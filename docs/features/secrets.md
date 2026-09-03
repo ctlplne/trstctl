@@ -521,7 +521,14 @@ not a conformance claim: use a stock KMIP client to prove the complete mTLS wire
 ### Secret sync (F68)
 
 trstctl pushes secrets _outward_ via the durable outbox (journaled first, at-least-once,
-no half-writes). `POST /api/v1/secrets/syncs` reads a stored secret, writes a sealed
+no half-writes). Operators first call `POST /api/v1/secrets/syncs/preview`. Preview
+checks only the tenant-scoped secret metadata and configured target catalog. It does
+not open the secret value, emit an event, write an outbox row, or contact the target.
+For a ready plan it returns the exact secret version, destination, effects, recovery
+steps, verification steps, and a caller-bound request fingerprint.
+
+`POST /api/v1/secrets/syncs` reads the stored secret only after the operator submits
+that reviewed fingerprint, writes a sealed
 outbox row in the same tenant-scoped transaction, delivers through the configured
 pusher, and returns metadata only (`name`, `target`, `remote_key`, enqueued/delivered
 flags). `GET /api/v1/secrets/syncs/targets` lists the catalog and marks which targets
@@ -909,7 +916,17 @@ The `secretstore.APIServer` exposes the store over HTTP (`PUT/GET /secrets/<path
 cat > secret-sync.json <<'JSON'
 {"name":"sync/source","target":"github-actions","remote_key":"DB_PASSWORD"}
 JSON
-trstctl-cli --idempotency-key sync-db-password-1 secrets syncs run -f secret-sync.json
+
+# Effect-free: reads metadata only and contacts no target.
+trstctl-cli secrets syncs preview -f secret-sync.json
+
+# Copy request_fingerprint from preview into preview_fingerprint, without adding a
+# secret value. Execution rejects a stale fingerprint if the secret version,
+# destination, caller, or remote key changed after review.
+cat > reviewed-secret-sync.json <<'JSON'
+{"name":"sync/source","target":"github-actions","remote_key":"DB_PASSWORD","preview_fingerprint":"sha256:<copy-from-preview>"}
+JSON
+trstctl-cli --idempotency-key sync-db-password-1 secrets syncs run -f reviewed-secret-sync.json
 
 curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   "$TRSTCTL_URL/api/v1/secrets/syncs/targets"

@@ -6031,7 +6031,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use secret sync / platform integrations while tenant, policy, and security authority remain on the server.",
       "tool": "secrets",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/secrets/sync",
       "navigationEntrypoints": [
         "tool navigation",
@@ -6045,7 +6045,7 @@ export const canonicalCapabilities = [
       ],
       "sideEffects": "mixed",
       "secretDataHandling": "The parity contract contains metadata only. Product workflows may reveal a value once, but reports and evidence never contain the value.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -6062,30 +6062,40 @@ export const canonicalCapabilities = [
         "configure": {
           "status": "complete",
           "evidence": [
-            "web/src/pages/Secrets.tsx"
+            "web/src/pages/secrets/SecretSyncWorkflow.tsx"
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "POST /api/v1/secrets/syncs/preview (previewSecretSync)",
+            "internal/api/secrets_posture.go",
+            "internal/api/secret_sync_preview_contract_test.go",
+            "internal/server/secrets_sync_served_test.go",
+            "internal/cli/command.go",
+            "web/src/pages/secrets/SecretSyncWorkflow.tsx",
+            "web/src/lib/api.test.ts",
+            "web/src/__tests__/secrets.test.tsx"
+          ]
         },
         "execute": {
           "status": "complete",
           "evidence": [
-            "web/src/pages/Secrets.tsx",
+            "web/src/pages/secrets/SecretSyncWorkflow.tsx",
             "internal/server/dod_secret_integrations_runtime_test.go"
           ]
         },
         "observe": {
           "status": "complete",
           "evidence": [
-            "web/src/pages/Secrets.tsx"
+            "web/src/pages/secrets/SecretSyncWorkflow.tsx"
           ]
         },
         "recover": {
           "status": "complete",
           "evidence": [
-            "web/src/pages/Secrets.tsx",
+            "web/src/pages/secrets/SecretSyncWorkflow.tsx",
+            "internal/server/secrets_sync_served_test.go",
             "internal/server/dod_secret_integrations_runtime_test.go"
           ]
         },
@@ -6100,6 +6110,7 @@ export const canonicalCapabilities = [
           "evidence": [
             "OpenAPI operationId: getCloudSecretManagerIntegration",
             "OpenAPI operationId: listSecretSyncTargets",
+            "OpenAPI operationId: previewSecretSync",
             "OpenAPI operationId: createSecretSyncWorkloadIdentitySource",
             "OpenAPI operationId: listSecretSyncWorkloadIdentitySources",
             "OpenAPI operationId: getSecretSyncWorkloadIdentitySource",
@@ -6110,6 +6121,7 @@ export const canonicalCapabilities = [
             "OpenAPI operationId: getSecretWorkloadInjection",
             "OpenAPI operationId: getUnvaultedSecretPosture",
             "CLI command: secrets cloud-secret-managers",
+            "CLI command: secrets syncs preview",
             "CLI command: secrets syncs run",
             "CLI command: secrets syncs targets",
             "CLI command: secrets syncs workload-identities create",

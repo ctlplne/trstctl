@@ -516,6 +516,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"secrets", "kubernetes-operator"}, Method: "GET", Path: "/api/v1/secrets/kubernetes-operator", Summary: "Show Kubernetes SecretSync operator coverage"},
 	{Name: []string{"secrets", "workload-injection"}, Method: "GET", Path: "/api/v1/secrets/workload-injection", Summary: "Show no-code workload secret-injection coverage"},
 	{Name: []string{"secrets", "unvaulted"}, Method: "GET", Path: "/api/v1/secrets/unvaulted", Summary: "Show unvaulted-secret detection and multi-vault visibility"},
+	{Name: []string{"secrets", "syncs", "preview"}, Method: "POST", Path: "/api/v1/secrets/syncs/preview", Body: bodyFile, ReadOnly: true, Summary: "Review an exact secret-sync plan without opening or enqueueing the value"},
 	{Name: []string{"secrets", "syncs", "run"}, Method: "POST", Path: "/api/v1/secrets/syncs", Body: bodyFile, Summary: "Push a stored secret to a configured external sync target"},
 	{Name: []string{"secrets", "syncs", "targets"}, Method: "GET", Path: "/api/v1/secrets/syncs/targets", Summary: "List supported and configured external secret-sync targets"},
 	{Name: []string{"secrets", "syncs", "workload-identities", "create"}, Method: "POST", Path: "/api/v1/secrets/syncs/workload-identity-sources", Body: bodyFile, Summary: "Create a cloud workload-identity source for bounded secret-sync delivery"},

@@ -1143,6 +1143,7 @@ func TestTRACE034SecretSyncPlatformIntegrationsAreConditionallyServed(t *testing
 	for _, want := range []string{
 		"/api/v1/secrets/cloud-secret-managers",
 		"/api/v1/secrets/syncs/targets",
+		"/api/v1/secrets/syncs/preview",
 		"/api/v1/secrets/syncs",
 		"/api/v1/secrets/kubernetes-operator",
 		"/api/v1/secrets/workload-injection",
@@ -1166,6 +1167,7 @@ func TestTRACE034SecretSyncPlatformIntegrationsAreConditionallyServed(t *testing
 	cliEvidence := strings.ToLower(strings.Join(append(append([]string{}, f68.CLISurface...), f68.FacetEvidence.CLI.Evidence...), "\n"))
 	for _, want := range []string{
 		"secrets cloud-secret-managers",
+		"secrets syncs preview",
 		"secrets syncs run",
 		"secrets syncs targets",
 		"secrets kubernetes-operator",
@@ -1186,6 +1188,8 @@ func TestTRACE034SecretSyncPlatformIntegrationsAreConditionallyServed(t *testing
 		"tools/dodcensus/substrates/secret_integrations.py",
 		"tools/dodcensus/manifest.json",
 		"internal/server/secrets_sync_served_test.go",
+		"internal/api/secret_sync_preview_contract_test.go",
+		"internal/cli/cli_test.go",
 		"internal/server/unvaulted_secret_posture_served_test.go",
 		"internal/operator/reconcile_test.go",
 		"internal/api/feature_parity_test.go",
@@ -1205,6 +1209,8 @@ func TestTRACE034SecretSyncPlatformIntegrationsAreConditionallyServed(t *testing
 		"testdodsecretsyncproductionassembly",
 		"authenticated external write/readback",
 		"required secret_sync census",
+		"testservedsecretsyncpreviewiseffectfreeandbindsexactexecution",
+		"zero preview events/outbox/egress",
 	} {
 		if !strings.Contains(testEvidence, want) {
 			t.Errorf("TRACE-034: F68 test evidence must mention %q, got %q", want, testEvidence)

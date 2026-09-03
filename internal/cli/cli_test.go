@@ -1539,6 +1539,25 @@ func TestSecretSyncCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	}
 }
 
+func TestSecretSyncPreviewCommandIsEffectFreeRead(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, 200, `{"capability":"F68","operation":"sync_secret","ready":true,"effect_free":true,"request_fingerprint":"sha256:preview"}`, &cap)
+	body := `{"name":"sync/source","target":"github-actions","remote_key":"DB_PASSWORD"}`
+	code, _, _ := run(t, []string{"secrets", "syncs", "preview", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
+	if code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	if cap.Method != "POST" || cap.Path != "/api/v1/secrets/syncs/preview" {
+		t.Errorf("request = %s %s", cap.Method, cap.Path)
+	}
+	if strings.TrimSpace(string(cap.Body)) != body {
+		t.Errorf("body = %q, want %q", cap.Body, body)
+	}
+	if cap.Header.Get("Idempotency-Key") != "" {
+		t.Error("effect-free secret-sync preview must not send an Idempotency-Key")
+	}
+}
+
 func TestSecretScanCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 201, `{"run_id":"1f95f7db-4a45-40fe-bb8f-9b7dfc8f6ad8","scanner":"gitleaks","engine_version":"v8.27.2","rules_active":213,"findings_count":1,"findings":[]}`, &cap)

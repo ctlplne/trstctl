@@ -677,6 +677,7 @@ public final class OpenApiSchemas {
       "SecretScanRequest",
       "SecretStoreCreatePreview",
       "SecretSync",
+      "SecretSyncPreview",
       "SecretSyncRequest",
       "SecretSyncTarget",
       "SecretSyncTargetCatalog",

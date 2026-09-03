@@ -210,7 +210,7 @@ describe("route-level product surface parity", () => {
     expect(feature?.current_frontend_mapping).not.toMatch(/\b(?:none|basic|disclosure|observe only|partial)\b/i);
   });
 
-  it("keeps Transit attached to its real independent partial workflow without overclaiming KMIP", () => {
+  it("keeps the completed Transit journey attached to its real route without overclaiming KMIP", () => {
     const surface = realGuiSurfaces.find((candidate) => candidate.featureId === "F66");
     const feature = servedFeatureMap().items.find((candidate) => candidate.feature_id === "F66");
 
@@ -222,10 +222,11 @@ describe("route-level product surface parity", () => {
     expect(surface?.evidence).toMatch(/purpose-locked create\/select\/rotate/i);
     expect(surface?.evidence).toMatch(/encrypt\/decrypt/i);
     expect(surface?.evidence).toMatch(/native secret store/i);
-    expect(surface?.evidence).toMatch(/verify, full version history, audit, and KMIP appliance posture remain parity debt/i);
-    expect(feature?.current_frontend_mapping).toMatch(/^partial workflow:/);
+    expect(surface?.evidence).toMatch(/complete version history, filtered immutable audit receipts/i);
+    expect(surface?.evidence).toMatch(/tenant-bound KMIP posture/i);
+    expect(feature?.current_frontend_mapping).toMatch(/^complete conditional journey:/);
     expect(feature?.current_frontend_mapping).toMatch(/\/secrets\/engines/);
-    expect(feature?.current_frontend_mapping).toMatch(/native secret stor(?:e|age)/i);
+    expect(feature?.current_frontend_mapping).toMatch(/tenant-bound KMIP posture/i);
   });
 
   it("keeps COVER-004 UI cells workflow-backed or explicitly non-UI", () => {

@@ -225,8 +225,8 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// F65 adds the configured-provider catalog and effect-free lease preview;
 	// the lifecycle mutation/read operations were already in the contract.
 	// F66 adds complete key-version history and effect-free Transit/KMIP posture.
-	if len(out) != 425 {
-		t.Fatalf("OpenAPI operationIds = %d, want 425", len(out))
+	if len(out) != 426 {
+		t.Fatalf("OpenAPI operationIds = %d, want 426", len(out))
 	}
 	return out
 }

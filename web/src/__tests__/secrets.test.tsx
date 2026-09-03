@@ -60,6 +60,7 @@ const { apiMock } = vi.hoisted(() => ({
     kubernetesSecretOperator: vi.fn(),
     secretWorkloadInjection: vi.fn(),
     unvaultedSecrets: vi.fn(),
+    previewSecretSync: vi.fn(),
     previewSecretScan: vi.fn(),
     scanSecrets: vi.fn(),
     syncSecret: vi.fn(),
@@ -684,6 +685,28 @@ function primeSecretsMocks() {
   apiMock.kubernetesSecretOperator.mockResolvedValue(kubernetesSecretOperatorFixture());
   apiMock.secretWorkloadInjection.mockResolvedValue(secretWorkloadInjectionFixture());
   apiMock.unvaultedSecrets.mockResolvedValue(unvaultedSecretPostureFixture());
+  apiMock.previewSecretSync.mockResolvedValue({
+    capability: "F68",
+    operation: "sync_secret",
+    ready: true,
+    effect_free: true,
+    name: "app/db/password",
+    secret_version: 3,
+    target: "github-actions",
+    remote_key: "Secret/payments-db/password",
+    required_permission: "secrets:write",
+    request_fingerprint: "sha256:f68-sync-preview-fixture",
+    blockers: [],
+    preview_reads: ["read tenant-scoped secret metadata and configured target metadata"],
+    preview_writes: [],
+    preview_external_effects: [],
+    execute_writes: ["append one immutable secret.sync.queued event", "commit one sealed outbox intent"],
+    execute_external_effects: ["deliver version 3 to durable-target at DB_PASSWORD"],
+    recovery_steps: ["Retry the same command with the same Idempotency-Key after an ambiguous response."],
+    verification_steps: ["Confirm the durable delivery receipt before retiring the prior remote value."],
+    cli_argv: ["trstctl", "secrets", "syncs", "run", "-f", "secret-sync.json"],
+    secret_data_handling: "Preview reads metadata only and never opens, returns, logs, or sends the secret value.",
+  });
   apiMock.previewSecretScan.mockResolvedValue(secretScanPreviewFixture());
   apiMock.scanSecrets.mockResolvedValue({
     run_id: "55555555-5555-5555-5555-555555555555",
@@ -698,7 +721,7 @@ function primeSecretsMocks() {
   });
   apiMock.syncSecret.mockResolvedValue({
     name: "app/db/password",
-    target: "kubernetes/prod",
+    target: "github-actions",
     remote_key: "Secret/payments-db/password",
     enqueued: true,
     delivered: false,
@@ -1941,24 +1964,74 @@ describe("secrets surface", () => {
     expect(await screen.findByRole("heading", { name: "Secret sync and platform integrations" })).toBeInTheDocument();
     const syncForm = within(screen.getByRole("form", { name: "Sync stored secret" }));
     expect(syncForm.getByLabelText("Secret name")).toHaveValue("app/db/password");
-    await user.type(syncForm.getByLabelText("Target"), "kubernetes/prod");
-    await user.type(syncForm.getByLabelText("Remote key"), "Secret/payments-db/password");
-    await user.click(syncForm.getByRole("button", { name: /sync secret/i }));
+    await user.selectOptions(syncForm.getByLabelText("Target"), "github-actions");
+    await user.type(syncForm.getByLabelText("Name at destination"), "Secret/payments-db/password");
+    await user.click(syncForm.getByRole("button", { name: /review sync/i }));
     await waitFor(() =>
-      expect(apiMock.syncSecret).toHaveBeenCalledWith({
+      expect(apiMock.previewSecretSync).toHaveBeenCalledWith({
         name: "app/db/password",
-        target: "kubernetes/prod",
+        target: "github-actions",
         remote_key: "Secret/payments-db/password",
       }),
     );
+    expect(apiMock.syncSecret).not.toHaveBeenCalled();
+    expect(await screen.findByText("Version 3 stays encrypted until the outbox worker delivers it.")).toBeInTheDocument();
+    expect(screen.getByText("No preview writes or outside calls")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /queue reviewed sync/i }));
+    await waitFor(() =>
+      expect(apiMock.syncSecret).toHaveBeenCalledWith(
+        {
+          name: "app/db/password",
+          target: "github-actions",
+          remote_key: "Secret/payments-db/password",
+          preview_fingerprint: "sha256:f68-sync-preview-fixture",
+        },
+        expect.stringMatching(/^secret-sync-/),
+      ),
+    );
     expect(await screen.findByText("Queued")).toBeInTheDocument();
     expect(screen.getByText("Not delivered")).toBeInTheDocument();
-    expect(screen.getByText("Secret/payments-db/password")).toBeInTheDocument();
+    expect(screen.getAllByText("Secret/payments-db/password").length).toBeGreaterThan(0);
     expect(screen.queryByText(/raw target token|BEGIN .* PRIVATE KEY/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /push|rollback/i })).not.toBeInTheDocument();
     expect(storageSpy).not.toHaveBeenCalled();
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
+  });
+
+  it("fails F68 closed when the server describes a preview with effects", async () => {
+    apiMock.previewSecretSync.mockResolvedValueOnce({
+      capability: "F68",
+      operation: "sync_secret",
+      ready: true,
+      effect_free: false,
+      name: "app/db/password",
+      secret_version: 3,
+      target: "github-actions",
+      remote_key: "DB_PASSWORD",
+      required_permission: "secrets:write",
+      request_fingerprint: "sha256:must-not-execute",
+      blockers: [],
+      preview_reads: [],
+      preview_writes: ["unexpected write"],
+      preview_external_effects: [],
+      execute_writes: [],
+      execute_external_effects: [],
+      recovery_steps: [],
+      verification_steps: [],
+      cli_argv: [],
+      secret_data_handling: "metadata only",
+    });
+    const user = userEvent.setup();
+    renderSecrets("/secrets/sync");
+
+    const form = within(await screen.findByRole("form", { name: "Sync stored secret" }));
+    await user.selectOptions(form.getByLabelText("Target"), "github-actions");
+    await user.click(form.getByRole("button", { name: /review sync/i }));
+
+    expect(await screen.findByText("The server did not prove this review was effect-free. Nothing was queued.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /queue reviewed sync/i })).not.toBeInTheDocument();
+    expect(apiMock.syncSecret).not.toHaveBeenCalled();
   });
 
   it("turns an uncertain Transit operation into an explicit proof-first recovery journey", async () => {

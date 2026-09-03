@@ -34,6 +34,159 @@ func currentSecretSyncJobIDForTest(t *testing.T, s *store.Store, tenantID, rawKe
 	return store.DurableSecretSyncJobIDForEpoch(tenantID, epoch, rawKey)
 }
 
+func secretSyncPreviewRequest(t *testing.T, h *servedHarness, token string, body any) (int, []byte) {
+	t.Helper()
+	raw, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("marshal secret-sync preview: %v", err)
+	}
+	req, err := http.NewRequest(http.MethodPost, h.ts.URL+"/api/v1/secrets/syncs/preview", bytes.NewReader(raw))
+	if err != nil {
+		t.Fatalf("new secret-sync preview: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := h.ts.Client().Do(req)
+	if err != nil {
+		t.Fatalf("do secret-sync preview: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	response, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, response
+}
+
+func TestServedSecretSyncPreviewIsEffectFreeAndBindsExactExecution(t *testing.T) {
+	pusher := &outboxSyncPusher{}
+	h := newServedHarness(t, config.Protocols{},
+		withSecretsEnabled(t, nil),
+		func(d *Deps) {
+			d.TenantSecretSyncTargets = SecretSyncTargetRegistry{servedTestTenant: {
+				"durable-target": secretsync.NewTarget("durable-target", pusher),
+			}}
+		},
+	)
+	registerServedTenant(t, h, "F68 exact preview tenant")
+	writer := seedScopedTokenSubject(t, h.store, h.tenant, "f68-preview-writer", "secrets:read", "secrets:write")
+	reader := seedScopedTokenSubject(t, h.store, h.tenant, "f68-preview-reader", "secrets:read")
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", writer,
+		map[string]any{"name": "sync/exact-source", "value": "f68-value-must-never-enter-preview"})
+	if status != http.StatusCreated {
+		t.Fatalf("create preview source status=%d body=%s", status, body)
+	}
+
+	var beforeOutbox int
+	if err := h.store.SystemPool().QueryRow(t.Context(),
+		`SELECT COUNT(*) FROM outbox WHERE tenant_id = $1`, h.tenant).Scan(&beforeOutbox); err != nil {
+		t.Fatalf("count outbox before preview: %v", err)
+	}
+	beforeEvents := sharePreviewEventCount(t, h.log, h.tenant)
+	command := map[string]any{"name": "sync/exact-source", "target": "durable-target", "remote_key": "DB_PASSWORD"}
+	status, body = secretSyncPreviewRequest(t, h, writer, command)
+	if status != http.StatusOK {
+		t.Fatalf("secret-sync preview status=%d body=%s", status, body)
+	}
+	var plan struct {
+		Capability             string   `json:"capability"`
+		Operation              string   `json:"operation"`
+		Ready                  bool     `json:"ready"`
+		EffectFree             bool     `json:"effect_free"`
+		Name                   string   `json:"name"`
+		SecretVersion          int      `json:"secret_version"`
+		Target                 string   `json:"target"`
+		RemoteKey              string   `json:"remote_key"`
+		RequiredPermission     string   `json:"required_permission"`
+		RequestFingerprint     string   `json:"request_fingerprint"`
+		Blockers               []string `json:"blockers"`
+		PreviewReads           []string `json:"preview_reads"`
+		PreviewWrites          []string `json:"preview_writes"`
+		PreviewExternalEffects []string `json:"preview_external_effects"`
+		ExecuteWrites          []string `json:"execute_writes"`
+		ExecuteExternalEffects []string `json:"execute_external_effects"`
+		RecoverySteps          []string `json:"recovery_steps"`
+		VerificationSteps      []string `json:"verification_steps"`
+		CLIArgv                []string `json:"cli_argv"`
+		DataHandling           string   `json:"secret_data_handling"`
+	}
+	if err := json.Unmarshal(body, &plan); err != nil {
+		t.Fatalf("decode secret-sync preview: %v (%s)", err, body)
+	}
+	if plan.Capability != "F68" || plan.Operation != "sync_secret" || !plan.Ready || !plan.EffectFree ||
+		plan.Name != "sync/exact-source" || plan.SecretVersion != 1 || plan.Target != "durable-target" ||
+		plan.RemoteKey != "DB_PASSWORD" || plan.RequiredPermission != "secrets:write" ||
+		!strings.HasPrefix(plan.RequestFingerprint, "sha256:") {
+		t.Fatalf("unexpected secret-sync preview: %+v", plan)
+	}
+	if len(plan.Blockers) != 0 || len(plan.PreviewReads) == 0 || len(plan.PreviewWrites) != 0 ||
+		len(plan.PreviewExternalEffects) != 0 || len(plan.ExecuteWrites) == 0 || len(plan.ExecuteExternalEffects) == 0 ||
+		len(plan.RecoverySteps) == 0 || len(plan.VerificationSteps) == 0 || len(plan.CLIArgv) == 0 || plan.DataHandling == "" {
+		t.Fatalf("secret-sync preview omitted lifecycle or zero-effect evidence: %+v", plan)
+	}
+	if strings.Contains(string(body), "f68-value-must-never-enter-preview") || len(pusher.values) != 0 {
+		t.Fatalf("preview exposed or externally delivered secret material: %s", body)
+	}
+	var afterPreviewOutbox int
+	if err := h.store.SystemPool().QueryRow(t.Context(),
+		`SELECT COUNT(*) FROM outbox WHERE tenant_id = $1`, h.tenant).Scan(&afterPreviewOutbox); err != nil {
+		t.Fatalf("count outbox after preview: %v", err)
+	}
+	if afterPreviewOutbox != beforeOutbox || sharePreviewEventCount(t, h.log, h.tenant) != beforeEvents {
+		t.Fatalf("preview changed durable state: outbox %d -> %d, events %d -> %d",
+			beforeOutbox, afterPreviewOutbox, beforeEvents, sharePreviewEventCount(t, h.log, h.tenant))
+	}
+	status, repeated := secretSyncPreviewRequest(t, h, writer, command)
+	if status != http.StatusOK || !bytes.Contains(repeated, []byte(plan.RequestFingerprint)) {
+		t.Fatalf("same preview did not return stable exact evidence: %d %s", status, repeated)
+	}
+	status, denied := secretSyncPreviewRequest(t, h, reader, command)
+	if status != http.StatusForbidden || bytes.Contains(denied, []byte(plan.RequestFingerprint)) {
+		t.Fatalf("read-only caller received executable preview: %d %s", status, denied)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPut, "/api/v1/secrets/store/sync/exact-source", writer,
+		map[string]any{"value": "f68-rotated-value-must-never-enter-preview"})
+	if status != http.StatusOK {
+		t.Fatalf("rotate preview source status=%d body=%s", status, body)
+	}
+	staleCommand := map[string]any{
+		"name": "sync/exact-source", "target": "durable-target", "remote_key": "DB_PASSWORD",
+		"preview_fingerprint": plan.RequestFingerprint,
+	}
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/syncs", writer, "f68-stale-preview", staleCommand)
+	if status != http.StatusConflict || !bytes.Contains(body, []byte("reviewed secret-sync plan is stale")) || len(pusher.values) != 0 {
+		t.Fatalf("stale preview did not fail before enqueue/delivery: %d %s", status, body)
+	}
+	var afterStaleOutbox int
+	if err := h.store.SystemPool().QueryRow(t.Context(),
+		`SELECT COUNT(*) FROM outbox WHERE tenant_id = $1`, h.tenant).Scan(&afterStaleOutbox); err != nil {
+		t.Fatalf("count outbox after stale plan: %v", err)
+	}
+	if afterStaleOutbox != beforeOutbox {
+		t.Fatalf("stale plan enqueued outbox work: %d -> %d", beforeOutbox, afterStaleOutbox)
+	}
+
+	status, body = secretSyncPreviewRequest(t, h, writer, command)
+	if status != http.StatusOK {
+		t.Fatalf("refreshed secret-sync preview status=%d body=%s", status, body)
+	}
+	var refreshed struct {
+		Ready              bool   `json:"ready"`
+		SecretVersion      int    `json:"secret_version"`
+		RequestFingerprint string `json:"request_fingerprint"`
+	}
+	if err := json.Unmarshal(body, &refreshed); err != nil || !refreshed.Ready || refreshed.SecretVersion != 2 ||
+		refreshed.RequestFingerprint == "" || refreshed.RequestFingerprint == plan.RequestFingerprint {
+		t.Fatalf("rotation did not invalidate exact preview: plan=%+v err=%v body=%s", refreshed, err, body)
+	}
+	reviewedCommand := map[string]any{
+		"name": "sync/exact-source", "target": "durable-target", "remote_key": "DB_PASSWORD",
+		"preview_fingerprint": refreshed.RequestFingerprint,
+	}
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/syncs", writer, "f68-reviewed-preview", reviewedCommand)
+	if status != http.StatusOK || !bytes.Contains(body, []byte(`"enqueued":true`)) || len(pusher.values) != 0 {
+		t.Fatalf("reviewed exact plan did not durably enqueue without request-path delivery: %d %s", status, body)
+	}
+}
+
 func TestDurableSecretSyncReplayDoesNotReadRotatedSourceAfterRecorderGC(t *testing.T) {
 	pusher := &outboxSyncPusher{}
 	h := newServedHarness(t, config.Protocols{},

@@ -5704,6 +5704,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/syncs/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review an exact secret-sync plan without opening the value, writing, enqueueing, or contacting the target */
+        post: operations["previewSecretSync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/syncs/targets": {
         parameters: {
             query?: never;
@@ -13658,8 +13675,31 @@ export interface components {
             remote_key: string;
             target: string;
         };
+        SecretSyncPreview: {
+            blockers: string[];
+            capability: string;
+            cli_argv: string[];
+            effect_free: boolean;
+            execute_external_effects: string[];
+            execute_writes: string[];
+            name: string;
+            operation: string;
+            preview_external_effects: string[];
+            preview_reads: string[];
+            preview_writes: string[];
+            ready: boolean;
+            recovery_steps: string[];
+            remote_key: string;
+            request_fingerprint?: string;
+            required_permission: string;
+            secret_data_handling: string;
+            secret_version: number;
+            target: string;
+            verification_steps: string[];
+        };
         SecretSyncRequest: {
             name: string;
+            preview_fingerprint?: string;
             remote_key?: string;
             target: string;
         };
@@ -30755,6 +30795,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SecretSync"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewSecretSync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretSyncRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretSyncPreview"];
                 };
             };
             /** @description client error */

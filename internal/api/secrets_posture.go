@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -70,9 +71,10 @@ type unvaultedSecretPostureResponse struct {
 }
 
 type secretSyncRequest struct {
-	Name      string `json:"name"`
-	Target    string `json:"target"`
-	RemoteKey string `json:"remote_key"`
+	Name               string `json:"name"`
+	Target             string `json:"target"`
+	RemoteKey          string `json:"remote_key"`
+	PreviewFingerprint string `json:"preview_fingerprint,omitempty"`
 }
 
 type secretSyncResponse struct {
@@ -81,6 +83,29 @@ type secretSyncResponse struct {
 	RemoteKey string `json:"remote_key"`
 	Enqueued  bool   `json:"enqueued"`
 	Delivered bool   `json:"delivered"`
+}
+
+type secretSyncPreviewResponse struct {
+	Capability             string   `json:"capability"`
+	Operation              string   `json:"operation"`
+	Ready                  bool     `json:"ready"`
+	EffectFree             bool     `json:"effect_free"`
+	Name                   string   `json:"name"`
+	SecretVersion          int      `json:"secret_version"`
+	Target                 string   `json:"target"`
+	RemoteKey              string   `json:"remote_key"`
+	RequiredPermission     string   `json:"required_permission"`
+	RequestFingerprint     string   `json:"request_fingerprint,omitempty"`
+	Blockers               []string `json:"blockers"`
+	PreviewReads           []string `json:"preview_reads"`
+	PreviewWrites          []string `json:"preview_writes"`
+	PreviewExternalEffects []string `json:"preview_external_effects"`
+	ExecuteWrites          []string `json:"execute_writes"`
+	ExecuteExternalEffects []string `json:"execute_external_effects"`
+	RecoverySteps          []string `json:"recovery_steps"`
+	VerificationSteps      []string `json:"verification_steps"`
+	CLIArgv                []string `json:"cli_argv"`
+	DataHandling           string   `json:"secret_data_handling"`
 }
 
 type secretSyncTargetResponse struct {
@@ -106,7 +131,10 @@ type secretSyncTargetCatalogResponse struct {
 	Residuals         []string                   `json:"residuals"`
 }
 
-const secretSyncTargetSecretHandling = "sealed outbox value is unsealed only for the delivery attempt; response and audit contain metadata only"
+const (
+	secretSyncTargetSecretHandling = "sealed outbox value is unsealed only for the delivery attempt; response and audit contain metadata only"
+	previewEvidenceDomainF68       = "trstctl.api.secret-sync-preview.f68.v1"
+)
 
 type cloudSecretManagerProviderResponse struct {
 	ID                   string   `json:"id"`
@@ -213,6 +241,142 @@ type secretWorkloadInjectionResponse struct {
 	RecommendedNextActions []string                              `json:"recommended_next_actions"`
 }
 
+func normalizeSecretSyncRequest(req *secretSyncRequest) error {
+	req.Name = strings.TrimSpace(req.Name)
+	req.Target = strings.TrimSpace(req.Target)
+	req.RemoteKey = strings.TrimSpace(req.RemoteKey)
+	req.PreviewFingerprint = strings.TrimSpace(req.PreviewFingerprint)
+	if req.Name == "" || req.Target == "" {
+		return errStatus(http.StatusBadRequest, "name and target are required")
+	}
+	if req.RemoteKey == "" {
+		req.RemoteKey = req.Name
+	}
+	return nil
+}
+
+func (a *API) secretSyncPreviewFingerprint(tenantID, principal string, req secretSyncRequest, secretVersion int) (string, error) {
+	if a.secrets == nil || a.secrets.be.CommandMAC == nil {
+		return "", errors.New("api: server-keyed secret-sync preview evidence is unavailable")
+	}
+	material, err := json.Marshal(struct {
+		Domain        string `json:"domain"`
+		TenantID      string `json:"tenant_id"`
+		Principal     string `json:"principal"`
+		Operation     string `json:"operation"`
+		Name          string `json:"name"`
+		SecretVersion int    `json:"secret_version"`
+		Target        string `json:"target"`
+		RemoteKey     string `json:"remote_key"`
+	}{
+		Domain: previewEvidenceDomainF68, TenantID: tenantID, Principal: principal,
+		Operation: "sync_secret", Name: req.Name, SecretVersion: secretVersion,
+		Target: req.Target, RemoteKey: req.RemoteKey,
+	})
+	if err != nil {
+		return "", err
+	}
+	defer secret.Wipe(material)
+	mac, err := a.secrets.be.CommandMAC([]byte(previewEvidenceDomainF68), material)
+	if err != nil {
+		return "", err
+	}
+	if len(mac) != 32 {
+		secret.Wipe(mac)
+		return "", errors.New("api: secret-sync preview MAC has invalid length")
+	}
+	defer secret.Wipe(mac)
+	return "sha256:" + hex.EncodeToString(mac), nil
+}
+
+// previewSecretSync builds the exact, effect-free F68 delivery plan. It reads only
+// tenant-scoped secret metadata and configured target metadata: it does not open
+// the sealed value, append an event, record idempotency, enqueue outbox work, audit,
+// or contact the target. The keyed fingerprint binds later reviewed execution to
+// the tenant, caller, current secret version, target, and remote key.
+func (a *API) previewSecretSync(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	var req secretSyncRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	if err := normalizeSecretSyncRequest(&req); err != nil {
+		a.writeError(w, err)
+		return
+	}
+	principal, err := requestPrincipalSubject(r.Context())
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	plan := secretSyncPreviewResponse{
+		Capability: "F68", Operation: "sync_secret", EffectFree: true,
+		Name: req.Name, Target: req.Target, RemoteKey: req.RemoteKey,
+		RequiredPermission: "secrets:write", Blockers: []string{},
+		PreviewReads: []string{
+			"read one tenant-scoped application-secret metadata row without opening its sealed value",
+			"read this tenant's in-memory configured target registry",
+		},
+		PreviewWrites:          []string{},
+		PreviewExternalEffects: []string{},
+		ExecuteWrites: []string{
+			"append one immutable secret.sync.queued event",
+			"project one tenant-scoped durable delivery job",
+			"commit one sealed outbox intent in the same transaction",
+		},
+		ExecuteExternalEffects: []string{
+			"the bounded outbox worker delivers the reviewed secret version to target " + req.Target + " at remote key " + req.RemoteKey,
+		},
+		RecoverySteps: []string{
+			"Before execution, change or leave this page and no state changes.",
+			"After an ambiguous response, retry the identical command with the same Idempotency-Key.",
+			"If the source version changes, request a new preview instead of forcing the stale plan.",
+			"Inspect the durable job and delivery receipt before changing the destination again.",
+		},
+		VerificationSteps: []string{
+			"Confirm the response says enqueued and does not claim request-path delivery.",
+			"Confirm the durable job reaches delivered for this target and remote key.",
+			"Read the external platform independently and verify its version or value digest without putting the value in evidence.",
+			"Confirm audit and event evidence contain metadata only.",
+		},
+		CLIArgv:      []string{"trstctl", "secrets", "syncs", "preview", "-f", "secret-sync.json"},
+		DataHandling: "Preview reads metadata only and never decrypts, returns, logs, sends, or enqueues the secret value. Execution opens it only long enough to seal the outbox payload, then wipes the plaintext buffer.",
+	}
+	if a.secrets.be.QueueSecretSync == nil {
+		plan.Blockers = append(plan.Blockers, "event-backed secret sync queue is not configured")
+	}
+	if a.secrets.syncTargets(tenantID)[req.Target] == nil {
+		plan.Blockers = append(plan.Blockers, "secret sync target is not configured")
+	}
+	record, err := a.secrets.be.Store.GetSecret(r.Context(), tenantID, req.Name)
+	if err != nil {
+		if errors.Is(err, store.ErrSecretNotFound) {
+			plan.Blockers = append(plan.Blockers, "application secret was not found")
+		} else {
+			a.writeError(w, err)
+			return
+		}
+	} else {
+		plan.SecretVersion = record.Version
+		plan.RequestFingerprint, err = a.secretSyncPreviewFingerprint(tenantID, principal, req, record.Version)
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
+	}
+	plan.Ready = len(plan.Blockers) == 0
+	a.writeJSON(w, http.StatusOK, plan)
+}
+
 // syncSecret pushes a stored secret to a configured external target. The secret value
 // is read internally, enqueued through the sync outbox first (AN-6), delivered by the
 // pusher, and wiped before the metadata-only response is returned.
@@ -233,15 +397,9 @@ func (a *API) syncSecret(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
 		return
 	}
-	req.Name = strings.TrimSpace(req.Name)
-	req.Target = strings.TrimSpace(req.Target)
-	req.RemoteKey = strings.TrimSpace(req.RemoteKey)
-	if req.Name == "" || req.Target == "" {
-		a.writeError(w, errStatus(http.StatusBadRequest, "name and target are required"))
+	if err := normalizeSecretSyncRequest(&req); err != nil {
+		a.writeError(w, err)
 		return
-	}
-	if req.RemoteKey == "" {
-		req.RemoteKey = req.Name
 	}
 	principal, err := requestPrincipalSubject(r.Context())
 	if err != nil {
@@ -302,6 +460,15 @@ func (a *API) syncSecret(w http.ResponseWriter, r *http.Request) {
 			}
 			return 0, nil, err
 		}
+		if req.PreviewFingerprint != "" {
+			expected, fingerprintErr := a.secretSyncPreviewFingerprint(tenantID, principal, req, rec.Version)
+			if fingerprintErr != nil {
+				return 0, nil, fingerprintErr
+			}
+			if !crypto.ConstantTimeEqual([]byte(req.PreviewFingerprint), []byte(expected)) {
+				return 0, nil, errStatus(http.StatusConflict, "reviewed secret-sync plan is stale or does not match this caller, secret version, target, or remote key")
+			}
+		}
 		value, err := a.secrets.open(ctx, tenantID, rec.Sealed, sealAAD(tenantID, req.Name))
 		if err != nil {
 			return 0, nil, err
@@ -323,12 +490,16 @@ func (a *API) syncSecret(w http.ResponseWriter, r *http.Request) {
 
 func secretSyncRequestBinding(principal string, req secretSyncRequest) (string, error) {
 	canonical := struct {
-		Operation string `json:"operation"`
-		Principal string `json:"principal"`
-		Name      string `json:"name"`
-		Target    string `json:"target"`
-		RemoteKey string `json:"remote_key"`
-	}{Operation: "secret.sync", Principal: principal, Name: req.Name, Target: req.Target, RemoteKey: req.RemoteKey}
+		Operation          string `json:"operation"`
+		Principal          string `json:"principal"`
+		Name               string `json:"name"`
+		Target             string `json:"target"`
+		RemoteKey          string `json:"remote_key"`
+		PreviewFingerprint string `json:"preview_fingerprint,omitempty"`
+	}{
+		Operation: "secret.sync", Principal: principal, Name: req.Name, Target: req.Target,
+		RemoteKey: req.RemoteKey, PreviewFingerprint: req.PreviewFingerprint,
+	}
 	encoded, err := json.Marshal(canonical)
 	if err != nil {
 		return "", err

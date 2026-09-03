@@ -961,7 +961,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     component: "Secrets",
     kind: "operate",
     evidence:
-      "Transit safe key-metadata list, purpose-locked create/select/rotate, encrypt/decrypt, rewrap, HMAC, signing, local-only reveal-once plaintext, and encryption-service availability independent of the optional native secret store; verify, full version history, audit, and KMIP appliance posture remain parity debt",
+      "Transit safe key-metadata list, purpose-locked create/select/rotate, encrypt/decrypt, rewrap, HMAC, signing and verification, local-only reveal-once plaintext, complete version history, filtered immutable audit receipts, explicit no-auto-retry recovery, sealed startup-restore status, tenant-bound KMIP posture, and encryption-service availability independent of the optional native secret store",
   },
   {
     featureId: "F67",

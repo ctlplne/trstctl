@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Eyebrow } from "@/components/typography";
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { AlertTriangle, Clock3, Copy, Eye, KeyRound, Loader2, MoreHorizontal, RefreshCw, RotateCw, Send, Share2, Trash2, UserRoundX } from "lucide-react";
+import { AlertTriangle, Clock3, Copy, Eye, KeyRound, Loader2, MoreHorizontal, RefreshCw, RotateCw, Send, Trash2, UserRoundX } from "lucide-react";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { DetailDrawer } from "@/components/DetailDrawer";
@@ -38,7 +38,6 @@ import {
   type SecretRotationRequest,
   type SecretRotationSchedule,
   type SecretRotationScheduleRun,
-  type SecretSync,
   type SecretSyncTargetCatalog,
   type SecretWorkloadInjection,
   type ThirdPartySecretScanPosture,
@@ -70,6 +69,7 @@ import { PKISecretWorkflow } from "./secrets/PKISecretWorkflow";
 import { MachineAuthWorkflow } from "./secrets/MachineAuthWorkflow";
 import { SecretScanningWorkflow } from "./secrets/SecretScanningWorkflow";
 import { DynamicSecretWorkflow } from "./secrets/DynamicSecretWorkflow";
+import { SecretSyncWorkflow } from "./secrets/SecretSyncWorkflow";
 
 const SecretSharingWorkflow = lazy(() => import("./secrets/SecretSharingWorkflow"));
 const EphemeralAPIKeyWorkflow = lazy(() => import("./secrets/EphemeralAPIKeyWorkflow"));
@@ -265,12 +265,6 @@ export function Secrets() {
   const [repoScanPosture, setRepoScanPosture] = useState<SecretRepositoryScanPosture | null>(null);
   const [thirdPartyPosture, setThirdPartyPosture] = useState<ThirdPartySecretScanPosture | null>(null);
 
-  const [syncName, setSyncName] = useState("");
-  const [syncTarget, setSyncTarget] = useState("");
-  const [syncRemoteKey, setSyncRemoteKey] = useState("");
-  const [syncBusy, setSyncBusy] = useState(false);
-  const [syncError, setSyncError] = useState<string | null>(null);
-  const [syncResult, setSyncResult] = useState<SecretSync | null>(null);
   const [cloudManagers, setCloudManagers] = useState<CloudSecretManagerIntegration | null>(null);
   const [syncCatalog, setSyncCatalog] = useState<SecretSyncTargetCatalog | null>(null);
   const [operatorPosture, setOperatorPosture] = useState<KubernetesSecretOperator | null>(null);
@@ -376,7 +370,6 @@ export function Secrets() {
         setItems((current) => (cursor ? mergeMeta(current, page.items) : page.items));
         setNextCursor(page.next_cursor);
         setAccessName((current) => current || page.items[0]?.name || "");
-        setSyncName((current) => current || page.items[0]?.name || "");
       } else {
         setItems([]);
         setNextCursor(undefined);
@@ -466,7 +459,6 @@ export function Secrets() {
     );
   }, [items, ownerByID, secretSearch]);
   const detailSecret = useMemo(() => items.find((item) => item.name === detailSecretName) ?? null, [detailSecretName, items]);
-  const configuredSyncTargets = useMemo(() => syncCatalog?.targets.filter((target) => target.configured) ?? [], [syncCatalog]);
   const unownedSecrets = useMemo(() => items.filter((item) => !item.owner_id || !ownerByID.has(item.owner_id)), [items, ownerByID]);
   const overdueSchedules = useMemo(
     () =>
@@ -1108,24 +1100,6 @@ export function Secrets() {
       setGrantError(apiProblemMessage(err, t("secrets.grant.failedTitle")));
     } finally {
       setRevokingTokenId(null);
-    }
-  }
-
-  async function submitSecretSync(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSyncError(null);
-    setSyncBusy(true);
-    try {
-      const name = syncName.trim();
-      const target = syncTarget.trim();
-      const remoteKey = syncRemoteKey.trim();
-      if (!name) throw new Error("Secret name is required");
-      if (!target) throw new Error("Target is required");
-      setSyncResult(await api.syncSecret({ name, target, ...(remoteKey ? { remote_key: remoteKey } : {}) }));
-    } catch (err) {
-      setSyncError(apiProblemMessage(err, "Could not sync secret"));
-    } finally {
-      setSyncBusy(false);
     }
   }
 
@@ -2958,80 +2932,7 @@ export function Secrets() {
                 <SecretSyncWorkloadIdentityPanel />
               </div>
             </details>
-            {syncCatalog && configuredSyncTargets.length === 0 ? (
-              <UnavailableState title={t("secrets.sync.noDestinationTitle")}>{t("secrets.sync.noDestinationBody")}</UnavailableState>
-            ) : (
-              <form
-                aria-label={translateNow("source.sync.stored.secret.b83b2d0767")}
-                onSubmit={(event) => void submitSecretSync(event)}
-                className="-order-1 grid gap-3 xl:grid-cols-[minmax(0,1fr)_14rem_minmax(0,1fr)_auto]"
-              >
-                <label className="grid gap-1 text-sm">
-                  <span className="font-medium">{translateNow("source.secret.name.5cdf573b89")}</span>
-                  <input
-                    className="rounded-md border border-border bg-background px-3 py-2"
-                    value={syncName}
-                    onChange={(event) => setSyncName(event.target.value)}
-                    placeholder={selectedMeta?.name ?? translateNow("source.app.db.password.917cb98f9d")}
-                    required
-                  />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  <span className="font-medium">{translateNow("source.target.978354db0c")}</span>
-                  <input
-                    className="rounded-md border border-border bg-background px-3 py-2"
-                    list="secret-sync-target-options"
-                    value={syncTarget}
-                    onChange={(event) => setSyncTarget(event.target.value)}
-                    placeholder={translateNow("source.kubernetes.prod.16a7f7e17a")}
-                    required
-                  />
-                </label>
-                <datalist id="secret-sync-target-options">
-                  {configuredSyncTargets.map((target) => (
-                    <option key={target.id} value={target.id} label={target.name} />
-                  ))}
-                </datalist>
-                <label className="grid gap-1 text-sm">
-                  <span className="font-medium">{translateNow("source.remote.key.b698762058")}</span>
-                  <input
-                    className="rounded-md border border-border bg-background px-3 py-2"
-                    value={syncRemoteKey}
-                    onChange={(event) => setSyncRemoteKey(event.target.value)}
-                    placeholder={translateNow("source.secret.payments.db.password.cf46ca15a9")}
-                  />
-                </label>
-                <Button type="submit" className="self-end" disabled={syncBusy || Boolean(loadError)}>
-                  {syncBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Share2 className="h-4 w-4" aria-hidden="true" />}
-                  {translateNow("source.sync.secret.4d3ab1c075")}
-                </Button>
-              </form>
-            )}
-            {syncError && <ErrorState title={translateNow("source.secret.sync.failed.b901ae57d8")}>{syncError}</ErrorState>}
-            {syncResult && (
-              <dl className="ui-panel grid gap-3 p-comfortable text-sm md:grid-cols-2 xl:grid-cols-5">
-                <div>
-                  <dt className="font-medium text-muted-foreground">{translateNow("source.secret.7e32a729b1")}</dt>
-                  <dd>{syncResult.name}</dd>
-                </div>
-                <div>
-                  <dt className="font-medium text-muted-foreground">{translateNow("source.target.978354db0c")}</dt>
-                  <dd>{syncResult.target}</dd>
-                </div>
-                <div>
-                  <dt className="font-medium text-muted-foreground">{translateNow("source.remote.key.b698762058")}</dt>
-                  <dd className="break-all font-mono text-xs">{syncResult.remote_key}</dd>
-                </div>
-                <div>
-                  <dt className="font-medium text-muted-foreground">{translateNow("source.queue.3b2fe03e36")}</dt>
-                  <dd>{syncResult.enqueued ? translateNow("source.queued.661ff40a07") : translateNow("source.not.queued.7e52b62ffb")}</dd>
-                </div>
-                <div>
-                  <dt className="font-medium text-muted-foreground">{translateNow("source.delivery.52bfe584a5")}</dt>
-                  <dd>{syncResult.delivered ? translateNow("source.delivered.9061156573") : translateNow("source.not.delivered.f498742c19")}</dd>
-                </div>
-              </dl>
-            )}
+            <SecretSyncWorkflow catalog={syncCatalog} initialName={selectedMeta?.name ?? ""} loadBlocked={Boolean(loadError)} />
           </section>
         </div>
       )}

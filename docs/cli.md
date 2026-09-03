@@ -814,12 +814,22 @@ trstctl-cli --idempotency-key connector-rotation-schedule-1 secrets rotation-sch
 trstctl-cli secrets rotation-schedules list
 trstctl-cli --idempotency-key connector-rotation-due-1 secrets rotation-schedules run-due
 
-# Push a stored secret to a configured external sync target. The response contains
-# metadata only; the secret value is never echoed back.
+# Review a stored-secret delivery before allowing any write or network effect.
+# Preview reads tenant-scoped metadata only: it does not open the secret value,
+# append an event, enqueue an outbox row, or contact the target.
 cat > secret-sync.json <<'JSON'
 {"name":"sync/source","target":"github-actions","remote_key":"DB_PASSWORD"}
 JSON
-trstctl-cli --idempotency-key secret-sync-1 secrets syncs run -f secret-sync.json
+trstctl-cli secrets syncs preview -f secret-sync.json
+
+# Copy request_fingerprint from the preview into preview_fingerprint. Execution
+# rejects a stale plan if the caller, secret version, target, or remote key changed.
+cat > reviewed-secret-sync.json <<'JSON'
+{"name":"sync/source","target":"github-actions","remote_key":"DB_PASSWORD","preview_fingerprint":"sha256:<copy-from-preview>"}
+JSON
+trstctl-cli --idempotency-key secret-sync-1 secrets syncs run -f reviewed-secret-sync.json
+
+# The execution response is metadata only; the secret value is never echoed back.
 
 # Discover supported and configured target IDs before choosing the target field.
 trstctl-cli secrets syncs targets

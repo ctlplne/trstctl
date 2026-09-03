@@ -404,6 +404,7 @@ import type {
   SecretScanPreview,
   SecretScanRequest,
   SecretSync,
+  SecretSyncPreview,
   SecretSyncRequest,
   SecretSyncTargetCatalog,
   SecretSyncWorkloadIdentitySource,
@@ -1027,6 +1028,7 @@ export type {
   SecretScanPreview,
   SecretScanRequest,
   SecretSync,
+  SecretSyncPreview,
   SecretSyncRequest,
   SecretSyncTargetCatalog,
   SecretSyncWorkloadIdentitySource,
@@ -2358,7 +2360,8 @@ export interface Api {
   ingestThirdPartySecretScan(provider: string, input: ThirdPartySecretScanIngestRequest): Promise<ThirdPartySecretScanReceipt>;
   previewSecretScan(input: SecretScanRequest): Promise<SecretScanPreview>;
   scanSecrets(input: SecretScanRequest, idempotencyKey?: string): Promise<SecretScan>;
-  syncSecret(input: SecretSyncRequest): Promise<SecretSync>;
+  previewSecretSync(input: SecretSyncRequest): Promise<SecretSyncPreview>;
+  syncSecret(input: SecretSyncRequest, idempotencyKey?: string): Promise<SecretSync>;
   cloudSecretManagers(): Promise<CloudSecretManagerIntegration>;
   secretSyncTargets(): Promise<SecretSyncTargetCatalog>;
   secretSyncWorkloadIdentitySources(): Promise<SecretSyncWorkloadIdentitySourceList>;
@@ -2939,7 +2942,8 @@ const liveApi: Api = {
     mutate<ThirdPartySecretScanReceipt>("POST", `/api/v1/secrets/scans/third-party/${encodeURIComponent(provider)}/ingest`, input),
   previewSecretScan: (input) => postRead<SecretScanPreview>("/api/v1/secrets/scans/preview", input),
   scanSecrets: (input, idempotencyKey) => mutate<SecretScan>("POST", "/api/v1/secrets/scans", input, idempotencyKey),
-  syncSecret: (input) => mutate<SecretSync>("POST", "/api/v1/secrets/syncs", input),
+  previewSecretSync: (input) => postRead<SecretSyncPreview>("/api/v1/secrets/syncs/preview", input),
+  syncSecret: (input, idempotencyKey) => mutate<SecretSync>("POST", "/api/v1/secrets/syncs", input, idempotencyKey),
   cloudSecretManagers: () => req<CloudSecretManagerIntegration>("/api/v1/secrets/cloud-secret-managers"),
   secretSyncTargets: () => req<SecretSyncTargetCatalog>("/api/v1/secrets/syncs/targets"),
   secretSyncWorkloadIdentitySources: () => req<SecretSyncWorkloadIdentitySourceList>("/api/v1/secrets/syncs/workload-identity-sources"),

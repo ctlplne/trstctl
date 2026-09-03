@@ -7015,8 +7015,32 @@ export interface SecretSync {
   target: string;
 }
 
+export interface SecretSyncPreview {
+  blockers: string[];
+  capability: string;
+  cli_argv: string[];
+  effect_free: boolean;
+  execute_external_effects: string[];
+  execute_writes: string[];
+  name: string;
+  operation: string;
+  preview_external_effects: string[];
+  preview_reads: string[];
+  preview_writes: string[];
+  ready: boolean;
+  recovery_steps: string[];
+  remote_key: string;
+  request_fingerprint?: string;
+  required_permission: string;
+  secret_data_handling: string;
+  secret_version: number;
+  target: string;
+  verification_steps: string[];
+}
+
 export interface SecretSyncRequest {
   name: string;
+  preview_fingerprint?: string;
   remote_key?: string;
   target: string;
 }

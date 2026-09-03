@@ -1446,8 +1446,13 @@ describe("i18n boundary", () => {
       // startup restore, KMIP runtime state, no-auto-retry recovery, complete
       // version history, filtered audit receipts, and real signature verification.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "8aade4ab3d046fb4cf33953eec9177a8ec92b21a825eaf6f9a8ce1f6e1ca39a9",
-      "de-DE": "40cb2407f3913eaf6a380144a90a5322d6f8f345f04fa03c19c114947ea14cbf",
+      // F68 re-pin: the secret-sync journey now names its choose/review/queue
+      // boundary, effect-free metadata-only preview, exact-version fence,
+      // recovery and verification steps, and metadata-only receipt. Retired
+      // source.* strings from the old direct form were removed. Machine-authored
+      // es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "3d135679f66a29e33a07bb65f56b957c0336444d6ed6f2b5665ad38bbc0e0ee2",
+      "de-DE": "dd319d9ea536961d685369be193dc76e6d03ffd984dcfb43be393ef252d9c4c9",
     });
   });
 

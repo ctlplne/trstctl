@@ -583,6 +583,9 @@ describe("exported API surface census", () => {
       // F37: reads tenant-scoped secret version and connector configuration
       // only; it generates no successor, writes no state, and contacts no target.
       "/api/v1/secrets/rotations/preview",
+      // F68: reads only tenant-scoped secret/target metadata and returns a
+      // server-keyed exact delivery plan; it never opens or enqueues the value.
+      "/api/v1/secrets/syncs/preview",
       // F63: validates a native-store create and returns a keyed, secret-free
       // plan without an idempotency row, event, projection, audit, or external call.
       "/api/v1/secrets/store/preview",
@@ -1831,6 +1834,32 @@ describe("secrets contract", () => {
       path: "/srv/repos/payments",
       mode: "workspace",
       preview_fingerprint: "sha256:f39-plan",
+    });
+  });
+
+  it("previews F68 without mutation headers and preserves the reviewed recovery key", async () => {
+    mockFetch(200, JSON.stringify({ capability: "F68", ready: true, effect_free: true, request_fingerprint: "sha256:f68-plan" }));
+    await api.previewSecretSync({ name: "app/db", target: "github-actions", remote_key: "DB_PASSWORD" });
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/syncs/preview");
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("POST");
+    expect(sentHeaders()["Idempotency-Key"]).toBeUndefined();
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual({
+      name: "app/db",
+      target: "github-actions",
+      remote_key: "DB_PASSWORD",
+    });
+
+    mockFetch(200, JSON.stringify({ name: "app/db", target: "github-actions", remote_key: "DB_PASSWORD", enqueued: true, delivered: false }));
+    await api.syncSecret({ name: "app/db", target: "github-actions", remote_key: "DB_PASSWORD", preview_fingerprint: "sha256:f68-plan" }, "f68-recovery-key");
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/syncs");
+    expect(sentHeaders()["Idempotency-Key"]).toBe("f68-recovery-key");
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual({
+      name: "app/db",
+      target: "github-actions",
+      remote_key: "DB_PASSWORD",
+      preview_fingerprint: "sha256:f68-plan",
     });
   });
 });

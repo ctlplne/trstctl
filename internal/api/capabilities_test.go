@@ -238,8 +238,10 @@ func TestCapabilitiesViewIsAuthenticatedSanitizedAndAuthorizationAware(t *testin
 	if f68.RuntimeState != "partially_available" || !containsCapabilityString(f68.Actions.Allowed, "listSecretSyncTargets") {
 		t.Fatalf("operator F68 runtime=%q allowed=%v, want independent sync target posture", f68.RuntimeState, f68.Actions.Allowed)
 	}
-	if action := findUnavailableCapabilityAction(t, f68, "syncSecret"); action.Code != "dependency_not_configured" {
-		t.Fatalf("F68 syncSecret unavailable=%+v, want dependency_not_configured", action)
+	for _, operationID := range []string{"previewSecretSync", "syncSecret"} {
+		if action := findUnavailableCapabilityAction(t, f68, operationID); action.Code != "dependency_not_configured" {
+			t.Fatalf("F68 %s unavailable=%+v, want dependency_not_configured", operationID, action)
+		}
 	}
 	f66 := findCapabilityViewItem(t, operator, "F66")
 	if f66.RuntimeState != "partially_available" || !containsCapabilityString(f66.Actions.Allowed, "getTransitPosture") {

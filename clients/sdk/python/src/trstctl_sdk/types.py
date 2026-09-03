@@ -9673,10 +9673,38 @@ SecretSync = TypedDict(
     total=False,
 )
 
+SecretSyncPreview = TypedDict(
+    'SecretSyncPreview',
+    {
+        'blockers': list[str],
+        'capability': str,
+        'cli_argv': list[str],
+        'effect_free': bool,
+        'execute_external_effects': list[str],
+        'execute_writes': list[str],
+        'name': str,
+        'operation': str,
+        'preview_external_effects': list[str],
+        'preview_reads': list[str],
+        'preview_writes': list[str],
+        'ready': bool,
+        'recovery_steps': list[str],
+        'remote_key': str,
+        'request_fingerprint': str,
+        'required_permission': str,
+        'secret_data_handling': str,
+        'secret_version': int,
+        'target': str,
+        'verification_steps': list[str],
+    },
+    total=False,
+)
+
 SecretSyncRequest = TypedDict(
     'SecretSyncRequest',
     {
         'name': str,
+        'preview_fingerprint': str,
         'remote_key': str,
         'target': str,
     },

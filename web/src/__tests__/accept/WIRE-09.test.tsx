@@ -35,6 +35,7 @@ const { apiMock } = vi.hoisted(() => ({
     kubernetesSecretOperator: vi.fn(),
     secretWorkloadInjection: vi.fn(),
     unvaultedSecrets: vi.fn(),
+    previewSecretSync: vi.fn(),
     previewSecretScan: vi.fn(),
     scanSecrets: vi.fn(),
     syncSecret: vi.fn(),
@@ -426,6 +427,28 @@ describe("WIRE-09 secret scanning and sync wiring", () => {
     apiMock.kubernetesSecretOperator.mockResolvedValue(kubernetesSecretOperatorFixture());
     apiMock.secretWorkloadInjection.mockResolvedValue(secretWorkloadInjectionFixture());
     apiMock.unvaultedSecrets.mockResolvedValue(unvaultedSecretPostureFixture());
+    apiMock.previewSecretSync.mockResolvedValue({
+      capability: "F68",
+      operation: "sync_secret",
+      ready: true,
+      effect_free: true,
+      name: "app/db/password",
+      secret_version: 3,
+      target: "github-actions",
+      remote_key: "Secret/payments-db/password",
+      required_permission: "secrets:write",
+      request_fingerprint: "sha256:reviewed-f68",
+      blockers: [],
+      preview_reads: ["read tenant-scoped metadata"],
+      preview_writes: [],
+      preview_external_effects: [],
+      execute_writes: ["append event", "commit sealed outbox intent"],
+      execute_external_effects: ["deliver through the bounded outbox worker"],
+      recovery_steps: ["Retry with the same Idempotency-Key."],
+      verification_steps: ["Read the durable delivery receipt."],
+      cli_argv: ["trstctl", "secrets", "syncs", "preview", "-f", "secret-sync.json"],
+      secret_data_handling: "Preview reads metadata only and never opens the value.",
+    });
     apiMock.previewSecretScan.mockResolvedValue({
       capability: "F39",
       operation: "run_secret_scan",
@@ -470,7 +493,7 @@ describe("WIRE-09 secret scanning and sync wiring", () => {
     });
     apiMock.syncSecret.mockResolvedValue({
       name: "app/db/password",
-      target: "kubernetes/prod",
+      target: "github-actions",
       remote_key: "Secret/payments-db/password",
       enqueued: true,
       delivered: false,
@@ -559,21 +582,26 @@ describe("WIRE-09 secret scanning and sync wiring", () => {
     cleanup();
     renderSecrets("/secrets/sync");
     const syncForm = within(await screen.findByRole("form", { name: "Sync stored secret" }));
-    await user.clear(syncForm.getByLabelText("Target"));
-    await user.type(syncForm.getByLabelText("Target"), "kubernetes/prod");
-    await user.type(syncForm.getByLabelText("Remote key"), "Secret/payments-db/password");
-    await user.click(syncForm.getByRole("button", { name: /sync secret/i }));
+    await user.selectOptions(syncForm.getByLabelText("Target"), "github-actions");
+    await user.type(syncForm.getByLabelText("Name at destination"), "Secret/payments-db/password");
+    await user.click(syncForm.getByRole("button", { name: /review sync/i }));
+    expect(apiMock.syncSecret).not.toHaveBeenCalled();
+    await user.click(await screen.findByRole("button", { name: /queue reviewed sync/i }));
 
     await waitFor(() =>
-      expect(apiMock.syncSecret).toHaveBeenCalledWith({
-        name: "app/db/password",
-        target: "kubernetes/prod",
-        remote_key: "Secret/payments-db/password",
-      }),
+      expect(apiMock.syncSecret).toHaveBeenCalledWith(
+        {
+          name: "app/db/password",
+          target: "github-actions",
+          remote_key: "Secret/payments-db/password",
+          preview_fingerprint: "sha256:reviewed-f68",
+        },
+        expect.stringMatching(/^secret-sync-/),
+      ),
     );
     expect(await screen.findByText("Queued")).toBeInTheDocument();
     expect(screen.getByText("Not delivered")).toBeInTheDocument();
-    expect(screen.getByText("Secret/payments-db/password")).toBeInTheDocument();
+    expect(screen.getAllByText("Secret/payments-db/password").length).toBeGreaterThan(0);
     expect(screen.queryByText(/ghp_plaintext_secret|BEGIN .* PRIVATE KEY|raw target token/i)).not.toBeInTheDocument();
     expect(storageSpy).not.toHaveBeenCalled();
     expect(localStorage.length).toBe(0);

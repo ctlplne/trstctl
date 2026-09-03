@@ -28569,9 +28569,125 @@
         ],
         "type": "object"
       },
+      "SecretSyncPreview": {
+        "properties": {
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "cli_argv": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "execute_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execute_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_reads": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "remote_key": {
+            "type": "string"
+          },
+          "request_fingerprint": {
+            "type": "string"
+          },
+          "required_permission": {
+            "type": "string"
+          },
+          "secret_data_handling": {
+            "type": "string"
+          },
+          "secret_version": {
+            "type": "integer"
+          },
+          "target": {
+            "type": "string"
+          },
+          "verification_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "operation",
+          "ready",
+          "effect_free",
+          "name",
+          "secret_version",
+          "target",
+          "remote_key",
+          "required_permission",
+          "blockers",
+          "preview_reads",
+          "preview_writes",
+          "preview_external_effects",
+          "execute_writes",
+          "execute_external_effects",
+          "recovery_steps",
+          "verification_steps",
+          "cli_argv",
+          "secret_data_handling"
+        ],
+        "type": "object"
+      },
       "SecretSyncRequest": {
         "properties": {
           "name": {
+            "type": "string"
+          },
+          "preview_fingerprint": {
             "type": "string"
           },
           "remote_key": {
@@ -55060,6 +55176,63 @@
           }
         ],
         "summary": "Push a stored secret to a configured external sync target",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/syncs/preview": {
+      "post": {
+        "operationId": "previewSecretSync",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretSyncRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretSyncPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Review an exact secret-sync plan without opening the value, writing, enqueueing, or contacting the target",
         "x-trstctl-permission": "secrets:write"
       }
     },

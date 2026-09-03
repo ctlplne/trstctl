@@ -2730,6 +2730,83 @@ export const messages = {
     defaultMessage: "Add a destination first. trstctl will not accept a made-up target name or pretend a delivery was queued.",
     description: "Secret delivery empty-state guidance and honesty boundary.",
   },
+  "secrets.sync.required": { defaultMessage: "This field is required.", description: "Secret-sync required-field validation." },
+  "secrets.sync.formLabel": { defaultMessage: "Sync stored secret", description: "Accessible label for the exact secret-sync workflow." },
+  "secrets.sync.configureStep": { defaultMessage: "Choose the delivery", description: "Secret-sync configuration step." },
+  "secrets.sync.configureStepHelp": {
+    defaultMessage: "Choose one stored secret, one configured destination, and the name it should have there.",
+    description: "Plain-language help for the secret-sync configuration step.",
+  },
+  "secrets.sync.reviewStep": { defaultMessage: "Review before queueing", description: "Secret-sync effect-free review step." },
+  "secrets.sync.reviewStepHelp": {
+    defaultMessage: "The server checks the exact secret version and shows every write, outside call, recovery step, and proof.",
+    description: "Plain-language help for the server-owned secret-sync review.",
+  },
+  "secrets.sync.progress": { defaultMessage: "Secret sync progress", description: "Accessible progress label for secret sync." },
+  "secrets.sync.reviewAction": { defaultMessage: "Review sync", description: "Request the effect-free secret-sync plan." },
+  "secrets.sync.reviewing": { defaultMessage: "Checking the plan…", description: "Secret-sync preview pending state." },
+  "secrets.sync.secretName": { defaultMessage: "Secret name", description: "Stored secret selected for synchronization." },
+  "secrets.sync.secretNameExample": { defaultMessage: "app/db/password", description: "Example stored-secret name in the sync form." },
+  "secrets.sync.targetHelp": {
+    defaultMessage: "Only destinations configured for this tenant are listed.",
+    description: "Secret-sync target authority help.",
+  },
+  "secrets.sync.chooseTarget": { defaultMessage: "Choose a configured destination", description: "Secret-sync target placeholder." },
+  "secrets.sync.remoteKey": { defaultMessage: "Name at destination", description: "Remote key or object name for a secret sync." },
+  "secrets.sync.remoteKeyExample": { defaultMessage: "DB_PASSWORD", description: "Example destination key in the secret-sync form." },
+  "secrets.sync.remoteKeyHelp": {
+    defaultMessage: "Leave blank to use the stored secret name.",
+    description: "Secret-sync remote-key default behavior.",
+  },
+  "secrets.sync.permissionBlocked": { defaultMessage: "Secret sync is not available to this role", description: "Secret-sync authorization state." },
+  "secrets.sync.permissionHelp": {
+    defaultMessage: "Ask for secrets:write, then reload the capability check.",
+    description: "Secret-sync permission recovery guidance.",
+  },
+  "secrets.sync.previewUnsafe": {
+    defaultMessage: "The server did not prove this review was effect-free. Nothing was queued.",
+    description: "Fail-closed secret-sync preview boundary.",
+  },
+  "secrets.sync.previewMissingFingerprint": {
+    defaultMessage: "The server did not bind this ready plan to an exact version. Nothing was queued.",
+    description: "Fail-closed response when a ready secret-sync preview lacks exact evidence.",
+  },
+  "secrets.sync.previewFailed": { defaultMessage: "Could not review secret sync", description: "Secret-sync preview error title." },
+  "secrets.sync.reviewRequired": {
+    defaultMessage: "Review the current fields again before queueing.",
+    description: "Secret-sync review prerequisite guidance.",
+  },
+  "secrets.sync.previewStale": {
+    defaultMessage: "The secret version or delivery fields changed. Review the current plan again; the stale plan was not queued.",
+    description: "Secret-sync stale preview recovery guidance.",
+  },
+  "secrets.sync.executeFailed": { defaultMessage: "Could not confirm secret sync", description: "Secret-sync execution or recovery error title." },
+  "secrets.sync.previewReady": { defaultMessage: "This exact delivery is ready", description: "Ready secret-sync plan heading." },
+  "secrets.sync.previewBlocked": { defaultMessage: "This delivery is blocked", description: "Blocked secret-sync plan heading." },
+  "secrets.sync.previewNoEffects": {
+    defaultMessage: "No preview writes or outside calls",
+    description: "Explicit effect-free secret-sync preview assurance.",
+  },
+  "secrets.sync.ready": { defaultMessage: "ready", description: "Ready secret-sync plan badge." },
+  "secrets.sync.blocked": { defaultMessage: "blocked", description: "Blocked secret-sync plan badge." },
+  "secrets.sync.versionSummary": {
+    defaultMessage: "Version {version} stays encrypted until the outbox worker delivers it.",
+    description: "Plain-language secret version and custody summary.",
+  },
+  "secrets.sync.permission": { defaultMessage: "Required permission", description: "Secret-sync plan permission label." },
+  "secrets.sync.effects": { defaultMessage: "What will happen", description: "Secret-sync execution effects heading." },
+  "secrets.sync.recovery": { defaultMessage: "If something goes wrong", description: "Secret-sync recovery steps heading." },
+  "secrets.sync.verification": { defaultMessage: "How to prove it worked", description: "Secret-sync verification steps heading." },
+  "secrets.sync.exactEvidence": { defaultMessage: "Show exact plan evidence", description: "Secret-sync fingerprint disclosure." },
+  "secrets.sync.fingerprint": { defaultMessage: "plan fingerprint", description: "Accessible label for the secret-sync plan fingerprint." },
+  "secrets.sync.executeReviewed": { defaultMessage: "Queue reviewed sync", description: "Execute the exact reviewed secret-sync plan." },
+  "secrets.sync.retryReviewed": { defaultMessage: "Retry reviewed sync", description: "Retry an ambiguous secret-sync command with the same key." },
+  "secrets.sync.receiptTitle": { defaultMessage: "Sync request recorded", description: "Secret-sync metadata receipt heading." },
+  "secrets.sync.queue": { defaultMessage: "Queue", description: "Secret-sync queue status label." },
+  "secrets.sync.queued": { defaultMessage: "Queued", description: "Secret-sync queued state." },
+  "secrets.sync.notQueued": { defaultMessage: "Not queued", description: "Secret-sync not-queued state." },
+  "secrets.sync.delivered": { defaultMessage: "Delivered", description: "Secret-sync delivered state." },
+  "secrets.sync.notDelivered": { defaultMessage: "Not delivered", description: "Secret-sync not-yet-delivered state." },
   "nav.group.secretsAccess": {
     defaultMessage: "Access & sharing",
     description: "Secrets space navigation group: machine access and one-time shares.",
@@ -22893,10 +22970,6 @@ export const messages = {
     defaultMessage: "Question",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Assistant.tsx.",
   },
-  "source.queue.3b2fe03e36": {
-    defaultMessage: "Queue",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
   "source.queue.a.servicenow.table.api.ticket.throug.0df778f34b": {
     defaultMessage: "Queue a ServiceNow Table API ticket through the same event log and outbox used for credential workflows.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
@@ -23019,10 +23092,6 @@ export const messages = {
   "source.reload.command.cf1acb1111": {
     defaultMessage: "Reload command",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/SSHTrust.tsx.",
-  },
-  "source.remote.key.b698762058": {
-    defaultMessage: "Remote key",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
   "source.remove.row.1810fddd9e": {
     defaultMessage: "Remove row",
@@ -23318,10 +23387,6 @@ export const messages = {
     defaultMessage: "Search owners",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Owners.tsx.",
   },
-  "source.secret.7e32a729b1": {
-    defaultMessage: "Secret",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
   "source.secret.create.failed.885c3ecf7c": {
     defaultMessage: "Secret create failed",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
@@ -23348,10 +23413,6 @@ export const messages = {
   },
   "source.secret.sync.and.platform.integrations.90c8c57a01": {
     defaultMessage: "Secret sync and platform integrations",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
-  "source.secret.sync.failed.b901ae57d8": {
-    defaultMessage: "Secret sync failed",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
   "source.secret.to.delete.6abd642165": {
@@ -23998,14 +24059,6 @@ export const messages = {
   },
   "source.svc.internal.e50a91019d": {
     defaultMessage: "svc.internal",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
-  "source.sync.secret.4d3ab1c075": {
-    defaultMessage: "Sync secret",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
-  "source.sync.stored.secret.b83b2d0767": {
-    defaultMessage: "Sync stored secret",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
   "source.table.16d1c9050a": {
@@ -24765,17 +24818,9 @@ export const messages = {
     defaultMessage: "none selected",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Assistant.tsx:198.",
   },
-  "source.not.delivered.f498742c19": {
-    defaultMessage: "Not delivered",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Secrets.tsx:3070.",
-  },
   "source.not.published.30839efda7": {
     defaultMessage: "not published",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/SSHTrust.tsx:258.",
-  },
-  "source.not.queued.7e52b62ffb": {
-    defaultMessage: "Not queued",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Secrets.tsx:3066.",
   },
   "source.not.scoped.dcd55e3956": {
     defaultMessage: "not scoped",

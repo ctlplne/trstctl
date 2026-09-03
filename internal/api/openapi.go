@@ -5193,8 +5193,20 @@ func componentSchemas() map[string]*Schema {
 		"system_error":       {Type: "string", Description: "Non-secret fail-stop detail. A 503 envelope is cached by the outer Idempotency-Key; retry with the same key is byte-identical and executes no child again. Use a new key to continue after repair."},
 	}, "ran", "scanned", "runs", "deferred", "run_limit_reached", "scan_limit_reached", "complete", "partial")
 	secretSyncReq := object(map[string]*Schema{
-		"name": str(), "target": str(), "remote_key": str(),
+		"name": str(), "target": str(), "remote_key": str(), "preview_fingerprint": str(),
 	}, "name", "target")
+	secretSyncPreview := object(map[string]*Schema{
+		"capability": str(), "operation": str(), "ready": {Type: "boolean"}, "effect_free": {Type: "boolean"},
+		"name": str(), "secret_version": {Type: "integer"}, "target": str(), "remote_key": str(),
+		"required_permission": str(), "request_fingerprint": str(),
+		"blockers": {Type: "array", Items: str()}, "preview_reads": {Type: "array", Items: str()},
+		"preview_writes": {Type: "array", Items: str()}, "preview_external_effects": {Type: "array", Items: str()},
+		"execute_writes": {Type: "array", Items: str()}, "execute_external_effects": {Type: "array", Items: str()},
+		"recovery_steps": {Type: "array", Items: str()}, "verification_steps": {Type: "array", Items: str()},
+		"cli_argv": {Type: "array", Items: str()}, "secret_data_handling": str(),
+	}, "capability", "operation", "ready", "effect_free", "name", "secret_version", "target", "remote_key",
+		"required_permission", "blockers", "preview_reads", "preview_writes", "preview_external_effects",
+		"execute_writes", "execute_external_effects", "recovery_steps", "verification_steps", "cli_argv", "secret_data_handling")
 	secretSync := object(map[string]*Schema{
 		"name": str(), "target": str(), "remote_key": str(),
 		"enqueued": {Type: "boolean"}, "delivered": {Type: "boolean"},
@@ -6494,6 +6506,7 @@ func componentSchemas() map[string]*Schema {
 		"SecretRotationScheduleDeferred":     secretRotationScheduleDeferred,
 		"SecretRotationDueRun":               secretRotationDueRun,
 		"SecretSyncRequest":                  secretSyncReq,
+		"SecretSyncPreview":                  secretSyncPreview,
 		"SecretSync":                         secretSync,
 		"SecretSyncTarget":                   secretSyncTarget,
 		"SecretSyncTargetCatalog":            secretSyncTargetCatalog,
