@@ -199,6 +199,46 @@ func TestCodeSigningIntentConcurrentProjectionCreatesOneCommand(t *testing.T) {
 	}
 }
 
+func TestCodeSigningIdentitiesJoinTransparencyByOutboxIdentity(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	op := store.CodeSigningOperation{
+		TenantID: tenantA, OperationID: "codesign-history-transparency",
+		IdempotencyKey: store.CodeSigningIdempotencyKeyRef("history-request"),
+		Mode:           "key", RequestHash: strings.Repeat("a", 64),
+		SealedCommand: []byte("sealed-command"), CreatedAt: now, UpdatedAt: now,
+	}
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return s.ApplyCodeSigningIntentTx(ctx, tx, op,
+			[]byte(`{"operation_id":"codesign-history-transparency"}`))
+	}); err != nil {
+		t.Fatalf("apply code-signing intent: %v", err)
+	}
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return s.ApplyCodeSigningCompletedTx(ctx, tx, tenantA, op.OperationID,
+			op.RequestHash, []byte(`{"status":"signed"}`), "transparency.rekor",
+			[]byte(`{"operation_id":"codesign-history-transparency"}`), "", now.Add(time.Second))
+	}); err != nil {
+		t.Fatalf("apply code-signing completion: %v", err)
+	}
+	if _, err := s.SystemPool().Exec(ctx,
+		`UPDATE outbox SET status = 'delivered', delivered_at = now(), payload = $4
+		  WHERE tenant_id = $1 AND destination = $2 AND idempotency_key = $3`,
+		tenantA, "transparency.rekor", "codesign.rekor:"+op.OperationID,
+		[]byte(`{"payload":"does-not-contain-the-operation-id"}`)); err != nil {
+		t.Fatalf("mark transparency intent delivered: %v", err)
+	}
+
+	rows, err := s.ListCodeSigningIdentities(ctx, tenantA, "transparency.rekor", 10)
+	if err != nil {
+		t.Fatalf("list code-signing identities: %v", err)
+	}
+	if len(rows) != 1 || rows[0].OperationID != op.OperationID || rows[0].Transparency != "verified" {
+		t.Fatalf("code-signing history = %+v, want the operation joined to its delivered Rekor intent", rows)
+	}
+}
+
 func TestCodeSigningIntentConsumesExactApprovalInOperationOutboxTransaction(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()

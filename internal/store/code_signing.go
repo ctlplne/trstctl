@@ -251,7 +251,7 @@ func (s *Store) ListCodeSigningIdentities(ctx context.Context, tenantID, destina
 			       FROM outbox
 			      WHERE tenant_id = op.tenant_id
 			        AND destination = $2
-			        AND payload::text LIKE '%' || op.operation_id || '%'
+			        AND idempotency_key = 'codesign.rekor:' || op.operation_id
 			      ORDER BY id DESC
 			      LIMIT 1
 			   ) ob ON true
