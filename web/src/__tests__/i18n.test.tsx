@@ -1457,8 +1457,11 @@ describe("i18n boundary", () => {
       // transparency proof, and keyless-token custody. Obsolete direct-mutation
       // source.* strings were removed. Machine-authored es/de — FLAGGED FOR
       // HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "fbc80510e5fe0bab1d583ee15e8532509acadd28809ff0fa65ba689cbe1a2a4c",
-      "de-DE": "1f1d461c0c1e93b3a33ea45f3710b09d84257bc014703d34aefc5833bed39879",
+      // F50 browser-history re-pin: an unexpected public signing mode now says
+      // Unknown signing mode instead of silently claiming a keyless identity.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "40b33610f1924e77fe7a90a719a77f2a1fc3cded452794d7fb26722a6b444c2f",
+      "de-DE": "9d930d1e74f79351e9156efc9ffdc991f5e7406be677b8acc9211747df168c95",
     });
   });
 
