@@ -184,7 +184,7 @@ exhaustive subcommand list:
 | `cbom`                            | Cryptographic bill of materials: effect-free plan review, bounded scan, inventory (`preview` · `scan` · `assets`)                                                                                                                                                                                                   |
 | `pqc campaigns`                   | Core PQC migration ownership and evidence workflow (`create` · `list` · `get` · `update` · `readiness` · `disposition` · `close` · `evidence`)                                                                                                                                                                      |
 | `certificates`                    | Certificate inventory: ingest, list, get, health, bulk-revoke (`ingest` · `list` · `get` · `health` · `bulk-revoke`)                                                                                                                                                                                                |
-| `code-signing`                    | Sign artifact digests with a managed key or a keyless Sigstore/Fulcio identity (`identities` · `sign` · `keyless`)                                                                                                                                                                                                  |
+| `code-signing`                    | Review and sign artifact digests with a managed key or a keyless Sigstore/Fulcio identity (`identities` · `preview` · `sign` · `keyless-preview` · `keyless`)                                                                                                                                                                               |
 | `compliance`                      | Compliance/inventory reporting and signed evidence-pack export (`inventory-report` · `nhi-report` · `report-schedules` · `evidence-pack`)                                                                                                                                                                           |
 | `connector target`                | Deployment connector targets: create, bind, test, deploy, roll back (`create` · `list` · `get` · `update` · `delete` · `bind` · `test` · `deploy` · `rollback`)                                                                                                                                                     |
 | `connectors`                      | Connector catalog, outbox circuit-breaker state, delivery receipts (`catalog` · `outbox-circuits` · `deliveries`)                                                                                                                                                                                                   |
@@ -908,11 +908,16 @@ cat > transit-rewrap.json <<'JSON'
 JSON
 trstctl-cli --idempotency-key transit-payments-rewrap transit rewrap -f transit-rewrap.json
 
-# Sign an artifact digest with a configured code-signing key. The response contains
-# the signature, public key, algorithm, and transparency outbox destination.
 cat > code-sign.json <<'JSON'
 {"key_id":"release-key","artifact_type":"oci-image","digest":"4EW4IfBBkDngEwN3v+ChO06PV2er4tF7nEVmFev3x1g="}
 JSON
+# Review an artifact digest with a configured code-signing key. This is effect-free:
+# it does not open the signer, write state, or contact Rekor.
+trstctl-cli code-signing preview -f code-sign.json > code-sign-plan.json
+
+# Copy request_fingerprint from the plan into code-sign.json as
+# preview_fingerprint, then execute with one retained recovery key. The response
+# contains the signature, public key, algorithm, and transparency outbox destination.
 trstctl-cli --idempotency-key release-sign-1 code-signing sign -f code-sign.json
 
 # Sign keylessly with a verified Fulcio/Sigstore identity proof. identity_payload is
@@ -920,6 +925,7 @@ trstctl-cli --idempotency-key release-sign-1 code-signing sign -f code-sign.json
 cat > code-sign-keyless.json <<'JSON'
 {"artifact_type":"oci-image","digest":"4EW4IfBBkDngEwN3v+ChO06PV2er4tF7nEVmFev3x1g=","identity_method":"github_oidc","identity_payload":"eyJqd3QiOiJleGFtcGxlIn0=","fulcio_san":"repo:acme/payments:ref:refs/heads/main","fulcio_issuer":"https://token.actions.githubusercontent.com"}
 JSON
+trstctl-cli code-signing keyless-preview -f code-sign-keyless.json > code-sign-keyless-plan.json
 trstctl-cli --idempotency-key release-keyless-1 code-signing keyless -f code-sign-keyless.json
 
 # On an enrolled host, report local public certificate files over the agent channel.

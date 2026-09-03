@@ -37,6 +37,17 @@ func (r *tenantCodeSigningKeyResolver) Signer(tenantID, keyID string) (crypto.Di
 	return signer, nil
 }
 
+func (r *tenantCodeSigningKeyResolver) CodeSigningKeyMetadata(tenantID, keyID string) (string, bool) {
+	if r == nil {
+		return "", false
+	}
+	signer, ok := r.keys[codeSigningKeyIdentity(tenantID, keyID)]
+	if !ok || signer == nil {
+		return "", false
+	}
+	return string(signer.Algorithm()), true
+}
+
 // codeSigningConfigFromConfig is the production composition seam named by the
 // wiring census. Every private operation stays behind SignerProvider.Client();
 // neither persistent nor keyless private key material enters this process.

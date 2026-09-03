@@ -2045,12 +2045,42 @@ export interface CodeSigningKeylessRequest {
   fulcio_san?: string;
   identity_method: string;
   identity_payload: string;
+  preview_fingerprint?: string;
+}
+
+export interface CodeSigningPreview {
+  approval_required: boolean;
+  artifact_type: string;
+  blockers: string[];
+  capability: string;
+  cli_argv: string[];
+  configuration_fingerprint: string;
+  digest_sha256: string;
+  effect_free: boolean;
+  execute_external_effects: string[];
+  execute_writes: string[];
+  identity_method?: string;
+  key_id?: string;
+  mode: "key" | "keyless";
+  operation: string;
+  preview_external_effects: string[];
+  preview_reads: string[];
+  preview_writes: string[];
+  ready: boolean;
+  recovery_steps: string[];
+  request_fingerprint: string;
+  required_permission: string;
+  secret_data_handling: string;
+  signing_algorithm?: string;
+  transparency_destination?: string;
+  verification_steps: string[];
 }
 
 export interface CodeSigningRequest {
   artifact_type: string;
   digest: string;
   key_id: string;
+  preview_fingerprint?: string;
 }
 
 export interface CodeSigningSignature {

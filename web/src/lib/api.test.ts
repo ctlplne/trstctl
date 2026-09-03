@@ -620,6 +620,10 @@ describe("exported API surface census", () => {
       "/api/v1/ca/ceremonies/preview",
       "/api/v1/ca/authorities/item%2Fid/rotate/preview",
       "/api/v1/managed-keys/preview",
+      // F50: these bind one exact digest and signer configuration without
+      // resolving a signer, attesting identity, writing state, or publishing.
+      "/api/v1/code-signing/preview",
+      "/api/v1/code-signing/keyless/preview",
       // F67: validates the exact PKI custody/profile/CA plan but performs no
       // signing, event append, audit write, idempotency record, or egress.
       "/api/v1/secrets/pki/preview",
@@ -1861,6 +1865,24 @@ describe("secrets contract", () => {
       remote_key: "DB_PASSWORD",
       preview_fingerprint: "sha256:f68-plan",
     });
+  });
+
+  it("previews F50 without mutation headers and preserves the reviewed recovery key", async () => {
+    const request = { artifact_type: "oci-image", digest: "AA==", key_id: "release-signing" };
+    mockFetch(200, JSON.stringify({ capability: "F50", ready: true, effect_free: true, request_fingerprint: "sha256:f50-plan" }));
+    await api.previewCode(request);
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/code-signing/preview");
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("POST");
+    expect(sentHeaders()["Idempotency-Key"]).toBeUndefined();
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual(request);
+
+    mockFetch(200, JSON.stringify({ algorithm: "ECDSA-P256", artifact_type: "oci-image", signature: "sig", public_key_der: "pub" }));
+    await api.signCode({ ...request, preview_fingerprint: "sha256:f50-plan" }, "f50-recovery-key");
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/code-signing/sign");
+    expect(sentHeaders()["Idempotency-Key"]).toBe("f50-recovery-key");
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual({ ...request, preview_fingerprint: "sha256:f50-plan" });
   });
 });
 

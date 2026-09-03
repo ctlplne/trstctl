@@ -8324,6 +8324,9 @@
           "identity_payload": {
             "format": "byte",
             "type": "string"
+          },
+          "preview_fingerprint": {
+            "type": "string"
           }
         },
         "required": [
@@ -8331,6 +8334,140 @@
           "digest",
           "identity_method",
           "identity_payload"
+        ],
+        "type": "object"
+      },
+      "CodeSigningPreview": {
+        "properties": {
+          "approval_required": {
+            "type": "boolean"
+          },
+          "artifact_type": {
+            "type": "string"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "cli_argv": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "configuration_fingerprint": {
+            "type": "string"
+          },
+          "digest_sha256": {
+            "type": "string"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "execute_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execute_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "identity_method": {
+            "type": "string"
+          },
+          "key_id": {
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "key",
+              "keyless"
+            ],
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_reads": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "request_fingerprint": {
+            "type": "string"
+          },
+          "required_permission": {
+            "type": "string"
+          },
+          "secret_data_handling": {
+            "type": "string"
+          },
+          "signing_algorithm": {
+            "type": "string"
+          },
+          "transparency_destination": {
+            "type": "string"
+          },
+          "verification_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "operation",
+          "mode",
+          "ready",
+          "effect_free",
+          "artifact_type",
+          "digest_sha256",
+          "required_permission",
+          "request_fingerprint",
+          "configuration_fingerprint",
+          "approval_required",
+          "blockers",
+          "preview_reads",
+          "preview_writes",
+          "preview_external_effects",
+          "execute_writes",
+          "execute_external_effects",
+          "recovery_steps",
+          "verification_steps",
+          "cli_argv",
+          "secret_data_handling"
         ],
         "type": "object"
       },
@@ -8344,6 +8481,9 @@
             "type": "string"
           },
           "key_id": {
+            "type": "string"
+          },
+          "preview_fingerprint": {
             "type": "string"
           }
         },
@@ -37910,6 +38050,120 @@
           }
         ],
         "summary": "Sign an artifact digest with a verified Sigstore/Fulcio identity",
+        "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/code-signing/keyless/preview": {
+      "post": {
+        "operationId": "previewCodeArtifactKeyless",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeSigningKeylessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeSigningPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Review an exact keyless signing plan without attesting, signing, or publishing",
+        "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/code-signing/preview": {
+      "post": {
+        "operationId": "previewCodeArtifact",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeSigningRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeSigningPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Review an exact managed-key signing plan without signing or publishing",
         "x-trstctl-permission": "keys:write"
       }
     },

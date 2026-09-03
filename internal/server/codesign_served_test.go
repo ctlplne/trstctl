@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/codesign"
@@ -76,11 +77,66 @@ func TestServedCodeSigningKeyBasedAndKeylessSigstore(t *testing.T) {
 		string(authz.KeysRead), string(authz.KeysWrite),
 	})
 	digest := crypto.SHA256Sum([]byte("oci manifest bytes"))
-
-	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/code-signing/sign", token, "clm-06-keyed-sign", map[string]any{
+	countCodeSigningEvents := func() int {
+		t.Helper()
+		count := 0
+		if err := h.log.Replay(context.Background(), 0, func(event events.Event) error {
+			if event.TenantID == h.tenant && strings.HasPrefix(event.Type, "codesign.") {
+				count++
+			}
+			return nil
+		}); err != nil {
+			t.Fatalf("count code-signing events: %v", err)
+		}
+		return count
+	}
+	beforePreview := countCodeSigningEvents()
+	previewRequest := map[string]any{
 		"key_id":        "release-key",
 		"artifact_type": "oci-image",
 		"digest":        digest,
+	}
+	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/code-signing/preview", token, "", previewRequest)
+	if code != http.StatusOK {
+		t.Fatalf("key-based preview = %d, want 200; body=%s", code, body)
+	}
+	var keyedPlan api.CodeSigningPreview
+	if err := json.Unmarshal(body, &keyedPlan); err != nil {
+		t.Fatalf("decode key-based preview: %v body=%s", err, body)
+	}
+	if !keyedPlan.Ready || !keyedPlan.EffectFree || keyedPlan.RequestFingerprint == "" ||
+		len(keyedPlan.PreviewWrites) != 0 || len(keyedPlan.PreviewExternalEffects) != 0 ||
+		keyedPlan.DigestSHA256 != fmt.Sprintf("%x", digest) || keyedPlan.SigningAlgorithm != string(crypto.ECDSAP256) {
+		t.Fatalf("unsafe or incomplete key-based preview: %+v", keyedPlan)
+	}
+	if got := countCodeSigningEvents(); got != beforePreview {
+		t.Fatalf("effect-free preview appended code-signing events: before=%d after=%d", beforePreview, got)
+	}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/code-signing/preview", token, "", previewRequest)
+	var repeatedPlan api.CodeSigningPreview
+	if code != http.StatusOK || json.Unmarshal(body, &repeatedPlan) != nil || repeatedPlan.RequestFingerprint != keyedPlan.RequestFingerprint {
+		t.Fatalf("identical preview was not deterministic: code=%d first=%q repeated=%q body=%s", code, keyedPlan.RequestFingerprint, repeatedPlan.RequestFingerprint, body)
+	}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/code-signing/preview", token, "", map[string]any{
+		"key_id": "missing-key", "artifact_type": "oci-image", "digest": digest,
+	})
+	var blockedPlan api.CodeSigningPreview
+	if code != http.StatusOK || json.Unmarshal(body, &blockedPlan) != nil || blockedPlan.Ready || len(blockedPlan.Blockers) == 0 {
+		t.Fatalf("missing-key preview did not fail closed: code=%d plan=%+v body=%s", code, blockedPlan, body)
+	}
+
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/code-signing/sign", token, "clm-06-stale-sign", map[string]any{
+		"key_id": "release-key", "artifact_type": "sbom", "digest": digest,
+		"preview_fingerprint": keyedPlan.RequestFingerprint,
+	})
+	if code != http.StatusConflict {
+		t.Fatalf("stale code-signing preview = %d, want 409; body=%s", code, body)
+	}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/code-signing/sign", token, "clm-06-keyed-sign", map[string]any{
+		"key_id":              "release-key",
+		"artifact_type":       "oci-image",
+		"digest":              digest,
+		"preview_fingerprint": keyedPlan.RequestFingerprint,
 	})
 	if code != http.StatusOK {
 		op, _, _ := h.store.CodeSigningOperationByIdempotency(context.Background(), h.tenant, "clm-06-keyed-sign")
@@ -104,14 +160,24 @@ func TestServedCodeSigningKeyBasedAndKeylessSigstore(t *testing.T) {
 		t.Fatalf("served key-based signature does not verify: %v", err)
 	}
 
-	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/code-signing/keyless", token, "clm-06-keyless-sign", map[string]any{
+	keylessPreviewRequest := map[string]any{
 		"artifact_type":    "oci-image",
 		"digest":           digest,
 		"identity_method":  "fulcio_fixture",
 		"identity_payload": []byte(`{"token":"fixture-good"}`),
 		"fulcio_san":       "repo:acme/payments:ref:refs/heads/main",
 		"fulcio_issuer":    "https://token.actions.githubusercontent.com",
-	})
+	}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/code-signing/keyless/preview", token, "", keylessPreviewRequest)
+	if code != http.StatusOK || bytes.Contains(body, []byte("fixture-good")) {
+		t.Fatalf("keyless preview failed or leaked identity proof: code=%d body=%s", code, body)
+	}
+	var keylessPlan api.CodeSigningPreview
+	if err := json.Unmarshal(body, &keylessPlan); err != nil || !keylessPlan.Ready || !keylessPlan.EffectFree || keylessPlan.RequestFingerprint == "" {
+		t.Fatalf("keyless preview = %+v, %v; body=%s", keylessPlan, err, body)
+	}
+	keylessPreviewRequest["preview_fingerprint"] = keylessPlan.RequestFingerprint
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/code-signing/keyless", token, "clm-06-keyless-sign", keylessPreviewRequest)
 	if code != http.StatusOK {
 		t.Fatalf("keyless code-signing = %d, want 200; body=%s", code, body)
 	}
@@ -182,6 +248,14 @@ func (m codeSigningKeyMap) Signer(_ string, keyID string) (crypto.DigestSigner, 
 		return nil, fmt.Errorf("no key %s", keyID)
 	}
 	return signer, nil
+}
+
+func (m codeSigningKeyMap) CodeSigningKeyMetadata(_ string, keyID string) (string, bool) {
+	signer, ok := m.keys[keyID]
+	if !ok || signer == nil {
+		return "", false
+	}
+	return string(signer.Algorithm()), true
 }
 
 var _ codesign.KeyResolver = codeSigningKeyMap{}

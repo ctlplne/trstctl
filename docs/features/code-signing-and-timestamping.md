@@ -184,11 +184,44 @@ It calls that same read-only qualification surface. It sends no request body or
 mutation headers and cannot issue a timestamp; use the OpenSSL flow above for the
 real RFC 3161 proof.
 
+## Preview, execute, recover, prove
+
+The console and headless client now use the same two-step safety contract:
+
+1. **Preview** validates one exact SHA-256 digest, artifact type, tenant, caller,
+   managed-key ID or keyless identity proof, approval posture, isolated-signer
+   algorithm, and Rekor destination. The server returns a keyed request fingerprint
+   plus a configuration fingerprint. It does not resolve a live signer, attest the
+   identity proof, append an event, reserve idempotency, write SQL, or contact
+   Fulcio/Rekor. The keyless proof is never returned in the plan.
+2. **Execute** sends that fingerprint with one retained `Idempotency-Key`. The server
+   recomputes readiness and the keyed fingerprint before a command can exist. A
+   changed digest, caller, signer, proof, or runtime configuration returns `409` and
+   signs nothing.
+3. **Recover** retries an uncertain response with the unchanged request and the same
+   idempotency key. A new command requires a new preview. The recent-outcomes ledger
+   shows durable signing and transparency failures without opening the sealed command.
+4. **Prove** verifies the returned signature against the exact input digest and public
+   key, then confirms the operation is `completed` and Rekor state is `verified`.
+
+Managed-key automation:
+
+```console
+trstctl-cli code-signing preview -f code-sign.json
+trstctl-cli --idempotency-key release-sign-1 code-signing sign -f reviewed-code-sign.json
+```
+
+Keyless automation uses `code-signing keyless-preview` followed by
+`code-signing keyless`. Put the returned `request_fingerprint` in the execution
+body as `preview_fingerprint`; never put an OIDC proof in logs or evidence.
+
 ## Pitfalls & limits
 
-- **Serving status:** code signing is served at `POST /api/v1/code-signing/sign` and
-  `POST /api/v1/code-signing/keyless`, with matching `trstctl-cli code-signing sign`
-  and `trstctl-cli code-signing keyless` commands. The shipped binary builds the
+- **Serving status:** code signing is reviewed at `POST /api/v1/code-signing/preview`
+  and `POST /api/v1/code-signing/keyless/preview`, then served at
+  `POST /api/v1/code-signing/sign` and `POST /api/v1/code-signing/keyless`, with
+  matching `trstctl-cli code-signing preview`, `code-signing keyless-preview`,
+  `code-signing sign`, and `code-signing keyless` commands. The shipped binary builds the
   service from `code_signing`, fails closed with `501` while that configuration is
   disabled, and fails closed at startup if an enabled configuration lacks an isolated
   signer, tenant-bound keys/attestors, or pinned Rekor log trust. Mutations require
@@ -218,8 +251,10 @@ real RFC 3161 proof.
 
 ## Reference
 
-- **Code signing:** `POST /api/v1/code-signing/sign`,
-  `POST /api/v1/code-signing/keyless`, `trstctl-cli code-signing sign`,
+- **Code signing:** `POST /api/v1/code-signing/preview`,
+  `POST /api/v1/code-signing/keyless/preview`, `POST /api/v1/code-signing/sign`,
+  `POST /api/v1/code-signing/keyless`, `trstctl-cli code-signing preview`,
+  `trstctl-cli code-signing keyless-preview`, `trstctl-cli code-signing sign`,
   `trstctl-cli code-signing keyless`, `Service.Sign`, `Service.SignKeyless`,
   `Verify`, `VerifyKeyless`.
 - **Timestamping:** `Authority.Timestamp`, `Verify`, `VerifyLongTermValidity` (RFC 3161).

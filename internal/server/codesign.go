@@ -89,6 +89,10 @@ type codeSigningExactApprovalGate interface {
 	CodeSigningApprovalRequired() bool
 }
 
+type codeSigningPreviewKeyResolver interface {
+	CodeSigningKeyMetadata(tenantID, keyID string) (algorithm string, configured bool)
+}
+
 var errCodeSigningTerminalDomain = errors.New("codesign: terminal domain failure")
 
 type codeSigningTerminalDomainError struct{ cause error }
@@ -212,6 +216,80 @@ func (s *servedCodeSigningService) SignKeylessCode(ctx context.Context, tenantID
 		IdentityPayload: req.IdentityPayload, FulcioSAN: req.FulcioSAN,
 		FulcioIssuer: req.FulcioIssuer,
 	})
+}
+
+// PreviewCodeSigning reads immutable in-memory configuration metadata only. It
+// deliberately does not resolve a live signer, evaluate an identity proof, call a
+// policy provider, append an event, touch SQL, or contact Fulcio/Rekor.
+func (s *servedCodeSigningService) PreviewCodeSigning(_ context.Context, tenantID, mode, keyID, identityMethod string) (api.CodeSigningPreviewStatus, error) {
+	status := api.CodeSigningPreviewStatus{
+		Blockers:                []string{},
+		TransparencyDestination: s.cfg.RekorDestination,
+	}
+	if gate, ok := s.cfg.Gate.(codeSigningExactApprovalGate); ok {
+		status.ApprovalRequired = gate.CodeSigningApprovalRequired()
+	}
+	configuredIdentityMethods := make([]string, 0)
+	if mode == "key" {
+		metadata, ok := s.cfg.Keys.(codeSigningPreviewKeyResolver)
+		if !ok {
+			status.Blockers = append(status.Blockers, "managed signing-key metadata is unavailable without opening a signer")
+		} else if algorithm, configured := metadata.CodeSigningKeyMetadata(tenantID, keyID); !configured {
+			status.Blockers = append(status.Blockers, "managed signing key is not configured for this tenant")
+		} else {
+			status.SigningAlgorithm = algorithm
+		}
+	} else if mode == "keyless" {
+		attestors := s.cfg.Attestors
+		if s.cfg.AttestorsForTenant != nil {
+			attestors = s.cfg.AttestorsForTenant(tenantID)
+		}
+		found := false
+		for _, candidate := range attestors {
+			if candidate == nil {
+				continue
+			}
+			method := strings.TrimSpace(candidate.Method())
+			configuredIdentityMethods = append(configuredIdentityMethods, method)
+			if method == identityMethod {
+				found = true
+			}
+		}
+		if !found {
+			status.Blockers = append(status.Blockers, "keyless identity method is not configured for this tenant")
+		}
+		if s.cfg.NewEphemeralSigner == nil || s.cfg.DestroyEphemeralSigner == nil {
+			status.Blockers = append(status.Blockers, "isolated ephemeral signer create-and-destroy lifecycle is not configured")
+		}
+		status.SigningAlgorithm = string(s.cfg.EphemeralAlgorithm)
+	} else {
+		status.Blockers = append(status.Blockers, "code-signing mode is unsupported")
+	}
+	if s.cfg.TransparencyHandler == nil {
+		status.Blockers = append(status.Blockers, "verified transparency-log delivery is not configured")
+	}
+	configuration, err := json.Marshal(struct {
+		TenantID                  string   `json:"tenant_id"`
+		Mode                      string   `json:"mode"`
+		KeyID                     string   `json:"key_id,omitempty"`
+		IdentityMethod            string   `json:"identity_method,omitempty"`
+		ConfiguredIdentityMethods []string `json:"configured_identity_methods,omitempty"`
+		SigningAlgorithm          string   `json:"signing_algorithm,omitempty"`
+		TransparencyDestination   string   `json:"transparency_destination"`
+		TransparencyConfigured    bool     `json:"transparency_configured"`
+		ApprovalRequired          bool     `json:"approval_required"`
+	}{
+		TenantID: tenantID, Mode: mode, KeyID: keyID, IdentityMethod: identityMethod,
+		ConfiguredIdentityMethods: configuredIdentityMethods, SigningAlgorithm: status.SigningAlgorithm,
+		TransparencyDestination: status.TransparencyDestination,
+		TransparencyConfigured:  s.cfg.TransparencyHandler != nil, ApprovalRequired: status.ApprovalRequired,
+	})
+	if err != nil {
+		return api.CodeSigningPreviewStatus{}, err
+	}
+	status.ConfigurationFingerprint = "sha256:" + crypto.SHA256Hex(configuration)
+	status.Ready = len(status.Blockers) == 0
+	return status, nil
 }
 
 func (s *servedCodeSigningService) submitAndWait(ctx context.Context, tenantID, idempotencyKey string, command codeSigningCommand) (api.CodeSigningResponse, error) {
@@ -1267,6 +1345,10 @@ type emptyCodeSigningKeys struct{}
 
 func (emptyCodeSigningKeys) Signer(_ string, keyID string) (crypto.DigestSigner, error) {
 	return nil, fmt.Errorf("codesign: no key %s", keyID)
+}
+
+func (emptyCodeSigningKeys) CodeSigningKeyMetadata(_, _ string) (string, bool) {
+	return "", false
 }
 
 // CodeSigningIdentities answers B-4: the tenant's recent signing operations

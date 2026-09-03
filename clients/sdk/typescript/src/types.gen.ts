@@ -1596,6 +1596,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/code-signing/keyless/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review an exact keyless signing plan without attesting, signing, or publishing */
+        post: operations["previewCodeArtifactKeyless"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/code-signing/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review an exact managed-key signing plan without signing or publishing */
+        post: operations["previewCodeArtifact"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/code-signing/sign": {
         parameters: {
             query?: never;
@@ -8452,12 +8486,42 @@ export interface components {
             identity_method: string;
             /** Format: byte */
             identity_payload: string;
+            preview_fingerprint?: string;
+        };
+        CodeSigningPreview: {
+            approval_required: boolean;
+            artifact_type: string;
+            blockers: string[];
+            capability: string;
+            cli_argv: string[];
+            configuration_fingerprint: string;
+            digest_sha256: string;
+            effect_free: boolean;
+            execute_external_effects: string[];
+            execute_writes: string[];
+            identity_method?: string;
+            key_id?: string;
+            /** @enum {string} */
+            mode: "key" | "keyless";
+            operation: string;
+            preview_external_effects: string[];
+            preview_reads: string[];
+            preview_writes: string[];
+            ready: boolean;
+            recovery_steps: string[];
+            request_fingerprint: string;
+            required_permission: string;
+            secret_data_handling: string;
+            signing_algorithm?: string;
+            transparency_destination?: string;
+            verification_steps: string[];
         };
         CodeSigningRequest: {
             artifact_type: string;
             /** Format: byte */
             digest: string;
             key_id: string;
+            preview_fingerprint?: string;
         };
         CodeSigningSignature: {
             algorithm: string;
@@ -18838,6 +18902,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CodeSigningSignature"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewCodeArtifactKeyless: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeSigningKeylessRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodeSigningPreview"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewCodeArtifact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeSigningRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodeSigningPreview"];
                 };
             };
             /** @description client error */

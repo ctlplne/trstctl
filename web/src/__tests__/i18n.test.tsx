@@ -1451,8 +1451,14 @@ describe("i18n boundary", () => {
       // recovery and verification steps, and metadata-only receipt. Retired
       // source.* strings from the old direct form were removed. Machine-authored
       // es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "3d135679f66a29e33a07bb65f56b957c0336444d6ed6f2b5665ad38bbc0e0ee2",
-      "de-DE": "dd319d9ea536961d685369be193dc76e6d03ffd984dcfb43be393ef252d9c4c9",
+      // F50 re-pin: the code-signing journey now names choose/review/sign,
+      // zero-effect preview, exact caller/request/configuration binding,
+      // stale-review refusal, identical-request retry, isolated signing,
+      // transparency proof, and keyless-token custody. Obsolete direct-mutation
+      // source.* strings were removed. Machine-authored es/de — FLAGGED FOR
+      // HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "fbc80510e5fe0bab1d583ee15e8532509acadd28809ff0fa65ba689cbe1a2a4c",
+      "de-DE": "1f1d461c0c1e93b3a33ea45f3710b09d84257bc014703d34aefc5833bed39879",
     });
   });
 

@@ -1,1 +1,0 @@
-import{vt as e}from"./index-DhErDvnw.js";function t(t,n,...r){let i=e[t];return typeof i==`function`?i(...r):Promise.resolve(n)}export{t};

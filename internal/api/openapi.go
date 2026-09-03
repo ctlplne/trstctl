@@ -5616,13 +5616,28 @@ func componentSchemas() map[string]*Schema {
 		"valid": {Type: "boolean"},
 	}, "valid")
 	codeSigningReq := object(map[string]*Schema{
-		"key_id": str(), "artifact_type": str(), "digest": {Type: "string", Format: "byte"},
+		"key_id": str(), "artifact_type": str(), "digest": {Type: "string", Format: "byte"}, "preview_fingerprint": str(),
 	}, "key_id", "artifact_type", "digest")
 	codeSigningKeylessReq := object(map[string]*Schema{
 		"artifact_type": str(), "digest": {Type: "string", Format: "byte"},
 		"identity_method": str(), "identity_payload": {Type: "string", Format: "byte"},
-		"fulcio_san": str(), "fulcio_issuer": str(),
+		"fulcio_san": str(), "fulcio_issuer": str(), "preview_fingerprint": str(),
 	}, "artifact_type", "digest", "identity_method", "identity_payload")
+	codeSigningPreview := object(map[string]*Schema{
+		"capability": str(), "operation": str(), "mode": {Type: "string", Enum: []string{"key", "keyless"}},
+		"ready": {Type: "boolean"}, "effect_free": {Type: "boolean"}, "artifact_type": str(), "digest_sha256": str(),
+		"key_id": str(), "identity_method": str(), "required_permission": str(),
+		"request_fingerprint": str(), "configuration_fingerprint": str(), "signing_algorithm": str(),
+		"transparency_destination": str(), "approval_required": {Type: "boolean"},
+		"blockers": {Type: "array", Items: str()}, "preview_reads": {Type: "array", Items: str()},
+		"preview_writes": {Type: "array", Items: str()}, "preview_external_effects": {Type: "array", Items: str()},
+		"execute_writes": {Type: "array", Items: str()}, "execute_external_effects": {Type: "array", Items: str()},
+		"recovery_steps": {Type: "array", Items: str()}, "verification_steps": {Type: "array", Items: str()},
+		"cli_argv": {Type: "array", Items: str()}, "secret_data_handling": str(),
+	}, "capability", "operation", "mode", "ready", "effect_free", "artifact_type", "digest_sha256",
+		"required_permission", "request_fingerprint", "configuration_fingerprint", "approval_required", "blockers",
+		"preview_reads", "preview_writes", "preview_external_effects", "execute_writes", "execute_external_effects",
+		"recovery_steps", "verification_steps", "cli_argv", "secret_data_handling")
 	codeSigningSignature := object(map[string]*Schema{
 		"algorithm": str(), "key_id": str(), "artifact_type": str(),
 		"signature": {Type: "string", Format: "byte"}, "public_key_der": {Type: "string", Format: "byte"},
@@ -6571,6 +6586,7 @@ func componentSchemas() map[string]*Schema {
 		"TransitVerify":                      transitVerify,
 		"CodeSigningRequest":                 codeSigningReq,
 		"CodeSigningKeylessRequest":          codeSigningKeylessReq,
+		"CodeSigningPreview":                 codeSigningPreview,
 		"CodeSigningSignature":               codeSigningSignature,
 		"ManagedKeyCustodyRequirement":       managedKeyCustodyRequirement,
 		"ManagedKeyCustodyProvider":          managedKeyCustodyProvider,

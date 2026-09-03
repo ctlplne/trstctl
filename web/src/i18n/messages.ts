@@ -4327,6 +4327,116 @@ export const messages = {
   "codesign.transparency.pending": { defaultMessage: "Transparency pending", description: "Pending transparency state." },
   "codesign.transparency.failed": { defaultMessage: "Transparency failed", description: "Failed transparency state." },
   "codesign.transparency.notPublished": { defaultMessage: "Not published", description: "Not-published transparency state." },
+  "codesign.workflow.title": { defaultMessage: "Sign an artifact safely", description: "F50 signing workflow title." },
+  "codesign.workflow.description": {
+    defaultMessage: "Review the exact digest, signer, effects, recovery, and proof before one durable signing request.",
+    description: "F50 signing workflow description.",
+  },
+  "codesign.workflow.formLabel": { defaultMessage: "Artifact signing workflow", description: "Accessible F50 signing form label." },
+  "codesign.workflow.configureStep": { defaultMessage: "Choose what to sign", description: "F50 configure step." },
+  "codesign.workflow.configureHelp": {
+    defaultMessage: "Give trstctl a SHA-256 digest, never the artifact or a private key, then choose managed-key or verified keyless signing.",
+    description: "F50 configure step help.",
+  },
+  "codesign.workflow.reviewStep": { defaultMessage: "Review before signing", description: "F50 review step." },
+  "codesign.workflow.reviewHelp": {
+    defaultMessage: "The server checks readiness without signing, saving, attesting, or contacting a transparency service.",
+    description: "F50 review step help.",
+  },
+  "codesign.workflow.progress": { defaultMessage: "Artifact signing progress", description: "F50 workflow progress label." },
+  "codesign.workflow.mode": { defaultMessage: "Signing mode", description: "F50 signing mode label." },
+  "codesign.workflow.managedMode": { defaultMessage: "Managed key", description: "F50 managed-key mode." },
+  "codesign.workflow.keylessMode": { defaultMessage: "Verified keyless identity", description: "F50 keyless mode." },
+  "codesign.workflow.artifactType": { defaultMessage: "Artifact type", description: "F50 artifact type label." },
+  "codesign.workflow.artifactTypeHelp": {
+    defaultMessage: "This label is recorded with the signature; the digest remains the exact signed subject.",
+    description: "F50 artifact type help.",
+  },
+  "codesign.workflow.artifactContainer": { defaultMessage: "Container", description: "F50 container artifact option." },
+  "codesign.workflow.artifactOCI": { defaultMessage: "OCI image", description: "F50 OCI artifact option." },
+  "codesign.workflow.artifactSBOM": { defaultMessage: "SBOM", description: "F50 SBOM artifact option." },
+  "codesign.workflow.artifactBlob": { defaultMessage: "File or blob", description: "F50 blob artifact option." },
+  "codesign.workflow.digest": { defaultMessage: "Artifact digest", description: "F50 SHA-256 digest label." },
+  "codesign.workflow.digestHelp": {
+    defaultMessage: "Paste the 64-character SHA-256 digest. trstctl signs these exact 32 bytes and does not hash them again.",
+    description: "F50 digest help.",
+  },
+  "codesign.workflow.digestError": {
+    defaultMessage: "Enter exactly 64 hexadecimal SHA-256 characters, with an optional sha256: prefix.",
+    description: "F50 digest validation.",
+  },
+  "codesign.workflow.digestPlaceholder": {
+    defaultMessage: "sha256:<64 hexadecimal characters>",
+    description: "F50 digest field placeholder.",
+  },
+  "codesign.workflow.keyId": { defaultMessage: "Managed key id", description: "F50 managed key label." },
+  "codesign.workflow.keyIdHelp": {
+    defaultMessage: "Use a signer-held key configured for this tenant. Preview checks the identifier without opening the signer.",
+    description: "F50 key help.",
+  },
+  "codesign.workflow.keyIdPlaceholder": { defaultMessage: "release-signing", description: "F50 managed-key example placeholder." },
+  "codesign.workflow.identityMethod": { defaultMessage: "Identity method", description: "F50 keyless identity method label." },
+  "codesign.workflow.identityMethodHelp": {
+    defaultMessage: "For example, github_oidc. The method must be configured for this tenant.",
+    description: "F50 identity method help.",
+  },
+  "codesign.workflow.identityProof": { defaultMessage: "Short-lived identity proof", description: "F50 keyless identity proof label." },
+  "codesign.workflow.identityProofHelp": {
+    defaultMessage: "Paste the short-lived proof. Preview binds it but never echoes, saves, verifies, or sends it.",
+    description: "F50 identity proof help.",
+  },
+  "codesign.workflow.required": { defaultMessage: "This field is required.", description: "F50 required field error." },
+  "codesign.workflow.reviewAction": { defaultMessage: "Review signing plan", description: "F50 preview action." },
+  "codesign.workflow.reviewing": { defaultMessage: "Checking plan…", description: "F50 preview busy label." },
+  "codesign.workflow.previewReady": { defaultMessage: "This exact signing request is ready", description: "F50 ready preview heading." },
+  "codesign.workflow.previewBlocked": { defaultMessage: "This signing request is blocked", description: "F50 blocked preview heading." },
+  "codesign.workflow.previewNoEffects": {
+    defaultMessage: "No signature, event, database row, approval, signer call, or network call was created by this review.",
+    description: "F50 effect-free preview explanation.",
+  },
+  "codesign.workflow.ready": { defaultMessage: "Ready", description: "F50 ready badge." },
+  "codesign.workflow.blocked": { defaultMessage: "Blocked", description: "F50 blocked badge." },
+  "codesign.workflow.signer": { defaultMessage: "Signer", description: "F50 signer label." },
+  "codesign.workflow.algorithm": { defaultMessage: "Algorithm", description: "F50 algorithm label." },
+  "codesign.workflow.runtimeSelected": { defaultMessage: "Selected by the isolated signer", description: "F50 runtime algorithm fallback." },
+  "codesign.workflow.transparency": { defaultMessage: "Transparency proof", description: "F50 transparency label." },
+  "codesign.workflow.notConfigured": { defaultMessage: "Not configured", description: "F50 missing configuration label." },
+  "codesign.workflow.approval": { defaultMessage: "Approval", description: "F50 approval label." },
+  "codesign.workflow.approvalRequired": { defaultMessage: "An exact approval is required", description: "F50 approval-required label." },
+  "codesign.workflow.policyAtExecution": { defaultMessage: "Policy is enforced during execution", description: "F50 execution-policy label." },
+  "codesign.workflow.permission": { defaultMessage: "Required permission", description: "F50 permission label." },
+  "codesign.workflow.effects": { defaultMessage: "What execution will do", description: "F50 effects panel title." },
+  "codesign.workflow.recovery": { defaultMessage: "How to recover", description: "F50 recovery panel title." },
+  "codesign.workflow.verification": { defaultMessage: "How to prove it worked", description: "F50 verification panel title." },
+  "codesign.workflow.exactEvidence": { defaultMessage: "Show exact review evidence", description: "F50 evidence disclosure." },
+  "codesign.workflow.requestFingerprint": { defaultMessage: "Reviewed request fingerprint", description: "F50 request fingerprint label." },
+  "codesign.workflow.configurationFingerprint": { defaultMessage: "Signer configuration fingerprint", description: "F50 configuration fingerprint label." },
+  "codesign.workflow.executeReviewed": { defaultMessage: "Sign this reviewed digest", description: "F50 execute action." },
+  "codesign.workflow.retryReviewed": { defaultMessage: "Retry the same reviewed request", description: "F50 safe retry action." },
+  "codesign.workflow.newReview": { defaultMessage: "Start a new review", description: "F50 reset action." },
+  "codesign.workflow.previewFailed": { defaultMessage: "The signing plan could not be reviewed", description: "F50 preview failure heading." },
+  "codesign.workflow.executeFailed": { defaultMessage: "The signing result needs attention", description: "F50 execution failure heading." },
+  "codesign.workflow.previewUnsafe": {
+    defaultMessage: "The server returned a preview that was not effect-free, so execution was stopped.",
+    description: "F50 unsafe preview refusal.",
+  },
+  "codesign.workflow.previewMissingFingerprint": {
+    defaultMessage: "The ready plan did not include exact server-owned evidence, so execution was stopped.",
+    description: "F50 missing preview evidence refusal.",
+  },
+  "codesign.workflow.reviewRequired": { defaultMessage: "Review the current inputs again before signing.", description: "F50 review-required error." },
+  "codesign.workflow.previewStale": {
+    defaultMessage: "The digest, signer, caller, or runtime changed. Nothing was signed; review the current plan again.",
+    description: "F50 stale preview recovery.",
+  },
+  "codesign.workflow.permissionBlocked": { defaultMessage: "Signing is not available for this session", description: "F50 capability block heading." },
+  "codesign.workflow.permissionHelp": {
+    defaultMessage: "This session needs the keys:write permission and an available code-signing runtime.",
+    description: "F50 capability block help.",
+  },
+  "codesign.workflow.receiptTitle": { defaultMessage: "Signature receipt", description: "F50 signature receipt title." },
+  "codesign.workflow.fulcioIssuer": { defaultMessage: "Verified Fulcio issuer", description: "F50 Fulcio issuer label." },
+  "codesign.workflow.publicKey": { defaultMessage: "Public key (DER, base64)", description: "F50 public key label." },
   "operations.jobs.description": {
     defaultMessage:
       "Work that touches your estate is decided here and executed by an agent in your environment. This is what is waiting, what an agent holds right now, and how long the oldest job has waited \u2014 the number that tells a drained queue from a stalled one.",
@@ -19670,10 +19780,6 @@ export const messages = {
     defaultMessage: "Alert routing is managed from Notifications",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Posture.tsx.",
   },
-  "source.algorithm.d704d8af25": {
-    defaultMessage: "Algorithm",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CodeSigning.tsx.",
-  },
   "source.algorithm.mix.a5ab80b898": {
     defaultMessage: "Algorithm mix",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Dashboard.tsx.",
@@ -19783,10 +19889,6 @@ export const messages = {
   "source.approvers.99f86511e2": {
     defaultMessage: "Approvers:",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Notifications.tsx.",
-  },
-  "source.artifact.digest.f7f37af3fe": {
-    defaultMessage: "Artifact digest",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CodeSigning.tsx.",
   },
   "source.artifact.type.c4984fa09a": {
     defaultMessage: "Artifact type",
@@ -20344,10 +20446,6 @@ export const messages = {
   "source.could.not.mint.enrollment.token.7b0b6374e9": {
     defaultMessage: "Could not mint enrollment token",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Agents.tsx.",
-  },
-  "source.could.not.sign.artifact.67ae96a355": {
-    defaultMessage: "Could not sign artifact",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CodeSigning.tsx.",
   },
   "source.coverage.523487a5de": {
     defaultMessage: "Coverage",
@@ -20932,10 +21030,6 @@ export const messages = {
     defaultMessage: "From",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
   },
-  "source.fulcio.issuer.6baae4cd90": {
-    defaultMessage: "Fulcio issuer",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CodeSigning.tsx.",
-  },
   "source.full.delivery.subject.ownership.and.routin.32d5733727": {
     defaultMessage: "· full delivery, subject, ownership, and routing state.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Notifications.tsx.",
@@ -21075,14 +21169,6 @@ export const messages = {
   "source.identity.issued.08c478fa05": {
     defaultMessage: "identity.issued",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Audit.tsx.",
-  },
-  "source.identity.method.324ef3acce": {
-    defaultMessage: "Identity method",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CodeSigning.tsx.",
-  },
-  "source.identity.payload.7cafae50c5": {
-    defaultMessage: "Identity payload",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CodeSigning.tsx.",
   },
   "source.identity.uuid.ae37807bc4": {
     defaultMessage: "identity uuid",
@@ -21256,10 +21342,6 @@ export const messages = {
     defaultMessage: "Key algorithm",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Certificates.tsx.",
   },
-  "source.key.backed.4eae20ec94": {
-    defaultMessage: "Key-backed",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CodeSigning.tsx.",
-  },
   "source.key.id.d54d56ee0a": {
     defaultMessage: "Key ID",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/SSHTrust.tsx.",
@@ -21267,10 +21349,6 @@ export const messages = {
   "source.key.version.aa5d87c789": {
     defaultMessage: "Key version",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
-  "source.keyless.fulcio.42a397ffc7": {
-    defaultMessage: "Keyless (Fulcio)",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CodeSigning.tsx.",
   },
   "source.kind.attributes.9505322c06": {
     defaultMessage: "Kind attributes",
@@ -21452,10 +21530,6 @@ export const messages = {
   "source.managed.8f2de600bf": {
     defaultMessage: "Managed",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Posture.tsx.",
-  },
-  "source.managed.key.id.8d05580702": {
-    defaultMessage: "Managed key id",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CodeSigning.tsx.",
   },
   "source.managed.offering.f4e80765ae": {
     defaultMessage: "Managed offering",
@@ -22957,10 +23031,6 @@ export const messages = {
     defaultMessage: "Public key",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
   },
-  "source.public.key.der.606443a2d8": {
-    defaultMessage: "Public key (DER)",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CodeSigning.tsx.",
-  },
   "source.query.rca.and.mcp.fail.closed.when.disable.255478de84": {
     defaultMessage:
       "Query, RCA, and MCP fail closed when disabled. Tenant and RBAC scope come from the authenticated session/API token, never from a browser field.",
@@ -23575,10 +23645,6 @@ export const messages = {
     defaultMessage: "Shown once",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Agents.tsx.",
   },
-  "source.sign.an.artifact.fb729a3d5b": {
-    defaultMessage: "Sign an artifact",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CodeSigning.tsx.",
-  },
   "source.sign.intermediate.csr.with.64b849b64d": {
     defaultMessage: "Sign intermediate CSR with",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
@@ -23587,10 +23653,6 @@ export const messages = {
     defaultMessage: "Sign message",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
-  "source.signature.receipt.8d8dcf3028": {
-    defaultMessage: "Signature receipt",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CodeSigning.tsx.",
-  },
   "source.signed.evidence.bundle.ready.9ce177ede7": {
     defaultMessage: "Signed evidence bundle ready",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Audit.tsx.",
@@ -23598,14 +23660,6 @@ export const messages = {
   "source.signed.export.plus.offline.verification.ke.f03caf9838": {
     defaultMessage: "Signed export plus offline verification key for auditor handoff.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Policy.tsx.",
-  },
-  "source.signing.key.49395b9594": {
-    defaultMessage: "Signing key",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CodeSigning.tsx.",
-  },
-  "source.signing.mode.0ba52a4363": {
-    defaultMessage: "Signing mode",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CodeSigning.tsx.",
   },
   "source.simpleenroll.4ea6ad8043": {
     defaultMessage: "simpleenroll",
@@ -25002,14 +25056,6 @@ export const messages = {
   "source.show.value1.nodes.b6e7a8266b": {
     defaultMessage: "Show {value1} nodes",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Graph.tsx:656.",
-  },
-  "source.sign.artifact.57261585fa": {
-    defaultMessage: "Sign artifact",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CodeSigning.tsx:164.",
-  },
-  "source.signing.bdabe34a39": {
-    defaultMessage: "Signing…",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CodeSigning.tsx:164.",
   },
   "source.start.campaign.bfdb5d43fb": {
     defaultMessage: "Start campaign",

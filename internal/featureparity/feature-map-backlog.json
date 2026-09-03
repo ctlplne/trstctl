@@ -12690,12 +12690,15 @@
                 "internal/server/dod_code_signing_runtime_test.go"
             ],
             "source_frontend": [
-                "web/src/pages/CodeSigning.tsx"
+                "web/src/pages/CodeSigning.tsx",
+                "web/src/pages/codesigning/CodeSigningWorkflow.tsx"
             ],
             "status": "closed",
             "notes": "WIRE-CODESIGN-001 closes the shipped assembly gap. buildRunDeps now constructs tenant-bound signer handles, offline GitHub OIDC attestors, one-use isolated signer keys, and a Rekor outbox handler with an operator-pinned log public key. The DoD proof drives both served mutations, independently verifies exact pre-hashed signatures with OpenSSL, forces the real Rekor 409 Location readback flow, and verifies the signed-entry timestamp before the outbox row can be acknowledged. B-4 adds listCodeSigningIdentities: signing operations joined to their transparency-log state. Rekor publication rides the outbox and the handler refuses to acknowledge an entry whose signed receipt does not verify, so a delivered row is a verified entry and the view reads that state instead of a parallel flag; sealed command bytes are never read. Covered by TestCodeSigningIdentitiesReportTransparencyState and its empty/unwired/failure/unauthenticated cases.",
             "api_surface": [
                 "listCodeSigningIdentities",
+                "previewCodeArtifact",
+                "previewCodeArtifactKeyless",
                 "signCodeArtifact",
                 "signCodeArtifactKeyless"
             ],
@@ -12703,6 +12706,8 @@
             "cli_surface": [
                 "code-signing identities",
                 "code-signing keyless",
+                "code-signing keyless-preview",
+                "code-signing preview",
                 "code-signing sign"
             ],
             "cli_na": "",

@@ -143,6 +143,7 @@ import type {
   CodeSigningIdentity,
   CodeSigningIdentityList,
   CodeSigningKeylessRequest,
+  CodeSigningPreview,
   CodeSigningRequest,
   CodeSigningSignature,
   ComplianceEvidencePack,
@@ -815,6 +816,7 @@ export type {
   CodeSigningIdentity,
   CodeSigningIdentityList,
   CodeSigningKeylessRequest,
+  CodeSigningPreview,
   CodeSigningRequest,
   CodeSigningSignature,
   ComplianceEvidencePack,
@@ -2144,8 +2146,10 @@ export interface Api {
   exportFleetReissuanceEvidence(id: string): Promise<FleetReissuanceEvidence>;
   breakglassIssue(input: BreakglassIssueRequest): Promise<BreakglassIssueResponse>;
   breakglassReconcile(input: BreakglassReconcileRequest): Promise<BreakglassReconcileResponse>;
-  signCode(input: CodeSigningRequest): Promise<CodeSigningSignature>;
-  signCodeKeyless(input: CodeSigningKeylessRequest): Promise<CodeSigningSignature>;
+  previewCode(input: CodeSigningRequest): Promise<CodeSigningPreview>;
+  previewCodeKeyless(input: CodeSigningKeylessRequest): Promise<CodeSigningPreview>;
+  signCode(input: CodeSigningRequest, idempotencyKey?: string): Promise<CodeSigningSignature>;
+  signCodeKeyless(input: CodeSigningKeylessRequest, idempotencyKey?: string): Promise<CodeSigningSignature>;
   codeSigningIdentities(): Promise<CodeSigningIdentityList>;
   risk(options?: RiskQuery): Promise<CredentialRisk[]>;
   contextualRiskPriorities(): Promise<ContextualRiskPriorities>;
@@ -2698,8 +2702,10 @@ const liveApi: Api = {
   exportFleetReissuanceEvidence: (id) => req<FleetReissuanceEvidence>(`/api/v1/incidents/fleet-reissuance-runs/${encodeURIComponent(id)}/evidence`),
   breakglassIssue: (input) => mutate<BreakglassIssueResponse>("POST", "/api/v1/breakglass/issue", input),
   breakglassReconcile: (input) => mutate<BreakglassReconcileResponse>("POST", "/api/v1/breakglass/reconcile", input),
-  signCode: (input) => mutate<CodeSigningSignature>("POST", "/api/v1/code-signing/sign", input),
-  signCodeKeyless: (input) => mutate<CodeSigningSignature>("POST", "/api/v1/code-signing/keyless", input),
+  previewCode: (input) => postRead<CodeSigningPreview>("/api/v1/code-signing/preview", input),
+  previewCodeKeyless: (input) => postRead<CodeSigningPreview>("/api/v1/code-signing/keyless/preview", input),
+  signCode: (input, idempotencyKey) => mutate<CodeSigningSignature>("POST", "/api/v1/code-signing/sign", input, idempotencyKey),
+  signCodeKeyless: (input, idempotencyKey) => mutate<CodeSigningSignature>("POST", "/api/v1/code-signing/keyless", input, idempotencyKey),
   codeSigningIdentities: () => req<CodeSigningIdentityList>("/api/v1/code-signing/identities"),
   risk: (options) => req<CredentialRiskList>(`/api/v1/risk/credentials${riskQueryString(options)}`).then((r) => r.credentials ?? []),
   contextualRiskPriorities: () => req<ContextualRiskPriorities>("/api/v1/risk/contextual-priorities"),

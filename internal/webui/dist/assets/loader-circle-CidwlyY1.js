@@ -1,0 +1,1 @@
+import{t as e}from"./createLucideIcon-Dk9S73op.js";var t=e(`LoaderCircle`,[[`path`,{d:`M21 12a9 9 0 1 1-6.219-8.56`,key:`13zald`}]]);export{t};

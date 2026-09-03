@@ -75,6 +75,9 @@ func (a *API) runtimeRouteAvailability(r route) (bool, string) {
 		"hmacTransit", "signTransit", "verifyTransit":
 		return runtimeDependency(a.transit != nil,
 			"The Transit cryptography service is not configured in this deployment.")
+	case "previewCodeArtifact", "previewCodeArtifactKeyless":
+		return runtimeDependency(a.codeSigning != nil && a.commandMAC != nil,
+			"Code-signing preview needs the signing runtime and server-keyed review evidence; one or both are not configured.")
 	case "signCodeArtifact", "signCodeArtifactKeyless":
 		return runtimeDependency(a.codeSigning != nil,
 			"The code-signing service is not configured in this deployment.")

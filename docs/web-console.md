@@ -508,10 +508,16 @@ load on demand. See [Privacy data catalog](privacy-data-catalog.md). Backed by
   `/api/v1/incidents/outbox-reconciliation-conflicts`: source sequence, old outbox
   row, lanes, agent demands, and SHA-256 command identities are visible, while the
   executable payloads are never returned to the browser.
-- **Code signing** — a real signing console (key-backed and keyless/Fulcio),
-  submitting only the artifact digest and rendering the signature receipt; private
-  keys and artifact bytes never enter the browser (`/api/v1/code-signing/sign`,
-  `/api/v1/code-signing/keyless`).
+- **Code signing** — a preview-first signing console (managed key and
+  keyless/Fulcio). The first step submits only a SHA-256 digest plus signer metadata
+  to an effect-free readiness oracle. Review shows exact execution effects,
+  recovery, verification, and server-owned request/configuration fingerprints.
+  Signing is disabled until that review is ready; editing any input invalidates it.
+  An uncertain response can only retry the identical request with the same
+  `Idempotency-Key`. Private keys and artifact bytes never enter the browser, and a
+  keyless identity proof is never rendered after input
+  (`/api/v1/code-signing/preview`, `/api/v1/code-signing/keyless/preview`,
+  `/api/v1/code-signing/sign`, `/api/v1/code-signing/keyless`).
 - **CA hierarchy** — the m-of-n key ceremony flow, existing-CA-chain import,
   offline-root import/intermediate-CSR workflow, and HSM/KMS managed-key custody
   (generate, rotate, revoke, zeroize), guarded by RBAC. The issuer catalog has

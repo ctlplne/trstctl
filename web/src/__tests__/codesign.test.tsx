@@ -6,9 +6,12 @@ import { CodeSigning } from "@/pages/CodeSigning";
 import { AppQueryProvider } from "@/lib/query";
 import type { CapabilityView, CapabilityViewItem } from "@/lib/api-types.gen";
 import { CapabilityFixtureProvider } from "@/lib/capabilities";
+import { ApiError } from "@/lib/api";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
+    previewCode: vi.fn(),
+    previewCodeKeyless: vi.fn(),
     signCode: vi.fn(),
     signCodeKeyless: vi.fn(),
     codeSigningIdentities: vi.fn(),
@@ -24,6 +27,40 @@ vi.mock("@/lib/api", async (orig) => {
 
 beforeEach(() => {
   for (const mock of Object.values(apiMock)) mock.mockReset();
+  const preview = {
+    capability: "F50",
+    operation: "sign_code_artifact",
+    mode: "key",
+    ready: true,
+    effect_free: true,
+    artifact_type: "container",
+    digest_sha256: "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    key_id: "key-1",
+    required_permission: "keys:write",
+    request_fingerprint: `sha256:${"a".repeat(64)}`,
+    configuration_fingerprint: `sha256:${"b".repeat(64)}`,
+    signing_algorithm: "ECDSA-P256",
+    transparency_destination: "transparency.rekor",
+    approval_required: false,
+    blockers: [],
+    preview_reads: ["read signer metadata"],
+    preview_writes: [],
+    preview_external_effects: [],
+    execute_writes: ["append one immutable command"],
+    execute_external_effects: ["ask the isolated signer"],
+    recovery_steps: ["retry the same request"],
+    verification_steps: ["verify the signature"],
+    cli_argv: ["trstctl-cli", "code-signing", "preview", "-f", "code-signing.json"],
+    secret_data_handling: "Artifact bytes and private keys never enter the browser.",
+  } as const;
+  apiMock.previewCode.mockResolvedValue(preview);
+  apiMock.previewCodeKeyless.mockResolvedValue({
+    ...preview,
+    operation: "sign_code_artifact_keyless",
+    mode: "keyless",
+    key_id: undefined,
+    identity_method: "github_oidc",
+  });
   apiMock.signCode.mockReset().mockResolvedValue({
     algorithm: "ECDSA-P256",
     artifact_type: "container",
@@ -109,10 +146,19 @@ function codeSigningCapability(capabilityId: "F33" | "F50", operationId: string,
     dependencies: [],
     stages: [{ name: "observe", completion: available ? "complete" : "blocked", ...(available ? {} : { reason: detail }) }],
     actions: {
-      allowed: available ? [operationId] : [],
+      allowed: available
+        ? capabilityId === "F50"
+          ? ["listCodeSigningIdentities", "previewCodeArtifact", "previewCodeArtifactKeyless", "signCodeArtifact", "signCodeArtifactKeyless"]
+          : [operationId]
+        : [],
       scoped: [],
       denied: [],
-      unavailable: available ? [] : [{ operation_id: operationId, code: "dependency_not_configured", detail }],
+      unavailable: available
+        ? []
+        : (capabilityId === "F50"
+            ? ["listCodeSigningIdentities", "previewCodeArtifact", "previewCodeArtifactKeyless", "signCodeArtifact", "signCodeArtifactKeyless"]
+            : [operationId]
+          ).map((id) => ({ operation_id: id, code: "dependency_not_configured" as const, detail })),
     },
   };
 }
@@ -143,29 +189,123 @@ function renderPage(view?: CapabilityView) {
 }
 
 describe("code signing console", () => {
-  it("submits a key-backed signing request and renders the served signature receipt", async () => {
+  it("reviews a key-backed request before signing and renders the served signature receipt", async () => {
     const user = userEvent.setup();
     renderPage();
     expect(screen.getByRole("heading", { name: "Software Trust" })).toBeInTheDocument();
     expect(screen.getByText(/what software-signing work needs attention/i)).toBeInTheDocument();
     await user.type(screen.getByLabelText("Artifact digest"), "sha256:000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
     await user.type(screen.getByLabelText("Managed key id"), "key-1");
-    await user.click(screen.getByRole("button", { name: "Sign artifact" }));
+    await user.click(screen.getByRole("button", { name: "Review signing plan" }));
 
     await waitFor(() =>
-      expect(apiMock.signCode).toHaveBeenCalledWith({
+      expect(apiMock.previewCode).toHaveBeenCalledWith({
         artifact_type: "container",
         digest: "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
         key_id: "key-1",
       }),
     );
+    expect(await screen.findByText("This exact signing request is ready")).toBeInTheDocument();
+    expect(screen.getByText(/no signature, event, database row/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Sign this reviewed digest" }));
+
+    await waitFor(() =>
+      expect(apiMock.signCode).toHaveBeenCalledWith(
+        {
+          artifact_type: "container",
+          digest: "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+          key_id: "key-1",
+          preview_fingerprint: `sha256:${"a".repeat(64)}`,
+        },
+        expect.stringMatching(/^codesign-/),
+      ),
+    );
     expect(await screen.findByText("Signature receipt")).toBeInTheDocument();
-    expect(screen.getByText("ECDSA-P256")).toBeInTheDocument();
+    expect(screen.getAllByText("ECDSA-P256").length).toBeGreaterThan(0);
     expect(screen.getByText("BASE64SIG")).toBeInTheDocument();
-    expect(screen.getByText("transparency.rekor")).toBeInTheDocument();
+    expect(screen.getAllByText("transparency.rekor").length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: "Download signature" })).toHaveAttribute("download", "artifact.sig");
     // The signer boundary holds: no private key material ever reaches the browser.
     expect(screen.queryByText(/BEGIN .* PRIVATE KEY/)).not.toBeInTheDocument();
+  });
+
+  it("invalidates the review after an input changes and requires a fresh server preview", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const digest = screen.getByLabelText("Artifact digest");
+    await user.type(digest, "0".repeat(64));
+    await user.type(screen.getByLabelText("Managed key id"), "key-1");
+    await user.click(screen.getByRole("button", { name: "Review signing plan" }));
+    expect(await screen.findByText("This exact signing request is ready")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Previous" }));
+    const currentDigest = screen.getByLabelText("Artifact digest");
+    await user.clear(currentDigest);
+    await user.type(currentDigest, "1".repeat(64));
+    expect(screen.queryByRole("button", { name: "Sign this reviewed digest" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Review signing plan" }));
+    await waitFor(() => expect(apiMock.previewCode).toHaveBeenCalledTimes(2));
+    expect(apiMock.previewCode.mock.calls[1]?.[0]).toMatchObject({ digest: "ERERERERERERERERERERERERERERERERERERERERERE=" });
+  });
+
+  it("retries an ambiguous response with the identical request and idempotency key", async () => {
+    const user = userEvent.setup();
+    apiMock.signCode.mockRejectedValueOnce(new Error("connection closed before response")).mockResolvedValueOnce({
+      algorithm: "ECDSA-P256",
+      artifact_type: "container",
+      key_id: "key-1",
+      public_key_der: "BASE64DER",
+      signature: "BASE64SIG",
+      transparency_destination: "transparency.rekor",
+    });
+    renderPage();
+    await user.type(screen.getByLabelText("Artifact digest"), "0".repeat(64));
+    await user.type(screen.getByLabelText("Managed key id"), "key-1");
+    await user.click(screen.getByRole("button", { name: "Review signing plan" }));
+    await user.click(await screen.findByRole("button", { name: "Sign this reviewed digest" }));
+    expect(await screen.findByRole("button", { name: "Retry the same reviewed request" })).toBeInTheDocument();
+    const firstCall = apiMock.signCode.mock.calls[0];
+    await user.click(screen.getByRole("button", { name: "Retry the same reviewed request" }));
+    await waitFor(() => expect(apiMock.signCode).toHaveBeenCalledTimes(2));
+    expect(apiMock.signCode.mock.calls[1]).toEqual(firstCall);
+  });
+
+  it("throws away a stale review and uses a fresh idempotency key after re-review", async () => {
+    const user = userEvent.setup();
+    apiMock.signCode.mockRejectedValueOnce(new ApiError(409, JSON.stringify({ title: "Conflict", detail: "reviewed plan is stale" }))).mockResolvedValueOnce({
+      algorithm: "ECDSA-P256",
+      artifact_type: "container",
+      key_id: "key-1",
+      public_key_der: "BASE64DER",
+      signature: "BASE64SIG",
+      transparency_destination: "transparency.rekor",
+    });
+    renderPage();
+    await user.type(screen.getByLabelText("Artifact digest"), "0".repeat(64));
+    await user.type(screen.getByLabelText("Managed key id"), "key-1");
+    await user.click(screen.getByRole("button", { name: "Review signing plan" }));
+    await user.click(await screen.findByRole("button", { name: "Sign this reviewed digest" }));
+    expect(await screen.findByText(/nothing was signed; review the current plan again/i)).toBeInTheDocument();
+    const rejectedKey = apiMock.signCode.mock.calls[0]?.[1];
+
+    await user.click(screen.getByRole("button", { name: "Review signing plan" }));
+    await user.click(await screen.findByRole("button", { name: "Sign this reviewed digest" }));
+    await waitFor(() => expect(apiMock.signCode).toHaveBeenCalledTimes(2));
+    expect(apiMock.signCode.mock.calls[1]?.[1]).toMatch(/^codesign-/);
+    expect(apiMock.signCode.mock.calls[1]?.[1]).not.toBe(rejectedKey);
+    expect(await screen.findByText("Signature receipt")).toBeInTheDocument();
+  });
+
+  it("binds a keyless identity proof in preview without rendering the proof", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole("button", { name: "Verified keyless identity" }));
+    await user.type(screen.getByLabelText("Artifact digest"), "0".repeat(64));
+    await user.type(screen.getByLabelText("Short-lived identity proof"), "sensitive-oidc-proof");
+    await user.click(screen.getByRole("button", { name: "Review signing plan" }));
+    await waitFor(() => expect(apiMock.previewCodeKeyless).toHaveBeenCalledTimes(1));
+    expect(apiMock.previewCodeKeyless.mock.calls[0]?.[0]).toMatchObject({ identity_payload: "c2Vuc2l0aXZlLW9pZGMtcHJvb2Y=" });
+    expect(screen.queryByText("sensitive-oidc-proof")).not.toBeInTheDocument();
+    expect(await screen.findByText("This exact signing request is ready")).toBeInTheDocument();
   });
 
   it("puts failed signing, approvals, timestamping, and recent outcomes before the signing control", async () => {

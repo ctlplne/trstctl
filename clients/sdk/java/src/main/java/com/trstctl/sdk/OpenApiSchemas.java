@@ -216,6 +216,7 @@ public final class OpenApiSchemas {
       "CodeSigningIdentity",
       "CodeSigningIdentityList",
       "CodeSigningKeylessRequest",
+      "CodeSigningPreview",
       "CodeSigningRequest",
       "CodeSigningSignature",
       "ComplianceEvidencePack",

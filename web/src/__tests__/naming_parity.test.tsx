@@ -176,7 +176,7 @@ const certificateDesignTargets = [
     to: "/codesign",
     answer: /software-signing work needs attention.*approvals.*timestamping.*transparency proof.*artifact bytes and private keys never enter this browser/i,
     proof: /tenant-scoped signing operations.*immutable approval intents.*TSA probes.*managed-key inventory.*no read model/i,
-    primary: "Sign artifact",
+    primary: "Review signing plan",
   },
 ] as const;
 

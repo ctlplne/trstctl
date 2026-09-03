@@ -555,6 +555,8 @@ var coreCommandTable = []Command{
 	// Code-signing (CLM-06/F50). The served API signs artifact digests with a
 	// managed key or a verified keyless identity, then queues Rekor transparency-log
 	// publication through outbox.
+	{Name: []string{"code-signing", "preview"}, Method: "POST", Path: "/api/v1/code-signing/preview", Body: bodyFile, ReadOnly: true, Summary: "Review an exact managed-key signing plan without signing or publishing"},
+	{Name: []string{"code-signing", "keyless-preview"}, Method: "POST", Path: "/api/v1/code-signing/keyless/preview", Body: bodyFile, ReadOnly: true, Summary: "Review an exact keyless signing plan without attesting, signing, or publishing"},
 	{Name: []string{"code-signing", "sign"}, Method: "POST", Path: "/api/v1/code-signing/sign", Body: bodyFile, Summary: "Sign an artifact digest with a managed code-signing key"},
 	{Name: []string{"code-signing", "keyless"}, Method: "POST", Path: "/api/v1/code-signing/keyless", Body: bodyFile, Summary: "Sign an artifact digest with a verified Sigstore/Fulcio identity"},
 
