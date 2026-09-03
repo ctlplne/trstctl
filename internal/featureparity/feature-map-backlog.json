@@ -15032,8 +15032,8 @@
             "priority": 76,
             "served_state": "conditional",
             "backend_status": "conditional: served-api-cli-gitleaks-repo-webhook-precommit-staged-diff-deep-history-custom-rules-third-party-artifact-ingest",
-            "current_frontend_mapping": "operate: Secrets at /secrets - Gitleaks scan execution is served through POST /api/v1/secrets/scans and trstctl-cli secrets scans run, including CAP-SCAN-03 workspace or full Git-history mode, additive custom rules, and response capabilities; CAP-SCAN-01 repository posture covers GitHub/GitLab/Bitbucket webhook ingress through GET /api/v1/secrets/scans/repositories and POST /api/v1/secrets/scans/repositories/{provider}/webhook; CAP-SCAN-02 staged-diff and pre-commit workflows are CLI-local guardrails; CAP-SCAN-04 third-party artifact posture and ingest cover CI/CD logs, container registries, Slack, and Jira through GET /api/v1/secrets/scans/third-party and POST /api/v1/secrets/scans/third-party/{provider}/ingest.",
-            "target_gui_mapping": "Secret scanning findings UI with source repo/build, detector, masked fingerprint, owner mapping, rotation action, and false-positive handling.",
+            "current_frontend_mapping": "operate: Secrets at /secrets/scanning serves a Choose -> Review -> Prove workflow. The server validates the confined target, pinned Gitleaks binary, mode, additive custom-rules content digest, rule floor, permission, effects, recovery, and verification without starting a process or writing state. Execution is bound to that tenant/caller review, rejects changed plans with 409, retains failed reviewed work, retries with the same in-memory Idempotency-Key, and hands the redacted result to its durable discovery run. CAP-SCAN-01 repository posture, CAP-SCAN-02 local staged-diff/pre-commit guardrails, CAP-SCAN-03 workspace/history/custom-rules scans, and CAP-SCAN-04 third-party artifact ingest remain visible under automation.",
+            "target_gui_mapping": "Complete Choose -> Review -> Prove secret-scanning journey with exact effect-free preview, reviewed execution, redacted result metadata, same-key interruption recovery, durable discovery verification, and API/CLI automation; richer owner/rotation/false-positive triage remains a separate non-blocking product increment.",
             "acceptance_test": "UI proves finding snippets are redacted and actions require proper scope.",
             "source_docs": [
                 "docs/features/secrets.md"
@@ -15047,13 +15047,14 @@
                 "web/src/pages/Secrets.tsx"
             ],
             "status": "closed",
-            "notes": "COMPETE-046 adds CAP-SCAN-01 repository realtime ingress: provider posture, authenticated normalized GitHub/GitLab/Bitbucket webhook queueing into discovery.run outbox, and served worker execution against checkout_path or public/local clone_url. COMPETE-047 adds CAP-SCAN-02 local guardrails: staged Git blob scanning, base/head CI diff scanning, and pre-commit hook installation through the CLI without requiring a server. COMPETE-048 adds CAP-SCAN-03 full Git-history deep scans through the served API/CLI/UI using Gitleaks git --log-opts --all, additive custom [[rules]] fragments that extend defaults, response capability metadata, OpenAPI/SDK contracts, and execution tests. COMPETE-068 adds CAP-SCAN-04 third-party artifact ingest for CI/CD logs, container registries, Slack, and Jira through served API/CLI/UI paths backed by discovery.run outbox execution. Native provider signature verification, private credential_ref clone resolution, provider-native check annotations, central ingest for local CAP-SCAN-02 JSON, native Slack/Jira/container-registry API polling, and artifact retention automation remain documented architecture shortfalls rather than counted as served.",
+            "notes": "F39 convergence at g161/a37d8519a9dfa1d3acdf3e7beb5ed1ae4e836b12 adds the exact effect-free scan preview, tenant/caller/configuration/custom-rules-content binding, 409 stale-review rejection before process launch, same-key retry/replay recovery, extracted StepShell console journey, OpenAPI/SDK/CLI parity, and redacted discovery handoff. COMPETE-046 adds CAP-SCAN-01 repository realtime ingress; COMPETE-047 adds CAP-SCAN-02 local staged-diff/pre-commit guardrails; COMPETE-048 adds CAP-SCAN-03 Git-history/custom-rules scanning; COMPETE-068 adds CAP-SCAN-04 third-party artifact ingest. Native provider signature verification, private credential_ref clone resolution, provider-native annotations, native polling, artifact retention automation, and richer owner/rotation/false-positive triage remain documented non-primary increments rather than hidden or counted as this vertical-slice blocker.",
             "api_surface": [
                 "getSecretRepositoryScanning",
                 "receiveSecretRepositoryWebhook",
                 "getThirdPartySecretScanning",
                 "ingestThirdPartySecretScan",
-                "scanSecrets"
+                "scanSecrets",
+                "previewSecretScan"
             ],
             "api_na": "",
             "cli_surface": [
@@ -15063,6 +15064,7 @@
                 "secrets scans third-party",
                 "secrets scans third-party ingest",
                 "secrets scans run",
+                "secrets scans preview",
                 "secrets scans staged-diff"
             ],
             "cli_na": "",
@@ -15094,18 +15096,20 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: operate: Secrets at /secrets - Gitleaks scan execution, CAP-SCAN-01 repository posture, and CAP-SCAN-04 third-party artifact posture are visible with provider, ingest path, event-flow, release-gate, and residual-shortfall metadata; the scan forms expose workspace versus Git-history mode, custom rules path, third-party source/artifact/event inputs, and returned scan capabilities.",
-                        "target_gui_mapping: Secret scanning findings UI with source repo/build, detector, masked fingerprint, owner mapping, rotation action, and false-positive handling."
+                        "SecretScanningWorkflow at /secrets/scanning uses StepShell to guide Choose -> Review -> Prove, verifies the server's zero-effect arrays before showing execution, names the secrets:write permission and exact effects, keeps a failed reviewed plan visible, and offers Retry reviewed scan with the same in-memory key.",
+                        "The proof step shows redacted rule/file/line/credential-reference metadata and links the exact durable discovery run; advanced repository and third-party automation posture remains available without competing with the primary journey.",
+                        "target_gui_mapping: complete exact review, reviewed execution, redacted observation, same-key recovery, durable verification, and automation."
                     ],
                     "refs": [
                         "web/src/pages/Secrets.tsx",
+                        "web/src/pages/secrets/SecretScanningWorkflow.tsx",
                         "web/src/lib/navigation.ts",
                         "web/src/App.tsx"
                     ]
                 },
                 "cli": {
                     "evidence": [
-                        "trstctl-cli secrets scans run sends POST /api/v1/secrets/scans with an Idempotency-Key for CI-safe retry and accepts mode=git_history/custom_rules_path in its JSON body; trstctl-cli secrets scans repositories reads CAP-SCAN-01 posture; trstctl-cli secrets scans repositories webhook queues provider events; trstctl-cli secrets scans third-party reads CAP-SCAN-04 posture; trstctl-cli secrets scans third-party ingest queues CI/CD log, container-registry, Slack, or Jira artifact scans; trstctl-cli secrets scans staged-diff runs local staged or base/head diff scans without --server; trstctl-cli secrets scans pre-commit install writes the local hook."
+                        "trstctl-cli secrets scans preview calls the effect-free review route without an Idempotency-Key; secrets scans run accepts the returned preview_fingerprint and a stable explicit Idempotency-Key for retry/replay. Repository webhook, third-party ingest, staged-diff, CI diff, and pre-commit commands preserve the wider CAP-SCAN automation surface."
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -15115,7 +15119,7 @@
                 },
                 "api": {
                     "evidence": [
-                        "OpenAPI operationIds getSecretRepositoryScanning, receiveSecretRepositoryWebhook, getThirdPartySecretScanning, ingestThirdPartySecretScan, and scanSecrets are registered with SecretRepositoryScanPosture, SecretRepositoryWebhookRequest/Receipt, ThirdPartySecretScanPosture, ThirdPartySecretScanIngestRequest/Receipt, and SecretScan schemas; SecretScanRequest includes mode and custom_rules_path, and SecretScan includes mode, custom_rules, and capabilities."
+                        "OpenAPI operationId previewSecretScan exposes SecretScanPreview with the normalized target/mode, custom-rules content SHA-256, scanner/rule/capability posture, permission, zero preview writes/effects, exact execution effects, recovery, verification, and tenant/caller-bound request fingerprint. scanSecrets accepts preview_fingerprint; repository and third-party operations remain mapped to F39."
                     ],
                     "refs": [
                         "internal/api/api.go",
@@ -15129,6 +15133,9 @@
                 },
                 "test": {
                     "evidence": [
+                        "TestServedSecretScanPreviewAndRetryRecoveryF39 proves preview starts no scanner and records no discovery state, custom-rules content changes invalidate the review before execution, transient failure records no completed run, same-key retry succeeds, and completed replay does not scan twice.",
+                        "TestGitleaksRunnerPlanValidatesWithoutExecutingScannerF39 proves filesystem validation, pinned-binary validation, custom rule counting/digest changes, and zero process execution.",
+                        "Secrets console, WIRE-09, API-client census, and a11y receipt tests prove the three-step review journey, no preview idempotency header, fingerprint-bound execution, failure retention, stable-key retry, redacted proof, and keyboard/axe coverage.",
                         "TestServedRepositorySecretScanWebhookQueuesAndExecutesCAPSCAN01 queues a GitHub repository event through the served API, dispatches the discovery.run outbox worker, and records a redacted leaked-secret discovery finding.",
                         "TestServedRepoSecretScanningCAPSCAN01 proves the CAP-SCAN-01 posture reports GitHub/GitLab/Bitbucket providers, webhook paths, release gates, event flow, and AN controls.",
                         "TestServedThirdPartySecretScanningCAPSCAN04 proves the CAP-SCAN-04 posture reports CI/CD log, container-registry, Slack, and Jira providers plus ingest paths, release gates, event flow, and AN controls.",
@@ -15149,23 +15156,27 @@
                         "internal/cli/cli_test.go",
                         "internal/secretscan/gitdiff_test.go",
                         "internal/secretscan/gitleaks_options_test.go",
+                        "web/src/__tests__/secrets.test.tsx",
+                        "web/src/__tests__/accept/WIRE-09.test.tsx",
+                        "web/src/lib/api.test.ts",
                         "internal/featureparity/feature_facet_coverage_test.go"
                     ]
                 },
                 "docs": {
                     "evidence": [
-                        "documented in docs/features/secrets.md, docs/journeys/manage-secrets.md, docs/configuration.md, and docs/cli.md"
+                        "The feature, CLI, operator journey, and web-console docs explain effect-free preview, exact fingerprint binding, stale-review 409 behavior, same-key interruption recovery, redacted evidence, and durable discovery verification."
                     ],
                     "refs": [
                         "docs/features/secrets.md",
                         "docs/journeys/manage-secrets.md",
                         "docs/configuration.md",
-                        "docs/cli.md"
+                        "docs/cli.md",
+                        "docs/web-console.md"
                     ]
                 },
                 "rbac": {
                     "evidence": [
-                        "The feature authz manifest maps GET /api/v1/secrets/scans/repositories and GET /api/v1/secrets/scans/third-party to secrets:read, POST /api/v1/secrets/scans/repositories/{provider}/webhook, POST /api/v1/secrets/scans/third-party/{provider}/ingest, and POST /api/v1/secrets/scans to secrets:write; discovery/graph reads remain guarded by discovery:read and graph:read."
+                        "The API feature authz manifest maps both POST /api/v1/secrets/scans/preview and POST /api/v1/secrets/scans to secrets:write; preview is explicitly non-mutating while execution still requires idempotency and CSRF. Repository/third-party routes and discovery/graph reads preserve their existing scoped permissions."
                     ],
                     "refs": [
                         "internal/api/api.go",
@@ -15176,7 +15187,7 @@
                 },
                 "audit": {
                     "evidence": [
-                        "Served scans, repository webhook runs, and third-party artifact runs record discovery.source.upserted, discovery.run.queued, discovery.run.started, discovery.finding.recorded, and discovery.run.completed events without the secret value."
+                        "Effect-free preview appends no audit/discovery event. Successful served scans, repository webhook runs, and third-party artifact runs record tenant-scoped discovery lifecycle events without the secret value; failed scanner attempts do not forge a completed-run event."
                     ],
                     "refs": [
                         "internal/orchestrator/discovery.go",
@@ -15196,18 +15207,19 @@
                 },
                 "a11y": {
                     "evidence": [
-                        "feature-specific a11y receipt: Code/CI secret scanning bridge is mapped to route-backed GUI workflow evidence and exercised by web/src/__tests__/feature_a11y_receipts.test.tsx, which renders the registered route surface, runs axe, and verifies keyboard focus reaches the workflow."
+                        "The extracted StepShell workflow uses associated Field controls, native table semantics, status/error regions, keyboard-reachable actions, and is exercised by the feature-specific axe/focus receipt plus the Secrets journey tests."
                     ],
                     "refs": [
                         "web/src/__tests__/feature_a11y_receipts.test.tsx",
                         "web/src/lib/navigation.ts",
                         "web/src/pages/Secrets.tsx",
+                        "web/src/pages/secrets/SecretScanningWorkflow.tsx",
                         "web/src/App.tsx"
                     ]
                 },
                 "i18n": {
                     "evidence": [
-                        "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
+                        "All new F39 workflow copy is in the typed English catalog with machine-authored Spanish/German entries explicitly marked for human review; extraction, unused-key detection, and runtime-catalog generation pass npm run i18n:check."
                     ],
                     "refs": [
                         "web/scripts/extract-i18n-messages.mjs",
@@ -15222,7 +15234,7 @@
                 "purpose": "Lets an operator understand and safely use code/ci secret scanning bridge while tenant, policy, and security authority remain on the server.",
                 "tool": "secrets",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/secrets/scanning",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -15236,51 +15248,65 @@
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "The parity contract contains metadata only. Product workflows may reveal a value once, but reports and evidence never contain the value.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/pages/Secrets.tsx"
+                            "web/src/pages/Secrets.tsx",
+                            "web/src/pages/secrets/SecretScanningWorkflow.tsx"
                         ]
                     },
                     "understand": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/pages/Secrets.tsx"
+                            "web/src/pages/secrets/SecretScanningWorkflow.tsx",
+                            "internal/api/secrets_scanning.go"
                         ]
                     },
                     "configure": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/pages/Secrets.tsx"
+                            "web/src/pages/secrets/SecretScanningWorkflow.tsx"
                         ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: previewSecretScan",
+                            "internal/api/secrets_scanning.go",
+                            "internal/secretscan/gitleaks.go",
+                            "internal/server/secrets_scan_served_test.go",
+                            "web/src/pages/secrets/SecretScanningWorkflow.tsx"
+                        ]
                     },
                     "execute": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/pages/Secrets.tsx",
-                            "internal/server/secret_repository_scan_served_test.go"
+                            "web/src/pages/secrets/SecretScanningWorkflow.tsx",
+                            "internal/server/secrets_scan_served_test.go"
                         ]
                     },
                     "observe": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/pages/Secrets.tsx"
+                            "web/src/pages/secrets/SecretScanningWorkflow.tsx"
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/server/secrets_scan_served_test.go",
+                            "web/src/pages/secrets/SecretScanningWorkflow.tsx",
+                            "web/src/__tests__/secrets.test.tsx",
+                            "web/src/__tests__/accept/WIRE-09.test.tsx"
+                        ]
                     },
                     "verify": {
                         "status": "complete",
                         "evidence": [
-                            "internal/server/secret_repository_scan_served_test.go"
+                            "internal/server/secrets_scan_served_test.go",
+                            "web/src/pages/secrets/SecretScanningWorkflow.tsx"
                         ]
                     },
                     "automate": {
@@ -15290,12 +15316,14 @@
                             "OpenAPI operationId: receiveSecretRepositoryWebhook",
                             "OpenAPI operationId: getThirdPartySecretScanning",
                             "OpenAPI operationId: ingestThirdPartySecretScan",
+                            "OpenAPI operationId: previewSecretScan",
                             "OpenAPI operationId: scanSecrets",
                             "CLI command: secrets scans pre-commit install",
                             "CLI command: secrets scans repositories",
                             "CLI command: secrets scans repositories webhook",
                             "CLI command: secrets scans third-party",
                             "CLI command: secrets scans third-party ingest",
+                            "CLI command: secrets scans preview",
                             "CLI command: secrets scans run",
                             "CLI command: secrets scans staged-diff"
                         ]
@@ -15303,8 +15331,8 @@
                 },
                 "owner": "secrets",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "a37d8519a9dfa1d3acdf3e7beb5ed1ae4e836b12",
+                "freshness": "2026-09-03"
             }
         },
         {

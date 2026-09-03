@@ -35,7 +35,7 @@ type secretScannerPlanner interface {
 	Plan(path string, opts secretscan.ScanOptions) (secretscan.Plan, error)
 }
 
-const secretScanReviewDomain = "trstctl.api.f39-secret-scan-review.v1"
+const secretScanReviewDomain = "trstctl.api.f39-secret-scan-review.v1" // #nosec G101 -- public MAC domain label, not a credential
 
 type secretRepoScanProviderResponse struct {
 	ID               string   `json:"id"`

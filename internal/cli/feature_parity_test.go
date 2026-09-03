@@ -266,8 +266,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// use the same review oracle as the console before presenting a credential.
 	// F60 adds the value-free one-time-share preview command.
 	// F38 adds the read-only, effect-free ephemeral API-key preview command.
-	if len(out) != 432 {
-		t.Fatalf("CLI commands = %d, want 432", len(out))
+	// F39 adds the read-only, effect-free secret-scan preview command.
+	if len(out) != 433 {
+		t.Fatalf("CLI commands = %d, want 433", len(out))
 	}
 	return out
 }

@@ -5382,7 +5382,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use code/ci secret scanning bridge while tenant, policy, and security authority remain on the server.",
       "tool": "secrets",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/secrets/scanning",
       "navigationEntrypoints": [
         "tool navigation",
@@ -5396,51 +5396,65 @@ export const canonicalCapabilities = [
       ],
       "sideEffects": "mixed",
       "secretDataHandling": "The parity contract contains metadata only. Product workflows may reveal a value once, but reports and evidence never contain the value.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
           "evidence": [
-            "web/src/pages/Secrets.tsx"
+            "web/src/pages/Secrets.tsx",
+            "web/src/pages/secrets/SecretScanningWorkflow.tsx"
           ]
         },
         "understand": {
           "status": "complete",
           "evidence": [
-            "web/src/pages/Secrets.tsx"
+            "web/src/pages/secrets/SecretScanningWorkflow.tsx",
+            "internal/api/secrets_scanning.go"
           ]
         },
         "configure": {
           "status": "complete",
           "evidence": [
-            "web/src/pages/Secrets.tsx"
+            "web/src/pages/secrets/SecretScanningWorkflow.tsx"
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: previewSecretScan",
+            "internal/api/secrets_scanning.go",
+            "internal/secretscan/gitleaks.go",
+            "internal/server/secrets_scan_served_test.go",
+            "web/src/pages/secrets/SecretScanningWorkflow.tsx"
+          ]
         },
         "execute": {
           "status": "complete",
           "evidence": [
-            "web/src/pages/Secrets.tsx",
-            "internal/server/secret_repository_scan_served_test.go"
+            "web/src/pages/secrets/SecretScanningWorkflow.tsx",
+            "internal/server/secrets_scan_served_test.go"
           ]
         },
         "observe": {
           "status": "complete",
           "evidence": [
-            "web/src/pages/Secrets.tsx"
+            "web/src/pages/secrets/SecretScanningWorkflow.tsx"
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "internal/server/secrets_scan_served_test.go",
+            "web/src/pages/secrets/SecretScanningWorkflow.tsx",
+            "web/src/__tests__/secrets.test.tsx",
+            "web/src/__tests__/accept/WIRE-09.test.tsx"
+          ]
         },
         "verify": {
           "status": "complete",
           "evidence": [
-            "internal/server/secret_repository_scan_served_test.go"
+            "internal/server/secrets_scan_served_test.go",
+            "web/src/pages/secrets/SecretScanningWorkflow.tsx"
           ]
         },
         "automate": {
@@ -5450,12 +5464,14 @@ export const canonicalCapabilities = [
             "OpenAPI operationId: receiveSecretRepositoryWebhook",
             "OpenAPI operationId: getThirdPartySecretScanning",
             "OpenAPI operationId: ingestThirdPartySecretScan",
+            "OpenAPI operationId: previewSecretScan",
             "OpenAPI operationId: scanSecrets",
             "CLI command: secrets scans pre-commit install",
             "CLI command: secrets scans repositories",
             "CLI command: secrets scans repositories webhook",
             "CLI command: secrets scans third-party",
             "CLI command: secrets scans third-party ingest",
+            "CLI command: secrets scans preview",
             "CLI command: secrets scans run",
             "CLI command: secrets scans staged-diff"
           ]
@@ -5463,8 +5479,8 @@ export const canonicalCapabilities = [
       },
       "owner": "secrets",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "a37d8519a9dfa1d3acdf3e7beb5ed1ae4e836b12",
+      "freshness": "2026-09-03"
     }
   },
   {
