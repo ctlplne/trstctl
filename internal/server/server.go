@@ -1238,18 +1238,9 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 		}
 		defaults = append(defaults, api.WithSecrets(s.buildSecretsBackend(d)))
 	}
-	transitSvc, err := s.buildTransitService(d)
-	if err != nil {
+	if err := s.appendTransitAPIOptions(d, &defaults); err != nil {
 		return nil, nil, err
 	}
-	if transitSvc != nil {
-		defaults = append(defaults, api.WithTransit(transitSvc))
-	}
-	kmipEnabled := d.Protocols.KMIP.Enabled
-	kmipTenantID := d.Protocols.KMIP.TenantID
-	defaults = append(defaults, api.WithTransitPosture(func(_ context.Context, tenantID string) api.TransitRuntimePosture {
-		return s.transitRuntimePosture(kmipEnabled, kmipTenantID, tenantID)
-	}))
 	codeSigningConfig := d.CodeSigning
 	if codeSigningConfig.Gate == nil {
 		codeSigningConfig.Gate = s.codeSignGate
@@ -1307,6 +1298,24 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	a := api.New(d.Store, idem, orch, append(defaults, d.APIOptions...)...)
 	s.api = a
 	return a, auditSvc, nil
+}
+
+// appendTransitAPIOptions keeps Transit service construction and its tenant-safe
+// runtime posture reader together as one reviewable startup stage.
+func (s *Server) appendTransitAPIOptions(d Deps, options *[]api.Option) error {
+	transitSvc, err := s.buildTransitService(d)
+	if err != nil {
+		return err
+	}
+	if transitSvc != nil {
+		*options = append(*options, api.WithTransit(transitSvc))
+	}
+	kmipEnabled := d.Protocols.KMIP.Enabled
+	kmipTenantID := d.Protocols.KMIP.TenantID
+	*options = append(*options, api.WithTransitPosture(func(_ context.Context, tenantID string) api.TransitRuntimePosture {
+		return s.transitRuntimePosture(kmipEnabled, kmipTenantID, tenantID)
+	}))
+	return nil
 }
 
 // appendAuditAPIOptions keeps audit construction and its lazy TSA dependency in
