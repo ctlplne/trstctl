@@ -327,16 +327,20 @@ func TestConnectorDeliveryServedVsLibraryMutationIsHonest(t *testing.T) {
 // disclosure to the code reality.
 func TestSecretsExpansionDisclosedLibraryOnlyInProductAndDocs(t *testing.T) {
 	// In-product disclosure: the Secrets page must label the not-yet-served slices.
-	secretsPage := strings.ToLower(read(t, "../web/src/pages/Secrets.tsx"))
+	secretsPage := strings.ToLower(strings.Join([]string{
+		read(t, "../web/src/pages/Secrets.tsx"),
+		read(t, "../web/src/pages/secrets/SecretScanningWorkflow.tsx"),
+		read(t, "../web/src/pages/secrets/EphemeralAPIKeyWorkflow.tsx"),
+	}, "\n"))
 	for _, m := range []string{
 		"secret-scanning triage is library-only",
 	} {
 		if !strings.Contains(secretsPage, m) {
-			t.Errorf("web/src/pages/Secrets.tsx must keep the honest library-only label for the secrets-expansion surfaces (missing %q) — TRACE-005", m)
+			t.Errorf("the assembled Secrets workflow must keep the honest library-only label for the secrets-expansion surfaces (missing %q) — TRACE-005", m)
 		}
 	}
 	if !containsAll(secretsPage, []string{"ephemeral api-key issuance is served", "post /api/v1/ephemeral/api-keys", "trstctl-cli ephemeral api-keys issue", "api_token.revoked"}) {
-		t.Error("web/src/pages/Secrets.tsx must disclose ephemeral API-key issuance as served now that F38 has API/CLI routes — TRACE-005")
+		t.Error("the assembled Secrets workflow must disclose ephemeral API-key issuance as served now that F38 has API/CLI routes — TRACE-005")
 	}
 	if !containsAll(secretsPage, []string{"dynamic secret leases are served", "post /api/v1/secrets/leases", "secrets:read"}) {
 		t.Error("web/src/pages/Secrets.tsx must disclose dynamic-secret leases as served now that F65 has API/CLI routes — TRACE-005")

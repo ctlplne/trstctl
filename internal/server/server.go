@@ -1190,15 +1190,7 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 		}
 		defaults = append(defaults, licensedOpts...)
 	}
-	var auditSvc *audit.Service
-	if d.Log != nil {
-		auditSvc = audit.NewService(d.Log, d.AuditSigningKey, audit.WithCheckpoints(d.Store), audit.WithPrivacyErasures(d.Store))
-		s.audit = auditSvc
-		defaults = append(defaults, api.WithAudit(auditSvc))
-		// J1: chain heads are countersigned by the served TSA. Resolved lazily —
-		// the protocol mounts are built after this point.
-		defaults = append(defaults, api.WithAuditTimestamper(auditTimestamper{srv: s}))
-	}
+	auditSvc := s.appendAuditAPIOptions(d, &defaults)
 	if d.RateLimiter != nil {
 		defaults = append(defaults, api.WithRateLimiter(d.RateLimiter))
 	}
@@ -1305,6 +1297,21 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	a := api.New(d.Store, idem, orch, append(defaults, d.APIOptions...)...)
 	s.api = a
 	return a, auditSvc, nil
+}
+
+// appendAuditAPIOptions keeps audit construction and its lazy TSA dependency in
+// one named startup stage so configureAPI remains reviewable as features grow.
+func (s *Server) appendAuditAPIOptions(d Deps, options *[]api.Option) *audit.Service {
+	if d.Log == nil {
+		return nil
+	}
+	auditSvc := audit.NewService(d.Log, d.AuditSigningKey, audit.WithCheckpoints(d.Store), audit.WithPrivacyErasures(d.Store))
+	s.audit = auditSvc
+	*options = append(*options, api.WithAudit(auditSvc))
+	// J1: chain heads are countersigned by the served TSA. Resolved lazily —
+	// the protocol mounts are built after this point.
+	*options = append(*options, api.WithAuditTimestamper(auditTimestamper{srv: s}))
+	return auditSvc
 }
 
 // appendProtocolQualificationOptions keeps the protocol readiness sources in

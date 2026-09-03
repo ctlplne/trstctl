@@ -5,13 +5,7 @@ import { ErrorState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import { formatDateTime } from "@/i18n/format";
 import { useTranslation } from "@/i18n/I18nProvider";
-import {
-  ApiError,
-  api,
-  type EphemeralAPIKey,
-  type EphemeralAPIKeyPreview,
-  type EphemeralAPIKeyRequest,
-} from "@/lib/api";
+import { ApiError, api, type EphemeralAPIKey, type EphemeralAPIKeyPreview, type EphemeralAPIKeyRequest } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
 import { RevealPanel, parseScopeList } from "./SecretsPageParts";
 
@@ -31,6 +25,8 @@ function requestFromInputs(subjectInput: string, scopesInput: string, ttlInput: 
 }
 
 export default function EphemeralAPIKeyWorkflow({ canGrant, nativeStoreUnavailable }: { canGrant: boolean; nativeStoreUnavailable: boolean }) {
+  // TRACE-005 source anchor: ephemeral API-key issuance is served through POST /api/v1/ephemeral/api-keys,
+  // trstctl-cli ephemeral api-keys issue, and durable api_token.revoked verification.
   const { t } = useTranslation();
   const subjectRef = useRef<HTMLInputElement>(null);
   const [subject, setSubject] = useState("");
@@ -184,7 +180,9 @@ export default function EphemeralAPIKeyWorkflow({ canGrant, nativeStoreUnavailab
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.8fr)]">
         <form aria-label={t("secrets.ephemeral.formLabel")} onSubmit={(event) => void review(event)} className="grid content-start gap-3">
           <div className="grid gap-1 text-sm">
-            <label className="font-medium" htmlFor="ephemeral-api-key-subject">{t("secrets.ephemeral.subject")}</label>
+            <label className="font-medium" htmlFor="ephemeral-api-key-subject">
+              {t("secrets.ephemeral.subject")}
+            </label>
             <input
               ref={subjectRef}
               id="ephemeral-api-key-subject"
@@ -199,10 +197,14 @@ export default function EphemeralAPIKeyWorkflow({ canGrant, nativeStoreUnavailab
               autoComplete="off"
               required
             />
-            <span id="ephemeral-api-key-subject-help" className="text-xs text-muted-foreground">{t("secrets.ephemeral.subjectHelp")}</span>
+            <span id="ephemeral-api-key-subject-help" className="text-xs text-muted-foreground">
+              {t("secrets.ephemeral.subjectHelp")}
+            </span>
           </div>
           <div className="grid gap-1 text-sm">
-            <label className="font-medium" htmlFor="ephemeral-api-key-scopes">{t("secrets.ephemeral.scopes")}</label>
+            <label className="font-medium" htmlFor="ephemeral-api-key-scopes">
+              {t("secrets.ephemeral.scopes")}
+            </label>
             <textarea
               id="ephemeral-api-key-scopes"
               aria-describedby="ephemeral-api-key-scopes-help"
@@ -215,10 +217,14 @@ export default function EphemeralAPIKeyWorkflow({ canGrant, nativeStoreUnavailab
               placeholder="access:read"
               required
             />
-            <span id="ephemeral-api-key-scopes-help" className="text-xs text-muted-foreground">{t("secrets.ephemeral.scopesHelp")}</span>
+            <span id="ephemeral-api-key-scopes-help" className="text-xs text-muted-foreground">
+              {t("secrets.ephemeral.scopesHelp")}
+            </span>
           </div>
           <div className="grid gap-1 text-sm">
-            <label className="font-medium" htmlFor="ephemeral-api-key-ttl">{t("secrets.ephemeral.ttl")}</label>
+            <label className="font-medium" htmlFor="ephemeral-api-key-ttl">
+              {t("secrets.ephemeral.ttl")}
+            </label>
             <input
               id="ephemeral-api-key-ttl"
               aria-describedby="ephemeral-api-key-ttl-help"
@@ -234,7 +240,9 @@ export default function EphemeralAPIKeyWorkflow({ canGrant, nativeStoreUnavailab
               }}
               required
             />
-            <span id="ephemeral-api-key-ttl-help" className="text-xs text-muted-foreground">{t("secrets.ephemeral.ttlHelp")}</span>
+            <span id="ephemeral-api-key-ttl-help" className="text-xs text-muted-foreground">
+              {t("secrets.ephemeral.ttlHelp")}
+            </span>
           </div>
           <Button type="submit" disabled={previewBusy || issueBusy || !canGrant}>
             {previewBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
@@ -287,13 +295,17 @@ export default function EphemeralAPIKeyWorkflow({ canGrant, nativeStoreUnavailab
             <div>
               <h4 className="font-medium">{t("secrets.ephemeral.recoveryHeading")}</h4>
               <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-                {preview.recovery_steps.map((step) => <li key={step}>{step}</li>)}
+                {preview.recovery_steps.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
               </ul>
             </div>
             <div>
               <h4 className="font-medium">{t("secrets.ephemeral.verificationHeading")}</h4>
               <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-                {preview.verification_steps.map((step) => <li key={step}>{step}</li>)}
+                {preview.verification_steps.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
               </ul>
             </div>
           </div>
@@ -335,12 +347,20 @@ export default function EphemeralAPIKeyWorkflow({ canGrant, nativeStoreUnavailab
             </Button>
           </div>
           {!canVerify ? <p className="text-sm text-muted-foreground">{t("secrets.ephemeral.verifyUnavailable")}</p> : null}
-          {verified ? <p role="status" className="text-sm text-risk-healthy">{t("secrets.ephemeral.verifyPassed")}</p> : null}
+          {verified ? (
+            <p role="status" className="text-sm text-risk-healthy">
+              {t("secrets.ephemeral.verifyPassed")}
+            </p>
+          ) : null}
           {verifyError ? <ErrorState title={t("secrets.ephemeral.verifyFailedTitle")}>{verifyError}</ErrorState> : null}
           {revokeError ? <ErrorState title={t("secrets.ephemeral.revokeFailedTitle")}>{revokeError}</ErrorState> : null}
         </div>
       ) : null}
-      {revoked ? <p role="status" className="text-sm text-risk-healthy">{t("secrets.ephemeral.revoked")}</p> : null}
+      {revoked ? (
+        <p role="status" className="text-sm text-risk-healthy">
+          {t("secrets.ephemeral.revoked")}
+        </p>
+      ) : null}
     </section>
   );
 }

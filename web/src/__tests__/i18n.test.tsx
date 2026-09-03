@@ -1426,8 +1426,12 @@ describe("i18n boundary", () => {
       // automatic expiry. Twelve obsolete extracted strings from the retired
       // direct-mint panel were removed. Machine-authored es/de — FLAGGED FOR HUMAN
       // TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "e31f1fc16fb36108f2885993834ae999a8644a563c7465d10c5bb58bc5f8c579",
-      "de-DE": "73e8f5b843ff67eb01bfbf1fee25598cb3932b1a425975a0286f5dfb2f1f16b2",
+      // F39 re-pin: the secret-scanning journey now distinguishes effect-free
+      // review, reviewed execution, stale-plan refusal, same-key retry, and
+      // redacted durable proof. Machine-authored es/de — FLAGGED FOR HUMAN
+      // TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "0ceabb163af8c4e8a016152b14a854ad6bed47afe76ae25f89ca054748ee29e2",
+      "de-DE": "2bee0694543ecff78333eba54fa43307b03c0506423fe4a884a4ea5dd91d7645",
     });
   });
 

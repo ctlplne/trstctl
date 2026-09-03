@@ -377,6 +377,7 @@ export function SecretScanningWorkflow({
       </StepShell>
 
       <Card>
+        {/* TRACE-005 source anchor: secret-scanning triage is library-only; scan automation and redacted discovery handoff are served. */}
         <CardHeader>
           <CardTitle>{t("secrets.scan.automationHeading")}</CardTitle>
           <p className="text-sm text-muted-foreground">{t("secrets.scan.automationHelp")}</p>

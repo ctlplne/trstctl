@@ -113,7 +113,9 @@ describe("WIRE-06 ephemeral API-key issuance wiring", () => {
       }),
     );
     expect(apiMock.issueEphemeralAPIKey).not.toHaveBeenCalled();
-    expect(await screen.findByText("Nothing has been created yet. This plan is bound to this tenant, caller, subject, permission set, and lifetime.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Nothing has been created yet. This plan is bound to this tenant, caller, subject, permission set, and lifetime."),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Issue reviewed key" }));
 
     await waitFor(() =>
