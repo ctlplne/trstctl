@@ -22,7 +22,6 @@ import {
   api,
   type APIToken,
   type CloudSecretManagerIntegration,
-  type DynamicLease,
   type EphemeralCredential,
   type Identity,
   type KubernetesSecretOperator,
@@ -47,14 +46,12 @@ import {
   type SecretValue,
 } from "@/lib/api";
 import {
-  DynamicLeaseMetadata,
   formatCommandArgv,
   parseSecretRotationPartialReceipt,
   RevealPanel,
   RotationHealthBadges,
   SecretApprovalQueue,
   Snippet,
-  leaseMetadataOnly,
   mergeMeta,
   NativeSecretCreateForm,
   secretApprovalActionLabel,
@@ -72,6 +69,7 @@ import { TransitOperations } from "./secrets/TransitOperations";
 import { PKISecretWorkflow } from "./secrets/PKISecretWorkflow";
 import { MachineAuthWorkflow } from "./secrets/MachineAuthWorkflow";
 import { SecretScanningWorkflow } from "./secrets/SecretScanningWorkflow";
+import { DynamicSecretWorkflow } from "./secrets/DynamicSecretWorkflow";
 
 const SecretSharingWorkflow = lazy(() => import("./secrets/SecretSharingWorkflow"));
 const EphemeralAPIKeyWorkflow = lazy(() => import("./secrets/EphemeralAPIKeyWorkflow"));
@@ -263,15 +261,6 @@ export function Secrets() {
 
   const [sharingTask, setSharingTask] = useState<"share" | "machine" | null>(null);
   const [engineTask, setEngineTask] = useState<"dynamic" | "transit" | "pki" | null>(null);
-
-  const [leaseProvider, setLeaseProvider] = useState("postgresql");
-  const [leaseRole, setLeaseRole] = useState("");
-  const [leaseTTL, setLeaseTTL] = useState("1200");
-  const [leaseExtendSeconds, setLeaseExtendSeconds] = useState("300");
-  const [leaseBusy, setLeaseBusy] = useState<"issue" | "renew" | "revoke" | null>(null);
-  const [leaseError, setLeaseError] = useState<string | null>(null);
-  const [lease, setLease] = useState<DynamicLease | null>(null);
-  const [leaseCredential, setLeaseCredential] = useState<{ id: string; credential: string } | null>(null);
 
   const [repoScanPosture, setRepoScanPosture] = useState<SecretRepositoryScanPosture | null>(null);
   const [thirdPartyPosture, setThirdPartyPosture] = useState<ThirdPartySecretScanPosture | null>(null);
@@ -1119,56 +1108,6 @@ export function Secrets() {
       setGrantError(apiProblemMessage(err, t("secrets.grant.failedTitle")));
     } finally {
       setRevokingTokenId(null);
-    }
-  }
-
-  async function submitDynamicLease(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setLeaseError(null);
-    setLeaseCredential(null);
-    setLeaseBusy("issue");
-    try {
-      const role = leaseRole.trim();
-      const ttl = Number(leaseTTL);
-      if (!role) throw new Error("Role is required");
-      if (!Number.isFinite(ttl) || ttl <= 0) throw new Error("TTL seconds must be a positive number");
-      const issued = await api.issueDynamicLease({ provider: leaseProvider, role, ttl_seconds: Math.round(ttl) });
-      setLease(leaseMetadataOnly(issued));
-      if (issued.credential) setLeaseCredential({ id: issued.id, credential: issued.credential });
-      setLeaseRole("");
-    } catch (err) {
-      setLeaseError(apiProblemMessage(err, "Could not issue dynamic lease"));
-    } finally {
-      setLeaseBusy(null);
-    }
-  }
-
-  async function renewDynamicLease() {
-    if (!lease) return;
-    setLeaseError(null);
-    setLeaseBusy("renew");
-    try {
-      const extendSeconds = Number(leaseExtendSeconds);
-      if (!Number.isFinite(extendSeconds) || extendSeconds <= 0) throw new Error("Extend seconds must be a positive number");
-      setLease(leaseMetadataOnly(await api.renewDynamicLease(lease.id, { extend_seconds: Math.round(extendSeconds) })));
-    } catch (err) {
-      setLeaseError(apiProblemMessage(err, "Could not renew dynamic lease"));
-    } finally {
-      setLeaseBusy(null);
-    }
-  }
-
-  async function revokeDynamicLease() {
-    if (!lease) return;
-    setLeaseError(null);
-    setLeaseCredential(null);
-    setLeaseBusy("revoke");
-    try {
-      setLease(leaseMetadataOnly(await api.revokeDynamicLease(lease.id)));
-    } catch (err) {
-      setLeaseError(apiProblemMessage(err, "Could not revoke dynamic lease"));
-    } finally {
-      setLeaseBusy(null);
     }
   }
 
@@ -2738,123 +2677,9 @@ export function Secrets() {
           />
 
           {engineTask === "dynamic" && (
-            <section id="task-panel-dynamic" aria-labelledby="dynamic-secrets-heading" className="grid gap-4 border-y border-border py-4">
-              <div>
-                <h2 id="dynamic-secrets-heading" className="text-title font-semibold">
-                  {translateNow("source.dynamic.secrets.70f2c5b95c")}
-                </h2>
-                <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.issue.a.lease.scoped.credential.from.a.con.9d8b9440ef")}</p>
-                {/* TRACE-005 source anchor: dynamic secret leases are served; POST /api/v1/secrets/leases; secrets:read */}
-              </div>
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
-                <form
-                  aria-label={translateNow("source.issue.dynamic.secret.lease.e14a6cc2e8")}
-                  onSubmit={(event) => void submitDynamicLease(event)}
-                  className="grid content-start gap-3"
-                >
-                  <label className="grid gap-1 text-sm">
-                    <span className="font-medium">{translateNow("source.provider.472590ae97")}</span>
-                    <select
-                      className="rounded-md border border-border bg-background px-3 py-2"
-                      value={leaseProvider}
-                      onChange={(event) => setLeaseProvider(event.target.value)}
-                    >
-                      <option value="postgresql">{translateNow("source.postgresql.cc52d03280")}</option>
-                      <option value="aws-iam">{translateNow("source.aws.iam.c37b8156ed")}</option>
-                      <option value="kubernetes">{translateNow("source.kubernetes.a37d07fe30")}</option>
-                      <option value="redis">{translateNow("source.redis.a7f6415749")}</option>
-                    </select>
-                  </label>
-                  <label className="grid gap-1 text-sm">
-                    <span className="font-medium">{translateNow("source.role.14736a2eb9")}</span>
-                    <input
-                      className="rounded-md border border-border bg-background px-3 py-2"
-                      value={leaseRole}
-                      onChange={(event) => setLeaseRole(event.target.value)}
-                      placeholder={translateNow("source.readonly.reporting.ddf5aecb22")}
-                      required
-                    />
-                  </label>
-                  <label className="grid gap-1 text-sm">
-                    <span className="font-medium">{translateNow("source.ttl.seconds.862d08de5a")}</span>
-                    <input
-                      className="rounded-md border border-border bg-background px-3 py-2"
-                      type="number"
-                      min="60"
-                      value={leaseTTL}
-                      onChange={(event) => setLeaseTTL(event.target.value)}
-                      required
-                    />
-                  </label>
-                  <Button type="submit" disabled={leaseBusy === "issue" || Boolean(loadError)}>
-                    {leaseBusy === "issue" ? (
-                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                    ) : (
-                      <KeyRound className="h-4 w-4" aria-hidden="true" />
-                    )}
-                    {translateNow("source.issue.lease.96a70e0f64")}
-                  </Button>
-                </form>
-                <div className="ui-panel grid content-start gap-3 p-comfortable text-sm">
-                  <h3 className="text-title font-semibold">{translateNow("source.lease.state.70d08ad3df")}</h3>
-                  {lease ? (
-                    <>
-                      <DynamicLeaseMetadata lease={lease} />
-                      <label className="grid gap-1">
-                        <span className="font-medium">{translateNow("source.extend.seconds.ff4a8186f0")}</span>
-                        <input
-                          className="rounded-md border border-border bg-background px-3 py-2"
-                          type="number"
-                          min="60"
-                          value={leaseExtendSeconds}
-                          onChange={(event) => setLeaseExtendSeconds(event.target.value)}
-                        />
-                      </label>
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => void renewDynamicLease()}
-                          disabled={leaseBusy === "renew" || lease.state === "revoked"}
-                        >
-                          {leaseBusy === "renew" ? (
-                            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                          ) : (
-                            <RotateCw className="h-4 w-4" aria-hidden="true" />
-                          )}
-                          {translateNow("source.renew.lease.b730aa5628")}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => void revokeDynamicLease()}
-                          disabled={leaseBusy === "revoke" || lease.state === "revoked"}
-                        >
-                          {leaseBusy === "revoke" ? (
-                            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                          ) : (
-                            <Trash2 className="h-4 w-4" aria-hidden="true" />
-                          )}
-                          {translateNow("source.revoke.lease.a04f91a939")}
-                        </Button>
-                      </div>
-                    </>
-                  ) : (
-                    <p className="text-muted-foreground">{translateNow("source.no.dynamic.lease.issued.yet.da6fd9c373")}</p>
-                  )}
-                </div>
-              </div>
-              {leaseError && <ErrorState title={translateNow("source.dynamic.lease.operation.failed.115f5893e7")}>{leaseError}</ErrorState>}
-              {leaseCredential && (
-                <RevealPanel
-                  title={translateNow("source.generated.credential.for.lease.value1.814b0bc937", { value1: leaseCredential.id })}
-                  onDismiss={() => setLeaseCredential(null)}
-                  value={leaseCredential.credential}
-                >
-                  {translateNow("source.copy.this.generated.credential.now.renew.a.811264cbb9")}
-                </RevealPanel>
-              )}
-            </section>
+            <div id="task-panel-dynamic" className="border-y border-border py-4">
+              <DynamicSecretWorkflow loadBlocked={Boolean(loadError)} />
+            </div>
           )}
 
           {engineTask === "transit" && <TransitOperations nativeStoreUnavailable={Boolean(loadError)} />}

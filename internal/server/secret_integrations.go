@@ -187,9 +187,13 @@ type configuredDynamicProvider struct {
 	cfg          config.DynamicSecretProviderConfig
 	allowedRoles map[string]bool
 	maxTTL       time.Duration
-	credentials  integrationCredentialResolver
-	guard        *egress.Guard
-	open         func(context.Context) (requestDynamicBackend, func(), error)
+	// configurationRevision is a runtime-scoped, non-secret identity for the
+	// exact validated provider attachment. A restart creates a new identity, so
+	// an old review cannot authorize work against replacement configuration.
+	configurationRevision string
+	credentials           integrationCredentialResolver
+	guard                 *egress.Guard
+	open                  func(context.Context) (requestDynamicBackend, func(), error)
 }
 
 // newConfiguredDynamicProvider assembles the concrete backend opener now, while
@@ -199,7 +203,8 @@ type configuredDynamicProvider struct {
 func newConfiguredDynamicProvider(cfg config.DynamicSecretProviderConfig, allowed map[string]bool, maxTTL time.Duration, credentials integrationCredentialResolver, guard *egress.Guard) dynsecret.Provider {
 	provider := &configuredDynamicProvider{
 		id: cfg.ID, tenantID: cfg.TenantID, cfg: cfg,
-		allowedRoles: allowed, maxTTL: maxTTL, credentials: credentials, guard: guard,
+		allowedRoles: allowed, maxTTL: maxTTL, configurationRevision: uuid.NewString(),
+		credentials: credentials, guard: guard,
 	}
 	provider.open = func(ctx context.Context) (requestDynamicBackend, func(), error) {
 		return openConfiguredDynamicBackend(ctx, provider)
@@ -211,6 +216,27 @@ func newConfiguredDynamicProvider(cfg config.DynamicSecretProviderConfig, allowe
 }
 
 func (p *configuredDynamicProvider) Name() string { return p.id }
+
+// DynamicSecretProviderType is the non-secret backend family displayed by the
+// operator review. It deliberately does not expose endpoint or credential refs.
+func (p *configuredDynamicProvider) DynamicSecretProviderType() string { return p.cfg.Type }
+
+// DynamicSecretAllowedRoles returns only operator-selectable role names.
+// Provider-native bindings remain startup-owned and do not cross the API seam.
+func (p *configuredDynamicProvider) DynamicSecretAllowedRoles() []string {
+	roles := make([]string, 0, len(p.allowedRoles))
+	for role := range p.allowedRoles {
+		roles = append(roles, role)
+	}
+	sort.Strings(roles)
+	return roles
+}
+
+// DynamicSecretConfigurationRevision binds a review to this process's exact
+// validated provider attachment without disclosing topology or authority refs.
+func (p *configuredDynamicProvider) DynamicSecretConfigurationRevision() string {
+	return p.configurationRevision
+}
 
 // MaximumTTL is the provider credential's hard native-validity bound. The
 // durable lifecycle creates native credentials for this duration, then manages a

@@ -367,6 +367,11 @@ describe("i18n boundary", () => {
       // review action, and separate exact/supporting evidence disclosures.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW before
       // release.
+      // F65 re-pin: the dynamic-secret journey replaces the retired free-text
+      // form with translated choose/review/use-and-retire steps, exact effect
+      // and recovery copy, and reveal-once custody warnings. Retired source.*
+      // strings were removed. Machine-authored es/de — FLAGGED FOR HUMAN
+      // TRANSLATION REVIEW before release.
       // QA product g40 re-pin: cross-system discovery now explains the complete
       // six-surface evidence rule, progress, valid sample, and all missing
       // surfaces in one response. Machine-authored es/de — FLAGGED FOR HUMAN
@@ -1434,8 +1439,8 @@ describe("i18n boundary", () => {
       // results are scoped to one exact run and names the action that returns
       // to the full finding list. Machine-authored es/de — FLAGGED FOR HUMAN
       // TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "e09262ea433c144be1e0cf925785820063a7ffc29a1ce29de6bc15e62ff345a7",
-      "de-DE": "40841ce23c0f28ac36a91e3c88ae097e237917d8ed6baaf6d6eac3e9aa6a6b83",
+      "es-ES": "2d180e3fe2ea4339314ef3930e1a87f6df68c2521f28c7746157f17bc1b239b0",
+      "de-DE": "f1bdd1edfbde50874bbcd74e815f010002890d57879db9b846b2b5d067fdca3b",
     });
   });
 

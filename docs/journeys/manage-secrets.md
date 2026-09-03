@@ -274,21 +274,39 @@ today (see [Current limitations](../limitations.md) and
    fails, correct the named secret, reference, tenant, or permission and retry the
    reviewed plan. If the secret version changed, review again before execution.
 
-7. Hand an application a short-lived backend credential it cannot hoard. Dynamic leases
-   return the credential once, then later reads show only metadata. When the TTL expires,
-   the served leaseworker queues backend revocation through the outbox, so a crash does
-   not silently drop the revoke. Operators must wire the named provider backend before a
-   tenant can issue from it. The built-in backend names are `postgresql`, `mysql`,
+7. Hand an application a short-lived backend credential it cannot hoard. In the
+   console, open **Secrets → Automatic sources → Create a temporary database or cloud
+   credential**. Choose a real configured connection and an allowed role, review the
+   zero-write/zero-call plan, create once, move the reveal-once credential directly to
+   the workload, then revoke it and prove the same login is dead. Dynamic leases return
+   the credential once; later reads show only metadata. When the TTL expires, the served
+   leaseworker queues backend revocation through the outbox, so a crash does not silently
+   drop the revoke. Operators must wire the named provider backend before a tenant can
+   issue from it. The built-in backend types are `postgresql`, `mysql`,
    `mongodb`, `aws-iam`, `gcp-iam`, `azure-entra`, `kubernetes`, and `redis`; each
    creates a scoped credential in the target system and revokes it when the lease
    closes.
 
    ```sh
+   # Discover safe setup recipes and this tenant's configured provider IDs.
+   trstctl-cli secrets leases providers
+
+   cat > dynamic-lease.json <<'JSON'
+   {"provider":"payments-db","role":"readonly","ttl_seconds":900}
+   JSON
+
+   # This first call is effect-free: no provider call, event, audit row, or outbox write.
+   trstctl-cli secrets leases preview -f dynamic-lease.json
+
+   # Execute the unchanged reviewed request with one stable key for ambiguous retries.
+   # Console execution also carries the returned preview fingerprint and refuses stale plans.
+   trstctl-cli --idempotency-key payments-db-readonly-1 secrets leases issue -f dynamic-lease.json
+
    curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST https://localhost:8443/api/v1/secrets/leases \
      -H "Authorization: Bearer $TRSTCTL_TOKEN" \
      -H "Idempotency-Key: $(uuidgen)" \
      -H 'Content-Type: application/json' \
-     -d '{"provider":"postgresql","role":"readonly","ttl_seconds":900}'
+     -d '{"provider":"payments-db","role":"readonly","ttl_seconds":900,"preview_fingerprint":"<request_fingerprint>"}'
 
    curl -fsS --cacert "$TRSTCTL_CA_FILE" https://localhost:8443/api/v1/secrets/leases/<lease-id> \
      -H "Authorization: Bearer $TRSTCTL_TOKEN"
@@ -304,8 +322,11 @@ today (see [Current limitations](../limitations.md) and
      -H "Idempotency-Key: $(uuidgen)"
    ```
 
-   -> the issue response contains the credential; the get, renew, and revoke responses
-   contain only lease id, provider, role, state, and timestamps.
+   -> catalog and preview responses contain no secret reference or credential value;
+   the issue response contains the credential once; get, renew, and revoke contain
+   only lease id, provider, role, state, and timestamps. If the provider configuration,
+   role, TTL, tenant, or caller changed after review, issue returns `409` before any
+   backend call. Review again instead of forcing the stale plan.
 
 8. Review, issue, prove, and retire a short-lived API key for automation that should
    not keep a reusable bearer credential. Preview is effect-free and permission-

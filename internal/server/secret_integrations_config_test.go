@@ -120,6 +120,36 @@ func TestConfiguredDynamicProviderEnforcesRoleTTLAndBackendLifecycle(t *testing.
 	}
 }
 
+func TestConfiguredDynamicProviderPublishesOnlySecretFreeReviewIdentity(t *testing.T) {
+	cfg := config.DynamicSecretProviderConfig{
+		TenantID: "tenant-a", ID: "payments-db", Type: "postgresql",
+		AdminDSNRef:  "secret://providers/payments/admin-dsn",
+		AllowedRoles: []string{"support-read", "readonly-reporting"}, MaxTTL: "45m",
+	}
+	provider := newConfiguredDynamicProvider(cfg, map[string]bool{
+		"support-read": true, "readonly-reporting": true,
+	}, 45*time.Minute, integrationCredentialResolver{}, nil)
+	described, ok := provider.(interface {
+		DynamicSecretProviderType() string
+		DynamicSecretAllowedRoles() []string
+		DynamicSecretConfigurationRevision() string
+	})
+	if !ok {
+		t.Fatalf("configured provider %T does not publish review identity", provider)
+	}
+	roles := described.DynamicSecretAllowedRoles()
+	if described.DynamicSecretProviderType() != "postgresql" ||
+		len(roles) != 2 || roles[0] != "readonly-reporting" || roles[1] != "support-read" ||
+		described.DynamicSecretConfigurationRevision() == "" {
+		t.Fatalf("provider review identity = type %q roles %v revision %q",
+			described.DynamicSecretProviderType(), roles, described.DynamicSecretConfigurationRevision())
+	}
+	joined := strings.Join(append(roles, described.DynamicSecretConfigurationRevision()), " ")
+	if strings.Contains(joined, cfg.AdminDSNRef) || strings.Contains(joined, "providers/payments") {
+		t.Fatalf("provider review identity leaked credential reference: %q", joined)
+	}
+}
+
 func TestConfiguredDynamicProviderFailsClosedWhenOpenerIsMissingOrFails(t *testing.T) {
 	provider := &configuredDynamicProvider{
 		id: "missing", allowedRoles: map[string]bool{"reader": true}, maxTTL: time.Hour,

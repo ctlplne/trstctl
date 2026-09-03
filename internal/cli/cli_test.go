@@ -90,6 +90,41 @@ func TestManagedKeyCustodyAndPreviewUseSecretFreeReadSurfaces(t *testing.T) {
 	}
 }
 
+func TestDynamicSecretProviderCatalogAndPreviewUseEffectFreeReadSurfaces(t *testing.T) {
+	var catalog capture
+	catalogServer := mockServer(t, http.StatusOK,
+		`{"capability":"F65","configured_providers":[{"id":"payments-db","type":"postgresql","ready":true}],"supported_providers":[]}`,
+		&catalog)
+	catalogEnv := cli.Env{Server: catalogServer.URL, Token: "secrets-token", Tenant: "tenant-a", HTTPClient: catalogServer.Client()}
+
+	code, stdout, stderr := run(t, []string{"secrets", "leases", "providers"}, catalogEnv, "")
+	if code != 0 || !strings.Contains(stdout, `"id": "payments-db"`) || stderr != "" {
+		t.Fatalf("secrets leases providers = exit %d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if catalog.Method != http.MethodGet || catalog.Path != "/api/v1/secrets/leases/providers" ||
+		catalog.Header.Get("Idempotency-Key") != "" || len(catalog.Body) != 0 {
+		t.Fatalf("provider catalog request = %s %s key=%q body=%s", catalog.Method, catalog.Path,
+			catalog.Header.Get("Idempotency-Key"), catalog.Body)
+	}
+
+	body := `{"provider":"payments-db","role":"readonly-reporting","ttl_seconds":900}`
+	var preview capture
+	previewServer := mockServer(t, http.StatusOK,
+		`{"capability":"F65","ready":true,"effect_free":true,"request_fingerprint":"sha256:reviewed-f65"}`,
+		&preview)
+	previewEnv := cli.Env{Server: previewServer.URL, Token: "secrets-token", Tenant: "tenant-a", HTTPClient: previewServer.Client()}
+
+	code, stdout, stderr = run(t, []string{"secrets", "leases", "preview", "-f", "-"}, previewEnv, body)
+	if code != 0 || !strings.Contains(stdout, `"effect_free": true`) || stderr != "" {
+		t.Fatalf("secrets leases preview = exit %d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if preview.Method != http.MethodPost || preview.Path != "/api/v1/secrets/leases/preview" ||
+		preview.Header.Get("Idempotency-Key") != "" || !sameJSON(preview.Body, []byte(body)) {
+		t.Fatalf("dynamic-secret preview request = %s %s key=%q body=%s", preview.Method, preview.Path,
+			preview.Header.Get("Idempotency-Key"), preview.Body)
+	}
+}
+
 func TestCMPQualificationUsesAuthenticatedReadOnlyPOST(t *testing.T) {
 	var captured capture
 	srv := mockServer(t, http.StatusOK,

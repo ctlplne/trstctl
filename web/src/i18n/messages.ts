@@ -3528,6 +3528,88 @@ export const messages = {
       "Leave this empty and trstctl generates the private key itself and returns it \u2014 a deprecated path that records an issuance.server_side_keygen event each time it runs.",
     description: "B1: states plainly what happens when no CSR is supplied, so the deprecated path is a choice rather than a default nobody noticed.",
   },
+  "secrets.dynamic.title": { defaultMessage: "Temporary backend credentials", description: "F65 dynamic-secret workflow heading." },
+  "secrets.dynamic.answer": {
+    defaultMessage: "Pick a connection already approved for this tenant. trstctl creates one short-lived login, shows it once, and reliably removes it when you revoke it or its lease ends.",
+    description: "ELI5 explanation of the dynamic-secret outcome.",
+  },
+  "secrets.dynamic.loading": { defaultMessage: "Checking this tenant's temporary-credential connections…", description: "Dynamic provider catalog loading state." },
+  "secrets.dynamic.catalogFailed": { defaultMessage: "Could not read temporary-credential setup", description: "Dynamic provider catalog error title." },
+  "secrets.dynamic.catalogMissing": { defaultMessage: "The server returned no provider catalog.", description: "Missing dynamic provider catalog fallback." },
+  "secrets.dynamic.setupNeeded": { defaultMessage: "Connect a backend before issuing a credential", description: "No dynamic provider configured state." },
+  "secrets.dynamic.permissionBlocked": { defaultMessage: "This action is not available to your session", description: "Dynamic lease permission or attachment blocker title." },
+  "secrets.dynamic.permissionHelp": { defaultMessage: "Ask for secrets:write or repair the server attachment, then check again.", description: "Dynamic lease permission remediation." },
+  "secrets.dynamic.configureStep": { defaultMessage: "Choose connection", description: "First F65 journey step." },
+  "secrets.dynamic.configureStepHelp": {
+    defaultMessage: "Choose the real configured provider ID, one allowed role, and a lifetime within that provider's ceiling.",
+    description: "ELI5 dynamic lease configuration step.",
+  },
+  "secrets.dynamic.reviewStep": { defaultMessage: "Review exact plan", description: "Second F65 journey step." },
+  "secrets.dynamic.reviewStepHelp": {
+    defaultMessage: "The server checks the running provider revision, role, lifetime, writes, and outside call without creating a credential.",
+    description: "ELI5 effect-free dynamic lease review step.",
+  },
+  "secrets.dynamic.verifyStep": { defaultMessage: "Use and retire", description: "Third F65 journey step." },
+  "secrets.dynamic.verifyStepHelp": {
+    defaultMessage: "Use the credential once, inspect its lease, then revoke it and prove the same login is dead.",
+    description: "ELI5 dynamic lease verification step.",
+  },
+  "secrets.dynamic.progress": { defaultMessage: "Temporary credential workflow progress", description: "Accessible F65 step progress label." },
+  "secrets.dynamic.provider": { defaultMessage: "Connected provider", description: "Configured dynamic provider field label." },
+  "secrets.dynamic.providerHelp": { defaultMessage: "These are server-validated IDs for this tenant, not generic backend names.", description: "Configured dynamic provider help." },
+  "secrets.dynamic.chooseProvider": { defaultMessage: "Choose a connected provider", description: "Empty dynamic provider choice." },
+  "secrets.dynamic.chooseProviderHelp": { defaultMessage: "Choose a provider to see its safe setup checklist.", description: "No dynamic provider selected help." },
+  "secrets.dynamic.role": { defaultMessage: "Allowed role", description: "Dynamic provider role field label." },
+  "secrets.dynamic.roleHelp": { defaultMessage: "The server supplies this allowlist. A typed or undeclared role cannot reach the backend.", description: "Dynamic provider role help." },
+  "secrets.dynamic.chooseRole": { defaultMessage: "Choose an allowed role", description: "Empty dynamic provider role choice." },
+  "secrets.dynamic.ttl": { defaultMessage: "Lifetime in seconds", description: "Dynamic lease TTL field label." },
+  "secrets.dynamic.ttlHelp": { defaultMessage: "The credential stops being valid at this time; the configured provider maximum still wins.", description: "Dynamic lease TTL help." },
+  "secrets.dynamic.required": { defaultMessage: "This field is required.", description: "Dynamic lease form required error." },
+  "secrets.dynamic.ttlError": { defaultMessage: "Enter a whole number of seconds greater than zero.", description: "Dynamic lease TTL validation error." },
+  "secrets.dynamic.configured": { defaultMessage: "Connected now: {provider}", description: "Selected configured dynamic provider heading." },
+  "secrets.dynamic.notSelected": { defaultMessage: "No connection selected", description: "No selected dynamic provider heading." },
+  "secrets.dynamic.backendType": { defaultMessage: "Backend type", description: "Dynamic provider backend type label." },
+  "secrets.dynamic.maxTTL": { defaultMessage: "Maximum lifetime", description: "Dynamic provider maximum TTL label." },
+  "secrets.dynamic.requirements": { defaultMessage: "Safe setup checklist", description: "Dynamic provider prerequisites heading." },
+  "secrets.dynamic.requiredLabel": { defaultMessage: "Required", description: "Required provider prerequisite marker." },
+  "secrets.dynamic.optionalLabel": { defaultMessage: "Optional", description: "Optional provider prerequisite marker." },
+  "secrets.dynamic.referenceOnly": { defaultMessage: "Reference only", description: "Credential-reference provider prerequisite marker." },
+  "secrets.dynamic.allSetups": { defaultMessage: "View required setup for all {count} built-in backends", description: "Disclosure for all dynamic provider setup recipes." },
+  "secrets.dynamic.reviewAction": { defaultMessage: "Review without creating", description: "Action that requests the F65 effect-free preview." },
+  "secrets.dynamic.reviewing": { defaultMessage: "Checking the plan…", description: "Dynamic lease preview pending action." },
+  "secrets.dynamic.previewNotEffectFree": { defaultMessage: "The server did not prove a zero-write, zero-call preview. Issuance stays locked.", description: "Fail-closed dynamic preview check." },
+  "secrets.dynamic.previewBlocked": { defaultMessage: "The server did not mark this plan ready.", description: "Blocked dynamic preview fallback." },
+  "secrets.dynamic.previewFailed": { defaultMessage: "Could not review this credential plan", description: "Dynamic preview request error title." },
+  "secrets.dynamic.readyTitle": { defaultMessage: "Ready to create one credential", description: "Ready dynamic lease preview heading." },
+  "secrets.dynamic.ready": { defaultMessage: "Ready", description: "Ready dynamic lease preview badge." },
+  "secrets.dynamic.noPreviewEffects": { defaultMessage: "This check made no writes, opened no credential reference, and called no backend.", description: "Effect-free dynamic preview explanation." },
+  "secrets.dynamic.effectiveTTL": { defaultMessage: "Exact lifetime", description: "Reviewed dynamic lease TTL label." },
+  "secrets.dynamic.permission": { defaultMessage: "Permission checked again", description: "Reviewed dynamic lease permission label." },
+  "secrets.dynamic.effects": { defaultMessage: "What creation will change", description: "Dynamic lease execution effects heading." },
+  "secrets.dynamic.recovery": { defaultMessage: "How to recover", description: "Dynamic lease recovery heading." },
+  "secrets.dynamic.verification": { defaultMessage: "How to prove it", description: "Dynamic lease verification heading." },
+  "secrets.dynamic.cliParity": { defaultMessage: "Automation can review the same request with:", description: "Dynamic lease CLI parity label." },
+  "secrets.dynamic.fingerprint": { defaultMessage: "Server-keyed plan fingerprint", description: "Dynamic lease preview fingerprint label." },
+  "secrets.dynamic.reviewRequired": { defaultMessage: "Review a ready, unchanged plan before creating a credential.", description: "Missing dynamic preview error." },
+  "secrets.dynamic.reviewStale": { defaultMessage: "The provider, role, lifetime, caller, tenant, or running configuration changed. Review again; nothing was created.", description: "Stale dynamic preview recovery." },
+  "secrets.dynamic.issueFailed": { defaultMessage: "The credential result was not confirmed", description: "Dynamic lease issue failure title." },
+  "secrets.dynamic.issueReviewed": { defaultMessage: "Create reviewed credential", description: "Dynamic lease reviewed execution action." },
+  "secrets.dynamic.retry": { defaultMessage: "Retry the exact request", description: "Dynamic lease stable-key retry action." },
+  "secrets.dynamic.issuedTitle": { defaultMessage: "Credential created; verify it now", description: "Active dynamic lease result heading." },
+  "secrets.dynamic.revokedTitle": { defaultMessage: "Lease revoked; prove the login is dead", description: "Revoked dynamic lease result heading." },
+  "secrets.dynamic.verifyHelp": { defaultMessage: "The lease below is durable metadata. The secret itself exists only in the reveal-once panel until you dismiss or leave it.", description: "Dynamic lease result evidence help." },
+  "secrets.dynamic.credentialTitle": { defaultMessage: "Reveal-once credential for {id}", description: "Dynamic lease credential reveal title." },
+  "secrets.dynamic.credentialHelp": { defaultMessage: "Copy this directly to the workload. Do not put it in tickets, chat, logs, screenshots, or browser storage.", description: "Dynamic lease credential custody warning." },
+  "secrets.dynamic.extend": { defaultMessage: "Extend by seconds", description: "Dynamic lease renewal duration label." },
+  "secrets.dynamic.extendHelp": { defaultMessage: "Renewal can never pass the provider's original hard expiry.", description: "Dynamic lease renewal bound help." },
+  "secrets.dynamic.extendError": { defaultMessage: "Enter a whole number of seconds greater than zero before renewing.", description: "Dynamic lease renewal validation error." },
+  "secrets.dynamic.renew": { defaultMessage: "Renew lease", description: "Dynamic lease renewal action." },
+  "secrets.dynamic.revoke": { defaultMessage: "Revoke lease", description: "Dynamic lease revoke action." },
+  "secrets.dynamic.renewFailed": { defaultMessage: "Could not renew this lease", description: "Dynamic lease renewal error title." },
+  "secrets.dynamic.revokeFailed": { defaultMessage: "Could not confirm lease revocation", description: "Dynamic lease revocation error title." },
+  "secrets.dynamic.needsAttention": { defaultMessage: "Temporary credential needs attention", description: "Dynamic workflow error wrapper title." },
+  "secrets.dynamic.startAgain": { defaultMessage: "Create another credential", description: "Reset completed dynamic lease workflow action." },
+  "secrets.dynamic.cancel": { defaultMessage: "Clear this plan", description: "Reset unexecuted dynamic lease workflow action." },
   "secrets.pki.custodyLabel": {
     defaultMessage: "Key custody",
     description: "PKI-as-a-secret selector explaining who creates and retains the subject private key.",
@@ -19578,10 +19660,6 @@ export const messages = {
     defaultMessage: "Awaiting approval",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Operations.tsx.",
   },
-  "source.aws.iam.c37b8156ed": {
-    defaultMessage: "AWS IAM",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
   "source.batches.467629e63d": {
     defaultMessage: "batches",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
@@ -20039,10 +20117,6 @@ export const messages = {
     defaultMessage: "Copy once",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/secrets/SecretsPageParts.tsx.",
   },
-  "source.copy.this.generated.credential.now.renew.a.811264cbb9": {
-    defaultMessage: "Copy this generated credential now. Renew and revoke actions keep only lease metadata.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
   "source.correlation.id.c267c186e8": {
     defaultMessage: "Correlation ID",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
@@ -20385,14 +20459,6 @@ export const messages = {
     defaultMessage: "Dry run",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Discovery.tsx.",
   },
-  "source.dynamic.lease.operation.failed.115f5893e7": {
-    defaultMessage: "Dynamic lease operation failed",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
-  "source.dynamic.secrets.70f2c5b95c": {
-    defaultMessage: "Dynamic secrets",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
   "source.e.g.change.approved.in.cab.1234.6a0cc1f9e3": {
     defaultMessage: "e.g. change approved in CAB-1234",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Identities.tsx.",
@@ -20593,10 +20659,6 @@ export const messages = {
   "source.export.query.rows.b38bb9ef0b": {
     defaultMessage: "Export query rows",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
-  },
-  "source.extend.seconds.ff4a8186f0": {
-    defaultMessage: "Extend seconds",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
   "source.fail.closed.startup.and.issuance.posture.661fcb680a": {
     defaultMessage: "Fail-closed startup and issuance posture",
@@ -20882,11 +20944,6 @@ export const messages = {
     defaultMessage: "Issue",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Identities.tsx.",
   },
-  "source.issue.a.lease.scoped.credential.from.a.con.9d8b9440ef": {
-    defaultMessage:
-      "Issue a lease-scoped credential from a configured provider, renew its expiry when needed, or revoke it immediately. Generated credentials are shown once and then cleared from the page.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
   "source.issue.a.short.lived.certificate.bundle.and.68b22cee4d": {
     defaultMessage: "Issue a short-lived certificate bundle and reveal the private key only in the explicit result panel.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
@@ -20907,10 +20964,6 @@ export const messages = {
     defaultMessage: "Issue dynamic lease",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Wizard.tsx.",
   },
-  "source.issue.dynamic.secret.lease.e14a6cc2e8": {
-    defaultMessage: "Issue dynamic secret lease",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
   "source.issue.first.certificate.4d8af98e7d": {
     defaultMessage: "Issue first certificate",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Certificates.tsx.",
@@ -20918,10 +20971,6 @@ export const messages = {
   "source.issue.leaf.from.47e7b2541d": {
     defaultMessage: "Issue leaf from",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
-  },
-  "source.issue.lease.96a70e0f64": {
-    defaultMessage: "Issue lease",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
   "source.issue.pki.secret.692ee4b6e2": {
     defaultMessage: "Issue PKI secret",
@@ -21044,10 +21093,6 @@ export const messages = {
     defaultMessage: "KRL version",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/SSHTrust.tsx.",
   },
-  "source.kubernetes.a37d07fe30": {
-    defaultMessage: "Kubernetes",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
   "source.kubernetes.prod.16a7f7e17a": {
     defaultMessage: "kubernetes/prod",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
@@ -21067,10 +21112,6 @@ export const messages = {
   "source.lease.id.9730377afc": {
     defaultMessage: "Lease ID",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/secrets/SecretsPageParts.tsx.",
-  },
-  "source.lease.state.70d08ad3df": {
-    defaultMessage: "Lease state",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
   "source.license.feature.de93785a58": {
     defaultMessage: "License feature",
@@ -21422,10 +21463,6 @@ export const messages = {
   "source.no.drift.remediation.findings.returned.yet.5034b41d52": {
     defaultMessage: "No drift remediation findings returned yet",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Posture.tsx.",
-  },
-  "source.no.dynamic.lease.issued.yet.da6fd9c373": {
-    defaultMessage: "No dynamic lease issued yet.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
   "source.no.extra.kind.attributes.were.returned.9f899e73ae": {
     defaultMessage: "No extra kind attributes were returned.",
@@ -22778,10 +22815,6 @@ export const messages = {
     defaultMessage: "Read-only responder probe",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Protocols.tsx.",
   },
-  "source.readonly.reporting.ddf5aecb22": {
-    defaultMessage: "readonly-reporting",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
   "source.ready.for.certificate.operations.e99f6e538f": {
     defaultMessage: "Ready for certificate operations",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Wizard.tsx.",
@@ -22839,10 +22872,6 @@ export const messages = {
     defaultMessage: "Redeemed share value",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
-  "source.redis.a7f6415749": {
-    defaultMessage: "Redis",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
   "source.refresh.0e91610117": {
     defaultMessage: "Refresh",
     description:
@@ -22879,10 +22908,6 @@ export const messages = {
   "source.renew.90c1689b0b": {
     defaultMessage: "Renew",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Identities.tsx.",
-  },
-  "source.renew.lease.b730aa5628": {
-    defaultMessage: "Renew lease",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
   "source.renewal.history.771f739290": {
     defaultMessage: "Renewal history",
@@ -22980,10 +23005,6 @@ export const messages = {
   "source.revoke.certificate.for.a0ed3562dc": {
     defaultMessage: "Revoke certificate for",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Agents.tsx.",
-  },
-  "source.revoke.lease.a04f91a939": {
-    defaultMessage: "Revoke lease",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
   "source.revoke.selected.38b0352f6d": {
     defaultMessage: "Revoke selected (",
@@ -24434,10 +24455,6 @@ export const messages = {
   "source.fips.module.inactive.fac8ddb35b": {
     defaultMessage: "FIPS module inactive",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:766.",
-  },
-  "source.generated.credential.for.lease.value1.814b0bc937": {
-    defaultMessage: "Generated credential for lease {value1}",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Secrets.tsx:2592.",
   },
   "source.graph.node.value1.3c48c6439b": {
     defaultMessage: "Graph node {value1}",

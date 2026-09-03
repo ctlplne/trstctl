@@ -205,14 +205,38 @@ outbox command first, so only the outbox worker calls the provider and a crash r
 reuses the same identity. Cloud/Kubernetes endpoints require HTTPS; `allow_insecure_loopback` is a
 same-host-emulator exception limited to `localhost`, `127.0.0.0/8`, or `::1`.
 
+- `GET /api/v1/secrets/leases/providers` returns the eight safe setup recipes plus
+  this tenant's real configured provider IDs, allowed roles, maximum TTLs, and
+  runtime configuration revisions. It never returns endpoints, native bindings,
+  credential references, or provider credential values. Configuration remains a
+  startup-admin operation: edit the server configuration or mounted secret reference
+  and restart the control plane; the console does not turn infrastructure credentials
+  into browser form fields.
+- `POST /api/v1/secrets/leases/preview` validates the exact configured ID, role, TTL,
+  caller, tenant, and running configuration revision. It opens no credential
+  reference, calls no provider, writes no event/audit/idempotency/outbox state, and
+  returns the exact execution effects, recovery steps, verification steps, CLI
+  command, and a server-keyed `request_fingerprint`.
 - `POST /api/v1/secrets/leases` issues one credential copy for a provider, role, and
-  TTL, guarded by `secrets:write` plus `Idempotency-Key`.
+  TTL, guarded by `secrets:write` plus `Idempotency-Key`. The console always supplies
+  the current preview fingerprint; changed inputs or a restarted/reconfigured
+  provider return `409` before a provider call. API clients may omit the fingerprint
+  for backward compatibility.
 - `GET /api/v1/secrets/leases/{lease_id}` returns lease metadata only, never replaying
   the credential after first issue.
 - `POST /api/v1/secrets/leases/{lease_id}/renew` extends a lease without returning the
   credential again.
 - `POST /api/v1/secrets/leases/{lease_id}/revoke` closes the lease and queues backend
   revocation through the outbox worker.
+
+The console presents the same contract as three small steps: **Choose connection →
+Review exact plan → Use and retire**. It selects only a real configured provider ID
+and an allowlisted role; the old free-text provider/role form is gone. The first step
+shows the selected backend's safe prerequisites and a disclosure containing all eight
+built-in recipes. Review must prove zero writes and zero calls before **Create reviewed
+credential** appears. The issued credential lives only in the reveal-once panel;
+dismissing it, navigating away, or revoking the lease removes the browser copy, while
+durable metadata remains available for renewal, revocation, and verification.
 
 **PKI-as-a-secrets-engine** plugs certificate issuance into the same operator
 workspace. The recommended `csr_pem` mode accepts one self-signed PKCS#10 request,

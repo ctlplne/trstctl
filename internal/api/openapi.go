@@ -5075,8 +5075,44 @@ func componentSchemas() map[string]*Schema {
 		"name": str(), "owner_id": uuid(), "version": {Type: "integer"}, "created_at": timestamp(), "updated_at": timestamp(),
 	}, "name", "version")
 	dynamicLeaseReq := object(map[string]*Schema{
-		"provider": str(), "role": str(), "ttl_seconds": {Type: "integer"},
+		"provider": str(), "role": str(), "ttl_seconds": {Type: "integer"}, "preview_fingerprint": str(),
 	}, "provider", "role", "ttl_seconds")
+	dynamicSecretRequirement := object(map[string]*Schema{
+		"key": str(), "label": str(),
+		"kind":     {Type: "string", Enum: []string{"tenant", "identifier", "role_allowlist", "duration", "value", "network_policy", "credential_reference", "role_binding"}},
+		"required": {Type: "boolean"}, "description": str(),
+	}, "key", "label", "kind", "required", "description")
+	dynamicSecretSupportedProvider := object(map[string]*Schema{
+		"type":  {Type: "string", Enum: []string{"postgresql", "mysql", "mongodb", "aws-iam", "gcp-iam", "azure-entra", "kubernetes", "redis"}},
+		"label": str(), "purpose": str(),
+		"requirements": {Type: "array", Items: ref("DynamicSecretProviderRequirement")},
+	}, "type", "label", "purpose", "requirements")
+	dynamicSecretConfiguredProvider := object(map[string]*Schema{
+		"id": str(), "type": str(), "label": str(),
+		"allowed_roles": {Type: "array", Items: str()}, "maximum_ttl_seconds": {Type: "integer"},
+		"ready": {Type: "boolean"}, "configuration_revision": str(),
+	}, "id", "type", "label", "allowed_roles", "maximum_ttl_seconds", "ready", "configuration_revision")
+	dynamicSecretProviderCatalog := object(map[string]*Schema{
+		"capability":                            {Type: "string", Enum: []string{"F65"}},
+		"configuration_mode":                    {Type: "string", Enum: []string{"startup_static"}},
+		"configuration_changes_require_restart": {Type: "boolean"},
+		"secret_delivery":                       {Type: "string", Enum: []string{"file_or_secret_reference"}},
+		"supported_providers":                   {Type: "array", Items: ref("DynamicSecretSupportedProvider")},
+		"configured_providers":                  {Type: "array", Items: ref("DynamicSecretConfiguredProvider")},
+		"blockers":                              {Type: "array", Items: str()}, "documentation_path": str(), "secret_data_handling": str(),
+	}, "capability", "configuration_mode", "configuration_changes_require_restart", "secret_delivery", "supported_providers", "configured_providers", "blockers", "documentation_path", "secret_data_handling")
+	dynamicLeasePreview := object(map[string]*Schema{
+		"capability": {Type: "string", Enum: []string{"F65"}},
+		"operation":  {Type: "string", Enum: []string{"issue_dynamic_secret_lease"}},
+		"ready":      {Type: "boolean"}, "effect_free": {Type: "boolean"},
+		"provider_id": str(), "provider_type": str(), "provider_label": str(), "role": str(),
+		"requested_ttl_seconds": {Type: "integer"}, "effective_ttl_seconds": {Type: "integer"}, "maximum_ttl_seconds": {Type: "integer"},
+		"configuration_revision": str(), "required_permission": str(), "request_fingerprint": str(),
+		"blockers": {Type: "array", Items: str()}, "preview_writes": {Type: "array", Items: str()},
+		"preview_external_effects": {Type: "array", Items: str()}, "execute_writes": {Type: "array", Items: str()},
+		"execute_external_effects": {Type: "array", Items: str()}, "recovery_steps": {Type: "array", Items: str()},
+		"verification_steps": {Type: "array", Items: str()}, "cli_argv": {Type: "array", Items: str()}, "secret_data_handling": str(),
+	}, "capability", "operation", "ready", "effect_free", "provider_id", "provider_type", "provider_label", "role", "requested_ttl_seconds", "effective_ttl_seconds", "maximum_ttl_seconds", "configuration_revision", "required_permission", "request_fingerprint", "blockers", "preview_writes", "preview_external_effects", "execute_writes", "execute_external_effects", "recovery_steps", "verification_steps", "cli_argv", "secret_data_handling")
 	rotationProvider := str()
 	rotationProvider.Description = "connector:<target> is the only executable mode. Static and dynamic-lease providers are unavailable and fail closed with 503 before effects."
 	rotationTTL := &Schema{Type: "integer"}
@@ -6472,6 +6508,11 @@ func componentSchemas() map[string]*Schema {
 		"ThirdPartySecretScanIngestRequest":  thirdPartySecretScanIngestReq,
 		"ThirdPartySecretScanReceipt":        thirdPartySecretScanReceipt,
 		"DynamicLeaseRequest":                dynamicLeaseReq,
+		"DynamicSecretProviderRequirement":   dynamicSecretRequirement,
+		"DynamicSecretSupportedProvider":     dynamicSecretSupportedProvider,
+		"DynamicSecretConfiguredProvider":    dynamicSecretConfiguredProvider,
+		"DynamicSecretProviderCatalog":       dynamicSecretProviderCatalog,
+		"DynamicLeasePreview":                dynamicLeasePreview,
 		"DynamicLeaseRenewRequest":           dynamicLeaseRenewReq,
 		"DynamicLease":                       dynamicLease,
 		"TransitKeyRequest":                  transitKeyReq,

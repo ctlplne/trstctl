@@ -11358,6 +11358,135 @@
         ],
         "type": "object"
       },
+      "DynamicLeasePreview": {
+        "properties": {
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "enum": [
+              "F65"
+            ],
+            "type": "string"
+          },
+          "cli_argv": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "configuration_revision": {
+            "type": "string"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "effective_ttl_seconds": {
+            "type": "integer"
+          },
+          "execute_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execute_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "maximum_ttl_seconds": {
+            "type": "integer"
+          },
+          "operation": {
+            "enum": [
+              "issue_dynamic_secret_lease"
+            ],
+            "type": "string"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "provider_id": {
+            "type": "string"
+          },
+          "provider_label": {
+            "type": "string"
+          },
+          "provider_type": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "request_fingerprint": {
+            "type": "string"
+          },
+          "requested_ttl_seconds": {
+            "type": "integer"
+          },
+          "required_permission": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "secret_data_handling": {
+            "type": "string"
+          },
+          "verification_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "operation",
+          "ready",
+          "effect_free",
+          "provider_id",
+          "provider_type",
+          "provider_label",
+          "role",
+          "requested_ttl_seconds",
+          "effective_ttl_seconds",
+          "maximum_ttl_seconds",
+          "configuration_revision",
+          "required_permission",
+          "request_fingerprint",
+          "blockers",
+          "preview_writes",
+          "preview_external_effects",
+          "execute_writes",
+          "execute_external_effects",
+          "recovery_steps",
+          "verification_steps",
+          "cli_argv",
+          "secret_data_handling"
+        ],
+        "type": "object"
+      },
       "DynamicLeaseRenewRequest": {
         "properties": {
           "extend_seconds": {
@@ -11371,6 +11500,9 @@
       },
       "DynamicLeaseRequest": {
         "properties": {
+          "preview_fingerprint": {
+            "type": "string"
+          },
           "provider": {
             "type": "string"
           },
@@ -11385,6 +11517,178 @@
           "provider",
           "role",
           "ttl_seconds"
+        ],
+        "type": "object"
+      },
+      "DynamicSecretConfiguredProvider": {
+        "properties": {
+          "allowed_roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "configuration_revision": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "maximum_ttl_seconds": {
+            "type": "integer"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "label",
+          "allowed_roles",
+          "maximum_ttl_seconds",
+          "ready",
+          "configuration_revision"
+        ],
+        "type": "object"
+      },
+      "DynamicSecretProviderCatalog": {
+        "properties": {
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "enum": [
+              "F65"
+            ],
+            "type": "string"
+          },
+          "configuration_changes_require_restart": {
+            "type": "boolean"
+          },
+          "configuration_mode": {
+            "enum": [
+              "startup_static"
+            ],
+            "type": "string"
+          },
+          "configured_providers": {
+            "items": {
+              "$ref": "#/components/schemas/DynamicSecretConfiguredProvider"
+            },
+            "type": "array"
+          },
+          "documentation_path": {
+            "type": "string"
+          },
+          "secret_data_handling": {
+            "type": "string"
+          },
+          "secret_delivery": {
+            "enum": [
+              "file_or_secret_reference"
+            ],
+            "type": "string"
+          },
+          "supported_providers": {
+            "items": {
+              "$ref": "#/components/schemas/DynamicSecretSupportedProvider"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "configuration_mode",
+          "configuration_changes_require_restart",
+          "secret_delivery",
+          "supported_providers",
+          "configured_providers",
+          "blockers",
+          "documentation_path",
+          "secret_data_handling"
+        ],
+        "type": "object"
+      },
+      "DynamicSecretProviderRequirement": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "tenant",
+              "identifier",
+              "role_allowlist",
+              "duration",
+              "value",
+              "network_policy",
+              "credential_reference",
+              "role_binding"
+            ],
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "kind",
+          "required",
+          "description"
+        ],
+        "type": "object"
+      },
+      "DynamicSecretSupportedProvider": {
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "requirements": {
+            "items": {
+              "$ref": "#/components/schemas/DynamicSecretProviderRequirement"
+            },
+            "type": "array"
+          },
+          "type": {
+            "enum": [
+              "postgresql",
+              "mysql",
+              "mongodb",
+              "aws-iam",
+              "gcp-iam",
+              "azure-entra",
+              "kubernetes",
+              "redis"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "label",
+          "purpose",
+          "requirements"
         ],
         "type": "object"
       },
@@ -52264,6 +52568,110 @@
         "summary": "Issue a dynamic secret lease",
         "x-trstctl-permission": "secrets:write",
         "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/secrets/leases/preview": {
+      "post": {
+        "operationId": "previewDynamicSecretLease",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DynamicLeaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DynamicLeasePreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Preview exact dynamic-secret issuance without provider contact or state changes",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/leases/providers": {
+      "get": {
+        "operationId": "listDynamicSecretProviders",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DynamicSecretProviderCatalog"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List tenant-configured dynamic-secret providers and secret-free setup requirements",
+        "x-trstctl-permission": "secrets:read"
       }
     },
     "/api/v1/secrets/leases/{lease_id}": {

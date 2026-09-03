@@ -223,7 +223,7 @@ exhaustive subcommand list:
 | `run`                             | Local wrapper: run a child process with fetched secrets injected into its environment                                                                                                                                                                                                                               |
 | `scale`                           | High-volume orchestration and multi-region HA issuance posture (`orchestration` · `ha-issuance`)                                                                                                                                                                                                                    |
 | `secrets store`                   | Stored secrets: effect-free create review, then put, list, get, history, recover, update, delete (`preview` · `put` · `list` · `get` · `history` · `recover` · `update` · `delete`); bulk import is unavailable until an atomic event-sourced batch command exists                                                  |
-| `secrets leases`                  | Dynamic secret leases: issue, get, renew, revoke (`issue` · `get` · `renew` · `revoke`)                                                                                                                                                                                                                             |
+| `secrets leases`                  | Dynamic secret leases: list safe provider setup/readiness, effect-free exact preview, then issue, get, renew, revoke (`providers` · `preview` · `issue` · `get` · `renew` · `revoke`)                                                                                                                                |
 | `secrets rotations`               | Effect-free exact review, then worker-owned connector rotation; static and dynamic provider modes fail closed before effects (`preview` · `run`)                                                                                                                                                                    |
 | `secrets rotation-schedules`      | Scheduled connector rotations with bounded durable due-run receipts (`create` · `list` · `run-due`)                                                                                                                                                                                                                 |
 | `secrets syncs`                   | Push a stored secret to an external sync target (`run` · `targets`)                                                                                                                                                                                                                                                 |
@@ -771,10 +771,12 @@ JSON
 trstctl-cli --idempotency-key jit-agent-7-approve-1 ephemeral approve <approval_request_id> -f ephemeral-approval.json
 trstctl-cli --idempotency-key jit-agent-7-issue-1 ephemeral issue -f ephemeral-jit.json
 
-# Issue, renew, read, and revoke a dynamic secret lease from a configured provider.
+# Discover, review, issue, renew, read, and revoke a dynamic secret lease.
+trstctl-cli secrets leases providers
 cat > dynamic-lease.json <<'JSON'
-{"provider":"postgresql","role":"readonly","ttl_seconds":900}
+{"provider":"payments-db","role":"readonly","ttl_seconds":900}
 JSON
+trstctl-cli secrets leases preview -f dynamic-lease.json
 trstctl-cli --idempotency-key lease-issue-1 secrets leases issue -f dynamic-lease.json
 trstctl-cli secrets leases get <lease-id>
 printf '{"extend_seconds":900}' | trstctl-cli --idempotency-key lease-renew-1 secrets leases renew <lease-id> -f -

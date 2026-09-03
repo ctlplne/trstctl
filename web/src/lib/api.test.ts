@@ -645,6 +645,10 @@ describe("exported API surface census", () => {
       // F39: validates and fingerprints the normalized scan plan without
       // starting gitleaks, writing discovery state, or appending an event.
       "/api/v1/secrets/scans/preview",
+      // F65: validates one configured provider ID, allowed role, TTL, and
+      // runtime configuration revision without opening its credential
+      // reference, calling the backend, or writing lease state.
+      "/api/v1/secrets/leases/preview",
     ]);
     for (const [target, init] of transport.mock.calls) {
       const url = String(target);

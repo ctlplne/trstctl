@@ -2786,14 +2786,78 @@ export interface DynamicLease {
   state: string;
 }
 
+export interface DynamicLeasePreview {
+  blockers: string[];
+  capability: "F65";
+  cli_argv: string[];
+  configuration_revision: string;
+  effect_free: boolean;
+  effective_ttl_seconds: number;
+  execute_external_effects: string[];
+  execute_writes: string[];
+  maximum_ttl_seconds: number;
+  operation: "issue_dynamic_secret_lease";
+  preview_external_effects: string[];
+  preview_writes: string[];
+  provider_id: string;
+  provider_label: string;
+  provider_type: string;
+  ready: boolean;
+  recovery_steps: string[];
+  request_fingerprint: string;
+  requested_ttl_seconds: number;
+  required_permission: string;
+  role: string;
+  secret_data_handling: string;
+  verification_steps: string[];
+}
+
 export interface DynamicLeaseRenewRequest {
   extend_seconds: number;
 }
 
 export interface DynamicLeaseRequest {
+  preview_fingerprint?: string;
   provider: string;
   role: string;
   ttl_seconds: number;
+}
+
+export interface DynamicSecretConfiguredProvider {
+  allowed_roles: string[];
+  configuration_revision: string;
+  id: string;
+  label: string;
+  maximum_ttl_seconds: number;
+  ready: boolean;
+  type: string;
+}
+
+export interface DynamicSecretProviderCatalog {
+  blockers: string[];
+  capability: "F65";
+  configuration_changes_require_restart: boolean;
+  configuration_mode: "startup_static";
+  configured_providers: DynamicSecretConfiguredProvider[];
+  documentation_path: string;
+  secret_data_handling: string;
+  secret_delivery: "file_or_secret_reference";
+  supported_providers: DynamicSecretSupportedProvider[];
+}
+
+export interface DynamicSecretProviderRequirement {
+  description: string;
+  key: string;
+  kind: "tenant" | "identifier" | "role_allowlist" | "duration" | "value" | "network_policy" | "credential_reference" | "role_binding";
+  label: string;
+  required: boolean;
+}
+
+export interface DynamicSecretSupportedProvider {
+  label: string;
+  purpose: string;
+  requirements: DynamicSecretProviderRequirement[];
+  type: "postgresql" | "mysql" | "mongodb" | "aws-iam" | "gcp-iam" | "azure-entra" | "kubernetes" | "redis";
 }
 
 export interface EdgeDelegation {

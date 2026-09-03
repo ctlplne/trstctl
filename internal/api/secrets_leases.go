@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/api/problem"
@@ -20,9 +19,10 @@ import (
 )
 
 type dynamicLeaseIssueRequest struct {
-	Provider   string `json:"provider"`
-	Role       string `json:"role"`
-	TTLSeconds int    `json:"ttl_seconds"`
+	Provider           string `json:"provider"`
+	Role               string `json:"role"`
+	TTLSeconds         int    `json:"ttl_seconds"`
+	PreviewFingerprint string `json:"preview_fingerprint,omitempty"`
 }
 
 type dynamicLeaseRenewRequest struct {
@@ -61,14 +61,9 @@ func (a *API) issueDynamicLease(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
 		return
 	}
-	req.Provider = strings.TrimSpace(req.Provider)
-	req.Role = strings.TrimSpace(req.Role)
-	if req.Provider == "" || req.Role == "" {
-		a.writeError(w, errStatus(http.StatusBadRequest, "provider and role are required"))
-		return
-	}
-	if req.TTLSeconds <= 0 {
-		a.writeError(w, errStatus(http.StatusBadRequest, "ttl_seconds must be positive"))
+	req, err := normalizeDynamicLeaseIssueRequest(req)
+	if err != nil {
+		a.writeError(w, err)
 		return
 	}
 	principal, err := requestPrincipalSubject(r.Context())
@@ -82,6 +77,22 @@ func (a *API) issueDynamicLease(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.mutateSealedDynamicLease(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
+		provider, found := a.secrets.configuredDynamicSecretProvider(tenantID, req.Provider)
+		if !found {
+			return 0, nil, errStatus(http.StatusUnprocessableEntity, "dynamic secret provider is not configured for this tenant")
+		}
+		if err := validateDynamicLeaseProviderRequest(provider, req); err != nil {
+			return 0, nil, err
+		}
+		if req.PreviewFingerprint != "" {
+			want, fingerprintErr := a.dynamicSecretPreviewFingerprint(tenantID, principal, provider, req)
+			if fingerprintErr != nil {
+				return 0, nil, fingerprintErr
+			}
+			if !crypto.ConstantTimeEqual([]byte(req.PreviewFingerprint), []byte(want)) {
+				return 0, nil, errStatus(http.StatusConflict, "reviewed dynamic-secret plan is stale; preview the current request again")
+			}
+		}
 		engine, err := a.secrets.dynamicLeaseEngine(tenantID)
 		if err != nil {
 			return 0, nil, err

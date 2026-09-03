@@ -85,7 +85,7 @@ func (a *API) runtimeRouteAvailability(r route) (bool, string) {
 	case "previewSecretCreate", "previewSecretAccess", "createSecret", "listSecrets", "getSecret", "getSecretVersion", "recoverSecretAt", "rotateSecret", "deleteSecret",
 		"rotateStaticSecret", "createSecretRotationSchedule", "listSecretRotationSchedules", "runDueSecretRotationSchedules",
 		"syncSecret", "receiveSecretRepositoryWebhook", "ingestThirdPartySecretScan", "scanSecrets", "approveSecretChange",
-		"issueDynamicSecretLease", "getDynamicSecretLease", "renewDynamicSecretLease", "revokeDynamicSecretLease",
+		"listDynamicSecretProviders", "previewDynamicSecretLease", "issueDynamicSecretLease", "getDynamicSecretLease", "renewDynamicSecretLease", "revokeDynamicSecretLease",
 		"previewShare", "createShare", "redeemShare", "issuePKISecret", "previewMachineLogin", "machineLogin", "listMachineAuthMethods", "listMachineSessions",
 		"revokeMachineSession", "disableMachineAuthMethod", "enableMachineAuthMethod":
 		return runtimeDependency(a.secrets != nil,

@@ -199,8 +199,10 @@ import type {
   DriftRemediationDecisionRequest,
   DriftRemediationFinding,
   DynamicLease,
+  DynamicLeasePreview,
   DynamicLeaseRenewRequest,
   DynamicLeaseRequest,
+  DynamicSecretProviderCatalog,
   EndpointBinding,
   EndpointBindingRequest,
   EnrollmentPlanPreview as GenEnrollmentPlanPreview,
@@ -857,8 +859,10 @@ export type {
   DriftRemediationDecisionRequest,
   DriftRemediationFinding,
   DynamicLease,
+  DynamicLeasePreview,
   DynamicLeaseRenewRequest,
   DynamicLeaseRequest,
+  DynamicSecretProviderCatalog,
   EnterpriseSupportStatus,
   EphemeralAPIKey,
   EphemeralAPIKeyPreview,
@@ -2362,7 +2366,9 @@ export interface Api {
   kubernetesSecretOperator(): Promise<KubernetesSecretOperator>;
   secretWorkloadInjection(): Promise<SecretWorkloadInjection>;
   unvaultedSecrets(): Promise<UnvaultedSecretPosture>;
-  issueDynamicLease(input: DynamicLeaseRequest): Promise<DynamicLease>;
+  dynamicSecretProviders(): Promise<DynamicSecretProviderCatalog>;
+  previewDynamicLease(input: DynamicLeaseRequest): Promise<DynamicLeasePreview>;
+  issueDynamicLease(input: DynamicLeaseRequest, idempotencyKey?: string): Promise<DynamicLease>;
   getDynamicLease(leaseId: string): Promise<DynamicLease>;
   renewDynamicLease(leaseId: string, input: DynamicLeaseRenewRequest): Promise<DynamicLease>;
   revokeDynamicLease(leaseId: string): Promise<DynamicLease>;
@@ -2940,7 +2946,9 @@ const liveApi: Api = {
   kubernetesSecretOperator: () => req<KubernetesSecretOperator>("/api/v1/secrets/kubernetes-operator"),
   secretWorkloadInjection: () => req<SecretWorkloadInjection>("/api/v1/secrets/workload-injection"),
   unvaultedSecrets: () => req<UnvaultedSecretPosture>("/api/v1/secrets/unvaulted"),
-  issueDynamicLease: (input) => mutate<DynamicLease>("POST", "/api/v1/secrets/leases", input),
+  dynamicSecretProviders: () => req<DynamicSecretProviderCatalog>("/api/v1/secrets/leases/providers"),
+  previewDynamicLease: (input) => postRead<DynamicLeasePreview>("/api/v1/secrets/leases/preview", input),
+  issueDynamicLease: (input, idempotencyKey) => mutate<DynamicLease>("POST", "/api/v1/secrets/leases", input, idempotencyKey),
   getDynamicLease: (leaseId) => req<DynamicLease>(`/api/v1/secrets/leases/${encodeURIComponent(leaseId)}`),
   renewDynamicLease: (leaseId, input) => mutate<DynamicLease>("POST", `/api/v1/secrets/leases/${encodeURIComponent(leaseId)}/renew`, input),
   revokeDynamicLease: (leaseId) => mutate<DynamicLease>("POST", `/api/v1/secrets/leases/${encodeURIComponent(leaseId)}/revoke`),

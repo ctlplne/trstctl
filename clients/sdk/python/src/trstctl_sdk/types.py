@@ -3876,6 +3876,36 @@ DynamicLease = TypedDict(
     total=False,
 )
 
+DynamicLeasePreview = TypedDict(
+    'DynamicLeasePreview',
+    {
+        'blockers': list[str],
+        'capability': str,
+        'cli_argv': list[str],
+        'configuration_revision': str,
+        'effect_free': bool,
+        'effective_ttl_seconds': int,
+        'execute_external_effects': list[str],
+        'execute_writes': list[str],
+        'maximum_ttl_seconds': int,
+        'operation': str,
+        'preview_external_effects': list[str],
+        'preview_writes': list[str],
+        'provider_id': str,
+        'provider_label': str,
+        'provider_type': str,
+        'ready': bool,
+        'recovery_steps': list[str],
+        'request_fingerprint': str,
+        'requested_ttl_seconds': int,
+        'required_permission': str,
+        'role': str,
+        'secret_data_handling': str,
+        'verification_steps': list[str],
+    },
+    total=False,
+)
+
 DynamicLeaseRenewRequest = TypedDict(
     'DynamicLeaseRenewRequest',
     {
@@ -3887,9 +3917,63 @@ DynamicLeaseRenewRequest = TypedDict(
 DynamicLeaseRequest = TypedDict(
     'DynamicLeaseRequest',
     {
+        'preview_fingerprint': str,
         'provider': str,
         'role': str,
         'ttl_seconds': int,
+    },
+    total=False,
+)
+
+DynamicSecretConfiguredProvider = TypedDict(
+    'DynamicSecretConfiguredProvider',
+    {
+        'allowed_roles': list[str],
+        'configuration_revision': str,
+        'id': str,
+        'label': str,
+        'maximum_ttl_seconds': int,
+        'ready': bool,
+        'type': str,
+    },
+    total=False,
+)
+
+DynamicSecretProviderCatalog = TypedDict(
+    'DynamicSecretProviderCatalog',
+    {
+        'blockers': list[str],
+        'capability': str,
+        'configuration_changes_require_restart': bool,
+        'configuration_mode': str,
+        'configured_providers': list[dict[str, Any]],
+        'documentation_path': str,
+        'secret_data_handling': str,
+        'secret_delivery': str,
+        'supported_providers': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+DynamicSecretProviderRequirement = TypedDict(
+    'DynamicSecretProviderRequirement',
+    {
+        'description': str,
+        'key': str,
+        'kind': str,
+        'label': str,
+        'required': bool,
+    },
+    total=False,
+)
+
+DynamicSecretSupportedProvider = TypedDict(
+    'DynamicSecretSupportedProvider',
+    {
+        'label': str,
+        'purpose': str,
+        'requirements': list[dict[str, Any]],
+        'type': str,
     },
     total=False,
 )

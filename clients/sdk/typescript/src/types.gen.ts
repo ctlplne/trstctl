@@ -5153,6 +5153,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/leases/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview exact dynamic-secret issuance without provider contact or state changes */
+        post: operations["previewDynamicSecretLease"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/leases/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List tenant-configured dynamic-secret providers and secret-free setup requirements */
+        get: operations["listDynamicSecretProviders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/leases/{lease_id}": {
         parameters: {
             query?: never;
@@ -9152,13 +9186,79 @@ export interface components {
             role: string;
             state: string;
         };
+        DynamicLeasePreview: {
+            blockers: string[];
+            /** @enum {string} */
+            capability: "F65";
+            cli_argv: string[];
+            configuration_revision: string;
+            effect_free: boolean;
+            effective_ttl_seconds: number;
+            execute_external_effects: string[];
+            execute_writes: string[];
+            maximum_ttl_seconds: number;
+            /** @enum {string} */
+            operation: "issue_dynamic_secret_lease";
+            preview_external_effects: string[];
+            preview_writes: string[];
+            provider_id: string;
+            provider_label: string;
+            provider_type: string;
+            ready: boolean;
+            recovery_steps: string[];
+            request_fingerprint: string;
+            requested_ttl_seconds: number;
+            required_permission: string;
+            role: string;
+            secret_data_handling: string;
+            verification_steps: string[];
+        };
         DynamicLeaseRenewRequest: {
             extend_seconds: number;
         };
         DynamicLeaseRequest: {
+            preview_fingerprint?: string;
             provider: string;
             role: string;
             ttl_seconds: number;
+        };
+        DynamicSecretConfiguredProvider: {
+            allowed_roles: string[];
+            configuration_revision: string;
+            id: string;
+            label: string;
+            maximum_ttl_seconds: number;
+            ready: boolean;
+            type: string;
+        };
+        DynamicSecretProviderCatalog: {
+            blockers: string[];
+            /** @enum {string} */
+            capability: "F65";
+            configuration_changes_require_restart: boolean;
+            /** @enum {string} */
+            configuration_mode: "startup_static";
+            configured_providers: components["schemas"]["DynamicSecretConfiguredProvider"][];
+            documentation_path: string;
+            secret_data_handling: string;
+            /** @enum {string} */
+            secret_delivery: "file_or_secret_reference";
+            supported_providers: components["schemas"]["DynamicSecretSupportedProvider"][];
+        };
+        DynamicSecretProviderRequirement: {
+            description: string;
+            key: string;
+            /** @enum {string} */
+            kind: "tenant" | "identifier" | "role_allowlist" | "duration" | "value" | "network_policy" | "credential_reference" | "role_binding";
+            label: string;
+            required: boolean;
+        };
+        DynamicSecretSupportedProvider: {
+            label: string;
+            purpose: string;
+            requirements: components["schemas"]["DynamicSecretProviderRequirement"][];
+            /** @enum {string} */
+            type: "postgresql" | "mysql" | "mongodb" | "aws-iam" | "gcp-iam" | "azure-entra" | "kubernetes" | "redis";
         };
         EdgeDelegation: {
             attested_key_sha256?: string;
@@ -28989,6 +29089,86 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DynamicLease"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewDynamicSecretLease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DynamicLeaseRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DynamicLeasePreview"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listDynamicSecretProviders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DynamicSecretProviderCatalog"];
                 };
             };
             /** @description client error */
