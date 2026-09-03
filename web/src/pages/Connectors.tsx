@@ -56,6 +56,11 @@ export function Connectors() {
   const [keyCustody, setKeyCustody] = useState<EndpointKeyCustodyList | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actionResult, setActionResult] = useState<string | null>(null);
+  const [previewReceipt, setPreviewReceipt] = useState<ConnectorDelivery | null>(null);
+  const [previewRefreshing, setPreviewRefreshing] = useState(false);
+  const [recoveryReceipt, setRecoveryReceipt] = useState<ConnectorDelivery | null>(null);
+  const [rollbackReviewOpen, setRollbackReviewOpen] = useState(false);
+  const [targetActionBusy, setTargetActionBusy] = useState<"bind" | "test" | "deploy" | "rollback" | null>(null);
   const [targetName, setTargetName] = useState("edge/prod/payments");
   const [connectorName, setConnectorName] = useState("nginx");
   const [targetConfig, setTargetConfig] = useState('{"credential_ref":"connector-credential-ref","host":"edge-1.internal"}');
@@ -187,6 +192,10 @@ export function Connectors() {
 
   const connectorOptions = useMemo(() => (catalog ?? []).map((item) => item.name), [catalog]);
   const selectedTargetRecord = useMemo(() => (targets ?? []).find((target) => target.id === selectedTarget), [selectedTarget, targets]);
+  const selectedConnectorRecord = useMemo(
+    () => (catalog ?? []).find((connector) => connector.name === selectedTargetRecord?.connector),
+    [catalog, selectedTargetRecord],
+  );
   const selectedIdentityRecord = useMemo(() => identities.find((identity) => identity.id === selectedIdentity), [identities, selectedIdentity]);
   const intendedConnector = useMemo(() => {
     const value = selectedIdentityRecord?.attributes?.intended_connector;
@@ -261,28 +270,63 @@ export function Connectors() {
   };
 
   const runTargetAction = async (action: "bind" | "test" | "deploy" | "rollback") => {
-    if (!selectedTarget || targetActionBlocked) return;
+    if (!selectedTarget || targetActionBlocked || targetActionBusy) return;
     if (action !== "test" && identityActionBlocked) return;
     if ((action === "deploy" || action === "rollback") && !reason.trim()) return;
+    if (action === "rollback" && !selectedConnectorRecord?.executes_rollback) return;
+    setTargetActionBusy(action);
+    setError(null);
     try {
       if (action === "bind") {
         if (!selectedIdentity) return;
         const identity = await api.bindIdentityConnectorTarget(selectedIdentity, { target_id: selectedTarget });
         setActionResult(`bound:${identity.id}`);
       } else if (action === "test") {
+        setPreviewReceipt(null);
         const receipt = await api.testConnectorTarget(selectedTarget);
-        setActionResult(`${receipt.destination}:${receipt.status}`);
+        setPreviewReceipt(receipt);
+        setActionResult(null);
       } else if (action === "deploy") {
         if (!selectedIdentity) return;
         const identity = await api.deployConnectorTarget(selectedTarget, { identity_id: selectedIdentity, reason: reason.trim() });
         setActionResult(`deploy:${identity.status}`);
       } else {
+        setRecoveryReceipt(null);
         const receipt = await api.rollbackConnectorTarget(selectedTarget, { identity_id: selectedIdentity, reason: reason.trim() });
-        setActionResult(`${receipt.destination}:${receipt.status}`);
+        setRecoveryReceipt(receipt);
+        setRollbackReviewOpen(false);
+        setActionResult(null);
       }
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setTargetActionBusy(null);
+    }
+  };
+
+  const refreshPreviewResult = async () => {
+    if (!selectedTargetRecord || !previewReceipt) return;
+    setPreviewRefreshing(true);
+    try {
+      const page = await api.connectorDeliveries({ limit: 20 });
+      const rows = page.items ?? [];
+      setDeliveries(rows);
+      setDeliveriesCursor(page.next_cursor);
+      const resultKey = previewReceipt.idempotency_key ? `${previewReceipt.idempotency_key}:result` : "";
+      const terminal = rows.find(
+        (receipt) =>
+          Boolean(resultKey) &&
+          receipt.destination === "connector.test" &&
+          receipt.target === selectedTargetRecord.name &&
+          receipt.status !== "dry_run_queued" &&
+          receipt.idempotency_key === resultKey,
+      );
+      if (terminal) setPreviewReceipt(terminal);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPreviewRefreshing(false);
     }
   };
 
@@ -538,13 +582,23 @@ export function Connectors() {
             <section aria-labelledby="target-actions-heading" className="grid gap-3 border-y border-border py-4">
               <div>
                 <h2 id="target-actions-heading" className="text-title font-semibold">
-                  {translateNow("source.target.actions.4d6d059ed8")}
+                  {t("connectors.actions.heading")}
                 </h2>
+                <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("connectors.actions.help")}</p>
               </div>
               <div className="ui-panel grid gap-3 md:grid-cols-3">
                 <label className="grid gap-1 text-sm">
                   {translateNow("source.target.978354db0c")}
-                  <select className="ui-input" value={selectedTarget} onChange={(event) => setSelectedTarget(event.target.value)}>
+                  <select
+                    className="ui-input"
+                    value={selectedTarget}
+                    onChange={(event) => {
+                      setSelectedTarget(event.target.value);
+                      setPreviewReceipt(null);
+                      setRecoveryReceipt(null);
+                      setRollbackReviewOpen(false);
+                    }}
+                  >
                     <option value="">{translateNow("source.select.target.adfbe7a33d")}</option>
                     {targets.map((target) => (
                       <option key={target.id} value={target.id}>
@@ -581,20 +635,103 @@ export function Connectors() {
                   </p>
                 ) : null}
                 <div className="flex flex-wrap gap-2 md:col-span-3">
-                  <Button type="button" onClick={() => runTargetAction("bind")} disabled={identityActionBlocked}>
+                  <Button
+                    type="button"
+                    onClick={() => runTargetAction("bind")}
+                    disabled={identityActionBlocked || Boolean(targetActionBusy)}
+                    loading={targetActionBusy === "bind"}
+                  >
                     {translateNow("source.bind.56b9b63d28")}
                   </Button>
-                  <Button type="button" onClick={() => runTargetAction("test")} disabled={targetActionBlocked}>
-                    {translateNow("source.test.532eaabd95")}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => runTargetAction("test")}
+                    disabled={targetActionBlocked || Boolean(targetActionBusy)}
+                    loading={targetActionBusy === "test"}
+                  >
+                    {t("connectors.preview.action")}
                   </Button>
-                  <Button type="button" onClick={() => runTargetAction("deploy")} disabled={reasonActionBlocked}>
+                  <Button
+                    type="button"
+                    onClick={() => runTargetAction("deploy")}
+                    disabled={reasonActionBlocked || Boolean(targetActionBusy)}
+                    loading={targetActionBusy === "deploy"}
+                  >
                     {translateNow("source.deploy.4c236daafb")}
                   </Button>
-                  <Button type="button" onClick={() => runTargetAction("rollback")} disabled={reasonActionBlocked}>
-                    {translateNow("source.rollback.c591f55749")}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setRollbackReviewOpen(true)}
+                    disabled={reasonActionBlocked || !selectedConnectorRecord?.executes_rollback || Boolean(targetActionBusy)}
+                  >
+                    {t("connectors.recovery.review")}
                   </Button>
                 </div>
                 {actionResult && <output className="font-mono text-xs text-muted-foreground md:col-span-3">{actionResult}</output>}
+                {selectedTargetRecord && selectedConnectorRecord && !selectedConnectorRecord.executes_rollback ? (
+                  <p className="text-sm text-muted-foreground md:col-span-3">{t("connectors.recovery.unavailable")}</p>
+                ) : null}
+                {previewReceipt ? (
+                  <section
+                    aria-labelledby="connector-preview-result-heading"
+                    className="grid gap-2 rounded-control border border-border bg-muted/30 p-3 md:col-span-3"
+                    role="status"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 id="connector-preview-result-heading" className="font-semibold">
+                        {previewReceipt.status === "dry_run_planned"
+                          ? t("connectors.preview.ready")
+                          : previewReceipt.status === "dry_run_blocked"
+                            ? t("connectors.preview.blocked")
+                            : previewReceipt.status === "dry_run_queued"
+                              ? t("connectors.preview.queued")
+                              : t("connectors.preview.localOnly")}
+                      </h3>
+                      <StatusBadge value={previewReceipt.status} vocabulary="delivery" tone={deliveryStatusTone(previewReceipt.status)} />
+                    </div>
+                    <p className="text-sm text-muted-foreground">{previewReceipt.detail || previewReceipt.reason || "-"}</p>
+                    <p className="text-sm font-medium">{t("connectors.preview.zeroWriteBoundary")}</p>
+                    {previewReceipt.status === "config_validated" ? (
+                      <p className="text-sm text-status-warning">{t("connectors.preview.localOnlyWarning")}</p>
+                    ) : null}
+                    {previewReceipt.status === "dry_run_queued" && previewReceipt.idempotency_key ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="justify-self-start"
+                        loading={previewRefreshing}
+                        onClick={() => void refreshPreviewResult()}
+                      >
+                        {t("connectors.preview.refresh")}
+                      </Button>
+                    ) : null}
+                    {previewReceipt.status === "dry_run_queued" && !previewReceipt.idempotency_key ? (
+                      <p className="text-sm text-status-warning">{t("connectors.preview.correlationUnavailable")}</p>
+                    ) : null}
+                  </section>
+                ) : null}
+                {recoveryReceipt ? (
+                  <section
+                    aria-labelledby="connector-recovery-result-heading"
+                    className="grid gap-2 rounded-control border border-border bg-muted/30 p-3 md:col-span-3"
+                    role="status"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 id="connector-recovery-result-heading" className="font-semibold">
+                        {recoveryReceipt.status === "rolled_back"
+                          ? t("connectors.recovery.restored")
+                          : recoveryReceipt.status === "rollback_queued"
+                            ? t("connectors.recovery.queued")
+                            : t("connectors.recovery.notExecuted")}
+                      </h3>
+                      <StatusBadge value={recoveryReceipt.status} vocabulary="delivery" tone={deliveryStatusTone(recoveryReceipt.status)} />
+                    </div>
+                    <p className="text-sm text-muted-foreground">{recoveryReceipt.detail || recoveryReceipt.reason || "-"}</p>
+                  </section>
+                ) : null}
               </div>
               {selectedTargetRecord ? (
                 <section aria-labelledby="selected-target-timeline-heading" className="ui-panel grid gap-3">
@@ -1407,6 +1544,48 @@ export function Connectors() {
           <div className="flex justify-end border-t border-border px-5 py-4">
             <Button type="button" variant="outline" onClick={() => setDeliveryDetail(null)}>
               {translateNow("source.close.7d9eb7acb1")}
+            </Button>
+          </div>
+        </Dialog>
+      )}
+
+      {rollbackReviewOpen && selectedTargetRecord && selectedIdentityRecord && (
+        <Dialog
+          open
+          onClose={() => setRollbackReviewOpen(false)}
+          titleId="connector-rollback-review-heading"
+          descriptionId="connector-rollback-review-description"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          overlayClassName="absolute inset-0 bg-black/55"
+          panelClassName="relative max-h-[calc(100dvh-2rem)] w-full max-w-xl overflow-y-auto overscroll-contain rounded-panel border border-border bg-card shadow-elevation2"
+        >
+          <header className="border-b border-border px-5 py-4">
+            <h2 id="connector-rollback-review-heading" className="text-title font-semibold">
+              {t("connectors.recovery.dialogTitle")}
+            </h2>
+            <p id="connector-rollback-review-description" className="mt-1 text-sm text-muted-foreground">
+              {t("connectors.recovery.dialogHelp")}
+            </p>
+          </header>
+          <dl className="grid gap-2 p-5 text-sm">
+            <ConnectorDetailRow term={t("connectors.design.destinationName")}>{selectedTargetRecord.name}</ConnectorDetailRow>
+            <ConnectorDetailRow term={translateNow("source.identity.999f23fcd7")}>{selectedIdentityRecord.name}</ConnectorDetailRow>
+            <ConnectorDetailRow term={translateNow("source.reason.f81ab834de")}>{reason}</ConnectorDetailRow>
+          </dl>
+          <p className="mx-5 rounded-control border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm">
+            {t("connectors.recovery.dialogBoundary")}
+          </p>
+          <div className="flex flex-wrap justify-end gap-2 border-t border-border px-5 py-4">
+            <Button type="button" variant="ghost" onClick={() => setRollbackReviewOpen(false)}>
+              {translateNow("source.cancel.19766ed6cc")}
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void runTargetAction("rollback")}
+              disabled={Boolean(targetActionBusy)}
+              loading={targetActionBusy === "rollback"}
+            >
+              {t("connectors.recovery.confirm")}
             </Button>
           </div>
         </Dialog>

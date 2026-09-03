@@ -4401,6 +4401,34 @@ const esESCatalog = {
   "connectors.design.bindHelp":
     "Elija un destino habilitado y verificado de forma independiente. Esta acción revisada crea la identidad y pone en cola la emisión y el despliegue; no crea ni habilita un destino.",
   "connectors.design.destinationsTable": "Destinos de despliegue configurados",
+  // QA-G182 machine-authored translations; human review required before release.
+  "connectors.actions.heading": "Previsualizar, desplegar y recuperar",
+  "connectors.actions.help":
+    "Previsualice primero desde el mismo agente o relay. Comprueba la conexión del destino, las credenciales de administración necesarias y los permisos locales sin recibir el certificado ni la clave privada que instalará un despliegue posterior. Desplegar cambia el destino. Revise la restauración por separado si la versión nueva causa problemas.",
+  "connectors.preview.action": "Previsualizar cambios (sin escrituras)",
+  "connectors.preview.ready": "Ruta al destino lista — no se hicieron cambios",
+  "connectors.preview.blocked": "Despliegue bloqueado — no se hicieron cambios",
+  "connectors.preview.queued": "Previsualización en cola — aún no hay resultado",
+  "connectors.preview.localOnly": "Configuración válida — no se contactó el destino",
+  "connectors.preview.zeroWriteBoundary":
+    "La previsualización nunca instala un certificado, escribe un archivo del destino, ejecuta una recarga ni cambia una vinculación.",
+  "connectors.preview.localOnlyWarning":
+    "Ningún agente ni relay ejecutó esta previsualización. No la trate como permiso para desplegar; habilite connector.test y vuelva a ejecutarla desde el punto de ejecución del destino.",
+  "connectors.preview.refresh": "Comprobar resultado de la previsualización",
+  "connectors.preview.correlationUnavailable":
+    "Esta previsualización en cola no tiene una clave de recibo, por lo que la consola no adivinará qué resultado le pertenece. Ejecute una previsualización nueva.",
+  "connectors.recovery.review": "Revisar restauración",
+  "connectors.recovery.unavailable":
+    "Este conector no tiene una ruta de restauración ejecutable. Use el procedimiento manual documentado; trstctl no registrará un éxito que parezca una restauración.",
+  "connectors.recovery.dialogTitle": "Revisar la restauración de la versión anterior",
+  "connectors.recovery.dialogHelp":
+    "Compruebe el destino, la identidad y el motivo exactos antes de pedir al agente o relay que restaure su predecesor probado.",
+  "connectors.recovery.dialogBoundary":
+    "Poner en cola no significa éxito. trstctl solo informa restaurado después de que el agente o relay requerido ejecute la recuperación; si falta el predecesor o la ruta no es compatible, falla de forma cerrada.",
+  "connectors.recovery.confirm": "Poner restauración en cola",
+  "connectors.recovery.queued": "Restauración en cola — esperando prueba del agente",
+  "connectors.recovery.restored": "Versión anterior restaurada",
+  "connectors.recovery.notExecuted": "Restauración no probada",
   "connectors.design.capabilitiesHelp":
     "Esto es evidencia de capacidades, no una afirmación de que todos los conectores estén configurados aquí. La ubicación de ejecución, la reversión, la prueba del dispositivo, los límites de migración, la identidad firmada del editor y los permisos efectivos siguen siendo exactos.",
   "connectors.design.capabilitiesTable": "Registro de capacidades de conectores",
@@ -7074,7 +7102,6 @@ const esESCatalog = {
   "source.svc.internal.e50a91019d": "svc.internal",
   "source.table.16d1c9050a": "Table",
   "source.target.978354db0c": "Destino",
-  "source.target.actions.4d6d059ed8": "Acciones del destino",
   "source.target.deploy.listener.verification.and.rollback.38783cea3d":
     "{target}: evidencias de despliegue, verificación del listener y reversión en el orden registrado.",
   "source.target.hosts.b345027096": "Hosts de destino",

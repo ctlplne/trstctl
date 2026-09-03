@@ -312,6 +312,15 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	pluginJob := plugins.Has(intent.Connector)
 
 	hostJob := ExecutesOnHost(intent.Connector)
+	if job.Kind == KindConnectorTest {
+		// A target test is terminal whether its plan is ready or blocked. Its
+		// whole purpose is to explain a deterministic prerequisite without
+		// changing the target. Routing it before deploy-only rollback identity
+		// checks also matters: connector.test intentionally carries no certificate
+		// fingerprint, because it is testing a target path rather than claiming a
+		// credential was deployed.
+		return runConnectorTest(ctx, ch, client, hostProfile, job, intent, hostJob, pluginJob)
+	}
 	if job.Kind == KindADCSInventory {
 		// An AD CS inventory names no connector; its executor is the directory
 		// reader. Skip the connector checks rather than failing it for not
@@ -334,9 +343,6 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 		return false
 	}
 
-	// A dry-run still redeems: the point of testing a target is to find out
-	// whether the credential works, and a test that skipped it would pass right
-	// up until the deploy that mattered.
 	items, err := ch.RedeemJobCredential(ctx, job.JobID, job.Attempt)
 	if err != nil {
 		// A refused or unavailable redemption is not this relay's failure to
@@ -354,25 +360,6 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// inside a connector, which must not leave an appliance password sitting in
 	// unlocked memory for the rest of the process's life.
 	defer destroy()
-
-	if job.Kind == KindConnectorTest {
-		plan, planErr := DryRun(ctx, client, intent, material)
-		if planErr != nil {
-			report(ctx, ch, job, OutcomeFailed, "dry-run could not be evaluated")
-			return false
-		}
-		// The plan is the answer either way: a target that cannot be reached is
-		// a successful TEST with a failed step, not a failed job. Reporting it
-		// as a failure would put the job back on the queue to be retried
-		// forever against an appliance that is simply off.
-		detail, marshalErr := json.Marshal(plan)
-		if marshalErr != nil {
-			report(ctx, ch, job, OutcomeFailed, "dry-run plan could not be encoded")
-			return false
-		}
-		report(ctx, ch, job, OutcomeExecuted, string(detail))
-		return plan.Ready
-	}
 
 	if job.Kind == KindADCSInventory {
 		// Unlike the other probe kinds this one redeems: reading a domain's
@@ -444,6 +431,93 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 
 	reportWithEvidence(ctx, ch, job, outcome, detail, evidence)
 	return outcome != transport.OutcomeVerifyFailed
+}
+
+// runConnectorTest executes the zero-write test path for both agent vantages.
+// A blocked plan is reported as OutcomeExecuted so the queue closes and the
+// operator receives the answer. Reporting a deterministic refusal as
+// OutcomeFailed would requeue it immediately; in a one-second poll loop that is
+// an unbounded claim/redemption storm, not resilience.
+func runConnectorTest(
+	ctx context.Context,
+	ch Channel,
+	client *http.Client,
+	hostProfile connector.LocalOpsConfig,
+	job Job,
+	intent DeployIntent,
+	hostJob, pluginJob bool,
+) bool {
+	if pluginJob {
+		return reportConnectorTestPlan(ctx, ch, job, Plan{
+			Connector: intent.Connector, Target: intent.Target,
+			Steps: []PlanStep{{
+				Name: "connector", Status: StepFailed,
+				Detail: "this verified plugin has no zero-write target-test contract; no credential was redeemed and the plugin was not invoked",
+			}},
+		})
+	}
+	if !hostJob && !Executes(intent.Connector) {
+		return reportConnectorTestPlan(ctx, ch, job, Plan{
+			Connector: intent.Connector, Target: intent.Target,
+			Steps: []PlanStep{{
+				Name: "connector", Status: StepFailed,
+				Detail: "connector is not executable by this agent",
+			}},
+		})
+	}
+
+	// A host target with no management-secret references needs no redemption.
+	// Its certificate and key are supplied only after a deploy is authorized.
+	// Appliance relays still redeem because proving their username/token works is
+	// part of the test; Java keystore targets redeem their password reference for
+	// the same reason.
+	needsRedemption := !hostJob || len(intent.CredentialRefs) > 0
+	material := Material{}
+	destroy := func() {}
+	if needsRedemption {
+		items, err := ch.RedeemJobCredential(ctx, job.JobID, job.Attempt)
+		if err != nil {
+			return reportConnectorTestPlan(ctx, ch, job, blockedConnectorTestPlan(intent,
+				"credentials", "credential redemption was not granted for this test attempt"))
+		}
+		var adoptErr error
+		material, destroy, adoptErr = AdoptMaterial(items)
+		if adoptErr != nil {
+			return reportConnectorTestPlan(ctx, ch, job, blockedConnectorTestPlan(intent,
+				"credentials", "redeemed material could not be protected in locked memory"))
+		}
+	}
+	defer destroy()
+
+	var plan Plan
+	var err error
+	if hostJob {
+		plan, err = DryRunOnHost(ctx, client, hostProfile, intent, material)
+	} else {
+		plan, err = DryRun(ctx, client, intent, material)
+	}
+	if err != nil {
+		plan = blockedConnectorTestPlan(intent, "evaluation", "dry-run could not be evaluated safely")
+	}
+	return reportConnectorTestPlan(ctx, ch, job, plan)
+}
+
+func blockedConnectorTestPlan(intent DeployIntent, step, detail string) Plan {
+	return Plan{
+		Connector: intent.Connector,
+		Target:    intent.Target,
+		Steps:     []PlanStep{{Name: step, Status: StepFailed, Detail: detail}},
+	}
+}
+
+func reportConnectorTestPlan(ctx context.Context, ch Channel, job Job, plan Plan) bool {
+	detail, err := json.Marshal(plan)
+	if err != nil {
+		report(ctx, ch, job, OutcomeFailed, "dry-run plan could not be encoded")
+		return false
+	}
+	report(ctx, ch, job, OutcomeExecuted, string(detail))
+	return plan.Ready
 }
 
 // runRollback executes one appliance re-bind or host-local restore (D4/G1).

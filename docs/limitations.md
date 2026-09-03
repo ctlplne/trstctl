@@ -2047,16 +2047,16 @@ evidence predicate is reviewed.
 | `queued` | connector delivery | Intent committed to the outbox in the same transaction as the state change. | That any connector has run. |
 | `delivered` | connector delivery | A connector reached the target and applied the credential. | That the endpoint is serving it. Live verification is a **separate state**, served since D2 — see `GET /api/v1/endpoints/verifications` and the endpoint verification vocabulary below. A delivery receipt says what this control plane did; only a handshake says what the listener answers with. |
 | `failed` | connector delivery | The attempt ran and did not succeed. | — |
-| `config_validated` | connector delivery | `POST /api/v1/connectors/targets/{id}/test` resolved target metadata, schema, and credential references **locally**, because no relay is enabled for `connector.test`. | That the target was contacted, reachable, or willing to accept the credential. Nothing was changed. |
+| `config_validated` | connector delivery | `POST /api/v1/connectors/targets/{id}/test` resolved target metadata, schema, and credential references **locally**, because no eligible agent path is enabled for `connector.test`. | That the target was contacted, reachable, or willing to accept the credential. Nothing was changed. |
 | `verified` | connector delivery | A connector applied the credential AND a TLS handshake against the endpoint afterwards observed it serving that exact identity. The only delivery state that says the certificate is **live** rather than that it was sent. | That it is still live now. A delivery receipt is historical — it records what was true when that delivery ran. Current state is the endpoint verification row beside it. |
 | `verify_failed` | connector delivery | A connector applied the credential and a handshake found the endpoint serving something else. | That the delivery failed. It succeeded; the endpoint did not take it. This is a renewal that did not land, and it is what triggers rollback where a target has opted in. |
 | `verified` | endpoint verification | A TLS handshake against the live listener observed it serving the expected identity. The record carries which comparisons ran — fingerprint always, name set and chain when an expectation supplied them. | That every vantage agrees. A `local` row means the serving host's own agent confirmed it; only a `relay` row means a client across the segment could get it. |
 | `diverged` | endpoint verification | A handshake succeeded and the listener is **not** serving what was deployed. The mismatch class says which way: `fingerprint`, `sans`, `chain`, `expired`, `not_yet_valid`. | That the deploy failed. It usually succeeded — this is a renewal that did not land, which is exactly the failure inventory-based expiry alerting cannot see. |
 | `unreachable` | endpoint verification | The handshake did not complete, so nothing was observed. | A divergence, and emphatically not a pass. An endpoint nobody could connect to is not verified. |
 | `not_checked` | endpoint verification | No verification has run for this endpoint from this vantage. | That the endpoint is fine. An endpoint with no configured listener address stays here permanently — absence of a check is not absence of a problem. |
-| `dry_run_queued` | connector delivery | A relay-executed dry-run was queued for the agent bound to this target. | That anything is yet known about the target. No relay has reported. |
-| `dry_run_planned` | connector delivery | A relay reached the target, resolved every credential a real deploy needs, and returned the mutation plan. | That anything was deployed. The dry-run path never invokes a connector's `Deploy`, so zero writes is structural, not promised. |
-| `dry_run_blocked` | connector delivery | A relay ran the dry-run and a real deploy would **not** proceed. The reason names the step that stopped it. | That the target is broken in every respect — one step failed, and the plan says which. |
+| `dry_run_queued` | connector delivery | An effect-free test was queued for the eligible host agent or network relay bound to this target. | That anything is yet known about the target. No agent has reported. |
+| `dry_run_planned` | connector delivery | The correct agent vantage reached the target, validated the authority a real deploy needs, and returned the mutation plan. A network relay proves its appliance credential with a read-only request. A host agent validates its operator-owned roots and logical commands, then performs a read-only TLS handshake against `verify_address`. | That anything was deployed. The test path never invokes a connector's `Deploy`, writes a file, or starts a reload command, so zero writes is structural rather than promised. |
+| `dry_run_blocked` | connector delivery | The correct agent vantage ran the effect-free test and a real deploy would **not** proceed. The reason names the step that stopped it. Deterministic blocks are terminal test answers rather than endlessly retried jobs. | That the target is broken in every respect — one step failed, and the plan says which. |
 | `rollback_recorded` | connector delivery | Legacy evidence from releases that recorded a memo instead of executing. New unsupported/no-predecessor requests are refused and do not create this status. | That a rollback executed. Nothing was restored. |
 | `rollback_queued` | connector delivery | An executable rollback was queued for the required enrolled agent. Host rows also pin the exact agent that retained the predecessor. | That anything happened yet. No agent has reported. |
 | `rolled_back` | connector delivery | An agent restored the predecessor and returned a signed receipt. `reason=rolled_back_and_reverified` additionally proves the same agent handshook the listener after reload; otherwise the detail explicitly says verification was not configured. | That an unverified restore is live when the reason does not say reverified. |
@@ -2078,17 +2078,27 @@ because receipts written before the correction still carry them and removing an
 enum member would put stored rows outside the contract that describes them.
 
 Making these statuses stronger is real work, not relabelling. The dry-run half
-is now served: with `connector.test` enabled, `POST
-/api/v1/connectors/targets/{id}/test` queues a job the bound relay claims,
-redeems the target's credential for that one attempt, probes the endpoint with a
-read-only GET, and reports whether a real deploy would proceed plus what it
-would change — `dry_run_planned` or `dry_run_blocked` with the failing step
-named. Zero writes is structural rather than promised: the dry-run path never
-calls a connector's `Deploy`, which is the only code that mutates a target. A
-test still redeems the credential, because a test that skipped it would pass
-right up until the deploy that mattered. Without a relay enabled the route keeps
-the honest local answer, `config_validated`, rather than queueing work nothing
-will claim.
+is now served from both execution vantages. With `connector.test` enabled,
+`POST /api/v1/connectors/targets/{id}/test` queues a job for the bound host agent
+or network relay. A network relay redeems the appliance-management credential
+for one attempt and probes the endpoint with a read-only GET. A host agent
+validates the target paths and logical commands against its local
+`--host-exec-profile`, then performs a read-only TLS handshake against the exact
+`verify_address` and optional `verify_server_name`. It does not redeem a
+certificate or private key: those do not exist in a target-only test and are
+supplied only after a deploy is authorized. It redeems only a host-target secret
+the preflight actually needs, such as a Java keystore password reference.
+
+Both vantages return what a real deploy would change as `dry_run_planned`, or
+name the first failed step as `dry_run_blocked`. Zero writes is structural rather
+than promised: this path never calls a connector's `Deploy`, never writes a file,
+and never executes a reload. A deterministic block is reported as a completed
+test answer, so an unavailable listener or insufficient host profile does not
+become a rapid retry and credential-redemption storm. Signed connector plugins
+without an explicit zero-write test contract are blocked before the plugin is
+invoked or any credential is redeemed. Without an eligible agent path enabled,
+the route keeps the honest local answer, `config_validated`, rather than queueing
+work nothing will claim.
 
 Restoring a predecessor is served as a relay-executed re-**bind**, not a
 re-upload. After CSR-first issuance (B1) the control plane never holds the

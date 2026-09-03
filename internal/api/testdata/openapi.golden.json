@@ -39216,7 +39216,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Record rollback evidence for a deployment connector target",
+        "summary": "Queue restoration of a deployment target's proven predecessor",
         "x-trstctl-permission": "connectors:write"
       }
     },
@@ -39283,7 +39283,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Validate a deployment connector target",
+        "summary": "Preview deployment changes from the target vantage without writing",
         "x-trstctl-permission": "connectors:write"
       }
     },

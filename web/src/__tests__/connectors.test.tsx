@@ -47,6 +47,7 @@ describe("connector deployment disclosure surface", () => {
           kind: "file/process",
           delivery_mode: "native registry, signed plugin, or receipt",
           rollback: "receipt:rollback-nginx-2026-06-26",
+          executes_rollback: true,
         },
         {
           name: "f5",
@@ -165,9 +166,24 @@ describe("connector deployment disclosure surface", () => {
       renewal_intent: "ca.renew",
     });
     apiMock.bindIdentityConnectorTarget.mockReset().mockResolvedValue({ id: "identity-1", status: "issued" });
-    apiMock.testConnectorTarget.mockReset().mockResolvedValue({ destination: "connector.test", status: "config_validated" });
+    apiMock.testConnectorTarget.mockReset().mockResolvedValue({
+      id: "preview-1",
+      destination: "connector.test",
+      connector: "nginx",
+      target: "edge/prod/payments",
+      status: "dry_run_planned",
+      detail: "a real deploy would proceed. It would: replace the certificate files; reload nginx",
+      idempotency_key: "connector-test:target-1:preview-1",
+    });
     apiMock.deployConnectorTarget.mockReset().mockResolvedValue({ id: "identity-1", status: "deployed" });
-    apiMock.rollbackConnectorTarget.mockReset().mockResolvedValue({ destination: "connector.rollback", status: "rollback_recorded" });
+    apiMock.rollbackConnectorTarget.mockReset().mockResolvedValue({
+      id: "rollback-1",
+      destination: "connector.rollback",
+      connector: "nginx",
+      target: "edge/prod/payments",
+      status: "rollback_queued",
+      detail: "the host agent will restore the encrypted predecessor bundle and verify the listener",
+    });
     apiMock.connectorDeliveries.mockReset().mockResolvedValue({
       items: [
         {
@@ -246,7 +262,7 @@ describe("connector deployment disclosure surface", () => {
     expect(screen.getAllByText(/connector\.deploy/).length).toBeGreaterThan(0);
     expect(screen.getAllByText("receipt:rollback-nginx-2026-06-26").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Deploy" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Rollback" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Review restore" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Bind and enroll" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Credential activity timeline" })).toBeInTheDocument();
     expect(screen.getByTestId("selected-target-timeline")).toHaveTextContent("connector.deploy");
@@ -408,8 +424,11 @@ describe("connector deployment disclosure surface", () => {
     await user.click(screen.getByRole("button", { name: "Bind" }));
     await waitFor(() => expect(apiMock.bindIdentityConnectorTarget).toHaveBeenCalledWith("identity-1", { target_id: "target-1" }));
 
-    await user.click(screen.getByRole("button", { name: "Test" }));
+    await user.click(screen.getByRole("button", { name: "Preview changes (no writes)" }));
     await waitFor(() => expect(apiMock.testConnectorTarget).toHaveBeenCalledWith("target-1"));
+    expect(await screen.findByRole("heading", { name: "Target path ready — no changes made" })).toBeInTheDocument();
+    expect(screen.getByText("a real deploy would proceed. It would: replace the certificate files; reload nginx")).toBeInTheDocument();
+    expect(screen.getByText("Preview never installs a certificate, writes a target file, runs a reload, or changes a binding.")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Deploy" }));
     await waitFor(() =>
@@ -419,8 +438,111 @@ describe("connector deployment disclosure surface", () => {
       }),
     );
 
-    await user.click(screen.getByRole("button", { name: "Rollback" }));
+    await user.click(screen.getByRole("button", { name: "Review restore" }));
+    expect(apiMock.rollbackConnectorTarget).not.toHaveBeenCalled();
+    const restoreDialog = screen.getByRole("dialog", { name: "Review restore of the previous version" });
+    expect(restoreDialog).toHaveTextContent("edge/prod/payments");
+    expect(restoreDialog).toHaveTextContent("payments.example.test");
+    expect(restoreDialog).toHaveTextContent("verified design-partner endpoint");
+    await user.click(within(restoreDialog).getByRole("button", { name: "Queue restore" }));
     await waitFor(() => expect(apiMock.rollbackConnectorTarget).toHaveBeenCalledWith("target-1", expect.objectContaining({ identity_id: "identity-1" })));
+    expect(await screen.findByRole("heading", { name: "Restore queued — waiting for agent proof" })).toBeInTheDocument();
+    expect(screen.getByText("the host agent will restore the encrypted predecessor bundle and verify the listener")).toBeInTheDocument();
+  });
+
+  it("does not turn a local schema check into target-readiness proof", async () => {
+    apiMock.testConnectorTarget.mockResolvedValue({
+      id: "preview-local-only",
+      destination: "connector.test",
+      connector: "nginx",
+      target: "edge/prod/payments",
+      status: "config_validated",
+      detail: "connector target metadata and credential references validated locally; the target was not contacted",
+    });
+    const user = userEvent.setup();
+    renderConnectors();
+    await screen.findByRole("heading", { name: "Where credentials are installed" });
+    await user.click(screen.getByText("Destinations and safe actions", { exact: true }));
+    await screen.findByRole("heading", { name: "Configured destinations" });
+    await user.selectOptions(screen.getByLabelText("Target"), "target-1");
+    await user.click(screen.getByRole("button", { name: "Preview changes (no writes)" }));
+
+    expect(await screen.findByRole("heading", { name: "Configuration valid — target not contacted" })).toBeInTheDocument();
+    expect(screen.getByText(/Do not treat this as permission to deploy/i)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /Ready to deploy/i })).not.toBeInTheDocument();
+  });
+
+  it("refreshes an asynchronous preview by its exact receipt chain", async () => {
+    apiMock.testConnectorTarget.mockResolvedValue({
+      id: "preview-queued",
+      destination: "connector.test",
+      connector: "nginx",
+      target: "edge/prod/payments",
+      status: "dry_run_queued",
+      detail: "a dry-run was queued for the host agent",
+      idempotency_key: "connector-test:target-1:preview-queued",
+    });
+    apiMock.connectorDeliveries.mockResolvedValueOnce({
+      items: [
+        {
+          id: "preview-result",
+          destination: "connector.test",
+          connector: "nginx",
+          target: "edge/prod/payments",
+          status: "dry_run_blocked",
+          detail: "endpoint: connection refused",
+          idempotency_key: "connector-test:target-1:preview-queued:result",
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderConnectors();
+    await screen.findByRole("heading", { name: "Where credentials are installed" });
+    await user.click(screen.getByText("Destinations and safe actions", { exact: true }));
+    await screen.findByRole("heading", { name: "Configured destinations" });
+    await user.selectOptions(screen.getByLabelText("Target"), "target-1");
+    await user.click(screen.getByRole("button", { name: "Preview changes (no writes)" }));
+
+    expect(await screen.findByRole("heading", { name: "Preview queued — no result yet" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Check preview result" }));
+    expect(await screen.findByRole("heading", { name: "Deploy blocked — no changes made" })).toBeInTheDocument();
+    expect(screen.getAllByText("endpoint: connection refused").length).toBeGreaterThan(0);
+  });
+
+  it("refuses to guess an asynchronous result when the preview has no receipt key", async () => {
+    apiMock.testConnectorTarget.mockResolvedValue({
+      id: "preview-queued-without-key",
+      destination: "connector.test",
+      connector: "nginx",
+      target: "edge/prod/payments",
+      status: "dry_run_queued",
+      detail: "a dry-run was queued for the host agent",
+    });
+    apiMock.connectorDeliveries.mockResolvedValueOnce({
+      items: [
+        {
+          id: "stale-result",
+          destination: "connector.test",
+          connector: "nginx",
+          target: "edge/prod/payments",
+          status: "dry_run_planned",
+          detail: "an older preview was ready",
+          idempotency_key: "connector-test:target-1:older:result",
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderConnectors();
+    await screen.findByRole("heading", { name: "Where credentials are installed" });
+    await user.click(screen.getByText("Destinations and safe actions", { exact: true }));
+    await screen.findByRole("heading", { name: "Configured destinations" });
+    await user.selectOptions(screen.getByLabelText("Target"), "target-1");
+    await user.click(screen.getByRole("button", { name: "Preview changes (no writes)" }));
+
+    expect(await screen.findByRole("heading", { name: "Preview queued — no result yet" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Check preview result" })).not.toBeInTheDocument();
+    expect(screen.getByText(/console will not guess which result belongs to it/i)).toBeInTheDocument();
+    expect(apiMock.connectorDeliveries).not.toHaveBeenCalled();
   });
 
   it("keeps prepared destinations inert until an operator explicitly enables them", async () => {
@@ -465,7 +587,7 @@ describe("connector deployment disclosure surface", () => {
     expect(
       screen.getByText("This destination is disabled. Enable it only after its agent or relay and endpoint have been verified. Nothing will be queued."),
     ).toBeInTheDocument();
-    for (const name of ["Bind", "Test", "Deploy", "Rollback"]) {
+    for (const name of ["Bind", "Preview changes (no writes)", "Deploy", "Review restore"]) {
       expect(screen.getByRole("button", { name })).toBeDisabled();
     }
     expect(apiMock.bindIdentityConnectorTarget).not.toHaveBeenCalled();
@@ -513,7 +635,7 @@ describe("connector deployment disclosure surface", () => {
     expect(screen.getByText("This identity is intended for iis, but the selected destination uses apache. Choose a matching identity.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Bind" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Deploy" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Rollback" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Test" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Review restore" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Preview changes (no writes)" })).toBeEnabled();
   });
 });

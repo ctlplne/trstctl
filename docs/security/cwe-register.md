@@ -44,11 +44,11 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1358 annotated sites across 26 rules. Each row is
+1362 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (296 sites)
+### G101 — CWE-798 Use of hardcoded credentials (297 sites)
 
 | Location | Reason |
 |---|---|
@@ -78,6 +78,7 @@ not this file.
 | `ee/provider/scim_fuzz_test.go:30` | deterministic non-deployable fuzz authenticator (CWE-798). |
 | `internal/agent/discovery/kubernetes.go:89` | metadata key naming the Kubernetes Secret a public certificate was found in; no credential value present (CWE-798) |
 | `internal/agent/k8s/client.go:30` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/agent/relay/hostdryrun_internal_test.go:11` | KeystorePasswordRef is a secret-store locator, not credential material (CWE-798). |
 | `internal/agent/relay/mdmsync_test.go:23` | credential reference (secret store pointer), no credential value present (CWE-798) |
 | `internal/agent/relay/relay_appliance_e2e_test.go:70` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
 | `internal/agent/relay/relay_appliance_e2e_test.go:93` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
@@ -88,10 +89,10 @@ not this file.
 | `internal/agent/relay/relay_appliance_e2e_test.go:190` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
 | `internal/agent/relay/relay_appliance_e2e_test.go:259` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
 | `internal/agent/relay/relay_appliance_e2e_test.go:297` | credential REFERENCE NAMES, not credentials: the relay looks values up in redeemed material by these keys (CWE-798) |
-| `internal/agent/relay/relay_test.go:138` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
-| `internal/agent/relay/relay_test.go:180` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
-| `internal/agent/relay/relay_test.go:318` | reference NAME, not a credential (CWE-798) |
-| `internal/agent/relay/relay_test.go:376` | reference NAME (CWE-798) |
+| `internal/agent/relay/relay_test.go:139` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
+| `internal/agent/relay/relay_test.go:181` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
+| `internal/agent/relay/relay_test.go:334` | reference NAME, not a credential (CWE-798) |
+| `internal/agent/relay/relay_test.go:392` | reference NAME (CWE-798) |
 | `internal/agent/relay/ticketsync_test.go:66` | TokenRef is a non-secret locator in a deterministic test fixture (CWE-798). |
 | `internal/agent/transport/agentservice.go:742` | an RPC method name, not a credential. The material this |
 | `internal/agent/transport/agentservice.go:749` | an RPC method name. This call carries a CSR up and returns |
@@ -762,7 +763,7 @@ not this file.
 | `internal/api/headerauth_guard_test.go:39` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/ca/shellca/shellca.go:120` | the shell-CA backend exists to run the operator's configured signing command (CWE-78) |
 | `internal/cli/cli_test.go:2158` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/connector/localops.go:247` | operator-configured local-ops action command; running it is the feature (CWE-78) |
+| `internal/connector/localops.go:320` | operator-configured local-ops action command; running it is the feature (CWE-78) |
 | `internal/crypto/kmswrap/external_kms.go:122` | operator-configured external KMS helper command (CWE-78) |
 | `internal/kms/pkcs11/softhsm_container_test.go:116` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/kms/tpm/swtpm_container_test.go:94` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
@@ -943,7 +944,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (363 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (366 sites)
 
 | Location | Reason |
 |---|---|
@@ -1036,11 +1037,12 @@ not this file.
 | `internal/agent/drift/drift_test.go:184` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/drift/drift_test.go:209` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/drift/drift_test.go:244` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/agent/relay/hostexec.go:121` | operator-supplied profile path, read at their instruction (CWE-22) |
+| `internal/agent/relay/hostexec.go:124` | operator-supplied profile path, read at their instruction (CWE-22) |
 | `internal/agent/relay/hostrollback.go:285` | validated agent-local state directory (CWE-22) |
 | `internal/agent/relay/hostrollback_test.go:46` | test-owned temporary directory (CWE-22) |
 | `internal/agent/relay/plugins.go:141` | operator-configured plugin directory (CWE-22) |
 | `internal/agent/relay/plugins.go:145` | sibling of an operator-configured module (CWE-22) |
+| `internal/agent/relay/relay_test.go:1021` | callers pass paths created inside this test package's t.TempDir fixtures (CWE-22). |
 | `internal/agent/relay/rollback_test.go:200` | test-owned temporary path (CWE-22) |
 | `internal/agent/relay/selfupgrade_test.go:87` | test reads its own tempdir fixture path (CWE-22) |
 | `internal/agent/relay/selfupgrade_test.go:152` | test reads its own tempdir fixture path (CWE-22) |
@@ -1088,8 +1090,8 @@ not this file.
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/config/config.go:2287` | the config loader reading the operator's own config file (CWE-22) |
 | `internal/connector/device_proof_census_test.go:46` | fixed in-tree path derived from the census (CWE-22) |
-| `internal/connector/localops.go:148` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
-| `internal/connector/localops.go:215` | clean is confined to operator-approved local roots above (CWE-22) |
+| `internal/connector/localops.go:221` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
+| `internal/connector/localops.go:288` | clean is confined to operator-approved local roots above (CWE-22) |
 | `internal/connector/localops_sync_other.go:10` | path is the parent of an operator-approved local connector target (CWE-22) |
 | `internal/crypto/acmekey/production_guard_test.go:44` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/crypto/mtls/agent.go:214` | operator-configured certificate/key path from deployment config (CWE-22) |
@@ -1146,6 +1148,8 @@ not this file.
 | `internal/secretscan/gitleaks.go:527` | the operator's own scanner config, already validated as a path this process was told to use (CWE-22) |
 | `internal/secretscan/gitleaks_options_test.go:186` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/secretscan/secretscan_test.go:124` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/server/agent_roles_served_test.go:478` | path is a t.TempDir fixture (CWE-22). |
+| `internal/server/agent_roles_served_test.go:482` | path is a t.TempDir fixture (CWE-22). |
 | `internal/server/agentchannel.go:122` | operator-configured agent CA certificate path from this server's own config (CWE-22) |
 | `internal/server/backup.go:132` | operator-configured public trust anchor path (CWE-22) |
 | `internal/server/backup.go:196` | operator-invoked backup/restore over its own configured directory (CWE-22) |
@@ -1348,7 +1352,7 @@ not this file.
 | `internal/cbom/hostsource/hostsource_test.go:23` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/cli/cli_test.go:2188` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/cli/secret_scan_local.go:137` | a git hook must be executable; 0755 is the working minimum (CWE-276) |
-| `internal/connector/localops_test.go:87` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/connector/localops_test.go:89` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/crypto/external_kms_test.go:90` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/crypto/mtls/agent.go:205` | certificate chain PEM is public material; the key is written 0600 separately (CWE-276) |
 | `internal/crypto/mtls/signer.go:217` | writes the PUBLIC CA trust anchor bundle; world-readable is intended, no key material (CWE-276) |

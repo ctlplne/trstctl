@@ -65,12 +65,14 @@ func ShippedJobKinds() []ShippedJobKind {
 			Flags:      []string{"--relay-claim", "--host-exec-profile"},
 		},
 		{
-			// D5: the dry-run. Same connectors, same credential redemption, and
-			// deliberately never connector.Run — zero writes is structural here,
-			// not a promise, because the mutating path is not on it.
+			// D5: the dry-run. Appliance relays resolve their management credential
+			// and make one read-only request. Host agents validate their operator
+			// profile and handshake the listener without receiving certificate/key
+			// material or invoking connector.Run. A blocked plan is terminal, so a
+			// deterministic refusal cannot become an unbounded retry storm.
 			Kind:       KindConnectorTest,
-			Connectors: RelayConnectorKinds(),
-			Flags:      []string{"--relay-claim"},
+			Connectors: append(append([]string(nil), RelayConnectorKinds()...), HostConnectorKinds()...),
+			Flags:      []string{"--relay-claim", "--host-exec-profile"},
 		},
 		{
 			// D4/G1: appliances re-bind an installed object; host agents restore

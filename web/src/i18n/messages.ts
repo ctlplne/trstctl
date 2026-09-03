@@ -12997,6 +12997,91 @@ export const messages = {
     defaultMessage: "Configured deployment destinations",
     description: "Accessible caption for saved destination rows.",
   },
+  "connectors.actions.heading": {
+    defaultMessage: "Preview, deploy, and recover",
+    description: "Heading for the ordered deployment-target action journey.",
+  },
+  "connectors.actions.help": {
+    defaultMessage:
+      "Preview first from the same agent or relay. It checks the target connection, required management credentials, and local permissions without receiving the certificate or private key a later deploy will install. Deploy changes the target. Review restore separately if the new version causes trouble.",
+    description: "Technical ELI5 ordering and effect boundary for connector actions.",
+  },
+  "connectors.preview.action": {
+    defaultMessage: "Preview changes (no writes)",
+    description: "Effect-free connector target preview action.",
+  },
+  "connectors.preview.ready": {
+    defaultMessage: "Target path ready — no changes made",
+    description: "Heading for a successful relay- or agent-executed connector preview.",
+  },
+  "connectors.preview.blocked": {
+    defaultMessage: "Deploy blocked — no changes made",
+    description: "Heading for a connector preview that found a deterministic blocker.",
+  },
+  "connectors.preview.queued": {
+    defaultMessage: "Preview queued — no result yet",
+    description: "Heading while the target agent or relay has not returned its preview result.",
+  },
+  "connectors.preview.localOnly": {
+    defaultMessage: "Configuration valid — target not contacted",
+    description: "Heading for the honest local-only connector validation fallback.",
+  },
+  "connectors.preview.zeroWriteBoundary": {
+    defaultMessage: "Preview never installs a certificate, writes a target file, runs a reload, or changes a binding.",
+    description: "Zero-write effect boundary shown with every connector preview result.",
+  },
+  "connectors.preview.localOnlyWarning": {
+    defaultMessage:
+      "No agent or relay ran this preview. Do not treat this as permission to deploy; enable connector.test and run it again from the target vantage.",
+    description: "Warning that local schema validation is not live target readiness proof.",
+  },
+  "connectors.preview.refresh": {
+    defaultMessage: "Check preview result",
+    description: "Read-only refresh action for an asynchronous connector preview.",
+  },
+  "connectors.preview.correlationUnavailable": {
+    defaultMessage:
+      "This queued preview has no receipt key, so the console will not guess which result belongs to it. Run a new preview.",
+    description: "Fail-closed warning when an asynchronous connector preview cannot be tied to its exact result receipt.",
+  },
+  "connectors.recovery.review": {
+    defaultMessage: "Review restore",
+    description: "Opens the connector recovery review without changing the target.",
+  },
+  "connectors.recovery.unavailable": {
+    defaultMessage:
+      "This connector has no executable restore path. Use its documented manual recovery procedure; trstctl will not record a restore-shaped success.",
+    description: "Truth boundary for a connector that cannot execute rollback.",
+  },
+  "connectors.recovery.dialogTitle": {
+    defaultMessage: "Review restore of the previous version",
+    description: "Title for the connector rollback confirmation dialog.",
+  },
+  "connectors.recovery.dialogHelp": {
+    defaultMessage: "Check the exact destination, identity, and reason before asking the target agent or relay to restore its proven predecessor.",
+    description: "ELI5 instruction for reviewing connector recovery.",
+  },
+  "connectors.recovery.dialogBoundary": {
+    defaultMessage:
+      "Queueing is not success. trstctl reports restored only after the required agent or relay performs the recovery; a missing predecessor or unsupported route fails closed.",
+    description: "Execution and evidence boundary in the connector restore dialog.",
+  },
+  "connectors.recovery.confirm": {
+    defaultMessage: "Queue restore",
+    description: "Confirmation action that queues connector recovery.",
+  },
+  "connectors.recovery.queued": {
+    defaultMessage: "Restore queued — waiting for agent proof",
+    description: "Heading for accepted but not yet proven connector recovery.",
+  },
+  "connectors.recovery.restored": {
+    defaultMessage: "Previous version restored",
+    description: "Heading for an agent-proven connector recovery.",
+  },
+  "connectors.recovery.notExecuted": {
+    defaultMessage: "Restore not proven",
+    description: "Heading for a connector recovery response that does not prove execution.",
+  },
   "connectors.design.capabilitiesHelp": {
     defaultMessage:
       "This is capability evidence, not a claim that every connector is configured here. Execution location, rollback behavior, device proof, migration limits, signed publisher identity, and effective grants remain exact.",
@@ -24123,10 +24208,6 @@ export const messages = {
   "source.target.978354db0c": {
     defaultMessage: "Target",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Connectors.tsx, src/pages/Identities.tsx, src/pages/Secrets.tsx.",
-  },
-  "source.target.actions.4d6d059ed8": {
-    defaultMessage: "Target actions",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Connectors.tsx.",
   },
   "source.target.deploy.listener.verification.and.rollback.38783cea3d": {
     defaultMessage: "{target}: deploy, listener verification, and rollback evidence in recorded order.",

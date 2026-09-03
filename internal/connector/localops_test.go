@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"trstctl.com/trstctl/internal/pluginhost"
 )
 
 func TestLocalOpsExecutesOnlyExactOperatorProfile(t *testing.T) {
@@ -103,6 +105,46 @@ func TestLocalOpsPowerShellRequiresFullyPinnedOperatorArgv(t *testing.T) {
 		}},
 	}); err != nil {
 		t.Fatalf("fully pinned PowerShell profile: %v", err)
+	}
+}
+
+func TestPreflightLocalOpsChecksPathsAndCommandsWithoutEffects(t *testing.T) {
+	root := t.TempDir()
+	targetDir := filepath.Join(root, "tls")
+	if err := os.Mkdir(targetDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := LocalOpsConfig{
+		AllowedRoots: []string{root},
+		Actions: []LocalAction{{
+			LogicalName: "apachectl", LogicalArgs: []string{"configtest"}, Command: executable,
+		}},
+	}
+	grant := pluginhost.NewGrant(pluginhost.CapFSWrite, CapExec).
+		WithPathPrefix(pluginhost.CapFSWrite, targetDir)
+	if err := PreflightLocalOps(profile, grant, []LocalActionInvocation{{
+		LogicalName: "apachectl", LogicalArgs: []string{"configtest"}, ArgsKnown: true,
+	}}); err != nil {
+		t.Fatalf("safe local preflight: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(targetDir, ".trstctl-preflight")); !os.IsNotExist(err) {
+		t.Fatalf("preflight created its synthetic path: %v", err)
+	}
+
+	outside := t.TempDir()
+	outsideGrant := pluginhost.NewGrant(pluginhost.CapFSWrite).
+		WithPathPrefix(pluginhost.CapFSWrite, outside)
+	if err := PreflightLocalOps(profile, outsideGrant, nil); err == nil || !strings.Contains(err.Error(), "outside operator-approved roots") {
+		t.Fatalf("outside path preflight error = %v", err)
+	}
+	if err := PreflightLocalOps(profile, grant, []LocalActionInvocation{{
+		LogicalName: "apachectl", LogicalArgs: []string{"graceful"}, ArgsKnown: true,
+	}}); err == nil || !strings.Contains(err.Error(), "does not match operator profile") {
+		t.Fatalf("mismatched action preflight error = %v", err)
 	}
 }
 

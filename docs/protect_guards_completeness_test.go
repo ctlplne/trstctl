@@ -716,13 +716,17 @@ func TestJourney006Trace014ConsoleDisclosesLibraryGaps(t *testing.T) {
 		`"connectors.design.disclosure.destinations"`,
 		`"connectors.design.disclosure.health"`,
 		`"connectors.design.disclosure.capabilities"`,
-		`"source.target.actions.4d6d059ed8"`,
+		`"connectors.actions.heading"`,
+		`"connectors.preview.action"`,
+		`"connectors.recovery.review"`,
 		`"source.deploy.4c236daafb"`)
 	requireAllContained(t, "JOURNEY-006/TRACE-014", "web/src/i18n/messages.ts", messages,
 		"Which destinations trstctl can update and whether they are healthy.",
 		"Saving a destination does not deploy a credential",
 		"Capabilities, grants, health, retries, rollback, plugin evidence.",
-		"Target actions",
+		"Preview, deploy, and recover",
+		"Preview changes (no writes)",
+		"Review restore",
 		"Deploy")
 	if strings.Contains(connectors, "UnavailableState") || strings.Contains(strings.ToLower(connectors), "not served yet") {
 		t.Error("JOURNEY-006/TRACE-014: Connectors should stay on served target/action evidence, not unavailable-state copy")

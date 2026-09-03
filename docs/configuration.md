@@ -1566,8 +1566,9 @@ custodied there) is a startup error.
 **Which work agents may claim.** `agent_channel.claimable_job_kinds`, or its
 comma-separated `TRSTCTL_AGENT_CHANNEL_CLAIMABLE_JOB_KINDS` environment form,
 lists the estate-touching job kinds enrolled agents may lease and execute:
-`connector.deploy`, `connector.rollback`, `endpoint.verify`, `discovery.run`,
-`revocation.probe`, `trust.distribute`.
+`connector.deploy`, `connector.test`, `connector.rollback`, `endpoint.renew`,
+`endpoint.verify`, `discovery.run`, `revocation.probe`, `adcs.inventory`,
+`trust.distribute`, `cmdb.sync`, `mdm.sync`, `ticket.sync`, and `agent.upgrade`.
 
 Empty is the default and means the job ledger is served but hands nothing out.
 Enable a kind when its agent-side executor ships; enabling one earlier fills the
@@ -1581,8 +1582,10 @@ waited.
 The evaluation Compose stack enables only `discovery.run`, `endpoint.verify`, and
 `connector.test`, matching the safe actions its blank-stack console offers. It does
 not enable `connector.deploy`; an evaluation install must not gain appliance-write
-authority merely because it started successfully. Production remains empty and
-fail-closed until an operator chooses each kind.
+authority merely because it started successfully. A host-family `connector.test`
+uses the enrolled host agent's local exec profile to validate roots and commands and
+performs only a read-only TLS handshake; it cannot write or reload. Production
+remains empty and fail-closed until an operator chooses each kind.
 
 See [Getting started](getting-started.md) for the blank Compose stack's published
 agent-channel port and the local CA-pinning steps to reach it from an agent CLI.

@@ -136,7 +136,14 @@ Three closed sections keep implementation machinery available without making it 
 default reading path:
 
 - **Destinations and safe actions** loads identities only when opened, then exposes
-  target evidence, binding, test, deploy, rollback, and the exact activity timeline.
+  target evidence, binding, **Preview changes (no writes)**, deploy,
+  **Review restore**, and the exact activity timeline. Preview shows a real
+  `dry_run_planned` or `dry_run_blocked` receipt when the target agent or relay
+  answers. If no target-side executor is enabled, it says **Configuration valid —
+  target not contacted** and explicitly refuses to treat that local check as
+  deployment readiness. An asynchronous preview is refreshed through its exact
+  idempotency-linked result receipt, so a different target's answer cannot be
+  substituted.
 - **Health, retries, and rollback** loads delivery receipts, listener verification,
   key custody, and outbox-circuit evidence only when opened. These are distinct
   observations; a successful outbox attempt does not silently stand in for a listener
@@ -194,6 +201,31 @@ trstctl connector target test --target "$TARGET_ID"
 trstctl connector target deploy --identity "$IDENTITY_ID" --target "$TARGET_ID"
 trstctl connector target rollback --identity "$IDENTITY_ID" --target "$TARGET_ID"
 ```
+
+`target test` is an effect-free dress rehearsal from the machine or network that
+would perform the real deployment. Enable `connector.test` as a claimable job kind
+in addition to enrolling the required agent role. For all 14 host-vantage families,
+the host agent validates the exact target fields, confirms every path and logical
+command fits its operator-owned `--host-exec-profile`, and handshakes
+`verify_address` using `verify_server_name` when supplied. It does not write a file,
+run a command, call `Deploy`, or redeem certificate/private-key material. A host
+secret needed to open the target, such as a Java keystore password reference, is
+redeemed only for that one attempt. Network-relay appliance tests instead redeem the
+appliance-management credential and perform the connector's read-only probe. A ready
+test returns `dry_run_planned` with the later mutation list; an unreachable target,
+missing grant, or other deterministic prerequisite returns terminal
+`dry_run_blocked` rather than retrying forever. Signed plugins that do not declare a
+zero-write testing contract fail closed without being invoked.
+
+The console keeps recovery separate from deployment. **Review restore** opens a
+confirmation that names the exact destination, identity, and operator reason; no
+restore is queued by opening it. **Queue restore** uses the served rollback route.
+The first response may say only `rollback_queued`: that is waiting state, not
+success. The console reports success only from a later `rolled_back` receipt written
+after the required agent or relay restores the proven predecessor. Connector
+families without an executable restore path show the manual boundary and keep the
+button disabled; the API also fails closed instead of recording a rollback-shaped
+success.
 
 The REST surface is `/api/v1/connectors/targets` for CRUD,
 `/api/v1/identities/{id}/connector-target` for identity binding, and
@@ -276,6 +308,13 @@ their support rows say so, and a refusal records no rollback-shaped success.
   enrolled host-role agent with `connector.deploy` enabled and a usable host profile
   is polling, the row remains pending. Operations shows the queue; this is a safe
   refusal, not a request to place the target's filesystem on the control-plane host.
+- **Host target testing:** `connector.test` is separately enabled. It checks target
+  reachability and local authority without granting `connector.deploy`; a green test
+  is a plan, not proof that a certificate was installed.
+- **Control-plane cloud target testing:** the three cloud-store connectors currently
+  return the local `config_validated` fallback because they have no agent or relay
+  executor. This validates the strict schema and credential references but does not
+  contact the provider. The console labels that limit and does not call it ready.
 - **Target evidence:** selecting a target in Connectors shows one time-ordered deploy,
   listener-verification, and rollback timeline. Agent verification rows name the
   certificate identity that produced the signed observation; a delivery receipt alone

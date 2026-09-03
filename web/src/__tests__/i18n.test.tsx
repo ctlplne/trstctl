@@ -1460,8 +1460,12 @@ describe("i18n boundary", () => {
       // F50 browser-history re-pin: an unexpected public signing mode now says
       // Unknown signing mode instead of silently claiming a keyless identity.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "40b33610f1924e77fe7a90a719a77f2a1fc3cded452794d7fb26722a6b444c2f",
-      "de-DE": "9d930d1e74f79351e9156efc9ffdc991f5e7406be677b8acc9211747df168c95",
+      // F7 preview/recovery re-pin: the connector journey now distinguishes a
+      // target-executed zero-write plan from local-only configuration validation,
+      // and a reviewed restore request from a completed restore. Machine-authored
+      // es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "aaa237c0e08fc86cabc856a64ce4fce5c029b5245f2282b2037b870f10885725",
+      "de-DE": "f42eef10a8d1606eec079f1341f6199091e1a0f163f4a144e8030e41d4c16605",
     });
   });
 

@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"trstctl.com/trstctl/internal/agent/transport"
@@ -247,6 +248,21 @@ func TestRelayExecutesOnlyItsDeclaredConnectors(t *testing.T) {
 	if !kinds["connector.deploy"] || !kinds[relay.KindConnectorTest] {
 		t.Fatalf("shipped job kinds = %+v, want connector.deploy and connector.test", shipped)
 	}
+	// D5 is served from both actual vantages. Keeping only the appliance list
+	// here made the console queue Apache/IIS/etc. tests the host binary did not
+	// advertise, even though their deploy executor was already present.
+	wantTestConnectors := append(append([]string(nil), relay.RelayConnectorKinds()...), relay.HostConnectorKinds()...)
+	for _, s := range shipped {
+		if s.Kind != relay.KindConnectorTest {
+			continue
+		}
+		if !slices.Equal(s.Connectors, wantTestConnectors) {
+			t.Errorf("connector.test advertises %v, want relay and host executors %v", s.Connectors, wantTestConnectors)
+		}
+		if !slices.Contains(s.Flags, "--host-exec-profile") {
+			t.Errorf("connector.test flags = %v, want the host authority boundary named", s.Flags)
+		}
+	}
 	// D4: rollback ships now, for the families whose API can re-bind. The
 	// assertion moved from "named as unshipped" to "shipped for exactly the
 	// rollback-capable subset" — advertising the rest would take a claim, burn
@@ -399,6 +415,137 @@ func TestDryRunFailsOnAnUnredeemedCredential(t *testing.T) {
 		}
 	}
 	t.Fatal("no failed credentials step in the plan")
+}
+
+// A host connector's test must be a real, terminal, zero-write preflight on
+// the machine that will receive the certificate. The API intentionally queues
+// this job without a certificate fingerprint: it is testing the target path,
+// not pretending a particular credential was deployed. The old shared runner
+// applied the host-deploy rollback identity check before the dry-run branch,
+// reported failure, and let the server requeue the same deterministic refusal
+// as fast as the agent could poll.
+func TestHostDryRunFinishesWithoutDeployIdentityOrMutation(t *testing.T) {
+	listener, err := tlsprobe.NewServingTestServer("apache.example.test")
+	if err != nil {
+		t.Fatalf("start Apache listener: %v", err)
+	}
+	defer listener.Close()
+
+	root := t.TempDir()
+	certPath := filepath.Join(root, "site.crt")
+	keyPath := filepath.Join(root, "site.key")
+	if err := os.WriteFile(certPath, []byte("bootstrap certificate"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(keyPath, []byte("bootstrap key"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	beforeCert := mustReadTempFixture(t, certPath)
+	beforeKey := mustReadTempFixture(t, keyPath)
+
+	intent := relay.DeployIntent{
+		Connector: "apache",
+		Target:    "payments Apache",
+		TargetID:  "target-apache-1",
+		// Deliberately no Fingerprint or credential.cert_pem/key_pem. A target
+		// test is not a deploy and must not manufacture either.
+		TargetConfig: mustJSON(t, map[string]any{
+			"cert_path":          certPath,
+			"key_path":           keyPath,
+			"verify_address":     listener.Addr,
+			"verify_server_name": "apache.example.test",
+		}),
+		VerifyAddress:    listener.Addr,
+		VerifyServerName: "apache.example.test",
+	}
+	payload, err := json.Marshal(intent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch := &fakeChannel{
+		jobs: []relay.Job{{JobID: 91, Kind: relay.KindConnectorTest, Attempt: 1, Payload: payload}},
+	}
+	profile := connector.LocalOpsConfig{
+		AllowedRoots: []string{root},
+		Actions: []connector.LocalAction{{
+			LogicalName: "apachectl", Command: trueCommand(), PassArgs: true,
+		}},
+	}
+
+	executed, err := relay.RunOnceWithHost(context.Background(), ch, http.DefaultClient, profile, 1, 60)
+	if err != nil {
+		t.Fatalf("run host dry-run: %v", err)
+	}
+	if executed != 1 {
+		t.Fatalf("executed = %d, want one ready dry-run", executed)
+	}
+	if ch.redeemed != 0 {
+		t.Fatalf("credential redemption calls = %d, want zero because this host target names no management-secret reference", ch.redeemed)
+	}
+	if len(ch.reports) != 1 || ch.reports[0].outcome != relay.OutcomeExecuted {
+		t.Fatalf("reports = %+v, want one terminal executed plan", ch.reports)
+	}
+	var plan relay.Plan
+	if err := json.Unmarshal([]byte(ch.reports[0].detail), &plan); err != nil {
+		t.Fatalf("decode host plan: %v", err)
+	}
+	if !plan.Ready || plan.Endpoint != listener.Addr || len(plan.WouldMutate) < 3 {
+		t.Fatalf("host plan = %+v, want reachable ready plan naming file and reload changes", plan)
+	}
+	afterCert := mustReadTempFixture(t, certPath)
+	afterKey := mustReadTempFixture(t, keyPath)
+	if string(afterCert) != string(beforeCert) || string(afterKey) != string(beforeKey) {
+		t.Fatalf("host dry-run changed target files: cert=%q key=%q", afterCert, afterKey)
+	}
+}
+
+// A deterministic local refusal is the ANSWER to a target test, not a reason
+// to requeue it forever. Reporting an executed blocked plan makes the outbox
+// row terminal while telling the operator exactly which prerequisite is absent.
+func TestHostDryRunWithoutOperatorProfileReportsTerminalBlockedPlan(t *testing.T) {
+	payload, err := json.Marshal(relay.DeployIntent{
+		Connector: "apache", Target: "payments Apache", TargetID: "target-apache-1",
+		TargetConfig: mustJSON(t, map[string]string{
+			"cert_path": "/srv/apache/site.crt", "key_path": "/srv/apache/site.key",
+		}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch := &fakeChannel{
+		jobs: []relay.Job{{JobID: 92, Kind: relay.KindConnectorTest, Attempt: 1, Payload: payload}},
+	}
+
+	executed, err := relay.RunOnceWithHost(context.Background(), ch, http.DefaultClient,
+		connector.LocalOpsConfig{}, 1, 60)
+	if err != nil {
+		t.Fatalf("run blocked host dry-run: %v", err)
+	}
+	if executed != 0 {
+		t.Fatalf("executed = %d, want blocked plan", executed)
+	}
+	if ch.redeemed != 0 {
+		t.Fatalf("blocked host test redeemed %d time(s); an absent operator authority must be refused before redemption", ch.redeemed)
+	}
+	if len(ch.reports) != 1 || ch.reports[0].outcome != relay.OutcomeExecuted {
+		t.Fatalf("reports = %+v, want one terminal executed blocked plan", ch.reports)
+	}
+	var plan relay.Plan
+	if err := json.Unmarshal([]byte(ch.reports[0].detail), &plan); err != nil {
+		t.Fatalf("decode blocked host plan: %v", err)
+	}
+	if plan.Ready {
+		t.Fatalf("missing operator profile reported ready: %+v", plan)
+	}
+	found := false
+	for _, step := range plan.Steps {
+		if step.Name == "host-authority" && step.Status == relay.StepFailed && strings.Contains(step.Detail, "host exec profile") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("blocked plan does not name the missing host authority: %+v", plan.Steps)
+	}
 }
 
 // TestHostProfileRefusesToDefaultOpen is D1's security property. A host executor
@@ -863,6 +1010,15 @@ func TestNoListenerAddressYieldsNoVerificationClaim(t *testing.T) {
 func mustJSON(t *testing.T, v any) json.RawMessage {
 	t.Helper()
 	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+func mustReadTempFixture(t *testing.T, path string) []byte {
+	t.Helper()
+	b, err := os.ReadFile(path) // #nosec G304 -- callers pass paths created inside this test package's t.TempDir fixtures (CWE-22).
 	if err != nil {
 		t.Fatal(err)
 	}

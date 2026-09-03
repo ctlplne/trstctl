@@ -170,7 +170,7 @@ describe("route 031 decision-first deployment destination design", () => {
     await waitFor(() => expect(apiMock.identities).toHaveBeenCalledTimes(1));
     expect(await screen.findByRole("table", { name: "Configured deployment destinations" })).toHaveTextContent("payments edge");
     expect(screen.getByRole("button", { name: "Deploy" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Rollback" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Review restore" })).toBeInTheDocument();
 
     await user.click(screen.getByText("Health, retries, and rollback", { exact: true }));
     await waitFor(() => expect(apiMock.connectorDeliveries).toHaveBeenCalledWith({ limit: 20 }));

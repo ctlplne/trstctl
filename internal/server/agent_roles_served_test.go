@@ -3,18 +3,26 @@
 package server
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"net"
+	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
 
 	"strings"
 	"trstctl.com/trstctl/internal/agent"
+	agentrelay "trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/connector"
 
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/crypto/tlsprobe"
 	"trstctl.com/trstctl/internal/servedstatus"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -382,4 +390,114 @@ func TestServedDryRunProducesAPlanAndChangesNothing(t *testing.T) {
 			t.Fatal("a dry-run produced a delivered receipt; nothing was deployed")
 		}
 	}
+}
+
+// TestServedHostDryRunReachesTheTargetAndChangesNothing is F7's host-vantage
+// preview proof on the assembled control plane and shipping agent runtime. A
+// host-role agent claims the real connector.test row over mTLS, validates its
+// operator-owned filesystem/command boundary, handshakes the listener, and
+// reports the plan. The target bytes are compared before and after so
+// "preview" is an observed zero-write boundary, not only a UI label.
+func TestServedHostDryRunReachesTheTargetAndChangesNothing(t *testing.T) {
+	ctx := t.Context()
+	h := newRoleHarness(t, []string{mtls.AgentRoleHost}, agentrelay.KindConnectorTest)
+
+	listener, err := tlsprobe.NewServingTestServer("apache.example.test")
+	if err != nil {
+		t.Fatalf("start Apache preview listener: %v", err)
+	}
+	defer listener.Close()
+
+	root := t.TempDir()
+	certPath := filepath.Join(root, "site.crt")
+	keyPath := filepath.Join(root, "site.key")
+	beforeCert := []byte("bootstrap certificate")
+	beforeKey := []byte("bootstrap private key")
+	if err := os.WriteFile(certPath, beforeCert, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(keyPath, beforeKey, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	targetConfig, err := json.Marshal(map[string]string{
+		"cert_path": certPath, "key_path": keyPath,
+		"verify_address": listener.Addr, "verify_server_name": "apache.example.test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(agentrelay.DeployIntent{
+		Connector:        "apache",
+		Target:           "payments Apache",
+		TargetID:         "target-apache-preview",
+		TargetConfig:     targetConfig,
+		VerifyAddress:    listener.Addr,
+		VerifyServerName: "apache.example.test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		_, execErr := tx.Exec(ctx,
+			`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, required_agent_role)
+			 VALUES ($1, $2, $3, $4, $5)`,
+			h.tenant, agentrelay.KindConnectorTest, payload, "preview:apache:served", mtls.AgentRoleHost)
+		return execErr
+	}); err != nil {
+		t.Fatalf("seed host preview: %v", err)
+	}
+
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := connector.LocalOpsConfig{
+		AllowedRoots: []string{root},
+		Actions: []connector.LocalAction{{
+			LogicalName: "apachectl", Command: executable, PassArgs: true,
+		}},
+	}
+	channel := &servedHostRelayChannel{client: h.client, identity: h.identity}
+	executed, err := agentrelay.RunOnceWithHost(ctx, channel, http.DefaultClient, profile, 1, 60)
+	if err != nil {
+		t.Fatalf("run served host preview: %v", err)
+	}
+	if executed != 1 || !channel.lastAccepted || channel.lastOutcome != transport.JobOutcomeExecuted {
+		t.Fatalf("served host preview = executed %d accepted %t outcome %q detail %q",
+			executed, channel.lastAccepted, channel.lastOutcome, channel.lastDetail)
+	}
+	var plan agentrelay.Plan
+	if err := json.Unmarshal([]byte(channel.lastDetail), &plan); err != nil {
+		t.Fatalf("decode served host preview plan: %v", err)
+	}
+	if !plan.Ready || plan.Endpoint != listener.Addr || len(plan.WouldMutate) < 3 {
+		t.Fatalf("served host preview plan = %+v, want ready target-bound plan", plan)
+	}
+
+	afterCert, err := os.ReadFile(certPath) // #nosec G304 -- path is a t.TempDir fixture (CWE-22).
+	if err != nil {
+		t.Fatal(err)
+	}
+	afterKey, err := os.ReadFile(keyPath) // #nosec G304 -- path is a t.TempDir fixture (CWE-22).
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(afterCert, beforeCert) || !bytes.Equal(afterKey, beforeKey) {
+		t.Fatalf("served host preview changed target files: cert=%q key=%q", afterCert, afterKey)
+	}
+
+	receipts, err := h.store.ListConnectorDeliveryReceiptsPage(ctx, h.tenant, "", store.ZeroUUID, 50)
+	if err != nil {
+		t.Fatalf("list host preview receipts: %v", err)
+	}
+	for _, receipt := range receipts {
+		if receipt.Destination == agentrelay.KindConnectorTest && receipt.Status == servedstatus.ConnectorTestPlanned {
+			if !strings.Contains(receipt.Detail, listener.Addr) {
+				t.Fatalf("planned receipt does not identify the listener: %q", receipt.Detail)
+			}
+			return
+		}
+	}
+	t.Fatalf("no dry_run_planned receipt recorded; receipts = %+v", receipts)
 }

@@ -18,6 +18,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/secretfile"
+	"trstctl.com/trstctl/internal/pluginhost"
 )
 
 const localCommandOutputLimit = 64 << 10
@@ -49,6 +50,78 @@ type LocalAction struct {
 type LocalOpsConfig struct {
 	AllowedRoots []string
 	Actions      []LocalAction
+}
+
+// LocalActionInvocation is one command a host connector would ask its sandbox
+// to run. ArgsKnown is false only when the arguments depend on the certificate
+// selected later for a real deploy (IIS is the current example). The operator's
+// action still has to exist and its executable still has to pass NewLocalOps'
+// regular-file, non-symlink, no-unpinned-shell checks.
+type LocalActionInvocation struct {
+	LogicalName string
+	LogicalArgs []string
+	ArgsKnown   bool
+}
+
+// PreflightLocalOps proves that a connector's declared local effects fit inside
+// the operator-owned host profile without performing any of those effects.
+//
+// NewLocalOps validates and canonicalizes every root and executable. This
+// function then checks each filesystem prefix declared by the connector against
+// those roots and each declared logical command against the profile. It never
+// opens a target file for writing and never starts a process; it uses Lstat and
+// directory canonicalization only. That makes zero writes a property of this
+// code path rather than a convention the caller has to remember.
+func PreflightLocalOps(cfg LocalOpsConfig, grant pluginhost.Grant, actions []LocalActionInvocation) error {
+	raw, err := NewLocalOps(cfg)
+	if err != nil {
+		return err
+	}
+	ops, ok := raw.(*localOps)
+	if !ok {
+		return errors.New("connector: local preflight boundary is unavailable")
+	}
+
+	for _, capability := range []pluginhost.Capability{pluginhost.CapFSRead, pluginhost.CapFSWrite} {
+		if !grant.Has(capability) {
+			continue
+		}
+		prefixes := grant.PathPrefixes(capability)
+		if len(prefixes) == 0 {
+			return fmt.Errorf("connector: local %s capability has no path boundary", capability)
+		}
+		for _, prefix := range prefixes {
+			// Host connectors constrain file effects to a directory. Validate a
+			// synthetic child path so allowedPath proves the directory exists,
+			// resolves no symlinked parent, and sits under an approved root without
+			// opening or creating the child.
+			if _, err := ops.allowedPath(filepath.Join(prefix, ".trstctl-preflight")); err != nil {
+				return fmt.Errorf("connector: local %s path %q is not authorized: %w", capability, prefix, err)
+			}
+		}
+	}
+
+	if grant.Has(CapExec) && len(actions) == 0 {
+		return errors.New("connector: local process capability has no declared command plan")
+	}
+	if !grant.Has(CapExec) && len(actions) > 0 {
+		return errors.New("connector: local command plan exceeds the connector capability grant")
+	}
+	for _, required := range actions {
+		name := strings.TrimSpace(required.LogicalName)
+		if name == "" {
+			return errors.New("connector: local preflight command has no logical name")
+		}
+		configured, exists := ops.actions[name]
+		if !exists {
+			return fmt.Errorf("connector: local action %q is not operator-approved", name)
+		}
+		if required.ArgsKnown && configured.LogicalArgs != nil &&
+			!slices.Equal(configured.LogicalArgs, required.LogicalArgs) {
+			return fmt.Errorf("connector: activation %q %q does not match operator profile", name, required.LogicalArgs)
+		}
+	}
+	return nil
 }
 
 type localOps struct {

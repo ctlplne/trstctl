@@ -4446,6 +4446,34 @@ const deDECatalog = {
   "connectors.design.bindHelp":
     "Wählen Sie ein aktiviertes, unabhängig geprüftes Ziel. Diese geprüfte Aktion erstellt die Identität und stellt Ausstellung und Bereitstellung in die Warteschlange; sie erstellt oder aktiviert kein Ziel.",
   "connectors.design.destinationsTable": "Konfigurierte Bereitstellungsziele",
+  // QA-G182 machine-authored translations; human review required before release.
+  "connectors.actions.heading": "Vorschau, Bereitstellung und Wiederherstellung",
+  "connectors.actions.help":
+    "Führen Sie die Vorschau zuerst vom selben Agenten oder Relay aus. Sie prüft die Zielverbindung, erforderliche Verwaltungs-Credentials und lokale Berechtigungen, ohne das Zertifikat oder den privaten Schlüssel zu erhalten, den eine spätere Bereitstellung installiert. Bereitstellen ändert das Ziel. Prüfen Sie die Wiederherstellung separat, falls die neue Version Probleme verursacht.",
+  "connectors.preview.action": "Änderungen ansehen (keine Schreibvorgänge)",
+  "connectors.preview.ready": "Zielpfad bereit — nichts geändert",
+  "connectors.preview.blocked": "Bereitstellung blockiert — nichts geändert",
+  "connectors.preview.queued": "Vorschau eingereiht — noch kein Ergebnis",
+  "connectors.preview.localOnly": "Konfiguration gültig — Ziel nicht kontaktiert",
+  "connectors.preview.zeroWriteBoundary":
+    "Die Vorschau installiert kein Zertifikat, schreibt keine Zieldatei, führt keinen Reload aus und ändert keine Bindung.",
+  "connectors.preview.localOnlyWarning":
+    "Kein Agent oder Relay hat diese Vorschau ausgeführt. Behandeln Sie sie nicht als Bereitstellungsfreigabe; aktivieren Sie connector.test und führen Sie sie erneut vom Ausführungsort des Ziels aus.",
+  "connectors.preview.refresh": "Vorschauergebnis prüfen",
+  "connectors.preview.correlationUnavailable":
+    "Diese eingereihte Vorschau hat keinen Belegschlüssel. Die Konsole rät deshalb nicht, welches Ergebnis dazugehört. Führen Sie eine neue Vorschau aus.",
+  "connectors.recovery.review": "Wiederherstellung prüfen",
+  "connectors.recovery.unavailable":
+    "Dieser Connector hat keinen ausführbaren Wiederherstellungspfad. Nutzen Sie das dokumentierte manuelle Verfahren; trstctl zeichnet keinen irreführenden Wiederherstellungserfolg auf.",
+  "connectors.recovery.dialogTitle": "Wiederherstellung der vorherigen Version prüfen",
+  "connectors.recovery.dialogHelp":
+    "Prüfen Sie das genaue Ziel, die Identität und den Grund, bevor der Ziel-Agent oder das Relay den nachgewiesenen Vorgänger wiederherstellen soll.",
+  "connectors.recovery.dialogBoundary":
+    "Eingereiht bedeutet nicht erfolgreich. trstctl meldet erst dann wiederhergestellt, wenn der erforderliche Agent oder das Relay die Wiederherstellung ausgeführt hat; ein fehlender Vorgänger oder ein nicht unterstützter Pfad wird sicher abgelehnt.",
+  "connectors.recovery.confirm": "Wiederherstellung einreihen",
+  "connectors.recovery.queued": "Wiederherstellung eingereiht — Agent-Nachweis ausstehend",
+  "connectors.recovery.restored": "Vorherige Version wiederhergestellt",
+  "connectors.recovery.notExecuted": "Wiederherstellung nicht nachgewiesen",
   "connectors.design.capabilitiesHelp":
     "Dies sind Fähigkeitsnachweise, keine Behauptung, dass jeder Connector hier konfiguriert ist. Ausführungsort, Rollback, Gerätenachweis, Migrationsgrenzen, signierte Herausgeberidentität und wirksame Berechtigungen bleiben exakt.",
   "connectors.design.capabilitiesTable": "Register der Connector-Fähigkeiten",
@@ -7129,7 +7157,6 @@ const deDECatalog = {
   "source.svc.internal.e50a91019d": "svc.internal",
   "source.table.16d1c9050a": "Table",
   "source.target.978354db0c": "Ziel",
-  "source.target.actions.4d6d059ed8": "Zielaktionen",
   "source.target.deploy.listener.verification.and.rollback.38783cea3d":
     "{target}: Bereitstellungs-, Listener-Prüfungs- und Rollback-Nachweise in aufgezeichneter Reihenfolge.",
   "source.target.hosts.b345027096": "Zielhosts",

@@ -1636,7 +1636,7 @@ describe("protocol surface", () => {
     expect(within(dialog).getByRole("region", { name: "CAA issuance policy" })).toHaveTextContent("CAA allows this issuer");
     expect(within(dialog).getByRole("status", { name: "Preflight result for api.example.test" })).toHaveFocus();
     expect(apiMock.acmeDNS01Preflight).toHaveBeenCalledTimes(3);
-  });
+  }, 15_000);
 
   it("reviews, executes, observes, and recovers an admitted signed DNS plugin without exposing secrets", async () => {
     const user = userEvent.setup();

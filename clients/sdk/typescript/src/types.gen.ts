@@ -1847,7 +1847,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Record rollback evidence for a deployment connector target */
+        /** Queue restoration of a deployment target's proven predecessor */
         post: operations["rollbackConnectorTarget"];
         delete?: never;
         options?: never;
@@ -1864,7 +1864,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Validate a deployment connector target */
+        /** Preview deployment changes from the target vantage without writing */
         post: operations["testConnectorTarget"];
         delete?: never;
         options?: never;

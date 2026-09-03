@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/connector/apache"
 	"trstctl.com/trstctl/internal/connector/caddy"
@@ -29,6 +30,8 @@ import (
 	"trstctl.com/trstctl/internal/connector/rabbitmq"
 	"trstctl.com/trstctl/internal/connector/tomcat"
 	"trstctl.com/trstctl/internal/connector/traefik"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/crypto/tlsprobe"
 )
 
 // Host-executed connector deploys (epic D1).
@@ -215,6 +218,9 @@ func ExecuteOnHost(
 	if err != nil {
 		return connector.Stats{}, err
 	}
+	if closer, ok := built.(interface{ Close() }); ok {
+		defer closer.Close()
+	}
 	var ops connector.Ops
 	if intent.Connector == "envoy" {
 		var client *http.Client
@@ -237,6 +243,308 @@ func ExecuteOnHost(
 		KeyPEM:      keyPEM,
 		Fingerprint: intent.Fingerprint,
 	})
+}
+
+// DryRunOnHost validates a host connector on the machine that would execute it
+// and handshakes the listener it would later update. It performs no deployment:
+// PreflightLocalOps only canonicalizes/Lstats roots and commands, and the
+// listener check is a read-only TLS handshake. Certificate/key material is not
+// required because connector.test proves the target path, not a credential that
+// has not been selected for deployment yet.
+func DryRunOnHost(
+	ctx context.Context,
+	client *http.Client,
+	profile connector.LocalOpsConfig,
+	intent DeployIntent,
+	material Material,
+) (Plan, error) {
+	plan := Plan{Connector: intent.Connector, Target: intent.Target}
+	if !ExecutesOnHost(intent.Connector) {
+		plan.Steps = append(plan.Steps, PlanStep{
+			Name: "connector", Status: StepFailed,
+			Detail: fmt.Sprintf("connector %q is not executable by a host agent", intent.Connector),
+		})
+		return plan, nil
+	}
+	plan.Steps = append(plan.Steps, PlanStep{
+		Name: "connector", Status: StepOK,
+		Detail: "this host agent carries an executor for " + intent.Connector,
+	})
+
+	var target HostTargetConfig
+	if len(intent.TargetConfig) > 0 {
+		if err := json.Unmarshal(intent.TargetConfig, &target); err != nil {
+			plan.Steps = append(plan.Steps, PlanStep{
+				Name: "target-config", Status: StepFailed,
+				Detail: "host target configuration did not decode: " + err.Error(),
+			})
+			return plan, nil
+		}
+	}
+	actions, err := hostPreflightActions(intent.Connector, target)
+	if err != nil {
+		plan.Steps = append(plan.Steps, PlanStep{
+			Name: "target-config", Status: StepFailed, Detail: err.Error(),
+		})
+		return plan, nil
+	}
+	for _, ref := range intent.CredentialRefs {
+		if len(material[strings.TrimSpace(ref)]) == 0 {
+			plan.Steps = append(plan.Steps, PlanStep{
+				Name: "credentials", Status: StepFailed,
+				Detail: "required credential reference " + strings.TrimSpace(ref) + " was not redeemed for this test",
+			})
+			return plan, nil
+		}
+	}
+	if len(intent.CredentialRefs) == 0 {
+		plan.Steps = append(plan.Steps, PlanStep{
+			Name: "credentials", Status: StepSkipped,
+			Detail: "this host target needs no management credential; certificate material is supplied only when a deploy is authorized",
+		})
+	} else {
+		plan.Steps = append(plan.Steps, PlanStep{
+			Name: "credentials", Status: StepOK,
+			Detail: "every host-target credential reference was redeemed for this one test attempt",
+		})
+	}
+
+	built, err := buildHostConnector(intent.Connector, target, material)
+	if err != nil {
+		plan.Steps = append(plan.Steps, PlanStep{
+			Name: "target-config", Status: StepFailed, Detail: err.Error(),
+		})
+		return plan, nil
+	}
+	if closer, ok := built.(interface{ Close() }); ok {
+		defer closer.Close()
+	}
+	plan.Steps = append(plan.Steps, PlanStep{
+		Name: "target-config", Status: StepOK,
+		Detail: "the host target configuration resolves to the shipped " + intent.Connector + " connector",
+	})
+
+	if RequiresHostExecProfile(intent.Connector) {
+		if len(profile.AllowedRoots) == 0 {
+			plan.Steps = append(plan.Steps, PlanStep{
+				Name: "host-authority", Status: StepFailed,
+				Detail: "this agent has no host exec profile configured for file and reload operations",
+			})
+			return plan, nil
+		}
+		if err := connector.PreflightLocalOps(profile, built.Capabilities(), actions); err != nil {
+			plan.Steps = append(plan.Steps, PlanStep{
+				Name: "host-authority", Status: StepFailed,
+				Detail: "operator host authority does not permit this target plan: " + err.Error(),
+			})
+			return plan, nil
+		}
+		plan.Steps = append(plan.Steps, PlanStep{
+			Name: "host-authority", Status: StepOK,
+			Detail: "target directories and logical commands fit inside the operator-owned host exec profile",
+		})
+	} else {
+		plan.Steps = append(plan.Steps, PlanStep{
+			Name: "host-authority", Status: StepSkipped,
+			Detail: "this co-resident connector uses no filesystem or process authority",
+		})
+	}
+
+	var reachability PlanStep
+	if intent.Connector == "envoy" {
+		plan.Endpoint = strings.TrimSpace(target.Endpoint)
+		reachability = probeEndpoint(ctx, client, plan.Endpoint)
+	} else {
+		plan.Endpoint = strings.TrimSpace(intent.VerifyAddress)
+		reachability = probeHostListener(ctx, plan.Endpoint, strings.TrimSpace(intent.VerifyServerName))
+	}
+	plan.Steps = append(plan.Steps, reachability)
+	if reachability.Status == StepFailed {
+		return plan, nil
+	}
+
+	plan.Ready = true
+	plan.WouldMutate = wouldMutateOnHost(intent.Connector, target, actions, plan.Endpoint)
+	return plan, nil
+}
+
+func hostPreflightActions(name string, target HostTargetConfig) ([]connector.LocalActionInvocation, error) {
+	require := func(fields ...struct{ label, value string }) error {
+		for _, field := range fields {
+			if strings.TrimSpace(field.value) == "" {
+				return fmt.Errorf("host target configuration requires %s", field.label)
+			}
+		}
+		return nil
+	}
+	field := func(label, value string) struct{ label, value string } {
+		return struct{ label, value string }{label, value}
+	}
+	action := func(name string, args ...string) connector.LocalActionInvocation {
+		return connector.LocalActionInvocation{LogicalName: name, LogicalArgs: args, ArgsKnown: true}
+	}
+
+	switch name {
+	case "apache":
+		if err := require(field("cert_path", target.CertPath), field("key_path", target.KeyPath)); err != nil {
+			return nil, err
+		}
+		return []connector.LocalActionInvocation{action("apachectl", "configtest"), action("apachectl", "graceful")}, nil
+	case "nginx":
+		if err := require(field("cert_path", target.CertPath), field("key_path", target.KeyPath)); err != nil {
+			return nil, err
+		}
+		return []connector.LocalActionInvocation{action("nginx", "-t"), action("nginx", "-s", "reload")}, nil
+	case "caddy":
+		if err := require(field("cert_path", target.CertPath), field("key_path", target.KeyPath)); err != nil {
+			return nil, err
+		}
+		return []connector.LocalActionInvocation{action("caddy", "reload")}, nil
+	case "haproxy":
+		if err := require(field("crt_path", target.CRTPath), field("config_path", target.ConfigPath)); err != nil {
+			return nil, err
+		}
+		return []connector.LocalActionInvocation{action("haproxy", "-c", "-f", target.ConfigPath), action("systemctl", "reload", "haproxy")}, nil
+	case "mysql":
+		if err := require(field("cert_path", target.CertPath), field("key_path", target.KeyPath)); err != nil {
+			return nil, err
+		}
+		return []connector.LocalActionInvocation{action("mysqladmin", "reload")}, nil
+	case "postgresql":
+		if err := require(field("cert_path", target.CertPath), field("key_path", target.KeyPath)); err != nil {
+			return nil, err
+		}
+		return []connector.LocalActionInvocation{action("pg_ctl", "reload")}, nil
+	case "rabbitmq":
+		if err := require(field("cert_path", target.CertPath), field("key_path", target.KeyPath)); err != nil {
+			return nil, err
+		}
+		return []connector.LocalActionInvocation{action("rabbitmqctl", "rotate_certs")}, nil
+	case "tomcat":
+		if err := require(field("cert_path", target.CertPath), field("key_path", target.KeyPath)); err != nil {
+			return nil, err
+		}
+		return []connector.LocalActionInvocation{action("catalina.sh", "reload")}, nil
+	case "postfix":
+		if err := require(
+			field("postfix_cert_path", target.PostfixCertPath), field("postfix_key_path", target.PostfixKeyPath),
+			field("dovecot_cert_path", target.DovecotCertPath), field("dovecot_key_path", target.DovecotKeyPath)); err != nil {
+			return nil, err
+		}
+		return []connector.LocalActionInvocation{
+			action("postfix", "check"), action("doveconf", "-n"),
+			action("postfix", "reload"), action("doveadm", "reload"),
+		}, nil
+	case "iis":
+		if err := require(field("binding", target.Binding), field("import_dir", target.ImportDir)); err != nil {
+			return nil, err
+		}
+		// The complete argv includes the certificate thumbprint and staged PFX
+		// filename selected only at deploy time. The profile's action names and
+		// executable safety are still checked now; exact argv is enforced again
+		// by LocalOps when the real deploy supplies it.
+		return []connector.LocalActionInvocation{
+			{LogicalName: "powershell", ArgsKnown: false},
+			{LogicalName: "netsh", ArgsKnown: false},
+		}, nil
+	case "java-keystore":
+		if err := require(field("keystore_path", target.KeystorePath), field("keystore_password_ref", target.KeystorePasswordRef)); err != nil {
+			return nil, err
+		}
+		return nil, nil
+	case "elasticsearch", "traefik":
+		if err := require(field("cert_path", target.CertPath), field("key_path", target.KeyPath)); err != nil {
+			return nil, err
+		}
+		return nil, nil
+	case "envoy":
+		if err := require(field("endpoint", target.Endpoint), field("secret_name", target.SecretName)); err != nil {
+			return nil, err
+		}
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("connector %q has no host preflight plan", name)
+	}
+}
+
+func probeHostListener(ctx context.Context, address, serverName string) PlanStep {
+	if strings.TrimSpace(address) == "" {
+		return PlanStep{Name: "reachability", Status: StepFailed,
+			Detail: "host target configuration carries no verify_address, so no listener can be checked"}
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, dryRunProbeTimeout)
+	defer cancel()
+	observed, err := tlsprobe.Probe(probeCtx, address,
+		tlsprobe.WithTimeout(dryRunProbeTimeout), tlsprobe.WithServerName(serverName))
+	if err != nil {
+		return PlanStep{Name: "reachability", Status: StepFailed,
+			Detail: "could not handshake the configured listener: " + transport.SanitizeProbeError(err)}
+	}
+	if len(observed.PeerCertificates) == 0 {
+		return PlanStep{Name: "reachability", Status: StepFailed,
+			Detail: "the configured listener completed TLS but presented no certificate"}
+	}
+	leaf, err := certinfo.Inspect(observed.PeerCertificates[0])
+	if err != nil {
+		return PlanStep{Name: "reachability", Status: StepFailed,
+			Detail: "the configured listener presented an unreadable certificate"}
+	}
+	if serverName != "" && certinfo.VerifyHostname(observed.PeerCertificates[0], serverName) != nil {
+		return PlanStep{Name: "reachability", Status: StepFailed,
+			Detail: "the listener is reachable but its current certificate is not valid for verify_server_name " + serverName}
+	}
+	fingerprint := strings.ToLower(strings.ReplaceAll(leaf.SHA256Fingerprint, ":", ""))
+	if len(fingerprint) > 12 {
+		fingerprint = fingerprint[:12]
+	}
+	return PlanStep{Name: "reachability", Status: StepOK,
+		Detail: "TLS handshake reached " + address + " and observed current public leaf " + fingerprint + "; CA trust was not assumed or changed"}
+}
+
+func wouldMutateOnHost(name string, target HostTargetConfig, actions []connector.LocalActionInvocation, endpoint string) []string {
+	var changes []string
+	appendPath := func(label, value string) {
+		if strings.TrimSpace(value) != "" {
+			changes = append(changes, "replace "+label+" at "+value)
+		}
+	}
+	switch name {
+	case "haproxy":
+		appendPath("certificate/key bundle", target.CRTPath)
+	case "java-keystore":
+		appendPath("Java keystore", target.KeystorePath)
+	case "iis":
+		changes = append(changes, "import the certificate into the Windows "+nonemptyHost(target.Store, "MY")+" store")
+		changes = append(changes, "bind it to IIS listener "+target.Binding)
+	case "postfix":
+		appendPath("Postfix certificate", target.PostfixCertPath)
+		appendPath("Postfix private key", target.PostfixKeyPath)
+		appendPath("Dovecot certificate", target.DovecotCertPath)
+		appendPath("Dovecot private key", target.DovecotKeyPath)
+	case "envoy":
+		changes = append(changes, "replace co-resident Envoy SDS secret "+target.SecretName)
+	default:
+		appendPath("certificate", target.CertPath)
+		appendPath("private key", target.KeyPath)
+	}
+	for _, invocation := range actions {
+		if invocation.ArgsKnown {
+			changes = append(changes, "run operator-approved "+strings.TrimSpace(invocation.LogicalName+" "+strings.Join(invocation.LogicalArgs, " ")))
+		} else {
+			changes = append(changes, "run operator-approved "+invocation.LogicalName+" action with deploy-bound arguments")
+		}
+	}
+	if endpoint != "" && name != "envoy" {
+		changes = append(changes, "handshake "+endpoint+" and require the newly deployed certificate before reporting verified")
+	}
+	return changes
+}
+
+func nonemptyHost(value, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return strings.TrimSpace(value)
 }
 
 // buildHostConnector constructs the named file/exec connector. It mirrors the
