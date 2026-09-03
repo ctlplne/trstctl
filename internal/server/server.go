@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -606,24 +607,28 @@ type Deps struct {
 
 // Server is the assembled control plane.
 type Server struct {
-	store        *store.Store
-	log          *events.Log
-	audit        *audit.Service
-	outbox       *orchestrator.Outbox
-	outboxWake   chan struct{}
-	idemGC       *idemgc.Sweeper   // bounds idempotency_keys via the background retention sweep (SPINE-002)
-	outboxGC     *outboxgc.Sweeper // bounds the outbox via the background delivered-row purge (SPINE-003)
-	obHandler    orchestrator.Handler
-	handler      http.Handler
-	acmeDNS01    *servedACMEDNS01Automation
-	transit      *transitpkg.Service
-	transitStore *transitpkg.Store
+	store             *store.Store
+	log               *events.Log
+	audit             *audit.Service
+	outbox            *orchestrator.Outbox
+	outboxWake        chan struct{}
+	idemGC            *idemgc.Sweeper   // bounds idempotency_keys via the background retention sweep (SPINE-002)
+	outboxGC          *outboxgc.Sweeper // bounds the outbox via the background delivered-row purge (SPINE-003)
+	obHandler         orchestrator.Handler
+	handler           http.Handler
+	acmeDNS01         *servedACMEDNS01Automation
+	transit           *transitpkg.Service
+	transitStore      *transitpkg.Store
+	transitStateMu    sync.RWMutex
+	transitStateFound bool
 	// codeSignGate is the production adapter over the live OPA evaluator and
 	// distinct-approver store assembled by configurePolicyGate.
-	codeSignGate codesign.Gate
-	codeSign     *servedCodeSigningService
-	ctSubmit     *servedCTSubmissionService
-	kmip         KMIPRuntime
+	codeSignGate  codesign.Gate
+	codeSign      *servedCodeSigningService
+	ctSubmit      *servedCTSubmissionService
+	kmip          KMIPRuntime
+	kmipStateMu   sync.RWMutex
+	kmipListening bool
 	// complianceSigner is a generated locked key used only when the deployment did
 	// not supply Deps.ComplianceSigner. Supplied signers are owned by the caller.
 	complianceSigner *crypto.LockedSigner
@@ -1240,6 +1245,11 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	if transitSvc != nil {
 		defaults = append(defaults, api.WithTransit(transitSvc))
 	}
+	kmipEnabled := d.Protocols.KMIP.Enabled
+	kmipTenantID := d.Protocols.KMIP.TenantID
+	defaults = append(defaults, api.WithTransitPosture(func(_ context.Context, tenantID string) api.TransitRuntimePosture {
+		return s.transitRuntimePosture(kmipEnabled, kmipTenantID, tenantID)
+	}))
 	codeSigningConfig := d.CodeSigning
 	if codeSigningConfig.Gate == nil {
 		codeSigningConfig.Gate = s.codeSignGate
@@ -1480,6 +1490,10 @@ func (s *Server) buildTransitService(d Deps) (*transitpkg.Service, error) {
 	// in-memory behaviour rather than silently writing keys in the clear.
 	s.transitStore = transitpkg.NewStore(d.TransitKeyringDir, d.KEK)
 	if s.transitStore != nil {
+		found, err := s.transitStore.HasState()
+		if err != nil {
+			return nil, fmt.Errorf("server: inspect sealed transit keyring: %w", err)
+		}
 		if err := s.transitStore.Load(s.transit); err != nil {
 			// A keyring that EXISTS but cannot be opened must not be replaced by an
 			// empty one and started anyway: the service would come up healthy,
@@ -1488,14 +1502,45 @@ func (s *Server) buildTransitService(d Deps) (*transitpkg.Service, error) {
 			// operator still has the sealed file and can fix the KEK.
 			return nil, fmt.Errorf("server: open sealed transit keyring: %w", err)
 		}
+		s.transitStateMu.Lock()
+		s.transitStateFound = found
+		s.transitStateMu.Unlock()
 	}
 	if s.transitStore != nil {
 		// Checkpoint after every create/rotate rather than relying on a periodic
 		// flush: a key that works until the next restart and then silently does
 		// not is exactly the failure this persistence exists to prevent.
-		s.transit.SetPersist(func() error { return s.transitStore.Save(s.transit) })
+		s.transit.SetPersist(func() error {
+			if err := s.transitStore.Save(s.transit); err != nil {
+				return err
+			}
+			s.transitStateMu.Lock()
+			s.transitStateFound = true
+			s.transitStateMu.Unlock()
+			return nil
+		})
 	}
 	return s.transit, nil
+}
+
+func (s *Server) transitRuntimePosture(kmipEnabled bool, kmipTenantID, tenantID string) api.TransitRuntimePosture {
+	s.transitStateMu.RLock()
+	stateFound := s.transitStateFound
+	s.transitStateMu.RUnlock()
+	s.kmipStateMu.RLock()
+	listening := s.kmipListening
+	s.kmipStateMu.RUnlock()
+	tenantBound := kmipEnabled && strings.TrimSpace(kmipTenantID) != "" && kmipTenantID == tenantID
+	address := ""
+	if tenantBound && s.kmip != nil {
+		address = s.kmip.Addr()
+	}
+	return api.TransitRuntimePosture{
+		Served: s.transit != nil, PersistenceConfigured: s.transitStore != nil,
+		SealedStateFound: stateFound, KMIPConfigured: tenantBound,
+		KMIPServed: tenantBound && s.kmip != nil, KMIPListening: tenantBound && listening,
+		KMIPTenantBound: tenantBound, KMIPAddress: address,
+	}
 }
 
 // SaveTransitKeyring seals the current keyring. Callers invoke it after a key is

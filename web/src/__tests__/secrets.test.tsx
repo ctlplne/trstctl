@@ -41,6 +41,8 @@ const { apiMock } = vi.hoisted(() => ({
     renewDynamicLease: vi.fn(),
     revokeDynamicLease: vi.fn(),
     transitKeys: vi.fn(),
+    transitKeyVersions: vi.fn(),
+    transitPosture: vi.fn(),
     createTransitKey: vi.fn(),
     rotateTransitKey: vi.fn(),
     encryptTransit: vi.fn(),
@@ -48,6 +50,8 @@ const { apiMock } = vi.hoisted(() => ({
     hmacTransit: vi.fn(),
     rewrapTransit: vi.fn(),
     signTransit: vi.fn(),
+    verifyTransit: vi.fn(),
+    auditEvents: vi.fn(),
     secretRepositoryScanning: vi.fn(),
     thirdPartySecretScanning: vi.fn(),
     ingestThirdPartySecretScan: vi.fn(),
@@ -614,6 +618,40 @@ function primeSecretsMocks() {
     expires_at: "2026-06-19T13:25:00Z",
   });
   apiMock.transitKeys.mockResolvedValue({ items: [] });
+  apiMock.transitKeyVersions.mockImplementation(async (name: string) => ({
+    name,
+    kind: name.includes("signing") ? "sign" : name.includes("integrity") ? "hmac" : "aead",
+    versions: [
+      { version: 1, current: false },
+      { version: 2, current: true },
+    ],
+  }));
+  apiMock.transitPosture.mockResolvedValue({
+    checked_at: "2026-09-03T12:00:00Z",
+    effect_free: true,
+    transit: {
+      served: true,
+      persistence_configured: true,
+      restore_state: "restored",
+      recovery_ready: true,
+      detail: "The running service restored its sealed keyring during startup.",
+    },
+    kmip: {
+      state: "not_configured",
+      configured: false,
+      served: false,
+      listening: false,
+      tenant_bound: false,
+      transport: "mTLS",
+      profile: "KMIP 1.x AES-256 SymmetricKey appliance profile",
+      objects: ["AES-256 SymmetricKey"],
+      operations: ["Create", "Get", "Locate", "Revoke", "Destroy"],
+      detail: "KMIP is not configured for this tenant.",
+      recovery: "Enable the licensed KMIP listener and bind it to this tenant.",
+    },
+    recovery_steps: ["Keep the original ciphertext.", "Repair the original KEK or mount.", "Retry and prove the result."],
+    proof: ["Effect-free.", "No keyring read.", "No key bytes returned."],
+  });
   apiMock.createTransitKey.mockImplementation(async (input: { name: string; kind: string }) => ({ ...input, version: 1 }));
   apiMock.rotateTransitKey.mockImplementation(async (input: { name: string }) => ({
     name: input.name,
@@ -625,6 +663,8 @@ function primeSecretsMocks() {
   apiMock.hmacTransit.mockResolvedValue({ hmac: "hmac-base64" });
   apiMock.rewrapTransit.mockResolvedValue({ ciphertext: "trst:v4:rewrapped", version: 4 });
   apiMock.signTransit.mockResolvedValue({ signature: "signature-base64", public_der: "public-der-base64" });
+  apiMock.verifyTransit.mockResolvedValue({ valid: true });
+  apiMock.auditEvents.mockResolvedValue([{ sequence: 42, tenant_id: "tenant-a", time: "2026-09-03T12:00:00Z", type: "transit.key.rotated" }]);
   apiMock.secretRepositoryScanning.mockResolvedValue(repoScanPostureFixture());
   apiMock.thirdPartySecretScanning.mockResolvedValue(thirdPartyScanPostureFixture());
   apiMock.ingestThirdPartySecretScan.mockResolvedValue({
@@ -1763,9 +1803,7 @@ describe("secrets surface", () => {
     await user.clear(screen.getByLabelText("Lifetime in seconds"));
     await user.type(screen.getByLabelText("Lifetime in seconds"), "1200");
     await user.click(screen.getByRole("button", { name: "Review without creating" }));
-    await waitFor(() =>
-      expect(apiMock.previewDynamicLease).toHaveBeenCalledWith({ provider: "payments-db", role: "readonly-reporting", ttl_seconds: 1200 }),
-    );
+    await waitFor(() => expect(apiMock.previewDynamicLease).toHaveBeenCalledWith({ provider: "payments-db", role: "readonly-reporting", ttl_seconds: 1200 }));
     expect(apiMock.issueDynamicLease).not.toHaveBeenCalled();
     await user.click(await screen.findByRole("button", { name: "Create reviewed credential" }));
     await waitFor(() =>
@@ -1816,6 +1854,9 @@ describe("secrets surface", () => {
 
     await user.click(await screen.findByRole("button", { name: "Open encryption and signing" }));
     expect(await screen.findByRole("heading", { name: "Transit and KMIP" })).toBeInTheDocument();
+    expect(await screen.findByText("Sealed restore ready")).toBeInTheDocument();
+    expect(screen.getByText("KMIP not configured")).toBeInTheDocument();
+    expect(await screen.findByText("transit.key.rotated")).toBeInTheDocument();
 
     const keyForm = within(screen.getByRole("form", { name: "Create a Transit key" }));
     await user.type(keyForm.getByLabelText("Key name"), "payments-pii");
@@ -1882,6 +1923,18 @@ describe("secrets surface", () => {
         message: "cmVjZWlwdCBib2R5",
       }),
     );
+    expect(await screen.findByDisplayValue("signature-base64")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("public-der-base64")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Verify signature" }));
+    await waitFor(() =>
+      expect(apiMock.verifyTransit).toHaveBeenCalledWith({
+        message: "cmVjZWlwdCBib2R5",
+        signature: "signature-base64",
+        public_der: "public-der-base64",
+      }),
+    );
+    expect(await screen.findByText("Valid signature")).toBeInTheDocument();
+    expect(await screen.findByText("Version 2 (current)")).toBeInTheDocument();
 
     cleanup();
     renderSecrets("/secrets/sync");
@@ -1906,6 +1959,32 @@ describe("secrets surface", () => {
     expect(storageSpy).not.toHaveBeenCalled();
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
+  });
+
+  it("turns an uncertain Transit operation into an explicit proof-first recovery journey", async () => {
+    apiMock.transitKeys.mockResolvedValue({ items: [{ name: "payments-signing", kind: "sign", version: 2 }] });
+    apiMock.signTransit.mockRejectedValueOnce(new Error("the response ended before the outcome was confirmed"));
+    const user = userEvent.setup();
+    renderSecrets("/secrets/engines");
+
+    await user.click(await screen.findByRole("button", { name: "Open encryption and signing" }));
+    await user.type(await screen.findByLabelText("Message"), "receipt body");
+    await user.click(screen.getByRole("button", { name: "Sign message" }));
+
+    expect(await screen.findByText("Transit operation failed")).toBeInTheDocument();
+    expect(screen.getByText(/Refresh server status, version history, and audit evidence before retrying/)).toBeInTheDocument();
+    expect(apiMock.signTransit).toHaveBeenCalledTimes(1);
+
+    const postureCalls = apiMock.transitPosture.mock.calls.length;
+    const versionCalls = apiMock.transitKeyVersions.mock.calls.length;
+    const auditCalls = apiMock.auditEvents.mock.calls.length;
+    await user.click(screen.getByRole("button", { name: "Refresh recovery proof" }));
+    await waitFor(() => {
+      expect(apiMock.transitPosture.mock.calls.length).toBeGreaterThan(postureCalls);
+      expect(apiMock.transitKeyVersions.mock.calls.length).toBeGreaterThan(versionCalls);
+      expect(apiMock.auditEvents.mock.calls.length).toBeGreaterThan(auditCalls);
+    });
+    expect(apiMock.signTransit).toHaveBeenCalledTimes(1);
   });
 
   it("issues PKI secrets, tests machine login, and creates/redeems one-time shares once", async () => {

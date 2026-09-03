@@ -1886,6 +1886,72 @@ export const messages = {
   "secrets.transit.rewrapFailed": { defaultMessage: "Could not rewrap ciphertext", description: "Transit rewrap fallback error." },
   "secrets.transit.hmacFailed": { defaultMessage: "Could not compute HMAC", description: "Transit HMAC fallback error." },
   "secrets.transit.signFailed": { defaultMessage: "Could not sign message", description: "Transit sign fallback error." },
+  "secrets.transit.verifyFailed": { defaultMessage: "Could not verify the signature", description: "Transit verify fallback error." },
+  "secrets.transit.recoveryHeading": { defaultMessage: "Recovery and runtime", description: "Transit recovery and KMIP posture heading." },
+  "secrets.transit.recoveryDescription": {
+    defaultMessage: "The server reports whether key versions survive a restart and whether the tenant-bound KMIP listener is actually running.",
+    description: "ELI5 explanation of the server-owned Transit recovery posture.",
+  },
+  "secrets.transit.refreshProof": { defaultMessage: "Refresh proof", description: "Refresh Transit runtime evidence." },
+  "secrets.transit.postureUnavailable": { defaultMessage: "Recovery status is unavailable", description: "Transit posture read failure heading." },
+  "secrets.transit.loadingPosture": { defaultMessage: "Checking sealed restore and KMIP status…", description: "Transit posture loading state." },
+  "secrets.transit.restoreReady": { defaultMessage: "Sealed restore ready", description: "Transit sealed-keyring recovery success." },
+  "secrets.transit.restoreBlocked": { defaultMessage: "Restart recovery is not protected", description: "Transit persistence-disabled warning." },
+  "secrets.transit.kmipListening": { defaultMessage: "KMIP listening", description: "KMIP listener-ready state." },
+  "secrets.transit.kmipNotConfigured": { defaultMessage: "KMIP not configured", description: "KMIP disabled or unavailable state." },
+  "secrets.transit.failedRecovery": {
+    defaultMessage: "If an operation fails or its response is uncertain",
+    description: "Transit failed-operation recovery disclosure.",
+  },
+  "secrets.transit.proofHeading": { defaultMessage: "Version and audit proof", description: "Transit version and audit evidence card heading." },
+  "secrets.transit.proofDescription": {
+    defaultMessage: "Confirm which versions remain usable and read the latest Transit-only immutable receipts without exposing key material.",
+    description: "Transit verification evidence explanation.",
+  },
+  "secrets.transit.historyKey": { defaultMessage: "Key history", description: "Transit key-version history selector." },
+  "secrets.transit.historyDescription": {
+    defaultMessage: "Every retained version is listed; only the current version is used for new operations.",
+    description: "Transit version history behavior.",
+  },
+  "secrets.transit.loadingVersions": { defaultMessage: "Reading complete version history…", description: "Transit key versions loading state." },
+  "secrets.transit.versionHistory": { defaultMessage: "Transit key version history", description: "Accessible label for the Transit version list." },
+  "secrets.transit.currentVersion": { defaultMessage: "Version {version} (current)", description: "Current Transit key version label." },
+  "secrets.transit.retainedVersion": { defaultMessage: "Version {version} (retained)", description: "Older retained Transit key version label." },
+  "secrets.transit.noVersionHistory": {
+    defaultMessage: "Create or select a key to inspect its version history.",
+    description: "Empty Transit version history state.",
+  },
+  "secrets.transit.auditHeading": { defaultMessage: "Recent Transit receipts", description: "Filtered Transit audit list heading." },
+  "secrets.transit.openAudit": { defaultMessage: "Open full filtered audit", description: "Link to the Transit-filtered audit page." },
+  "secrets.transit.auditPermission": {
+    defaultMessage: "Ask for audit:read to inspect immutable Transit receipts.",
+    description: "Transit audit permission guidance.",
+  },
+  "secrets.transit.loadingAudit": { defaultMessage: "Reading Transit-only audit receipts…", description: "Transit audit loading state." },
+  "secrets.transit.noAudit": { defaultMessage: "No Transit receipts have been recorded for this tenant yet.", description: "Empty Transit audit state." },
+  "secrets.transit.verifyHeading": { defaultMessage: "Verify a signature", description: "Transit signature verification heading." },
+  "secrets.transit.verifyDescription": {
+    defaultMessage:
+      "Sign fills these public values automatically. You can also paste a signature and public key from another Transit response; verification never needs private key material.",
+    description: "Transit signature verification custody explanation.",
+  },
+  "secrets.transit.signature": { defaultMessage: "Signature", description: "Transit signature input label." },
+  "secrets.transit.signaturePlaceholder": { defaultMessage: "Base64 signature", description: "Transit signature input placeholder." },
+  "secrets.transit.publicKey": { defaultMessage: "Public key (DER, base64)", description: "Transit public verification key input label." },
+  "secrets.transit.publicKeyDescription": {
+    defaultMessage: "Public verification material, not the private signing key.",
+    description: "Transit public key safety explanation.",
+  },
+  "secrets.transit.publicKeyPlaceholder": { defaultMessage: "Base64 public DER", description: "Transit public key input placeholder." },
+  "secrets.transit.verifySignature": { defaultMessage: "Verify signature", description: "Transit signature verification action." },
+  "secrets.transit.validSignature": { defaultMessage: "Valid signature", description: "Transit signature verification success." },
+  "secrets.transit.invalidSignature": { defaultMessage: "Invalid signature", description: "Transit signature verification mismatch." },
+  "secrets.transit.operationRecovery": {
+    defaultMessage:
+      "Keep the original inputs. Refresh server status, version history, and audit evidence before retrying the unchanged operation; never create a replacement key to work around an uncertain response. API and CLI callers must reuse their original Idempotency-Key.",
+    description: "Inline Transit failed-operation recovery guidance.",
+  },
+  "secrets.transit.refreshRecovery": { defaultMessage: "Refresh recovery proof", description: "Refresh Transit recovery evidence after an operation failure." },
   "secrets.access.machineAdministration": {
     defaultMessage: "Machine login administration",
     description: "Closed disclosure summary for advanced machine-login methods and issued sessions.",
@@ -23458,10 +23524,6 @@ export const messages = {
   },
   "source.sign.message.516e35c2fc": {
     defaultMessage: "Sign message",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
-  "source.signature.f1a73e2204": {
-    defaultMessage: "Signature",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
   "source.signature.receipt.8d8dcf3028": {

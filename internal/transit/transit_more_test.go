@@ -109,3 +109,38 @@ func allZero(b []byte) bool {
 	}
 	return true
 }
+
+func TestListKeyVersionsReturnsCompleteMetadataOnlyHistory(t *testing.T) {
+	ctx := context.Background()
+	svc := NewService(nil)
+	t.Cleanup(svc.Destroy)
+	if _, err := svc.CreateKey(ctx, "tenant-a", "payments", KindAEAD); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if _, err := svc.Rotate(ctx, "tenant-a", "payments"); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	kind, versions, err := svc.ListKeyVersions(ctx, "tenant-a", "payments")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kind != KindAEAD {
+		t.Fatalf("kind = %q, want %q", kind, KindAEAD)
+	}
+	if len(versions) != 3 {
+		t.Fatalf("versions = %+v, want the complete three-version history", versions)
+	}
+	for i, got := range versions {
+		wantVersion := i + 1
+		if got.Version != wantVersion || got.Current != (wantVersion == 3) {
+			t.Fatalf("versions[%d] = %+v, want version=%d current=%v", i, got, wantVersion, wantVersion == 3)
+		}
+	}
+
+	if _, _, err := svc.ListKeyVersions(ctx, "tenant-b", "payments"); err == nil {
+		t.Fatal("a different tenant read tenant-a's key-version history")
+	}
+}

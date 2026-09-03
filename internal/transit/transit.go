@@ -80,6 +80,14 @@ type KeyInfo struct {
 	Version int
 }
 
+// KeyVersionInfo is non-secret lifecycle metadata for one retained version.
+// Current marks the version new operations use; old versions remain available
+// so ciphertext created before a rotation can still be decrypted.
+type KeyVersionInfo struct {
+	Version int
+	Current bool
+}
+
 type namedKey struct {
 	kind   Kind
 	aead   [][]byte               // version (1-based) -> 32-byte key
@@ -146,6 +154,17 @@ func (s *Service) ListKeys(_ context.Context, tenantID string) ([]KeyInfo, error
 		return []KeyInfo{}, nil
 	}
 	return k.ListKeys(), nil
+}
+
+// ListKeyVersions returns the complete metadata-only history for one tenant key.
+func (s *Service) ListKeyVersions(_ context.Context, tenantID, name string) (Kind, []KeyVersionInfo, error) {
+	s.mu.Lock()
+	k := s.rings[tenantID]
+	s.mu.Unlock()
+	if k == nil {
+		return "", nil, fmt.Errorf("transit: unknown key %q", name)
+	}
+	return k.ListKeyVersions(name)
 }
 
 // Rotate adds a new version to a tenant-scoped key.
@@ -317,6 +336,22 @@ func (k *Keyring) ListKeys() []KeyInfo {
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Name < items[j].Name })
 	return items
+}
+
+// ListKeyVersions returns dense 1-based version metadata without copying or
+// exposing any held key bytes.
+func (k *Keyring) ListKeyVersions(name string) (Kind, []KeyVersionInfo, error) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	nk, ok := k.keys[name]
+	if !ok {
+		return "", nil, fmt.Errorf("transit: unknown key %q", name)
+	}
+	versions := make([]KeyVersionInfo, 0, nk.latest)
+	for version := 1; version <= nk.latest; version++ {
+		versions = append(versions, KeyVersionInfo{Version: version, Current: version == nk.latest})
+	}
+	return nk.kind, versions, nil
 }
 
 // Rotate adds a new version to a key and returns the new version number.

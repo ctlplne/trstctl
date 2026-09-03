@@ -112,6 +112,7 @@ type API struct {
 	managedKeys                ManagedKeyService // served BYOK/HSM key lifecycle (CRYPTO-005); nil = not enabled
 	managedKeyCustody          ManagedKeyCustodyConfiguration
 	transit                    TransitService // served transit/EaaS key operations (KMS-01); nil = not enabled
+	transitPosture             TransitPostureProvider
 	vaultCompat                *vaultCompatState
 	protocolProfile            ProtocolProfileControl
 	cmpQualificationPosture    CMPQualificationPosture
@@ -231,6 +232,7 @@ type config struct {
 	managedKeys                 ManagedKeyService
 	managedKeyCustody           ManagedKeyCustodyConfiguration
 	transit                     TransitService
+	transitPosture              TransitPostureProvider
 	protocolProfile             ProtocolProfileControl
 	cmpQualificationPosture     CMPQualificationPosture
 	tsaQualificationPosture     TSAQualificationPosture
@@ -531,6 +533,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		managedKeys:                 cfg.managedKeys,
 		managedKeyCustody:           cfg.managedKeyCustody,
 		transit:                     cfg.transit,
+		transitPosture:              cfg.transitPosture,
 		vaultCompat:                 newVaultCompatState(cfg.eventLog),
 		protocolProfile:             cfg.protocolProfile,
 		cmpQualificationPosture:     cfg.cmpQualificationPosture,
@@ -1431,6 +1434,8 @@ func (a *API) routes() []route {
 		// registration, DLL/plugin engines, or a policy controller that feeds provider
 		// behavior at runtime.
 		{method: "GET", path: "/api/v1/transit/keys", opID: "listTransitKeys", summary: "List tenant-scoped Transit key metadata", handler: a.listTransitKeys, resSchema: "TransitKeyList", successCode: "200", perm: authz.KeysRead},
+		{method: "GET", path: "/api/v1/transit/keys/{name}/versions", opID: "listTransitKeyVersions", summary: "List the complete metadata-only version history for one tenant Transit key", handler: a.listTransitKeyVersions, pathParams: []param{pathString("name", "Transit key name")}, resSchema: "TransitKeyVersionList", successCode: "200", perm: authz.KeysRead},
+		{method: "GET", path: "/api/v1/transit/status", opID: "getTransitPosture", summary: "Read effect-free Transit recovery and KMIP runtime posture", handler: a.getTransitPosture, resSchema: "TransitPosture", successCode: "200", perm: authz.KeysRead},
 		{method: "POST", path: "/api/v1/transit/keys", opID: "createTransitKey", summary: "Create a tenant-scoped transit key", handler: a.createTransitKey, reqSchema: "TransitKeyRequest", resSchema: "TransitKey", successCode: "201", mutation: true, perm: authz.KeysWrite},
 		{method: "POST", path: "/api/v1/transit/keys/rotate", opID: "rotateTransitKey", summary: "Rotate a tenant-scoped transit key", handler: a.rotateTransitKey, reqSchema: "TransitRotateRequest", resSchema: "TransitKey", successCode: "200", mutation: true, perm: authz.KeysWrite},
 		{method: "POST", path: "/api/v1/transit/encrypt", opID: "encryptTransit", summary: "Encrypt plaintext with a transit key", handler: a.encryptTransit, reqSchema: "TransitEncryptRequest", resSchema: "TransitCiphertext", successCode: "200", mutation: true, perm: authz.KeysWrite},

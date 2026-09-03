@@ -447,7 +447,9 @@ import type {
   TransitKey,
   TransitKeyList,
   TransitKeyRequest,
+  TransitKeyVersionList,
   TransitPlaintext,
+  TransitPosture,
   TransitRewrapRequest,
   TransitRotateRequest,
   TransitSignature,
@@ -1067,7 +1069,9 @@ export type {
   TransitKey,
   TransitKeyList,
   TransitKeyRequest,
+  TransitKeyVersionList,
   TransitPlaintext,
+  TransitPosture,
   TransitRewrapRequest,
   TransitRotateRequest,
   TransitSignature,
@@ -2393,6 +2397,8 @@ export interface Api {
   createShare(input: ShareRequest, idempotencyKey?: string): Promise<ShareToken>;
   redeemShare(input: ShareRedeemRequest): Promise<ShareValue>;
   transitKeys(): Promise<TransitKeyList>;
+  transitKeyVersions(name: string): Promise<TransitKeyVersionList>;
+  transitPosture(): Promise<TransitPosture>;
   createTransitKey(input: TransitKeyRequest): Promise<TransitKey>;
   rotateTransitKey(input: TransitRotateRequest): Promise<TransitKey>;
   encryptTransit(input: TransitEncryptRequest): Promise<TransitCiphertext>;
@@ -2979,6 +2985,8 @@ const liveApi: Api = {
   createShare: (input, idempotencyKey) => mutate<ShareToken>("POST", "/api/v1/secrets/shares", input, idempotencyKey),
   redeemShare: (input) => mutate<ShareValue>("POST", "/api/v1/secrets/shares/redeem", input),
   transitKeys: () => req<TransitKeyList>("/api/v1/transit/keys"),
+  transitKeyVersions: (name) => req<TransitKeyVersionList>(`/api/v1/transit/keys/${encodeURIComponent(name)}/versions`),
+  transitPosture: () => req<TransitPosture>("/api/v1/transit/status"),
   createTransitKey: (input) => mutate<TransitKey>("POST", "/api/v1/transit/keys", input),
   rotateTransitKey: (input) => mutate<TransitKey>("POST", "/api/v1/transit/keys/rotate", input),
   encryptTransit: (input) => mutate<TransitCiphertext>("POST", "/api/v1/transit/encrypt", input),

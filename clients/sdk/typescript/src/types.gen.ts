@@ -6082,6 +6082,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/transit/keys/{name}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the complete metadata-only version history for one tenant Transit key */
+        get: operations["listTransitKeyVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/transit/rewrap": {
         parameters: {
             query?: never;
@@ -6110,6 +6127,23 @@ export interface paths {
         put?: never;
         /** Sign a message with a transit signing key */
         post: operations["signTransit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/transit/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read effect-free Transit recovery and KMIP runtime posture */
+        get: operations["getTransitPosture"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -10239,6 +10273,20 @@ export interface components {
             name: string;
             public_key?: string;
         };
+        KMIPPosture: {
+            address?: string;
+            configured: boolean;
+            detail: string;
+            listening: boolean;
+            objects: string[];
+            operations: string[];
+            profile: string;
+            recovery?: string;
+            served: boolean;
+            state: string;
+            tenant_bound: boolean;
+            transport: string;
+        };
         KubernetesCSRSupport: {
             api_group: string;
             api_version: string;
@@ -14015,9 +14063,27 @@ export interface components {
             kind: string;
             name: string;
         };
+        TransitKeyVersion: {
+            current: boolean;
+            version: number;
+        };
+        TransitKeyVersionList: {
+            kind: string;
+            name: string;
+            versions: components["schemas"]["TransitKeyVersion"][];
+        };
         TransitPlaintext: {
             /** Format: byte */
             plaintext: string;
+        };
+        TransitPosture: {
+            /** Format: date-time */
+            checked_at: string;
+            effect_free: boolean;
+            kmip: components["schemas"]["KMIPPosture"];
+            proof: string[];
+            recovery_steps: string[];
+            transit: components["schemas"]["TransitServicePosture"];
         };
         TransitRewrapRequest: {
             /** Format: byte */
@@ -14027,6 +14093,14 @@ export interface components {
         };
         TransitRotateRequest: {
             name: string;
+        };
+        TransitServicePosture: {
+            detail: string;
+            persistence_configured: boolean;
+            recovery?: string;
+            recovery_ready: boolean;
+            restore_state: string;
+            served: boolean;
         };
         TransitSignRequest: {
             key: string;
@@ -31790,6 +31864,47 @@ export interface operations {
             };
         };
     };
+    listTransitKeyVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Transit key name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitKeyVersionList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     rewrapTransit: {
         parameters: {
             query?: never;
@@ -31858,6 +31973,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TransitSignature"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getTransitPosture: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitPosture"];
                 };
             };
             /** @description client error */

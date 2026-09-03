@@ -269,8 +269,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// F39 adds the read-only, effect-free secret-scan preview command.
 	// F65 adds the read-only configured-provider catalog and effect-free lease
 	// preview commands; issue, read, renew, and revoke were already catalogued.
-	if len(out) != 435 {
-		t.Fatalf("CLI commands = %d, want 435", len(out))
+	// F66 adds read-only complete key-version history plus effect-free sealed
+	// restore and KMIP runtime posture, raising the catalog to 437.
+	if len(out) != 437 {
+		t.Fatalf("CLI commands = %d, want 437", len(out))
 	}
 	return out
 }

@@ -5280,6 +5280,25 @@ IssuerRequest = TypedDict(
     total=False,
 )
 
+KMIPPosture = TypedDict(
+    'KMIPPosture',
+    {
+        'address': str,
+        'configured': bool,
+        'detail': str,
+        'listening': bool,
+        'objects': list[str],
+        'operations': list[str],
+        'profile': str,
+        'recovery': str,
+        'served': bool,
+        'state': str,
+        'tenant_bound': bool,
+        'transport': str,
+    },
+    total=False,
+)
+
 KubernetesCSRSupport = TypedDict(
     'KubernetesCSRSupport',
     {
@@ -10212,10 +10231,42 @@ TransitKeyRequest = TypedDict(
     total=False,
 )
 
+TransitKeyVersion = TypedDict(
+    'TransitKeyVersion',
+    {
+        'current': bool,
+        'version': int,
+    },
+    total=False,
+)
+
+TransitKeyVersionList = TypedDict(
+    'TransitKeyVersionList',
+    {
+        'kind': str,
+        'name': str,
+        'versions': list[dict[str, Any]],
+    },
+    total=False,
+)
+
 TransitPlaintext = TypedDict(
     'TransitPlaintext',
     {
         'plaintext': str,
+    },
+    total=False,
+)
+
+TransitPosture = TypedDict(
+    'TransitPosture',
+    {
+        'checked_at': str,
+        'effect_free': bool,
+        'kmip': dict[str, Any],
+        'proof': list[str],
+        'recovery_steps': list[str],
+        'transit': dict[str, Any],
     },
     total=False,
 )
@@ -10234,6 +10285,19 @@ TransitRotateRequest = TypedDict(
     'TransitRotateRequest',
     {
         'name': str,
+    },
+    total=False,
+)
+
+TransitServicePosture = TypedDict(
+    'TransitServicePosture',
+    {
+        'detail': str,
+        'persistence_configured': bool,
+        'recovery': str,
+        'recovery_ready': bool,
+        'restore_state': str,
+        'served': bool,
     },
     total=False,
 )

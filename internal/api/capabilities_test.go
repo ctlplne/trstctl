@@ -242,8 +242,14 @@ func TestCapabilitiesViewIsAuthenticatedSanitizedAndAuthorizationAware(t *testin
 		t.Fatalf("F68 syncSecret unavailable=%+v, want dependency_not_configured", action)
 	}
 	f66 := findCapabilityViewItem(t, operator, "F66")
-	if f66.RuntimeState != "unavailable" {
-		t.Fatalf("operator F66 runtime=%q, want unavailable without Transit service", f66.RuntimeState)
+	if f66.RuntimeState != "partially_available" || !containsCapabilityString(f66.Actions.Allowed, "getTransitPosture") {
+		t.Fatalf("operator F66 runtime=%q allowed=%v, want independent recovery/KMIP posture", f66.RuntimeState, f66.Actions.Allowed)
+	}
+	for _, operationID := range []string{"listTransitKeys", "listTransitKeyVersions", "createTransitKey", "rotateTransitKey", "encryptTransit", "decryptTransit", "rewrapTransit", "hmacTransit", "signTransit", "verifyTransit"} {
+		action := findUnavailableCapabilityAction(t, f66, operationID)
+		if action.Code != "dependency_not_configured" || !strings.Contains(action.Detail, "Transit cryptography service") {
+			t.Fatalf("F66 %s unavailable=%+v, want exact Transit dependency reason", operationID, action)
+		}
 	}
 	f33 := findCapabilityViewItem(t, operator, "F33")
 	for _, operationID := range []string{"listApprovalRequests", "approveApprovalRequest", "denyApprovalRequest"} {

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Eye, KeyRound, Loader2, RotateCw } from "lucide-react";
+import { Eye, KeyRound, Loader2, RefreshCw, RotateCw } from "lucide-react";
 import { useForm } from "react-hook-form";
+import { Link } from "react-router-dom";
 import { z } from "zod";
 import { useCan } from "@/components/rbac";
 import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
@@ -18,6 +20,16 @@ import { useApiQuery, useQueryClient } from "@/lib/query";
 import { RevealPanel, Snippet, decodeTransitBytes, encodeTransitBytes } from "./SecretsPageParts";
 
 const transitKinds = ["aead", "hmac", "sign"] as const;
+const transitAuditTypes = [
+  "transit.key.created",
+  "transit.key.rotated",
+  "transit.encrypt",
+  "transit.decrypt",
+  "transit.rewrap",
+  "transit.hmac",
+  "transit.sign",
+  "transit.verify",
+].join(",");
 const emptyTransitKeys: TransitKey[] = [];
 type TransitKind = (typeof transitKinds)[number];
 type CreateKeyValues = { name: string; kind: TransitKind };
@@ -44,8 +56,14 @@ export function TransitOperations({ nativeStoreUnavailable }: { nativeStoreUnava
   const { t } = useTranslation();
   const canRead = useCan("keys:read");
   const canWrite = useCan("keys:write");
+  const canReadAudit = useCan("audit:read");
   const queryClient = useQueryClient();
   const keyQuery = useApiQuery(["transit-keys"], loadTransitKeys, { enabled: canRead });
+  const postureQuery = useApiQuery(["transit-posture"], () => api.transitPosture(), { enabled: canRead, live: { intervalMs: 15_000 } });
+  const auditQuery = useApiQuery(["transit-audit"], () => api.auditEvents({ type: transitAuditTypes, limit: 8 }), {
+    enabled: canReadAudit,
+    live: { intervalMs: 15_000 },
+  });
   const keys = keyQuery.data?.items ?? emptyTransitKeys;
   const aeadKeys = useMemo(() => keys.filter((key) => key.kind === "aead"), [keys]);
   const hmacKeys = useMemo(() => keys.filter((key) => key.kind === "hmac"), [keys]);
@@ -53,6 +71,7 @@ export function TransitOperations({ nativeStoreUnavailable }: { nativeStoreUnava
   const [aeadKey, setAEADKey] = useState("");
   const [hmacKey, setHMACKey] = useState("");
   const [signingKey, setSigningKey] = useState("");
+  const [historyKey, setHistoryKey] = useState("");
   const [keyBusy, setKeyBusy] = useState<"create" | string | null>(null);
   const [keyError, setKeyError] = useState<string | null>(null);
   const [keyNotice, setKeyNotice] = useState<string | null>(null);
@@ -79,7 +98,10 @@ export function TransitOperations({ nativeStoreUnavailable }: { nativeStoreUnava
     if (!aeadKeys.some((key) => key.name === aeadKey)) setAEADKey(aeadKeys[0]?.name ?? "");
     if (!hmacKeys.some((key) => key.name === hmacKey)) setHMACKey(hmacKeys[0]?.name ?? "");
     if (!signingKeys.some((key) => key.name === signingKey)) setSigningKey(signingKeys[0]?.name ?? "");
-  }, [aeadKey, aeadKeys, hmacKey, hmacKeys, signingKey, signingKeys]);
+    if (!keys.some((key) => key.name === historyKey)) setHistoryKey(keys[0]?.name ?? "");
+  }, [aeadKey, aeadKeys, historyKey, hmacKey, hmacKeys, keys, signingKey, signingKeys]);
+
+  const versionQuery = useApiQuery(["transit-key-versions", historyKey], () => api.transitKeyVersions(historyKey), { enabled: canRead && Boolean(historyKey) });
 
   const createKey = handleSubmit(async (values) => {
     setKeyError(null);
@@ -91,6 +113,8 @@ export function TransitOperations({ nativeStoreUnavailable }: { nativeStoreUnava
       if (created.kind === "aead") setAEADKey(created.name);
       if (created.kind === "hmac") setHMACKey(created.name);
       if (created.kind === "sign") setSigningKey(created.name);
+      setHistoryKey(created.name);
+      void queryClient.invalidateQueries({ queryKey: ["transit-audit"] });
       reset({ name: "", kind: values.kind });
       setKeyNotice(t("secrets.transit.createdNotice", { name: created.name, version: created.version }));
     } catch (error) {
@@ -107,6 +131,9 @@ export function TransitOperations({ nativeStoreUnavailable }: { nativeStoreUnava
     try {
       const rotated = await api.rotateTransitKey({ name });
       queryClient.setQueryData<TransitKeyList>(["transit-keys"], (current) => ({ items: replaceKey(current?.items ?? [], rotated) }));
+      setHistoryKey(rotated.name);
+      void queryClient.invalidateQueries({ queryKey: ["transit-key-versions", rotated.name] });
+      void queryClient.invalidateQueries({ queryKey: ["transit-audit"] });
       setKeyNotice(t("secrets.transit.rotatedNotice", { name: rotated.name, version: rotated.version }));
     } catch (error) {
       setKeyError(apiProblemMessage(error, t("secrets.transit.rotateFailed")));
@@ -119,12 +146,15 @@ export function TransitOperations({ nativeStoreUnavailable }: { nativeStoreUnava
   const [transitAAD, setTransitAAD] = useState("");
   const [transitCiphertextInput, setTransitCiphertextInput] = useState("");
   const [transitMessage, setTransitMessage] = useState("");
-  const [transitBusy, setTransitBusy] = useState<"encrypt" | "decrypt" | "hmac" | "rewrap" | "sign" | null>(null);
+  const [transitBusy, setTransitBusy] = useState<"encrypt" | "decrypt" | "hmac" | "rewrap" | "sign" | "verify" | null>(null);
   const [transitError, setTransitError] = useState<string | null>(null);
   const [transitCiphertext, setTransitCiphertext] = useState<TransitCiphertext | null>(null);
   const [transitPlaintextResult, setTransitPlaintextResult] = useState<string | null>(null);
   const [transitHMACResult, setTransitHMACResult] = useState<TransitHMAC | null>(null);
   const [transitSignature, setTransitSignature] = useState<TransitSignature | null>(null);
+  const [signatureInput, setSignatureInput] = useState("");
+  const [publicDERInput, setPublicDERInput] = useState("");
+  const [signatureValid, setSignatureValid] = useState<boolean | null>(null);
 
   async function encryptTransit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -209,6 +239,33 @@ export function TransitOperations({ nativeStoreUnavailable }: { nativeStoreUnava
     }
   }
 
+  useEffect(() => {
+    if (!transitSignature) return;
+    setSignatureInput(transitSignature.signature);
+    setPublicDERInput(transitSignature.public_der);
+    setSignatureValid(null);
+    void queryClient.invalidateQueries({ queryKey: ["transit-audit"] });
+  }, [queryClient, transitSignature]);
+
+  async function verifyTransit() {
+    setTransitError(null);
+    setSignatureValid(null);
+    setTransitBusy("verify");
+    try {
+      const result = await api.verifyTransit({
+        message: encodeTransitBytes(transitMessage),
+        signature: signatureInput.trim(),
+        public_der: publicDERInput.trim(),
+      });
+      setSignatureValid(result.valid);
+      void queryClient.invalidateQueries({ queryKey: ["transit-audit"] });
+    } catch (error) {
+      setTransitError(apiProblemMessage(error, t("secrets.transit.verifyFailed")));
+    } finally {
+      setTransitBusy(null);
+    }
+  }
+
   const selectedAEAD = aeadKeys.find((key) => key.name === aeadKey) ?? null;
   const selectedHMAC = hmacKeys.find((key) => key.name === hmacKey) ?? null;
   const selectedSigning = signingKeys.find((key) => key.name === signingKey) ?? null;
@@ -226,6 +283,169 @@ export function TransitOperations({ nativeStoreUnavailable }: { nativeStoreUnava
           {t("secrets.transit.independentFromStore")}
         </p>
       ) : null}
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardTitle>{t("secrets.transit.recoveryHeading")}</CardTitle>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  postureQuery.refetch();
+                  keyQuery.refetch();
+                }}
+                disabled={!canRead || postureQuery.fetching}
+              >
+                <RefreshCw className={`h-4 w-4 ${postureQuery.fetching ? "animate-spin" : ""}`} aria-hidden="true" />
+                {t("secrets.transit.refreshProof")}
+              </Button>
+            </div>
+            <p className="text-sm text-muted-foreground">{t("secrets.transit.recoveryDescription")}</p>
+          </CardHeader>
+          <CardContent className="grid gap-4 text-sm">
+            {postureQuery.error ? (
+              <ErrorState title={t("secrets.transit.postureUnavailable")}>{postureQuery.error}</ErrorState>
+            ) : postureQuery.loading || !postureQuery.data ? (
+              <p role="status" className="text-muted-foreground">
+                {t("secrets.transit.loadingPosture")}
+              </p>
+            ) : (
+              <>
+                <div className="grid gap-1 border-s-2 border-border ps-3">
+                  <StatusBadge
+                    value={postureQuery.data.transit.restore_state}
+                    label={postureQuery.data.transit.recovery_ready ? t("secrets.transit.restoreReady") : t("secrets.transit.restoreBlocked")}
+                    tone={postureQuery.data.transit.recovery_ready ? "success" : "warning"}
+                  />
+                  <p className="text-muted-foreground">{postureQuery.data.transit.detail}</p>
+                  {postureQuery.data.transit.recovery ? <p className="text-status-warning">{postureQuery.data.transit.recovery}</p> : null}
+                </div>
+                <div className="grid gap-1 border-s-2 border-border ps-3">
+                  <StatusBadge
+                    value={postureQuery.data.kmip.state}
+                    label={postureQuery.data.kmip.state === "listening" ? t("secrets.transit.kmipListening") : t("secrets.transit.kmipNotConfigured")}
+                    tone={postureQuery.data.kmip.state === "listening" ? "success" : "neutral"}
+                  />
+                  <p className="font-medium">{postureQuery.data.kmip.profile}</p>
+                  <p className="text-muted-foreground">{postureQuery.data.kmip.detail}</p>
+                  <p className="flex flex-wrap gap-x-1 text-caption text-muted-foreground">
+                    <span>{postureQuery.data.kmip.transport}</span>
+                    {postureQuery.data.kmip.operations.map((operation) => (
+                      <span key={operation}>
+                        <span aria-hidden="true">{String.fromCharCode(183)}</span> {operation}
+                      </span>
+                    ))}
+                    {postureQuery.data.kmip.address ? (
+                      <span>
+                        <span aria-hidden="true">{String.fromCharCode(183)}</span> {postureQuery.data.kmip.address}
+                      </span>
+                    ) : null}
+                  </p>
+                  {postureQuery.data.kmip.recovery ? <p className="text-status-warning">{postureQuery.data.kmip.recovery}</p> : null}
+                </div>
+                <details className="border-t border-border pt-3">
+                  <summary className="cursor-pointer font-medium">{t("secrets.transit.failedRecovery")}</summary>
+                  <ol className="mt-2 grid list-decimal gap-2 ps-5 text-muted-foreground">
+                    {postureQuery.data.recovery_steps.map((step) => (
+                      <li key={step}>{step}</li>
+                    ))}
+                  </ol>
+                </details>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("secrets.transit.proofHeading")}</CardTitle>
+            <p className="text-sm text-muted-foreground">{t("secrets.transit.proofDescription")}</p>
+          </CardHeader>
+          <CardContent className="grid gap-4 text-sm">
+            <div className="grid gap-2">
+              <Field label={t("secrets.transit.historyKey")} description={t("secrets.transit.historyDescription")}>
+                {(control) => (
+                  <Select
+                    {...control}
+                    value={historyKey}
+                    onChange={(event) => setHistoryKey(event.target.value)}
+                    disabled={!canRead || keyQuery.loading || Boolean(keyQuery.error)}
+                  >
+                    <option value="">{t("secrets.transit.selectKey")}</option>
+                    {keys.map((key) => (
+                      <option key={key.name} value={key.name}>
+                        {key.name}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+              {versionQuery.error ? (
+                <p role="alert" className="text-status-warning">
+                  {versionQuery.error}
+                </p>
+              ) : versionQuery.loading && historyKey ? (
+                <p role="status" className="text-muted-foreground">
+                  {t("secrets.transit.loadingVersions")}
+                </p>
+              ) : versionQuery.data ? (
+                <ul className="flex flex-wrap gap-x-4 gap-y-2" aria-label={t("secrets.transit.versionHistory")}>
+                  {versionQuery.data.versions.map((version) => (
+                    <li key={version.version}>
+                      <StatusBadge
+                        value={version.current ? "current" : "retained"}
+                        label={
+                          version.current
+                            ? t("secrets.transit.currentVersion", { version: version.version })
+                            : t("secrets.transit.retainedVersion", { version: version.version })
+                        }
+                        tone={version.current ? "success" : "neutral"}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-muted-foreground">{t("secrets.transit.noVersionHistory")}</p>
+              )}
+            </div>
+            <div className="grid gap-2 border-t border-border pt-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="font-semibold">{t("secrets.transit.auditHeading")}</h3>
+                <Link className="text-caption font-medium text-brand-accent hover:underline" to={`/audit?type=${encodeURIComponent(transitAuditTypes)}`}>
+                  {t("secrets.transit.openAudit")}
+                </Link>
+              </div>
+              {!canReadAudit ? (
+                <p className="text-muted-foreground">{t("secrets.transit.auditPermission")}</p>
+              ) : auditQuery.error ? (
+                <p role="alert" className="text-status-warning">
+                  {auditQuery.error}
+                </p>
+              ) : auditQuery.loading ? (
+                <p role="status" className="text-muted-foreground">
+                  {t("secrets.transit.loadingAudit")}
+                </p>
+              ) : auditQuery.data?.length ? (
+                <ul className="grid gap-2">
+                  {auditQuery.data.map((event) => (
+                    <li key={`${event.sequence}-${event.type}`} className="flex flex-wrap items-baseline justify-between gap-2 border-s-2 border-border ps-3">
+                      <span className="font-mono text-xs">{event.type}</span>
+                      <span className="text-caption text-muted-foreground">
+                        #{event.sequence} · {event.time}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-muted-foreground">{t("secrets.transit.noAudit")}</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       <Card>
         <CardHeader>
@@ -486,7 +706,10 @@ export function TransitOperations({ nativeStoreUnavailable }: { nativeStoreUnava
                   {...control}
                   className="min-h-20"
                   value={transitMessage}
-                  onChange={(event) => setTransitMessage(event.target.value)}
+                  onChange={(event) => {
+                    setTransitMessage(event.target.value);
+                    setSignatureValid(null);
+                  }}
                   placeholder={translateNow("source.message.bytes.to.mac.or.sign.1400a97072")}
                 />
               )}
@@ -512,13 +735,81 @@ export function TransitOperations({ nativeStoreUnavailable }: { nativeStoreUnava
               </Button>
             </div>
             {transitHMACResult ? <Snippet title={translateNow("source.hmac.32fd6f051c")} text={transitHMACResult.hmac} /> : null}
-            {transitSignature ? (
-              <Snippet title={translateNow("source.signature.f1a73e2204")} text={`${transitSignature.signature}\npublic_der: ${transitSignature.public_der}`} />
-            ) : null}
+            <div className="grid gap-3 border-t border-border pt-3">
+              <div>
+                <h3 className="font-semibold">{t("secrets.transit.verifyHeading")}</h3>
+                <p className="mt-1 text-caption text-muted-foreground">{t("secrets.transit.verifyDescription")}</p>
+              </div>
+              <Field label={t("secrets.transit.signature")}>
+                {(control) => (
+                  <Textarea
+                    {...control}
+                    className="min-h-16 font-mono text-xs"
+                    value={signatureInput}
+                    onChange={(event) => {
+                      setSignatureInput(event.target.value);
+                      setSignatureValid(null);
+                    }}
+                    placeholder={t("secrets.transit.signaturePlaceholder")}
+                  />
+                )}
+              </Field>
+              <Field label={t("secrets.transit.publicKey")} description={t("secrets.transit.publicKeyDescription")}>
+                {(control) => (
+                  <Textarea
+                    {...control}
+                    className="min-h-16 font-mono text-xs"
+                    value={publicDERInput}
+                    onChange={(event) => {
+                      setPublicDERInput(event.target.value);
+                      setSignatureValid(null);
+                    }}
+                    placeholder={t("secrets.transit.publicKeyPlaceholder")}
+                  />
+                )}
+              </Field>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void verifyTransit()}
+                  disabled={!canRead || transitBusy === "verify" || !transitMessage.trim() || !signatureInput.trim() || !publicDERInput.trim()}
+                >
+                  {transitBusy === "verify" ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <KeyRound className="h-4 w-4" aria-hidden="true" />
+                  )}
+                  {t("secrets.transit.verifySignature")}
+                </Button>
+                {signatureValid === true ? <StatusBadge value="valid" label={t("secrets.transit.validSignature")} tone="success" role="status" /> : null}
+                {signatureValid === false ? <StatusBadge value="invalid" label={t("secrets.transit.invalidSignature")} tone="warning" role="status" /> : null}
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
-      {transitError ? <ErrorState title={translateNow("source.transit.operation.failed.22502fa40b")}>{transitError}</ErrorState> : null}
+      {transitError ? (
+        <ErrorState title={translateNow("source.transit.operation.failed.22502fa40b")}>
+          <p>{transitError}</p>
+          <p className="mt-2">{t("secrets.transit.operationRecovery")}</p>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="mt-3"
+            onClick={() => {
+              postureQuery.refetch();
+              keyQuery.refetch();
+              versionQuery.refetch();
+              if (canReadAudit) auditQuery.refetch();
+            }}
+          >
+            <RefreshCw className="h-4 w-4" aria-hidden="true" />
+            {t("secrets.transit.refreshRecovery")}
+          </Button>
+        </ErrorState>
+      ) : null}
       {transitPlaintextResult ? (
         <RevealPanel
           title={translateNow("source.decrypted.plaintext.675dd9b983")}

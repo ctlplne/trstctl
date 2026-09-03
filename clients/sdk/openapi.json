@@ -15546,6 +15546,65 @@
         ],
         "type": "object"
       },
+      "KMIPPosture": {
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "listening": {
+            "type": "boolean"
+          },
+          "objects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "operations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "profile": {
+            "type": "string"
+          },
+          "recovery": {
+            "type": "string"
+          },
+          "served": {
+            "type": "boolean"
+          },
+          "state": {
+            "type": "string"
+          },
+          "tenant_bound": {
+            "type": "boolean"
+          },
+          "transport": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "configured",
+          "served",
+          "listening",
+          "tenant_bound",
+          "transport",
+          "profile",
+          "objects",
+          "operations",
+          "detail"
+        ],
+        "type": "object"
+      },
       "KubernetesCSRSupport": {
         "properties": {
           "api_group": {
@@ -30066,6 +30125,43 @@
         ],
         "type": "object"
       },
+      "TransitKeyVersion": {
+        "properties": {
+          "current": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "current"
+        ],
+        "type": "object"
+      },
+      "TransitKeyVersionList": {
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/TransitKeyVersion"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "versions"
+        ],
+        "type": "object"
+      },
       "TransitPlaintext": {
         "properties": {
           "plaintext": {
@@ -30075,6 +30171,44 @@
         },
         "required": [
           "plaintext"
+        ],
+        "type": "object"
+      },
+      "TransitPosture": {
+        "properties": {
+          "checked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "kmip": {
+            "$ref": "#/components/schemas/KMIPPosture"
+          },
+          "proof": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "transit": {
+            "$ref": "#/components/schemas/TransitServicePosture"
+          }
+        },
+        "required": [
+          "checked_at",
+          "effect_free",
+          "transit",
+          "kmip",
+          "recovery_steps",
+          "proof"
         ],
         "type": "object"
       },
@@ -30105,6 +30239,36 @@
         },
         "required": [
           "name"
+        ],
+        "type": "object"
+      },
+      "TransitServicePosture": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "persistence_configured": {
+            "type": "boolean"
+          },
+          "recovery": {
+            "type": "string"
+          },
+          "recovery_ready": {
+            "type": "boolean"
+          },
+          "restore_state": {
+            "type": "string"
+          },
+          "served": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "served",
+          "persistence_configured",
+          "restore_state",
+          "recovery_ready",
+          "detail"
         ],
         "type": "object"
       },
@@ -56419,6 +56583,64 @@
         "x-trstctl-permission": "keys:write"
       }
     },
+    "/api/v1/transit/keys/{name}/versions": {
+      "get": {
+        "operationId": "listTransitKeyVersions",
+        "parameters": [
+          {
+            "description": "Transit key name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitKeyVersionList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List the complete metadata-only version history for one tenant Transit key",
+        "x-trstctl-permission": "keys:read"
+      }
+    },
     "/api/v1/transit/rewrap": {
       "post": {
         "operationId": "rewrapTransit",
@@ -56553,6 +56775,53 @@
         ],
         "summary": "Sign a message with a transit signing key",
         "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/transit/status": {
+      "get": {
+        "operationId": "getTransitPosture",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransitPosture"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read effect-free Transit recovery and KMIP runtime posture",
+        "x-trstctl-permission": "keys:read"
       }
     },
     "/api/v1/transit/verify": {

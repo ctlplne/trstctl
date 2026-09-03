@@ -540,6 +540,8 @@ var coreCommandTable = []Command{
 	// shapes such as crypto.Signer / JCA / OpenSSL ENGINE without runtime provider
 	// registration or policy-fed crypto-provider behavior.
 	{Name: []string{"transit", "keys", "list"}, Method: "GET", Path: "/api/v1/transit/keys", Summary: "List tenant-scoped Transit key metadata"},
+	{Name: []string{"transit", "keys", "versions"}, Method: "GET", Path: "/api/v1/transit/keys/{name}/versions", Summary: "List the complete metadata-only history for a Transit key"},
+	{Name: []string{"transit", "status"}, Method: "GET", Path: "/api/v1/transit/status", Summary: "Read effect-free Transit restore and KMIP runtime posture"},
 	{Name: []string{"transit", "keys", "create"}, Method: "POST", Path: "/api/v1/transit/keys", Body: bodyFile, Summary: "Create a tenant-scoped transit key"},
 	{Name: []string{"transit", "keys", "rotate"}, Method: "POST", Path: "/api/v1/transit/keys/rotate", Body: bodyFile, Summary: "Rotate a tenant-scoped transit key"},
 	{Name: []string{"transit", "encrypt"}, Method: "POST", Path: "/api/v1/transit/encrypt", Body: bodyFile, Summary: "Encrypt plaintext with a transit key"},

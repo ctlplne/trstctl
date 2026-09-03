@@ -16287,6 +16287,8 @@
             "notes": "The earlier disclosure label was stale and its evidence overclaimed UI support for verify, versions, audit, and KMIP posture. g10 removed the unrelated native-secret-store dependency, then live proof exposed the missing compatible-key prerequisite. The extracted Transit workflow now owns safe metadata readback plus purpose-locked list/create/select/rotate before operation. The remaining partial debt is verification, full history, filtered audit, and KMIP posture. TRACE-011 still proves KMIP Create, Locate, Revoke, and Destroy over the served mTLS TTLV handler.",
             "api_surface": [
                 "listTransitKeys",
+                "listTransitKeyVersions",
+                "getTransitPosture",
                 "createTransitKey",
                 "rotateTransitKey",
                 "encryptTransit",
@@ -16299,6 +16301,8 @@
             "api_na": "",
             "cli_surface": [
                 "transit keys list",
+                "transit keys versions",
+                "transit status",
                 "transit keys create",
                 "transit keys rotate",
                 "transit encrypt",
@@ -16347,6 +16351,8 @@
                 "cli": {
                     "evidence": [
                         "CLI command: transit keys list",
+                        "CLI command: transit keys versions",
+                        "CLI command: transit status",
                         "CLI command: transit keys create",
                         "CLI command: transit keys rotate",
                         "CLI command: transit encrypt",
@@ -16365,6 +16371,8 @@
                 "api": {
                     "evidence": [
                         "OpenAPI operationId: listTransitKeys",
+                        "OpenAPI operationId: listTransitKeyVersions",
+                        "OpenAPI operationId: getTransitPosture",
                         "OpenAPI operationId: createTransitKey",
                         "OpenAPI operationId: rotateTransitKey",
                         "OpenAPI operationId: encryptTransit",
@@ -16529,7 +16537,11 @@
                         "status": "complete",
                         "evidence": [
                             "OpenAPI operationId: listTransitKeys",
-                            "CLI command: transit keys list"
+                            "OpenAPI operationId: listTransitKeyVersions",
+                            "OpenAPI operationId: getTransitPosture",
+                            "CLI command: transit keys list",
+                            "CLI command: transit keys versions",
+                            "CLI command: transit status"
                         ]
                     }
                 },

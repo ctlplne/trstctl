@@ -39,6 +39,14 @@ func TestKMIPServedThroughEditionFactory(t *testing.T) {
 	if !h.srv.KMIPServed() {
 		t.Fatal("KMIP listener was not mounted through the edition factory")
 	}
+	posture := h.srv.transitRuntimePosture(true, servedTestTenant, servedTestTenant)
+	if !posture.KMIPConfigured || !posture.KMIPServed || !posture.KMIPTenantBound || posture.KMIPListening || posture.KMIPAddress != runtime.addr {
+		t.Fatalf("KMIP startup posture = %+v, want configured tenant-bound runtime not yet listening", posture)
+	}
+	otherTenant := h.srv.transitRuntimePosture(true, servedTestTenant, "22222222-2222-4222-8222-222222222222")
+	if otherTenant.KMIPConfigured || otherTenant.KMIPServed || otherTenant.KMIPListening || otherTenant.KMIPTenantBound || otherTenant.KMIPAddress != "" {
+		t.Fatalf("KMIP posture leaked another tenant's runtime state: %+v", otherTenant)
+	}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen KMIP seam socket: %v", err)
@@ -48,5 +56,8 @@ func TestKMIPServedThroughEditionFactory(t *testing.T) {
 	}
 	if !runtime.served {
 		t.Fatal("ServeKMIP did not delegate to the edition runtime")
+	}
+	if h.srv.transitRuntimePosture(true, servedTestTenant, servedTestTenant).KMIPListening {
+		t.Fatal("completed KMIP runtime still reported a listening socket")
 	}
 }

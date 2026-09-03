@@ -3806,6 +3806,21 @@ export interface IssuerRequest {
   public_key?: string;
 }
 
+export interface KMIPPosture {
+  address?: string;
+  configured: boolean;
+  detail: string;
+  listening: boolean;
+  objects: string[];
+  operations: string[];
+  profile: string;
+  recovery?: string;
+  served: boolean;
+  state: string;
+  tenant_bound: boolean;
+  transport: string;
+}
+
 export interface KubernetesCSRSupport {
   api_group: string;
   api_version: string;
@@ -7402,8 +7417,28 @@ export interface TransitKeyRequest {
   name: string;
 }
 
+export interface TransitKeyVersion {
+  current: boolean;
+  version: number;
+}
+
+export interface TransitKeyVersionList {
+  kind: string;
+  name: string;
+  versions: TransitKeyVersion[];
+}
+
 export interface TransitPlaintext {
   plaintext: string;
+}
+
+export interface TransitPosture {
+  checked_at: string;
+  effect_free: boolean;
+  kmip: KMIPPosture;
+  proof: string[];
+  recovery_steps: string[];
+  transit: TransitServicePosture;
 }
 
 export interface TransitRewrapRequest {
@@ -7414,6 +7449,15 @@ export interface TransitRewrapRequest {
 
 export interface TransitRotateRequest {
   name: string;
+}
+
+export interface TransitServicePosture {
+  detail: string;
+  persistence_configured: boolean;
+  recovery?: string;
+  recovery_ready: boolean;
+  restore_state: string;
+  served: boolean;
 }
 
 export interface TransitSignRequest {

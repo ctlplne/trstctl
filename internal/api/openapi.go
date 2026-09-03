@@ -5552,6 +5552,27 @@ func componentSchemas() map[string]*Schema {
 	transitKeyList := object(map[string]*Schema{
 		"items": {Type: "array", Items: ref("TransitKey")},
 	}, "items")
+	transitKeyVersion := object(map[string]*Schema{
+		"version": {Type: "integer"}, "current": {Type: "boolean"},
+	}, "version", "current")
+	transitKeyVersionList := object(map[string]*Schema{
+		"name": str(), "kind": str(), "versions": {Type: "array", Items: ref("TransitKeyVersion")},
+	}, "name", "kind", "versions")
+	transitServicePosture := object(map[string]*Schema{
+		"served": {Type: "boolean"}, "persistence_configured": {Type: "boolean"},
+		"restore_state": str(), "recovery_ready": {Type: "boolean"}, "detail": str(), "recovery": str(),
+	}, "served", "persistence_configured", "restore_state", "recovery_ready", "detail")
+	kmipPosture := object(map[string]*Schema{
+		"state": str(), "configured": {Type: "boolean"}, "served": {Type: "boolean"},
+		"listening": {Type: "boolean"}, "tenant_bound": {Type: "boolean"}, "address": str(),
+		"transport": str(), "profile": str(), "objects": {Type: "array", Items: str()},
+		"operations": {Type: "array", Items: str()}, "detail": str(), "recovery": str(),
+	}, "state", "configured", "served", "listening", "tenant_bound", "transport", "profile", "objects", "operations", "detail")
+	transitPosture := object(map[string]*Schema{
+		"checked_at": timestamp(), "effect_free": {Type: "boolean"},
+		"transit": ref("TransitServicePosture"), "kmip": ref("KMIPPosture"),
+		"recovery_steps": {Type: "array", Items: str()}, "proof": {Type: "array", Items: str()},
+	}, "checked_at", "effect_free", "transit", "kmip", "recovery_steps", "proof")
 	transitEncryptReq := object(map[string]*Schema{
 		"key": str(), "plaintext": {Type: "string", Format: "byte"}, "aad": {Type: "string", Format: "byte"},
 	}, "key", "plaintext")
@@ -6519,6 +6540,11 @@ func componentSchemas() map[string]*Schema {
 		"TransitRotateRequest":               transitRotateReq,
 		"TransitKey":                         transitKey,
 		"TransitKeyList":                     transitKeyList,
+		"TransitKeyVersion":                  transitKeyVersion,
+		"TransitKeyVersionList":              transitKeyVersionList,
+		"TransitServicePosture":              transitServicePosture,
+		"KMIPPosture":                        kmipPosture,
+		"TransitPosture":                     transitPosture,
 		"TransitEncryptRequest":              transitEncryptReq,
 		"TransitDecryptRequest":              transitCiphertextReq,
 		"TransitRewrapRequest":               transitCiphertextReq,

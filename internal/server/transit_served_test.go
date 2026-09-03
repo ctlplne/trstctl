@@ -74,6 +74,21 @@ func TestServedTransitAPIEncryptDecryptRewrap(t *testing.T) {
 	if code != http.StatusOK || json.Unmarshal(body, &listed) != nil || len(listed.Items) != 1 || listed.Items[0].Version != 2 {
 		t.Fatalf("transit key list did not durably read back rotation: code=%d items=%+v body=%s", code, listed.Items, body)
 	}
+	code, body = doBearer(t, h.ts, http.MethodGet, "/api/v1/transit/keys/payments/versions", token, "", nil)
+	if code != http.StatusOK {
+		t.Fatalf("version history = %d, want 200; body=%s", code, body)
+	}
+	var history struct {
+		Name     string `json:"name"`
+		Kind     string `json:"kind"`
+		Versions []struct {
+			Version int  `json:"version"`
+			Current bool `json:"current"`
+		} `json:"versions"`
+	}
+	if err := json.Unmarshal(body, &history); err != nil || history.Name != "payments" || history.Kind != "aead" || len(history.Versions) != 2 || history.Versions[0].Current || !history.Versions[1].Current {
+		t.Fatalf("complete version history = %+v err=%v body=%s", history, err, body)
+	}
 
 	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/transit/rewrap", token, "kms-01-rewrap", map[string]any{
 		"key": "payments", "ciphertext": encrypted.Ciphertext, "aad": aad,

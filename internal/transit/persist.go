@@ -83,6 +83,23 @@ func NewStore(dir string, wrapper seal.KeyWrapper) *Store {
 
 func (s *Store) path() string { return filepath.Join(s.dir, transitStateFile) }
 
+// HasState reports whether a sealed keyring checkpoint exists. Callers use it
+// only during startup to distinguish a first boot from a successful restore;
+// it never opens, unseals, or returns the file.
+func (s *Store) HasState() (bool, error) {
+	if s == nil {
+		return false, nil
+	}
+	_, err := os.Stat(s.path())
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	return false, fmt.Errorf("transit: inspect sealed keyring checkpoint: %w", err)
+}
+
 // Save seals the whole service state. It writes atomically: a torn keyring is
 // worse than no keyring, because half a version history still looks loadable.
 func (s *Store) Save(svc *Service) error {

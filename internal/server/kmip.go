@@ -84,6 +84,7 @@ func (s *Server) RunKMIP(ctx context.Context) {
 	addr := s.kmip.Addr()
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
+		s.setKMIPListening(false)
 		if s.logger != nil {
 			s.logger.Error("KMIP listener failed to bind", slog.String("addr", addr), slog.String("error", err.Error()))
 		}
@@ -102,5 +103,13 @@ func (s *Server) ServeKMIP(ctx context.Context, ln net.Listener) error {
 		_ = ln.Close()
 		return errors.New("server: KMIP is not configured")
 	}
+	s.setKMIPListening(true)
+	defer s.setKMIPListening(false)
 	return s.kmip.Serve(ctx, ln)
+}
+
+func (s *Server) setKMIPListening(listening bool) {
+	s.kmipStateMu.Lock()
+	s.kmipListening = listening
+	s.kmipStateMu.Unlock()
 }

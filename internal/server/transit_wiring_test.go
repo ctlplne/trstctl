@@ -101,6 +101,14 @@ func TestTransitKeyringSurvivesServerRebuild(t *testing.T) {
 		t.Cleanup(st.Close)
 		srv := buildTransitTestServer(t, ctx, cfg, st, filepath.Join(t.TempDir(), "nats-2"))
 		defer func() { _ = srv.Shutdown(context.Background()) }()
+		posture := srv.transitRuntimePosture(false, "", servedTestTenant)
+		if !posture.Served || !posture.PersistenceConfigured || !posture.SealedStateFound {
+			t.Fatalf("restored Transit runtime posture = %+v, want served sealed restore evidence", posture)
+		}
+		kind, versions, err := srv.transit.ListKeyVersions(ctx, servedTestTenant, "app-key")
+		if err != nil || kind != transit.KindAEAD || len(versions) != 1 || !versions[0].Current {
+			t.Fatalf("restored key-version history kind=%q versions=%+v err=%v", kind, versions, err)
+		}
 		got, err := srv.transit.Decrypt(ctx, servedTestTenant, "app-key", ciphertext, nil)
 		if err != nil {
 			t.Fatalf("decrypt after rebuild: %v (the keyring did not survive the restart)", err)

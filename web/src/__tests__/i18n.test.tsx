@@ -1442,8 +1442,12 @@ describe("i18n boundary", () => {
       // F65 live-browser repair re-pin: renewal headroom now names the exact
       // remaining seconds and the no-time-left recovery action. Machine-authored
       // es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "b9722fccfe2cd7a037a5db9a6cc2e6c5bd91591b58c14f4aa1106d3a8eb83fd2",
-      "de-DE": "dfecebfb204e393bca470fe01c676434003cc15c8fe17f60a6ed2df124da45ea",
+      // F66 re-pin: the Transit recovery and proof surfaces now explain sealed
+      // startup restore, KMIP runtime state, no-auto-retry recovery, complete
+      // version history, filtered audit receipts, and real signature verification.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "8aade4ab3d046fb4cf33953eec9177a8ec92b21a825eaf6f9a8ce1f6e1ca39a9",
+      "de-DE": "40cb2407f3913eaf6a380144a90a5322d6f8f345f04fa03c19c114947ea14cbf",
     });
   });
 

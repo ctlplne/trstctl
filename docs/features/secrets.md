@@ -442,6 +442,10 @@ Transit encrypts, decrypts, HMACs, signs, verifies, and rewraps data using tenan
 named keys the application _never sees_, mounted at `/api/v1/transit/*` with a
 one-for-one CLI: `GET /api/v1/transit/keys` / `transit keys list` reads only
 tenant-scoped name, purpose, and current-version metadata;
+`GET /api/v1/transit/keys/{name}/versions` / `transit keys versions <name>` reads
+the complete retained version history without key material; `GET
+/api/v1/transit/status` / `transit status` reads effect-free sealed-restore and
+KMIP runtime posture;
 `POST /api/v1/transit/keys` / `transit keys create` mints a key,
 `.../keys/rotate` / `transit keys rotate` rotates it, and the same
 `POST /api/v1/transit/<op>` / `trstctl-cli transit <op>` pairing covers `encrypt`,
@@ -451,7 +455,11 @@ Ciphertexts are versioned (`trv:<version>:...`) so rotation can rewrap old data 
 newest version. Requests are tenant-bound and idempotent, auth-gated by `keys:write`
 for creation/rotation/encrypt/decrypt/rewrap/HMAC/sign and `keys:read` for verify.
 Plaintext and associated data live in wipeable `[]byte` buffers zeroized after the
-response is written, and in-memory keyrings die on shutdown. Events —
+response is written. When `transit.keyring_dir` and the deployment KEK are configured,
+every create/rotate atomically checkpoints an opaque sealed keyring and startup restores
+it before serving; a missing or unreadable original KEK fails startup instead of silently
+replacing the keys. There is deliberately no browser upload/import path for key material.
+Events —
 `transit.key.created`, `transit.key.rotated`, `transit.encrypt`, `transit.rewrap`,
 `transit.hmac`, `transit.sign` — give audit evidence without logging key bytes or
 plaintext.
@@ -459,12 +467,13 @@ plaintext.
 The console's **Encryption and signing** task at `/secrets/engines` reads back safe
 key metadata, creates AEAD/HMAC/signing keys, selects only a compatible key for each
 operation, rotates the selected key of each type, and operates encrypt, decrypt,
-rewrap, HMAC, and sign. Transit is a separate encryption service, so those controls
+rewrap, HMAC, sign, and verify. It also shows the full retained version history,
+Transit-only immutable audit receipts, automatic sealed-restore state, an explicit
+proof-first failed-operation recovery journey, and the real tenant-bound KMIP
+listener/profile status. Transit is a separate encryption service, so those controls
 remain available when the optional native secret store is disabled. No key bytes
 enter the browser. The raw plaintext returned by decrypt is shown in a reveal-once
-panel and removed from the page when dismissed. Signature verify, full version
-history, Transit-filtered audit receipts, and KMIP listener/profile status remain
-explicit console parity debt.
+panel and removed from the page when dismissed.
 
 ```bash
 cat > transit-key.json <<'JSON'
@@ -472,12 +481,21 @@ cat > transit-key.json <<'JSON'
 JSON
 trstctl-cli --idempotency-key transit-payments-create transit keys create -f transit-key.json
 trstctl-cli transit keys list
+trstctl-cli transit keys versions payments
+trstctl-cli transit status
 
 cat > transit-encrypt.json <<'JSON'
 {"key":"payments","plaintext":"Y2FyZC10b2tlbi0xMjM=","aad":"dGVuYW50PXBheW1lbnRz"}
 JSON
 trstctl-cli --idempotency-key transit-payments-encrypt transit encrypt -f transit-encrypt.json
 ```
+
+If a create, rotate, encrypt, rewrap, HMAC, or sign response is uncertain, do not
+invent a replacement key or changed request. Keep the original inputs and
+`Idempotency-Key`, read `transit status`, the key's version history, and the filtered
+`transit.*` audit receipts, then replay the byte-identical request with the same key.
+For a restore failure, repair the original KEK or sealed-keyring mount and restart;
+never delete or overwrite the sealed file just to make the process start.
 
 For legacy gear, the binary can also mount an opt-in KMIP listener:
 
@@ -496,6 +514,9 @@ rekey, and shutdown. The served OASIS 1.4 profile is stock-client-tested: Query,
 DiscoverVersions, Create/Register an AES-256 `SymmetricKey`, Get it plain or
 AES-GCM-wrapped (and register the wrapped value back), Locate, Revoke, and Destroy over
 TTLV. Unsupported operations get a KMIP failure response, not an unframed TCP close.
+The Transit status endpoint and console report `not_configured`, `starting`, or
+`listening` from the assembled tenant binding and live listener state. That status is
+not a conformance claim: use a stock KMIP client to prove the complete mTLS wire path.
 
 ### Secret sync (F68)
 

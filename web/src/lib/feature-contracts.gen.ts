@@ -5889,7 +5889,11 @@ export const canonicalCapabilities = [
           "status": "complete",
           "evidence": [
             "OpenAPI operationId: listTransitKeys",
-            "CLI command: transit keys list"
+            "OpenAPI operationId: listTransitKeyVersions",
+            "OpenAPI operationId: getTransitPosture",
+            "CLI command: transit keys list",
+            "CLI command: transit keys versions",
+            "CLI command: transit status"
           ]
         }
       },

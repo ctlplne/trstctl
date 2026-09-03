@@ -71,7 +71,7 @@ func (a *API) runtimeRouteAvailability(r route) (bool, string) {
 	case "generateManagedKey", "approveManagedKeyAction", "rotateManagedKey", "revokeManagedKey", "zeroizeManagedKey":
 		return runtimeDependency(a.managedKeys != nil,
 			"Managed HSM or cloud KMS key lifecycle is not configured in this deployment.")
-	case "listTransitKeys", "createTransitKey", "rotateTransitKey", "encryptTransit", "decryptTransit", "rewrapTransit",
+	case "listTransitKeys", "listTransitKeyVersions", "createTransitKey", "rotateTransitKey", "encryptTransit", "decryptTransit", "rewrapTransit",
 		"hmacTransit", "signTransit", "verifyTransit":
 		return runtimeDependency(a.transit != nil,
 			"The Transit cryptography service is not configured in this deployment.")

@@ -234,8 +234,8 @@ exhaustive subcommand list:
 | `setup`                           | Tenant-bound eval protocol profile status and activation (`protocols status` · `protocols activate`)                                                                                                                                                                                                                |
 | `ssh`                             | SSH CA/KRL/attestation workflow status, trust rollout, exact effect-free previews, direct and attested issuance, safe unchanged-request recovery, revoke, host retirement (`fleet` · `status` · `trust-rollout` · `preview` · `issue` · `preview-attested-user` · `issue-attested-user` · `revoke` · `retire-host`) |
 | `support`                         | Show enterprise support, SLA, and services posture (`enterprise`)                                                                                                                                                                                                                                                   |
-| `transit keys`                    | List safe metadata, create, and rotate a tenant-scoped Transit key (`list` · `create` · `rotate`)                                                                                                                                                                                                                   |
-| `transit`                         | Encrypt, decrypt, rewrap, HMAC, sign, verify with a transit key (`encrypt` · `decrypt` · `rewrap` · `hmac` · `sign` · `verify`)                                                                                                                                                                                     |
+| `transit keys`                    | List safe metadata, inspect full version history, create, and rotate a tenant-scoped Transit key (`list` · `versions` · `create` · `rotate`)                                                                                                                                                                       |
+| `transit`                         | Read effect-free restore/KMIP status or encrypt, decrypt, rewrap, HMAC, sign, and verify with a transit key (`status` · `encrypt` · `decrypt` · `rewrap` · `hmac` · `sign` · `verify`)                                                                                                                              |
 | `workloads`                       | Workload attester trust sources and attested X.509-SVID issuance (`attester-trust-sources create/list/get/update/rotate/revoke/delete` · `attested-issuance`)                                                                                                                                                       |
 
 Plus `version`. `trstctl` (the server binary) additionally serves `token`,
@@ -884,6 +884,8 @@ cat > transit-key.json <<'JSON'
 {"name":"payments","kind":"aead"}
 JSON
 trstctl-cli --idempotency-key transit-payments-create transit keys create -f transit-key.json
+trstctl-cli transit keys versions payments
+trstctl-cli transit status
 
 cat > transit-encrypt.json <<'JSON'
 {"key":"payments","plaintext":"Y2FyZC10b2tlbi0xMjM=","aad":"dGVuYW50PXBheW1lbnRz"}
