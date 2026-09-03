@@ -13,6 +13,17 @@
 .vite/
 docs-internal/
 
+# The documentation site and its test suite are release inputs, not runtime
+# image inputs. The web feature-contract build validates only the four docs
+# files cited directly by executable stage evidence, so retain those exact
+# witnesses and keep the remaining site out of every COPY . . layer.
+docs/**
+!docs/coverage_test.go
+!docs/features/
+!docs/features/acme-and-dns.md
+!docs/features/code-signing-and-timestamping.md
+!docs/features/secrets.md
+
 # Repository-local audit, dependency, compiler, and release caches.
 .sandbox-build/
 .supply-chain/

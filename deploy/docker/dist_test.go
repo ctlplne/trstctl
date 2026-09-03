@@ -1213,7 +1213,9 @@ func TestDockerignoreKeepsContextSmall(t *testing.T) {
 	mustContainAll(t, ".dockerignore", di,
 		".sandbox-build/", ".supply-chain/", ".cache/", "node_modules/",
 		"internal/webui/dist/", "web/test-results/", "sbom*.json",
-		"*.key", "*.pem", ".env.*", "**/.fuse_hidden*",
+		"*.key", "*.pem", ".env.*", "**/.fuse_hidden*", "docs/**",
+		"!docs/coverage_test.go", "!docs/features/acme-and-dns.md",
+		"!docs/features/code-signing-and-timestamping.md", "!docs/features/secrets.md",
 	)
 	dockerfile := readArtifact(t, "Dockerfile")
 	mustContainAll(t, "Dockerfile context audit target", dockerfile,
