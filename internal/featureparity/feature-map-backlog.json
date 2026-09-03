@@ -16263,11 +16263,11 @@
             "domain": "Secrets",
             "phase": "P2",
             "priority": 78,
-            "served_state": "partial",
-            "backend_status": "partial: served transit API and CLI; served KMIP mTLS listener for AES-256 SymmetricKey Create/Get/Locate/Revoke/Destroy",
-            "current_frontend_mapping": "partial workflow: Secrets at /secrets/engines lists non-secret Transit key metadata, creates purpose-locked AEAD/HMAC/signing keys, selects only compatible keys, rotates the selected key of each type, and serves encrypt/decrypt, rewrap, HMAC, signing, and local-only reveal-once plaintext through the independent encryption service even when optional native secret storage is disabled. Signature verification, full key-version history, Transit-filtered audit, and KMIP appliance profile/status remain API/CLI-only or absent from this console workflow.",
-            "target_gui_mapping": "Complete the existing Transit workflow with signature verification, full version history, audit receipts, and KMIP appliance profile/status without rendering key material.",
-            "acceptance_test": "Vitest proves a blank console can create purpose-locked Transit keys, select only compatible types, rotate with durable metadata readback, and encrypt/decrypt/HMAC/sign while native secret storage returns 503; served integration tests prove list/create/rotate/encrypt/decrypt/rewrap and the corresponding KMIP operations.",
+            "served_state": "conditional",
+            "backend_status": "conditional: the served Transit API and CLI expose tenant-bound metadata, complete key-version history, sealed startup-restore posture, create/rotate/encrypt/decrypt/rewrap/HMAC/sign/verify, and filtered immutable audit proof; the optional licensed KMIP mTLS listener truthfully reports its tenant-bound AES-256 SymmetricKey Create/Get/Locate/Revoke/Destroy appliance profile and live listener state",
+            "current_frontend_mapping": "complete conditional journey: Secrets at /secrets/engines lists non-secret Transit key and complete version metadata; shows sealed startup-restore and tenant-bound KMIP posture; creates and rotates purpose-locked AEAD/HMAC/signing keys; encrypts, decrypts, rewraps, HMACs, signs, and verifies; renders Transit-filtered immutable audit receipts; and provides an explicit no-automatic-retry recovery proof without rendering held key material",
+            "target_gui_mapping": "No GA frontend residual: the conditional console journey covers safe key setup, automatic sealed restore, effect-free runtime proof, execute, observe, failed-operation recovery, signature verification, complete version metadata, filtered audit receipts, KMIP posture, and equivalent API/CLI automation without rendering held key material.",
+            "acceptance_test": "Vitest proves a blank console can create and rotate purpose-locked Transit keys, encrypt/decrypt/HMAC/sign, verify a real signature, show complete version metadata, filter immutable Transit audit receipts, render sealed-restore and KMIP posture, and recover from an uncertain operation without automatically retrying it; served tests prove tenant isolation, restart restore, metadata-only versions and posture, every Transit operation, and the corresponding KMIP wire operations.",
             "source_docs": [
                 "docs/features/secrets.md"
             ],
@@ -16284,7 +16284,7 @@
                 "web/src/pages/secrets/TransitOperations.tsx"
             ],
             "status": "closed",
-            "notes": "The earlier disclosure label was stale and its evidence overclaimed UI support for verify, versions, audit, and KMIP posture. g10 removed the unrelated native-secret-store dependency, then live proof exposed the missing compatible-key prerequisite. The extracted Transit workflow now owns safe metadata readback plus purpose-locked list/create/select/rotate before operation. The remaining partial debt is verification, full history, filtered audit, and KMIP posture. TRACE-011 still proves KMIP Create, Locate, Revoke, and Destroy over the served mTLS TTLV handler.",
+            "notes": "The earlier disclosure label was stale and its evidence overclaimed UI support for verify, versions, audit, and KMIP posture. g10 removed the unrelated native-secret-store dependency, then live proof exposed the missing compatible-key prerequisite. F66 convergence at 2cfd187a777d9249c58998b9a87691630abf98ad adds metadata-only complete history, effect-free automatic sealed-restore and tenant-confined KMIP posture, real signature verification, Transit-filtered immutable audit receipts, explicit no-auto-retry recovery, API/CLI/SDK parity, and focused source proof. TRACE-011 continues to prove KMIP Create, Locate, Revoke, and Destroy over the served mTLS TTLV handler; final wire and browser qualification remain evidence gates, not product-contract gaps.",
             "api_surface": [
                 "listTransitKeys",
                 "listTransitKeyVersions",
@@ -16316,10 +16316,10 @@
             "facet_evidence": {
                 "served": {
                     "evidence": [
-                        "served transit API mounted at /api/v1/transit for safe key metadata list, key create/rotate, encrypt/decrypt, rewrap, HMAC, sign, and verify",
+                        "served Transit API mounted at /api/v1/transit for safe key and complete version metadata, effect-free restore/KMIP posture, key create/rotate, encrypt/decrypt, rewrap, HMAC, sign, and verify",
                         "served KMIP mTLS listener handles AES-256 SymmetricKey Create/Get/Locate/Revoke/Destroy over bounded TTLV frames",
-                        "served_state=partial",
-                        "backend_status=partial: served transit API and CLI; served KMIP mTLS listener for AES-256 SymmetricKey Create/Get/Locate/Revoke/Destroy"
+                        "served_state=conditional",
+                        "backend_status=conditional: Transit is served when configured; the licensed tenant-bound KMIP appliance listener is optional and reports its honest runtime state"
                     ],
                     "refs": [
                         "internal/api/transit.go",
@@ -16335,9 +16335,9 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: partial workflow at /secrets/engines for safe key metadata list, purpose-locked create/select/rotate, Transit encrypt/decrypt, rewrap, HMAC, signing, and local-only reveal-once plaintext through the independent encryption service",
-                        "residual: signature verification, full key-version history, Transit audit, and KMIP appliance profile/status remain outside the console workflow",
-                        "target_gui_mapping: complete the existing Transit workflow without rendering key material"
+                        "current_frontend_mapping: complete conditional workflow at /secrets/engines for safe key and complete version metadata, automatic sealed-restore and KMIP posture, purpose-locked create/select/rotate, Transit encrypt/decrypt/rewrap/HMAC/sign/verify, filtered immutable audit receipts, and deterministic failed-operation recovery",
+                        "the console never renders held private/key bytes; decrypted plaintext remains local reveal-once output",
+                        "target_gui_mapping: no GA frontend residual"
                     ],
                     "refs": [
                         "web/src/lib/navigation.ts",
@@ -16390,7 +16390,9 @@
                 },
                 "test": {
                     "evidence": [
-                        "acceptance_test: served Transit API lists safe metadata, creates a key, encrypts, rotates, reads back the new version, rewraps, decrypts, and records audit events.",
+                        "acceptance_test: served Transit API lists safe metadata and complete version history, creates a key, encrypts, rotates, reads back the new version, rewraps, decrypts, signs, verifies, and records audit events.",
+                        "acceptance_test: production server restart restores the sealed keyring and reports restored posture without exposing key material or deployment paths.",
+                        "acceptance_test: console renders restore/KMIP posture, complete version history, real signature verification, filtered audit receipts, and an uncertain-operation recovery refresh that does not retry the mutation.",
                         "acceptance_test: real PyKMIP client container creates and retrieves an AES-256 SymmetricKey over the served KMIP mTLS listener.",
                         "acceptance_test: served KMIP wire handler creates, locates, revokes, destroys, and rejects post-destroy Get for an AES-256 SymmetricKey.",
                         "memory-hygiene acceptance confirms Destroy zeroizes held AEAD key bytes.",
@@ -16399,9 +16401,12 @@
                     ],
                     "refs": [
                         "internal/server/transit_served_test.go",
+                        "internal/server/transit_wiring_test.go",
                         "internal/server/kmip_seam_test.go",
+                        "internal/api/transit_posture_test.go",
                         "ee/kmip/kmip_test.go",
                         "internal/transit/transit_more_test.go",
+                        "web/src/__tests__/secrets.test.tsx",
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "web/src/__tests__/route_parity.test.ts",
                         "web/src/__tests__/feature_coverage.test.tsx"
@@ -16464,7 +16469,7 @@
                 }
             },
             "ga_served_scope": "out_of_ga",
-            "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
+            "ga_scope_reason": "Residual GA conditions are configured sealed persistence for restart-safe Transit use plus the licensed Enterprise implementation and mTLS trust configuration for the tenant-bound KMIP appliance listener.",
             "dod_capabilities": [
                 "secrets_residuals"
             ],
@@ -16473,7 +16478,7 @@
                 "purpose": "Lets an operator understand and safely use encryption-as-a-service and kmip while tenant, policy, and security authority remain on the server.",
                 "tool": "secrets",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/secrets/engines",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -16483,11 +16488,11 @@
                 "permission_authority": "internal/api route registry and feature authorization manifest",
                 "edition": "core",
                 "dependencies": [
-                    "One or more lifecycle or console stages remain incomplete and are shown in the stage ledger."
+                    "Configuration, deployment, or edition prerequisite is named by the served capability evidence."
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "The parity contract contains metadata only. Product workflows may reveal a value once, but reports and evidence never contain the value.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -16526,12 +16531,25 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Key restore and an explicit failed-operation recovery journey are not yet present in the console."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/secrets/TransitOperations.tsx",
+                            "web/src/__tests__/secrets.test.tsx",
+                            "internal/server/transit_wiring_test.go",
+                            "OpenAPI operationId: getTransitPosture"
+                        ]
                     },
                     "verify": {
-                        "status": "missing",
-                        "reason": "Signature verification, full version history, filtered audit receipts, and KMIP status remain parity debt."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/secrets/TransitOperations.tsx",
+                            "web/src/__tests__/secrets.test.tsx",
+                            "internal/api/transit_posture_test.go",
+                            "internal/server/transit_served_test.go",
+                            "OpenAPI operationId: listTransitKeyVersions",
+                            "OpenAPI operationId: getTransitPosture",
+                            "OpenAPI operationId: verifyTransit"
+                        ]
                     },
                     "automate": {
                         "status": "complete",
@@ -16547,8 +16565,8 @@
                 },
                 "owner": "secrets",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "2cfd187a777d9249c58998b9a87691630abf98ad",
+                "freshness": "2026-09-03"
             }
         },
         {

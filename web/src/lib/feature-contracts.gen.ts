@@ -5825,7 +5825,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use encryption-as-a-service and kmip while tenant, policy, and security authority remain on the server.",
       "tool": "secrets",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/secrets/engines",
       "navigationEntrypoints": [
         "tool navigation",
@@ -5835,11 +5835,11 @@ export const canonicalCapabilities = [
       "permissionAuthority": "internal/api route registry and feature authorization manifest",
       "edition": "core",
       "dependencies": [
-        "One or more lifecycle or console stages remain incomplete and are shown in the stage ledger."
+        "Configuration, deployment, or edition prerequisite is named by the served capability evidence."
       ],
       "sideEffects": "mixed",
       "secretDataHandling": "The parity contract contains metadata only. Product workflows may reveal a value once, but reports and evidence never contain the value.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -5878,12 +5878,25 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Key restore and an explicit failed-operation recovery journey are not yet present in the console."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/secrets/TransitOperations.tsx",
+            "web/src/__tests__/secrets.test.tsx",
+            "internal/server/transit_wiring_test.go",
+            "OpenAPI operationId: getTransitPosture"
+          ]
         },
         "verify": {
-          "status": "missing",
-          "reason": "Signature verification, full version history, filtered audit receipts, and KMIP status remain parity debt."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/secrets/TransitOperations.tsx",
+            "web/src/__tests__/secrets.test.tsx",
+            "internal/api/transit_posture_test.go",
+            "internal/server/transit_served_test.go",
+            "OpenAPI operationId: listTransitKeyVersions",
+            "OpenAPI operationId: getTransitPosture",
+            "OpenAPI operationId: verifyTransit"
+          ]
         },
         "automate": {
           "status": "complete",
@@ -5899,8 +5912,8 @@ export const canonicalCapabilities = [
       },
       "owner": "secrets",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "2cfd187a777d9249c58998b9a87691630abf98ad",
+      "freshness": "2026-09-03"
     }
   },
   {
