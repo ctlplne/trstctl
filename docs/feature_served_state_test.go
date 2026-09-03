@@ -141,7 +141,7 @@ func TestFeatureServedStateClassifiesRuntimeConditionsAndResiduals(t *testing.T)
 		"F63": "conditional", // secrets.enable_api
 		"F64": "partial",     // served SDK spine; Vault/Terraform residuals remain
 		"F65": "conditional", // all eight providers are assembled when tenant endpoints and credentials are configured
-		"F66": "partial",     // transit is served; KMIP residuals/config remain
+		"F66": "conditional", // Transit requires sealed persistence; the optional licensed KMIP listener requires tenant-bound mTLS configuration
 		"F67": "conditional", // secrets.enable_api
 		"F68": "conditional", // ten native pushers are served when operator endpoints and credentials are configured
 		"F69": "conditional", // ACME plus provider configuration

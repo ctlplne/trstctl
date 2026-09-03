@@ -847,15 +847,15 @@
       "requirement_text": "trstctl shall provide Encryption-as-a-service (transit) & KMIP.",
       "owner": "Secrets",
       "priority": "P2",
-      "acceptance_criteria": "UI never logs plaintext by default and marks test plaintext as local-only with explicit wiping behavior where possible.",
-      "status": "partial",
-      "served_state": "partial",
-      "backend_status": "partial: served transit API and CLI; served KMIP mTLS listener for AES-256 SymmetricKey Create/Get/Locate/Revoke/Destroy",
+      "acceptance_criteria": "Vitest proves a blank console can create and rotate purpose-locked Transit keys, encrypt/decrypt/HMAC/sign, verify a real signature, show complete version metadata, filter immutable Transit audit receipts, render sealed-restore and KMIP posture, and recover from an uncertain operation without automatically retrying it; served tests prove tenant isolation, restart restore, metadata-only versions and posture, every Transit operation, and the corresponding KMIP wire operations.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: the served Transit API and CLI expose tenant-bound metadata, complete key-version history, sealed startup-restore posture, create/rotate/encrypt/decrypt/rewrap/HMAC/sign/verify, and filtered immutable audit proof; the optional licensed KMIP mTLS listener truthfully reports its tenant-bound AES-256 SymmetricKey Create/Get/Locate/Revoke/Destroy appliance profile and live listener state",
       "source_docs": [
         "docs/features/secrets.md"
       ],
       "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator."
+      "ga_scope_reason": "Residual GA conditions are configured sealed persistence for restart-safe Transit use plus the licensed Enterprise implementation and mTLS trust configuration for the tenant-bound KMIP appliance listener."
     },
     {
       "requirement_id": "F67",

@@ -133,6 +133,7 @@ receipt cannot certify it.
 | F39 | Code/CI secret scanning bridge | docs/features/secrets.md |
 | F63 | Native secret store | docs/features/secrets.md |
 | F65 | Dynamic secrets | docs/features/secrets.md |
+| F66 | Encryption-as-a-service and KMIP | docs/features/secrets.md |
 | F68 | Secret sync / platform integrations | docs/features/secrets.md |
 | F67 | PKI as a secrets engine | docs/features/secrets.md |
 | F58 | Platform auth-method framework | docs/features/secrets.md |
@@ -153,7 +154,6 @@ receipt cannot certify it.
 | F16 | Crypto-agility and PQC readiness | docs/features/lifecycle-and-pqc.md |
 | F57 | PQC migration orchestration | docs/features/lifecycle-and-pqc.md |
 | F64 | Developer secrets experience | docs/features/secrets.md, docs/cli.md, docs/journeys/manage-secrets.md |
-| F66 | Encryption-as-a-service and KMIP | docs/features/secrets.md |
 
 ### Library-only
 
@@ -3317,8 +3317,11 @@ call.
 
 Transit/KMIP (F66) — served, with a bounded OASIS KMIP 1.4 profile. The
 running binary mounts `/api/v1/transit/*` and the `trstctl-cli transit`
-command group for tenant-scoped key create/rotate, encrypt/decrypt, rewrap,
-HMAC, sign, and verify. Transit keys never leave the process as exportable
+command group for tenant-scoped key create/rotate, complete metadata-only
+version history, effect-free sealed-restore/KMIP posture, encrypt/decrypt,
+rewrap, HMAC, sign, and verify. The Secrets console exposes the same workflow,
+filtered immutable receipts, and explicit no-auto-retry recovery. Transit keys
+never leave the process as exportable
 material, request plaintext uses wipeable `[]byte` buffers, keyrings are
 zeroized on shutdown, and mutating operations emit immutable `transit.*`
 audit events. The binary also mounts an opt-in raw KMIP mTLS listener when
@@ -3332,7 +3335,10 @@ Query and DiscoverVersions, AES-256 `SymmetricKey` Create/Register/Get
 wire for stock clients, records `kmip.object.created`, `kmip.object.revoke`,
 and `kmip.object.destroyed`, and zeroizes in-memory key material on
 rekey/destroy/shutdown. Appliance-specific templates and tenant self-service
-listener management remain deliberate gaps.
+listener management remain deliberate product-scope boundaries. Production
+Transit remains conditional on a protected keyring directory and deployment
+KEK; the KMIP listener additionally remains conditional on its licensed runtime,
+one tenant binding, and configured mTLS trust.
 
 ## Authorization policy gates and ABAC overlays: served by the binary
 
