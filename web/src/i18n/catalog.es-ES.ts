@@ -7690,6 +7690,9 @@ const esESCatalog = {
   "discovery.evidence.open": "Mostrar evidencia de supervisión",
   "discovery.evidence.close": "Ocultar evidencia de supervisión",
   "discovery.findings.heading": "Credenciales para revisar",
+  // F39 browser repair — machine-authored translations; human linguistic review required before release.
+  "discovery.findings.runScope": "Mostrando solo los hallazgos de esta ejecución de descubrimiento.",
+  "discovery.findings.clearRunScope": "Mostrar todos los hallazgos",
   "discovery.findings.review": "Revisar hallazgo",
   "discovery.findings.moreActions": "Más acciones",
   "discovery.findings.exactEvidence": "Evidencia exacta del hallazgo",

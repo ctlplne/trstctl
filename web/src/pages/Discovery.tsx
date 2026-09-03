@@ -8,6 +8,7 @@ import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/St
 import { StatusBadge } from "@/components/StatusBadge";
 import { SourceActivityCell, SourceFindingsCell, sourceActivityByID, type SourceActivity } from "./discovery/DiscoveryPageParts";
 import { ADCSSourceFields, parseADCSEnrollmentEndpoints, parseADCSPrivateEgressCIDRs } from "./discovery/ADCSSourceFields";
+import { DiscoveryRunScopeNotice } from "./discovery/DiscoveryRunScopeNotice";
 import { SourceSetup } from "./discovery/SourceSetup";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -586,6 +587,7 @@ function discoveryTabFromSearchParam(value: string | null): DiscoveryTab {
 export function Discovery() {
   const { formatDateTime, t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const requestedRunID = searchParams.get("run_id")?.trim() ?? "";
   const [tab, setTab] = useState<DiscoveryTab>(() => discoveryTabFromSearchParam(searchParams.get("tab")));
   const [pendingFocus, setPendingFocus] = useState<"source" | "schedule" | "run" | null>(null);
   const [sources, setSources] = useState<DiscoverySource[]>([]);
@@ -654,7 +656,7 @@ export function Discovery() {
       api.discoveryRuns({ limit: 50 }),
       api.discoveryMonitoring(),
       api.nhiShadowPosture(),
-      api.discoveryFindings({ limit: 50 }),
+      api.discoveryFindings({ limit: 50, ...(requestedRunID ? { runId: requestedRunID } : {}) }),
       api.discoveryCoverage(),
     ]);
     if (sourceResult.status === "fulfilled") setSources(sourceResult.value.items ?? []);
@@ -667,8 +669,10 @@ export function Discovery() {
     else setMonitoring(null);
     if (shadowPostureResult.status === "fulfilled") setShadowPosture(shadowPostureResult.value);
     else setShadowPosture(null);
-    if (findingResult.status === "fulfilled") setFindings(findingResult.value.items ?? []);
-    else setFindings([]);
+    if (findingResult.status === "fulfilled") {
+      const items = findingResult.value.items ?? [];
+      setFindings(requestedRunID ? items.filter((finding) => finding.run_id === requestedRunID) : items);
+    } else setFindings([]);
     if (coverageResult.status === "fulfilled") setCoverageReport(coverageResult.value);
     else setCoverageReport(null);
     const rejected = [sourceResult, scheduleResult, runResult, monitoringResult, shadowPostureResult, findingResult].find(
@@ -676,7 +680,7 @@ export function Discovery() {
     );
     if (rejected?.status === "rejected") setNotice(noticeForError(rejected.reason, "Could not load discovery records"));
     setLoading(false);
-  }, []);
+  }, [requestedRunID]);
 
   useEffect(() => {
     void load();
@@ -981,6 +985,21 @@ export function Discovery() {
             <h2 id="findings-heading" className="text-title font-semibold">
               {t("discovery.findings.heading")}
             </h2>
+            {requestedRunID ? (
+              <DiscoveryRunScopeNotice
+                runId={requestedRunID}
+                onClear={() => {
+                  setSearchParams(
+                    (current) => {
+                      const next = new URLSearchParams(current);
+                      next.delete("run_id");
+                      return next;
+                    },
+                    { replace: true },
+                  );
+                }}
+              />
+            ) : null}
             {!loading && findings.length === 0 ? (
               <EmptyState
                 icon={<Search className="h-5 w-5" aria-hidden="true" />}

@@ -7242,6 +7242,14 @@ export const messages = {
     defaultMessage: "Credentials to review",
     description: "Plain-language heading above the findings that need an operator decision.",
   },
+  "discovery.findings.runScope": {
+    defaultMessage: "Showing only findings from this discovery run.",
+    description: "Visible notice when a discovery deep link is scoped to one exact run.",
+  },
+  "discovery.findings.clearRunScope": {
+    defaultMessage: "Show all findings",
+    description: "Action that removes an exact discovery-run deep-link filter.",
+  },
   "discovery.findings.columnStatus": {
     defaultMessage: "Status",
     description: "Column header for discovery finding triage status.",

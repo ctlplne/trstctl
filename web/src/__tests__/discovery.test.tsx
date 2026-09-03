@@ -568,6 +568,26 @@ describe("discovery control-plane surface", () => {
     expect((await screen.findAllByRole("button", { name: "Run" }))[0]).toHaveFocus();
   });
 
+  it("keeps a secret-scan discovery handoff scoped to the exact run until the operator clears it", async () => {
+    const seeded = await apiMock.discoveryFindings();
+    apiMock.discoveryFindings.mockReset().mockImplementation(async (options?: { runId?: string }) => ({
+      items: options?.runId ? seeded.items.filter((finding: { run_id: string }) => finding.run_id === options.runId) : seeded.items,
+    }));
+    const user = userEvent.setup();
+    renderDiscovery(["/discovery?run_id=run-cloud-secrets"]);
+
+    expect(await screen.findByText("Showing only findings from this discovery run.")).toBeInTheDocument();
+    expect(screen.getByText("run-cloud-secrets")).toBeInTheDocument();
+    expect(apiMock.discoveryFindings).toHaveBeenCalledWith({ limit: 50, runId: "run-cloud-secrets" });
+    expect(screen.getByText("vault://vault.example/secret/tls/web")).toBeInTheDocument();
+    expect(screen.queryByText("10.0.0.10:443")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Show all findings" }));
+    await waitFor(() => expect(screen.getByLabelText("location search")).toHaveTextContent(""));
+    await waitFor(() => expect(apiMock.discoveryFindings).toHaveBeenLastCalledWith({ limit: 50 }));
+    expect(await screen.findByText("10.0.0.10:443")).toBeInTheDocument();
+  });
+
   it("keeps an unavailable source ID in exact evidence instead of leaking it into the default decision path", async () => {
     const seededSources = await apiMock.discoverySources();
     apiMock.discoverySources.mockResolvedValue({

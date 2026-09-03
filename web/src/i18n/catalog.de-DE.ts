@@ -7745,6 +7745,9 @@ const deDECatalog = {
   "discovery.evidence.open": "Überwachungsnachweise anzeigen",
   "discovery.evidence.close": "Überwachungsnachweise ausblenden",
   "discovery.findings.heading": "Zu prüfende Credentials",
+  // F39 browser repair — machine-authored translations; human linguistic review required before release.
+  "discovery.findings.runScope": "Es werden nur die Ergebnisse dieses Discovery-Laufs angezeigt.",
+  "discovery.findings.clearRunScope": "Alle Ergebnisse anzeigen",
   "discovery.findings.review": "Fund prüfen",
   "discovery.findings.moreActions": "Weitere Aktionen",
   "discovery.findings.exactEvidence": "Exakte Fundnachweise",

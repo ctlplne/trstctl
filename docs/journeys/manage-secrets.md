@@ -503,7 +503,10 @@ today (see [Current limitations](../limitations.md) and
    head side of an explicit CI diff, and also drops the raw secret value. If the
    reviewed server run fails or its response is interrupted, retry the identical
    body with the same idempotency key; trstctl retries a pre-recording failure or
-   replays the completed run instead of scanning twice.
+   replays the completed run instead of scanning twice. The console's **Open
+   discovery run** handoff keeps `run_id` in the URL, asks the server for only
+   that run's findings, visibly shows the active run scope, and offers **Show all
+   findings** to remove it. It never mixes other scan runs into the initial proof.
 
 ## Where next
 

@@ -1430,8 +1430,12 @@ describe("i18n boundary", () => {
       // review, reviewed execution, stale-plan refusal, same-key retry, and
       // redacted durable proof. Machine-authored es/de — FLAGGED FOR HUMAN
       // TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "0ceabb163af8c4e8a016152b14a854ad6bed47afe76ae25f89ca054748ee29e2",
-      "de-DE": "2bee0694543ecff78333eba54fa43307b03c0506423fe4a884a4ea5dd91d7645",
+      // F39 live-browser repair re-pin: the Discovery handoff now says when
+      // results are scoped to one exact run and names the action that returns
+      // to the full finding list. Machine-authored es/de — FLAGGED FOR HUMAN
+      // TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "e09262ea433c144be1e0cf925785820063a7ffc29a1ce29de6bc15e62ff345a7",
+      "de-DE": "40841ce23c0f28ac36a91e3c88ae097e237917d8ed6baaf6d6eac3e9aa6a6b83",
     });
   });
 
