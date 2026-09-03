@@ -6875,10 +6875,38 @@ export interface SecretScanFinding {
   rule_id: string;
 }
 
+export interface SecretScanPreview {
+  blockers: string[];
+  capabilities: string[];
+  capability: string;
+  cli_argv: string[];
+  custom_rules: boolean;
+  custom_rules_path?: string;
+  custom_rules_sha256?: string;
+  effect_free: boolean;
+  execute_external_effects: string[];
+  execute_writes: string[];
+  mode: string;
+  operation: string;
+  prerequisites: string[];
+  preview_external_effects: string[];
+  preview_writes: string[];
+  ready: boolean;
+  recovery_steps: string[];
+  request_fingerprint: string;
+  required_permission: string;
+  rules_active: number;
+  scanner: string;
+  secret_data_handling: string;
+  target_path: string;
+  verification_steps: string[];
+}
+
 export interface SecretScanRequest {
   custom_rules_path?: string;
   mode?: string;
   path: string;
+  preview_fingerprint?: string;
 }
 
 export interface SecretStoreCreatePreview {

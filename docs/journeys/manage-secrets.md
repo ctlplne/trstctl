@@ -465,7 +465,10 @@ today (see [Current limitations](../limitations.md) and
    cat > secret-scan.json <<'JSON'
    {"path":"."}
    JSON
-   trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.json
+   trstctl-cli secrets scans preview -f secret-scan.json
+   # Put the returned request_fingerprint in preview_fingerprint, then execute.
+   # Reuse the same idempotency key for an interrupted retry.
+   trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f reviewed-secret-scan.json
 
    cat > deep-secret-scan.json <<'JSON'
    {"path":".","mode":"git_history","custom_rules_path":"./gitleaks-custom-rules.toml"}
@@ -487,14 +490,20 @@ today (see [Current limitations](../limitations.md) and
      -H "Authorization: Bearer $TRSTCTL_TOKEN"
    ```
 
-   -> the served scan response shows the `run_id`, `mode`, `capabilities`,
+   -> preview proves the normalized target, scanner, rule floor, effects, and
+   recovery steps without starting a process or writing state. A changed target,
+   mode, rules file, tenant, or caller makes execution fail with `409` before
+   Gitleaks starts. The served scan response shows the `run_id`, `mode`, `capabilities`,
    `rules_active`, and redacted findings. Deep mode scans full Git history with
    the default Gitleaks rules plus additive custom `[[rules]]` fragments.
    Third-party artifact mode covers CI logs, container-registry metadata, and
    Slack/Jira exports through artifact-path ingest; native provider polling
    and signature validation remain documented shortfalls. The local
    staged-diff scanner needs no server, scans only staged Git blobs or the
-   head side of an explicit CI diff, and also drops the raw secret value.
+   head side of an explicit CI diff, and also drops the raw secret value. If the
+   reviewed server run fails or its response is interrupted, retry the identical
+   body with the same idempotency key; trstctl retries a pre-recording failure or
+   replays the completed run instead of scanning twice.
 
 ## Where next
 

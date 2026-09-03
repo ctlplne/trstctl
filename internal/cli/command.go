@@ -525,6 +525,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"secrets", "scans", "repositories", "webhook"}, Method: "POST", Path: "/api/v1/secrets/scans/repositories/{provider}/webhook", Body: bodyFile, Summary: "Queue a normalized repository secret scan"},
 	{Name: []string{"secrets", "scans", "third-party"}, Method: "GET", Path: "/api/v1/secrets/scans/third-party", Summary: "Show CI/CD, registry, Slack, and Jira secret-scanning posture"},
 	{Name: []string{"secrets", "scans", "third-party", "ingest"}, Method: "POST", Path: "/api/v1/secrets/scans/third-party/{provider}/ingest", Body: bodyFile, Summary: "Queue a CI/CD, registry, Slack, or Jira artifact secret scan"},
+	{Name: []string{"secrets", "scans", "preview"}, Method: "POST", Path: "/api/v1/secrets/scans/preview", Body: bodyFile, ReadOnly: true, Summary: "Review an exact effect-free Gitleaks scan plan"},
 	{Name: []string{"secrets", "scans", "run"}, Method: "POST", Path: "/api/v1/secrets/scans", Body: bodyFile, Summary: "Run Gitleaks and record redacted scan findings"},
 	{Name: []string{"secrets", "shares", "preview"}, Method: "POST", Path: "/api/v1/secrets/shares/preview", Body: bodyFile, ReadOnly: true, Summary: "Review a one-time share plan without sending the value"},
 	{Name: []string{"secrets", "shares", "create"}, Method: "POST", Path: "/api/v1/secrets/shares", Body: bodyFile, Summary: "Create a reviewed one-time secret share"},

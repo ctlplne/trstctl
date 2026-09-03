@@ -5408,7 +5408,19 @@ func componentSchemas() map[string]*Schema {
 	}, "capability", "served", "generated_at", "api_group", "api_version", "resource", "distribution_targets", "controller_flow", "rbac_rules", "status_fields", "architecture_controls", "evidence_refs", "residuals", "recommended_next_actions")
 	secretScanReq := object(map[string]*Schema{
 		"path": str(), "mode": str(), "custom_rules_path": str(),
+		"preview_fingerprint": {Type: "string", Description: "Optional server-keyed fingerprint returned by SecretScanPreview. When supplied, execution fails closed if tenant, caller, target, mode, custom rules, or scanner capabilities changed."},
 	}, "path")
+	secretScanPreview := object(map[string]*Schema{
+		"capability": str(), "operation": str(), "ready": {Type: "boolean"}, "effect_free": {Type: "boolean"},
+		"target_path": str(), "mode": str(), "custom_rules": {Type: "boolean"}, "custom_rules_path": str(), "custom_rules_sha256": str(),
+		"scanner": str(), "rules_active": {Type: "integer"}, "capabilities": {Type: "array", Items: str()},
+		"required_permission": str(), "request_fingerprint": str(), "blockers": {Type: "array", Items: str()},
+		"prerequisites": {Type: "array", Items: str()}, "preview_writes": {Type: "array", Items: str()},
+		"preview_external_effects": {Type: "array", Items: str()}, "execute_writes": {Type: "array", Items: str()},
+		"execute_external_effects": {Type: "array", Items: str()}, "recovery_steps": {Type: "array", Items: str()},
+		"verification_steps": {Type: "array", Items: str()}, "cli_argv": {Type: "array", Items: str()},
+		"secret_data_handling": str(),
+	}, "capability", "operation", "ready", "effect_free", "target_path", "mode", "custom_rules", "scanner", "rules_active", "capabilities", "required_permission", "request_fingerprint", "blockers", "prerequisites", "preview_writes", "preview_external_effects", "execute_writes", "execute_external_effects", "recovery_steps", "verification_steps", "cli_argv", "secret_data_handling")
 	secretScanFinding := object(map[string]*Schema{
 		"rule_id": str(), "file": str(), "line": {Type: "integer"}, "credential_ref": str(),
 	}, "rule_id", "file", "line", "credential_ref")
@@ -6447,6 +6459,7 @@ func componentSchemas() map[string]*Schema {
 		"KubernetesCSRSupport":               kubernetesCSRSupport,
 		"KubernetesTrustBundleDistribution":  kubernetesTrustBundleDistribution,
 		"SecretScanRequest":                  secretScanReq,
+		"SecretScanPreview":                  secretScanPreview,
 		"SecretScanFinding":                  secretScanFinding,
 		"SecretScan":                         secretScan,
 		"SecretRepositoryScanProvider":       secretRepoProvider,

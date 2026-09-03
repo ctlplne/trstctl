@@ -1526,6 +1526,25 @@ func TestSecretScanCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	}
 }
 
+func TestSecretScanPreviewCommandIsEffectFreeRead(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, 200, `{"capability":"F39","ready":true,"effect_free":true,"request_fingerprint":"sha256:reviewed"}`, &cap)
+	body := `{"path":".","mode":"workspace"}`
+	code, _, _ := run(t, []string{"secrets", "scans", "preview", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
+	if code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	if cap.Method != "POST" || cap.Path != "/api/v1/secrets/scans/preview" {
+		t.Errorf("request = %s %s", cap.Method, cap.Path)
+	}
+	if strings.TrimSpace(string(cap.Body)) != body {
+		t.Errorf("body = %q, want %q", cap.Body, body)
+	}
+	if cap.Header.Get("Idempotency-Key") != "" {
+		t.Error("effect-free secret scan preview must not send an Idempotency-Key")
+	}
+}
+
 func TestSecretRepositoryScanCommandsMapToServedRoutes(t *testing.T) {
 	var posture capture
 	postureSrv := mockServer(t, 200, `{"capability":"CAP-SCAN-01","served":true}`, &posture)

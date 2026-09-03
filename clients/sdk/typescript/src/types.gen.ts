@@ -5358,6 +5358,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/scans/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review an exact effect-free Gitleaks scan plan */
+        post: operations["previewSecretScan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/scans/repositories": {
         parameters: {
             query?: never;
@@ -13432,10 +13449,38 @@ export interface components {
             line: number;
             rule_id: string;
         };
+        SecretScanPreview: {
+            blockers: string[];
+            capabilities: string[];
+            capability: string;
+            cli_argv: string[];
+            custom_rules: boolean;
+            custom_rules_path?: string;
+            custom_rules_sha256?: string;
+            effect_free: boolean;
+            execute_external_effects: string[];
+            execute_writes: string[];
+            mode: string;
+            operation: string;
+            prerequisites: string[];
+            preview_external_effects: string[];
+            preview_writes: string[];
+            ready: boolean;
+            recovery_steps: string[];
+            request_fingerprint: string;
+            required_permission: string;
+            rules_active: number;
+            scanner: string;
+            secret_data_handling: string;
+            target_path: string;
+            verification_steps: string[];
+        };
         SecretScanRequest: {
             custom_rules_path?: string;
             mode?: string;
             path: string;
+            /** @description Optional server-keyed fingerprint returned by SecretScanPreview. When supplied, execution fails closed if tenant, caller, target, mode, custom rules, or scanner capabilities changed. */
+            preview_fingerprint?: string;
         };
         SecretStoreCreatePreview: {
             blockers: string[];
@@ -29531,6 +29576,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SecretScan"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewSecretScan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretScanRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretScanPreview"];
                 };
             };
             /** @description client error */

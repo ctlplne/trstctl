@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"os/exec"
@@ -15,6 +16,126 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/secretscan"
 )
+
+func TestServedSecretScanPreviewAndRetryRecoveryF39(t *testing.T) {
+	repo := t.TempDir()
+	customRules := filepath.Join(repo, "custom.toml")
+	if err := os.WriteFile(customRules, []byte("[[rules]]\nid = \"f39-review-v1\"\nregex = '''f39_v1_[a-z0-9]{8}'''\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fakeBinary := filepath.Join(t.TempDir(), "gitleaks")
+	if err := os.WriteFile(fakeBinary, []byte("#!/bin/sh\nexit 99\n"), 0o755); err != nil { // #nosec G306 -- isolated executable test fixture
+		t.Fatal(err)
+	}
+	planner := secretscan.NewGitleaksRunner(fakeBinary)
+	planner.AllowedRoots = []string{repo}
+	fake := &recoverableSecretScanner{
+		planner: planner,
+		report: secretscan.Report{
+			Scanner:       "gitleaks",
+			EngineVersion: secretscan.GitleaksPinnedVersion,
+			RulesActive:   secretscan.GitleaksDefaultRulesActive,
+			Mode:          secretscan.ScanModeWorkspace,
+			Capabilities:  secretscan.ScanCapabilities(secretscan.ScanModeWorkspace, false),
+		},
+		failures: 1,
+	}
+	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
+		d.SecretScanner = fake
+	})
+	tok := seedScopedToken(t, h.store, h.tenant, "secrets:write", "discovery:read")
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/scans/preview", tok, map[string]any{
+		"path":              repo,
+		"mode":              "workspace",
+		"custom_rules_path": customRules,
+	})
+	if status != http.StatusOK {
+		t.Fatalf("preview scan: status %d body %s", status, body)
+	}
+	var plan struct {
+		Ready                  bool     `json:"ready"`
+		EffectFree             bool     `json:"effect_free"`
+		RequestFingerprint     string   `json:"request_fingerprint"`
+		CustomRulesSHA256      string   `json:"custom_rules_sha256"`
+		PreviewWrites          []string `json:"preview_writes"`
+		PreviewExternalEffects []string `json:"preview_external_effects"`
+		RecoverySteps          []string `json:"recovery_steps"`
+	}
+	if err := json.Unmarshal(body, &plan); err != nil {
+		t.Fatalf("decode scan preview: %v (%s)", err, body)
+	}
+	if !plan.Ready || !plan.EffectFree || plan.RequestFingerprint == "" || len(plan.CustomRulesSHA256) != 64 {
+		t.Fatalf("scan preview = %+v, want ready effect-free server-bound plan", plan)
+	}
+	if len(plan.PreviewWrites) != 0 || len(plan.PreviewExternalEffects) != 0 || len(plan.RecoverySteps) == 0 {
+		t.Fatalf("scan preview did not prove zero effects and recovery: %+v", plan)
+	}
+	if fake.calls != 0 {
+		t.Fatalf("effect-free preview invoked scanner %d times", fake.calls)
+	}
+	if h.hasEvent(t, "discovery.run.completed") || h.hasEvent(t, "discovery.finding.recorded") {
+		t.Fatal("effect-free preview recorded discovery state")
+	}
+
+	if err := os.WriteFile(customRules, []byte("[[rules]]\nid = \"f39-review-v2\"\nregex = '''f39_v2_[a-z0-9]{8}'''\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/scans", tok, "f39-stale-plan", map[string]any{
+		"path":                repo,
+		"mode":                "workspace",
+		"custom_rules_path":   customRules,
+		"preview_fingerprint": plan.RequestFingerprint,
+	})
+	if status != http.StatusConflict || !strings.Contains(string(body), "reviewed secret-scan plan is stale") {
+		t.Fatalf("stale scan plan: status %d body %s", status, body)
+	}
+	if fake.calls != 0 {
+		t.Fatalf("stale plan invoked scanner %d times", fake.calls)
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/secrets/scans/preview", tok, map[string]any{
+		"path": repo, "mode": "workspace", "custom_rules_path": customRules,
+	})
+	if status != http.StatusOK || json.Unmarshal(body, &plan) != nil || plan.RequestFingerprint == "" {
+		t.Fatalf("refresh changed scan review: status %d body %s", status, body)
+	}
+
+	request := map[string]any{
+		"path":                repo,
+		"mode":                "workspace",
+		"custom_rules_path":   customRules,
+		"preview_fingerprint": plan.RequestFingerprint,
+	}
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/scans", tok, "f39-recoverable-run", request)
+	if status != http.StatusBadGateway || !strings.Contains(string(body), "temporary scanner failure") {
+		t.Fatalf("first recoverable scan: status %d body %s", status, body)
+	}
+	if h.hasEvent(t, "discovery.run.completed") {
+		t.Fatal("failed scan recorded a completed discovery run")
+	}
+
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/scans", tok, "f39-recoverable-run", request)
+	if status != http.StatusCreated {
+		t.Fatalf("retry reviewed scan: status %d body %s", status, body)
+	}
+	var recovered struct {
+		RunID string `json:"run_id"`
+	}
+	if err := json.Unmarshal(body, &recovered); err != nil || recovered.RunID == "" {
+		t.Fatalf("decode recovered scan: %v (%s)", err, body)
+	}
+	if fake.calls != 2 {
+		t.Fatalf("scanner calls after recovery = %d, want failed call plus one retry", fake.calls)
+	}
+
+	status, replay := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/scans", tok, "f39-recoverable-run", request)
+	if status != http.StatusCreated || string(replay) != string(body) {
+		t.Fatalf("completed retry did not replay original result: status %d body %s", status, replay)
+	}
+	if fake.calls != 2 {
+		t.Fatalf("idempotent replay rescanned target; calls = %d", fake.calls)
+	}
+}
 
 var sec07SlackBotToken = strings.Join([]string{
 	"xoxb",
@@ -220,6 +341,29 @@ type fakeDeepSecretScanner struct {
 	report secretscan.Report
 	path   string
 	opts   secretscan.ScanOptions
+}
+
+type recoverableSecretScanner struct {
+	report   secretscan.Report
+	failures int
+	calls    int
+	planner  *secretscan.GitleaksRunner
+}
+
+func (f *recoverableSecretScanner) Plan(path string, opts secretscan.ScanOptions) (secretscan.Plan, error) {
+	return f.planner.Plan(path, opts)
+}
+
+func (f *recoverableSecretScanner) Scan(_ context.Context, _ string) (secretscan.Report, error) {
+	f.calls++
+	if f.calls <= f.failures {
+		return secretscan.Report{}, errors.New("temporary scanner failure")
+	}
+	return f.report, nil
+}
+
+func (f *recoverableSecretScanner) ScanWithOptions(ctx context.Context, path string, _ secretscan.ScanOptions) (secretscan.Report, error) {
+	return f.Scan(ctx, path)
 }
 
 func (f *fakeDeepSecretScanner) Scan(_ context.Context, path string) (secretscan.Report, error) {

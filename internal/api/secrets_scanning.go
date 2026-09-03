@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +14,8 @@ import (
 
 	gouuid "github.com/google/uuid"
 
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/secretscan"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -27,6 +30,12 @@ type SecretScanner interface {
 type SecretScannerWithOptions interface {
 	ScanWithOptions(ctx context.Context, path string, opts secretscan.ScanOptions) (secretscan.Report, error)
 }
+
+type secretScannerPlanner interface {
+	Plan(path string, opts secretscan.ScanOptions) (secretscan.Plan, error)
+}
+
+const secretScanReviewDomain = "trstctl.api.f39-secret-scan-review.v1"
 
 type secretRepoScanProviderResponse struct {
 	ID               string   `json:"id"`
@@ -136,9 +145,37 @@ type thirdPartySecretScanPostureResponse struct {
 }
 
 type secretScanRequest struct {
-	Path            string `json:"path"`
-	Mode            string `json:"mode,omitempty"`
-	CustomRulesPath string `json:"custom_rules_path,omitempty"`
+	Path               string `json:"path"`
+	Mode               string `json:"mode,omitempty"`
+	CustomRulesPath    string `json:"custom_rules_path,omitempty"`
+	PreviewFingerprint string `json:"preview_fingerprint,omitempty"`
+}
+
+type secretScanPreviewResponse struct {
+	Capability             string   `json:"capability"`
+	Operation              string   `json:"operation"`
+	Ready                  bool     `json:"ready"`
+	EffectFree             bool     `json:"effect_free"`
+	TargetPath             string   `json:"target_path"`
+	Mode                   string   `json:"mode"`
+	CustomRules            bool     `json:"custom_rules"`
+	CustomRulesPath        string   `json:"custom_rules_path,omitempty"`
+	CustomRulesSHA256      string   `json:"custom_rules_sha256,omitempty"`
+	Scanner                string   `json:"scanner"`
+	RulesActive            int      `json:"rules_active"`
+	Capabilities           []string `json:"capabilities"`
+	RequiredPermission     string   `json:"required_permission"`
+	RequestFingerprint     string   `json:"request_fingerprint"`
+	Blockers               []string `json:"blockers"`
+	Prerequisites          []string `json:"prerequisites"`
+	PreviewWrites          []string `json:"preview_writes"`
+	PreviewExternalEffects []string `json:"preview_external_effects"`
+	ExecuteWrites          []string `json:"execute_writes"`
+	ExecuteExternalEffects []string `json:"execute_external_effects"`
+	RecoverySteps          []string `json:"recovery_steps"`
+	VerificationSteps      []string `json:"verification_steps"`
+	CLIArgv                []string `json:"cli_argv"`
+	DataHandling           string   `json:"secret_data_handling"`
 }
 
 type secretScanFindingResponse struct {
@@ -160,6 +197,158 @@ type secretScanResponse struct {
 	Findings      []secretScanFindingResponse `json:"findings"`
 }
 
+func normalizeSecretScanRequest(scanner SecretScanner, req secretScanRequest) (secretscan.Plan, error) {
+	path := strings.TrimSpace(req.Path)
+	if path == "" {
+		return secretscan.Plan{}, errStatus(http.StatusBadRequest, "path is required")
+	}
+	mode, err := secretscan.NormalizeScanMode(req.Mode)
+	if err != nil {
+		return secretscan.Plan{}, errStatus(http.StatusBadRequest, err.Error())
+	}
+	opts := secretscan.ScanOptions{Mode: mode, CustomRulesPath: strings.TrimSpace(req.CustomRulesPath)}
+	if planner, ok := scanner.(secretScannerPlanner); ok {
+		plan, err := planner.Plan(path, opts)
+		if err != nil {
+			return secretscan.Plan{}, secretScanRequestError(err)
+		}
+		return plan, nil
+	}
+	// Test and embedded scanners may predate the optional planner interface. The
+	// execution request is still bound exactly and the scanner remains responsible
+	// for enforcing its own target boundary. Production uses GitleaksRunner.Plan.
+	return secretscan.Plan{
+		TargetPath: path, TargetRoot: path, Mode: mode,
+		CustomRulesPath: opts.CustomRulesPath, CustomRules: opts.CustomRulesPath != "",
+		RulesActive:  secretscan.GitleaksDefaultRulesActive,
+		Capabilities: secretscan.ScanCapabilities(mode, opts.CustomRulesPath != ""),
+	}, nil
+}
+
+func secretScanRequestError(err error) error {
+	switch {
+	case errors.Is(err, secretscan.ErrInvalidScanTarget):
+		return errStatus(http.StatusBadRequest, err.Error())
+	case errors.Is(err, secretscan.ErrInvalidScanMode), errors.Is(err, secretscan.ErrInvalidCustomRules):
+		return errStatus(http.StatusBadRequest, err.Error())
+	case errors.Is(err, secretscan.ErrGitleaksBinaryNotFound):
+		return errStatus(http.StatusServiceUnavailable, "gitleaks binary is not configured")
+	default:
+		return err
+	}
+}
+
+func (a *API) secretScanPreviewFingerprint(tenantID, principal string, plan secretscan.Plan) (string, error) {
+	if a.commandMAC == nil {
+		return "", errors.New("api: server-keyed secret-scan preview evidence is unavailable")
+	}
+	material, err := json.Marshal(struct {
+		Domain            string   `json:"domain"`
+		TenantID          string   `json:"tenant_id"`
+		Principal         string   `json:"principal"`
+		Operation         string   `json:"operation"`
+		TargetPath        string   `json:"target_path"`
+		Mode              string   `json:"mode"`
+		CustomRulesPath   string   `json:"custom_rules_path,omitempty"`
+		CustomRulesSHA256 string   `json:"custom_rules_sha256,omitempty"`
+		Capabilities      []string `json:"capabilities"`
+	}{
+		Domain: secretScanReviewDomain, TenantID: tenantID, Principal: principal,
+		Operation: "run_secret_scan", TargetPath: plan.TargetPath, Mode: plan.Mode,
+		CustomRulesPath: plan.CustomRulesPath, CustomRulesSHA256: plan.CustomRulesSHA256,
+		Capabilities: append([]string(nil), plan.Capabilities...),
+	})
+	if err != nil {
+		return "", err
+	}
+	defer secret.Wipe(material)
+	mac, err := a.commandMAC([]byte(secretScanReviewDomain), material)
+	if err != nil {
+		return "", err
+	}
+	if len(mac) != 32 {
+		secret.Wipe(mac)
+		return "", errors.New("api: secret-scan preview MAC has invalid length")
+	}
+	defer secret.Wipe(mac)
+	return "sha256:" + hex.EncodeToString(mac), nil
+}
+
+// previewSecretScan validates the exact scanner, confinement boundary, target,
+// mode, and custom rule file without starting Git/Gitleaks, writing a report,
+// recording idempotency, appending an event, or calling another system.
+func (a *API) previewSecretScan(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	if a.secrets.be.SecretScanner == nil {
+		a.writeError(w, errStatus(http.StatusServiceUnavailable, "secret scanner is not configured"))
+		return
+	}
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	principal, err := requestPrincipalSubject(r.Context())
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	var req secretScanRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	plan, err := normalizeSecretScanRequest(a.secrets.be.SecretScanner, req)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	fingerprint, err := a.secretScanPreviewFingerprint(tenantID, principal, plan)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, secretScanPreviewResponse{
+		Capability: "F39", Operation: "run_secret_scan", Ready: true, EffectFree: true,
+		TargetPath: plan.TargetPath, Mode: plan.Mode, CustomRules: plan.CustomRules,
+		CustomRulesPath: plan.CustomRulesPath, CustomRulesSHA256: plan.CustomRulesSHA256,
+		Scanner:     "gitleaks " + secretscan.GitleaksPinnedVersion,
+		RulesActive: plan.RulesActive, Capabilities: append([]string(nil), plan.Capabilities...),
+		RequiredPermission: "secrets:write", RequestFingerprint: fingerprint,
+		Blockers: []string{},
+		Prerequisites: []string{
+			"The target and optional custom-rules file must remain inside an operator-configured scan root.",
+			"Git-history mode requires a local Git worktree whose repository root is inside that same boundary.",
+			"Custom rules may add detectors but cannot allowlist or disable the pinned defaults.",
+		},
+		PreviewWrites: []string{}, PreviewExternalEffects: []string{},
+		ExecuteWrites: []string{
+			"create and remove one private redacted scanner report in the process temporary directory",
+			"append tenant-scoped discovery run and redacted finding events after the scanner succeeds",
+			"store the successful response under the supplied Idempotency-Key for exact replay",
+		},
+		ExecuteExternalEffects: []string{
+			"start the pinned Gitleaks process with redaction enabled",
+			"read the reviewed target and optional custom-rules file within the configured scan roots",
+		},
+		RecoverySteps: []string{
+			"If the scanner fails before results are recorded, keep the reviewed plan visible and retry it with the same Idempotency-Key.",
+			"If the response is interrupted after completion, retry the identical request with the same Idempotency-Key to recover the original run instead of scanning twice.",
+			"If target, mode, or rules change, discard the old review and preview again.",
+		},
+		VerificationSteps: []string{
+			"Open the returned discovery run and confirm its completed state.",
+			"Review finding rule, file, line, fingerprint, and credential reference metadata; no matched secret value should be present.",
+			"Use the discovery, graph, risk, and incident views to assign and remediate confirmed findings.",
+		},
+		CLIArgv:      []string{"trstctl", "secrets", "scans", "preview", "-f", "secret-scan.json"},
+		DataHandling: "Preview reads only path metadata and validated custom-rule configuration. Execution runs Gitleaks with redaction; matched values are dropped before tenant-scoped discovery events, API responses, logs, or evidence are created.",
+	})
+}
+
 // scanSecrets invokes the configured Gitleaks binary through the served API and
 // records redacted metadata into discovery findings. The scanner output is parsed
 // for rule/file/line only; the secret value is neither read nor persisted.
@@ -178,26 +367,32 @@ func (a *API) scanSecrets(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
-		if strings.TrimSpace(req.Path) == "" {
-			return 0, nil, errStatus(http.StatusBadRequest, "path is required")
-		}
-		mode, err := secretscan.NormalizeScanMode(req.Mode)
+		plan, err := normalizeSecretScanRequest(a.secrets.be.SecretScanner, req)
 		if err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, err
 		}
-		opts := secretscan.ScanOptions{Mode: mode, CustomRulesPath: req.CustomRulesPath}
+		if fingerprint := strings.TrimSpace(req.PreviewFingerprint); fingerprint != "" {
+			principal, principalErr := requestPrincipalSubject(ctx)
+			if principalErr != nil {
+				return 0, nil, principalErr
+			}
+			want, fingerprintErr := a.secretScanPreviewFingerprint(tenantID, principal, plan)
+			if fingerprintErr != nil {
+				return 0, nil, fingerprintErr
+			}
+			if !crypto.ConstantTimeEqual([]byte(fingerprint), []byte(want)) {
+				return 0, nil, errStatus(http.StatusConflict, "reviewed secret-scan plan is stale; preview the current request again")
+			}
+		}
+		opts := secretscan.ScanOptions{Mode: plan.Mode, CustomRulesPath: plan.CustomRulesPath}
 
 		start := time.Now()
-		report, err := runSecretScanner(ctx, a.secrets.be.SecretScanner, req.Path, opts)
+		report, err := runSecretScanner(ctx, a.secrets.be.SecretScanner, plan.TargetPath, opts)
 		a.observeFeature("secrets", "scan", start, err)
 		if err != nil {
 			switch {
-			case errors.Is(err, secretscan.ErrInvalidScanTarget):
-				return 0, nil, errStatus(http.StatusBadRequest, err.Error())
-			case errors.Is(err, secretscan.ErrInvalidScanMode), errors.Is(err, secretscan.ErrInvalidCustomRules):
-				return 0, nil, errStatus(http.StatusBadRequest, err.Error())
-			case errors.Is(err, secretscan.ErrGitleaksBinaryNotFound):
-				return 0, nil, errStatus(http.StatusServiceUnavailable, "gitleaks binary is not configured")
+			case errors.Is(err, secretscan.ErrInvalidScanTarget), errors.Is(err, secretscan.ErrInvalidScanMode), errors.Is(err, secretscan.ErrInvalidCustomRules), errors.Is(err, secretscan.ErrGitleaksBinaryNotFound):
+				return 0, nil, secretScanRequestError(err)
 			default:
 				return 0, nil, errStatus(http.StatusBadGateway, err.Error())
 			}
@@ -210,22 +405,22 @@ func (a *API) scanSecrets(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
-		run, _, _, err := a.orch.RecordSecretScan(ctx, tenantID, report.Scanner, req.Path, report.RulesActive, rows)
+		run, _, _, err := a.orch.RecordSecretScan(ctx, tenantID, report.Scanner, plan.TargetPath, report.RulesActive, rows)
 		if err != nil {
 			return 0, nil, err
 		}
 		if report.Mode == "" {
-			report.Mode = mode
+			report.Mode = plan.Mode
 		}
 		if len(report.Capabilities) == 0 {
-			report.Capabilities = secretscan.ScanCapabilities(report.Mode, report.CustomRules || strings.TrimSpace(req.CustomRulesPath) != "")
+			report.Capabilities = secretscan.ScanCapabilities(report.Mode, report.CustomRules || plan.CustomRules)
 		}
 		return http.StatusCreated, secretScanResponse{
 			RunID:         run.ID,
 			Scanner:       report.Scanner,
 			EngineVersion: report.EngineVersion,
 			Mode:          report.Mode,
-			CustomRules:   report.CustomRules || strings.TrimSpace(req.CustomRulesPath) != "",
+			CustomRules:   report.CustomRules || plan.CustomRules,
 			Capabilities:  report.Capabilities,
 			RulesActive:   report.RulesActive,
 			FindingsCount: len(findings),

@@ -399,6 +399,7 @@ import type {
   SecretRotationScheduleList,
   SecretRotationScheduleRequest,
   SecretScan,
+  SecretScanPreview,
   SecretScanRequest,
   SecretSync,
   SecretSyncRequest,
@@ -1017,6 +1018,7 @@ export type {
   SecretRotationScheduleList,
   SecretRotationScheduleRequest,
   SecretScan,
+  SecretScanPreview,
   SecretScanRequest,
   SecretSync,
   SecretSyncRequest,
@@ -2346,7 +2348,8 @@ export interface Api {
   receiveSecretRepositoryWebhook(provider: string, input: SecretRepositoryWebhookRequest): Promise<SecretRepositoryWebhookReceipt>;
   thirdPartySecretScanning(): Promise<ThirdPartySecretScanPosture>;
   ingestThirdPartySecretScan(provider: string, input: ThirdPartySecretScanIngestRequest): Promise<ThirdPartySecretScanReceipt>;
-  scanSecrets(input: SecretScanRequest): Promise<SecretScan>;
+  previewSecretScan(input: SecretScanRequest): Promise<SecretScanPreview>;
+  scanSecrets(input: SecretScanRequest, idempotencyKey?: string): Promise<SecretScan>;
   syncSecret(input: SecretSyncRequest): Promise<SecretSync>;
   cloudSecretManagers(): Promise<CloudSecretManagerIntegration>;
   secretSyncTargets(): Promise<SecretSyncTargetCatalog>;
@@ -2922,7 +2925,8 @@ const liveApi: Api = {
   thirdPartySecretScanning: () => req<ThirdPartySecretScanPosture>("/api/v1/secrets/scans/third-party"),
   ingestThirdPartySecretScan: (provider, input) =>
     mutate<ThirdPartySecretScanReceipt>("POST", `/api/v1/secrets/scans/third-party/${encodeURIComponent(provider)}/ingest`, input),
-  scanSecrets: (input) => mutate<SecretScan>("POST", "/api/v1/secrets/scans", input),
+  previewSecretScan: (input) => postRead<SecretScanPreview>("/api/v1/secrets/scans/preview", input),
+  scanSecrets: (input, idempotencyKey) => mutate<SecretScan>("POST", "/api/v1/secrets/scans", input, idempotencyKey),
   syncSecret: (input) => mutate<SecretSync>("POST", "/api/v1/secrets/syncs", input),
   cloudSecretManagers: () => req<CloudSecretManagerIntegration>("/api/v1/secrets/cloud-secret-managers"),
   secretSyncTargets: () => req<SecretSyncTargetCatalog>("/api/v1/secrets/syncs/targets"),

@@ -39,12 +39,10 @@ import {
   type SecretRotationRequest,
   type SecretRotationSchedule,
   type SecretRotationScheduleRun,
-  type SecretScan,
   type SecretSync,
   type SecretSyncTargetCatalog,
   type SecretWorkloadInjection,
   type ThirdPartySecretScanPosture,
-  type ThirdPartySecretScanReceipt,
   type UnvaultedSecretPosture,
   type SecretValue,
 } from "@/lib/api";
@@ -52,13 +50,10 @@ import {
   DynamicLeaseMetadata,
   formatCommandArgv,
   parseSecretRotationPartialReceipt,
-  RepositoryScanPosture,
   RevealPanel,
   RotationHealthBadges,
   SecretApprovalQueue,
   Snippet,
-  ThirdPartyScanPosture,
-  defaultThirdPartyProviders,
   leaseMetadataOnly,
   mergeMeta,
   NativeSecretCreateForm,
@@ -76,6 +71,7 @@ import { SecretSyncWorkloadIdentityPanel } from "./secrets/SecretSyncWorkloadIde
 import { TransitOperations } from "./secrets/TransitOperations";
 import { PKISecretWorkflow } from "./secrets/PKISecretWorkflow";
 import { MachineAuthWorkflow } from "./secrets/MachineAuthWorkflow";
+import { SecretScanningWorkflow } from "./secrets/SecretScanningWorkflow";
 
 const SecretSharingWorkflow = lazy(() => import("./secrets/SecretSharingWorkflow"));
 const EphemeralAPIKeyWorkflow = lazy(() => import("./secrets/EphemeralAPIKeyWorkflow"));
@@ -277,21 +273,8 @@ export function Secrets() {
   const [lease, setLease] = useState<DynamicLease | null>(null);
   const [leaseCredential, setLeaseCredential] = useState<{ id: string; credential: string } | null>(null);
 
-  const [scanPath, setScanPath] = useState("");
-  const [scanMode, setScanMode] = useState<"workspace" | "git_history">("workspace");
-  const [scanCustomRulesPath, setScanCustomRulesPath] = useState("");
-  const [scanBusy, setScanBusy] = useState(false);
-  const [scanError, setScanError] = useState<string | null>(null);
-  const [scanResult, setScanResult] = useState<SecretScan | null>(null);
   const [repoScanPosture, setRepoScanPosture] = useState<SecretRepositoryScanPosture | null>(null);
   const [thirdPartyPosture, setThirdPartyPosture] = useState<ThirdPartySecretScanPosture | null>(null);
-  const [thirdPartyProvider, setThirdPartyProvider] = useState("cicd_log");
-  const [thirdPartySource, setThirdPartySource] = useState("");
-  const [thirdPartyArtifactPath, setThirdPartyArtifactPath] = useState("");
-  const [thirdPartyEvent, setThirdPartyEvent] = useState("");
-  const [thirdPartyBusy, setThirdPartyBusy] = useState(false);
-  const [thirdPartyError, setThirdPartyError] = useState<string | null>(null);
-  const [thirdPartyReceipt, setThirdPartyReceipt] = useState<ThirdPartySecretScanReceipt | null>(null);
 
   const [syncName, setSyncName] = useState("");
   const [syncTarget, setSyncTarget] = useState("");
@@ -1186,44 +1169,6 @@ export function Secrets() {
       setLeaseError(apiProblemMessage(err, "Could not revoke dynamic lease"));
     } finally {
       setLeaseBusy(null);
-    }
-  }
-
-  async function submitSecretScan(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setScanError(null);
-    setScanBusy(true);
-    try {
-      const path = scanPath.trim();
-      if (!path) throw new Error("Path is required");
-      const customRulesPath = scanCustomRulesPath.trim();
-      setScanResult(await api.scanSecrets({ path, mode: scanMode, ...(customRulesPath ? { custom_rules_path: customRulesPath } : {}) }));
-    } catch (err) {
-      setScanError(apiProblemMessage(err, "Could not run secret scan"));
-    } finally {
-      setScanBusy(false);
-    }
-  }
-
-  async function submitThirdPartySecretScan(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setThirdPartyError(null);
-    setThirdPartyBusy(true);
-    try {
-      const source = thirdPartySource.trim();
-      const artifactPath = thirdPartyArtifactPath.trim();
-      if (!source) throw new Error("Source is required");
-      if (!artifactPath) throw new Error("Artifact path is required");
-      const receipt = await api.ingestThirdPartySecretScan(thirdPartyProvider, {
-        source,
-        artifact_path: artifactPath,
-        ...(thirdPartyEvent.trim() ? { event: thirdPartyEvent.trim() } : {}),
-      });
-      setThirdPartyReceipt(receipt);
-    } catch (err) {
-      setThirdPartyError(apiProblemMessage(err, "Could not queue third-party secret scan"));
-    } finally {
-      setThirdPartyBusy(false);
     }
   }
 
@@ -2758,190 +2703,7 @@ export function Secrets() {
 
       {tab === "scanning" && (
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
-          <section aria-labelledby="secret-scanning-heading" className="grid min-w-0 gap-4 border-y border-border py-4">
-            <div className="-order-2">
-              <h2 id="secret-scanning-heading" className="text-title font-semibold">
-                {translateNow("source.code.and.ci.secret.scanning.bridge.27c18d763b")}
-              </h2>
-              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("secrets.scan.description")}</p>
-              {/* CAP-SCAN-01 source anchor: repository secret scanning is served by REST, CLI, outbox, and Gitleaks worker paths */}
-            </div>
-            <details className="ui-panel group order-1 p-comfortable">
-              <summary className="cursor-pointer font-medium text-foreground">
-                {t("secrets.scan.advancedSummary")}
-                <span className="ms-2 text-sm font-normal text-muted-foreground">{t("secrets.scan.advancedSummaryHelp")}</span>
-              </summary>
-              <div className="mt-4 grid gap-4">
-                {repoScanPosture && <RepositoryScanPosture posture={repoScanPosture} />}
-                {thirdPartyPosture && <ThirdPartyScanPosture posture={thirdPartyPosture} />}
-                <form
-                  aria-label={t("secrets.thirdPartyScan.form")}
-                  onSubmit={(event) => void submitThirdPartySecretScan(event)}
-                  className="grid gap-3 md:grid-cols-[12rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
-                >
-                  <label className="grid gap-1 text-sm">
-                    <span className="font-medium">{t("secrets.thirdPartyScan.provider")}</span>
-                    <select
-                      className="rounded-md border border-border bg-background px-3 py-2"
-                      value={thirdPartyProvider}
-                      onChange={(event) => setThirdPartyProvider(event.target.value)}
-                    >
-                      {(thirdPartyPosture?.providers ?? defaultThirdPartyProviders()).map((provider) => (
-                        <option key={provider.id} value={provider.id}>
-                          {provider.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="grid gap-1 text-sm">
-                    <span className="font-medium">{t("secrets.thirdPartyScan.source")}</span>
-                    <input
-                      className="rounded-md border border-border bg-background px-3 py-2"
-                      value={thirdPartySource}
-                      onChange={(event) => setThirdPartySource(event.target.value)}
-                      placeholder={t("secrets.thirdPartyScan.sourcePlaceholder")}
-                      required
-                    />
-                  </label>
-                  <label className="grid gap-1 text-sm">
-                    <span className="font-medium">{t("secrets.thirdPartyScan.artifactPath")}</span>
-                    <input
-                      className="rounded-md border border-border bg-background px-3 py-2"
-                      value={thirdPartyArtifactPath}
-                      onChange={(event) => setThirdPartyArtifactPath(event.target.value)}
-                      placeholder={t("secrets.thirdPartyScan.artifactPlaceholder")}
-                      required
-                    />
-                  </label>
-                  <label className="grid gap-1 text-sm">
-                    <span className="font-medium">{t("secrets.thirdPartyScan.event")}</span>
-                    <input
-                      className="rounded-md border border-border bg-background px-3 py-2"
-                      value={thirdPartyEvent}
-                      onChange={(event) => setThirdPartyEvent(event.target.value)}
-                      placeholder={t("secrets.thirdPartyScan.eventPlaceholder")}
-                    />
-                  </label>
-                  <Button type="submit" className="self-end" disabled={thirdPartyBusy || Boolean(loadError)}>
-                    {thirdPartyBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
-                    {thirdPartyBusy ? t("secrets.thirdPartyScan.queueing") : t("secrets.thirdPartyScan.queue")}
-                  </Button>
-                </form>
-                {thirdPartyError && <ErrorState title={t("secrets.thirdPartyScan.errorTitle")}>{thirdPartyError}</ErrorState>}
-                {thirdPartyReceipt && (
-                  <p role="status" className="rounded-control border border-status-success/30 bg-status-success/10 px-3 py-2 text-sm text-status-success">
-                    {t("secrets.thirdPartyScan.accepted", { provider: thirdPartyReceipt.provider, run: thirdPartyReceipt.run_id })}
-                  </p>
-                )}
-                {/* TRACE-005 source anchor: secret-scanning triage is library-only while repository ingestion and scan execution are served */}
-                <UnavailableState title={t("secrets.scan.triageLibraryOnlyTitle")}>{t("secrets.scan.triageLibraryOnlyBody")}</UnavailableState>
-              </div>
-            </details>
-            <form
-              aria-label={translateNow("source.run.secret.scan.89f2ed7a1b")}
-              onSubmit={(event) => void submitSecretScan(event)}
-              className="-order-1 grid gap-3 md:grid-cols-[minmax(0,1fr)_12rem_minmax(0,1fr)_auto]"
-            >
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium">{translateNow("source.path.62fa5a5b0d")}</span>
-                <input
-                  id="secret-scan-path"
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                  value={scanPath}
-                  onChange={(event) => setScanPath(event.target.value)}
-                  placeholder={translateNow("source.github.com.example.payments.8d7be8211f")}
-                  required
-                />
-              </label>
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium">{t("secrets.scan.mode")}</span>
-                <select
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                  value={scanMode}
-                  onChange={(event) => setScanMode(event.target.value as "workspace" | "git_history")}
-                >
-                  <option value="workspace">{t("secrets.scan.modeWorkspace")}</option>
-                  <option value="git_history">{t("secrets.scan.modeGitHistory")}</option>
-                </select>
-              </label>
-              <label className="grid gap-1 text-sm">
-                <span className="font-medium">{t("secrets.scan.customRules")}</span>
-                <input
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                  value={scanCustomRulesPath}
-                  onChange={(event) => setScanCustomRulesPath(event.target.value)}
-                  placeholder={t("secrets.scan.customRulesPlaceholder")}
-                />
-              </label>
-              <Button type="submit" className="self-end" disabled={scanBusy || Boolean(loadError)}>
-                {scanBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
-                {translateNow("source.run.scan.68ac7da5df")}
-              </Button>
-            </form>
-            {scanError && <ErrorState title={translateNow("source.secret.scan.failed.61f13676c4")}>{scanError}</ErrorState>}
-            {scanResult && (
-              <div className="ui-panel grid gap-3 p-comfortable text-sm">
-                <dl className="grid gap-2 md:grid-cols-6">
-                  <div>
-                    <dt className="font-medium text-muted-foreground">{translateNow("source.run.id.26d3e7aaac")}</dt>
-                    <dd className="break-all font-mono text-xs">{scanResult.run_id}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-medium text-muted-foreground">{translateNow("source.scanner.71d4cf953e")}</dt>
-                    <dd>{scanResult.scanner}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-medium text-muted-foreground">{t("secrets.scan.mode")}</dt>
-                    <dd>{scanResult.mode}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-medium text-muted-foreground">{t("secrets.scan.customRules")}</dt>
-                    <dd>{scanResult.custom_rules ? t("secrets.scan.customRulesYes") : t("secrets.scan.customRulesNo")}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-medium text-muted-foreground">{translateNow("source.rules.4228aeb07c")}</dt>
-                    <dd>{scanResult.rules_active}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-medium text-muted-foreground">{translateNow("source.findings.e171c2ff25")}</dt>
-                    <dd>{scanResult.findings_count}</dd>
-                  </div>
-                </dl>
-                {scanResult.capabilities.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {scanResult.capabilities.map((capability) => (
-                      <span key={capability} className="rounded-control border border-border px-2 py-1 text-xs text-muted-foreground">
-                        {capability}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <div className="overflow-x-auto">
-                  <table className="ui-table min-w-[48rem]">
-                    <caption className="sr-only">{translateNow("source.secret.scan.findings.3462f78805")}</caption>
-                    <thead>
-                      <tr>
-                        <th scope="col">{translateNow("source.rule.62845f31a2")}</th>
-                        <th scope="col">{translateNow("source.file.50009ce1da")}</th>
-                        <th scope="col">{translateNow("source.line.d7852cd0d2")}</th>
-                        <th scope="col">{translateNow("source.redacted.reference.f904f7809b")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {scanResult.findings.map((finding) => (
-                        <tr key={`${finding.rule_id}-${finding.file}-${finding.line}`} className="align-top">
-                          <td>{finding.rule_id}</td>
-                          <td>{finding.file}</td>
-                          <td className="font-mono text-xs">{finding.line}</td>
-                          <td className="font-mono text-xs">{finding.credential_ref}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </section>
+          <SecretScanningWorkflow repoPosture={repoScanPosture} thirdPartyPosture={thirdPartyPosture} loadingBlocked={Boolean(loadError)} />
         </div>
       )}
 

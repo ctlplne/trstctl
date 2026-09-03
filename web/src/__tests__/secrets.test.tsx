@@ -54,6 +54,7 @@ const { apiMock } = vi.hoisted(() => ({
     kubernetesSecretOperator: vi.fn(),
     secretWorkloadInjection: vi.fn(),
     unvaultedSecrets: vi.fn(),
+    previewSecretScan: vi.fn(),
     scanSecrets: vi.fn(),
     syncSecret: vi.fn(),
     identities: vi.fn(),
@@ -582,6 +583,7 @@ function primeSecretsMocks() {
   apiMock.kubernetesSecretOperator.mockResolvedValue(kubernetesSecretOperatorFixture());
   apiMock.secretWorkloadInjection.mockResolvedValue(secretWorkloadInjectionFixture());
   apiMock.unvaultedSecrets.mockResolvedValue(unvaultedSecretPostureFixture());
+  apiMock.previewSecretScan.mockResolvedValue(secretScanPreviewFixture());
   apiMock.scanSecrets.mockResolvedValue({
     run_id: "55555555-5555-5555-5555-555555555555",
     scanner: "gitleaks",
@@ -657,6 +659,33 @@ function repoScanPostureFixture() {
     residuals: ["native provider signature verification remains a follow-up"],
     evidence_refs: ["internal/api/secrets.go"],
     architecture_controls: ["AN-2", "AN-5", "AN-6", "AN-8"],
+  };
+}
+
+function secretScanPreviewFixture() {
+  return {
+    capability: "F39",
+    operation: "run_secret_scan",
+    ready: true,
+    effect_free: true,
+    target_path: "github.com/example/payments",
+    mode: "workspace",
+    custom_rules: false,
+    scanner: "gitleaks v8.27.2",
+    rules_active: 213,
+    capabilities: ["pattern-rules", "entropy-rules", "default-rules-100-plus", "workspace"],
+    required_permission: "secrets:write",
+    request_fingerprint: "sha256:reviewed-f39",
+    blockers: [],
+    prerequisites: ["The target must stay inside an operator-configured scan root."],
+    preview_writes: [],
+    preview_external_effects: [],
+    execute_writes: ["append tenant-scoped discovery events"],
+    execute_external_effects: ["start the pinned Gitleaks process with redaction enabled"],
+    recovery_steps: ["Retry the identical reviewed request with the same Idempotency-Key."],
+    verification_steps: ["Open the returned discovery run and confirm its completed state."],
+    cli_argv: ["trstctl", "secrets", "scans", "preview", "-f", "secret-scan.json"],
+    secret_data_handling: "Matched secret values are dropped before events, API responses, logs, or evidence are created.",
   };
 }
 
@@ -1649,8 +1678,16 @@ describe("secrets surface", () => {
     expect(await screen.findByText(/slack scan queued as run 66666666-6666-6666-6666-666666666666/i)).toBeInTheDocument();
     const scanForm = within(screen.getByRole("form", { name: "Run secret scan" }));
     await user.type(scanForm.getByLabelText("Path"), "github.com/example/payments");
-    await user.click(scanForm.getByRole("button", { name: /run scan/i }));
-    await waitFor(() => expect(apiMock.scanSecrets).toHaveBeenCalledWith({ path: "github.com/example/payments", mode: "workspace" }));
+    await user.click(scanForm.getByRole("button", { name: /review scan/i }));
+    await waitFor(() => expect(apiMock.previewSecretScan).toHaveBeenCalledWith({ path: "github.com/example/payments", mode: "workspace" }));
+    expect(apiMock.scanSecrets).not.toHaveBeenCalled();
+    await user.click(await screen.findByRole("button", { name: "Run reviewed scan" }));
+    await waitFor(() =>
+      expect(apiMock.scanSecrets).toHaveBeenCalledWith(
+        { path: "github.com/example/payments", mode: "workspace", preview_fingerprint: "sha256:reviewed-f39" },
+        expect.any(String),
+      ),
+    );
     expect(await screen.findByText("55555555-5555-5555-5555-555555555555")).toBeInTheDocument();
     expect(screen.getByText("entropy-rules")).toBeInTheDocument();
     expect(screen.getByText("generic-api-key")).toBeInTheDocument();
@@ -1683,6 +1720,25 @@ describe("secrets surface", () => {
     expect(storageSpy).not.toHaveBeenCalled();
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
+  });
+
+  it("keeps the failed F39 run visible and retries the exact reviewed request with one idempotency key", async () => {
+    const user = userEvent.setup();
+    apiMock.scanSecrets.mockRejectedValueOnce(new Error("temporary scanner failure"));
+    renderSecrets("/secrets/scanning");
+
+    const form = within(await screen.findByRole("form", { name: "Run secret scan" }));
+    await user.type(form.getByLabelText("Path"), "github.com/example/payments");
+    await user.click(form.getByRole("button", { name: "Review scan" }));
+    await user.click(await screen.findByRole("button", { name: "Run reviewed scan" }));
+
+    expect(await screen.findByText(/temporary scanner failure/i)).toBeInTheDocument();
+    const firstKey = apiMock.scanSecrets.mock.calls[0]?.[1];
+    expect(firstKey).toEqual(expect.any(String));
+    await user.click(screen.getByRole("button", { name: "Retry reviewed scan" }));
+    await waitFor(() => expect(apiMock.scanSecrets).toHaveBeenCalledTimes(2));
+    expect(apiMock.scanSecrets.mock.calls[1]?.[1]).toBe(firstKey);
+    expect(await screen.findByText("55555555-5555-5555-5555-555555555555")).toBeInTheDocument();
   });
 
   it("runs transit encrypt/decrypt and keeps secret sync disclosure scoped", async () => {

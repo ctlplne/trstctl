@@ -731,8 +731,14 @@ checksums the release tarball before installing. `secrets.scan_roots` (or
 `TRSTCTL_SECRETS_SCAN_ROOTS`, a comma-separated list) is the closed set of mounted
 filesystem trees the served scanner may read; an empty setting confines scans to the
 control-plane working directory. This prevents a caller with `secrets:write` from
-turning the scanner into a general host-file reader. `POST /api/v1/secrets/scans` scans a
-repo or workspace with the pinned `213`-rule default set (above the 140-rule floor);
+turning the scanner into a general host-file reader. `POST
+/api/v1/secrets/scans/preview` first validates the exact confined path, scan mode,
+installed scanner, and additive rules without starting Git or Gitleaks, creating a
+file, appending an event, or recording idempotency. Its keyed fingerprint is bound to
+the tenant, caller, normalized target, mode, rules path, and capabilities. `POST
+/api/v1/secrets/scans` may require that fingerprint and fails with `409` before the
+scanner starts if the reviewed command changed. Execution scans a repo or workspace
+with the pinned `213`-rule default set (above the 140-rule floor);
 the response and stored finding carry only rule id, file, line, scanner version, and
 fingerprint — Gitleaks redacts the value, never reaching the API, event log, graph, or
 audit output.
@@ -741,7 +747,9 @@ audit output.
 cat > secret-scan.json <<'JSON'
 {"path":".","mode":"git_history","custom_rules_path":"./gitleaks-custom-rules.toml"}
 JSON
-trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.json
+trstctl-cli secrets scans preview -f secret-scan.json
+# Copy request_fingerprint from the review into preview_fingerprint, then run.
+trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f reviewed-secret-scan.json
 ```
 
 A bare `{"path":"."}` scans the working tree by default; `mode`/`custom_rules_path`
@@ -752,7 +760,11 @@ allowlist or disabled-rule override. The response's `mode`, `custom_rules`, and
 custom-rule coverage without storing a secret value; `run_id` can be replayed against
 `GET /api/v1/discovery/findings?run_id=...` or the graph view. TruffleHog JSON
 ingestion still exists for offline import/contract tests, but Gitleaks is the served
-engine.
+engine. If a scanner or network failure interrupts execution, retry the identical
+reviewed body with the same `Idempotency-Key`: a pre-recording failure can try again,
+while a completed request returns its original run instead of scanning twice. The
+console preserves that recovery key only in memory, keeps the original failure
+visible, and labels the action **Retry reviewed scan**.
 
 Locally, the same runner works without a server: `secrets scans staged-diff` and
 `secrets scans pre-commit install` scan only staged Git blobs, or an explicit

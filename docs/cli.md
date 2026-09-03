@@ -844,7 +844,10 @@ trstctl-cli kubernetes trust-bundles
 cat > secret-scan.json <<'JSON'
 {"path":"."}
 JSON
-trstctl-cli --idempotency-key secret-scan-1 secrets scans run -f secret-scan.json
+trstctl-cli secrets scans preview -f secret-scan.json
+# Add the returned request_fingerprint as preview_fingerprint in the same body.
+# Reuse this idempotency key if the run is interrupted; a completed run replays.
+trstctl-cli --idempotency-key secret-scan-1 secrets scans run -f reviewed-secret-scan.json
 
 # Scan full Git history with the default 213-rule floor plus additive custom rules.
 cat > deep-secret-scan.json <<'JSON'

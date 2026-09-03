@@ -1723,7 +1723,10 @@ export const messages = {
     defaultMessage: "The server did not prove that review is effect-free, so the console refused to continue.",
     description: "F38 fail-closed response when preview effect-free evidence is absent.",
   },
-  "secrets.ephemeral.previewBlocked": { defaultMessage: "The server says this temporary key is not ready to issue.", description: "F38 preview blocker fallback." },
+  "secrets.ephemeral.previewBlocked": {
+    defaultMessage: "The server says this temporary key is not ready to issue.",
+    description: "F38 preview blocker fallback.",
+  },
   "secrets.ephemeral.permissionBlocked": { defaultMessage: "Temporary key controls are locked", description: "F38 missing-permission heading." },
   "secrets.ephemeral.permissionBlockedDetail": {
     defaultMessage: "This session needs access:write. The server also refuses any requested permission that this session does not already hold.",
@@ -1731,10 +1734,22 @@ export const messages = {
   },
   "secrets.ephemeral.safetyHeading": { defaultMessage: "What happens", description: "F38 ELI5 lifecycle explanation heading." },
   "secrets.ephemeral.safetyReview": { defaultMessage: "Review writes nothing and calls no external system.", description: "F38 preview safety step." },
-  "secrets.ephemeral.safetyReveal": { defaultMessage: "Issue returns the raw bearer once; copy it before dismissing it.", description: "F38 reveal-once safety step." },
-  "secrets.ephemeral.safetyVerify": { defaultMessage: "Verification uses the new bearer without your browser session and keeps only pass or fail.", description: "F38 bearer verification safety step." },
-  "secrets.ephemeral.safetyRecover": { defaultMessage: "An uncertain retry reuses one recovery key, so it cannot mint a duplicate.", description: "F38 idempotent recovery safety step." },
-  "secrets.ephemeral.openLedger": { defaultMessage: "Open the access-token ledger", description: "F38 link to observed API-token metadata and revoke controls." },
+  "secrets.ephemeral.safetyReveal": {
+    defaultMessage: "Issue returns the raw bearer once; copy it before dismissing it.",
+    description: "F38 reveal-once safety step.",
+  },
+  "secrets.ephemeral.safetyVerify": {
+    defaultMessage: "Verification uses the new bearer without your browser session and keeps only pass or fail.",
+    description: "F38 bearer verification safety step.",
+  },
+  "secrets.ephemeral.safetyRecover": {
+    defaultMessage: "An uncertain retry reuses one recovery key, so it cannot mint a duplicate.",
+    description: "F38 idempotent recovery safety step.",
+  },
+  "secrets.ephemeral.openLedger": {
+    defaultMessage: "Open the access-token ledger",
+    description: "F38 link to observed API-token metadata and revoke controls.",
+  },
   "secrets.ephemeral.reviewedPlanLabel": { defaultMessage: "Reviewed temporary API-key plan", description: "Accessible label for F38 review result." },
   "secrets.ephemeral.reviewedPlan": { defaultMessage: "Ready to issue", description: "F38 reviewed plan heading." },
   "secrets.ephemeral.nothingCreated": {
@@ -1749,19 +1764,25 @@ export const messages = {
   "secrets.ephemeral.fingerprint": { defaultMessage: "Server-bound review fingerprint", description: "F38 review fingerprint label." },
   "secrets.ephemeral.issueReviewed": { defaultMessage: "Issue reviewed key", description: "F38 reviewed execution action." },
   "secrets.ephemeral.retrySame": { defaultMessage: "Retry same reviewed key", description: "F38 stable-idempotency recovery action." },
-  "secrets.ephemeral.reviewRequired": { defaultMessage: "Review the current subject, actions, and lifetime before issuing.", description: "F38 missing-review refusal." },
-  "secrets.ephemeral.reviewStale": { defaultMessage: "Configuration changed after review. Review the current values again.", description: "F38 stale-review refusal." },
+  "secrets.ephemeral.reviewRequired": {
+    defaultMessage: "Review the current subject, actions, and lifetime before issuing.",
+    description: "F38 missing-review refusal.",
+  },
+  "secrets.ephemeral.reviewStale": {
+    defaultMessage: "Configuration changed after review. Review the current values again.",
+    description: "F38 stale-review refusal.",
+  },
   "secrets.ephemeral.issueFailedTitle": { defaultMessage: "Temporary key was not confirmed", description: "F38 issuance failure heading." },
   "secrets.ephemeral.issueFallback": { defaultMessage: "The server did not confirm temporary-key issuance.", description: "F38 issuance error fallback." },
   "secrets.ephemeral.revealTitle": { defaultMessage: "Reveal-once temporary API key", description: "F38 reveal panel heading." },
   "secrets.ephemeral.revealGuidance": {
-    defaultMessage:
-      "Key {id} belongs to {subject}, expires {expiresAt}, and can perform only {scopes}. Copy it now. Dismissal removes the only browser copy.",
+    defaultMessage: "Key {id} belongs to {subject}, expires {expiresAt}, and can perform only {scopes}. Copy it now. Dismissal removes the only browser copy.",
     description: "F38 reveal-once key metadata and handling guidance.",
   },
   "secrets.ephemeral.verify": { defaultMessage: "Verify key access", description: "F38 raw-bearer verification action." },
   "secrets.ephemeral.verifyUnavailable": {
-    defaultMessage: "This key does not include access:read, so the console cannot use its safe metadata-only verification route. Test the key against its intended API before handing it off.",
+    defaultMessage:
+      "This key does not include access:read, so the console cannot use its safe metadata-only verification route. Test the key against its intended API before handing it off.",
     description: "F38 explanation when the built-in bearer proof cannot run.",
   },
   "secrets.ephemeral.verifyPassed": {
@@ -1769,9 +1790,15 @@ export const messages = {
     description: "F38 successful bearer-use verification evidence.",
   },
   "secrets.ephemeral.verifyFailedTitle": { defaultMessage: "Temporary key verification failed", description: "F38 bearer verification error heading." },
-  "secrets.ephemeral.verifyFallback": { defaultMessage: "The temporary key could not authenticate the verification request.", description: "F38 bearer verification error fallback." },
+  "secrets.ephemeral.verifyFallback": {
+    defaultMessage: "The temporary key could not authenticate the verification request.",
+    description: "F38 bearer verification error fallback.",
+  },
   "secrets.ephemeral.revoke": { defaultMessage: "Revoke now", description: "F38 immediate revoke action." },
-  "secrets.ephemeral.revoked": { defaultMessage: "Revoked. The raw key was removed from this page and can no longer authenticate.", description: "F38 successful revocation and browser cleanup status." },
+  "secrets.ephemeral.revoked": {
+    defaultMessage: "Revoked. The raw key was removed from this page and can no longer authenticate.",
+    description: "F38 successful revocation and browser cleanup status.",
+  },
   "secrets.ephemeral.revokeFailedTitle": { defaultMessage: "Temporary key revocation failed", description: "F38 revocation error heading." },
   "secrets.ephemeral.revokeFallback": { defaultMessage: "The temporary key could not be revoked.", description: "F38 revocation error fallback." },
   "secrets.transit.independentFromStore": {
@@ -14981,6 +15008,80 @@ export const messages = {
     defaultMessage: "no",
     description: "Short value showing custom rules were not used for a secret scan.",
   },
+  "secrets.scan.required": { defaultMessage: "This field is required.", description: "Required-field error in the secret scan workflow." },
+  "secrets.scan.pathHelp": {
+    defaultMessage: "Choose a repository or build-workspace path that the control plane is allowed to read.",
+    description: "Plain-language help for the secret scan target path.",
+  },
+  "secrets.scan.modeHelp": {
+    defaultMessage: "Workspace checks current files. Git history also checks secrets committed in the past.",
+    description: "Plain-language explanation of secret scan modes.",
+  },
+  "secrets.scan.customRulesHelp": {
+    defaultMessage: "Optional. Extra rules can add detectors, but cannot turn off the built-in rules.",
+    description: "Plain-language help for additive Gitleaks rules.",
+  },
+  "secrets.scan.progress": { defaultMessage: "Secret scan progress", description: "Accessible label for the secret scan stepper." },
+  "secrets.scan.stepConfigure": { defaultMessage: "Choose what to scan", description: "Configure step label in the secret scan workflow." },
+  "secrets.scan.stepConfigureHelp": {
+    defaultMessage: "Pick the bounded path, scan depth, and optional extra rules.",
+    description: "Configure step description in the secret scan workflow.",
+  },
+  "secrets.scan.stepReview": { defaultMessage: "Review the safe plan", description: "Review step label in the secret scan workflow." },
+  "secrets.scan.stepReviewHelp": {
+    defaultMessage: "Confirm exactly what Gitleaks will read, run, and record before it starts.",
+    description: "Review step description in the secret scan workflow.",
+  },
+  "secrets.scan.stepProve": { defaultMessage: "See and verify results", description: "Proof step label in the secret scan workflow." },
+  "secrets.scan.stepProveHelp": {
+    defaultMessage: "Use the durable run ID and redacted findings to continue remediation.",
+    description: "Proof step description in the secret scan workflow.",
+  },
+  "secrets.scan.review": { defaultMessage: "Review scan", description: "Button that requests an effect-free secret scan preview." },
+  "secrets.scan.previewNotEffectFree": {
+    defaultMessage: "The server did not prove that this review is effect-free.",
+    description: "Fail-closed error for an unsafe secret scan preview.",
+  },
+  "secrets.scan.previewBlocked": { defaultMessage: "The server says this scan is not ready.", description: "Fallback for a blocked secret scan preview." },
+  "secrets.scan.previewFailed": { defaultMessage: "Could not review this secret scan", description: "Fallback error for secret scan preview." },
+  "secrets.scan.reviewRequired": {
+    defaultMessage: "Review the current scan before running it.",
+    description: "Error when scan execution has no reviewed plan.",
+  },
+  "secrets.scan.reviewStale": {
+    defaultMessage: "The target, mode, rules, tenant, or operator changed. Review the current scan again.",
+    description: "Error shown when the server refuses a stale secret scan plan.",
+  },
+  "secrets.scan.runFailed": { defaultMessage: "Could not complete the reviewed secret scan", description: "Fallback error for secret scan execution." },
+  "secrets.scan.reviewedPlanLabel": { defaultMessage: "Reviewed secret scan plan", description: "Accessible label for exact secret scan review evidence." },
+  "secrets.scan.reviewedPlan": { defaultMessage: "Ready to scan", description: "Heading for an accepted secret scan preview." },
+  "secrets.scan.nothingHappened": {
+    defaultMessage: "Nothing has run or changed yet. This plan made no writes and started no process.",
+    description: "Effect-free assurance in the secret scan review.",
+  },
+  "secrets.scan.permission": { defaultMessage: "Required permission", description: "Permission label in the secret scan review." },
+  "secrets.scan.executionEffects": { defaultMessage: "What will happen", description: "Execution-effects heading in the secret scan review." },
+  "secrets.scan.recovery": { defaultMessage: "If the scan fails", description: "Recovery heading in the secret scan review." },
+  "secrets.scan.exactEvidence": { defaultMessage: "Exact reviewed fingerprint", description: "Disclosure label for the server-bound scan fingerprint." },
+  "secrets.scan.failedTitle": { defaultMessage: "Secret scan needs attention", description: "Error-state heading in the secret scan workflow." },
+  "secrets.scan.retryHelp": {
+    defaultMessage: "The original failure stays visible. Retry uses the same reviewed request and idempotency key, so a completed scan is not run twice.",
+    description: "Explains safe F39 scan recovery.",
+  },
+  "secrets.scan.runReviewed": { defaultMessage: "Run reviewed scan", description: "Button that executes an exact reviewed secret scan." },
+  "secrets.scan.retryReviewed": { defaultMessage: "Retry reviewed scan", description: "Button that safely retries the same reviewed secret scan." },
+  "secrets.scan.completed": { defaultMessage: "Scan completed", description: "Heading for a completed secret scan." },
+  "secrets.scan.completedHelp": {
+    defaultMessage: "Only redacted metadata is shown here. The durable discovery run is the proof and remediation handoff.",
+    description: "Explanation of secret scan result evidence.",
+  },
+  "secrets.scan.openDiscovery": { defaultMessage: "Open discovery run", description: "Link from a secret scan result to durable discovery evidence." },
+  "secrets.scan.startAnother": { defaultMessage: "Start another scan", description: "Action that resets the secret scan workflow." },
+  "secrets.scan.automationHeading": { defaultMessage: "Connect repositories and build systems", description: "Heading for advanced secret scan automation." },
+  "secrets.scan.automationHelp": {
+    defaultMessage: "After the first scan works, connect Git providers, CI logs, registry exports, Slack, or Jira so checks keep running.",
+    description: "Plain-language introduction to repository and third-party scan automation.",
+  },
   "secrets.approvals.heading": {
     defaultMessage: "Secret-change approvals",
     description: "Heading for the secret-change approval queue.",
@@ -23008,10 +23109,6 @@ export const messages = {
     defaultMessage: "Run ID",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
-  "source.run.scan.68ac7da5df": {
-    defaultMessage: "Run scan",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
   "source.run.secret.scan.89f2ed7a1b": {
     defaultMessage: "Run secret scan",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
@@ -23091,10 +23188,6 @@ export const messages = {
   },
   "source.secret.payments.db.password.cf46ca15a9": {
     defaultMessage: "Secret/payments-db/password",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
-  "source.secret.scan.failed.61f13676c4": {
-    defaultMessage: "Secret scan failed",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
   "source.secret.scan.findings.3462f78805": {

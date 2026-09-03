@@ -35,6 +35,7 @@ const { apiMock } = vi.hoisted(() => ({
     kubernetesSecretOperator: vi.fn(),
     secretWorkloadInjection: vi.fn(),
     unvaultedSecrets: vi.fn(),
+    previewSecretScan: vi.fn(),
     scanSecrets: vi.fn(),
     syncSecret: vi.fn(),
   },
@@ -425,6 +426,30 @@ describe("WIRE-09 secret scanning and sync wiring", () => {
     apiMock.kubernetesSecretOperator.mockResolvedValue(kubernetesSecretOperatorFixture());
     apiMock.secretWorkloadInjection.mockResolvedValue(secretWorkloadInjectionFixture());
     apiMock.unvaultedSecrets.mockResolvedValue(unvaultedSecretPostureFixture());
+    apiMock.previewSecretScan.mockResolvedValue({
+      capability: "F39",
+      operation: "run_secret_scan",
+      ready: true,
+      effect_free: true,
+      target_path: "github.com/example/payments",
+      mode: "workspace",
+      custom_rules: false,
+      scanner: "gitleaks v8.27.2",
+      rules_active: 213,
+      capabilities: ["pattern-rules", "entropy-rules", "default-rules-100-plus", "workspace"],
+      required_permission: "secrets:write",
+      request_fingerprint: "sha256:reviewed-f39",
+      blockers: [],
+      prerequisites: ["Target remains inside the configured root."],
+      preview_writes: [],
+      preview_external_effects: [],
+      execute_writes: ["append redacted discovery events"],
+      execute_external_effects: ["run Gitleaks with redaction"],
+      recovery_steps: ["Retry with the same Idempotency-Key."],
+      verification_steps: ["Open the discovery run."],
+      cli_argv: ["trstctl", "secrets", "scans", "preview", "-f", "secret-scan.json"],
+      secret_data_handling: "Matched values never enter the response.",
+    });
     apiMock.scanSecrets.mockResolvedValue({
       run_id: "55555555-5555-5555-5555-555555555555",
       scanner: "gitleaks",
@@ -516,9 +541,15 @@ describe("WIRE-09 secret scanning and sync wiring", () => {
     expect(await screen.findByText(/slack scan queued as run 66666666-6666-6666-6666-666666666666/i)).toBeInTheDocument();
     const scanForm = within(screen.getByRole("form", { name: "Run secret scan" }));
     await user.type(scanForm.getByLabelText("Path"), "github.com/example/payments");
-    await user.click(scanForm.getByRole("button", { name: /run scan/i }));
+    await user.click(scanForm.getByRole("button", { name: /review scan/i }));
+    await user.click(await screen.findByRole("button", { name: "Run reviewed scan" }));
 
-    await waitFor(() => expect(apiMock.scanSecrets).toHaveBeenCalledWith({ path: "github.com/example/payments", mode: "workspace" }));
+    await waitFor(() =>
+      expect(apiMock.scanSecrets).toHaveBeenCalledWith(
+        { path: "github.com/example/payments", mode: "workspace", preview_fingerprint: "sha256:reviewed-f39" },
+        expect.any(String),
+      ),
+    );
     expect(await screen.findByText("55555555-5555-5555-5555-555555555555")).toBeInTheDocument();
     expect(screen.getByText("entropy-rules")).toBeInTheDocument();
     expect(screen.getByText("generic-api-key")).toBeInTheDocument();

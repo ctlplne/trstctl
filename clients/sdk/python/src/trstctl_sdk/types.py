@@ -9493,12 +9493,44 @@ SecretScanFinding = TypedDict(
     total=False,
 )
 
+SecretScanPreview = TypedDict(
+    'SecretScanPreview',
+    {
+        'blockers': list[str],
+        'capabilities': list[str],
+        'capability': str,
+        'cli_argv': list[str],
+        'custom_rules': bool,
+        'custom_rules_path': str,
+        'custom_rules_sha256': str,
+        'effect_free': bool,
+        'execute_external_effects': list[str],
+        'execute_writes': list[str],
+        'mode': str,
+        'operation': str,
+        'prerequisites': list[str],
+        'preview_external_effects': list[str],
+        'preview_writes': list[str],
+        'ready': bool,
+        'recovery_steps': list[str],
+        'request_fingerprint': str,
+        'required_permission': str,
+        'rules_active': int,
+        'scanner': str,
+        'secret_data_handling': str,
+        'target_path': str,
+        'verification_steps': list[str],
+    },
+    total=False,
+)
+
 SecretScanRequest = TypedDict(
     'SecretScanRequest',
     {
         'custom_rules_path': str,
         'mode': str,
         'path': str,
+        'preview_fingerprint': str,
     },
     total=False,
 )

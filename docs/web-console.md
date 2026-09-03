@@ -355,7 +355,13 @@ If creation has an ambiguous network result, the page retains one in-memory reco
 key and offers **Retry same reviewed share**; it does not create a new request. The
 same workspace shows the secret-change dual-control queue and keeps values/tokens out
 of browser storage. **Find leaked secrets in code** (`/secrets/scanning`)
-covers repository and pipeline checks; **Send secrets to systems** (`/secrets/sync`)
+covers repository and pipeline checks through a three-step **choose → review →
+prove** workflow. Review is server-owned and effect-free: it validates the confined
+path, mode, scanner, and optional rules before any process starts. A failed or
+interrupted run stays visible and **Retry reviewed scan** reuses the same in-memory
+idempotency key, so a completed scan is recovered rather than run twice. Result rows
+show only rule, file, line, and redacted credential-reference metadata, then link to
+the durable discovery run. **Send secrets to systems** (`/secrets/sync`)
 shows configured destinations and refuses a delivery when none is configured.
 The store's scheduled-rotation panel renders one tick's exact run and deferred-row
 receipt. Deferred rows use only the served `approval_pending`,

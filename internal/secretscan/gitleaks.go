@@ -5,6 +5,7 @@ package secretscan
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +14,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	boundarycrypto "trstctl.com/trstctl/internal/crypto"
 )
 
 const (
@@ -57,6 +60,21 @@ type Report struct {
 	Findings      []Finding
 }
 
+// Plan is the effect-free, filesystem-validated description of one future
+// Gitleaks run. It contains configuration metadata only. Building it never
+// starts Git, Gitleaks, or any other process and never creates a report/config
+// file, which makes it safe to expose through an authenticated review route.
+type Plan struct {
+	TargetPath        string
+	TargetRoot        string
+	Mode              string
+	CustomRulesPath   string
+	CustomRulesSHA256 string
+	CustomRules       bool
+	RulesActive       int
+	Capabilities      []string
+}
+
 // GitleaksRunner invokes the pinned Gitleaks CLI as a subprocess.
 type GitleaksRunner struct {
 	Binary             string
@@ -79,6 +97,54 @@ func NewGitleaksRunner(binary string) *GitleaksRunner {
 // Scan runs the default workspace scan for compatibility with older embedders.
 func (r *GitleaksRunner) Scan(ctx context.Context, target string) (Report, error) {
 	return r.ScanWithOptions(ctx, target, ScanOptions{})
+}
+
+// Plan validates the exact target, confinement boundary, mode, scanner binary,
+// and additive custom rules without starting a process or writing a file.
+func (r *GitleaksRunner) Plan(target string, opts ScanOptions) (Plan, error) {
+	mode, err := NormalizeScanMode(opts.Mode)
+	if err != nil {
+		return Plan{}, err
+	}
+	targetPath, targetRoot, err := normalizeTarget(target, r.AllowedRoots)
+	if err != nil {
+		return Plan{}, err
+	}
+	if mode == ScanModeGitHistory {
+		root, err := gitRootWithoutProcess(targetPath)
+		if err != nil {
+			return Plan{}, err
+		}
+		root, err = resolveAllowedPath(root, r.AllowedRoots)
+		if err != nil {
+			return Plan{}, fmt.Errorf("%w: repository root is outside the configured scan roots", ErrInvalidScanTarget)
+		}
+		targetPath, targetRoot = root, root
+	}
+	if _, err := r.resolveBinary(); err != nil {
+		return Plan{}, err
+	}
+	rulesActive := GitleaksDefaultRulesActive
+	customRulesPath := ""
+	customRulesSHA256 := ""
+	if strings.TrimSpace(opts.CustomRulesPath) != "" {
+		var data []byte
+		customRulesPath, data, err = loadCustomRulesFragment(opts.CustomRulesPath, r.AllowedRoots)
+		if err != nil {
+			return Plan{}, err
+		}
+		rulesActive += countCustomRuleTables(data)
+		digest, digestErr := boundarycrypto.Digest(boundarycrypto.SHA256, data)
+		if digestErr != nil {
+			return Plan{}, fmt.Errorf("secretscan: digest custom rules: %w", digestErr)
+		}
+		customRulesSHA256 = hex.EncodeToString(digest)
+	}
+	return Plan{
+		TargetPath: targetPath, TargetRoot: targetRoot, Mode: mode,
+		CustomRulesPath: customRulesPath, CustomRulesSHA256: customRulesSHA256, CustomRules: customRulesPath != "",
+		RulesActive: rulesActive, Capabilities: ScanCapabilities(mode, customRulesPath != ""),
+	}, nil
 }
 
 // ScanWithOptions runs gitleaks against a directory, file, or full Git history. The
@@ -216,30 +282,8 @@ func prepareCustomRulesConfig(customRulesPath string, allowedRoots []string) (st
 	if customRulesPath == "" {
 		return "", cleanup, nil
 	}
-	abs, err := filepath.Abs(customRulesPath)
+	_, data, err := loadCustomRulesFragment(customRulesPath, allowedRoots)
 	if err != nil {
-		return "", cleanup, fmt.Errorf("%w: %v", ErrInvalidCustomRules, err)
-	}
-	abs = filepath.Clean(abs)
-	abs, err = resolveAllowedPath(abs, allowedRoots)
-	if err != nil {
-		return "", cleanup, fmt.Errorf("%w: custom rules path is outside the configured scan roots", ErrInvalidCustomRules)
-	}
-	info, err := os.Stat(abs)
-	if err != nil {
-		return "", cleanup, fmt.Errorf("%w: %v", ErrInvalidCustomRules, err)
-	}
-	if info.IsDir() {
-		return "", cleanup, fmt.Errorf("%w: custom rules path must be a file", ErrInvalidCustomRules)
-	}
-	if info.Size() > 1<<20 {
-		return "", cleanup, fmt.Errorf("%w: custom rules file is larger than 1 MiB", ErrInvalidCustomRules)
-	}
-	data, err := os.ReadFile(abs)
-	if err != nil {
-		return "", cleanup, fmt.Errorf("%w: %v", ErrInvalidCustomRules, err)
-	}
-	if err := validateCustomRulesFragment(data); err != nil {
 		return "", cleanup, err
 	}
 	cfg, err := os.CreateTemp("", "trstctl-gitleaks-config-*.toml")
@@ -262,6 +306,68 @@ func prepareCustomRulesConfig(customRulesPath string, allowedRoots []string) (st
 		return "", func() {}, fmt.Errorf("secretscan: close gitleaks config: %w", closeErr)
 	}
 	return configPath, cleanup, nil
+}
+
+func loadCustomRulesFragment(customRulesPath string, allowedRoots []string) (string, []byte, error) {
+	abs, err := filepath.Abs(strings.TrimSpace(customRulesPath))
+	if err != nil {
+		return "", nil, fmt.Errorf("%w: %v", ErrInvalidCustomRules, err)
+	}
+	abs = filepath.Clean(abs)
+	abs, err = resolveAllowedPath(abs, allowedRoots)
+	if err != nil {
+		return "", nil, fmt.Errorf("%w: custom rules path is outside the configured scan roots", ErrInvalidCustomRules)
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		return "", nil, fmt.Errorf("%w: %v", ErrInvalidCustomRules, err)
+	}
+	if info.IsDir() {
+		return "", nil, fmt.Errorf("%w: custom rules path must be a file", ErrInvalidCustomRules)
+	}
+	if info.Size() > 1<<20 {
+		return "", nil, fmt.Errorf("%w: custom rules file is larger than 1 MiB", ErrInvalidCustomRules)
+	}
+	data, err := os.ReadFile(abs) // #nosec G304 -- path is resolved inside an operator-configured scan root
+	if err != nil {
+		return "", nil, fmt.Errorf("%w: %v", ErrInvalidCustomRules, err)
+	}
+	if err := validateCustomRulesFragment(data); err != nil {
+		return "", nil, err
+	}
+	return abs, data, nil
+}
+
+func countCustomRuleTables(data []byte) int {
+	rules := 0
+	for _, line := range strings.Split(string(data), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "[[rules]]") {
+			rules++
+		}
+	}
+	return rules
+}
+
+func gitRootWithoutProcess(target string) (string, error) {
+	info, err := os.Stat(target)
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrInvalidScanTarget, err)
+	}
+	dir := target
+	if !info.IsDir() {
+		dir = filepath.Dir(target)
+	}
+	for {
+		if gitInfo, statErr := os.Stat(filepath.Join(dir, ".git")); statErr == nil && (gitInfo.IsDir() || gitInfo.Mode().IsRegular()) {
+			return dir, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("%w: git history scan requires a local repository", ErrInvalidScanTarget)
+		}
+		dir = parent
+	}
 }
 
 func validateCustomRulesFragment(data []byte) error {

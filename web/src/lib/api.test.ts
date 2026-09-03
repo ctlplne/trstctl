@@ -642,6 +642,9 @@ describe("exported API surface census", () => {
       "/api/v1/mcp/tools/item%2Fid",
       "/api/v1/pqc/migrations/plan",
       "/api/v1/privacy/subject-exports",
+      // F39: validates and fingerprints the normalized scan plan without
+      // starting gitleaks, writing discovery state, or appending an event.
+      "/api/v1/secrets/scans/preview",
     ]);
     for (const [target, init] of transport.mock.calls) {
       const url = String(target);
@@ -1804,6 +1807,27 @@ describe("secrets contract", () => {
     const headers = call[1]?.headers as Record<string, string>;
     expect(headers["Idempotency-Key"]).toBeUndefined();
     expect(headers["X-CSRF-Token"]).toBe("csrf-secret-preview");
+  });
+
+  it("previews F39 without mutation headers and preserves an explicit recovery key", async () => {
+    mockFetch(200, JSON.stringify({ capability: "F39", ready: true, effect_free: true, request_fingerprint: "sha256:f39-plan" }));
+    await api.previewSecretScan({ path: "/srv/repos/payments", mode: "workspace" });
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/scans/preview");
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("POST");
+    expect(sentHeaders()["Idempotency-Key"]).toBeUndefined();
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual({ path: "/srv/repos/payments", mode: "workspace" });
+
+    mockFetch(201, JSON.stringify({ run_id: "55555555-5555-5555-5555-555555555555", findings: [] }));
+    await api.scanSecrets({ path: "/srv/repos/payments", mode: "workspace", preview_fingerprint: "sha256:f39-plan" }, "f39-recovery-key");
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/scans");
+    expect(sentHeaders()["Idempotency-Key"]).toBe("f39-recovery-key");
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual({
+      path: "/srv/repos/payments",
+      mode: "workspace",
+      preview_fingerprint: "sha256:f39-plan",
+    });
   });
 });
 

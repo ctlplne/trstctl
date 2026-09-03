@@ -27932,6 +27932,137 @@
         ],
         "type": "object"
       },
+      "SecretScanPreview": {
+        "properties": {
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "cli_argv": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "custom_rules": {
+            "type": "boolean"
+          },
+          "custom_rules_path": {
+            "type": "string"
+          },
+          "custom_rules_sha256": {
+            "type": "string"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "execute_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execute_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "prerequisites": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "request_fingerprint": {
+            "type": "string"
+          },
+          "required_permission": {
+            "type": "string"
+          },
+          "rules_active": {
+            "type": "integer"
+          },
+          "scanner": {
+            "type": "string"
+          },
+          "secret_data_handling": {
+            "type": "string"
+          },
+          "target_path": {
+            "type": "string"
+          },
+          "verification_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "operation",
+          "ready",
+          "effect_free",
+          "target_path",
+          "mode",
+          "custom_rules",
+          "scanner",
+          "rules_active",
+          "capabilities",
+          "required_permission",
+          "request_fingerprint",
+          "blockers",
+          "prerequisites",
+          "preview_writes",
+          "preview_external_effects",
+          "execute_writes",
+          "execute_external_effects",
+          "recovery_steps",
+          "verification_steps",
+          "cli_argv",
+          "secret_data_handling"
+        ],
+        "type": "object"
+      },
       "SecretScanRequest": {
         "properties": {
           "custom_rules_path": {
@@ -27941,6 +28072,10 @@
             "type": "string"
           },
           "path": {
+            "type": "string"
+          },
+          "preview_fingerprint": {
+            "description": "Optional server-keyed fingerprint returned by SecretScanPreview. When supplied, execution fails closed if tenant, caller, target, mode, custom rules, or scanner capabilities changed.",
             "type": "string"
           }
         },
@@ -52981,6 +53116,63 @@
           }
         ],
         "summary": "Run a Gitleaks secret scan and record redacted findings",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/scans/preview": {
+      "post": {
+        "operationId": "previewSecretScan",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretScanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretScanPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Review an exact effect-free Gitleaks scan plan",
         "x-trstctl-permission": "secrets:write"
       }
     },

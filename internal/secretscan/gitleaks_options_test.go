@@ -57,6 +57,60 @@ entropy = 3.5
 	}
 }
 
+func TestGitleaksRunnerPlanValidatesWithoutExecutingScannerF39(t *testing.T) {
+	repo := initSecretScanGitRepo(t)
+	customRules := filepath.Join(repo, "custom.toml")
+	if err := os.WriteFile(customRules, []byte(`[[rules]]
+id = "trstctl-review-token"
+description = "review-only rule"
+regex = '''review_[a-z0-9]{16}'''
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(t.TempDir(), "scanner-was-executed")
+	fake := filepath.Join(t.TempDir(), "gitleaks")
+	if err := os.WriteFile(fake, []byte("#!/bin/sh\ntouch "+shellQuoteForTest(marker)+"\nexit 99\n"), 0o755); err != nil { // #nosec G306 -- executable is an isolated test fixture
+		t.Fatal(err)
+	}
+	runner := &GitleaksRunner{Binary: fake, AllowedRoots: []string{repo}}
+
+	plan, err := runner.Plan(repo, ScanOptions{Mode: "deep", CustomRulesPath: customRules})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolvedRepo, err := filepath.EvalSymlinks(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.TargetPath != resolvedRepo || plan.Mode != ScanModeGitHistory || !plan.CustomRules {
+		t.Fatalf("plan = %+v, want exact history/custom-rules request", plan)
+	}
+	if plan.RulesActive != GitleaksDefaultRulesActive+1 {
+		t.Fatalf("rules_active = %d, want default rules plus one reviewed custom rule", plan.RulesActive)
+	}
+	if len(plan.CustomRulesSHA256) != 64 {
+		t.Fatalf("custom_rules_sha256 = %q, want canonical SHA-256 evidence", plan.CustomRulesSHA256)
+	}
+	firstDigest := plan.CustomRulesSHA256
+	if err := os.WriteFile(customRules, []byte(`[[rules]]
+id = "trstctl-review-token-v2"
+description = "changed review-only rule"
+regex = '''review_v2_[a-z0-9]{16}'''
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	changed, err := runner.Plan(repo, ScanOptions{Mode: "deep", CustomRulesPath: customRules})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed.CustomRulesSHA256 == firstDigest {
+		t.Fatal("custom-rules content changed without changing the reviewed digest")
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("effect-free plan executed scanner; marker stat err = %v", err)
+	}
+}
+
 func TestGitleaksRunnerRejectsCustomRulesThatWeakenDefaults(t *testing.T) {
 	customRules := filepath.Join(t.TempDir(), "custom.toml")
 	if err := os.WriteFile(customRules, []byte("[extend]\ndisabledRules = [\"generic-api-key\"]\n"), 0o600); err != nil {
