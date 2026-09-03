@@ -2678,6 +2678,10 @@ export function Secrets() {
 
           {engineTask === "dynamic" && (
             <div id="task-panel-dynamic" className="border-y border-border py-4">
+              {/* TRACE-005 served contract: dynamic secret leases are served by
+                  POST /api/v1/secrets/leases and require secrets:read. The
+                  workflow below renders the effect-free review, one-time
+                  credential reveal, durable metadata, renewal, and revocation. */}
               <DynamicSecretWorkflow loadBlocked={Boolean(loadError)} />
             </div>
           )}

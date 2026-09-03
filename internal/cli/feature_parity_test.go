@@ -267,8 +267,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// F60 adds the value-free one-time-share preview command.
 	// F38 adds the read-only, effect-free ephemeral API-key preview command.
 	// F39 adds the read-only, effect-free secret-scan preview command.
-	if len(out) != 433 {
-		t.Fatalf("CLI commands = %d, want 433", len(out))
+	// F65 adds the read-only configured-provider catalog and effect-free lease
+	// preview commands; issue, read, renew, and revoke were already catalogued.
+	if len(out) != 435 {
+		t.Fatalf("CLI commands = %d, want 435", len(out))
 	}
 	return out
 }

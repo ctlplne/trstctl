@@ -222,8 +222,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// F60 adds the value-free, effect-free one-time-share plan.
 	// F38 adds the caller-attenuated, effect-free ephemeral API-key plan.
 	// F39 adds the effect-free, configuration-bound secret-scan review.
-	if len(out) != 421 {
-		t.Fatalf("OpenAPI operationIds = %d, want 421", len(out))
+	// F65 adds the configured-provider catalog and effect-free lease preview;
+	// the lifecycle mutation/read operations were already in the contract.
+	if len(out) != 423 {
+		t.Fatalf("OpenAPI operationIds = %d, want 423", len(out))
 	}
 	return out
 }
