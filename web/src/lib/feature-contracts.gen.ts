@@ -5345,8 +5345,7 @@ export const canonicalCapabilities = [
           "status": "complete",
           "evidence": [
             "internal/server/ephemeral_served_test.go",
-            "web/src/__tests__/accept/WIRE-06.test.tsx",
-            "docs/journeys/manage-secrets.md"
+            "web/src/__tests__/accept/WIRE-06.test.tsx"
           ]
         },
         "verify": {
