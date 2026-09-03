@@ -1693,6 +1693,87 @@ export const messages = {
       "Temporary API keys use the access service, so this workflow remains available while native secret storage is disabled. It still requires access:write permission.",
     description: "Ephemeral key workflow: explains why temporary API-key issuance remains usable when the optional native secret store is unavailable.",
   },
+  "secrets.ephemeral.heading": { defaultMessage: "Ephemeral API keys", description: "F38 temporary API-key workflow heading." },
+  "secrets.ephemeral.description": {
+    defaultMessage:
+      "Give one machine a narrowly scoped key that expires automatically. Review the exact subject, permissions, and lifetime before trstctl creates anything; then prove the reveal-once key works or revoke it immediately.",
+    description: "Deeply technical ELI5 introduction to F38 ephemeral API keys.",
+  },
+  "secrets.ephemeral.formLabel": { defaultMessage: "Review ephemeral API key", description: "Accessible label for the F38 review form." },
+  "secrets.ephemeral.subject": { defaultMessage: "Machine subject", description: "F38 machine subject field label." },
+  "secrets.ephemeral.subjectPlaceholder": { defaultMessage: "ci/deploy-preview", description: "F38 example machine-subject value." },
+  "secrets.ephemeral.subjectHelp": {
+    defaultMessage: "Use a name that says which job will hold the key, such as ci/deploy-preview.",
+    description: "F38 subject naming guidance.",
+  },
+  "secrets.ephemeral.scopes": { defaultMessage: "Allowed actions", description: "F38 API permission scopes field label." },
+  "secrets.ephemeral.scopesHelp": {
+    defaultMessage: "Comma-separate permissions. You may grant only permissions your current session already has.",
+    description: "F38 least-authority and scope-attenuation guidance.",
+  },
+  "secrets.ephemeral.ttl": { defaultMessage: "Lifetime in seconds", description: "F38 key lifetime field label." },
+  "secrets.ephemeral.ttlHelp": {
+    defaultMessage: "Choose 1 to 3,600 seconds. Shorter is safer; trstctl automatically expires the key.",
+    description: "F38 TTL boundary and expiry guidance.",
+  },
+  "secrets.ephemeral.review": { defaultMessage: "Review temporary key", description: "F38 effect-free preview action." },
+  "secrets.ephemeral.previewFailedTitle": { defaultMessage: "Could not review the temporary key", description: "F38 preview error heading." },
+  "secrets.ephemeral.previewFallback": { defaultMessage: "The temporary-key review failed.", description: "F38 preview error fallback." },
+  "secrets.ephemeral.previewNotEffectFree": {
+    defaultMessage: "The server did not prove that review is effect-free, so the console refused to continue.",
+    description: "F38 fail-closed response when preview effect-free evidence is absent.",
+  },
+  "secrets.ephemeral.previewBlocked": { defaultMessage: "The server says this temporary key is not ready to issue.", description: "F38 preview blocker fallback." },
+  "secrets.ephemeral.permissionBlocked": { defaultMessage: "Temporary key controls are locked", description: "F38 missing-permission heading." },
+  "secrets.ephemeral.permissionBlockedDetail": {
+    defaultMessage: "This session needs access:write. The server also refuses any requested permission that this session does not already hold.",
+    description: "F38 permission and scope-attenuation explanation.",
+  },
+  "secrets.ephemeral.safetyHeading": { defaultMessage: "What happens", description: "F38 ELI5 lifecycle explanation heading." },
+  "secrets.ephemeral.safetyReview": { defaultMessage: "Review writes nothing and calls no external system.", description: "F38 preview safety step." },
+  "secrets.ephemeral.safetyReveal": { defaultMessage: "Issue returns the raw bearer once; copy it before dismissing it.", description: "F38 reveal-once safety step." },
+  "secrets.ephemeral.safetyVerify": { defaultMessage: "Verification uses the new bearer without your browser session and keeps only pass or fail.", description: "F38 bearer verification safety step." },
+  "secrets.ephemeral.safetyRecover": { defaultMessage: "An uncertain retry reuses one recovery key, so it cannot mint a duplicate.", description: "F38 idempotent recovery safety step." },
+  "secrets.ephemeral.openLedger": { defaultMessage: "Open the access-token ledger", description: "F38 link to observed API-token metadata and revoke controls." },
+  "secrets.ephemeral.reviewedPlanLabel": { defaultMessage: "Reviewed temporary API-key plan", description: "Accessible label for F38 review result." },
+  "secrets.ephemeral.reviewedPlan": { defaultMessage: "Ready to issue", description: "F38 reviewed plan heading." },
+  "secrets.ephemeral.nothingCreated": {
+    defaultMessage: "Nothing has been created yet. This plan is bound to this tenant, caller, subject, permission set, and lifetime.",
+    description: "F38 effect-free and fingerprint-binding explanation.",
+  },
+  "secrets.ephemeral.lifetime": { defaultMessage: "Lifetime", description: "F38 reviewed lifetime label." },
+  "secrets.ephemeral.lifetimeValue": { defaultMessage: "{seconds} seconds", description: "F38 reviewed lifetime value." },
+  "secrets.ephemeral.permission": { defaultMessage: "Required permission", description: "F38 required caller permission label." },
+  "secrets.ephemeral.recoveryHeading": { defaultMessage: "If something goes wrong", description: "F38 server-supplied recovery list heading." },
+  "secrets.ephemeral.verificationHeading": { defaultMessage: "How to prove it worked", description: "F38 server-supplied verification list heading." },
+  "secrets.ephemeral.fingerprint": { defaultMessage: "Server-bound review fingerprint", description: "F38 review fingerprint label." },
+  "secrets.ephemeral.issueReviewed": { defaultMessage: "Issue reviewed key", description: "F38 reviewed execution action." },
+  "secrets.ephemeral.retrySame": { defaultMessage: "Retry same reviewed key", description: "F38 stable-idempotency recovery action." },
+  "secrets.ephemeral.reviewRequired": { defaultMessage: "Review the current subject, actions, and lifetime before issuing.", description: "F38 missing-review refusal." },
+  "secrets.ephemeral.reviewStale": { defaultMessage: "Configuration changed after review. Review the current values again.", description: "F38 stale-review refusal." },
+  "secrets.ephemeral.issueFailedTitle": { defaultMessage: "Temporary key was not confirmed", description: "F38 issuance failure heading." },
+  "secrets.ephemeral.issueFallback": { defaultMessage: "The server did not confirm temporary-key issuance.", description: "F38 issuance error fallback." },
+  "secrets.ephemeral.revealTitle": { defaultMessage: "Reveal-once temporary API key", description: "F38 reveal panel heading." },
+  "secrets.ephemeral.revealGuidance": {
+    defaultMessage:
+      "Key {id} belongs to {subject}, expires {expiresAt}, and can perform only {scopes}. Copy it now. Dismissal removes the only browser copy.",
+    description: "F38 reveal-once key metadata and handling guidance.",
+  },
+  "secrets.ephemeral.verify": { defaultMessage: "Verify key access", description: "F38 raw-bearer verification action." },
+  "secrets.ephemeral.verifyUnavailable": {
+    defaultMessage: "This key does not include access:read, so the console cannot use its safe metadata-only verification route. Test the key against its intended API before handing it off.",
+    description: "F38 explanation when the built-in bearer proof cannot run.",
+  },
+  "secrets.ephemeral.verifyPassed": {
+    defaultMessage: "Verified: the new bearer authenticated access:read without using your browser session. No response data was retained or displayed.",
+    description: "F38 successful bearer-use verification evidence.",
+  },
+  "secrets.ephemeral.verifyFailedTitle": { defaultMessage: "Temporary key verification failed", description: "F38 bearer verification error heading." },
+  "secrets.ephemeral.verifyFallback": { defaultMessage: "The temporary key could not authenticate the verification request.", description: "F38 bearer verification error fallback." },
+  "secrets.ephemeral.revoke": { defaultMessage: "Revoke now", description: "F38 immediate revoke action." },
+  "secrets.ephemeral.revoked": { defaultMessage: "Revoked. The raw key was removed from this page and can no longer authenticate.", description: "F38 successful revocation and browser cleanup status." },
+  "secrets.ephemeral.revokeFailedTitle": { defaultMessage: "Temporary key revocation failed", description: "F38 revocation error heading." },
+  "secrets.ephemeral.revokeFallback": { defaultMessage: "The temporary key could not be revoked.", description: "F38 revocation error fallback." },
   "secrets.transit.independentFromStore": {
     defaultMessage:
       "Transit uses the encryption service, so encrypt, decrypt, rewrap, HMAC, and signing remain available while native secret storage is disabled. It still requires the Transit key permissions shown by the API.",
@@ -19693,10 +19774,6 @@ export const messages = {
     defaultMessage: "Checking protocol responders.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Protocols.tsx.",
   },
-  "source.ci.deploy.preview.d2c6100222": {
-    defaultMessage: "ci/deploy-preview",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
   "source.ciphertext.47955e6673": {
     defaultMessage: "Ciphertext",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
@@ -20288,18 +20365,6 @@ export const messages = {
     defaultMessage: "Environment filter",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Certificates.tsx.",
   },
-  "source.ephemeral.api.key.59757a0857": {
-    defaultMessage: "Ephemeral API key",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
-  "source.ephemeral.api.key.issue.failed.b91df9889a": {
-    defaultMessage: "Ephemeral API-key issue failed",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
-  "source.ephemeral.api.keys.6c8f7c6a2c": {
-    defaultMessage: "Ephemeral API keys",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
   "source.escalation.35615b8245": {
     defaultMessage: "Escalation",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
@@ -20362,10 +20427,6 @@ export const messages = {
   },
   "source.expires.1de5fe01e9": {
     defaultMessage: "· expires",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
-  "source.expires.ab8a2845f1": {
-    defaultMessage: "expires",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
   "source.expires.f6725f3af0": {
@@ -20487,10 +20548,6 @@ export const messages = {
   "source.fleet.run.recorded.ff2d7b78ff": {
     defaultMessage: "Fleet run recorded",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
-  },
-  "source.for.10c22bcf4c": {
-    defaultMessage: "for",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
   "source.format.2f343666aa": {
     defaultMessage: "Format",
@@ -20725,10 +20782,6 @@ export const messages = {
     defaultMessage: "Issue a short-lived certificate bundle and reveal the private key only in the explicit result panel.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
-  "source.issue.api.key.3cdf19cbb9": {
-    defaultMessage: "Issue API key",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
   "source.issue.attested.ssh.user.certificate.f7e0f6ef66": {
     defaultMessage: "Issue attested SSH user certificate",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/SSHTrust.tsx.",
@@ -20747,10 +20800,6 @@ export const messages = {
   },
   "source.issue.dynamic.secret.lease.e14a6cc2e8": {
     defaultMessage: "Issue dynamic secret lease",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
-  "source.issue.ephemeral.api.key.d864784cc7": {
-    defaultMessage: "Issue ephemeral API key",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
   "source.issue.first.certificate.4d8af98e7d": {
@@ -22746,10 +22795,6 @@ export const messages = {
     defaultMessage: "Replacement value",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
-  "source.repo.payments.read.deploy.staging.write.169aa8250e": {
-    defaultMessage: "repo:payments:read, deploy:staging:write",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
   "source.reports.7f26104f77": {
     defaultMessage: "reports",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Identities.tsx.",
@@ -22800,10 +22845,6 @@ export const messages = {
   },
   "source.reveal.failed.f00b1b5ba6": {
     defaultMessage: "Reveal failed",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
-  "source.reveal.once.key.issuance.61c20133fa": {
-    defaultMessage: "Reveal-once key issuance",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
   "source.reviewer.63c2827d64": {
@@ -23020,10 +23061,6 @@ export const messages = {
     description:
       "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx, src/pages/Secrets.tsx, src/pages/Workloads.tsx, src/pages/secrets/SecretsPageParts.tsx.",
   },
-  "source.scopes.c7bcf9d686": {
-    defaultMessage: ". Scopes:",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
   "source.search.49c266baaa": {
     defaultMessage: "Search",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx.",
@@ -23139,11 +23176,6 @@ export const messages = {
   "source.selectors.d27e6f722c": {
     defaultMessage: "Selectors",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Workloads.tsx.",
-  },
-  "source.send.the.subject.scopes.and.ttl.to.issue.a.9854a77221": {
-    defaultMessage:
-      "Send the subject, scopes, and TTL to issue a short-lived token. Copy the returned token from the reveal panel, then dismiss it so browser memory drops the raw key.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
   "source.sensitivity.label.8a52af2e9c": {
     defaultMessage: "Sensitivity label",

@@ -4395,9 +4395,39 @@ EphemeralAPIKey = TypedDict(
     total=False,
 )
 
+EphemeralAPIKeyPreview = TypedDict(
+    'EphemeralAPIKeyPreview',
+    {
+        'blockers': list[str],
+        'capability': str,
+        'cli_argv': list[str],
+        'effect_free': bool,
+        'effective_ttl_seconds': int,
+        'execute_external_effects': list[str],
+        'execute_writes': list[str],
+        'maximum_ttl_seconds': int,
+        'minimum_ttl_seconds': int,
+        'native_secret_store_needed': bool,
+        'operation': str,
+        'preview_external_effects': list[str],
+        'preview_writes': list[str],
+        'ready': bool,
+        'recovery_steps': list[str],
+        'request_fingerprint': str,
+        'requested_ttl_seconds': int,
+        'required_permission': str,
+        'scopes': list[str],
+        'subject': str,
+        'token_data_handling': str,
+        'verification_steps': list[str],
+    },
+    total=False,
+)
+
 EphemeralAPIKeyRequest = TypedDict(
     'EphemeralAPIKeyRequest',
     {
+        'preview_fingerprint': str,
         'scopes': list[str],
         'subject': str,
         'ttl_seconds': int,

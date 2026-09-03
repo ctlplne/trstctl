@@ -205,7 +205,7 @@ describe("route-level product surface parity", () => {
     expect(surface?.evidence).toMatch(/scoped/i);
     expect(surface?.evidence).toMatch(/reveal-once/i);
     expect(surface?.evidence).toMatch(/native secret store/i);
-    expect(feature?.current_frontend_mapping).toMatch(/^operate:/);
+    expect(feature?.current_frontend_mapping).toMatch(/^complete vertical slice:/);
     expect(feature?.current_frontend_mapping).toMatch(/\/secrets\/sharing/);
     expect(feature?.current_frontend_mapping).not.toMatch(/\b(?:none|basic|disclosure|observe only|partial)\b/i);
   });

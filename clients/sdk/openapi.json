@@ -12849,8 +12849,134 @@
         ],
         "type": "object"
       },
+      "EphemeralAPIKeyPreview": {
+        "properties": {
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "cli_argv": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "effective_ttl_seconds": {
+            "type": "integer"
+          },
+          "execute_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execute_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "maximum_ttl_seconds": {
+            "type": "integer"
+          },
+          "minimum_ttl_seconds": {
+            "type": "integer"
+          },
+          "native_secret_store_needed": {
+            "type": "boolean"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "request_fingerprint": {
+            "type": "string"
+          },
+          "requested_ttl_seconds": {
+            "type": "integer"
+          },
+          "required_permission": {
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "token_data_handling": {
+            "type": "string"
+          },
+          "verification_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "operation",
+          "ready",
+          "effect_free",
+          "subject",
+          "scopes",
+          "requested_ttl_seconds",
+          "effective_ttl_seconds",
+          "minimum_ttl_seconds",
+          "maximum_ttl_seconds",
+          "required_permission",
+          "request_fingerprint",
+          "blockers",
+          "preview_writes",
+          "preview_external_effects",
+          "execute_writes",
+          "execute_external_effects",
+          "recovery_steps",
+          "verification_steps",
+          "cli_argv",
+          "token_data_handling",
+          "native_secret_store_needed"
+        ],
+        "type": "object"
+      },
       "EphemeralAPIKeyRequest": {
         "properties": {
+          "preview_fingerprint": {
+            "description": "Optional server-keyed fingerprint returned by EphemeralAPIKeyPreview. When supplied, issuance fails closed if subject, scopes, caller, tenant, or lifetime changed.",
+            "type": "string"
+          },
           "scopes": {
             "items": {
               "type": "string"
@@ -40448,6 +40574,63 @@
         "summary": "Mint a short-TTL API key for machine workflows",
         "x-trstctl-permission": "access:write",
         "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/ephemeral/api-keys/preview": {
+      "post": {
+        "operationId": "previewEphemeralAPIKey",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EphemeralAPIKeyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EphemeralAPIKeyPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Review one exact short-TTL API key without minting or storing a bearer",
+        "x-trstctl-permission": "access:write"
       }
     },
     "/api/v1/ephemeral/preview": {

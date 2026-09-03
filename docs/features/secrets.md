@@ -377,21 +377,35 @@ request path deliberately does not invoke them yet.
 For high-churn automation, trstctl issues short-lived API keys through the served
 control plane:
 
+- `POST /api/v1/ephemeral/api-keys/preview` validates and normalizes the exact
+  tenant/caller/subject/scopes/TTL plan without creating a bearer, event,
+  idempotency row, projection, or external effect. It returns a server-keyed
+  `request_fingerprint` and complete recovery/verification instructions.
 - `POST /api/v1/ephemeral/api-keys` mints a tenant API token with `subject`, `scopes`,
-  and `ttl_seconds`.
-- `trstctl-cli ephemeral api-keys issue -f body.json` drives the same route.
-- Guarded by `access:write` plus `Idempotency-Key`, so a retry returns the original
-  response instead of minting twice.
+  `ttl_seconds`, and an optional reviewed `preview_fingerprint`. A stale fingerprint
+  returns `409` before issuance.
+- `trstctl-cli ephemeral api-keys preview -f body.json` and `ephemeral api-keys
+  issue -f reviewed.json` drive the same two-step contract.
+- Both review and issue require `access:write`; both also attenuate authority by
+  refusing any requested scope the caller does not already possess.
+- Execution is guarded by `Idempotency-Key`, so a byte-identical retry with the same
+  key returns the original response instead of minting twice. Reusing that key with
+  changed input returns `409`.
 - The response returns the raw `trst_...` token once; the event log stores only the
   token hash in `api_token.created` — the raw token is never persisted or emitted.
 - The served leaseworker sweeps expired keys and emits `api_token.revoked`, so the read
   model shows `revoked_at` evidence and authentication rejects the key after TTL.
+- The console makes the whole lifecycle executable: configure, effect-free review,
+  reviewed issue, metadata-ledger observation, same-key recovery after uncertainty,
+  bearer-only verification, immediate revocation, and post-revoke cleanup. The raw
+  bearer lives only in React memory and is removed on dismiss or revoke.
 
 ```json
 {
   "subject": "ci-preview-deploy",
   "scopes": ["access:read"],
-  "ttl_seconds": 900
+  "ttl_seconds": 900,
+  "preview_fingerprint": "sha256:<value returned by preview>"
 }
 ```
 

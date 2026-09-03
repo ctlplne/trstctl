@@ -208,6 +208,7 @@ import type {
   EnrollmentTokenRequest as GenEnrollmentTokenRequest,
   EnterpriseSupportStatus,
   EphemeralAPIKey,
+  EphemeralAPIKeyPreview,
   EphemeralAPIKeyRequest,
   EphemeralApproval,
   EphemeralApprovalRequest,
@@ -859,6 +860,7 @@ export type {
   DynamicLeaseRequest,
   EnterpriseSupportStatus,
   EphemeralAPIKey,
+  EphemeralAPIKeyPreview,
   EphemeralAPIKeyRequest,
   EphemeralApproval,
   EphemeralApprovalRequest,
@@ -2361,7 +2363,12 @@ export interface Api {
   getDynamicLease(leaseId: string): Promise<DynamicLease>;
   renewDynamicLease(leaseId: string, input: DynamicLeaseRenewRequest): Promise<DynamicLease>;
   revokeDynamicLease(leaseId: string): Promise<DynamicLease>;
-  issueEphemeralAPIKey(input: EphemeralAPIKeyRequest): Promise<EphemeralAPIKey>;
+  previewEphemeralAPIKey(input: EphemeralAPIKeyRequest): Promise<EphemeralAPIKeyPreview>;
+  issueEphemeralAPIKey(input: EphemeralAPIKeyRequest, idempotencyKey?: string): Promise<EphemeralAPIKey>;
+  /** Prove the reveal-once bearer works on one access:read route without using
+   * or falling back to the browser's human session cookie. The response body
+   * is deliberately discarded; the console retains only pass/fail evidence. */
+  verifyEphemeralAPIKey(token: string): Promise<boolean>;
   previewPKISecret(input: PKISecretRequest): Promise<PKISecretPreview>;
   issuePKISecret(input: PKISecretRequest): Promise<PKISecret>;
   previewMachineLogin(input: MachineLoginPreviewRequest): Promise<MachineLoginPreview>;
@@ -2933,7 +2940,15 @@ const liveApi: Api = {
   getDynamicLease: (leaseId) => req<DynamicLease>(`/api/v1/secrets/leases/${encodeURIComponent(leaseId)}`),
   renewDynamicLease: (leaseId, input) => mutate<DynamicLease>("POST", `/api/v1/secrets/leases/${encodeURIComponent(leaseId)}/renew`, input),
   revokeDynamicLease: (leaseId) => mutate<DynamicLease>("POST", `/api/v1/secrets/leases/${encodeURIComponent(leaseId)}/revoke`),
-  issueEphemeralAPIKey: (input) => mutate<EphemeralAPIKey>("POST", "/api/v1/ephemeral/api-keys", input),
+  previewEphemeralAPIKey: (input) => postRead<EphemeralAPIKeyPreview>("/api/v1/ephemeral/api-keys/preview", input),
+  issueEphemeralAPIKey: (input, idempotencyKey) => mutate<EphemeralAPIKey>("POST", "/api/v1/ephemeral/api-keys", input, idempotencyKey),
+  verifyEphemeralAPIKey: async (token) => {
+    await req<unknown>("/api/v1/access/roles", {
+      credentials: "omit",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return true;
+  },
   previewPKISecret: (input) =>
     req<PKISecretPreview>("/api/v1/secrets/pki/preview", {
       method: "POST",

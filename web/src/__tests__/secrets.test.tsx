@@ -32,7 +32,9 @@ const { apiMock } = vi.hoisted(() => ({
     previewShare: vi.fn(),
     createShare: vi.fn(),
     redeemShare: vi.fn(),
+    previewEphemeralAPIKey: vi.fn(),
     issueEphemeralAPIKey: vi.fn(),
+    verifyEphemeralAPIKey: vi.fn(),
     issueDynamicLease: vi.fn(),
     renewDynamicLease: vi.fn(),
     revokeDynamicLease: vi.fn(),
@@ -491,11 +493,35 @@ function primeSecretsMocks() {
     secret_data_handling: "Preview never receives the value. Execution seals it and returns the bearer token once.",
   });
   apiMock.redeemShare.mockResolvedValue({ value: "redeemed-secret" });
+  apiMock.previewEphemeralAPIKey.mockResolvedValue({
+    capability: "F38",
+    operation: "issue_ephemeral_api_key",
+    ready: true,
+    effect_free: true,
+    subject: "ci/deploy-preview",
+    scopes: ["access:read"],
+    requested_ttl_seconds: 900,
+    effective_ttl_seconds: 900,
+    minimum_ttl_seconds: 1,
+    maximum_ttl_seconds: 3600,
+    required_permission: "access:write",
+    request_fingerprint: "sha256:reviewed-f38",
+    blockers: [],
+    preview_writes: [],
+    preview_external_effects: [],
+    execute_writes: ["append an api_token.created event", "project one tenant-scoped token ledger row"],
+    execute_external_effects: [],
+    recovery_steps: ["Retry the same reviewed command with the same Idempotency-Key."],
+    verification_steps: ["Use the bearer on an API allowed by its scopes.", "Revoke the key and confirm it is rejected."],
+    cli_argv: ["trstctl", "ephemeral", "api-keys", "issue", "-f", "ephemeral-api-key.json"],
+    token_data_handling: "The raw bearer is returned once and is never written to events or metadata reads.",
+    native_secret_store_needed: false,
+  });
   apiMock.issueEphemeralAPIKey.mockResolvedValue({
     id: "33333333-3333-3333-3333-333333333333",
     tenant_id: "44444444-4444-4444-4444-444444444444",
     subject: "ci/deploy-preview",
-    scopes: ["repo:payments:read", "deploy:staging:write"],
+    scopes: ["access:read"],
     created_at: "2026-06-19T13:00:00Z",
     expires_at: "2026-06-19T13:15:00Z",
     token: "epk_live_reveal_once_123",
@@ -1562,24 +1588,35 @@ describe("secrets surface", () => {
 
     await user.click(await screen.findByRole("button", { name: "Open temporary access" }));
     expect(await screen.findByRole("heading", { name: "Ephemeral API keys" })).toBeInTheDocument();
-    expect(screen.getByText("Reveal-once key issuance")).toBeInTheDocument();
-    expect(screen.getByText(/short-lived token/i)).toBeInTheDocument();
-    const issueForm = within(screen.getByRole("form", { name: "Issue ephemeral API key" }));
-    await user.type(issueForm.getByLabelText("Subject"), "ci/deploy-preview");
-    await user.type(issueForm.getByLabelText("Scopes"), "repo:payments:read, deploy:staging:write");
-    await user.clear(issueForm.getByLabelText("TTL seconds"));
-    await user.type(issueForm.getByLabelText("TTL seconds"), "900");
-    await user.click(issueForm.getByRole("button", { name: /issue api key/i }));
+    expect(screen.getByText("What happens")).toBeInTheDocument();
+    expect(screen.getByText(/narrowly scoped key/i)).toBeInTheDocument();
+    const issueForm = within(screen.getByRole("form", { name: "Review ephemeral API key" }));
+    await user.type(issueForm.getByLabelText("Machine subject"), "ci/deploy-preview");
+    await user.click(issueForm.getByRole("button", { name: "Review temporary key" }));
 
     await waitFor(() =>
-      expect(apiMock.issueEphemeralAPIKey).toHaveBeenCalledWith({
+      expect(apiMock.previewEphemeralAPIKey).toHaveBeenCalledWith({
         subject: "ci/deploy-preview",
-        scopes: ["repo:payments:read", "deploy:staging:write"],
+        scopes: ["access:read"],
         ttl_seconds: 900,
       }),
     );
+    expect(apiMock.issueEphemeralAPIKey).not.toHaveBeenCalled();
+    await user.click(await screen.findByRole("button", { name: "Issue reviewed key" }));
+
+    await waitFor(() =>
+      expect(apiMock.issueEphemeralAPIKey).toHaveBeenCalledWith(
+        {
+          subject: "ci/deploy-preview",
+          scopes: ["access:read"],
+          ttl_seconds: 900,
+          preview_fingerprint: "sha256:reviewed-f38",
+        },
+        expect.any(String),
+      ),
+    );
     expect(await screen.findByText("epk_live_reveal_once_123")).toBeInTheDocument();
-    expect(screen.getByText("33333333-3333-3333-3333-333333333333")).toBeInTheDocument();
+    expect(screen.getByText(/33333333-3333-3333-3333-333333333333/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /dismiss/i }));
     expect(screen.queryByText("epk_live_reveal_once_123")).not.toBeInTheDocument();
 
@@ -2023,20 +2060,21 @@ describe("secrets surface", () => {
     await user.click(screen.getByRole("button", { name: "Open temporary access" }));
     expect(await screen.findByText(/Temporary API keys use the access service/)).toBeInTheDocument();
 
-    const form = within(screen.getByRole("form", { name: "Issue ephemeral API key" }));
-    const submit = form.getByRole("button", { name: /issue api key/i });
+    const form = within(screen.getByRole("form", { name: "Review ephemeral API key" }));
+    const submit = form.getByRole("button", { name: "Review temporary key" });
     expect(submit).toBeEnabled();
-    await user.type(form.getByLabelText("Subject"), "ci/deploy-preview");
-    await user.type(form.getByLabelText("Scopes"), "repo:payments:read");
+    await user.type(form.getByLabelText("Machine subject"), "ci/deploy-preview");
     await user.click(submit);
 
     await waitFor(() =>
-      expect(apiMock.issueEphemeralAPIKey).toHaveBeenCalledWith({
+      expect(apiMock.previewEphemeralAPIKey).toHaveBeenCalledWith({
         subject: "ci/deploy-preview",
-        scopes: ["repo:payments:read"],
+        scopes: ["access:read"],
         ttl_seconds: 900,
       }),
     );
+    await user.click(await screen.findByRole("button", { name: "Issue reviewed key" }));
+    await waitFor(() => expect(apiMock.issueEphemeralAPIKey).toHaveBeenCalled());
     expect(await screen.findByText("epk_live_reveal_once_123")).toBeInTheDocument();
   });
 

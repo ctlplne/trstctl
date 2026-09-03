@@ -222,7 +222,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"broker", "agent-identities", "issue"}, Method: "POST", Path: "/api/v1/broker/agent-identities", Body: bodyFile, Summary: "Issue a policy-gated AI/MCP agent identity"},
 	{Name: []string{"ephemeral", "preview"}, Method: "POST", Path: "/api/v1/ephemeral/preview", Body: bodyFile, ReadOnly: true, Summary: "Preview an exact approval-gated JIT credential request without side effects"},
 	{Name: []string{"ephemeral", "issue"}, Method: "POST", Path: "/api/v1/ephemeral", Body: bodyFile, Summary: "Open or complete an approval-gated JIT credential request"},
-	{Name: []string{"ephemeral", "api-keys", "issue"}, Method: "POST", Path: "/api/v1/ephemeral/api-keys", Body: bodyFile, Summary: "Mint a short-TTL API key"},
+	{Name: []string{"ephemeral", "api-keys", "preview"}, Method: "POST", Path: "/api/v1/ephemeral/api-keys/preview", Body: bodyFile, ReadOnly: true, Summary: "Review an exact short-TTL API key without minting a bearer"},
+	{Name: []string{"ephemeral", "api-keys", "issue"}, Method: "POST", Path: "/api/v1/ephemeral/api-keys", Body: bodyFile, Summary: "Mint a reviewed short-TTL API key"},
 	{Name: []string{"ephemeral", "approve"}, Method: "POST", Path: "/api/v1/ephemeral/{id}/approvals", Body: bodyApprovalFile, Action: "issue", Summary: "Approve an exact immutable ephemeral JIT request"},
 
 	{Name: []string{"discovery", "sources", "create"}, Method: "POST", Path: "/api/v1/discovery/sources", Body: bodyFile, Summary: "Create a discovery source"},

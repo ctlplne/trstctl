@@ -23,7 +23,6 @@ import {
   type APIToken,
   type CloudSecretManagerIntegration,
   type DynamicLease,
-  type EphemeralAPIKey,
   type EphemeralCredential,
   type Identity,
   type KubernetesSecretOperator,
@@ -63,7 +62,6 @@ import {
   leaseMetadataOnly,
   mergeMeta,
   NativeSecretCreateForm,
-  parseScopeList,
   secretApprovalActionLabel,
   secretApprovalQueueID,
   secretRotationDeferredReasonKeys,
@@ -80,6 +78,7 @@ import { PKISecretWorkflow } from "./secrets/PKISecretWorkflow";
 import { MachineAuthWorkflow } from "./secrets/MachineAuthWorkflow";
 
 const SecretSharingWorkflow = lazy(() => import("./secrets/SecretSharingWorkflow"));
+const EphemeralAPIKeyWorkflow = lazy(() => import("./secrets/EphemeralAPIKeyWorkflow"));
 
 /** The store (tree + table + lifecycle) renders at /secrets; every other
  * workflow is its own route in the Secrets space sidebar (S-C2) instead of
@@ -268,13 +267,6 @@ export function Secrets() {
 
   const [sharingTask, setSharingTask] = useState<"share" | "machine" | null>(null);
   const [engineTask, setEngineTask] = useState<"dynamic" | "transit" | "pki" | null>(null);
-
-  const [ephemeralSubject, setEphemeralSubject] = useState("");
-  const [ephemeralScopes, setEphemeralScopes] = useState("");
-  const [ephemeralTTL, setEphemeralTTL] = useState("900");
-  const [ephemeralBusy, setEphemeralBusy] = useState(false);
-  const [ephemeralError, setEphemeralError] = useState<string | null>(null);
-  const [ephemeralKey, setEphemeralKey] = useState<EphemeralAPIKey | null>(null);
 
   const [leaseProvider, setLeaseProvider] = useState("postgresql");
   const [leaseRole, setLeaseRole] = useState("");
@@ -1144,28 +1136,6 @@ export function Secrets() {
       setGrantError(apiProblemMessage(err, t("secrets.grant.failedTitle")));
     } finally {
       setRevokingTokenId(null);
-    }
-  }
-
-  async function submitEphemeralAPIKey(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setEphemeralError(null);
-    setEphemeralKey(null);
-    setEphemeralBusy(true);
-    try {
-      const subject = ephemeralSubject.trim();
-      const scopes = parseScopeList(ephemeralScopes);
-      const ttl = Number(ephemeralTTL);
-      if (!subject) throw new Error("Subject is required");
-      if (scopes.length === 0) throw new Error("At least one scope is required");
-      if (!Number.isFinite(ttl) || ttl <= 0) throw new Error("TTL seconds must be a positive number");
-      setEphemeralKey(await api.issueEphemeralAPIKey({ subject, scopes, ttl_seconds: Math.round(ttl) }));
-      setEphemeralSubject("");
-      setEphemeralScopes("");
-    } catch (err) {
-      setEphemeralError(apiProblemMessage(err, "Could not issue ephemeral API key"));
-    } finally {
-      setEphemeralBusy(false);
     }
   }
 
@@ -2655,76 +2625,13 @@ export function Secrets() {
           )}
 
           {sharingTask === "machine" && (
-            <section id="task-panel-machine" aria-labelledby="ephemeral-api-heading" className="grid gap-4 border-y border-border py-4">
-              <div>
-                <h2 id="ephemeral-api-heading" className="text-title font-semibold">
-                  {translateNow("source.ephemeral.api.keys.6c8f7c6a2c")}
-                </h2>
-                <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-                  Issue a scoped, short-lived key for a machine task. The server returns the raw token once; after dismissal this page keeps no copy.
-                </p>
-                {/* TRACE-005 source anchor: ephemeral API-key issuance is served; POST /api/v1/ephemeral/api-keys; trstctl-cli ephemeral api-keys issue; api_token.revoked */}
-              </div>
-              {loadError ? (
-                <p role="note" className="rounded-control border border-brand-accent/25 bg-brand-accent/5 p-3 text-sm text-muted-foreground">
-                  {t("secrets.ephemeral.independentFromStore")}
-                </p>
-              ) : null}
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
-                <form
-                  aria-label={translateNow("source.issue.ephemeral.api.key.d864784cc7")}
-                  onSubmit={(event) => void submitEphemeralAPIKey(event)}
-                  className="grid content-start gap-3"
-                >
-                  <label className="grid gap-1 text-sm">
-                    <span className="font-medium">{translateNow("source.subject.6897128384")}</span>
-                    <input
-                      className="rounded-md border border-border bg-background px-3 py-2"
-                      value={ephemeralSubject}
-                      onChange={(event) => setEphemeralSubject(event.target.value)}
-                      placeholder={translateNow("source.ci.deploy.preview.d2c6100222")}
-                      required
-                    />
-                  </label>
-                  <label className="grid gap-1 text-sm">
-                    <span className="font-medium">{translateNow("source.scopes.0d5644ff52")}</span>
-                    <textarea
-                      className="min-h-24 rounded-md border border-border bg-background px-3 py-2"
-                      value={ephemeralScopes}
-                      onChange={(event) => setEphemeralScopes(event.target.value)}
-                      placeholder={translateNow("source.repo.payments.read.deploy.staging.write.169aa8250e")}
-                      required
-                    />
-                  </label>
-                  <label className="grid gap-1 text-sm">
-                    <span className="font-medium">{translateNow("source.ttl.seconds.862d08de5a")}</span>
-                    <input
-                      className="rounded-md border border-border bg-background px-3 py-2"
-                      type="number"
-                      min="60"
-                      value={ephemeralTTL}
-                      onChange={(event) => setEphemeralTTL(event.target.value)}
-                      required
-                    />
-                  </label>
-                  <Button type="submit" disabled={ephemeralBusy || !canGrant}>
-                    {ephemeralBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
-                    {translateNow("source.issue.api.key.3cdf19cbb9")}
-                  </Button>
-                  {ephemeralError && <ErrorState title={translateNow("source.ephemeral.api.key.issue.failed.b91df9889a")}>{ephemeralError}</ErrorState>}
-                </form>
-                <div className="ui-panel grid content-start gap-2 p-comfortable text-sm">
-                  <h3 className="text-title font-semibold">{translateNow("source.reveal.once.key.issuance.61c20133fa")}</h3>
-                  <p className="text-muted-foreground">{translateNow("source.send.the.subject.scopes.and.ttl.to.issue.a.9854a77221")}</p>
-                </div>
-              </div>
-              {ephemeralKey && (
-                <RevealPanel title={translateNow("source.ephemeral.api.key.59757a0857")} onDismiss={() => setEphemeralKey(null)} value={ephemeralKey.token}>
-                  {translateNow("source.key.99a52df3ff")} <span className="font-mono text-xs">{ephemeralKey.id}</span> {translateNow("source.for.10c22bcf4c")}{" "}
-                  {ephemeralKey.subject} {translateNow("source.expires.ab8a2845f1")} {formatDate(ephemeralKey.expires_at)}
-                  {translateNow("source.scopes.c7bcf9d686")} {ephemeralKey.scopes.join(", ")}.
-                </RevealPanel>
-              )}
+            <Suspense fallback={<div className="min-h-24 animate-pulse rounded-md bg-muted" aria-hidden="true" />}>
+              <EphemeralAPIKeyWorkflow canGrant={canGrant} nativeStoreUnavailable={Boolean(loadError)} />
+            </Suspense>
+          )}
+
+          {sharingTask === "machine" && (
+            <section className="grid gap-4">
               <div className="grid gap-4 border-t border-border pt-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
                 <form
                   aria-label={t("parity.requestAttestationGatedEphemeralCredential_4ce3ce")}

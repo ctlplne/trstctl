@@ -3393,7 +3393,24 @@ func componentSchemas() map[string]*Schema {
 	apiTokenRevokeReq := object(map[string]*Schema{"reason": str()})
 	ephemeralAPIKeyReq := object(map[string]*Schema{
 		"subject": str(), "scopes": {Type: "array", Items: str()}, "ttl_seconds": {Type: "integer"},
+		"preview_fingerprint": {Type: "string", Description: "Optional server-keyed fingerprint returned by EphemeralAPIKeyPreview. When supplied, issuance fails closed if subject, scopes, caller, tenant, or lifetime changed."},
 	}, "subject", "scopes", "ttl_seconds")
+	ephemeralAPIKeyPreview := object(map[string]*Schema{
+		"capability": str(), "operation": str(), "ready": {Type: "boolean"}, "effect_free": {Type: "boolean"},
+		"subject": str(), "scopes": {Type: "array", Items: str()},
+		"requested_ttl_seconds": {Type: "integer"}, "effective_ttl_seconds": {Type: "integer"},
+		"minimum_ttl_seconds": {Type: "integer"}, "maximum_ttl_seconds": {Type: "integer"},
+		"required_permission": str(), "request_fingerprint": str(),
+		"blockers": {Type: "array", Items: str()}, "preview_writes": {Type: "array", Items: str()},
+		"preview_external_effects": {Type: "array", Items: str()}, "execute_writes": {Type: "array", Items: str()},
+		"execute_external_effects": {Type: "array", Items: str()}, "recovery_steps": {Type: "array", Items: str()},
+		"verification_steps": {Type: "array", Items: str()}, "cli_argv": {Type: "array", Items: str()},
+		"token_data_handling": str(), "native_secret_store_needed": {Type: "boolean"},
+	}, "capability", "operation", "ready", "effect_free", "subject", "scopes", "requested_ttl_seconds",
+		"effective_ttl_seconds", "minimum_ttl_seconds", "maximum_ttl_seconds", "required_permission",
+		"request_fingerprint", "blockers", "preview_writes", "preview_external_effects", "execute_writes",
+		"execute_external_effects", "recovery_steps", "verification_steps", "cli_argv", "token_data_handling",
+		"native_secret_store_needed")
 	ephemeralAPIKey := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "subject": str(), "scopes": {Type: "array", Items: str()},
 		"expires_at": timestamp(), "created_at": timestamp(), "token": str(),
@@ -6153,6 +6170,7 @@ func componentSchemas() map[string]*Schema {
 		"EphemeralCredentialPreview":               ephemeralCredentialPreview,
 		"EphemeralCredential":                      ephemeralCredential,
 		"EphemeralAPIKeyRequest":                   ephemeralAPIKeyReq,
+		"EphemeralAPIKeyPreview":                   ephemeralAPIKeyPreview,
 		"EphemeralAPIKey":                          ephemeralAPIKey,
 		"EphemeralApprovalRequest":                 ephemeralApprovalReq,
 		"EphemeralApproval":                        ephemeralApproval,

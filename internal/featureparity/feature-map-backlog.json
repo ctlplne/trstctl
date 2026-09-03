@@ -14772,41 +14772,47 @@
             "priority": 75,
             "served_state": "served",
             "backend_status": "served-api-cli-leaseworker",
-            "current_frontend_mapping": "operate: Secrets at /secrets/sharing issues scoped short-TTL API keys, returns the raw token once, clears it on dismissal, explains expiry, and remains available through the access service when the optional native secret store is disabled; the API token ledger at /secrets/access supports revocation while the lease worker automatically expires ephemeral keys.",
-            "target_gui_mapping": "Delivered: scoped, time-bound key issuance, reveal-once handling, expiry, access verification, token-ledger revocation, and an explicit native-secret-store independence state.",
-            "acceptance_test": "UI ensures token value is visible once only, cannot be recovered, and is never stored in localStorage/sessionStorage.",
+            "current_frontend_mapping": "complete vertical slice: Secrets at /secrets/sharing configures subject/scopes/TTL, requests an effect-free server review, binds execution to its fingerprint, reuses one idempotency key after an uncertain response, reveals the bearer once, verifies access:read without the human browser session, revokes immediately, and links to the metadata-only token ledger; the workflow remains available through the access service when optional native secret storage is disabled.",
+            "target_gui_mapping": "Delivered: deeply technical ELI5 configure, effect-free preview, reviewed execution, metadata observation, exact-retry recovery, bearer-only verification, token-ledger revocation, automatic expiry, and explicit native-secret-store independence.",
+            "acceptance_test": "Served and browser acceptance prove effect-free preview, caller-scope attenuation, stale-review refusal, exact idempotent recovery, one token row, reveal-once handling, browser-storage absence, bearer-only verification, immediate revocation, and post-revoke rejection.",
             "source_docs": [
                 "docs/features/secrets.md"
             ],
             "source_backend": [
                 "internal/api/ephemeral.go",
+                "internal/api/ephemeral_api_key_preview.go",
                 "internal/api/api_key_lease.go",
                 "internal/orchestrator/commands.go",
                 "internal/store/api_token.go",
                 "internal/server/ephemeral_served_test.go"
             ],
             "source_frontend": [
-                "web/src/pages/Secrets.tsx"
+                "web/src/pages/Secrets.tsx",
+                "web/src/pages/secrets/EphemeralAPIKeyWorkflow.tsx"
             ],
             "status": "closed",
-            "notes": "The earlier disclosure label was stale and hid a real coupling bug: the served console already issued reveal-once ephemeral keys, but its button was disabled by unrelated native-secret-store readiness. The operate mapping now covers the independent access-service workflow and is pinned by route-parity plus degraded-state browser tests.",
+            "notes": "The vertical-slice repair added a server-keyed, effect-free review independent of native secret storage; made caller-scope attenuation mandatory in both preview and execution; and replaced direct minting with a reviewed console workflow. A stable client recovery key prevents duplicate issuance after an ambiguous response. The reveal-once bearer can be proved without the human session, revoked immediately, observed only as metadata, or allowed to expire automatically.",
             "api_surface": [
+                "previewEphemeralAPIKey",
                 "issueEphemeralAPIKey"
             ],
             "api_na": "",
             "cli_surface": [
+                "ephemeral api-keys preview",
                 "ephemeral api-keys issue"
             ],
             "cli_na": "",
             "facet_evidence": {
                 "served": {
                     "evidence": [
-                        "Served POST /api/v1/ephemeral/api-keys mints short-TTL API tokens through the event-sourced API-token command and the leaseworker expires them by emitting api_token.revoked.",
+                        "Served POST /api/v1/ephemeral/api-keys/preview returns a server-keyed, caller-attenuated, effect-free plan without a bearer, event, idempotency row, projection, signer call, or egress.",
+                        "Served POST /api/v1/ephemeral/api-keys requires caller-held scopes, optionally binds execution to the reviewed fingerprint, mints through the event-sourced API-token command, and is expired by api_token.revoked.",
                         "served_state=served",
                         "backend_status=served-api-cli-leaseworker"
                     ],
                     "refs": [
                         "internal/api/ephemeral.go",
+                        "internal/api/ephemeral_api_key_preview.go",
                         "internal/api/api.go",
                         "internal/api/api_key_lease.go",
                         "internal/orchestrator/commands.go",
@@ -14818,18 +14824,19 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: operate: Secrets at /secrets/sharing issues scoped short-TTL API keys, returns the raw token once, clears it on dismissal, explains expiry, and remains available through the access service when the optional native secret store is disabled; the API token ledger at /secrets/access supports revocation while the lease worker automatically expires ephemeral keys.",
-                        "target_gui_mapping: Delivered: scoped, time-bound key issuance, reveal-once handling, expiry, access verification, token-ledger revocation, and an explicit native-secret-store independence state."
+                        "current_frontend_mapping: complete vertical slice at /secrets/sharing with configure, server review, reviewed issue, stable retry, reveal-once proof, immediate revoke, and token-ledger observation.",
+                        "target_gui_mapping: Delivered: deeply technical ELI5 configure, effect-free preview, reviewed execution, metadata observation, exact-retry recovery, bearer-only verification, token-ledger revocation, automatic expiry, and explicit native-secret-store independence."
                     ],
                     "refs": [
                         "web/src/pages/Secrets.tsx",
+                        "web/src/pages/secrets/EphemeralAPIKeyWorkflow.tsx",
                         "web/src/lib/navigation.ts",
                         "web/src/App.tsx"
                     ]
                 },
                 "cli": {
                     "evidence": [
-                        "trstctl-cli ephemeral api-keys issue posts a JSON body to /api/v1/ephemeral/api-keys."
+                        "trstctl-cli ephemeral api-keys preview posts an effect-free JSON review to /api/v1/ephemeral/api-keys/preview; issue executes the reviewed body with a stable Idempotency-Key."
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -14838,7 +14845,7 @@
                 },
                 "api": {
                     "evidence": [
-                        "OpenAPI operation issueEphemeralAPIKey is registered for POST /api/v1/ephemeral/api-keys."
+                        "OpenAPI operations previewEphemeralAPIKey and issueEphemeralAPIKey register the read-only review and mutation routes with generated web, TypeScript, Python, and Java client contracts."
                     ],
                     "refs": [
                         "internal/api/api.go",
@@ -14847,14 +14854,17 @@
                 },
                 "test": {
                     "evidence": [
-                        "acceptance_test: UI ensures token value is visible once only, cannot be recovered, and is never stored in localStorage/sessionStorage.",
+                        "acceptance_test: served and browser acceptance prove effect-free preview, caller-scope attenuation, stale-review refusal, exact idempotent recovery, one token row, reveal-once handling, browser-storage absence, bearer-only verification, immediate revocation, and post-revoke rejection.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes.",
-                        "TestServedEphemeralAPIKeyAutoExpires is a named acceptance test executed by the CI make test package set."
+                        "TestServedEphemeralAPIKeyReviewRecoveryAndRevocation proves the complete F38 contract against real PostgreSQL/event projections with native secret storage disabled.",
+                        "WIRE-06 proves reviewed browser execution, stable ambiguous retry, input invalidation, reveal-once handling, bearer verification, immediate revoke, and zero local/session storage.",
+                        "TestServedEphemeralAPIKeyAutoExpires proves automatic leaseworker retirement."
                     ],
                     "refs": [
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "internal/server/ephemeral_served_test.go",
+                        "web/src/__tests__/accept/WIRE-06.test.tsx",
                         "web/src/__tests__/feature_coverage.test.tsx",
                         "web/src/__tests__/secrets.test.tsx",
                         "web/src/__tests__/route_parity.test.ts"
@@ -14872,18 +14882,19 @@
                 },
                 "rbac": {
                     "evidence": [
-                        "The feature authz manifest/test covers issueEphemeralAPIKey; the route is guarded by access:write and request scopes are validated against the RBAC permission registry."
+                        "The feature authz manifest/test covers previewEphemeralAPIKey and issueEphemeralAPIKey; both require access:write, validate known scopes, and refuse any scope the authenticated caller does not hold."
                     ],
                     "refs": [
                         "internal/api/feature_authz_test.go",
                         "internal/api/api.go",
+                        "internal/api/ephemeral_api_key_preview.go",
                         "internal/api/access.go",
                         "internal/authz/authz.go"
                     ]
                 },
                 "audit": {
                     "evidence": [
-                        "API-key issuance emits api_token.created with only the token hash; expiry emits api_token.revoked, and the served test asserts the raw token never reaches the event log."
+                        "Preview writes no event. Issuance emits api_token.created with only the token hash; manual/automatic retirement emits api_token.revoked, and the served test asserts the raw bearer never reaches the event log."
                     ],
                     "refs": [
                         "internal/orchestrator/commands.go",
@@ -14926,7 +14937,7 @@
                 "purpose": "Lets an operator understand and safely use ephemeral api key issuance while tenant, policy, and security authority remain on the server.",
                 "tool": "secrets",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/secrets/sharing",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -14938,7 +14949,7 @@
                 "dependencies": [],
                 "side_effects": "mixed",
                 "secret_data_handling": "The parity contract contains metadata only. Product workflows may reveal a value once, but reports and evidence never contain the value.",
-                "maturity": "observe_only",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -14953,16 +14964,27 @@
                         ]
                     },
                     "configure": {
-                        "status": "missing",
-                        "reason": "No structured evidence proves an operator can configure every required prerequisite from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/secrets/EphemeralAPIKeyWorkflow.tsx",
+                            "web/src/__tests__/accept/WIRE-06.test.tsx"
+                        ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/api/ephemeral_api_key_preview.go",
+                            "internal/server/ephemeral_served_test.go",
+                            "web/src/pages/secrets/EphemeralAPIKeyWorkflow.tsx"
+                        ]
                     },
                     "execute": {
-                        "status": "missing",
-                        "reason": "No complete console execution path is proved for this capability."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/api/ephemeral.go",
+                            "web/src/pages/secrets/EphemeralAPIKeyWorkflow.tsx",
+                            "web/src/__tests__/accept/WIRE-06.test.tsx"
+                        ]
                     },
                     "observe": {
                         "status": "complete",
@@ -14971,17 +14993,27 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/server/ephemeral_served_test.go",
+                            "web/src/__tests__/accept/WIRE-06.test.tsx",
+                            "docs/journeys/manage-secrets.md"
+                        ]
                     },
                     "verify": {
-                        "status": "missing",
-                        "reason": "Durable or external-effect verification is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/server/ephemeral_served_test.go",
+                            "web/src/__tests__/accept/WIRE-06.test.tsx",
+                            "web/src/lib/api.test.ts"
+                        ]
                     },
                     "automate": {
                         "status": "complete",
                         "evidence": [
+                            "OpenAPI operationId: previewEphemeralAPIKey",
                             "OpenAPI operationId: issueEphemeralAPIKey",
+                            "CLI command: ephemeral api-keys preview",
                             "CLI command: ephemeral api-keys issue"
                         ]
                     }

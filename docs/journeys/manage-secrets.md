@@ -307,27 +307,42 @@ today (see [Current limitations](../limitations.md) and
    -> the issue response contains the credential; the get, renew, and revoke responses
    contain only lease id, provider, role, state, and timestamps.
 
-8. Mint a short-lived API key for automation that should not keep a reusable bearer
-   credential. The route returns the raw token once, stores only its hash, and the
-   served leaseworker records `api_token.revoked` when the TTL passes.
+8. Review, issue, prove, and retire a short-lived API key for automation that should
+   not keep a reusable bearer credential. Preview is effect-free and permission-
+   attenuated: it writes nothing, calls nothing outside trstctl, and refuses any
+   scope the current caller does not already hold. Its server-keyed fingerprint binds
+   the exact tenant, caller, subject, scopes, and TTL to execution.
 
    ```sh
-   curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST https://localhost:8443/api/v1/ephemeral/api-keys \
-     -H "Authorization: Bearer $TRSTCTL_TOKEN" \
-     -H "Idempotency-Key: $(uuidgen)" \
-     -H 'Content-Type: application/json' \
-     -d '{"subject":"ci-preview-deploy","scopes":["access:read"],"ttl_seconds":900}'
-
    cat > ephemeral-api-key.json <<'JSON'
    {"subject":"ci-preview-deploy","scopes":["access:read"],"ttl_seconds":900}
    JSON
-   trstctl-cli --idempotency-key ci-preview-key ephemeral api-keys issue -f ephemeral-api-key.json
+
+   curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST https://localhost:8443/api/v1/ephemeral/api-keys/preview \
+     -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+     -H 'Content-Type: application/json' \
+     --data-binary @ephemeral-api-key.json > ephemeral-api-key.preview.json
+
+   jq --slurpfile review ephemeral-api-key.preview.json \
+     '. + {preview_fingerprint: $review[0].request_fingerprint}' \
+     ephemeral-api-key.json > ephemeral-api-key.reviewed.json
+
+   trstctl-cli ephemeral api-keys preview -f ephemeral-api-key.json
+   trstctl-cli --idempotency-key ci-preview-key ephemeral api-keys issue -f ephemeral-api-key.reviewed.json
    ```
 
-   -> the response includes `token` exactly once, plus metadata such as `id`,
-   `subject`, `scopes`, and `expires_at`. After expiry, the same token receives
-   `401`, and `GET /api/v1/access/api-tokens?subject=ci-preview-deploy&include_revoked=true`
-   shows `revoked_at`.
+   -> preview shows `effect_free: true`, zero preview writes/effects, the normalized
+   request, recovery instructions, verification instructions, and the fingerprint.
+   Issue returns `token` exactly once plus `id`, `subject`, `scopes`, and `expires_at`.
+   If the response is uncertain, retry the byte-identical issue command with
+   `ci-preview-key`; do not invent a second recovery key.
+
+   Use the bearer against an endpoint allowed by one reviewed scope. Confirm its
+   non-secret metadata appears under `GET /api/v1/access/api-tokens`, revoke it by id,
+   and confirm the bearer then receives `401`. If it is not revoked manually, the
+   leaseworker expires it and the ledger shows `revoked_at`. The web console performs
+   this review, reveal-once verification, and immediate revocation journey without
+   browser storage or the human session cookie.
 
 9. Hand an application a short-lived certificate while its private key stays where it
    will run. Generate the CSR beside the workload, then send only that public request

@@ -1229,6 +1229,12 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	if scimOpt != nil {
 		defaults = append(defaults, scimOpt)
 	}
+	// Effect-free review evidence is a platform primitive, not a native-secret-
+	// store feature. Wire the KEK's keyed-digest seam even when that optional API
+	// is disabled so F38 temporary access remains independently reviewable.
+	if mac, ok := d.KEK.(secretCommandMAC); ok {
+		defaults = append(defaults, api.WithCommandMAC(mac.KeyedDigest))
+	}
 	if d.EnableSecretsAPI {
 		if d.KEK == nil {
 			return nil, nil, errors.New("server: secrets API enabled but no KEK provided (envelope encryption at rest is required)")

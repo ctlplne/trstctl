@@ -781,7 +781,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     component: "Secrets",
     kind: "operate",
     evidence:
-      "scoped short-TTL API-key issuance, reveal-once handling, expiry evidence, and access-service availability independent of the optional native secret store",
+      "effect-free reviewed scoped short-TTL API-key issuance, stable retry recovery, reveal-once bearer verification, immediate revocation, expiry evidence, and access-service availability independent of the optional native secret store",
   },
   {
     featureId: "F39",

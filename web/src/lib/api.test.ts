@@ -574,6 +574,9 @@ describe("exported API surface census", () => {
       // F25: the temporary-credential review computes the exact bounded plan
       // and proof digests without persisting, signing, or contacting a target.
       "/api/v1/ephemeral/preview",
+      // F38: normalizes subject, caller-held scopes, and bounded lifetime into
+      // a server-keyed fingerprint without minting or storing any bearer.
+      "/api/v1/ephemeral/api-keys/preview",
       // F30: exact trust configuration, key/proof digests, and lifetime bounds;
       // no attestation verification, signing, event append, or durable write.
       "/api/v1/workloads/attested-issuance/preview",
@@ -1494,6 +1497,30 @@ describe("secrets contract", () => {
     expect(call[0]).toBe("/api/v1/secrets/store/app%2Fdb%2Fpassword");
     expect(call[1]?.credentials).toBe("omit");
     expect((call[1]?.headers as Record<string, string>).Authorization).toBe("Bearer trst_workload_reveal_once");
+  });
+
+  it("reviews, recovers, and verifies an F38 ephemeral key over the exact served routes", async () => {
+    mockFetchSequence([
+      { status: 200, body: JSON.stringify({ capability: "F38", ready: true, effect_free: true, request_fingerprint: "sha256:f38" }) },
+      { status: 201, body: JSON.stringify({ id: "token-1", token: "trst_f38_once" }) },
+      { status: 200, body: JSON.stringify({ items: [] }) },
+    ]);
+    const input = { subject: "ci/deploy", scopes: ["access:read"], ttl_seconds: 300 };
+
+    await api.previewEphemeralAPIKey(input);
+    await api.issueEphemeralAPIKey({ ...input, preview_fingerprint: "sha256:f38" }, "f38-same-retry");
+    await api.verifyEphemeralAPIKey("trst_f38_once");
+
+    const calls = vi.mocked(fetch).mock.calls;
+    expect(calls[0]?.[0]).toBe("/api/v1/ephemeral/api-keys/preview");
+    expect(calls[0]?.[1]?.method).toBe("POST");
+    expect(new Headers(calls[0]?.[1]?.headers).get("Idempotency-Key")).toBeNull();
+    expect(calls[1]?.[0]).toBe("/api/v1/ephemeral/api-keys");
+    expect(new Headers(calls[1]?.[1]?.headers).get("Idempotency-Key")).toBe("f38-same-retry");
+    expect(JSON.parse(String(calls[1]?.[1]?.body))).toEqual({ ...input, preview_fingerprint: "sha256:f38" });
+    expect(calls[2]?.[0]).toBe("/api/v1/access/roles");
+    expect(calls[2]?.[1]?.credentials).toBe("omit");
+    expect(new Headers(calls[2]?.[1]?.headers).get("Authorization")).toBe("Bearer trst_f38_once");
   });
 
   it("reads cloud secret-manager integration posture without mutation headers", async () => {

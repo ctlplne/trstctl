@@ -190,7 +190,7 @@ exhaustive subcommand list:
 | `connectors`                      | Connector catalog, outbox circuit-breaker state, delivery receipts (`catalog` · `outbox-circuits` · `deliveries`)                                                                                                                                                                                                   |
 | `discovery`                       | Discovery segments, sources, schedules, runs, findings, CT monitoring, drift remediation, continuous monitoring (`segments create` · `sources` · `schedules` · `runs` · `findings` · `ct-monitoring` · `drift-remediation` · `monitoring`)                                                                          |
 | `editions`                        | Show edition, license, and FIPS posture (`status`)                                                                                                                                                                                                                                                                  |
-| `ephemeral`                       | Approval-gated JIT credentials and short-TTL API keys (`issue` · `api-keys issue` · `approve`)                                                                                                                                                                                                                      |
+| `ephemeral`                       | Approval-gated JIT credentials and reviewed short-TTL API keys (`issue` · `api-keys preview` · `api-keys issue` · `approve`)                                                                                                                                                                                        |
 | `endpoints`                       | Read live endpoint identity and key-custody evidence, including one exact signed verification (`verifications` · `verifications get` · `key-custody`)                                                                                                                                                               |
 | `enrollment diagnostics`          | Read exact tenant refusal evidence, export aggregate-only support counts, and queue signed proof after a successful retry (`list` · `support-addendum` · `prove-fixed`)                                                                                                                                             |
 | `external-cas`                    | List and issue through configured upstream CA integrations (`list` · `issue`)                                                                                                                                                                                                                                       |
@@ -401,17 +401,38 @@ the required count is met.
 
 ## Ephemeral API keys
 
-`trstctl-cli ephemeral api-keys issue` mints a narrow, short-TTL bearer token through
-`POST /api/v1/ephemeral/api-keys`. The response prints the raw `trst_...` token once;
-the server stores only the token hash and the leaseworker records `api_token.revoked`
-after `ttl_seconds`.
+`trstctl-cli ephemeral api-keys preview` first asks the server to normalize and check
+one exact subject, permission set, and lifetime. This is a read-only `POST`: it mints
+no bearer, creates no idempotency row, appends no event, and calls no external system.
+It also refuses permission escalation—a caller can grant only scopes it already has.
+
+The preview returns a server-keyed `request_fingerprint`. Put that value in the issue
+body. `trstctl-cli ephemeral api-keys issue` then fails closed if the tenant, caller,
+subject, scopes, or lifetime no longer match the review. The successful response
+prints the raw `trst_...` bearer once; the server stores only its one-way hash. The
+leaseworker records `api_token.revoked` after `ttl_seconds`.
 
 ```bash
 cat > ephemeral-api-key.json <<'JSON'
 {"subject":"ci-preview-deploy","scopes":["access:read"],"ttl_seconds":900}
 JSON
-trstctl-cli --idempotency-key ci-preview-key ephemeral api-keys issue -f ephemeral-api-key.json
+trstctl-cli ephemeral api-keys preview -f ephemeral-api-key.json > ephemeral-api-key.preview.json
+
+# Copy request_fingerprint from the preview into the exact reviewed body.
+jq --slurpfile review ephemeral-api-key.preview.json \
+  '. + {preview_fingerprint: $review[0].request_fingerprint}' \
+  ephemeral-api-key.json > ephemeral-api-key.reviewed.json
+
+# Keep this recovery key stable until the response is certain. Retrying this exact
+# command recovers the original response instead of minting another bearer.
+trstctl-cli --idempotency-key ci-preview-key ephemeral api-keys issue -f ephemeral-api-key.reviewed.json
 ```
+
+Observe or revoke the key by id with `access api-tokens list` and
+`access api-tokens revoke`. For an `access:read` key, prove the bearer works by using
+it against a metadata-only access endpoint, then revoke it and prove the same bearer
+receives `401`. Never place the raw bearer in a URL, log, screenshot, or committed
+file.
 
 ## Bootstrapping or recovering a local API token
 

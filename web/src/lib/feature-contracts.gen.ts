@@ -5286,7 +5286,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use ephemeral api key issuance while tenant, policy, and security authority remain on the server.",
       "tool": "secrets",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/secrets/sharing",
       "navigationEntrypoints": [
         "tool navigation",
@@ -5298,7 +5298,7 @@ export const canonicalCapabilities = [
       "dependencies": [],
       "sideEffects": "mixed",
       "secretDataHandling": "The parity contract contains metadata only. Product workflows may reveal a value once, but reports and evidence never contain the value.",
-      "maturity": "observe_only",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -5313,16 +5313,27 @@ export const canonicalCapabilities = [
           ]
         },
         "configure": {
-          "status": "missing",
-          "reason": "No structured evidence proves an operator can configure every required prerequisite from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/secrets/EphemeralAPIKeyWorkflow.tsx",
+            "web/src/__tests__/accept/WIRE-06.test.tsx"
+          ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "internal/api/ephemeral_api_key_preview.go",
+            "internal/server/ephemeral_served_test.go",
+            "web/src/pages/secrets/EphemeralAPIKeyWorkflow.tsx"
+          ]
         },
         "execute": {
-          "status": "missing",
-          "reason": "No complete console execution path is proved for this capability."
+          "status": "complete",
+          "evidence": [
+            "internal/api/ephemeral.go",
+            "web/src/pages/secrets/EphemeralAPIKeyWorkflow.tsx",
+            "web/src/__tests__/accept/WIRE-06.test.tsx"
+          ]
         },
         "observe": {
           "status": "complete",
@@ -5331,17 +5342,27 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "internal/server/ephemeral_served_test.go",
+            "web/src/__tests__/accept/WIRE-06.test.tsx",
+            "docs/journeys/manage-secrets.md"
+          ]
         },
         "verify": {
-          "status": "missing",
-          "reason": "Durable or external-effect verification is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "internal/server/ephemeral_served_test.go",
+            "web/src/__tests__/accept/WIRE-06.test.tsx",
+            "web/src/lib/api.test.ts"
+          ]
         },
         "automate": {
           "status": "complete",
           "evidence": [
+            "OpenAPI operationId: previewEphemeralAPIKey",
             "OpenAPI operationId: issueEphemeralAPIKey",
+            "CLI command: ephemeral api-keys preview",
             "CLI command: ephemeral api-keys issue"
           ]
         }

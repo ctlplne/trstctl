@@ -581,6 +581,185 @@ func TestServedEphemeralAPIKeyAutoExpires(t *testing.T) {
 	t.Fatalf("ephemeral API key did not auto-expire: roles=%d body=%s metadata=%d body=%s", code, roleBody, metaCode, listed)
 }
 
+// TestServedEphemeralAPIKeyReviewRecoveryAndRevocation is the complete F38
+// vertical-slice proof. The native secret store is intentionally disabled: a
+// temporary access token belongs to the access service, but its server-keyed
+// review still uses the deployment KEK without exposing or persisting key bytes.
+func TestServedEphemeralAPIKeyReviewRecoveryAndRevocation(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	admin := seedScopedTokenSubject(t, h.store, h.tenant, "ephemeral-review-admin", "access:read", "access:write")
+	const subject = "ci-reviewed-deploy"
+	request := map[string]any{
+		"subject": subject, "scopes": []string{"access:read"}, "ttl_seconds": 300,
+	}
+
+	var tokenRowsBefore, idempotencyRowsBefore int
+	if err := h.store.SystemPool().QueryRow(t.Context(),
+		`SELECT
+		   (SELECT count(*) FROM api_tokens WHERE tenant_id = $1 AND subject = $2),
+		   (SELECT count(*) FROM idempotency_keys WHERE tenant_id = $1)`,
+		h.tenant, subject).Scan(&tokenRowsBefore, &idempotencyRowsBefore); err != nil {
+		t.Fatalf("read F38 preview baseline: %v", err)
+	}
+	eventHeadBefore, err := h.log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatalf("read F38 event baseline: %v", err)
+	}
+
+	status, raw := secretsReqKey(t, h, http.MethodPost, "/api/v1/ephemeral/api-keys/preview", admin, "", request)
+	if status != http.StatusOK {
+		t.Fatalf("ephemeral API-key preview = %d, want 200: %s", status, raw)
+	}
+	var plan struct {
+		Capability              string   `json:"capability"`
+		Operation               string   `json:"operation"`
+		Ready                   bool     `json:"ready"`
+		EffectFree              bool     `json:"effect_free"`
+		Subject                 string   `json:"subject"`
+		Scopes                  []string `json:"scopes"`
+		RequestedTTLSeconds     int64    `json:"requested_ttl_seconds"`
+		EffectiveTTLSeconds     int64    `json:"effective_ttl_seconds"`
+		MinimumTTLSeconds       int64    `json:"minimum_ttl_seconds"`
+		MaximumTTLSeconds       int64    `json:"maximum_ttl_seconds"`
+		RequiredPermission      string   `json:"required_permission"`
+		RequestFingerprint      string   `json:"request_fingerprint"`
+		Blockers                []string `json:"blockers"`
+		PreviewWrites           []string `json:"preview_writes"`
+		PreviewExternalEffects  []string `json:"preview_external_effects"`
+		ExecuteWrites           []string `json:"execute_writes"`
+		ExecuteExternalEffects  []string `json:"execute_external_effects"`
+		RecoverySteps           []string `json:"recovery_steps"`
+		VerificationSteps       []string `json:"verification_steps"`
+		CLIArgv                 []string `json:"cli_argv"`
+		TokenDataHandling       string   `json:"token_data_handling"`
+		NativeSecretStoreNeeded bool     `json:"native_secret_store_needed"`
+	}
+	if err := json.Unmarshal(raw, &plan); err != nil {
+		t.Fatalf("decode F38 preview: %v (%s)", err, raw)
+	}
+	if plan.Capability != "F38" || plan.Operation != "issue_ephemeral_api_key" || !plan.Ready || !plan.EffectFree ||
+		plan.Subject != subject || !slices.Equal(plan.Scopes, []string{"access:read"}) ||
+		plan.RequestedTTLSeconds != 300 || plan.EffectiveTTLSeconds != 300 || plan.MinimumTTLSeconds != 1 ||
+		plan.MaximumTTLSeconds != 3600 || plan.RequiredPermission != "access:write" ||
+		!strings.HasPrefix(plan.RequestFingerprint, "sha256:") || plan.NativeSecretStoreNeeded {
+		t.Fatalf("unexpected F38 preview: %+v", plan)
+	}
+	if len(plan.Blockers) != 0 || len(plan.PreviewWrites) != 0 || len(plan.PreviewExternalEffects) != 0 ||
+		len(plan.ExecuteWrites) == 0 || len(plan.ExecuteExternalEffects) != 0 || len(plan.RecoverySteps) == 0 ||
+		len(plan.VerificationSteps) == 0 || len(plan.CLIArgv) == 0 || plan.TokenDataHandling == "" {
+		t.Fatalf("F38 preview omitted lifecycle or zero-effect evidence: %+v", plan)
+	}
+	var tokenRowsAfterPreview, idempotencyRowsAfterPreview int
+	if err := h.store.SystemPool().QueryRow(t.Context(),
+		`SELECT
+		   (SELECT count(*) FROM api_tokens WHERE tenant_id = $1 AND subject = $2),
+		   (SELECT count(*) FROM idempotency_keys WHERE tenant_id = $1)`,
+		h.tenant, subject).Scan(&tokenRowsAfterPreview, &idempotencyRowsAfterPreview); err != nil {
+		t.Fatalf("read F38 preview effects: %v", err)
+	}
+	if tokenRowsAfterPreview != tokenRowsBefore || idempotencyRowsAfterPreview != idempotencyRowsBefore {
+		t.Fatalf("F38 preview changed state: tokens %d -> %d, idempotency %d -> %d",
+			tokenRowsBefore, tokenRowsAfterPreview, idempotencyRowsBefore, idempotencyRowsAfterPreview)
+	}
+	if eventHeadAfter, err := h.log.LastSequence(t.Context()); err != nil || eventHeadAfter != eventHeadBefore {
+		t.Fatalf("F38 preview event head = (%d, %v), want %d", eventHeadAfter, err, eventHeadBefore)
+	}
+
+	status, repeated := secretsReqKey(t, h, http.MethodPost, "/api/v1/ephemeral/api-keys/preview", admin, "", request)
+	if status != http.StatusOK || !bytes.Contains(repeated, []byte(plan.RequestFingerprint)) {
+		t.Fatalf("identical F38 preview was not stable: %d %s", status, repeated)
+	}
+	changed := map[string]any{"subject": subject, "scopes": []string{"access:read"}, "ttl_seconds": 301}
+	status, changedRaw := secretsReqKey(t, h, http.MethodPost, "/api/v1/ephemeral/api-keys/preview", admin, "", changed)
+	if status != http.StatusOK || bytes.Contains(changedRaw, []byte(plan.RequestFingerprint)) {
+		t.Fatalf("changed F38 TTL did not invalidate preview: %d %s", status, changedRaw)
+	}
+
+	// A holder of access:write cannot mint authority it does not itself possess.
+	escalation := map[string]any{"subject": subject, "scopes": []string{"certs:read"}, "ttl_seconds": 300}
+	status, raw = secretsReqKey(t, h, http.MethodPost, "/api/v1/ephemeral/api-keys/preview", admin, "", escalation)
+	if status != http.StatusForbidden || bytes.Contains(raw, []byte(h.tenant)) {
+		t.Fatalf("F38 preview did not refuse scope escalation safely: %d %s", status, raw)
+	}
+	status, raw = secretsReqKey(t, h, http.MethodPost, "/api/v1/ephemeral/api-keys", admin, "f38-escalation", escalation)
+	if status != http.StatusForbidden {
+		t.Fatalf("F38 execution did not refuse scope escalation: %d %s", status, raw)
+	}
+
+	stale := map[string]any{
+		"subject": subject, "scopes": []string{"access:read"}, "ttl_seconds": 301,
+		"preview_fingerprint": plan.RequestFingerprint,
+	}
+	status, raw = secretsReqKey(t, h, http.MethodPost, "/api/v1/ephemeral/api-keys", admin, "f38-stale-review", stale)
+	if status != http.StatusConflict || bytes.Contains(raw, []byte(plan.RequestFingerprint)) {
+		t.Fatalf("F38 stale review did not fail closed: %d %s", status, raw)
+	}
+
+	reviewed := map[string]any{
+		"subject": subject, "scopes": []string{"access:read"}, "ttl_seconds": 300,
+		"preview_fingerprint": plan.RequestFingerprint,
+	}
+	status, created := secretsReqKey(t, h, http.MethodPost, "/api/v1/ephemeral/api-keys", admin, "f38-reviewed-issue", reviewed)
+	if status != http.StatusCreated {
+		t.Fatalf("reviewed F38 issue = %d, want 201: %s", status, created)
+	}
+	status, recovered := secretsReqKey(t, h, http.MethodPost, "/api/v1/ephemeral/api-keys", admin, "f38-reviewed-issue", reviewed)
+	if status != http.StatusCreated || !bytes.Equal(created, recovered) {
+		t.Fatalf("F38 same-key recovery changed result: %d %s", status, recovered)
+	}
+	var issued struct {
+		ID        string     `json:"id"`
+		Subject   string     `json:"subject"`
+		Scopes    []string   `json:"scopes"`
+		ExpiresAt *time.Time `json:"expires_at"`
+		Token     string     `json:"token"`
+	}
+	if err := json.Unmarshal(created, &issued); err != nil || issued.ID == "" || issued.Subject != subject ||
+		!slices.Equal(issued.Scopes, []string{"access:read"}) || issued.ExpiresAt == nil || !strings.HasPrefix(issued.Token, auth.TokenPrefix) {
+		t.Fatalf("decode reviewed F38 issue: %+v err=%v body=%s", issued, err, created)
+	}
+	if h.logContains(t, issued.Token) {
+		t.Fatal("F38 raw bearer reached the event log")
+	}
+
+	conflict := map[string]any{
+		"subject": subject + "-changed", "scopes": []string{"access:read"}, "ttl_seconds": 300,
+		"preview_fingerprint": plan.RequestFingerprint,
+	}
+	status, raw = secretsReqKey(t, h, http.MethodPost, "/api/v1/ephemeral/api-keys", admin, "f38-reviewed-issue", conflict)
+	if status != http.StatusConflict {
+		t.Fatalf("F38 changed-body retry = %d, want 409: %s", status, raw)
+	}
+	var issuedRows int
+	if err := h.store.SystemPool().QueryRow(t.Context(),
+		`SELECT count(*) FROM api_tokens WHERE tenant_id = $1 AND subject = $2`, h.tenant, subject).Scan(&issuedRows); err != nil {
+		t.Fatalf("count reviewed F38 rows: %v", err)
+	}
+	if issuedRows != 1 {
+		t.Fatalf("reviewed F38 issue rows = %d, want exactly 1", issuedRows)
+	}
+
+	status, raw = doBearer(t, h.ts, http.MethodGet, "/api/v1/access/roles", issued.Token, "", nil)
+	if status != http.StatusOK || bytes.Contains(raw, []byte(issued.Token)) {
+		t.Fatalf("fresh F38 bearer did not authorize its exact access:read route: %d %s", status, raw)
+	}
+	status, listed := doBearer(t, h.ts, http.MethodGet,
+		"/api/v1/access/api-tokens?subject="+subject+"&include_revoked=true", admin, "", nil)
+	if status != http.StatusOK || !bytes.Contains(listed, []byte(issued.ID)) || bytes.Contains(listed, []byte(issued.Token)) {
+		t.Fatalf("F38 metadata ledger did not observe issued key safely: %d %s", status, listed)
+	}
+	status, raw = doBearer(t, h.ts, http.MethodDelete, "/api/v1/access/api-tokens/"+issued.ID, admin, "f38-revoke", map[string]string{
+		"reason": "reviewed F38 qualification cleanup",
+	})
+	if status != http.StatusNoContent {
+		t.Fatalf("revoke reviewed F38 key = %d, want 204: %s", status, raw)
+	}
+	status, raw = doBearer(t, h.ts, http.MethodGet, "/api/v1/access/roles", issued.Token, "", nil)
+	if status != http.StatusUnauthorized || bytes.Contains(raw, []byte(issued.Token)) {
+		t.Fatalf("revoked F38 bearer remained usable or leaked: %d %s", status, raw)
+	}
+}
+
 type servedEphemeralAttestor struct{}
 
 func (servedEphemeralAttestor) Method() string { return "stub_ephemeral" }

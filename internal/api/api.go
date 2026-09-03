@@ -66,44 +66,48 @@ type API struct {
 	// lastDrill returns the most recent restore drill, or nil if none has run
 	// (J2). Nil-returning rather than a zero value: "no drill has run" and "a
 	// drill ran and failed" must not render the same way.
-	lastDrill                  func() *backup.DrillAttestation
-	restoreDrillKeys           *jose.JWKSet
-	roles                      *authz.Registry
-	principal                  func(*http.Request) (authz.Principal, error)
-	audit                      *audit.Service
-	auditTimestamper           auditanchor.Timestamper
-	retirementChecklist        RetirementChecklistSource
-	auth                       *AuthConfig
-	providerPlaneAvailable     bool
-	oidcPreLogin               *oidcPreLoginStore
-	scim                       *SCIMConfig
-	scimTokens                 map[string]scimToken
-	agentTokens                BootstrapTokenIssuer
-	agentConnection            agentEnrollmentConnection
-	agentRenewalReady          bool
-	agentHeartbeatInterval     time.Duration
-	agentEnroller              BootstrapEnroller
-	agentEnrollmentObserver    func(result string)
-	rateLimiter                RateLimiter
-	specialAbuse               *specialRouteAbuseLimiter
-	gate                       MutationGate
-	abac                       ABACDenyEvaluator
-	abacEnvironment            map[string]string
-	abacNow                    func() time.Time
-	approvals                  ApprovalRecorder
-	breakglass                 BreakglassReconciler
-	breakglassIssuer           BreakglassIssuer
-	breakglassCeremonies       BreakglassCeremonyService
-	breakglassRotation         BreakglassRotationService
-	breakglassAdmin            *breakglass.AdminService
-	caHierarchy                CAHierarchyService
-	edgeDelegations            EdgeDelegationService
-	externalCAs                ExternalCAService
-	certRevocationAuthority    CertificateRevocationAuthorityResolver
-	attestedIssuer             AttestedIssuerService
-	sshWorkflow                SSHWorkflowService
-	broker                     BrokerService
-	ephemeral                  EphemeralIssuerService
+	lastDrill               func() *backup.DrillAttestation
+	restoreDrillKeys        *jose.JWKSet
+	roles                   *authz.Registry
+	principal               func(*http.Request) (authz.Principal, error)
+	audit                   *audit.Service
+	auditTimestamper        auditanchor.Timestamper
+	retirementChecklist     RetirementChecklistSource
+	auth                    *AuthConfig
+	providerPlaneAvailable  bool
+	oidcPreLogin            *oidcPreLoginStore
+	scim                    *SCIMConfig
+	scimTokens              map[string]scimToken
+	agentTokens             BootstrapTokenIssuer
+	agentConnection         agentEnrollmentConnection
+	agentRenewalReady       bool
+	agentHeartbeatInterval  time.Duration
+	agentEnroller           BootstrapEnroller
+	agentEnrollmentObserver func(result string)
+	rateLimiter             RateLimiter
+	specialAbuse            *specialRouteAbuseLimiter
+	gate                    MutationGate
+	abac                    ABACDenyEvaluator
+	abacEnvironment         map[string]string
+	abacNow                 func() time.Time
+	approvals               ApprovalRecorder
+	breakglass              BreakglassReconciler
+	breakglassIssuer        BreakglassIssuer
+	breakglassCeremonies    BreakglassCeremonyService
+	breakglassRotation      BreakglassRotationService
+	breakglassAdmin         *breakglass.AdminService
+	caHierarchy             CAHierarchyService
+	edgeDelegations         EdgeDelegationService
+	externalCAs             ExternalCAService
+	certRevocationAuthority CertificateRevocationAuthorityResolver
+	attestedIssuer          AttestedIssuerService
+	sshWorkflow             SSHWorkflowService
+	broker                  BrokerService
+	ephemeral               EphemeralIssuerService
+	// commandMAC produces server-keyed, domain-separated review evidence for
+	// core workflows that do not depend on the optional native secret store.
+	// The key stays behind the crypto boundary; callers receive only its digest.
+	commandMAC                 func(domain, material []byte) ([]byte, error)
 	pam                        PAMService
 	managedKeys                ManagedKeyService // served BYOK/HSM key lifecycle (CRYPTO-005); nil = not enabled
 	managedKeyCustody          ManagedKeyCustodyConfiguration
@@ -222,6 +226,7 @@ type config struct {
 	sshWorkflow                 SSHWorkflowService
 	broker                      BrokerService
 	ephemeral                   EphemeralIssuerService
+	commandMAC                  func(domain, material []byte) ([]byte, error)
 	pam                         PAMService
 	managedKeys                 ManagedKeyService
 	managedKeyCustody           ManagedKeyCustodyConfiguration
@@ -407,6 +412,13 @@ func WithPrincipalResolver(fn func(*http.Request) (authz.Principal, error)) Opti
 	return func(c *config) { c.principalFn = fn }
 }
 
+// WithCommandMAC wires the deployment-wide, crypto-boundary keyed digest used
+// to bind an effect-free review to one authenticated command. It is independent
+// of the optional native secret store and never exposes the underlying key.
+func WithCommandMAC(fn func(domain, material []byte) ([]byte, error)) Option {
+	return func(c *config) { c.commandMAC = fn }
+}
+
 // RateLimiter sheds load per authenticated tenant (R2.3). Allow takes one unit of
 // quota for tenantID; allowed is false when the tenant is over budget, with
 // retryAfter indicating when to retry. The API depends only on this interface so
@@ -514,6 +526,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		sshWorkflow:                 cfg.sshWorkflow,
 		broker:                      cfg.broker,
 		ephemeral:                   cfg.ephemeral,
+		commandMAC:                  cfg.commandMAC,
 		pam:                         cfg.pam,
 		managedKeys:                 cfg.managedKeys,
 		managedKeyCustody:           cfg.managedKeyCustody,
@@ -1106,6 +1119,7 @@ func (a *API) routes() []route {
 			"201": {Description: "credential issued", Content: map[string]MediaType{"application/json": {Schema: ref("EphemeralCredential")}}},
 			"202": {Description: "credential request awaiting approval", Content: map[string]MediaType{"application/json": {Schema: ref("EphemeralCredential")}}},
 		}, mutation: true, perm: authz.CertsRequest},
+		{method: "POST", path: "/api/v1/ephemeral/api-keys/preview", opID: "previewEphemeralAPIKey", summary: "Review one exact short-TTL API key without minting or storing a bearer", handler: a.previewEphemeralAPIKey, reqSchema: "EphemeralAPIKeyRequest", resSchema: "EphemeralAPIKeyPreview", successCode: "200", perm: authz.AccessWrite},
 		{method: "POST", path: "/api/v1/ephemeral/api-keys", opID: "issueEphemeralAPIKey", summary: "Mint a short-TTL API key for machine workflows", handler: a.issueEphemeralAPIKey, reqSchema: "EphemeralAPIKeyRequest", resSchema: "EphemeralAPIKey", successCode: "201", mutation: true, sensitiveResponse: true, perm: authz.AccessWrite},
 		{method: "POST", path: "/api/v1/ephemeral/{id}/approvals", opID: "approveEphemeralCredential", summary: "Approve a pending ephemeral JIT credential request", handler: a.approveEphemeralCredential, pathParams: ephemeralRequestPath, reqSchema: "EphemeralApprovalRequest", resSchema: "EphemeralApproval", successCode: "200", mutation: true, perm: authz.CertsIssue},
 

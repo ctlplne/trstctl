@@ -1420,8 +1420,14 @@ describe("i18n boundary", () => {
       // failure in each production locale. The F58 method helper also replaces
       // internal "served" language with operator-facing "ready" language.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "8700f00714a2684b47f827a91dcbcafa179e409ca6cd3a73fff38e168d86d0f4",
-      "de-DE": "217b5232f0603669f54086f6b1bc5f254050d48d82483ae78297ecfd5b6526ae",
+      // F38 re-pin: the complete temporary API-key journey now explains exact
+      // review binding, caller-scope attenuation, one-time bearer custody,
+      // stable retry, verification without the human session, revocation, and
+      // automatic expiry. Twelve obsolete extracted strings from the retired
+      // direct-mint panel were removed. Machine-authored es/de — FLAGGED FOR HUMAN
+      // TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "e31f1fc16fb36108f2885993834ae999a8644a563c7465d10c5bb58bc5f8c579",
+      "de-DE": "73e8f5b843ff67eb01bfbf1fee25598cb3932b1a425975a0286f5dfb2f1f16b2",
     });
   });
 

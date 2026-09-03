@@ -3153,7 +3153,33 @@ export interface EphemeralAPIKey {
   token: string;
 }
 
+export interface EphemeralAPIKeyPreview {
+  blockers: string[];
+  capability: string;
+  cli_argv: string[];
+  effect_free: boolean;
+  effective_ttl_seconds: number;
+  execute_external_effects: string[];
+  execute_writes: string[];
+  maximum_ttl_seconds: number;
+  minimum_ttl_seconds: number;
+  native_secret_store_needed: boolean;
+  operation: string;
+  preview_external_effects: string[];
+  preview_writes: string[];
+  ready: boolean;
+  recovery_steps: string[];
+  request_fingerprint: string;
+  requested_ttl_seconds: number;
+  required_permission: string;
+  scopes: string[];
+  subject: string;
+  token_data_handling: string;
+  verification_steps: string[];
+}
+
 export interface EphemeralAPIKeyRequest {
+  preview_fingerprint?: string;
   scopes: string[];
   subject: string;
   ttl_seconds: number;

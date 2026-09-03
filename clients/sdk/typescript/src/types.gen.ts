@@ -2387,6 +2387,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ephemeral/api-keys/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review one exact short-TTL API key without minting or storing a bearer */
+        post: operations["previewEphemeralAPIKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ephemeral/preview": {
         parameters: {
             query?: never;
@@ -9496,7 +9513,33 @@ export interface components {
             tenant_id: string;
             token: string;
         };
+        EphemeralAPIKeyPreview: {
+            blockers: string[];
+            capability: string;
+            cli_argv: string[];
+            effect_free: boolean;
+            effective_ttl_seconds: number;
+            execute_external_effects: string[];
+            execute_writes: string[];
+            maximum_ttl_seconds: number;
+            minimum_ttl_seconds: number;
+            native_secret_store_needed: boolean;
+            operation: string;
+            preview_external_effects: string[];
+            preview_writes: string[];
+            ready: boolean;
+            recovery_steps: string[];
+            request_fingerprint: string;
+            requested_ttl_seconds: number;
+            required_permission: string;
+            scopes: string[];
+            subject: string;
+            token_data_handling: string;
+            verification_steps: string[];
+        };
         EphemeralAPIKeyRequest: {
+            /** @description Optional server-keyed fingerprint returned by EphemeralAPIKeyPreview. When supplied, issuance fails closed if subject, scopes, caller, tenant, or lifetime changed. */
+            preview_fingerprint?: string;
             scopes: string[];
             subject: string;
             ttl_seconds: number;
@@ -20873,6 +20916,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EphemeralAPIKey"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewEphemeralAPIKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EphemeralAPIKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EphemeralAPIKeyPreview"];
                 };
             };
             /** @description client error */

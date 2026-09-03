@@ -152,9 +152,10 @@ type EphemeralApproval struct {
 }
 
 type ephemeralAPIKeyJSON struct {
-	Subject    string   `json:"subject"`
-	Scopes     []string `json:"scopes"`
-	TTLSeconds int64    `json:"ttl_seconds"`
+	Subject            string   `json:"subject"`
+	Scopes             []string `json:"scopes"`
+	TTLSeconds         int64    `json:"ttl_seconds"`
+	PreviewFingerprint string   `json:"preview_fingerprint,omitempty"`
 }
 
 func ephemeralCredentialRequestFromJSON(wire ephemeralCredentialJSON) (EphemeralCredentialRequest, error) {
@@ -243,34 +244,31 @@ func (a *API) issueEphemeralAPIKey(w http.ResponseWriter, r *http.Request) {
 			opErr = err
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
-		req.Subject = strings.TrimSpace(req.Subject)
-		if req.Subject == "" {
-			principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
-			req.Subject = strings.TrimSpace(principal.Subject)
-		}
-		if req.Subject == "" {
-			opErr = errors.New("subject is required")
-			return 0, nil, errStatus(http.StatusBadRequest, "subject is required")
-		}
-		if len(req.Scopes) == 0 {
-			opErr = errors.New("at least one scope is required")
-			return 0, nil, errStatus(http.StatusBadRequest, "at least one scope is required")
-		}
-		if err := a.validatePermissionScopes(req.Scopes); err != nil {
+		normalized, err := a.normalizeEphemeralAPIKeyRequest(ctx, tenantID, req)
+		if err != nil {
 			opErr = err
 			return 0, nil, err
 		}
-		if req.TTLSeconds <= 0 {
-			opErr = errors.New("ttl_seconds must be positive")
-			return 0, nil, errStatus(http.StatusBadRequest, "ttl_seconds must be positive")
+		req.PreviewFingerprint = strings.TrimSpace(req.PreviewFingerprint)
+		if req.PreviewFingerprint != "" {
+			principal, principalErr := requestPrincipalSubject(ctx)
+			if principalErr != nil {
+				opErr = principalErr
+				return 0, nil, principalErr
+			}
+			want, fingerprintErr := a.ephemeralAPIKeyPreviewFingerprint(tenantID, principal, normalized)
+			if fingerprintErr != nil {
+				opErr = fingerprintErr
+				return 0, nil, fingerprintErr
+			}
+			if !crypto.ConstantTimeEqual([]byte(req.PreviewFingerprint), []byte(want)) {
+				opErr = errors.New("reviewed ephemeral API-key plan is stale")
+				return 0, nil, errStatus(http.StatusConflict, "reviewed ephemeral API-key plan is stale; preview the current request again")
+			}
 		}
-		if req.TTLSeconds > int64(ephemeralAPIKeyMaxTTL/time.Second) {
-			opErr = errors.New("ttl_seconds exceeds the ephemeral API-key maximum")
-			return 0, nil, errStatus(http.StatusUnprocessableEntity, "ttl_seconds must be 3600 or less")
-		}
-		ttl := time.Duration(req.TTLSeconds) * time.Second
+		ttl := time.Duration(normalized.TTLSeconds) * time.Second
 		expiresAt := time.Now().UTC().Add(ttl)
-		rec, raw, err := a.orch.CreateAPIToken(ctx, tenantID, req.Subject, req.Scopes, &expiresAt)
+		rec, raw, err := a.orch.CreateAPIToken(ctx, tenantID, normalized.Subject, normalized.Scopes, &expiresAt)
 		if err != nil {
 			opErr = err
 			return 0, nil, err

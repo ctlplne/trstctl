@@ -220,8 +220,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// F58 adds the exact, effect-free machine-login method plan; credential
 	// verification remains the separate idempotent login mutation.
 	// F60 adds the value-free, effect-free one-time-share plan.
-	if len(out) != 419 {
-		t.Fatalf("OpenAPI operationIds = %d, want 419", len(out))
+	// F38 adds the caller-attenuated, effect-free ephemeral API-key plan.
+	if len(out) != 420 {
+		t.Fatalf("OpenAPI operationIds = %d, want 420", len(out))
 	}
 	return out
 }

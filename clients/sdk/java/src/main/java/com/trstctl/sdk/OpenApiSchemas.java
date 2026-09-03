@@ -323,6 +323,7 @@ public final class OpenApiSchemas {
       "EnterpriseSupportStatus",
       "EnterpriseSupportTier",
       "EphemeralAPIKey",
+      "EphemeralAPIKeyPreview",
       "EphemeralAPIKeyRequest",
       "EphemeralApproval",
       "EphemeralApprovalRequest",
