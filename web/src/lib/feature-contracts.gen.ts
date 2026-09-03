@@ -4550,7 +4550,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use code-signing service while tenant, policy, and security authority remain on the server.",
       "tool": "software_trust",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/codesign",
       "navigationEntrypoints": [
         "tool navigation",
@@ -4564,7 +4564,7 @@ export const canonicalCapabilities = [
       ],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -4585,12 +4585,22 @@ export const canonicalCapabilities = [
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "internal/api/codesign.go",
+            "internal/server/codesign.go",
+            "web/src/pages/codesigning/CodeSigningWorkflow.tsx",
+            "web/src/__tests__/codesign.test.tsx"
+          ]
         },
         "execute": {
-          "status": "missing",
-          "reason": "No complete console execution path is proved for this capability."
+          "status": "complete",
+          "evidence": [
+            "internal/api/codesign.go",
+            "internal/server/codesign.go",
+            "web/src/pages/codesigning/CodeSigningWorkflow.tsx",
+            "internal/server/dod_code_signing_runtime_test.go"
+          ]
         },
         "observe": {
           "status": "complete",
@@ -4599,13 +4609,19 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/codesigning/CodeSigningWorkflow.tsx",
+            "web/src/__tests__/codesign.test.tsx",
+            "internal/server/codesign_durable_test.go"
+          ]
         },
         "verify": {
           "status": "complete",
           "evidence": [
-            "internal/codesign/codesign_test.go"
+            "internal/codesign/codesign_test.go",
+            "internal/server/dod_code_signing_runtime_test.go",
+            "internal/store/code_signing_rls_test.go"
           ]
         },
         "automate": {
@@ -4622,8 +4638,8 @@ export const canonicalCapabilities = [
       },
       "owner": "software-trust",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "66082f980a13da91f14d1383ff7b2e041e16707a",
+      "freshness": "2026-09-03"
     }
   },
   {

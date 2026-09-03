@@ -12674,11 +12674,13 @@
             "priority": 71,
             "served_state": "conditional",
             "backend_status": "conditional: shipped buildRunDeps assembles tenant-scoped persistent and keyless signing through the isolated signer plus pinned Rekor v1 transparency delivery when code_signing.enabled is configured",
-            "current_frontend_mapping": "served: CodeSigning at /codesign submits authenticated key-backed and keyless digest-signing mutations and renders the returned signature, public key, verified Fulcio identity, and Rekor outbox destination",
-            "target_gui_mapping": "Code-signing UI for signing requests, key/keyless mode, approvals, artifact digest, policy decision, signature download, and audit evidence.",
-            "acceptance_test": "The DoD runtime proof enters through the shipped key-backed and keyless routes assembled by buildRunDeps, signs the exact supplied SHA-256 digest in an isolated signer process, drains official Rekor v1 HashedRekord work, and requires external OpenSSL verification plus a pinned signed-entry-timestamp receipt.",
+            "current_frontend_mapping": "operate: Code signing at /codesign guides an operator through managed-key or verified-keyless input, an effect-free server review, exact reviewed execution, a non-secret signature receipt, durable transparency status, safe retry, and recovery.",
+            "target_gui_mapping": "Complete vertical slice: choose managed or keyless signing, bind one exact artifact digest, review server-owned effects and recovery, sign only the reviewed request, then verify the durable signature and Rekor result without exposing private keys or identity proofs.",
+            "acceptance_test": "The exact-candidate proof enters through the shipped browser, native CLI, and API review/signing routes assembled by buildRunDeps; proves review has zero effects; refuses stale reviewed input; signs the exact SHA-256 digest in a separate signer process; safely replays one Idempotency-Key; drains official Rekor v1 HashedRekord work; verifies the signature with external OpenSSL and the pinned signed-entry timestamp; survives a control-plane restart; and retains no raw identity proof.",
             "source_docs": [
-                "docs/features/code-signing-and-timestamping.md"
+                "docs/features/code-signing-and-timestamping.md",
+                "docs/web-console.md",
+                "docs/cli.md"
             ],
             "source_backend": [
                 "internal/codesign",
@@ -12687,14 +12689,17 @@
                 "internal/config/code_signing.go",
                 "internal/server/code_signing_config.go",
                 "internal/server/rekor.go",
-                "internal/server/dod_code_signing_runtime_test.go"
+                "internal/server/dod_code_signing_runtime_test.go",
+                "internal/store/code_signing.go",
+                "internal/server/codesign_durable_test.go"
             ],
             "source_frontend": [
                 "web/src/pages/CodeSigning.tsx",
-                "web/src/pages/codesigning/CodeSigningWorkflow.tsx"
+                "web/src/pages/codesigning/CodeSigningWorkflow.tsx",
+                "web/src/__tests__/codesign.test.tsx"
             ],
             "status": "closed",
-            "notes": "WIRE-CODESIGN-001 closes the shipped assembly gap. buildRunDeps now constructs tenant-bound signer handles, offline GitHub OIDC attestors, one-use isolated signer keys, and a Rekor outbox handler with an operator-pinned log public key. The DoD proof drives both served mutations, independently verifies exact pre-hashed signatures with OpenSSL, forces the real Rekor 409 Location readback flow, and verifies the signed-entry timestamp before the outbox row can be acknowledged. B-4 adds listCodeSigningIdentities: signing operations joined to their transparency-log state. Rekor publication rides the outbox and the handler refuses to acknowledge an entry whose signed receipt does not verify, so a delivered row is a verified entry and the view reads that state instead of a parallel flag; sealed command bytes are never read. Covered by TestCodeSigningIdentitiesReportTransparencyState and its empty/unwired/failure/unauthenticated cases.",
+            "notes": "F50 is a complete review-first vertical slice. Managed-key and verified-keyless requests receive an effect-free, server-keyed preview that binds the exact digest and configuration; execution rejects stale or missing review evidence and uses one stable Idempotency-Key for safe ambiguous-response recovery. Private signing operations stay in the separate signer process. Keyless identity proofs are verified, consumed, and excluded from public history, PostgreSQL operation/outbox rows, served audit evidence, logs, and retained QA receipts. Rekor publication uses the outbox, verifies the official HashedRekord body and operator-pinned signed-entry timestamp before acknowledgement, and joins verified transparency state into the durable history view. The console explains effects, recovery, and verification; contains the wide ledger on phone viewports; and labels public history only as Managed key or Keyless identity. Exact g180 evidence proves real browser/API/native-CLI parity, external OpenSSL verification, deterministic retry, restart survival, zero pending outbox work, privacy controls, and strict pinned-HTTPS cleanup.",
             "api_surface": [
                 "listCodeSigningIdentities",
                 "previewCodeArtifact",
@@ -12734,18 +12739,20 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: served: CodeSigning at /codesign submits authenticated key-backed and keyless digest-signing mutations and renders the returned signature, public key, verified Fulcio identity, and Rekor outbox destination",
-                        "target_gui_mapping: Code-signing UI for signing requests, key/keyless mode, approvals, artifact digest, policy decision, signature download, and audit evidence."
+                        "CodeSigningWorkflow at /codesign guides managed-key and keyless operators through configure, effect-free review, exact execution, receipt verification, and safe retry or new-review recovery.",
+                        "CodeSigning renders durable signing history joined to transparency state and contains that ledger inside its own horizontal scroll boundary on phone viewports."
                     ],
                     "refs": [
                         "web/src/lib/navigation.ts",
                         "web/src/App.tsx",
-                        "web/src/pages/CodeSigning.tsx"
+                        "web/src/pages/CodeSigning.tsx",
+                        "web/src/pages/codesigning/CodeSigningWorkflow.tsx",
+                        "web/src/__tests__/codesign.test.tsx"
                     ]
                 },
                 "cli": {
                     "evidence": [
-                        "trstctl-cli exposes code-signing sign and code-signing keyless commands over the served API."
+                        "trstctl-cli exposes code-signing preview, keyless-preview, sign, keyless, and identities over the same served review, execution, and durable-history APIs as the console."
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -12754,7 +12761,7 @@
                 },
                 "api": {
                     "evidence": [
-                        "OpenAPI operationIds signCodeArtifact and signCodeArtifactKeyless publish the code-signing request and signature schemas."
+                        "OpenAPI operationIds previewCodeArtifact, previewCodeArtifactKeyless, signCodeArtifact, signCodeArtifactKeyless, and listCodeSigningIdentities publish the effect-free review, exact execution, receipt, and durable history contracts."
                     ],
                     "refs": [
                         "internal/api/api.go",
@@ -12766,7 +12773,8 @@
                     "evidence": [
                         "TestDODCodeSigningProductionAssembly starts a separate signer process, uses production buildRunDeps and Build, calls the served key-backed and keyless mutations, and drains two transparency rows to an out-of-process Rekor emulator.",
                         "The emulator uses OpenSSL as an independent verifier for the exact pre-hashed signatures, signs the official Rekor SET payload with a per-run external key, and exposes nonce/PID-bound readback required by the census.",
-                        "Focused unit tests reject double-hashed digests, cross-tenant signer resolution, forged OIDC identity, forged Rekor SETs, unbound UUID/body/log identity, and unsafe duplicate Locations."
+                        "Focused unit tests reject double-hashed digests, cross-tenant signer resolution, forged OIDC identity, forged Rekor SETs, unbound UUID/body/log identity, and unsafe duplicate Locations.",
+                        "Exact g180 live evidence proves managed and keyless review/execution, stale-plan refusal, deterministic replay, PostgreSQL/audit/log privacy, external OpenSSL verification, verified Rekor completion, restart survival, drained outbox work, browser recovery, and mobile containment."
                     ],
                     "refs": [
                         "internal/codesign/codesign_test.go",
@@ -12776,15 +12784,20 @@
                         "internal/server/codesign_served_test.go",
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "web/src/__tests__/route_parity.test.ts",
-                        "web/src/__tests__/feature_coverage.test.tsx"
+                        "web/src/__tests__/feature_coverage.test.tsx",
+                        "web/src/__tests__/codesign.test.tsx",
+                        "internal/server/codesign_durable_test.go",
+                        "internal/store/code_signing_rls_test.go"
                     ]
                 },
                 "docs": {
                     "evidence": [
-                        "documented in docs/features/code-signing-and-timestamping.md"
+                        "The code-signing guide documents review-first browser and CLI journeys, prerequisites, custody boundaries, safe retry, verification, and recovery."
                     ],
                     "refs": [
-                        "docs/features/code-signing-and-timestamping.md"
+                        "docs/features/code-signing-and-timestamping.md",
+                        "docs/web-console.md",
+                        "docs/cli.md"
                     ]
                 },
                 "rbac": {
@@ -12849,7 +12862,7 @@
                 "purpose": "Lets an operator understand and safely use code-signing service while tenant, policy, and security authority remain on the server.",
                 "tool": "software_trust",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/codesign",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -12863,7 +12876,7 @@
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -12884,12 +12897,22 @@
                         ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/api/codesign.go",
+                            "internal/server/codesign.go",
+                            "web/src/pages/codesigning/CodeSigningWorkflow.tsx",
+                            "web/src/__tests__/codesign.test.tsx"
+                        ]
                     },
                     "execute": {
-                        "status": "missing",
-                        "reason": "No complete console execution path is proved for this capability."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/api/codesign.go",
+                            "internal/server/codesign.go",
+                            "web/src/pages/codesigning/CodeSigningWorkflow.tsx",
+                            "internal/server/dod_code_signing_runtime_test.go"
+                        ]
                     },
                     "observe": {
                         "status": "complete",
@@ -12898,13 +12921,19 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/codesigning/CodeSigningWorkflow.tsx",
+                            "web/src/__tests__/codesign.test.tsx",
+                            "internal/server/codesign_durable_test.go"
+                        ]
                     },
                     "verify": {
                         "status": "complete",
                         "evidence": [
-                            "internal/codesign/codesign_test.go"
+                            "internal/codesign/codesign_test.go",
+                            "internal/server/dod_code_signing_runtime_test.go",
+                            "internal/store/code_signing_rls_test.go"
                         ]
                     },
                     "automate": {
@@ -12921,8 +12950,8 @@
                 },
                 "owner": "software-trust",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "66082f980a13da91f14d1383ff7b2e041e16707a",
+                "freshness": "2026-09-03"
             }
         },
         {
