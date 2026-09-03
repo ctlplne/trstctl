@@ -15957,9 +15957,9 @@
             "phase": "P2",
             "priority": 77,
             "served_state": "conditional",
-            "backend_status": "conditional: buildRunDeps constructs all eight tenant-bound dynamic-secret providers from operator configuration; served issue/renew/revoke uses an event-projected sealed outbox and restart-safe leaseworker against the real provider authority",
-            "current_frontend_mapping": "served when configured: Secrets at /secrets lists configured tenant providers and drives issue, reveal-once credential use, renew, revoke, status, and backend errors through the production registry",
-            "target_gui_mapping": "Dynamic secrets UI for backend type, role, lease TTL, issue/revoke, lease status, backend health, and generated credential copy-once flow.",
+            "backend_status": "conditional: buildRunDeps constructs all eight tenant-bound dynamic-secret providers from operator configuration; served secret-free catalog and effect-free preview bind the tenant, caller, configured provider ID/type/runtime revision, allowed role, and TTL before issue/renew/revoke uses the event-projected sealed outbox and restart-safe leaseworker against the real provider authority",
+            "current_frontend_mapping": "complete conditional journey: Secrets at /secrets/engines uses Choose connection, Review exact plan, and Use and retire steps; it reads real tenant provider IDs and role allowlists, shows secret-free setup recipes for all eight backends, refuses issuance without a zero-effect current review, passes the server-keyed fingerprint with a stable Idempotency-Key, reveals the credential once, and preserves metadata-only renew/revoke/verification evidence",
+            "target_gui_mapping": "No GA frontend residual: the conditional console journey covers safe startup setup guidance, runtime readiness, exact effect-free preview, issue, reveal-once custody, observe, recover, revoke, verify, and equivalent API/CLI automation for all eight provider types.",
             "acceptance_test": "The dynamic_secret DoD census drives all eight providers through production buildRunDeps and the authenticated lease route, proves the generated credential works independently, rotates it, revokes it, and proves both credentials are dead.",
             "source_docs": [
                 "docs/features/secrets.md"
@@ -15968,20 +15968,27 @@
                 "internal/dynsecret",
                 "internal/leaseworker",
                 "internal/api/secrets.go",
-                "internal/server/secrets.go"
+                "internal/api/dynamic_secret_preview.go",
+                "internal/server/secrets.go",
+                "internal/server/secret_integrations.go"
             ],
             "source_frontend": [
-                "web/src/pages/Secrets.tsx"
+                "web/src/pages/Secrets.tsx",
+                "web/src/pages/secrets/DynamicSecretWorkflow.tsx"
             ],
             "status": "closed",
-            "notes": "SEC-03 mounted the dynsecret.Engine lease lifecycle on the served path. WIRE-DYNSEC-000/101-108 add validated tenant/provider configuration, production buildRunDeps construction, event-projected pending/issued/revoked lease state, sealed issuance/revocation outbox work, stable crash-retry identities, and a universal shipped-assembly proof against official PostgreSQL, MySQL, MongoDB, and Redis containers plus protocol-faithful AWS IAM, GCP IAM, Azure Entra, and Kubernetes substrates. Test evidence: TestDODSecretIntegrationsProductionAssembly issues, renews, rotates, uses, and revokes each provider credential from the authenticated served route; the external process independently verifies use and post-revoke denial.",
+            "notes": "SEC-03 mounted the dynsecret.Engine lease lifecycle on the served path. WIRE-DYNSEC-000/101-108 add validated tenant/provider configuration, production buildRunDeps construction, event-projected pending/issued/revoked lease state, sealed issuance/revocation outbox work, stable crash-retry identities, and a universal shipped-assembly proof against official PostgreSQL, MySQL, MongoDB, and Redis containers plus protocol-faithful AWS IAM, GCP IAM, Azure Entra, and Kubernetes substrates. TestDODSecretIntegrationsProductionAssembly issues, renews, rotates, uses, and revokes each provider credential from the authenticated served route; the external process independently verifies use and post-revoke denial. F65 frontend convergence at d3072f969c4429c2f5c9e18095dd06d10d53f45a adds the secret-free eight-provider catalog, configured-ID/readiness projection, exact zero-write/zero-call preview, stale-review refusal, three-step console journey, reveal-once custody, API/CLI parity, and focused served/browser/a11y proof.",
             "api_surface": [
+                "listDynamicSecretProviders",
+                "previewDynamicSecretLease",
                 "issueDynamicSecretLease",
                 "getDynamicSecretLease",
                 "renewDynamicSecretLease",
                 "revokeDynamicSecretLease"
             ],
             "cli_surface": [
+                "secrets leases providers",
+                "secrets leases preview",
                 "secrets leases issue",
                 "secrets leases get",
                 "secrets leases renew",
@@ -15993,12 +16000,15 @@
                         "buildRunDeps constructs TenantDynamicSecretProviders from validated operator configuration and returns that registry to Build.",
                         "Lease issuance projects a deterministic pending lease plus sealed dynsecret.issue outbox command before the provider worker makes any external call; retries converge on one provider identity.",
                         "TestDODSecretIntegrationsProductionAssembly enters through POST /api/v1/secrets/leases, independently uses and rotates each credential, revokes both through the outbox, and verifies post-revoke denial for all eight providers.",
+                        "GET /api/v1/secrets/leases/providers projects only safe requirement descriptors and tenant-configured IDs/types/roles/TTL/revision; POST /preview validates the exact plan without resolving credentials, calling a provider, or writing state.",
                         "served_state=conditional",
                         "backend_status=conditional: buildRunDeps constructs all eight tenant-bound dynamic-secret providers from operator configuration; served issue/renew/revoke uses an event-projected sealed outbox and restart-safe leaseworker against the real provider authority"
                     ],
                     "refs": [
                         "internal/server/secret_integrations.go",
                         "internal/server/dynamic_secret_lifecycle.go",
+                        "internal/api/dynamic_secret_preview.go",
+                        "internal/server/dynamic_secret_preview_served_test.go",
                         "internal/server/dod_secret_integrations_runtime_test.go",
                         "tools/dodcensus/substrates/secret_integrations.py",
                         "tools/dodcensus/manifest.json"
@@ -16009,35 +16019,39 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: operate: Secrets at /secrets serves dynamic secret leases with backend provider/role, TTL, issue/renew/revoke controls, lease status, backend error handling, and reveal-once generated credential panel.",
-                        "target_gui_mapping: Dynamic secrets UI for backend type, role, lease TTL, issue/revoke, lease status, backend health, and generated credential copy-once flow."
+                        "current_frontend_mapping: /secrets/engines presents Choose connection, Review exact plan, and Use and retire in a dedicated StepShell; only server-listed provider IDs and roles are selectable, all eight safe setup recipes are available, execution stays locked until zero-effect review, and result/recovery/revocation proof stays metadata-only after reveal dismissal.",
+                        "target_gui_mapping: No GA frontend residual: safe conditional setup, preview, execute, observe, recover, verify, and automation are present."
                     ],
                     "refs": [
                         "web/src/pages/Secrets.tsx",
+                        "web/src/pages/secrets/DynamicSecretWorkflow.tsx",
                         "web/src/lib/navigation.ts",
                         "web/src/App.tsx"
                     ]
                 },
                 "cli": {
                     "evidence": [
-                        "trstctl-cli secrets leases issue posts a provider/role/ttl body.",
+                        "trstctl-cli secrets leases providers reads the secret-free provider catalog and trstctl-cli secrets leases preview posts an effect-free exact provider/role/ttl body without an Idempotency-Key.",
+                        "trstctl-cli secrets leases issue posts a provider/role/ttl body with mutation idempotency.",
                         "trstctl-cli secrets leases get reads metadata only.",
                         "trstctl-cli secrets leases renew and revoke send Idempotency-Key-protected mutations."
                     ],
                     "refs": [
                         "internal/cli/command.go",
+                        "internal/cli/cli_test.go",
                         "internal/cli/feature_parity_test.go",
                         "docs/cli.md"
                     ]
                 },
                 "api": {
                     "evidence": [
-                        "OpenAPI exposes issueDynamicSecretLease, getDynamicSecretLease, renewDynamicSecretLease, and revokeDynamicSecretLease.",
-                        "The generated TypeScript client re-exports DynamicLease request/response types."
+                        "OpenAPI exposes listDynamicSecretProviders, previewDynamicSecretLease, issueDynamicSecretLease, getDynamicSecretLease, renewDynamicSecretLease, and revokeDynamicSecretLease with exact read/write permissions.",
+                        "The generated web and published TypeScript/Python/Java SDK contracts include the provider catalog, preview, request fingerprint, and lease types."
                     ],
                     "refs": [
                         "internal/api/api.go",
                         "internal/api/openapi.go",
+                        "internal/api/dynamic_secret_contract_test.go",
                         "internal/api/testdata/openapi.golden.json",
                         "internal/api/feature_parity_test.go",
                         "web/src/lib/api.ts"
@@ -16046,10 +16060,13 @@
                 "test": {
                     "evidence": [
                         "Dynamic-lease unit and route tests cover lifecycle behavior, tenant isolation, idempotency, event projection, and sealed outbox state.",
-                        "The required dynamic_secret census entries bind every provider constructor to TenantDynamicSecretProviders and the same universal production-assembly runtime proof."
+                        "The required dynamic_secret census entries bind every provider constructor to TenantDynamicSecretProviders and the same universal production-assembly runtime proof.",
+                        "TestServedDynamicSecretCatalogAndPreviewBindTheExactRuntimeConfiguration proves all eight recipes, safe configured identity, zero provider calls during preview, stale-review 409 before provider contact, and one exact reviewed issue. WIRE-07 proves the same three-step UI, fingerprint-bound issue, reveal-once lifecycle, no browser storage, and axe-clean review state."
                     ],
                     "refs": [
                         "internal/server/dod_secret_integrations_runtime_test.go",
+                        "internal/server/dynamic_secret_preview_served_test.go",
+                        "internal/api/dynamic_secret_contract_test.go",
                         "tools/dodcensus/substrates/secret_integrations.py",
                         "tools/dodcensus/manifest.json",
                         "internal/server/secrets_served_test.go",
@@ -16077,8 +16094,8 @@
                 },
                 "rbac": {
                     "evidence": [
-                        "lease issue/renew/revoke require secrets:write.",
-                        "lease metadata reads require secrets:read.",
+                        "provider catalog and lease metadata reads require secrets:read.",
+                        "effect-free preview plus lease issue/renew/revoke require secrets:write and execution rechecks the caller.",
                         "feature authz manifest maps api_surface operations to secrets:read and secrets:write permissions."
                     ],
                     "refs": [
@@ -16089,7 +16106,7 @@
                 },
                 "audit": {
                     "evidence": [
-                        "dynsecret.lease.issued, dynsecret.lease.renewed, and dynsecret.lease.revoked events are emitted for the served lifecycle.",
+                        "Provider catalog and preview are deliberately audit-free because they perform no state change or external effect; dynsecret.lease.issued, dynsecret.lease.renewed, and dynsecret.lease.revoked events are emitted for the served lifecycle.",
                         "revocation intents are journaled to the outbox before backend revoke delivery."
                     ],
                     "refs": [
@@ -16108,10 +16125,11 @@
                 },
                 "a11y": {
                     "evidence": [
-                        "feature-specific a11y receipt: Dynamic secrets is mapped to route-backed GUI workflow evidence and exercised by web/src/__tests__/feature_a11y_receipts.test.tsx, which renders the registered route surface, runs axe, and verifies keyboard focus reaches the workflow."
+                        "feature-specific a11y receipt: Dynamic secrets is mapped to route-backed GUI workflow evidence and exercised by web/src/__tests__/feature_a11y_receipts.test.tsx; WIRE-07 opens the real F65 review step and runs axe against the configured-ID, role, TTL, exact-plan, and action controls."
                     ],
                     "refs": [
                         "web/src/__tests__/feature_a11y_receipts.test.tsx",
+                        "web/src/__tests__/accept/WIRE-07.test.tsx",
                         "web/src/lib/navigation.ts",
                         "web/src/pages/Secrets.tsx",
                         "web/src/App.tsx"
@@ -16138,7 +16156,7 @@
                 "purpose": "Lets an operator understand and safely use dynamic secrets while tenant, policy, and security authority remain on the server.",
                 "tool": "secrets",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/secrets/engines",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -16152,61 +16170,79 @@
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "The parity contract contains metadata only. Product workflows may reveal a value once, but reports and evidence never contain the value.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/pages/Secrets.tsx"
+                            "web/src/pages/Secrets.tsx",
+                            "web/src/pages/secrets/DynamicSecretWorkflow.tsx"
                         ]
                     },
                     "understand": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/pages/Secrets.tsx"
+                            "web/src/pages/secrets/DynamicSecretWorkflow.tsx",
+                            "docs/features/secrets.md"
                         ]
                     },
                     "configure": {
-                        "status": "missing",
-                        "reason": "No structured evidence proves an operator can configure every required prerequisite from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: listDynamicSecretProviders",
+                            "web/src/pages/secrets/DynamicSecretWorkflow.tsx",
+                            "internal/server/dynamic_secret_preview_served_test.go",
+                            "docs/features/secrets.md"
+                        ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: previewDynamicSecretLease",
+                            "web/src/pages/secrets/DynamicSecretWorkflow.tsx",
+                            "internal/server/dynamic_secret_preview_served_test.go"
+                        ]
                     },
                     "execute": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/pages/Secrets.tsx",
+                            "web/src/pages/secrets/DynamicSecretWorkflow.tsx",
                             "internal/server/dod_secret_integrations_runtime_test.go"
                         ]
                     },
                     "observe": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/pages/Secrets.tsx"
+                            "web/src/pages/secrets/DynamicSecretWorkflow.tsx"
                         ]
                     },
                     "recover": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/pages/Secrets.tsx",
-                            "internal/server/dod_secret_integrations_runtime_test.go"
+                            "web/src/pages/secrets/DynamicSecretWorkflow.tsx",
+                            "internal/server/dod_secret_integrations_runtime_test.go",
+                            "internal/server/dynamic_secret_preview_served_test.go",
+                            "web/src/__tests__/accept/WIRE-07.test.tsx"
                         ]
                     },
                     "verify": {
                         "status": "complete",
                         "evidence": [
-                            "internal/server/dod_secret_integrations_runtime_test.go"
+                            "internal/server/dod_secret_integrations_runtime_test.go",
+                            "web/src/__tests__/accept/WIRE-07.test.tsx"
                         ]
                     },
                     "automate": {
                         "status": "complete",
                         "evidence": [
+                            "OpenAPI operationId: listDynamicSecretProviders",
+                            "OpenAPI operationId: previewDynamicSecretLease",
                             "OpenAPI operationId: issueDynamicSecretLease",
                             "OpenAPI operationId: getDynamicSecretLease",
                             "OpenAPI operationId: renewDynamicSecretLease",
                             "OpenAPI operationId: revokeDynamicSecretLease",
+                            "CLI command: secrets leases providers",
+                            "CLI command: secrets leases preview",
                             "CLI command: secrets leases issue",
                             "CLI command: secrets leases get",
                             "CLI command: secrets leases renew",
@@ -16216,8 +16252,8 @@
                 },
                 "owner": "secrets",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "d3072f969c4429c2f5c9e18095dd06d10d53f45a",
+                "freshness": "2026-09-03"
             }
         },
         {

@@ -5715,7 +5715,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use dynamic secrets while tenant, policy, and security authority remain on the server.",
       "tool": "secrets",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/secrets/engines",
       "navigationEntrypoints": [
         "tool navigation",
@@ -5729,61 +5729,79 @@ export const canonicalCapabilities = [
       ],
       "sideEffects": "mixed",
       "secretDataHandling": "The parity contract contains metadata only. Product workflows may reveal a value once, but reports and evidence never contain the value.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
           "evidence": [
-            "web/src/pages/Secrets.tsx"
+            "web/src/pages/Secrets.tsx",
+            "web/src/pages/secrets/DynamicSecretWorkflow.tsx"
           ]
         },
         "understand": {
           "status": "complete",
           "evidence": [
-            "web/src/pages/Secrets.tsx"
+            "web/src/pages/secrets/DynamicSecretWorkflow.tsx",
+            "docs/features/secrets.md"
           ]
         },
         "configure": {
-          "status": "missing",
-          "reason": "No structured evidence proves an operator can configure every required prerequisite from this console journey."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: listDynamicSecretProviders",
+            "web/src/pages/secrets/DynamicSecretWorkflow.tsx",
+            "internal/server/dynamic_secret_preview_served_test.go",
+            "docs/features/secrets.md"
+          ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: previewDynamicSecretLease",
+            "web/src/pages/secrets/DynamicSecretWorkflow.tsx",
+            "internal/server/dynamic_secret_preview_served_test.go"
+          ]
         },
         "execute": {
           "status": "complete",
           "evidence": [
-            "web/src/pages/Secrets.tsx",
+            "web/src/pages/secrets/DynamicSecretWorkflow.tsx",
             "internal/server/dod_secret_integrations_runtime_test.go"
           ]
         },
         "observe": {
           "status": "complete",
           "evidence": [
-            "web/src/pages/Secrets.tsx"
+            "web/src/pages/secrets/DynamicSecretWorkflow.tsx"
           ]
         },
         "recover": {
           "status": "complete",
           "evidence": [
-            "web/src/pages/Secrets.tsx",
-            "internal/server/dod_secret_integrations_runtime_test.go"
+            "web/src/pages/secrets/DynamicSecretWorkflow.tsx",
+            "internal/server/dod_secret_integrations_runtime_test.go",
+            "internal/server/dynamic_secret_preview_served_test.go",
+            "web/src/__tests__/accept/WIRE-07.test.tsx"
           ]
         },
         "verify": {
           "status": "complete",
           "evidence": [
-            "internal/server/dod_secret_integrations_runtime_test.go"
+            "internal/server/dod_secret_integrations_runtime_test.go",
+            "web/src/__tests__/accept/WIRE-07.test.tsx"
           ]
         },
         "automate": {
           "status": "complete",
           "evidence": [
+            "OpenAPI operationId: listDynamicSecretProviders",
+            "OpenAPI operationId: previewDynamicSecretLease",
             "OpenAPI operationId: issueDynamicSecretLease",
             "OpenAPI operationId: getDynamicSecretLease",
             "OpenAPI operationId: renewDynamicSecretLease",
             "OpenAPI operationId: revokeDynamicSecretLease",
+            "CLI command: secrets leases providers",
+            "CLI command: secrets leases preview",
             "CLI command: secrets leases issue",
             "CLI command: secrets leases get",
             "CLI command: secrets leases renew",
@@ -5793,8 +5811,8 @@ export const canonicalCapabilities = [
       },
       "owner": "secrets",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "d3072f969c4429c2f5c9e18095dd06d10d53f45a",
+      "freshness": "2026-09-03"
     }
   },
   {

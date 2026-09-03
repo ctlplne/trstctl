@@ -221,6 +221,16 @@ func TestCapabilitiesViewIsAuthenticatedSanitizedAndAuthorizationAware(t *testin
 			t.Fatalf("F63 %s unavailable=%+v, want exact native-store dependency reason", operationID, action)
 		}
 	}
+	f65 := findCapabilityViewItem(t, operator, "F65")
+	if f65.RuntimeState != "unavailable" || len(f65.Actions.Allowed) != 0 {
+		t.Fatalf("operator F65 runtime=%q allowed=%v, want unavailable/none without the native secret store", f65.RuntimeState, f65.Actions.Allowed)
+	}
+	for _, operationID := range []string{"listDynamicSecretProviders", "previewDynamicSecretLease", "issueDynamicSecretLease", "getDynamicSecretLease", "renewDynamicSecretLease", "revokeDynamicSecretLease"} {
+		action := findUnavailableCapabilityAction(t, f65, operationID)
+		if action.Code != "dependency_not_configured" || !strings.Contains(action.Detail, "native secret store is turned off") {
+			t.Fatalf("F65 %s unavailable=%+v, want exact native-store dependency reason", operationID, action)
+		}
+	}
 	// F68 intentionally mixes independent posture/configuration reads with the
 	// native-store-backed sync execution. Turning the store off must not erase
 	// the useful read-only surfaces.
