@@ -1375,8 +1375,7 @@ const esESCatalog = {
   "secrets.dynamic.permissionBlocked": "Esta acción no está disponible para su sesión",
   "secrets.dynamic.permissionHelp": "Solicite secrets:write o repare la conexión del servidor y vuelva a comprobar.",
   "secrets.dynamic.configureStep": "Elegir conexión",
-  "secrets.dynamic.configureStepHelp":
-    "Elija el ID del proveedor realmente configurado, un rol permitido y una duración dentro de su límite.",
+  "secrets.dynamic.configureStepHelp": "Elija el ID del proveedor realmente configurado, un rol permitido y una duración dentro de su límite.",
   "secrets.dynamic.reviewStep": "Revisar el plan exacto",
   "secrets.dynamic.reviewStepHelp":
     "El servidor comprueba la revisión activa del proveedor, el rol, la duración, las escrituras y la llamada externa sin crear una credencial.",
@@ -1427,9 +1426,12 @@ const esESCatalog = {
   "secrets.dynamic.revokedTitle": "Arrendamiento revocado; demuestre que el inicio de sesión ya no funciona",
   "secrets.dynamic.verifyHelp": "El arrendamiento es metadato duradero. El secreto solo existe en el panel de una vista hasta que lo descarte o salga.",
   "secrets.dynamic.credentialTitle": "Credencial de una sola vista para {id}",
-  "secrets.dynamic.credentialHelp": "Cópiela directamente a la carga de trabajo. No la ponga en tickets, chat, registros, capturas ni almacenamiento del navegador.",
+  "secrets.dynamic.credentialHelp":
+    "Cópiela directamente a la carga de trabajo. No la ponga en tickets, chat, registros, capturas ni almacenamiento del navegador.",
   "secrets.dynamic.extend": "Ampliar en segundos",
   "secrets.dynamic.extendHelp": "La renovación nunca puede superar el vencimiento duro original del proveedor.",
+  "secrets.dynamic.extendAvailable": "Quedan {seconds}s antes del vencimiento duro del proveedor.",
+  "secrets.dynamic.extendUnavailable": "No queda tiempo de renovación. Revoque este arrendamiento y cree una credencial nueva.",
   "secrets.dynamic.extendError": "Introduzca un número entero de segundos mayor que cero antes de renovar.",
   "secrets.dynamic.renew": "Renovar arrendamiento",
   "secrets.dynamic.revoke": "Revocar arrendamiento",

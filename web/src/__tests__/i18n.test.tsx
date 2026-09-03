@@ -1439,8 +1439,11 @@ describe("i18n boundary", () => {
       // results are scoped to one exact run and names the action that returns
       // to the full finding list. Machine-authored es/de — FLAGGED FOR HUMAN
       // TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "2d180e3fe2ea4339314ef3930e1a87f6df68c2521f28c7746157f17bc1b239b0",
-      "de-DE": "f1bdd1edfbde50874bbcd74e815f010002890d57879db9b846b2b5d067fdca3b",
+      // F65 live-browser repair re-pin: renewal headroom now names the exact
+      // remaining seconds and the no-time-left recovery action. Machine-authored
+      // es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "b9722fccfe2cd7a037a5db9a6cc2e6c5bd91591b58c14f4aa1106d3a8eb83fd2",
+      "de-DE": "dfecebfb204e393bca470fe01c676434003cc15c8fe17f60a6ed2df124da45ea",
     });
   });
 

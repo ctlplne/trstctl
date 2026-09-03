@@ -12,14 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { StepShell } from "@/components/wizard/StepShell";
 import { useTranslation } from "@/i18n/I18nProvider";
-import {
-  ApiError,
-  api,
-  type DynamicLease,
-  type DynamicLeasePreview,
-  type DynamicLeaseRequest,
-  type DynamicSecretProviderCatalog,
-} from "@/lib/api";
+import { ApiError, api, type DynamicLease, type DynamicLeasePreview, type DynamicLeaseRequest, type DynamicSecretProviderCatalog } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
 import { useCapabilities, useCapabilityAction } from "@/lib/capabilities";
 import { useApiQuery } from "@/lib/query";
@@ -30,6 +23,24 @@ type DynamicLeaseForm = {
   role: string;
   ttlSeconds: number;
 };
+
+const preferredLeaseTTLSeconds = 900;
+const preferredRenewalSeconds = 300;
+
+function defaultLeaseTiming(maximumTTLSeconds: number): { ttl: number; renewal: number } {
+  const maximum = Math.max(1, Math.floor(maximumTTLSeconds));
+  if (maximum === 1) return { ttl: 1, renewal: 1 };
+  const renewal = Math.min(preferredRenewalSeconds, Math.max(1, Math.floor(maximum / 3)));
+  return { ttl: Math.max(1, Math.min(preferredLeaseTTLSeconds, maximum - renewal)), renewal };
+}
+
+function renewalHeadroomSeconds(lease: DynamicLease | null, maximumTTLSeconds: number | undefined): number {
+  if (!lease || !maximumTTLSeconds) return 0;
+  const issued = Date.parse(lease.issued_at);
+  const expires = Date.parse(lease.expires_at);
+  if (!Number.isFinite(issued) || !Number.isFinite(expires)) return 0;
+  return Math.max(0, Math.floor((issued + maximumTTLSeconds * 1000 - expires) / 1000));
+}
 
 function newDynamicLeaseIdempotencyKey(): string {
   if (typeof globalThis.crypto?.randomUUID === "function") return `dynamic-lease-${globalThis.crypto.randomUUID()}`;
@@ -95,9 +106,13 @@ export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean })
   useEffect(() => {
     if (!catalog || catalog.configured_providers.length === 0 || providerID) return;
     const provider = catalog.configured_providers[0];
+    const timing = defaultLeaseTiming(provider.maximum_ttl_seconds);
     setValue("provider", provider.id, { shouldValidate: true });
     setValue("role", provider.allowed_roles[0] ?? "", { shouldValidate: true });
-    if (provider.maximum_ttl_seconds > 0) setValue("ttlSeconds", Math.min(900, provider.maximum_ttl_seconds), { shouldValidate: true });
+    if (provider.maximum_ttl_seconds > 0) {
+      setValue("ttlSeconds", timing.ttl, { shouldValidate: true });
+      setExtendSeconds(String(timing.renewal));
+    }
   }, [catalog, providerID, setValue]);
 
   function invalidateReview() {
@@ -112,10 +127,14 @@ export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean })
 
   function selectProvider(id: string) {
     const next = catalog?.configured_providers.find((provider) => provider.id === id);
+    const timing = next ? defaultLeaseTiming(next.maximum_ttl_seconds) : null;
     invalidateReview();
     setValue("provider", id, { shouldDirty: true, shouldValidate: true });
     setValue("role", next?.allowed_roles[0] ?? "", { shouldDirty: true, shouldValidate: true });
-    if (next?.maximum_ttl_seconds) setValue("ttlSeconds", Math.min(900, next.maximum_ttl_seconds), { shouldDirty: true, shouldValidate: true });
+    if (timing) {
+      setValue("ttlSeconds", timing.ttl, { shouldDirty: true, shouldValidate: true });
+      setExtendSeconds(String(timing.renewal));
+    }
   }
 
   async function reviewPlan(values: DynamicLeaseForm) {
@@ -188,7 +207,8 @@ export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean })
   async function renewLease() {
     if (!lease) return;
     const extend = Number(extendSeconds);
-    if (!Number.isSafeInteger(extend) || extend <= 0) {
+    const headroom = renewalHeadroomSeconds(lease, selectedProvider?.maximum_ttl_seconds);
+    if (!Number.isSafeInteger(extend) || extend <= 0 || extend > headroom) {
       setError(t("secrets.dynamic.extendError"));
       return;
     }
@@ -219,10 +239,11 @@ export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean })
 
   function startAgain() {
     const firstProvider = catalog?.configured_providers[0];
+    const timing = firstProvider ? defaultLeaseTiming(firstProvider.maximum_ttl_seconds) : { ttl: 900, renewal: 300 };
     reset({
       provider: firstProvider?.id ?? "",
       role: firstProvider?.allowed_roles[0] ?? "",
-      ttlSeconds: firstProvider?.maximum_ttl_seconds ? Math.min(900, firstProvider.maximum_ttl_seconds) : 900,
+      ttlSeconds: timing.ttl,
     });
     setReview(null);
     setIssueKey(null);
@@ -230,6 +251,7 @@ export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean })
     setLease(null);
     setCredential(null);
     setError(null);
+    setExtendSeconds(String(timing.renewal));
     setStep(0);
   }
 
@@ -242,6 +264,9 @@ export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean })
   const currentRequest: DynamicLeaseRequest = { provider: providerID ?? "", role: role ?? "", ttl_seconds: Number(ttlSeconds) || 0 };
   const currentReview = review?.requestKey === requestKey(currentRequest) ? review.plan : null;
   const configureReady = Boolean(selectedProvider?.ready && role && Number(ttlSeconds) > 0 && previewRunnable && !loadBlocked);
+  const renewalHeadroom = renewalHeadroomSeconds(lease, selectedProvider?.maximum_ttl_seconds);
+  const renewalSeconds = Number(extendSeconds);
+  const renewalReady = Number.isSafeInteger(renewalSeconds) && renewalSeconds > 0 && renewalSeconds <= renewalHeadroom;
   const steps = [
     {
       id: "configure",
@@ -314,13 +339,7 @@ export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean })
               </Field>
               <Field label={t("secrets.dynamic.role")} description={t("secrets.dynamic.roleHelp")} error={errors.role?.message} required>
                 {(field) => (
-                  <Select
-                    {...field}
-                    {...register("role", { onChange: invalidateReview })}
-                    value={role ?? ""}
-                    disabled={!selectedProvider}
-                    required
-                  >
+                  <Select {...field} {...register("role", { onChange: invalidateReview })} value={role ?? ""} disabled={!selectedProvider} required>
                     <option value="">{t("secrets.dynamic.chooseRole")}</option>
                     {selectedProvider?.allowed_roles.map((allowedRole) => (
                       <option key={allowedRole} value={allowedRole}>
@@ -348,7 +367,9 @@ export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean })
             <div className="grid gap-3 lg:grid-cols-2">
               <Card>
                 <CardHeader>
-                  <CardTitle>{selectedProvider ? t("secrets.dynamic.configured", { provider: selectedProvider.id }) : t("secrets.dynamic.notSelected")}</CardTitle>
+                  <CardTitle>
+                    {selectedProvider ? t("secrets.dynamic.configured", { provider: selectedProvider.id }) : t("secrets.dynamic.notSelected")}
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2 text-sm text-muted-foreground">
                   <p>{catalog.secret_data_handling}</p>
@@ -378,7 +399,9 @@ export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean })
             </div>
 
             <details>
-              <summary className="cursor-pointer text-sm font-medium text-primary">{t("secrets.dynamic.allSetups", { count: catalog.supported_providers.length })}</summary>
+              <summary className="cursor-pointer text-sm font-medium text-primary">
+                {t("secrets.dynamic.allSetups", { count: catalog.supported_providers.length })}
+              </summary>
               <div className="mt-3 grid gap-3 md:grid-cols-2">
                 {catalog.supported_providers.map((provider) => (
                   <Card key={provider.type}>
@@ -438,19 +461,48 @@ export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean })
             </div>
             <DynamicLeaseMetadata lease={lease} />
             {credential ? (
-              <RevealPanel title={t("secrets.dynamic.credentialTitle", { id: credential.leaseID })} onDismiss={() => setCredential(null)} value={credential.value}>
+              <RevealPanel
+                title={t("secrets.dynamic.credentialTitle", { id: credential.leaseID })}
+                onDismiss={() => setCredential(null)}
+                value={credential.value}
+              >
                 {t("secrets.dynamic.credentialHelp")}
               </RevealPanel>
             ) : null}
             <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
-              <Field label={t("secrets.dynamic.extend")} description={t("secrets.dynamic.extendHelp")}>
-                {(field) => <Input {...field} type="number" min="1" step="1" value={extendSeconds} onChange={(event) => setExtendSeconds(event.target.value)} />}
+              <Field
+                label={t("secrets.dynamic.extend")}
+                description={renewalHeadroom > 0 ? t("secrets.dynamic.extendAvailable", { seconds: renewalHeadroom }) : t("secrets.dynamic.extendUnavailable")}
+              >
+                {(field) => (
+                  <Input
+                    {...field}
+                    type="number"
+                    min="1"
+                    max={renewalHeadroom || undefined}
+                    step="1"
+                    value={extendSeconds}
+                    onChange={(event) => setExtendSeconds(event.target.value)}
+                  />
+                )}
               </Field>
-              <Button type="button" variant="outline" onClick={() => void renewLease()} disabled={lifecycleBusy !== null || lease.state === "revoked"} loading={lifecycleBusy === "renew"}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void renewLease()}
+                disabled={lifecycleBusy !== null || lease.state === "revoked" || !renewalReady}
+                loading={lifecycleBusy === "renew"}
+              >
                 <RotateCw className="h-4 w-4" aria-hidden="true" />
                 {t("secrets.dynamic.renew")}
               </Button>
-              <Button type="button" variant="destructive-outline" onClick={() => void revokeLease()} disabled={lifecycleBusy !== null || lease.state === "revoked"} loading={lifecycleBusy === "revoke"}>
+              <Button
+                type="button"
+                variant="destructive-outline"
+                onClick={() => void revokeLease()}
+                disabled={lifecycleBusy !== null || lease.state === "revoked"}
+                loading={lifecycleBusy === "revoke"}
+              >
                 <Trash2 className="h-4 w-4" aria-hidden="true" />
                 {t("secrets.dynamic.revoke")}
               </Button>
@@ -466,7 +518,12 @@ export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean })
           {step === 2 ? t("secrets.dynamic.startAgain") : t("secrets.dynamic.cancel")}
         </Button>
         {step === 1 && currentReview ? (
-          <Button type="button" onClick={() => void issueReviewed()} disabled={issueBusy || !currentReview.ready || !issueRunnable || loadBlocked} loading={issueBusy}>
+          <Button
+            type="button"
+            onClick={() => void issueReviewed()}
+            disabled={issueBusy || !currentReview.ready || !issueRunnable || loadBlocked}
+            loading={issueBusy}
+          >
             <KeyRound className="h-4 w-4" aria-hidden="true" />
             {retryable ? t("secrets.dynamic.retry") : t("secrets.dynamic.issueReviewed")}
           </Button>

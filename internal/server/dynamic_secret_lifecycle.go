@@ -272,7 +272,7 @@ func (l *durableDynamicSecretLifecycle) Renew(ctx context.Context, leaseID strin
 	}
 	next := record.ExpiresAt.Add(extend)
 	if next.After(record.HardExpiresAt) {
-		return dynsecret.Lease{}, fmt.Errorf("dynsecret: renewal exceeds hard provider expiry %s", record.HardExpiresAt.Format(time.RFC3339))
+		return dynsecret.Lease{}, fmt.Errorf("%w %s", dynsecret.ErrLeaseHardExpiry, record.HardExpiresAt.Format(time.RFC3339))
 	}
 	operationID := "legacy-renew:" + leaseID + ":" + next.UTC().Truncate(time.Microsecond).Format(time.RFC3339Nano)
 	if err := l.appendAndProjectID(ctx, dynamicSecretEventID(l.tenantID, record.TenantEpoch, "lease-renewed", operationID), projections.EventDynamicSecretLeaseRenewed, projections.DynamicSecretLeaseRenewed{
@@ -322,7 +322,7 @@ func (l *durableDynamicSecretLifecycle) RenewBound(ctx context.Context, leaseID 
 	}
 	next := record.ExpiresAt.Add(extend)
 	if next.After(record.HardExpiresAt) {
-		return dynsecret.Lease{}, fmt.Errorf("dynsecret: renewal exceeds hard provider expiry %s", record.HardExpiresAt.Format(time.RFC3339))
+		return dynsecret.Lease{}, fmt.Errorf("%w %s", dynsecret.ErrLeaseHardExpiry, record.HardExpiresAt.Format(time.RFC3339))
 	}
 	response, err := json.Marshal(dynamicSecretOperationResponseFromLease(dynamicLeaseFromStore(record), dynsecret.LeaseActive, next))
 	if err != nil {

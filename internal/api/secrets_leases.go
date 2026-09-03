@@ -370,6 +370,8 @@ func dynamicLeaseError(err error) error {
 		return errStatus(http.StatusNotFound, "no such dynamic secret lease")
 	case errors.Is(err, dynsecret.ErrLeaseNotActive):
 		return errStatus(http.StatusConflict, "dynamic secret lease is not active")
+	case errors.Is(err, dynsecret.ErrLeaseHardExpiry):
+		return errStatus(http.StatusUnprocessableEntity, "renewal cannot pass the provider's original hard expiry; revoke this lease and create a new credential")
 	case errors.Is(err, store.ErrIdempotencyConflict):
 		return errStatus(http.StatusConflict, "Idempotency-Key was already used for a different dynamic secret request")
 	case errors.Is(err, context.DeadlineExceeded):

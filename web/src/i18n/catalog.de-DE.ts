@@ -1402,7 +1402,8 @@ const deDECatalog = {
   "secrets.dynamic.reviewStepHelp":
     "Der Server prüft aktive Provider-Revision, Rolle, Laufzeit, Schreibvorgänge und externen Aufruf, ohne Zugangsdaten zu erstellen.",
   "secrets.dynamic.verifyStep": "Verwenden und stilllegen",
-  "secrets.dynamic.verifyStepHelp": "Verwenden Sie die Zugangsdaten, prüfen Sie das Lease, widerrufen Sie es und beweisen Sie, dass dieselbe Anmeldung nicht mehr funktioniert.",
+  "secrets.dynamic.verifyStepHelp":
+    "Verwenden Sie die Zugangsdaten, prüfen Sie das Lease, widerrufen Sie es und beweisen Sie, dass dieselbe Anmeldung nicht mehr funktioniert.",
   "secrets.dynamic.progress": "Fortschritt des Ablaufs für temporäre Zugangsdaten",
   "secrets.dynamic.provider": "Verbundener Provider",
   "secrets.dynamic.providerHelp": "Dies sind servergeprüfte IDs für diesen Mandanten, keine allgemeinen Backend-Namen.",
@@ -1440,17 +1441,21 @@ const deDECatalog = {
   "secrets.dynamic.cliParity": "Automatisierung kann dieselbe Anfrage prüfen mit:",
   "secrets.dynamic.fingerprint": "Servergeschützter Plan-Fingerabdruck",
   "secrets.dynamic.reviewRequired": "Prüfen Sie einen bereiten, unveränderten Plan, bevor Zugangsdaten erstellt werden.",
-  "secrets.dynamic.reviewStale": "Provider, Rolle, Laufzeit, Aufrufer, Mandant oder aktive Konfiguration haben sich geändert. Erneut prüfen; nichts wurde erstellt.",
+  "secrets.dynamic.reviewStale":
+    "Provider, Rolle, Laufzeit, Aufrufer, Mandant oder aktive Konfiguration haben sich geändert. Erneut prüfen; nichts wurde erstellt.",
   "secrets.dynamic.issueFailed": "Das Ergebnis der Zugangsdaten wurde nicht bestätigt",
   "secrets.dynamic.issueReviewed": "Geprüfte Zugangsdaten erstellen",
   "secrets.dynamic.retry": "Genaue Anfrage wiederholen",
   "secrets.dynamic.issuedTitle": "Zugangsdaten erstellt; jetzt prüfen",
   "secrets.dynamic.revokedTitle": "Lease widerrufen; beweisen Sie, dass die Anmeldung nicht mehr funktioniert",
-  "secrets.dynamic.verifyHelp": "Das Lease unten ist dauerhafte Metadaten. Das Geheimnis existiert nur bis zum Schließen oder Verlassen im einmaligen Anzeigefeld.",
+  "secrets.dynamic.verifyHelp":
+    "Das Lease unten ist dauerhafte Metadaten. Das Geheimnis existiert nur bis zum Schließen oder Verlassen im einmaligen Anzeigefeld.",
   "secrets.dynamic.credentialTitle": "Einmalig sichtbare Zugangsdaten für {id}",
   "secrets.dynamic.credentialHelp": "Kopieren Sie sie direkt in den Workload. Nicht in Tickets, Chat, Logs, Screenshots oder Browser-Speicher ablegen.",
   "secrets.dynamic.extend": "Um Sekunden verlängern",
   "secrets.dynamic.extendHelp": "Eine Verlängerung kann das ursprüngliche harte Provider-Ablaufdatum nie überschreiten.",
+  "secrets.dynamic.extendAvailable": "Bis zum harten Provider-Ablauf verbleiben {seconds}s.",
+  "secrets.dynamic.extendUnavailable": "Es bleibt keine Verlängerungszeit. Widerrufen Sie dieses Lease und erstellen Sie neue Zugangsdaten.",
   "secrets.dynamic.extendError": "Geben Sie vor der Verlängerung eine ganze Sekundenzahl größer als null ein.",
   "secrets.dynamic.renew": "Lease verlängern",
   "secrets.dynamic.revoke": "Lease widerrufen",

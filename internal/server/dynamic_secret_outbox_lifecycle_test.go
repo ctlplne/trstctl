@@ -718,6 +718,9 @@ func TestDurableDynamicSecretRenewRevokeReplayAndWorkerCrashFence(t *testing.T) 
 	if err != nil || !replayedRenewal.ExpiresAt.Equal(renewed.ExpiresAt) {
 		t.Fatalf("restart renewal replay=%+v err=%v, want exact expiry %s", replayedRenewal, err, renewed.ExpiresAt)
 	}
+	if _, err := restarted.RenewBound(ctx, lease.ID, 40*time.Minute, "lifecycle-renew-past-hard-expiry", "sha256:caller-a-renew-2400"); !errors.Is(err, dynsecret.ErrLeaseHardExpiry) {
+		t.Fatalf("over-limit renewal error=%v, want ErrLeaseHardExpiry", err)
+	}
 	if _, err := restarted.RenewBound(ctx, lease.ID, 5*time.Minute, "lifecycle-renew", "sha256:caller-b-renew-300"); !errors.Is(err, store.ErrIdempotencyConflict) {
 		t.Fatalf("changed renewal caller error=%v, want idempotency conflict", err)
 	}

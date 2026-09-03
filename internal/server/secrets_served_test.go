@@ -744,6 +744,12 @@ func TestServedDynamicSecretLeasesIssueRenewRevokeAndExpire(t *testing.T) {
 		t.Fatalf("renewed lease = %+v, want later expiry and no credential replay", renewed)
 	}
 
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/secrets/leases/"+issued.ID+"/renew", tok,
+		map[string]any{"extend_seconds": 3600})
+	if status != http.StatusUnprocessableEntity || !strings.Contains(string(body), "provider's original hard expiry") {
+		t.Fatalf("over-limit renewal: status %d body %s, want a specific 422 recovery response", status, body)
+	}
+
 	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/secrets/leases/"+issued.ID+"/revoke", tok, nil)
 	if status != http.StatusOK {
 		t.Fatalf("revoke dynamic lease: status %d body %s", status, body)

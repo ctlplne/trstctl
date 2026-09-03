@@ -71,6 +71,7 @@ var (
 	ErrUnknownProvider = errors.New("dynsecret: unknown provider")
 	ErrLeaseNotFound   = errors.New("dynsecret: lease not found")
 	ErrLeaseNotActive  = errors.New("dynsecret: lease not active")
+	ErrLeaseHardExpiry = errors.New("dynsecret: renewal exceeds provider hard expiry")
 )
 
 // Lease is the durable record of a generated credential's lifecycle.

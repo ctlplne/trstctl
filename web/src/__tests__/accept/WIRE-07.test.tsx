@@ -47,22 +47,20 @@ function renderSecrets(path: string) {
   );
 }
 
-const supportedProviders = ["postgresql", "mysql", "mongodb", "aws-iam", "gcp-iam", "azure-entra", "kubernetes", "redis"].map(
-  (type) => ({
-    type,
-    label: type,
-    purpose: `Issue short-lived ${type} access.`,
-    requirements: [
-      {
-        key: "credential_ref",
-        label: "Credential reference",
-        kind: "credential_reference",
-        required: true,
-        description: "A server-side reference; never a credential value in the browser.",
-      },
-    ],
-  }),
-);
+const supportedProviders = ["postgresql", "mysql", "mongodb", "aws-iam", "gcp-iam", "azure-entra", "kubernetes", "redis"].map((type) => ({
+  type,
+  label: type,
+  purpose: `Issue short-lived ${type} access.`,
+  requirements: [
+    {
+      key: "credential_ref",
+      label: "Credential reference",
+      kind: "credential_reference",
+      required: true,
+      description: "A server-side reference; never a credential value in the browser.",
+    },
+  ],
+}));
 
 describe("WIRE-07 dynamic secret lease wiring", () => {
   beforeEach(() => {
@@ -204,6 +202,88 @@ describe("WIRE-07 dynamic secret lease wiring", () => {
     expect(storageSpy).not.toHaveBeenCalled();
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
+  });
+
+  it("leaves renewal headroom by default and disables renewal when the hard lifetime is spent", async () => {
+    apiMock.dynamicSecretProviders.mockResolvedValueOnce({
+      capability: "F65",
+      configuration_mode: "startup_static",
+      configuration_changes_require_restart: true,
+      secret_delivery: "file_or_secret_reference",
+      supported_providers: supportedProviders,
+      configured_providers: [
+        {
+          id: "payments-db",
+          type: "postgresql",
+          label: "PostgreSQL",
+          allowed_roles: ["readonly-reporting"],
+          maximum_ttl_seconds: 900,
+          ready: true,
+          configuration_revision: "runtime-revision-a",
+        },
+      ],
+      blockers: [],
+      documentation_path: "/docs/features/secrets#dynamic-secrets",
+      secret_data_handling: "The browser receives readiness metadata, never provider credentials or credential-reference values.",
+    });
+    apiMock.previewDynamicLease.mockResolvedValueOnce({
+      capability: "F65",
+      operation: "issue_dynamic_secret_lease",
+      ready: true,
+      effect_free: true,
+      provider_id: "payments-db",
+      provider_type: "postgresql",
+      provider_label: "PostgreSQL",
+      role: "readonly-reporting",
+      requested_ttl_seconds: 600,
+      effective_ttl_seconds: 600,
+      maximum_ttl_seconds: 900,
+      configuration_revision: "runtime-revision-a",
+      required_permission: "secrets:write",
+      request_fingerprint: "sha256:reviewed-headroom",
+      blockers: [],
+      preview_writes: [],
+      preview_external_effects: [],
+      execute_writes: ["append one pending lease event"],
+      execute_external_effects: ["create one scoped PostgreSQL credential"],
+      recovery_steps: ["Revoke the lease."],
+      verification_steps: ["Prove the revoked login fails."],
+      cli_argv: ["trstctl", "secrets", "leases", "issue", "-f", "dynamic-secret-lease.json"],
+      secret_data_handling: "Execution returns the credential once.",
+    });
+    apiMock.issueDynamicLease.mockResolvedValueOnce({
+      id: "lease-postgres-headroom",
+      provider: "payments-db",
+      role: "readonly-reporting",
+      state: "active",
+      issued_at: "2026-06-19T13:00:00Z",
+      expires_at: "2026-06-19T13:10:00Z",
+      credential: "postgres://lease-secret-headroom",
+    });
+    apiMock.renewDynamicLease.mockResolvedValueOnce({
+      id: "lease-postgres-headroom",
+      provider: "payments-db",
+      role: "readonly-reporting",
+      state: "active",
+      issued_at: "2026-06-19T13:00:00Z",
+      expires_at: "2026-06-19T13:15:00Z",
+    });
+    const user = userEvent.setup();
+    renderSecrets("/secrets/engines");
+
+    await user.click(await screen.findByRole("button", { name: "Open temporary credential" }));
+    expect(screen.getByLabelText("Lifetime in seconds")).toHaveValue(600);
+    await user.click(screen.getByRole("button", { name: "Review without creating" }));
+    await waitFor(() => expect(apiMock.previewDynamicLease).toHaveBeenCalledWith({ provider: "payments-db", role: "readonly-reporting", ttl_seconds: 600 }));
+    await user.click(await screen.findByRole("button", { name: "Create reviewed credential" }));
+    await user.click(await screen.findByRole("button", { name: /dismiss/i }));
+    expect(screen.getByText("300s remain before the provider's hard expiry.")).toBeInTheDocument();
+    const renew = screen.getByRole("button", { name: "Renew lease" });
+    expect(renew).toBeEnabled();
+    await user.click(renew);
+    await waitFor(() => expect(apiMock.renewDynamicLease).toHaveBeenCalledWith("lease-postgres-headroom", { extend_seconds: 300 }));
+    expect(await screen.findByText("No renewal time remains. Revoke this lease and create a new credential.")).toBeInTheDocument();
+    expect(renew).toBeDisabled();
   });
 
   it("removes the dynamic-secret lease fixture table", () => {
