@@ -1724,6 +1724,7 @@ const esESCatalog = {
   "codesign.outcomes.noError": "No se informó ningún fallo",
   "codesign.mode.managed": "Clave administrada",
   "codesign.mode.keyless": "Identidad sin clave",
+  "codesign.mode.unknown": "Modo de firma desconocido",
   "codesign.transparency.verified": "Transparencia verificada",
   "codesign.transparency.pending": "Transparencia pendiente",
   "codesign.transparency.failed": "Transparencia fallida",

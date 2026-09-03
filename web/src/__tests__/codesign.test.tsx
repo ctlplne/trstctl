@@ -326,6 +326,30 @@ describe("code signing console", () => {
     expect(within(outcomes).getByText("Rekor publication failed")).toBeInTheDocument();
   });
 
+  it("shows an unknown history mode honestly instead of calling it keyless", async () => {
+    apiMock.codeSigningIdentities.mockResolvedValue({
+      total: 1,
+      verified_count: 1,
+      not_published_count: 0,
+      items: [
+        {
+          operation_id: "sign-unknown-mode",
+          request_hash: "c".repeat(64),
+          mode: "unexpected",
+          status: "completed",
+          transparency: "verified",
+          created_at: "2026-08-24T09:00:00Z",
+          updated_at: "2026-08-24T09:01:00Z",
+        },
+      ],
+    });
+    renderPage();
+
+    const outcomes = await screen.findByRole("table", { name: "Recent software-signing outcomes" });
+    expect(within(outcomes).getByText("Unknown signing mode")).toBeInTheDocument();
+    expect(within(outcomes).queryByText("Keyless identity")).not.toBeInTheDocument();
+  });
+
   it("fails closed when the signing ledger cannot be read", async () => {
     apiMock.codeSigningIdentities.mockRejectedValue(new Error("ledger unavailable"));
     renderPage();

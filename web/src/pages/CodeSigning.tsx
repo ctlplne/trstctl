@@ -207,7 +207,7 @@ function SigningOutcomes({ items }: { items: CodeSigningIdentity[] }) {
             {items.slice(0, 10).map((item) => (
               <tr key={item.operation_id}>
                 <td className="font-mono text-xs">{item.operation_id}</td>
-                <td>{t(item.mode === "managed" ? "codesign.mode.managed" : "codesign.mode.keyless")}</td>
+                <td>{t(item.mode === "managed" ? "codesign.mode.managed" : item.mode === "keyless" ? "codesign.mode.keyless" : "codesign.mode.unknown")}</td>
                 <td>{item.status}</td>
                 <td>
                   {t(

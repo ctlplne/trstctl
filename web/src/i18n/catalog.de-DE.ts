@@ -1751,6 +1751,7 @@ const deDECatalog = {
   "codesign.outcomes.noError": "Kein Fehler gemeldet",
   "codesign.mode.managed": "Verwalteter Schlüssel",
   "codesign.mode.keyless": "Schlüssellose Identität",
+  "codesign.mode.unknown": "Unbekannter Signaturmodus",
   "codesign.transparency.verified": "Transparenz verifiziert",
   "codesign.transparency.pending": "Transparenz ausstehend",
   "codesign.transparency.failed": "Transparenz fehlgeschlagen",

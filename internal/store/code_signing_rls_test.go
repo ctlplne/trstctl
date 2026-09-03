@@ -234,8 +234,8 @@ func TestCodeSigningIdentitiesJoinTransparencyByOutboxIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list code-signing identities: %v", err)
 	}
-	if len(rows) != 1 || rows[0].OperationID != op.OperationID || rows[0].Transparency != "verified" {
-		t.Fatalf("code-signing history = %+v, want the operation joined to its delivered Rekor intent", rows)
+	if len(rows) != 1 || rows[0].OperationID != op.OperationID || rows[0].Mode != "managed" || rows[0].Transparency != "verified" {
+		t.Fatalf("code-signing history = %+v, want managed public mode joined to its delivered Rekor intent", rows)
 	}
 }
 

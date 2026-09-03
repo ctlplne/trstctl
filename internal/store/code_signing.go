@@ -241,7 +241,9 @@ func (s *Store) ListCodeSigningIdentities(ctx context.Context, tenantID, destina
 	var out []CodeSigningIdentityRow
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
-			`SELECT op.operation_id, op.mode, op.status, op.request_hash,
+			`SELECT op.operation_id,
+			        CASE op.mode WHEN 'key' THEN 'managed' ELSE op.mode END AS public_mode,
+			        op.status, op.request_hash,
 			        op.created_at, op.updated_at, COALESCE(op.last_error, ''),
 			        COALESCE(ob.status, 'not-published') AS transparency,
 			        COALESCE(ob.last_error, '')          AS transparency_error

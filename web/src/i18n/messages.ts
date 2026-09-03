@@ -4323,6 +4323,7 @@ export const messages = {
   "codesign.outcomes.noError": { defaultMessage: "No failure reported", description: "Successful signing outcome evidence text." },
   "codesign.mode.managed": { defaultMessage: "Managed key", description: "Managed-key signing mode." },
   "codesign.mode.keyless": { defaultMessage: "Keyless identity", description: "Keyless signing mode." },
+  "codesign.mode.unknown": { defaultMessage: "Unknown signing mode", description: "Signing history mode was not recognized." },
   "codesign.transparency.verified": { defaultMessage: "Transparency verified", description: "Verified transparency state." },
   "codesign.transparency.pending": { defaultMessage: "Transparency pending", description: "Pending transparency state." },
   "codesign.transparency.failed": { defaultMessage: "Transparency failed", description: "Failed transparency state." },
