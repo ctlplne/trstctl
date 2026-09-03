@@ -185,14 +185,14 @@ function SoftwareHealth({ icon, label, urgent, to }: { icon: ReactNode; label: s
 function SigningOutcomes({ items }: { items: CodeSigningIdentity[] }) {
   const { t } = useTranslation();
   return (
-    <section aria-labelledby="codesign-outcomes-heading" className="space-y-3">
+    <section aria-labelledby="codesign-outcomes-heading" className="min-w-0 space-y-3">
       <div>
         <h2 id="codesign-outcomes-heading" className="text-title font-semibold">
           {t("codesign.outcomes.title")}
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">{t("codesign.outcomes.help")}</p>
       </div>
-      <div className="overflow-x-auto rounded-panel border border-border">
+      <div className="min-w-0 overflow-x-auto rounded-panel border border-border">
         <table aria-label={t("codesign.outcomes.label")} className="ui-table min-w-full">
           <thead>
             <tr>

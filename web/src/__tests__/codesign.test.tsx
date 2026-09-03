@@ -350,6 +350,16 @@ describe("code signing console", () => {
     expect(within(outcomes).queryByText("Keyless identity")).not.toBeInTheDocument();
   });
 
+  it("keeps the signing ledger inside its horizontal scroll boundary on narrow screens", async () => {
+    renderPage();
+
+    const outcomes = await screen.findByRole("table", { name: "Recent software-signing outcomes" });
+    const section = outcomes.closest("section");
+    const scrollBoundary = outcomes.parentElement;
+    expect(section).toHaveClass("min-w-0");
+    expect(scrollBoundary).toHaveClass("min-w-0", "overflow-x-auto");
+  });
+
   it("fails closed when the signing ledger cannot be read", async () => {
     apiMock.codeSigningIdentities.mockRejectedValue(new Error("ledger unavailable"));
     renderPage();
