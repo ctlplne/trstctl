@@ -8359,8 +8359,7 @@ export const canonicalCapabilities = [
           "status": "complete",
           "evidence": [
             "web/src/pages/Privacy.tsx",
-            "web/src/__tests__/accept/U6-3.test.tsx",
-            "docs/privacy-data-catalog.md"
+            "web/src/__tests__/accept/U6-3.test.tsx"
           ]
         },
         "preview": {
