@@ -4461,7 +4461,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use additional deployment connectors while tenant, policy, and security authority remain on the server.",
       "tool": "operations",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/connectors",
       "navigationEntrypoints": [
         "tool navigation",
@@ -4475,7 +4475,7 @@ export const canonicalCapabilities = [
       ],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -4496,8 +4496,17 @@ export const canonicalCapabilities = [
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/Connectors.tsx",
+            "internal/api/connectors_lifecycle.go",
+            "internal/server/connector_test_job.go",
+            "internal/connector/preview.go",
+            "internal/server/dod_connector_runtime_test.go",
+            "OpenAPI operationId: testConnectorTarget",
+            "CLI command: connector target test",
+            "Exact g191 all-connector source proof and installed AWS ACM API/CLI zero-write qualification"
+          ]
         },
         "execute": {
           "status": "complete",
@@ -4555,8 +4564,8 @@ export const canonicalCapabilities = [
       },
       "owner": "operations",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "900b88d3a051afb23c634fdfc42b8ce477252fc5",
+      "freshness": "2026-09-04"
     }
   },
   {

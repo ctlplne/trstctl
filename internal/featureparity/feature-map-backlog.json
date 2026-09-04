@@ -12413,8 +12413,8 @@
             "phase": "P2",
             "priority": 70,
             "served_state": "conditional",
-            "backend_status": "conditional: the shipped buildRunDeps constructs every advertised appliance/database/messaging connector selected by the operator and the served deploy route performs the provider-specific authenticated mutation plus external readback",
-            "current_frontend_mapping": "served when configured: Connectors at /connectors creates appliance/database targets with secret references, binds identities, invokes deploy, and shows the production receipt",
+            "backend_status": "conditional: the shipped buildRunDeps constructs every advertised appliance, cloud-store, database, messaging, search, and Java-keystore connector selected by the operator; the served test route performs an authenticated target-vantage zero-write preview and the deploy route performs the provider-specific mutation plus external readback",
+            "current_frontend_mapping": "served when configured: Connectors at /connectors creates strict-schema targets with secret references, explains execution ownership, runs an effect-free target-vantage preview, binds identities, invokes reviewed deploy or supported restore, and shows immutable queued and terminal receipts",
             "target_gui_mapping": "Connector UI for the 24 shipped native targets, including F5/BIG-IP, NetScaler, A10, Kemp, PostgreSQL, MySQL, RabbitMQ, Elasticsearch, Tomcat, Cisco, FortiGate, Palo Alto and future connectors, with target secrets, reachability, and rollback.",
             "acceptance_test": "The connector DoD census drives each appliance/database connector from the served target and identity workflow through production assembly, then requires exact authentication, provider wire operations, and independent external readback.",
             "source_docs": [
@@ -12440,7 +12440,7 @@
                 "web/src/lib/api.ts"
             ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence, CLM-05, JOURNEY-001, CAP-DEP-01, CAP-DEP-09, and CAP-LIFE-05. JOURNEY-001 adds served connector targets and actions that accept all served connector catalog names, including appliance connectors; CAP-DEP-01 adds served A10 and Kemp load-balancer mutation beside F5/BIG-IP and NetScaler; CAP-DEP-09 expands the published native catalog to 24 shipped targets with PostgreSQL, MySQL, RabbitMQ, Elasticsearch, and Tomcat while actual mutation still routes through native registry or signed plugin ownership; CAP-LIFE-05 proves endpoint-binding issue/renewal pushes credential-bearing payloads to a load balancer from the served lifecycle path. Test evidence: TestServedConnectorTargetJourneyJOURNEY001EndToEnd, TestConnectorTargetCLIUsesServedAPI, connectors.test.tsx, TestServedLoadBalancerConnectorBreadthCAPDEP01, TestServedEndpointBindingPushesCredentialsCAPLIFE05, TestServedPublishedConnectorCatalogCAPDEP09, and native connector tests.",
+            "notes": "F27 is a complete review-first connector vertical slice for every additional shipped connector. The served target-test route sends no certificate or private-key bytes and performs a target-vantage dress rehearsal: host and appliance work is queued to the owning agent or relay, while AWS ACM, Azure Key Vault, and GCP Certificate Manager use the bounded control-plane outbox with one-attempt tenant-secret leases and authenticated read-only provider calls. Unsupported previews and unreachable targets fail closed. Exact g191 source proof drives all 25 connector rows through production assembly and requires unchanged mutable-target digests. Exact installed g191 API and native CLI proof authenticates to isolated ACM, returns dry_run_planned twice, imports zero certificates, and detects a deliberately unreachable control as dry_run_blocked. The Connectors console explains execution ownership, preview, deploy, verification, and recovery; its complete web gate passes accessibility, i18n, interaction, build, and size budgets. The installed authenticated browser interaction remains explicitly deferred as a final-qualification gate because the in-app browser blocked the local SSO redirect.",
             "api_surface": [
                 "listConnectorCatalog",
                 "createConnectorTarget",
@@ -12490,7 +12490,8 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: served: Connectors at /connectors creates appliance-capable connector targets, binds identities, runs test/deploy/rollback actions, and shows served delivery receipts",
+                        "current_frontend_mapping: served: Connectors at /connectors creates appliance-capable connector targets, explains the execution vantage, runs an effect-free target test, binds identities, runs reviewed deploy/rollback actions, and shows correlated queued and terminal delivery receipts",
+                        "Exact g191 web qualification passes the connector preview interaction, target-vantage language, receipt semantics, accessibility, responsive containment, i18n, type, format, build, and bundle-size gates.",
                         "target_gui_mapping: Connector UI for the 24 shipped native targets, including F5/BIG-IP, NetScaler, A10, Kemp, PostgreSQL, MySQL, RabbitMQ, Elasticsearch, Tomcat, Cisco, FortiGate, Palo Alto and future connectors, with target secrets, reachability, and rollback."
                     ],
                     "refs": [
@@ -12500,7 +12501,8 @@
                 },
                 "cli": {
                     "evidence": [
-                        "trstctl connector target exposes target setup/actions against the served API for all served connector names, including appliance connectors."
+                        "trstctl connector target exposes target setup/actions against the served API for all served connector names, including appliance connectors.",
+                        "Exact g191 native CLI queues and observes the same authenticated AWS ACM dry_run_planned contract as the API without importing a certificate."
                     ],
                     "refs": [
                         "cmd/trstctl/connector.go",
@@ -12509,7 +12511,8 @@
                 },
                 "api": {
                     "evidence": [
-                        "Connector target CRUD/action, identity binding, catalog, delivery receipt, and outbox circuit APIs expose appliance connector route state and delivery outcomes."
+                        "Connector target CRUD/action, identity binding, catalog, delivery receipt, and outbox circuit APIs expose appliance connector route state and delivery outcomes.",
+                        "POST /api/v1/connectors/targets/{id}/test records dry_run_queued before dispatch and a separately correlated dry_run_planned or dry_run_blocked terminal receipt after the target-vantage executor finishes."
                     ],
                     "refs": [
                         "internal/api/connectors_lifecycle.go",
@@ -12519,7 +12522,8 @@
                 "test": {
                     "evidence": [
                         "Appliance connector package tests exercise failure, rollback, credential, and wire-shape behavior.",
-                        "The authoritative connector DoD proof does not construct a registry; it follows production buildRunDeps from the served API to the external target process."
+                        "The authoritative connector DoD proof does not construct a registry; it follows production buildRunDeps from the served API to the external target process.",
+                        "Exact g191 runs all 25 connector rows through preview before deploy, requires unchanged mutable-target digests, and includes a live installed ACM API/CLI preview plus a deliberately broken oracle control."
                     ],
                     "refs": [
                         "internal/featureparity/feature_facet_coverage_test.go",
@@ -12600,7 +12604,7 @@
                 "purpose": "Lets an operator understand and safely use additional deployment connectors while tenant, policy, and security authority remain on the server.",
                 "tool": "operations",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/connectors",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -12614,7 +12618,7 @@
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -12635,8 +12639,17 @@
                         ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/Connectors.tsx",
+                            "internal/api/connectors_lifecycle.go",
+                            "internal/server/connector_test_job.go",
+                            "internal/connector/preview.go",
+                            "internal/server/dod_connector_runtime_test.go",
+                            "OpenAPI operationId: testConnectorTarget",
+                            "CLI command: connector target test",
+                            "Exact g191 all-connector source proof and installed AWS ACM API/CLI zero-write qualification"
+                        ]
                     },
                     "execute": {
                         "status": "complete",
@@ -12694,8 +12707,8 @@
                 },
                 "owner": "operations",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "900b88d3a051afb23c634fdfc42b8ce477252fc5",
+                "freshness": "2026-09-04"
             }
         },
         {
