@@ -23217,8 +23217,10 @@
             "status": "closed",
             "notes": "Closed by COVER-003: F79 is now a first-class denominator row instead of only a UI featureId. Test evidence includes TestFeatureCatalogCoversWebNavigationFeatureIDs plus docs, featureparity, API, and CLI parity gates.",
             "api_surface": [
+                "previewPrivacySubjectErasure",
                 "erasePrivacySubject",
                 "listPrivacySubjectErasures",
+                "previewPrivacyRetention",
                 "enforcePrivacyRetention",
                 "listPrivacyRetentionRuns",
                 "attestPrivacyArchiveErasure",
@@ -23228,8 +23230,10 @@
             ],
             "api_na": "",
             "cli_surface": [
+                "privacy erasures preview",
                 "privacy erasures erase",
                 "privacy erasures list",
+                "privacy retention preview",
                 "privacy retention run",
                 "privacy retention list",
                 "privacy archives attest",
@@ -23270,8 +23274,10 @@
                 },
                 "cli": {
                     "evidence": [
+                        "CLI command: privacy erasures preview",
                         "CLI command: privacy erasures erase",
                         "CLI command: privacy erasures list",
+                        "CLI command: privacy retention preview",
                         "CLI command: privacy retention run",
                         "CLI command: privacy retention list",
                         "CLI command: privacy archives attest",
@@ -23286,8 +23292,10 @@
                 },
                 "api": {
                     "evidence": [
+                        "OpenAPI operationId: previewPrivacySubjectErasure",
                         "OpenAPI operationId: erasePrivacySubject",
                         "OpenAPI operationId: listPrivacySubjectErasures",
+                        "OpenAPI operationId: previewPrivacyRetention",
                         "OpenAPI operationId: enforcePrivacyRetention",
                         "OpenAPI operationId: listPrivacyRetentionRuns",
                         "OpenAPI operationId: exportPrivacySubject",
@@ -23443,7 +23451,9 @@
                         "status": "complete",
                         "evidence": [
                             "OpenAPI operationId: erasePrivacySubject",
+                            "OpenAPI operationId: previewPrivacySubjectErasure",
                             "OpenAPI operationId: listPrivacySubjectErasures",
+                            "OpenAPI operationId: previewPrivacyRetention",
                             "OpenAPI operationId: enforcePrivacyRetention",
                             "OpenAPI operationId: listPrivacyRetentionRuns",
                             "OpenAPI operationId: attestPrivacyArchiveErasure",
@@ -23451,7 +23461,9 @@
                             "OpenAPI operationId: exportPrivacySubject",
                             "OpenAPI operationId: getPrivacyCatalog",
                             "CLI command: privacy erasures erase",
+                            "CLI command: privacy erasures preview",
                             "CLI command: privacy erasures list",
+                            "CLI command: privacy retention preview",
                             "CLI command: privacy retention run",
                             "CLI command: privacy retention list",
                             "CLI command: privacy archives attest",

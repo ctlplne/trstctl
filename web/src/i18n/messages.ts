@@ -25799,6 +25799,21 @@ export const messages = {
     defaultMessage: "Current lifecycle stages for managed machine identities.",
     description: "ELI5 explanation for identity lifecycle counts.",
   },
+  "privacy.review.erasureAction": { defaultMessage: "Review erasure", description: "Request an effect-free exact subject-erasure review." },
+  "privacy.review.retentionAction": { defaultMessage: "Review retention", description: "Request an effect-free exact retention review." },
+  "privacy.review.reviewing": { defaultMessage: "Reviewing…", description: "Busy label while a privacy preview is requested." },
+  "privacy.review.erasureHeading": { defaultMessage: "Review subject erasure", description: "Heading for the exact subject-erasure review dialog." },
+  "privacy.review.retentionHeading": { defaultMessage: "Review retention enforcement", description: "Heading for the exact retention review dialog." },
+  "privacy.review.recordsMatched": { defaultMessage: "records matched", description: "Suffix for the exact number of privacy rows selected." },
+  "privacy.review.archiveAttestations": { defaultMessage: "archive attestations", description: "Suffix for subject archive-evidence count." },
+  "privacy.review.activeLegalHolds": { defaultMessage: "active legal hold", description: "Suffix for active subject legal-hold count." },
+  "privacy.review.reviewedAt": { defaultMessage: "Reviewed at", description: "Label for the server time of a privacy review." },
+  "privacy.review.cutoffs": { defaultMessage: "Effective cutoffs", description: "Heading for exact tenant retention cutoffs." },
+  "privacy.review.prerequisites": { defaultMessage: "Prerequisites", description: "Heading for privacy-action prerequisites." },
+  "privacy.review.effects": { defaultMessage: "What confirmation changes", description: "Heading for durable privacy execution effects." },
+  "privacy.review.executeErasure": { defaultMessage: "Erase reviewed subject", description: "Execute the exact reviewed subject erasure." },
+  "privacy.review.executeRetention": { defaultMessage: "Enforce reviewed retention", description: "Execute retention after exact review." },
+  "privacy.review.dataHandling": { defaultMessage: "Data boundary", description: "Heading for privacy-preview data handling." },
 } as const;
 
 export type MessageKey = keyof typeof messages;

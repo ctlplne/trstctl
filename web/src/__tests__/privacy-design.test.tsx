@@ -11,6 +11,8 @@ const { apiMock } = vi.hoisted(() => ({
     privacySubjectErasures: vi.fn(),
     privacyRetentionRuns: vi.fn(),
     privacyArchiveAttestations: vi.fn(),
+    previewPrivacySubjectErasure: vi.fn(),
+    previewPrivacyRetention: vi.fn(),
     erasePrivacySubject: vi.fn(),
     exportPrivacySubject: vi.fn(),
     enforcePrivacyRetention: vi.fn(),
@@ -57,6 +59,54 @@ describe("Route 036 evidence-privacy hierarchy", () => {
       items: [{ run_id: "run-1", enforced_at: "2026-08-21T10:00:00Z", requested_by_ref: "scheduler", counts: {}, cutoffs: {} }],
     });
     apiMock.privacyArchiveAttestations.mockResolvedValue({ items: [] });
+    apiMock.previewPrivacySubjectErasure.mockResolvedValue({
+      capability: "F79",
+      operation: "erase_subject",
+      ready: true,
+      effect_free: true,
+      request_fingerprint: "a".repeat(64),
+      required_permission: "privacy:write",
+      normalized_request: { subject: "alice@example.test", reason: "request" },
+      subject_ref: "subject-ref-alice",
+      counts: { owners: 1, api_tokens: 2 },
+      total_records: 3,
+      archive_attestations: 1,
+      active_legal_holds: 1,
+      prerequisites: ["Export required evidence before erasure."],
+      blockers: [],
+      warnings: ["Completed erasure is irreversible."],
+      preview_writes: [],
+      preview_external_effects: [],
+      execute_writes: ["Pseudonymize direct operational rows."],
+      execute_external_effects: [],
+      recovery_steps: ["Retry the unchanged request with the same Idempotency-Key."],
+      verification_steps: ["Export again and inspect erasure evidence."],
+      secret_data_handling: "No secrets are returned.",
+    });
+    apiMock.previewPrivacyRetention.mockResolvedValue({
+      capability: "F79",
+      operation: "enforce_retention",
+      ready: true,
+      effect_free: true,
+      request_fingerprint: "b".repeat(64),
+      required_permission: "privacy:write",
+      reviewed_at: "2026-09-04T10:00:00Z",
+      cutoffs: { ssh_stale_before: "2026-03-08T10:00:00Z" },
+      counts: { ssh_keys: 4 },
+      total_records: 4,
+      prerequisites: ["Review the effective tenant retention cutoffs."],
+      blockers: [],
+      warnings: ["Re-review if tenant data changes."],
+      preview_writes: [],
+      preview_external_effects: [],
+      execute_writes: ["Append one retention event."],
+      execute_external_effects: [],
+      recovery_steps: ["Retry with the same Idempotency-Key."],
+      verification_steps: ["List retention runs."],
+      secret_data_handling: "Aggregate counts only.",
+    });
+    apiMock.erasePrivacySubject.mockResolvedValue({ subject_ref: "subject-ref-alice", counts: {}, selectors: {}, erased_at: "2026-09-04T10:01:00Z" });
+    apiMock.enforcePrivacyRetention.mockResolvedValue({ run_id: "run-2", counts: {}, cutoffs: {}, enforced_at: "2026-09-04T10:02:00Z" });
   });
 
   it("answers the evidence boundary before loading or exposing exact controls", async () => {
@@ -121,5 +171,34 @@ describe("Route 036 evidence-privacy hierarchy", () => {
       const disclosure = screen.getByText(title, { exact: true }).closest("details");
       expect(disclosure).toHaveClass("min-w-0");
     }
+  });
+
+  it("reviews destructive subject and retention effects before execution and exposes truthful recovery", async () => {
+    const user = userEvent.setup();
+    renderPrivacy();
+    await user.click(await screen.findByText("Subject rights", { exact: true }));
+    await user.type(screen.getByLabelText("Data subject"), "alice@example.test");
+    await user.type(screen.getByLabelText("Reason"), "request");
+
+    expect(apiMock.erasePrivacySubject).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Review erasure" }));
+    const erasureReview = await screen.findByRole("dialog", { name: "Review subject erasure" });
+    expect(erasureReview).toHaveTextContent("No state changed");
+    expect(erasureReview).toHaveTextContent("3 records matched");
+    expect(erasureReview).toHaveTextContent("1 active legal hold");
+    expect(erasureReview).toHaveTextContent("Completed erasure is irreversible");
+    expect(erasureReview).toHaveTextContent("Retry the unchanged request with the same Idempotency-Key");
+    await user.click(within(erasureReview).getByRole("button", { name: "Erase reviewed subject" }));
+    await waitFor(() => expect(apiMock.erasePrivacySubject).toHaveBeenCalledWith({ subject: "alice@example.test", reason: "request" }));
+
+    await user.click(screen.getByText("Retention jobs", { exact: true }));
+    await waitFor(() => expect(apiMock.privacyRetentionRuns).toHaveBeenCalled());
+    expect(apiMock.enforcePrivacyRetention).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Review retention" }));
+    const retentionReview = await screen.findByRole("dialog", { name: "Review retention enforcement" });
+    expect(retentionReview).toHaveTextContent("4 records matched");
+    expect(retentionReview).toHaveTextContent("ssh stale before");
+    await user.click(within(retentionReview).getByRole("button", { name: "Enforce reviewed retention" }));
+    await waitFor(() => expect(apiMock.enforcePrivacyRetention).toHaveBeenCalledTimes(1));
   });
 });

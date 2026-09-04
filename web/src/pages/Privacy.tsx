@@ -5,8 +5,10 @@ import {
   type PrivacyArchiveErasureAttestation,
   type PrivacyArchiveErasureAttestationRequest,
   type PrivacyCatalog,
+  type PrivacyRetentionPreview,
   type PrivacyRetentionRun,
   type PrivacySubjectErasure,
+  type PrivacySubjectErasurePreview,
   type PrivacySubjectExport,
 } from "@/lib/api";
 
@@ -24,6 +26,31 @@ import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 
 function countTotal(counts: Record<string, unknown>): number {
   return Object.values(counts).reduce<number>((sum, value) => sum + (typeof value === "number" ? value : 0), 0);
+}
+
+const subjectAggregateClasses = [
+  "owners",
+  "identities",
+  "certificates",
+  "ssh_keys",
+  "attestations",
+  "approval_requests",
+  "approvals",
+  "profiles",
+  "agents",
+  "agent_offboard_actors",
+  "agent_offboard_reasons",
+  "api_tokens",
+  "tenant_members",
+  "code_signing_operations",
+  "read_models",
+] as const;
+
+function countSubjectRecords(counts: Record<string, unknown>): number {
+  return subjectAggregateClasses.reduce((sum, name) => {
+    const value = counts[name];
+    return sum + (typeof value === "number" ? value : 0);
+  }, 0);
 }
 
 type ArchiveAttestationFormState = {
@@ -119,6 +146,9 @@ export function Privacy() {
   const [reason, setReason] = useState("");
   const [exportSubject, setExportSubject] = useState("");
   const [subjectExport, setSubjectExport] = useState<PrivacySubjectExport | null>(null);
+  const [erasurePreview, setErasurePreview] = useState<PrivacySubjectErasurePreview | null>(null);
+  const [retentionPreview, setRetentionPreview] = useState<PrivacyRetentionPreview | null>(null);
+  const [reviewBusy, setReviewBusy] = useState<null | "erase" | "retention">(null);
   const [busy, setBusy] = useState<null | "erase" | "retention">(null);
   const [exportBusy, setExportBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -245,13 +275,27 @@ export function Privacy() {
   async function submitErasure(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!subject.trim()) return;
+    setReviewBusy("erase");
+    setError(null);
+    try {
+      setErasurePreview(await api.previewPrivacySubjectErasure({ subject: subject.trim(), reason: reason.trim() || undefined }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setReviewBusy(null);
+    }
+  }
+
+  async function executeErasure() {
+    if (!erasurePreview?.ready) return;
     setBusy("erase");
     setError(null);
     try {
-      const result = await api.erasePrivacySubject({ subject: subject.trim(), reason: reason.trim() || undefined });
+      const result = await api.erasePrivacySubject(erasurePreview.normalized_request);
       setErasures((current) => [result, ...current]);
       setSubject("");
       setReason("");
+      setErasurePreview(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -260,11 +304,25 @@ export function Privacy() {
   }
 
   async function runRetention() {
+    setReviewBusy("retention");
+    setError(null);
+    try {
+      setRetentionPreview(await api.previewPrivacyRetention());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setReviewBusy(null);
+    }
+  }
+
+  async function executeRetention() {
+    if (!retentionPreview?.ready) return;
     setBusy("retention");
     setError(null);
     try {
       const run = await api.enforcePrivacyRetention();
       setRuns((current) => [run, ...current]);
+      setRetentionPreview(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -371,7 +429,10 @@ export function Privacy() {
                   <input
                     id="privacy-subject"
                     value={subject}
-                    onChange={(event) => setSubject(event.target.value)}
+                    onChange={(event) => {
+                      setSubject(event.target.value);
+                      setErasurePreview(null);
+                    }}
                     placeholder={t("privacy.subjectPlaceholder")}
                     className="rounded-md border border-border bg-background px-3 py-2 text-sm"
                   />
@@ -381,13 +442,16 @@ export function Privacy() {
                   <input
                     id="privacy-reason"
                     value={reason}
-                    onChange={(event) => setReason(event.target.value)}
+                    onChange={(event) => {
+                      setReason(event.target.value);
+                      setErasurePreview(null);
+                    }}
                     placeholder={t("privacy.erasure.reasonPlaceholder")}
                     className="rounded-md border border-border bg-background px-3 py-2 text-sm"
                   />
                 </label>
-                <Button type="submit" disabled={busy === "erase" || !subject.trim()}>
-                  {busy === "erase" ? t("privacy.erasure.busy") : t("privacy.erasure.submit")}
+                <Button type="submit" disabled={reviewBusy === "erase" || busy === "erase" || !subject.trim()}>
+                  {reviewBusy === "erase" ? t("privacy.review.reviewing") : t("privacy.review.erasureAction")}
                 </Button>
               </form>
               {erasures.length === 0 ? (
@@ -407,7 +471,7 @@ export function Privacy() {
                       {erasures.map((erasure, index) => (
                         <tr key={`${erasure.subject_ref}-${index}`} className="border-b border-border/60 align-top">
                           <td className="py-2 font-mono text-caption">{erasure.subject_ref}</td>
-                          <td className="py-2 tabular-nums">{countTotal(erasure.counts)}</td>
+                          <td className="py-2 tabular-nums">{countSubjectRecords(erasure.counts)}</td>
                           <td className="py-2 text-muted-foreground">{erasure.reason || "—"}</td>
                           <td className="py-2 text-muted-foreground">{formatDateTimePolicy(erasure.erased_at)}</td>
                         </tr>
@@ -468,7 +532,7 @@ export function Privacy() {
                       </tbody>
                     </table>
                   </div>
-                  <p className="text-caption text-muted-foreground">{t("privacy.export.summary", { count: countTotal(subjectExport.counts) })}</p>
+                  <p className="text-caption text-muted-foreground">{t("privacy.export.summary", { count: countSubjectRecords(subjectExport.counts) })}</p>
                 </div>
               ) : null}
             </SectionCard>
@@ -536,8 +600,8 @@ export function Privacy() {
             title={t("privacy.retention.title")}
             description={t("privacy.retention.description")}
             actions={
-              <Button type="button" variant="outline" onClick={() => void runRetention()} disabled={busy === "retention"}>
-                {busy === "retention" ? t("privacy.retention.busy") : t("privacy.retention.submit")}
+              <Button type="button" variant="outline" onClick={() => void runRetention()} disabled={reviewBusy === "retention" || busy === "retention"}>
+                {reviewBusy === "retention" ? t("privacy.review.reviewing") : t("privacy.review.retentionAction")}
               </Button>
             }
           >
@@ -570,6 +634,30 @@ export function Privacy() {
           </SectionCard>
         ) : null}
       </PrivacyDisclosurePanel>
+
+      {erasurePreview ? (
+        <PrivacyReviewDialog
+          preview={erasurePreview}
+          title={t("privacy.review.erasureHeading")}
+          titleId="privacy-erasure-review-heading"
+          executeLabel={busy === "erase" ? t("privacy.erasure.busy") : t("privacy.review.executeErasure")}
+          executing={busy === "erase"}
+          onClose={() => setErasurePreview(null)}
+          onExecute={() => void executeErasure()}
+        />
+      ) : null}
+
+      {retentionPreview ? (
+        <PrivacyReviewDialog
+          preview={retentionPreview}
+          title={t("privacy.review.retentionHeading")}
+          titleId="privacy-retention-review-heading"
+          executeLabel={busy === "retention" ? t("privacy.retention.busy") : t("privacy.review.executeRetention")}
+          executing={busy === "retention"}
+          onClose={() => setRetentionPreview(null)}
+          onExecute={() => void executeRetention()}
+        />
+      ) : null}
 
       {recordOpen && (
         <Dialog
@@ -678,6 +766,121 @@ export function Privacy() {
           </form>
         </Dialog>
       )}
+    </section>
+  );
+}
+
+type PrivacyActionPreview = PrivacySubjectErasurePreview | PrivacyRetentionPreview;
+
+function PrivacyReviewDialog({
+  executeLabel,
+  executing,
+  onClose,
+  onExecute,
+  preview,
+  title,
+  titleId,
+}: {
+  executeLabel: string;
+  executing: boolean;
+  onClose: () => void;
+  onExecute: () => void;
+  preview: PrivacyActionPreview;
+  title: string;
+  titleId: string;
+}) {
+  const { t } = useTranslation();
+  const countEntries = Object.entries(preview.counts).filter(([, count]) => typeof count === "number" && count > 0);
+  const isErasure = "subject_ref" in preview;
+  const cutoffEntries = "cutoffs" in preview ? Object.entries(preview.cutoffs) : [];
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      titleId={titleId}
+      descriptionId={`${titleId}-description`}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      overlayClassName="absolute inset-0 bg-black/55"
+      panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-3xl overflow-y-auto rounded-panel border border-border bg-card shadow-elevation2"
+    >
+      <header className="border-b border-border px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 id={titleId} className="text-title font-semibold">{title}</h2>
+          <StatusBadge value={preview.ready ? "ready" : "blocked"} label={preview.ready ? t("policy.reporting.ready") : t("policy.reporting.setupNeeded")} tone={preview.ready ? "success" : "warning"} />
+        </div>
+        <p id={`${titleId}-description`} className="mt-1 text-sm text-muted-foreground">
+          {t("policy.reporting.noStateChanged")} {preview.preview_writes.length === 0 && preview.preview_external_effects.length === 0 ? "" : preview.blockers.join(" ")}
+        </p>
+      </header>
+      <div className="grid gap-5 p-5">
+        <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <PrivacyFact label={t("privacy.review.recordsMatched")} value={`${preview.total_records} ${t("privacy.review.recordsMatched")}`} />
+          {isErasure ? <PrivacyFact label={t("privacy.review.archiveAttestations")} value={`${preview.archive_attestations} ${t("privacy.review.archiveAttestations")}`} /> : null}
+          {isErasure ? <PrivacyFact label={t("privacy.review.activeLegalHolds")} value={`${preview.active_legal_holds} ${t("privacy.review.activeLegalHolds")}`} /> : null}
+          {"reviewed_at" in preview ? <PrivacyFact label={t("privacy.review.reviewedAt")} value={formatDateTimePolicy(preview.reviewed_at)} /> : null}
+          <PrivacyFact label={t("policy.reporting.permission")} value={preview.required_permission} />
+        </dl>
+
+        <section className="grid gap-2" aria-labelledby={`${titleId}-counts`}>
+          <h3 id={`${titleId}-counts`} className="text-sm font-semibold">{t("privacy.review.recordsMatched")}</h3>
+          {countEntries.length ? (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {countEntries.map(([name, count]) => (
+                <div key={name} className="flex items-center justify-between gap-4 rounded-control border border-border px-3 py-2 text-sm">
+                  <span>{name.replace(/_/g, " ")}</span><span className="font-mono tabular-nums">{String(count)}</span>
+                </div>
+              ))}
+            </div>
+          ) : <p className="text-sm text-muted-foreground">0 {t("privacy.review.recordsMatched")}</p>}
+        </section>
+
+        {cutoffEntries.length ? (
+          <details className="rounded-control border border-border px-3 py-2">
+            <summary className="cursor-pointer text-sm font-semibold">{t("privacy.review.cutoffs")}</summary>
+            <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+              {cutoffEntries.map(([name, value]) => (
+                <div key={name} className="min-w-0 text-xs">
+                  <dt className="text-muted-foreground">{name.replace(/_/g, " ")}</dt>
+                  <dd className="break-all font-mono">{typeof value === "string" ? formatDateTimePolicy(value) : String(value)}</dd>
+                </div>
+              ))}
+            </dl>
+          </details>
+        ) : null}
+
+        {preview.blockers.length ? <ErrorState title={t("policy.reporting.setupNeeded")}>{preview.blockers.join(" ")}</ErrorState> : null}
+        {preview.warnings.map((warning) => <p key={warning} className="rounded-control border border-warning/40 bg-warning/10 px-3 py-2 text-sm">{warning}</p>)}
+
+        <PrivacyReviewList title={t("privacy.review.prerequisites")} items={preview.prerequisites} />
+        <PrivacyReviewList title={t("privacy.review.effects")} items={[...preview.execute_writes, ...preview.execute_external_effects]} />
+        <PrivacyReviewList title={t("policy.reporting.recovery")} items={preview.recovery_steps} />
+        <PrivacyReviewList title={t("policy.reporting.verify")} items={preview.verification_steps} />
+
+        <section className="rounded-control border border-border bg-muted/20 p-3 text-sm">
+          <h3 className="font-semibold">{t("privacy.review.dataHandling")}</h3>
+          <p className="mt-1 text-muted-foreground">{preview.secret_data_handling}</p>
+        </section>
+
+        <details className="rounded-control border border-border px-3 py-2">
+          <summary className="cursor-pointer text-sm font-semibold">{t("policy.reporting.fingerprint")}</summary>
+          <p className="mt-2 break-all font-mono text-xs">{preview.request_fingerprint}</p>
+        </details>
+      </div>
+      <footer className="flex justify-end gap-2 border-t border-border px-5 py-4">
+        <Button type="button" variant="ghost" onClick={onClose}>{translateNow("source.cancel.19766ed6cc")}</Button>
+        <Button type="button" disabled={!preview.ready || executing} onClick={onExecute}>{executeLabel}</Button>
+      </footer>
+    </Dialog>
+  );
+}
+
+function PrivacyReviewList({ items, title }: { items: string[]; title: string }) {
+  return (
+    <section className="grid gap-2">
+      <h3 className="text-sm font-semibold">{title}</h3>
+      <ul className="grid list-disc gap-1 ps-5 text-sm text-muted-foreground">
+        {items.map((item) => <li key={item}>{item}</li>)}
+      </ul>
     </section>
   );
 }

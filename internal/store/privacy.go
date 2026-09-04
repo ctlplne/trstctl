@@ -1537,7 +1537,7 @@ func (s *Store) ApplyPrivacyRetentionEnforcedTx(ctx context.Context, tx pgx.Tx, 
 			  WHERE tenant_id = $1
 			    AND triaged_at IS NOT NULL
 			    AND triaged_at < $2
-			    AND (triage_actor <> '' OR triage_reason <> '')`,
+			    AND ((triage_actor <> '' AND triage_actor NOT LIKE 'retained:%' AND triage_actor NOT LIKE 'erased:%') OR triage_reason <> '')`,
 		r.TenantID, r.Cutoffs.AttestationEvidenceBefore); err != nil {
 		return err
 	}
@@ -1576,7 +1576,8 @@ func (s *Store) ApplyPrivacyRetentionEnforcedTx(ctx context.Context, tx pgx.Tx, 
 			        rollback_refs = '{}'::text[]
 			  WHERE tenant_id = $1
 			    AND updated_at < $2
-			    AND (created_by <> '' OR reason <> '' OR evidence_bundle <> '' OR cardinality(failed_targets) > 0 OR cardinality(rollback_refs) > 0)`,
+			    AND ((created_by <> '' AND created_by NOT LIKE 'retained:%' AND created_by NOT LIKE 'erased:%')
+			      OR reason <> '' OR evidence_bundle <> '' OR cardinality(failed_targets) > 0 OR cardinality(rollback_refs) > 0)`,
 		r.TenantID, r.Cutoffs.AttestationEvidenceBefore); err != nil {
 		return err
 	}
@@ -1608,7 +1609,8 @@ func (s *Store) ApplyPrivacyRetentionEnforcedTx(ctx context.Context, tx pgx.Tx, 
 			  WHERE tenant_id = $1
 			    AND status <> 'pending'
 			    AND COALESCE(decided_at, updated_at, created_at) < $2
-			    AND (decision_by <> '' OR decision_reason <> '' OR cardinality(decision_evidence_refs) > 0)`,
+			    AND ((decision_by <> '' AND decision_by NOT LIKE 'retained:%' AND decision_by NOT LIKE 'erased:%')
+			      OR decision_reason <> '' OR cardinality(decision_evidence_refs) > 0)`,
 		r.TenantID, r.Cutoffs.ApprovalActorBefore); err != nil {
 		return err
 	}
@@ -1668,7 +1670,10 @@ func (s *Store) ApplyPrivacyRetentionEnforcedTx(ctx context.Context, tx pgx.Tx, 
 			        owner_email = ''
 			  WHERE tenant_id = $1
 			    AND updated_at < $2
-			    AND (scope_kind = 'owner' OR owner_ref <> '' OR owner_email <> '')`,
+			    AND ((scope_kind = 'owner' AND scope_ref <> ''
+			          AND scope_ref NOT LIKE 'owner/retained:%' AND scope_ref NOT LIKE 'owner/erased:%')
+			      OR (owner_ref <> '' AND owner_ref NOT LIKE 'retained:%' AND owner_ref NOT LIKE 'erased:%')
+			      OR owner_email <> '')`,
 		r.TenantID, r.Cutoffs.AttestationEvidenceBefore); err != nil {
 		return err
 	}
@@ -1685,7 +1690,8 @@ func (s *Store) ApplyPrivacyRetentionEnforcedTx(ctx context.Context, tx pgx.Tx, 
 			        initial_response = ''::bytea
 			  WHERE tenant_id = $1
 			    AND updated_at < $2
-			    AND (created_by <> '' OR reason <> '' OR cardinality(evidence_refs) > 0 OR cardinality(rollback_refs) > 0)`,
+			    AND ((created_by <> '' AND created_by NOT LIKE 'retained:%' AND created_by NOT LIKE 'erased:%')
+			      OR reason <> '' OR cardinality(evidence_refs) > 0 OR cardinality(rollback_refs) > 0)`,
 		r.TenantID, r.Cutoffs.AttestationEvidenceBefore); err != nil {
 		return err
 	}
@@ -1714,7 +1720,8 @@ func (s *Store) ApplyPrivacyRetentionEnforcedTx(ctx context.Context, tx pgx.Tx, 
 			        rollback_refs = '{}'::text[]
 			  WHERE tenant_id = $1
 			    AND updated_at < $2
-			    AND (created_by <> '' OR reason <> '' OR evidence_bundle <> '' OR cardinality(failed_targets) > 0 OR cardinality(rollback_refs) > 0)`,
+			    AND ((created_by <> '' AND created_by NOT LIKE 'retained:%' AND created_by NOT LIKE 'erased:%')
+			      OR reason <> '' OR evidence_bundle <> '' OR cardinality(failed_targets) > 0 OR cardinality(rollback_refs) > 0)`,
 		r.TenantID, r.Cutoffs.AttestationEvidenceBefore); err != nil {
 		return err
 	}
@@ -3658,7 +3665,8 @@ func countPrivacyRetentionRows(ctx context.Context, tx pgx.Tx, tenantID string, 
 			sql: `SELECT count(*) FROM discovery_findings
 					       WHERE tenant_id = $1
 					         AND (
-					               (triaged_at IS NOT NULL AND triaged_at < $2 AND (triage_actor <> '' OR triage_reason <> ''))
+					               (triaged_at IS NOT NULL AND triaged_at < $2
+					                 AND ((triage_actor <> '' AND triage_actor NOT LIKE 'retained:%' AND triage_actor NOT LIKE 'erased:%') OR triage_reason <> ''))
 					            OR (discovered_at < $2 AND ` + discoveryPrivacyJSONHasRetainablePII("metadata") + `)
 					         )`,
 			args: []any{tenantID, c.AttestationEvidenceBefore},
@@ -3678,9 +3686,10 @@ func countPrivacyRetentionRows(ctx context.Context, tx pgx.Tx, tenantID string, 
 		},
 		"incident_executions": {
 			sql: `SELECT count(*) FROM incident_executions
-				       WHERE tenant_id = $1
-				         AND updated_at < $2
-				         AND (created_by <> '' OR reason <> '' OR evidence_bundle <> '' OR cardinality(failed_targets) > 0 OR cardinality(rollback_refs) > 0)`,
+					       WHERE tenant_id = $1
+					         AND updated_at < $2
+					         AND ((created_by <> '' AND created_by NOT LIKE 'retained:%' AND created_by NOT LIKE 'erased:%')
+					           OR reason <> '' OR evidence_bundle <> '' OR cardinality(failed_targets) > 0 OR cardinality(rollback_refs) > 0)`,
 			args: []any{tenantID, c.AttestationEvidenceBefore},
 		},
 		"nhi_access_review_campaigns": {
@@ -3693,10 +3702,11 @@ func countPrivacyRetentionRows(ctx context.Context, tx pgx.Tx, tenantID string, 
 		},
 		"nhi_access_review_items": {
 			sql: `SELECT count(*) FROM nhi_access_review_items
-				       WHERE tenant_id = $1
-				         AND status <> 'pending'
-				         AND COALESCE(decided_at, updated_at, created_at) < $2
-				         AND (decision_by <> '' OR decision_reason <> '' OR cardinality(decision_evidence_refs) > 0)`,
+					       WHERE tenant_id = $1
+					         AND status <> 'pending'
+					         AND COALESCE(decided_at, updated_at, created_at) < $2
+					         AND ((decision_by <> '' AND decision_by NOT LIKE 'retained:%' AND decision_by NOT LIKE 'erased:%')
+					           OR decision_reason <> '' OR cardinality(decision_evidence_refs) > 0)`,
 			args: []any{tenantID, c.ApprovalActorBefore},
 		},
 		"access_change_requests": {
@@ -3725,16 +3735,20 @@ func countPrivacyRetentionRows(ctx context.Context, tx pgx.Tx, tenantID string, 
 		},
 		"notification_routing_policies": {
 			sql: `SELECT count(*) FROM notification_routing_policies
-				       WHERE tenant_id = $1
-				         AND updated_at < $2
-				         AND (scope_kind = 'owner' OR owner_ref <> '' OR owner_email <> '')`,
+					       WHERE tenant_id = $1
+					         AND updated_at < $2
+					         AND ((scope_kind = 'owner' AND scope_ref <> ''
+					               AND scope_ref NOT LIKE 'owner/retained:%' AND scope_ref NOT LIKE 'owner/erased:%')
+					           OR (owner_ref <> '' AND owner_ref NOT LIKE 'retained:%' AND owner_ref NOT LIKE 'erased:%')
+					           OR owner_email <> '')`,
 			args: []any{tenantID, c.AttestationEvidenceBefore},
 		},
 		"remediation_playbook_runs": {
 			sql: `SELECT count(*) FROM remediation_playbook_runs
-				       WHERE tenant_id = $1
-				         AND updated_at < $2
-				         AND (created_by <> '' OR reason <> '' OR cardinality(evidence_refs) > 0 OR cardinality(rollback_refs) > 0)`,
+					       WHERE tenant_id = $1
+					         AND updated_at < $2
+					         AND ((created_by <> '' AND created_by NOT LIKE 'retained:%' AND created_by NOT LIKE 'erased:%')
+					           OR reason <> '' OR cardinality(evidence_refs) > 0 OR cardinality(rollback_refs) > 0)`,
 			args: []any{tenantID, c.AttestationEvidenceBefore},
 		},
 		"compliance_report_schedules": {
@@ -3747,9 +3761,10 @@ func countPrivacyRetentionRows(ctx context.Context, tx pgx.Tx, tenantID string, 
 		},
 		"incident_fleet_reissuance_runs": {
 			sql: `SELECT count(*) FROM incident_fleet_reissuance_runs
-				       WHERE tenant_id = $1
-				         AND updated_at < $2
-				         AND (created_by <> '' OR reason <> '' OR evidence_bundle <> '' OR cardinality(failed_targets) > 0 OR cardinality(rollback_refs) > 0)`,
+					       WHERE tenant_id = $1
+					         AND updated_at < $2
+					         AND ((created_by <> '' AND created_by NOT LIKE 'retained:%' AND created_by NOT LIKE 'erased:%')
+					           OR reason <> '' OR evidence_bundle <> '' OR cardinality(failed_targets) > 0 OR cardinality(rollback_refs) > 0)`,
 			args: []any{tenantID, c.AttestationEvidenceBefore},
 		},
 		"ownership_readiness_exceptions": {

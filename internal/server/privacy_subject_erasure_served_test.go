@@ -50,7 +50,7 @@ func TestServedPrivacySubjectErasureRedactsAuditAndExports(t *testing.T) {
 		t.Fatalf("seed tenant: %v", err)
 	}
 	subjectToken := seedServedAPIToken(t, ctx, st, tenantID, subject, []string{
-		string(authz.OwnersWrite), string(authz.PrivacyWrite),
+		string(authz.OwnersWrite), string(authz.PrivacyRead), string(authz.PrivacyWrite),
 	})
 	adminToken := seedServedAPIToken(t, ctx, st, tenantID, "privacy-admin", []string{
 		string(authz.OwnersRead), string(authz.PrivacyRead), string(authz.AuditRead),
@@ -89,6 +89,36 @@ func TestServedPrivacySubjectErasureRedactsAuditAndExports(t *testing.T) {
 	}
 	if err := json.Unmarshal(body, &ownerResp); err != nil || ownerResp.ID == "" {
 		t.Fatalf("decode owner response: id=%q err=%v body=%s", ownerResp.ID, err, body)
+	}
+
+	code, body = doBearer(t, ts, http.MethodPost, "/api/v1/privacy/subject-erasures/preview", subjectToken, "", map[string]string{
+		"subject": subject, "reason": "data subject request",
+	})
+	if code != http.StatusOK {
+		t.Fatalf("preview subject erasure = %d, want 200; body=%s", code, body)
+	}
+	var preview struct {
+		Capability          string         `json:"capability"`
+		Ready               bool           `json:"ready"`
+		EffectFree          bool           `json:"effect_free"`
+		RequestFingerprint  string         `json:"request_fingerprint"`
+		SubjectRef          string         `json:"subject_ref"`
+		Counts              map[string]int `json:"counts"`
+		TotalRecords        int            `json:"total_records"`
+		ArchiveAttestations int            `json:"archive_attestations"`
+		RecoverySteps       []string       `json:"recovery_steps"`
+	}
+	if err := json.Unmarshal(body, &preview); err != nil {
+		t.Fatalf("decode subject erasure preview: %v body=%s", err, body)
+	}
+	if preview.Capability != "F79" || !preview.Ready || !preview.EffectFree || len(preview.RequestFingerprint) != 64 ||
+		preview.SubjectRef != privacy.SubjectRef(tenantID, subject) || preview.Counts["owners"] != 1 || preview.Counts["api_tokens"] != 1 ||
+		preview.TotalRecords < 2 || preview.ArchiveAttestations != 0 || len(preview.RecoverySteps) < 3 {
+		t.Fatalf("subject erasure preview is incomplete: %+v", preview)
+	}
+	code, body = doBearer(t, ts, http.MethodGet, "/api/v1/privacy/subject-erasures", subjectToken, "", nil)
+	if code != http.StatusOK || !bytes.Contains(body, []byte(`"items":[]`)) {
+		t.Fatalf("effect-free preview wrote erasure evidence: status=%d body=%s", code, body)
 	}
 
 	code, body = doBearer(t, ts, http.MethodPost, "/api/v1/privacy/subject-erasures", subjectToken, "erase-alice", map[string]string{

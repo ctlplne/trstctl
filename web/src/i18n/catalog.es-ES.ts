@@ -8537,6 +8537,21 @@ const esESCatalog = {
   "identities.automation.openRuns": "Abrir ejecuciones de rotación",
   "identities.automation.openConnectors": "Abrir conectores y reversión",
   "identities.automation.openAlerts": "Abrir alertas de vencimiento",
+  "privacy.review.erasureAction": "Revisar borrado",
+  "privacy.review.retentionAction": "Revisar retención",
+  "privacy.review.reviewing": "Revisando…",
+  "privacy.review.erasureHeading": "Revisar borrado del sujeto",
+  "privacy.review.retentionHeading": "Revisar aplicación de retención",
+  "privacy.review.recordsMatched": "registros coincidentes",
+  "privacy.review.archiveAttestations": "atestaciones de archivo",
+  "privacy.review.activeLegalHolds": "retención legal activa",
+  "privacy.review.reviewedAt": "Revisado el",
+  "privacy.review.cutoffs": "Límites efectivos",
+  "privacy.review.prerequisites": "Requisitos previos",
+  "privacy.review.effects": "Qué cambia la confirmación",
+  "privacy.review.executeErasure": "Borrar el sujeto revisado",
+  "privacy.review.executeRetention": "Aplicar la retención revisada",
+  "privacy.review.dataHandling": "Límite de datos",
 } satisfies Record<MessageKey, string>;
 
 export default esESCatalog;

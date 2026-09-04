@@ -1,0 +1,1 @@
+import{G as e}from"./index-CaQ2-Vw0.js";function t(t,n,...r){let i=e[t];return typeof i==`function`?i(...r):Promise.resolve(n)}export{t};

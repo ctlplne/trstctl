@@ -4743,6 +4743,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/privacy/retention-runs/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review exact retention cutoffs and affected row counts without writing state */
+        post: operations["previewPrivacyRetention"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/privacy/subject-erasures": {
         parameters: {
             query?: never;
@@ -4755,6 +4772,23 @@ export interface paths {
         put?: never;
         /** Erase direct subject personal data from tenant read surfaces */
         post: operations["erasePrivacySubject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/privacy/subject-erasures/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review exact tenant-scoped direct-data erasure effects, archive evidence, and recovery without writing state */
+        post: operations["previewPrivacySubjectErasure"];
         delete?: never;
         options?: never;
         head?: never;
@@ -12674,6 +12708,31 @@ export interface components {
             /** Format: date-time */
             ssh_stale_before: string;
         };
+        PrivacyRetentionPreview: {
+            blockers: string[];
+            capability: string;
+            counts: {
+                [key: string]: number;
+            };
+            cutoffs: components["schemas"]["PrivacyRetentionCutoffs"];
+            effect_free: boolean;
+            execute_external_effects: string[];
+            execute_writes: string[];
+            operation: string;
+            prerequisites: string[];
+            preview_external_effects: string[];
+            preview_writes: string[];
+            ready: boolean;
+            recovery_steps: string[];
+            request_fingerprint: string;
+            required_permission: string;
+            /** Format: date-time */
+            reviewed_at: string;
+            secret_data_handling: string;
+            total_records: number;
+            verification_steps: string[];
+            warnings: string[];
+        };
         PrivacyRetentionRun: {
             counts: Record<string, never>;
             cutoffs: components["schemas"]["PrivacyRetentionCutoffs"];
@@ -12699,6 +12758,32 @@ export interface components {
         PrivacySubjectErasureList: {
             items: components["schemas"]["PrivacySubjectErasure"][];
             next_cursor?: string;
+        };
+        PrivacySubjectErasurePreview: {
+            active_legal_holds: number;
+            archive_attestations: number;
+            blockers: string[];
+            capability: string;
+            counts: {
+                [key: string]: number;
+            };
+            effect_free: boolean;
+            execute_external_effects: string[];
+            execute_writes: string[];
+            normalized_request: components["schemas"]["PrivacySubjectErasureRequest"];
+            operation: string;
+            prerequisites: string[];
+            preview_external_effects: string[];
+            preview_writes: string[];
+            ready: boolean;
+            recovery_steps: string[];
+            request_fingerprint: string;
+            required_permission: string;
+            secret_data_handling: string;
+            subject_ref: string;
+            total_records: number;
+            verification_steps: string[];
+            warnings: string[];
         };
         PrivacySubjectErasureRequest: {
             reason?: string;
@@ -28367,6 +28452,44 @@ export interface operations {
             };
         };
     };
+    previewPrivacyRetention: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrivacyRetentionPreview"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     listPrivacySubjectErasures: {
         parameters: {
             query?: {
@@ -28433,6 +28556,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PrivacySubjectErasure"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewPrivacySubjectErasure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrivacySubjectErasureRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrivacySubjectErasurePreview"];
                 };
             };
             /** @description client error */

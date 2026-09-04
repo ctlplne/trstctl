@@ -5955,6 +5955,29 @@ export interface PrivacyRetentionCutoffs {
   ssh_stale_before: string;
 }
 
+export interface PrivacyRetentionPreview {
+  blockers: string[];
+  capability: string;
+  counts: Record<string, unknown>;
+  cutoffs: PrivacyRetentionCutoffs;
+  effect_free: boolean;
+  execute_external_effects: string[];
+  execute_writes: string[];
+  operation: string;
+  prerequisites: string[];
+  preview_external_effects: string[];
+  preview_writes: string[];
+  ready: boolean;
+  recovery_steps: string[];
+  request_fingerprint: string;
+  required_permission: string;
+  reviewed_at: string;
+  secret_data_handling: string;
+  total_records: number;
+  verification_steps: string[];
+  warnings: string[];
+}
+
 export interface PrivacyRetentionRun {
   counts: Record<string, unknown>;
   cutoffs: PrivacyRetentionCutoffs;
@@ -5980,6 +6003,31 @@ export interface PrivacySubjectErasure {
 export interface PrivacySubjectErasureList {
   items: PrivacySubjectErasure[];
   next_cursor?: string;
+}
+
+export interface PrivacySubjectErasurePreview {
+  active_legal_holds: number;
+  archive_attestations: number;
+  blockers: string[];
+  capability: string;
+  counts: Record<string, unknown>;
+  effect_free: boolean;
+  execute_external_effects: string[];
+  execute_writes: string[];
+  normalized_request: PrivacySubjectErasureRequest;
+  operation: string;
+  prerequisites: string[];
+  preview_external_effects: string[];
+  preview_writes: string[];
+  ready: boolean;
+  recovery_steps: string[];
+  request_fingerprint: string;
+  required_permission: string;
+  secret_data_handling: string;
+  subject_ref: string;
+  total_records: number;
+  verification_steps: string[];
+  warnings: string[];
 }
 
 export interface PrivacySubjectErasureRequest {

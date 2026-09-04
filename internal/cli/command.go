@@ -365,8 +365,10 @@ var coreCommandTable = []Command{
 	{Name: []string{"compliance", "evidence-pack"}, Method: "GET", Path: "/api/v1/compliance/evidence-packs/{framework}", Summary: "Export a signed compliance evidence pack"},
 
 	{Name: []string{"privacy", "erasures", "erase"}, Method: "POST", Path: "/api/v1/privacy/subject-erasures", Body: bodyFile, Summary: "Erase direct subject personal data"},
+	{Name: []string{"privacy", "erasures", "preview"}, Method: "POST", Path: "/api/v1/privacy/subject-erasures/preview", Body: bodyFile, Summary: "Review direct subject erasure without writes"},
 	{Name: []string{"privacy", "erasures", "list"}, Method: "GET", Path: "/api/v1/privacy/subject-erasures", Query: []string{"limit", "cursor"}, Summary: "List subject-erasure evidence"},
 	{Name: []string{"privacy", "retention", "run"}, Method: "POST", Path: "/api/v1/privacy/retention-runs", Body: bodyNone, Summary: "Run non-audit personal-data retention"},
+	{Name: []string{"privacy", "retention", "preview"}, Method: "POST", Path: "/api/v1/privacy/retention-runs/preview", Body: bodyNone, Summary: "Review retention cutoffs and counts without writes"},
 	{Name: []string{"privacy", "retention", "list"}, Method: "GET", Path: "/api/v1/privacy/retention-runs", Query: []string{"limit", "cursor"}, Summary: "List retention evidence"},
 	{Name: []string{"privacy", "archives", "attest"}, Method: "POST", Path: "/api/v1/privacy/archive-erasure-attestations", Body: bodyFile, Summary: "Record backup/archive erasure evidence"},
 	{Name: []string{"privacy", "archives", "list"}, Method: "GET", Path: "/api/v1/privacy/archive-erasure-attestations", Query: []string{"limit", "cursor", "subject_ref"}, Summary: "List backup/archive erasure evidence"},

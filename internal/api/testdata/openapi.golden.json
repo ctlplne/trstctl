@@ -24371,6 +24371,124 @@
         ],
         "type": "object"
       },
+      "PrivacyRetentionPreview": {
+        "properties": {
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "cutoffs": {
+            "$ref": "#/components/schemas/PrivacyRetentionCutoffs"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "execute_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execute_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "prerequisites": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "request_fingerprint": {
+            "type": "string"
+          },
+          "required_permission": {
+            "type": "string"
+          },
+          "reviewed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "secret_data_handling": {
+            "type": "string"
+          },
+          "total_records": {
+            "type": "integer"
+          },
+          "verification_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "operation",
+          "ready",
+          "effect_free",
+          "request_fingerprint",
+          "required_permission",
+          "reviewed_at",
+          "cutoffs",
+          "counts",
+          "total_records",
+          "prerequisites",
+          "blockers",
+          "warnings",
+          "preview_writes",
+          "preview_external_effects",
+          "execute_writes",
+          "execute_external_effects",
+          "recovery_steps",
+          "verification_steps",
+          "secret_data_handling"
+        ],
+        "type": "object"
+      },
       "PrivacyRetentionRun": {
         "properties": {
           "counts": {
@@ -24460,6 +24578,131 @@
         },
         "required": [
           "items"
+        ],
+        "type": "object"
+      },
+      "PrivacySubjectErasurePreview": {
+        "properties": {
+          "active_legal_holds": {
+            "type": "integer"
+          },
+          "archive_attestations": {
+            "type": "integer"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "execute_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execute_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "normalized_request": {
+            "$ref": "#/components/schemas/PrivacySubjectErasureRequest"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "prerequisites": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "request_fingerprint": {
+            "type": "string"
+          },
+          "required_permission": {
+            "type": "string"
+          },
+          "secret_data_handling": {
+            "type": "string"
+          },
+          "subject_ref": {
+            "type": "string"
+          },
+          "total_records": {
+            "type": "integer"
+          },
+          "verification_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "operation",
+          "ready",
+          "effect_free",
+          "request_fingerprint",
+          "required_permission",
+          "normalized_request",
+          "subject_ref",
+          "counts",
+          "total_records",
+          "archive_attestations",
+          "active_legal_holds",
+          "prerequisites",
+          "blockers",
+          "warnings",
+          "preview_writes",
+          "preview_external_effects",
+          "execute_writes",
+          "execute_external_effects",
+          "recovery_steps",
+          "verification_steps",
+          "secret_data_handling"
         ],
         "type": "object"
       },
@@ -51876,6 +52119,53 @@
         "x-trstctl-permission": "privacy:write"
       }
     },
+    "/api/v1/privacy/retention-runs/preview": {
+      "post": {
+        "operationId": "previewPrivacyRetention",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrivacyRetentionPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Review exact retention cutoffs and affected row counts without writing state",
+        "x-trstctl-permission": "privacy:write"
+      }
+    },
     "/api/v1/privacy/subject-erasures": {
       "get": {
         "operationId": "listPrivacySubjectErasures",
@@ -52004,6 +52294,63 @@
           }
         ],
         "summary": "Erase direct subject personal data from tenant read surfaces",
+        "x-trstctl-permission": "privacy:write"
+      }
+    },
+    "/api/v1/privacy/subject-erasures/preview": {
+      "post": {
+        "operationId": "previewPrivacySubjectErasure",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrivacySubjectErasureRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrivacySubjectErasurePreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Review exact tenant-scoped direct-data erasure effects, archive evidence, and recovery without writing state",
         "x-trstctl-permission": "privacy:write"
       }
     },

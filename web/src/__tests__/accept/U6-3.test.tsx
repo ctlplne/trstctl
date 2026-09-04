@@ -10,6 +10,8 @@ const { apiMock } = vi.hoisted(() => ({
     privacyCatalog: vi.fn(),
     privacySubjectErasures: vi.fn(),
     privacyRetentionRuns: vi.fn(),
+    previewPrivacySubjectErasure: vi.fn(),
+    previewPrivacyRetention: vi.fn(),
     erasePrivacySubject: vi.fn(),
     enforcePrivacyRetention: vi.fn(),
   },
@@ -45,6 +47,31 @@ beforeEach(() => {
     counts: { identities: 2 },
     selectors: {},
   });
+  apiMock.previewPrivacySubjectErasure.mockReset().mockResolvedValue({
+    capability: "F79",
+    operation: "erase_subject",
+    ready: true,
+    effect_free: true,
+    request_fingerprint: "e".repeat(64),
+    required_permission: "privacy:write",
+    normalized_request: { subject: "owner-42" },
+    subject_ref: "subject-ref-42",
+    counts: { identities: 2 },
+    total_records: 2,
+    archive_attestations: 0,
+    active_legal_holds: 0,
+    prerequisites: ["Export required evidence before erasure."],
+    blockers: [],
+    warnings: ["Completed erasure is irreversible."],
+    preview_writes: [],
+    preview_external_effects: [],
+    execute_writes: ["Pseudonymize direct operational rows."],
+    execute_external_effects: [],
+    recovery_steps: ["Retry the unchanged request with the same Idempotency-Key."],
+    verification_steps: ["Export again and inspect erasure evidence."],
+    secret_data_handling: "No secrets are returned.",
+  });
+  apiMock.previewPrivacyRetention.mockReset();
   apiMock.enforcePrivacyRetention.mockReset().mockResolvedValue({ run_id: "ret-2", enforced_at: "2026-06-21T10:00:00Z", counts: {}, cutoffs: {} });
 });
 
@@ -67,7 +94,12 @@ describe("U6-3 privacy / GDPR console", () => {
     await user.click(screen.getByText("Subject rights", { exact: true }));
     await waitFor(() => expect(apiMock.privacySubjectErasures).toHaveBeenCalled());
     await user.type(screen.getByLabelText("Data subject"), "owner-42");
-    await user.click(screen.getByRole("button", { name: "Erase subject" }));
+    await user.click(screen.getByRole("button", { name: "Review erasure" }));
+    await waitFor(() => expect(apiMock.previewPrivacySubjectErasure).toHaveBeenCalledWith({ subject: "owner-42", reason: undefined }));
+    const review = await screen.findByRole("dialog", { name: "Review subject erasure" });
+    expect(review).toHaveTextContent("No state changed");
+    expect(review).toHaveTextContent("2 records matched");
+    await user.click(screen.getByRole("button", { name: "Erase reviewed subject" }));
     await waitFor(() => expect(apiMock.erasePrivacySubject).toHaveBeenCalledWith({ subject: "owner-42", reason: undefined }));
     expect(await screen.findByText("owner-42")).toBeInTheDocument();
   });

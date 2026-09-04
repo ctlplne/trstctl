@@ -8603,6 +8603,21 @@ const deDECatalog = {
   "identities.automation.openRuns": "Rotationsläufe öffnen",
   "identities.automation.openConnectors": "Connectoren und Rollback öffnen",
   "identities.automation.openAlerts": "Ablaufwarnungen öffnen",
+  "privacy.review.erasureAction": "Löschung prüfen",
+  "privacy.review.retentionAction": "Aufbewahrung prüfen",
+  "privacy.review.reviewing": "Wird geprüft…",
+  "privacy.review.erasureHeading": "Betroffenenlöschung prüfen",
+  "privacy.review.retentionHeading": "Aufbewahrungsdurchsetzung prüfen",
+  "privacy.review.recordsMatched": "übereinstimmende Datensätze",
+  "privacy.review.archiveAttestations": "Archivnachweise",
+  "privacy.review.activeLegalHolds": "aktive rechtliche Aufbewahrung",
+  "privacy.review.reviewedAt": "Geprüft am",
+  "privacy.review.cutoffs": "Wirksame Stichtage",
+  "privacy.review.prerequisites": "Voraussetzungen",
+  "privacy.review.effects": "Was die Bestätigung ändert",
+  "privacy.review.executeErasure": "Geprüfte Betroffenenlöschung ausführen",
+  "privacy.review.executeRetention": "Geprüfte Aufbewahrung durchsetzen",
+  "privacy.review.dataHandling": "Datengrenze",
 } satisfies Record<MessageKey, string>;
 
 export default deDECatalog;

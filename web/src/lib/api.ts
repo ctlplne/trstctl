@@ -350,10 +350,12 @@ import type {
   PrivacyArchiveErasureAttestationList,
   PrivacyArchiveErasureAttestationRequest,
   PrivacyCatalog,
+  PrivacyRetentionPreview,
   PrivacyRetentionRun,
   PrivacyRetentionRunList,
   PrivacySubjectErasure,
   PrivacySubjectErasureList,
+  PrivacySubjectErasurePreview,
   PrivacySubjectErasureRequest,
   PrivacySubjectExport,
   PrivacySubjectExportRequest,
@@ -1000,10 +1002,12 @@ export type {
   PrivacyArchiveErasureAttestationList,
   PrivacyArchiveErasureAttestationRequest,
   PrivacyCatalog,
+  PrivacyRetentionPreview,
   PrivacyRetentionRun,
   PrivacyRetentionRunList,
   PrivacySubjectErasure,
   PrivacySubjectErasureList,
+  PrivacySubjectErasurePreview,
   PrivacySubjectErasureRequest,
   PrivacySubjectExport,
   PrivacySubjectExportRequest,
@@ -2205,9 +2209,11 @@ export interface Api {
   createAPIToken(input: APITokenCreateRequest): Promise<APITokenCreateResponse>;
   revokeAPIToken(id: string): Promise<void>;
   erasePrivacySubject(input: PrivacySubjectErasureRequest): Promise<PrivacySubjectErasure>;
+  previewPrivacySubjectErasure(input: PrivacySubjectErasureRequest): Promise<PrivacySubjectErasurePreview>;
   privacySubjectErasures(options?: { limit?: number; cursor?: string }): Promise<PrivacySubjectErasureList>;
   exportPrivacySubject(input: PrivacySubjectExportRequest): Promise<PrivacySubjectExport>;
   enforcePrivacyRetention(): Promise<PrivacyRetentionRun>;
+  previewPrivacyRetention(): Promise<PrivacyRetentionPreview>;
   privacyRetentionRuns(options?: { limit?: number; cursor?: string }): Promise<PrivacyRetentionRunList>;
   privacyCatalog(): Promise<PrivacyCatalog>;
   auditEvents(options?: AuditQuery, signal?: AbortSignal): Promise<AuditEvent[]>;
@@ -2771,9 +2777,11 @@ const liveApi: Api = {
   createAPIToken: (input) => mutate<APITokenCreateResponse>("POST", "/api/v1/access/api-tokens", input),
   revokeAPIToken: (id) => mutate<void>("DELETE", `/api/v1/access/api-tokens/${encodeURIComponent(id)}`),
   erasePrivacySubject: (input) => mutate<PrivacySubjectErasure>("POST", "/api/v1/privacy/subject-erasures", input),
+  previewPrivacySubjectErasure: (input) => postRead<PrivacySubjectErasurePreview>("/api/v1/privacy/subject-erasures/preview", input),
   privacySubjectErasures: (options) => req<PrivacySubjectErasureList>(`/api/v1/privacy/subject-erasures${pageQueryString(options)}`),
   exportPrivacySubject: (input) => postRead<PrivacySubjectExport>("/api/v1/privacy/subject-exports", input),
   enforcePrivacyRetention: () => mutate<PrivacyRetentionRun>("POST", "/api/v1/privacy/retention-runs"),
+  previewPrivacyRetention: () => postRead<PrivacyRetentionPreview>("/api/v1/privacy/retention-runs/preview"),
   privacyRetentionRuns: (options) => req<PrivacyRetentionRunList>(`/api/v1/privacy/retention-runs${pageQueryString(options)}`),
   privacyCatalog: () => req<PrivacyCatalog>("/api/v1/privacy/catalog"),
   auditEvents: (options, signal) =>

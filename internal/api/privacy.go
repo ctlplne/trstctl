@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/privacy"
@@ -46,6 +47,54 @@ type privacySubjectErasureResponse struct {
 	Selectors      store.PrivacyErasureSelectors `json:"selectors"`
 	Counts         map[string]int                `json:"counts"`
 	ErasedAt       time.Time                     `json:"erased_at"`
+}
+
+type privacySubjectErasurePreviewResponse struct {
+	Capability             string                       `json:"capability"`
+	Operation              string                       `json:"operation"`
+	Ready                  bool                         `json:"ready"`
+	EffectFree             bool                         `json:"effect_free"`
+	RequestFingerprint     string                       `json:"request_fingerprint"`
+	RequiredPermission     string                       `json:"required_permission"`
+	NormalizedRequest      privacySubjectErasureRequest `json:"normalized_request"`
+	SubjectRef             string                       `json:"subject_ref"`
+	Counts                 map[string]int               `json:"counts"`
+	TotalRecords           int                          `json:"total_records"`
+	ArchiveAttestations    int                          `json:"archive_attestations"`
+	ActiveLegalHolds       int                          `json:"active_legal_holds"`
+	Prerequisites          []string                     `json:"prerequisites"`
+	Blockers               []string                     `json:"blockers"`
+	Warnings               []string                     `json:"warnings"`
+	PreviewWrites          []string                     `json:"preview_writes"`
+	PreviewExternalEffects []string                     `json:"preview_external_effects"`
+	ExecuteWrites          []string                     `json:"execute_writes"`
+	ExecuteExternalEffects []string                     `json:"execute_external_effects"`
+	RecoverySteps          []string                     `json:"recovery_steps"`
+	VerificationSteps      []string                     `json:"verification_steps"`
+	SecretDataHandling     string                       `json:"secret_data_handling"`
+}
+
+type privacyRetentionPreviewResponse struct {
+	Capability             string                          `json:"capability"`
+	Operation              string                          `json:"operation"`
+	Ready                  bool                            `json:"ready"`
+	EffectFree             bool                            `json:"effect_free"`
+	RequestFingerprint     string                          `json:"request_fingerprint"`
+	RequiredPermission     string                          `json:"required_permission"`
+	ReviewedAt             time.Time                       `json:"reviewed_at"`
+	Cutoffs                privacyRetentionCutoffsResponse `json:"cutoffs"`
+	Counts                 map[string]int                  `json:"counts"`
+	TotalRecords           int                             `json:"total_records"`
+	Prerequisites          []string                        `json:"prerequisites"`
+	Blockers               []string                        `json:"blockers"`
+	Warnings               []string                        `json:"warnings"`
+	PreviewWrites          []string                        `json:"preview_writes"`
+	PreviewExternalEffects []string                        `json:"preview_external_effects"`
+	ExecuteWrites          []string                        `json:"execute_writes"`
+	ExecuteExternalEffects []string                        `json:"execute_external_effects"`
+	RecoverySteps          []string                        `json:"recovery_steps"`
+	VerificationSteps      []string                        `json:"verification_steps"`
+	SecretDataHandling     string                          `json:"secret_data_handling"`
 }
 
 type privacySubjectErasureListResponse struct {
@@ -139,6 +188,208 @@ func toPrivacyRetentionRunResponse(r store.PrivacyRetentionRun) privacyRetention
 	}
 }
 
+func privacyCountTotal(counts map[string]int) int {
+	total := 0
+	for _, count := range counts {
+		total += count
+	}
+	return total
+}
+
+// privacySubjectExportCountTotal counts each matched record once. Subject
+// exports expose both an aggregate read_models count and per-table read-model
+// breakdowns; summing every map value would count those rows twice.
+func privacySubjectExportCountTotal(counts map[string]int) int {
+	total := 0
+	for _, class := range []string{
+		"owners", "identities", "certificates", "ssh_keys", "attestations",
+		"tenant_members", "api_tokens", "approvals", "read_models",
+	} {
+		total += counts[class]
+	}
+	return total
+}
+
+func normalizePrivacySubjectErasureRequest(req privacySubjectErasureRequest) (privacySubjectErasureRequest, error) {
+	req.Subject = strings.TrimSpace(req.Subject)
+	req.Reason = strings.TrimSpace(req.Reason)
+	if req.Subject == "" {
+		return privacySubjectErasureRequest{}, errStatus(http.StatusBadRequest, "subject is required")
+	}
+	return req, nil
+}
+
+// previewPrivacySubjectErasure is a structured read. It shows the exact records
+// currently matched by the same tenant-scoped selector used by erasure, plus
+// archive disposition evidence. It emits no event and changes no row.
+func (a *API) previewPrivacySubjectErasure(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	var req privacySubjectErasureRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	normalized, err := normalizePrivacySubjectErasureRequest(req)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	export, err := a.store.SelectPrivacySubjectExport(r.Context(), tenantID, normalized.Subject)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	attestations, err := a.listAllPrivacyArchiveAttestations(r.Context(), tenantID, export.SubjectRef)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	now := time.Now().UTC()
+	activeLegalHolds := 0
+	for _, attestation := range attestations {
+		if attestation.Action == "legal_hold" && (attestation.HeldUntil == nil || attestation.HeldUntil.After(now)) {
+			activeLegalHolds++
+		}
+	}
+	fingerprintBody, err := json.Marshal(struct {
+		Domain           string                                   `json:"domain"`
+		TenantID         string                                   `json:"tenant_id"`
+		Request          privacySubjectErasureRequest             `json:"request"`
+		SubjectRef       string                                   `json:"subject_ref"`
+		Counts           map[string]int                           `json:"counts"`
+		Attestations     []store.PrivacyArchiveErasureAttestation `json:"attestations"`
+		ActiveLegalHolds int                                      `json:"active_legal_holds"`
+	}{
+		Domain: "trstctl.api.privacy-subject-erasure-preview.v1", TenantID: tenantID,
+		Request: normalized, SubjectRef: export.SubjectRef, Counts: export.Counts, Attestations: attestations,
+		ActiveLegalHolds: activeLegalHolds,
+	})
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	warnings := []string{"Completed direct-data erasure is irreversible. Export any evidence you are allowed to retain before execution."}
+	if len(attestations) == 0 {
+		warnings = append(warnings, "No backup or signed-audit-archive disposition is recorded for this subject. Direct operational erasure can proceed, but archive removal must be evidenced separately.")
+	}
+	if activeLegalHolds > 0 {
+		warnings = append(warnings, "An active archive legal hold preserves the held artifact. This direct operational erasure does not remove or override that hold.")
+	}
+	a.writeJSON(w, http.StatusOK, privacySubjectErasurePreviewResponse{
+		Capability: "F79", Operation: "erase_subject", Ready: true, EffectFree: true,
+		RequestFingerprint: crypto.SHA256Hex(fingerprintBody), RequiredPermission: string(authz.PrivacyWrite),
+		NormalizedRequest: normalized, SubjectRef: export.SubjectRef, Counts: export.Counts,
+		TotalRecords: privacySubjectExportCountTotal(export.Counts), ArchiveAttestations: len(attestations), ActiveLegalHolds: activeLegalHolds,
+		Prerequisites: []string{
+			"Confirm the data-subject identifier and the tenant boundary shown in this review.",
+			"Export any records that policy or law requires before irreversible direct-data erasure.",
+			"Record backup or signed-audit-archive disposition separately when archived copies exist.",
+		},
+		Blockers: []string{}, Warnings: warnings, PreviewWrites: []string{}, PreviewExternalEffects: []string{},
+		ExecuteWrites: []string{
+			"Prepare a tenant-scoped crash-recovery record and rewrite affected direct operational data to a non-PII placeholder.",
+			"Append one immutable privacy.subject.erased event and project subject-erasure evidence.",
+			"Revoke subject-bound API tokens and preserve sanitized audit continuity.",
+		},
+		ExecuteExternalEffects: []string{},
+		RecoverySteps: []string{
+			"If the request is interrupted, retry the exact request with the same Idempotency-Key; the original result is returned instead of erasing twice.",
+			"At startup, trstctl completes any prepared rewrite before normal service resumes.",
+			"There is no rollback after completion. Use the pre-erasure export and archive disposition evidence for retained records.",
+		},
+		VerificationSteps: []string{
+			"List subject-erasure evidence and match subject_ref, reason, counts, and erased_at.",
+			"Export the same subject again and confirm direct operational record counts are zero or only policy-preserved evidence remains.",
+			"Search the audit feed for the raw subject and confirm it no longer appears while the pseudonymized erasure event verifies.",
+		},
+		SecretDataHandling: "The authorized review may echo the submitted data-subject identifier. It never reads or returns token hashes, secret values, private keys, or credential material; the fingerprint is tenant-bound.",
+	})
+}
+
+func (a *API) listAllPrivacyArchiveAttestations(ctx context.Context, tenantID, subjectRef string) ([]store.PrivacyArchiveErasureAttestation, error) {
+	const pageSize = 500
+	after := ""
+	var out []store.PrivacyArchiveErasureAttestation
+	for {
+		page, err := a.store.ListPrivacyArchiveErasureAttestationsPage(ctx, tenantID, subjectRef, after, pageSize)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, page...)
+		if len(page) < pageSize {
+			return out, nil
+		}
+		after = page[len(page)-1].AttestationID
+	}
+}
+
+// previewPrivacyRetention resolves the effective tenant policy and performs the
+// same read-only count selection as enforcement. It does not reserve a run ID,
+// append an event, or pseudonymize a row.
+func (a *API) previewPrivacyRetention(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	policy, err := privacy.ResolveRetentionPolicy(r.Context(), a.privacyRetentionSource, tenantID, a.privacyRetentionPolicy)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	reviewedAt := time.Now().UTC()
+	selected, err := a.store.SelectPrivacyRetention(r.Context(), tenantID, "00000000-0000-0000-0000-000000000000", policy, reviewedAt)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	view := toPrivacyRetentionRunResponse(selected)
+	fingerprintBody, err := json.Marshal(struct {
+		Domain     string                          `json:"domain"`
+		TenantID   string                          `json:"tenant_id"`
+		ReviewedAt time.Time                       `json:"reviewed_at"`
+		Cutoffs    privacyRetentionCutoffsResponse `json:"cutoffs"`
+		Counts     map[string]int                  `json:"counts"`
+	}{
+		Domain: "trstctl.api.privacy-retention-preview.v1", TenantID: tenantID,
+		ReviewedAt: reviewedAt, Cutoffs: view.Cutoffs, Counts: view.Counts,
+	})
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, privacyRetentionPreviewResponse{
+		Capability: "F79", Operation: "enforce_retention", Ready: true, EffectFree: true,
+		RequestFingerprint: crypto.SHA256Hex(fingerprintBody), RequiredPermission: string(authz.PrivacyWrite),
+		ReviewedAt: reviewedAt, Cutoffs: view.Cutoffs, Counts: view.Counts, TotalRecords: privacyCountTotal(view.Counts),
+		Prerequisites: []string{
+			"Review the effective tenant retention cutoffs and affected record classes.",
+			"Confirm required legal holds and archive policies are recorded before pseudonymizing eligible operational rows.",
+		},
+		Blockers: []string{}, Warnings: []string{"Counts describe the reviewed instant. Re-review if time passes or tenant data changes before execution."},
+		PreviewWrites: []string{}, PreviewExternalEffects: []string{},
+		ExecuteWrites: []string{
+			"Append one tenant-scoped privacy.retention.enforced event containing cutoffs and aggregate counts, never raw personal values.",
+			"Project deterministic pseudonyms into eligible non-audit operational rows while retaining verifiable security evidence.",
+		},
+		ExecuteExternalEffects: []string{},
+		RecoverySteps: []string{
+			"Retry an interrupted request with the same Idempotency-Key; duplicate mutation is prevented.",
+			"Run a fresh review after any policy correction, then execute a new run. Completed pseudonymization has no rollback.",
+		},
+		VerificationSteps: []string{
+			"List retention runs and match the enforced cutoffs and aggregate counts.",
+			"Run a new effect-free review; eligible counts should fall to zero unless newer rows crossed a cutoff.",
+			"Verify the immutable privacy.retention.enforced audit event contains no raw data-subject value.",
+		},
+		SecretDataHandling: "Preview returns tenant-scoped aggregate counts and policy cutoffs only. It never returns raw matched values, token hashes, secrets, private keys, or credential material.",
+	})
+}
+
 func toPrivacyArchiveErasureAttestationResponse(a store.PrivacyArchiveErasureAttestation) privacyArchiveErasureAttestationResponse {
 	refs := a.EvidenceRefs
 	if refs == nil {
@@ -166,10 +417,9 @@ func (a *API) erasePrivacySubject(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
 		return
 	}
-	req.Subject = strings.TrimSpace(req.Subject)
-	req.Reason = strings.TrimSpace(req.Reason)
-	if req.Subject == "" {
-		a.writeError(w, errStatus(http.StatusBadRequest, "subject is required"))
+	req, err := normalizePrivacySubjectErasureRequest(req)
+	if err != nil {
+		a.writeError(w, err)
 		return
 	}
 	binding, err := privacySubjectErasureRequestBinding(r, req)

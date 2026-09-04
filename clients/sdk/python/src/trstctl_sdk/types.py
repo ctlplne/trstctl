@@ -8205,6 +8205,33 @@ PrivacyRetentionCutoffs = TypedDict(
     total=False,
 )
 
+PrivacyRetentionPreview = TypedDict(
+    'PrivacyRetentionPreview',
+    {
+        'blockers': list[str],
+        'capability': str,
+        'counts': dict[str, Any],
+        'cutoffs': dict[str, Any],
+        'effect_free': bool,
+        'execute_external_effects': list[str],
+        'execute_writes': list[str],
+        'operation': str,
+        'prerequisites': list[str],
+        'preview_external_effects': list[str],
+        'preview_writes': list[str],
+        'ready': bool,
+        'recovery_steps': list[str],
+        'request_fingerprint': str,
+        'required_permission': str,
+        'reviewed_at': str,
+        'secret_data_handling': str,
+        'total_records': int,
+        'verification_steps': list[str],
+        'warnings': list[str],
+    },
+    total=False,
+)
+
 PrivacyRetentionRun = TypedDict(
     'PrivacyRetentionRun',
     {
@@ -8244,6 +8271,35 @@ PrivacySubjectErasureList = TypedDict(
     {
         'items': list[dict[str, Any]],
         'next_cursor': str,
+    },
+    total=False,
+)
+
+PrivacySubjectErasurePreview = TypedDict(
+    'PrivacySubjectErasurePreview',
+    {
+        'active_legal_holds': int,
+        'archive_attestations': int,
+        'blockers': list[str],
+        'capability': str,
+        'counts': dict[str, Any],
+        'effect_free': bool,
+        'execute_external_effects': list[str],
+        'execute_writes': list[str],
+        'normalized_request': dict[str, Any],
+        'operation': str,
+        'prerequisites': list[str],
+        'preview_external_effects': list[str],
+        'preview_writes': list[str],
+        'ready': bool,
+        'recovery_steps': list[str],
+        'request_fingerprint': str,
+        'required_permission': str,
+        'secret_data_handling': str,
+        'subject_ref': str,
+        'total_records': int,
+        'verification_steps': list[str],
+        'warnings': list[str],
     },
     total=False,
 )

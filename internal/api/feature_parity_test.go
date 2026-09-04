@@ -230,9 +230,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// exact, effect-free online emergency issuance preview raises it to 429. F29's
 	// exact, effect-free unsaved routing-policy review raises it to 430. F62's
 	// exact report-schedule preview plus pause and resume recovery operations raise
-	// it to 433.
-	if len(out) != 433 {
-		t.Fatalf("OpenAPI operationIds = %d, want 433", len(out))
+	// F79's subject-erasure and retention reviews raise it to 435.
+	if len(out) != 435 {
+		t.Fatalf("OpenAPI operationIds = %d, want 435", len(out))
 	}
 	return out
 }

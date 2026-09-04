@@ -77,9 +77,14 @@ sections and load only when an operator opens them:
 - **Policy and data map** — browse the maintained rows from `GET
   /api/v1/privacy/catalog`, including location, owner, purpose, and retention
   class.
-- **Subject rights** — submit a subject erasure and optional reason. The
-  console calls `POST /api/v1/privacy/subject-erasures` and shows the count of
-  records erased from the `privacy.subject.erased` projection. Export a
+- **Subject rights** — enter a subject and optional reason, then review the exact
+  tenant-scoped match at `POST /api/v1/privacy/subject-erasures/preview` before
+  erasing. The review returns the normalized request, subject ref, per-class and
+  total record counts, archive-attestation and active-legal-hold counts, a
+  tenant-bound fingerprint, the later writes, and recovery/verification steps.
+  It writes no row or event and makes no external call. Confirmation calls
+  `POST /api/v1/privacy/subject-erasures` and shows the count erased from the
+  `privacy.subject.erased` projection. Export a
   subject's cataloged record counts through `POST
   /api/v1/privacy/subject-exports`. Secret values and token material are not
   rendered.
@@ -87,9 +92,12 @@ sections and load only when an operator opens them:
   backup or signed audit archive was deleted, cryptographically shredded, or
   retained under legal hold through `GET` and `POST` on
   `/api/v1/privacy/archive-erasure-attestations`.
-- **Retention jobs** — trigger `POST
-  /api/v1/privacy/retention-runs` and review recent runs (id, cutoffs,
-  records affected, requester), on top of the scheduled `24h` default.
+- **Retention jobs** — review the effective tenant cutoffs and exact currently
+  eligible counts at `POST /api/v1/privacy/retention-runs/preview`, then confirm
+  `POST /api/v1/privacy/retention-runs`. The preview is an effect-free read. The
+  history shows run id, cutoffs, affected records, and requester on top of the
+  scheduled `24h` default. Already-pseudonymized rows are excluded from later
+  affected counts, so a fresh review reflects only work that remains.
 
 Opening the page does not eagerly fetch these evidence sets. This keeps the
 default view short and avoids moving tenant evidence into the browser before the
@@ -121,3 +129,23 @@ This is the inverse of subject **erasure**
 data, erasure removes it. Both are event-sourced
 (`privacy.subject.erased` / `privacy.retention.enforced`); export is a
 pure read and emits no event.
+
+## Recovery and verification
+
+Direct-data erasure and completed retention pseudonymization are intentionally
+irreversible. Recovery therefore means finishing safely, not restoring personal
+data:
+
+1. Export any records policy allows you to retain, and record backup or signed
+   audit-archive disposition before erasing direct operational data.
+2. If an erasure response is interrupted, retry the unchanged request with the
+   same `Idempotency-Key`. The durable operation returns the original result
+   instead of erasing twice. On restart, trstctl completes any prepared history
+   rewrite before normal service resumes.
+3. Read the erasure or retention history, repeat the effect-free review, and
+   inspect the audit event. The raw subject must be absent while pseudonymized
+   security evidence remains verifiable.
+
+An archive `legal_hold` is not silently overridden. The erasure review names
+active holds and explains that the held artifact remains; direct operational
+erasure and archived-artifact disposition are separate evidence boundaries.

@@ -1478,8 +1478,12 @@ describe("i18n boundary", () => {
       // pause/resume recovery, and verification guidance are translated in
       // both production catalogs. Machine-authored es/de — FLAGGED FOR HUMAN
       // TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "3280ed7a739a2589e771c717f69008e3163fe7fef6641671739b44269324de8c",
-      "de-DE": "2e92c9127fd1d7d50456dd465e5aa3b0ba5c7d53dddb1d0f620f4e1cf2424d6d",
+      // F79 re-pin: exact erasure and retention review actions, matched-row and
+      // legal-hold facts, prerequisites, effects, recovery, and verification
+      // labels are translated in both production catalogs. Machine-authored
+      // es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "80a6f92dd4034d924386a9614b20400e509651daaa2f418894aaa246a29d4375",
+      "de-DE": "38ec920c41521bed4d0642aa605ec2cd13a9407697b1a23b8d6a06e715338d8c",
     });
   });
 

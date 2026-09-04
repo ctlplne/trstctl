@@ -486,10 +486,15 @@ showing exact controls. Reading requires `privacy:read`; changing retention or
 erasure evidence requires `privacy:write`; every request remains tenant-scoped.
 One **Review policy** action opens the data map. Subject erasure/export, archive
 removal attestations, and retention jobs stay in separate closed sections and
-load on demand. See [Privacy data catalog](privacy-data-catalog.md). Backed by
+load on demand. Subject erasure and retention now open server-owned reviews before
+confirmation: both show exact current counts, prove the review made no change, and
+name prerequisites, durable effects, safe retry, irreversibility, and readback checks.
+Changing the subject or reason discards the old erasure review. See [Privacy data
+catalog](privacy-data-catalog.md). Backed by
 `/api/v1/privacy/subject-erasures`, `/api/v1/privacy/subject-exports`,
 `/api/v1/privacy/archive-erasure-attestations`,
-`/api/v1/privacy/retention-runs`, and `/api/v1/privacy/catalog`.
+`/api/v1/privacy/retention-runs`, their `/preview` routes, and
+`/api/v1/privacy/catalog`.
 
 ### Trust Operations and Software Trust (`/trust-operations`, `/incidents`, `/codesign`)
 

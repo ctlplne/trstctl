@@ -323,11 +323,20 @@ only; inline secrets and credential values are rejected.
 ### Privacy and data-subject controls (F79)
 
 Privacy controls are first-class governance surfaces, not hidden compliance helpers.
+Before either destructive workflow, `POST
+/api/v1/privacy/subject-erasures/preview` and `POST
+/api/v1/privacy/retention-runs/preview` perform effect-free, tenant-scoped reads.
+Subject review returns exact current per-class counts, archive-disposition and
+active-legal-hold evidence, later writes, a tenant-bound fingerprint, and explicit
+recovery/verification instructions. Retention review resolves the effective tenant
+policy and returns the current cutoffs and eligible counts. Neither preview appends an
+event, projects a row, reserves an idempotency key, or calls an outside system.
 `POST /api/v1/privacy/subject-erasures` records a tenant-scoped subject erasure, emits
 `privacy.subject.erased`, and projects pseudonymized or cleared personal data while
 keeping audit evidence verifiable. `POST /api/v1/privacy/retention-runs` records a
 non-audit PII retention pass, emits `privacy.retention.enforced`, and applies configured
-retention windows to operational metadata. `POST /api/v1/privacy/subject-exports`
+retention windows to operational metadata; later runs do not count already-pseudonymized
+rows as fresh work. `POST /api/v1/privacy/subject-exports`
 answers access/portability requests as a read-only export that does not mutate state or
 carry an `Idempotency-Key`. `GET /api/v1/privacy/catalog` exposes the maintained
 personal-data catalog so operators can see what fields are subject to erasure and
@@ -347,8 +356,9 @@ generation and configuration identities, invariant/mapping/content roots, audit-
 heads, retention seed, and the disclosure that older external archives, exports, or
 backups may still retain the source bytes.
 
-The CLI exposes the same controls through `privacy erasures erase`, `privacy erasures
-list`, `privacy retention run`, `privacy retention list`, `privacy export`, and `privacy
+The CLI exposes the same controls through `privacy erasures preview`, `privacy erasures
+erase`, `privacy erasures list`, `privacy retention preview`,
+`privacy retention run`, `privacy retention list`, `privacy export`, and `privacy
 catalog`; the web console's `/privacy` screen covers erasure, retention enforcement,
 retention evidence, and the catalog. See [Privacy data catalog](../privacy-data-catalog.md)
 for the row-level map and erasure/retention behavior.

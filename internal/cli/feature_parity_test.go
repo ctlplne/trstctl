@@ -275,9 +275,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// and keyless effect-free signing previews raised it to 440. F34's
 	// effect-free emergency issuance preview raises it to 441. F29's exact,
 	// effect-free unsaved routing-policy review raises it to 442. F62's exact
-	// report-schedule review plus pause/resume recovery raises it to 445.
-	if len(out) != 445 {
-		t.Fatalf("CLI commands = %d, want 445", len(out))
+	// F79's subject-erasure and retention reviews raise it to 447.
+	if len(out) != 447 {
+		t.Fatalf("CLI commands = %d, want 447", len(out))
 	}
 	return out
 }

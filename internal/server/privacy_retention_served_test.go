@@ -99,6 +99,30 @@ func TestServedPrivacyRetentionWorkerPseudonymizesStalePII(t *testing.T) {
 	if err := seedStaleSSHKey(t, ctx, st, tenantID, routeSubject); err != nil {
 		t.Fatalf("seed route ssh key: %v", err)
 	}
+	code, body = doBearer(t, ts, http.MethodPost, "/api/v1/privacy/retention-runs/preview", adminToken, "", nil)
+	if code != http.StatusOK {
+		t.Fatalf("preview manual retention = %d, want 200; body=%s", code, body)
+	}
+	var preview struct {
+		Capability         string         `json:"capability"`
+		Ready              bool           `json:"ready"`
+		EffectFree         bool           `json:"effect_free"`
+		RequestFingerprint string         `json:"request_fingerprint"`
+		Counts             map[string]int `json:"counts"`
+		TotalRecords       int            `json:"total_records"`
+		RecoverySteps      []string       `json:"recovery_steps"`
+	}
+	if err := json.Unmarshal(body, &preview); err != nil {
+		t.Fatalf("decode retention preview: %v body=%s", err, body)
+	}
+	if preview.Capability != "F79" || !preview.Ready || !preview.EffectFree || len(preview.RequestFingerprint) != 64 ||
+		preview.Counts["ssh_keys"] != 1 || preview.TotalRecords < 1 || len(preview.RecoverySteps) < 2 {
+		t.Fatalf("retention preview is incomplete: %+v", preview)
+	}
+	code, body = doBearer(t, ts, http.MethodGet, "/api/v1/privacy/retention-runs", adminToken, "", nil)
+	if code != http.StatusOK || bytes.Count(body, []byte(`"run_id"`)) != 1 {
+		t.Fatalf("effect-free retention preview changed run history: status=%d body=%s", code, body)
+	}
 	code, body = doBearer(t, ts, http.MethodPost, "/api/v1/privacy/retention-runs", adminToken, "privacy-retention-manual", nil)
 	if code != http.StatusCreated {
 		t.Fatalf("manual retention run = %d, want 201; body=%s", code, body)
@@ -107,6 +131,11 @@ func TestServedPrivacyRetentionWorkerPseudonymizesStalePII(t *testing.T) {
 		t.Fatalf("manual retention response leaked raw PII or missed ssh count: %s", body)
 	}
 	assertNoRawRetentionPII(t, ctx, st, tenantID, routeSubject)
+
+	code, body = doBearer(t, ts, http.MethodPost, "/api/v1/privacy/retention-runs/preview", adminToken, "", nil)
+	if code != http.StatusOK || !bytes.Contains(body, []byte(`"total_records":0`)) {
+		t.Fatalf("post-enforcement retention verification = %d body=%s", code, body)
+	}
 
 	var sawRetentionEvent bool
 	if err := log.Replay(ctx, 0, func(ev events.Event) error {
