@@ -1610,7 +1610,7 @@ function ConnectorDetails({ title, open, onToggle, children }: { title: string; 
 function ScrollableTableRegion({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div
-      className="ui-panel overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+      className="ui-panel w-full min-w-0 max-w-full overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
       role="region"
       aria-label={label}
       tabIndex={0}
