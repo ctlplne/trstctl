@@ -39139,7 +39139,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Deploy an issued identity through a deployment connector target",
+        "summary": "Start a credential-bearing deployment through a connector target",
         "x-trstctl-permission": "connectors:write"
       }
     },

@@ -1830,7 +1830,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Deploy an issued identity through a deployment connector target */
+        /** Start a credential-bearing deployment through a connector target */
         post: operations["deployConnectorTarget"];
         delete?: never;
         options?: never;

@@ -969,6 +969,85 @@ func connectorTargetOutboxRows(t *testing.T, h *servedHarness) int {
 	return count
 }
 
+// A private key exists only while issuance builds the sealed connector effect.
+// An already-issued record cannot be pushed later by inventing a keyless
+// lifecycle transition and claiming that "deployed" means external success.
+func TestIssuedConnectorTargetDeployFailsClosedWithoutCredentialMaterial(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, func(*Deps) {})
+	tok := seedScopedToken(t, h.store, h.tenant,
+		"owners:read", "owners:write", "identities:read", "identities:write", "certs:issue", "connectors:read", "connectors:write")
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/owners", tok, map[string]any{
+		"kind": "workload", "name": "issued-deploy-refusal-owner",
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create owner: status %d body %s", status, body)
+	}
+	var owner struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &owner); err != nil {
+		t.Fatal(err)
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/identities", tok, map[string]any{
+		"kind": "x509_certificate", "name": "issued-deploy-refusal.served.test", "owner_id": owner.ID,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create identity: status %d body %s", status, body)
+	}
+	var identity struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &identity); err != nil {
+		t.Fatal(err)
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets", tok, map[string]any{
+		"name": "issued-deploy-refusal-target", "connector": "apache", "enabled": true,
+		"config": map[string]any{"profile": "apache", "cert_path": "/srv/tls/site.crt", "key_path": "/srv/tls/site.key"},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create target: status %d body %s", status, body)
+	}
+	var target struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &target); err != nil {
+		t.Fatal(err)
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/identities/"+identity.ID+"/connector-target", tok, map[string]any{"target_id": target.ID})
+	if status != http.StatusOK {
+		t.Fatalf("bind target: status %d body %s", status, body)
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/identities/"+identity.ID+"/transitions", tok, map[string]any{
+		"to": "issued", "reason": "fixture stops before the credential-bearing issuer runs",
+	})
+	if status != http.StatusOK {
+		t.Fatalf("mark issued fixture: status %d body %s", status, body)
+	}
+
+	beforeOutbox := connectorTargetOutboxRows(t, h)
+	beforeBindings := eventCount(t, h.log, h.tenant, projections.EventIdentityConnectorTargetBound)
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets/"+target.ID+"/deploy", tok, map[string]any{
+		"identity_id": identity.ID, "reason": "must not create a keyless deployment",
+	})
+	if status != http.StatusConflict || !jsonContains(t, body, "does not retain the private key") || !jsonContains(t, body, "nothing was queued or changed") {
+		t.Fatalf("issued deploy did not fail closed: status %d body %s", status, body)
+	}
+	stored, err := h.store.GetIdentity(t.Context(), h.tenant, identity.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Status != "issued" {
+		t.Fatalf("issued deploy changed identity state to %q", stored.Status)
+	}
+	if got := connectorTargetOutboxRows(t, h); got != beforeOutbox {
+		t.Fatalf("issued deploy queued a keyless effect: before=%d after=%d", beforeOutbox, got)
+	}
+	if got := eventCount(t, h.log, h.tenant, projections.EventIdentityConnectorTargetBound); got != beforeBindings {
+		t.Fatalf("issued deploy rebound before refusing: before=%d after=%d", beforeBindings, got)
+	}
+}
+
 type connectorDeliveryList struct {
 	Raw   []byte
 	Items []struct {

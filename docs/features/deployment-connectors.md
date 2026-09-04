@@ -202,6 +202,16 @@ trstctl connector target deploy --identity "$IDENTITY_ID" --target "$TARGET_ID"
 trstctl connector target rollback --identity "$IDENTITY_ID" --target "$TARGET_ID"
 ```
 
+`target deploy` is not a private-key recovery command. For a `requested` identity,
+it binds the target first and starts issuance so the new certificate and its private
+key move directly into one sealed connector job. If an identity was already issued
+before that credential-bearing path existed, trstctl does not have a retained private
+key to copy: the deploy call returns `409`, leaves state and queues unchanged, and
+tells the operator to wait for an already-bound issuance or renew/reissue after
+binding. A running renewal is also left alone; its successor will deploy through its
+own bound job. This refusal prevents the console from saying **Deployed** when no
+executor received a credential.
+
 `target test` is an effect-free dress rehearsal from the machine or network that
 would perform the real deployment. Enable `connector.test` as a claimable job kind
 in addition to enrolling the required agent role. For all 14 host-vantage families,

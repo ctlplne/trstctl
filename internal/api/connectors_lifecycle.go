@@ -314,6 +314,19 @@ func requireIdentityConnectorCompatible(identity store.Identity, target store.De
 		"identity is intended for "+intended+", but the selected destination uses "+connectorName+"; choose a matching destination; nothing was queued or changed")
 }
 
+func identityDeploymentTargetID(identity store.Identity) string {
+	if len(identity.Attributes) == 0 {
+		return ""
+	}
+	var attributes struct {
+		DeploymentTargetID string `json:"deployment_target_id"`
+	}
+	if err := json.Unmarshal(identity.Attributes, &attributes); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(attributes.DeploymentTargetID)
+}
+
 func toRotationRunResponse(r store.RotationRun) rotationRunResponse {
 	return rotationRunResponse{
 		ID: r.ID, TenantID: r.TenantID, IdentityID: r.IdentityID, OutboxID: r.OutboxID,
@@ -605,9 +618,6 @@ func (a *API) deployConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		if err := requireIdentityConnectorCompatible(identity, target); err != nil {
 			return 0, nil, err
 		}
-		if _, err := a.orch.BindIdentityDeploymentTarget(ctx, tenantID, req.IdentityID, target); err != nil {
-			return 0, nil, err
-		}
 		reason := strings.TrimSpace(req.Reason)
 		if reason == "" {
 			reason = "connector target deploy"
@@ -618,19 +628,33 @@ func (a *API) deployConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		}
 		switch state {
 		case orchestrator.StateRequested:
-			if err := a.orch.Transition(ctx, tenantID, req.IdentityID, orchestrator.StateIssued, reason); err != nil {
+			if _, err := a.orch.BindIdentityDeploymentTarget(ctx, tenantID, req.IdentityID, target); err != nil {
 				return 0, nil, err
 			}
-		case orchestrator.StateIssued, orchestrator.StateRenewing:
-			if err := a.orch.Transition(ctx, tenantID, req.IdentityID, orchestrator.StateDeployed, reason); err != nil {
+			if err := a.orch.TransitionWithIdempotency(ctx, tenantID, req.IdentityID, orchestrator.StateIssued, reason, idempotencyKey); err != nil {
 				return 0, nil, err
 			}
+		case orchestrator.StateIssued:
+			return 0, nil, errStatus(http.StatusConflict,
+				"this identity is issued, but issued state does not retain the private key needed for a new deployment; wait for its already-bound issuance delivery, or bind the target and start a renewal/reissue so fresh credential material reaches the executor; nothing was queued or changed")
+		case orchestrator.StateRenewing:
+			return 0, nil, errStatus(http.StatusConflict,
+				"this identity is already renewing; wait for the successor credential and its bound connector delivery instead of queuing a keyless deploy; nothing was queued or changed")
+		case orchestrator.StateRenewalFailed:
+			return 0, nil, errStatus(http.StatusConflict,
+				"the last renewal failed, so there is no successor credential to deploy; retry the renewal after repairing its failure; nothing was queued or changed")
+		case orchestrator.StateRevoked, orchestrator.StateRetired:
+			return 0, nil, errStatus(http.StatusConflict,
+				"a revoked or retired identity cannot be deployed; issue an active replacement instead; nothing was queued or changed")
 		case orchestrator.StateDeployed:
+			if identityDeploymentTargetID(identity) != target.ID {
+				return 0, nil, errStatus(http.StatusConflict,
+					"this identity is already deployed to a different target, and trstctl does not retain its private key for copying elsewhere; bind the new target and renew/reissue first; nothing was queued or changed")
+			}
 			// Already converged by the issuer's credential-bearing deploy path.
 		default:
-			if err := a.orch.Transition(ctx, tenantID, req.IdentityID, orchestrator.StateDeployed, reason); err != nil {
-				return 0, nil, err
-			}
+			return 0, nil, errStatus(http.StatusConflict,
+				"this identity state cannot safely produce a credential-bearing deployment; issue or renew it after binding the target; nothing was queued or changed")
 		}
 		identity, err = a.store.GetIdentity(ctx, tenantID, req.IdentityID)
 		if err != nil {
