@@ -18417,7 +18417,7 @@
             "priority": 80,
             "served_state": "served",
             "backend_status": "served: production dispatcher resolves tenant routing from asset to owner to workspace to global, assembles email/Slack/Teams/SMS/SIEM/webhook plus native PagerDuty Events v2 and OpsGenie Alert v2 delivery, and preserves channel lifecycle, safe tests, inbox/dead-letter handling, and outbox-backed retries",
-            "current_frontend_mapping": "served: the global Alert Center at /notifications separates meaningful attention, delivery failures, history, inherited routing policies, and channels/tests; it previews the server-resolved route, shows precise delivery semantics and owner/escalation evidence, marks read, and requeues dead letters",
+            "current_frontend_mapping": "served: the global Alert Center at /notifications separates meaningful attention, delivery failures, history, inherited routing policies, and channels/tests; it validates and fingerprints the exact unsaved route without side effects, blocks save until every destination is ready, shows precise delivery and recovery semantics, marks read, and requeues dead letters",
             "target_gui_mapping": "Notification channel UI for Slack, Teams, email, SMS, SIEM, PagerDuty, OpsGenie, webhook, test delivery, secret reference, and duplicate-safe delivery.",
             "acceptance_test": "Served lifecycle and channel-test mutations enqueue durable notification work; the DoD runtime proof enters through the authenticated channel-test route assembled by buildRunDeps and requires exact PagerDuty/OpsGenie native requests, vendor acceptance envelopes, external readback, and nonce/PID-bound execution receipts.",
             "source_docs": [
@@ -18438,7 +18438,7 @@
                 "web/src/pages/Notifications.tsx"
             ],
             "status": "closed",
-            "notes": "WIRE-NOTIFY-000/101/102 close the remaining advertised channel breadth. buildRunDeps constructs native PagerDuty and OpsGenie clients from operator configuration, locks and wipes credentials, routes user-created test/lifecycle outbox rows through the same dispatcher, sends deterministic vendor retry identities, validates exact acceptance receipts, and proves delivery against separate nonce-bound vendor emulators with external readback.",
+            "notes": "WIRE-NOTIFY-000/101/102 close the advertised channel breadth. The F29 convergence candidate adds an effect-free server review of the exact unsaved routing-policy draft, a stable SHA-256 fingerprint through the cryptographic boundary, prerequisite blockers, explicit execute/recovery/verification semantics, save-time channel-readiness revalidation, UI stale-review invalidation, and matching CLI/API/SDK surfaces. Live browser evidence proves an unconfigured PagerDuty route cannot be saved or mutate state; served DESIGN-003 evidence proves the ready Slack and HMAC-webhook path through durable outbox delivery, and C10-3 proves dead-letter recovery. No external credential or successful PagerDuty delivery is fabricated.",
             "api_surface": [
                 "createNotificationChannel",
                 "listNotificationChannels",
@@ -18514,7 +18514,7 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: served: Notifications at /notifications lists configured channel families, authors tenant notification channels with endpoint metadata and redacted credential references, authors severity-to-channel routing policies with owner and digest preview metadata, queues redacted channel tests, shows owner/approver escalation, marks read, and requeues dead letters",
+                        "current_frontend_mapping: served: Notifications at /notifications lists configured channel families, authors tenant notification channels with endpoint metadata and redacted credential references, reviews and fingerprints the exact unsaved severity-to-channel draft without writes or delivery, disables save until all channels are ready, invalidates stale review after any edit, queues redacted channel tests, shows owner/approver escalation, marks read, and requeues dead letters",
                         "target_gui_mapping: Notification channel UI for Slack, Teams, email, SMS, SIEM, PagerDuty, OpsGenie, webhook, test delivery, secret reference, and duplicate-safe delivery."
                     ],
                     "refs": [
@@ -18529,7 +18529,7 @@
                         "notifications channels exposes the read-only supported/configured channel catalog through the CLI.",
                         "notifications channels create/get/update/delete expose tenant-scoped notification channel credential-reference lifecycle through the CLI.",
                         "notifications channels test queues a redacted channel test through the served notification outbox.",
-                        "notifications routing-policies create/list/get/update/delete expose tenant-scoped severity-to-channel routing policy authoring through the CLI.",
+                        "notifications routing-policies preview performs the same effect-free exact-draft prerequisite review as the console; create/list/get/update/delete expose tenant-scoped severity-to-channel routing policy authoring through the CLI.",
                         "notifications list/get expose the tenant-scoped notification inbox and dead-letter view through the CLI.",
                         "notifications read and notifications requeue call the served mutating endpoints with Idempotency-Key handling."
                     ],
@@ -18541,7 +18541,7 @@
                 "api": {
                     "evidence": [
                         "OpenAPI exposes createNotificationChannel, listNotificationChannels, getNotificationChannel, updateNotificationChannel, deleteNotificationChannel, and testNotificationChannel for tenant channel lifecycle, supported/configured channel catalog, and redacted channel test enqueue.",
-                        "OpenAPI exposes createNotificationRoutingPolicy, listNotificationRoutingPolicies, getNotificationRoutingPolicy, updateNotificationRoutingPolicy, and deleteNotificationRoutingPolicy for tenant-scoped severity-to-channel policy authoring.",
+                        "OpenAPI exposes previewNotificationRoutingPolicy for an effect-free, normalized, fingerprinted exact-draft prerequisite review and createNotificationRoutingPolicy, listNotificationRoutingPolicies, getNotificationRoutingPolicy, updateNotificationRoutingPolicy, and deleteNotificationRoutingPolicy for tenant-scoped severity-to-channel policy authoring.",
                         "OpenAPI exposes listNotifications, getNotification, markNotificationRead, and requeueNotification for the tenant-scoped notification inbox and dead-letter queue.",
                         "Notification channel credential values are never returned by the API; tenant-authored channels store credential references and endpoint metadata and the delivery worker resolves enabled channels at outbox dispatch time."
                     ],
@@ -18554,7 +18554,9 @@
                 "test": {
                     "evidence": [
                         "acceptance_test: Served lifecycle and channel-test mutations enqueue durable notification work; the DoD runtime proof enters through the authenticated channel-test route assembled by buildRunDeps and requires exact PagerDuty/OpsGenie native requests, vendor acceptance envelopes, external readback, and nonce/PID-bound execution receipts.",
-                        "TestServedNotificationRoutingPolicyAuthoringAndChannelTestDESIGN003 is the default-built, no-skip acceptance test for tenant-authored notification routes and outbox-backed channel delivery.",
+                        "TestServedNotificationRoutingPolicyAuthoringAndChannelTestDESIGN003 proves an unavailable channel blocks the exact effect-free review and direct create without advancing the event head, then proves a ready Slack/HMAC-webhook route can be reviewed, created, tested, and delivered through the outbox.",
+                        "DESIGN-003 browser-component evidence proves save is disabled before exact review, the reviewed fingerprint and recovery contract are visible, and editing the draft invalidates the review.",
+                        "g200 live browser evidence against the exact 8f4ef7afb candidate proves an unavailable PagerDuty prerequisite produces a specific blocker, keeps save disabled, creates no routing policy, and leaves dashboard counts unchanged.",
                         "Focused served tests drive the running server scheduler, outbox drain, email/Slack/Teams/SMS/SIEM sinks, tenant-authored httptest webhook channel, dead-letter list, idempotent requeue, and mark-read projection.",
                         "TestDODNativeIncidentNotificationProductionAssembly uses buildRunDeps and Build, invokes the authenticated served channel-test mutation, drains its durable row, and requires exact external PagerDuty/OpsGenie readback plus a process execution receipt.",
                         "C10-3 notification inbox UI test renders configured channel coverage, owner/approver escalation fields, and exercises mark-read plus dead-letter requeue.",
@@ -18650,8 +18652,8 @@
                 "purpose": "Lets an operator understand and safely use notification integrations while tenant, policy, and security authority remain on the server.",
                 "tool": "operations",
                 "classification": "primary",
-                "release_blocking": true,
-                "console_route": "/policy",
+                "release_blocking": false,
+                "console_route": "/notifications",
                 "navigation_entrypoints": [
                     "tool navigation",
                     "task search",
@@ -18662,7 +18664,7 @@
                 "dependencies": [],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -18677,12 +18679,24 @@
                         ]
                     },
                     "configure": {
-                        "status": "missing",
-                        "reason": "No structured evidence proves an operator can configure every required prerequisite from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/Notifications.tsx",
+                            "web/src/__tests__/accept/DESIGN-003.test.tsx",
+                            "internal/server/notifications_served_test.go"
+                        ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: previewNotificationRoutingPolicy",
+                            "CLI command: notifications routing-policies preview",
+                            "internal/api/notification_routing_preview_contract_test.go",
+                            "internal/server/notifications_served_test.go",
+                            "web/src/pages/Notifications.tsx",
+                            "web/src/__tests__/accept/DESIGN-003.test.tsx",
+                            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g200-f29-live-browser-qualification.json"
+                        ]
                     },
                     "execute": {
                         "status": "complete",
@@ -18698,8 +18712,12 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/Notifications.tsx",
+                            "web/src/__tests__/accept/C10-3.test.tsx",
+                            "internal/server/notifications_served_test.go"
+                        ]
                     },
                     "verify": {
                         "status": "complete",
@@ -18717,6 +18735,7 @@
                             "OpenAPI operationId: deleteNotificationChannel",
                             "OpenAPI operationId: testNotificationChannel",
                             "OpenAPI operationId: createNotificationRoutingPolicy",
+                            "OpenAPI operationId: previewNotificationRoutingPolicy",
                             "OpenAPI operationId: listNotificationRoutingPolicies",
                             "OpenAPI operationId: getNotificationRoutingPolicy",
                             "OpenAPI operationId: updateNotificationRoutingPolicy",
@@ -18733,6 +18752,7 @@
                             "CLI command: notifications channels delete",
                             "CLI command: notifications channels test",
                             "CLI command: notifications routing-policies create",
+                            "CLI command: notifications routing-policies preview",
                             "CLI command: notifications routing-policies list",
                             "CLI command: notifications routing-policies get",
                             "CLI command: notifications routing-policies update",
@@ -18747,8 +18767,8 @@
                 },
                 "owner": "operations",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "8f4ef7afb32e643e766b6a9dd8701dcd648c6d5b",
+                "freshness": "2026-09-04"
             }
         },
         {

@@ -6588,8 +6588,8 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use notification integrations while tenant, policy, and security authority remain on the server.",
       "tool": "operations",
       "classification": "primary",
-      "releaseBlocking": true,
-      "consoleRoute": "/policy",
+      "releaseBlocking": false,
+      "consoleRoute": "/notifications",
       "navigationEntrypoints": [
         "tool navigation",
         "task search",
@@ -6600,7 +6600,7 @@ export const canonicalCapabilities = [
       "dependencies": [],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -6615,12 +6615,24 @@ export const canonicalCapabilities = [
           ]
         },
         "configure": {
-          "status": "missing",
-          "reason": "No structured evidence proves an operator can configure every required prerequisite from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/Notifications.tsx",
+            "web/src/__tests__/accept/DESIGN-003.test.tsx",
+            "internal/server/notifications_served_test.go"
+          ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: previewNotificationRoutingPolicy",
+            "CLI command: notifications routing-policies preview",
+            "internal/api/notification_routing_preview_contract_test.go",
+            "internal/server/notifications_served_test.go",
+            "web/src/pages/Notifications.tsx",
+            "web/src/__tests__/accept/DESIGN-003.test.tsx",
+            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g200-f29-live-browser-qualification.json"
+          ]
         },
         "execute": {
           "status": "complete",
@@ -6636,8 +6648,12 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/Notifications.tsx",
+            "web/src/__tests__/accept/C10-3.test.tsx",
+            "internal/server/notifications_served_test.go"
+          ]
         },
         "verify": {
           "status": "complete",
@@ -6655,6 +6671,7 @@ export const canonicalCapabilities = [
             "OpenAPI operationId: deleteNotificationChannel",
             "OpenAPI operationId: testNotificationChannel",
             "OpenAPI operationId: createNotificationRoutingPolicy",
+            "OpenAPI operationId: previewNotificationRoutingPolicy",
             "OpenAPI operationId: listNotificationRoutingPolicies",
             "OpenAPI operationId: getNotificationRoutingPolicy",
             "OpenAPI operationId: updateNotificationRoutingPolicy",
@@ -6671,6 +6688,7 @@ export const canonicalCapabilities = [
             "CLI command: notifications channels delete",
             "CLI command: notifications channels test",
             "CLI command: notifications routing-policies create",
+            "CLI command: notifications routing-policies preview",
             "CLI command: notifications routing-policies list",
             "CLI command: notifications routing-policies get",
             "CLI command: notifications routing-policies update",
@@ -6685,8 +6703,8 @@ export const canonicalCapabilities = [
       },
       "owner": "operations",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "8f4ef7afb32e643e766b6a9dd8701dcd648c6d5b",
+      "freshness": "2026-09-04"
     }
   },
   {

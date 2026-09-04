@@ -239,11 +239,11 @@ export const navSpaces: NavSpace[] = [
       {
         labelKey: "nav.group.governAdminister",
         items: [
-          { to: "/policy", labelKey: "nav.item.policy", icon: "policy", mode: "real", featureIds: ["F28", "F29", "F62"] },
+          { to: "/policy", labelKey: "nav.item.policy", icon: "policy", mode: "real", featureIds: ["F28", "F62"] },
           { to: "/approvals", labelKey: "nav.item.approvals", icon: "approval", mode: "real", featureIds: ["F33"] },
           { to: "/audit", labelKey: "nav.item.audit", icon: "audit", mode: "real", featureIds: ["F9"] },
           { to: "/owners", labelKey: "nav.item.ownership", icon: "owner", mode: "real", featureIds: ["F59"] },
-          { to: "/notifications", labelKey: "nav.item.notifications", icon: "notification", mode: "real", featureIds: ["F7"] },
+          { to: "/notifications", labelKey: "nav.item.notifications", icon: "notification", mode: "real", featureIds: ["F7", "F29"] },
           { to: "/privacy", labelKey: "nav.item.privacy", icon: "policy", mode: "real", featureIds: ["F79"] },
         ],
       },
@@ -721,10 +721,10 @@ export const realGuiSurfaces: RealGuiSurface[] = [
   },
   {
     featureId: "F29",
-    routes: ["/policy"],
-    component: "Policy",
-    kind: "observe",
-    evidence: "expiry-alert scheduling with masked notification-channel references and no live channel config",
+    routes: ["/notifications"],
+    component: "Notifications",
+    kind: "workflow",
+    evidence: "channel configuration, exact effect-free routing review, guarded save, delivery observation, and dead-letter recovery",
   },
   {
     featureId: "F31",
