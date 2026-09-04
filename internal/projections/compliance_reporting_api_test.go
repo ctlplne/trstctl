@@ -23,7 +23,55 @@ func TestComplianceInventoryReportingCAPOBS02(t *testing.T) {
 		"delivery":         "audit_export",
 		"recipient_ref":    "audit-vault",
 	}
-	status, _, body := do(t, srv, http.MethodPost, "/api/v1/compliance/report-schedules", reqOpts{
+	status, _, body := do(t, srv, http.MethodPost, "/api/v1/compliance/report-schedules/preview", reqOpts{
+		tenant: tenantA,
+		body:   req,
+	})
+	if status != http.StatusOK {
+		t.Fatalf("preview report schedule = %d: %s", status, body)
+	}
+	var preview struct {
+		Capability         string         `json:"capability"`
+		Operation          string         `json:"operation"`
+		Ready              bool           `json:"ready"`
+		EffectFree         bool           `json:"effect_free"`
+		RequestFingerprint string         `json:"request_fingerprint"`
+		NormalizedRequest  map[string]any `json:"normalized_request"`
+		PreviewWrites      []string       `json:"preview_writes"`
+		PreviewEffects     []string       `json:"preview_external_effects"`
+		RecoverySteps      []string       `json:"recovery_steps"`
+		VerificationSteps  []string       `json:"verification_steps"`
+	}
+	if err := json.Unmarshal(body, &preview); err != nil {
+		t.Fatalf("decode schedule preview: %v", err)
+	}
+	if preview.Capability != "F62" || preview.Operation != "create_report_schedule" || !preview.Ready || !preview.EffectFree ||
+		preview.RequestFingerprint == "" || len(preview.PreviewWrites) != 0 || len(preview.PreviewEffects) != 0 ||
+		len(preview.RecoverySteps) == 0 || len(preview.VerificationSteps) == 0 || preview.NormalizedRequest["delivery"] != "audit_export" {
+		t.Fatalf("schedule preview = %+v, want exact effect-free ready plan", preview)
+	}
+	status, _, body = do(t, srv, http.MethodGet, "/api/v1/compliance/report-schedules", reqOpts{tenant: tenantA})
+	var afterPreview struct {
+		Items []json.RawMessage `json:"items"`
+	}
+	if err := json.Unmarshal(body, &afterPreview); err != nil {
+		t.Fatalf("decode report schedules after preview: %v", err)
+	}
+	if status != http.StatusOK || len(afterPreview.Items) != 0 {
+		t.Fatalf("preview mutated report schedules = %d: %s", status, body)
+	}
+	tightLoop := map[string]any{
+		"name":             "Every second",
+		"framework":        "soc2",
+		"report_type":      "inventory_snapshot",
+		"interval_seconds": 1,
+	}
+	status, _, body = do(t, srv, http.MethodPost, "/api/v1/compliance/report-schedules/preview", reqOpts{tenant: tenantA, body: tightLoop})
+	if status != http.StatusBadRequest {
+		t.Fatalf("tight-loop schedule preview = %d: %s", status, body)
+	}
+
+	status, _, body = do(t, srv, http.MethodPost, "/api/v1/compliance/report-schedules", reqOpts{
 		tenant: tenantA,
 		idem:   "cap-obs-02-schedule",
 		body:   req,
@@ -140,5 +188,31 @@ func TestComplianceInventoryReportingCAPOBS02(t *testing.T) {
 	}
 	if len(report.EvidenceRefs) == 0 || len(report.Schedules) != 1 || report.Schedules[0].ID != created.ID {
 		t.Fatalf("report missing evidence or schedule enumeration: %+v", report)
+	}
+
+	for _, action := range []struct {
+		name        string
+		wantEnabled bool
+	}{
+		{name: "pause", wantEnabled: false},
+		{name: "resume", wantEnabled: true},
+	} {
+		status, _, body = do(t, srv, http.MethodPost, "/api/v1/compliance/report-schedules/"+created.ID+"/"+action.name, reqOpts{
+			tenant: tenantA,
+			idem:   "cap-obs-02-" + action.name,
+		})
+		if status != http.StatusOK {
+			t.Fatalf("%s report schedule = %d: %s", action.name, status, body)
+		}
+		var changed struct {
+			ID      string `json:"id"`
+			Enabled bool   `json:"enabled"`
+		}
+		if err := json.Unmarshal(body, &changed); err != nil {
+			t.Fatalf("decode %s schedule: %v", action.name, err)
+		}
+		if changed.ID != created.ID || changed.Enabled != action.wantEnabled {
+			t.Fatalf("%s schedule = %+v, want enabled=%t", action.name, changed, action.wantEnabled)
+		}
 	}
 }

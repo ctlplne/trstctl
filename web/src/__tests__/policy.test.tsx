@@ -14,6 +14,9 @@ const { apiMock } = vi.hoisted(() => ({
     nhiComplianceReport: vi.fn(),
     complianceReportSchedules: vi.fn(),
     createComplianceReportSchedule: vi.fn(),
+    previewComplianceReportSchedule: vi.fn(),
+    pauseComplianceReportSchedule: vi.fn(),
+    resumeComplianceReportSchedule: vi.fn(),
     decideAccessChangeRequest: vi.fn(),
     decideNHIReviewItem: vi.fn(),
     exportAudit: vi.fn(),
@@ -211,6 +214,35 @@ function complianceSchedule(name = "Quarterly SOC 2 inventory") {
   };
 }
 
+function complianceSchedulePreview() {
+  return {
+    capability: "F62",
+    operation: "create_report_schedule",
+    ready: true,
+    effect_free: true,
+    request_fingerprint: "sha256:reviewed-compliance-schedule",
+    required_permission: "audit:write",
+    normalized_request: {
+      framework: "soc2",
+      name: "Quarterly SOC 2 inventory",
+      report_type: "inventory_snapshot",
+      interval_seconds: 90 * 24 * 60 * 60,
+      enabled: true,
+      delivery: "audit_export",
+      recipient_ref: "audit-vault",
+    },
+    blockers: [],
+    warnings: [],
+    preview_writes: [],
+    preview_external_effects: [],
+    execute_writes: ["Append and project one tenant-scoped compliance report-schedule event."],
+    execute_external_effects: [],
+    recovery_steps: ["Pause the schedule before its next run; resume it after correcting the definition."],
+    verification_steps: ["Read the schedule list and confirm its exact enabled state and next run."],
+    secret_data_handling: "Recipient references are metadata locators. Preview reads and returns no credential value.",
+  };
+}
+
 function policyDryRunResult() {
   return {
     kind: "lifecycle",
@@ -372,6 +404,9 @@ describe("policy governance surface", () => {
     apiMock.nhiComplianceReport.mockReset().mockResolvedValue(nhiComplianceReport());
     apiMock.complianceReportSchedules.mockReset().mockResolvedValue({ items: [complianceSchedule()] });
     apiMock.createComplianceReportSchedule.mockReset().mockResolvedValue(complianceSchedule("Quarterly SOC 2 inventory"));
+    apiMock.previewComplianceReportSchedule.mockReset().mockResolvedValue(complianceSchedulePreview());
+    apiMock.pauseComplianceReportSchedule.mockReset().mockResolvedValue({ ...complianceSchedule(), enabled: false });
+    apiMock.resumeComplianceReportSchedule.mockReset().mockResolvedValue(complianceSchedule());
     apiMock.decideAccessChangeRequest.mockReset().mockResolvedValue(accessChangeRequest("approved"));
     apiMock.decideNHIReviewItem.mockReset().mockResolvedValue(nhiReviewCampaign("certified"));
     apiMock.exportAudit.mockReset();
@@ -898,6 +933,13 @@ describe("policy governance surface", () => {
     await waitFor(() => expect(apiMock.exportAudit).toHaveBeenCalledWith({ limit: 500 }));
     expect(await screen.findByText("jws: signed.audit.bundle")).toBeInTheDocument();
 
+    expect(screen.getByRole("button", { name: "Create schedule" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Review exact schedule" }));
+    await waitFor(() => expect(apiMock.previewComplianceReportSchedule).toHaveBeenCalled());
+    expect(screen.getByText("No state changed.")).toBeInTheDocument();
+    expect(screen.getByText("sha256:reviewed-compliance-schedule")).toBeInTheDocument();
+    expect(screen.getByText(/Pause the schedule before its next run/i)).toBeInTheDocument();
+
     await user.click(screen.getByRole("button", { name: "Create schedule" }));
     await waitFor(() =>
       expect(apiMock.createComplianceReportSchedule).toHaveBeenCalledWith(
@@ -909,7 +951,25 @@ describe("policy governance surface", () => {
         }),
       ),
     );
+
+    await user.click(screen.getByRole("button", { name: "Pause schedule" }));
+    await waitFor(() => expect(apiMock.pauseComplianceReportSchedule).toHaveBeenCalledWith("33333333-3333-4333-8333-333333333333"));
     expect(screen.queryByRole("button", { name: /generate report|attest compliance/i })).not.toBeInTheDocument();
+  });
+
+  it("invalidates an exact compliance schedule review after the draft changes", async () => {
+    const user = userEvent.setup();
+    renderPolicy();
+    await user.click(await screen.findByText("Framework evidence and reports", { exact: true }));
+    await screen.findByRole("heading", { name: "Compliance posture and reports" });
+
+    await user.click(screen.getByRole("button", { name: "Review exact schedule" }));
+    expect(await screen.findByText("sha256:reviewed-compliance-schedule")).toBeInTheDocument();
+    await user.clear(screen.getByLabelText("Schedule"));
+    await user.type(screen.getByLabelText("Schedule"), "Monthly SOC 2 inventory");
+
+    expect(screen.queryByText("sha256:reviewed-compliance-schedule")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create schedule" })).toBeDisabled();
   });
 
   it("serves NHI access certification campaigns from the Policy surface", async () => {

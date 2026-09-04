@@ -274,9 +274,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// `secrets syncs preview` command, raising the catalog to 438. F50's managed
 	// and keyless effect-free signing previews raised it to 440. F34's
 	// effect-free emergency issuance preview raises it to 441. F29's exact,
-	// effect-free unsaved routing-policy review raises it to 442.
-	if len(out) != 442 {
-		t.Fatalf("CLI commands = %d, want 442", len(out))
+	// effect-free unsaved routing-policy review raises it to 442. F62's exact
+	// report-schedule review plus pause/resume recovery raises it to 445.
+	if len(out) != 445 {
+		t.Fatalf("CLI commands = %d, want 445", len(out))
 	}
 	return out
 }

@@ -1474,8 +1474,12 @@ describe("i18n boundary", () => {
       // request, deployment-owned custody boundary, zero-effect preview,
       // independent quorum, execution effects, recovery, and audit proof.
       // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW.
-      "es-ES": "5eedbedd38c1f27ed4bec2a392b51963af8de3e6659b07a26e3575cbc8e223c6",
-      "de-DE": "d20f214eda87522fdbbedd6eeb1964bdf8df3bb7b14292152904d2c4733e0739",
+      // F62 re-pin: exact compliance schedule review, effect boundaries,
+      // pause/resume recovery, and verification guidance are translated in
+      // both production catalogs. Machine-authored es/de — FLAGGED FOR HUMAN
+      // TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "3280ed7a739a2589e771c717f69008e3163fe7fef6641671739b44269324de8c",
+      "de-DE": "2e92c9127fd1d7d50456dd465e5aa3b0ba5c7d53dddb1d0f620f4e1cf2424d6d",
     });
   });
 

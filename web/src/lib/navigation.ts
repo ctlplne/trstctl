@@ -723,7 +723,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     featureId: "F29",
     routes: ["/notifications"],
     component: "Notifications",
-    kind: "workflow",
+    kind: "operate",
     evidence: "channel configuration, exact effect-free routing review, guarded save, delivery observation, and dead-letter recovery",
   },
   {

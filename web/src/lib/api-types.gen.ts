@@ -2180,6 +2180,25 @@ export interface ComplianceReportScheduleList {
   next_cursor?: string;
 }
 
+export interface ComplianceReportSchedulePreview {
+  blockers: string[];
+  capability: string;
+  effect_free: boolean;
+  execute_external_effects: string[];
+  execute_writes: string[];
+  normalized_request: ComplianceReportScheduleRequest;
+  operation: string;
+  preview_external_effects: string[];
+  preview_writes: string[];
+  ready: boolean;
+  recovery_steps: string[];
+  request_fingerprint: string;
+  required_permission: string;
+  secret_data_handling: string;
+  verification_steps: string[];
+  warnings: string[];
+}
+
 export interface ComplianceReportScheduleRequest {
   delivery?: "audit_export";
   enabled?: boolean;

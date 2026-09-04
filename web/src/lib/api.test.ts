@@ -617,6 +617,9 @@ describe("exported API surface census", () => {
       // F9: audit feed preview shares the execution validator but performs no
       // write, idempotency insert, outbox enqueue, credential read, or egress.
       "/api/v1/audit/feeds/item%2Fid/preview",
+      // F29: validates one unsaved routing-policy draft and checks referenced
+      // channel readiness without saving a policy or queueing a delivery.
+      "/api/v1/notification-routing-policies/preview",
       "/api/v1/ca/ceremonies/preview",
       "/api/v1/ca/authorities/item%2Fid/rotate/preview",
       "/api/v1/managed-keys/preview",
@@ -652,6 +655,9 @@ describe("exported API surface census", () => {
       "/api/v1/mcp/tools/item%2Fid",
       "/api/v1/pqc/migrations/plan",
       "/api/v1/privacy/subject-exports",
+      // F62: validates and fingerprints one exact report-schedule draft. It
+      // appends no event, reserves no idempotency key, and performs no delivery.
+      "/api/v1/compliance/report-schedules/preview",
       // F39: validates and fingerprints the normalized scan plan without
       // starting gitleaks, writing discovery state, or appending an event.
       "/api/v1/secrets/scans/preview",

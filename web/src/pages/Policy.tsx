@@ -16,6 +16,7 @@ import {
   type ComplianceEvidencePack,
   type ComplianceInventoryReport,
   type ComplianceReportSchedule,
+  type ComplianceReportSchedulePreview,
   type ComplianceReportScheduleRequest,
   type NHIComplianceReport,
   type NHIReviewCampaign,
@@ -162,7 +163,8 @@ export function Policy() {
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportNotice, setReportNotice] = useState<string | null>(null);
-  const [scheduleAction, setScheduleAction] = useState(false);
+  const [scheduleAction, setScheduleAction] = useState<string | null>(null);
+  const [schedulePreview, setSchedulePreview] = useState<ComplianceReportSchedulePreview | null>(null);
   const [evidenceBundle, setEvidenceBundle] = useState<string | null>(null);
   const [evidenceError, setEvidenceError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -390,33 +392,83 @@ export function Policy() {
     }
   }
 
-  async function createReportSchedule(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setScheduleAction(true);
+  function complianceScheduleRequest(): ComplianceReportScheduleRequest | null {
+    const intervalDays = Number.parseInt(scheduleForm.intervalDays, 10);
+    if (!Number.isFinite(intervalDays) || intervalDays < 1 || intervalDays > 366) {
+      setReportError(t("policy.reporting.intervalError"));
+      return null;
+    }
+    return {
+      name: scheduleForm.name.trim(),
+      framework: scheduleForm.framework,
+      report_type: scheduleForm.reportType,
+      interval_seconds: intervalDays * 24 * 60 * 60,
+      enabled: true,
+      delivery: "audit_export",
+      recipient_ref: optionalText(scheduleForm.recipientRef),
+    };
+  }
+
+  async function previewReportSchedule() {
+    setScheduleAction("preview");
     setReportError(null);
     setReportNotice(null);
-    const intervalDays = Number.parseInt(scheduleForm.intervalDays, 10);
-    if (!Number.isFinite(intervalDays) || intervalDays < 1) {
-      setReportError("interval days must be a positive integer");
-      setScheduleAction(false);
+    setSchedulePreview(null);
+    const request = complianceScheduleRequest();
+    if (!request) {
+      setScheduleAction(null);
       return;
     }
     try {
-      const schedule = await api.createComplianceReportSchedule({
-        name: scheduleForm.name.trim(),
-        framework: scheduleForm.framework,
-        report_type: scheduleForm.reportType,
-        interval_seconds: intervalDays * 24 * 60 * 60,
-        enabled: true,
-        delivery: "audit_export",
-        recipient_ref: optionalText(scheduleForm.recipientRef),
-      });
+      setSchedulePreview(await api.previewComplianceReportSchedule(request));
+    } catch (err) {
+      setReportError(describePolicyError(err, "report schedule review failed"));
+    } finally {
+      setScheduleAction(null);
+    }
+  }
+
+  async function createReportSchedule(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!schedulePreview?.ready) {
+      setReportError(t("policy.reporting.reviewRequired"));
+      return;
+    }
+    setScheduleAction("create");
+    setReportError(null);
+    setReportNotice(null);
+    const request = complianceScheduleRequest();
+    if (!request) {
+      setScheduleAction(null);
+      return;
+    }
+    try {
+      const schedule = await api.createComplianceReportSchedule(request);
       setReportNotice(`${schedule.name} scheduled for ${formatDate(schedule.next_run_at)}.`);
+      setSchedulePreview(null);
       await refreshComplianceReporting();
     } catch (err) {
       setReportError(describePolicyError(err, "report schedule create failed"));
     } finally {
-      setScheduleAction(false);
+      setScheduleAction(null);
+    }
+  }
+
+  async function toggleReportSchedule(schedule: ComplianceReportSchedule) {
+    const operation = schedule.enabled ? "pause" : "resume";
+    setScheduleAction(`${operation}:${schedule.id}`);
+    setReportError(null);
+    setReportNotice(null);
+    try {
+      const changed = schedule.enabled
+        ? await api.pauseComplianceReportSchedule(schedule.id)
+        : await api.resumeComplianceReportSchedule(schedule.id);
+      setReportNotice(changed.enabled ? t("policy.reporting.resumed") : t("policy.reporting.paused"));
+      await refreshComplianceReporting();
+    } catch (err) {
+      setReportError(describePolicyError(err, `report schedule ${operation} failed`));
+    } finally {
+      setScheduleAction(null);
     }
   }
 
@@ -916,7 +968,14 @@ export function Policy() {
 
             {reportLoading && <LoadingState>{t("policy.reporting.loading")}</LoadingState>}
             {reportError && <ErrorState title={t("policy.reporting.unavailableTitle")}>{reportError}</ErrorState>}
-            {inventoryReport && <ComplianceInventoryReportPanel report={inventoryReport} schedules={reportSchedules} />}
+            {inventoryReport && (
+              <ComplianceInventoryReportPanel
+                report={inventoryReport}
+                schedules={reportSchedules}
+                scheduleAction={scheduleAction}
+                onToggleSchedule={(schedule) => void toggleReportSchedule(schedule)}
+              />
+            )}
             {nhiComplianceReport && <NHIComplianceReportPanel report={nhiComplianceReport} />}
 
             <form
@@ -928,7 +987,10 @@ export function Policy() {
                 <input
                   className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
                   value={scheduleForm.name}
-                  onChange={(event) => setScheduleForm((current) => ({ ...current, name: event.target.value }))}
+                  onChange={(event) => {
+                    setSchedulePreview(null);
+                    setScheduleForm((current) => ({ ...current, name: event.target.value }));
+                  }}
                 />
               </label>
               <label className="grid gap-1">
@@ -936,7 +998,10 @@ export function Policy() {
                 <select
                   className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
                   value={scheduleForm.framework}
-                  onChange={(event) => setScheduleForm((current) => ({ ...current, framework: event.target.value as ComplianceFramework }))}
+                  onChange={(event) => {
+                    setSchedulePreview(null);
+                    setScheduleForm((current) => ({ ...current, framework: event.target.value as ComplianceFramework }));
+                  }}
                 >
                   {complianceFrameworks.map((framework) => (
                     <option key={framework.id} value={framework.id}>
@@ -950,7 +1015,10 @@ export function Policy() {
                 <select
                   className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
                   value={scheduleForm.reportType}
-                  onChange={(event) => setScheduleForm((current) => ({ ...current, reportType: event.target.value as ComplianceReportType }))}
+                  onChange={(event) => {
+                    setSchedulePreview(null);
+                    setScheduleForm((current) => ({ ...current, reportType: event.target.value as ComplianceReportType }));
+                  }}
                 >
                   {complianceReportTypes.map((reportType) => (
                     <option key={reportType.id} value={reportType.id}>
@@ -966,7 +1034,10 @@ export function Policy() {
                   inputMode="numeric"
                   pattern="[0-9]*"
                   value={scheduleForm.intervalDays}
-                  onChange={(event) => setScheduleForm((current) => ({ ...current, intervalDays: event.target.value }))}
+                  onChange={(event) => {
+                    setSchedulePreview(null);
+                    setScheduleForm((current) => ({ ...current, intervalDays: event.target.value }));
+                  }}
                 />
               </label>
               <label className="grid gap-1">
@@ -974,15 +1045,44 @@ export function Policy() {
                 <input
                   className="min-h-10 rounded-md border border-border bg-background px-3 py-2"
                   value={scheduleForm.recipientRef}
-                  onChange={(event) => setScheduleForm((current) => ({ ...current, recipientRef: event.target.value }))}
+                  onChange={(event) => {
+                    setSchedulePreview(null);
+                    setScheduleForm((current) => ({ ...current, recipientRef: event.target.value }));
+                  }}
                 />
               </label>
-              <div className="flex items-end lg:col-span-6">
-                <Button type="submit" disabled={scheduleAction}>
-                  {scheduleAction ? t("policy.reporting.scheduling") : t("policy.reporting.createSchedule")}
+              <div className="flex flex-wrap items-end gap-2 lg:col-span-6">
+                <Button type="button" variant="outline" onClick={() => void previewReportSchedule()} disabled={scheduleAction !== null}>
+                  {scheduleAction === "preview" ? t("policy.reporting.reviewing") : t("policy.reporting.review")}
+                </Button>
+                <Button type="submit" disabled={scheduleAction !== null || !schedulePreview?.ready}>
+                  {scheduleAction === "create" ? t("policy.reporting.scheduling") : t("policy.reporting.createSchedule")}
                 </Button>
               </div>
             </form>
+            {schedulePreview && (
+              <section className="rounded-md border border-border bg-muted/40 p-4 text-sm" aria-labelledby="compliance-schedule-review-heading">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 id="compliance-schedule-review-heading" className="font-semibold">{t("policy.reporting.reviewHeading")}</h3>
+                    <p className="mt-1 text-muted-foreground">{t("policy.reporting.noStateChanged")}</p>
+                  </div>
+                  <span className="rounded-md border border-border bg-background px-2 py-1 text-xs font-medium">
+                    {schedulePreview.ready ? t("policy.reporting.ready") : t("policy.reporting.setupNeeded")}
+                  </span>
+                </div>
+                <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div><dt className="text-xs font-medium text-muted-foreground">{t("policy.reporting.fingerprint")}</dt><dd className="mt-1 break-all font-mono text-xs">{schedulePreview.request_fingerprint}</dd></div>
+                  <div><dt className="text-xs font-medium text-muted-foreground">{t("policy.reporting.permission")}</dt><dd className="mt-1 font-mono text-xs">{schedulePreview.required_permission}</dd></div>
+                </dl>
+                <div className="mt-3 grid gap-3 lg:grid-cols-3">
+                  <EvidenceList title={t("policy.reporting.executeWrites")} items={schedulePreview.execute_writes} />
+                  <EvidenceList title={t("policy.reporting.recovery")} items={schedulePreview.recovery_steps} />
+                  <EvidenceList title={t("policy.reporting.verify")} items={schedulePreview.verification_steps} />
+                </div>
+                <p className="mt-3 text-xs text-muted-foreground">{schedulePreview.secret_data_handling}</p>
+              </section>
+            )}
             {reportNotice && (
               <p className="rounded-md border border-border bg-muted p-3 text-sm" role="status">
                 {reportNotice}
@@ -1536,7 +1636,17 @@ function PolicyDryRunResultPanel({ result }: { result: PolicyDryRun }) {
   );
 }
 
-function ComplianceInventoryReportPanel({ report, schedules }: { report: ComplianceInventoryReport; schedules: ComplianceReportSchedule[] }) {
+function ComplianceInventoryReportPanel({
+  report,
+  schedules,
+  scheduleAction,
+  onToggleSchedule,
+}: {
+  report: ComplianceInventoryReport;
+  schedules: ComplianceReportSchedule[];
+  scheduleAction: string | null;
+  onToggleSchedule: (schedule: ComplianceReportSchedule) => void;
+}) {
   const { formatDate, t } = useTranslation();
   const rows = schedules.length > 0 ? schedules : report.schedules;
 
@@ -1581,6 +1691,7 @@ function ComplianceInventoryReportPanel({ report, schedules }: { report: Complia
                 <th scope="col">{t("policy.reporting.type")}</th>
                 <th scope="col">{t("policy.reporting.cadence")}</th>
                 <th scope="col">{t("policy.reporting.nextRun")}</th>
+                <th scope="col">{t("policy.reporting.recovery")}</th>
               </tr>
             </thead>
             <tbody>
@@ -1594,6 +1705,18 @@ function ComplianceInventoryReportPanel({ report, schedules }: { report: Complia
                   <td>{reportTypeLabel(schedule.report_type, t)}</td>
                   <td>{Math.round(schedule.interval_seconds / 86400)}d</td>
                   <td>{formatDate(schedule.next_run_at)}</td>
+                  <td>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => onToggleSchedule(schedule)}
+                      disabled={scheduleAction !== null}
+                    >
+                      {scheduleAction === `${schedule.enabled ? "pause" : "resume"}:${schedule.id}`
+                        ? schedule.enabled ? t("policy.reporting.pausing") : t("policy.reporting.resuming")
+                        : schedule.enabled ? t("policy.reporting.pause") : t("policy.reporting.resume")}
+                    </Button>
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -10451,6 +10451,82 @@ export const messages = {
     defaultMessage: "Create schedule",
     description: "Button label for creating a compliance report schedule.",
   },
+  "policy.reporting.review": {
+    defaultMessage: "Review exact schedule",
+    description: "Ask the server to validate and fingerprint the unsaved report schedule without effects.",
+  },
+  "policy.reporting.reviewing": {
+    defaultMessage: "Reviewing exact schedule…",
+    description: "Effect-free report schedule review pending state.",
+  },
+  "policy.reporting.reviewHeading": {
+    defaultMessage: "Exact schedule review",
+    description: "Heading for the server-owned report schedule preview.",
+  },
+  "policy.reporting.noStateChanged": {
+    defaultMessage: "No state changed.",
+    description: "Confirms the report schedule preview performed no write or outside call.",
+  },
+  "policy.reporting.ready": {
+    defaultMessage: "Ready to save",
+    description: "The reviewed report schedule satisfies server prerequisites.",
+  },
+  "policy.reporting.setupNeeded": {
+    defaultMessage: "Setup needed",
+    description: "The reviewed report schedule has server blockers.",
+  },
+  "policy.reporting.fingerprint": {
+    defaultMessage: "Exact draft fingerprint",
+    description: "Cryptographic identifier for the normalized report schedule draft.",
+  },
+  "policy.reporting.permission": {
+    defaultMessage: "Permission checked again at save",
+    description: "Permission the server rechecks when the report schedule is created.",
+  },
+  "policy.reporting.executeWrites": {
+    defaultMessage: "What save writes",
+    description: "Durable writes performed by report schedule creation.",
+  },
+  "policy.reporting.recovery": {
+    defaultMessage: "Recovery",
+    description: "How an operator safely stops or repairs a report schedule.",
+  },
+  "policy.reporting.verify": {
+    defaultMessage: "How to verify",
+    description: "Readback checks after report schedule creation or recovery.",
+  },
+  "policy.reporting.intervalError": {
+    defaultMessage: "Cadence must be a whole number from 1 through 366 days.",
+    description: "Bounded report cadence validation error.",
+  },
+  "policy.reporting.reviewRequired": {
+    defaultMessage: "Review this exact schedule before saving it.",
+    description: "Save guard shown when an exact server review is missing or stale.",
+  },
+  "policy.reporting.pause": {
+    defaultMessage: "Pause schedule",
+    description: "Stop a compliance report schedule without deleting its definition or evidence.",
+  },
+  "policy.reporting.pausing": {
+    defaultMessage: "Pausing…",
+    description: "Compliance report schedule pause pending state.",
+  },
+  "policy.reporting.resume": {
+    defaultMessage: "Resume schedule",
+    description: "Restart a paused compliance report schedule with a fresh interval.",
+  },
+  "policy.reporting.resuming": {
+    defaultMessage: "Resuming…",
+    description: "Compliance report schedule resume pending state.",
+  },
+  "policy.reporting.paused": {
+    defaultMessage: "Schedule paused. Its definition and evidence remain available.",
+    description: "Successful compliance report schedule pause notice.",
+  },
+  "policy.reporting.resumed": {
+    defaultMessage: "Schedule resumed with a fresh full interval.",
+    description: "Successful compliance report schedule resume notice.",
+  },
   "policy.reporting.heading": {
     defaultMessage: "Compliance inventory report",
     description: "Heading for the compliance inventory reporting panel.",

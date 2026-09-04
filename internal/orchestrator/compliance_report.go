@@ -37,11 +37,14 @@ func (o *Orchestrator) UpsertComplianceReportSchedule(ctx context.Context, tenan
 	if err != nil {
 		return store.ComplianceReportSchedule{}, err
 	}
+	createdAt := in.CreatedAt
+	if createdAt.IsZero() {
+		createdAt = ev.Time
+	}
 	return store.ComplianceReportSchedule{
 		ID: id, TenantID: tenantID, Framework: in.Framework, Name: in.Name,
 		ReportType: in.ReportType, IntervalSeconds: in.IntervalSeconds,
 		Enabled: in.Enabled, Delivery: delivery, RecipientRef: in.RecipientRef,
-		NextRunAt: ev.Time.Add(time.Duration(in.IntervalSeconds) * time.Second),
-		CreatedAt: ev.Time, UpdatedAt: ev.Time,
+		NextRunAt: ev.Time.Add(time.Duration(in.IntervalSeconds) * time.Second), CreatedAt: createdAt, UpdatedAt: ev.Time,
 	}, nil
 }

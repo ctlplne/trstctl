@@ -154,6 +154,7 @@ import type {
   ComplianceInventoryReport,
   ComplianceReportSchedule,
   ComplianceReportScheduleList,
+  ComplianceReportSchedulePreview,
   ComplianceReportScheduleRequest,
   ConnectorCatalog,
   ConnectorCatalogItem,
@@ -832,6 +833,7 @@ export type {
   ComplianceInventoryReport,
   ComplianceReportSchedule,
   ComplianceReportScheduleList,
+  ComplianceReportSchedulePreview,
   ComplianceReportScheduleRequest,
   ConnectorCatalog,
   ConnectorCatalogItem,
@@ -2219,7 +2221,10 @@ export interface Api {
   complianceInventoryReport(): Promise<ComplianceInventoryReport>;
   nhiComplianceReport(): Promise<NHIComplianceReport>;
   complianceReportSchedules(options?: { limit?: number; cursor?: string }): Promise<ComplianceReportScheduleList>;
+  previewComplianceReportSchedule(input: ComplianceReportScheduleRequest): Promise<ComplianceReportSchedulePreview>;
   createComplianceReportSchedule(input: ComplianceReportScheduleRequest): Promise<ComplianceReportSchedule>;
+  pauseComplianceReportSchedule(id: string): Promise<ComplianceReportSchedule>;
+  resumeComplianceReportSchedule(id: string): Promise<ComplianceReportSchedule>;
   policyVersions(): Promise<PolicyVersionList>;
   createPolicyVersion(input: PolicyVersionRequest): Promise<PolicyVersion>;
   activatePolicyVersion(id: string, input: PolicyVersionActionRequest): Promise<PolicyVersion>;
@@ -2782,7 +2787,10 @@ const liveApi: Api = {
   complianceInventoryReport: () => req<ComplianceInventoryReport>("/api/v1/compliance/inventory-report"),
   nhiComplianceReport: () => req<NHIComplianceReport>("/api/v1/compliance/nhi-report"),
   complianceReportSchedules: (options) => req<ComplianceReportScheduleList>(`/api/v1/compliance/report-schedules${pageQueryString(options)}`),
+  previewComplianceReportSchedule: (input) => postRead<ComplianceReportSchedulePreview>("/api/v1/compliance/report-schedules/preview", input),
   createComplianceReportSchedule: (input) => mutate<ComplianceReportSchedule>("POST", "/api/v1/compliance/report-schedules", input),
+  pauseComplianceReportSchedule: (id) => mutate<ComplianceReportSchedule>("POST", `/api/v1/compliance/report-schedules/${encodeURIComponent(id)}/pause`),
+  resumeComplianceReportSchedule: (id) => mutate<ComplianceReportSchedule>("POST", `/api/v1/compliance/report-schedules/${encodeURIComponent(id)}/resume`),
   policyVersions: () => req<PolicyVersionList>("/api/v1/policy/versions"),
   createPolicyVersion: (input) => mutate<PolicyVersion>("POST", "/api/v1/policy/versions", input),
   activatePolicyVersion: (id, input) => mutate<PolicyVersion>("POST", `/api/v1/policy/versions/${encodeURIComponent(id)}/activate`, input),

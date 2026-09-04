@@ -357,8 +357,11 @@ var coreCommandTable = []Command{
 	{Name: []string{"audit", "feeds", "list"}, Method: "GET", Path: "/api/v1/audit/feeds", Summary: "List audit-feed schedules, lag, retries, failures, and collector receipts"},
 	{Name: []string{"compliance", "inventory-report"}, Method: "GET", Path: "/api/v1/compliance/inventory-report", Summary: "Get compliance and inventory reporting coverage"},
 	{Name: []string{"compliance", "nhi-report"}, Method: "GET", Path: "/api/v1/compliance/nhi-report", Summary: "Get audit-ready NHI compliance mappings"},
+	{Name: []string{"compliance", "report-schedules", "preview"}, Method: "POST", Path: "/api/v1/compliance/report-schedules/preview", Body: bodyFile, ReadOnly: true, Summary: "Review and fingerprint an exact report schedule without writing state or generating a report"},
 	{Name: []string{"compliance", "report-schedules", "create"}, Method: "POST", Path: "/api/v1/compliance/report-schedules", Body: bodyFile, Summary: "Create a scheduled compliance or inventory report"},
 	{Name: []string{"compliance", "report-schedules", "list"}, Method: "GET", Path: "/api/v1/compliance/report-schedules", Query: []string{"limit", "cursor"}, Summary: "List scheduled compliance and inventory reports"},
+	{Name: []string{"compliance", "report-schedules", "pause"}, Method: "POST", Path: "/api/v1/compliance/report-schedules/{id}/pause", Summary: "Pause a report schedule while retaining its definition and evidence"},
+	{Name: []string{"compliance", "report-schedules", "resume"}, Method: "POST", Path: "/api/v1/compliance/report-schedules/{id}/resume", Summary: "Resume a report schedule with a fresh full interval"},
 	{Name: []string{"compliance", "evidence-pack"}, Method: "GET", Path: "/api/v1/compliance/evidence-packs/{framework}", Summary: "Export a signed compliance evidence pack"},
 
 	{Name: []string{"privacy", "erasures", "erase"}, Method: "POST", Path: "/api/v1/privacy/subject-erasures", Body: bodyFile, Summary: "Erase direct subject personal data"},

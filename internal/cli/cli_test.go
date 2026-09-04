@@ -976,6 +976,42 @@ func TestProfileRecoveryCommandsCarryExactReviewedBody(t *testing.T) {
 	}
 }
 
+func TestComplianceScheduleReviewAndRecoveryCommands(t *testing.T) {
+	body := `{"name":"Quarterly SOC 2 inventory","framework":"soc2","report_type":"inventory_snapshot","interval_seconds":7776000,"enabled":true,"delivery":"audit_export","recipient_ref":"audit-vault"}`
+	var preview capture
+	previewServer := mockServer(t, http.StatusOK, `{"capability":"F62","ready":true,"effect_free":true}`, &preview)
+	code, _, stderr := run(t, []string{"compliance", "report-schedules", "preview", "-f", "-"}, cli.Env{
+		Server: previewServer.URL, HTTPClient: previewServer.Client(), IdempotencyKey: "must-not-send",
+	}, body)
+	if code != 0 || stderr != "" {
+		t.Fatalf("compliance preview exit = %d, stderr=%q", code, stderr)
+	}
+	if preview.Method != http.MethodPost || preview.Path != "/api/v1/compliance/report-schedules/preview" || !sameJSON(preview.Body, []byte(body)) {
+		t.Fatalf("compliance preview request = %s %s body=%s", preview.Method, preview.Path, preview.Body)
+	}
+	if got := preview.Header.Get("Idempotency-Key"); got != "" {
+		t.Fatalf("effect-free compliance preview sent Idempotency-Key %q", got)
+	}
+
+	for _, action := range []string{"pause", "resume"} {
+		var captured capture
+		srv := mockServer(t, http.StatusOK, `{"id":"33333333-3333-4333-8333-333333333333","enabled":true}`, &captured)
+		code, _, stderr = run(t, []string{"compliance", "report-schedules", action, "33333333-3333-4333-8333-333333333333"}, cli.Env{
+			Server: srv.URL, HTTPClient: srv.Client(), IdempotencyKey: "schedule-" + action,
+		}, "")
+		if code != 0 || stderr != "" {
+			t.Fatalf("compliance %s exit = %d, stderr=%q", action, code, stderr)
+		}
+		wantPath := "/api/v1/compliance/report-schedules/33333333-3333-4333-8333-333333333333/" + action
+		if captured.Method != http.MethodPost || captured.Path != wantPath || len(captured.Body) != 0 {
+			t.Fatalf("compliance %s request = %s %s body=%s", action, captured.Method, captured.Path, captured.Body)
+		}
+		if got := captured.Header.Get("Idempotency-Key"); got != "schedule-"+action {
+			t.Fatalf("compliance %s Idempotency-Key = %q", action, got)
+		}
+	}
+}
+
 func TestIdentityTransitionPreviewSendsExactBodyWithoutMutationHeader(t *testing.T) {
 	body := `{"to":"issued","reason":"reviewed issuance","subject_csr_pem":"public-csr"}`
 	var captured capture

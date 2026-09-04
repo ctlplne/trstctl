@@ -28,11 +28,11 @@ compliant.
   [Framework evidence packs](#framework-evidence-packs) below). Each report
   evaluates one explicit 90-day window; it does not treat “some audit data
   exists” as proof of an unrelated control.
-- Compliance inventory reporting and schedule definitions. `GET
-  /api/v1/compliance/inventory-report` and `POST
-  /api/v1/compliance/report-schedules` expose supported frameworks, report
-  types, evidence references, and idempotent, event-sourced schedule
-  definitions.
+- Compliance inventory reporting and recoverable schedule definitions. `GET
+  /api/v1/compliance/inventory-report`, effect-free `POST
+  /api/v1/compliance/report-schedules/preview`, and the create/list/pause/resume
+  schedule routes expose supported frameworks, report types, evidence references,
+  exact-draft review, and idempotent event-sourced recovery.
 - Tenant isolation. Every audit query is tenant-scoped.
 
 ## The tamper-evidence trust model (read this)
@@ -170,20 +170,40 @@ The response is intentionally mechanical: framework ids, report types
 `audit_summary`), served routes, evidence references, inventory counts,
 and the first page of tenant report schedules.
 
-An operator with `audit:write` can record a schedule definition — a
-tenant-scoped, idempotent event that does not claim email, webhook, or
-ticket dispatch:
+An operator with `audit:write` first reviews the exact definition and then records it.
+Review returns a tenant-bound SHA-256 fingerprint, normalized definition, later writes,
+recovery steps, and verification steps. It appends no event, projects no row, generates
+no report, resolves no credential, and calls no destination. Creation is a
+tenant-scoped, idempotent event that does not claim email, webhook, or ticket dispatch:
 
 ```sh
 cat > soc2-schedule.json <<'JSON'
 {"framework":"soc2","name":"weekly-soc2-pack","report_type":"framework_evidence_pack","interval_seconds":604800,"delivery":"audit_export","recipient_ref":"audit-archive"}
 JSON
+trstctl-cli compliance report-schedules preview -f soc2-schedule.json
 trstctl-cli --idempotency-key weekly-soc2 compliance report-schedules create -f soc2-schedule.json
 trstctl-cli compliance report-schedules list
 ```
 
 `delivery` is `audit_export` only; any other value is rejected, so an
-unserved email/webhook delivery can never look like a category met.
+unserved email/webhook delivery can never look like a category met. Cadence is bounded
+to one hour through 366 days, preventing a malformed definition from becoming a tight
+unbounded loop. The console intentionally accepts whole days from one through 366;
+API and CLI automation may use the finer one-hour minimum.
+
+Recovery preserves evidence instead of erasing history:
+
+```sh
+trstctl-cli --idempotency-key pause-weekly-soc2 \
+  compliance report-schedules pause SCHEDULE_ID
+trstctl-cli --idempotency-key resume-weekly-soc2 \
+  compliance report-schedules resume SCHEDULE_ID
+```
+
+Pause writes a new immutable configuration event with `enabled=false`; it does not
+delete the definition or prior evidence. Resume writes `enabled=true` and calculates a
+fresh full interval. Read the schedule list and inventory report after either action to
+verify both the exact row and the aggregate enabled-schedule count.
 
 ## What the operator must still do
 

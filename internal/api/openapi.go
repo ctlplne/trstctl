@@ -3586,6 +3586,24 @@ func componentSchemas() map[string]*Schema {
 		"delivery":         {Type: "string", Enum: []string{"audit_export"}},
 		"recipient_ref":    str(),
 	}, "framework", "name", "report_type", "interval_seconds")
+	complianceReportSchedulePreview := object(map[string]*Schema{
+		"capability":               str(),
+		"operation":                str(),
+		"ready":                    {Type: "boolean"},
+		"effect_free":              {Type: "boolean"},
+		"request_fingerprint":      str(),
+		"required_permission":      str(),
+		"normalized_request":       ref("ComplianceReportScheduleRequest"),
+		"blockers":                 {Type: "array", Items: str()},
+		"warnings":                 {Type: "array", Items: str()},
+		"preview_writes":           {Type: "array", Items: str()},
+		"preview_external_effects": {Type: "array", Items: str()},
+		"execute_writes":           {Type: "array", Items: str()},
+		"execute_external_effects": {Type: "array", Items: str()},
+		"recovery_steps":           {Type: "array", Items: str()},
+		"verification_steps":       {Type: "array", Items: str()},
+		"secret_data_handling":     str(),
+	}, "capability", "operation", "ready", "effect_free", "request_fingerprint", "required_permission", "normalized_request", "blockers", "warnings", "preview_writes", "preview_external_effects", "execute_writes", "execute_external_effects", "recovery_steps", "verification_steps", "secret_data_handling")
 	complianceReportSchedule := object(map[string]*Schema{
 		"id":               uuid(),
 		"tenant_id":        uuid(),
@@ -6250,6 +6268,7 @@ func componentSchemas() map[string]*Schema {
 		"CustodyExportabilityCounts":               custodyExportabilityCounts,
 		"UnrecordedCustodyCertificate":             unrecordedCustodyCertificate,
 		"ComplianceReportScheduleRequest":          complianceReportScheduleReq,
+		"ComplianceReportSchedulePreview":          complianceReportSchedulePreview,
 		"ComplianceReportSchedule":                 complianceReportSchedule,
 		"ComplianceReportScheduleList":             list("ComplianceReportSchedule"),
 		"ComplianceInventorySummary":               complianceInventorySummary,

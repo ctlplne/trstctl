@@ -3034,6 +3034,29 @@ ComplianceReportScheduleList = TypedDict(
     total=False,
 )
 
+ComplianceReportSchedulePreview = TypedDict(
+    'ComplianceReportSchedulePreview',
+    {
+        'blockers': list[str],
+        'capability': str,
+        'effect_free': bool,
+        'execute_external_effects': list[str],
+        'execute_writes': list[str],
+        'normalized_request': dict[str, Any],
+        'operation': str,
+        'preview_external_effects': list[str],
+        'preview_writes': list[str],
+        'ready': bool,
+        'recovery_steps': list[str],
+        'request_fingerprint': str,
+        'required_permission': str,
+        'secret_data_handling': str,
+        'verification_steps': list[str],
+        'warnings': list[str],
+    },
+    total=False,
+)
+
 ComplianceReportScheduleRequest = TypedDict(
     'ComplianceReportScheduleRequest',
     {

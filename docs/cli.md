@@ -185,7 +185,7 @@ exhaustive subcommand list:
 | `pqc campaigns`                   | Core PQC migration ownership and evidence workflow (`create` · `list` · `get` · `update` · `readiness` · `disposition` · `close` · `evidence`)                                                                                                                                                                      |
 | `certificates`                    | Certificate inventory: ingest, list, get, health, bulk-revoke (`ingest` · `list` · `get` · `health` · `bulk-revoke`)                                                                                                                                                                                                |
 | `code-signing`                    | Review and sign artifact digests with a managed key or a keyless Sigstore/Fulcio identity (`identities` · `preview` · `sign` · `keyless-preview` · `keyless`)                                                                                                                                                                               |
-| `compliance`                      | Compliance/inventory reporting and signed evidence-pack export (`inventory-report` · `nhi-report` · `report-schedules` · `evidence-pack`)                                                                                                                                                                           |
+| `compliance`                      | Compliance/inventory reporting, exact schedule review/recovery, and signed evidence-pack export (`inventory-report` · `nhi-report` · `report-schedules preview/create/list/pause/resume` · `evidence-pack`)                                                                                                                                                                           |
 | `connector target`                | Deployment connector targets: create, bind, test, deploy, roll back (`create` · `list` · `get` · `update` · `delete` · `bind` · `test` · `deploy` · `rollback`)                                                                                                                                                     |
 | `connectors`                      | Connector catalog, outbox circuit-breaker state, delivery receipts (`catalog` · `outbox-circuits` · `deliveries`)                                                                                                                                                                                                   |
 | `discovery`                       | Discovery segments, sources, schedules, runs, findings, CT monitoring, drift remediation, continuous monitoring (`segments create` · `sources` · `schedules` · `runs` · `findings` · `ct-monitoring` · `drift-remediation` · `monitoring`)                                                                          |
@@ -732,8 +732,14 @@ trstctl-cli audit feeds list
 cat > compliance-schedule.json <<'JSON'
 {"framework":"soc2","name":"weekly-soc2-pack","report_type":"framework_evidence_pack","interval_seconds":604800,"delivery":"audit_export","recipient_ref":"audit-archive"}
 JSON
+trstctl-cli compliance report-schedules preview -f compliance-schedule.json
 trstctl-cli --idempotency-key weekly-soc2 compliance report-schedules create -f compliance-schedule.json
 trstctl-cli compliance report-schedules list
+
+# Recovery retains the definition and evidence, stops future due work, and resumes
+# with a fresh full interval after the problem is corrected.
+trstctl-cli --idempotency-key pause-weekly-soc2 compliance report-schedules pause SCHEDULE_ID
+trstctl-cli --idempotency-key resume-weekly-soc2 compliance report-schedules resume SCHEDULE_ID
 
 # Review the exact normalized targets and read/write ceilings without touching them.
 cat > cbom-scan.json <<'JSON'

@@ -226,6 +226,7 @@ public final class OpenApiSchemas {
       "ComplianceInventorySummary",
       "ComplianceReportSchedule",
       "ComplianceReportScheduleList",
+      "ComplianceReportSchedulePreview",
       "ComplianceReportScheduleRequest",
       "ConnectorCatalog",
       "ConnectorCatalogItem",

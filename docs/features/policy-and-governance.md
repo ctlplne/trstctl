@@ -298,7 +298,14 @@ routes, evidence references, schedule rows, and inventory counts across certific
 CBOM assets, and discovery/report schedules; `POST`/`GET
 /api/v1/compliance/report-schedules` record and list idempotent, event-sourced
 schedules, with compliance-report delivery limited to `audit_export` until a served
-report runner exists. This limitation does not apply to the separate native audit
+report runner exists. `POST /api/v1/compliance/report-schedules/preview` validates and
+fingerprints the exact unsaved definition without appending an event, projecting a row,
+generating a report, or calling a destination. The console invalidates that review after
+any edit and keeps **Create schedule** disabled until the exact draft is ready. Saved
+schedules expose named `/{id}/pause` and `/{id}/resume` recovery routes. Pause retains
+the definition and prior evidence; resume calculates a fresh full interval. Both actions
+are tenant-scoped, permission-checked, event-sourced, and idempotent. This limitation
+does not apply to the separate native audit
 feed: `PUT /api/v1/audit/feeds/{id}` and `GET /api/v1/audit/feeds` configure and
 observe durable Splunk HEC or Microsoft Sentinel batches. `GET
 /api/v1/compliance/nhi-report` builds a separate mapping (NIST SP 800-53 Rev. 5, NIST
@@ -410,7 +417,10 @@ printf '{"reason":"CAB approved"}' | trstctl-cli --idempotency-key policy-activa
 cat > soc2-schedule.json <<'JSON'
 {"framework":"soc2","name":"weekly-soc2-pack","interval_seconds":604800,"delivery":"audit_export"}
 JSON
+trstctl-cli compliance report-schedules preview -f soc2-schedule.json
 trstctl-cli --idempotency-key weekly-soc2 compliance report-schedules create -f soc2-schedule.json
+trstctl-cli --idempotency-key pause-weekly-soc2 compliance report-schedules pause SCHEDULE_ID
+trstctl-cli --idempotency-key resume-weekly-soc2 compliance report-schedules resume SCHEDULE_ID
 
 # start and decide an NHI access certification campaign
 trstctl-cli access reviews start -f nhi-review.json

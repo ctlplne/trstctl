@@ -99,11 +99,11 @@ describe("Global Alert Center", () => {
     expect(screen.getByRole("form", { name: "Create routing rule" })).toBeInTheDocument();
     expect(screen.getByLabelText("Rule level")).toHaveValue("workspace");
     expect(screen.getByLabelText("Workspace")).toHaveValue("certificate-lifecycle");
-    await user.click(screen.getByRole("button", { name: "Preview current route" }));
-    await waitFor(() =>
-      expect(apiMock.notificationRoutingPreview).toHaveBeenCalledWith(expect.objectContaining({ workspace: "certificate-lifecycle", severity: "critical" })),
-    );
-    expect(await screen.findByText("No automatic rule matches this asset.")).toBeInTheDocument();
+    // A blank tenant cannot manufacture a ready automatic route. The exact
+    // draft review stays disabled until at least one configured channel is
+    // selected, and no effective-route preview is issued as a substitute.
+    expect(screen.getByRole("button", { name: "Review exact route" })).toBeDisabled();
+    expect(apiMock.notificationRoutingPreview).not.toHaveBeenCalled();
 
     await user.click(within(tabs).getByRole("tab", { name: "Channels & test" }));
     expect(screen.getByText(/browser never calls the destination directly/i)).toBeInTheDocument();

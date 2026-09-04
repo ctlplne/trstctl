@@ -5,11 +5,17 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	googleuuid "github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
+	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/cryptoreadiness"
 	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/discovery/adcs"
@@ -65,6 +71,11 @@ var complianceFrameworks = []ComplianceFramework{
 }
 
 var complianceReportTypes = []string{"framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary", "nhi_compliance_mapping"}
+
+const (
+	minComplianceReportIntervalSeconds = 60 * 60
+	maxComplianceReportIntervalSeconds = 366 * 24 * 60 * 60
+)
 
 // ParseComplianceFramework accepts stable API path values and common aliases.
 func ParseComplianceFramework(raw string) (ComplianceFramework, error) {
@@ -203,6 +214,25 @@ type complianceReportScheduleResponse struct {
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
+type complianceReportSchedulePreviewResponse struct {
+	Capability             string                          `json:"capability"`
+	Operation              string                          `json:"operation"`
+	Ready                  bool                            `json:"ready"`
+	EffectFree             bool                            `json:"effect_free"`
+	RequestFingerprint     string                          `json:"request_fingerprint"`
+	RequiredPermission     string                          `json:"required_permission"`
+	NormalizedRequest      complianceReportScheduleRequest `json:"normalized_request"`
+	Blockers               []string                        `json:"blockers"`
+	Warnings               []string                        `json:"warnings"`
+	PreviewWrites          []string                        `json:"preview_writes"`
+	PreviewExternalEffects []string                        `json:"preview_external_effects"`
+	ExecuteWrites          []string                        `json:"execute_writes"`
+	ExecuteExternalEffects []string                        `json:"execute_external_effects"`
+	RecoverySteps          []string                        `json:"recovery_steps"`
+	VerificationSteps      []string                        `json:"verification_steps"`
+	SecretDataHandling     string                          `json:"secret_data_handling"`
+}
+
 type complianceInventoryReport struct {
 	Capability   string                             `json:"capability"`
 	GeneratedAt  time.Time                          `json:"generated_at"`
@@ -230,6 +260,63 @@ func WithComplianceEvidence(svc ComplianceEvidenceService) Option {
 	return func(c *config) { c.complianceEvidence = svc }
 }
 
+// previewComplianceReportSchedule is a POST-shaped read because the exact
+// unsaved definition is structured. It calls the execution validator but does
+// not append an event, reserve an idempotency key, project a row, generate a
+// report, or contact a delivery destination.
+func (a *API) previewComplianceReportSchedule(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	var req complianceReportScheduleRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	normalized, err := normalizeComplianceReportScheduleRequest(req)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	fingerprintBody, err := json.Marshal(struct {
+		Domain   string                          `json:"domain"`
+		TenantID string                          `json:"tenant_id"`
+		Request  complianceReportScheduleRequest `json:"request"`
+	}{
+		Domain: "trstctl.api.compliance-report-schedule-preview.v1", TenantID: tenantID, Request: normalized,
+	})
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	warnings := []string{}
+	if normalized.Enabled != nil && !*normalized.Enabled {
+		warnings = append(warnings, "This definition will be saved paused, so no run becomes due until an operator resumes it.")
+	}
+	a.writeJSON(w, http.StatusOK, complianceReportSchedulePreviewResponse{
+		Capability: "F62", Operation: "create_report_schedule", Ready: true, EffectFree: true,
+		RequestFingerprint: crypto.SHA256Hex(fingerprintBody), RequiredPermission: string(authz.AuditWrite),
+		NormalizedRequest: normalized, Blockers: []string{}, Warnings: warnings,
+		PreviewWrites: []string{}, PreviewExternalEffects: []string{},
+		ExecuteWrites: []string{
+			"Append one tenant-scoped compliance.report_schedule.upserted event.",
+			"Project one report definition with its cadence, enabled state, destination reference, and next due time.",
+		},
+		ExecuteExternalEffects: []string{},
+		RecoverySteps: []string{
+			"Pause the schedule before its next run; already retained evidence is not deleted.",
+			"Correct the definition by creating a reviewed replacement, then resume only the intended schedule.",
+		},
+		VerificationSteps: []string{
+			"Read GET /api/v1/compliance/report-schedules and match the exact definition and enabled state.",
+			"Read GET /api/v1/compliance/inventory-report and confirm schedule and enabled-schedule totals.",
+		},
+		SecretDataHandling: "recipient_ref is an opaque metadata locator. Preview neither resolves nor returns a credential, report body, private key, or secret value.",
+	})
+}
+
 //trstctl:mutation
 func (a *API) createComplianceReportSchedule(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
@@ -238,41 +325,97 @@ func (a *API) createComplianceReportSchedule(w http.ResponseWriter, r *http.Requ
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
-		fw, err := ParseComplianceFramework(req.Framework)
+		normalized, err := normalizeComplianceReportScheduleRequest(req)
 		if err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
-		}
-		name := strings.TrimSpace(req.Name)
-		if name == "" {
-			return 0, nil, errStatus(http.StatusBadRequest, "name is required")
-		}
-		reportType := strings.ToLower(strings.TrimSpace(req.ReportType))
-		if !validComplianceReportType(reportType) {
-			return 0, nil, errStatus(http.StatusBadRequest, "report_type must be one of framework_evidence_pack, inventory_snapshot, cbom_posture, audit_summary, or nhi_compliance_mapping")
-		}
-		if req.IntervalSeconds <= 0 {
-			return 0, nil, errStatus(http.StatusBadRequest, "interval_seconds must be greater than zero")
-		}
-		delivery := strings.ToLower(strings.TrimSpace(req.Delivery))
-		if delivery == "" {
-			delivery = "audit_export"
-		}
-		if delivery != "audit_export" {
-			return 0, nil, errStatus(http.StatusBadRequest, "delivery must be audit_export")
-		}
-		enabled := true
-		if req.Enabled != nil {
-			enabled = *req.Enabled
+			return 0, nil, err
 		}
 		sched, err := a.orch.UpsertComplianceReportSchedule(ctx, tenantID, store.ComplianceReportSchedule{
-			Framework: string(fw), Name: name, ReportType: reportType,
-			IntervalSeconds: req.IntervalSeconds, Enabled: enabled,
-			Delivery: delivery, RecipientRef: strings.TrimSpace(req.RecipientRef),
+			Framework: normalized.Framework, Name: normalized.Name, ReportType: normalized.ReportType,
+			IntervalSeconds: normalized.IntervalSeconds, Enabled: *normalized.Enabled,
+			Delivery: normalized.Delivery, RecipientRef: normalized.RecipientRef,
 		})
 		if err != nil {
 			return 0, nil, err
 		}
 		return http.StatusCreated, toComplianceReportScheduleResponse(sched), nil
+	})
+}
+
+func normalizeComplianceReportScheduleRequest(req complianceReportScheduleRequest) (complianceReportScheduleRequest, error) {
+	fw, err := ParseComplianceFramework(req.Framework)
+	if err != nil {
+		return complianceReportScheduleRequest{}, errStatus(http.StatusBadRequest, err.Error())
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return complianceReportScheduleRequest{}, errStatus(http.StatusBadRequest, "name is required")
+	}
+	if len(name) > 160 {
+		return complianceReportScheduleRequest{}, errStatus(http.StatusBadRequest, "name must be 160 characters or fewer")
+	}
+	reportType := strings.ToLower(strings.TrimSpace(req.ReportType))
+	if !validComplianceReportType(reportType) {
+		return complianceReportScheduleRequest{}, errStatus(http.StatusBadRequest, "report_type must be one of framework_evidence_pack, inventory_snapshot, cbom_posture, audit_summary, or nhi_compliance_mapping")
+	}
+	if req.IntervalSeconds < minComplianceReportIntervalSeconds || req.IntervalSeconds > maxComplianceReportIntervalSeconds {
+		return complianceReportScheduleRequest{}, errStatus(http.StatusBadRequest, "interval_seconds must be between 3600 and 31622400")
+	}
+	delivery := strings.ToLower(strings.TrimSpace(req.Delivery))
+	if delivery == "" {
+		delivery = "audit_export"
+	}
+	if delivery != "audit_export" {
+		return complianceReportScheduleRequest{}, errStatus(http.StatusBadRequest, "delivery must be audit_export")
+	}
+	recipientRef := strings.TrimSpace(req.RecipientRef)
+	if len(recipientRef) > 256 {
+		return complianceReportScheduleRequest{}, errStatus(http.StatusBadRequest, "recipient_ref must be 256 characters or fewer")
+	}
+	enabled := true
+	if req.Enabled != nil {
+		enabled = *req.Enabled
+	}
+	return complianceReportScheduleRequest{
+		Framework: string(fw), Name: name, ReportType: reportType,
+		IntervalSeconds: req.IntervalSeconds, Enabled: &enabled,
+		Delivery: delivery, RecipientRef: recipientRef,
+	}, nil
+}
+
+//trstctl:mutation
+func (a *API) pauseComplianceReportSchedule(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.setComplianceReportScheduleEnabled(w, r, idempotencyKey, false)
+}
+
+//trstctl:mutation
+func (a *API) resumeComplianceReportSchedule(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.setComplianceReportScheduleEnabled(w, r, idempotencyKey, true)
+}
+
+func (a *API) setComplianceReportScheduleEnabled(w http.ResponseWriter, r *http.Request, idempotencyKey string, enabled bool) {
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		id := strings.TrimSpace(r.PathValue("id"))
+		if parsed, err := googleuuid.Parse(id); err != nil || parsed == googleuuid.Nil {
+			return 0, nil, errStatus(http.StatusBadRequest, "report schedule id must be a non-zero UUID")
+		}
+		current, err := a.store.GetComplianceReportSchedule(ctx, tenantID, id)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, nil, errStatus(http.StatusNotFound, "compliance report schedule not found")
+		}
+		if err != nil {
+			return 0, nil, err
+		}
+		if current.Enabled == enabled {
+			return http.StatusOK, toComplianceReportScheduleResponse(current), nil
+		}
+		current.Enabled = enabled
+		updated, err := a.orch.UpsertComplianceReportSchedule(ctx, tenantID, current)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, toComplianceReportScheduleResponse(updated), nil
 	})
 }
 
@@ -342,8 +485,11 @@ func (a *API) getComplianceInventoryReport(w http.ResponseWriter, r *http.Reques
 		Routes: []string{
 			"GET /api/v1/compliance/inventory-report",
 			"GET /api/v1/compliance/nhi-report",
+			"POST /api/v1/compliance/report-schedules/preview",
 			"POST /api/v1/compliance/report-schedules",
 			"GET /api/v1/compliance/report-schedules",
+			"POST /api/v1/compliance/report-schedules/{id}/pause",
+			"POST /api/v1/compliance/report-schedules/{id}/resume",
 			"GET /api/v1/compliance/evidence-packs/{framework}",
 		},
 		EvidenceRefs: []string{

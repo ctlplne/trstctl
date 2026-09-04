@@ -8942,6 +8942,101 @@
         ],
         "type": "object"
       },
+      "ComplianceReportSchedulePreview": {
+        "properties": {
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "execute_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execute_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "normalized_request": {
+            "$ref": "#/components/schemas/ComplianceReportScheduleRequest"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "request_fingerprint": {
+            "type": "string"
+          },
+          "required_permission": {
+            "type": "string"
+          },
+          "secret_data_handling": {
+            "type": "string"
+          },
+          "verification_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "operation",
+          "ready",
+          "effect_free",
+          "request_fingerprint",
+          "required_permission",
+          "normalized_request",
+          "blockers",
+          "warnings",
+          "preview_writes",
+          "preview_external_effects",
+          "execute_writes",
+          "execute_external_effects",
+          "recovery_steps",
+          "verification_steps",
+          "secret_data_handling"
+        ],
+        "type": "object"
+      },
       "ComplianceReportScheduleRequest": {
         "properties": {
           "delivery": {
@@ -38870,6 +38965,197 @@
           }
         ],
         "summary": "Create a scheduled compliance or inventory report",
+        "x-trstctl-permission": "audit:write"
+      }
+    },
+    "/api/v1/compliance/report-schedules/preview": {
+      "post": {
+        "operationId": "previewComplianceReportSchedule",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComplianceReportScheduleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComplianceReportSchedulePreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Review and fingerprint an exact compliance report schedule without writing state or generating a report",
+        "x-trstctl-permission": "audit:write"
+      }
+    },
+    "/api/v1/compliance/report-schedules/{id}/pause": {
+      "post": {
+        "operationId": "pauseComplianceReportSchedule",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComplianceReportSchedule"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Pause a compliance report schedule while retaining its definition and evidence",
+        "x-trstctl-permission": "audit:write"
+      }
+    },
+    "/api/v1/compliance/report-schedules/{id}/resume": {
+      "post": {
+        "operationId": "resumeComplianceReportSchedule",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComplianceReportSchedule"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Resume a compliance report schedule with a fresh full interval",
         "x-trstctl-permission": "audit:write"
       }
     },
