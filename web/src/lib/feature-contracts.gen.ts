@@ -5130,7 +5130,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use break-glass procedures while tenant, policy, and security authority remain on the server.",
       "tool": "operations",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/incidents",
       "navigationEntrypoints": [
         "tool navigation",
@@ -5144,7 +5144,7 @@ export const canonicalCapabilities = [
       ],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -5159,12 +5159,24 @@ export const canonicalCapabilities = [
           ]
         },
         "configure": {
-          "status": "missing",
-          "reason": "No structured evidence proves an operator can configure every required prerequisite from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/components/breakglass/index.tsx",
+            "web/src/components/breakglass/index.test.tsx",
+            "docs/features/incident-and-jit.md",
+            "artifacts/g197-f34-source-qualification.json",
+            "artifacts/g197-f34-live-browser-qualification.json"
+          ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "POST /api/v1/breakglass/issue-ceremonies/preview",
+            "CLI command: breakglass issue-preview",
+            "web/src/components/breakglass/index.tsx",
+            "internal/server/breakglass_served_test.go",
+            "artifacts/g197-f34-live-browser-qualification.json"
+          ]
         },
         "execute": {
           "status": "complete",
@@ -5195,6 +5207,7 @@ export const canonicalCapabilities = [
         "automate": {
           "status": "complete",
           "evidence": [
+            "OpenAPI operationId: previewBreakglassIssue",
             "OpenAPI operationId: startBreakglassIssueCeremony",
             "OpenAPI operationId: issueBreakglass",
             "OpenAPI operationId: startBreakglassRotationCeremony",
@@ -5202,6 +5215,7 @@ export const canonicalCapabilities = [
             "OpenAPI operationId: startBreakglassCrossSignCeremony",
             "OpenAPI operationId: crossSignBreakglass",
             "OpenAPI operationId: reconcileBreakglass",
+            "CLI command: breakglass issue-preview",
             "CLI command: breakglass issue-ceremony",
             "CLI command: breakglass issue",
             "CLI command: breakglass rotation-ceremony",
@@ -5214,8 +5228,8 @@ export const canonicalCapabilities = [
       },
       "owner": "operations",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "e58e74b4017d164c50bd17b41fc3256df8000aa3",
+      "freshness": "2026-09-04"
     }
   },
   {

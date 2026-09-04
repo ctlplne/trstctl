@@ -14325,7 +14325,7 @@
             "priority": 74,
             "served_state": "conditional",
             "backend_status": "conditional: signer-backed online issue, rotation, cross-signing, and offline-bundle reconciliation are production-assembled behind explicit custody and roster configuration",
-            "current_frontend_mapping": "served: Incidents at /incidents can submit online m-of-n break-glass issue requests and reconcile offline bundles, with audit event evidence",
+            "current_frontend_mapping": "served: Incidents at /incidents provides a four-step break-glass journey that collects a structured emergency request, obtains an exact effect-free server review, discloses quorum/custody blockers and execution/recovery/verification effects, opens the request-bound ceremony only when ready, then verifies the immutable issuance evidence; offline bundle reconciliation remains available as an explicitly separated recovery path",
             "target_gui_mapping": "Break-glass UI with emergency declaration, quorum, online issue, offline verification, reconciliation, expiry, and post-incident audit checklist.",
             "acceptance_test": "Served API requires m-of-n quorum, rejects sub-quorum online issue requests, returns a self-verifying bundle, and records breakglass.issued before responding; UI/CLI call the served route with high-risk confirmation/body-file workflows.",
             "source_docs": [
@@ -14336,9 +14336,13 @@
                 "internal/server/breakglass_rotation.go",
                 "internal/server/ca_hierarchy.go"
             ],
-            "source_frontend": [],
+            "source_frontend": [
+                "web/src/components/breakglass/index.tsx",
+                "web/src/components/breakglass/index.test.tsx",
+                "web/src/__tests__/incidents.test.tsx"
+            ],
             "status": "closed",
-            "notes": "TRACE-006 closes F34 as conditionally served. Production buildRunDeps binds configured verifier material to a persisted purpose-constrained dual-control signer handle. Online issue, rotation, and cross-sign requests are exact-request-bound to tenant-scoped ceremonies; caller-supplied approver names are absent, and only distinct authenticated immutable ca.ceremony.approved actors from the configured roster count. POST /api/v1/breakglass/reconcile remains the recovery path for signed offline bundles.",
+            "notes": "Complete review-first vertical slice. Production buildRunDeps binds configured verifier material to a persisted purpose-constrained dual-control signer handle. Online issue, rotation, and cross-sign requests are exact-request-bound to tenant-scoped ceremonies; caller-supplied approver names are absent, and only distinct authenticated immutable ca.ceremony.approved actors from the configured roster count. The four-step UI and breakglass issue-preview CLI use the effect-free served preview before opening a ceremony, name every prerequisite and planned effect, and keep execution disabled when custody or roster configuration is absent. Exact g197 qualification passed full repository lint/test with 72.1% merged coverage. The installed g197 browser journey returned a 2,276-byte blocked safety plan instead of the preserved typed-nil empty-body failure; configured signer-backed 2-of-3 issue, immutable audit, bundle verification, and sub-quorum refusal remain proven by the served test. POST /api/v1/breakglass/reconcile remains the separated recovery path for signed offline bundles.",
             "api_surface": [
                 "previewBreakglassIssue",
                 "startBreakglassIssueCeremony",
@@ -14364,6 +14368,7 @@
             "facet_evidence": {
                 "served": {
                     "evidence": [
+                        "POST /api/v1/breakglass/issue-ceremonies/preview parses and fingerprints the CSR, binds the exact request, reports immutable custody/roster readiness, and returns zero-effect execution, recovery, and verification plans without opening a ceremony.",
                         "POST /api/v1/breakglass/issue performs online m-of-n emergency issuance through the configured signer-backed break-glass issuer and reconciles the resulting bundle into audit before returning.",
                         "Online issue, CA rotation, and target cross-signing use exact-request ceremony/execution pairs; approvals are immutable authenticated event actors from the configured roster, not names in the execution body.",
                         "POST /api/v1/breakglass/reconcile verifies signed offline break-glass bundles against deployment-pinned verifier material and reconciles them into audit as immutable breakglass.issued events.",
@@ -14381,16 +14386,21 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: served: Incidents at /incidents can submit online m-of-n break-glass issue requests and reconcile offline bundles, with audit event evidence",
+                        "current_frontend_mapping: Incidents at /incidents provides Configure, Review safety, Collect approvals, and Verify evidence steps backed by the served preview and ceremony APIs.",
+                        "The structured form validates request ID, subject, incident reason, TTL, and base64 DER CSR; the safety review explains no state changed, readiness, exact fingerprints, request binding, blockers, writes, signer calls, recovery, and verification before enabling ceremony creation.",
+                        "Exact installed g197 browser evidence proves disabled custody is explained with two precise blockers and the mutation control remains disabled, rather than returning a blank response or asking operators to guess configuration.",
                         "target_gui_mapping: Break-glass UI with emergency declaration, quorum, online issue, offline verification, reconciliation, expiry, and post-incident audit checklist."
                     ],
                     "refs": [
                         "web/src/lib/navigation.ts",
-                        "web/src/App.tsx"
+                        "web/src/App.tsx",
+                        "web/src/components/breakglass/index.tsx",
+                        "web/src/components/breakglass/index.test.tsx"
                     ]
                 },
                 "cli": {
                     "evidence": [
+                        "cli_surface: breakglass issue-preview reads the exact request from -f and sends it to the effect-free served preview before an operator opens a ceremony.",
                         "cli_surface: breakglass issue sends POST /api/v1/breakglass/issue with a JSON request body from -f and an Idempotency-Key for safe retries.",
                         "cli_surface: breakglass issue-ceremony, rotation-ceremony/rotate, and cross-sign-ceremony/cross-sign expose the exact request-bound signer lifecycle without caller-authored approver names.",
                         "cli_surface: breakglass reconcile sends POST /api/v1/breakglass/reconcile with a JSON request body from -f and an Idempotency-Key for safe retries.",
@@ -14403,6 +14413,7 @@
                 },
                 "api": {
                     "evidence": [
+                        "api_surface: previewBreakglassIssue is in the served OpenAPI route registry at POST /api/v1/breakglass/issue-ceremonies/preview and publishes a typed BreakglassIssuePlan.",
                         "api_surface: issueBreakglass is in the served OpenAPI route registry at POST /api/v1/breakglass/issue.",
                         "api_surface: startBreakglassIssueCeremony, startBreakglassRotationCeremony, rotateBreakglass, startBreakglassCrossSignCeremony, and crossSignBreakglass are in the served OpenAPI route registry.",
                         "api_surface: reconcileBreakglass is in the served OpenAPI route registry at POST /api/v1/breakglass/reconcile.",
@@ -14415,6 +14426,10 @@
                 },
                 "test": {
                     "evidence": [
+                        "TestServedOnlineBreakglassIssueRequiresQuorumAndRecordsAuditChain rejects malformed CSR preview without moving the event head, proves a valid preview is effect-free and request-bound, then performs real 2-of-3 signer-backed issuance and sub-quorum refusal.",
+                        "TestServedBreakglassPreviewExplainsUnconfiguredCustody reproduces the production typed-nil boundary and proves disabled custody returns non-empty JSON with exact blockers and zero event mutation.",
+                        "web/src/components/breakglass/index.test.tsx proves the operator cannot open a ceremony before review, sees the effect-free blocked plan, and can use the separately named offline reconciliation path.",
+                        "artifacts/g197-f34-source-qualification.json and artifacts/g197-f34-live-browser-qualification.json retain exact source and installed-browser proof.",
                         "internal/server/breakglass_served_test.go posts a real online m-of-n issue request to the running handler, verifies the returned bundle, verifies breakglass.issued is chain-verifiable in the audit surface, and proves sub-quorum online issue fails closed.",
                         "internal/server/breakglass_served_test.go also posts a real offline bundle to the running reconcile handler and verifies breakglass.issued is chain-verifiable in the audit surface.",
                         "internal/server/dod_breakglass_rotation_runtime_test.go assembles buildRunDeps, proves exact authenticated ceremony failures, restart replay, bidirectional rotation chains, signer-backed CA cross-signing, and offline-root public re-key/cross-sign import against an independent OpenSSL process.",
@@ -14433,7 +14448,7 @@
                 },
                 "docs": {
                     "evidence": [
-                        "documented in docs/features/incident-and-jit.md"
+                        "docs/features/incident-and-jit.md documents the effect-free preview, structured CLI/API sequence, exact-request quorum, no-custody blocked behavior, immutable audit proof, offline recovery, and post-incident verification."
                     ],
                     "refs": [
                         "docs/features/incident-and-jit.md"
@@ -14466,12 +14481,15 @@
                 },
                 "a11y": {
                     "evidence": [
-                        "feature-specific a11y receipt: Break-glass procedures is mapped to route-backed GUI workflow evidence and exercised by web/src/__tests__/feature_a11y_receipts.test.tsx, which renders the registered route surface, runs axe, and verifies keyboard focus reaches the workflow."
+                        "feature-specific a11y receipt: Break-glass procedures is mapped to route-backed GUI workflow evidence and exercised by web/src/__tests__/feature_a11y_receipts.test.tsx, which renders the registered route surface, runs axe, and verifies keyboard focus reaches the workflow.",
+                        "The workflow uses labelled native controls, Wizard/StepShell keyboard navigation, accessible status/error regions, and explicit disabled-state text; component tests drive the review action by accessible role and name."
                     ],
                     "refs": [
                         "web/src/__tests__/feature_a11y_receipts.test.tsx",
                         "web/src/lib/navigation.ts",
-                        "web/src/App.tsx"
+                        "web/src/App.tsx",
+                        "web/src/components/breakglass/index.tsx",
+                        "web/src/components/breakglass/index.test.tsx"
                     ]
                 },
                 "i18n": {
@@ -14495,7 +14513,7 @@
                 "purpose": "Lets an operator understand and safely use break-glass procedures while tenant, policy, and security authority remain on the server.",
                 "tool": "operations",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/incidents",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -14509,7 +14527,7 @@
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -14524,12 +14542,24 @@
                         ]
                     },
                     "configure": {
-                        "status": "missing",
-                        "reason": "No structured evidence proves an operator can configure every required prerequisite from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/components/breakglass/index.tsx",
+                            "web/src/components/breakglass/index.test.tsx",
+                            "docs/features/incident-and-jit.md",
+                            "artifacts/g197-f34-source-qualification.json",
+                            "artifacts/g197-f34-live-browser-qualification.json"
+                        ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "POST /api/v1/breakglass/issue-ceremonies/preview",
+                            "CLI command: breakglass issue-preview",
+                            "web/src/components/breakglass/index.tsx",
+                            "internal/server/breakglass_served_test.go",
+                            "artifacts/g197-f34-live-browser-qualification.json"
+                        ]
                     },
                     "execute": {
                         "status": "complete",
@@ -14560,6 +14590,7 @@
                     "automate": {
                         "status": "complete",
                         "evidence": [
+                            "OpenAPI operationId: previewBreakglassIssue",
                             "OpenAPI operationId: startBreakglassIssueCeremony",
                             "OpenAPI operationId: issueBreakglass",
                             "OpenAPI operationId: startBreakglassRotationCeremony",
@@ -14567,6 +14598,7 @@
                             "OpenAPI operationId: startBreakglassCrossSignCeremony",
                             "OpenAPI operationId: crossSignBreakglass",
                             "OpenAPI operationId: reconcileBreakglass",
+                            "CLI command: breakglass issue-preview",
                             "CLI command: breakglass issue-ceremony",
                             "CLI command: breakglass issue",
                             "CLI command: breakglass rotation-ceremony",
@@ -14579,8 +14611,8 @@
                 },
                 "owner": "operations",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "e58e74b4017d164c50bd17b41fc3256df8000aa3",
+                "freshness": "2026-09-04"
             }
         },
         {
