@@ -1012,13 +1012,13 @@ export function Connectors() {
           if (value) void loadHealthEvidence();
         }}
       >
-        <div className="grid gap-4">
+        <div className="grid min-w-0 gap-4">
           <p className="max-w-3xl text-sm text-muted-foreground">{t("connectors.design.healthHelp")}</p>
           {healthLoading && <LoadingState>{t("connectors.design.healthLoading")}</LoadingState>}
           {healthError && <ErrorState title={t("connectors.design.healthError")}>{healthError}</ErrorState>}
 
           {deliveries && (
-            <section aria-labelledby="delivery-receipts-heading" className="grid gap-3 border-y border-border py-4">
+            <section aria-labelledby="delivery-receipts-heading" className="grid min-w-0 gap-3 border-y border-border py-4">
               {/* D2: what the listeners are actually SERVING.
           Deliberately its own section rather than a column on the delivery
           receipts below. A receipt records what this control plane DID; these
