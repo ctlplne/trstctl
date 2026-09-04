@@ -153,7 +153,9 @@ data:
    rewrite before normal service resumes.
 3. Read the erasure or retention history, repeat the effect-free review, and
    inspect the audit event. The raw subject must be absent while pseudonymized
-   security evidence remains verifiable.
+   security evidence remains verifiable. Raw-subject export and repeat erasure
+   review exclude already-pseudonymized member and token rows, so retained
+   revocation/offboarding evidence does not look like unfinished erasure work.
 
 An archive `legal_hold` is not silently overridden. The erasure review names
 active holds and explains that the held artifact remains; direct operational

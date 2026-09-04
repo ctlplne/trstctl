@@ -125,6 +125,70 @@ func TestPrivacySubjectExportCollectsAllSubjectRecords(t *testing.T) {
 	}
 }
 
+func TestPrivacySubjectExportAndReviewExcludePseudonymizedSecurityEvidence(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Acme"}); err != nil {
+		t.Fatal(err)
+	}
+
+	const subject = "erasure-complete@example.com"
+	subjectRef := privacy.SubjectRef(tenantA, subject)
+	seedPrivacySubject(t, s, tenantA, subject, subjectRef)
+
+	erasure, err := s.SelectPrivacySubjectErasure(ctx, tenantA, subject)
+	if err != nil {
+		t.Fatalf("SelectPrivacySubjectErasure: %v", err)
+	}
+	if erasure.Counts["tenant_members"] != 1 || erasure.Counts["api_tokens"] != 1 {
+		t.Fatalf("initial stable-ref counts = members:%d tokens:%d, want 1/1",
+			erasure.Counts["tenant_members"], erasure.Counts["api_tokens"])
+	}
+	erasure.RequestedByRef = privacy.SubjectRef(tenantA, "privacy-admin")
+	erasure.Reason = "data subject request"
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return s.ApplyPrivacySubjectErasedTx(ctx, tx, erasure)
+	}); err != nil {
+		t.Fatalf("ApplyPrivacySubjectErasedTx: %v", err)
+	}
+
+	exported, err := s.SelectPrivacySubjectExport(ctx, tenantA, subject)
+	if err != nil {
+		t.Fatalf("SelectPrivacySubjectExport after erasure: %v", err)
+	}
+	if len(exported.Members) != 0 || len(exported.Tokens) != 0 ||
+		exported.Counts["tenant_members"] != 0 || exported.Counts["api_tokens"] != 0 {
+		t.Fatalf("raw-subject export still counts pseudonymized evidence: members=%d tokens=%d counts=%v",
+			len(exported.Members), len(exported.Tokens), exported.Counts)
+	}
+
+	reviewed, err := s.SelectPrivacySubjectErasure(ctx, tenantA, subject)
+	if err != nil {
+		t.Fatalf("SelectPrivacySubjectErasure after erasure: %v", err)
+	}
+	if reviewed.Counts["tenant_members"] != 0 || reviewed.Counts["api_tokens"] != 0 {
+		t.Fatalf("repeat erasure review counts completed rows: members=%d tokens=%d",
+			reviewed.Counts["tenant_members"], reviewed.Counts["api_tokens"])
+	}
+
+	placeholder := privacy.Placeholder(subjectRef)
+	var preserved int
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `
+			SELECT
+			  (SELECT count(*) FROM tenant_members
+			    WHERE tenant_id = $1 AND subject_ref = $2 AND subject = $3 AND status = 'offboarded') +
+			  (SELECT count(*) FROM api_tokens
+			    WHERE tenant_id = $1 AND subject_ref = $2 AND subject = $3 AND revoked_at IS NOT NULL)`,
+			tenantA, subjectRef, placeholder).Scan(&preserved)
+	}); err != nil {
+		t.Fatalf("verify pseudonymous security evidence: %v", err)
+	}
+	if preserved != 2 {
+		t.Fatalf("pseudonymous security evidence rows = %d, want 2 retained and terminal", preserved)
+	}
+}
+
 func TestPrivacySubjectErasureRedactsApprovalsProfilesAndAgents(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()

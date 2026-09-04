@@ -487,6 +487,7 @@ func (s *Store) SelectPrivacySubjectExport(ctx context.Context, tenantID, subjec
 			`SELECT subject, display_name, email, roles, status
 			   FROM tenant_members
 			  WHERE tenant_id = $1 AND subject_ref = $2
+			    AND subject NOT LIKE 'erased:%'
 			  ORDER BY subject`, tenantID, out.SubjectRef)
 		if err != nil {
 			return err
@@ -509,6 +510,7 @@ func (s *Store) SelectPrivacySubjectExport(ctx context.Context, tenantID, subjec
 			`SELECT id::text, subject, scopes, expires_at, created_at
 			   FROM api_tokens
 			  WHERE tenant_id = $1 AND subject_ref = $2
+			    AND subject NOT LIKE 'erased:%'
 			  ORDER BY id`, tenantID, out.SubjectRef)
 		if err != nil {
 			return err
@@ -758,13 +760,17 @@ func (s *Store) selectPrivacySubjectErasureTx(
 		return err
 	}
 	memberCount, err := selectCount(ctx, tx,
-		`SELECT count(*) FROM tenant_members WHERE tenant_id = $1 AND subject_ref = $2`,
+		`SELECT count(*) FROM tenant_members
+		  WHERE tenant_id = $1 AND subject_ref = $2
+		    AND subject NOT LIKE 'erased:%'`,
 		tenantID, out.SubjectRef)
 	if err != nil {
 		return err
 	}
 	tokenCount, err := selectCount(ctx, tx,
-		`SELECT count(*) FROM api_tokens WHERE tenant_id = $1 AND subject_ref = $2`,
+		`SELECT count(*) FROM api_tokens
+		  WHERE tenant_id = $1 AND subject_ref = $2
+		    AND subject NOT LIKE 'erased:%'`,
 		tenantID, out.SubjectRef)
 	if err != nil {
 		return err
