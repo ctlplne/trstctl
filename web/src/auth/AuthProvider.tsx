@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { api, loginURL, setPreviewTransportIsolation, UnauthorizedError, type Me } from "@/lib/api";
+import { api, loginURL, setAuthenticatedBrowserTenantID, setPreviewTransportIsolation, UnauthorizedError, type Me } from "@/lib/api";
 
 /** The static demo build (demo.trstctl.com) sets VITE_TRSTCTL_DEMO=1 at
  * build time: preview becomes available in a production bundle AND starts
@@ -45,7 +45,10 @@ const AuthContext = createContext<AuthState>({
 /** AuthProvider resolves the current session from /auth/me on mount. */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const previewRef = useRef(demoBuild);
-  if (demoBuild) setPreviewTransportIsolation(true);
+  if (demoBuild) {
+    setPreviewTransportIsolation(true);
+    setAuthenticatedBrowserTenantID(previewUser.tenant_id);
+  }
   const [state, setState] = useState<AuthCoreState>(
     demoBuild
       ? // Demo build: land signed-in on the showcase — no /auth/me round-trip,
@@ -58,6 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!previewAllowed) return;
     previewRef.current = true;
     setPreviewTransportIsolation(true);
+    setAuthenticatedBrowserTenantID(previewUser.tenant_id);
     setState((current) => ({
       user: previewUser,
       loading: false,
@@ -72,6 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (previewRef.current) {
       previewRef.current = false;
       setPreviewTransportIsolation(false);
+      setAuthenticatedBrowserTenantID(null);
       setState((current) => ({
         user: null,
         loading: false,
@@ -86,6 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState((current) => ({ ...current, error: null }));
     try {
       await api.logout();
+      setAuthenticatedBrowserTenantID(null);
       setState((current) => ({
         user: null,
         loading: false,
@@ -111,6 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const user = await api.me();
         if (!active || previewRef.current) return;
+        setAuthenticatedBrowserTenantID(user.tenant_id);
         setState({
           user,
           loading: false,
@@ -122,6 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         if (!active || previewRef.current) return;
         if (err instanceof UnauthorizedError) {
+          setAuthenticatedBrowserTenantID(null);
           setState({
             user: null,
             loading: false,

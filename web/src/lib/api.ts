@@ -1500,6 +1500,16 @@ export function setPreviewTransportIsolation(isolated: boolean): void {
   previewTransportIsolated = isolated;
 }
 
+// The machine-login exchange is intentionally public because the submitted
+// machine credential is what authenticates the workload. The server still
+// needs an explicit tenant lookup hint before it can choose a verifier. The
+// browser may use only the tenant returned by /auth/me; it never accepts this
+// value from a route, query string, form field, or the machine credential.
+let authenticatedBrowserTenantID = "";
+export function setAuthenticatedBrowserTenantID(tenantID: string | null | undefined): void {
+  authenticatedBrowserTenantID = tenantID?.trim() ?? "";
+}
+
 /** Read the preview-isolation wall. A reader rather than an exported binding,
  * so this module stays the only writer (epic J1's audit download needs to
  * honour the same wall without being able to lower it). */
@@ -1902,6 +1912,25 @@ export function mutate<T>(method: string, path: string, body?: unknown, idempote
     method,
     headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
     body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
+/** A public mutation whose tenant hint comes only from the authenticated
+ * browser session. Refuse before serializing or sending a credential when the
+ * session tenant has not been resolved. The server still authenticates the
+ * credential and rejects a tenant/MAC mismatch. */
+function mutateForAuthenticatedBrowserTenant<T>(path: string, body: unknown, idempotencyKey = newIdempotencyKey()): Promise<T> {
+  if (!authenticatedBrowserTenantID) {
+    return Promise.reject(new ApiError(0, "The browser session has no verified tenant. Reload and sign in before testing a machine credential."));
+  }
+  return req<T>(path, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": idempotencyKey,
+      "X-Tenant-ID": authenticatedBrowserTenantID,
+    },
+    body: JSON.stringify(body),
   });
 }
 
@@ -3016,7 +3045,7 @@ const liveApi: Api = {
     }),
   issuePKISecret: (input) => mutate<PKISecret>("POST", "/api/v1/secrets/pki", input),
   previewMachineLogin: (input) => postRead<MachineLoginPreview>("/api/v1/secrets/login/preview", input),
-  machineLogin: (input) => mutate<MachineLoginResponse>("POST", "/api/v1/secrets/login", input),
+  machineLogin: (input) => mutateForAuthenticatedBrowserTenant<MachineLoginResponse>("/api/v1/secrets/login", input),
   machineAuthMethods: () => req<MachineAuthMethodList>("/api/v1/secrets/auth-methods"),
   machineSessions: (options) => req<MachineSessionList>(`/api/v1/secrets/sessions${options?.limit ? `?limit=${options.limit}` : ""}`),
   revokeMachineSession: (id) => mutate<MachineSession>("POST", `/api/v1/secrets/sessions/${encodeURIComponent(id)}/revoke`),

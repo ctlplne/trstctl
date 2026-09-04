@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { api, ApiError, firstCertificateIdentityRequest, UnauthorizedError } from "@/lib/api";
+import { api, ApiError, firstCertificateIdentityRequest, setAuthenticatedBrowserTenantID, UnauthorizedError } from "@/lib/api";
 
 // Unit tests for the typed REST client's error handling, focused on the SURFACE-007
 // 429/Retry-After path. We stub global fetch so no network is touched.
@@ -33,12 +33,24 @@ function lastSentHeaders(): Record<string, string> {
 }
 
 afterEach(() => {
+  setAuthenticatedBrowserTenantID(null);
   document.cookie = "trstctl_csrf=; Max-Age=0; path=/";
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
 describe("api error handling (SURFACE-007)", () => {
+  it("refuses a browser machine credential before fetch when /auth/me has not supplied a tenant", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await expect(api.machineLogin({ method: "token", credential: "must-not-leave-browser" })).rejects.toMatchObject({
+      status: 0,
+      body: expect.stringContaining("no verified tenant"),
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it("loads the current caller's server-derived capability posture", async () => {
     mockFetch(
       200,
@@ -491,6 +503,7 @@ describe("approval request contract (AUD-77)", () => {
 describe("exported API surface census", () => {
   it("drives every operation through the bounded same-origin transport and preserves mutation idempotency", async () => {
     document.cookie = "trstctl_csrf=csrf-census; path=/";
+    setAuthenticatedBrowserTenantID("11111111-1111-4111-8111-111111111111");
     // The census deliberately executes the streaming audit-download method as
     // well as JSON API calls. jsdom has no navigation/download implementation,
     // so pin the browser handoff without letting its temporary anchor navigate.
@@ -655,6 +668,10 @@ describe("exported API surface census", () => {
       "/api/v1/mcp/tools/item%2Fid",
       "/api/v1/pqc/migrations/plan",
       "/api/v1/privacy/subject-exports",
+      // F79: both privacy previews compute counts, holds, prerequisites, and
+      // exact effect summaries only. They do not erase or retain anything.
+      "/api/v1/privacy/subject-erasures/preview",
+      "/api/v1/privacy/retention-runs/preview",
       // F62: validates and fingerprints one exact report-schedule draft. It
       // appends no event, reserves no idempotency key, and performs no delivery.
       "/api/v1/compliance/report-schedules/preview",
@@ -1763,9 +1780,11 @@ describe("secrets contract", () => {
     expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual({ method: "token" });
 
     mockFetch(200, JSON.stringify({ session_id: "sess-1", principal: "svc", method: "token", scopes: ["secrets:read"], expires_at: "2026-06-19T13:00:00Z" }));
+    setAuthenticatedBrowserTenantID("11111111-1111-4111-8111-111111111111");
     await api.machineLogin({ method: "token", credential: "machine-token", preview_fingerprint: "sha256:machine-plan" });
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/login");
     expect(sentHeaders()["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
+    expect(sentHeaders()["X-Tenant-ID"]).toBe("11111111-1111-4111-8111-111111111111");
     expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual({
       method: "token",
       credential: "machine-token",
