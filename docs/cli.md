@@ -209,7 +209,7 @@ exhaustive subcommand list:
 | `mdm`                             | MDM SCEP policy/challenge status and enrollment-policy management (`scep status` · `scep policies`)                                                                                                                                                                                                                 |
 | `migration`                       | Licensed crypto-migration runs over CBOM findings — Enterprise PQC only (`plan` · `start` · `status` · `rollback`)                                                                                                                                                                                                  |
 | `nhi`                             | Unified NHI inventory, posture findings, policy compliance, decommissioning (`inventory` · `posture shadow/stale/overprivilege/static-credentials/exposure` · `policy compliance` · `decommission`)                                                                                                                 |
-| `notifications`                   | Notification channels, routing policies, inbox/dead-letter management (`channels` · `routing-policies` · `list` · `get` · `read` · `requeue`)                                                                                                                                                                       |
+| `notifications`                   | Notification channels, exact effect-free routing-policy review, saved routing rules, inbox/dead-letter recovery (`channels` · `routing-policies preview/create/list/get/update/delete` · `routing-preview` · `list` · `get` · `read` · `requeue`)                                                                      |
 | `operations`                      | Operational telemetry for the bounded worker pools that carry backpressure (`bulkheads`)                                                                                                                                                                                                                            |
 | `owners`                          | Owner CRUD, event-backed contextual/bulk assignment, application-model readiness, explicit attestation, expiring identity exceptions, and NHI attribution (`create` · `list` · `get` · `update` · `delete` · `assign` · `attest` · `exceptions list/grant/revoke` · `attribution`)                                  |
 | `platform`                        | Show self-hostable run-anywhere distribution posture (`distribution`)                                                                                                                                                                                                                                               |
@@ -240,6 +240,24 @@ exhaustive subcommand list:
 
 Plus `version`. `trstctl` (the server binary) additionally serves `token`,
 `connector`, and `ssh` under its own conventions — see the callout above.
+
+Review a notification route before saving it:
+
+```bash
+trstctl-cli notifications routing-policies preview -f routing-policy.json
+trstctl-cli --idempotency-key notifications-payments-v1 \
+  notifications routing-policies create -f routing-policy.json
+```
+
+The first command sends the exact unsaved rule to the server and returns a
+ready/blocked answer, normalized scope and channels, missing-channel blockers,
+recovery steps, verification steps, and a stable request fingerprint. It writes no
+event, saves no policy, queues no message, contacts no provider, and therefore does
+not accept an `Idempotency-Key`. If the JSON changes, review it again. Use
+`notifications routing-preview` after saving to explain which rule currently wins
+for one workspace, owner, asset, and severity. Create and update recheck current
+channel readiness, so disabling a channel after review makes the later save fail
+closed instead of installing a dead route.
 
 Before creating a native-store value, ask the same server oracle used by the
 console to validate the exact name, owner, and transient value without writing it:

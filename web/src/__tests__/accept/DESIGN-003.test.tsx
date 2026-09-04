@@ -13,6 +13,7 @@ const { apiMock } = vi.hoisted(() => ({
     createNotificationChannel: vi.fn(),
     notificationRoutingPolicies: vi.fn(),
     notificationRoutingPreview: vi.fn(),
+    previewNotificationRoutingPolicy: vi.fn(),
     createNotificationRoutingPolicy: vi.fn(),
     testNotificationChannel: vi.fn(),
     markNotificationRead: vi.fn(),
@@ -82,6 +83,28 @@ describe("DESIGN-003 notification routing authoring", () => {
       secret_handling: "credential reference redacted",
     });
     apiMock.createNotificationRoutingPolicy.mockResolvedValue(createdPolicy);
+    apiMock.previewNotificationRoutingPolicy.mockResolvedValue({
+      capability: "F29",
+      operation: "save_notification_routing_policy",
+      ready: true,
+      effect_free: true,
+      request_fingerprint: "sha256:reviewed-notification-policy",
+      name: "Expiry escalation",
+      scope_kind: "workspace",
+      scope_ref: "certificate-lifecycle",
+      channels_by_severity: { critical: ["slack", "webhook"], warning: ["slack"], low: ["email"] },
+      default_channels: ["webhook"],
+      configured_channels: ["email", "slack", "webhook"],
+      missing_channels: [],
+      blockers: [],
+      preview_writes: [],
+      preview_external_effects: [],
+      execute_writes: ["Append and project one notification routing policy event."],
+      execute_external_effects: [],
+      recovery_steps: ["Edit or delete the policy, then preview the effective route again."],
+      verification_steps: ["Queue a redacted channel test and observe the outbox result."],
+      secret_data_handling: "Routing policies contain channel identifiers and owner metadata, never channel credential values.",
+    });
     apiMock.testNotificationChannel
       .mockResolvedValueOnce({
         channel_id: "slack",
@@ -139,7 +162,32 @@ describe("DESIGN-003 notification routing authoring", () => {
     await user.type(screen.getByLabelText("Warning channels"), "slack");
     await user.type(screen.getByLabelText("Low channels"), "email");
 
-    await user.click(screen.getByRole("button", { name: /Save policy/ }));
+    const savePolicy = screen.getByRole("button", { name: /Save policy/ });
+    expect(savePolicy).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Review exact route" }));
+    await waitFor(() => expect(apiMock.previewNotificationRoutingPolicy).toHaveBeenCalled());
+    expect(apiMock.previewNotificationRoutingPolicy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "Expiry escalation",
+        scope_kind: "workspace",
+        scope_ref: "certificate-lifecycle",
+        owner_email: "platform-security@example.test",
+        default_channels: ["webhook"],
+        channels_by_severity: expect.objectContaining({ critical: ["slack", "webhook"], warning: ["slack"] }),
+      }),
+    );
+    expect(screen.getByText("No state changed during this review.")).toBeInTheDocument();
+    expect(screen.getByText("sha256:reviewed-notification-policy")).toBeInTheDocument();
+    expect(savePolicy).toBeEnabled();
+
+    await user.type(screen.getByLabelText("Owner reference"), "-west");
+    expect(screen.queryByText("sha256:reviewed-notification-policy")).not.toBeInTheDocument();
+    expect(savePolicy).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Review exact route" }));
+    await waitFor(() => expect(apiMock.previewNotificationRoutingPolicy).toHaveBeenCalledTimes(2));
+    expect(savePolicy).toBeEnabled();
+
+    await user.click(savePolicy);
     await waitFor(() => expect(apiMock.createNotificationRoutingPolicy).toHaveBeenCalled());
     expect(apiMock.createNotificationRoutingPolicy).toHaveBeenCalledWith(
       expect.objectContaining({

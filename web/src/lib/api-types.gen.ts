@@ -5197,6 +5197,33 @@ export interface NotificationRoutingPolicyList {
   next_cursor?: string;
 }
 
+export interface NotificationRoutingPolicyPreview {
+  blockers: string[];
+  capability: string;
+  channels_by_severity: Record<string, unknown>;
+  configured_channels: string[];
+  default_channels: string[];
+  digest_interval_seconds: number;
+  digest_timezone: string;
+  effect_free: boolean;
+  execute_external_effects: string[];
+  execute_writes: string[];
+  missing_channels: string[];
+  name: string;
+  operation: string;
+  owner_email?: string;
+  owner_ref?: string;
+  preview_external_effects: string[];
+  preview_writes: string[];
+  ready: boolean;
+  recovery_steps: string[];
+  request_fingerprint: string;
+  scope_kind: "manual" | "global" | "workspace" | "owner" | "asset";
+  scope_ref?: string;
+  secret_data_handling: string;
+  verification_steps: string[];
+}
+
 export interface NotificationRoutingPolicyRequest {
   channels_by_severity?: Record<string, unknown>;
   default_channels?: string[];

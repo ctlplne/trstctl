@@ -234,8 +234,14 @@ attempts remain in three closed detail sections until needed. The server applies
 fixed alert envelope across channel providers. There is no tenant-editable template
 library in this build, and the console states that limitation instead of presenting a
 false template editor. The console does not prefill invented channel or owner values,
-and it keeps routing-policy save disabled until every entered destination is a ready
-channel.
+and it keeps routing-policy save disabled until the server has reviewed the exact
+unsaved draft and every entered destination is a ready channel. **Review exact route**
+does not save the rule, write an event, queue a message, or contact a provider. It
+returns the normalized scope and channel set, a stable request fingerprint, missing
+channel blockers, the later execution effects, the recovery steps, and the checks an
+operator can use after saving. Editing any field invalidates that review, so an old
+green result cannot authorize a changed rule. Save also rechecks current server-side
+channel readiness, closing the gap where a channel is disabled after review.
 
 **Status:** served. When the lifecycle alert window is set, the leader scheduler writes
 `notification.expiry` outbox work, stamps the certificate alerted, and includes the
@@ -253,7 +259,12 @@ twice on the same channel. Operators can list channel families, queue redacted t
 requeue failed dispatches from `/api/v1/notifications/{id}/requeue`. Every successful
 fan-out records a `notification.delivery.recorded` event before the outbox row is acknowledged,
 so a retry after failure skips channels already rebuilt from the event log; channel
-tests replay through `notification.test.queued` events.
+tests replay through `notification.test.queued` events. Operators can review an exact
+routing-policy draft at `POST /api/v1/notification-routing-policies/preview`, manage
+the saved rules at `/api/v1/notification-routing-policies`, and inspect the effective
+saved hierarchy with `GET /api/v1/notification-routing-preview`. Recovery is explicit:
+replace or delete a bad policy, then requeue only the failed delivery. Retrying is safe
+because completed channel receipts are preserved and skipped.
 
 ### Compliance reporting (F62)
 
@@ -485,7 +496,11 @@ auth:
   (HMAC-signed); HTTP targets are public HTTPS by default; channel routes are
   `POST|GET /api/v1/notification-channels`,
   `GET|PUT|DELETE /api/v1/notification-channels/{id}`, and
-  `POST /api/v1/notification-channels/{id}/test`; inbox routes are
+  `POST /api/v1/notification-channels/{id}/test`; routing-policy routes are
+  `POST /api/v1/notification-routing-policies/preview`,
+  `POST|GET /api/v1/notification-routing-policies`,
+  `GET|PUT|DELETE /api/v1/notification-routing-policies/{id}`, and
+  `GET /api/v1/notification-routing-preview`; inbox routes are
   `GET /api/v1/notifications[/{id}]`, `POST /api/v1/notifications/{id}/read`, and
   `POST /api/v1/notifications/{id}/requeue`.
 - **Compliance frameworks (15, evidence packs):** PCI-DSS (`pci-dss`), HIPAA

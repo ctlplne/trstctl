@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -117,6 +118,33 @@ type notificationRoutingPreviewResponse struct {
 	Missing         []string                           `json:"missing_channels"`
 	DeliveryReady   bool                               `json:"delivery_ready"`
 	Explanation     string                             `json:"explanation"`
+}
+
+type notificationRoutingPolicyPreviewResponse struct {
+	Capability             string              `json:"capability"`
+	Operation              string              `json:"operation"`
+	Ready                  bool                `json:"ready"`
+	EffectFree             bool                `json:"effect_free"`
+	RequestFingerprint     string              `json:"request_fingerprint"`
+	Name                   string              `json:"name"`
+	ScopeKind              string              `json:"scope_kind"`
+	ScopeRef               string              `json:"scope_ref,omitempty"`
+	ChannelsBySeverity     map[string][]string `json:"channels_by_severity"`
+	DefaultChannels        []string            `json:"default_channels"`
+	OwnerRef               string              `json:"owner_ref,omitempty"`
+	OwnerEmail             string              `json:"owner_email,omitempty"`
+	DigestInterval         int                 `json:"digest_interval_seconds"`
+	DigestTimezone         string              `json:"digest_timezone"`
+	ConfiguredChannels     []string            `json:"configured_channels"`
+	MissingChannels        []string            `json:"missing_channels"`
+	Blockers               []string            `json:"blockers"`
+	PreviewWrites          []string            `json:"preview_writes"`
+	PreviewExternalEffects []string            `json:"preview_external_effects"`
+	ExecuteWrites          []string            `json:"execute_writes"`
+	ExecuteExternalEffects []string            `json:"execute_external_effects"`
+	RecoverySteps          []string            `json:"recovery_steps"`
+	VerificationSteps      []string            `json:"verification_steps"`
+	SecretDataHandling     string              `json:"secret_data_handling"`
 }
 
 type notificationDigestPreviewResponse struct {
@@ -466,12 +494,147 @@ func (a *API) previewNotificationRouting(w http.ResponseWriter, r *http.Request)
 	a.writeJSON(w, http.StatusOK, response)
 }
 
+// previewNotificationRoutingPolicy validates and normalizes the exact draft
+// the operator is looking at. It neither appends the policy event nor queues a
+// channel test, so clients can review the real plan before the mutation.
+func (a *API) previewNotificationRoutingPolicy(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	policy, err := a.decodeNotificationRoutingPolicyRequest(r, tenantID, "")
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	configured, missing, err := a.notificationRoutingPolicyReadiness(r.Context(), tenantID, policy)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	blockers := make([]string, 0, 1)
+	if len(missing) > 0 {
+		blockers = append(blockers, "Configure and enable every requested channel before saving this automatic route: "+strings.Join(missing, ", ")+".")
+	}
+	fingerprint, err := notificationRoutingPolicyFingerprint(policy)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, notificationRoutingPolicyPreviewResponse{
+		Capability: "F29", Operation: "save_notification_routing_policy", Ready: len(blockers) == 0, EffectFree: true,
+		RequestFingerprint: "sha256:" + fingerprint,
+		Name:               policy.Name, ScopeKind: policy.ScopeKind, ScopeRef: policy.ScopeRef,
+		ChannelsBySeverity: policy.ChannelsBySeverity, DefaultChannels: policy.DefaultChannels,
+		OwnerRef: policy.OwnerRef, OwnerEmail: policy.OwnerEmail,
+		DigestInterval: policy.DigestInterval, DigestTimezone: policy.DigestTimezone,
+		ConfiguredChannels: configured, MissingChannels: missing, Blockers: blockers,
+		PreviewWrites: []string{}, PreviewExternalEffects: []string{},
+		ExecuteWrites: []string{
+			"Append one tenant-scoped notification.routing_policy.upserted source event.",
+			"Project that event into the tenant notification routing read model.",
+		},
+		ExecuteExternalEffects: []string{},
+		RecoverySteps: []string{
+			"Update or delete the routing policy through its idempotent API, then preview the effective route again.",
+			"If a delivery exhausts its bounded retries, inspect the dead-letter row and requeue it only after correcting the channel.",
+		},
+		VerificationSteps: []string{
+			"Read the saved policy and preview the effective asset-to-owner-to-workspace-to-global route.",
+			"Queue a redacted channel test, then verify the outbox delivery result or dead-letter evidence.",
+		},
+		SecretDataHandling: "Routing policies contain channel identifiers and owner metadata, never channel credential values. Channel tests retain only redacted credential-reference evidence.",
+	})
+}
+
+func notificationRoutingPolicyChannels(policy store.NotificationRoutingPolicy) []string {
+	seen := make(map[string]bool)
+	for _, channelID := range policy.DefaultChannels {
+		seen[channelID] = true
+	}
+	for _, channels := range policy.ChannelsBySeverity {
+		for _, channelID := range channels {
+			seen[channelID] = true
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for channelID := range seen {
+		out = append(out, channelID)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func (a *API) notificationRoutingPolicyReadiness(ctx context.Context, tenantID string, policy store.NotificationRoutingPolicy) ([]string, []string, error) {
+	channels, err := a.notificationChannelsForTenant(ctx, tenantID)
+	if err != nil {
+		return nil, nil, err
+	}
+	configured := make([]string, 0, len(channels))
+	ready := make(map[string]bool, len(channels))
+	for _, channel := range channels {
+		if !channel.Configured || !channel.Enabled {
+			continue
+		}
+		configured = append(configured, channel.ID)
+		ready[channel.ID] = true
+	}
+	sort.Strings(configured)
+	requested := notificationRoutingPolicyChannels(policy)
+	missing := make([]string, 0, len(requested))
+	for _, channelID := range requested {
+		if !ready[channelID] {
+			missing = append(missing, channelID)
+		}
+	}
+	return configured, missing, nil
+}
+
+func (a *API) requireNotificationRoutingPolicyReady(ctx context.Context, tenantID string, policy store.NotificationRoutingPolicy) error {
+	_, missing, err := a.notificationRoutingPolicyReadiness(ctx, tenantID, policy)
+	if err != nil {
+		return err
+	}
+	if len(missing) > 0 {
+		return errStatus(http.StatusConflict, "configure and enable every requested notification channel before saving this route: "+strings.Join(missing, ", "))
+	}
+	return nil
+}
+
+func notificationRoutingPolicyFingerprint(policy store.NotificationRoutingPolicy) (string, error) {
+	normalized := struct {
+		Name               string              `json:"name"`
+		ScopeKind          string              `json:"scope_kind"`
+		ScopeRef           string              `json:"scope_ref,omitempty"`
+		ChannelsBySeverity map[string][]string `json:"channels_by_severity"`
+		DefaultChannels    []string            `json:"default_channels"`
+		OwnerRef           string              `json:"owner_ref,omitempty"`
+		OwnerEmail         string              `json:"owner_email,omitempty"`
+		DigestInterval     int                 `json:"digest_interval_seconds"`
+		DigestTimezone     string              `json:"digest_timezone"`
+	}{
+		Name: policy.Name, ScopeKind: policy.ScopeKind, ScopeRef: policy.ScopeRef,
+		ChannelsBySeverity: policy.ChannelsBySeverity, DefaultChannels: policy.DefaultChannels,
+		OwnerRef: policy.OwnerRef, OwnerEmail: policy.OwnerEmail,
+		DigestInterval: policy.DigestInterval, DigestTimezone: policy.DigestTimezone,
+	}
+	encoded, err := json.Marshal(normalized)
+	if err != nil {
+		return "", err
+	}
+	return crypto.SHA256Hex(encoded), nil
+}
+
 //trstctl:mutation
 func (a *API) createNotificationRoutingPolicy(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
 		policy, err := a.decodeNotificationRoutingPolicyRequest(r, tenantID, "")
 		if err != nil {
+			return 0, nil, err
+		}
+		if err := a.requireNotificationRoutingPolicyReady(ctx, tenantID, policy); err != nil {
 			return 0, nil, err
 		}
 		created, err := a.appendNotificationRoutingPolicyUpsert(ctx, tenantID, policy)
@@ -499,6 +662,9 @@ func (a *API) updateNotificationRoutingPolicy(w http.ResponseWriter, r *http.Req
 		}
 		policy, err := a.decodeNotificationRoutingPolicyRequest(r, tenantID, pathID)
 		if err != nil {
+			return 0, nil, err
+		}
+		if err := a.requireNotificationRoutingPolicyReady(ctx, tenantID, policy); err != nil {
 			return 0, nil, err
 		}
 		updated, err := a.appendNotificationRoutingPolicyUpsert(ctx, tenantID, policy)

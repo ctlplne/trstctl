@@ -310,6 +310,7 @@ import type {
   NotificationList,
   NotificationRoutingPolicy,
   NotificationRoutingPolicyList,
+  NotificationRoutingPolicyPreview,
   NotificationRoutingPolicyRequest,
   NotificationRoutingPreview,
   OffboardMemberRequest,
@@ -961,6 +962,7 @@ export type {
   NotificationList,
   NotificationRoutingPolicy,
   NotificationRoutingPolicyList,
+  NotificationRoutingPolicyPreview,
   NotificationRoutingPolicyRequest,
   NotificationRoutingPreview,
   OffboardMemberRequest,
@@ -2431,6 +2433,7 @@ export interface Api {
   updateNotificationChannel(id: string, input: NotificationChannelRequest): Promise<NotificationChannel>;
   deleteNotificationChannel(id: string): Promise<void>;
   notificationRoutingPolicies(): Promise<NotificationRoutingPolicyList>;
+  previewNotificationRoutingPolicy(input: NotificationRoutingPolicyRequest): Promise<NotificationRoutingPolicyPreview>;
   notificationRoutingPreview(options: {
     workspace?: string;
     owner_ref?: string;
@@ -3024,6 +3027,8 @@ const liveApi: Api = {
   updateNotificationChannel: (id, input) => mutate<NotificationChannel>("PUT", `/api/v1/notification-channels/${encodeURIComponent(id)}`, input),
   deleteNotificationChannel: (id) => mutate<void>("DELETE", `/api/v1/notification-channels/${encodeURIComponent(id)}`),
   notificationRoutingPolicies: () => req<NotificationRoutingPolicyList>("/api/v1/notification-routing-policies"),
+  previewNotificationRoutingPolicy: (input) =>
+    req<NotificationRoutingPolicyPreview>("/api/v1/notification-routing-policies/preview", { method: "POST", body: JSON.stringify(input) }),
   notificationRoutingPreview: (options) => {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(options)) if (value) query.set(key, value);

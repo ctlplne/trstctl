@@ -503,6 +503,7 @@ public final class OpenApiSchemas {
       "NotificationList",
       "NotificationRoutingPolicy",
       "NotificationRoutingPolicyList",
+      "NotificationRoutingPolicyPreview",
       "NotificationRoutingPolicyRequest",
       "NotificationRoutingPreview",
       "OIDCMappingStatus",

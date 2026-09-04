@@ -22,7 +22,8 @@ import {
   type NotificationChannel,
   type NotificationChannelTest,
   type NotificationRoutingPolicy,
-  type NotificationRoutingPreview,
+  type NotificationRoutingPolicyPreview,
+  type NotificationRoutingPolicyRequest,
 } from "@/lib/api";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 import type { StatusTone } from "@/lib/statusVocab";
@@ -133,7 +134,7 @@ export function Notifications() {
   const [policyBusy, setPolicyBusy] = useState(false);
   const [testBusy, setTestBusy] = useState(false);
   const [testResult, setTestResult] = useState<NotificationChannelTest | null>(null);
-  const [routePreview, setRoutePreview] = useState<NotificationRoutingPreview | null>(null);
+  const [routePreview, setRoutePreview] = useState<NotificationRoutingPolicyPreview | null>(null);
   const [previewBusy, setPreviewBusy] = useState(false);
   const [detail, setDetail] = useState<Notification | null>(null);
   const [channelDialogOpen, setChannelDialogOpen] = useState(false);
@@ -229,23 +230,10 @@ export function Notifications() {
     setPolicyBusy(true);
     setError(null);
     try {
-      const created = await api.createNotificationRoutingPolicy({
-        name: policyForm.name.trim(),
-        scope_kind: policyForm.scopeKind,
-        scope_ref: policyForm.scopeKind === "manual" || policyForm.scopeKind === "global" ? undefined : policyForm.scopeRef.trim(),
-        owner_ref: policyForm.ownerRef.trim() || undefined,
-        owner_email: policyForm.ownerEmail.trim() || undefined,
-        digest_interval_seconds: Number(policyForm.digestInterval),
-        digest_timezone: "UTC",
-        default_channels: splitChannels(policyForm.defaultChannels),
-        channels_by_severity: {
-          critical: splitChannels(policyForm.criticalChannels),
-          warning: splitChannels(policyForm.warningChannels),
-          low: splitChannels(policyForm.lowChannels),
-        },
-      });
+      const created = await api.createNotificationRoutingPolicy(notificationRoutingPolicyRequest(policyForm));
       queryClient.setQueryData(policyQueryKey, { items: upsertPolicy(policies, created) });
       void queryClient.invalidateQueries({ queryKey: policyQueryKey, refetchType: "none" });
+      setRoutePreview(null);
       toast({ kind: "success", title: t("notifications.routing.policyCreated"), description: created.name });
     } catch (err) {
       const detail = errorText(err, t("notifications.routing.createError"));
@@ -348,12 +336,7 @@ export function Notifications() {
     setPreviewBusy(true);
     setError(null);
     try {
-      const preview = await api.notificationRoutingPreview({
-        workspace: policyForm.scopeKind === "workspace" ? policyForm.scopeRef : undefined,
-        owner_ref: policyForm.scopeKind === "owner" ? policyForm.scopeRef : undefined,
-        asset_ref: policyForm.scopeKind === "asset" ? policyForm.scopeRef : undefined,
-        severity: "critical",
-      });
+      const preview = await api.previewNotificationRoutingPolicy(notificationRoutingPolicyRequest(policyForm));
       setRoutePreview(preview);
     } catch (err) {
       setError({ title: t("notifications.routing.previewFailed"), detail: errorText(err, t("notifications.routing.previewFailedDetail")) });
@@ -434,7 +417,10 @@ export function Notifications() {
                 policyBusy={policyBusy}
                 routePreview={routePreview}
                 previewBusy={previewBusy}
-                onPolicyFormChange={setPolicyForm}
+                onPolicyFormChange={(next) => {
+                  setPolicyForm(next);
+                  setRoutePreview(null);
+                }}
                 onSavePolicy={(event) => void savePolicy(event)}
                 onPreviewRoute={() => void previewRoute()}
               />
@@ -938,7 +924,7 @@ function RoutingPolicyAuthoring({
   policies: NotificationRoutingPolicy[];
   policyForm: PolicyFormState;
   policyBusy: boolean;
-  routePreview: NotificationRoutingPreview | null;
+  routePreview: NotificationRoutingPolicyPreview | null;
   previewBusy: boolean;
   onPolicyFormChange: (next: PolicyFormState) => void;
   onSavePolicy: (event: FormEvent<HTMLFormElement>) => void;
@@ -957,6 +943,7 @@ function RoutingPolicyAuthoring({
   );
   const requestedChannelsReady = requestedChannelIDs.length > 0 && requestedChannelIDs.every((channelID) => readyChannelIDs.has(channelID));
   const scopeReady = policyForm.scopeKind === "manual" || policyForm.scopeKind === "global" || policyForm.scopeRef.trim().length > 0;
+  const draftReviewable = policyForm.name.trim().length > 0 && scopeReady && requestedChannelIDs.length > 0;
   const policyReady = policyForm.name.trim().length > 0 && scopeReady && requestedChannelsReady;
   const routingReadiness =
     configured.length === 0
@@ -1090,24 +1077,43 @@ function RoutingPolicyAuthoring({
             {routingReadiness}
           </p>
           <div className="flex flex-wrap gap-2">
-            <Button type="submit" className="w-fit" aria-describedby="notification-routing-readiness" disabled={policyBusy || !policyReady}>
+            <Button
+              type="submit"
+              className="w-fit"
+              aria-describedby="notification-routing-readiness"
+              disabled={policyBusy || !policyReady || !routePreview?.ready}
+            >
               <Save className="h-4 w-4" aria-hidden="true" />
               {policyBusy ? t("notifications.routing.saving") : t("notifications.routing.save")}
             </Button>
-            <Button type="button" variant="outline" disabled={previewBusy || !scopeReady} onClick={onPreviewRoute}>
+            <Button type="button" variant="outline" disabled={previewBusy || !draftReviewable} onClick={onPreviewRoute}>
               {previewBusy ? t("notifications.routing.previewing") : t("notifications.routing.preview")}
             </Button>
           </div>
           {routePreview ? (
-            <div className="grid gap-2 rounded-control border border-border bg-muted/20 p-3" role="status">
-              <p className="text-sm font-medium">{routePreview.explanation}</p>
-              <p className="text-sm text-muted-foreground">
-                {t("notifications.routing.resolution")}: {(routePreview.resolution_order ?? []).join(" → ")}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {t("notifications.routing.channelsLabel")}: {(routePreview.effective_channels ?? []).join(", ") || t("notifications.routing.none")} ·{" "}
-                {t(routePreview.delivery_ready ? "notifications.routing.previewReady" : "notifications.routing.previewNotReady")}
-              </p>
+            <div className="grid gap-4 rounded-control border border-border bg-muted/20 p-4" role="status">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">{t("notifications.routing.reviewNoChanges")}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{t("notifications.routing.reviewBoundary")}</p>
+                </div>
+                <StatusBadge
+                  value={routePreview.ready ? "ready" : "blocked"}
+                  label={t(routePreview.ready ? "notifications.routing.reviewReady" : "notifications.routing.reviewBlocked")}
+                  tone={routePreview.ready ? "success" : "critical"}
+                />
+              </div>
+              <dl className="grid gap-3 text-sm md:grid-cols-2">
+                <div><dt className="text-muted-foreground">{t("notifications.routing.fingerprint")}</dt><dd className="break-all font-mono text-xs">{routePreview.request_fingerprint}</dd></div>
+                <div><dt className="text-muted-foreground">{t("notifications.routing.channelsLabel")}</dt><dd>{requestedChannelIDs.join(", ")}</dd></div>
+              </dl>
+              {routePreview.blockers.length > 0 ? <ErrorState title={t("notifications.routing.reviewBlocked")}>{routePreview.blockers.join(" ")}</ErrorState> : null}
+              <div className="grid gap-4 md:grid-cols-3">
+                <ReviewList title={t("notifications.routing.executeWrites")} items={routePreview.execute_writes} />
+                <ReviewList title={t("notifications.routing.recoverySteps")} items={routePreview.recovery_steps} />
+                <ReviewList title={t("notifications.routing.verificationSteps")} items={routePreview.verification_steps} />
+              </div>
+              <p className="text-xs text-muted-foreground">{routePreview.secret_data_handling}</p>
             </div>
           ) : null}
         </form>
@@ -1179,6 +1185,17 @@ function TextInput({
         />
       )}
     </Field>
+  );
+}
+
+function ReviewList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div>
+      <h3 className="text-sm font-medium">{title}</h3>
+      <ul className="mt-2 grid gap-1 pl-4 text-xs text-muted-foreground">
+        {items.map((item) => <li key={item}>{item}</li>)}
+      </ul>
+    </div>
   );
 }
 
@@ -1330,6 +1347,24 @@ function splitChannels(value: string): string[] {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function notificationRoutingPolicyRequest(form: PolicyFormState): NotificationRoutingPolicyRequest {
+  return {
+    name: form.name.trim(),
+    scope_kind: form.scopeKind,
+    scope_ref: form.scopeKind === "manual" || form.scopeKind === "global" ? undefined : form.scopeRef.trim(),
+    owner_ref: form.ownerRef.trim() || undefined,
+    owner_email: form.ownerEmail.trim() || undefined,
+    digest_interval_seconds: Number(form.digestInterval),
+    digest_timezone: "UTC",
+    default_channels: splitChannels(form.defaultChannels),
+    channels_by_severity: {
+      critical: splitChannels(form.criticalChannels),
+      warning: splitChannels(form.warningChannels),
+      low: splitChannels(form.lowChannels),
+    },
+  };
 }
 
 function joinChannels(value: string[] | undefined): string {

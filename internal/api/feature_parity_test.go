@@ -227,9 +227,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// F66 adds complete key-version history and effect-free Transit/KMIP posture.
 	// F68 adds an exact secret-sync preview, then F50 adds managed-key and keyless
 	// code-signing previews brought the served contract to 428 operations. F34's
-	// exact, effect-free online emergency issuance preview raises it to 429.
-	if len(out) != 429 {
-		t.Fatalf("OpenAPI operationIds = %d, want 429", len(out))
+	// exact, effect-free online emergency issuance preview raises it to 429. F29's
+	// exact, effect-free unsaved routing-policy review raises it to 430.
+	if len(out) != 430 {
+		t.Fatalf("OpenAPI operationIds = %d, want 430", len(out))
 	}
 	return out
 }

@@ -3967,6 +3967,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/notification-routing-policies/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review and fingerprint an exact notification routing-policy draft without writes or delivery */
+        post: operations["previewNotificationRoutingPolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/notification-routing-policies/{id}": {
         parameters: {
             query?: never;
@@ -11811,6 +11828,33 @@ export interface components {
         NotificationRoutingPolicyList: {
             items: components["schemas"]["NotificationRoutingPolicy"][];
             next_cursor?: string;
+        };
+        NotificationRoutingPolicyPreview: {
+            blockers: string[];
+            capability: string;
+            channels_by_severity: Record<string, never>;
+            configured_channels: string[];
+            default_channels: string[];
+            digest_interval_seconds: number;
+            digest_timezone: string;
+            effect_free: boolean;
+            execute_external_effects: string[];
+            execute_writes: string[];
+            missing_channels: string[];
+            name: string;
+            operation: string;
+            owner_email?: string;
+            owner_ref?: string;
+            preview_external_effects: string[];
+            preview_writes: string[];
+            ready: boolean;
+            recovery_steps: string[];
+            request_fingerprint: string;
+            /** @enum {string} */
+            scope_kind: "manual" | "global" | "workspace" | "owner" | "asset";
+            scope_ref?: string;
+            secret_data_handling: string;
+            verification_steps: string[];
         };
         NotificationRoutingPolicyRequest: {
             channels_by_severity?: Record<string, never>;
@@ -25870,6 +25914,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NotificationRoutingPolicy"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewNotificationRoutingPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationRoutingPolicyRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationRoutingPolicyPreview"];
                 };
             };
             /** @description client error */

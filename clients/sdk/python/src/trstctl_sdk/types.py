@@ -7159,6 +7159,37 @@ NotificationRoutingPolicyList = TypedDict(
     total=False,
 )
 
+NotificationRoutingPolicyPreview = TypedDict(
+    'NotificationRoutingPolicyPreview',
+    {
+        'blockers': list[str],
+        'capability': str,
+        'channels_by_severity': dict[str, Any],
+        'configured_channels': list[str],
+        'default_channels': list[str],
+        'digest_interval_seconds': int,
+        'digest_timezone': str,
+        'effect_free': bool,
+        'execute_external_effects': list[str],
+        'execute_writes': list[str],
+        'missing_channels': list[str],
+        'name': str,
+        'operation': str,
+        'owner_email': str,
+        'owner_ref': str,
+        'preview_external_effects': list[str],
+        'preview_writes': list[str],
+        'ready': bool,
+        'recovery_steps': list[str],
+        'request_fingerprint': str,
+        'scope_kind': str,
+        'scope_ref': str,
+        'secret_data_handling': str,
+        'verification_steps': list[str],
+    },
+    total=False,
+)
+
 NotificationRoutingPolicyRequest = TypedDict(
     'NotificationRoutingPolicyRequest',
     {

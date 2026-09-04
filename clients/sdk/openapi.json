@@ -21330,6 +21330,143 @@
         ],
         "type": "object"
       },
+      "NotificationRoutingPolicyPreview": {
+        "properties": {
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "channels_by_severity": {
+            "type": "object"
+          },
+          "configured_channels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "default_channels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "digest_interval_seconds": {
+            "type": "integer"
+          },
+          "digest_timezone": {
+            "type": "string"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "execute_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execute_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "missing_channels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "owner_email": {
+            "type": "string"
+          },
+          "owner_ref": {
+            "type": "string"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "request_fingerprint": {
+            "type": "string"
+          },
+          "scope_kind": {
+            "enum": [
+              "manual",
+              "global",
+              "workspace",
+              "owner",
+              "asset"
+            ],
+            "type": "string"
+          },
+          "scope_ref": {
+            "type": "string"
+          },
+          "secret_data_handling": {
+            "type": "string"
+          },
+          "verification_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "operation",
+          "ready",
+          "effect_free",
+          "request_fingerprint",
+          "name",
+          "scope_kind",
+          "channels_by_severity",
+          "default_channels",
+          "digest_interval_seconds",
+          "digest_timezone",
+          "configured_channels",
+          "missing_channels",
+          "blockers",
+          "preview_writes",
+          "preview_external_effects",
+          "execute_writes",
+          "execute_external_effects",
+          "recovery_steps",
+          "verification_steps",
+          "secret_data_handling"
+        ],
+        "type": "object"
+      },
       "NotificationRoutingPolicyRequest": {
         "properties": {
           "channels_by_severity": {
@@ -48217,6 +48354,63 @@
           }
         ],
         "summary": "Create a notification routing policy",
+        "x-trstctl-permission": "notifications:write"
+      }
+    },
+    "/api/v1/notification-routing-policies/preview": {
+      "post": {
+        "operationId": "previewNotificationRoutingPolicy",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationRoutingPolicyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationRoutingPolicyPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Review and fingerprint an exact notification routing-policy draft without writes or delivery",
         "x-trstctl-permission": "notifications:write"
       }
     },

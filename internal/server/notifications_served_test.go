@@ -322,8 +322,81 @@ func TestServedNotificationRoutingPolicyAuthoringAndChannelTestDESIGN003(t *test
 		}
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, "notifications:read", "notifications:write")
+	eventHeadBeforePreview, err := h.log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatalf("read event head before notification policy preview: %v", err)
+	}
+	previewRequest := map[string]any{
+		"name":       "Expiry escalation",
+		"scope_kind": "workspace",
+		"scope_ref":  "certificate-lifecycle",
+		"channels_by_severity": map[string][]string{
+			"critical": {"slack", "webhook"},
+			"warning":  {"slack"},
+		},
+		"default_channels":        []string{"webhook"},
+		"owner_ref":               "team/platform-security",
+		"owner_email":             "platform-security@example.test",
+		"digest_interval_seconds": 43200,
+		"digest_timezone":         "UTC",
+	}
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/notification-routing-policies/preview", tok, previewRequest)
+	if status != http.StatusOK {
+		t.Fatalf("preview notification routing policy: status %d body %s", status, body)
+	}
+	var draftPreview struct {
+		Capability             string              `json:"capability"`
+		Operation              string              `json:"operation"`
+		Ready                  bool                `json:"ready"`
+		EffectFree             bool                `json:"effect_free"`
+		RequestFingerprint     string              `json:"request_fingerprint"`
+		Name                   string              `json:"name"`
+		ScopeKind              string              `json:"scope_kind"`
+		ScopeRef               string              `json:"scope_ref"`
+		ChannelsBySeverity     map[string][]string `json:"channels_by_severity"`
+		DefaultChannels        []string            `json:"default_channels"`
+		MissingChannels        []string            `json:"missing_channels"`
+		PreviewWrites          []string            `json:"preview_writes"`
+		PreviewExternalEffects []string            `json:"preview_external_effects"`
+		ExecuteWrites          []string            `json:"execute_writes"`
+		RecoverySteps          []string            `json:"recovery_steps"`
+		VerificationSteps      []string            `json:"verification_steps"`
+	}
+	if err := json.Unmarshal(body, &draftPreview); err != nil {
+		t.Fatalf("decode notification policy preview: %v (%s)", err, body)
+	}
+	if draftPreview.Capability != "F29" || draftPreview.Operation != "save_notification_routing_policy" || !draftPreview.Ready || !draftPreview.EffectFree {
+		t.Fatalf("bad notification policy preview envelope: %+v", draftPreview)
+	}
+	if draftPreview.RequestFingerprint == "" || draftPreview.Name != "Expiry escalation" || draftPreview.ScopeKind != "workspace" || draftPreview.ScopeRef != "certificate-lifecycle" {
+		t.Fatalf("notification policy preview does not bind the normalized draft: %+v", draftPreview)
+	}
+	if len(draftPreview.MissingChannels) != 0 || len(draftPreview.PreviewWrites) != 0 || len(draftPreview.PreviewExternalEffects) != 0 || len(draftPreview.ExecuteWrites) == 0 || len(draftPreview.RecoverySteps) == 0 || len(draftPreview.VerificationSteps) == 0 {
+		t.Fatalf("notification policy preview effect/recovery contract incomplete: %+v", draftPreview)
+	}
+	if eventHeadAfterPreview, headErr := h.log.LastSequence(t.Context()); headErr != nil || eventHeadAfterPreview != eventHeadBeforePreview {
+		t.Fatalf("notification policy preview changed event head: before=%d after=%d err=%v", eventHeadBeforePreview, eventHeadAfterPreview, headErr)
+	}
 
-	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/notification-routing-preview?workspace=certificate-lifecycle&severity=critical", tok, nil)
+	blockedRequest := map[string]any{
+		"name":                 "Unconfigured incident route",
+		"scope_kind":           "global",
+		"channels_by_severity": map[string][]string{"critical": {"pagerduty"}},
+		"default_channels":     []string{},
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/notification-routing-policies/preview", tok, blockedRequest)
+	if status != http.StatusOK || !strings.Contains(string(body), `"ready":false`) || !strings.Contains(string(body), `"missing_channels":["pagerduty"]`) {
+		t.Fatalf("unconfigured notification channel must block draft preview: status %d body %s", status, body)
+	}
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/notification-routing-policies", tok, "design-003-blocked-policy-create", blockedRequest)
+	if status != http.StatusConflict || !strings.Contains(string(body), "configure and enable every requested notification channel") {
+		t.Fatalf("save must recheck current channel readiness after preview: status %d body %s", status, body)
+	}
+	if eventHeadAfterBlockedSave, headErr := h.log.LastSequence(t.Context()); headErr != nil || eventHeadAfterBlockedSave != eventHeadBeforePreview {
+		t.Fatalf("blocked notification policy save changed event head: before=%d after=%d err=%v", eventHeadBeforePreview, eventHeadAfterBlockedSave, headErr)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/notification-routing-preview?workspace=certificate-lifecycle&severity=critical", tok, nil)
 	if status != http.StatusOK || !strings.Contains(string(body), `"effective_channels":[]`) || !strings.Contains(string(body), `"missing_channels":[]`) {
 		t.Fatalf("empty routing preview must return arrays the console can render: status %d body %s", status, body)
 	}

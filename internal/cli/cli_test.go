@@ -1952,6 +1952,20 @@ func TestNotificationCommandsSendPathsQueriesAndIdempotencyKeys(t *testing.T) {
 	}
 
 	policyBody := `{"name":"Expiry escalation","default_channels":["slack"],"channels_by_severity":{"critical":["slack"]}}`
+	code, _, _ = run(t, []string{"notifications", "routing-policies", "preview", "-f", "-"}, env, policyBody)
+	if code != 0 {
+		t.Fatalf("routing policy preview exit = %d", code)
+	}
+	if cap.Method != "POST" || cap.Path != "/api/v1/notification-routing-policies/preview" {
+		t.Errorf("routing policy preview request = %s %s", cap.Method, cap.Path)
+	}
+	if strings.TrimSpace(string(cap.Body)) != policyBody {
+		t.Errorf("routing policy preview body = %q, want %q", cap.Body, policyBody)
+	}
+	if cap.Header.Get("Idempotency-Key") != "" {
+		t.Errorf("effect-free routing policy preview Idempotency-Key = %q, want empty", cap.Header.Get("Idempotency-Key"))
+	}
+
 	code, _, _ = run(t, []string{"notifications", "routing-policies", "create", "-f", "-"}, env, policyBody)
 	if code != 0 {
 		t.Fatalf("routing policy create exit = %d", code)
