@@ -12061,10 +12061,10 @@
             "phase": "P2",
             "priority": 69,
             "served_state": "conditional",
-            "backend_status": "conditional: the shipped buildRunDeps constructs the selected members of all 24 native connectors from operator configuration and routes served issue/deploy work through the durable outbox to real target mutation and readback",
-            "current_frontend_mapping": "served when configured: Connectors at /connectors creates strict-schema native targets, binds identities, invokes issue/deploy, and shows delivered or failed receipts for the same production registry",
-            "target_gui_mapping": "Connector registry/deployment UI for nginx, Apache, HAProxy, IIS, AWS ACM, Azure KV, GCP CM, Java keystore, and Kubernetes destinations with grants and outbox delivery state.",
-            "acceptance_test": "The connector DoD census proves production buildRunDeps construction plus authenticated served target creation, identity binding, issuance/deploy, target-specific mutation, and independent external readback for all 24 native connectors.",
+            "backend_status": "conditional: the shipped buildRunDeps constructs the selected members of all 24 native connectors from operator configuration and routes served preview, issue/deploy, verification, and supported rollback work through bounded durable queues to real target execution and readback",
+            "current_frontend_mapping": "operate when configured: Connectors at /connectors explains execution ownership, creates strict-schema targets, binds identities, runs an effect-free target preview, deploys the exact credential, shows durable target-vantage verification, and reviews supported predecessor restoration",
+            "target_gui_mapping": "Complete connector journey for nginx, Apache, HAProxy, IIS, AWS ACM, Azure KV, GCP CM, Java keystore, and Kubernetes destinations: configure, preview without writes, deploy, observe, verify, and recover without exposing private-key material.",
+            "acceptance_test": "The exact-candidate proof drives authenticated browser, native CLI, and API journeys through target creation, binding, target-executed zero-write preview, issuance/deploy, independent TLS readback, reviewed predecessor rollback, restored-byte/readback verification, safe idempotent retry, unsupported-rollback refusal, tenant isolation, and receipt privacy.",
             "source_docs": [
                 "docs/features/deployment-connectors.md"
             ],
@@ -12073,14 +12073,18 @@
                 "internal/server/issuance.go",
                 "internal/api/connectors_lifecycle.go",
                 "internal/orchestrator/commands.go",
-                "internal/store/deployment_target.go"
+                "internal/store/deployment_target.go",
+                "internal/connector/localops.go",
+                "internal/agent/relay/hostexec.go",
+                "internal/agent/relay/loop.go",
+                "internal/events/privacy_event_catalog.go"
             ],
             "source_frontend": [
                 "web/src/pages/Connectors.tsx",
                 "web/src/lib/api.ts"
             ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence, CLM-05, JOURNEY-001, and CAP-LIFE-05. JOURNEY-001 adds event-sourced deployment_target.upserted/deleted and identity.connector_target_bound, served target CRUD, target test/deploy/rollback actions, trstctl connector target CLI, and Connectors console workflow. CAP-LIFE-05 makes endpoint-binding issue/renewal emit credential-bearing connector.deploy payloads while the generated key is still in memory and preserves keyless receipt evidence. Test evidence: TestServedConnectorTargetJourneyJOURNEY001EndToEnd proves target create/bind/issue/deploy/rotate/rollback/revoke/retire with connector.delivery.recorded receipts; TestServedEndpointBindingPushesCredentialsCAPLIFE05 proves actual mutation of nginx, java-keystore, and Kemp load-balancer targets; TestConnectorTargetCLIUsesServedAPI proves CLI calls the served API with tenant/auth/idempotency; connectors.test.tsx proves UI creation/actions. Native registry emulator coverage remains in TestServedNativeConnectorRegistryDeploysToACMAndAzureKVEmulators.",
+            "notes": "F7 is a complete review-first connector vertical slice. The served target test route performs either a target-vantage zero-write dry-run on the exact enrolled host or relay, or labels a local-only validation honestly; it never sends credential bytes during preview. Deployment remains event-sourced and outbox-driven, refuses keyless identities that cannot supply deployable key material, and records the execution vantage in metadata-only receipts. Supported rollback requires explicit review, selects the exact encrypted predecessor ledger entry, queues work only to the agent that owns it, restores certificate and key mode atomically, and verifies the restored target independently; unsupported rollback fails without a success-shaped receipt. connector.rollback.requested is admitted by the closed production privacy vocabulary without exposing payload material. The Connectors console explains preview, execution, verification, and recovery in operator language and contains its evidence ledger on 390 px viewports. Exact g188 evidence proves an Apache preview/deploy/renew/rollback lifecycle, independent TLS fingerprints, restored predecessor bytes and key match, native CLI parity, revoked-token refusal, unsupported-rollback refusal, no unexpected authenticated browser errors or 5xx responses, and desktop/phone usability.",
             "api_surface": [
                 "listConnectorCatalog",
                 "createConnectorTarget",
@@ -12132,6 +12136,8 @@
                     "evidence": [
                         "buildRunDeps constructs ConnectorRegistry from connectors.enabled and operator-owned local/network policy; tenant target rows can select only a strict compiled schema and secret references.",
                         "TestDODNativeConnectorsProductionAssembly enters through authenticated served target creation, identity binding, and deploy routes, drains real issuance plus connector.deploy work, and requires a target-specific external mutation/readback receipt for every native connector.",
+                        "The served target test route queues an exact target-vantage dry-run when an enrolled host agent or network relay owns execution, and labels configuration-only validation as local-only instead of claiming target proof.",
+                        "Supported host rollback restores only the exact encrypted predecessor held by the owning agent; unsupported families and missing predecessors fail before a rollback-shaped success receipt.",
                         "Unknown connector.* outbox destinations and configured-but-unowned connector names fail closed.",
                         "served_state=conditional",
                         "backend_status=conditional: the shipped buildRunDeps constructs the selected members of all 24 native connectors from operator configuration and routes served issue/deploy work through the durable outbox to real target mutation and readback"
@@ -12148,17 +12154,18 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: served: Connectors at /connectors creates connector targets, binds identities, runs test/deploy/rollback actions, and shows served catalog plus delivery receipts",
-                        "target_gui_mapping: Connector registry/deployment UI for nginx, Apache, HAProxy, IIS, AWS ACM, Azure KV, GCP CM, Java keystore, and Kubernetes destinations with grants and outbox delivery state."
+                        "Connectors at /connectors guides configure, target-vantage preview, reviewed deploy, durable verification, reviewed restore, and restored-target verification while naming which process owns each action.",
+                        "The receipt ledger has a local horizontal scroll boundary and zero-minimum grid tracks so a 390 px phone viewport never widens the document."
                     ],
                     "refs": [
                         "web/src/pages/Connectors.tsx",
-                        "web/src/__tests__/connectors.test.tsx"
+                        "web/src/__tests__/connectors.test.tsx",
+                        "web/src/__tests__/connectors-design.test.tsx"
                     ]
                 },
                 "cli": {
                     "evidence": [
-                        "trstctl connector target exposes list/get/create/update/delete/bind/test/deploy/rollback against the served API with tenant/auth/idempotency headers."
+                        "trstctl connector target exposes list/get/create/update/delete/bind/test/deploy/rollback against the same served API with tenant/auth/idempotency headers; target test is the effect-free preview command."
                     ],
                     "refs": [
                         "cmd/trstctl/connector.go",
@@ -12167,7 +12174,7 @@
                 },
                 "api": {
                     "evidence": [
-                        "OpenAPI operationIds createConnectorTarget, listConnectorTargets, getConnectorTarget, updateConnectorTarget, deleteConnectorTarget, testConnectorTarget, deployConnectorTarget, rollbackConnectorTarget, bindIdentityConnectorTarget, listConnectorDeliveries, getConnectorDelivery, and listOutboxCircuits expose the served connector workflow."
+                        "OpenAPI operationIds createConnectorTarget, listConnectorTargets, getConnectorTarget, updateConnectorTarget, deleteConnectorTarget, testConnectorTarget, deployConnectorTarget, rollbackConnectorTarget, bindIdentityConnectorTarget, listConnectorDeliveries, getConnectorDelivery, and listOutboxCircuits expose the same review-first connector workflow."
                     ],
                     "refs": [
                         "internal/api/connectors_lifecycle.go",
@@ -12178,7 +12185,8 @@
                     "evidence": [
                         "Package tests prove connector-local contracts and deny-by-default operations.",
                         "Signed-WASM dispatch tests prove the separate served plugin spine.",
-                        "The connector DoD proof uses production buildRunDeps and served user routes; it never constructs ConnectorRegistry in test code."
+                        "The connector DoD proof uses production buildRunDeps and served user routes; it never constructs ConnectorRegistry in test code.",
+                        "Exact g188 retained evidence proves target-vantage zero-write preview, Apache deploy and renewal, independent TLS readback, reviewed predecessor restoration, cryptographic key/certificate match, unsupported rollback refusal, revoked-token refusal, authenticated browser health, and 390 px containment."
                     ],
                     "refs": [
                         "internal/featureparity/feature_facet_coverage_test.go",
@@ -12186,13 +12194,16 @@
                         "cmd/trstctl/main_test.go",
                         "web/src/__tests__/connectors.test.tsx",
                         "internal/server/native_connectors_served_test.go",
+                        "internal/server/agent_roles_served_test.go",
+                        "internal/orchestrator/connector_rollback_privacy_test.go",
                         "web/src/__tests__/route_parity.test.ts",
-                        "web/src/__tests__/feature_coverage.test.tsx"
+                        "web/src/__tests__/feature_coverage.test.tsx",
+                        "web/src/__tests__/connectors-design.test.tsx"
                     ]
                 },
                 "docs": {
                     "evidence": [
-                        "documented in docs/features/deployment-connectors.md"
+                        "The deployment connector guide explains target-vantage preview, local-only validation, secret-reference custody, execution ownership, receipt interpretation, supported rollback, independent verification, and CLI parity."
                     ],
                     "refs": [
                         "docs/features/deployment-connectors.md"
@@ -12211,11 +12222,14 @@
                 },
                 "audit": {
                     "evidence": [
-                        "Connector intent uses queued with attempts=0; native connector workers emit delivered or failed outcomes and never return PEM/key material in receipts."
+                        "Connector intent uses queued with attempts=0; native connector workers emit delivered or failed outcomes and never return PEM/key material in receipts.",
+                        "connector.rollback.requested is in the closed production privacy vocabulary with a metadata-only shape, so production mode accepts the audit event without weakening evidence privacy."
                     ],
                     "refs": [
                         "internal/server/issuance.go",
-                        "internal/store/connector_lifecycle.go"
+                        "internal/store/connector_lifecycle.go",
+                        "internal/events/privacy_event_catalog.go",
+                        "internal/orchestrator/connector_rollback_privacy_test.go"
                     ]
                 },
                 "telemetry": {
@@ -12259,7 +12273,7 @@
                 "purpose": "Lets an operator understand and safely use deployment connectors initial set while tenant, policy, and security authority remain on the server.",
                 "tool": "operations",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/connectors",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -12273,7 +12287,7 @@
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -12294,8 +12308,17 @@
                         ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: testConnectorTarget",
+                            "CLI command: connector target test",
+                            "internal/api/connectors_lifecycle.go",
+                            "internal/agent/relay/hostexec.go",
+                            "internal/server/agent_roles_served_test.go",
+                            "web/src/pages/Connectors.tsx",
+                            "web/src/__tests__/connectors.test.tsx",
+                            "Exact g188 target-vantage preview issued zero certificate or key bytes and made zero target writes before returning dry_run_planned."
+                        ]
                     },
                     "execute": {
                         "status": "complete",
@@ -12311,8 +12334,18 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: rollbackConnectorTarget",
+                            "CLI command: connector target rollback",
+                            "internal/api/connectors_lifecycle.go",
+                            "internal/agent/relay/hostexec.go",
+                            "internal/orchestrator/connector_rollback_privacy_test.go",
+                            "internal/server/journey_delivery_served_test.go",
+                            "web/src/pages/Connectors.tsx",
+                            "web/src/__tests__/connectors.test.tsx",
+                            "Exact g188 restored the encrypted Apache predecessor, preserved private-key mode, proved the key matches the certificate, and served the predecessor fingerprint over independent TLS readback."
+                        ]
                     },
                     "verify": {
                         "status": "complete",
@@ -12368,8 +12401,8 @@
                 },
                 "owner": "operations",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "f451d533903eb4e1158aafd0c0861359915f9f32",
+                "freshness": "2026-09-03"
             }
         },
         {

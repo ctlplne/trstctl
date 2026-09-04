@@ -4319,7 +4319,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use deployment connectors initial set while tenant, policy, and security authority remain on the server.",
       "tool": "operations",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/connectors",
       "navigationEntrypoints": [
         "tool navigation",
@@ -4333,7 +4333,7 @@ export const canonicalCapabilities = [
       ],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -4354,8 +4354,17 @@ export const canonicalCapabilities = [
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: testConnectorTarget",
+            "CLI command: connector target test",
+            "internal/api/connectors_lifecycle.go",
+            "internal/agent/relay/hostexec.go",
+            "internal/server/agent_roles_served_test.go",
+            "web/src/pages/Connectors.tsx",
+            "web/src/__tests__/connectors.test.tsx",
+            "Exact g188 target-vantage preview issued zero certificate or key bytes and made zero target writes before returning dry_run_planned."
+          ]
         },
         "execute": {
           "status": "complete",
@@ -4371,8 +4380,18 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: rollbackConnectorTarget",
+            "CLI command: connector target rollback",
+            "internal/api/connectors_lifecycle.go",
+            "internal/agent/relay/hostexec.go",
+            "internal/orchestrator/connector_rollback_privacy_test.go",
+            "internal/server/journey_delivery_served_test.go",
+            "web/src/pages/Connectors.tsx",
+            "web/src/__tests__/connectors.test.tsx",
+            "Exact g188 restored the encrypted Apache predecessor, preserved private-key mode, proved the key matches the certificate, and served the predecessor fingerprint over independent TLS readback."
+          ]
         },
         "verify": {
           "status": "complete",
@@ -4428,8 +4447,8 @@ export const canonicalCapabilities = [
       },
       "owner": "operations",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "f451d533903eb4e1158aafd0c0861359915f9f32",
+      "freshness": "2026-09-03"
     }
   },
   {
