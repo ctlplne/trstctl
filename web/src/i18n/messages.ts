@@ -904,6 +904,57 @@ export const messages = {
     defaultMessage: "Game day (test only; separate permission)",
     description: "Non-production rehearsal mode.",
   },
+  "incidents.fleet.invalidWave": {
+    defaultMessage: "Give every wave a unique name, positive order, and at least one complete member.",
+    description: "Fleet wave validation.",
+  },
+  "incidents.fleet.setupNeeds": {
+    defaultMessage: "Add an X.509 issuer, an active replacement CA, and an enrolled agent before starting.",
+    description: "Fleet configuration prerequisites.",
+  },
+  "incidents.fleet.scopeStep": { defaultMessage: "Choose the affected CA", description: "Fleet configuration first step." },
+  "incidents.fleet.cohortStep": { defaultMessage: "Build migration waves", description: "Fleet configuration second step." },
+  "incidents.fleet.reviewStep": { defaultMessage: "Review before estate work", description: "Fleet configuration review step." },
+  "incidents.fleet.loadingSetup": { defaultMessage: "Loading fleet prerequisites…", description: "Fleet configuration loading state." },
+  "incidents.fleet.setupUnavailable": { defaultMessage: "Fleet setup could not be checked", description: "Fleet prerequisite read error title." },
+  "incidents.fleet.setupIncomplete": { defaultMessage: "Fleet setup is incomplete", description: "Fleet prerequisite blocker title." },
+  "incidents.fleet.configurationProgress": { defaultMessage: "Fleet re-issuance setup progress", description: "Fleet wizard progress label." },
+  "incidents.fleet.buildWaves": { defaultMessage: "Build migration waves", description: "Advance from fleet scope to cohorts." },
+  "incidents.fleet.reviewRun": { defaultMessage: "Review fleet run", description: "Advance from fleet cohorts to review." },
+  "incidents.fleet.compromisedIssuer": { defaultMessage: "Compromised issuer", description: "Fleet compromised issuer field." },
+  "incidents.fleet.chooseIssuer": { defaultMessage: "Choose an X.509 issuer", description: "Fleet compromised issuer placeholder." },
+  "incidents.fleet.replacementAuthority": { defaultMessage: "Replacement CA authority", description: "Fleet replacement authority field." },
+  "incidents.fleet.chooseAuthority": { defaultMessage: "Choose an active CA authority", description: "Fleet replacement authority placeholder." },
+  "incidents.fleet.rollback": { defaultMessage: "Rollback instructions", description: "Fleet rollback reference field." },
+  "incidents.fleet.noAffectedIdentitiesTitle": {
+    defaultMessage: "No deployable identities match this issuer",
+    description: "Fleet cohort identity blocker title.",
+  },
+  "incidents.fleet.noAffectedIdentities": {
+    defaultMessage: "Return to the first step and choose an issuer with issued, deployed, or renewing X.509 identities.",
+    description: "Fleet cohort identity blocker remedy.",
+  },
+  "incidents.fleet.wave": { defaultMessage: "Wave {number}", description: "Fleet wave heading." },
+  "incidents.fleet.canaryHelp": {
+    defaultMessage: "Keep the first wave small. It must pass signed trust and live-serving checks before later waves run.",
+    description: "Fleet canary guidance.",
+  },
+  "incidents.fleet.removeWave": { defaultMessage: "Remove wave", description: "Fleet remove wave action." },
+  "incidents.fleet.waveName": { defaultMessage: "Wave name", description: "Fleet wave name field." },
+  "incidents.fleet.waveOrder": { defaultMessage: "Run order", description: "Fleet wave order field." },
+  "incidents.fleet.chooseIdentity": { defaultMessage: "Choose an affected identity", description: "Fleet wave identity placeholder." },
+  "incidents.fleet.chooseAgent": { defaultMessage: "Choose an enrolled agent", description: "Fleet wave agent placeholder." },
+  "incidents.fleet.trustAnchorPath": { defaultMessage: "Trust-anchor path", description: "Fleet wave trust-anchor path field." },
+  "incidents.fleet.removeMember": { defaultMessage: "Remove member {number}", description: "Fleet remove member accessible label." },
+  "incidents.fleet.addMember": { defaultMessage: "Add identity to this wave", description: "Fleet add wave member action." },
+  "incidents.fleet.addWave": { defaultMessage: "Add another wave", description: "Fleet add cohort action." },
+  "incidents.fleet.reviewTitle": { defaultMessage: "Exact run plan", description: "Fleet review card title." },
+  "incidents.fleet.reviewWarning": {
+    defaultMessage:
+      "Starting records the immutable H1 plan first, then queues only the canary. No predecessor is revoked until signed trust and live-serving gates pass.",
+    description: "Fleet review safety warning.",
+  },
+  "incidents.fleet.exactRequest": { defaultMessage: "Show exact request", description: "Fleet advanced exact request disclosure." },
   "certificates.tabs.inventory": {
     defaultMessage: "Inventory",
     description: "Certificates page tab: the primary certificate table.",
@@ -19896,9 +19947,6 @@ export const messages = {
   "source.migration.h2mig00001": {
     defaultMessage: "Move to trstctl",
   },
-  "source.migration.waves.h2mig00009": {
-    defaultMessage: "Waves",
-  },
   "source.all.kinds.ddd0c2108e": {
     defaultMessage: "All kinds",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Graph.tsx, src/pages/Identities.tsx, src/pages/Owners.tsx.",
@@ -20410,10 +20458,6 @@ export const messages = {
   },
   "source.compromised.05ab8ef2cf": {
     defaultMessage: "Compromised",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
-  },
-  "source.compromised.issuer.18ef83eabb": {
-    defaultMessage: "Compromised issuer",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
   },
   "source.compute.hmac.4809a2f350": {
@@ -23312,10 +23356,6 @@ export const messages = {
     defaultMessage: "Response",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
   },
-  "source.restore.previous.bindings.ec8f60be98": {
-    defaultMessage: "restore previous bindings",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
-  },
   "source.retire.da8597f3f2": {
     defaultMessage: "Retire",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Identities.tsx.",
@@ -23412,10 +23452,6 @@ export const messages = {
   "source.rollback.failed.manual.intervention.requir.113a558395": {
     defaultMessage: "Rollback failed — manual intervention required.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
-  "source.rollback.instructions.8fb506160a": {
-    defaultMessage: "Rollback instructions",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Incidents.tsx.",
   },
   "source.rollback.plan.952efc8286": {
     defaultMessage: "Rollback plan",

@@ -138,6 +138,17 @@ legacy `POST /api/v1/incidents/executions` mutation now returns conflict with th
 route as guidance; historical execution reads remain available. CLI parity is
 `trstctl-cli incidents fleet-reissuance start|list|get|pause|resume|rollback|evidence`.
 
+The `/incidents` console configures the same contract as a three-step journey; it
+does not ask an operator to paste UUIDs or hand-write cohort JSON. First choose a
+served X.509 issuer and active replacement authority, then build ordered waves
+from the affected identity and enrolled-agent rosters. The final step names the
+exact issuer, authority, mode, wave order, and identity-to-agent assignments
+before start. An empty issuer, authority, agent, or affected-identity roster
+blocks progress with a named prerequisite instead of guessing. The advanced
+exact-request disclosure remains available for audit and API comparison, while
+the primary path keeps the immutable-plan, canary-first, signed-gate, and
+predecessor-after-proof safety order visible in plain language.
+
 ### Just-in-time issuance with approval (F33)
 
 F33 has three related lanes, and the distinction matters. The ordinary self-service

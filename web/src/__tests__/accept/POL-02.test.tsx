@@ -19,6 +19,10 @@ const { apiMock } = vi.hoisted(() => ({
     resumeFleetReissuance: vi.fn(),
     rollbackFleetReissuance: vi.fn(),
     exportFleetReissuanceEvidence: vi.fn(),
+    issuers: vi.fn(),
+    caAuthorities: vi.fn(),
+    identities: vi.fn(),
+    agents: vi.fn(),
   },
 }));
 
@@ -41,6 +45,10 @@ vi.mock("@/lib/api", async (orig) => {
       resumeFleetReissuance: apiMock.resumeFleetReissuance,
       rollbackFleetReissuance: apiMock.rollbackFleetReissuance,
       exportFleetReissuanceEvidence: apiMock.exportFleetReissuanceEvidence,
+      issuers: apiMock.issuers,
+      caAuthorities: apiMock.caAuthorities,
+      identities: apiMock.identities,
+      agents: apiMock.agents,
     },
   };
 });
@@ -147,6 +155,14 @@ describe("POL-02 incident polish", () => {
       failed_targets: [],
       exported_at: fleetRun.updated_at,
     });
+    apiMock.issuers.mockReset().mockResolvedValue([{ id: "issuer-1", name: "compromised issuer", kind: "x509_ca" }]);
+    apiMock.caAuthorities.mockReset().mockResolvedValue({
+      items: [{ id: "replacement-ca-1", common_name: "clean replacement CA", kind: "intermediate", status: "active" }],
+    });
+    apiMock.identities
+      .mockReset()
+      .mockResolvedValue([{ id: "id-1", name: "payments identity", kind: "x509_certificate", issuer_id: "issuer-1", status: "deployed" }]);
+    apiMock.agents.mockReset().mockResolvedValue([{ id: "agent-1", name: "payments host", status: "active", presence: { state: "online" } }]);
   });
 
   it("uses operator-facing form labels, serves fleet runs, and moves break-glass to help", async () => {
@@ -164,9 +180,10 @@ describe("POL-02 incident polish", () => {
     const fleetTable = screen.getByRole("table", { name: "Fleet reissuance runs" });
     expect(within(fleetTable).getByText("fleet-1")).toBeInTheDocument();
     expect(screen.getByLabelText("Compromised issuer")).toBeInTheDocument();
-    expect(screen.getByLabelText("Replacement CA Authority")).toBeInTheDocument();
+    expect(screen.getByLabelText("Replacement CA authority")).toBeInTheDocument();
     expect(screen.getByLabelText("Mode")).toBeInTheDocument();
-    expect(screen.getByLabelText("Waves")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Waves")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Build migration waves" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Break-glass procedures" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Break-glass help" }));

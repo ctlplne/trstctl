@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ApiError } from "@/lib/api";
@@ -28,6 +28,9 @@ const { apiMock } = vi.hoisted(() => ({
     rollbackFleetReissuance: vi.fn(),
     exportFleetReissuanceEvidence: vi.fn(),
     identities: vi.fn(),
+    issuers: vi.fn(),
+    caAuthorities: vi.fn(),
+    agents: vi.fn(),
     connectorCatalog: vi.fn(),
     nhiInventory: vi.fn(),
   },
@@ -58,6 +61,9 @@ vi.mock("@/lib/api", async (orig) => {
       rollbackFleetReissuance: apiMock.rollbackFleetReissuance,
       exportFleetReissuanceEvidence: apiMock.exportFleetReissuanceEvidence,
       identities: apiMock.identities,
+      issuers: apiMock.issuers,
+      caAuthorities: apiMock.caAuthorities,
+      agents: apiMock.agents,
       connectorCatalog: apiMock.connectorCatalog,
       nhiInventory: apiMock.nhiInventory,
     },
@@ -431,9 +437,22 @@ describe("incident response served execution surface", () => {
     // DA-10 rosters (C-P1): pickers are fed from the same inventory the rest
     // of the console loads; defaults keep pre-picker tests behaviorally identical.
     apiMock.identities.mockReset().mockResolvedValue([
-      { id: "11111111-1111-1111-1111-111111111111", name: "payments-api", kind: "x509_certificate", status: "issued" },
+      {
+        id: "11111111-1111-1111-1111-111111111111",
+        name: "payments-api",
+        kind: "x509_certificate",
+        status: "issued",
+        issuer_id: "77777777-7777-7777-7777-777777777777",
+      },
       { id: "55555555-5555-5555-5555-555555555555", name: "billing-bot", kind: "workload_identity", status: "issued" },
     ]);
+    apiMock.issuers.mockReset().mockResolvedValue([{ id: "77777777-7777-7777-7777-777777777777", name: "compromised intermediate", kind: "x509_ca" }]);
+    apiMock.caAuthorities.mockReset().mockResolvedValue({
+      items: [{ id: "abababab-abab-4bab-8bab-abababababab", common_name: "clean replacement CA", kind: "intermediate", status: "active" }],
+    });
+    apiMock.agents
+      .mockReset()
+      .mockResolvedValue([{ id: "12121212-1212-4212-8212-121212121212", name: "role-agent", status: "active", presence: { state: "online" } }]);
     apiMock.connectorCatalog.mockReset().mockResolvedValue({
       items: [
         { name: "nginx", kind: "webserver", delivery_mode: "push", rollback: "restore previous bundle" },
@@ -786,10 +805,15 @@ describe("incident response served execution surface", () => {
     expect(screen.getByText(/1 Candidate CA fingerprint · Not verified/)).toBeInTheDocument();
     const fleetPanel = document.getElementById("incidents-panel-fleet");
     expect(fleetPanel).not.toBeNull();
-    await user.clear(within(fleetPanel as HTMLElement).getByLabelText("Compromised issuer"));
-    await user.type(within(fleetPanel as HTMLElement).getByLabelText("Compromised issuer"), "77777777-7777-7777-7777-777777777777");
-    await user.type(within(fleetPanel as HTMLElement).getByLabelText("Replacement CA Authority"), "abababab-abab-4bab-8bab-abababababab");
-    await user.type(within(fleetPanel as HTMLElement).getByLabelText("Rollback instructions"), "restore previous bindings");
+    const fleetWorkspace = within(fleetPanel as HTMLElement);
+    await fleetWorkspace.findByRole("option", { name: /compromised intermediate/ });
+    await user.selectOptions(fleetWorkspace.getByRole("combobox", { name: "Compromised issuer" }), "77777777-7777-7777-7777-777777777777");
+    await user.selectOptions(fleetWorkspace.getByRole("combobox", { name: "Replacement CA authority" }), "abababab-abab-4bab-8bab-abababababab");
+    await user.clear(fleetWorkspace.getByLabelText("Rollback instructions"));
+    await user.type(fleetWorkspace.getByLabelText("Rollback instructions"), "restore previous bindings");
+    await user.click(fleetWorkspace.getByRole("button", { name: "Build migration waves" }));
+    await user.selectOptions(fleetWorkspace.getByRole("combobox", { name: "Identity" }), "11111111-1111-1111-1111-111111111111");
+    await user.selectOptions(fleetWorkspace.getByRole("combobox", { name: "Agent" }), "12121212-1212-4212-8212-121212121212");
     const cohorts = [
       {
         id: "canary",
@@ -803,8 +827,8 @@ describe("incident response served execution surface", () => {
         ],
       },
     ];
-    fireEvent.change(within(fleetPanel as HTMLElement).getByLabelText("Waves"), { target: { value: JSON.stringify(cohorts) } });
-    await user.click(screen.getByRole("button", { name: "Start fleet run" }));
+    await user.click(fleetWorkspace.getByRole("button", { name: "Review fleet run" }));
+    await user.click(fleetWorkspace.getByRole("button", { name: "Start fleet run" }));
     await waitFor(() =>
       expect(apiMock.startFleetReissuance).toHaveBeenCalledWith(
         expect.objectContaining({

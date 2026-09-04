@@ -1464,8 +1464,14 @@ describe("i18n boundary", () => {
       // target-executed zero-write plan from local-only configuration validation,
       // and a reviewed restore request from a completed restore. Machine-authored
       // es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "aaa237c0e08fc86cabc856a64ce4fce5c029b5245f2282b2037b870f10885725",
-      "de-DE": "f42eef10a8d1606eec079f1341f6199091e1a0f163f4a144e8030e41d4c16605",
+      // F32 structured-configuration re-pin: the fleet incident journey now
+      // names roster prerequisites, choose/build/review steps, canary ordering,
+      // signed live gates, and the pre-revocation rollback boundary. Shared
+      // operator labels keep that safety story inside the existing bundle
+      // budget. Four obsolete raw-form source.* strings were removed. Machine-
+      // authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "72fa05d5ca4c700dfe28b3553dc87f70ae13818c8332916eb9ec1aba2e8493d5",
+      "de-DE": "ba4d8894c3ac8e1d67fd7e61e7bf40d625d2f2c3b3209a018dd6d81ed67c8be6",
     });
   });
 

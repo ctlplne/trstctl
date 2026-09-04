@@ -33,6 +33,16 @@ export default defineConfig({
   build: {
     outDir: path.resolve(webRoot, "../internal/webui/dist"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // Route splitting otherwise emits one sub-kilobyte file per shared
+        // Lucide glyph. Group only the tree-shaken glyph modules so those
+        // files share one wrapper and compression dictionary.
+        manualChunks(id) {
+          if (id.includes("/node_modules/lucide-react/")) return "icons";
+        },
+      },
+    },
     // S-C3: pages are route-level lazy chunks. The shell, shared UI helpers,
     // and eager English message source form the initial module graph; es/de
     // stay lazy and AUD-121 emits value-only locale chunks from keyed sources.

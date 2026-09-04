@@ -35,13 +35,11 @@ import { PageTabs, tabPanelProps } from "@/components/PageTabs";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { BreakGlassReconcile } from "@/components/breakglass";
 import { CapabilityActionNotice, capabilityExecutionReason } from "@/components/CapabilityTruth";
 import { useTranslation, type I18nContextValue, translateNow } from "@/i18n/I18nProvider";
 import { IncidentExecutionProof, IncidentSeverityBadge, IncidentSituationSummary } from "./incidents/IncidentsPageParts";
-import { FleetReissuanceTable, FleetStartAction } from "./incidents/FleetReissuanceParts";
+import { FleetReissuanceConfiguration, FleetReissuanceTable } from "./incidents/FleetReissuanceParts";
 import { OutboxRecoveryPanel } from "./incidents/OutboxRecoveryPanel";
 import { formatDateTime } from "@/i18n/format";
 import { describeStatus, humanizeStatus, type StatusTone } from "@/lib/statusVocab";
@@ -108,23 +106,6 @@ const defaultResponseIntegration: ResponseIntegrationForm = {
   servicenow_token_ref: "servicenow-response-token",
 };
 
-const defaultFleetRun: FleetReissuanceRequest = {
-  issuer_id: "",
-  replacement_authority_id: "",
-  mode: "live",
-  reason: "intermediate CA private key exposure",
-  rollback_ref: "",
-  cohorts: [
-    {
-      id: "canary",
-      ordinal: 1,
-      members: [{ identity_id: "", agent_id: "", trust_anchor_path: "/etc/trstctl/next-root.pem" }],
-    },
-  ],
-};
-
-const defaultFleetCohorts = JSON.stringify(defaultFleetRun.cohorts, null, 2);
-
 const defaultPlaybookRun: RemediationPlaybookRunRequest = {
   target_identity_id: "",
   inventory_id: "",
@@ -182,8 +163,6 @@ export function Incidents() {
   });
   const [impact, setImpact] = useState<GraphImpact | null>(null);
   const [executions, setExecutions] = useState<IncidentExecution[]>([]);
-  const [fleetForm, setFleetForm] = useState<FleetReissuanceRequest>(defaultFleetRun);
-  const [fleetCohorts, setFleetCohorts] = useState(defaultFleetCohorts);
   const [fleetRuns, setFleetRuns] = useState<FleetReissuanceRun[]>([]);
   const [playbookForm, setPlaybookForm] = useState<RemediationPlaybookRunRequest>(defaultPlaybookRun);
   const [responseForm, setResponseForm] = useState<ResponseIntegrationForm>(defaultResponseIntegration);
@@ -442,10 +421,6 @@ export function Incidents() {
       setPreviewError("Compromised identity ID is required.");
       return;
     }
-    setFleetForm((current) => ({
-      ...current,
-      reason: form.reason?.trim() || current.reason || "verified credential compromise",
-    }));
     selectTab("fleet");
   }
 
@@ -609,49 +584,19 @@ export function Incidents() {
     }
   }
 
-  async function startFleetReissuance(event?: FormEvent<HTMLFormElement>) {
-    event?.preventDefault();
-    if (!fleetForm.issuer_id.trim()) {
-      setFleetError("Compromised issuer ID is required.");
-      return;
-    }
-    if (!fleetForm.replacement_authority_id.trim()) {
-      setFleetError("Replacement CA authority ID is required.");
-      return;
-    }
-    let cohorts: FleetReissuanceRequest["cohorts"];
-    try {
-      cohorts = JSON.parse(fleetCohorts) as FleetReissuanceRequest["cohorts"];
-    } catch {
-      setFleetError("H2 cohorts must be valid JSON.");
-      return;
-    }
-    const complete =
-      Array.isArray(cohorts) &&
-      cohorts.length > 0 &&
-      cohorts.every(
-        (cohort) =>
-          cohort.id?.trim() &&
-          cohort.ordinal > 0 &&
-          cohort.members?.length > 0 &&
-          cohort.members.every((member) => member.identity_id?.trim() && member.agent_id?.trim() && member.trust_anchor_path?.trim()),
-      );
-    if (!complete) {
-      setFleetError("Every H2 cohort needs an id, positive ordinal, and exact identity, agent, and trust-anchor-path members.");
-      return;
-    }
+  async function startFleetReissuance(request: FleetReissuanceRequest) {
     setRunningFleet(true);
     setFleetError(null);
     setLatestFleetRun(null);
     setFleetEvidence(null);
     try {
       const result = await api.startFleetReissuance({
-        ...fleetForm,
-        issuer_id: fleetForm.issuer_id.trim(),
-        replacement_authority_id: fleetForm.replacement_authority_id.trim(),
-        reason: fleetForm.reason?.trim() || "fleet reissuance",
-        cohorts,
-        rollback_ref: fleetForm.rollback_ref?.trim() || "H2 restores the failed cohort before predecessor revocation",
+        ...request,
+        issuer_id: request.issuer_id.trim(),
+        replacement_authority_id: request.replacement_authority_id.trim(),
+        reason: request.reason?.trim() || "fleet reissuance",
+        cohorts: request.cohorts,
+        rollback_ref: request.rollback_ref?.trim() || "H2 restores the failed cohort before predecessor revocation",
       });
       setFleetRuns((prev) => [result, ...prev.filter((item) => item.id !== result.id)].slice(0, 10));
       setLatestFleetRun(result);
@@ -1387,61 +1332,7 @@ export function Incidents() {
           </h2>
           <p className="mt-1 max-w-4xl text-sm text-muted-foreground">{translateNow("incidents.fleet.planSummary")}</p>
         </div>
-        <form className="grid gap-3 md:grid-cols-2" onSubmit={startFleetReissuance}>
-          <label className="grid gap-1 text-sm font-medium">
-            {translateNow("source.compromised.issuer.18ef83eabb")}
-            <input
-              className="ui-input font-mono"
-              value={fleetForm.issuer_id}
-              onChange={(event) => setFleetForm({ ...fleetForm, issuer_id: event.target.value })}
-              placeholder="00000000-0000-0000-0000-000000000000"
-            />
-          </label>
-          <label className="grid gap-1 text-sm font-medium">
-            {translateNow("source.replacement.cefd665229")} {translateNow("source.adcs.ca.f4adcs0004")} {translateNow("source.authority.c4xr000007")}
-            <input
-              className="ui-input font-mono"
-              value={fleetForm.replacement_authority_id}
-              onChange={(event) => setFleetForm({ ...fleetForm, replacement_authority_id: event.target.value })}
-              placeholder="00000000-0000-0000-0000-000000000000"
-            />
-          </label>
-          <label className="grid gap-1 text-sm font-medium">
-            {translateNow("source.what.happened.483bd49023")}
-            <input className="ui-input" value={fleetForm.reason ?? ""} onChange={(event) => setFleetForm({ ...fleetForm, reason: event.target.value })} />
-          </label>
-          <label className="grid gap-1 text-sm font-medium">
-            {translateNow("secrets.scan.mode")}
-            <Select value={fleetForm.mode} onChange={(event) => setFleetForm({ ...fleetForm, mode: event.target.value as FleetReissuanceRequest["mode"] })}>
-              <option value="live">{translateNow("integrate.gitops.live")}</option>
-              <option value="game_day">{translateNow("incidents.fleet.modeGameDay")}</option>
-            </Select>
-          </label>
-          <label className="grid gap-1 text-sm font-medium">
-            {translateNow("source.rollback.instructions.8fb506160a")}
-            <input
-              className="ui-input"
-              value={fleetForm.rollback_ref ?? ""}
-              onChange={(event) => setFleetForm({ ...fleetForm, rollback_ref: event.target.value })}
-              placeholder={translateNow("source.restore.previous.bindings.ec8f60be98")}
-            />
-          </label>
-          <div className="grid gap-1 md:col-span-2">
-            <label className="text-sm font-medium" htmlFor="incident-fleet-cohorts">
-              {translateNow("source.migration.waves.h2mig00009")}
-            </label>
-            <Textarea
-              id="incident-fleet-cohorts"
-              className="min-h-56 font-mono text-xs"
-              value={fleetCohorts}
-              onChange={(event) => setFleetCohorts(event.target.value)}
-              spellCheck={false}
-            />
-          </div>
-          <div className="md:col-span-2">
-            <FleetStartAction running={runningFleet} onStart={() => void startFleetReissuance()} />
-          </div>
-        </form>
+        <FleetReissuanceConfiguration initialReason={form.reason} running={runningFleet} onStart={(request) => startFleetReissuance(request)} />
         {fleetError && <ErrorState title={translateNow("source.fleet.reissuance.failed.734d656156")}>{fleetError}</ErrorState>}
         {latestFleetRun && (
           <section role="status" aria-labelledby="fleet-progress-heading" className="ui-panel p-comfortable">
