@@ -30,9 +30,10 @@ type Server struct {
 	srv   *httptest.Server
 	token string
 
-	mu    sync.Mutex
-	certs map[string]Imported // certificate name -> imported bundle
-	calls int
+	mu      sync.Mutex
+	certs   map[string]Imported // certificate name -> imported bundle
+	calls   int
+	preview int
 }
 
 // New starts a fake vault that accepts requests bearing expectedToken.
@@ -66,9 +67,29 @@ func (s *Server) Calls() int {
 	return s.calls
 }
 
+// PreviewCalls is the number of authenticated read-only certificate lists.
+func (s *Server) PreviewCalls() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.preview
+}
+
 func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Authorization") != "Bearer "+s.token {
 		s.fail(w, http.StatusUnauthorized, "Unauthorized", "bearer token missing or invalid")
+		return
+	}
+	if r.Method == http.MethodGet && r.URL.Path == "/certificates" {
+		if r.URL.Query().Get("api-version") == "" {
+			s.fail(w, http.StatusBadRequest, "BadParameter", "api-version is required")
+			return
+		}
+		s.mu.Lock()
+		s.preview++
+		s.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"value":[]}`))
 		return
 	}
 	name, ok := importName(r.URL.Path)

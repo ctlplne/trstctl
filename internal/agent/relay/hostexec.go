@@ -246,11 +246,11 @@ func ExecuteOnHost(
 }
 
 // DryRunOnHost validates a host connector on the machine that would execute it
-// and handshakes the listener it would later update. It performs no deployment:
-// PreflightLocalOps only canonicalizes/Lstats roots and commands, and the
-// listener check is a read-only TLS handshake. Certificate/key material is not
-// required because connector.test proves the target path, not a credential that
-// has not been selected for deployment yet.
+// and, when configured, handshakes the listener it would later update. It
+// performs no deployment: PreflightLocalOps only canonicalizes/Lstats roots and
+// commands, and the optional listener check is a read-only TLS handshake.
+// Certificate/key material is not required because connector.test proves the
+// target path, not a credential that has not been selected for deployment yet.
 func DryRunOnHost(
 	ctx context.Context,
 	client *http.Client,
@@ -469,8 +469,8 @@ func hostPreflightActions(name string, target HostTargetConfig) ([]connector.Loc
 
 func probeHostListener(ctx context.Context, address, serverName string) PlanStep {
 	if strings.TrimSpace(address) == "" {
-		return PlanStep{Name: "reachability", Status: StepFailed,
-			Detail: "host target configuration carries no verify_address, so no listener can be checked"}
+		return PlanStep{Name: "reachability", Status: StepSkipped,
+			Detail: "no verify_address is configured; this deploy can proceed, but trstctl will not claim the certificate is live until a listener address is added and verified"}
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, dryRunProbeTimeout)
 	defer cancel()

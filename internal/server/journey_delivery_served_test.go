@@ -1051,14 +1051,16 @@ func TestIssuedConnectorTargetDeployFailsClosedWithoutCredentialMaterial(t *test
 type connectorDeliveryList struct {
 	Raw   []byte
 	Items []struct {
-		ID          string `json:"id"`
-		IdentityID  string `json:"identity_id"`
-		Connector   string `json:"connector"`
-		Target      string `json:"target"`
-		Fingerprint string `json:"fingerprint"`
-		Status      string `json:"status"`
-		Reason      string `json:"reason"`
-		Detail      string `json:"detail"`
+		ID             string `json:"id"`
+		IdentityID     string `json:"identity_id"`
+		Destination    string `json:"destination"`
+		Connector      string `json:"connector"`
+		Target         string `json:"target"`
+		Fingerprint    string `json:"fingerprint"`
+		Status         string `json:"status"`
+		Reason         string `json:"reason"`
+		Detail         string `json:"detail"`
+		IdempotencyKey string `json:"idempotency_key"`
 	} `json:"items"`
 }
 

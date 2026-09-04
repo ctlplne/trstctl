@@ -499,6 +499,49 @@ func TestHostDryRunFinishesWithoutDeployIdentityOrMutation(t *testing.T) {
 	}
 }
 
+// A first deployment may target files or a service that is not listening yet.
+// verify_address is therefore an optional verification contract, not a
+// prerequisite to writing the credential. Preview must disclose the missing
+// live check without turning an otherwise executable deployment into a block.
+func TestHostDryRunWithoutVerifyAddressPlansButDoesNotClaimLive(t *testing.T) {
+	root := t.TempDir()
+	certPath := filepath.Join(root, "site.crt")
+	keyPath := filepath.Join(root, "site.key")
+	if err := os.WriteFile(certPath, []byte("bootstrap certificate"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(keyPath, []byte("bootstrap key"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := relay.DryRunOnHost(context.Background(), http.DefaultClient,
+		connector.LocalOpsConfig{
+			AllowedRoots: []string{root},
+			Actions: []connector.LocalAction{{
+				LogicalName: "apachectl", Command: trueCommand(), PassArgs: true,
+			}},
+		}, relay.DeployIntent{
+			Connector: "apache", Target: "first Apache deployment",
+			TargetConfig: mustJSON(t, map[string]string{
+				"cert_path": certPath, "key_path": keyPath,
+			}),
+		}, nil)
+	if err != nil {
+		t.Fatalf("host dry-run: %v", err)
+	}
+	if !plan.Ready || plan.Endpoint != "" {
+		t.Fatalf("plan = %+v, want executable plan with no claimed listener", plan)
+	}
+	foundSkipped := false
+	for _, step := range plan.Steps {
+		if step.Name == "reachability" && step.Status == relay.StepSkipped && strings.Contains(step.Detail, "will not claim") {
+			foundSkipped = true
+		}
+	}
+	if !foundSkipped {
+		t.Fatalf("plan does not clearly disclose absent live verification: %+v", plan.Steps)
+	}
+}
+
 // A deterministic local refusal is the ANSWER to a target test, not a reason
 // to requeue it forever. Reporting an executed blocked plan makes the outbox
 // row terminal while telling the operator exactly which prerequisite is absent.

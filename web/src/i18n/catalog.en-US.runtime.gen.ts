@@ -12090,7 +12090,7 @@ export const defaultMessageValues = [
   "Choose an enabled, independently verified destination. This reviewed action creates the identity and queues issuance and deployment together; it does not create or enable a destination.",
   "Configured deployment destinations",
   "Preview, deploy, and recover",
-  "Preview first from the same agent or relay. It checks the target connection, required management credentials, and local permissions without receiving the certificate or private key a later deploy will install. Deploy changes the target. Review restore separately if the new version causes trouble.",
+  "Preview first from the same execution place: the target agent, network relay, or bounded cloud worker. It checks the connection when configured, required management credentials, and local permissions without receiving the certificate or private key a later deploy will install. Deploy changes the target. Review restore separately if the new version causes trouble.",
   "Preview changes (no writes)",
   "Target path ready — no changes made",
   "Deploy blocked — no changes made",

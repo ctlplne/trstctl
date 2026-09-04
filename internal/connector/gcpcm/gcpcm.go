@@ -139,6 +139,39 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 	return c.awaitOperation(ctx, sb, token, op)
 }
 
+// Preview authenticates to Certificate Manager and lists at most one resource
+// inside the exact project/location scope. It never calls certificates.patch or
+// polls a mutation operation.
+func (c *Connector) Preview(ctx context.Context, sb connector.Sandbox, target string) (connector.Preview, error) {
+	token, err := c.tokens.Token(ctx)
+	if err != nil {
+		return connector.Preview{}, fmt.Errorf("gcpcm: acquire preview token: %w", err)
+	}
+	defer secret.Wipe(token)
+	collection := fmt.Sprintf("%s/v1/projects/%s/locations/%s/certificates", c.endpoint, url.PathEscape(c.project), url.PathEscape(c.location))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, collection+"?pageSize=1", nil)
+	if err != nil {
+		return connector.Preview{}, err
+	}
+	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", token))
+	resp, err := sb.Request(req)
+	if err != nil {
+		return connector.Preview{}, fmt.Errorf("gcpcm: preview certificate access: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode/100 != 2 {
+		_ = secret.DrainBounded(resp.Body, 4<<10)
+		return connector.Preview{}, fmt.Errorf("gcpcm: preview certificate access: status %d (response body redacted)", resp.StatusCode)
+	}
+	_ = secret.DrainBounded(resp.Body, 1<<20)
+	resource := collection + "/" + url.PathEscape(target)
+	return connector.Preview{
+		Endpoint:    resource,
+		WouldMutate: []string{"replace the self-managed certificate and private key on " + resource},
+		Detail:      "GCP accepted an authenticated read-only certificate list in the configured project and location; no certificate was patched",
+	}, nil
+}
+
 // awaitOperation polls op until it reports done. An operation with no name (for
 // example a synchronous response) is treated as already complete.
 func (c *Connector) awaitOperation(ctx context.Context, sb connector.Sandbox, token []byte, op operation) error {

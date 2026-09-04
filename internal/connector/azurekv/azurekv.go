@@ -131,6 +131,38 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 	return nil
 }
 
+// Preview authenticates to the vault and lists at most one certificate. It uses
+// the exact token provider and sandbox as Deploy, but cannot reach the import
+// endpoint and carries no certificate/private-key material.
+func (c *Connector) Preview(ctx context.Context, sb connector.Sandbox, target string) (connector.Preview, error) {
+	token, err := c.tokens.Token(ctx)
+	if err != nil {
+		return connector.Preview{}, fmt.Errorf("azurekv: acquire preview token: %w", err)
+	}
+	defer secret.Wipe(token)
+	endpoint := c.vaultURL + "/certificates?api-version=" + url.QueryEscape(c.apiVersion) + "&maxresults=1"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return connector.Preview{}, err
+	}
+	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", token))
+	resp, err := sb.Request(req)
+	if err != nil {
+		return connector.Preview{}, fmt.Errorf("azurekv: preview certificate access: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode/100 != 2 {
+		_ = secret.DrainBounded(resp.Body, 4<<10)
+		return connector.Preview{}, fmt.Errorf("azurekv: preview certificate access: status %d (response body redacted)", resp.StatusCode)
+	}
+	_ = secret.DrainBounded(resp.Body, 1<<20)
+	return connector.Preview{
+		Endpoint:    c.vaultURL + "/certificates/" + url.PathEscape(target),
+		WouldMutate: []string{"import a new version of certificate " + target + " with its renewed private key"},
+		Detail:      "Azure Key Vault accepted an authenticated read-only certificate list; no certificate version was created",
+	}, nil
+}
+
 // importRequest is the Key Vault certificate import body.
 type importRequest struct {
 	Value  secretjson.Base64Bytes `json:"value"`

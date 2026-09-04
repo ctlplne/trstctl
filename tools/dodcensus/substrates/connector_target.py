@@ -305,6 +305,20 @@ class State:
                 "signal_error": self.signal_error,
             }
 
+    def effect_digest(self) -> str:
+        """Hash only receiver state a connector is allowed to mutate."""
+        digest = hashlib.sha256()
+        with self.lock:
+            digest.update(b"cert\0" + self.cert)
+            digest.update(b"readback\0" + self.readback)
+        for candidate in sorted(self.root.rglob("*")):
+            if not candidate.is_file() or candidate.is_symlink():
+                continue
+            relative = candidate.relative_to(self.root).as_posix().encode()
+            digest.update(b"file\0" + relative + b"\0")
+            digest.update(candidate.read_bytes())
+        return digest.hexdigest()
+
     def record_signal(self, payload: dict) -> bool:
         with self.lock:
             if (
@@ -457,6 +471,10 @@ class Handler(BaseHTTPRequestHandler):
             # booleans explain which protocol leg failed without returning a
             # credential, header, request body, or certificate byte.
             body = json.dumps(self.state.failure_diagnostic(), sort_keys=True, separators=(",", ":")).encode()
+            self._send(200, body)
+            return
+        if parsed.path == "/dod/effect-digest":
+            body = json.dumps({"sha256": self.state.effect_digest()}, sort_keys=True, separators=(",", ":")).encode()
             self._send(200, body)
             return
         if parsed.path == "/dod/readback":

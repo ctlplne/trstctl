@@ -64,7 +64,6 @@ import {
 import { apiProblemMessage } from "@/lib/apiProblem";
 import { useCapabilityExecution } from "@/lib/capabilities";
 import { SecretSyncWorkloadIdentityPanel } from "./secrets/SecretSyncWorkloadIdentityPanel";
-import { TransitOperations } from "./secrets/TransitOperations";
 import { PKISecretWorkflow } from "./secrets/PKISecretWorkflow";
 import { MachineAuthWorkflow } from "./secrets/MachineAuthWorkflow";
 import { SecretScanningWorkflow } from "./secrets/SecretScanningWorkflow";
@@ -73,6 +72,11 @@ import { SecretSyncWorkflow } from "./secrets/SecretSyncWorkflow";
 
 const SecretSharingWorkflow = lazy(() => import("./secrets/SecretSharingWorkflow"));
 const EphemeralAPIKeyWorkflow = lazy(() => import("./secrets/EphemeralAPIKeyWorkflow"));
+const TransitOperations = lazy(() => import("./secrets/TransitOperations").then((module) => ({ default: module.TransitOperations })));
+
+function SecretsWorkflowFallback() {
+  return <div className="min-h-24 animate-pulse rounded-md bg-muted" aria-hidden="true" />;
+}
 
 /** The store (tree + table + lifecycle) renders at /secrets; every other
  * workflow is its own route in the Secrets space sidebar (S-C2) instead of
@@ -2660,7 +2664,11 @@ export function Secrets() {
             </div>
           )}
 
-          {engineTask === "transit" && <TransitOperations nativeStoreUnavailable={Boolean(loadError)} />}
+          {engineTask === "transit" && (
+            <Suspense fallback={<SecretsWorkflowFallback />}>
+              <TransitOperations nativeStoreUnavailable={Boolean(loadError)} />
+            </Suspense>
+          )}
 
           {engineTask === "pki" && (
             <section id="task-panel-pki" aria-labelledby="pki-heading" className="grid gap-4 border-y border-border py-4">

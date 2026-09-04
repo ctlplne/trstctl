@@ -50,10 +50,11 @@ type redeemedMaterial struct {
 }
 
 // resolveJobCredential opens a claimed connector job's sealed payload and
-// resolves every credential reference it carries. Nothing is returned for
-// non-connector destinations: no other job kind references credentials, and a
-// redemption request against one is a caller doing something the protocol does
-// not mean.
+// resolves every credential reference it carries. Deploys are sealed because
+// they carry the issued certificate and private key. Tests are deliberately
+// key-less and unsealed, so they resolve only the secret:// references in the
+// target revision. Nothing is returned for destinations without an explicit
+// credential contract.
 func (r *relayCredentialResolver) resolveJobCredential(
 	ctx context.Context,
 	tenantID string,
@@ -76,10 +77,12 @@ func (r *relayCredentialResolver) resolveJobCredential(
 	case "ticket.sync":
 		// I3: the ServiceNow ticket token is redeemed for one relay attempt.
 		return r.resolveJobReferences(ctx, tenantID, job)
-	case "connector.deploy", "connector.rollback", "connector.test":
-		// connector.test redeems too (D5). A dry-run exists to find out whether
-		// the credential works; one that skipped redemption would pass right up
-		// until the deploy that mattered.
+	case "connector.test":
+		// D5: a target test has no certificate or private key to seal. It still
+		// has to prove the appliance/keystore credential a deploy would use, so
+		// resolve only the secret references in its exact target revision.
+		return r.resolveJobReferences(ctx, tenantID, job)
+	case "connector.deploy", "connector.rollback":
 	default:
 		return redeemedMaterial{}, fmt.Errorf("job kind %q carries no redeemable credential", job.Destination)
 	}

@@ -1018,10 +1018,7 @@ export function Connectors() {
           {healthError && <ErrorState title={t("connectors.design.healthError")}>{healthError}</ErrorState>}
 
           {deliveries && (
-            <section
-              aria-labelledby="delivery-receipts-heading"
-              className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 border-y border-border py-4"
-            >
+            <section aria-labelledby="delivery-receipts-heading" className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 border-y border-border py-4">
               {/* D2: what the listeners are actually SERVING.
           Deliberately its own section rather than a column on the delivery
           receipts below. A receipt records what this control plane DID; these

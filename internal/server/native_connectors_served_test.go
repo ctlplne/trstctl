@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -34,6 +35,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/servedstatus"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -118,6 +120,87 @@ func TestServedNativeConnectorRegistryDeploysToACMAndAzureKVEmulators(t *testing
 	}
 	if !h.hasEvent(t, "connector.delivery.recorded") {
 		t.Fatal("native connector deployment did not emit connector.delivery.recorded")
+	}
+}
+
+func TestServedControlPlaneCloudPreviewUsesOutboxAndChangesNothing(t *testing.T) {
+	const (
+		awsAccessKey = "AKIDF27PREVIEW"
+		awsSecretKey = "F27PreviewSecretKeyForSigV4Only" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798).
+		acmTargetARN = "arn:aws:acm:us-east-1:123456789012:certificate/f27-preview"
+	)
+	provider := acmtest.New(awsAccessKey, awsSecretKey)
+	defer provider.Close()
+
+	reg := connector.NewRegistry(func(string) connector.Ops {
+		return connector.NewHTTPOps(provider.Client())
+	})
+	reg.Register(acm.New("us-east-1", acm.Credentials{
+		AccessKeyID: awsAccessKey, SecretAccessKey: []byte(awsSecretKey),
+	}, acm.WithEndpoint(provider.URL())))
+	if err := reg.DeclareTargetVantage("aws-acm", connector.VantageControlPlane); err != nil {
+		t.Fatal(err)
+	}
+
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.ConnectorRegistry = reg
+	})
+	tok := seedScopedToken(t, h.store, h.tenant, "connectors:read", "connectors:write")
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets", tok, map[string]any{
+		"name": acmTargetARN, "connector": "aws-acm", "config": map[string]any{},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create target: status %d body %s", status, body)
+	}
+	var target store.DeploymentTarget
+	if err := json.Unmarshal(body, &target); err != nil || target.ID == "" {
+		t.Fatalf("decode target: %v body=%s", err, body)
+	}
+	target, err := h.store.GetDeploymentTarget(t.Context(), h.tenant, target.ID)
+	if err != nil || target.RevisionID == "" {
+		t.Fatalf("load immutable target revision: target=%+v err=%v", target, err)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets/"+target.ID+"/test", tok, nil)
+	if status != http.StatusAccepted || !jsonContains(t, body, servedstatus.ConnectorTestQueued) {
+		t.Fatalf("queue preview: status %d body %s", status, body)
+	}
+	if provider.PreviewCalls() != 0 || provider.Calls() != 0 {
+		t.Fatal("request handler contacted or mutated the provider before outbox delivery")
+	}
+	var queued struct {
+		IdempotencyKey string `json:"idempotency_key"`
+	}
+	if err := json.Unmarshal(body, &queued); err != nil || queued.IdempotencyKey == "" {
+		t.Fatalf("decode queued receipt: %v body=%s", err, body)
+	}
+
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain control-plane preview: %v", err)
+	}
+	if provider.PreviewCalls() != 1 || provider.Calls() != 0 {
+		t.Fatalf("preview calls=%d import calls=%d, want 1/0", provider.PreviewCalls(), provider.Calls())
+	}
+	if _, exists := provider.Imported(acmTargetARN); exists {
+		t.Fatal("served effect-free preview imported a certificate")
+	}
+	deliveries := connectorDeliveries(t, h, tok)
+	found := false
+	for _, receipt := range deliveries.Items {
+		if receipt.Destination == "connector.test" && receipt.Status == servedstatus.ConnectorTestPlanned &&
+			receipt.Connector == "aws-acm" && receipt.Target == acmTargetARN &&
+			receipt.IdempotencyKey == queued.IdempotencyKey+":result" {
+			found = true
+			if !strings.Contains(receipt.Detail, "ListCertificates") || strings.Contains(receipt.Detail, awsSecretKey) {
+				t.Fatalf("unsafe or unhelpful preview receipt: %+v", receipt)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("no terminal control-plane preview receipt: %s", deliveries.Raw)
+	}
+	if !h.hasEvent(t, "connector.delivery.recorded") {
+		t.Fatal("control-plane preview did not emit event-sourced receipt evidence")
 	}
 }
 

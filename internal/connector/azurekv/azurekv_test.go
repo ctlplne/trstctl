@@ -64,6 +64,39 @@ func TestDeployFailsOnBadToken(t *testing.T) {
 	}
 }
 
+func TestPreviewAuthenticatesWithoutImporting(t *testing.T) {
+	srv := azurekvtest.New(token)
+	defer srv.Close()
+
+	c := azurekv.New(srv.URL(), azurekv.StaticToken([]byte(token)))
+	plan, err := connector.RunPreview(context.Background(), c, connector.NewHTTPOps(srv.Client()), certName)
+	if err != nil {
+		t.Fatalf("preview: %v", err)
+	}
+	if plan.Endpoint == "" || len(plan.WouldMutate) == 0 {
+		t.Fatalf("preview plan = %+v, want provider resource and exact later effects", plan)
+	}
+	if srv.PreviewCalls() != 1 || srv.Calls() != 0 {
+		t.Fatalf("preview calls=%d import calls=%d, want 1/0", srv.PreviewCalls(), srv.Calls())
+	}
+	if _, ok := srv.Imported(certName); ok {
+		t.Fatal("effect-free preview imported a certificate")
+	}
+}
+
+func TestPreviewRejectsBadTokenWithoutImporting(t *testing.T) {
+	srv := azurekvtest.New(token)
+	defer srv.Close()
+
+	c := azurekv.New(srv.URL(), azurekv.StaticToken([]byte("wrong-token")))
+	if _, err := connector.RunPreview(context.Background(), c, connector.NewHTTPOps(srv.Client()), certName); err == nil {
+		t.Fatal("preview passed with an invalid Azure token")
+	}
+	if srv.Calls() != 0 {
+		t.Fatal("failed preview imported a certificate")
+	}
+}
+
 // Reimporting the same credential to the same name converges to the same state.
 func TestDeployIsIdempotent(t *testing.T) {
 	srv := azurekvtest.New(token)

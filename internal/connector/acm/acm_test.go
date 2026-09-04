@@ -116,6 +116,39 @@ func TestDeployFailsOnBadCredentials(t *testing.T) {
 	}
 }
 
+func TestPreviewAuthenticatesWithoutImporting(t *testing.T) {
+	srv := acmtest.New(accessKey, secretKey)
+	defer srv.Close()
+
+	c := acm.New(region, creds(), acm.WithEndpoint(srv.URL()))
+	plan, err := connector.RunPreview(context.Background(), c, connector.NewHTTPOps(srv.Client()), targetARN)
+	if err != nil {
+		t.Fatalf("preview: %v", err)
+	}
+	if plan.Endpoint != srv.URL() || len(plan.WouldMutate) == 0 {
+		t.Fatalf("preview plan = %+v, want provider endpoint and exact later effects", plan)
+	}
+	if srv.PreviewCalls() != 1 || srv.Calls() != 0 {
+		t.Fatalf("preview calls=%d import calls=%d, want 1/0", srv.PreviewCalls(), srv.Calls())
+	}
+	if _, ok := srv.Imported(targetARN); ok {
+		t.Fatal("effect-free preview imported a certificate")
+	}
+}
+
+func TestPreviewRejectsBadCredentialsWithoutImporting(t *testing.T) {
+	srv := acmtest.New(accessKey, secretKey)
+	defer srv.Close()
+
+	c := acm.New(region, acm.Credentials{AccessKeyID: accessKey, SecretAccessKey: []byte("wrong-secret")}, acm.WithEndpoint(srv.URL()))
+	if _, err := connector.RunPreview(context.Background(), c, connector.NewHTTPOps(srv.Client()), targetARN); err == nil {
+		t.Fatal("preview passed with invalid AWS credentials")
+	}
+	if srv.Calls() != 0 {
+		t.Fatal("failed preview imported a certificate")
+	}
+}
+
 // Reimporting the same credential to the same ARN converges to the same state.
 func TestDeployIsIdempotent(t *testing.T) {
 	srv := acmtest.New(accessKey, secretKey)

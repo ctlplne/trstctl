@@ -1426,8 +1426,9 @@ func (s *Server) appendOperationalReadModels(d Deps, defaults *[]api.Option) {
 	// A1: job-ledger queue depth and claim health, read at request time because
 	// the counters are only useful fresh.
 	*defaults = append(*defaults, api.WithAgentJobPosture(s.agentJobPosture))
-	// D5: the console's target test becomes a relay-executed dry-run when the
-	// operator has enabled connector.test. Otherwise the route keeps the honest
+	// D5/F27: target tests run at the deploy vantage. Host/network targets use an
+	// explicitly enabled connector.test agent; cloud stores use the bounded
+	// control-plane outbox worker. An unavailable agent path keeps the honest
 	// local answer rather than queueing work nothing will claim.
 	*defaults = append(*defaults, api.WithADCSPosture(s.adcsPostureView))
 	*defaults = append(*defaults, api.WithADCSDrift(s.adcsDriftView))
@@ -1938,8 +1939,9 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		// issuance dispatcher sealed with — constructed from the same Deps, so
 		// the two sides of the seal cannot drift apart (epic A3).
 		relayCredentials: &relayCredentialResolver{store: d.Store, kek: d.KEK, tenantCrypto: d.TenantCrypto},
-		// D5: a relay's dry-run plan becomes a delivery receipt an operator can
-		// read on the Connectors page.
+		// D5: an agent's dry-run plan becomes a delivery receipt an operator can
+		// read on the Connectors page. Control-plane previews write the same
+		// event-sourced receipt through the outbox dispatcher.
 		recordDryRun:               s.dryRunReceipt,
 		recordRollback:             s.rollbackReceipt,
 		recordADCSInventory:        s.recordADCSInventory,

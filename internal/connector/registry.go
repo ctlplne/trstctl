@@ -448,6 +448,53 @@ func (r *Registry) Deploy(ctx context.Context, p DeployPayload) error {
 	return err
 }
 
+// Preview constructs the same immutable, tenant-scoped target connector a
+// deployment would use, including one-attempt secret leases, but dispatches only
+// its explicit effect-free Preview contract. It rejects credential-bearing
+// payloads because a target test never needs certificate or private-key bytes.
+func (r *Registry) Preview(ctx context.Context, p DeployPayload) (Preview, error) {
+	if r == nil {
+		return Preview{}, fmt.Errorf("connector: registry is not configured")
+	}
+	if p.TenantID == "" || p.TargetID == "" || p.TargetRevision == "" || p.Connector == "" || p.Target == "" {
+		return Preview{}, fmt.Errorf("connector: preview requires tenant, target, revision, connector, and target name")
+	}
+	if len(p.CertPEM) != 0 || len(p.KeyPEM) != 0 || p.Fingerprint != "" {
+		return Preview{}, fmt.Errorf("connector: preview payload must not contain certificate or private-key material")
+	}
+	r.mu.RLock()
+	c := r.connectors[p.Connector]
+	factory := r.factories[p.Connector]
+	opsFor := r.opsFor
+	r.mu.RUnlock()
+	if c == nil && factory == nil {
+		return Preview{}, fmt.Errorf("connector: no connector registered as %q", p.Connector)
+	}
+	var (
+		ops     Ops
+		cleanup func()
+		err     error
+	)
+	if factory != nil {
+		c, ops, cleanup, err = factory(ctx, p)
+		if err != nil {
+			return Preview{}, fmt.Errorf("connector: build preview target %q: %w", p.Connector, err)
+		}
+		if cleanup != nil {
+			defer cleanup()
+		}
+	} else if opsFor != nil {
+		ops = opsFor(p.Connector)
+	}
+	if c == nil {
+		return Preview{}, fmt.Errorf("connector: factory returned no connector for %q", p.Connector)
+	}
+	if ops == nil {
+		return Preview{}, fmt.Errorf("connector: no ops configured for %q", p.Connector)
+	}
+	return RunPreview(ctx, c, ops, p.Target)
+}
+
 // Handle decodes a deploy payload and runs the named connector. It is the body
 // of the outbox handler (AN-6): wire it as
 // outbox.HandlerFunc(func(ctx, m) error { return reg.Handle(ctx, m.Payload) }).

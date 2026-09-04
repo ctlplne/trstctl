@@ -83,6 +83,38 @@ func TestDeployFailsOnBadToken(t *testing.T) {
 	}
 }
 
+func TestPreviewAuthenticatesWithoutUpdating(t *testing.T) {
+	srv := gcpcmtest.New(token)
+	defer srv.Close()
+
+	plan, err := connector.RunPreview(context.Background(), newConn(srv.URL()), connector.NewHTTPOps(srv.Client()), certID)
+	if err != nil {
+		t.Fatalf("preview: %v", err)
+	}
+	if plan.Endpoint == "" || len(plan.WouldMutate) == 0 {
+		t.Fatalf("preview plan = %+v, want provider resource and exact later effects", plan)
+	}
+	if srv.PreviewCalls() != 1 || srv.PatchCalls() != 0 {
+		t.Fatalf("preview calls=%d patch calls=%d, want 1/0", srv.PreviewCalls(), srv.PatchCalls())
+	}
+	if _, ok := srv.Imported(certID); ok {
+		t.Fatal("effect-free preview updated a certificate")
+	}
+}
+
+func TestPreviewRejectsBadTokenWithoutUpdating(t *testing.T) {
+	srv := gcpcmtest.New(token)
+	defer srv.Close()
+
+	c := gcpcm.New(project, location, gcpcm.StaticToken([]byte("wrong-token")), gcpcm.WithEndpoint(srv.URL()))
+	if _, err := connector.RunPreview(context.Background(), c, connector.NewHTTPOps(srv.Client()), certID); err == nil {
+		t.Fatal("preview passed with an invalid GCP token")
+	}
+	if srv.PatchCalls() != 0 {
+		t.Fatal("failed preview updated a certificate")
+	}
+}
+
 // Re-applying the same credential to the same resource converges to the same
 // state.
 func TestDeployIsIdempotent(t *testing.T) {

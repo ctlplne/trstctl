@@ -265,7 +265,7 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.handleFleetReissuanceBatch(ctx, m)
 	case orchestrator.DestinationIncidentMigrationRevoke:
 		return d.handleIncidentMigrationRevoke(ctx, m)
-	case orchestrator.DestinationConnectorRollback, "connector.test":
+	case orchestrator.DestinationConnectorRollback:
 		// Relay-executed kinds. This dispatcher sweeps every "connector." row
 		// (see outboxDispatchFamilies) and does not filter on
 		// required_agent_role, so without this case the default branch below
@@ -280,6 +280,8 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		// agent that is actually supposed to run it.
 		return orchestrator.DeferDelivery(fmt.Errorf(
 			"server: %s executes on a relay, not the control plane", m.Destination))
+	case "connector.test":
+		return d.routeConnectorTest(ctx, m)
 	case orchestrator.DestinationConnectorRightSize:
 		return d.handleConnectorRightSize(ctx, m)
 	case "discovery.run":

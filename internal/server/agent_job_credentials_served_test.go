@@ -139,6 +139,75 @@ func TestServedRedemptionRequiresTheLease(t *testing.T) {
 	assertNoCanaryInEvents(t, ctx, h)
 }
 
+// TestServedConnectorTestRedeemsTheExactTargetReference is the production
+// distinction between a deploy and a preview: a deploy opens a sealed
+// certificate/key container, while a zero-write test has no credential payload
+// to seal and redeems only the secret:// references in its exact target
+// revision. Treating both payloads as sealed made every authenticated appliance
+// preview fail before target contact.
+func TestServedConnectorTestRedeemsTheExactTargetReference(t *testing.T) {
+	ctx := context.Background()
+	h := newRoleHarness(t, []string{mtls.AgentRoleNetwork}, "connector.test")
+	const (
+		secretName = "relay-preview-admin"
+		idemKey    = "connector-test:edge-f5:preview"
+	)
+	sealedSecret, err := h.srv.sealTenantSecretForTest(ctx, h.tenant, secretName, []byte(canaryPassword))
+	if err != nil {
+		t.Fatalf("seal tenant secret: %v", err)
+	}
+	seedApplicationSecretFixture(t, h.store, h.tenant, secretName, sealedSecret)
+	targetConfig, err := json.Marshal(map[string]any{
+		"endpoint":     "https://f5.example.internal",
+		"username":     "preview-operator",
+		"password_ref": "secret://" + secretName,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(connector.DeployPayload{
+		Connector: "f5", Target: "edge-f5", TargetID: "target-f5",
+		TargetRevision: "revision-f5", TargetConfig: targetConfig,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var jobID int64
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, required_agent_role)
+			 VALUES ($1, 'connector.test', $2, $3, 'network') RETURNING id`,
+			h.tenant, payload, idemKey).Scan(&jobID)
+	}); err != nil {
+		t.Fatalf("seed connector test: %v", err)
+	}
+
+	claimed, err := h.client.ClaimJobs(ctx, &transport.ClaimJobsRequest{
+		Kinds: []string{"connector.test"}, Limit: 1, LeaseSeconds: 120,
+	})
+	if err != nil || len(claimed.Jobs) != 1 || claimed.Jobs[0].JobID != jobID {
+		t.Fatalf("claim connector test: jobs=%+v err=%v", claimed.Jobs, err)
+	}
+	assertNoCanary(t, "connector test claim", claimed.Jobs[0].Payload)
+	redeemed, err := h.client.RedeemJobCredential(ctx, &transport.RedeemJobCredentialRequest{
+		JobID: jobID, Attempt: claimed.Jobs[0].Attempt,
+	})
+	if err != nil {
+		t.Fatalf("redeem connector test target credential: %v", err)
+	}
+	if len(redeemed.Items) != 1 || redeemed.Items[0].Name != "secret://"+secretName ||
+		!bytes.Equal(redeemed.Items[0].Value, []byte(canaryPassword)) {
+		t.Fatalf("redeemed items = %+v, want only exact target reference", redeemed.Items)
+	}
+	if _, err := h.client.RedeemJobCredential(ctx, &transport.RedeemJobCredentialRequest{
+		JobID: jobID, Attempt: claimed.Jobs[0].Attempt,
+	}); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("replayed preview redemption error = %v (%v), want PermissionDenied", err, status.Code(err))
+	}
+	assertNoCanaryInJobRows(t, ctx, h)
+	assertNoCanaryInEvents(t, ctx, h)
+}
+
 // seedSealedRelayJob enqueues a relay-vantage connector.deploy carrying sealed
 // credential material and a secret:// reference, the way the issuance
 // dispatcher does, and returns the job id.

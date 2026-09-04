@@ -216,12 +216,15 @@ executor received a credential.
 would perform the real deployment. Enable `connector.test` as a claimable job kind
 in addition to enrolling the required agent role. For all 14 host-vantage families,
 the host agent validates the exact target fields, confirms every path and logical
-command fits its operator-owned `--host-exec-profile`, and handshakes
-`verify_address` using `verify_server_name` when supplied. It does not write a file,
-run a command, call `Deploy`, or redeem certificate/private-key material. A host
-secret needed to open the target, such as a Java keystore password reference, is
-redeemed only for that one attempt. Network-relay appliance tests instead redeem the
-appliance-management credential and perform the connector's read-only probe. A ready
+command fits its operator-owned `--host-exec-profile`, and, when configured,
+handshakes `verify_address` using `verify_server_name`. With no `verify_address`,
+the plan says the deploy can run but live-state verification is not configured; it
+never upgrades that omission into a claim that the certificate is serving. It does
+not write a file, run a command, call `Deploy`, or redeem certificate/private-key
+material. A host secret needed to open the target, such as a Java keystore password
+reference, is redeemed only for that one attempt. Network-relay appliance tests
+instead redeem the appliance-management credential and perform the connector's
+read-only probe. A ready
 test returns `dry_run_planned` with the later mutation list; an unreachable target,
 missing grant, or other deterministic prerequisite returns terminal
 `dry_run_blocked` rather than retrying forever. Signed plugins that do not declare a
@@ -321,10 +324,12 @@ their support rows say so, and a refusal records no rollback-shaped success.
 - **Host target testing:** `connector.test` is separately enabled. It checks target
   reachability and local authority without granting `connector.deploy`; a green test
   is a plan, not proof that a certificate was installed.
-- **Control-plane cloud target testing:** the three cloud-store connectors currently
-  return the local `config_validated` fallback because they have no agent or relay
-  executor. This validates the strict schema and credential references but does not
-  contact the provider. The console labels that limit and does not call it ready.
+- **Control-plane cloud target testing:** AWS ACM, Azure Key Vault, and GCP
+  Certificate Manager previews run on the bounded control-plane outbox worker.
+  Each uses the exact saved target revision and a one-attempt secret lease for an
+  authenticated, provider-specific read-only operation, then returns the later
+  import plan. Provider I/O never occurs in the request handler, and preview never
+  calls the connector's deploy method.
 - **Target evidence:** selecting a target in Connectors shows one time-ordered deploy,
   listener-verification, and rollback timeline. Agent verification rows name the
   certificate identity that produced the signed observation; a delivery receipt alone

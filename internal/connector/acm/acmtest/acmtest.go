@@ -27,7 +27,10 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
-const target = "CertificateManager.ImportCertificate"
+const (
+	target        = "CertificateManager.ImportCertificate"
+	previewTarget = "CertificateManager.ListCertificates"
+)
 
 // Imported is a credential the fake ACM received.
 type Imported struct {
@@ -45,6 +48,7 @@ type Server struct {
 	mu      sync.Mutex
 	imports map[string]Imported // ARN -> credential
 	calls   int
+	preview int
 	minted  int
 }
 
@@ -84,12 +88,20 @@ func (s *Server) Calls() int {
 	return s.calls
 }
 
+// PreviewCalls is the number of authenticated read-only list operations.
+func (s *Server) PreviewCalls() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.preview
+}
+
 func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost || r.URL.Path != "/" {
 		s.fail(w, http.StatusNotFound, "UnknownOperation", "no such resource")
 		return
 	}
-	if r.Header.Get("X-Amz-Target") != target {
+	operation := r.Header.Get("X-Amz-Target")
+	if operation != target && operation != previewTarget {
 		s.fail(w, http.StatusBadRequest, "UnknownOperationException", "unexpected X-Amz-Target")
 		return
 	}
@@ -97,6 +109,15 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 
 	if !s.verifySigV4(r, body) {
 		s.fail(w, http.StatusForbidden, "SignatureDoesNotMatch", "the request signature does not match")
+		return
+	}
+	if operation == previewTarget {
+		s.mu.Lock()
+		s.preview++
+		s.mu.Unlock()
+		w.Header().Set("Content-Type", "application/x-amz-json-1.1")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"CertificateSummaryList":[]}`))
 		return
 	}
 

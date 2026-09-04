@@ -44,9 +44,10 @@ import (
 )
 
 const (
-	service   = "acm"
-	amzTarget = "CertificateManager.ImportCertificate"
-	jsonType  = "application/x-amz-json-1.1"
+	service          = "acm"
+	amzTarget        = "CertificateManager.ImportCertificate"
+	amzPreviewTarget = "CertificateManager.ListCertificates"
+	jsonType         = "application/x-amz-json-1.1"
 )
 
 // Credentials are the AWS access credentials used to sign requests. SessionToken
@@ -158,6 +159,36 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 	}
 	_ = secret.DrainBounded(resp.Body, 1<<20)
 	return nil
+}
+
+// Preview authenticates to ACM with the same SigV4 credential and endpoint a
+// deploy uses, but calls the read-only ListCertificates operation. POST is the
+// AWS JSON transport verb here; X-Amz-Target is the effect boundary, and this
+// method can never reach ImportCertificate.
+func (c *Connector) Preview(ctx context.Context, sb connector.Sandbox, target string) (connector.Preview, error) {
+	body := []byte("{}")
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint+"/", bytes.NewReader(body))
+	if err != nil {
+		return connector.Preview{}, err
+	}
+	req.Header.Set("Content-Type", jsonType)
+	req.Header.Set("X-Amz-Target", amzPreviewTarget)
+	c.signV4(req, body, c.now().UTC())
+	resp, err := sb.Request(req)
+	if err != nil {
+		return connector.Preview{}, fmt.Errorf("acm: preview certificate access: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode/100 != 2 {
+		_ = secret.DrainBounded(resp.Body, 4<<10)
+		return connector.Preview{}, fmt.Errorf("acm: preview certificate access: status %d (response body redacted)", resp.StatusCode)
+	}
+	_ = secret.DrainBounded(resp.Body, 1<<20)
+	effect := "import a new externally issued certificate into AWS Certificate Manager"
+	if strings.TrimSpace(target) != "" {
+		effect = "re-import the renewed certificate into ACM resource " + target
+	}
+	return connector.Preview{Endpoint: c.endpoint, WouldMutate: []string{effect}, Detail: "AWS accepted an authenticated read-only ListCertificates request; no certificate was imported"}, nil
 }
 
 // importRequest is the ACM ImportCertificate body. Certificate, PrivateKey, and

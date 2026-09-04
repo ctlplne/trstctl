@@ -31,7 +31,8 @@
   "security": {
     "process": "out-of-process, nonce/entry/PID bound",
     "authentication": "native connector authentication is exact: Basic, bearer, A10/NITRO sessions, or PAN-OS keys must match the configured credential; ACM recomputes the credential-, region-, service-, header-, and payload-bound SigV4 signature",
-    "user_path": "served target CRUD + identity bind + target deploy route; production issuance creates the sealed connector.deploy outbox command",
+    "user_path": "served target CRUD + effect-free target-vantage preview + identity bind + target deploy route; production preview and issuance create outbox-owned connector.test and sealed connector.deploy commands",
+    "preview": "every row must return one terminal dry_run_planned receipt before deploy; the out-of-process receiver hashes all mutable certificate/readback/file state before and after preview and requires the digests to match",
     "completion": "passed is true only after the entry-specific mutation sequence, exact validation/reload argv in order, and readback from the connector-specific installed credential path",
     "failure_diagnostic": "a failed substrate emits only bounded entry ID, parsed method/path pairs, readback presence, signal count, and signal-error state; request headers, bodies, credentials, certificates, and raw signal arguments are excluded"
   }

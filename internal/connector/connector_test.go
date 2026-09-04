@@ -139,6 +139,70 @@ func (noCapConnector) Deploy(context.Context, connector.Sandbox, connector.Deplo
 	return nil
 }
 
+type previewProbeConnector struct {
+	previewed int
+	deployed  int
+}
+
+func (*previewProbeConnector) Name() string { return "preview-probe" }
+func (*previewProbeConnector) Capabilities() pluginhost.Grant {
+	return pluginhost.NewGrant(pluginhost.CapNetDial).WithPathPrefix(pluginhost.CapNetDial, "preview.example")
+}
+func (p *previewProbeConnector) Deploy(context.Context, connector.Sandbox, connector.Deployment) error {
+	p.deployed++
+	return nil
+}
+func (p *previewProbeConnector) Preview(context.Context, connector.Sandbox, string) (connector.Preview, error) {
+	p.previewed++
+	return connector.Preview{
+		Endpoint:    "https://preview.example",
+		WouldMutate: []string{"replace the named certificate only after explicit deploy"},
+		Detail:      "authenticated read-only target check passed",
+	}, nil
+}
+
+func TestRegistryPreviewUsesExactFactoryContextWithoutDeploying(t *testing.T) {
+	probe := &previewProbeConnector{}
+	registry := connector.NewRegistry()
+	var got connector.DeployPayload
+	if err := registry.RegisterFactory("preview-probe", func(_ context.Context, payload connector.DeployPayload) (connector.Connector, connector.Ops, func(), error) {
+		got = payload
+		return probe, connector.NewMemoryOps(), func() {}, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	request := connector.DeployPayload{
+		TenantID: "tenant-a", TargetID: "target-a", TargetRevision: "revision-a",
+		Connector: "preview-probe", Target: "payments edge",
+		TargetConfig: []byte(`{"endpoint":"https://preview.example"}`),
+	}
+	plan, err := registry.Preview(context.Background(), request)
+	if err != nil {
+		t.Fatalf("preview: %v", err)
+	}
+	if probe.previewed != 1 || probe.deployed != 0 {
+		t.Fatalf("preview calls=%d deploy calls=%d, want 1/0", probe.previewed, probe.deployed)
+	}
+	if got.TenantID != request.TenantID || got.TargetID != request.TargetID || got.TargetRevision != request.TargetRevision || string(got.TargetConfig) != string(request.TargetConfig) {
+		t.Fatalf("factory context = %+v, want exact tenant/target/revision/config", got)
+	}
+	if plan.Endpoint == "" || len(plan.WouldMutate) == 0 || plan.Detail == "" {
+		t.Fatalf("preview plan is not operator-usable: %+v", plan)
+	}
+}
+
+func TestRegistryPreviewFailsClosedWhenConnectorHasNoZeroWriteContract(t *testing.T) {
+	registry := connector.NewRegistry(func(string) connector.Ops { return connector.NewMemoryOps() })
+	registry.Register(dialConnector{name: "edge"})
+	_, err := registry.Preview(context.Background(), connector.DeployPayload{
+		TenantID: "tenant-a", TargetID: "target-a", TargetRevision: "revision-a",
+		Connector: "edge", Target: "edge-a",
+	})
+	if !errors.Is(err, connector.ErrPreviewUnsupported) {
+		t.Fatalf("preview without contract error = %v, want ErrPreviewUnsupported", err)
+	}
+}
+
 // TestConformanceFailsForBrokenOrPowerlessConnector: the suite catches a
 // connector that errors on deploy and one that declares no capabilities.
 func TestConformanceFailsForBrokenOrPowerlessConnector(t *testing.T) {

@@ -30,12 +30,13 @@ type Server struct {
 	srv   *httptest.Server
 	token string
 
-	mu     sync.Mutex
-	certs  map[string]Imported // certificate id -> content
-	ops    map[string]bool     // operation name -> done
-	patch  int
-	polls  int
-	nextOp int
+	mu      sync.Mutex
+	certs   map[string]Imported // certificate id -> content
+	ops     map[string]bool     // operation name -> done
+	patch   int
+	polls   int
+	preview int
+	nextOp  int
 }
 
 // New starts a fake Certificate Manager that accepts requests bearing
@@ -70,6 +71,20 @@ func (s *Server) Polls() int {
 	return s.polls
 }
 
+// PreviewCalls is the number of authenticated read-only certificate lists.
+func (s *Server) PreviewCalls() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.preview
+}
+
+// PatchCalls is the number of certificate mutation calls.
+func (s *Server) PatchCalls() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.patch
+}
+
 func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Authorization") != "Bearer "+s.token {
 		s.fail(w, http.StatusUnauthorized, "UNAUTHENTICATED", "bearer token missing or invalid")
@@ -77,6 +92,16 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch {
+	case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/certificates"):
+		if _, _, _, ok := parseCertCollectionPath(r.URL.Path); !ok {
+			s.fail(w, http.StatusNotFound, "NOT_FOUND", "malformed certificate collection path")
+			return
+		}
+		s.mu.Lock()
+		s.preview++
+		s.mu.Unlock()
+		s.writeJSON(w, map[string]any{"certificates": []any{}})
+
 	case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/operations/"):
 		name := strings.TrimPrefix(r.URL.Path, "/v1/")
 		s.mu.Lock()
@@ -122,6 +147,14 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	default:
 		s.fail(w, http.StatusNotFound, "NOT_FOUND", "no such operation")
 	}
+}
+
+func parseCertCollectionPath(path string) (project, location string, certificates bool, ok bool) {
+	p := strings.Split(strings.Trim(path, "/"), "/")
+	if len(p) != 6 || p[0] != "v1" || p[1] != "projects" || p[3] != "locations" || p[5] != "certificates" {
+		return "", "", false, false
+	}
+	return p[2], p[4], true, true
 }
 
 type operation struct {

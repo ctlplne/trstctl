@@ -742,7 +742,7 @@ func dodConfigureConnectorAgent(cfg *config.Config, dir string) {
 	cfg.AgentChannel.CACertFile = filepath.Join(dir, "agent-ca.crt")
 	cfg.AgentChannel.ServerName = dodConnectorAgentServerName
 	cfg.AgentChannel.HeartbeatInterval = "30s"
-	cfg.AgentChannel.ClaimableJobKinds = []string{"connector.deploy"}
+	cfg.AgentChannel.ClaimableJobKinds = []string{"connector.deploy", "connector.test"}
 }
 
 func dodStartConnectorAgentRuntime(
@@ -1087,6 +1087,70 @@ func dodRunConnector(t *testing.T, entryID, connectorName string, external *proo
 	if json.Unmarshal(targetBody, &configured) != nil || configured.ID == "" {
 		t.Fatalf("decode %s target: %s", entryID, targetBody)
 	}
+
+	// F27 preview gate: every shipped connector must perform a real target-
+	// vantage dress rehearsal before credential issuance/deploy. The target
+	// process hashes only mutable receiver state (not its request transcript), so
+	// equal before/after digests prove preview changed no target bytes while the
+	// terminal receipt proves it still reached and authenticated where required.
+	beforePreview := dodConnectorEffectDigest(t, external)
+	previewBody := dodConnectorRequest(t, srv, token, http.MethodPost,
+		"/api/v1/connectors/targets/"+configured.ID+"/test", "dod-preview-"+stem, nil, http.StatusAccepted)
+	var queuedPreview struct {
+		Status         string `json:"status"`
+		IdempotencyKey string `json:"idempotency_key"`
+	}
+	if json.Unmarshal(previewBody, &queuedPreview) != nil || queuedPreview.Status != "dry_run_queued" || queuedPreview.IdempotencyKey == "" {
+		t.Fatalf("decode %s queued preview: %s", entryID, previewBody)
+	}
+	vantage := nativeConnectorVantage(connectorName)
+	previewAgentOwned := vantage != connector.VantageControlPlane
+	if previewAgentOwned {
+		if agentRuntime == nil {
+			t.Fatalf("%s preview requires %s execution but the connector agent runtime is absent", entryID, vantage)
+		}
+		if err := agentRuntime.heartbeat(t); err != nil {
+			t.Fatalf("%s refresh enrolled agent presence before preview: %v", entryID, err)
+		}
+	}
+	if err := srv.Drain(context.Background()); err != nil {
+		t.Fatalf("drain %s preview: %v", entryID, err)
+	}
+	if previewAgentOwned {
+		if err := agentRuntime.run(t, connectorName); err != nil {
+			t.Fatalf("%s agent preview: %v; substrate %s", entryID, err, dodConnectorFailureDiagnostic(external))
+		}
+	}
+	afterPreview := dodConnectorEffectDigest(t, external)
+	if beforePreview != afterPreview {
+		t.Fatalf("%s preview changed target state: before=%s after=%s", entryID, beforePreview, afterPreview)
+	}
+	previewReceipts := dodConnectorRequest(t, srv, token, http.MethodGet,
+		"/api/v1/connectors/deliveries?limit=100", "", nil, http.StatusOK)
+	var previewPage struct {
+		Items []struct {
+			Connector      string `json:"connector"`
+			Target         string `json:"target"`
+			Status         string `json:"status"`
+			Reason         string `json:"reason"`
+			IdempotencyKey string `json:"idempotency_key"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(previewReceipts, &previewPage); err != nil {
+		t.Fatalf("decode %s preview receipts: %v body=%s", entryID, err, previewReceipts)
+	}
+	previewMatched := 0
+	for _, receipt := range previewPage.Items {
+		if receipt.Connector == connectorName && receipt.Target == target &&
+			receipt.Status == "dry_run_planned" && receipt.Reason == "dry_run_planned" &&
+			receipt.IdempotencyKey == queuedPreview.IdempotencyKey+":result" {
+			previewMatched++
+		}
+	}
+	if previewMatched != 1 {
+		t.Fatalf("%s terminal zero-write preview receipts=%d, want exactly one; body=%s", entryID, previewMatched, previewReceipts)
+	}
+
 	identityBody := dodConnectorRequest(t, srv, token, http.MethodPost, "/api/v1/identities", "dod-identity-"+stem, map[string]any{
 		"kind": "x509_certificate", "name": stem + ".dod.test", "owner_id": ownerID,
 	}, http.StatusCreated)
@@ -1106,7 +1170,7 @@ func dodRunConnector(t *testing.T, entryID, connectorName string, external *proo
 		inner: srv.obHandler, classes: make(map[string]string),
 	}
 	srv.obHandler = diagnostic
-	vantage := nativeConnectorVantage(connectorName)
+	vantage = nativeConnectorVantage(connectorName)
 	// Relay-vantage is the target topology, while RelayMigrated is the switch
 	// that has actually retired control-plane fallback. Cisco, FortiGate, and
 	// Palo Alto deliberately retain that fallback until their device APIs can
@@ -1186,6 +1250,22 @@ func dodRunConnector(t *testing.T, entryID, connectorName string, external *proo
 		Destination: []byte("native-connector://" + entryID + "/" + target),
 		Written:     written, ReadBack: readback, ExecutionReceipt: executionReceipt,
 	}))
+}
+
+func dodConnectorEffectDigest(t *testing.T, external *proof.ExternalSubstrate) string {
+	t.Helper()
+	response, err := http.Get(external.Endpoint() + "/dod/effect-digest")
+	if err != nil {
+		t.Fatalf("read connector target effect digest: %v", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	var body struct {
+		SHA256 string `json:"sha256"`
+	}
+	if response.StatusCode != http.StatusOK || json.NewDecoder(response.Body).Decode(&body) != nil || len(body.SHA256) != 64 {
+		t.Fatalf("invalid connector target effect digest response")
+	}
+	return body.SHA256
 }
 
 func firstDifferentByte(left, right []byte) int {

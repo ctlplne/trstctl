@@ -13003,7 +13003,7 @@ export const messages = {
   },
   "connectors.actions.help": {
     defaultMessage:
-      "Preview first from the same agent or relay. It checks the target connection, required management credentials, and local permissions without receiving the certificate or private key a later deploy will install. Deploy changes the target. Review restore separately if the new version causes trouble.",
+      "Preview first from the same execution place: the target agent, network relay, or bounded cloud worker. It checks the connection when configured, required management credentials, and local permissions without receiving the certificate or private key a later deploy will install. Deploy changes the target. Review restore separately if the new version causes trouble.",
     description: "Technical ELI5 ordering and effect boundary for connector actions.",
   },
   "connectors.preview.action": {
@@ -13012,7 +13012,7 @@ export const messages = {
   },
   "connectors.preview.ready": {
     defaultMessage: "Target path ready — no changes made",
-    description: "Heading for a successful relay- or agent-executed connector preview.",
+    description: "Heading for a successful target-vantage connector preview.",
   },
   "connectors.preview.blocked": {
     defaultMessage: "Deploy blocked — no changes made",
@@ -13020,7 +13020,7 @@ export const messages = {
   },
   "connectors.preview.queued": {
     defaultMessage: "Preview queued — no result yet",
-    description: "Heading while the target agent or relay has not returned its preview result.",
+    description: "Heading while the target-vantage executor has not returned its preview result.",
   },
   "connectors.preview.localOnly": {
     defaultMessage: "Configuration valid — target not contacted",
@@ -13040,8 +13040,7 @@ export const messages = {
     description: "Read-only refresh action for an asynchronous connector preview.",
   },
   "connectors.preview.correlationUnavailable": {
-    defaultMessage:
-      "This queued preview has no receipt key, so the console will not guess which result belongs to it. Run a new preview.",
+    defaultMessage: "This queued preview has no receipt key, so the console will not guess which result belongs to it. Run a new preview.",
     description: "Fail-closed warning when an asynchronous connector preview cannot be tied to its exact result receipt.",
   },
   "connectors.recovery.review": {

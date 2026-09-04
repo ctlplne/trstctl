@@ -16,26 +16,28 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
-// The relay-executed target test (epic D5).
+// The target-vantage connector test (epic D5/F27).
 //
 // The console's test button used to record that a target's configuration
 // parsed. That was true and nearly useless — it could not tell an operator
 // whether the appliance was reachable or whether the credential still worked.
-// This queues a real dry-run for the relay bound to that target: resolve
-// everything a deploy needs, probe the endpoint, describe what would change,
-// change nothing.
+// This queues a real zero-write preview at the same execution vantage as deploy:
+// the bound host/network agent for local and appliance targets, or the bounded
+// control-plane outbox worker for the three cloud stores. It resolves everything
+// a deploy needs, validates the target, describes what would change, and changes
+// nothing.
 //
-// It returns (nil, nil) rather than an error when no relay can take the work.
-// That is the honest fallback: the route then records the local
-// config-validated answer it always did, instead of queueing a job that would
-// sit unclaimed while an operator waited for a result that was never coming.
+// It returns (nil, nil) rather than an error when an agent-owned target has no
+// enabled connector.test claimant. That is the honest fallback: the route then
+// records local config validation instead of queueing work that cannot run.
 
 // connectorTestEnqueuer builds the API's dry-run enqueuer over the served job
-// ledger. The kind must be enabled by the operator like any other claimable
-// kind, so enabling deploys and enabling tests stay separate decisions.
+// ledger. Agent-owned tests must be enabled by the operator like any other
+// claimable kind. Control-plane previews are outbox work, not agent claims, and
+// therefore do not depend on the agent claimable-kind switch.
 func (s *Server) connectorTestEnqueuer(claimable map[string]bool) func(context.Context, string, store.DeploymentTarget, string) (*store.ConnectorDeliveryReceipt, error) {
 	return func(ctx context.Context, tenantID string, target store.DeploymentTarget, idempotencyKey string) (*store.ConnectorDeliveryReceipt, error) {
-		if !claimable["connector.test"] || s.outbox == nil || s.store == nil || s.orch == nil {
+		if s.outbox == nil || s.store == nil || s.orch == nil {
 			return nil, nil
 		}
 		// A target whose connector no agent can execute would queue work that
@@ -44,9 +46,10 @@ func (s *Server) connectorTestEnqueuer(claimable map[string]bool) func(context.C
 			return nil, nil
 		}
 		vantage := s.connectorRegistry.TargetVantageFor(target.Type)
-		if vantage == connector.VantageControlPlane {
-			// Cloud stores have no relay and never will; the local answer is the
-			// only honest one for them.
+		if vantage != connector.VantageControlPlane && !claimable["connector.test"] {
+			// Agent-owned tests are an explicit operator choice. A disabled claim
+			// kind keeps the historical honest local fallback instead of queueing
+			// work no agent is permitted to claim.
 			return nil, nil
 		}
 
@@ -54,10 +57,11 @@ func (s *Server) connectorTestEnqueuer(claimable map[string]bool) func(context.C
 		// credential: the relay redeems for itself. There is no cert or key
 		// here — a dry-run proves the path, not the certificate.
 		payload, err := json.Marshal(connector.DeployPayload{
-			Connector:    target.Type,
-			Target:       target.Name,
-			TargetID:     target.ID,
-			TargetConfig: append(json.RawMessage(nil), target.Config...),
+			Connector:      target.Type,
+			Target:         target.Name,
+			TargetID:       target.ID,
+			TargetRevision: target.RevisionID,
+			TargetConfig:   append(json.RawMessage(nil), target.Config...),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("server: encode connector test payload: %w", err)
@@ -82,11 +86,15 @@ func (s *Server) connectorTestEnqueuer(claimable map[string]bool) func(context.C
 		// The receipt says QUEUED, not tested. The result arrives when the relay
 		// reports; claiming a result now would be the same defect this epic
 		// exists to fix, one status further along.
+		detail := "a dry-run was queued for the " + requiredRole +
+			" agent bound to this target; it will resolve credentials, probe the endpoint, and report a mutation plan without changing anything"
+		if vantage == connector.VantageControlPlane {
+			detail = "an effect-free provider preview was queued on the control-plane outbox; it will use the exact target revision and one-attempt credential lease to authenticate with a read-only provider operation, then report what a later deploy would change"
+		}
 		receipt, err := s.orch.RecordConnectorDelivery(ctx, tenantID, store.ConnectorDeliveryReceipt{
 			Destination: "connector.test", Connector: target.Type, Target: target.Name,
 			Status: servedstatus.ConnectorTestQueued, Attempts: 0, Reason: "dry_run_queued",
-			Detail: "a dry-run was queued for the " + requiredRole +
-				" agent bound to this target; it will resolve credentials, probe the endpoint, and report a mutation plan without changing anything",
+			Detail:         detail,
 			IdempotencyKey: idemKey,
 		})
 		if err != nil {
@@ -94,6 +102,59 @@ func (s *Server) connectorTestEnqueuer(claimable map[string]bool) func(context.C
 		}
 		return &receipt, nil
 	}
+}
+
+// routeConnectorTest keeps the central outbox dispatcher small and makes the
+// execution boundary explicit: only control-plane rows run here. Host and
+// network rows stay pending until the correctly enrolled agent claims them.
+func (d *issuanceDispatcher) routeConnectorTest(ctx context.Context, m orchestrator.Message) error {
+	if m.RequiredAgentRole == string(connector.VantageControlPlane) {
+		return d.handleControlPlaneConnectorTest(ctx, m)
+	}
+	return orchestrator.DeferDelivery(fmt.Errorf(
+		"server: %s executes on a target-vantage agent, not the control plane", m.Destination))
+}
+
+// handleControlPlaneConnectorTest runs the three cloud-store previews that have
+// no host or network-relay vantage. The request handler only enqueues this row;
+// all provider I/O occurs here on the bounded outbox worker (AN-6).
+func (d *issuanceDispatcher) handleControlPlaneConnectorTest(ctx context.Context, m orchestrator.Message) error {
+	var payload connector.DeployPayload
+	if err := json.Unmarshal(m.Payload, &payload); err != nil {
+		return fmt.Errorf("server: decode connector preview payload: %w", err)
+	}
+	payload.TenantID = m.TenantID
+	receipt := connectorDeliveryEvidence{
+		ID:             evidenceID("connector-preview", m.TenantID, m.IdempotencyKey+":result", m.ID),
+		OutboxID:       outboxPtr(m.ID),
+		Destination:    m.Destination,
+		Connector:      nonempty(payload.Connector, "unconfigured"),
+		Target:         nonempty(payload.Target, "unconfigured"),
+		Attempts:       m.Attempts,
+		IdempotencyKey: m.IdempotencyKey + ":result",
+	}
+	recordBlocked := func(reason string) error {
+		receipt.Detail = reason
+		return d.recordConnectorDelivery(ctx, m.TenantID, receipt, servedstatus.ConnectorTestBlocked, "dry_run_blocked")
+	}
+	if m.IdempotencyKey == "" {
+		return recordBlocked("preview stopped before target contact: the queued command has no stable idempotency key")
+	}
+	if d.connectorRegistry == nil || !d.connectorRegistry.Has(payload.Connector) {
+		return recordBlocked("preview stopped before target contact: the configured native connector is not loaded")
+	}
+	if d.connectorDeployVantage(payload.Connector) != connector.VantageControlPlane {
+		return orchestrator.DeferDelivery(fmt.Errorf("server: %s connector preview executes at its target vantage, not the control plane", payload.Connector))
+	}
+	plan, err := d.connectorRegistry.Preview(ctx, payload)
+	if err != nil {
+		// A preview is an interactive verdict, not a deployment retry loop. The
+		// terminal blocked receipt carries the actionable redacted cause and the
+		// outbox row can be acknowledged because no mutation was attempted.
+		return recordBlocked("preview blocked: " + err.Error())
+	}
+	receipt.Detail = plan.Detail + ". A later authorized deploy would: " + strings.Join(plan.WouldMutate, "; ")
+	return d.recordConnectorDelivery(ctx, m.TenantID, receipt, servedstatus.ConnectorTestPlanned, "dry_run_planned")
 }
 
 // dryRunReceipt turns a relay's reported plan into a delivery receipt.
