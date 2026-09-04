@@ -6717,7 +6717,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use cryptographic compliance reporting & posture dashboards while tenant, policy, and security authority remain on the server.",
       "tool": "operations",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/policy",
       "navigationEntrypoints": [
         "tool navigation",
@@ -6731,7 +6731,7 @@ export const canonicalCapabilities = [
       ],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -6748,34 +6748,62 @@ export const canonicalCapabilities = [
         "configure": {
           "status": "complete",
           "evidence": [
-            "web/src/pages/Policy.tsx"
+            "web/src/pages/Policy.tsx",
+            "web/src/pages/policy/ComplianceReportingPanels.tsx",
+            "web/src/__tests__/policy.test.tsx"
           ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: previewComplianceReportSchedule",
+            "CLI command: compliance report-schedules preview",
+            "internal/api/compliance_report_schedule_contract_test.go",
+            "internal/projections/compliance_reporting_api_test.go",
+            "web/src/pages/Policy.tsx",
+            "web/src/__tests__/policy.test.tsx",
+            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g203-f62-live.json",
+            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g203-f62-browser.json"
+          ]
         },
         "execute": {
           "status": "complete",
           "evidence": [
-            "web/src/lib/navigation.ts",
-            "internal/server/governance_seam_test.go"
+            "web/src/pages/Policy.tsx",
+            "internal/projections/compliance_reporting_api_test.go",
+            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g203-f62-live.json"
           ]
         },
         "observe": {
           "status": "complete",
           "evidence": [
-            "web/src/lib/navigation.ts"
+            "web/src/pages/policy/ComplianceReportingPanels.tsx",
+            "OpenAPI operationId: listComplianceReportSchedules",
+            "OpenAPI operationId: getComplianceInventoryReport",
+            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g203-f62-browser.json"
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: pauseComplianceReportSchedule",
+            "OpenAPI operationId: resumeComplianceReportSchedule",
+            "CLI command: compliance report-schedules pause",
+            "CLI command: compliance report-schedules resume",
+            "internal/projections/compliance_reporting_api_test.go",
+            "web/src/pages/Policy.tsx",
+            "web/src/__tests__/policy.test.tsx",
+            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g203-f62-live.json",
+            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g203-f62-browser.json"
+          ]
         },
         "verify": {
           "status": "complete",
           "evidence": [
-            "internal/server/governance_seam_test.go"
+            "internal/server/governance_seam_test.go",
+            "internal/projections/compliance_reporting_api_test.go",
+            "web/src/pages/policy/ComplianceReportingPanels.tsx",
+            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g203-f62-live.json"
           ]
         },
         "automate": {
@@ -6818,8 +6846,8 @@ export const canonicalCapabilities = [
       },
       "owner": "operations",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "8ad04f5aed809bd291072844cc2b008daadd3661",
+      "freshness": "2026-09-04"
     }
   },
   {

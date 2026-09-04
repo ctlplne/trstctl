@@ -18797,10 +18797,11 @@
                 "internal/server/nhi_posture_served_test.go"
             ],
             "source_frontend": [
-                "web/src/pages/Policy.tsx"
+                "web/src/pages/Policy.tsx",
+                "web/src/pages/policy/ComplianceReportingPanels.tsx"
             ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence, COMP-01 served evidence-pack wiring, CAP-CMP-01 CA/Browser Forum Baseline Requirements posture packs, CAP-CMP-02 WebTrust/ETSI CA-audit posture packs, CAP-CMP-03 FIPS 140/Common Criteria posture packs, CAP-CMP-04 eIDAS/NIST/CMMC/FedRAMP/NIS2 regulatory mapping packs, CAP-CMP-05 SOC 2 CC6/CC7/CC8 evidence mapping packs, CAP-OBS-02 compliance/inventory reports, CAP-CMP-06 NHI compliance mappings, and CAP-GOV-02 NHI access certification campaigns. Test evidence: internal/server/governance_seam_test.go proves the licensed seam serves an auditor for SOC 2, FIPS 140/Common Criteria/CABF BR/WebTrust/ETSI, and CAP-CMP-04 framework path values while hiding the route without the governance factory; ee/governance/governance_test.go verifies deterministic signed evidence packs plus SOC 2 trust-services residuals, FIPS 140, Common Criteria, CABF BR, CA-audit posture residuals, and CAP-CMP-04 framework residuals; internal/server/nhi_posture_served_test.go proves CAP-CMP-06 maps NIST 800-53/CSF, PCI DSS 4.0, DORA, ISO 27001, FedRAMP, CMMC 2.0, eIDAS, and NIS2 to served NHI inventory/posture/audit evidence without credential leakage; internal/server/nhi_access_review_served_test.go proves campaign start, reviewer decisions, completion counts, event projection, and idempotent replay. web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search. Verification evidence: focused served acceptance plus generated OpenAPI/SDK parity for getComplianceEvidencePack, getNHIComplianceReport, and NHI review operations.",
+            "notes": "Complete vertical slice closed on exact g203 candidate 8ad04f5aed809bd291072844cc2b008daadd3661. Existing signed framework packs, CAP-OBS-02 inventory reporting, CAP-CMP-06 NHI mappings, and CAP-GOV-02 access certification remain served. F62 convergence adds an effect-free server review of the exact unsaved audit-export schedule, a tenant-bound SHA-256 fingerprint, explicit writes/recovery/verification and secret-data boundaries, event-sourced pause/resume, UI review-before-create and stale-review invalidation, plus API/CLI/SDK parity. qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g203-f62-source-qualification.json binds full make test/lint and the exact image; g203-f62-live.json proves pinned-CA API/native-CLI parity, tenant/auth failures, tight-cadence and false-delivery rejection, idempotent create/pause/resume, four immutable events for four real state changes, zero delivery outbox intents, token cleanup, and a final disabled schedule; g203-f62-browser.json proves the installed /policy journey. External report generation and delivery remain explicitly unserved rather than fabricated.",
             "api_surface": [
                 "getComplianceEvidencePack",
                 "getComplianceInventoryReport",
@@ -18844,6 +18845,7 @@
                     "evidence": [
                         "GET /api/v1/compliance/evidence-packs/{framework} exports a signed, tenant-scoped framework evidence pack generated from the audit log and CBOM graph, including SOC 2 CC6/CC7/CC8 evidence mapping, eIDAS, NIST 800-53/CSF, CMMC 2.0, FedRAMP, NIS2, FIPS 140, Common Criteria, CA/Browser Forum Baseline Requirements, WebTrust, and ETSI posture packs.",
                         "GET /api/v1/compliance/inventory-report returns CAP-OBS-02 compliance/inventory reporting coverage and enumerates scheduled audit-export reports; POST/GET /api/v1/compliance/report-schedules creates and lists event-sourced tenant report schedules.",
+                        "POST /api/v1/compliance/report-schedules/preview validates and fingerprints the exact unsaved definition without writing state or resolving a destination; POST /pause and /resume append event-sourced recovery state while retaining the definition and evidence.",
                         "GET /api/v1/compliance/nhi-report returns CAP-CMP-06 NHI compliance mappings for NIST 800-53/CSF, PCI DSS 4.0, DORA, ISO 27001, FedRAMP, CMMC 2.0, eIDAS, and NIS2 from served NHI inventory, posture, and audit evidence refs.",
                         "POST /api/v1/access/reviews starts an IGA-grade NHI access certification campaign from metadata/evidence references, and POST /api/v1/access/reviews/{id}/items/{item_id}/decision records certified/revoked/exception decisions.",
                         "served_state=conditional",
@@ -18853,6 +18855,8 @@
                         "internal/api/compliance.go",
                         "internal/orchestrator/compliance_report.go",
                         "internal/store/compliance_report.go",
+                        "internal/api/compliance_report_schedule_contract_test.go",
+                        "internal/projections/compliance_reporting_api_test.go",
                         "internal/server/nhi_posture_served_test.go",
                         "internal/api/nhi_access_review.go",
                         "internal/orchestrator/nhi_access_review.go",
@@ -18866,13 +18870,15 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: served: Policy at /policy, /audit - signed audit export, served framework evidence-pack posture disclosure for PCI, HIPAA, SOC 2, NIST 800-53/CSF, FedRAMP, CMMC 2.0, CNSA 2.0, FIPS 140, Common Criteria, CA/B Forum BR, WebTrust, ETSI, eIDAS, and NIS2, compliance/inventory report coverage plus audit-export schedules, CAP-CMP-06 NHI compliance mappings for NIST 800-53/CSF, PCI DSS 4.0, DORA, ISO 27001, FedRAMP, CMMC 2.0, eIDAS, and NIS2, plus NHI access certification campaign controls",
+                        "current_frontend_mapping: served: Policy at /policy and /audit; Framework evidence and reports shows signed posture disclosures, inventory/NHI mappings, an exact effect-free schedule review, review-before-create gating, stale-review invalidation, schedule counts, and pause/resume recovery without implying external delivery",
                         "target_gui_mapping: Compliance dashboard for PCI, HIPAA, SOC 2, NIST 800-53/CSF, FedRAMP, CMMC 2.0, CNSA 2.0, FIPS 140, Common Criteria, CA/B Forum BR, WebTrust, ETSI, eIDAS, NIS2, PCI DSS 4.0, DORA, and ISO 27001 mappings, inventory report coverage, evidence export, scheduled audit-export report definitions, control state, NHI access certifications, and caveats."
                     ],
                     "refs": [
                         "web/src/lib/navigation.ts",
                         "web/src/App.tsx",
-                        "web/src/pages/Policy.tsx"
+                        "web/src/pages/Policy.tsx",
+                        "web/src/pages/policy/ComplianceReportingPanels.tsx",
+                        "web/src/__tests__/policy.test.tsx"
                     ]
                 },
                 "cli": {
@@ -18911,6 +18917,10 @@
                     "evidence": [
                         "acceptance_test: auditor role pulls signed SOC 2, FIPS 140/Common Criteria/CABF BR/WebTrust/ETSI, and CAP-CMP-04 eIDAS/NIST/CMMC/FedRAMP/NIS2 evidence packs via API for CAP-CMP-01/CAP-CMP-02/CAP-CMP-03/CAP-CMP-04/CAP-CMP-05; non-auditor is denied.",
                         "internal/projections/compliance_reporting_api_test.go proves CAP-OBS-02 schedule creation, idempotent replay, list readback, and inventory-report coverage.",
+                        "internal/api/compliance_report_schedule_contract_test.go proves the preview is registered as a read-only audit:write operation and pause/resume are idempotent mutations with complete OpenAPI contracts.",
+                        "web/src/__tests__/policy.test.tsx proves create is disabled before exact review, edits invalidate the review, explicit effects/recovery/verification render, and pause/resume update the served inventory counts.",
+                        "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g203-f62-live.json proves the exact installed g203 API/native-CLI lifecycle on real PostgreSQL, NATS, and a separate nonroot signer, including zero preview mutation/outbox work and final recovery to disabled.",
+                        "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g203-f62-browser.json proves the installed browser review, invalidation, create, observe, pause, resume, and final paused journey.",
                         "internal/server/nhi_posture_served_test.go proves CAP-CMP-06 serves NHI compliance mappings for NIST 800-53/CSF, PCI DSS 4.0, DORA, ISO 27001, FedRAMP, CMMC 2.0, eIDAS, and NIS2 from NHI inventory/posture/audit evidence without leaking credential material.",
                         "internal/server/nhi_access_review_served_test.go proves CAP-GOV-02 end-to-end campaign start, item decisions, completion counts, event projection, and idempotent replay.",
                         "internal/server/governance_seam_test.go verifies the licensed route mount, RBAC, and SOC 2/FIPS 140/Common Criteria/CABF BR/WebTrust/ETSI path values; ee/governance/governance_test.go verifies signed export determinism, tamper detection, SOC 2 trust-services residuals, FIPS 140/Common Criteria residuals, CABF BR profile-lint posture, and CA-audit posture residuals.",
@@ -18922,6 +18932,8 @@
                         "internal/server/nhi_posture_served_test.go",
                         "internal/server/nhi_access_review_served_test.go",
                         "ee/governance/governance_test.go",
+                        "internal/api/compliance_report_schedule_contract_test.go",
+                        "internal/projections/compliance_reporting_api_test.go",
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "web/src/__tests__/policy.test.tsx",
                         "web/src/__tests__/route_parity.test.ts",
@@ -18930,7 +18942,8 @@
                 },
                 "docs": {
                     "evidence": [
-                        "documented in docs/features/policy-and-governance.md and docs/compliance.md"
+                        "documented in docs/features/policy-and-governance.md and docs/compliance.md",
+                        "The docs distinguish the one-hour API/CLI cadence floor from the console's whole-day input, require exact review before save, explain pause/resume verification, and explicitly state that report generation and external delivery are not served."
                     ],
                     "refs": [
                         "docs/features/policy-and-governance.md",
@@ -18940,23 +18953,30 @@
                 "rbac": {
                     "evidence": [
                         "The evidence-pack and NHI compliance report routes are guarded by audit:read; served acceptance proves a risk:read caller receives 403 for evidence packs and CAP-CMP-06 uses the auditor route.",
+                        "Inventory/list routes require audit:read; exact schedule preview and create/pause/resume require audit:write, and every mutation additionally requires Idempotency-Key.",
+                        "Exact g203 live evidence proves anonymous review returns 401, a mismatched tenant returns 403, and mutation without Idempotency-Key returns 400.",
                         "NHI access-review campaign list/get routes require access:read; campaign start and item decision routes require access:write and Idempotency-Key.",
                         "feature authz manifest maps api_surface operations getComplianceEvidencePack and getNHIComplianceReport to route permissions."
                     ],
                     "refs": [
                         "internal/api/api.go",
                         "internal/api/feature_authz_test.go",
+                        "internal/api/compliance_report_schedule_contract_test.go",
                         "internal/server/governance_seam_test.go"
                     ]
                 },
                 "audit": {
                     "evidence": [
+                        "Create, pause, and resume emit compliance.report_schedule.upserted through the orchestrator; idempotent replays append no duplicate event.",
+                        "Exact g203 live evidence observes four immutable events for create, pause, resume, and final pause and zero external-delivery outbox rows.",
                         "NHI access-review campaign starts emit nhi.access_review.campaign.started and item decisions emit nhi.access_review.item.decided; both are catalogued in internal/eventledger for feature/action audit filters.",
                         "The evidence-pack export remains read-only and is generated from tenant audit records that served mutations append and seal."
                     ],
                     "refs": [
                         "internal/eventledger/ledger.go",
                         "internal/projections/projections.go",
+                        "internal/orchestrator/compliance_report.go",
+                        "internal/projections/compliance_reporting_api_test.go",
                         "internal/orchestrator/eventledger_completeness_test.go"
                     ]
                 },
@@ -18971,7 +18991,8 @@
                         "web/src/__tests__/feature_a11y_receipts.test.tsx",
                         "web/src/lib/navigation.ts",
                         "web/src/App.tsx",
-                        "web/src/pages/Policy.tsx"
+                        "web/src/pages/Policy.tsx",
+                        "web/src/pages/policy/ComplianceReportingPanels.tsx"
                     ]
                 },
                 "i18n": {
@@ -18991,7 +19012,7 @@
                 "purpose": "Lets an operator understand and safely use cryptographic compliance reporting & posture dashboards while tenant, policy, and security authority remain on the server.",
                 "tool": "operations",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/policy",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -19005,7 +19026,7 @@
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -19022,34 +19043,62 @@
                     "configure": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/pages/Policy.tsx"
+                            "web/src/pages/Policy.tsx",
+                            "web/src/pages/policy/ComplianceReportingPanels.tsx",
+                            "web/src/__tests__/policy.test.tsx"
                         ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: previewComplianceReportSchedule",
+                            "CLI command: compliance report-schedules preview",
+                            "internal/api/compliance_report_schedule_contract_test.go",
+                            "internal/projections/compliance_reporting_api_test.go",
+                            "web/src/pages/Policy.tsx",
+                            "web/src/__tests__/policy.test.tsx",
+                            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g203-f62-live.json",
+                            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g203-f62-browser.json"
+                        ]
                     },
                     "execute": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/lib/navigation.ts",
-                            "internal/server/governance_seam_test.go"
+                            "web/src/pages/Policy.tsx",
+                            "internal/projections/compliance_reporting_api_test.go",
+                            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g203-f62-live.json"
                         ]
                     },
                     "observe": {
                         "status": "complete",
                         "evidence": [
-                            "web/src/lib/navigation.ts"
+                            "web/src/pages/policy/ComplianceReportingPanels.tsx",
+                            "OpenAPI operationId: listComplianceReportSchedules",
+                            "OpenAPI operationId: getComplianceInventoryReport",
+                            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g203-f62-browser.json"
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: pauseComplianceReportSchedule",
+                            "OpenAPI operationId: resumeComplianceReportSchedule",
+                            "CLI command: compliance report-schedules pause",
+                            "CLI command: compliance report-schedules resume",
+                            "internal/projections/compliance_reporting_api_test.go",
+                            "web/src/pages/Policy.tsx",
+                            "web/src/__tests__/policy.test.tsx",
+                            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g203-f62-live.json",
+                            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g203-f62-browser.json"
+                        ]
                     },
                     "verify": {
                         "status": "complete",
                         "evidence": [
-                            "internal/server/governance_seam_test.go"
+                            "internal/server/governance_seam_test.go",
+                            "internal/projections/compliance_reporting_api_test.go",
+                            "web/src/pages/policy/ComplianceReportingPanels.tsx",
+                            "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g203-f62-live.json"
                         ]
                     },
                     "automate": {
@@ -19092,8 +19141,8 @@
                 },
                 "owner": "operations",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "8ad04f5aed809bd291072844cc2b008daadd3661",
+                "freshness": "2026-09-04"
             }
         },
         {
