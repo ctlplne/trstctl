@@ -8329,7 +8329,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use privacy and data-subject controls while tenant, policy, and security authority remain on the server.",
       "tool": "operations",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/privacy",
       "navigationEntrypoints": [
         "tool navigation",
@@ -8341,7 +8341,7 @@ export const canonicalCapabilities = [
       "dependencies": [],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -8356,12 +8356,23 @@ export const canonicalCapabilities = [
           ]
         },
         "configure": {
-          "status": "missing",
-          "reason": "No structured evidence proves an operator can configure every required prerequisite from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/Privacy.tsx",
+            "web/src/__tests__/accept/U6-3.test.tsx",
+            "docs/privacy-data-catalog.md"
+          ]
         },
         "preview": {
-          "status": "missing",
-          "reason": "No exact, effect-free server preview is linked from this workflow."
+          "status": "complete",
+          "evidence": [
+            "internal/api/privacy.go",
+            "internal/api/privacy_review_contract_test.go",
+            "internal/server/privacy_subject_erasure_served_test.go",
+            "internal/server/privacy_retention_served_test.go",
+            "web/src/pages/Privacy.tsx",
+            "web/src/__tests__/accept/U6-3.test.tsx"
+          ]
         },
         "execute": {
           "status": "complete",
@@ -8377,8 +8388,16 @@ export const canonicalCapabilities = [
           ]
         },
         "recover": {
-          "status": "missing",
-          "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+          "status": "complete",
+          "evidence": [
+            "internal/api/privacy.go",
+            "internal/api/privacy_review_contract_test.go",
+            "internal/orchestrator/privacy_retention.go",
+            "internal/server/privacy_subject_erasure_served_test.go",
+            "internal/server/privacy_retention_served_test.go",
+            "web/src/pages/Privacy.tsx",
+            "web/src/__tests__/accept/U6-3.test.tsx"
+          ]
         },
         "verify": {
           "status": "complete",
@@ -8414,8 +8433,8 @@ export const canonicalCapabilities = [
       },
       "owner": "operations",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "57b52ac2e149078381f137192093838316f8e516",
+      "freshness": "2026-09-04"
     }
   }
 ] as const satisfies readonly CanonicalCapability[];

@@ -23215,7 +23215,7 @@
                 "web/src/pages/Privacy.tsx"
             ],
             "status": "closed",
-            "notes": "Closed by COVER-003: F79 is now a first-class denominator row instead of only a UI featureId. Test evidence includes TestFeatureCatalogCoversWebNavigationFeatureIDs plus docs, featureparity, API, and CLI parity gates.",
+            "notes": "Complete vertical slice on the g209 dev candidate: the tenant-scoped privacy console exposes the data map and archive-disposition prerequisites, effect-free subject-erasure and retention reviews, guarded idempotent execution, evidence/history, exact recovery boundaries, and API/CLI automation. Live API/CLI qualification and installed-browser review prove the workflow; irreversible browser confirmation remains an explicit final installed-browser gate rather than an unevidenced waiver.",
             "api_surface": [
                 "previewPrivacySubjectErasure",
                 "erasePrivacySubject",
@@ -23390,7 +23390,7 @@
                 "purpose": "Lets an operator understand and safely use privacy and data-subject controls while tenant, policy, and security authority remain on the server.",
                 "tool": "operations",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/privacy",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -23402,7 +23402,7 @@
                 "dependencies": [],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -23417,12 +23417,23 @@
                         ]
                     },
                     "configure": {
-                        "status": "missing",
-                        "reason": "No structured evidence proves an operator can configure every required prerequisite from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/Privacy.tsx",
+                            "web/src/__tests__/accept/U6-3.test.tsx",
+                            "docs/privacy-data-catalog.md"
+                        ]
                     },
                     "preview": {
-                        "status": "missing",
-                        "reason": "No exact, effect-free server preview is linked from this workflow."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/api/privacy.go",
+                            "internal/api/privacy_review_contract_test.go",
+                            "internal/server/privacy_subject_erasure_served_test.go",
+                            "internal/server/privacy_retention_served_test.go",
+                            "web/src/pages/Privacy.tsx",
+                            "web/src/__tests__/accept/U6-3.test.tsx"
+                        ]
                     },
                     "execute": {
                         "status": "complete",
@@ -23438,8 +23449,16 @@
                         ]
                     },
                     "recover": {
-                        "status": "missing",
-                        "reason": "Failure recovery, retry, or rollback is not yet proved from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "internal/api/privacy.go",
+                            "internal/api/privacy_review_contract_test.go",
+                            "internal/orchestrator/privacy_retention.go",
+                            "internal/server/privacy_subject_erasure_served_test.go",
+                            "internal/server/privacy_retention_served_test.go",
+                            "web/src/pages/Privacy.tsx",
+                            "web/src/__tests__/accept/U6-3.test.tsx"
+                        ]
                     },
                     "verify": {
                         "status": "complete",
@@ -23475,8 +23494,8 @@
                 },
                 "owner": "operations",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "57b52ac2e149078381f137192093838316f8e516",
+                "freshness": "2026-09-04"
             }
         }
     ],
