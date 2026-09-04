@@ -80,6 +80,66 @@ func TestServedBreakglassReconcileRecordsAuditChain(t *testing.T) {
 	}
 }
 
+// F34 acceptance: an ordinary deployment with online emergency custody disabled
+// still receives an effect-free, machine-readable setup plan. A disabled optional
+// subsystem is a blocked prerequisite, not an empty successful response.
+func TestServedBreakglassPreviewExplainsUnconfiguredCustody(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		// buildRunDeps historically assigned the nil concrete runtime into these
+		// interfaces when online custody was disabled. Preserve that production
+		// shape here so this test catches a typed-nil interface escaping into API
+		// composition.
+		var disabled *configuredBreakglassRuntime
+		d.BreakglassIssuer = disabled
+		d.BreakglassCeremonies = disabled
+		d.BreakglassRotation = disabled
+		d.BreakglassReconciler = disabled
+	})
+	token := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "breakglass-planner", []string{
+		string(authz.CertsIssue),
+	})
+	workload, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatalf("generate workload key: %v", err)
+	}
+	t.Cleanup(workload.Destroy)
+	csrDER, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{
+		CommonName: "breakglass-disabled.svc.example.test",
+		DNSNames:   []string{"breakglass-disabled.svc.example.test"},
+	}, workload)
+	if err != nil {
+		t.Fatalf("create emergency CSR: %v", err)
+	}
+
+	eventHeadBefore, err := h.log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatalf("read event head before preview: %v", err)
+	}
+	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/issue-ceremonies/preview", token, "", map[string]any{
+		"request_id":  "f34-unconfigured-preview",
+		"subject":     "breakglass-disabled.svc.example.test",
+		"csr_der":     csrDER,
+		"reason":      "verify the disabled online-custody setup guidance",
+		"ttl_seconds": 900,
+	})
+	if code != http.StatusOK || len(body) == 0 {
+		t.Fatalf("unconfigured break-glass preview = %d body=%q; want non-empty 200 JSON", code, body)
+	}
+	var preview api.BreakglassIssuePlanPreview
+	if err := json.Unmarshal(body, &preview); err != nil {
+		t.Fatalf("decode unconfigured break-glass preview: %v body=%s", err, body)
+	}
+	if preview.Ready || !preview.EffectFree || preview.ApprovalThreshold != 0 || preview.ConfiguredOperatorCount != 0 || len(preview.Blockers) != 2 {
+		t.Fatalf("unconfigured break-glass preview did not explain both blockers: %+v", preview)
+	}
+	if preview.PreviewWrites == nil || preview.PreviewExternalEffects == nil || preview.PreviewSignerCalls == nil {
+		t.Fatalf("unconfigured preview omitted explicit zero-effect evidence: %+v", preview)
+	}
+	if eventHeadAfter, lastErr := h.log.LastSequence(t.Context()); lastErr != nil || eventHeadAfter != eventHeadBefore {
+		t.Fatalf("unconfigured break-glass preview changed event head: before=%d after=%d err=%v", eventHeadBefore, eventHeadAfter, lastErr)
+	}
+}
+
 // TRACE-006/F34 acceptance: the served control plane can perform online
 // emergency issuance when a signer-backed break-glass issuer is configured. The
 // execution request cannot nominate approvers: distinct authenticated ceremony

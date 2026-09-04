@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"time"
 
 	"trstctl.com/trstctl/internal/api"
@@ -30,8 +31,24 @@ type breakglassOnlineIssuer struct {
 	reconciler api.BreakglassReconciler
 }
 
+// breakglassDependencyPresent rejects both a nil interface and an interface that
+// contains a nil pointer. The latter can otherwise look configured at the API
+// boundary and panic only when the first incident request calls it.
+func breakglassDependencyPresent(dependency any) bool {
+	if dependency == nil {
+		return false
+	}
+	value := reflect.ValueOf(dependency)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return !value.IsNil()
+	default:
+		return true
+	}
+}
+
 func buildBreakglassReconciler(d Deps) (api.BreakglassReconciler, error) {
-	if d.BreakglassReconciler != nil {
+	if breakglassDependencyPresent(d.BreakglassReconciler) {
 		return d.BreakglassReconciler, nil
 	}
 	hasCA := len(d.BreakglassCACertDER) > 0
@@ -52,7 +69,7 @@ func buildBreakglassReconciler(d Deps) (api.BreakglassReconciler, error) {
 }
 
 func buildBreakglassIssuer(d Deps, reconciler api.BreakglassReconciler) (api.BreakglassIssuer, error) {
-	if d.BreakglassIssuer != nil {
+	if breakglassDependencyPresent(d.BreakglassIssuer) {
 		return d.BreakglassIssuer, nil
 	}
 	if d.BreakglassOfflineIssuer == nil {

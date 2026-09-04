@@ -1465,10 +1465,10 @@ func configureBreakglassAPIOptions(d Deps, defaults *[]api.Option) error {
 	if breakglassIssuer != nil {
 		*defaults = append(*defaults, api.WithBreakglassIssuer(breakglassIssuer))
 	}
-	if d.BreakglassCeremonies != nil {
+	if breakglassDependencyPresent(d.BreakglassCeremonies) {
 		*defaults = append(*defaults, api.WithBreakglassCeremonies(d.BreakglassCeremonies))
 	}
-	if d.BreakglassRotation != nil {
+	if breakglassDependencyPresent(d.BreakglassRotation) {
 		*defaults = append(*defaults, api.WithBreakglassRotation(d.BreakglassRotation))
 	}
 	return nil

@@ -605,6 +605,16 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, err
 	}
+	var breakglassIssuer api.BreakglassIssuer
+	var breakglassCeremonies api.BreakglassCeremonyService
+	var breakglassRotation api.BreakglassRotationService
+	var breakglassReconciler api.BreakglassReconciler
+	if breakglassRuntime != nil {
+		breakglassIssuer = breakglassRuntime
+		breakglassCeremonies = breakglassRuntime
+		breakglassRotation = breakglassRuntime
+		breakglassReconciler = breakglassRuntime
+	}
 	notificationChannels, notificationOwner, err := runNotifications(cfg.Notifications, egressGuard)
 	if err != nil {
 		return Deps{}, err
@@ -664,8 +674,8 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		PolicyModule: cfg.CA.Policy.Module, EnablePolicyGate: cfg.CA.Policy.Enabled,
 		ABACModule: cfg.Auth.ABAC.Module, EnableABAC: cfg.Auth.ABAC.Enabled, ABACEnvironment: cfg.Auth.ABAC.Environment,
 		BreakglassCACertDER: breakglassCACertDER, BreakglassPublicKeyDER: breakglassPublicKeyDER,
-		BreakglassIssuer: breakglassRuntime, BreakglassCeremonies: breakglassRuntime,
-		BreakglassRotation: breakglassRuntime, BreakglassReconciler: breakglassRuntime,
+		BreakglassIssuer: breakglassIssuer, BreakglassCeremonies: breakglassCeremonies,
+		BreakglassRotation: breakglassRotation, BreakglassReconciler: breakglassReconciler,
 		RequireApproval: cfg.CA.Policy.RequireApproval, RequiredApprovals: cfg.CA.Policy.RequiredApprovals,
 		AuditSigningKey: securityGuards.auditKey, AuditRetention: retention, AuditArchiveDir: cfg.Audit.ArchiveDir,
 		PrivacyRetentionEnabled: privacyRetentionEnabled, PrivacyRetentionInterval: privacyRetentionInterval,
