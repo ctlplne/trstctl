@@ -1164,7 +1164,7 @@ not this file.
 | `internal/server/backup_test.go:392` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/backup_test.go:531` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/backup_test.go:843` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/server/breakglass.go:123` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/breakglass.go:152` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/bundled_pg_dependency_test.go:32` | fixed repository source path (CWE-22) |
 | `internal/server/bundled_pg_dependency_test.go:46` | fixed repository source path (CWE-22) |
 | `internal/server/bundled_pg_verify.go:110` | operator-configured local file path from deployment config (CWE-22) |
@@ -1206,8 +1206,8 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:198` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
 | `internal/server/rekor.go:46` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/response_buffer_guard_test.go:63` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/server/run.go:1125` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/run.go:1516` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1126` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1517` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run_connectors_test.go:89` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/runtime_worker_census_test.go:65` | test reads its own package directory (CWE-22) |
 | `internal/server/serve_test.go:80` | test-owned path under t.TempDir (CWE-22) |

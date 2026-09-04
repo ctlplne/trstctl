@@ -605,16 +605,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, err
 	}
-	var breakglassIssuer api.BreakglassIssuer
-	var breakglassCeremonies api.BreakglassCeremonyService
-	var breakglassRotation api.BreakglassRotationService
-	var breakglassReconciler api.BreakglassReconciler
-	if breakglassRuntime != nil {
-		breakglassIssuer = breakglassRuntime
-		breakglassCeremonies = breakglassRuntime
-		breakglassRotation = breakglassRuntime
-		breakglassReconciler = breakglassRuntime
-	}
+	breakglassIssuer, breakglassCeremonies, breakglassRotation, breakglassReconciler := breakglassRuntimeDependencies(breakglassRuntime)
 	notificationChannels, notificationOwner, err := runNotifications(cfg.Notifications, egressGuard)
 	if err != nil {
 		return Deps{}, err

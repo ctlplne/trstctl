@@ -47,6 +47,18 @@ func breakglassDependencyPresent(dependency any) bool {
 	}
 }
 
+func breakglassRuntimeDependencies(runtime *configuredBreakglassRuntime) (
+	api.BreakglassIssuer,
+	api.BreakglassCeremonyService,
+	api.BreakglassRotationService,
+	api.BreakglassReconciler,
+) {
+	if runtime == nil {
+		return nil, nil, nil, nil
+	}
+	return runtime, runtime, runtime, runtime
+}
+
 func buildBreakglassReconciler(d Deps) (api.BreakglassReconciler, error) {
 	if breakglassDependencyPresent(d.BreakglassReconciler) {
 		return d.BreakglassReconciler, nil
