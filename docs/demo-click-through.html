@@ -452,7 +452,30 @@
     .demo-track pre { padding: 1rem; overflow-x: auto; border: 1px solid var(--line); border-radius: .4rem; background: #f2f1ea; white-space: pre; font-size: .83rem; }
     .demo-track pre code { padding: 0; border: 0; background: none; }
     .honesty { padding: .85rem 1rem; border: 1px solid #d9c69f; border-radius: .4rem; background: #fbf5e8; }
+    .script-step { margin: 1rem 0; padding: 1rem; border: 1px solid var(--line); border-radius: .65rem; background: #fff; }
+    .script-step h3 { margin: 0 0 .7rem; color: var(--navy); }
+    .script-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .7rem; }
+    .script-grid > div { padding: .75rem; border: 1px solid var(--line); border-radius: .5rem; background: #f8f7f1; }
+    .script-grid strong { display: block; margin-bottom: .25rem; color: var(--navy); font-size: .8rem; letter-spacing: .055em; text-transform: uppercase; }
+    .script-grid p { margin: 0; font-size: .9rem; }
+    .shot-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 1.1rem 0; }
+    figure.product-shot { margin: 0; overflow: hidden; border: 1px solid var(--line); border-radius: .7rem; background: #101817; box-shadow: var(--shadow); }
+    .product-shot img { display: block; width: 100%; height: auto; background: #101817; }
+    .product-shot figcaption { padding: .75rem .9rem; color: #dbe7e3; background: #101817; font-size: .82rem; }
+    .product-shot figcaption strong { color: #9edbc7; }
+    .truth-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; margin: 1rem 0; }
+    .truth-grid > div { padding: .9rem; border: 1px solid var(--line); border-radius: .55rem; background: #f8f7f1; }
+    .truth-grid strong { display: block; color: var(--navy); }
+    .journey-line { display: grid; grid-template-columns: repeat(7, minmax(92px, 1fr)); gap: .45rem; margin: 1rem 0; }
+    .journey-line > div { padding: .65rem; border: 1px solid #c8d9dd; border-radius: .45rem; background: #f3fafb; font-size: .78rem; text-align: center; }
+    .journey-line strong { display: block; color: var(--teal); }
+    .evidence-strip { padding: 1rem; border: 1px solid #9dbfb5; border-radius: .7rem; background: #edf8f3; }
+    .evidence-strip h2 { margin: 0 0 .4rem; }
+    .evidence-strip p { margin: .35rem 0; }
+    .term-table td:first-child { width: 10rem; font-weight: 800; color: var(--navy); }
     @media (max-width: 700px) { .track-grid, .proof-chain { grid-template-columns: 1fr; } .demo-track { padding: 1rem; } .run-table { min-width: 36rem; } }
+    @media (max-width: 900px) { .script-grid, .truth-grid { grid-template-columns: 1fr 1fr; } .journey-line { grid-template-columns: 1fr; } }
+    @media (max-width: 700px) { .shot-grid, .script-grid, .truth-grid { grid-template-columns: 1fr; } }
     @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
     @media print { .demo-track { break-inside: auto; box-shadow: none; } .track-card, .proof-chain div, tr { break-inside: avoid; } .table-scroll { overflow: visible; } .run-table { min-width: 0; } }
   </style>
@@ -493,6 +516,8 @@
       <p class="progress-copy">Reading progress, not qualification. Checkmarks never prove that a certificate was installed.</p>
       <nav aria-label="Walkthrough contents">
         <ol class="toc">
+          <li><a href="#zero-to-sale">Start here: zero to sale</a></li>
+          <li><a href="#rehearsal-proof">What was actually verified</a></li>
           <li><a href="#demo-menu">Choose the pitch</a></li>
           <li><a href="#demo-preflight">Lab preflight</a></li>
           <li><a href="#clm-5">CLM · 5 minutes</a></li>
@@ -532,10 +557,50 @@
     </aside>
 
     <main id="main">
+      <section class="demo-track" id="zero-to-sale">
+        <p class="track-label">Start here · the no-bluff presenter briefing</p>
+        <h2>You do not need to be a PKI engineer to run an honest demo</h2>
+        <p>Your job is to keep one simple story straight: a machine has a credential, a person or team owns the machine, a certificate authority signs the replacement, an execution runtime delivers it, and an independent check proves what the listener actually serves. If you cannot prove one link, call that link pending. That answer builds more trust than guessing.</p>
+        <div class="truth-grid">
+          <div><strong>The one-sentence pitch</strong>trstctl is the self-hosted control plane that finds non-human credentials, keeps the customer's chosen CA, automates safe replacement, and preserves proof.</div>
+          <div><strong>The beginner question</strong>“Which certificate would cause the most pain if it expired tonight?” Use the answer to choose one service, owner, issuer, and endpoint.</div>
+          <div><strong>The expert question</strong>“Which exact target, execution vantage, custody boundary, policy decision, and observed fingerprint will qualify success?”</div>
+        </div>
+        <div class="journey-line" aria-label="The complete certificate lifecycle story">
+          <div><strong>1 · Find</strong>Observe a listener or inventory source.</div>
+          <div><strong>2 · Explain</strong>Show expiry, provenance, and risk.</div>
+          <div><strong>3 · Own</strong>Name the accountable team.</div>
+          <div><strong>4 · Issue</strong>Use the selected CA and policy.</div>
+          <div><strong>5 · Deliver</strong>Use a constrained execution path.</div>
+          <div><strong>6 · Verify</strong>Handshake the real endpoint.</div>
+          <div><strong>7 · Repeat</strong>Schedule renewal and alerting.</div>
+        </div>
+        <div class="callout warning">
+          <h3>Four sentences that keep you out of trouble</h3>
+          <p>“Prepared” means configured, not contacted. “Queued” means accepted, not completed. A connector receipt is not a TLS handshake. “Implemented” is not the same as qualified on the customer's exact product version.</p>
+        </div>
+        <details open><summary>PKI in sixty seconds</summary><div><p>A certificate is a signed identity card for a machine. The CA is the office that signs it. The private key is the secret that proves the machine owns that card. Renewal creates a replacement card before the old one expires. trstctl coordinates those steps; it does not require the customer to abandon the CA they already trust.</p></div></details>
+        <details><summary>What to do when someone asks a question you cannot answer</summary><div><p>Do not improvise. Say: “I want to answer from evidence. Let us open the exact capability or mark it for a controlled follow-up.” Record the target version and requested operation. Never open secrets, raw private keys, bearer tokens, or customer data to rescue a demo.</p></div></details>
+      </section>
+
+      <section class="evidence-strip" id="rehearsal-proof" aria-labelledby="rehearsal-proof-title">
+        <p class="track-label">exact-candidate evidence · sanitized</p>
+        <h2 id="rehearsal-proof-title">What was actually verified for this guide</h2>
+        <p><strong>Live product candidate:</strong> g211, source commit <code>f8a266242eab77737f88508f6cb7200d055d1cbe</code>, observed 4 September 2026. The control plane reported build <code>g211-dev</code>, four of four core dependencies ready, an external signer, and zero live endpoint probe failures.</p>
+        <p><strong>Passed live now:</strong> authenticated Home, Discovery, Certificates, Alerts, Agents, System health, an API-playground <code>GET /api/v1/access/api-tokens</code> returning <code>200 OK</code>, temporary-key revocation, and an Apache target preview reaching <strong>Target path ready — no changes made</strong>.</p>
+        <p><strong>Recorded earlier on the same retained lab:</strong> g184/g185/g188 proved Apache issue, deploy, TLS listener readback, renewal to a distinct certificate, effect-free restore review, agent-executed rollback, CLI parity, and phone layout. Those are labelled recorded evidence, not a fresh g211 deployment.</p>
+        <p><strong>Still not claimed:</strong> a live IIS host, live F5 appliance, external vendor CA issuance on this exact candidate, a configured alert sink, or whole-product release readiness. “Not rehearsed on this candidate” remains the required label for those scenarios.</p>
+      </section>
+
+      <div class="shot-grid" aria-label="Exact g211 opening evidence">
+        <figure class="product-shot"><img src="assets/demo/g211-home-cockpit.png" alt="Exact g211 trstctl Home page showing three credentials needing attention and the seven product workspaces"><figcaption><strong>Start on Home.</strong> This is an executive pain signal, not the exact certificate queue. The live seed showed three credentials needing attention and 70 indexed source records.</figcaption></figure>
+        <figure class="product-shot"><img src="assets/demo/g211-certificate-inventory.png" alt="Exact g211 certificate inventory showing expired and expiring certificates with owner and delivery state"><figcaption><strong>Then open Certificates.</strong> This is where the presenter can name the certificate, expiry window, accountable owner, and failed or delayed delivery state.</figcaption></figure>
+      </div>
+
       <section id="demo-menu" class="section-title">
         <h2>What does this customer need to believe?</h2>
         <p>Start by asking: “Which certificate outage or manual renewal would you remove first?” Choose one endpoint, one owner, one issuer, and one measurable outcome. The existing 15-screen tour remains below as reference, not the default pitch.</p>
-        <p class="readiness">Not rehearsed on this candidate · this document is a playbook, not a live qualification result</p>
+        <p class="readiness">Partially rehearsed on g211 · read-only screens, safe API read, and Apache preview passed; use “Not rehearsed on this candidate” for IIS, F5, live alert delivery, external-vendor issuance, and any unlisted scenario</p>
       </section>
       <div class="track-grid">
         <article class="track-card"><span class="track-label">Flagship · application / infrastructure team</span><h3>Stop renewing web certificates by hand</h3><p>Apache or IIS: find the endpoint, keep its chosen CA, deliver a replacement, verify the listener, and show the next renewal.</p><a href="#clm-5">5-minute pitch</a> · <a href="#clm-15">15-minute proof</a> · <a href="#clm-40">40-minute deep dive</a></article>
@@ -550,7 +615,7 @@
       <section class="demo-track" id="demo-preflight">
         <p class="track-label">Preparation is outside the pitch clock</p><h2>Earn the right to call it a live demo</h2>
         <p>Use a disposable, operator-owned lab. A Linux Compose stack does not supply a Windows IIS machine or an F5 appliance. Provision those separately. Record exact product, agent, operating-system, application, and device versions before rehearsal.</p>
-        <p class="honesty"><strong>Prepared connector targets are not contacted targets.</strong> The shipped seed now creates clearly labelled Apache, IIS, and F5 destination records so the read-only pitch has concrete objects. It intentionally has <strong>zero enrolled agents</strong>, no target handshake, and no successful delivery receipt. A presenter must say “prepared, not contacted” until a candidate-specific live lab supplies the required host agent or network relay and independent listener proof.</p>
+        <p class="honesty"><strong>Prepared connector targets are not contacted targets.</strong> The shipped seed creates clearly labelled Apache, IIS, and F5 destination records so the read-only pitch has concrete objects. The exact g211 rehearsal has <strong>one active execution runtime</strong> and a successful no-write Apache preview; that does not prove IIS, F5, a deployment, or a listener change. A presenter must say “prepared, not contacted” for every target that lacks candidate-specific runtime and independent listener proof.</p>
         <div class="proof-chain">
           <div><strong>Read-only tour</strong>Inspect seeded or existing records. Explain screens. Do not claim a new deployment occurred.</div>
           <div><strong>Recorded evidence</strong>Show a dated, candidate-labelled earlier rehearsal. State what ran and what was simulated.</div>
@@ -564,7 +629,7 @@
           <li><strong>Constrain privileges.</strong> Enable the named native connector in operator configuration. Allow only the lab paths, executable/argument profiles, network ranges, ports, and credential references required. Keep secrets in protected files or secret handles, never the demo JSON, command history, screenshots, or this guide.</li>
           <li><strong>Pick an issuer explicitly.</strong> For a keep-your-CA pitch, configure and rehearse that external CA and its validation prerequisites first. The generic endpoint-binding form does not expose issuer selection today. <strong>No silent switch to the built-in CA</strong> if the desired end-to-end path is unavailable: call that path blocked and show the exact gap.</li>
           <li><strong>Rehearse two cycles.</strong> Prove initial delivery, a later replacement, endpoint verification, alert delivery to a controlled sink, and supported recovery. Repeat after an agent restart. Use fresh operation keys for new actions and the same key only for the same logical retry.</li>
-          <li><strong>Close the loop.</strong> Fill the <a href="#lab-manifest">rehearsal record</a>. No current signed-in or external-target rehearsal is supplied by this guide. If any required step is missing, label the slot Read-only tour or Recorded evidence before presenting.</li>
+          <li><strong>Close the loop.</strong> Fill the <a href="#lab-manifest">rehearsal record</a>. This guide supplies a current signed-in g211 inspection and no-write Apache preview, plus older labelled Apache lifecycle evidence. It does not supply a fresh g211 deployment to a customer-owned external target. If any required step is missing, label the slot Read-only tour or Recorded evidence before presenting.</li>
         </ol>
         <details><summary>Apache / IIS / F5 setup details and important limits</summary>
           <div class="table-scroll" tabindex="0" role="region" aria-label="Target-specific lab prerequisites"><table class="run-table"><thead><tr><th>Target</th><th>Operator preparation</th><th>Proof / limit</th></tr></thead><tbody>
@@ -580,13 +645,35 @@
         <p class="track-label">5 minutes · value pitch · choose Apache OR IIS</p><h2>“This certificate should not need a calendar reminder.”</h2>
         <blockquote>trstctl finds the certificate, shows who owns it, coordinates replacement with your chosen CA, and checks the endpoint where customers actually connect.</blockquote>
         <p><strong>Audience:</strong> application owner, infrastructure lead, or prospective design partner. <strong>Prepared object:</strong> one lab web service, one owner, one saved scan, one rehearsed delivery. Use the existing issuer name throughout. If external-CA automation has not been rehearsed, describe it as the intended workflow, not a completed capability.</p>
+        <p class="honesty"><strong>Home is the executive signal; Certificates is the exact queue.</strong> On g211, Home's top cards intentionally say that deadline or ownership may be unreported. Do not point at Home and invent an owner. Open Certificates to show exact expiry, owner, and delivery state.</p>
         <div class="table-scroll" tabindex="0" role="region" aria-label="Five-minute CLM run of show"><table class="run-table"><thead><tr><th>Clock</th><th>Show / say</th><th>What earns the claim</th></tr></thead><tbody>
-          <tr><td>0:00–0:45</td><a href="https://127.0.0.1:9443/" data-demo-path="/" target="_blank" rel="noopener">Home</a>: “Here is the service nearing expiry and the team responsible.”</td><td>Name the exact service and owner; explain expiry separately from a failed renewal.</td></tr>
-          <tr><td>0:45–1:30</td><a href="https://127.0.0.1:9443/discovery" data-demo-path="/discovery" target="_blank" rel="noopener">Discover</a>: open its finding and source. “We found this; we did not require you to replace your CA.”</td><td>Show source, scan time, host/port, issuer and source fingerprint. Seed data is labelled.</td></tr>
-          <tr><td>1:30–2:30</td><a href="https://127.0.0.1:9443/connectors" data-demo-path="/connectors" target="_blank" rel="noopener">Where credentials are installed</a>: show the clearly labelled Apache or IIS prepared target. In a live lab, also show its execution agent and approved replacement.</td><td>In the shipped read-only seed, say “prepared, not contacted” and point out that no agent is enrolled. In a live lab, explain exactly what runs on the host and what permissions it has. Do not open raw setup JSON during the short pitch.</td></tr>
-          <tr><td>2:30–4:15</td>In a prepared lab, perform the rehearsed deploy once; otherwise show clearly labelled recorded evidence. Follow delivery and independent listener verification.</td><td>Compare expected fingerprint with observed fingerprint on the exact listener. A queued job is still waiting.</td></tr>
+          <tr><td>0:00–0:35</td><a href="https://127.0.0.1:9443/" data-demo-path="/" target="_blank" rel="noopener">Home</a>: “This is the control-tower view. It tells me where risk or missing accountability needs attention.”</td><td>Point to the served count only. Do not assign a name, owner, deadline, or cause that the card does not show.</td></tr>
+          <tr><td>0:35–1:20</td><a href="https://127.0.0.1:9443/certificates" data-demo-path="/certificates" target="_blank" rel="noopener">Certificates</a>: choose one action-queue row. “This is the exact certificate, its time window, its owner, and whether delivery is manual, delayed, or failed.”</td><td>Name the displayed row. Expiry, ownership, and deployment are separate facts; a certificate can be expiring without a failed renewal.</td></tr>
+          <tr><td>1:20–2:05</td><a href="https://127.0.0.1:9443/discovery" data-demo-path="/discovery" target="_blank" rel="noopener">Discover</a>: click <strong>Review finding</strong>, then <strong>Exact finding evidence</strong>. “We know where this observation came from before we act.”</td><td>Show host/port or resource, source, collection time, run/provenance, finding ID, and fingerprint. <strong>No issuer is shown in this finding panel</strong>; get issuer detail from certificate inventory when it exists.</td></tr>
+          <tr><td>2:05–3:25</td><a href="https://127.0.0.1:9443/connectors" data-demo-path="/connectors" target="_blank" rel="noopener">Where credentials are installed</a>: open <strong>Destinations and safe actions</strong>. Select only the rehearsed Apache target and identity, enter a reason, then choose <strong>Preview changes (no writes)</strong>.</td><td>Wait for <strong>Target path ready — no changes made</strong>. A status of <em>Preview queued — no result yet</em> is not success. The preview may create a durable job/receipt, but it must not change the target.</td></tr>
+          <tr><td>3:25–4:15</td>In a prepared lab, perform the rehearsed deploy once; otherwise show clearly labelled recorded evidence. Follow delivery and independent listener verification.</td><td>Compare expected fingerprint with observed fingerprint on the exact listener. A queued job is still waiting.</td></tr>
           <tr><td>4:15–5:00</td><a href="https://127.0.0.1:9443/notifications" data-demo-path="/notifications" target="_blank" rel="noopener">Alerts and delivery</a>, then next renewal and audit. <strong>No alert channel is configured in the shipped seed</strong>, so show the unresolved delivery prerequisite rather than saying an owner already received it.</td><td>A live pitch earns the claim only with a controlled-sink delivery receipt and the next scheduled action. Close: “Which endpoint and alert channel should we validate together?”</td></tr>
         </tbody></table></div>
+        <div class="script-step">
+          <h3>Minute 0–1: make the pain concrete</h3>
+          <div class="script-grid"><div><strong>Click</strong><p>Home, then Certificates. Use one row from the action queue.</p></div><div><strong>Say</strong><p>“Home tells us there is work. Certificates tells us exactly which certificate, when, who owns it, and what delivery state is known.”</p></div><div><strong>Expected</strong><p>A named certificate with an expiry window, owner, and delivery/manual state.</p></div><div><strong>If it does not</strong><p>Choose another visible row. Do not manufacture an owner or a deadline from an empty field.</p></div></div>
+        </div>
+        <div class="script-step">
+          <h3>Minute 1–2: prove the observation has provenance</h3>
+          <div class="script-grid"><div><strong>Click</strong><p>Discover → Review finding → Exact finding evidence.</p></div><div><strong>Say</strong><p>“This is evidence from a named source and run, not a spreadsheet row we silently trusted.”</p></div><div><strong>Expected</strong><p>Finding ID, source, timestamp, run/provenance, and public fingerprint metadata.</p></div><div><strong>If it does not</strong><p>Call it a supplied seed observation. No issuer is shown here; use Certificates for certificate detail.</p></div></div>
+        </div>
+        <div class="script-step">
+          <h3>Minute 2–4: preview the real delivery path</h3>
+          <div class="script-grid"><div><strong>Click</strong><p>Where credentials are installed → Destinations and safe actions → target → identity → reason → Preview changes (no writes).</p></div><div><strong>Say</strong><p>“The execution runtime checks its approved paths, commands, and listener before any credential is delivered.”</p></div><div><strong>Expected</strong><p><strong>Target path ready — no changes made.</strong> The plan names certificate/key paths, config test, graceful reload, and listener handshake.</p></div><div><strong>If it does not</strong><p>If still queued, open Jobs and queues and verify the edge runtime. Do not click Deploy to make the spinner go away.</p></div></div>
+        </div>
+        <div class="script-step">
+          <h3>Minute 4–5: close with operational truth</h3>
+          <div class="script-grid"><div><strong>Click</strong><p>Alerts and delivery. In a qualified lab, also show the next renewal and audit evidence.</p></div><div><strong>Say</strong><p>“A lifecycle is not automated until the endpoint is checked, the next action is scheduled, and the right person or system can be notified.”</p></div><div><strong>Expected</strong><p>In the shipped seed: zero ready channels and zero routing rules. In a prepared lab: a controlled-sink receipt.</p></div><div><strong>If it does not</strong><p>Say that events remain recorded but no external recipient is configured. Ask which channel the customer wants to validate.</p></div></div>
+        </div>
+        <div class="shot-grid">
+          <figure class="product-shot"><img src="assets/demo/g211-discovery-finding-proof.png" alt="Exact g211 discovery finding expanded to show finding ID, fingerprint, source, run, provenance, and evidence references"><figcaption><strong>Discovery proof.</strong> The finding exposes source and fingerprint provenance. It does not display an issuer, so the script no longer tells the presenter to point to one here.</figcaption></figure>
+          <figure class="product-shot"><img src="assets/demo/g211-apache-preview.png" alt="Exact g211 connector page showing a successful no-write Apache preview and its config-test reload and listener-handshake plan"><figcaption><strong>Effect-free Apache preview.</strong> The run-owned edge runtime returned “Deploy would succeed (nothing changed)” after checking the approved local paths and listener plan.</figcaption></figure>
+        </div>
         <p class="honesty"><strong>If blocked:</strong> say “The setup/queue/verification is blocked at this step; the certificate has not been proven live.” Use a dated rehearsal only if one exists. Never substitute a green inventory badge for endpoint proof.</p>
       </section>
 
@@ -602,6 +689,17 @@
           <tr><td>12–14</td>Show a pre-rehearsed failed attempt and recovery, or execute a safe approved lab fault. Retry the same logical request with its original key.</td><td>Original failure remains, no duplicate issuance, supported recovery restores the intended fingerprint.</td></tr>
           <tr><td>14–15</td>Show alert delivery to the owner and an evidence export.</td><td>Customer can explain who owns this service, what happens next, and how a failure is noticed.</td></tr>
         </tbody></table></div>
+        <div class="script-step"><h3>Before the clock: stage one exact service</h3><div class="script-grid"><div><strong>Click</strong><p>System health, Agents, Certificates, and Where credentials are installed.</p></div><div><strong>Say</strong><p>Nothing yet. This is presenter preflight, not customer theater.</p></div><div><strong>Expected</strong><p>Matching candidate, healthy dependencies, a current execution heartbeat, one enabled rehearsed target, and an eligible identity.</p></div><div><strong>If it does not</strong><p>Use recorded evidence or the read-only tour. Never change the customer-facing story while debugging.</p></div></div></div>
+        <div class="script-step"><h3>0–4 minutes: baseline and discovery</h3><div class="script-grid"><div><strong>Click</strong><p>Capture the listener outside trstctl, then open Discover and the exact source/run/finding.</p></div><div><strong>Say</strong><p>“This is what the application serves before trstctl acts, and this is the observation that connected it to inventory.”</p></div><div><strong>Expected</strong><p>Before fingerprint, chain, hostname result, HTTP marker, timestamp, vantage, source, ports, and run ID.</p></div><div><strong>If it does not</strong><p>Stop the live mutation. A similarly named seed record is not the target you just measured.</p></div></div></div>
+        <div class="script-step"><h3>4–7 minutes: ownership, CA, policy, custody, and target</h3><div class="script-grid"><div><strong>Click</strong><p>Certificates, Ownership, Profiles, issuer capability detail, key-custody evidence, then the target.</p></div><div><strong>Say</strong><p>“This owner accepts the change; this CA signs it; this policy limits it; this is where the key is generated; this runtime can touch only these paths and commands.”</p></div><div><strong>Expected</strong><p>Exact owner, selected issuer/integration, profile version, key origin/exportability statement, target ID, and approved execution scope.</p></div><div><strong>If it does not</strong><p>Disclose the manual setup or UI gap. Do not silently switch to the built-in CA or control-plane key generation.</p></div></div></div>
+        <div class="script-step"><h3>7–10 minutes: preview, approve, issue, and deploy</h3><div class="script-grid"><div><strong>Click</strong><p>Preview first. Review the immutable request. Use the authorized mutation only in the prepared lab and follow Jobs and queues.</p></div><div><strong>Say</strong><p>“The preview is effect-free. The approved operation creates durable intent. A successful queue response still is not delivery.”</p></div><div><strong>Expected</strong><p>One operation key, one issuance result, one connector result, and a terminal verified state tied to the same target.</p></div><div><strong>If it does not</strong><p>Preserve the failure. Reconcile an ambiguous CA submission before retrying; use the same key only for the same logical action.</p></div></div></div>
+        <div class="script-step"><h3>10–12 minutes: prove the traffic path and replacement</h3><div class="script-grid"><div><strong>Click</strong><p>Endpoint verification and certificate lineage; repeat the external handshake from the declared vantage.</p></div><div><strong>Say</strong><p>“The expected certificate and the certificate a new connection sees now match. The application still answers.”</p></div><div><strong>Expected</strong><p>Expected fingerprint equals observed fingerprint, hostname and chain validate, application marker returns, and predecessor/successor are distinct.</p></div><div><strong>If it does not</strong><p>Do not call it deployed. Separate issuance, management delivery, and listener verification to locate the failed stage.</p></div></div></div>
+        <div class="script-step"><h3>12–14 minutes: show a failure and supported recovery</h3><div class="script-grid"><div><strong>Click</strong><p>Use a pre-approved bad target or retained failure, then Review restore. Execute recovery only when the predecessor is valid and the lab permits it.</p></div><div><strong>Say</strong><p>“We retain the failed attempt, isolate its queue lane, and restore only a proven predecessor.”</p></div><div><strong>Expected</strong><p>Denied or failed evidence, no cross-target starvation, reviewed recovery, terminal rollback receipt, and an independent restored-listener handshake.</p></div><div><strong>If it does not</strong><p>A connector without executable rollback must refuse. Never restore a revoked or expired predecessor to create a green demo.</p></div></div></div>
+        <div class="script-step"><h3>14–15 minutes: alert, evidence, and next meeting</h3><div class="script-grid"><div><strong>Click</strong><p>Alerts and delivery, Audit, then the next scheduled lifecycle action.</p></div><div><strong>Say</strong><p>“This is who learns about failure, what evidence they receive, and when automation acts again.”</p></div><div><strong>Expected</strong><p>A controlled-sink receipt, routing policy, accountable owner, audit chain, and future schedule in a fully prepared lab.</p></div><div><strong>If it does not</strong><p>On the pristine seed, say zero channels and zero routes. Close by proposing one customer-owned alert sink and endpoint for validation.</p></div></div></div>
+        <div class="shot-grid">
+          <figure class="product-shot"><img src="assets/demo/g211-connectors-delivery.png" alt="Exact g211 connector workspace with configured Apache IIS F5 and cloud destinations plus safe lifecycle controls"><figcaption><strong>The delivery workspace.</strong> Open “Destinations and safe actions”; the default collapsed summary is not enough for a live proof.</figcaption></figure>
+          <figure class="product-shot"><img src="assets/demo/g211-alert-delivery.png" alt="Exact g211 Alerts and delivery page showing zero ready channels and zero routing rules in the seeded demo"><figcaption><strong>Alerting truth.</strong> The product records events, but the pristine seed does not notify an external person or system until a channel and route are configured.</figcaption></figure>
+        </div>
         <details><summary>Use the CLI alongside the GUI—without revealing secrets</summary><div>
           <p>Install the documented <code>trstctl-cli</code>. Obtain a least-privilege lab token through the approved setup path; inject it through the protected process environment. Set <code>TRSTCTL_SERVER</code>, <code>TRSTCTL_CA_FILE</code> and the authenticated tenant context. The commands below read metadata; they do not configure or deploy a target.</p>
           <pre><code>trstctl-cli capabilities list
@@ -625,6 +723,26 @@ trstctl-cli certificates list --limit 20</code></pre>
           <tr><td>28–35</td>Approved fault: pause only the lab agent or use a denied lab target. Show bounded queue/retry behavior. Demonstrate supported rollback and readback.</td><td>Failure retained, unrelated work unaffected, predecessor restored only where supported. An older revoked certificate is never a safe recovery target.</td></tr>
           <tr><td>35–40</td>Review alerts, least privilege, evidence retention, upgrade/restart behavior and next design-partner test.</td><td>Exact version/topology qualified; list unsupported variations and every manual dependency.</td></tr>
         </tbody></table></div>
+        <h3>The whiteboard you should draw before clicking</h3>
+        <div class="journey-line" aria-label="Forty-minute technical trust-boundary walkthrough">
+          <div><strong>Caller</strong>Human, CI job, or customer AI agent with tenant-scoped access.</div>
+          <div><strong>Control</strong>Auth, policy, approval, idempotency, and event log.</div>
+          <div><strong>Signing</strong>External CA adapter or separate trstctl signer process.</div>
+          <div><strong>Durable intent</strong>Same-transaction outbox and bounded queue lane.</div>
+          <div><strong>Execution</strong>Host, network, or bounded cloud runtime with least privilege.</div>
+          <div><strong>Target</strong>Apache, IIS, F5 profile, cloud store, or another exact destination.</div>
+          <div><strong>Observation</strong>Independent readback, traffic handshake, alert, and audit evidence.</div>
+        </div>
+        <div class="truth-grid">
+          <div><strong>Ask the PKI expert</strong>Where is the private key generated? Which algorithms, SANs, EKUs, lifetime, validation method, revocation surfaces, and CA rollover behavior are required?</div>
+          <div><strong>Ask the platform owner</strong>Which hosts, ports, reload commands, maintenance windows, owners, alert channels, and rollback conditions are allowed?</div>
+          <div><strong>Ask the security reviewer</strong>What tenant, role, approval, idempotency, outbox, evidence-retention, and failure-isolation proof must be visible?</div>
+        </div>
+        <div class="script-step"><h3>At every boundary, use the same four-part script</h3><div class="script-grid"><div><strong>Click</strong><p>Open the page that owns this boundary and then its exact evidence disclosure.</p></div><div><strong>Say</strong><p>Explain what this component knows, what it can change, and what it cannot prove.</p></div><div><strong>Expected</strong><p>Name a served API/CLI contract, immutable record, or independent observation.</p></div><div><strong>If it does not</strong><p>Mark the missing stage: Discover, Understand, Configure, Preview, Execute, Observe, Recover, Verify, or Automate.</p></div></div></div>
+        <div class="shot-grid">
+          <figure class="product-shot"><img src="assets/demo/g211-system-health.png" alt="Exact g211 System health page showing build commit core dependency readiness signer isolation and endpoint probe status"><figcaption><strong>Architecture starts with provenance.</strong> Confirm the running build, exact source commit, four core dependencies, and external signer before explaining deeper controls.</figcaption></figure>
+          <figure class="product-shot"><img src="assets/demo/g211-edge-runtime.png" alt="Exact g211 Agents page showing one enrolled in-network execution runtime with heartbeat version and certificate-bound role evidence"><figcaption><strong>Execution is separate.</strong> Presence and certificate-bound roles establish identity and freshness, but a terminal job result is still required for target readiness.</figcaption></figure>
+        </div>
         <p><strong>F5-specific promise:</strong> demonstrate one named Client SSL profile on the rehearsed firmware/topology. Do not generalize to every BIG-IP feature or silently promise HA propagation. For NetScaler, A10, or Kemp, prepare a separate real-device rehearsal; Cisco, FortiGate and Palo Alto currently have additional rollback/readback limits.</p>
       </section>
 
@@ -687,13 +805,42 @@ trstctl-cli certificates list --limit 20</code></pre>
 
       <section class="demo-track" id="machine-demo">
         <p class="track-label">CLI / API / AI-agent clients</p><h2>Give automation a bounded job, then demand evidence</h2>
-        <p><strong>Lab:</strong> a scoped non-human client, pinned OpenAPI/CLI versions, an approved lab task, a stable operation key, and a known forbidden object. Keep credential material out of model prompts and tool results. The software doing the planning is distinct from the trstctl host agent doing the deployment.</p>
+        <p><strong>Lab:</strong> a scoped non-human client, pinned OpenAPI/CLI versions, an approved lab task, a stable operation key, and a known forbidden object. Keep credential material out of model prompts and tool results. The customer AI agent doing the planning is distinct from the trstctl execution runtime doing in-network collection or deployment.</p>
         <div class="table-scroll" tabindex="0" role="region" aria-label="Machine-facing demo variants"><table class="run-table"><thead><tr><th>Duration</th><th>Run of show</th><th>Proof</th></tr></thead><tbody>
           <tr><th>5 minutes</th><td>1m authenticated capabilities; 1m query an expiring owned endpoint; 2m inspect a grounded plan and evidence; 1m show a denied out-of-scope action.</td><td>Machine-readable results and the same tenant/policy boundary as the GUI. Default read-only tools do not change anything.</td></tr>
           <tr><th>15 minutes</th><td>3m CLI/API request; 4m approved mutation; 3m replay same key; 3m follow job and listener verification; 2m denied write.</td><td>One logical mutation, no duplicate certificate, terminal outcome and independent endpoint evidence. Exit 0 from a queueing request is not job completion.</td></tr>
           <tr><th>40 minutes</th><td>8m token/tenant/SDK contract; 8m workflow state and stable retries; 10m interruption/reconciliation; 8m tool-call and prompt-injection boundaries; 6m audit and operational handoff.</td><td>No unsafe retry after ambiguous CA submission, no secrets in tool output, bounded execution, and exact human approval where required.</td></tr>
         </tbody></table></div>
-        <p><strong>Transport truth:</strong> the inspected tool surface is <code>GET /api/v1/mcp/tools</code> and <code>POST /api/v1/mcp/tools/{tool}</code>. Do not advertise drop-in compatibility with arbitrary standard MCP clients without a tested protocol adapter. Write tools require explicit enablement and still go through API authorization.</p>
+        <section id="byo-ai-agent" aria-labelledby="byo-ai-agent-title">
+          <h3 id="byo-ai-agent-title">Your AI agent is the operator; trstctl is the governed control plane</h3>
+          <p>This is the right response to “we do not want another vendor agent.” The customer keeps the planner they already use—an internal assistant, CI automation, an orchestration framework, or another model. It calls trstctl through a tenant-scoped machine contract. trstctl supplies inventory, policy, previews, durable operations, and evidence. The customer AI agent never needs a private key or unrestricted shell access.</p>
+          <div class="journey-line" aria-label="Bring your own AI agent integration path">
+            <div><strong>Customer planner</strong>Their AI agent chooses a bounded task.</div>
+            <div><strong>Client contract</strong>Generated OpenAPI client, native CLI, or reviewed wrapper.</div>
+            <div><strong>Least privilege</strong>Short-lived tenant-scoped token and exact permissions.</div>
+            <div><strong>Preview</strong>Effect-free server plan before a write.</div>
+            <div><strong>Govern</strong>Policy, approval, stable idempotency key, and outbox.</div>
+            <div><strong>Execute</strong>Control plane or optional trstctl Edge runtime.</div>
+            <div><strong>Verify</strong>Poll terminal state and retrieve exact evidence.</div>
+          </div>
+          <div class="script-step"><h3>Five-minute bring-your-own-agent proof using the real API playground</h3><div class="script-grid"><div><strong>Click</strong><p>API playground → Try request. Review <code>GET /api/v1/access/api-tokens</code> and permission <code>access:read</code>.</p></div><div><strong>Say</strong><p>“A customer agent starts from the same explicit contract and tenant boundary as this safe request.”</p></div><div><strong>Expected</strong><p>The page says the starting request is read-only and shows exact route, operation ID, permission, and response types.</p></div><div><strong>If it does not</strong><p>Use the pinned OpenAPI document and CLI help. Do not let an AI agent infer an endpoint or scope.</p></div></div></div>
+          <div class="script-step"><h3>Run and clean up the temporary access proof</h3><div class="script-grid"><div><strong>Click</strong><p>In a disposable lab, Generate test key → Run request → confirm <strong>The request worked</strong> and <strong>200 OK</strong> → Revoke test key.</p></div><div><strong>Say</strong><p>“The 15-minute key has only <code>access:read</code>, its reveal-once value stays in this browser session, and we revoke it after the proof.”</p></div><div><strong>Expected</strong><p>HTTP 200 JSON metadata, followed by “Test key revoked.” No raw token in screenshots or notes.</p></div><div><strong>If it does not</strong><p>Stop. Do not broaden the scope, paste a production token, or place a credential in an AI prompt.</p></div></div></div>
+          <figure class="product-shot"><img src="assets/demo/g211-api-read-result.png" alt="Exact g211 API playground showing a least-privilege read-only request completed with HTTP 200 and JSON metadata"><figcaption><strong>Live g211 proof.</strong> The read-only request returned <code>200 OK</code>. The temporary reveal-once key was revoked immediately after capture; the image contains no bearer value.</figcaption></figure>
+          <p><strong>Transport truth:</strong> the inspected tool surface is <code>GET /api/v1/mcp/tools</code> and <code>POST /api/v1/mcp/tools/{tool}</code>. A standard MCP transport is not claimed. Do not advertise drop-in compatibility with arbitrary standard MCP clients without a tested protocol adapter. Write tools require explicit enablement and still go through API authorization.</p>
+        </section>
+        <section id="edge-name" aria-labelledby="edge-name-title">
+          <h3 id="edge-name-title">Recommended naming: trstctl Edge, with explicit roles</h3>
+          <p>Yes, the current word “agent” is overloaded. But renaming the whole runtime to “Edge Collector” would undersell it because the same runtime can also deploy, verify, roll back, relay, and run constrained host operations. Use <strong>trstctl Edge</strong> as the human-facing product family; use <strong>Edge Collector</strong> only for a discovery-only role.</p>
+          <div class="table-scroll" tabindex="0" role="region" aria-label="Recommended agent terminology"><table class="run-table term-table"><thead><tr><th>Term</th><th>Meaning</th><th>Never confuse with</th></tr></thead><tbody>
+            <tr><td>Customer AI agent</td><td>The customer's planner or automation client. It calls the API/CLI with bounded permissions and does not receive target secrets.</td><td>A trstctl process running in customer infrastructure.</td></tr>
+            <tr><td>trstctl Edge</td><td>The optional in-network execution family that opens an outbound mTLS channel to the control plane.</td><td>A general-purpose AI assistant.</td></tr>
+            <tr><td>Edge Collector</td><td>A discovery-only Edge role for bounded network, host, or inventory observations.</td><td>A runtime authorized to change targets.</td></tr>
+            <tr><td>Edge Executor</td><td>A host role allowed to perform exact reviewed deploy, verify, and supported recovery actions.</td><td>An unrestricted remote shell.</td></tr>
+            <tr><td>Edge Relay</td><td>An in-segment path for appliances or sources where software is not installed on the target, such as F5.</td><td>Software installed on the appliance itself.</td></tr>
+            <tr><td>AI-agent identity broker</td><td>A separate credential journey that issues governed identities to machine/AI clients.</td><td>The customer AI agent integration contract or trstctl Edge.</td></tr>
+          </tbody></table></div>
+          <p><strong>Compatibility plan:</strong> change navigation and documentation first, add role labels second, then consider a binary alias after automation compatibility testing. For now, the binary remains trstctl-agent, the API/CLI resources remain <code>agents</code>, and existing flags/configuration remain valid. This guide recommends product language; it does not pretend the rename is already shipped.</p>
+        </section>
         <p>Use <a href="journeys/build-on-the-api/" data-doc-href="journeys/build-on-the-api/" data-source-href="journeys/build-on-the-api.md">Build on the API</a> and <a href="features/client-sdks/" data-doc-href="features/client-sdks/" data-source-href="features/client-sdks.md">SDKs</a>. Do not conflate this workflow with the separate AI-agent identity broker; that broker's outstanding qualification findings need their own closure.</p>
       </section>
 
@@ -872,13 +1019,13 @@ evidence_access_owner: REQUIRED</code></pre>
           <h4>Click and inspect</h4>
           <ol>
             <li>Click <strong>Home</strong> in the workspace rail.</li>
-            <li>Notice the shell has Home plus five focused workspaces: <strong>Certificate Lifecycle</strong>, <strong>Machine &amp; Workload Trust</strong>, <strong>Secrets &amp; Access</strong>, <strong>Software Trust</strong>, and <strong>Trust Operations</strong>. Picking a workspace changes its scoped navigation; the URL always decides which workspace is active.</li>
-            <li>Start with <strong>What needs attention</strong>. Each row should name the affected workspace, consequence, deadline, automation state, accountable owner or team, and safest next action.</li>
-            <li>Use the compact workspace-health doors to compare certificate, workload, secret, software-signing, and cross-domain operational evidence without turning Home into five dashboards at once.</li>
+            <li>Notice the seven workspace buttons in the top rail: <strong>Home</strong>, <strong>Discover</strong>, <strong>Certificates</strong>, <strong>Workloads &amp; Machines</strong>, <strong>Secrets</strong>, <strong>Software Trust</strong>, and <strong>Operations</strong>. Picking one changes the scoped navigation; the URL still decides which workspace is active.</li>
+            <li>Start with <strong>What needs attention</strong>. Treat each card as an executive signal. If a deadline, owner, or automation result says it is not reported, do not fill the blank with a guess.</li>
+            <li>Use the workspace-health doors to compare certificate, workload, secret, software-signing, and cross-domain operational evidence without turning Home into seven dashboards at once.</li>
             <li>Open <strong>See diagnostic evidence</strong> only after you understand the primary work. Raw identifiers, projection details, and proof belong there; urgent work does not.</li>
             <li>Confirm seeded demo data is recognizable as non-production evidence rather than a claim about your own environment.</li>
           </ol>
-          <div class="expected"><strong>Expected:</strong> A populated tenant overview, including expiring demo certificates and algorithm distribution.</div>
+          <div class="expected"><strong>Expected:</strong> A seeded non-production tenant overview with cross-product attention signals. Open the owning workspace—especially Certificates—for exact deadlines, owners, algorithms, and lifecycle evidence.</div>
           <div class="meaning"><strong>Capability:</strong> Unified inventory and lifecycle telemetry across X.509, machine identities, secrets, tokens, and agents.</div>
         </div>
       </article>
@@ -891,11 +1038,11 @@ evidence_access_owner: REQUIRED</code></pre>
         </header>
         <div class="tour-body">
           <ol>
-            <li>Click <strong>Journeys</strong> in the left navigation, or <a href="https://127.0.0.1:9443/journeys" data-demo-path="/journeys" target="_blank" rel="noopener">open it directly</a>.</li>
-            <li>Notice the <strong>Verified path · shipped wiring 81/81</strong> badge. This means the journey is backed by capabilities wired into the shipped binary.</li>
-            <li>Select <strong>First certificate</strong>. Read its four steps: setup, request, approval, inventory.</li>
+            <li>Click <strong>Guided setup</strong> from Home, or <a href="https://127.0.0.1:9443/journeys" data-demo-path="/journeys" target="_blank" rel="noopener">open it directly</a>.</li>
+            <li>Read the selected journey's <strong>Verified journey progress</strong>. A percentage and completed-step count come from tenant evidence; they are not a claim that every possible product capability is qualified.</li>
+            <li>Select <strong>First certificate</strong>. The current demo shows four steps and starts with <strong>Complete the first-use guide</strong>.</li>
             <li>Select <strong>Migrate from an existing CA</strong>, then <strong>Respond to a compromise</strong>. Observe how each journey crosses several product screens.</li>
-            <li>Click <strong>Refresh status</strong>. Completed steps are detected from live tenant data, not merely from browser checkmarks.</li>
+            <li>Use <strong>Refresh status</strong> when it is enabled. Completed steps are detected from live tenant data, not merely from browser checkmarks.</li>
           </ol>
           <div class="expected"><strong>Expected:</strong> Multiple guided paths, each carrying served wiring proof and live completion state.</div>
           <div class="meaning"><strong>Capability:</strong> End-to-end outcomes that chain discovery, policy, issuance, delivery, revocation, and evidence.</div>
@@ -911,13 +1058,13 @@ evidence_access_owner: REQUIRED</code></pre>
         <div class="tour-body">
           <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/discovery" data-demo-path="/discovery" target="_blank" rel="noopener">Open Discovery</a><code>/discovery</code><span class="route-note">Observed credentials not fully managed yet</span></p>
           <ol>
-            <li>In <strong>Trust Operations</strong>, click <strong>Discovery</strong>.</li>
+            <li>Click <strong>Discover</strong> in the top workspace rail. The landing route is <code>/discovery</code>.</li>
             <li>Read the <strong>Shadow inventory</strong> counters: findings, high risk, and finding types.</li>
-            <li>On the <strong>Findings</strong> tab, inspect the demo findings. A finding is something trstctl observed but does not yet fully manage.</li>
+            <li>On <strong>Findings</strong>, click <strong>Review finding</strong>, then open <strong>Exact finding evidence</strong>. A finding is something trstctl observed but does not yet fully manage.</li>
             <li>Open <strong>Sources</strong>. Look for network, manual, CT-log, cloud certificate, cloud secret, and drift sources.</li>
             <li>Open <strong>Schedules</strong> and <strong>Runs</strong> to see how repeatable scans are represented.</li>
           </ol>
-          <div class="expected"><strong>Expected:</strong> A populated shadow-inventory summary and several configured discovery-source types.</div>
+          <div class="expected"><strong>Expected:</strong> In the g211 seed, 3 unmanaged findings, 3 high-risk findings, and 2 observed finding types. Exact evidence names the source, run/provenance, finding ID, and public fingerprint; it does not show a certificate issuer.</div>
           <div class="meaning"><strong>Capability:</strong> Discovery across networks, certificate-transparency logs, cloud stores, files, and declared drift targets—with every row tenant-scoped.</div>
         </div>
       </article>
@@ -931,15 +1078,15 @@ evidence_access_owner: REQUIRED</code></pre>
         <div class="tour-body">
           <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/certificates" data-demo-path="/certificates" target="_blank" rel="noopener">Open Certificate Lifecycle</a><code>/certificates</code><span class="route-note">Expiry, ownership, renewal, and inventory</span></p>
           <ol>
-            <li>In the workspace rail select <strong>Certificate Lifecycle</strong> — it lands on the certificate cockpit and inventory.</li>
-            <li>Stay on <strong>Inventory</strong>. Use the search box to search for <code>demo.trstctl.local</code>.</li>
-            <li>Open one row to inspect subject, issuer, owner, fingerprint, algorithm, validity, source, and deployment location.</li>
+            <li>In the workspace rail select <strong>Certificates</strong>. It lands on the <strong>Inventory</strong> tab with the <strong>Certificate Lifecycle cockpit</strong> above the table.</li>
+            <li>Read the action queue first. It puts the certificate, environment, deadline, automation state, owner, reason, and safest next action on one row.</li>
+            <li>In <strong>Inventoried certificates</strong>, use <strong>Search loaded rows</strong> for <code>demo.trstctl.local</code>, then click <strong>Review</strong> on one exact row for its detailed evidence.</li>
             <li>Click <strong>Estate health</strong> to view expiry and inventory posture across the tenant.</li>
             <li>Click <strong>CRL &amp; CT</strong> to see revocation and certificate-transparency evidence.</li>
             <li>Click <strong>Renewal readiness</strong> to distinguish “expires soon” from “can be renewed automatically.”</li>
             <li>Notice the links to <strong>CA hierarchy</strong> and <strong>Certificate profiles</strong>. CAs sign; profiles restrict what may be signed.</li>
           </ol>
-          <div class="expected"><strong>Expected:</strong> Imported, discovered, and trstctl-issued certificates in one searchable inventory.</div>
+          <div class="expected"><strong>Expected:</strong> The g211 seed reports 17 certificates needing action, 3 expired, 2 expiring within 7 days, 19 within 30 days, and 20 loaded rows in the current table window. These are demo data, not customer-estate claims.</div>
           <div class="meaning"><strong>Capability:</strong> Certificate lifecycle management from inventory through renewal, revocation, and transparency evidence.</div>
         </div>
       </article>
@@ -953,7 +1100,7 @@ evidence_access_owner: REQUIRED</code></pre>
         <div class="tour-body">
           <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/identities" data-demo-path="/identities" target="_blank" rel="noopener">Open Identities</a><code>/identities</code><span class="route-note">The machine record across credential rotations</span></p>
           <ol>
-            <li>In <strong>Machine &amp; Workload Trust</strong>, click <strong>Identities</strong>.</li>
+            <li>In <strong>Workloads &amp; Machines</strong>, click <strong>Machine identities</strong>.</li>
             <li>Read the <strong>Issuance pipeline</strong>: issued, deployed, and revoked are lifecycle states.</li>
             <li>Find a demo identity such as <code>payments-api.demo.trstctl.local</code> or <code>iot-est-gateway.demo.trstctl.local</code>.</li>
             <li>Click <strong>View details</strong>. Inspect owner, issuer, status, attributes, and credential relationships.</li>
@@ -973,15 +1120,15 @@ evidence_access_owner: REQUIRED</code></pre>
         <div class="tour-body">
           <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/protocols" data-demo-path="/protocols" target="_blank" rel="noopener">Open Protocols</a><code>/protocols</code><span class="route-note">Machine enrollment doorways and responder state</span></p>
           <ol>
-            <li>In <strong>Certificate Lifecycle</strong>, click <strong>Protocols</strong>.</li>
-            <li>Read <strong>Protocol responder status</strong> and the fail-closed explanation.</li>
-            <li>Scroll through the register. The evaluation profile activates <strong>ACME, EST, SCEP, CMP, SSH, TSA, and SPIFFE</strong>.</li>
+            <li>In <strong>Certificates</strong>, click <strong>How machines request credentials</strong>.</li>
+            <li>Read the served readiness summary. The exact state depends on operator configuration; a named method is not automatically enabled merely because the product supports it.</li>
+            <li>On the current g211 demo, <strong>3 of 7 methods are ready</strong>: ACME, EST, and SSH CA. SCEP, CMP, SPIFFE, and TSA are visibly <strong>Not set up</strong>.</li>
             <li>For ACME, connect “account + challenge + profile” to automated web-service certificates.</li>
             <li>For EST/SCEP/CMP, think of devices, MDM, networking gear, and enterprise PKI enrollment.</li>
             <li>For SPIFFE, think of short-lived workload identities delivered through a local workload socket.</li>
-            <li>Open <strong>SSH trust</strong> and <strong>Code signing</strong> from the page header to see adjacent credential families.</li>
+            <li>Use the <strong>Workloads &amp; Machines</strong> and <strong>Software Trust</strong> workspaces for the adjacent SSH and code-signing families; do not imply that a disabled protocol responder is serving traffic.</li>
           </ol>
-          <div class="expected"><strong>Expected:</strong> Enabled/served responder rows with tenant-bound setup guidance.</div>
+          <div class="expected"><strong>Expected:</strong> Seven method cards with individual Ready or Not set up states and a safe setup door. For g211, the headline is <strong>3 of 7 methods are ready</strong>.</div>
           <div class="meaning"><strong>Capability:</strong> One policy and signer boundary behind several standards. KMIP is intentionally not part of the one-click eval profile because it needs appliance-grade mutual-TLS material.</div>
         </div>
       </article>
@@ -995,7 +1142,7 @@ evidence_access_owner: REQUIRED</code></pre>
         <div class="tour-body">
           <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/secrets" data-demo-path="/secrets" target="_blank" rel="noopener">Open Secrets &amp; Access</a><code>/secrets</code><span class="route-note">Store, grant, share, generate, scan, and sync</span></p>
           <ol>
-            <li>In the workspace rail select <strong>Secrets &amp; Access</strong> — it lands on the operational overview. Each function remains a stable route, not an in-page imitation of a separate product.</li>
+            <li>In the workspace rail select <strong>Secrets</strong>. The page heading is <strong>Secrets &amp; Access</strong>; each function remains a stable route, not an in-page imitation of a separate product.</li>
             <li>On <strong>Secret store</strong>, use <strong>Add secret</strong> for the direct path. Expand <strong>Browse folders and references</strong> only when you need path-like organization such as <code>demo/github/actions</code>.</li>
             <li>Click <strong>Machine access</strong>: the machine-auth console. Grant a workload a scoped credential (reveal-once, then a list+revoke ledger), review the configured auth methods with their per-tenant disable overlay, and read the event-sourced issued-session ledger. Read-only during the tour.</li>
             <li>Click <strong>One-time secret links</strong>. A link exposes its value once and then self-destructs; ephemeral API keys are separate short-lived machine credentials.</li>
@@ -1015,13 +1162,13 @@ evidence_access_owner: REQUIRED</code></pre>
           <label class="complete"><input class="step-check" type="checkbox" data-step="9"> Mark complete</label>
         </header>
         <div class="tour-body">
-          <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/posture" data-demo-path="/posture" target="_blank" rel="noopener">Open Crypto posture</a><code>/posture</code><span class="route-note">Cryptographic exposure, drift, and migration readiness</span></p>
+          <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/posture" data-demo-path="/posture" target="_blank" rel="noopener">Open Algorithms and future readiness</a><code>/posture</code><span class="route-note">Cryptographic exposure, drift, and migration readiness</span></p>
           <ol>
-            <li>In <strong>Trust Operations</strong>, click <strong>Crypto posture</strong>.</li>
-            <li>Read <strong>Certificate Transparency monitoring</strong>. CT logs reveal publicly issued certificates, including ones trstctl did not request.</li>
-            <li>Read <strong>Drift detection</strong>. Drift means the deployed credential or file state no longer matches intent.</li>
-            <li>Find <strong>CBOM and cryptographic observability</strong>. CBOM means “cryptographic bill of materials”: algorithms, key sizes, and TLS posture.</li>
-            <li>Read <strong>Crypto-agility readiness</strong>. This is the migration view for weak or post-quantum-vulnerable algorithms.</li>
+            <li>In <strong>Operations</strong>, click <strong>Algorithms and future readiness</strong>.</li>
+            <li>Open <strong>Certificate, AD CS, authority, and drift evidence</strong>, then read <strong>Certificate Transparency monitoring</strong> and <strong>Drift detection</strong>. Their empty states mean no finding was returned, not that the estate is proven clean.</li>
+            <li>Open <strong>Algorithm inventory and scan evidence</strong>. <strong>CBOM and cryptographic observability</strong> means a cryptographic bill of materials: algorithms, key sizes, TLS versions, and policy status.</li>
+            <li>Read the effect-free CBOM planning text: review performs no writes; an approved run performs TLS handshakes and read-only config inspection without returning file contents.</li>
+            <li>Open <strong>Compatibility, PQC policy, and upgrade planning</strong>, then read <strong>Crypto-agility readiness</strong>. This is the migration view for weak or post-quantum-vulnerable algorithms.</li>
           </ol>
           <div class="expected"><strong>Expected:</strong> Separate CT, drift, CBOM, and crypto-agility sections with clear empty states where no live scan has run.</div>
           <div class="meaning"><strong>Capability:</strong> Fleet posture is broader than certificate expiry. It includes where crypto is used, whether it drifted, and how safely it can be migrated.</div>
@@ -1037,7 +1184,7 @@ evidence_access_owner: REQUIRED</code></pre>
         <div class="tour-body">
           <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/risk" data-demo-path="/risk" target="_blank" rel="noopener">Open What to fix first</a><code>/risk</code><span class="route-note">An explainable, ordered remediation queue</span></p>
           <ol>
-            <li>In <strong>Trust Operations</strong>, click <strong>What to fix first</strong>.</li>
+            <li>In <strong>Operations</strong>, click <strong>What to fix first</strong>.</li>
             <li>Start with <strong>Highest-risk credentials</strong>: each row states why the credential matters in plain language.</li>
             <li>Click <strong>Review risk</strong> on an item. Read the recommended action, then open <strong>Exact score and evidence</strong> to inspect its model contract, score inputs, raw reason codes, evidence IDs, and projection coverage.</li>
             <li>Find the demo entries such as <code>old-vpn.demo.trstctl.local:443</code> and <code>ci/buildkite/release-token</code>.</li>
@@ -1056,9 +1203,9 @@ evidence_access_owner: REQUIRED</code></pre>
           <label class="complete"><input class="step-check" type="checkbox" data-step="11"> Mark complete</label>
         </header>
         <div class="tour-body">
-          <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/graph" data-demo-path="/graph" target="_blank" rel="noopener">Open Credential graph</a><code>/graph</code><span class="route-note">Relationships and compromise blast radius</span></p>
+          <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/graph" data-demo-path="/graph" target="_blank" rel="noopener">Open What could be affected</a><code>/graph</code><span class="route-note">Relationships and compromise blast radius</span></p>
           <ol>
-            <li>Click <strong>Credential graph</strong>.</li>
+            <li>In <strong>Operations</strong>, click <strong>What could be affected</strong>.</li>
             <li>Read the node and edge counts. Nodes are identities, credentials, owners, issuers, or resources; edges are relationships.</li>
             <li>In <strong>Blast radius explorer</strong>, choose any populated credential.</li>
             <li>Inspect the map and analysis rail. Use <strong>Zoom in</strong>, <strong>Zoom out</strong>, and <strong>Reset view</strong>.</li>
@@ -1077,17 +1224,17 @@ evidence_access_owner: REQUIRED</code></pre>
           <label class="complete"><input class="step-check" type="checkbox" data-step="12"> Mark complete</label>
         </header>
         <div class="tour-body">
-          <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/approvals" data-demo-path="/approvals" target="_blank" rel="noopener">Open Approvals</a><a class="button small secondary" href="https://127.0.0.1:9443/policy" data-demo-path="/policy" target="_blank" rel="noopener">Open Policy</a><a class="button small secondary" href="https://127.0.0.1:9443/audit" data-demo-path="/audit" target="_blank" rel="noopener">Open Audit</a><span class="route-note">Decision → rule → immutable evidence</span></p>
+          <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/approvals" data-demo-path="/approvals" target="_blank" rel="noopener">Open Requests waiting for approval</a><a class="button small secondary" href="https://127.0.0.1:9443/policy" data-demo-path="/policy" target="_blank" rel="noopener">Open Rules and approvals</a><a class="button small secondary" href="https://127.0.0.1:9443/audit" data-demo-path="/audit" target="_blank" rel="noopener">Open Change history</a><span class="route-note">Decision → rule → immutable evidence</span></p>
           <ol>
-            <li>In <strong>Trust Operations</strong>, under <strong>Govern &amp; administer</strong>, click <strong>Approvals</strong>.</li>
-            <li>Inspect pending issue/rotate/revoke decisions. Do <strong>not</strong> click an approve button during the read-only tour.</li>
-            <li>Click an <strong>Audit trail</strong> link for a request.</li>
-            <li>Next click <strong>Policy</strong>. Read <strong>Enforcement path</strong>: the backend evaluates policy before it emits the state-change event.</li>
+            <li>In <strong>Operations</strong>, under <strong>Govern &amp; administer</strong>, click <strong>Requests waiting for approval</strong>.</li>
+            <li>The g211 seed says <strong>Nothing needs approval right now</strong>. If a future rehearsal has a pending issue/rotate/revoke decision, inspect it but do <strong>not</strong> approve it during the read-only tour.</li>
+            <li>Open the request history/evidence disclosure when records exist; an empty queue is not evidence that approval controls are absent.</li>
+            <li>Next click <strong>Rules and approvals</strong>. Read the version/change-history and framework evidence disclosures before making claims about a particular enforced rule.</li>
             <li>Inspect <strong>Policy versions</strong> and the compliance framework buttons. Select <strong>SOC 2</strong>, <strong>FIPS 140</strong>, or another framework.</li>
             <li>Click <strong>Audit</strong>. Read <strong>Hash-chain status</strong>, apply a type filter if desired, and click <strong>View event</strong> on one row.</li>
             <li>Notice <strong>Export evidence</strong>. Audit/export remains part of the auditable core.</li>
           </ol>
-          <div class="expected"><strong>Expected:</strong> Pending decisions, policy controls/evidence packs, and a long immutable event list with hashes.</div>
+          <div class="expected"><strong>Expected:</strong> On g211, zero pending approval requests, served rule/evidence disclosures, and tenant change-history evidence. Wait for Change history to finish its bounded read before describing any returned events or signatures.</div>
           <div class="meaning"><strong>Capability:</strong> Dual control prevents one actor from silently performing sensitive operations; policy decisions and resulting events remain attributable and exportable.</div>
         </div>
       </article>
@@ -1099,16 +1246,15 @@ evidence_access_owner: REQUIRED</code></pre>
           <label class="complete"><input class="step-check" type="checkbox" data-step="13"> Mark complete</label>
         </header>
         <div class="tour-body">
-          <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/incidents" data-demo-path="/incidents" target="_blank" rel="noopener">Open Incidents</a><code>/incidents</code><span class="route-note">Replace first, verify, then revoke</span></p>
+          <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/incidents" data-demo-path="/incidents" target="_blank" rel="noopener">Open Security incidents</a><code>/incidents</code><span class="route-note">Replace first, verify, then revoke</span></p>
           <ol>
-            <li>In <strong>Trust Operations</strong>, click <strong>Incidents</strong>.</li>
-            <li>Read <strong>Credential compromise execution</strong>. The intended order is: scope, issue replacement, deploy replacement, then revoke the old credential.</li>
-            <li>Select an affected identity if the field is populated, then click <strong>Preview blast radius</strong>. Do not click <strong>Execute incident</strong>.</li>
-            <li>Review <strong>Automated remediation playbooks</strong>: revoke, rotate, and right-size.</li>
-            <li>Read <strong>SIEM / SOAR / ITSM dispatch</strong>. External actions are queued through the event/outbox path instead of being called inline.</li>
-            <li>Scroll to <strong>Execution evidence</strong> and <strong>Remediation evidence</strong>.</li>
+            <li>In <strong>Operations</strong>, click <strong>Security incidents</strong>.</li>
+            <li>Read <strong>Situation now</strong>. In g211 it says no response is active, nothing is marked affected, and containment begins by identifying a credential and planning replacement before revocation.</li>
+            <li>Open <strong>Execute response</strong> only to inspect the workflow. Do not click <strong>Start response</strong> or execute a mutation during this read-only tour.</li>
+            <li>Use <strong>Remediation</strong> for playbook controls and evidence, and <strong>Integrations</strong> for SIEM/SOAR/ITSM delivery. Make a dispatch claim only when an outbox/receipt record is visible.</li>
+            <li>Return to <strong>Timeline &amp; evidence</strong>. The current seed truthfully says that no incident executions or remediation playbook runs have been recorded.</li>
           </ol>
-          <div class="expected"><strong>Expected:</strong> A previewable compromise workflow, remediation playbooks, external-response forms, and evidence sections.</div>
+          <div class="expected"><strong>Expected:</strong> Five tabs—Timeline &amp; evidence, Execute response, Remediation, Integrations, and Fleet &amp; break-glass—with explicit empty states when no response has run.</div>
           <div class="meaning"><strong>Capability:</strong> Safe incident choreography avoids revoking first and causing an outage. External systems receive durable, retryable outbox work.</div>
         </div>
       </article>
@@ -1120,16 +1266,16 @@ evidence_access_owner: REQUIRED</code></pre>
           <label class="complete"><input class="step-check" type="checkbox" data-step="14"> Mark complete</label>
         </header>
         <div class="tour-body">
-          <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/connectors" data-demo-path="/connectors" target="_blank" rel="noopener">Open Deployment connectors</a><code>/connectors</code><span class="route-note">Delivery attempts, receipts, retries, and circuit breakers</span></p>
+          <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/connectors" data-demo-path="/connectors" target="_blank" rel="noopener">Open Where credentials are installed</a><code>/connectors</code><span class="route-note">Destinations, safe actions, verification, retries, and rollback</span></p>
           <ol>
-            <li>In <strong>Trust Operations</strong>, under <strong>Infrastructure</strong>, click <strong>Deployment connectors</strong>.</li>
-            <li>Read the four concepts: target setup, identity binding, action, and receipt evidence.</li>
-            <li>Scroll through <strong>Connector registry</strong>. The shipped registry covers infrastructure targets such as web servers, proxies, clouds, Kubernetes, and secret platforms.</li>
-            <li>Inspect <strong>Recent delivery receipts</strong>. A failed receipt records the reported failure stage; it does not by itself prove a network call reached the target or that the target changed.</li>
-            <li>Inspect <strong>Outbox circuit breakers</strong>. An open circuit pauses a broken destination so it cannot exhaust the whole control plane.</li>
+            <li>In <strong>Operations</strong>, under <strong>Infrastructure</strong>, click <strong>Where credentials are installed</strong>.</li>
+            <li>Open <strong>Destinations and safe actions</strong>. Read the target, identity binding, reason, preview/deploy action, and returned terminal evidence as separate facts.</li>
+            <li>Open <strong>Connector capabilities and plugin evidence</strong>. A listed connector type proves shipped wiring; it does not prove a customer target was contacted.</li>
+            <li>Open <strong>Health, retries, and rollback</strong>. A failed receipt records the reported failure stage; it does not by itself prove a network call reached the target or that the target changed.</li>
+            <li>Read circuit, retry, verification, and rollback evidence together. An open circuit pauses a broken destination so it cannot exhaust the whole control plane.</li>
             <li>Do not create a target or click Deploy without real target configuration.</li>
           </ol>
-          <div class="expected"><strong>Expected:</strong> A served connector registry, delivery receipts, and per-destination circuit-breaker state.</div>
+          <div class="expected"><strong>Expected:</strong> On g211, 1 of 10 configured destinations has verification evidence, 3 connector types report rollback capability, and one page-level limitation remains. Do not convert those counts into “all connectors work.”</div>
           <div class="meaning"><strong>Capability:</strong> Connectors are runtime-wired delivery implementations. Bounded queues, receipts, retries, rollback metadata, and circuit breakers make external delivery operable.</div>
         </div>
       </article>
@@ -1141,17 +1287,17 @@ evidence_access_owner: REQUIRED</code></pre>
           <label class="complete"><input class="step-check" type="checkbox" data-step="15"> Mark complete</label>
         </header>
         <div class="tour-body">
-          <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/platform" data-demo-path="/platform" target="_blank" rel="noopener">Open Platform setup</a><a class="button small secondary" href="https://127.0.0.1:9443/admin/system" data-demo-path="/admin/system" target="_blank" rel="noopener">System health</a><a class="button small secondary" href="https://127.0.0.1:9443/admin/editions" data-demo-path="/admin/editions" target="_blank" rel="noopener">Editions &amp; license</a><span class="route-note">Three deliberately separate administration scopes</span></p>
+          <p class="route-door"><a class="button small primary" href="https://127.0.0.1:9443/platform" data-demo-path="/platform" target="_blank" rel="noopener">Open Platform setup</a><a class="button small secondary" href="https://127.0.0.1:9443/admin/system" data-demo-path="/admin/system" target="_blank" rel="noopener">System health</a><a class="button small secondary" href="https://127.0.0.1:9443/admin/editions" data-demo-path="/admin/editions" target="_blank" rel="noopener">Plan and license</a><span class="route-note">Three deliberately separate administration scopes</span></p>
           <ol>
             <li>Open <strong>Platform setup</strong> at <code>/platform</code>. It loads no protected detail: use its three cards to enter separately scoped administration pages. Choose <strong>People and roles</strong>, confirm who can use the control plane, then open <strong>SSO groups and role bindings</strong>, <strong>Sessions and access keys</strong>, and <strong>Certification history</strong> for exact evidence. Do not create a key, open a privileged session, or offboard anyone during the tour. Historical tab-query links still redirect.</li>
-            <li>Click <strong>System health</strong>, then <strong>Editions &amp; license</strong>. System health answers from the smallest core check and keeps configuration, dependency, and exception evidence behind intentional disclosures. Licensing and commercial-edition rows stay on their own route.</li>
+            <li>Click <strong>System health</strong>, then <strong>Plan and license</strong>. System health answers from the smallest core check and keeps configuration, dependency, and exception evidence behind intentional disclosures. Licensing and commercial-edition rows stay on their own route.</li>
             <li>Read <strong>Packaging</strong>: credentials and rotations are not billing units.</li>
             <li>Read <strong>Tenant boundary</strong>, <strong>Transport</strong>, and <strong>Auth session</strong>.</li>
-            <li>In <strong>Editions</strong>, confirm the offline Provider license is active and review the enabled Enterprise/Provider feature rows.</li>
+            <li>In <strong>Plan and license</strong>, confirm the offline Provider license is active and review the enabled feature rows. The g211 page says 14 of 14 licensed features are enabled, while the navigation still labels the route <strong>Unavailable</strong> because its one page capability is not fully actionable. License validity and page-action readiness are different facts.</li>
             <li>Notice <strong>FIPS module inactive · self-test passed</strong>. The feature is licensed, but the ordinary demo image is not the separately built FIPS artifact.</li>
             <li>Continue through regional issuance HA, scale orchestration, support, and managed-offering sections.</li>
           </ol>
-          <div class="expected"><strong>Expected:</strong> Provider edition active, commercial feature rows enabled, offline license posture, and the standard-demo FIPS disclosure.</div>
+          <div class="expected"><strong>Expected:</strong> On g211: Provider plan active, signed license verified at startup, 14 of 14 licensed features enabled, expiry Dec 31, 2035, and a separate route-readiness limitation. The ordinary demo artifact must not be represented as a qualified FIPS artifact.</div>
           <div class="meaning"><strong>Capability:</strong> One binary lineage supports free core, Enterprise, and Provider/MSP packaging. Commercial code attaches at a centralized edition seam after offline license verification.</div>
         </div>
       </article>
@@ -1170,7 +1316,7 @@ evidence_access_owner: REQUIRED</code></pre>
         <summary>Exercise A — create a harmless owner record</summary>
         <div>
           <ol>
-            <li>Open <strong>Ownership</strong> under <strong>Trust Operations → Govern &amp; administer</strong>.</li>
+            <li>Open <strong>Ownership</strong> under <strong>Operations → Govern &amp; administer</strong>.</li>
             <li>Choose <strong>Assign owner</strong>.</li>
             <li>Use kind <code>team</code>, name <code>Walkthrough Team</code>, and the reserved local example address <code>walkthrough@example.invalid</code>.</li>
             <li>Submit once. If the UI asks for an idempotency key, keep the generated value rather than resubmitting with a different one.</li>
@@ -1266,7 +1412,7 @@ evidence_access_owner: REQUIRED</code></pre>
   </div>
 
   <footer>
-    <strong>trstctl customer demo field guide · reviewed 31 August 2026</strong><br>
+    <strong>trstctl customer demo field guide · live-reviewed 4 September 2026</strong><br>
     Read-only by default. Live labs require explicit scope, real operator-owned targets, and candidate-specific rehearsal. No vendor qualification is implied.
   </footer>
 

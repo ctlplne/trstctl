@@ -133,9 +133,18 @@ test('disabled storage does not break checkboxes or reset', () => {
   dom.window.close();
 });
 
-test('presenter document makes no network request and embeds no third-party asset', () => {
+test('presenter document makes no network request and embeds only local screenshot evidence', () => {
   const { dom, document } = page();
-  assert.equal(document.querySelectorAll('script[src], iframe, img[src], link[rel="stylesheet"]').length, 0);
+  assert.equal(document.querySelectorAll('script[src], iframe, link[rel="stylesheet"]').length, 0);
+  const screenshots = Array.from(document.querySelectorAll('img[src]'));
+  assert.ok(screenshots.length >= 8, 'expected the guide to include real product screenshots');
+  for (const screenshot of screenshots) {
+    const src = screenshot.getAttribute('src');
+    assert.match(src, /^assets\/demo\/[a-z0-9-]+\.png$/);
+    assert.doesNotMatch(src, /^(?:[a-z]+:|\/\/|\/)/i);
+    assert.ok(screenshot.alt.trim().length > 20, `${src} needs descriptive alt text`);
+    assert.ok(existsSync(fileURLToPath(new URL(src, sourceURL))), `${src} is missing`);
+  }
   for (const script of document.querySelectorAll('script')) {
     assert.doesNotMatch(script.textContent, /\bfetch\s*\(|XMLHttpRequest|WebSocket|sendBeacon/);
   }

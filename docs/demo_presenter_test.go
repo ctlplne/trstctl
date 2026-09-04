@@ -3,6 +3,8 @@
 package docs
 
 import (
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -27,12 +29,49 @@ func TestDemoPresenterTracksKeepProofAndPrerequisitesVisible(t *testing.T) {
 		"one stable idempotency key", "Do not paste private keys",
 		"Management readback is not traffic-path verification",
 		"Prepared connector targets are not contacted targets.",
-		"zero enrolled agents",
+		"one active execution runtime",
 		"No alert channel is configured in the shipped seed",
 		"The lifecycle issuer is not a pre-created CA hierarchy",
+		`id="zero-to-sale"`, `id="rehearsal-proof"`, `id="byo-ai-agent"`,
+		`id="edge-name"`, "Click", "Say", "Expected", "If it does not",
+		"Home is the executive signal; Certificates is the exact queue",
+		"No issuer is shown in this finding panel",
+		"Target path ready — no changes made", "The request worked", "200 OK",
+		"Your AI agent is the operator; trstctl is the governed control plane",
+		"standard MCP transport is not claimed", "trstctl Edge",
+		"binary remains trstctl-agent",
 	} {
 		if !strings.Contains(page, marker) {
 			t.Errorf("presenter guide is missing %q", marker)
+		}
+	}
+}
+
+func TestDemoScreenshotsAreLocalCandidateLabelledEvidence(t *testing.T) {
+	page := read(t, "demo-click-through.html")
+	matches := regexp.MustCompile(`<img\s+[^>]*src="(assets/demo/[^"]+\.png)"[^>]*alt="([^"]+)"`).FindAllStringSubmatch(page, -1)
+	if len(matches) < 8 {
+		t.Fatalf("presenter guide has %d local screenshots; want at least 8", len(matches))
+	}
+	for _, match := range matches {
+		if strings.TrimSpace(match[2]) == "" {
+			t.Errorf("screenshot %s has no useful alt text", match[1])
+		}
+		info, err := os.Stat(filepath.FromSlash(match[1]))
+		if err != nil {
+			t.Errorf("screenshot %s is missing: %v", match[1], err)
+			continue
+		}
+		if info.Size() == 0 {
+			t.Errorf("screenshot %s is empty", match[1])
+		}
+	}
+	for _, marker := range []string{
+		"g211", "f8a266242eab77737f88508f6cb7200d055d1cbe",
+		"4 September 2026", "sanitized", "exact-candidate",
+	} {
+		if !strings.Contains(page, marker) {
+			t.Errorf("screenshot provenance is missing %q", marker)
 		}
 	}
 }
