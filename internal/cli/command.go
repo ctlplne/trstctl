@@ -2,7 +2,10 @@
 
 package cli
 
-import "strings"
+import (
+	"strings"
+	"time"
+)
 
 // bodyMode says where a command's request body comes from.
 type bodyMode int
@@ -28,6 +31,10 @@ type Command struct {
 	ReadOnly bool   // true for POST-shaped reads that accept a structured body
 	Action   string // fixed action validated for bodyApprovalFile commands
 	Summary  string
+	// RequestTimeout raises the default HTTP deadline for a command whose
+	// synchronous, recoverable server operation can legitimately take longer.
+	// Zero keeps the ordinary 30-second CLI bound.
+	RequestTimeout time.Duration
 }
 
 // Destructive reports whether the command can remove, revoke, erase, zeroize,
@@ -364,10 +371,10 @@ var coreCommandTable = []Command{
 	{Name: []string{"compliance", "report-schedules", "resume"}, Method: "POST", Path: "/api/v1/compliance/report-schedules/{id}/resume", Summary: "Resume a report schedule with a fresh full interval"},
 	{Name: []string{"compliance", "evidence-pack"}, Method: "GET", Path: "/api/v1/compliance/evidence-packs/{framework}", Summary: "Export a signed compliance evidence pack"},
 
-	{Name: []string{"privacy", "erasures", "erase"}, Method: "POST", Path: "/api/v1/privacy/subject-erasures", Body: bodyFile, Summary: "Erase direct subject personal data"},
+	{Name: []string{"privacy", "erasures", "erase"}, Method: "POST", Path: "/api/v1/privacy/subject-erasures", Body: bodyFile, Summary: "Erase direct subject personal data", RequestTimeout: 10 * time.Minute},
 	{Name: []string{"privacy", "erasures", "preview"}, Method: "POST", Path: "/api/v1/privacy/subject-erasures/preview", Body: bodyFile, Summary: "Review direct subject erasure without writes"},
 	{Name: []string{"privacy", "erasures", "list"}, Method: "GET", Path: "/api/v1/privacy/subject-erasures", Query: []string{"limit", "cursor"}, Summary: "List subject-erasure evidence"},
-	{Name: []string{"privacy", "retention", "run"}, Method: "POST", Path: "/api/v1/privacy/retention-runs", Body: bodyNone, Summary: "Run non-audit personal-data retention"},
+	{Name: []string{"privacy", "retention", "run"}, Method: "POST", Path: "/api/v1/privacy/retention-runs", Body: bodyNone, Summary: "Run non-audit personal-data retention", RequestTimeout: 10 * time.Minute},
 	{Name: []string{"privacy", "retention", "preview"}, Method: "POST", Path: "/api/v1/privacy/retention-runs/preview", Body: bodyNone, Summary: "Review retention cutoffs and counts without writes"},
 	{Name: []string{"privacy", "retention", "list"}, Method: "GET", Path: "/api/v1/privacy/retention-runs", Query: []string{"limit", "cursor"}, Summary: "List retention evidence"},
 	{Name: []string{"privacy", "archives", "attest"}, Method: "POST", Path: "/api/v1/privacy/archive-erasure-attestations", Body: bodyFile, Summary: "Record backup/archive erasure evidence"},

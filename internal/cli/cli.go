@@ -133,7 +133,7 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 		}
 	}
 
-	client, err := httpClientForEnv(env, *caFile)
+	client, err := httpClientForEnv(env, *caFile, cmd.RequestTimeout)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "error: CA file: %v\n", err)
 		return 2
@@ -152,12 +152,25 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 	return 0
 }
 
-func httpClientForEnv(env Env, caFile string) (*http.Client, error) {
+const defaultHTTPTimeout = 30 * time.Second
+
+func httpClientForEnv(env Env, caFile string, minimumTimeout ...time.Duration) (*http.Client, error) {
+	timeout := defaultHTTPTimeout
+	if len(minimumTimeout) > 0 && minimumTimeout[0] > timeout {
+		timeout = minimumTimeout[0]
+	}
 	if env.HTTPClient != nil {
-		return env.HTTPClient, nil
+		// A zero timeout is an explicit unbounded injected client. Otherwise,
+		// clone rather than mutate caller-owned transport configuration.
+		if env.HTTPClient.Timeout == 0 || env.HTTPClient.Timeout >= timeout {
+			return env.HTTPClient, nil
+		}
+		client := *env.HTTPClient
+		client.Timeout = timeout
+		return &client, nil
 	}
 	if caFile == "" {
-		return &http.Client{Timeout: 30 * time.Second}, nil
+		return &http.Client{Timeout: timeout}, nil
 	}
 	caPEM, err := os.ReadFile(caFile) // #nosec G304 -- the operator explicitly names the public trust-bundle path (CWE-22)
 	if err != nil {
@@ -167,7 +180,7 @@ func httpClientForEnv(env Env, caFile string) (*http.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &http.Client{Timeout: 30 * time.Second, Transport: transport}, nil
+	return &http.Client{Timeout: timeout, Transport: transport}, nil
 }
 
 func runWithSecrets(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, stderr io.Writer, server, token, tenant, caFile string) int {

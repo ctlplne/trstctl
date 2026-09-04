@@ -62,6 +62,12 @@ A trstctl API token carries its own tenant and scopes, so with `--token` you
 usually need nothing else. Mutations always send an `Idempotency-Key` so a
 retried command can never execute twice.
 
+Ordinary API calls have a 30-second client deadline. Direct subject erasure and
+retention enforcement automatically use a 10-minute deadline because they may
+perform a synchronous, crash-recoverable event-history rewrite on a large
+tenant. If either command is interrupted, retry it with the same explicit
+`--idempotency-key`; do not assume a client timeout means the server rolled back.
+
 For an evaluation server using its self-signed internal certificate, point
 `--ca-file` at the public certificate you inspected and chose to trust. Internal
 mode persists its private identity in `data/tls/internal-server.pem`, so a normal
