@@ -76,3 +76,37 @@ func TestPrivacySubjectExportCountTotalDoesNotDoubleCountReadModelBreakdowns(t *
 		t.Fatalf("privacySubjectExportCountTotal() = %d, want 3 distinct records", got)
 	}
 }
+
+func TestPrivacyHistoryMutationsDoNotInvertTenantCryptoAndHistoryFences(t *testing.T) {
+	wantExempt := map[string]bool{
+		"erasePrivacySubject":     false,
+		"enforcePrivacyRetention": false,
+	}
+	for _, route := range New(nil, nil, nil).routes() {
+		if _, ok := wantExempt[route.opID]; !ok {
+			continue
+		}
+		wantExempt[route.opID] = true
+		if !route.mutation || !tenantCryptoExemptOperation(route.opID) {
+			t.Errorf("%s does not use the history-safe mutation route contract", route.opID)
+		}
+	}
+	for operationID, found := range wantExempt {
+		if !found {
+			t.Errorf("missing privacy history mutation route %s", operationID)
+		}
+	}
+
+	// Structured reviews and ordinary privacy reads do not acquire the history
+	// rewrite lock, so they keep the normal fail-closed tenant crypto guard.
+	for _, operationID := range []string{
+		"previewPrivacySubjectErasure",
+		"previewPrivacyRetention",
+		"listPrivacySubjectErasures",
+		"listPrivacyRetentionRuns",
+	} {
+		if tenantCryptoExemptOperation(operationID) {
+			t.Errorf("%s unexpectedly bypasses the route-wide tenant crypto guard", operationID)
+		}
+	}
+}

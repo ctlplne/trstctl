@@ -88,6 +88,12 @@ sections and load only when an operator opens them:
   subject's cataloged record counts through `POST
   /api/v1/privacy/subject-exports`. Secret values and token material are not
   rendered.
+  The long-running erasure receiver uses its dedicated history/recovery fence;
+  it does not hold an idle route-wide tenant-key transaction while rewriting
+  history. Its cached HTTP result is still sealed separately under the tenant
+  key after completion. If that short sealing step cannot acquire cryptographic
+  access, retry the same request with the same `Idempotency-Key`; the durable
+  receiver reconciles instead of erasing twice.
 - **Archive removal evidence** — inspect or record tenant-scoped proof that a
   backup or signed audit archive was deleted, cryptographically shredded, or
   retained under legal hold through `GET` and `POST` on
@@ -98,6 +104,9 @@ sections and load only when an operator opens them:
   history shows run id, cutoffs, affected records, and requester on top of the
   scheduled `24h` default. Already-pseudonymized rows are excluded from later
   affected counts, so a fresh review reflects only work that remains.
+  Like direct erasure, the potentially long retention receiver does not hold an
+  idle route-wide tenant-key transaction; its idempotency response remains
+  independently tenant-sealed and replay-bound.
 
 Opening the page does not eagerly fetch these evidence sets. This keeps the
 default view short and avoids moving tenant evidence into the browser before the

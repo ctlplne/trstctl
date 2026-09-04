@@ -673,16 +673,6 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	return a
 }
 
-func tenantCryptoExemptOperation(operationID string) bool {
-	switch operationID {
-	case "getPlatformSystem", "listCapabilities",
-		"getTenantKeyDomain", "migrateTenantKeyDomain", "sealTenantKeyDomain", "unsealTenantKeyDomain":
-		return true
-	default:
-		return false
-	}
-}
-
 // ServeHTTP implements http.Handler.
 func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	a.mux.ServeHTTP(localizedProblemWriter(w, r), r)

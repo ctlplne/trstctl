@@ -69,6 +69,26 @@ func WithTenantCrypto(access tenantseal.Access) Option {
 	return func(c *config) { c.tenantCrypto = access }
 }
 
+func tenantCryptoExemptOperation(operationID string) bool {
+	switch operationID {
+	case "getPlatformSystem", "listCapabilities",
+		"getTenantKeyDomain", "migrateTenantKeyDomain", "sealTenantKeyDomain", "unsealTenantKeyDomain",
+		// These two privacy mutations do not read or return secret values. They
+		// acquire their own deployment history/recovery fences and may run longer
+		// than PostgreSQL's idle-transaction bound. Holding the route-wide shared
+		// tenant-key transaction around either operation inverts those locks: the
+		// history rewrite waits for the route fence, then the database kills that
+		// outer transaction and a successful 201 is followed by a spurious 500.
+		// Cached mutation results remain tenant-sealed: ResultProtector acquires a
+		// fresh, short tenant-key fence after the durable receiver completes, and
+		// an unavailable/sealed domain leaves the key safely retryable.
+		"erasePrivacySubject", "enforcePrivacyRetention":
+		return true
+	default:
+		return false
+	}
+}
+
 // WithPQCCampaignClosureSigner wires the persistent core audit key used to make
 // campaign closure evidence independently verifiable offline.
 func WithPQCCampaignClosureSigner(signer PQCCampaignClosureSigner) Option {
