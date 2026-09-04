@@ -158,26 +158,12 @@ func nativeConnectorReplaySafety(name string) connector.ReplaySafety {
 // loopback in the deployments we ship for, so the executor must be on the box
 // even though the bytes travel over HTTP.
 func nativeConnectorVantage(name string) connector.TargetVantage {
-	// The appliance families come from internal/connector, which is the one
-	// owner of that census; the relay reads the same list to decide what it will
-	// execute. Two literals would be two chances to disagree about which
-	// connectors are appliances, and the disagreement would show up as work
-	// stamped for a role that refuses to claim it.
-	if connector.IsRelayVantageFamily(name) {
-		return connector.VantageNetworkRelay
+	if vantage, shipped := connector.ShippedTargetVantage(name); shipped {
+		return vantage
 	}
-	switch name {
-	case "nginx", "apache", "caddy", "iis", "haproxy", "postfix", "traefik",
-		"java-keystore", "postgresql", "mysql", "rabbitmq", "elasticsearch",
-		"tomcat", "envoy":
-		return connector.VantageHostAgent
-	case "aws-acm", "azure-keyvault", "gcp-certificate-manager":
-		return connector.VantageControlPlane
-	default:
-		// Fail closed: an unlisted connector stays where it always ran until
-		// someone audits it for agent execution and adds it here.
-		return connector.VantageControlPlane
-	}
+	// Fail closed: an unlisted connector stays where it always ran until
+	// someone audits it for agent execution and adds it to the shared census.
+	return connector.VantageControlPlane
 }
 
 func connectorHTTPClientFromConfig(cfg config.Connectors, guard *egress.Guard) (*http.Client, error) {

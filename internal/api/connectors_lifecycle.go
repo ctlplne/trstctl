@@ -1131,6 +1131,9 @@ func (a *API) connectorCatalogWithSandbox() []connectorCatalogItem {
 		item.Capabilities = []string{}
 		item.ReplaySafety = replaySafetyLabel(connector.ReplaySafetyAtMostOnce)
 		item.TargetVantage = string(connector.VantageControlPlane)
+		if vantage, shipped := connector.ShippedTargetVantage(item.Name); shipped {
+			item.TargetVantage = string(vantage)
+		}
 		item.ExecutesRollback = connector.CanExecuteRollback(item.Name)
 		item.DeviceProven = connector.DeviceProven(item.Name)
 		if connector.IsE1Family(item.Name) {
@@ -1164,7 +1167,7 @@ func (a *API) connectorCatalogWithSandbox() []connectorCatalogItem {
 				Detail:           detail,
 			}
 		}
-		if a.connectorRegistry != nil {
+		if a.connectorRegistry != nil && a.connectorRegistry.Has(item.Name) {
 			item.Native = a.connectorRegistry.Has(item.Name)
 			if caps := a.connectorRegistry.CapabilitiesFor(item.Name); len(caps) > 0 {
 				item.Capabilities = caps
