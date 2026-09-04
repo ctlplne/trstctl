@@ -273,9 +273,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// restore and KMIP runtime posture, then F68 added the effect-free
 	// `secrets syncs preview` command, raising the catalog to 438. F50's managed
 	// and keyless effect-free signing previews raised it to 440. F34's
-	// effect-free emergency issuance preview raises it to 441.
-	if len(out) != 441 {
-		t.Fatalf("CLI commands = %d, want 441", len(out))
+	// effect-free emergency issuance preview raises it to 441. F29's exact,
+	// effect-free unsaved routing-policy review raises it to 442.
+	if len(out) != 442 {
+		t.Fatalf("CLI commands = %d, want 442", len(out))
 	}
 	return out
 }
