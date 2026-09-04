@@ -67,7 +67,7 @@ export function StepShell({
   }, [currentIndex, nextDisabled, onNext, onPrevious]);
 
   return (
-    <section aria-label={translateNow("source.onboarding.carousel.282df6ade1")} className="ui-panel overflow-hidden">
+    <section aria-label={progressLabel ?? translateNow("source.onboarding.carousel.282df6ade1")} className="ui-panel overflow-hidden">
       <div className="border-b border-border p-comfortable">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>

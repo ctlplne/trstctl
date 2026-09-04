@@ -965,6 +965,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/breakglass/issue-ceremonies/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate and explain an exact online break-glass request without opening a ceremony or calling the signer */
+        post: operations["previewBreakglassIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/breakglass/reconcile": {
         parameters: {
             query?: never;
@@ -7502,6 +7519,34 @@ export interface components {
             subject: string;
             ttl_seconds?: number;
         };
+        BreakglassIssuePlanPreview: {
+            approval_threshold: number;
+            blockers: string[];
+            /** @enum {string} */
+            capability: "F34";
+            configured_operator_count: number;
+            csr_sha256: string;
+            effect_free: boolean;
+            effective_ttl_seconds: number;
+            execution_external_effects: string[];
+            execution_signer_calls: string[];
+            execution_writes: string[];
+            /** @enum {string} */
+            operation: "issue_breakglass";
+            prerequisites: components["schemas"]["BreakglassPrerequisite"][];
+            preview_external_effects: string[];
+            preview_signer_calls: string[];
+            preview_writes: string[];
+            ready: boolean;
+            reason: string;
+            recovery_steps: string[];
+            request_fingerprint: string;
+            request_id: string;
+            requested_ttl_seconds: number;
+            required_permission: string;
+            subject: string;
+            verification_steps: string[];
+        };
         BreakglassIssueRequest: {
             approvals: string[];
             /** Format: byte */
@@ -7515,6 +7560,12 @@ export interface components {
             audit_event_type: string;
             bundle: components["schemas"]["BreakglassBundle"];
             reconciled: number;
+        };
+        BreakglassPrerequisite: {
+            detail: string;
+            id: string;
+            ready: boolean;
+            remediation?: string;
         };
         BreakglassReconcileRequest: {
             bundles: components["schemas"]["BreakglassBundle"][];
@@ -17198,6 +17249,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BreakglassCeremony"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewBreakglassIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BreakglassIssueIntentRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BreakglassIssuePlanPreview"];
                 };
             };
             /** @description client error */

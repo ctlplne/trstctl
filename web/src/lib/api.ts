@@ -97,6 +97,10 @@ import type {
   AuditFeedRequest,
   AuditEvent as GenAuditEvent,
   BreakglassBundle,
+  BreakglassCeremony,
+  BreakglassIssueExecutionRequest,
+  BreakglassIssueIntentRequest,
+  BreakglassIssuePlanPreview,
   BreakglassIssueRequest,
   BreakglassIssueResponse,
   BreakglassReconcileRequest,
@@ -782,6 +786,10 @@ export type {
   AuditFeedPreview,
   AuditFeedRequest,
   BreakglassBundle,
+  BreakglassCeremony,
+  BreakglassIssueExecutionRequest,
+  BreakglassIssueIntentRequest,
+  BreakglassIssuePlanPreview,
   BreakglassIssueRequest,
   BreakglassIssueResponse,
   BreakglassReconcileRequest,
@@ -2144,7 +2152,9 @@ export interface Api {
   resumeFleetReissuance(id: string, input: FleetReissuanceActionRequest): Promise<FleetReissuanceRun>;
   rollbackFleetReissuance(id: string, input: FleetReissuanceActionRequest): Promise<FleetReissuanceRun>;
   exportFleetReissuanceEvidence(id: string): Promise<FleetReissuanceEvidence>;
-  breakglassIssue(input: BreakglassIssueRequest): Promise<BreakglassIssueResponse>;
+  previewBreakglassIssue(input: BreakglassIssueIntentRequest): Promise<BreakglassIssuePlanPreview>;
+  startBreakglassIssueCeremony(input: BreakglassIssueIntentRequest): Promise<BreakglassCeremony>;
+  breakglassIssue(input: BreakglassIssueExecutionRequest): Promise<BreakglassIssueResponse>;
   breakglassReconcile(input: BreakglassReconcileRequest): Promise<BreakglassReconcileResponse>;
   previewCode(input: CodeSigningRequest): Promise<CodeSigningPreview>;
   previewCodeKeyless(input: CodeSigningKeylessRequest): Promise<CodeSigningPreview>;
@@ -2700,6 +2710,8 @@ const liveApi: Api = {
   rollbackFleetReissuance: (id, input) =>
     mutate<FleetReissuanceRun>("POST", `/api/v1/incidents/fleet-reissuance-runs/${encodeURIComponent(id)}/rollback`, input),
   exportFleetReissuanceEvidence: (id) => req<FleetReissuanceEvidence>(`/api/v1/incidents/fleet-reissuance-runs/${encodeURIComponent(id)}/evidence`),
+  previewBreakglassIssue: (input) => postRead<BreakglassIssuePlanPreview>("/api/v1/breakglass/issue-ceremonies/preview", input),
+  startBreakglassIssueCeremony: (input) => mutate<BreakglassCeremony>("POST", "/api/v1/breakglass/issue-ceremonies", input),
   breakglassIssue: (input) => mutate<BreakglassIssueResponse>("POST", "/api/v1/breakglass/issue", input),
   breakglassReconcile: (input) => mutate<BreakglassReconcileResponse>("POST", "/api/v1/breakglass/reconcile", input),
   previewCode: (input) => postRead<CodeSigningPreview>("/api/v1/code-signing/preview", input),

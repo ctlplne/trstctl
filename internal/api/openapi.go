@@ -976,6 +976,21 @@ func componentSchemas() map[string]*Schema {
 		"reason":      str(),
 		"ttl_seconds": {Type: "integer"},
 	}, "ceremony_id", "request_id", "subject", "csr_der", "reason")
+	breakglassPrerequisite := object(map[string]*Schema{
+		"id": str(), "ready": {Type: "boolean"}, "detail": str(), "remediation": str(),
+	}, "id", "ready", "detail")
+	breakglassIssuePlanPreview := object(map[string]*Schema{
+		"capability": {Type: "string", Enum: []string{"F34"}}, "operation": {Type: "string", Enum: []string{"issue_breakglass"}},
+		"ready": {Type: "boolean"}, "effect_free": {Type: "boolean"},
+		"request_id": str(), "subject": str(), "reason": str(), "requested_ttl_seconds": {Type: "integer"}, "effective_ttl_seconds": {Type: "integer"},
+		"csr_sha256": str(), "request_fingerprint": str(), "approval_threshold": {Type: "integer"}, "configured_operator_count": {Type: "integer"},
+		"required_permission": str(), "prerequisites": {Type: "array", Items: ref("BreakglassPrerequisite")}, "blockers": {Type: "array", Items: str()},
+		"preview_writes": {Type: "array", Items: str()}, "preview_external_effects": {Type: "array", Items: str()}, "preview_signer_calls": {Type: "array", Items: str()},
+		"execution_writes": {Type: "array", Items: str()}, "execution_external_effects": {Type: "array", Items: str()}, "execution_signer_calls": {Type: "array", Items: str()},
+		"recovery_steps": {Type: "array", Items: str()}, "verification_steps": {Type: "array", Items: str()},
+	}, "capability", "operation", "ready", "effect_free", "request_id", "subject", "reason", "requested_ttl_seconds", "effective_ttl_seconds",
+		"csr_sha256", "request_fingerprint", "approval_threshold", "configured_operator_count", "required_permission", "prerequisites", "blockers",
+		"preview_writes", "preview_external_effects", "preview_signer_calls", "execution_writes", "execution_external_effects", "execution_signer_calls", "recovery_steps", "verification_steps")
 	breakglassIssueResp := object(map[string]*Schema{
 		"bundle":           ref("BreakglassBundle"),
 		"reconciled":       {Type: "integer"},
@@ -6457,6 +6472,8 @@ func componentSchemas() map[string]*Schema {
 		"BreakglassIssueRequest":                   breakglassLegacyIssueReq,
 		"BreakglassIssueIntentRequest":             breakglassIssueIntentReq,
 		"BreakglassIssueExecutionRequest":          breakglassIssueExecutionReq,
+		"BreakglassPrerequisite":                   breakglassPrerequisite,
+		"BreakglassIssuePlanPreview":               breakglassIssuePlanPreview,
 		"BreakglassIssueResponse":                  breakglassIssueResp,
 		"BreakglassCeremony":                       breakglassCeremony,
 		"BreakglassRotationIntent":                 breakglassRotationIntent,

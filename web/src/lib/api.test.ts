@@ -624,6 +624,9 @@ describe("exported API surface census", () => {
       // resolving a signer, attesting identity, writing state, or publishing.
       "/api/v1/code-signing/preview",
       "/api/v1/code-signing/keyless/preview",
+      // F34: validates the exact emergency request and reports deployment-owned
+      // quorum/custody readiness without opening a ceremony or calling a signer.
+      "/api/v1/breakglass/issue-ceremonies/preview",
       // F67: validates the exact PKI custody/profile/CA plan but performs no
       // signing, event append, audit write, idempotency record, or egress.
       "/api/v1/secrets/pki/preview",

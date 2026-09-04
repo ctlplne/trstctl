@@ -213,7 +213,13 @@ access sessions list`, and `trstctl-cli access sessions get`.
 
 If the control plane is reachable during an incident, `POST /api/v1/breakglass/issue`
 serves online emergency issuance gated by an **m-of-n operator quorum**. The caller
-first opens an exact CSR/reason/TTL ceremony at
+first sends the exact CSR/reason/TTL to
+`POST /api/v1/breakglass/issue-ceremonies/preview`. This effect-free check opens no
+ceremony, appends no event, records no idempotency key, calls no signer, and performs
+no external request. It returns the request and CSR fingerprints, effective lifetime,
+safe deployment-readiness checklist, configured threshold and roster count (never
+operator names), exact execution effects, recovery steps, and verification steps.
+The caller then opens the unchanged request as a ceremony at
 `POST /api/v1/breakglass/issue-ceremonies`; distinct configured operators approve it
 with their own authenticated tokens, and the execution body contains only the
 ceremony id—not approver names. The server matches the roster to immutable
@@ -245,8 +251,13 @@ CAP-REM-02 owner self-remediation queue where bound owners can accept least-priv
 right-size recommendations without broad incident authority, a
 SIEM/SOAR/chat/ITSM response-dispatch form for Splunk, Jira, Slack, and ServiceNow, a
 ServiceNow ITSM ticket form that queues the Table API call through the outbox, and a
-**break-glass reconciliation** panel that folds offline-issued, quorum-approved bundles
-back into the event log (`/api/v1/breakglass/reconcile`). The self-service approvals inbox at
+guided **emergency certificate access** workspace. That workspace collects a structured
+request, shows the exact zero-effect server preview, reports deployment-owned signer and
+quorum readiness without exposing the operator roster, opens the request-bound ceremony,
+waits for independently authenticated approvals, executes only after quorum, and gives the
+operator a verification checklist. Its advanced recovery panel folds offline-issued,
+quorum-approved bundles back into the event log (`/api/v1/breakglass/reconcile`). The
+self-service approvals inbox at
 `/approvals` blocks self-approval of your own request. See
 [The web console](../web-console.md).
 
@@ -409,6 +420,11 @@ Online break-glass issue is API-served when the signer-backed break-glass issuer
 configured:
 
 ```bash
+curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST "https://trstctl.example.com/api/v1/breakglass/issue-ceremonies/preview" \
+  -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"request_id":"bg-001","subject":"recovery.svc.example.test","csr_der":"...base64-csr...","reason":"regional outage","ttl_seconds":900}'
+
 curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST "https://trstctl.example.com/api/v1/breakglass/issue-ceremonies" \
   -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   -H "Idempotency-Key: incident-2026-06-25-bg-ceremony" \

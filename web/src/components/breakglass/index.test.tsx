@@ -4,14 +4,16 @@ import { BreakGlassReconcile } from "@/components/breakglass";
 import type { CapabilityView } from "@/lib/api-types.gen";
 import { CapabilityFixtureProvider } from "@/lib/capabilities";
 
-const { breakglassIssue, breakglassReconcile } = vi.hoisted(() => ({
+const { previewBreakglassIssue, startBreakglassIssueCeremony, breakglassIssue, breakglassReconcile } = vi.hoisted(() => ({
+  previewBreakglassIssue: vi.fn(),
+  startBreakglassIssueCeremony: vi.fn(),
   breakglassIssue: vi.fn(),
   breakglassReconcile: vi.fn(),
 }));
 
 vi.mock("@/lib/api", async (orig) => {
   const actual = await orig<typeof import("@/lib/api")>();
-  return { ...actual, api: { ...actual.api, breakglassIssue, breakglassReconcile } };
+  return { ...actual, api: { ...actual.api, previewBreakglassIssue, startBreakglassIssueCeremony, breakglassIssue, breakglassReconcile } };
 });
 
 const unavailableDetail = "This operation is not mounted because its runtime dependency is not configured.";
@@ -42,6 +44,8 @@ const unavailableRuntime: CapabilityView = {
         scoped: [],
         denied: [],
         unavailable: [
+          { operation_id: "previewBreakglassIssue", code: "dependency_not_configured", detail: unavailableDetail },
+          { operation_id: "startBreakglassIssueCeremony", code: "dependency_not_configured", detail: unavailableDetail },
           { operation_id: "issueBreakglass", code: "dependency_not_configured", detail: unavailableDetail },
           { operation_id: "reconcileBreakglass", code: "dependency_not_configured", detail: unavailableDetail },
         ],
@@ -58,11 +62,16 @@ describe("break-glass runtime truth", () => {
       </CapabilityFixtureProvider>,
     );
 
-    fireEvent.change(screen.getByLabelText("Online issue request (JSON)"), { target: { value: '{"request_id":"bg-1"}' } });
+    fireEvent.change(screen.getByLabelText("Request ID"), { target: { value: "bg-1" } });
+    fireEvent.change(screen.getByLabelText("Emergency certificate subject"), { target: { value: "svc.example" } });
+    fireEvent.change(screen.getByLabelText("CSR (DER, base64)"), { target: { value: "Y3Ny" } });
+    fireEvent.change(screen.getByLabelText("Incident reason"), { target: { value: "regional outage" } });
     fireEvent.change(screen.getByLabelText("Offline-issued bundles (JSON)"), { target: { value: "[]" } });
-    expect(screen.getByRole("button", { name: "Issue break-glass certificate" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Review emergency request" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Reconcile break-glass bundles" })).toBeDisabled();
-    expect(screen.getAllByText(unavailableDetail)).toHaveLength(2);
+    expect(screen.getAllByText(unavailableDetail).length).toBeGreaterThanOrEqual(2);
+    expect(previewBreakglassIssue).not.toHaveBeenCalled();
+    expect(startBreakglassIssueCeremony).not.toHaveBeenCalled();
     expect(breakglassIssue).not.toHaveBeenCalled();
     expect(breakglassReconcile).not.toHaveBeenCalled();
   });

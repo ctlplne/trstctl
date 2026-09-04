@@ -1470,8 +1470,12 @@ describe("i18n boundary", () => {
       // operator labels keep that safety story inside the existing bundle
       // budget. Four obsolete raw-form source.* strings were removed. Machine-
       // authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "72fa05d5ca4c700dfe28b3553dc87f70ae13818c8332916eb9ec1aba2e8493d5",
-      "de-DE": "ba4d8894c3ac8e1d67fd7e61e7bf40d625d2f2c3b3209a018dd6d81ed67c8be6",
+      // F34 re-pin: the guided emergency workflow names the immutable
+      // request, deployment-owned custody boundary, zero-effect preview,
+      // independent quorum, execution effects, recovery, and audit proof.
+      // Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW.
+      "es-ES": "5eedbedd38c1f27ed4bec2a392b51963af8de3e6659b07a26e3575cbc8e223c6",
+      "de-DE": "d20f214eda87522fdbbedd6eeb1964bdf8df3bb7b14292152904d2c4733e0739",
     });
   });
 

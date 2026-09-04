@@ -11,8 +11,9 @@ import (
 func TestBreakglassLiveOpenAPIRequestsCannotNominateApprovers(t *testing.T) {
 	doc := New(nil, nil, nil).Spec()
 	wantRefs := map[string]string{
-		"/api/v1/breakglass/issue-ceremonies": "#/components/schemas/BreakglassIssueIntentRequest",
-		"/api/v1/breakglass/issue":            "#/components/schemas/BreakglassIssueExecutionRequest",
+		"/api/v1/breakglass/issue-ceremonies/preview": "#/components/schemas/BreakglassIssueIntentRequest",
+		"/api/v1/breakglass/issue-ceremonies":         "#/components/schemas/BreakglassIssueIntentRequest",
+		"/api/v1/breakglass/issue":                    "#/components/schemas/BreakglassIssueExecutionRequest",
 	}
 	for path, wantRef := range wantRefs {
 		op := doc.Paths[path]["post"]
@@ -44,6 +45,33 @@ func TestBreakglassLiveOpenAPIRequestsCannotNominateApprovers(t *testing.T) {
 					t.Fatalf("legacy caller-approval schema is still live on %s %s", method, path)
 				}
 			}
+		}
+	}
+}
+
+func TestBreakglassIssuePreviewContractExplainsConfigurationAndEffects(t *testing.T) {
+	doc := New(nil, nil, nil).Spec()
+	op := doc.Paths["/api/v1/breakglass/issue-ceremonies/preview"]["post"]
+	if op == nil || op.OperationID != "previewBreakglassIssue" || op.XPermission != "certs:issue" {
+		t.Fatalf("break-glass preview route is incomplete: %+v", op)
+	}
+	for _, route := range New(nil, nil, nil).routes() {
+		if route.opID == "previewBreakglassIssue" && route.mutation {
+			t.Fatal("break-glass preview was registered as a mutation")
+		}
+	}
+	schema := doc.Components.Schemas["BreakglassIssuePlanPreview"]
+	if schema == nil {
+		t.Fatal("missing BreakglassIssuePlanPreview schema")
+	}
+	for _, field := range []string{
+		"capability", "operation", "ready", "effect_free", "request_fingerprint", "csr_sha256",
+		"approval_threshold", "configured_operator_count", "prerequisites", "blockers",
+		"preview_writes", "preview_external_effects", "preview_signer_calls", "execution_writes",
+		"execution_external_effects", "execution_signer_calls", "recovery_steps", "verification_steps",
+	} {
+		if schema.Properties[field] == nil {
+			t.Errorf("BreakglassIssuePlanPreview missing %s", field)
 		}
 	}
 }

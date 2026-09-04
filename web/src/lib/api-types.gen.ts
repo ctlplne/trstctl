@@ -1117,6 +1117,33 @@ export interface BreakglassIssueIntentRequest {
   ttl_seconds?: number;
 }
 
+export interface BreakglassIssuePlanPreview {
+  approval_threshold: number;
+  blockers: string[];
+  capability: "F34";
+  configured_operator_count: number;
+  csr_sha256: string;
+  effect_free: boolean;
+  effective_ttl_seconds: number;
+  execution_external_effects: string[];
+  execution_signer_calls: string[];
+  execution_writes: string[];
+  operation: "issue_breakglass";
+  prerequisites: BreakglassPrerequisite[];
+  preview_external_effects: string[];
+  preview_signer_calls: string[];
+  preview_writes: string[];
+  ready: boolean;
+  reason: string;
+  recovery_steps: string[];
+  request_fingerprint: string;
+  request_id: string;
+  requested_ttl_seconds: number;
+  required_permission: string;
+  subject: string;
+  verification_steps: string[];
+}
+
 export interface BreakglassIssueRequest {
   approvals: string[];
   csr_der: string;
@@ -1130,6 +1157,13 @@ export interface BreakglassIssueResponse {
   audit_event_type: string;
   bundle: BreakglassBundle;
   reconciled: number;
+}
+
+export interface BreakglassPrerequisite {
+  detail: string;
+  id: string;
+  ready: boolean;
+  remediation?: string;
 }
 
 export interface BreakglassReconcileRequest {

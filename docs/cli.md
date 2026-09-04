@@ -176,7 +176,7 @@ exhaustive subcommand list:
 | `ai`                              | AI assistant status, question answering, root-cause analysis (`status` · `query` · `rca`)                                                                                                                                                                                                                           |
 | `approval-requests`               | Review immutable certificate, secret, and managed-key operation requests within the caller's real permission domains (`list` · `approve` · `deny`)                                                                                                                                                                  |
 | `audit`                           | Query/export the signed audit log, pin public verification keys, verify every saved format offline, and configure native collector feeds (`events` · `export` · `verification-keys` · `verify` · `feeds set` · `feeds list`)                                                                                        |
-| `breakglass`                      | Ceremony-gated online break-glass issuance, rotation, cross-signing, and offline-bundle reconciliation (`issue-ceremony` · `issue` · `rotation-ceremony` · `rotate` · `cross-sign-ceremony` · `cross-sign` · `reconcile`)                                                                                           |
+| `breakglass`                      | Effect-free emergency-request preview, ceremony-gated online issuance, rotation, cross-signing, and offline-bundle reconciliation (`issue-preview` · `issue-ceremony` · `issue` · `rotation-ceremony` · `rotate` · `cross-sign-ceremony` · `cross-sign` · `reconcile`)                                                                        |
 | `broker agent-identities`         | Issue a policy-gated AI/MCP agent identity (`issue`)                                                                                                                                                                                                                                                                |
 | `ca ceremonies`                   | Effect-free review, start, inspect, and approve m-of-n CA key ceremonies (`preview` · `start` · `get` · `approve`)                                                                                                                                                                                                  |
 | `ca authorities`                  | Private CA authority lifecycle — create/import roots and intermediates, preview/activate rotation, rekey, cross-sign, issue leaf certs (`list` · `create-root` · `import-offline-root` · `import-existing` · `create-intermediate` · `rotate-preview` · `rotate` · `rekey` · `cross-sign` · `issue`)                |
@@ -638,6 +638,9 @@ trstctl-cli ca authorities cross-sign <issuer-authority-id> -f ca-cross-sign.jso
 # root keys never enter these files or trstctl.
 trstctl-cli ca authorities rekey-offline-root <offline-root-authority-id> -f offline-root-rekey.json
 trstctl-cli ca authorities import-offline-cross-sign <successor-authority-id> -f offline-target-cross.json
+
+# Review the exact request and deployment-owned quorum/custody readiness first.
+trstctl-cli breakglass issue-preview -f breakglass-issue-intent.json
 
 # Online break-glass uses an exact intent ceremony and authenticated CA approvals;
 # the execution body carries ceremony_id but never approver names.

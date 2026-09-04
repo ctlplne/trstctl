@@ -5774,6 +5774,121 @@ export const messages = {
     defaultMessage: "Issued and audited {count} break-glass bundle.",
     description: "Success status after issuing an online break-glass bundle.",
   },
+  "breakglass.workspace.title": { defaultMessage: "Emergency certificate access", description: "Title for the guided break-glass workspace." },
+  "breakglass.workspace.description": {
+    defaultMessage: "Review one short-lived emergency certificate, collect a real operator quorum, issue it, and keep an audit trail.",
+    description: "Plain-language break-glass workspace summary.",
+  },
+  "breakglass.progress": { defaultMessage: "Emergency issuance progress", description: "Accessible progress label for break-glass issuance." },
+  "breakglass.step.configure": { defaultMessage: "Describe the emergency", description: "Break-glass configuration step label." },
+  "breakglass.step.configureHelp": {
+    defaultMessage: "Name the incident, certificate, reason, and shortest useful lifetime.",
+    description: "Break-glass configuration step help.",
+  },
+  "breakglass.step.review": { defaultMessage: "Review safety", description: "Break-glass preview step label." },
+  "breakglass.step.reviewHelp": {
+    defaultMessage: "The server checks the exact request and deployment-owned emergency setup without changing anything.",
+    description: "Break-glass preview step help.",
+  },
+  "breakglass.step.approve": { defaultMessage: "Collect approvals", description: "Break-glass approval step label." },
+  "breakglass.step.approveHelp": {
+    defaultMessage: "Different configured operators approve the exact ceremony with their own authenticated sessions.",
+    description: "Break-glass approval step help.",
+  },
+  "breakglass.step.verify": { defaultMessage: "Verify and close", description: "Break-glass verification step label." },
+  "breakglass.step.verifyHelp": {
+    defaultMessage: "Verify the signed bundle, audit event, expiry, and post-incident cleanup.",
+    description: "Break-glass verification step help.",
+  },
+  "breakglass.configure.boundaryTitle": {
+    defaultMessage: "Security setup stays outside the browser",
+    description: "Heading for the break-glass custody boundary.",
+  },
+  "breakglass.configure.boundaryHelp": {
+    defaultMessage:
+      "Signer custody and the operator roster are deployment settings. This screen reports whether they are ready; it cannot change or weaken them.",
+    description: "Explanation of the break-glass custody boundary.",
+  },
+  "breakglass.request.id": { defaultMessage: "Request ID", description: "Break-glass incident request identifier label." },
+  "breakglass.request.idPlaceholder": { defaultMessage: "INC-2026-0042", description: "Example break-glass incident request identifier." },
+  "breakglass.request.subject": { defaultMessage: "Emergency certificate subject", description: "Break-glass certificate subject label." },
+  "breakglass.request.subjectPlaceholder": { defaultMessage: "recovery-api.prod.example", description: "Example break-glass certificate subject." },
+  "breakglass.request.reason": { defaultMessage: "Incident reason", description: "Break-glass incident reason label." },
+  "breakglass.request.reasonPlaceholder": {
+    defaultMessage: "Production CA unavailable during regional recovery",
+    description: "Example break-glass incident reason.",
+  },
+  "breakglass.request.ttl": { defaultMessage: "Lifetime (seconds)", description: "Break-glass certificate lifetime label." },
+  "breakglass.request.ttlHelp": {
+    defaultMessage: "Use the shortest lifetime that can restore service. Maximum: 86,400 seconds.",
+    description: "Break-glass lifetime guidance.",
+  },
+  "breakglass.request.csr": { defaultMessage: "CSR (DER, base64)", description: "Break-glass CSR input label." },
+  "breakglass.request.csrPlaceholder": { defaultMessage: "MIIB...", description: "Abbreviated base64 DER CSR placeholder." },
+  "breakglass.request.csrHelp": {
+    defaultMessage: "Paste only the base64 DER request. The private key must stay on the recovering workload.",
+    description: "Break-glass CSR custody guidance.",
+  },
+  "breakglass.review.action": { defaultMessage: "Review emergency request", description: "Action that requests an effect-free break-glass preview." },
+  "breakglass.review.busy": { defaultMessage: "Reviewing request…", description: "Busy label while loading the break-glass preview." },
+  "breakglass.review.failed": { defaultMessage: "The emergency request could not be reviewed.", description: "Fallback break-glass preview error." },
+  "breakglass.review.noChanges": { defaultMessage: "No state changed during this review.", description: "Zero-effect break-glass preview evidence." },
+  "breakglass.review.quorum": {
+    defaultMessage: "{threshold}-person quorum from {count} configured operators",
+    description: "Break-glass quorum summary without exposing operator identities.",
+  },
+  "breakglass.review.ready": { defaultMessage: "Ready", description: "Ready break-glass prerequisite status." },
+  "breakglass.review.blocked": { defaultMessage: "Not ready", description: "Blocked break-glass prerequisite status." },
+  "breakglass.review.requestFingerprint": { defaultMessage: "Exact request fingerprint", description: "Break-glass request fingerprint label." },
+  "breakglass.review.csrFingerprint": { defaultMessage: "CSR fingerprint", description: "Break-glass CSR fingerprint label." },
+  "breakglass.review.executionTitle": { defaultMessage: "What execution will do", description: "Break-glass execution effect summary title." },
+  "breakglass.review.writes": { defaultMessage: "Records written", description: "Break-glass execution writes label." },
+  "breakglass.review.signerCalls": { defaultMessage: "Signer work", description: "Break-glass signer calls label." },
+  "breakglass.review.recovery": { defaultMessage: "If it cannot continue", description: "Break-glass recovery steps label." },
+  "breakglass.review.verify": { defaultMessage: "How to verify it", description: "Break-glass verification steps label." },
+  "breakglass.ceremony.open": { defaultMessage: "Open quorum ceremony", description: "Action that starts the exact break-glass ceremony." },
+  "breakglass.ceremony.opening": { defaultMessage: "Opening ceremony…", description: "Busy label while opening the break-glass ceremony." },
+  "breakglass.ceremony.failed": {
+    defaultMessage: "The quorum ceremony could not be opened.",
+    description: "Fallback error for opening a break-glass ceremony.",
+  },
+  "breakglass.ceremony.id": { defaultMessage: "Ceremony ID", description: "Break-glass ceremony identifier label." },
+  "breakglass.ceremony.progress": { defaultMessage: "{approvals} of {threshold} approvals recorded", description: "Break-glass approval progress." },
+  "breakglass.ceremony.help": {
+    defaultMessage:
+      "Share this ceremony ID with configured operators. Each person approves it from their own authenticated session; you cannot approve for them here.",
+    description: "Break-glass independent approval guidance.",
+  },
+  "breakglass.ceremony.refresh": { defaultMessage: "Refresh approvals", description: "Action that reloads break-glass ceremony status." },
+  "breakglass.ceremony.refreshing": { defaultMessage: "Refreshing approvals…", description: "Busy label while reloading break-glass approvals." },
+  "breakglass.ceremony.refreshFailed": {
+    defaultMessage: "Approval status could not be refreshed.",
+    description: "Fallback error while reloading break-glass approvals.",
+  },
+  "breakglass.issue.execute": { defaultMessage: "Issue emergency certificate", description: "Action that executes an approved break-glass request." },
+  "breakglass.issue.audit": { defaultMessage: "Audit evidence: {event}", description: "Break-glass audit event confirmation." },
+  "breakglass.startAgain": { defaultMessage: "Start another emergency request", description: "Reset action after break-glass issuance." },
+  "breakglass.reconcile.title": { defaultMessage: "Recover offline-issued certificates", description: "Offline break-glass reconciliation panel title." },
+  "breakglass.reconcile.description": {
+    defaultMessage: "When the control plane returns, verify signed offline bundles and add them to the same tenant audit chain.",
+    description: "Offline break-glass reconciliation summary.",
+  },
+  "breakglass.reconcile.label": { defaultMessage: "Offline-issued bundles (JSON)", description: "Offline break-glass bundle input label." },
+  "breakglass.reconcile.help": {
+    defaultMessage: "Advanced recovery input. Bundle signatures are verified before any audit event is accepted.",
+    description: "Offline break-glass bundle input help.",
+  },
+  "breakglass.reconcile.action": { defaultMessage: "Reconcile break-glass bundles", description: "Offline break-glass reconciliation action." },
+  "breakglass.reconcile.busy": { defaultMessage: "Reconciling…", description: "Busy label during break-glass reconciliation." },
+  "breakglass.reconcile.invalid": {
+    defaultMessage: "Bundles must be one JSON object or a JSON array.",
+    description: "Offline break-glass JSON validation error.",
+  },
+  "breakglass.reconcile.failed": { defaultMessage: "Reconciliation failed", description: "Offline break-glass reconciliation error title." },
+  "breakglass.reconcile.status": {
+    defaultMessage: "Reconciled {count} break-glass bundles into the event log.",
+    description: "Offline break-glass reconciliation success.",
+  },
   "certificates.health.stateCritical": {
     defaultMessage: "critical",
     description: "Critical certificate health state label.",
@@ -19044,14 +19159,6 @@ export const messages = {
     defaultMessage: "Blast radius explorer",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/graph/index.tsx.",
   },
-  "source.break.glass.bundle.37f85fd7cf": {
-    defaultMessage: "break-glass bundle",
-    description: "DA-14 sweep: migrated hardcoded copy from src/components/breakglass/index.tsx.",
-  },
-  "source.break.glass.reconciliation.7351236672": {
-    defaultMessage: "Break-glass reconciliation",
-    description: "DA-14 sweep: migrated hardcoded copy from src/components/breakglass/index.tsx.",
-  },
   "source.browse.by.folder.2bd11442a2": {
     defaultMessage: "Browse by folder",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/secrets/index.tsx.",
@@ -19290,10 +19397,6 @@ export const messages = {
     defaultMessage: "hmac:",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/secrets/transit.tsx.",
   },
-  "source.into.the.event.log.5f4b11117b": {
-    defaultMessage: "into the event log.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/components/breakglass/index.tsx.",
-  },
   "source.issuance.profiles.b2e6724c77": {
     defaultMessage: "Issuance profiles",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/ca/index.tsx.",
@@ -19450,10 +19553,6 @@ export const messages = {
     defaultMessage: "offline",
     description: "DA-14 sweep: migrated hardcoded copy from src/lib/statusVocab.ts.",
   },
-  "source.offline.issued.bundles.json.58401e65e9": {
-    defaultMessage: "Offline-issued bundles (JSON)",
-    description: "DA-14 sweep: migrated hardcoded copy from src/components/breakglass/index.tsx.",
-  },
   "source.onboarding.carousel.282df6ade1": {
     defaultMessage: "Onboarding carousel",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/wizard/StepShell.tsx.",
@@ -19549,14 +19648,6 @@ export const messages = {
   "source.recent.deployments.df97a4e11f": {
     defaultMessage: "Recent deployments",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/certs/index.tsx.",
-  },
-  "source.reconcile.failed.45e781836d": {
-    defaultMessage: "Reconcile failed",
-    description: "DA-14 sweep: migrated hardcoded copy from src/components/breakglass/index.tsx.",
-  },
-  "source.reconciled.2d5676cba2": {
-    defaultMessage: "Reconciled",
-    description: "DA-14 sweep: migrated hardcoded copy from src/components/breakglass/index.tsx.",
   },
   "source.recover.0c5327fd45": {
     defaultMessage: "Recover",
@@ -25068,14 +25159,6 @@ export const messages = {
   "source.read.only.4fed3970dc": {
     defaultMessage: "read-only",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Assistant.tsx:233.",
-  },
-  "source.reconcile.break.glass.bundles.b664752d57": {
-    defaultMessage: "Reconcile break-glass bundles",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/components/breakglass/index.tsx:119.",
-  },
-  "source.reconciling.8adbed64b5": {
-    defaultMessage: "Reconciling…",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/components/breakglass/index.tsx:119.",
   },
   "source.recorded.c7175fa7a0": {
     defaultMessage: "Recorded",

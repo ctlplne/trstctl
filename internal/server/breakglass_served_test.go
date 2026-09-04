@@ -147,7 +147,61 @@ func TestServedOnlineBreakglassIssueRequiresQuorumAndRecordsAuditChain(t *testin
 		"reason":      "regional CA outage while production recovery needs one short-lived certificate",
 		"ttl_seconds": 900,
 	}
-	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/issue-ceremonies", token, "trace-006-breakglass-ceremony", request)
+	eventHeadBeforePreview, err := h.log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatalf("read event head before preview: %v", err)
+	}
+	invalidRequest := map[string]any{
+		"request_id":  request["request_id"],
+		"subject":     request["subject"],
+		"csr_der":     []byte("not-a-signed-pkcs10-request"),
+		"reason":      request["reason"],
+		"ttl_seconds": request["ttl_seconds"],
+	}
+	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/issue-ceremonies/preview", token, "", invalidRequest)
+	if code != http.StatusBadRequest || !bytes.Contains(body, []byte("signed PKCS#10")) {
+		t.Fatalf("preview malformed CSR = %d body=%s; want fail-closed 400", code, body)
+	}
+	if eventHeadAfterInvalid, lastErr := h.log.LastSequence(t.Context()); lastErr != nil || eventHeadAfterInvalid != eventHeadBeforePreview {
+		t.Fatalf("rejected break-glass preview changed event head: before=%d after=%d err=%v", eventHeadBeforePreview, eventHeadAfterInvalid, lastErr)
+	}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/issue-ceremonies/preview", token, "", request)
+	if code != http.StatusOK {
+		t.Fatalf("preview online break-glass issue = %d body=%s; want 200", code, body)
+	}
+	var preview struct {
+		Capability              string   `json:"capability"`
+		Operation               string   `json:"operation"`
+		Ready                   bool     `json:"ready"`
+		EffectFree              bool     `json:"effect_free"`
+		RequestFingerprint      string   `json:"request_fingerprint"`
+		CSRSHA256               string   `json:"csr_sha256"`
+		ApprovalThreshold       int      `json:"approval_threshold"`
+		ConfiguredOperatorCount int      `json:"configured_operator_count"`
+		PreviewWrites           []string `json:"preview_writes"`
+		PreviewExternalEffects  []string `json:"preview_external_effects"`
+		PreviewSignerCalls      []string `json:"preview_signer_calls"`
+		ExecutionWrites         []string `json:"execution_writes"`
+		ExecutionSignerCalls    []string `json:"execution_signer_calls"`
+		RecoverySteps           []string `json:"recovery_steps"`
+		VerificationSteps       []string `json:"verification_steps"`
+	}
+	if err := json.Unmarshal(body, &preview); err != nil {
+		t.Fatalf("decode break-glass preview: %v body=%s", err, body)
+	}
+	if preview.Capability != "F34" || preview.Operation != "issue_breakglass" || !preview.Ready || !preview.EffectFree ||
+		preview.RequestFingerprint == "" || preview.CSRSHA256 == "" || preview.ApprovalThreshold != 2 || preview.ConfiguredOperatorCount != 3 {
+		t.Fatalf("break-glass preview identity/readiness is incomplete: %+v", preview)
+	}
+	if preview.PreviewWrites == nil || len(preview.PreviewWrites) != 0 || preview.PreviewExternalEffects == nil ||
+		len(preview.PreviewExternalEffects) != 0 || preview.PreviewSignerCalls == nil || len(preview.PreviewSignerCalls) != 0 ||
+		len(preview.ExecutionWrites) < 2 || len(preview.ExecutionSignerCalls) == 0 || len(preview.RecoverySteps) == 0 || len(preview.VerificationSteps) == 0 {
+		t.Fatalf("break-glass preview omitted zero-effect or lifecycle evidence: %+v", preview)
+	}
+	if eventHeadAfterPreview, lastErr := h.log.LastSequence(t.Context()); lastErr != nil || eventHeadAfterPreview != eventHeadBeforePreview {
+		t.Fatalf("effect-free break-glass preview changed event head: before=%d after=%d err=%v", eventHeadBeforePreview, eventHeadAfterPreview, lastErr)
+	}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/breakglass/issue-ceremonies", token, "trace-006-breakglass-ceremony", request)
 	if code != http.StatusCreated {
 		t.Fatalf("start online break-glass ceremony = %d body=%s", code, body)
 	}

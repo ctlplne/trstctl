@@ -1165,6 +1165,25 @@ func TestBreakglassIssueCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	}
 }
 
+func TestBreakglassIssuePreviewCommandIsEffectFreePOST(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, 200, `{"capability":"F34","operation":"issue_breakglass","ready":true,"effect_free":true}`, &cap)
+	body := `{"request_id":"bg-online-1","subject":"svc.example","csr_der":"Y3Ny","reason":"restore production","ttl_seconds":900}`
+	code, _, _ := run(t, []string{"breakglass", "issue-preview", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
+	if code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	if cap.Method != "POST" || cap.Path != "/api/v1/breakglass/issue-ceremonies/preview" {
+		t.Errorf("request = %s %s", cap.Method, cap.Path)
+	}
+	if strings.TrimSpace(string(cap.Body)) != body {
+		t.Errorf("body = %q, want %q", cap.Body, body)
+	}
+	if cap.Header.Get("Idempotency-Key") != "" {
+		t.Error("effect-free break-glass preview must not send a mutation idempotency key")
+	}
+}
+
 func TestServiceNowTicketCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 202, `{"id":"ticket-1","status":"queued"}`, &cap)

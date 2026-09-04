@@ -93,6 +93,10 @@ type configuredBreakglassRuntime struct {
 	verifiers     []breakglassVerifier
 }
 
+func (r *configuredBreakglassRuntime) BreakglassConfiguration() api.BreakglassConfiguration {
+	return api.BreakglassConfiguration{ApprovalThreshold: r.threshold, ConfiguredOperatorCount: len(r.operators)}
+}
+
 // breakglassRotationFromConfig is the explicit production assembly seam. It
 // binds the configured certificate and public verifier to one persisted signer
 // handle, then replays every completed rotation before the routes are exposed.

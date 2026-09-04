@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/breakglass"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // ErrBreakglassInvalidBundle marks a signed emergency bundle that did not verify
@@ -39,7 +40,16 @@ type BreakglassIssuer interface {
 // approval route, which attributes ca.ceremony.approved to the authenticated
 // principal.
 type BreakglassCeremonyService interface {
+	BreakglassConfiguration() BreakglassConfiguration
 	StartBreakglassIssueCeremony(ctx context.Context, tenantID string, req breakglass.EmergencyRequest, ttl time.Duration) (BreakglassCeremony, error)
+}
+
+// BreakglassConfiguration is the non-secret part of deployment-owned emergency
+// custody configuration. Operator identities, signer handles, certificate bytes,
+// and file paths never cross this boundary.
+type BreakglassConfiguration struct {
+	ApprovalThreshold       int
+	ConfiguredOperatorCount int
 }
 
 // BreakglassRotationService performs signer-backed emergency-CA rotation and
@@ -161,6 +171,103 @@ type breakglassIssueResponse struct {
 	Bundle         breakglass.Bundle `json:"bundle"`
 	Reconciled     int               `json:"reconciled"`
 	AuditEventType string            `json:"audit_event_type"`
+}
+
+type BreakglassPrerequisite struct {
+	ID          string `json:"id"`
+	Ready       bool   `json:"ready"`
+	Detail      string `json:"detail"`
+	Remediation string `json:"remediation,omitempty"`
+}
+
+// BreakglassIssuePlanPreview is the read-only answer to "is this exact
+// emergency request safe and runnable?" It reports deployment readiness without
+// disclosing the operator roster or signer custody details. Execution revalidates
+// the same request when it opens and consumes the request-bound ceremony.
+type BreakglassIssuePlanPreview struct {
+	Capability               string                   `json:"capability"`
+	Operation                string                   `json:"operation"`
+	Ready                    bool                     `json:"ready"`
+	EffectFree               bool                     `json:"effect_free"`
+	RequestID                string                   `json:"request_id"`
+	Subject                  string                   `json:"subject"`
+	Reason                   string                   `json:"reason"`
+	RequestedTTLSeconds      int                      `json:"requested_ttl_seconds"`
+	EffectiveTTLSeconds      int64                    `json:"effective_ttl_seconds"`
+	CSRSHA256                string                   `json:"csr_sha256"`
+	RequestFingerprint       string                   `json:"request_fingerprint"`
+	ApprovalThreshold        int                      `json:"approval_threshold"`
+	ConfiguredOperatorCount  int                      `json:"configured_operator_count"`
+	RequiredPermission       string                   `json:"required_permission"`
+	Prerequisites            []BreakglassPrerequisite `json:"prerequisites"`
+	Blockers                 []string                 `json:"blockers"`
+	PreviewWrites            []string                 `json:"preview_writes"`
+	PreviewExternalEffects   []string                 `json:"preview_external_effects"`
+	PreviewSignerCalls       []string                 `json:"preview_signer_calls"`
+	ExecutionWrites          []string                 `json:"execution_writes"`
+	ExecutionExternalEffects []string                 `json:"execution_external_effects"`
+	ExecutionSignerCalls     []string                 `json:"execution_signer_calls"`
+	RecoverySteps            []string                 `json:"recovery_steps"`
+	VerificationSteps        []string                 `json:"verification_steps"`
+}
+
+// previewBreakglassIssue validates and explains one exact online emergency
+// request. It opens no ceremony, records no idempotency key, appends no event,
+// calls no signer, and contacts no external system.
+func (a *API) previewBreakglassIssue(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	var req breakglassIssueRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	if strings.TrimSpace(req.CeremonyID) != "" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "ceremony_id must be omitted during preview"))
+		return
+	}
+	emergency, ttl, err := validateBreakglassIssueRequest(req, false)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	configuration := BreakglassConfiguration{}
+	if a.breakglassCeremonies != nil {
+		configuration = a.breakglassCeremonies.BreakglassConfiguration()
+	}
+	onlineReady := a.breakglassCeremonies != nil && a.breakglassIssuer != nil
+	rosterReady := configuration.ApprovalThreshold >= 2 && configuration.ConfiguredOperatorCount >= configuration.ApprovalThreshold
+	blockers := make([]string, 0, 2)
+	if !onlineReady {
+		blockers = append(blockers, "Online break-glass custody is not configured; enable the purpose-constrained signer and ceremony runtime at startup.")
+	}
+	if !rosterReady {
+		blockers = append(blockers, "The deployment needs at least two distinct configured operators and a satisfiable approval threshold.")
+	}
+	fingerprint := strings.TrimPrefix(breakglass.IssuePurpose(tenantID, emergency, ttl), "breakglass-issue:")
+	preview := BreakglassIssuePlanPreview{
+		Capability: "F34", Operation: "issue_breakglass", Ready: onlineReady && rosterReady, EffectFree: true,
+		RequestID: emergency.ID, Subject: emergency.Subject, Reason: emergency.Reason,
+		RequestedTTLSeconds: req.TTLSeconds, EffectiveTTLSeconds: int64(ttl / time.Second),
+		CSRSHA256: crypto.SHA256Hex(emergency.CSRDer), RequestFingerprint: "sha256:" + fingerprint,
+		ApprovalThreshold: configuration.ApprovalThreshold, ConfiguredOperatorCount: configuration.ConfiguredOperatorCount,
+		RequiredPermission: "certs:issue",
+		Prerequisites: []BreakglassPrerequisite{
+			{ID: "online_signer", Ready: onlineReady, Detail: "A purpose-constrained signer, pinned emergency CA, event log, and ceremony runtime must be configured at startup.", Remediation: "Set break-glass custody configuration, then restart and rerun this preview."},
+			{ID: "operator_roster", Ready: rosterReady, Detail: fmt.Sprintf("%d configured operators can satisfy a %d-person quorum.", configuration.ConfiguredOperatorCount, configuration.ApprovalThreshold), Remediation: "Configure at least two distinct operator subjects and a threshold the roster can satisfy."},
+			{ID: "request_binding", Ready: true, Detail: "The ceremony will be bound to this tenant, request, CSR digest, reason, and lifetime."},
+		},
+		Blockers: blockers, PreviewWrites: []string{}, PreviewExternalEffects: []string{}, PreviewSignerCalls: []string{},
+		ExecutionWrites:          []string{"Append and project one exact ceremony record.", "Consume the approved ceremony and append breakglass.issued before returning."},
+		ExecutionExternalEffects: []string{},
+		ExecutionSignerCalls:     []string{"Ask the isolated signer to issue one short-lived certificate only after quorum."},
+		RecoverySteps:            []string{"Do not execute if the request fingerprint no longer matches the incident.", "If quorum cannot be reached, leave the ceremony unconsumed and use the documented offline procedure.", "After recovery, reconcile and audit every offline-issued bundle."},
+		VerificationSteps:        []string{"Verify the returned signed bundle against the pinned emergency CA.", "Confirm breakglass.issued is present in the tenant audit chain.", "Retire emergency access before its short lifetime ends and complete the post-incident review."},
+	}
+	a.writeJSON(w, http.StatusOK, preview)
 }
 
 // issueBreakglass is the online execution half of the break-glass ceremony. The
@@ -376,6 +483,9 @@ func validateBreakglassIssueRequest(req breakglassIssueRequest, requireCeremony 
 	}
 	if len(req.CSRDer) == 0 {
 		return breakglass.EmergencyRequest{}, 0, errStatus(http.StatusBadRequest, "csr_der is required")
+	}
+	if err := crypto.VerifyCertificateRequest(req.CSRDer); err != nil {
+		return breakglass.EmergencyRequest{}, 0, errStatus(http.StatusBadRequest, "csr_der must be a signed PKCS#10 certificate request")
 	}
 	ttl := time.Duration(req.TTLSeconds) * time.Second
 	if ttl <= 0 {

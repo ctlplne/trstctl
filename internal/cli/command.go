@@ -301,6 +301,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"remediation", "owner-actions", "list"}, Method: "GET", Path: "/api/v1/remediation/owner-actions", Query: []string{"owner_id"}, Summary: "List owner-driven self-remediation actions"},
 	{Name: []string{"remediation", "owner-actions", "accept"}, Method: "POST", Path: "/api/v1/remediation/owner-actions/{id}/accept", Body: bodyFile, Summary: "Accept an owner-driven self-remediation action"},
 	{Name: []string{"itsm", "servicenow", "tickets", "create"}, Method: "POST", Path: "/api/v1/itsm/servicenow/tickets", Body: bodyFile, Summary: "Queue a ServiceNow ITSM ticket through the outbox"},
+	{Name: []string{"breakglass", "issue-preview"}, Method: "POST", Path: "/api/v1/breakglass/issue-ceremonies/preview", Body: bodyFile, ReadOnly: true, Summary: "Review emergency request and deployment quorum readiness without effects"},
 	{Name: []string{"breakglass", "issue-ceremony"}, Method: "POST", Path: "/api/v1/breakglass/issue-ceremonies", Body: bodyFile, Summary: "Start an exact-request-bound online break-glass ceremony"},
 	{Name: []string{"breakglass", "issue"}, Method: "POST", Path: "/api/v1/breakglass/issue", Body: bodyFile, Summary: "Issue and audit a ceremony-approved online break-glass certificate"},
 	{Name: []string{"breakglass", "rotation-ceremony"}, Method: "POST", Path: "/api/v1/breakglass/rotation-ceremonies", Body: bodyFile, Summary: "Start an exact break-glass CA rotation ceremony"},

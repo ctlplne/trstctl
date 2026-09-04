@@ -4552,6 +4552,145 @@
         ],
         "type": "object"
       },
+      "BreakglassIssuePlanPreview": {
+        "properties": {
+          "approval_threshold": {
+            "type": "integer"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "enum": [
+              "F34"
+            ],
+            "type": "string"
+          },
+          "configured_operator_count": {
+            "type": "integer"
+          },
+          "csr_sha256": {
+            "type": "string"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "effective_ttl_seconds": {
+            "type": "integer"
+          },
+          "execution_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execution_signer_calls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "execution_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "operation": {
+            "enum": [
+              "issue_breakglass"
+            ],
+            "type": "string"
+          },
+          "prerequisites": {
+            "items": {
+              "$ref": "#/components/schemas/BreakglassPrerequisite"
+            },
+            "type": "array"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_signer_calls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "request_fingerprint": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "requested_ttl_seconds": {
+            "type": "integer"
+          },
+          "required_permission": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "verification_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "operation",
+          "ready",
+          "effect_free",
+          "request_id",
+          "subject",
+          "reason",
+          "requested_ttl_seconds",
+          "effective_ttl_seconds",
+          "csr_sha256",
+          "request_fingerprint",
+          "approval_threshold",
+          "configured_operator_count",
+          "required_permission",
+          "prerequisites",
+          "blockers",
+          "preview_writes",
+          "preview_external_effects",
+          "preview_signer_calls",
+          "execution_writes",
+          "execution_external_effects",
+          "execution_signer_calls",
+          "recovery_steps",
+          "verification_steps"
+        ],
+        "type": "object"
+      },
       "BreakglassIssueRequest": {
         "properties": {
           "approvals": {
@@ -4602,6 +4741,28 @@
           "bundle",
           "reconciled",
           "audit_event_type"
+        ],
+        "type": "object"
+      },
+      "BreakglassPrerequisite": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "remediation": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "ready",
+          "detail"
         ],
         "type": "object"
       },
@@ -35495,6 +35656,63 @@
           }
         ],
         "summary": "Start an exact-request-bound online break-glass ceremony",
+        "x-trstctl-permission": "certs:issue"
+      }
+    },
+    "/api/v1/breakglass/issue-ceremonies/preview": {
+      "post": {
+        "operationId": "previewBreakglassIssue",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BreakglassIssueIntentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BreakglassIssuePlanPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Validate and explain an exact online break-glass request without opening a ceremony or calling the signer",
         "x-trstctl-permission": "certs:issue"
       }
     },

@@ -14340,6 +14340,7 @@
             "status": "closed",
             "notes": "TRACE-006 closes F34 as conditionally served. Production buildRunDeps binds configured verifier material to a persisted purpose-constrained dual-control signer handle. Online issue, rotation, and cross-sign requests are exact-request-bound to tenant-scoped ceremonies; caller-supplied approver names are absent, and only distinct authenticated immutable ca.ceremony.approved actors from the configured roster count. POST /api/v1/breakglass/reconcile remains the recovery path for signed offline bundles.",
             "api_surface": [
+                "previewBreakglassIssue",
                 "startBreakglassIssueCeremony",
                 "issueBreakglass",
                 "startBreakglassRotationCeremony",
@@ -14350,6 +14351,7 @@
             ],
             "api_na": "",
             "cli_surface": [
+                "breakglass issue-preview",
                 "breakglass issue-ceremony",
                 "breakglass issue",
                 "breakglass rotation-ceremony",

@@ -1555,6 +1555,37 @@ BreakglassIssueIntentRequest = TypedDict(
     total=False,
 )
 
+BreakglassIssuePlanPreview = TypedDict(
+    'BreakglassIssuePlanPreview',
+    {
+        'approval_threshold': int,
+        'blockers': list[str],
+        'capability': str,
+        'configured_operator_count': int,
+        'csr_sha256': str,
+        'effect_free': bool,
+        'effective_ttl_seconds': int,
+        'execution_external_effects': list[str],
+        'execution_signer_calls': list[str],
+        'execution_writes': list[str],
+        'operation': str,
+        'prerequisites': list[dict[str, Any]],
+        'preview_external_effects': list[str],
+        'preview_signer_calls': list[str],
+        'preview_writes': list[str],
+        'ready': bool,
+        'reason': str,
+        'recovery_steps': list[str],
+        'request_fingerprint': str,
+        'request_id': str,
+        'requested_ttl_seconds': int,
+        'required_permission': str,
+        'subject': str,
+        'verification_steps': list[str],
+    },
+    total=False,
+)
+
 BreakglassIssueRequest = TypedDict(
     'BreakglassIssueRequest',
     {
@@ -1574,6 +1605,17 @@ BreakglassIssueResponse = TypedDict(
         'audit_event_type': str,
         'bundle': dict[str, Any],
         'reconciled': int,
+    },
+    total=False,
+)
+
+BreakglassPrerequisite = TypedDict(
+    'BreakglassPrerequisite',
+    {
+        'detail': str,
+        'id': str,
+        'ready': bool,
+        'remediation': str,
     },
     total=False,
 )
