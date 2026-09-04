@@ -1,1 +1,0 @@
-var e=[`approval-requests`,{status:`pending`}];function t(e){return e.filter(e=>e.status===`pending`)}function n(e,t){if(!t)return!1;let n=e.requester.toLowerCase();return n?n===t.email?.toLowerCase()||n===t.subject.toLowerCase():!1}function r(e){return`/audit?${new URLSearchParams({q:`${e.id} ${e.intent_digest}`}).toString()}`}export{n as i,e as n,t as r,r as t};

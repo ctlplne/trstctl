@@ -38,8 +38,38 @@ export default defineConfig({
         // Route splitting otherwise emits one sub-kilobyte file per shared
         // Lucide glyph. Group only the tree-shaken glyph modules so those
         // files share one wrapper and compression dictionary.
-        manualChunks(id) {
-          if (id.includes("/node_modules/lucide-react/")) return "icons";
+        codeSplitting: {
+          groups: [
+            {
+              name: "icons",
+              test: /node_modules[\\/]lucide-react[\\/]/,
+              priority: 2,
+            },
+            {
+              name: "route-support",
+              // Keep small route helpers lazy, but compress them as one shared
+              // support asset instead of fourteen separately wrapped files.
+              test: (id) =>
+                [
+                  "/src/components/IdentityPicker.tsx",
+                  "/src/components/ScrollableTableRegion.tsx",
+                  "/src/components/dashboard/index.tsx",
+                  "/src/components/ui/checkbox.tsx",
+                  "/src/components/ui/field.tsx",
+                  "/src/components/ui/input.tsx",
+                  "/src/components/ui/select.tsx",
+                  "/src/components/ui/textarea.tsx",
+                  "/src/lib/agentInstall.ts",
+                  "/src/lib/apiProblem.ts",
+                  "/src/lib/approvalQueue.ts",
+                  "/src/lib/effectiveOwnership.ts",
+                  "/src/lib/onboardingState.ts",
+                  "/src/lib/optionalApi.ts",
+                ].some((modulePath) => id.includes(modulePath)),
+              includeDependenciesRecursively: false,
+              priority: 1,
+            },
+          ],
         },
       },
     },

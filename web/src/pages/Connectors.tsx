@@ -556,7 +556,7 @@ export function Connectors() {
                                 <span className="font-medium text-status-warning">{t("connectors.targetReadiness.disabledShort")}</span>
                               )}
                             </td>
-                            <td className="break-all font-mono text-xs">{target.id}</td>
+                            <td className="whitespace-nowrap font-mono text-xs">{target.id}</td>
                             <td>{formatDateTime(target.created_at)}</td>
                             <td>
                               <div className="flex flex-wrap gap-2">

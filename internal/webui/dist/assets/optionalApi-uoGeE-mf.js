@@ -1,1 +1,0 @@
-import{G as e}from"./index-DQ3bhBWV.js";function t(t,n,...r){let i=e[t];return typeof i==`function`?i(...r):Promise.resolve(n)}export{t};

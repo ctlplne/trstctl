@@ -1104,10 +1104,18 @@ function RoutingPolicyAuthoring({
                 />
               </div>
               <dl className="grid gap-3 text-sm md:grid-cols-2">
-                <div><dt className="text-muted-foreground">{t("notifications.routing.fingerprint")}</dt><dd className="break-all font-mono text-xs">{routePreview.request_fingerprint}</dd></div>
-                <div><dt className="text-muted-foreground">{t("notifications.routing.channelsLabel")}</dt><dd>{requestedChannelIDs.join(", ")}</dd></div>
+                <div>
+                  <dt className="text-muted-foreground">{t("notifications.routing.fingerprint")}</dt>
+                  <dd className="break-all font-mono text-xs">{routePreview.request_fingerprint}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">{t("notifications.routing.channelsLabel")}</dt>
+                  <dd>{requestedChannelIDs.join(", ")}</dd>
+                </div>
               </dl>
-              {routePreview.blockers.length > 0 ? <ErrorState title={t("notifications.routing.reviewBlocked")}>{routePreview.blockers.join(" ")}</ErrorState> : null}
+              {routePreview.blockers.length > 0 ? (
+                <ErrorState title={t("notifications.routing.reviewBlocked")}>{routePreview.blockers.join(" ")}</ErrorState>
+              ) : null}
               <div className="grid gap-4 md:grid-cols-3">
                 <ReviewList title={t("notifications.routing.executeWrites")} items={routePreview.execute_writes} />
                 <ReviewList title={t("notifications.routing.recoverySteps")} items={routePreview.recovery_steps} />
@@ -1193,7 +1201,9 @@ function ReviewList({ title, items }: { title: string; items: string[] }) {
     <div>
       <h3 className="text-sm font-medium">{title}</h3>
       <ul className="mt-2 grid gap-1 pl-4 text-xs text-muted-foreground">
-        {items.map((item) => <li key={item}>{item}</li>)}
+        {items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
       </ul>
     </div>
   );

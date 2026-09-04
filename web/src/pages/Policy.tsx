@@ -461,9 +461,7 @@ export function Policy() {
     setReportError(null);
     setReportNotice(null);
     try {
-      const changed = schedule.enabled
-        ? await api.pauseComplianceReportSchedule(schedule.id)
-        : await api.resumeComplianceReportSchedule(schedule.id);
+      const changed = schedule.enabled ? await api.pauseComplianceReportSchedule(schedule.id) : await api.resumeComplianceReportSchedule(schedule.id);
       setReportNotice(changed.enabled ? t("policy.reporting.resumed") : t("policy.reporting.paused"));
       await refreshComplianceReporting();
     } catch (err) {
@@ -1065,7 +1063,9 @@ export function Policy() {
               <section className="rounded-md border border-border bg-muted/40 p-4 text-sm" aria-labelledby="compliance-schedule-review-heading">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <h3 id="compliance-schedule-review-heading" className="font-semibold">{t("policy.reporting.reviewHeading")}</h3>
+                    <h3 id="compliance-schedule-review-heading" className="font-semibold">
+                      {t("policy.reporting.reviewHeading")}
+                    </h3>
                     <p className="mt-1 text-muted-foreground">{t("policy.reporting.noStateChanged")}</p>
                   </div>
                   <span className="rounded-md border border-border bg-background px-2 py-1 text-xs font-medium">
@@ -1073,8 +1073,14 @@ export function Policy() {
                   </span>
                 </div>
                 <dl className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <div><dt className="text-xs font-medium text-muted-foreground">{t("policy.reporting.fingerprint")}</dt><dd className="mt-1 break-all font-mono text-xs">{schedulePreview.request_fingerprint}</dd></div>
-                  <div><dt className="text-xs font-medium text-muted-foreground">{t("policy.reporting.permission")}</dt><dd className="mt-1 font-mono text-xs">{schedulePreview.required_permission}</dd></div>
+                  <div>
+                    <dt className="text-xs font-medium text-muted-foreground">{t("policy.reporting.fingerprint")}</dt>
+                    <dd className="mt-1 break-all font-mono text-xs">{schedulePreview.request_fingerprint}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium text-muted-foreground">{t("policy.reporting.permission")}</dt>
+                    <dd className="mt-1 font-mono text-xs">{schedulePreview.required_permission}</dd>
+                  </div>
                 </dl>
                 <div className="mt-3 grid gap-3 lg:grid-cols-3">
                   <EvidenceList title={t("policy.reporting.executeWrites")} items={schedulePreview.execute_writes} />

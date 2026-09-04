@@ -805,33 +805,49 @@ function PrivacyReviewDialog({
     >
       <header className="border-b border-border px-5 py-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 id={titleId} className="text-title font-semibold">{title}</h2>
-          <StatusBadge value={preview.ready ? "ready" : "blocked"} label={preview.ready ? t("policy.reporting.ready") : t("policy.reporting.setupNeeded")} tone={preview.ready ? "success" : "warning"} />
+          <h2 id={titleId} className="text-title font-semibold">
+            {title}
+          </h2>
+          <StatusBadge
+            value={preview.ready ? "ready" : "blocked"}
+            label={preview.ready ? t("policy.reporting.ready") : t("policy.reporting.setupNeeded")}
+            tone={preview.ready ? "success" : "warning"}
+          />
         </div>
         <p id={`${titleId}-description`} className="mt-1 text-sm text-muted-foreground">
-          {t("policy.reporting.noStateChanged")} {preview.preview_writes.length === 0 && preview.preview_external_effects.length === 0 ? "" : preview.blockers.join(" ")}
+          {t("policy.reporting.noStateChanged")}{" "}
+          {preview.preview_writes.length === 0 && preview.preview_external_effects.length === 0 ? "" : preview.blockers.join(" ")}
         </p>
       </header>
       <div className="grid gap-5 p-5">
         <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <PrivacyFact label={t("privacy.review.recordsMatched")} value={`${preview.total_records} ${t("privacy.review.recordsMatched")}`} />
-          {isErasure ? <PrivacyFact label={t("privacy.review.archiveAttestations")} value={`${preview.archive_attestations} ${t("privacy.review.archiveAttestations")}`} /> : null}
-          {isErasure ? <PrivacyFact label={t("privacy.review.activeLegalHolds")} value={`${preview.active_legal_holds} ${t("privacy.review.activeLegalHolds")}`} /> : null}
+          {isErasure ? (
+            <PrivacyFact label={t("privacy.review.archiveAttestations")} value={`${preview.archive_attestations} ${t("privacy.review.archiveAttestations")}`} />
+          ) : null}
+          {isErasure ? (
+            <PrivacyFact label={t("privacy.review.activeLegalHolds")} value={`${preview.active_legal_holds} ${t("privacy.review.activeLegalHolds")}`} />
+          ) : null}
           {"reviewed_at" in preview ? <PrivacyFact label={t("privacy.review.reviewedAt")} value={formatDateTimePolicy(preview.reviewed_at)} /> : null}
           <PrivacyFact label={t("policy.reporting.permission")} value={preview.required_permission} />
         </dl>
 
         <section className="grid gap-2" aria-labelledby={`${titleId}-counts`}>
-          <h3 id={`${titleId}-counts`} className="text-sm font-semibold">{t("privacy.review.recordsMatched")}</h3>
+          <h3 id={`${titleId}-counts`} className="text-sm font-semibold">
+            {t("privacy.review.recordsMatched")}
+          </h3>
           {countEntries.length ? (
             <div className="grid gap-2 sm:grid-cols-2">
               {countEntries.map(([name, count]) => (
                 <div key={name} className="flex items-center justify-between gap-4 rounded-control border border-border px-3 py-2 text-sm">
-                  <span>{name.replace(/_/g, " ")}</span><span className="font-mono tabular-nums">{String(count)}</span>
+                  <span>{name.replace(/_/g, " ")}</span>
+                  <span className="font-mono tabular-nums">{String(count)}</span>
                 </div>
               ))}
             </div>
-          ) : <p className="text-sm text-muted-foreground">0 {t("privacy.review.recordsMatched")}</p>}
+          ) : (
+            <p className="text-sm text-muted-foreground">0 {t("privacy.review.recordsMatched")}</p>
+          )}
         </section>
 
         {cutoffEntries.length ? (
@@ -849,7 +865,11 @@ function PrivacyReviewDialog({
         ) : null}
 
         {preview.blockers.length ? <ErrorState title={t("policy.reporting.setupNeeded")}>{preview.blockers.join(" ")}</ErrorState> : null}
-        {preview.warnings.map((warning) => <p key={warning} className="rounded-control border border-warning/40 bg-warning/10 px-3 py-2 text-sm">{warning}</p>)}
+        {preview.warnings.map((warning) => (
+          <p key={warning} className="rounded-control border border-warning/40 bg-warning/10 px-3 py-2 text-sm">
+            {warning}
+          </p>
+        ))}
 
         <PrivacyReviewList title={t("privacy.review.prerequisites")} items={preview.prerequisites} />
         <PrivacyReviewList title={t("privacy.review.effects")} items={[...preview.execute_writes, ...preview.execute_external_effects]} />
@@ -867,8 +887,12 @@ function PrivacyReviewDialog({
         </details>
       </div>
       <footer className="flex justify-end gap-2 border-t border-border px-5 py-4">
-        <Button type="button" variant="ghost" onClick={onClose}>{translateNow("source.cancel.19766ed6cc")}</Button>
-        <Button type="button" disabled={!preview.ready || executing} onClick={onExecute}>{executeLabel}</Button>
+        <Button type="button" variant="ghost" onClick={onClose}>
+          {translateNow("source.cancel.19766ed6cc")}
+        </Button>
+        <Button type="button" disabled={!preview.ready || executing} onClick={onExecute}>
+          {executeLabel}
+        </Button>
       </footer>
     </Dialog>
   );
@@ -879,7 +903,9 @@ function PrivacyReviewList({ items, title }: { items: string[]; title: string })
     <section className="grid gap-2">
       <h3 className="text-sm font-semibold">{title}</h3>
       <ul className="grid list-disc gap-1 ps-5 text-sm text-muted-foreground">
-        {items.map((item) => <li key={item}>{item}</li>)}
+        {items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
       </ul>
     </section>
   );

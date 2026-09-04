@@ -12256,7 +12256,10 @@ export const messages = {
   "notifications.routing.workspace": { defaultMessage: "Workspace", description: "Label for the product workspace routing selector." },
   "notifications.routing.ownerRoute": { defaultMessage: "Owner route (owner/<id>)", description: "Exact owner routing reference field label." },
   "notifications.routing.assetRoute": { defaultMessage: "Asset route (kind/<id>)", description: "Exact asset routing reference field label." },
-  "notifications.routing.preview": { defaultMessage: "Review exact route", description: "Ask the server to validate and fingerprint the exact unsaved routing draft." },
+  "notifications.routing.preview": {
+    defaultMessage: "Review exact route",
+    description: "Ask the server to validate and fingerprint the exact unsaved routing draft.",
+  },
   "notifications.routing.previewing": { defaultMessage: "Reviewing exact route…", description: "Routing-draft review pending state." },
   "notifications.routing.previewFailed": { defaultMessage: "Route review failed", description: "Routing-draft review error title." },
   "notifications.routing.previewFailedDetail": {
@@ -12268,14 +12271,20 @@ export const messages = {
   "notifications.routing.none": { defaultMessage: "none", description: "No effective notification channels value." },
   "notifications.routing.previewReady": { defaultMessage: "ready", description: "Effective route reaches every configured channel." },
   "notifications.routing.previewNotReady": { defaultMessage: "not ready", description: "Effective route cannot deliver through every named channel." },
-  "notifications.routing.reviewNoChanges": { defaultMessage: "No state changed during this review.", description: "Effect-free confirmation in the notification routing draft review." },
+  "notifications.routing.reviewNoChanges": {
+    defaultMessage: "No state changed during this review.",
+    description: "Effect-free confirmation in the notification routing draft review.",
+  },
   "notifications.routing.reviewBoundary": {
     defaultMessage: "trstctl validated this exact draft without saving a policy or sending a notification.",
     description: "Plain-language effect boundary for notification routing preview.",
   },
   "notifications.routing.reviewReady": { defaultMessage: "Ready to save", description: "Positive notification routing draft status." },
   "notifications.routing.reviewBlocked": { defaultMessage: "Setup needed", description: "Blocked notification routing draft status." },
-  "notifications.routing.fingerprint": { defaultMessage: "Exact request fingerprint", description: "Label for the normalized notification routing draft digest." },
+  "notifications.routing.fingerprint": {
+    defaultMessage: "Exact request fingerprint",
+    description: "Label for the normalized notification routing draft digest.",
+  },
   "notifications.routing.executeWrites": { defaultMessage: "What Save will record", description: "Heading for notification routing policy execution writes." },
   "notifications.routing.recoverySteps": { defaultMessage: "How to recover", description: "Heading for notification routing and dead-letter recovery steps." },
   "notifications.routing.verificationSteps": { defaultMessage: "How to prove delivery", description: "Heading for notification routing verification steps." },

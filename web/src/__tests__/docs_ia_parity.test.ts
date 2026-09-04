@@ -52,11 +52,11 @@ describe("docs IA parity (S-R2)", () => {
     });
   }
 
-  it("the demo click-through names the final five-workspace shell", () => {
+  it("the demo click-through names the final seven-workspace shell", () => {
     const full = path.join(dir, "demo-click-through.html");
     if (!existsSync(full)) return;
     const src = readFileSync(full, "utf8");
-    for (const label of ["Certificate Lifecycle", "Machine &amp; Workload Trust", "Secrets &amp; Access", "Software Trust", "Trust Operations"]) {
+    for (const label of ["Home", "Discover", "Certificates", "Workloads &amp; Machines", "Secrets", "Software Trust", "Operations"]) {
       expect(src).toContain(label);
     }
     expect(src).toContain("data-demo-path");

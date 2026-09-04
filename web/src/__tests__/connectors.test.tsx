@@ -272,6 +272,19 @@ describe("connector deployment disclosure surface", () => {
     expect(screen.queryByText(/BEGIN .* PRIVATE KEY/)).not.toBeInTheDocument();
   });
 
+  it("keeps destination identifiers readable inside the mobile scroll region", async () => {
+    const user = userEvent.setup();
+    renderConnectors();
+
+    await screen.findByRole("heading", { name: "Where credentials are installed" });
+    await user.click(screen.getByText("Destinations and safe actions", { exact: true }));
+    const table = await screen.findByRole("table", { name: "Configured deployment destinations" });
+    const identifierCell = within(table).getByText("target-1");
+
+    expect(identifierCell).toHaveClass("whitespace-nowrap");
+    expect(identifierCell).not.toHaveClass("break-all");
+  });
+
   it("keeps the connector route usable when an older API returns null plugin arrays", async () => {
     apiMock.connectorCatalog.mockResolvedValueOnce({
       items: [],
