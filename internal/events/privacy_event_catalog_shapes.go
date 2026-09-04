@@ -223,6 +223,16 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 		return shape(`{"principal":"","key":"","reason":""}`), true
 	case "codesign.signed":
 		return shape(`{"principal":"","key":"","artifact_type":"","digest":""}`), true
+	case "connector.rollback.requested":
+		return shape(`{"connector":"","target":"","target_id":"","identity_id":"","target_config":{"key":""},"predecessor_fingerprint":"","predecessor_serial":"","successor_fingerprint":"","reason":"","requested_by":"","required_agent_id":"","required_agent_role":""}`,
+			catalogPrivacyShapeOptions{
+				Optional: []string{
+					"/target_id", "/identity_id", "/target_config", "/predecessor_serial",
+					"/successor_fingerprint", "/reason", "/requested_by", "/required_agent_id",
+					"/required_agent_role",
+				},
+				DynamicObject: []string{"/target_config"},
+			}), true
 	case "ct.submission.delivered":
 		return shape(`{"capability":"","submission_id":"","log_url":"","entry_type":"","leaf_sha256_fingerprint":"","subject":"","serial_number":"","delivered_at":""}`), true
 	case "ct.submission.queued":

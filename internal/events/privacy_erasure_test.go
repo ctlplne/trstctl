@@ -434,10 +434,11 @@ func TestCoreProductionPrivacyCatalogExercisesEverySubjectBearingPath(t *testing
 
 func TestLiveWorkloadAndSSHProducerPayloadsFitTheClosedPrivacyCatalog(t *testing.T) {
 	valid := map[string]string{
-		"ephemeral.issued":           `{"subject":"ns/qa/sa/web","method":"k8s_sat","ttl_seconds":600,"not_after":"2026-08-20T10:34:00Z","recovered":false}`,
-		"ssh.cert.revoked":           `{"serial":119376402773978,"key_id":"jit-deployer","reason":"operator requested revocation"}`,
-		"ssh.host.retired":           `{"id":"","tenant_id":"11111111-1111-4111-8111-111111111111","host":"edge-1.internal","status":"retired","recorded_at":"2026-08-20T10:34:00Z"}`,
-		"ssh.trust_rollout.recorded": `{"id":"","tenant_id":"11111111-1111-4111-8111-111111111111","source_id":"","target_hosts":["edge-1.internal"],"candidate_ca_fingerprint":"SHA256:qa","reload_command":"systemctl reload sshd","health_command":"ssh localhost true","rollback_plan":"restore backup","status":"planned","confirmed":true,"recorded_at":"2026-08-20T10:34:00Z"}`,
+		"connector.rollback.requested": `{"connector":"apache","target":"payments listener","target_id":"target-1","identity_id":"identity-1","target_config":{"cert_path":"/etc/apache/payments.crt","verify_server_name":"payments.example.test"},"predecessor_fingerprint":"old-fingerprint","predecessor_serial":"01","successor_fingerprint":"new-fingerprint","reason":"restore after failed listener check","requested_by":"operator@example.test","required_agent_id":"agent-1","required_agent_role":"host"}`,
+		"ephemeral.issued":             `{"subject":"ns/qa/sa/web","method":"k8s_sat","ttl_seconds":600,"not_after":"2026-08-20T10:34:00Z","recovered":false}`,
+		"ssh.cert.revoked":             `{"serial":119376402773978,"key_id":"jit-deployer","reason":"operator requested revocation"}`,
+		"ssh.host.retired":             `{"id":"","tenant_id":"11111111-1111-4111-8111-111111111111","host":"edge-1.internal","status":"retired","recorded_at":"2026-08-20T10:34:00Z"}`,
+		"ssh.trust_rollout.recorded":   `{"id":"","tenant_id":"11111111-1111-4111-8111-111111111111","source_id":"","target_hosts":["edge-1.internal"],"candidate_ca_fingerprint":"SHA256:qa","reload_command":"systemctl reload sshd","health_command":"ssh localhost true","rollback_plan":"restore backup","status":"planned","confirmed":true,"recorded_at":"2026-08-20T10:34:00Z"}`,
 	}
 	for eventType, payload := range valid {
 		t.Run(eventType, func(t *testing.T) {
