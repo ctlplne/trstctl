@@ -4899,7 +4899,7 @@ export const canonicalCapabilities = [
       "purpose": "Lets an operator understand and safely use fleet re-issuance for ca compromise while tenant, policy, and security authority remain on the server.",
       "tool": "operations",
       "classification": "primary",
-      "releaseBlocking": true,
+      "releaseBlocking": false,
       "consoleRoute": "/incidents",
       "navigationEntrypoints": [
         "tool navigation",
@@ -4913,7 +4913,7 @@ export const canonicalCapabilities = [
       ],
       "sideEffects": "mixed",
       "secretDataHandling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-      "maturity": "partial_workflow",
+      "maturity": "complete_vertical_slice",
       "stages": {
         "discover": {
           "status": "complete",
@@ -4928,8 +4928,14 @@ export const canonicalCapabilities = [
           ]
         },
         "configure": {
-          "status": "missing",
-          "reason": "No structured evidence proves an operator can configure every required prerequisite from this console journey."
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/incidents/FleetReissuanceParts.tsx",
+            "web/src/__tests__/incidents.test.tsx",
+            "docs/features/incident-and-jit.md",
+            "artifacts/g193-f32-source-qualification.json",
+            "artifacts/g193-f32-live-browser-qualification.json"
+          ]
         },
         "preview": {
           "status": "complete",
@@ -4986,8 +4992,8 @@ export const canonicalCapabilities = [
       },
       "owner": "operations",
       "targetCheckpoint": "frontend-convergence",
-      "candidateSHA": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-      "freshness": "2026-08-25"
+      "candidateSHA": "3daab5833cfaca39b1285335a6224a1211122dae",
+      "freshness": "2026-09-04"
     }
   },
   {

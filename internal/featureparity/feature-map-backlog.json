@@ -13648,7 +13648,7 @@
             "priority": 73,
             "served_state": "conditional",
             "backend_status": "conditional: served compromised-issuer response freezes exact H1 trust scope and ordered H2 cohorts before mutation, gates trust/issue/deploy/live verification on signed agent evidence, revokes each exact predecessor only after its cohort passes, rolls back the current unrevoked cohort on failure, and seals compact-JWS evidence",
-            "current_frontend_mapping": "served: Incidents at /incidents plans live or separately authorized test-only game-day H2 cohorts, distinguishes exact stores from subject-only candidates, shows immutable plan digest/current signed gate/revocation verdicts, and records pause/resume/current-cohort rollback/JWS export actions from served API data; the unsafe direct single-identity action is retired with fleet guidance",
+            "current_frontend_mapping": "served: Incidents at /incidents uses a three-step, served-roster workflow to choose the compromised X.509 issuer and active replacement authority, build ordered identity-to-agent migration waves with explicit trust-anchor paths, and review the exact live or separately authorized test-only game-day request before mutation. It then shows immutable plan digest/current signed gate/revocation verdicts and records pause/resume/current-cohort rollback/JWS export actions from served API data; the unsafe direct single-identity action is retired with fleet guidance",
             "target_gui_mapping": "Fleet reissue UI for affected issuer, batches, health checks, resume, rollback, percent complete, failed targets, and audit receipts.",
             "acceptance_test": "Served e2e test proves plan-before-mutation exact-H1 enumeration, separately authorized and structurally test-only game-day operation, signed trust/live gates, post-verification exact predecessor revocation, offline-verifiable compact-JWS evidence, and failed-live-cohort automatic rollback with zero revocation; UI tests prove the same explicit H2 contract and retired direct-action guidance.",
             "source_docs": [
@@ -13665,10 +13665,12 @@
                 "internal/server/incident_fleet_reissuance_served_test.go"
             ],
             "source_frontend": [
-                "web/src/pages/Incidents.tsx"
+                "web/src/pages/Incidents.tsx",
+                "web/src/pages/incidents/FleetReissuanceParts.tsx",
+                "web/src/__tests__/incidents.test.tsx"
             ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence and the assembled AUD-41 journey. The real PostgreSQL/JetStream/out-of-process-signer/mTLS-agent test proves immutable exact-H1 planning precedes every H2 mutation, trust and live-serving receipts gate each cohort, predecessor revocation is exact and post-verification, success and rollback packs verify as compact JWS, a failed live cohort restores trust with zero revocation, game-day requires incidents:game-day and refuses production bindings, and the old direct route fails closed. UI evidence covers explicit ordered cohorts, exact-versus-candidate scope, game-day mode, durable gate/revocation state, evidence export, and retired-action guidance.",
+            "notes": "Complete review-first vertical slice. The real PostgreSQL/JetStream/out-of-process-signer/mTLS-agent test proves immutable exact-H1 planning precedes every H2 mutation, trust and live-serving receipts gate each cohort, predecessor revocation is exact and post-verification, success and rollback packs verify as compact JWS, a failed live cohort restores trust with zero revocation, game-day requires incidents:game-day and refuses production bindings, and the old direct route fails closed. Exact g193 source qualification passed full repository lint, race-enabled make test, all 1,276 web tests, i18n, production build, and unchanged bundle budgets. Installed g193 browser qualification first proved the missing-prerequisite refusal, then used a real two-custodian ceremony and exact approved authority to prove the three-step served-roster setup, canary wave builder, plain-language safety boundary, and exact request disclosure without exposing raw IDs as the primary journey.",
             "api_surface": [
                 "startFleetReissuance",
                 "listFleetReissuanceRuns",
@@ -13701,13 +13703,16 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: served: Incidents at /incidents accepts live or separately authorized test-only game-day H2 cohorts, distinguishes exact from candidate H1 scope, shows immutable plan/gate/revocation evidence, records pause/resume/rollback/export actions, and refuses the retired direct action with fleet guidance",
+                        "current_frontend_mapping: served: Incidents at /incidents uses served issuer, active-authority, identity, and agent rosters in a three-step setup; it builds ordered waves, discloses the exact request, explains signed gates and revocation timing, and preserves the existing observe/pause/resume/rollback/export controls.",
+                        "Exact installed g193 browser evidence proves the fail-closed prerequisite state and the complete positive setup through exact request review.",
                         "target_gui_mapping: Fleet reissue UI for affected issuer, batches, health checks, resume, rollback, percent complete, failed targets, and audit receipts."
                     ],
                     "refs": [
                         "web/src/lib/navigation.ts",
                         "web/src/App.tsx",
-                        "web/src/pages/Incidents.tsx"
+                        "web/src/pages/Incidents.tsx",
+                        "web/src/pages/incidents/FleetReissuanceParts.tsx",
+                        "web/src/__tests__/incidents.test.tsx"
                     ]
                 },
                 "cli": {
@@ -13745,7 +13750,8 @@
                         "acceptance_test: Served e2e proves plan-before-mutation exact-H1 scope, signed H2 trust/live gates, post-verification revocation, test-only game-day authorization, offline JWS evidence, and failed-cohort rollback with zero revocation; UI tests prove the explicit cohort contract and retired direct-action guidance.",
                         "internal/server/incident_fleet_reissuance_served_test.go proves the real assembled exact-H1/H2/H3 success and rollback journeys through PostgreSQL, JetStream, isolated signer, enrolled mTLS agent, and live TLS listeners.",
                         "internal/cli/cli_test.go proves fleet reissuance CLI start/list/pause/evidence commands map to the served API with idempotency on mutations.",
-                        "web/src/__tests__/incidents.test.tsx proves /incidents calls startFleetReissuance and all operator evidence actions.",
+                        "web/src/__tests__/incidents.test.tsx proves fail-closed roster loading and missing prerequisites, schema validation, structured wave construction, exact review, unchanged startFleetReissuance execution, and all operator evidence actions.",
+                        "artifacts/g193-f32-source-qualification.json and artifacts/g193-f32-live-browser-qualification.json retain exact source and installed browser proof.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
                     ],
@@ -13753,6 +13759,7 @@
                         "internal/server/incident_fleet_reissuance_served_test.go",
                         "internal/cli/cli_test.go",
                         "web/src/__tests__/incidents.test.tsx",
+                        "web/src/pages/incidents/FleetReissuanceParts.tsx",
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "web/src/__tests__/route_parity.test.ts",
                         "web/src/__tests__/feature_coverage.test.tsx"
@@ -13808,6 +13815,7 @@
                         "web/src/lib/navigation.ts",
                         "web/src/App.tsx",
                         "web/src/pages/Incidents.tsx",
+                        "web/src/pages/incidents/FleetReissuanceParts.tsx",
                         "web/src/__tests__/incidents.test.tsx"
                     ]
                 },
@@ -13828,7 +13836,7 @@
                 "purpose": "Lets an operator understand and safely use fleet re-issuance for ca compromise while tenant, policy, and security authority remain on the server.",
                 "tool": "operations",
                 "classification": "primary",
-                "release_blocking": true,
+                "release_blocking": false,
                 "console_route": "/incidents",
                 "navigation_entrypoints": [
                     "tool navigation",
@@ -13842,7 +13850,7 @@
                 ],
                 "side_effects": "mixed",
                 "secret_data_handling": "Tenant-scoped operational metadata only; secret values and private-key bytes never enter this contract or its reports.",
-                "maturity": "partial_workflow",
+                "maturity": "complete_vertical_slice",
                 "stages": {
                     "discover": {
                         "status": "complete",
@@ -13857,8 +13865,14 @@
                         ]
                     },
                     "configure": {
-                        "status": "missing",
-                        "reason": "No structured evidence proves an operator can configure every required prerequisite from this console journey."
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/incidents/FleetReissuanceParts.tsx",
+                            "web/src/__tests__/incidents.test.tsx",
+                            "docs/features/incident-and-jit.md",
+                            "artifacts/g193-f32-source-qualification.json",
+                            "artifacts/g193-f32-live-browser-qualification.json"
+                        ]
                     },
                     "preview": {
                         "status": "complete",
@@ -13915,8 +13929,8 @@
                 },
                 "owner": "operations",
                 "target_checkpoint": "frontend-convergence",
-                "candidate_sha": "73b871089f46e4cc9e95ca10473b9ae5872a53cd",
-                "freshness": "2026-08-25"
+                "candidate_sha": "3daab5833cfaca39b1285335a6224a1211122dae",
+                "freshness": "2026-09-04"
             }
         },
         {
