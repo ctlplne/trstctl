@@ -181,8 +181,8 @@ describe("route 031 decision-first deployment destination design", () => {
     expect(within(deliveryTable).getByText("rollback:delivery-31")).toBeInTheDocument();
     expect(deliveryTable.parentElement).toHaveAttribute("tabindex", "0");
     expect(deliveryTable.parentElement).toHaveClass("min-w-0", "max-w-full", "w-full");
-    expect(deliveryTable.closest("section")).toHaveClass("min-w-0");
-    expect(deliveryTable.closest("section")?.parentElement).toHaveClass("min-w-0");
+    expect(deliveryTable.closest("section")).toHaveClass("min-w-0", "grid-cols-[minmax(0,1fr)]");
+    expect(deliveryTable.closest("section")?.parentElement).toHaveClass("min-w-0", "grid-cols-[minmax(0,1fr)]");
 
     await user.click(screen.getByText("Connector capabilities and plugin evidence", { exact: true }));
     const capabilityTable = await screen.findByRole("table", { name: "Connector capability registry" });
