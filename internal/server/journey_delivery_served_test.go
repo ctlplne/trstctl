@@ -12,12 +12,175 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/ca/digicert"
+	"trstctl.com/trstctl/internal/ca/digicert/digicertfake"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/protocols/ari"
 	"trstctl.com/trstctl/internal/servedstatus"
 	"trstctl.com/trstctl/internal/store"
 )
+
+// TestEndpointBindingPinsExternalIssuerFromEffectFreePreview is DP-004's
+// release oracle. The primary endpoint journey must name a configured CA before
+// it can issue, bind execution to the exact effect-free preview, and route the
+// real issuance through that CA. A dropdown without this server proof would be
+// cosmetic: the old worker silently used the built-in CA regardless of UI.
+func TestEndpointBindingPinsExternalIssuerFromEffectFreePreview(t *testing.T) {
+	dc, err := digicertfake.NewServer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(dc.Close)
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.LifecycleRenewBefore = 31 * 24 * time.Hour
+		d.ExternalCAs = []ExternalCA{{
+			ID: "corporate-digicert", Type: "digicert", Name: "Corporate DigiCert",
+			CA: digicert.New("corporate-digicert", dc.URL(), []byte(dc.APIKey()), digicert.WithHTTPClient(&http.Client{Timeout: 5 * time.Second})),
+		}}
+	})
+	tok := seedScopedToken(t, h.store, h.tenant,
+		"owners:read", "owners:write", "identities:read", "identities:write",
+		"certs:read", "certs:issue", "connectors:read", "connectors:write", "lifecycle:read",
+	)
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/owners", tok, map[string]any{
+		"kind": "workload", "name": "dp-004-owner",
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create owner: status %d body %s", status, body)
+	}
+	var owner struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &owner); err != nil {
+		t.Fatalf("decode owner: %v", err)
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets", tok, map[string]any{
+		"name": "cloud/acm/dp-004", "connector": "aws-acm", "enabled": true,
+		"config": map[string]any{
+			"region": "us-east-1", "access_key_id": "AKIDTESTONLY",
+			"secret_access_key_ref": "secret://connectors/aws-acm/dp-004",
+		},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create target: status %d body %s", status, body)
+	}
+	var target struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &target); err != nil {
+		t.Fatalf("decode target: %v", err)
+	}
+
+	request := map[string]any{
+		"owner_id": owner.ID, "identity_name": "dp-004.served.test", "target_id": target.ID,
+		"issuer": map[string]any{"source": "external", "id": "corporate-digicert"},
+		"reason": "prove the selected CA reaches the destination",
+	}
+	beforeIdentities := eventCount(t, h.log, h.tenant, projections.EventIdentityCreated)
+	beforeOutbox := connectorTargetOutboxRows(t, h)
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/lifecycle/endpoint-bindings/preview", tok, request)
+	if status != http.StatusOK {
+		t.Fatalf("preview endpoint binding: status %d body %s", status, body)
+	}
+	var preview struct {
+		Ready              bool   `json:"ready"`
+		EffectFree         bool   `json:"effect_free"`
+		RequestFingerprint string `json:"request_fingerprint"`
+		Issuer             struct {
+			Source string `json:"source"`
+			ID     string `json:"id"`
+			Name   string `json:"name"`
+		} `json:"issuer"`
+		PreviewWrites          []string `json:"preview_writes"`
+		PreviewExternalEffects []string `json:"preview_external_effects"`
+	}
+	if err := json.Unmarshal(body, &preview); err != nil {
+		t.Fatalf("decode preview: %v body=%s", err, body)
+	}
+	if !preview.Ready || !preview.EffectFree || preview.RequestFingerprint == "" ||
+		preview.Issuer.Source != "external" || preview.Issuer.ID != "corporate-digicert" || preview.Issuer.Name != "Corporate DigiCert" ||
+		len(preview.PreviewWrites) != 0 || len(preview.PreviewExternalEffects) != 0 {
+		t.Fatalf("preview did not bind exact external CA effect-free: %+v body=%s", preview, body)
+	}
+	if got := eventCount(t, h.log, h.tenant, projections.EventIdentityCreated); got != beforeIdentities {
+		t.Fatalf("preview created identities: before=%d after=%d", beforeIdentities, got)
+	}
+	if got := connectorTargetOutboxRows(t, h); got != beforeOutbox {
+		t.Fatalf("preview queued external work: before=%d after=%d", beforeOutbox, got)
+	}
+
+	// Execution cannot skip or reuse a stale preview.
+	status, refusal := secretsReqKey(t, h, http.MethodPost, "/api/v1/lifecycle/endpoint-bindings", tok, "dp-004-no-preview", request)
+	if status != http.StatusConflict || !jsonContains(t, refusal, "preview_fingerprint is required") ||
+		eventCount(t, h.log, h.tenant, projections.EventIdentityCreated) != beforeIdentities {
+		t.Fatalf("missing preview was not refused before mutation: status=%d body=%s", status, refusal)
+	}
+	request["preview_fingerprint"] = preview.RequestFingerprint
+	stale := make(map[string]any, len(request))
+	for key, value := range request {
+		stale[key] = value
+	}
+	stale["reason"] = "a changed authorization after preview"
+	status, refusal = secretsReqKey(t, h, http.MethodPost, "/api/v1/lifecycle/endpoint-bindings", tok, "dp-004-stale-preview", stale)
+	if status != http.StatusConflict || !jsonContains(t, refusal, "changed after preview") ||
+		eventCount(t, h.log, h.tenant, projections.EventIdentityCreated) != beforeIdentities {
+		t.Fatalf("stale preview was not refused before mutation: status=%d body=%s", status, refusal)
+	}
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/lifecycle/endpoint-bindings", tok, "dp-004-bind", request)
+	if status != http.StatusCreated {
+		t.Fatalf("execute endpoint binding: status %d body %s", status, body)
+	}
+	var binding struct {
+		Identity struct {
+			ID string `json:"id"`
+		} `json:"identity"`
+		Issuer struct {
+			Source string `json:"source"`
+			ID     string `json:"id"`
+		} `json:"issuer"`
+	}
+	if err := json.Unmarshal(body, &binding); err != nil || binding.Identity.ID == "" ||
+		binding.Issuer.Source != "external" || binding.Issuer.ID != "corporate-digicert" {
+		t.Fatalf("endpoint binding response lost issuer: err=%v got=%+v body=%s", err, binding, body)
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain selected external CA issue and deploy: %v", err)
+	}
+	certs, err := h.store.ListActiveIssuedCertificatesForIdentity(t.Context(), h.tenant, owner.ID, "dp-004.served.test")
+	if err != nil || len(certs) != 1 || !strings.Contains(strings.ToLower(certs[0].Issuer), "digicert") {
+		var rows, inventory string
+		_ = h.store.WithTenant(t.Context(), h.tenant, func(tx pgx.Tx) error {
+			if err := tx.QueryRow(t.Context(), `SELECT COALESCE(string_agg(destination || ':' || status || ':' || COALESCE(last_error, ''), E'\n' ORDER BY id), '') FROM outbox WHERE tenant_id = $1`, h.tenant).Scan(&rows); err != nil {
+				return err
+			}
+			return tx.QueryRow(t.Context(), `SELECT COALESCE(string_agg(subject || ':' || issuer || ':' || source, E'\n' ORDER BY created_at), '') FROM certificates WHERE tenant_id = $1`, h.tenant).Scan(&inventory)
+		})
+		t.Fatalf("endpoint did not retain external issuer: certs=%+v err=%v outbox=%s inventory=%s", certs, err, rows, inventory)
+	}
+	if got := externalCAIntentOutboxCount(t, h, "endpoint-binding:dp-004-bind:external-ca:corporate-digicert"); got != 1 {
+		t.Fatalf("selected external CA intent rows = %d, want 1", got)
+	}
+	firstSerial := certs[0].Serial
+	queued, err := h.srv.RunLifecycleOnce(t.Context())
+	if err != nil || queued != 1 {
+		t.Fatalf("schedule pinned external-CA renewal: queued=%d err=%v", queued, err)
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain pinned external-CA renewal: %v", err)
+	}
+	renewed, err := h.store.ListActiveIssuedCertificatesForIdentity(t.Context(), h.tenant, owner.ID, "dp-004.served.test")
+	if err != nil || len(renewed) != 1 || renewed[0].Serial == firstSerial || !strings.Contains(strings.ToLower(renewed[0].Issuer), "digicert") {
+		t.Fatalf("renewal did not preserve selected external issuer: first=%s renewed=%+v err=%v", firstSerial, renewed, err)
+	}
+	var externalIntents int
+	if err := h.store.WithTenant(t.Context(), h.tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(t.Context(), `SELECT count(*) FROM outbox WHERE tenant_id = $1 AND destination = 'external-ca.issue'`, h.tenant).Scan(&externalIntents)
+	}); err != nil || externalIntents != 2 {
+		t.Fatalf("external CA issue intents after renewal = %d, want 2 (err=%v)", externalIntents, err)
+	}
+}
 
 // TestServedDeployAndRotationPublishReceipts is the JOURNEY-002 proof: the served
 // issue->deploy->rotate path exposes connector delivery receipts and rotation-run
@@ -647,7 +810,7 @@ func TestServedEndpointBindingAutomationCAPLIFE01(t *testing.T) {
 		t.Fatalf("decode owner: %v", err)
 	}
 
-	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/lifecycle/endpoint-bindings", tok, "cap-life-01-bind", map[string]any{
+	bindingRequest := previewPlatformEndpointBinding(t, h, tok, map[string]any{
 		"owner_id":      owner.ID,
 		"identity_name": "cap-life-01.served.test",
 		"reason":        "CAP-LIFE-01 endpoint lifecycle automation",
@@ -661,6 +824,7 @@ func TestServedEndpointBindingAutomationCAPLIFE01(t *testing.T) {
 			},
 		},
 	})
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/lifecycle/endpoint-bindings", tok, "cap-life-01-bind", bindingRequest)
 	if status != http.StatusCreated {
 		t.Fatalf("create endpoint binding automation: status %d body %s", status, body)
 	}
@@ -841,9 +1005,11 @@ func TestDisabledConnectorTargetRefusesEveryLifecycleMutation(t *testing.T) {
 		{name: "rollback", path: "/api/v1/connectors/targets/" + target.ID + "/rollback", body: map[string]any{"identity_id": identity.ID, "reason": "disabled target negative control"}},
 		{name: "existing endpoint binding", path: "/api/v1/lifecycle/endpoint-bindings", body: map[string]any{
 			"owner_id": owner.ID, "identity_name": "must-not-exist.served.test", "target_id": target.ID, "reason": "disabled target negative control",
+			"issuer": map[string]any{"source": "platform", "id": "trstctl-issuing-ca"},
 		}},
 		{name: "inline endpoint binding", path: "/api/v1/lifecycle/endpoint-bindings", body: map[string]any{
 			"owner_id": owner.ID, "identity_name": "inline-must-not-exist.served.test", "reason": "disabled target negative control",
+			"issuer": map[string]any{"source": "platform", "id": "trstctl-issuing-ca"},
 			"target": map[string]any{
 				"name": "prepared/iis/portal", "connector": "iis", "enabled": false,
 				"config": map[string]any{"credential_ref": "secret://connectors/iis/portal", "proof_state": "prepared_not_contacted"},
@@ -967,6 +1133,23 @@ func connectorTargetOutboxRows(t *testing.T, h *servedHarness) int {
 		t.Fatalf("count connector target outbox rows: %v", err)
 	}
 	return count
+}
+
+func previewPlatformEndpointBinding(t *testing.T, h *servedHarness, token string, request map[string]any) map[string]any {
+	t.Helper()
+	request["issuer"] = map[string]any{"source": "platform", "id": "trstctl-issuing-ca"}
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/lifecycle/endpoint-bindings/preview", token, request)
+	if status != http.StatusOK {
+		t.Fatalf("preview platform endpoint binding: status %d body %s", status, body)
+	}
+	var preview struct {
+		RequestFingerprint string `json:"request_fingerprint"`
+	}
+	if err := json.Unmarshal(body, &preview); err != nil || preview.RequestFingerprint == "" {
+		t.Fatalf("decode platform endpoint preview: err=%v body=%s", err, body)
+	}
+	request["preview_fingerprint"] = preview.RequestFingerprint
+	return request
 }
 
 // A private key exists only while issuance builds the sealed connector effect.

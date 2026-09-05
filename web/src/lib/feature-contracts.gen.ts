@@ -4065,6 +4065,7 @@ export const canonicalCapabilities = [
           "evidence": [
             "OpenAPI operationId: listIdentities",
             "OpenAPI operationId: transitionIdentity",
+            "OpenAPI operationId: previewEndpointBinding",
             "OpenAPI operationId: createEndpointBinding",
             "OpenAPI operationId: getLifecycleAutomationPlan",
             "OpenAPI operationId: listNotifications",
@@ -4076,6 +4077,7 @@ export const canonicalCapabilities = [
             "CLI command: identities list",
             "CLI command: identities transition",
             "CLI command: audit events",
+            "CLI command: lifecycle endpoint-bindings preview",
             "CLI command: lifecycle endpoint-bindings create",
             "CLI command: lifecycle automation-plan",
             "CLI command: notifications list",

@@ -637,7 +637,7 @@ not this file.
 | `internal/crypto/acmekey/production_guard_test.go:44` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/notify/response_buffer_guard_test.go:37` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/server/backup_test.go:843` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/server/protect_correct102_guard_test.go:100` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `internal/server/protect_correct102_guard_test.go:119` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/design_test.go:136` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/managedkeys_test.go:445` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/store/store_isolation_test.go:309` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
@@ -1188,7 +1188,7 @@ not this file.
 | `internal/server/pam_served_test.go:367` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/plugins.go:199` | operator-configured plugin dir; WASM and signature are verified after the read (CWE-22) |
 | `internal/server/plugins.go:203` | operator-configured plugin dir; WASM and signature are verified after the read (CWE-22) |
-| `internal/server/protect_correct102_guard_test.go:100` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `internal/server/protect_correct102_guard_test.go:119` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/server/protocol_mounts.go:679` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/protocol_mounts.go:786` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/protocol_mounts.go:851` | operator-configured local file path from deployment config (CWE-22) |

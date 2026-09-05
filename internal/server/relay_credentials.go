@@ -304,6 +304,7 @@ type RelayDeployIntent struct {
 	//
 	// Empty on a first issuance, which genuinely replaces nothing.
 	PredecessorCertificateID string `json:"predecessor_certificate_id,omitempty"`
+	IssuingAuthoritySource   string `json:"issuing_authority_source,omitempty"`
 	IssuingAuthorityID       string `json:"issuing_authority_id,omitempty"`
 	MigrationRunID           string `json:"migration_run_id,omitempty"`
 	MigrationWaveID          string `json:"migration_wave_id,omitempty"`

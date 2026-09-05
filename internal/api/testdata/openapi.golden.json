@@ -12718,6 +12718,12 @@
           "identity": {
             "$ref": "#/components/schemas/Identity"
           },
+          "issuer": {
+            "$ref": "#/components/schemas/EndpointIssuer"
+          },
+          "preview_fingerprint": {
+            "type": "string"
+          },
           "queued_lifecycle_intents": {
             "items": {
               "type": "string"
@@ -12734,15 +12740,39 @@
         "required": [
           "identity",
           "target",
+          "issuer",
+          "preview_fingerprint",
           "queued_lifecycle_intents",
           "renewal_intent"
         ],
         "type": "object"
       },
-      "EndpointBindingRequest": {
+      "EndpointBindingCustody": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "key_origin": {
+            "type": "string"
+          },
+          "private_key_enters_control_plane": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key_origin",
+          "private_key_enters_control_plane",
+          "detail"
+        ],
+        "type": "object"
+      },
+      "EndpointBindingPlanRequest": {
         "properties": {
           "identity_name": {
             "type": "string"
+          },
+          "issuer": {
+            "$ref": "#/components/schemas/EndpointIssuer"
           },
           "owner_id": {
             "format": "uuid",
@@ -12761,7 +12791,158 @@
         },
         "required": [
           "owner_id",
-          "identity_name"
+          "identity_name",
+          "issuer"
+        ],
+        "type": "object"
+      },
+      "EndpointBindingPreview": {
+        "properties": {
+          "capability": {
+            "type": "string"
+          },
+          "changes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "custody": {
+            "$ref": "#/components/schemas/EndpointBindingCustody"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "identity_name": {
+            "type": "string"
+          },
+          "issuer": {
+            "$ref": "#/components/schemas/EndpointIssuer"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "preview_external_effects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "preview_writes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "queued_lifecycle_intents": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "recovery_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "request_fingerprint": {
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/EndpointBindingTarget"
+          },
+          "verification_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "ready",
+          "effect_free",
+          "request_fingerprint",
+          "owner_id",
+          "identity_name",
+          "issuer",
+          "target",
+          "custody",
+          "changes",
+          "queued_lifecycle_intents",
+          "recovery_steps",
+          "verification_steps",
+          "preview_writes",
+          "preview_external_effects"
+        ],
+        "type": "object"
+      },
+      "EndpointBindingRequest": {
+        "properties": {
+          "identity_name": {
+            "type": "string"
+          },
+          "issuer": {
+            "$ref": "#/components/schemas/EndpointIssuer"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "preview_fingerprint": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/DeploymentTargetRequest"
+          },
+          "target_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "owner_id",
+          "identity_name",
+          "issuer",
+          "preview_fingerprint"
+        ],
+        "type": "object"
+      },
+      "EndpointBindingTarget": {
+        "properties": {
+          "config": {
+            "type": "object"
+          },
+          "connector": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "connector",
+          "config",
+          "enabled"
         ],
         "type": "object"
       },
@@ -12785,6 +12966,35 @@
           "host_generated",
           "control_plane_generated",
           "migrated_percent"
+        ],
+        "type": "object"
+      },
+      "EndpointIssuer": {
+        "properties": {
+          "availability": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "platform",
+              "private",
+              "external"
+            ],
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "id"
         ],
         "type": "object"
       },
@@ -18676,7 +18886,14 @@
             "type": "string"
           },
           "issuing_authority_id": {
-            "format": "uuid",
+            "type": "string"
+          },
+          "issuing_authority_source": {
+            "enum": [
+              "platform",
+              "private",
+              "external"
+            ],
             "type": "string"
           },
           "predecessor_certificate_id": {
@@ -45901,7 +46118,64 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Create an automated enrollment-to-endpoint binding",
+        "summary": "Create a preview-bound automated enrollment-to-endpoint binding",
+        "x-trstctl-permission": "connectors:write"
+      }
+    },
+    "/api/v1/lifecycle/endpoint-bindings/preview": {
+      "post": {
+        "operationId": "previewEndpointBinding",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EndpointBindingPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndpointBindingPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Review the exact issuer, custody, destination, and effects without changing state",
         "x-trstctl-permission": "connectors:write"
       }
     },

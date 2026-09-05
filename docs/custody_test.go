@@ -166,7 +166,7 @@ func TestCSRFirstIssuanceIsActuallyWired(t *testing.T) {
 		{"../internal/api/handlers.go", "SubjectCSRPEM", "the transition request must accept a caller-supplied CSR"},
 		{"../internal/api/handlers.go", "validateSubjectCSRPEM", "a malformed CSR must be rejected at the API edge, not in the outbox worker"},
 		{"../internal/orchestrator/orchestrator.go", "TransitionWithSubjectCSR", "the CSR must reach the issuance dispatcher on the transition"},
-		{"../internal/server/issuance.go", "mintServedLeafFromCSR", "the mint must sign the caller's request instead of generating a key"},
+		{"../internal/server/issuance.go", "mintServedLeafFromCSRForSelection", "the mint must sign the caller's request instead of generating a key"},
 		{"../internal/server/issuance.go", "issuance.server_side_keygen", "the legacy keygen path must record its own deprecation"},
 	} {
 		body := read(t, want.file)
@@ -182,18 +182,18 @@ func TestCSRFirstIssuanceIsActuallyWired(t *testing.T) {
 func TestCSRFirstMintReturnsNoKeyMaterial(t *testing.T) {
 	t.Parallel()
 	body := read(t, "../internal/server/issuance.go")
-	start := strings.Index(body, "func (d *issuanceDispatcher) mintServedLeafFromCSR(")
+	start := strings.Index(body, "func (d *issuanceDispatcher) mintServedLeafFromCSRForSelection(")
 	if start < 0 {
-		t.Fatal("mintServedLeafFromCSR is gone; the custody table's CSR row depends on it")
+		t.Fatal("mintServedLeafFromCSRForSelection is gone; the custody table's CSR row depends on it")
 	}
 	end := strings.Index(body[start:], "\n}\n")
 	if end < 0 {
-		t.Fatal("cannot delimit mintServedLeafFromCSR")
+		t.Fatal("cannot delimit mintServedLeafFromCSRForSelection")
 	}
 	fn := body[start : start+end]
 	for _, banned := range []string{"GenerateLockedKey", "PrivateKeyPEM", "KeyPEM:"} {
 		if strings.Contains(fn, banned) {
-			t.Errorf("mintServedLeafFromCSR references %q; the CSR path must not create or return subject key material — that is the whole custody difference", banned)
+			t.Errorf("mintServedLeafFromCSRForSelection references %q; the CSR path must not create or return subject key material — that is the whole custody difference", banned)
 		}
 	}
 }

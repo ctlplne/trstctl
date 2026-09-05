@@ -20,6 +20,7 @@ import {
   type OutboxCircuit,
 } from "@/lib/api";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
+import { EndpointBindingWorkflow } from "@/pages/connectors/EndpointBindingWorkflow";
 
 // VantageBadge names where a connector's deploy work executes (epic A3), read
 // from the live registry census. The distinction the operator cares about: work
@@ -66,8 +67,6 @@ export function Connectors() {
   const [targetConfig, setTargetConfig] = useState('{"credential_ref":"connector-credential-ref","host":"edge-1.internal"}');
   const [selectedTarget, setSelectedTarget] = useState("");
   const [selectedIdentity, setSelectedIdentity] = useState("");
-  const [bindingOwnerID, setBindingOwnerID] = useState("");
-  const [bindingIdentityName, setBindingIdentityName] = useState("payments.example.test");
   const [reason, setReason] = useState("");
   const [targetEnabled, setTargetEnabled] = useState(false);
   const [circuits, setCircuits] = useState<OutboxCircuit[] | null>(null);
@@ -246,24 +245,6 @@ export function Connectors() {
       setSelectedTarget(created.id);
       await refresh();
       setDestinationOpen(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  };
-
-  const createEndpointBinding = async (event: FormEvent) => {
-    event.preventDefault();
-    try {
-      const binding = await api.createEndpointBinding({
-        owner_id: bindingOwnerID.trim(),
-        identity_name: bindingIdentityName.trim(),
-        reason: reason.trim(),
-        target_id: selectedTarget,
-      });
-      setActionResult(`endpoint-binding:${binding.identity.status}:${binding.renewal_intent}`);
-      setSelectedTarget(binding.target.id);
-      setSelectedIdentity(binding.identity.id);
-      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -491,39 +472,16 @@ export function Connectors() {
                 </h2>
               </div>
               <p className="max-w-3xl text-sm text-muted-foreground">{t("connectors.design.bindHelp")}</p>
-              <form
-                aria-label={translateNow("source.create.endpoint.binding.dd5b21a786")}
-                className="ui-panel grid gap-3 md:grid-cols-5 md:items-end"
-                onSubmit={createEndpointBinding}
-              >
-                <label className="grid gap-1 text-sm">
-                  {t("connectors.targetReadiness.enrollmentDestination")}
-                  <select className="ui-input" value={selectedTarget} onChange={(event) => setSelectedTarget(event.target.value)} required>
-                    <option value="">{translateNow("source.select.target.adfbe7a33d")}</option>
-                    {targets.map((target) => (
-                      <option key={target.id} value={target.id}>
-                        {target.name}
-                        {target.enabled ? "" : t("connectors.targetReadiness.optionQualifier", { value: t("connectors.targetReadiness.disabledShort") })}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="grid gap-1 text-sm">
-                  {translateNow("source.owner.id.1611f5e055")}
-                  <input className="ui-input font-mono text-xs" value={bindingOwnerID} onChange={(event) => setBindingOwnerID(event.target.value)} required />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  {translateNow("source.identity.dns.name.c79a6b3b97")}
-                  <input className="ui-input" value={bindingIdentityName} onChange={(event) => setBindingIdentityName(event.target.value)} required />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  {t("connectors.targetReadiness.enrollmentReason")}
-                  <input className="ui-input" value={reason} onChange={(event) => setReason(event.target.value)} required />
-                </label>
-                <Button type="submit" disabled={targetActionBlocked || !bindingOwnerID.trim() || !bindingIdentityName.trim() || !reason.trim()}>
-                  {translateNow("source.bind.and.enroll.5cb885780a")}
-                </Button>
-              </form>
+              <EndpointBindingWorkflow
+                targets={targets}
+                onComplete={async (binding, bindingReason) => {
+                  setActionResult(`endpoint-binding:${binding.identity.status}:${binding.renewal_intent}`);
+                  setSelectedTarget(binding.target.id);
+                  setSelectedIdentity(binding.identity.id);
+                  setReason(bindingReason);
+                  await refresh();
+                }}
+              />
 
               {targets && targets.length === 0 ? (
                 <EmptyState title={translateNow("source.no.connector.targets.5a8adcf783")}>

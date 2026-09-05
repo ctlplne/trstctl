@@ -245,11 +245,17 @@ The REST surface is `/api/v1/connectors/targets` for CRUD,
 `/api/v1/connectors/targets/{id}/{test,deploy,rollback}` for actions; CRUD and binding
 are immutable events (`deployment_target.upserted`, `deployment_target.deleted`,
 `identity.connector_target_bound`) projected into the read model, so disaster recovery
-rebuilds routing from the event log. `POST /api/v1/lifecycle/endpoint-bindings` does
-the same in one call: it creates or reuses the target, creates the X.509 identity for
-an existing owner, binds them, and queues the normal `ca.issue`/`connector.deploy`
-intents; scheduled renewal reuses the leader-only `ca.renew` path, delivering the
-successor to the same binding and producing a second connector receipt.
+rebuilds routing from the event log. The effect-free
+`POST /api/v1/lifecycle/endpoint-bindings/preview` resolves one exact configured
+issuer and destination revision and fingerprints the proposed identity, custody,
+writes, queued effects, recovery, and verification. The paired
+`POST /api/v1/lifecycle/endpoint-bindings` accepts only that unchanged preview: it
+creates or reuses the target, creates the X.509 identity for an existing owner, pins
+the selected built-in, private, or external issuer, binds the route, and queues the
+normal `ca.issue`/`connector.deploy` intents. Scheduled renewal reuses the
+leader-only `ca.renew` path and the same issuer selection, delivering the successor
+to the same binding and producing a second connector receipt. The worker fails
+closed when that issuer is unavailable; it never silently substitutes another CA.
 
 The shipped `trstctl` composition builds the trusted native registry from
 `connectors.enabled` (applications never call `connector.NewRegistry` directly).

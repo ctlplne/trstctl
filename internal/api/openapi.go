@@ -2902,19 +2902,53 @@ func componentSchemas() map[string]*Schema {
 	identityConnectorTargetReq := object(map[string]*Schema{
 		"target_id": uuid(),
 	}, "target_id")
-	endpointBindingReq := object(map[string]*Schema{
+	endpointIssuer := object(map[string]*Schema{
+		"source":       {Type: "string", Enum: []string{endpointIssuerPlatform, endpointIssuerPrivate, endpointIssuerExternal}},
+		"id":           str(),
+		"name":         str(),
+		"type":         str(),
+		"availability": str(),
+	}, "source", "id")
+	endpointBindingPlanReq := object(map[string]*Schema{
 		"owner_id":      uuid(),
 		"identity_name": str(),
 		"target_id":     uuid(),
 		"target":        ref("DeploymentTargetRequest"),
+		"issuer":        ref("EndpointIssuer"),
 		"reason":        str(),
-	}, "owner_id", "identity_name")
+	}, "owner_id", "identity_name", "issuer")
+	endpointBindingReq := object(map[string]*Schema{
+		"owner_id":            uuid(),
+		"identity_name":       str(),
+		"target_id":           uuid(),
+		"target":              ref("DeploymentTargetRequest"),
+		"issuer":              ref("EndpointIssuer"),
+		"reason":              str(),
+		"preview_fingerprint": str(),
+	}, "owner_id", "identity_name", "issuer", "preview_fingerprint")
+	endpointBindingTarget := object(map[string]*Schema{
+		"id": uuid(), "name": str(), "connector": str(), "config": {Type: "object"},
+		"enabled": {Type: "boolean"}, "revision": str(),
+	}, "name", "connector", "config", "enabled")
+	endpointBindingCustody := object(map[string]*Schema{
+		"key_origin": str(), "private_key_enters_control_plane": {Type: "boolean"}, "detail": str(),
+	}, "key_origin", "private_key_enters_control_plane", "detail")
+	endpointBindingPreview := object(map[string]*Schema{
+		"capability": str(), "ready": {Type: "boolean"}, "effect_free": {Type: "boolean"},
+		"request_fingerprint": str(), "owner_id": uuid(), "identity_name": str(),
+		"issuer": ref("EndpointIssuer"), "target": ref("EndpointBindingTarget"), "custody": ref("EndpointBindingCustody"),
+		"changes": {Type: "array", Items: str()}, "queued_lifecycle_intents": {Type: "array", Items: str()},
+		"recovery_steps": {Type: "array", Items: str()}, "verification_steps": {Type: "array", Items: str()},
+		"preview_writes": {Type: "array", Items: str()}, "preview_external_effects": {Type: "array", Items: str()},
+	}, "capability", "ready", "effect_free", "request_fingerprint", "owner_id", "identity_name", "issuer", "target", "custody", "changes", "queued_lifecycle_intents", "recovery_steps", "verification_steps", "preview_writes", "preview_external_effects")
 	endpointBinding := object(map[string]*Schema{
 		"identity":                 ref("Identity"),
 		"target":                   ref("DeploymentTarget"),
+		"issuer":                   ref("EndpointIssuer"),
+		"preview_fingerprint":      str(),
 		"queued_lifecycle_intents": {Type: "array", Items: str()},
 		"renewal_intent":           str(),
-	}, "identity", "target", "queued_lifecycle_intents", "renewal_intent")
+	}, "identity", "target", "issuer", "preview_fingerprint", "queued_lifecycle_intents", "renewal_intent")
 	connectorTargetActionReq := object(map[string]*Schema{
 		"identity_id": uuid(), "reason": str(),
 	}, "identity_id")
@@ -4367,7 +4401,8 @@ func componentSchemas() map[string]*Schema {
 		"waves": {Type: "array", Items: ref("MigrationRunStartWave")},
 	}, "plan_id", "new_authority_id", "waves")
 	migrationMemberBinding := object(map[string]*Schema{
-		"issuing_authority_id": uuid(), "target_id": uuid(), "target_revision": str(), "connector": str(), "target": str(),
+		"issuing_authority_source": {Type: "string", Enum: []string{endpointIssuerPlatform, endpointIssuerPrivate, endpointIssuerExternal}},
+		"issuing_authority_id":     str(), "target_id": uuid(), "target_revision": str(), "connector": str(), "target": str(),
 		"target_config": {Type: "object"}, "required_agent_id": uuid(),
 		"trust_anchor_path": str(), "trust_anchor_pem": {Type: "string", Format: "byte"},
 		"trust_anchor_fingerprint": str(), "verify_address": str(), "verify_server_name": str(),
@@ -6211,7 +6246,12 @@ func componentSchemas() map[string]*Schema {
 		"DeploymentTarget":                         deploymentTarget,
 		"DeploymentTargetList":                     list("DeploymentTarget"),
 		"IdentityConnectorTargetRequest":           identityConnectorTargetReq,
+		"EndpointIssuer":                           endpointIssuer,
 		"EndpointBindingRequest":                   endpointBindingReq,
+		"EndpointBindingPlanRequest":               endpointBindingPlanReq,
+		"EndpointBindingTarget":                    endpointBindingTarget,
+		"EndpointBindingCustody":                   endpointBindingCustody,
+		"EndpointBindingPreview":                   endpointBindingPreview,
 		"EndpointBinding":                          endpointBinding,
 		"ConnectorTargetActionRequest":             connectorTargetActionReq,
 		"ConnectorDelivery":                        connectorDelivery,

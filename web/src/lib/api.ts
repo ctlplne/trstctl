@@ -210,6 +210,8 @@ import type {
   DynamicLeaseRequest,
   DynamicSecretProviderCatalog,
   EndpointBinding,
+  EndpointBindingPlanRequest,
+  EndpointBindingPreview,
   EndpointBindingRequest,
   EnrollmentPlanPreview as GenEnrollmentPlanPreview,
   EnrollmentToken as GenEnrollmentToken,
@@ -2162,6 +2164,7 @@ export interface Api {
   connectorCatalog(options?: { limit?: number; cursor?: string }): Promise<ConnectorCatalog>;
   connectorTargets(): Promise<DeploymentTargetList>;
   createConnectorTarget(input: DeploymentTargetRequest): Promise<DeploymentTarget>;
+  previewEndpointBinding(input: EndpointBindingPlanRequest): Promise<EndpointBindingPreview>;
   createEndpointBinding(input: EndpointBindingRequest): Promise<EndpointBinding>;
   bindIdentityConnectorTarget(id: string, input: IdentityConnectorTargetRequest): Promise<Identity>;
   testConnectorTarget(id: string): Promise<ConnectorDelivery>;
@@ -2722,6 +2725,7 @@ const liveApi: Api = {
   connectorCatalog: (options) => req<ConnectorCatalog>("/api/v1/connectors/catalog" + pageQueryString(options)),
   connectorTargets: () => req<DeploymentTargetList>("/api/v1/connectors/targets"),
   createConnectorTarget: (input) => mutate<DeploymentTarget>("POST", "/api/v1/connectors/targets", input),
+  previewEndpointBinding: (input) => postRead<EndpointBindingPreview>("/api/v1/lifecycle/endpoint-bindings/preview", input),
   createEndpointBinding: (input) => mutate<EndpointBinding>("POST", "/api/v1/lifecycle/endpoint-bindings", input),
   bindIdentityConnectorTarget: (id, input) => mutate<Identity>("POST", `/api/v1/identities/${encodeURIComponent(id)}/connector-target`, input),
   testConnectorTarget: (id) => mutate<ConnectorDelivery>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/test`),

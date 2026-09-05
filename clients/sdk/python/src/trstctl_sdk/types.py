@@ -4290,9 +4290,56 @@ EndpointBinding = TypedDict(
     'EndpointBinding',
     {
         'identity': dict[str, Any],
+        'issuer': dict[str, Any],
+        'preview_fingerprint': str,
         'queued_lifecycle_intents': list[str],
         'renewal_intent': str,
         'target': dict[str, Any],
+    },
+    total=False,
+)
+
+EndpointBindingCustody = TypedDict(
+    'EndpointBindingCustody',
+    {
+        'detail': str,
+        'key_origin': str,
+        'private_key_enters_control_plane': bool,
+    },
+    total=False,
+)
+
+EndpointBindingPlanRequest = TypedDict(
+    'EndpointBindingPlanRequest',
+    {
+        'identity_name': str,
+        'issuer': dict[str, Any],
+        'owner_id': str,
+        'reason': str,
+        'target': dict[str, Any],
+        'target_id': str,
+    },
+    total=False,
+)
+
+EndpointBindingPreview = TypedDict(
+    'EndpointBindingPreview',
+    {
+        'capability': str,
+        'changes': list[str],
+        'custody': dict[str, Any],
+        'effect_free': bool,
+        'identity_name': str,
+        'issuer': dict[str, Any],
+        'owner_id': str,
+        'preview_external_effects': list[str],
+        'preview_writes': list[str],
+        'queued_lifecycle_intents': list[str],
+        'ready': bool,
+        'recovery_steps': list[str],
+        'request_fingerprint': str,
+        'target': dict[str, Any],
+        'verification_steps': list[str],
     },
     total=False,
 )
@@ -4301,10 +4348,25 @@ EndpointBindingRequest = TypedDict(
     'EndpointBindingRequest',
     {
         'identity_name': str,
+        'issuer': dict[str, Any],
         'owner_id': str,
+        'preview_fingerprint': str,
         'reason': str,
         'target': dict[str, Any],
         'target_id': str,
+    },
+    total=False,
+)
+
+EndpointBindingTarget = TypedDict(
+    'EndpointBindingTarget',
+    {
+        'config': dict[str, Any],
+        'connector': str,
+        'enabled': bool,
+        'id': str,
+        'name': str,
+        'revision': str,
     },
     total=False,
 )
@@ -4316,6 +4378,18 @@ EndpointCustodySummary = TypedDict(
         'host_generated': int,
         'migrated_percent': int,
         'targets': int,
+    },
+    total=False,
+)
+
+EndpointIssuer = TypedDict(
+    'EndpointIssuer',
+    {
+        'availability': str,
+        'id': str,
+        'name': str,
+        'source': str,
+        'type': str,
     },
     total=False,
 )
@@ -6275,6 +6349,7 @@ MigrationMemberBinding = TypedDict(
     {
         'connector': str,
         'issuing_authority_id': str,
+        'issuing_authority_source': str,
         'predecessor_certificate_id': str,
         'predecessor_fingerprint': str,
         'required_agent_id': str,

@@ -59,15 +59,16 @@ non-production hostname and destination for the first proof.
 ## What the current workflow proves
 
 The upstream-CA registry and issue route are real served paths. The CA Hierarchy page
-and `trstctl-cli external-cas` commands use the same API. Connector target testing is
-a separate effect-free preview: it validates the destination from the execution
-vantage point and reports the proposed writes without deploying a certificate.
+and `trstctl-cli external-cas` commands use the same API. Endpoint lifecycle setup now
+binds one exact configured external CA, destination revision, and custody plan into an
+effect-free preview. Execution requires that preview's unchanged fingerprint. The
+initial issue and every later renewal route through the selected authority; missing
+or unavailable authority configuration fails closed without platform-CA fallback.
 
-Raw external-CA issuance and connector deployment are deliberately described as
-separate operations here. Do not claim a closed-loop external-CA renewal until the
-selected issuer, issued certificate, private-key custody, destination, renewal, and
-verification receipts are bound into one reviewed lifecycle. The proof gate at the
-end of this page makes that boundary explicit.
+The lifecycle preview proves the plan, not the outcome. Issuance, deployment,
+listener readback, renewal, alert delivery, and recovery still need their own durable
+receipts or independent observations. The proof gate at the end of this page names
+the evidence required before calling the complete loop production-ready.
 
 ## Steps
 
@@ -116,57 +117,65 @@ trstctl-cli external-cas list
 Do not continue when the intended row is absent or unhealthy. A similar display name
 is not a safe substitute for the registry ID.
 
-### 4. Create the key and CSR where the workload owner controls them
+### 4. Preview the exact CA-to-endpoint lifecycle
 
-The following lab command writes a new private key locally with owner-only
-permissions. Use the workload's HSM, KMS, or approved key-generation process in
-production.
+Create an enabled canary destination with only non-secret metadata and `secret://`
+references. Put the binding plan below in `endpoint-binding-plan.json`, replacing
+the IDs with the exact owner, target, and external CA you inspected:
 
-```sh
-umask 077
-openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 \
-  -nodes -keyout web-canary.key -out web-canary.csr \
-  -subj '/CN=web-canary.example.test' \
-  -addext 'subjectAltName=DNS:web-canary.example.test'
-jq -n --rawfile csr web-canary.csr \
-  '{csr_pem:$csr,dns_names:["web-canary.example.test"],profile_name:"tls-server-30d",ttl_seconds:2592000,requested_ekus:["serverAuth"]}' \
-  > external-ca-issue.json
+```json
+{
+  "owner_id": "<owner-id>",
+  "identity_name": "web-canary.example.test",
+  "target_id": "<target-id>",
+  "reason": "prove CA-preserving lifecycle on the isolated canary",
+  "issuer": {"source":"external","id":"<external-ca-id>"}
+}
 ```
 
-Review the CSR and request file. They must name only the canary and the approved
-profile.
+```sh
+trstctl-cli lifecycle endpoint-bindings preview \
+  -f endpoint-binding-plan.json > endpoint-binding-preview.json
+jq '{ready,effect_free,issuer,target,custody,changes,queued_lifecycle_intents,recovery_steps,verification_steps,preview_writes,preview_external_effects,request_fingerprint}' \
+  endpoint-binding-preview.json
+```
 
-### 5. Issue through that authority and inspect the receipt
+Stop unless the response names the intended CA and target, explains key custody,
+says `ready: true` and `effect_free: true`, and returns empty `preview_writes` and
+`preview_external_effects`. For Apache, IIS, and other host connectors, the normal
+plan is host-generated key custody: the edge collector sends a CSR, not a private
+key, to the control plane. A target-vantage connector test remains a separate useful
+check because it contacts the destination safely; **Configuration valid — target not
+contacted** is not live readiness.
 
-Replace `<external-ca-id>` with the registry ID from step 3:
+### 5. Authorize the unchanged plan
+
+Bind execution to the reviewed fingerprint, then submit one idempotent mutation:
 
 ```sh
+jq --arg fingerprint "$(jq -r .request_fingerprint endpoint-binding-preview.json)" \
+  '. + {preview_fingerprint:$fingerprint}' \
+  endpoint-binding-plan.json > endpoint-binding-execute.json
 trstctl-cli --idempotency-key preserve-ca-canary-001 \
-  external-cas issue <external-ca-id> -f external-ca-issue.json \
-  > external-ca-issued.json
-jq '{serial,issuer,not_after}' external-ca-issued.json
+  lifecycle endpoint-bindings create -f endpoint-binding-execute.json \
+  > endpoint-binding-result.json
+jq '{identity:.identity.id,issuer,target:.target.id,queued_lifecycle_intents,renewal_intent}' \
+  endpoint-binding-result.json
 ```
 
-The issuer must match the selected authority. Repeating the exact command with the
-same idempotency key returns the original result; changing the request while reusing
-that key is rejected. Store `certificate_pem` only where the approved installation
-process needs it, then delete the temporary response according to your retention
-policy.
+The response is accepted work, not delivery proof. Repeating the exact command with
+the same idempotency key returns the original result; changing the request while
+reusing that key is rejected. Changing the CA, destination, or plan after preview is
+also rejected because the fingerprint no longer matches.
 
-### 6. Preview the destination without writing
+### 6. Inspect issuance, deployment, and listener proof
 
-Create the canary destination with only non-secret metadata and `secret://`
-references, bind the intended identity, then run the target test:
-
-```sh
-trstctl connector target test --target <target-id>
-```
-
-A ready result is `dry_run_planned`; a blocked result is `dry_run_blocked`. The target
-test is an effect-free preview: it must report zero writes and the exact later
-mutations. **Configuration valid — target not contacted** is not live readiness.
-Follow [Deployment connectors](../features/deployment-connectors.md) for the connector's
-execution-vantage and key-custody requirements.
+Inspect the rotation run, connector receipt, certificate inventory, and independent
+listener. The public certificate issuer must agree with the CA selected in step 4,
+and the listener fingerprint must differ from the before baseline. A queued receipt
+with zero attempts is only intent evidence. Follow
+[Deployment connectors](../features/deployment-connectors.md) for exact target-vantage,
+readback, and recovery requirements.
 
 ### 7. Verify expiry routing and operator ownership
 
@@ -203,9 +212,11 @@ following evidence:
   fingerprint.
 
 Until every item is evidenced, describe the demonstrated boundary precisely: trstctl
-can discover the existing certificate, issue through the explicitly configured
-external CA, inventory the result, preview a destination, and route alerts. Do not
-turn those separate receipts into a claim that the complete lifecycle ran.
+can discover the existing certificate and create one CA-explicit, fingerprint-bound
+lifecycle plan whose worker routes initial issuance and renewal through the same
+external CA. Do not turn accepted work or separate receipts into a claim that the
+listener changed, renewed twice, alerted its owner, or recovered unless those exact
+outcomes were observed.
 
 ## Where next
 

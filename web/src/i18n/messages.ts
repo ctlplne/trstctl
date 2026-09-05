@@ -13255,6 +13255,106 @@ export const messages = {
       "Choose an enabled, independently verified destination. This reviewed action creates the identity and queues issuance and deployment together; it does not create or enable a destination.",
     description: "Safety explanation for the compound endpoint-binding action.",
   },
+  "connectors.binding.required": {
+    defaultMessage: "Choose or enter a value before continuing.",
+    description: "Required field message in endpoint lifecycle setup.",
+  },
+  "connectors.binding.issuerRequired": {
+    defaultMessage: "Choose the exact CA. trstctl will not choose one for you.",
+    description: "Fail-closed issuer selection message.",
+  },
+  "connectors.binding.loading": { defaultMessage: "Loading owners and available CAs…", description: "Endpoint setup roster loading state." },
+  "connectors.binding.loadFailed": { defaultMessage: "Endpoint setup is not ready", description: "Endpoint setup roster failure title." },
+  "connectors.binding.externalUnavailable": { defaultMessage: "External CA choices could not be loaded.", description: "Partial external CA roster warning." },
+  "connectors.binding.privateUnavailable": { defaultMessage: "Private CA choices could not be loaded.", description: "Partial private CA roster warning." },
+  "connectors.binding.progress": { defaultMessage: "Endpoint lifecycle setup progress", description: "Accessible endpoint setup progress label." },
+  "connectors.binding.endpointStep": { defaultMessage: "Name the endpoint", description: "Endpoint setup first step title." },
+  "connectors.binding.endpointStepHelp": {
+    defaultMessage: "Choose where the certificate goes, who owns it, and the DNS name it protects.",
+    description: "Endpoint setup first step help.",
+  },
+  "connectors.binding.issuerStep": { defaultMessage: "Choose the CA", description: "Endpoint setup issuer step title." },
+  "connectors.binding.issuerStepHelp": {
+    defaultMessage: "Pin one configured issuer. This choice is used for initial issuance and every renewal.",
+    description: "Endpoint setup issuer step help.",
+  },
+  "connectors.binding.reviewStep": { defaultMessage: "Review and authorize", description: "Endpoint setup review step title." },
+  "connectors.binding.reviewStepHelp": {
+    defaultMessage: "Check the exact CA, key custody, destination, changes, recovery, and verification before anything runs.",
+    description: "Endpoint setup review step help.",
+  },
+  "connectors.binding.chooseIssuer": { defaultMessage: "Choose CA", description: "Advance from endpoint facts to issuer selection." },
+  "connectors.binding.preview": { defaultMessage: "Build safe preview", description: "Effect-free endpoint lifecycle preview action." },
+  "connectors.binding.previewing": { defaultMessage: "Building preview…", description: "Endpoint lifecycle preview busy label." },
+  "connectors.binding.destination": { defaultMessage: "Destination", description: "Endpoint lifecycle destination label." },
+  "connectors.binding.destinationHelp": {
+    defaultMessage: "Only enabled destinations can receive lifecycle work.",
+    description: "Endpoint lifecycle destination help.",
+  },
+  "connectors.binding.selectDestination": { defaultMessage: "Choose an enabled destination", description: "Endpoint lifecycle destination placeholder." },
+  "connectors.binding.owner": { defaultMessage: "Owner", description: "Endpoint lifecycle owner label." },
+  "connectors.binding.ownerHelp": {
+    defaultMessage: "The accountable team or service, not a raw UUID you must memorize.",
+    description: "Endpoint lifecycle owner help.",
+  },
+  "connectors.binding.selectOwner": { defaultMessage: "Choose an owner", description: "Endpoint lifecycle owner placeholder." },
+  "connectors.binding.dnsName": { defaultMessage: "DNS name", description: "Endpoint lifecycle certificate name label." },
+  "connectors.binding.dnsHelp": { defaultMessage: "The hostname clients use, for example payments.example.com.", description: "Endpoint lifecycle DNS help." },
+  "connectors.binding.reasonHelp": {
+    defaultMessage: "Why this automation is being authorized; retained with the lifecycle event.",
+    description: "Endpoint lifecycle reason help.",
+  },
+  "connectors.binding.caAgnostic": {
+    defaultMessage: "Use the CA you already trust. trstctl automates the lifecycle; it does not require replacing your CA.",
+    description: "CA-agnostic promise in endpoint setup.",
+  },
+  "connectors.binding.issuer": { defaultMessage: "Issuing CA", description: "Endpoint lifecycle issuer label." },
+  "connectors.binding.issuerHelp": {
+    defaultMessage: "External is your configured public or enterprise CA; Private is a CA managed in trstctl; Platform is the built-in evaluation CA.",
+    description: "ELI5 issuer source explanation.",
+  },
+  "connectors.binding.selectIssuer": { defaultMessage: "Choose the exact CA — no default", description: "Fail-closed issuer placeholder." },
+  "connectors.binding.noIssuerDefault": {
+    defaultMessage: "Nothing is preselected. Choose the CA whose certificate policy and trust chain this endpoint must use.",
+    description: "No-silent-default issuer guidance.",
+  },
+  "connectors.binding.caSource": { defaultMessage: "CA source", description: "Selected issuer source label." },
+  "connectors.binding.caName": { defaultMessage: "Configured CA", description: "Selected issuer name label." },
+  "connectors.binding.caState": { defaultMessage: "Availability", description: "Selected issuer availability label." },
+  "connectors.binding.sourceExternal": { defaultMessage: "External CA", description: "External issuer source label." },
+  "connectors.binding.sourcePrivate": { defaultMessage: "Private CA", description: "Private issuer source label." },
+  "connectors.binding.sourcePlatform": { defaultMessage: "trstctl platform CA", description: "Built-in issuer source label." },
+  "connectors.binding.statusUnknown": { defaultMessage: "status not reported", description: "Unknown issuer status label." },
+  "connectors.binding.previewUnsafe": {
+    defaultMessage: "The server did not prove a zero-write preview. Nothing was authorized.",
+    description: "Endpoint preview invariant refusal.",
+  },
+  "connectors.binding.previewReady": { defaultMessage: "Ready to authorize — nothing changed", description: "Successful endpoint lifecycle preview title." },
+  "connectors.binding.zeroEffect": {
+    defaultMessage: "The preview wrote no records, called no CA, and contacted no destination. Execute is bound to this exact fingerprint.",
+    description: "Endpoint preview zero-effect boundary.",
+  },
+  "connectors.binding.keyCustody": { defaultMessage: "Private-key custody", description: "Endpoint preview key custody label." },
+  "connectors.binding.changes": { defaultMessage: "Records that will change", description: "Endpoint preview planned writes heading." },
+  "connectors.binding.queuedEffects": { defaultMessage: "Work that will be queued", description: "Endpoint preview queued intents heading." },
+  "connectors.binding.recovery": { defaultMessage: "If something fails", description: "Endpoint preview recovery heading." },
+  "connectors.binding.verification": { defaultMessage: "How success is proved", description: "Endpoint preview verification heading." },
+  "connectors.binding.exactContract": { defaultMessage: "Exact machine contract", description: "Endpoint preview technical details disclosure." },
+  "connectors.binding.fingerprint": { defaultMessage: "Preview fingerprint", description: "Endpoint preview fingerprint label." },
+  "connectors.binding.targetRevision": { defaultMessage: "Destination revision", description: "Endpoint target revision label." },
+  "connectors.binding.inlineTarget": { defaultMessage: "created with this request", description: "Inline target revision fallback." },
+  "connectors.binding.previewWrites": { defaultMessage: "Preview writes", description: "Preview durable write count label." },
+  "connectors.binding.previewCalls": { defaultMessage: "Preview external calls", description: "Preview external call count label." },
+  "connectors.binding.authorize": { defaultMessage: "Authorize issuance and deployment", description: "Endpoint lifecycle execution action." },
+  "connectors.binding.queueing": { defaultMessage: "Queueing exact plan…", description: "Endpoint lifecycle execution busy label." },
+  "connectors.binding.queued": {
+    defaultMessage: "{name} is queued for issuance, deployment, verification, and renewal.",
+    description: "Endpoint lifecycle accepted status.",
+  },
+  "connectors.binding.actionFailed": {
+    defaultMessage: "Endpoint lifecycle action needs attention",
+    description: "Endpoint lifecycle preview or execution failure title.",
+  },
   "connectors.design.destinationsTable": {
     defaultMessage: "Configured deployment destinations",
     description: "Accessible caption for saved destination rows.",
@@ -20318,10 +20418,6 @@ export const messages = {
     defaultMessage: "Bind",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Connectors.tsx.",
   },
-  "source.bind.and.enroll.5cb885780a": {
-    defaultMessage: "Bind and enroll",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Connectors.tsx.",
-  },
   "source.blast.radius.impact.42dfddadef": {
     defaultMessage: "Blast-radius impact",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Identities.tsx.",
@@ -20782,10 +20878,6 @@ export const messages = {
   "source.create.a.signer.backed.successor.before.ac.c0163adb05": {
     defaultMessage: "Create a signer-backed successor before activating rotation.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
-  },
-  "source.create.endpoint.binding.dd5b21a786": {
-    defaultMessage: "Create endpoint binding",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Connectors.tsx.",
   },
   "source.create.first.source.4d63a7434c": {
     defaultMessage: "Create first source",
@@ -21477,10 +21569,6 @@ export const messages = {
   "source.identity.detail.f34a3c7053": {
     defaultMessage: "Identity detail",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Identities.tsx.",
-  },
-  "source.identity.dns.name.c79a6b3b97": {
-    defaultMessage: "Identity DNS name",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Connectors.tsx.",
   },
   "source.identity.id.2f8124d39c": {
     defaultMessage: "Identity ID",

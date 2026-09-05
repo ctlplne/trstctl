@@ -3304,8 +3304,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create an automated enrollment-to-endpoint binding */
+        /** Create a preview-bound automated enrollment-to-endpoint binding */
         post: operations["createEndpointBinding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lifecycle/endpoint-bindings/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review the exact issuer, custody, destination, and effects without changing state */
+        post: operations["previewEndpointBinding"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9703,12 +9720,20 @@ export interface components {
         };
         EndpointBinding: {
             identity: components["schemas"]["Identity"];
+            issuer: components["schemas"]["EndpointIssuer"];
+            preview_fingerprint: string;
             queued_lifecycle_intents: string[];
             renewal_intent: string;
             target: components["schemas"]["DeploymentTarget"];
         };
-        EndpointBindingRequest: {
+        EndpointBindingCustody: {
+            detail: string;
+            key_origin: string;
+            private_key_enters_control_plane: boolean;
+        };
+        EndpointBindingPlanRequest: {
             identity_name: string;
+            issuer: components["schemas"]["EndpointIssuer"];
             /** Format: uuid */
             owner_id: string;
             reason?: string;
@@ -9716,11 +9741,57 @@ export interface components {
             /** Format: uuid */
             target_id?: string;
         };
+        EndpointBindingPreview: {
+            capability: string;
+            changes: string[];
+            custody: components["schemas"]["EndpointBindingCustody"];
+            effect_free: boolean;
+            identity_name: string;
+            issuer: components["schemas"]["EndpointIssuer"];
+            /** Format: uuid */
+            owner_id: string;
+            preview_external_effects: string[];
+            preview_writes: string[];
+            queued_lifecycle_intents: string[];
+            ready: boolean;
+            recovery_steps: string[];
+            request_fingerprint: string;
+            target: components["schemas"]["EndpointBindingTarget"];
+            verification_steps: string[];
+        };
+        EndpointBindingRequest: {
+            identity_name: string;
+            issuer: components["schemas"]["EndpointIssuer"];
+            /** Format: uuid */
+            owner_id: string;
+            preview_fingerprint: string;
+            reason?: string;
+            target?: components["schemas"]["DeploymentTargetRequest"];
+            /** Format: uuid */
+            target_id?: string;
+        };
+        EndpointBindingTarget: {
+            config: Record<string, never>;
+            connector: string;
+            enabled: boolean;
+            /** Format: uuid */
+            id?: string;
+            name: string;
+            revision?: string;
+        };
         EndpointCustodySummary: {
             control_plane_generated: number;
             host_generated: number;
             migrated_percent: number;
             targets: number;
+        };
+        EndpointIssuer: {
+            availability?: string;
+            id: string;
+            name?: string;
+            /** @enum {string} */
+            source: "platform" | "private" | "external";
+            type?: string;
         };
         EndpointKeyCustody: {
             connector: string;
@@ -11207,8 +11278,9 @@ export interface components {
         };
         MigrationMemberBinding: {
             connector: string;
-            /** Format: uuid */
             issuing_authority_id: string;
+            /** @enum {string} */
+            issuing_authority_source?: "platform" | "private" | "external";
             /** Format: uuid */
             predecessor_certificate_id: string;
             predecessor_fingerprint: string;
@@ -24096,6 +24168,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EndpointBinding"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewEndpointBinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EndpointBindingPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EndpointBindingPreview"];
                 };
             };
             /** @description client error */

@@ -3579,45 +3579,101 @@ func (s *Server) Drain(ctx context.Context) error {
 		}
 	}
 
-	for {
-		if err := ctx.Err(); err != nil {
-			return err
+	// Each family keeps sweeping independently until every worker is quiet at
+	// the same time. A barrier-per-round deadlocks a parent effect that durably
+	// creates work for another family and waits for its result: the child
+	// family's first sweep may finish just before the parent enqueues, then sit
+	// behind the barrier while the parent waits. External-CA-backed lifecycle
+	// issuance is exactly that shape (ca.issue -> external-ca.issue).
+	type drainWorkerState struct {
+		initialized bool
+		busy        bool
+		lastN       int
+		err         error
+	}
+	drainCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	states := make([]drainWorkerState, 0)
+	for _, family := range outboxDispatchFamilies {
+		for range s.outboxFamilyConcurrency(family) {
+			states = append(states, drainWorkerState{})
 		}
-		type dispatchResult struct {
-			n   int
-			err error
+	}
+	var (
+		stateMu sync.Mutex
+		wg      sync.WaitGroup
+		index   int
+	)
+	for _, family := range outboxDispatchFamilies {
+		family := family
+		for range s.outboxFamilyConcurrency(family) {
+			workerIndex := index
+			index++
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for {
+					stateMu.Lock()
+					states[workerIndex].busy = true
+					stateMu.Unlock()
+					n, err := s.outbox.DispatchScoped(drainCtx, s.obHandler, family.scope)
+					stateMu.Lock()
+					states[workerIndex] = drainWorkerState{initialized: true, lastN: n, err: err}
+					stateMu.Unlock()
+					if err != nil || drainCtx.Err() != nil {
+						return
+					}
+					if n == 0 {
+						timer := time.NewTimer(25 * time.Millisecond)
+						select {
+						case <-drainCtx.Done():
+							if !timer.Stop() {
+								<-timer.C
+							}
+							return
+						case <-timer.C:
+						}
+					}
+				}
+			}()
 		}
-		resultCapacity := 0
-		for _, family := range outboxDispatchFamilies {
-			resultCapacity += s.outboxFamilyConcurrency(family)
-		}
-		results := make(chan dispatchResult, resultCapacity)
-		var wg sync.WaitGroup
-		for _, family := range outboxDispatchFamilies {
-			family := family
-			for range s.outboxFamilyConcurrency(family) {
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					n, err := s.outbox.DispatchScoped(ctx, s.obHandler, family.scope)
-					results <- dispatchResult{n: n, err: err}
-				}()
-			}
-		}
-		wg.Wait()
-		close(results)
+	}
 
-		processed := 0
-		var dispatchErr error
-		for result := range results {
-			processed += result.n
-			dispatchErr = errors.Join(dispatchErr, result.err)
-		}
-		if dispatchErr != nil {
-			return dispatchErr
-		}
-		if processed == 0 {
-			return nil
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	quietChecks := 0
+	for {
+		select {
+		case <-ctx.Done():
+			cancel()
+			wg.Wait()
+			return ctx.Err()
+		case <-ticker.C:
+			stateMu.Lock()
+			allQuiet := len(states) > 0
+			var dispatchErr error
+			for _, state := range states {
+				dispatchErr = errors.Join(dispatchErr, state.err)
+				if !state.initialized || state.busy || state.lastN != 0 {
+					allQuiet = false
+				}
+			}
+			stateMu.Unlock()
+			if dispatchErr != nil {
+				cancel()
+				wg.Wait()
+				return dispatchErr
+			}
+			if allQuiet {
+				quietChecks++
+			} else {
+				quietChecks = 0
+			}
+			if quietChecks >= 2 {
+				cancel()
+				wg.Wait()
+				return nil
+			}
 		}
 	}
 }

@@ -99,18 +99,20 @@ deployment happen on their own.
    sandbox are covered in
    [Deployment connectors](../features/deployment-connectors.md).
 
-   Use the endpoint-binding lifecycle API to create the identity, provision the
-   tenant target, bind the route, and queue issue/deploy work in one idempotent
-   mutation:
+   Use the endpoint-binding lifecycle API to review one exact issuer, key-custody
+   path, destination, and effect list before any write. Put this request in
+   `endpoint-binding-plan.json`; replace the issuer with the exact configured
+   external, private, or platform CA you intend to keep using:
 
-   ```sh
-   curl -sS -X POST "$TRSTCTL_URL/api/v1/lifecycle/endpoint-bindings" \
-     -H "Authorization: Bearer $TRSTCTL_TOKEN" \
-     -H "Idempotency-Key: fleet-edge-payments-1" \
-     -H "Content-Type: application/json" \
-     -d '{
-       "owner_id": "'"$OWNER_ID"'",
+   ```json
+   {
+       "owner_id": "<owner-id>",
        "identity_name": "payments.example.com",
+       "reason": "automate the reviewed payments endpoint",
+       "issuer": {
+         "source": "external",
+         "id": "corporate-digicert"
+       },
        "target": {
          "name": "edge/prod/payments",
          "connector": "nginx",
@@ -119,16 +121,39 @@ deployment happen on their own.
            "host": "edge-1.internal"
          }
        }
-     }'
+   }
+   ```
+
+   Preview it. This POST is read-only: the returned `preview_writes` and
+   `preview_external_effects` must both be empty.
+
+   ```sh
+   trstctl-cli lifecycle endpoint-bindings preview \
+     -f endpoint-binding-plan.json > endpoint-binding-preview.json
+   jq '{ready,effect_free,issuer,target,custody,changes,queued_lifecycle_intents,recovery_steps,verification_steps,preview_writes,preview_external_effects,request_fingerprint}' \
+     endpoint-binding-preview.json
+   ```
+
+   After reviewing those exact values, copy the server fingerprint into the
+   execution body and authorize the idempotent mutation:
+
+   ```sh
+   jq --arg fingerprint "$(jq -r .request_fingerprint endpoint-binding-preview.json)" \
+     '. + {preview_fingerprint:$fingerprint}' \
+     endpoint-binding-plan.json > endpoint-binding-execute.json
+   trstctl-cli --idempotency-key fleet-edge-payments-1 \
+     lifecycle endpoint-bindings create -f endpoint-binding-execute.json
    ```
 
    The same flow is served in the console under **Deployment connectors** and over
-   REST at `/api/v1/lifecycle/endpoint-bindings`. The target stores non-secret
-   metadata and credential references only. Actual target mutation still moves through
-   `connector.deploy` outbox work; if no native registry or signed plugin owns the
-   connector, the binary records a failed worker receipt and leaves the work pending.
-   A queued receipt has zero attempts and is intent evidence only; it never claims that
-   delivery happened.
+   REST at `/api/v1/lifecycle/endpoint-bindings/preview` and
+   `/api/v1/lifecycle/endpoint-bindings`. The target stores non-secret metadata and
+   credential references only. Initial issuance and renewal use the previewed issuer;
+   an unavailable issuer fails closed instead of falling back. Actual target mutation
+   still moves through `connector.deploy` outbox work; if no native registry or signed
+   plugin owns the connector, the binary records a failed worker receipt and leaves
+   the work pending. A queued receipt has zero attempts and is intent evidence only;
+   it never claims that delivery happened.
 
 ## Where next
 

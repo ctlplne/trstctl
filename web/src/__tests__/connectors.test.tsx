@@ -10,7 +10,11 @@ const { apiMock } = vi.hoisted(() => ({
     connectorCatalog: vi.fn(),
     connectorTargets: vi.fn(),
     identities: vi.fn(),
+    owners: vi.fn(),
+    externalCAs: vi.fn(),
+    caAuthorities: vi.fn(),
     createConnectorTarget: vi.fn(),
+    previewEndpointBinding: vi.fn(),
     createEndpointBinding: vi.fn(),
     bindIdentityConnectorTarget: vi.fn(),
     testConnectorTarget: vi.fn(),
@@ -150,6 +154,20 @@ describe("connector deployment disclosure surface", () => {
         created_at: "2026-06-20T00:00:00Z",
       },
     ]);
+    apiMock.owners.mockReset().mockResolvedValue([
+      {
+        id: "owner-1",
+        tenant_id: "tenant-1",
+        name: "Payments platform",
+        kind: "team",
+        escalation_chain: [],
+        ownership_attested: true,
+        ownership_complete: true,
+        ownership_current: true,
+      },
+    ]);
+    apiMock.externalCAs.mockReset().mockResolvedValue([{ id: "corporate-digicert", name: "Corporate DigiCert", type: "digicert", status: "available" }]);
+    apiMock.caAuthorities.mockReset().mockResolvedValue({ items: [] });
     apiMock.createConnectorTarget.mockReset().mockResolvedValue({
       id: "target-created",
       tenant_id: "tenant-1",
@@ -159,9 +177,39 @@ describe("connector deployment disclosure surface", () => {
       enabled: false,
       created_at: "2026-06-20T00:00:00Z",
     });
+    apiMock.previewEndpointBinding.mockReset().mockResolvedValue({
+      capability: "F7",
+      ready: true,
+      effect_free: true,
+      request_fingerprint: "sha256:exact-endpoint-plan",
+      owner_id: "owner-1",
+      identity_name: "payments.example.test",
+      issuer: { source: "external", id: "corporate-digicert", name: "Corporate DigiCert", type: "digicert", availability: "available" },
+      target: {
+        id: "target-1",
+        name: "edge/prod/payments",
+        connector: "nginx",
+        config: { credential_ref: "secret://connectors/nginx" },
+        enabled: true,
+        revision: "sha256:target-revision",
+      },
+      custody: {
+        key_origin: "host_agent",
+        private_key_enters_control_plane: false,
+        detail: "The host creates the private key; only its CSR enters the control plane.",
+      },
+      changes: ["Create one x509 identity owned by Payments platform."],
+      queued_lifecycle_intents: ["ca.issue", "connector.deploy"],
+      recovery_steps: ["Restore the proven predecessor bundle."],
+      verification_steps: ["Read the certificate back from the endpoint."],
+      preview_writes: [],
+      preview_external_effects: [],
+    });
     apiMock.createEndpointBinding.mockReset().mockResolvedValue({
-      identity: { id: "identity-bound", status: "issued" },
-      target: { id: "target-created", name: "edge/prod/payments", connector: "nginx" },
+      identity: { id: "identity-bound", name: "payments.example.test", status: "issued" },
+      target: { id: "target-1", name: "edge/prod/payments", connector: "nginx" },
+      issuer: { source: "external", id: "corporate-digicert", name: "Corporate DigiCert", type: "digicert", availability: "available" },
+      preview_fingerprint: "sha256:exact-endpoint-plan",
       queued_lifecycle_intents: ["ca.issue", "connector.deploy"],
       renewal_intent: "ca.renew",
     });
@@ -263,7 +311,7 @@ describe("connector deployment disclosure surface", () => {
     expect(screen.getAllByText("receipt:rollback-nginx-2026-06-26").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Deploy" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Review restore" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Bind and enroll" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Choose CA" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Credential activity timeline" })).toBeInTheDocument();
     expect(screen.getByTestId("selected-target-timeline")).toHaveTextContent("connector.deploy");
     expect(screen.getByTestId("selected-target-timeline")).toHaveTextContent("endpoint.verify");
@@ -414,17 +462,35 @@ describe("connector deployment disclosure surface", () => {
 
     await user.click(screen.getByText("Destinations and safe actions", { exact: true }));
     await screen.findByRole("heading", { name: "Configured destinations" });
-    await user.selectOptions(screen.getByLabelText("Target"), "target-1");
-    await user.selectOptions(screen.getByLabelText("Identity"), "identity-1");
-    await user.type(screen.getByLabelText("Reason"), "verified design-partner endpoint");
-    await user.type(screen.getByLabelText("Owner ID"), "owner-1");
-    await user.click(screen.getByRole("button", { name: "Bind and enroll" }));
+    await screen.findByRole("heading", { name: "Name the endpoint" });
+    await user.selectOptions(screen.getByLabelText("Destination"), "target-1");
+    await user.selectOptions(screen.getByLabelText("Owner"), "owner-1");
+    await user.type(screen.getByLabelText("Enrollment reason"), "verified design-partner endpoint");
+    await user.click(screen.getByRole("button", { name: "Choose CA" }));
+    expect(await screen.findByRole("heading", { name: "Choose the CA" })).toBeInTheDocument();
+    expect(screen.getByText(/Nothing is preselected/)).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Issuing CA"), "external:corporate-digicert");
+    await user.click(screen.getByRole("button", { name: "Build safe preview" }));
+    expect(await screen.findByRole("heading", { name: "Ready to authorize — nothing changed" })).toBeInTheDocument();
+    expect(screen.getByText("External CA: Corporate DigiCert")).toBeInTheDocument();
+    expect(screen.getByText("host_agent")).toBeInTheDocument();
+    expect(screen.getByText("The host creates the private key; only its CSR enters the control plane.")).toBeInTheDocument();
+    expect(apiMock.previewEndpointBinding).toHaveBeenCalledWith({
+      owner_id: "owner-1",
+      identity_name: "payments.example.test",
+      reason: "verified design-partner endpoint",
+      target_id: "target-1",
+      issuer: { source: "external", id: "corporate-digicert" },
+    });
+    await user.click(screen.getByRole("button", { name: "Authorize issuance and deployment" }));
     await waitFor(() =>
       expect(apiMock.createEndpointBinding).toHaveBeenCalledWith({
         owner_id: "owner-1",
         identity_name: "payments.example.test",
         reason: "verified design-partner endpoint",
         target_id: "target-1",
+        issuer: { source: "external", id: "corporate-digicert" },
+        preview_fingerprint: "sha256:exact-endpoint-plan",
       }),
     );
 
@@ -433,6 +499,8 @@ describe("connector deployment disclosure surface", () => {
     // lifecycle action; the product must never guess these safety-critical inputs.
     await user.selectOptions(screen.getByLabelText("Target"), "target-1");
     await user.selectOptions(screen.getByLabelText("Identity"), "identity-1");
+    await user.clear(screen.getByLabelText("Reason"));
+    await user.type(screen.getByLabelText("Reason"), "verified design-partner endpoint");
 
     await user.click(screen.getByRole("button", { name: "Bind" }));
     await waitFor(() => expect(apiMock.bindIdentityConnectorTarget).toHaveBeenCalledWith("identity-1", { target_id: "target-1" }));

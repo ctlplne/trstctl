@@ -236,11 +236,17 @@ never live in the API process. What you can do end to end against the running bi
   write are one observation, while a difference of one stored microsecond still fails
   closed as changed terminal evidence. This lets exact JetStream replay converge
   without weakening the run ID, tenant, outbox, binding, outcome, or sequence checks.
-- Automated endpoint binding: `POST /api/v1/lifecycle/endpoint-bindings` creates the
+- Automated endpoint binding: first call the effect-free
+  `POST /api/v1/lifecycle/endpoint-bindings/preview` with the exact platform,
+  private, or external issuer. The preview reports CA identity, key custody, target
+  revision, writes, queued effects, recovery, verification, and a request
+  fingerprint while performing zero writes and zero external calls. Sending that
+  unchanged fingerprint to `POST /api/v1/lifecycle/endpoint-bindings` creates the
   X.509 identity for an existing owner, provisions or references the connector
-  target, binds the identity to that endpoint, and queues issue/deploy work through
-  the outbox. The leader lifecycle scheduler later renews the identity and sends the
-  successor back through credential-bearing `connector.deploy` work.
+  target, pins the chosen issuer, and queues issue/deploy work through the outbox.
+  Missing, unavailable, or changed issuers fail closed; the worker does not
+  substitute the built-in CA. The leader scheduler later renews through that same
+  pinned authority and sends the successor through `connector.deploy`.
 - Certificate key custody, corrected (B5 re-audit): the four custody columns
   (`key_origin`, `key_storage`, `key_exportable`, `key_generated_by`) are now
   actually persisted. They were added to the schema, set by the issuing code and

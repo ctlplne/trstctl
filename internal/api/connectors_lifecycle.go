@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/plugincensus"
 	"trstctl.com/trstctl/internal/servedstatus"
@@ -184,18 +186,75 @@ type identityConnectorTargetRequest struct {
 }
 
 type endpointBindingRequest struct {
-	OwnerID      string                   `json:"owner_id"`
-	IdentityName string                   `json:"identity_name"`
-	TargetID     string                   `json:"target_id"`
-	Target       *deploymentTargetRequest `json:"target"`
-	Reason       string                   `json:"reason"`
+	OwnerID            string                   `json:"owner_id"`
+	IdentityName       string                   `json:"identity_name"`
+	TargetID           string                   `json:"target_id"`
+	Target             *deploymentTargetRequest `json:"target"`
+	Issuer             endpointIssuerRequest    `json:"issuer"`
+	Reason             string                   `json:"reason"`
+	PreviewFingerprint string                   `json:"preview_fingerprint"`
 }
 
 type endpointBindingResponse struct {
 	Identity               identityResponse         `json:"identity"`
 	Target                 deploymentTargetResponse `json:"target"`
+	Issuer                 endpointIssuerSummary    `json:"issuer"`
+	PreviewFingerprint     string                   `json:"preview_fingerprint"`
 	QueuedLifecycleIntents []string                 `json:"queued_lifecycle_intents"`
 	RenewalIntent          string                   `json:"renewal_intent"`
+}
+
+const (
+	endpointIssuerPlatform = "platform"
+	endpointIssuerPrivate  = "private"
+	endpointIssuerExternal = "external"
+	endpointPlatformCAID   = "trstctl-issuing-ca"
+)
+
+type endpointIssuerRequest struct {
+	Source string `json:"source"`
+	ID     string `json:"id"`
+}
+
+type endpointIssuerSummary struct {
+	Source       string `json:"source"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Type         string `json:"type"`
+	Availability string `json:"availability"`
+}
+
+type endpointBindingTargetSummary struct {
+	ID        string          `json:"id,omitempty"`
+	Name      string          `json:"name"`
+	Connector string          `json:"connector"`
+	Config    json.RawMessage `json:"config"`
+	Enabled   bool            `json:"enabled"`
+	Revision  string          `json:"revision,omitempty"`
+}
+
+type endpointBindingCustody struct {
+	KeyOrigin              string `json:"key_origin"`
+	PrivateKeyControlPlane bool   `json:"private_key_enters_control_plane"`
+	Detail                 string `json:"detail"`
+}
+
+type endpointBindingPreviewResponse struct {
+	Capability             string                       `json:"capability"`
+	Ready                  bool                         `json:"ready"`
+	EffectFree             bool                         `json:"effect_free"`
+	RequestFingerprint     string                       `json:"request_fingerprint"`
+	OwnerID                string                       `json:"owner_id"`
+	IdentityName           string                       `json:"identity_name"`
+	Issuer                 endpointIssuerSummary        `json:"issuer"`
+	Target                 endpointBindingTargetSummary `json:"target"`
+	Custody                endpointBindingCustody       `json:"custody"`
+	Changes                []string                     `json:"changes"`
+	QueuedLifecycleIntents []string                     `json:"queued_lifecycle_intents"`
+	RecoverySteps          []string                     `json:"recovery_steps"`
+	VerificationSteps      []string                     `json:"verification_steps"`
+	PreviewWrites          []string                     `json:"preview_writes"`
+	PreviewExternalEffects []string                     `json:"preview_external_effects"`
 }
 
 type connectorTargetActionRequest struct {
@@ -834,6 +893,25 @@ func resolvePredecessorCertificate(ctx context.Context, st *store.Store, tenantI
 	return predecessorCertificate{Serial: p.Serial, Fingerprint: p.Fingerprint}
 }
 
+func (a *API) previewEndpointBinding(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	req, err := decodeEndpointBindingRequest(r)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	preview, err := a.endpointBindingPreview(r.Context(), tenantID, req)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, preview)
+}
+
 //trstctl:mutation
 func (a *API) createEndpointBinding(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
@@ -842,16 +920,19 @@ func (a *API) createEndpointBinding(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
-		if req.Target != nil && !deploymentTargetRequestEnabled(req.Target.Enabled) {
+		preview, err := a.endpointBindingPreview(ctx, tenantID, req)
+		if err != nil {
+			return 0, nil, err
+		}
+		if req.PreviewFingerprint == "" {
 			return 0, nil, errStatus(http.StatusConflict,
-				"deployment target is disabled; enable it only after its agent or relay and endpoint have been verified; nothing was queued or changed")
+				"preview_fingerprint is required; preview this exact owner, issuer, destination, and DNS name before enrollment; nothing was queued or changed")
 		}
-		if _, err := a.store.GetOwner(ctx, tenantID, req.OwnerID); err != nil {
-			return 0, nil, err
+		if req.PreviewFingerprint != preview.RequestFingerprint {
+			return 0, nil, errStatus(http.StatusConflict,
+				"endpoint binding changed after preview; preview the current owner, issuer, destination, and DNS name again; nothing was queued or changed")
 		}
-		if err := validateWildcardIdentityPolicy(req.IdentityName, nil); err != nil {
-			return 0, nil, err
-		}
+
 		target, err := a.endpointBindingTarget(ctx, tenantID, req)
 		if err != nil {
 			return 0, nil, err
@@ -859,10 +940,20 @@ func (a *API) createEndpointBinding(w http.ResponseWriter, r *http.Request) {
 		if err := requireDeploymentTargetEnabled(target); err != nil {
 			return 0, nil, err
 		}
+		attributes, err := json.Marshal(map[string]any{
+			"issuing_authority_source": preview.Issuer.Source,
+			"issuing_authority_id":     preview.Issuer.ID,
+			"issuing_authority_name":   preview.Issuer.Name,
+			"endpoint_preview_sha256":  preview.RequestFingerprint,
+		})
+		if err != nil {
+			return 0, nil, err
+		}
 		identity, err := a.orch.CreateIdentity(ctx, tenantID, store.Identity{
-			Kind:    store.KindX509Certificate,
-			Name:    req.IdentityName,
-			OwnerID: req.OwnerID,
+			Kind:       store.KindX509Certificate,
+			Name:       req.IdentityName,
+			OwnerID:    req.OwnerID,
+			Attributes: attributes,
 		})
 		if err != nil {
 			return 0, nil, err
@@ -871,11 +962,7 @@ func (a *API) createEndpointBinding(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
-		reason := req.Reason
-		if reason == "" {
-			reason = "endpoint binding automation"
-		}
-		if err := a.orch.Transition(ctx, tenantID, identity.ID, orchestrator.StateIssued, reason); err != nil {
+		if err := a.orch.TransitionWithIdempotency(ctx, tenantID, identity.ID, orchestrator.StateIssued, endpointBindingReason(req), idempotencyKey); err != nil {
 			return 0, nil, err
 		}
 		identity, err = a.store.GetIdentity(ctx, tenantID, identity.ID)
@@ -885,10 +972,185 @@ func (a *API) createEndpointBinding(w http.ResponseWriter, r *http.Request) {
 		return http.StatusCreated, endpointBindingResponse{
 			Identity:               toIdentityResponse(identity),
 			Target:                 toDeploymentTargetResponse(target),
+			Issuer:                 preview.Issuer,
+			PreviewFingerprint:     preview.RequestFingerprint,
 			QueuedLifecycleIntents: []string{"ca.issue", "connector.deploy"},
 			RenewalIntent:          "ca.renew",
 		}, nil
 	})
+}
+
+func endpointBindingReason(req endpointBindingRequest) string {
+	if req.Reason != "" {
+		return req.Reason
+	}
+	return "endpoint binding automation"
+}
+
+func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req endpointBindingRequest) (endpointBindingPreviewResponse, error) {
+	if _, err := a.store.GetOwner(ctx, tenantID, req.OwnerID); err != nil {
+		return endpointBindingPreviewResponse{}, err
+	}
+	if err := validateWildcardIdentityPolicy(req.IdentityName, nil); err != nil {
+		return endpointBindingPreviewResponse{}, err
+	}
+	target, err := a.endpointBindingPreviewTarget(ctx, tenantID, req)
+	if err != nil {
+		return endpointBindingPreviewResponse{}, err
+	}
+	issuer, err := a.resolveEndpointIssuer(ctx, tenantID, req.Issuer)
+	if err != nil {
+		return endpointBindingPreviewResponse{}, err
+	}
+	cfg, err := canonicalEndpointBindingConfig(target.Config)
+	if err != nil {
+		return endpointBindingPreviewResponse{}, err
+	}
+	target.Config = cfg
+	fingerprintInput := struct {
+		OwnerID      string                       `json:"owner_id"`
+		IdentityName string                       `json:"identity_name"`
+		Reason       string                       `json:"reason"`
+		Issuer       endpointIssuerSummary        `json:"issuer"`
+		Target       endpointBindingTargetSummary `json:"target"`
+	}{req.OwnerID, req.IdentityName, endpointBindingReason(req), issuer, target}
+	raw, err := json.Marshal(fingerprintInput)
+	if err != nil {
+		return endpointBindingPreviewResponse{}, err
+	}
+	fingerprint := crypto.SHA256Hex(raw)
+	agentKeygen := custody.TargetExecutorIsAgent(target.Config)
+	custodySummary := endpointBindingCustody{
+		KeyOrigin:              "control_plane",
+		PrivateKeyControlPlane: true,
+		Detail:                 "trstctl generates the subject key in locked memory, passes it only to the selected connector, then wipes it",
+	}
+	if agentKeygen {
+		custodySummary = endpointBindingCustody{
+			KeyOrigin:              "host_agent",
+			PrivateKeyControlPlane: false,
+			Detail:                 "the host agent generates the subject key, sends only a CSR, installs the returned certificate, and verifies the listener",
+		}
+	}
+	return endpointBindingPreviewResponse{
+		Capability:         "endpoint_binding",
+		Ready:              true,
+		EffectFree:         true,
+		RequestFingerprint: fingerprint,
+		OwnerID:            req.OwnerID,
+		IdentityName:       req.IdentityName,
+		Issuer:             issuer,
+		Target:             target,
+		Custody:            custodySummary,
+		Changes: []string{
+			"Create one X.509 identity for " + req.IdentityName + " owned by " + req.OwnerID + ".",
+			"Pin issuance and renewal to " + issuer.Name + " (" + issuer.Source + ":" + issuer.ID + ").",
+			"Bind the identity to " + target.Name + " through the " + target.Connector + " connector.",
+		},
+		QueuedLifecycleIntents: []string{"ca.issue", "connector.deploy"},
+		RecoverySteps: []string{
+			"Stop or disable the destination before retrying if deployment is unsafe.",
+			"Use the connector delivery receipt and predecessor fingerprint for supported rollback.",
+		},
+		VerificationSteps: []string{
+			"Wait for the issuance and connector delivery receipts to reach a terminal state.",
+			"Open a fresh connection to the listener and compare hostname, fingerprint, chain, and application response.",
+		},
+		PreviewWrites:          []string{},
+		PreviewExternalEffects: []string{},
+	}, nil
+}
+
+func (a *API) endpointBindingPreviewTarget(ctx context.Context, tenantID string, req endpointBindingRequest) (endpointBindingTargetSummary, error) {
+	if req.TargetID != "" {
+		target, err := a.store.GetDeploymentTarget(ctx, tenantID, req.TargetID)
+		if err != nil {
+			return endpointBindingTargetSummary{}, err
+		}
+		if err := requireDeploymentTargetEnabled(target); err != nil {
+			return endpointBindingTargetSummary{}, err
+		}
+		return endpointBindingTargetSummary{
+			ID: target.ID, Name: target.Name, Connector: target.Type, Config: target.Config,
+			Enabled: target.Enabled, Revision: target.RevisionID,
+		}, nil
+	}
+	if req.Target == nil || !deploymentTargetRequestEnabled(req.Target.Enabled) {
+		return endpointBindingTargetSummary{}, errStatus(http.StatusConflict,
+			"deployment target is disabled; enable it only after its agent or relay and endpoint have been verified; nothing was queued or changed")
+	}
+	return endpointBindingTargetSummary{
+		Name: req.Target.Name, Connector: req.Target.Connector, Config: req.Target.Config, Enabled: true,
+	}, nil
+}
+
+func (a *API) resolveEndpointIssuer(ctx context.Context, tenantID string, req endpointIssuerRequest) (endpointIssuerSummary, error) {
+	switch req.Source {
+	case endpointIssuerPlatform:
+		if req.ID != endpointPlatformCAID {
+			return endpointIssuerSummary{}, errStatus(http.StatusUnprocessableEntity,
+				"platform issuer id must be trstctl-issuing-ca; no CA was selected")
+		}
+		return endpointIssuerSummary{Source: req.Source, ID: req.ID, Name: "trstctl built-in issuing CA", Type: "x509", Availability: "available"}, nil
+	case endpointIssuerPrivate:
+		if a.caHierarchy == nil {
+			return endpointIssuerSummary{}, ErrCAHierarchyUnavailable
+		}
+		items, err := a.caHierarchy.ListAuthorities(ctx, tenantID)
+		if err != nil {
+			return endpointIssuerSummary{}, err
+		}
+		for _, item := range items {
+			if item.ID != req.ID {
+				continue
+			}
+			if item.Status != "active" || strings.TrimSpace(item.SignerHandle) == "" {
+				return endpointIssuerSummary{}, errStatus(http.StatusConflict,
+					"selected private CA is not active and signer-backed; no CA was substituted and nothing was queued")
+			}
+			return endpointIssuerSummary{Source: req.Source, ID: item.ID, Name: item.CommonName, Type: item.Kind, Availability: item.Status}, nil
+		}
+		return endpointIssuerSummary{}, errStatus(http.StatusUnprocessableEntity,
+			"selected private CA is not configured for this tenant; no CA was substituted and nothing was queued")
+	case endpointIssuerExternal:
+		if a.externalCAs == nil {
+			return endpointIssuerSummary{}, ErrExternalCAUnavailable
+		}
+		items, err := a.externalCAs.ListExternalCAs(ctx, tenantID)
+		if err != nil {
+			return endpointIssuerSummary{}, err
+		}
+		for _, item := range items {
+			if item.ID != req.ID {
+				continue
+			}
+			if item.Status != "available" {
+				return endpointIssuerSummary{}, errStatus(http.StatusConflict,
+					"selected external CA is unavailable; no CA was substituted and nothing was queued")
+			}
+			return endpointIssuerSummary{Source: req.Source, ID: item.ID, Name: item.Name, Type: item.Type, Availability: item.Status}, nil
+		}
+		return endpointIssuerSummary{}, errStatus(http.StatusUnprocessableEntity,
+			"selected external CA is not configured for this tenant; no CA was substituted and nothing was queued")
+	default:
+		return endpointIssuerSummary{}, errStatus(http.StatusBadRequest,
+			"issuer.source must be platform, private, or external")
+	}
+}
+
+func canonicalEndpointBindingConfig(raw json.RawMessage) (json.RawMessage, error) {
+	if len(raw) == 0 {
+		return json.RawMessage("{}"), nil
+	}
+	var value map[string]any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return nil, errStatus(http.StatusBadRequest, "target config must be a JSON object")
+	}
+	canonical, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	return canonical, nil
 }
 
 func (a *API) listOutboxCircuits(w http.ResponseWriter, r *http.Request) {
@@ -976,12 +1238,18 @@ func decodeEndpointBindingRequest(r *http.Request) (endpointBindingRequest, erro
 	req.OwnerID = strings.TrimSpace(req.OwnerID)
 	req.IdentityName = strings.TrimSpace(req.IdentityName)
 	req.TargetID = strings.TrimSpace(req.TargetID)
+	req.Issuer.Source = strings.ToLower(strings.TrimSpace(req.Issuer.Source))
+	req.Issuer.ID = strings.TrimSpace(req.Issuer.ID)
 	req.Reason = strings.TrimSpace(req.Reason)
+	req.PreviewFingerprint = strings.ToLower(strings.TrimSpace(req.PreviewFingerprint))
 	if req.OwnerID == "" {
 		return endpointBindingRequest{}, errStatus(http.StatusBadRequest, "owner_id is required")
 	}
 	if req.IdentityName == "" {
 		return endpointBindingRequest{}, errStatus(http.StatusBadRequest, "identity_name is required")
+	}
+	if req.Issuer.Source == "" || req.Issuer.ID == "" {
+		return endpointBindingRequest{}, errStatus(http.StatusBadRequest, "issuer.source and issuer.id are required")
 	}
 	if req.TargetID != "" && req.Target != nil {
 		return endpointBindingRequest{}, errStatus(http.StatusBadRequest, "provide target_id or target, not both")

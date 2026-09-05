@@ -1484,8 +1484,12 @@ describe("i18n boundary", () => {
       // The six-tool product map and repository-local SDK installation boundary
       // were reviewed in English for g216. Machine-authored es/de remain
       // FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "05fa84f06f44a73ec2608321e388321313da5b3cca452b0c60a404e86192ce5b",
-      "de-DE": "b73d30a5e38d9da2503aa567ba8ff03f9e4876afb24dfa23de7026b2c7112fbd",
+      // G221 re-pin: endpoint setup now requires an exact CA, shows key custody
+      // and all queued effects in a zero-write preview, and binds execution to
+      // that review. Machine-authored es/de remain FLAGGED FOR HUMAN
+      // TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "3f502f09eadf798d78d3074a5b8352f2213fa6cd12633cb462b7e78528ebb1a6",
+      "de-DE": "c7ef042c3417d51171629d16aa705f408bb5510bec80de09b6fedfb5fbcfe078",
     });
   });
 

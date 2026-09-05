@@ -79,12 +79,18 @@ tenant-scoped deployed X.509 identities, honoring `lifecycle.renew_before` and
 integration-tested against real PostgreSQL, NATS, the signer process, and a signed
 webhook sink.
 
-`POST /api/v1/lifecycle/endpoint-bindings` is the served end-to-end path for automated
-enrollment, provisioning, renewal, and endpoint binding: it creates the X.509 identity,
-binds the route, queues issue/deploy intents through the outbox, and leaves renewal on
-the same `ca.renew` path. The issuer builds the deploy payload while the key is still in
-memory, so the connector delivers the certificate/key bundle without PEM bytes ever
-returning from the API response.
+`POST /api/v1/lifecycle/endpoint-bindings/preview` is the effect-free review path.
+The operator must choose one exact built-in, private, or external CA; the response
+names that CA, key custody, destination revision, planned records, queued effects,
+recovery, verification, and the fingerprint that binds execution to the review.
+`POST /api/v1/lifecycle/endpoint-bindings` accepts that fingerprint and is the served
+end-to-end path for automated enrollment, provisioning, renewal, and endpoint
+binding. It creates the X.509 identity, pins the issuer, binds the route, and queues
+issue/deploy intents through the outbox. Initial issuance and renewal both use the
+pinned authority; a missing or unavailable authority fails instead of falling back.
+The issuer builds the deploy payload while the key is still in memory, so the
+connector delivers the certificate/key bundle without PEM bytes ever returning from
+the API response.
 
 #### See and operate the live renewal plan
 

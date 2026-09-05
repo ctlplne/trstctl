@@ -3094,17 +3094,63 @@ export interface EditionsInfo {
 
 export interface EndpointBinding {
   identity: Identity;
+  issuer: EndpointIssuer;
+  preview_fingerprint: string;
   queued_lifecycle_intents: string[];
   renewal_intent: string;
   target: DeploymentTarget;
 }
 
-export interface EndpointBindingRequest {
+export interface EndpointBindingCustody {
+  detail: string;
+  key_origin: string;
+  private_key_enters_control_plane: boolean;
+}
+
+export interface EndpointBindingPlanRequest {
   identity_name: string;
+  issuer: EndpointIssuer;
   owner_id: string;
   reason?: string;
   target?: DeploymentTargetRequest;
   target_id?: string;
+}
+
+export interface EndpointBindingPreview {
+  capability: string;
+  changes: string[];
+  custody: EndpointBindingCustody;
+  effect_free: boolean;
+  identity_name: string;
+  issuer: EndpointIssuer;
+  owner_id: string;
+  preview_external_effects: string[];
+  preview_writes: string[];
+  queued_lifecycle_intents: string[];
+  ready: boolean;
+  recovery_steps: string[];
+  request_fingerprint: string;
+  target: EndpointBindingTarget;
+  verification_steps: string[];
+}
+
+export interface EndpointBindingRequest {
+  identity_name: string;
+  issuer: EndpointIssuer;
+  owner_id: string;
+  preview_fingerprint: string;
+  reason?: string;
+  target?: DeploymentTargetRequest;
+  target_id?: string;
+}
+
+export interface EndpointBindingTarget {
+  config: Record<string, unknown>;
+  connector: string;
+  enabled: boolean;
+  id?: string;
+  name: string;
+  revision?: string;
 }
 
 export interface EndpointCustodySummary {
@@ -3112,6 +3158,14 @@ export interface EndpointCustodySummary {
   host_generated: number;
   migrated_percent: number;
   targets: number;
+}
+
+export interface EndpointIssuer {
+  availability?: string;
+  id: string;
+  name?: string;
+  source: "platform" | "private" | "external";
+  type?: string;
 }
 
 export interface EndpointKeyCustody {
@@ -4539,6 +4593,7 @@ export interface MigrationAssessment {
 export interface MigrationMemberBinding {
   connector: string;
   issuing_authority_id: string;
+  issuing_authority_source?: "platform" | "private" | "external";
   predecessor_certificate_id: string;
   predecessor_fingerprint: string;
   required_agent_id: string;

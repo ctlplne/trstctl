@@ -107,7 +107,7 @@ export const journeys: Journey[] = [
         bodyKey: "journeys.fleet.bindings.body",
         to: "/certificates?tab=renewal",
         command:
-          'curl -sS -X POST "$TRSTCTL_URL/api/v1/lifecycle/endpoint-bindings" \\\n  -H "Authorization: Bearer $TRSTCTL_TOKEN" \\\n  -H "Idempotency-Key: fleet-edge-payments-1" \\\n  -H "Content-Type: application/json" \\\n  -d @endpoint-binding.json',
+          'curl -sS -X POST "$TRSTCTL_URL/api/v1/lifecycle/endpoint-bindings/preview" \\\n  -H "Authorization: Bearer $TRSTCTL_TOKEN" \\\n  -H "Content-Type: application/json" \\\n  -d @endpoint-binding-plan.json',
       },
     ],
   },

@@ -598,7 +598,7 @@ func TestServedEndpointBindingPushesCredentialsCAPLIFE05(t *testing.T) {
 		{name: "cap-life-05-azure.served.test", connector: "azure-keyvault", route: azureName},
 		{name: "cap-life-05-kemp.served.test", connector: "kemp", route: kempVS},
 	} {
-		status, body = secretsReq(t, h, http.MethodPost, "/api/v1/lifecycle/endpoint-bindings", tok, map[string]any{
+		bindingRequest := previewPlatformEndpointBinding(t, h, tok, map[string]any{
 			"owner_id":      owner.ID,
 			"identity_name": tc.name,
 			"reason":        "cap-life-05 automated endpoint push",
@@ -611,6 +611,7 @@ func TestServedEndpointBindingPushesCredentialsCAPLIFE05(t *testing.T) {
 				},
 			},
 		})
+		status, body = secretsReq(t, h, http.MethodPost, "/api/v1/lifecycle/endpoint-bindings", tok, bindingRequest)
 		if status != http.StatusCreated {
 			t.Fatalf("create %s endpoint binding: status %d body %s", tc.connector, status, body)
 		}

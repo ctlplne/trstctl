@@ -97,8 +97,21 @@ func (d *issuanceDispatcher) signAgentSubjectCSR(
 
 	out, err := d.idem.Do(ctx, tenantID, idemKey, func(ctx context.Context) ([]byte, error) {
 		csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
-		material, err := d.mintServedLeafFromCSRForAuthority(
-			ctx, tenantID, ident, intent.IssuingAuthorityID, csrPEM, intent.Issuance,
+		selection := endpointAuthoritySelection{
+			Source: strings.TrimSpace(intent.IssuingAuthoritySource),
+			ID:     strings.TrimSpace(intent.IssuingAuthorityID),
+		}
+		if selection.Source == "" {
+			// Migration jobs predate the source field and always pin a private
+			// signer-backed hierarchy authority. An empty ID is the legacy
+			// platform issuer; neither case guesses an external CA.
+			selection = endpointAuthoritySelection{Source: "platform", ID: "trstctl-issuing-ca"}
+			if strings.TrimSpace(intent.IssuingAuthorityID) != "" {
+				selection = endpointAuthoritySelection{Source: "private", ID: strings.TrimSpace(intent.IssuingAuthorityID)}
+			}
+		}
+		material, err := d.mintServedLeafFromCSRForSelection(
+			ctx, tenantID, ident, selection, idemKey, csrPEM, intent.Issuance,
 		)
 		if err != nil {
 			return nil, err
@@ -145,28 +158,8 @@ func (d *issuanceDispatcher) signAgentSubjectCSR(
 	if !ok {
 		return nil, status.Error(codes.Internal, "issued certificate could not be read back")
 	}
-	if strings.TrimSpace(intent.MigrationRunID) != "" {
-		eventID := orchestrator.MigrationEventID(tenantID, intent.MigrationRunID, "issued:"+job.IdempotencyKey)
-		if _, err := d.orch.UpdateMigrationRun(ctx, tenantID, intent.MigrationRunID, eventID,
-			func(current migration.Run) (migration.Run, []migration.Action, error) {
-				member, found := migration.Member(current, intent.MigrationWaveID, intent.IdentityID)
-				if !found {
-					return current, nil, fmt.Errorf("server: migration CSR job names no current run member")
-				}
-				claim := migrationReceiptClaim{
-					runID: intent.MigrationRunID, waveID: intent.MigrationWaveID,
-					identityID: intent.IdentityID, stage: migration.StageSuccessor, renew: &intent,
-				}
-				if err := validateMigrationClaimBinding(member.Binding, intent.RequiredAgentID, claim); err != nil {
-					return current, nil, err
-				}
-				next, err := migration.RecordSuccessorIssued(
-					current, intent.MigrationWaveID, intent.IdentityID, fingerprint,
-				)
-				return next, nil, err
-			}); err != nil {
-			return nil, status.Errorf(codes.Internal, "bind issued successor to migration: %v", err)
-		}
+	if err := d.bindAgentCSRMigrationSuccessor(ctx, tenantID, job.IdempotencyKey, intent, fingerprint); err != nil {
+		return nil, err
 	}
 	if len(chainPEM) == 0 {
 		chainPEM = d.chainPEM
@@ -176,6 +169,40 @@ func (d *issuanceDispatcher) signAgentSubjectCSR(
 		ChainPEM:       append([]byte(nil), chainPEM...),
 		Fingerprint:    fingerprint,
 	}, nil
+}
+
+func (d *issuanceDispatcher) bindAgentCSRMigrationSuccessor(
+	ctx context.Context,
+	tenantID, jobIdempotencyKey string,
+	intent RelayDeployIntent,
+	fingerprint string,
+) error {
+	if strings.TrimSpace(intent.MigrationRunID) == "" {
+		return nil
+	}
+	eventID := orchestrator.MigrationEventID(tenantID, intent.MigrationRunID, "issued:"+jobIdempotencyKey)
+	_, err := d.orch.UpdateMigrationRun(ctx, tenantID, intent.MigrationRunID, eventID,
+		func(current migration.Run) (migration.Run, []migration.Action, error) {
+			member, found := migration.Member(current, intent.MigrationWaveID, intent.IdentityID)
+			if !found {
+				return current, nil, fmt.Errorf("server: migration CSR job names no current run member")
+			}
+			claim := migrationReceiptClaim{
+				runID: intent.MigrationRunID, waveID: intent.MigrationWaveID,
+				identityID: intent.IdentityID, stage: migration.StageSuccessor, renew: &intent,
+			}
+			if err := validateMigrationClaimBinding(member.Binding, intent.RequiredAgentID, claim); err != nil {
+				return current, nil, err
+			}
+			next, err := migration.RecordSuccessorIssued(
+				current, intent.MigrationWaveID, intent.IdentityID, fingerprint,
+			)
+			return next, nil, err
+		})
+	if err != nil {
+		return status.Errorf(codes.Internal, "bind issued successor to migration: %v", err)
+	}
+	return nil
 }
 
 // authorizeAgentCSR is the whole authorization decision for an agent's request.

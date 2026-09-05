@@ -133,6 +133,10 @@ func (d *issuanceDispatcher) enqueueHostRenewal(
 		routed = target.Name
 	}
 	verifyAddress, verifyServerName := verifyTargetFromConfig(target.Config)
+	selection, err := endpointIssuingAuthority(ident.Attributes)
+	if err != nil {
+		return err
+	}
 
 	intent := RelayDeployIntent{
 		Connector:                target.Type,
@@ -146,6 +150,8 @@ func (d *issuanceDispatcher) enqueueHostRenewal(
 		SubjectCommonName:        commonName,
 		SubjectDNSNames:          dnsNames,
 		PredecessorCertificateID: predecessorCertificateID,
+		IssuingAuthoritySource:   selection.Source,
+		IssuingAuthorityID:       selection.ID,
 		Issuance:                 issuance,
 	}
 	payload, err := json.Marshal(intent)

@@ -433,6 +433,7 @@ type transitionTrigger struct {
 	IdentityID             string `json:"identity_id"`
 	To                     string `json:"to"`
 	Reason                 string `json:"reason"`
+	IdempotencyKey         string `json:"idempotency_key,omitempty"`
 	Origin                 string `json:"origin,omitempty"`
 	PredecessorFingerprint string `json:"predecessor_fingerprint,omitempty"`
 	// SubjectCSRPEM is the caller's own PKCS#10 request (epic B1). When it is
@@ -539,7 +540,7 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 			return []byte("first issuance dispatched to host agent"), nil
 		}
 
-		material, err := d.mintServedLeafForTrigger(ctx, m.TenantID, ident, p)
+		material, err := d.mintServedLeafForTrigger(ctx, m.TenantID, ident, p, endpointBindingIssueKey(p, m))
 		if err != nil {
 			return nil, err
 		}
@@ -660,9 +661,18 @@ func (d *issuanceDispatcher) mintServedLeaf(ctx context.Context, tenantID, owner
 // must wipe KeyPEM after encoding the deployment intent; the key is never written
 // to the event log or read model.
 func (d *issuanceDispatcher) mintServedLeafMaterial(ctx context.Context, tenantID, ownerID, commonName string, dnsNames []string, issuance ...*store.OperationApprovalIssuanceBinding) (issuedLeafMaterial, error) {
-	if d.issue == nil {
-		return issuedLeafMaterial{}, errors.New("server: issuing CA is unavailable")
-	}
+	return d.mintServedLeafMaterialForSelection(ctx, tenantID, ownerID, commonName, dnsNames,
+		endpointAuthoritySelection{Source: "platform", ID: "trstctl-issuing-ca"}, "", issuance...)
+}
+
+func (d *issuanceDispatcher) mintServedLeafMaterialForSelection(
+	ctx context.Context,
+	tenantID, ownerID, commonName string,
+	dnsNames []string,
+	selection endpointAuthoritySelection,
+	issueKey string,
+	issuance ...*store.OperationApprovalIssuanceBinding,
+) (issuedLeafMaterial, error) {
 	if len(dnsNames) == 0 {
 		dnsNames = []string{commonName}
 	}
@@ -698,7 +708,7 @@ func (d *issuanceDispatcher) mintServedLeafMaterial(ctx context.Context, tenantI
 	if err != nil {
 		return issuedLeafMaterial{}, err
 	}
-	leafPEM, err := d.issue(ctx, csrDER, ttl, leafProfile)
+	leafPEM, chainPEM, caID, source, err := d.issueEndpointCSR(ctx, tenantID, selection, issueKey, csrDER, dnsNames, ttl, leafProfile)
 	if err != nil {
 		return issuedLeafMaterial{}, err
 	}
@@ -719,10 +729,10 @@ func (d *issuanceDispatcher) mintServedLeafMaterial(ctx context.Context, tenantI
 	keepKeyPEM = true
 	return issuedLeafMaterial{
 		Certificate: store.Certificate{
-			CAID: IssuingCAID(), OwnerID: ownerPtr, Subject: info.Subject, SANs: sansOf(info),
+			CAID: caID, OwnerID: ownerPtr, Subject: info.Subject, SANs: sansOf(info),
 			Issuer: info.Issuer, Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
 			KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
-			Source: "issued", CertificateDER: append([]byte(nil), blk.Bytes...),
+			Source: source, CertificateDER: append([]byte(nil), blk.Bytes...),
 			// B5: the deprecated path. The key was held in locked memory and
 			// wiped, but it existed outside the requester, and a credential on
 			// this path is one an operator should plan to replace. They cannot
@@ -731,8 +741,9 @@ func (d *issuanceDispatcher) mintServedLeafMaterial(ctx context.Context, tenantI
 			KeyOrigin:  string(custody.OriginControlPlane),
 			KeyStorage: string(custody.StorageLockedMemory),
 		},
-		CertPEM: append([]byte(nil), leafPEM...),
-		KeyPEM:  keyPEM,
+		CertPEM:  append([]byte(nil), leafPEM...),
+		ChainPEM: append([]byte(nil), chainPEM...),
+		KeyPEM:   keyPEM,
 	}, nil
 }
 
@@ -835,7 +846,7 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 			// the server-side-keygen deprecation event the issue path emits.
 			// Custody that degrades automatically is worse than custody that
 			// was never claimed, because the claim outlives the property.
-			material, err := d.mintServedLeafForRenewal(ctx, m.TenantID, ident, commonName, dnsNames)
+			material, err := d.mintServedLeafForRenewal(ctx, m.TenantID, ident, commonName, dnsNames, idemKey)
 			if err != nil {
 				_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
 				return nil, err
@@ -1753,24 +1764,28 @@ func sansOf(info certinfo.Info) []string {
 // records a deprecation event each time it is used, so an operator can see which
 // of their flows still hand key generation to the control plane before the path
 // is removed.
-func (d *issuanceDispatcher) mintServedLeafForTrigger(ctx context.Context, tenantID string, ident store.Identity, p transitionTrigger) (issuedLeafMaterial, error) {
+func (d *issuanceDispatcher) mintServedLeafForTrigger(ctx context.Context, tenantID string, ident store.Identity, p transitionTrigger, issueKey string) (issuedLeafMaterial, error) {
 	binding, err := issuanceBindingForTrigger(p)
+	if err != nil {
+		return issuedLeafMaterial{}, err
+	}
+	selection, err := endpointIssuingAuthority(ident.Attributes)
 	if err != nil {
 		return issuedLeafMaterial{}, err
 	}
 	// A CSR on the transition wins: it is the most specific statement of intent
 	// for this particular issuance.
 	if csr := strings.TrimSpace(p.SubjectCSRPEM); csr != "" {
-		return d.mintServedLeafFromCSR(ctx, tenantID, ident, []byte(csr), binding)
+		return d.mintServedLeafFromCSRForSelection(ctx, tenantID, ident, selection, issueKey, []byte(csr), binding)
 	}
 	// Otherwise the request's own CSR, recorded when the identity was created.
 	// The CSR belongs to the requester, not to whoever approves them: an approver
 	// pressing "approve" should not have to re-supply key material they never had.
 	if csr := subjectCSRFromIdentity(ident); csr != "" {
-		return d.mintServedLeafFromCSR(ctx, tenantID, ident, []byte(csr), binding)
+		return d.mintServedLeafFromCSRForSelection(ctx, tenantID, ident, selection, issueKey, []byte(csr), binding)
 	}
 	d.recordServerSideKeygenDeprecation(ctx, tenantID, ident)
-	return d.mintServedLeafMaterial(ctx, tenantID, ident.OwnerID, ident.Name, []string{ident.Name}, binding)
+	return d.mintServedLeafMaterialForSelection(ctx, tenantID, ident.OwnerID, ident.Name, []string{ident.Name}, selection, issueKey, binding)
 }
 
 // mintServedLeafForRenewal mints a renewal leaf, honouring a recorded CSR.
@@ -1785,20 +1800,24 @@ func (d *issuanceDispatcher) mintServedLeafForTrigger(ctx context.Context, tenan
 // still hold it: nothing about a renewal transfers custody. Falling back to
 // control-plane keygen for such an identity is what this exists to prevent.
 func (d *issuanceDispatcher) mintServedLeafForRenewal(
-	ctx context.Context, tenantID string, ident store.Identity, commonName string, dnsNames []string,
+	ctx context.Context, tenantID string, ident store.Identity, commonName string, dnsNames []string, issueKey string,
 ) (issuedLeafMaterial, error) {
+	selection, err := endpointIssuingAuthority(ident.Attributes)
+	if err != nil {
+		return issuedLeafMaterial{}, err
+	}
 	if csr := subjectCSRFromIdentity(ident); csr != "" {
 		// The recorded CSR fixes the public key; its own subject and SANs are
 		// re-validated against the profile inside mintServedLeafFromCSR, so a
 		// stale CSR cannot widen what the renewal asserts.
-		return d.mintServedLeafFromCSR(ctx, tenantID, ident, []byte(csr))
+		return d.mintServedLeafFromCSRForSelection(ctx, tenantID, ident, selection, issueKey, []byte(csr))
 	}
 	// No CSR on record: this identity's key has always been control-plane
 	// generated, so a renewal that generates one changes nothing about its
 	// custody. It is still worth announcing, for the same reason the issue path
 	// announces it.
 	d.recordServerSideKeygenDeprecation(ctx, tenantID, ident)
-	return d.mintServedLeafMaterial(ctx, tenantID, ident.OwnerID, commonName, dnsNames)
+	return d.mintServedLeafMaterialForSelection(ctx, tenantID, ident.OwnerID, commonName, dnsNames, selection, issueKey)
 }
 
 // subjectCSRFromIdentity reads the CSR a requester attached when they created the
@@ -1816,30 +1835,21 @@ func subjectCSRFromIdentity(ident store.Identity) string {
 	return strings.TrimSpace(csr)
 }
 
-// mintServedLeafFromCSR signs a caller-supplied request. It returns no KeyPEM,
+// mintServedLeafFromCSRForSelection signs a caller-supplied request with the
+// identity's exact authority selection. It returns no KeyPEM,
 // because there is no key here to return — which is the point. The connector
 // deploy path degrades to certificate-only for this identity, since the material
 // it would need is on the caller's side; host-executed renewal (epic B2) is what
 // closes that loop properly.
-func (d *issuanceDispatcher) mintServedLeafFromCSR(ctx context.Context, tenantID string, ident store.Identity, csrPEM []byte, issuance ...*store.OperationApprovalIssuanceBinding) (issuedLeafMaterial, error) {
-	return d.mintServedLeafFromCSRForAuthority(ctx, tenantID, ident, "", csrPEM, issuance...)
-}
-
-func (d *issuanceDispatcher) mintServedLeafFromCSRForAuthority(
+func (d *issuanceDispatcher) mintServedLeafFromCSRForSelection(
 	ctx context.Context,
 	tenantID string,
 	ident store.Identity,
-	authorityID string,
+	selection endpointAuthoritySelection,
+	issueKey string,
 	csrPEM []byte,
 	issuance ...*store.OperationApprovalIssuanceBinding,
 ) (issuedLeafMaterial, error) {
-	authorityID = strings.TrimSpace(authorityID)
-	if authorityID == "" && d.issue == nil {
-		return issuedLeafMaterial{}, errors.New("server: issuing CA is unavailable")
-	}
-	if authorityID != "" && d.authorityIssue == nil {
-		return issuedLeafMaterial{}, errors.New("server: exact CA authority issuance is unavailable")
-	}
 	csrDER, dnsNames, err := decodeSubjectCSR(csrPEM)
 	if err != nil {
 		return issuedLeafMaterial{}, err
@@ -1858,18 +1868,9 @@ func (d *issuanceDispatcher) mintServedLeafFromCSRForAuthority(
 	if err != nil {
 		return issuedLeafMaterial{}, err
 	}
-	caID := IssuingCAID()
-	var leafPEM, chainPEM []byte
-	if authorityID == "" {
-		leafPEM, err = d.issue(ctx, csrDER, ttl, leafProfile)
-	} else {
-		leafPEM, chainPEM, caID, err = d.authorityIssue(ctx, tenantID, authorityID, csrDER, ttl, leafProfile)
-	}
+	leafPEM, chainPEM, caID, source, err := d.issueEndpointCSR(ctx, tenantID, selection, issueKey, csrDER, dnsNames, ttl, leafProfile)
 	if err != nil {
 		return issuedLeafMaterial{}, err
-	}
-	if authorityID != "" && caID != authorityID {
-		return issuedLeafMaterial{}, errors.New("server: exact CA authority issuer returned a different authority")
 	}
 	blk, _ := pem.Decode(leafPEM)
 	if blk == nil {
@@ -1890,7 +1891,7 @@ func (d *issuanceDispatcher) mintServedLeafFromCSRForAuthority(
 			CAID: caID, OwnerID: ownerPtr, Subject: info.Subject, SANs: sansOf(info),
 			Issuer: info.Issuer, Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
 			KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
-			Source: "issued", CertificateDER: append([]byte(nil), blk.Bytes...),
+			Source: source, CertificateDER: append([]byte(nil), blk.Bytes...),
 			// B5: the requester generated this key and the control plane never
 			// held it. That is a fact about THIS certificate, recorded from what
 			// the code did rather than from what the documentation says the
