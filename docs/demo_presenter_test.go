@@ -48,6 +48,44 @@ func TestDemoPresenterTracksKeepProofAndPrerequisitesVisible(t *testing.T) {
 	}
 }
 
+// TestDemoEvidenceCannotLoseItsCandidateLabel is the DP-007 cold-presenter
+// guard. Every retained screenshot must identify its age, candidate,
+// environment, and evidence level beside the picture—not only in a distant
+// introduction a presenter may skip.
+func TestDemoEvidenceCannotLoseItsCandidateLabel(t *testing.T) {
+	page := read(t, "demo-click-through.html")
+	for _, marker := range []string{
+		`id="current-rehearsal-card"`,
+		"Current rehearsal card",
+		"Not current proof until you complete the checks below",
+		`id="historical-evidence-appendix"`,
+		"Historical evidence appendix",
+	} {
+		if !strings.Contains(page, marker) {
+			t.Errorf("DP-007: demo guide is missing evidence-boundary marker %q", marker)
+		}
+	}
+
+	figures := regexp.MustCompile(`(?s)<figure class="product-shot">.*?</figure>`).FindAllString(page, -1)
+	if len(figures) == 0 {
+		t.Fatal("DP-007: demo guide has no product screenshots to qualify")
+	}
+	for index, figure := range figures {
+		for _, marker := range []string{
+			`class="evidence-badge recorded"`,
+			`data-evidence-level="recorded"`,
+			`data-evidence-candidate="g211"`,
+			`data-evidence-observed="2026-09-04"`,
+			`data-evidence-environment="retained-local-demo"`,
+			"Recorded · g211 · 4 Sep 2026 · retained local demo",
+		} {
+			if !strings.Contains(figure, marker) {
+				t.Errorf("DP-007: product screenshot %d lacks adjacent marker %q", index+1, marker)
+			}
+		}
+	}
+}
+
 func TestDemoScreenshotsAreLocalCandidateLabelledEvidence(t *testing.T) {
 	page := read(t, "demo-click-through.html")
 	matches := regexp.MustCompile(`<img\s+[^>]*src="(assets/demo/[^"]+\.png)"[^>]*alt="([^"]+)"`).FindAllStringSubmatch(page, -1)

@@ -463,6 +463,10 @@
     .product-shot img { display: block; width: 100%; height: auto; background: #101817; }
     .product-shot figcaption { padding: .75rem .9rem; color: #dbe7e3; background: #101817; font-size: .82rem; }
     .product-shot figcaption strong { color: #9edbc7; }
+    .evidence-badge { display: block; width: fit-content; margin: 0 0 .55rem; padding: .25rem .5rem; border: 1px solid #6f9287; border-radius: 999px; color: #d9f5eb; background: #19352e; font-size: .7rem; font-weight: 750; letter-spacing: .025em; }
+    .current-rehearsal { margin: 1.4rem 0; padding: 1.2rem; border: 2px solid #b7791f; border-radius: .7rem; background: #fff9eb; }
+    .current-rehearsal h2 { margin: .2rem 0 .5rem; }
+    .current-rehearsal .identity-grid { margin-top: 1rem; }
     .truth-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; margin: 1rem 0; }
     .truth-grid > div { padding: .9rem; border: 1px solid var(--line); border-radius: .55rem; background: #f8f7f1; }
     .truth-grid strong { display: block; color: var(--navy); }
@@ -584,9 +588,29 @@
         <details><summary>What to do when someone asks a question you cannot answer</summary><div><p>Do not improvise. Say: “I want to answer from evidence. Let us open the exact capability or mark it for a controlled follow-up.” Record the target version and requested operation. Never open secrets, raw private keys, bearer tokens, or customer data to rescue a demo.</p></div></details>
       </section>
 
-      <section class="evidence-strip" id="rehearsal-proof" aria-labelledby="rehearsal-proof-title">
+      <section class="current-rehearsal" id="rehearsal-proof" aria-labelledby="current-rehearsal-title">
+        <div id="current-rehearsal-card">
+          <p class="track-label">Current rehearsal card · complete before presenting</p>
+          <h2 id="current-rehearsal-title">Current rehearsal card</h2>
+          <p><strong>Not current proof until you complete the checks below.</strong> This card describes the build and environment you intend to show now. It does not inherit a pass from the historical screenshots.</p>
+          <div class="identity-grid" aria-live="polite">
+            <div class="identity-fact"><strong>Expected candidate</strong><span class="identity-value needs-check" id="current-card-candidate">Not supplied — add <code>?candidate=&lt;Git SHA&gt;</code>.</span></div>
+            <div class="identity-fact"><strong>Live environment</strong><span class="identity-value" data-demo-origin>https://127.0.0.1:9443</span></div>
+            <div class="identity-fact"><strong>Evidence level</strong><span class="identity-value needs-check">Unverified current rehearsal</span></div>
+          </div>
+          <ol>
+            <li>Open System health and match the full running source commit to the expected candidate.</li>
+            <li>Run only the prepared scenario and its before/after checks on the environment named above.</li>
+            <li>Record time, operator role, exact target, issuer, execution vantage, outcome, and sanitized evidence reference.</li>
+            <li>Until all required checks pass, say <strong>“Not rehearsed on this candidate.”</strong></li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="evidence-strip" id="historical-evidence-appendix" aria-labelledby="rehearsal-proof-title">
         <p class="track-label">recorded screenshot evidence · sanitized</p>
-        <h2 id="rehearsal-proof-title">What this guide's retained evidence snapshot verified</h2>
+        <h2 id="rehearsal-proof-title">Historical evidence appendix</h2>
+        <p><strong>This appendix is context, not current-candidate proof.</strong> Every screenshot repeats its candidate, observation date, environment, and evidence level beside the image.</p>
         <p><strong>Evidence snapshot candidate:</strong> g211, source commit <code>f8a266242eab77737f88508f6cb7200d055d1cbe</code>, observed 4 September 2026. The control plane reported build <code>g211-dev</code>, four of four core dependencies ready, an external signer, and zero live endpoint probe failures.</p>
         <p><strong>Passed live on that snapshot:</strong> authenticated Home, Discovery, Certificates, Alerts, Agents, System health, an API-playground <code>GET /api/v1/access/api-tokens</code> returning <code>200 OK</code>, temporary-key revocation, and an Apache target preview reaching <strong>Target path ready — no changes made</strong>.</p>
         <p><strong>Recorded earlier on the same retained lab:</strong> g184/g185/g188 proved Apache issue, deploy, TLS listener readback, renewal to a distinct certificate, effect-free restore review, agent-executed rollback, CLI parity, and phone layout. Those are labelled recorded evidence, not a fresh g211 deployment.</p>
@@ -595,8 +619,8 @@
       </section>
 
       <div class="shot-grid" aria-label="Exact g211 opening evidence">
-        <figure class="product-shot"><img src="assets/demo/g211-home-cockpit.png" alt="Exact g211 trstctl Home page showing three credentials needing attention and the seven product workspaces"><figcaption><strong>Start on Home.</strong> This is an executive pain signal, not the exact certificate queue. The live seed showed three credentials needing attention and 70 indexed source records.</figcaption></figure>
-        <figure class="product-shot"><img src="assets/demo/g211-certificate-inventory.png" alt="Exact g211 certificate inventory showing expired and expiring certificates with owner and delivery state"><figcaption><strong>Then open Certificates.</strong> This is where the presenter can name the certificate, expiry window, accountable owner, and failed or delayed delivery state.</figcaption></figure>
+        <figure class="product-shot"><img src="assets/demo/g211-home-cockpit.png" alt="Exact g211 trstctl Home page showing three credentials needing attention and the seven product workspaces"><figcaption><span class="evidence-badge recorded" data-evidence-level="recorded" data-evidence-candidate="g211" data-evidence-observed="2026-09-04" data-evidence-environment="retained-local-demo">Recorded · g211 · 4 Sep 2026 · retained local demo</span><strong>Start on Home.</strong> This is an executive pain signal, not the exact certificate queue. The live seed showed three credentials needing attention and 70 indexed source records.</figcaption></figure>
+        <figure class="product-shot"><img src="assets/demo/g211-certificate-inventory.png" alt="Exact g211 certificate inventory showing expired and expiring certificates with owner and delivery state"><figcaption><span class="evidence-badge recorded" data-evidence-level="recorded" data-evidence-candidate="g211" data-evidence-observed="2026-09-04" data-evidence-environment="retained-local-demo">Recorded · g211 · 4 Sep 2026 · retained local demo</span><strong>Then open Certificates.</strong> This is where the presenter can name the certificate, expiry window, accountable owner, and failed or delayed delivery state.</figcaption></figure>
       </div>
 
       <section id="demo-menu" class="section-title">
@@ -673,8 +697,8 @@
           <div class="script-grid"><div><strong>Click</strong><p>Alerts and delivery. In a qualified lab, also show the next renewal and audit evidence.</p></div><div><strong>Say</strong><p>“A lifecycle is not automated until the endpoint is checked, the next action is scheduled, and the right person or system can be notified.”</p></div><div><strong>Expected</strong><p>In the shipped seed: zero ready channels and zero routing rules. In a prepared lab: a controlled-sink receipt.</p></div><div><strong>If it does not</strong><p>Say that events remain recorded but no external recipient is configured. Ask which channel the customer wants to validate.</p></div></div>
         </div>
         <div class="shot-grid">
-          <figure class="product-shot"><img src="assets/demo/g211-discovery-finding-proof.png" alt="Exact g211 discovery finding expanded to show finding ID, fingerprint, source, run, provenance, and evidence references"><figcaption><strong>Discovery proof.</strong> The finding exposes source and fingerprint provenance. It does not display an issuer, so the script no longer tells the presenter to point to one here.</figcaption></figure>
-          <figure class="product-shot"><img src="assets/demo/g211-apache-preview.png" alt="Exact g211 connector page showing a successful no-write Apache preview and its config-test reload and listener-handshake plan"><figcaption><strong>Effect-free Apache preview.</strong> The run-owned edge runtime returned “Deploy would succeed (nothing changed)” after checking the approved local paths and listener plan.</figcaption></figure>
+          <figure class="product-shot"><img src="assets/demo/g211-discovery-finding-proof.png" alt="Exact g211 discovery finding expanded to show finding ID, fingerprint, source, run, provenance, and evidence references"><figcaption><span class="evidence-badge recorded" data-evidence-level="recorded" data-evidence-candidate="g211" data-evidence-observed="2026-09-04" data-evidence-environment="retained-local-demo">Recorded · g211 · 4 Sep 2026 · retained local demo</span><strong>Discovery proof.</strong> The finding exposes source and fingerprint provenance. It does not display an issuer, so the script no longer tells the presenter to point to one here.</figcaption></figure>
+          <figure class="product-shot"><img src="assets/demo/g211-apache-preview.png" alt="Exact g211 connector page showing a successful no-write Apache preview and its config-test reload and listener-handshake plan"><figcaption><span class="evidence-badge recorded" data-evidence-level="recorded" data-evidence-candidate="g211" data-evidence-observed="2026-09-04" data-evidence-environment="retained-local-demo">Recorded · g211 · 4 Sep 2026 · retained local demo</span><strong>Effect-free Apache preview.</strong> The run-owned edge runtime returned “Deploy would succeed (nothing changed)” after checking the approved local paths and listener plan.</figcaption></figure>
         </div>
         <p class="honesty"><strong>If blocked:</strong> say “The setup/queue/verification is blocked at this step; the certificate has not been proven live.” Use a dated rehearsal only if one exists. Never substitute a green inventory badge for endpoint proof.</p>
       </section>
@@ -699,8 +723,8 @@
         <div class="script-step"><h3>12–14 minutes: show a failure and supported recovery</h3><div class="script-grid"><div><strong>Click</strong><p>Use a pre-approved bad target or retained failure, then Review restore. Execute recovery only when the predecessor is valid and the lab permits it.</p></div><div><strong>Say</strong><p>“We retain the failed attempt, isolate its queue lane, and restore only a proven predecessor.”</p></div><div><strong>Expected</strong><p>Denied or failed evidence, no cross-target starvation, reviewed recovery, terminal rollback receipt, and an independent restored-listener handshake.</p></div><div><strong>If it does not</strong><p>A connector without executable rollback must refuse. Never restore a revoked or expired predecessor to create a green demo.</p></div></div></div>
         <div class="script-step"><h3>14–15 minutes: alert, evidence, and next meeting</h3><div class="script-grid"><div><strong>Click</strong><p>Alerts and delivery, Audit, then the next scheduled lifecycle action.</p></div><div><strong>Say</strong><p>“This is who learns about failure, what evidence they receive, and when automation acts again.”</p></div><div><strong>Expected</strong><p>A controlled-sink receipt, routing policy, accountable owner, audit chain, and future schedule in a fully prepared lab.</p></div><div><strong>If it does not</strong><p>On the pristine seed, say zero channels and zero routes. Close by proposing one customer-owned alert sink and endpoint for validation.</p></div></div></div>
         <div class="shot-grid">
-          <figure class="product-shot"><img src="assets/demo/g211-connectors-delivery.png" alt="Exact g211 connector workspace with configured Apache IIS F5 and cloud destinations plus safe lifecycle controls"><figcaption><strong>The delivery workspace.</strong> Open “Destinations and safe actions”; the default collapsed summary is not enough for a live proof.</figcaption></figure>
-          <figure class="product-shot"><img src="assets/demo/g211-alert-delivery.png" alt="Exact g211 Alerts and delivery page showing zero ready channels and zero routing rules in the seeded demo"><figcaption><strong>Alerting truth.</strong> The product records events, but the pristine seed does not notify an external person or system until a channel and route are configured.</figcaption></figure>
+          <figure class="product-shot"><img src="assets/demo/g211-connectors-delivery.png" alt="Exact g211 connector workspace with configured Apache IIS F5 and cloud destinations plus safe lifecycle controls"><figcaption><span class="evidence-badge recorded" data-evidence-level="recorded" data-evidence-candidate="g211" data-evidence-observed="2026-09-04" data-evidence-environment="retained-local-demo">Recorded · g211 · 4 Sep 2026 · retained local demo</span><strong>The delivery workspace.</strong> Open “Destinations and safe actions”; the default collapsed summary is not enough for a live proof.</figcaption></figure>
+          <figure class="product-shot"><img src="assets/demo/g211-alert-delivery.png" alt="Exact g211 Alerts and delivery page showing zero ready channels and zero routing rules in the seeded demo"><figcaption><span class="evidence-badge recorded" data-evidence-level="recorded" data-evidence-candidate="g211" data-evidence-observed="2026-09-04" data-evidence-environment="retained-local-demo">Recorded · g211 · 4 Sep 2026 · retained local demo</span><strong>Alerting truth.</strong> The product records events, but the pristine seed does not notify an external person or system until a channel and route are configured.</figcaption></figure>
         </div>
         <details><summary>Use the CLI alongside the GUI—without revealing secrets</summary><div>
           <p>Install the documented <code>trstctl-cli</code>. Obtain a least-privilege lab token through the approved setup path; inject it through the protected process environment. Set <code>TRSTCTL_SERVER</code>, <code>TRSTCTL_CA_FILE</code> and the authenticated tenant context. The commands below read metadata; they do not configure or deploy a target.</p>
@@ -742,8 +766,8 @@ trstctl-cli certificates list --limit 20</code></pre>
         </div>
         <div class="script-step"><h3>At every boundary, use the same four-part script</h3><div class="script-grid"><div><strong>Click</strong><p>Open the page that owns this boundary and then its exact evidence disclosure.</p></div><div><strong>Say</strong><p>Explain what this component knows, what it can change, and what it cannot prove.</p></div><div><strong>Expected</strong><p>Name a served API/CLI contract, immutable record, or independent observation.</p></div><div><strong>If it does not</strong><p>Mark the missing stage: Discover, Understand, Configure, Preview, Execute, Observe, Recover, Verify, or Automate.</p></div></div></div>
         <div class="shot-grid">
-          <figure class="product-shot"><img src="assets/demo/g211-system-health.png" alt="Exact g211 System health page showing build commit core dependency readiness signer isolation and endpoint probe status"><figcaption><strong>Architecture starts with provenance.</strong> Confirm the running build, exact source commit, four core dependencies, and external signer before explaining deeper controls.</figcaption></figure>
-          <figure class="product-shot"><img src="assets/demo/g211-edge-runtime.png" alt="Exact g211 Agents page showing one enrolled in-network execution runtime with heartbeat version and certificate-bound role evidence"><figcaption><strong>Execution is separate.</strong> Presence and certificate-bound roles establish identity and freshness, but a terminal job result is still required for target readiness.</figcaption></figure>
+          <figure class="product-shot"><img src="assets/demo/g211-system-health.png" alt="Exact g211 System health page showing build commit core dependency readiness signer isolation and endpoint probe status"><figcaption><span class="evidence-badge recorded" data-evidence-level="recorded" data-evidence-candidate="g211" data-evidence-observed="2026-09-04" data-evidence-environment="retained-local-demo">Recorded · g211 · 4 Sep 2026 · retained local demo</span><strong>Architecture starts with provenance.</strong> Confirm the running build, exact source commit, four core dependencies, and external signer before explaining deeper controls.</figcaption></figure>
+          <figure class="product-shot"><img src="assets/demo/g211-edge-runtime.png" alt="Exact g211 Agents page showing one enrolled in-network execution runtime with heartbeat version and certificate-bound role evidence"><figcaption><span class="evidence-badge recorded" data-evidence-level="recorded" data-evidence-candidate="g211" data-evidence-observed="2026-09-04" data-evidence-environment="retained-local-demo">Recorded · g211 · 4 Sep 2026 · retained local demo</span><strong>Execution is separate.</strong> Presence and certificate-bound roles establish identity and freshness, but a terminal job result is still required for target readiness.</figcaption></figure>
         </div>
         <p><strong>F5-specific promise:</strong> demonstrate one named Client SSL profile on the rehearsed firmware/topology. Do not generalize to every BIG-IP feature or silently promise HA propagation. For NetScaler, A10, or Kemp, prepare a separate real-device rehearsal; Cisco, FortiGate and Palo Alto currently have additional rollback/readback limits.</p>
       </section>
@@ -827,7 +851,7 @@ trstctl-cli certificates list --limit 20</code></pre>
           </div>
           <div class="script-step"><h3>Five-minute bring-your-own-agent proof using the real API playground</h3><div class="script-grid"><div><strong>Click</strong><p>API playground → Try request. Review <code>GET /api/v1/access/api-tokens</code> and permission <code>access:read</code>.</p></div><div><strong>Say</strong><p>“A customer agent starts from the same explicit contract and tenant boundary as this safe request.”</p></div><div><strong>Expected</strong><p>The page says the starting request is read-only and shows exact route, operation ID, permission, and response types.</p></div><div><strong>If it does not</strong><p>Use the pinned OpenAPI document and CLI help. Do not let an AI agent infer an endpoint or scope.</p></div></div></div>
           <div class="script-step"><h3>Run and clean up the temporary access proof</h3><div class="script-grid"><div><strong>Click</strong><p>In a disposable lab, Generate test key → Run request → confirm <strong>The request worked</strong> and <strong>200 OK</strong> → Revoke test key.</p></div><div><strong>Say</strong><p>“The 15-minute key has only <code>access:read</code>, its reveal-once value stays in this browser session, and we revoke it after the proof.”</p></div><div><strong>Expected</strong><p>HTTP 200 JSON metadata, followed by “Test key revoked.” No raw token in screenshots or notes.</p></div><div><strong>If it does not</strong><p>Stop. Do not broaden the scope, paste a production token, or place a credential in an AI prompt.</p></div></div></div>
-          <figure class="product-shot"><img src="assets/demo/g211-api-read-result.png" alt="Exact g211 API playground showing a least-privilege read-only request completed with HTTP 200 and JSON metadata"><figcaption><strong>Live g211 proof.</strong> The read-only request returned <code>200 OK</code>. The temporary reveal-once key was revoked immediately after capture; the image contains no bearer value.</figcaption></figure>
+          <figure class="product-shot"><img src="assets/demo/g211-api-read-result.png" alt="Exact g211 API playground showing a least-privilege read-only request completed with HTTP 200 and JSON metadata"><figcaption><span class="evidence-badge recorded" data-evidence-level="recorded" data-evidence-candidate="g211" data-evidence-observed="2026-09-04" data-evidence-environment="retained-local-demo">Recorded · g211 · 4 Sep 2026 · retained local demo</span><strong>Live g211 proof.</strong> The read-only request returned <code>200 OK</code>. The temporary reveal-once key was revoked immediately after capture; the image contains no bearer value.</figcaption></figure>
           <p><strong>Transport truth:</strong> the inspected tool surface is <code>GET /api/v1/mcp/tools</code> and <code>POST /api/v1/mcp/tools/{tool}</code>. A standard MCP transport is not claimed. Do not advertise drop-in compatibility with arbitrary standard MCP clients without a tested protocol adapter. Write tools require explicit enablement and still go through API authorization.</p>
         </section>
         <section id="edge-name" aria-labelledby="edge-name-title">
@@ -1472,13 +1496,18 @@ evidence_access_owner: REQUIRED</code></pre>
       document.querySelectorAll("[data-demo-origin]").forEach((value) => { value.textContent = demoOrigin; });
 
       const expectedCandidate = candidateFromQuery();
+      const currentCardCandidate = document.getElementById("current-card-candidate");
       const candidateValue = document.getElementById("expected-candidate");
       if (expectedCandidate) {
         candidateValue.textContent = expectedCandidate;
         candidateValue.classList.remove("needs-check");
         candidateValue.classList.add("expected");
+        currentCardCandidate.textContent = expectedCandidate;
+        currentCardCandidate.classList.remove("needs-check");
+        currentCardCandidate.classList.add("expected");
       } else if (expectedCandidate === "") {
         candidateValue.textContent = "Invalid candidate value was ignored — use a 7-to-64-character hexadecimal Git SHA.";
+        currentCardCandidate.textContent = "Invalid candidate value was ignored — use a 7-to-64-character hexadecimal Git SHA.";
       }
 
       document.querySelectorAll("[data-source-href]").forEach((link) => {
