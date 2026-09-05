@@ -122,7 +122,10 @@ func sameNotificationTestOperation(a, b NotificationTestOperation) bool {
 		a.RequestBinding == b.RequestBinding && a.ChannelID == b.ChannelID &&
 		a.Destination == b.Destination &&
 		a.CredentialConfigured == b.CredentialConfigured &&
-		a.QueuedAt.Equal(b.QueuedAt)
+		// PostgreSQL timestamps retain microseconds while the event envelope can
+		// carry nanoseconds. That precision difference is not command drift.
+		a.QueuedAt.UTC().Truncate(time.Microsecond).Equal(
+			b.QueuedAt.UTC().Truncate(time.Microsecond))
 }
 
 func ensureNotificationTestOutboxTx(ctx context.Context, tx pgx.Tx, tenantID, key, effectLane string, payload []byte) (int64, error) {

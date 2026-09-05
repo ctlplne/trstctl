@@ -17,7 +17,9 @@ func TestNotificationOperationAndDeliveryReceiptRebuildFromEvents(t *testing.T) 
 	st := newStore(t)
 	log := openLog(t)
 	projector := projections.New(st)
-	queuedAt := time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC)
+	// Use event-log nanoseconds so this exercises the PostgreSQL microsecond
+	// round-trip that a real restart/rebuild performs.
+	queuedAt := time.Date(2026, 7, 11, 12, 0, 0, 987654321, time.UTC)
 	alert := json.RawMessage(`{"kind":"notification.channel_test","tenant_id":"` + tenantA + `","operation_id":"notification.test:rebuild","target_channel":"slack"}`)
 	queuedPayload, err := json.Marshal(projections.NotificationTestQueued{
 		ID: "notification.test:rebuild", RequestBinding: "rebuild-binding",

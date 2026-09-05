@@ -16,7 +16,11 @@ import (
 func TestNotificationTestOperationSurvivesOutboxGCAndRejectsBindingDrift(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
-	queuedAt := time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC)
+	// JetStream event timestamps carry nanoseconds while PostgreSQL stores this
+	// projection at microsecond precision. Replay must compare the canonical
+	// database instant instead of treating that expected precision loss as an
+	// authenticated-command conflict.
+	queuedAt := time.Date(2026, 7, 11, 12, 0, 0, 123456789, time.UTC)
 	op := store.NotificationTestOperation{
 		TenantID: tenantA, ID: "notification.test:durable-op",
 		RequestBinding: "binding-a", ChannelID: "slack",
@@ -36,7 +40,8 @@ func TestNotificationTestOperationSurvivesOutboxGCAndRejectsBindingDrift(t *test
 	if err != nil {
 		t.Fatalf("get notification test: %v", err)
 	}
-	if got.OutboxID == 0 || got.RequestBinding != op.RequestBinding || !got.QueuedAt.Equal(queuedAt) {
+	if got.OutboxID == 0 || got.RequestBinding != op.RequestBinding ||
+		!got.QueuedAt.Equal(queuedAt.Truncate(time.Microsecond)) {
 		t.Fatalf("projected operation = %+v", got)
 	}
 
