@@ -44,7 +44,7 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1364 annotated sites across 26 rules. Each row is
+1366 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -946,7 +946,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (366 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (368 sites)
 
 | Location | Reason |
 |---|---|
@@ -1079,6 +1079,7 @@ not this file.
 | `internal/backup/full_manifest_io_test.go:46` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/backup/full_manifest_io_test.go:53` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/backup/manifest_test.go:32` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/ca/capability_evidence_test.go:65` | fixed in-tree proof manifest |
 | `internal/ca/external_error_redaction_test.go:62` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/ca/profilelint/profilelint_test.go:146` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/ca/shellca/shellca.go:104` | operator-configured shell-CA output path; the shell CA is an explicit operator integration (CWE-22) |
@@ -1253,6 +1254,7 @@ not this file.
 | `tools/cbomcoveragedoc/main.go:66` | operator/CI-supplied path to this repo's own generated page (CWE-22) |
 | `tools/connectorsupportdoc/main.go:45` | fixed in-tree doc paths (CWE-22) |
 | `tools/connectorsupportdoc/main_test.go:25` | fixed in-tree doc paths (CWE-22) |
+| `tools/connectorsupportdoc/main_test.go:105` | fixed in-tree documentation contract |
 | `tools/dodcensus/artifact.go:85` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/artifact.go:167` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/dodcensus/claims.go:61` | developer tool reading the repo paths it is pointed at (CWE-22) |

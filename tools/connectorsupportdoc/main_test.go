@@ -88,6 +88,7 @@ func TestIssuerProofLevelSeparatesProtocolEvidenceFromVendorQualification(t *tes
 	t.Parallel()
 	page := strings.Join(strings.Fields(strings.ToLower(string(renderIssuers()))), " ")
 	for _, phrase := range []string{
+		"served state: **served**",
 		"high-fidelity protocol issuance proof",
 		"not live vendor-account certification",
 		"run the same scoped issuance with your configured account",

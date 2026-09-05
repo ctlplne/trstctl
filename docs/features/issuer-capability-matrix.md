@@ -4,6 +4,8 @@
 
 What this build can do with each certificate authority, per operation.
 
+Served state: **Served** through the external-CA API and the same production server assembly tested below.
+
 Read this before believing a "CA-agnostic" claim, including ours. Every row
 names the test that backs it, and the **Protocol issuance proof** column is separate from
 **Issue** on purpose: implementing an authority's API and having run an issuance
