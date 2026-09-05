@@ -100,7 +100,7 @@ func serverTestPostgresDSN(t *testing.T) string {
 		t.Skip("starts an embedded PostgreSQL; skipped in -short")
 	}
 	serverTestPG.once.Do(func() {
-		dir, err := os.MkdirTemp("", "trstctl-server-pg")
+		dir, err := os.MkdirTemp(serverTestPostgresTempRoot(), "trstctl-server-pg")
 		if err != nil {
 			serverTestPG.err = err
 			return
@@ -125,6 +125,28 @@ func serverTestPostgresDSN(t *testing.T) string {
 		t.Fatalf("server test postgres: %v", serverTestPG.err)
 	}
 	return serverTestPG.dsn
+}
+
+// serverTestPostgresTempRoot separates database state from the host-visible DoD
+// receipt mount. Docker Desktop may map files in that bind mount to root even
+// though the proof runner is non-root; PostgreSQL correctly rejects that owner
+// mismatch. The runner's /tmp is a private, non-executable tmpfs.
+func serverTestPostgresTempRoot() string {
+	if os.Getenv("TRSTCTL_DOD_RUNTIME_TEMP_ROOT") == "/dod-tmp" {
+		return "/tmp"
+	}
+	return ""
+}
+
+func TestServerTestPostgresUsesContainerOwnedScratchInDODRunner(t *testing.T) {
+	t.Setenv("TRSTCTL_DOD_RUNTIME_TEMP_ROOT", "/dod-tmp")
+	if got := serverTestPostgresTempRoot(); got != "/tmp" {
+		t.Fatalf("DoD Postgres temp root = %q, want container-owned /tmp", got)
+	}
+	t.Setenv("TRSTCTL_DOD_RUNTIME_TEMP_ROOT", "")
+	if got := serverTestPostgresTempRoot(); got != "" {
+		t.Fatalf("ordinary test Postgres temp root = %q, want Go default", got)
+	}
 }
 
 func newServerTestStore(t *testing.T) *store.Store {

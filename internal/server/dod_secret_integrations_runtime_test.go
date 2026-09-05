@@ -42,6 +42,44 @@ import (
 	"trstctl.com/trstctl/tools/dodcensus/proof"
 )
 
+func TestDODPostgresDataDirUsesContainerOwnedScratch(t *testing.T) {
+	t.Setenv(dodRuntimeTempRootEnv, dodRuntimeTempRoot)
+	dir, cleanup, err := dodPostgresDataDir("/dod-tmp/caller/postgres")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(dir, "/tmp/trstctl-dod-postgres-") {
+		cleanup()
+		t.Fatalf("DoD Postgres data dir = %q, want private /tmp child", dir)
+	}
+	info, err := os.Stat(dir)
+	if err != nil {
+		cleanup()
+		t.Fatal(err)
+	}
+	if info.Mode().Perm()&0o077 != 0 {
+		cleanup()
+		t.Fatalf("DoD Postgres data dir mode = %04o, want owner-only", info.Mode().Perm())
+	}
+	cleanup()
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("DoD Postgres cleanup left %s: %v", dir, err)
+	}
+}
+
+func TestDODPostgresDataDirPreservesCallerPathOutsideRunner(t *testing.T) {
+	t.Setenv(dodRuntimeTempRootEnv, "")
+	want := filepath.Join(t.TempDir(), "postgres")
+	got, cleanup, err := dodPostgresDataDir(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cleanup()
+	if got != want {
+		t.Fatalf("ordinary DoD Postgres data dir = %q, want %q", got, want)
+	}
+}
+
 const dodSecretIntegrationTenant = "d0d00000-0000-4000-8000-000000000301"
 
 type dodSecretIntegrationTarget struct {
