@@ -3,8 +3,9 @@
 ## What it is
 
 Issuing a [certificate](../glossary.md) is only half the job; it has to actually land
-on the server, load balancer, or appliance that will use it. A **deployment connector**
-is a small plugin that knows how to install a credential on one kind of target — write
+on the server, load balancer, or appliance that will use it. A
+**[deployment connector](../glossary.md#connector)** is a small implementation that
+knows how to install a credential on one kind of [target](../glossary.md#destination-deployment-target) — write
 it to nginx and reload, import it into AWS Certificate Manager, push it to an F5 load
 balancer — and trstctl ships a set of them plus an SDK for writing your own.
 
@@ -39,7 +40,7 @@ with `ErrDenied`.
 Delivery is reliable and journaled: the orchestrator writes a `connector.deploy`
 message in the *same transaction* as the state change that requested deployment, so a
 crash can't drop it. Before sealing the credential-bearing payload it stamps the row
-with the execution vantage from the closed connector census. The control-plane worker
+with the [execution vantage](../glossary.md#execution-vantage) from the closed connector census. The control-plane worker
 refuses every row stamped `host` before it opens the payload or looks up a native
 connector. An old row without a stamp is classified from its connector family and is
 refused the same way; an unknown stamp also fails closed. This means the one row cannot

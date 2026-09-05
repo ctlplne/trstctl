@@ -16,7 +16,8 @@ decision. Choose **Run scan** to use an
 existing discovery source or add your first one.
 
 trstctl discovers credentials five ways, and each suits a different corner of your
-estate: scanning the network from outside, asking an agent what a host can see from
+estate: scanning the network from outside, asking a
+[trstctl Edge runtime](../glossary.md#trstctl-edge-agent-runtime) what a host can see from
 inside, pulling inventory straight from cloud provider APIs, reading SSH key files and
 trust config, and connecting to external secret stores. Everything they find lands in
 one inventory.
@@ -61,7 +62,7 @@ breakdown, and the soonest-expiring certificates. It counts trstctl-issued rows,
 manually imported rows, and discovery-fed rows together, so a certificate issued by a
 different CA but found on a load balancer still shows up in the same health posture.
 
-### Network discovery (F2) — scanning from an enrolled network relay
+### Network discovery (F2) — scanning from an enrolled [network relay](../glossary.md#network-relay)
 
 Network discovery connects from an explicitly enrolled agent with the `network`
 role to IP/port ranges you define, performs a normal

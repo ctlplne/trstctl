@@ -165,7 +165,7 @@ configuration.
 Name the service the certificate belongs to and click **Issue**. The action
 uses your signed-in operator credential, which carries certificate-issuance
 authority; setup bootstrap tokens and agent enrollment tokens cannot issue.
-trstctl creates the owner and identity and issues the certificate through the
+trstctl creates the [owner](glossary.md#owner) and identity and issues the certificate through the
 internal signer-backed CA, then links you to the certificate inventory. From
 here trstctl tracks the certificate and alerts before expiry; renewal is a
 manual, one-click action today.
@@ -183,7 +183,7 @@ manual, one-click action today.
 This optional screen demonstrates that integration packages are reachable
 from the shipped control plane, not merely present in the source tree.
 Against systems an operator has already configured, it: reads the served
-connector catalog, creates a target, and deploys the newly issued identity via
+connector catalog, creates a [deployment target](glossary.md#destination-deployment-target), and deploys the newly issued identity via
 `POST /api/v1/connectors/targets/{id}/deploy`; submits an operator-supplied
 CSR to `POST /api/v1/external-cas/{id}/issue`; and opens a 15-minute
 dynamic-secret lease through `POST /api/v1/secrets/leases`. The wizard
@@ -193,6 +193,11 @@ one-time credential in browser state. A core-only install can choose
 was proven.
 
 ### Connect an agent (optional)
+
+This optional step connects a
+[trstctl Edge runtime](glossary.md#trstctl-edge-agent-runtime). The shipped wizard,
+binary, and API still use **agent** for compatibility; the glossary separates this
+execution runtime from a customer AI agent.
 
 Certificate operations are already usable at this point. Choose **Skip agent
 for now** if this evaluation should not inspect or deploy to a host; the review

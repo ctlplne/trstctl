@@ -5,6 +5,92 @@ defines every term of art the rest of the docs use, in plain language: what it i
 why it matters, and where it shows up. Skim it once, or jump back whenever a word
 trips you up.
 
+## The operational map
+
+These are the product nouns that explain one trstctl job from beginning to end:
+
+> A **caller** asks the control plane to protect a **service**. Its **owner** is
+> accountable. A **connector** executes from a named **execution vantage** and
+> changes one **destination**. trstctl then verifies the result from the vantage
+> that can observe the real endpoint.
+
+The words are deliberately separate. The owner is not necessarily the person who
+clicked the button. A destination record is not proof that its system was contacted.
+A connector listed in the catalog is not proof that one customer endpoint was
+changed. An execution receipt is not the same as a new TLS connection proving what
+clients now receive.
+
+### Owner
+
+The user, team, workload, service, or vendor accountable for one machine identity.
+The owner answers “who approves this credential, receives its expiry or failure
+alert, and is responsible for fixing it?” An owner record can include escalation and
+attestation evidence. It does not by itself grant a caller permission or prove that
+the named team is still current.
+
+### Service
+
+The stable application or machine capability that needs a credential, such as
+`payments-api` or `customer-portal`. One service can have several running workloads
+and several credentials over time. In setup, the service name connects the owner to
+the machine identity; it is not a private key, a user account, or necessarily an
+operating-system background service.
+
+### Destination / deployment target
+
+The tenant-scoped record for the exact system where a credential must work: for
+example an Apache listener, IIS site, F5 virtual server, or AWS ACM region. The web
+console says **destination**; the API and CLI usually say **target**. They mean the
+same saved object. It names one connector and stores non-secret configuration plus
+references to separately protected credentials. Saving a destination does not
+contact or change it. A test, deploy, rollback, and independent verification are
+separate actions with separate evidence.
+
+### Connector
+
+The bounded implementation that understands one destination type. It validates
+configuration, previews or tests when supported, performs a deploy, reads back what
+the target reports, and rolls back only when that connector has a proved recovery
+contract. Seeing a connector in the catalog proves the implementation is shipped and
+enabled; it does not prove a destination is configured, reachable, or already
+automated.
+
+### trstctl Edge (agent runtime)
+
+The human-facing name for the optional trstctl process that runs inside a customer
+network or beside a host, opens an outbound mTLS channel to the control plane, and
+claims only allowed job kinds. Its enrolled certificate fixes whether it has the
+`host` role, the `network` role, or both; an ordinary host enrollment cannot silently
+become a network relay. The binary remains `trstctl-agent` and the API/CLI resource
+remains `agents` so existing automation does not break while product wording evolves.
+A customer AI agent is a caller; trstctl Edge is an execution runtime.
+
+### Edge Collector
+
+The plain-language label for a trstctl Edge runtime used only to collect local public
+credential metadata and report discovery evidence. It is not a separate binary or a
+new certificate role today. If the same enrolled runtime may deploy, verify, roll
+back, or relay network work, call it **trstctl Edge** and show its exact roles and job
+allowlist instead of implying that it is discovery-only.
+
+### Network relay
+
+A trstctl Edge runtime whose enrolled certificate includes the `network` role. It
+executes bounded scans or appliance API work from the network segment that can reach
+the approved CIDRs, ports, or device. For example, an F5 connector can run through a
+relay near BIG-IP; trstctl software is not installed on the appliance. Relay
+readiness, connector/plugin census, scope, and job allowlist must all be present
+before the control plane admits the work.
+
+### Execution vantage
+
+The real place from which a job runs and therefore the network, filesystem, and
+permissions it can observe. trstctl records one of three connector vantages:
+`host` (trstctl Edge beside the service), `network_relay` (trstctl Edge in the
+reachable segment), or `control_plane` (the bounded worker used for supported cloud
+APIs). Vantage decides which runtime may claim the durable job. A successful check
+from one vantage must not be presented as proof from another.
+
 ## Terms
 
 ### Non-human identity (NHI)
