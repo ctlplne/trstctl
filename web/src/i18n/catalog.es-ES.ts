@@ -4548,6 +4548,8 @@ const esESCatalog = {
   "connectors.binding.selectOwner": "Elija un propietario",
   "connectors.binding.dnsName": "Nombre DNS",
   "connectors.binding.dnsHelp": "El nombre de host que usan los clientes, por ejemplo payments.example.com.",
+  "connectors.binding.dnsPinnedHelp":
+    "Este destino verifica {name}. trstctl usa ese nombre DNS exacto para que la comprobación posterior al despliegue no falle después de cambiar los archivos.",
   "connectors.binding.reasonHelp": "Por qué se autoriza esta automatización; se conserva con el evento del ciclo de vida.",
   "connectors.binding.caAgnostic": "Use la CA en la que ya confía. trstctl automatiza el ciclo de vida; no exige reemplazar su CA.",
   "connectors.binding.issuer": "CA emisora",

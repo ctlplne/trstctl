@@ -136,7 +136,7 @@ describe("connector deployment disclosure surface", () => {
           tenant_id: "tenant-1",
           name: "edge/prod/payments",
           connector: "nginx",
-          config: { credential_ref: "secret://connectors/nginx" },
+          config: { credential_ref: "secret://connectors/nginx", verify_server_name: "payments.example.test" },
           enabled: true,
           created_at: "2026-06-20T00:00:00Z",
         },
@@ -464,6 +464,9 @@ describe("connector deployment disclosure surface", () => {
     await screen.findByRole("heading", { name: "Configured destinations" });
     await screen.findByRole("heading", { name: "Name the endpoint" });
     await user.selectOptions(screen.getByLabelText("Destination"), "target-1");
+    expect(screen.getByLabelText("DNS name")).toHaveValue("payments.example.test");
+    expect(screen.getByLabelText("DNS name")).toHaveAttribute("readonly");
+    expect(screen.getByText(/This destination verifies payments.example.test/)).toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText("Owner"), "owner-1");
     await user.type(screen.getByLabelText("Enrollment reason"), "verified design-partner endpoint");
     await user.click(screen.getByRole("button", { name: "Choose CA" }));

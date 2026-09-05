@@ -15,6 +15,9 @@ import (
 	"trstctl.com/trstctl/internal/ca/digicert"
 	"trstctl.com/trstctl/internal/ca/digicert/digicertfake"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/connector/acm"
+	"trstctl.com/trstctl/internal/connector/acm/acmtest"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/protocols/ari"
 	"trstctl.com/trstctl/internal/servedstatus"
@@ -179,6 +182,71 @@ func TestEndpointBindingPinsExternalIssuerFromEffectFreePreview(t *testing.T) {
 		return tx.QueryRow(t.Context(), `SELECT count(*) FROM outbox WHERE tenant_id = $1 AND destination = 'external-ca.issue'`, h.tenant).Scan(&externalIntents)
 	}); err != nil || externalIntents != 2 {
 		t.Fatalf("external CA issue intents after renewal = %d, want 2 (err=%v)", externalIntents, err)
+	}
+}
+
+// The preview is the last safe point before issuance and deployment. A target
+// that verifies one hostname cannot safely receive a certificate for another:
+// the files may be replaced, but the listener proof will fail after the write.
+func TestEndpointBindingPreviewRejectsTargetHostnameMismatchBeforeMutation(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, func(*Deps) {})
+	tok := seedScopedToken(t, h.store, h.tenant,
+		"owners:read", "owners:write", "identities:read", "identities:write",
+		"certs:issue", "connectors:read", "connectors:write",
+	)
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/owners", tok, map[string]any{
+		"kind": "workload", "name": "endpoint-hostname-preview-owner",
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create owner: status %d body %s", status, body)
+	}
+	var owner struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &owner); err != nil {
+		t.Fatal(err)
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets", tok, map[string]any{
+		"name": "hostname-bound-apache", "connector": "apache", "enabled": true,
+		"config": map[string]any{
+			"cert_path": "/srv/tls/site.crt", "key_path": "/srv/tls/site.key",
+			"verify_address": "127.0.0.1:443", "verify_server_name": "payments.served.test",
+		},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create target: status %d body %s", status, body)
+	}
+	var target struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &target); err != nil {
+		t.Fatal(err)
+	}
+
+	beforeIdentities := eventCount(t, h.log, h.tenant, projections.EventIdentityCreated)
+	beforeOutbox := connectorTargetOutboxRows(t, h)
+	request := map[string]any{
+		"owner_id": owner.ID, "identity_name": "other.served.test", "target_id": target.ID,
+		"issuer": map[string]any{"source": "platform", "id": "trstctl-issuing-ca"},
+		"reason": "mismatch must stop before files are replaced",
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/lifecycle/endpoint-bindings/preview", tok, request)
+	if status != http.StatusConflict || !jsonContains(t, body, "other.served.test") ||
+		!jsonContains(t, body, "payments.served.test") || !jsonContains(t, body, "nothing was queued or changed") {
+		t.Fatalf("hostname mismatch did not fail closed: status %d body %s", status, body)
+	}
+	if got := eventCount(t, h.log, h.tenant, projections.EventIdentityCreated); got != beforeIdentities {
+		t.Fatalf("hostname mismatch created an identity: before=%d after=%d", beforeIdentities, got)
+	}
+	if got := connectorTargetOutboxRows(t, h); got != beforeOutbox {
+		t.Fatalf("hostname mismatch queued external work: before=%d after=%d", beforeOutbox, got)
+	}
+
+	request["identity_name"] = "payments.served.test"
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/lifecycle/endpoint-bindings/preview", tok, request)
+	if status != http.StatusOK || !jsonContains(t, body, `"ready":true`) {
+		t.Fatalf("exact target hostname was not previewable: status %d body %s", status, body)
 	}
 }
 
@@ -610,8 +678,22 @@ func TestServedWildcardIdentityRequiresAcknowledgementAndRenewsTRACE017(t *testi
 }
 
 func TestServedConnectorTargetJourneyJOURNEY001EndToEnd(t *testing.T) {
+	const (
+		awsAccessKey = "AKIDJOURNEY001"
+		awsSecretKey = "JOURNEY001SecretKeyForSigV4Only" // #nosec G101 -- fabricated test-only credential (CWE-798)
+		acmARN       = "arn:aws:acm:us-east-1:123456789012:certificate/journey-001"
+	)
+	provider := acmtest.New(awsAccessKey, awsSecretKey)
+	t.Cleanup(provider.Close)
+	registry := connector.NewRegistry(func(string) connector.Ops {
+		return connector.NewHTTPOps(provider.Client())
+	})
+	registry.Register(acm.New("us-east-1", acm.Credentials{
+		AccessKeyID: awsAccessKey, SecretAccessKey: []byte(awsSecretKey),
+	}, acm.WithEndpoint(provider.URL())))
 	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.LifecycleRenewBefore = 31 * 24 * time.Hour
+		d.ConnectorRegistry = registry
 	})
 	tok := seedScopedToken(t, h.store, h.tenant,
 		"owners:read", "owners:write",
@@ -620,11 +702,11 @@ func TestServedConnectorTargetJourneyJOURNEY001EndToEnd(t *testing.T) {
 	)
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets", tok, map[string]any{
-		"name":      "cloud/acm/payments",
+		"name":      acmARN,
 		"connector": "aws-acm",
 		"config": map[string]any{
 			"region":                "us-east-1",
-			"access_key_id":         "AKIDTESTONLY",
+			"access_key_id":         awsAccessKey,
 			"secret_access_key_ref": "secret://connectors/aws-acm/access-key",
 		},
 	})
@@ -682,7 +764,7 @@ func TestServedConnectorTargetJourneyJOURNEY001EndToEnd(t *testing.T) {
 	if err := json.Unmarshal(body, &ident); err != nil {
 		t.Fatalf("decode bound identity: %v", err)
 	}
-	if !jsonContains(t, ident.Attributes, target.ID) || !jsonContains(t, ident.Attributes, "cloud/acm/payments") {
+	if !jsonContains(t, ident.Attributes, target.ID) || !jsonContains(t, ident.Attributes, acmARN) {
 		t.Fatalf("bound identity attributes = %s, want connector target id and route", ident.Attributes)
 	}
 
@@ -701,15 +783,24 @@ func TestServedConnectorTargetJourneyJOURNEY001EndToEnd(t *testing.T) {
 		t.Fatalf("drain issue: %v", err)
 	}
 
-	// The target-test route validates configuration locally and contacts nothing,
-	// so the receipt says config_validated rather than claiming a successful test
-	// (truth-integrity 3; internal/servedstatus).
+	// A control-plane cloud target queues an effect-free provider preview. The
+	// request itself still contacts nothing; only the bounded outbox worker may
+	// perform the authenticated read-only operation.
+	writesBeforePreview := provider.Calls()
+	previewsBefore := provider.PreviewCalls()
 	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets/"+target.ID+"/test", tok, nil)
-	if status != http.StatusOK || !jsonContains(t, body, servedstatus.ConnectorConfigValidated) {
+	if status != http.StatusAccepted || !jsonContains(t, body, servedstatus.ConnectorTestQueued) {
 		t.Fatalf("test target: status %d body %s", status, body)
 	}
-	if jsonContains(t, body, "test_succeeded") {
-		t.Fatalf("test target receipt reintroduced the retired overstating status: %s", body)
+	if provider.Calls() != writesBeforePreview || provider.PreviewCalls() != previewsBefore {
+		t.Fatal("target-test request handler contacted the ACM provider")
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain target preview: %v", err)
+	}
+	if provider.Calls() != writesBeforePreview || provider.PreviewCalls() != previewsBefore+1 {
+		t.Fatalf("provider calls after target preview = writes:%d previews:%d, want %d/%d",
+			provider.Calls(), provider.PreviewCalls(), writesBeforePreview, previewsBefore+1)
 	}
 
 	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets/"+target.ID+"/deploy", tok, map[string]any{
@@ -723,7 +814,7 @@ func TestServedConnectorTargetJourneyJOURNEY001EndToEnd(t *testing.T) {
 		t.Fatalf("drain deploy: %v", err)
 	}
 	first := connectorDeliveriesForIdentity(t, h, tok, ident.ID)
-	if len(first.Items) != 1 || first.Items[0].Connector != "aws-acm" || first.Items[0].Target != "cloud/acm/payments" || first.Items[0].Fingerprint == "" {
+	if len(first.Items) != 1 || first.Items[0].Status != "delivered" || first.Items[0].Connector != "aws-acm" || first.Items[0].Target != acmARN || first.Items[0].Fingerprint == "" {
 		t.Fatalf("delivery receipt after target deploy = %+v raw=%s", first.Items, first.Raw)
 	}
 
@@ -744,6 +835,14 @@ func TestServedConnectorTargetJourneyJOURNEY001EndToEnd(t *testing.T) {
 	afterRenew := connectorDeliveriesForIdentity(t, h, tok, ident.ID)
 	if len(afterRenew.Items) != 2 {
 		t.Fatalf("delivery receipts after rotation = %d, want 2 (%s)", len(afterRenew.Items), afterRenew.Raw)
+	}
+	for _, receipt := range afterRenew.Items {
+		if receipt.Status != "delivered" {
+			t.Fatalf("successful connector journey recorded a non-delivered receipt: %+v", receipt)
+		}
+	}
+	if provider.Calls() != 2 {
+		t.Fatalf("ACM imports after deploy and rotation = %d, want 2", provider.Calls())
 	}
 
 	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets/"+target.ID+"/rollback", tok, map[string]any{

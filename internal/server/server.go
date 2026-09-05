@@ -3586,10 +3586,11 @@ func (s *Server) Drain(ctx context.Context) error {
 	// behind the barrier while the parent waits. External-CA-backed lifecycle
 	// issuance is exactly that shape (ca.issue -> external-ca.issue).
 	type drainWorkerState struct {
-		initialized bool
-		busy        bool
-		lastN       int
-		err         error
+		initialized     bool
+		busy            bool
+		lastN           int
+		quietGeneration uint64
+		err             error
 	}
 	drainCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -3603,6 +3604,12 @@ func (s *Server) Drain(ctx context.Context) error {
 		stateMu sync.Mutex
 		wg      sync.WaitGroup
 		index   int
+		// Every productive sweep advances the generation. A worker is quiet only
+		// after it completes an empty sweep in that latest generation. This is a
+		// causal quiescence barrier: if ca.renew creates connector.deploy while
+		// connector workers are in their idle poll, their older empty result can
+		// no longer make Drain return before they see the child command.
+		activityGeneration uint64
 	)
 	for _, family := range outboxDispatchFamilies {
 		family := family
@@ -3614,11 +3621,24 @@ func (s *Server) Drain(ctx context.Context) error {
 				defer wg.Done()
 				for {
 					stateMu.Lock()
+					startedGeneration := activityGeneration
 					states[workerIndex].busy = true
 					stateMu.Unlock()
 					n, err := s.outbox.DispatchScoped(drainCtx, s.obHandler, family.scope)
 					stateMu.Lock()
-					states[workerIndex] = drainWorkerState{initialized: true, lastN: n, err: err}
+					if n > 0 {
+						activityGeneration++
+					}
+					quietGeneration := uint64(0)
+					if n == 0 && err == nil {
+						// An empty query that began before another family completed
+						// productive work cannot certify the newer generation: its
+						// database snapshot may have preceded the child enqueue.
+						quietGeneration = startedGeneration
+					}
+					states[workerIndex] = drainWorkerState{
+						initialized: true, lastN: n, quietGeneration: quietGeneration, err: err,
+					}
 					stateMu.Unlock()
 					if err != nil || drainCtx.Err() != nil {
 						return
@@ -3641,7 +3661,6 @@ func (s *Server) Drain(ctx context.Context) error {
 
 	ticker := time.NewTicker(10 * time.Millisecond)
 	defer ticker.Stop()
-	quietChecks := 0
 	for {
 		select {
 		case <-ctx.Done():
@@ -3654,7 +3673,8 @@ func (s *Server) Drain(ctx context.Context) error {
 			var dispatchErr error
 			for _, state := range states {
 				dispatchErr = errors.Join(dispatchErr, state.err)
-				if !state.initialized || state.busy || state.lastN != 0 {
+				if !state.initialized || state.busy || state.lastN != 0 ||
+					state.quietGeneration != activityGeneration {
 					allQuiet = false
 				}
 			}
@@ -3665,11 +3685,6 @@ func (s *Server) Drain(ctx context.Context) error {
 				return dispatchErr
 			}
 			if allQuiet {
-				quietChecks++
-			} else {
-				quietChecks = 0
-			}
-			if quietChecks >= 2 {
 				cancel()
 				wg.Wait()
 				return nil

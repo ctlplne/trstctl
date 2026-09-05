@@ -422,6 +422,104 @@ func TestOutboxDrainHonorsConfiguredFamilyWorkerLimit(t *testing.T) {
 	}
 }
 
+// TestOutboxDrainWaitsForCrossFamilyChildWork proves causal quiescence. The CA
+// handler waits until the connector worker is inside its idle poll, then creates
+// connector work before returning. The old two-tick scoreboard mistook that idle
+// poll for final quiet and could return before the connector worker woke.
+func TestOutboxDrainWaitsForCrossFamilyChildWork(t *testing.T) {
+	if testing.Short() {
+		t.Skip("starts embedded PostgreSQL and NATS")
+	}
+	ctx := context.Background()
+	st := newServerTestStore(t)
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("open event log: %v", err)
+	}
+	set := bulkhead.NewSet(
+		bulkhead.Config{Name: bulkhead.SubsystemOutbox, Workers: 1, Queue: 8},
+		bulkhead.Config{Name: bulkhead.SubsystemOutboxConnectors, Workers: 1, Queue: 8},
+	)
+	const tenantID = "11111111-1111-1111-1111-111111111111"
+	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: "drain-causal-quiescence"}); err != nil {
+		t.Fatalf("upsert tenant: %v", err)
+	}
+
+	var (
+		srv     *Server
+		childID int64
+	)
+	delivered := make(chan string, 2)
+	handler := orchestrator.HandlerFunc(func(callCtx context.Context, message orchestrator.Message) error {
+		if message.Destination == "ca.issue" {
+			// Drain's idle workers poll every 25ms. Enqueue just after the
+			// connector worker begins its second idle poll, reproducing the old
+			// false-quiet window without changing production timing.
+			timer := time.NewTimer(30 * time.Millisecond)
+			select {
+			case <-callCtx.Done():
+				timer.Stop()
+				return callCtx.Err()
+			case <-timer.C:
+			}
+			if err := st.WithTenant(callCtx, tenantID, func(tx pgx.Tx) error {
+				var enqueueErr error
+				childID, enqueueErr = srv.outbox.Enqueue(callCtx, tx, orchestrator.Entry{
+					TenantID: tenantID, Destination: "connector.deploy",
+					IdempotencyKey: "drain-causal-child", Payload: []byte(`{}`),
+				})
+				return enqueueErr
+			}); err != nil {
+				return err
+			}
+		}
+		delivered <- message.Destination
+		return nil
+	})
+	srv, err = Build(ctx, Deps{Store: st, Log: log, Bulkhead: set, OutboxHandler: handler})
+	if err != nil {
+		set.Close()
+		_ = log.Close()
+		t.Fatalf("build control plane: %v", err)
+	}
+	t.Cleanup(func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(shutdownCtx)
+	})
+
+	var parentID int64
+	if err := st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var enqueueErr error
+		parentID, enqueueErr = srv.outbox.Enqueue(ctx, tx, orchestrator.Entry{
+			TenantID: tenantID, Destination: "ca.issue",
+			IdempotencyKey: "drain-causal-parent", Payload: []byte(`{}`),
+		})
+		return enqueueErr
+	}); err != nil {
+		t.Fatalf("enqueue parent row: %v", err)
+	}
+	if err := srv.Drain(ctx); err != nil {
+		t.Fatalf("drain parent and child: %v", err)
+	}
+	if childID == 0 {
+		t.Fatal("parent delivery did not enqueue its connector child")
+	}
+	for _, id := range []int64{parentID, childID} {
+		record, err := srv.outbox.Get(ctx, tenantID, id)
+		if err != nil || record.Status != "delivered" {
+			t.Fatalf("outbox row %d after drain = status %q err=%v, want delivered", id, record.Status, err)
+		}
+	}
+	seen := map[string]bool{}
+	for range 2 {
+		seen[<-delivered] = true
+	}
+	if !seen["ca.issue"] || !seen["connector.deploy"] {
+		t.Fatalf("drain deliveries = %v, want parent and cross-family child", seen)
+	}
+}
+
 func TestDispatchIssuanceOnceDeliversOneInternalCARow(t *testing.T) {
 	if testing.Short() {
 		t.Skip("starts embedded PostgreSQL and NATS")

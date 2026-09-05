@@ -998,15 +998,18 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 	if err != nil {
 		return endpointBindingPreviewResponse{}, err
 	}
-	issuer, err := a.resolveEndpointIssuer(ctx, tenantID, req.Issuer)
-	if err != nil {
-		return endpointBindingPreviewResponse{}, err
-	}
 	cfg, err := canonicalEndpointBindingConfig(target.Config)
 	if err != nil {
 		return endpointBindingPreviewResponse{}, err
 	}
 	target.Config = cfg
+	if err := validateEndpointBindingVerificationName(req.IdentityName, target.Config); err != nil {
+		return endpointBindingPreviewResponse{}, err
+	}
+	issuer, err := a.resolveEndpointIssuer(ctx, tenantID, req.Issuer)
+	if err != nil {
+		return endpointBindingPreviewResponse{}, err
+	}
 	fingerprintInput := struct {
 		OwnerID      string                       `json:"owner_id"`
 		IdentityName string                       `json:"identity_name"`
@@ -1059,6 +1062,28 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 		PreviewWrites:          []string{},
 		PreviewExternalEffects: []string{},
 	}, nil
+}
+
+// validateEndpointBindingVerificationName stops a deploy that is guaranteed to
+// fail its own post-write TLS proof. A host connector's verify_server_name is
+// the SNI/DNS name clients are expected to use. The single-name endpoint
+// workflow must issue that same name; otherwise the connector can replace the
+// files successfully and only discover the mistake after the listener reloads.
+func validateEndpointBindingVerificationName(identityName string, raw json.RawMessage) error {
+	var target struct {
+		VerifyServerName string `json:"verify_server_name"`
+	}
+	if err := json.Unmarshal(raw, &target); err != nil {
+		return errWithStatus(http.StatusBadRequest, err)
+	}
+	want := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(target.VerifyServerName)), ".")
+	got := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(identityName)), ".")
+	if want == "" || got == want {
+		return nil
+	}
+	return errStatus(http.StatusConflict,
+		"requested DNS name "+identityName+" does not match destination verify_server_name "+target.VerifyServerName+
+			"; use the exact hostname clients use or choose a destination configured for this hostname; nothing was queued or changed")
 }
 
 func (a *API) endpointBindingPreviewTarget(ctx context.Context, tenantID string, req endpointBindingRequest) (endpointBindingTargetSummary, error) {

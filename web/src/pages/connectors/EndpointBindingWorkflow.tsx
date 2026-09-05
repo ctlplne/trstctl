@@ -66,11 +66,12 @@ export function EndpointBindingWorkflow({
     register,
     trigger,
     getValues,
+    setValue,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     mode: "onTouched",
-    defaultValues: { target_id: "", owner_id: "", identity_name: "payments.example.test", reason: "", issuer_key: "" },
+    defaultValues: { target_id: "", owner_id: "", identity_name: "", reason: "", issuer_key: "" },
   });
   const issuerKey = useWatch({ control, name: "issuer_key" });
   const targetID = useWatch({ control, name: "target_id" });
@@ -120,6 +121,13 @@ export function EndpointBindingWorkflow({
   );
   const selectedIssuer = issuerOptions.find((issuer) => issuerKey === encodeIssuer(issuer));
   const selectedTarget = targets.find((target) => target.id === targetID);
+  const selectedTargetVerificationName = targetVerificationName(selectedTarget);
+
+  useEffect(() => {
+    if (!selectedTargetVerificationName) return;
+    setValue("identity_name", selectedTargetVerificationName, { shouldDirty: true, shouldValidate: true });
+  }, [selectedTargetVerificationName, setValue]);
+
   const steps: CarouselStep[] = [
     { id: "endpoint", label: t("connectors.binding.endpointStep"), description: t("connectors.binding.endpointStepHelp") },
     { id: "issuer", label: t("connectors.binding.issuerStep"), description: t("connectors.binding.issuerStepHelp") },
@@ -233,8 +241,17 @@ export function EndpointBindingWorkflow({
                 </Select>
               )}
             </Field>
-            <Field label={t("connectors.binding.dnsName")} description={t("connectors.binding.dnsHelp")} error={errors.identity_name?.message} required>
-              {(field) => <Input {...field} {...register("identity_name")} autoComplete="off" />}
+            <Field
+              label={t("connectors.binding.dnsName")}
+              description={
+                selectedTargetVerificationName
+                  ? t("connectors.binding.dnsPinnedHelp", { name: selectedTargetVerificationName })
+                  : t("connectors.binding.dnsHelp")
+              }
+              error={errors.identity_name?.message}
+              required
+            >
+              {(field) => <Input {...field} {...register("identity_name")} autoComplete="off" readOnly={Boolean(selectedTargetVerificationName)} />}
             </Field>
             <Field
               label={t("connectors.targetReadiness.enrollmentReason")}
@@ -316,6 +333,11 @@ export function EndpointBindingWorkflow({
       {selectedTarget && !selectedTarget.enabled ? <p className="text-sm text-status-warning">{t("connectors.targetReadiness.disabledHelp")}</p> : null}
     </div>
   );
+}
+
+function targetVerificationName(target: DeploymentTarget | undefined): string {
+  const value = target?.config?.verify_server_name;
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function encodeIssuer(issuer: Pick<EndpointIssuer, "source" | "id">): string {

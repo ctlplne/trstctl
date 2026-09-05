@@ -248,7 +248,10 @@ are immutable events (`deployment_target.upserted`, `deployment_target.deleted`,
 rebuilds routing from the event log. The effect-free
 `POST /api/v1/lifecycle/endpoint-bindings/preview` resolves one exact configured
 issuer and destination revision and fingerprints the proposed identity, custody,
-writes, queued effects, recovery, and verification. The paired
+writes, queued effects, recovery, and verification. The preview also compares
+the single requested DNS name with a host target's
+`verify_server_name`. A mismatch is rejected before issuance, file replacement, or
+reload, because that deployment is guaranteed to fail its own TLS proof. The paired
 `POST /api/v1/lifecycle/endpoint-bindings` accepts only that unchanged preview: it
 creates or reuses the target, creates the X.509 identity for an existing owner, pins
 the selected built-in, private, or external issuer, binds the route, and queues the

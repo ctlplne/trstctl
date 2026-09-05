@@ -142,7 +142,9 @@ jq '{ready,effect_free,issuer,target,custody,changes,queued_lifecycle_intents,re
 
 Stop unless the response names the intended CA and target, explains key custody,
 says `ready: true` and `effect_free: true`, and returns empty `preview_writes` and
-`preview_external_effects`. For Apache, IIS, and other host connectors, the normal
+`preview_external_effects`. If the destination has `verify_server_name`, use that
+exact value as `identity_name`; the preview refuses a mismatch before certificate
+files can be replaced and then fail their own listener proof. For Apache, IIS, and other host connectors, the normal
 plan is host-generated key custody: the edge collector sends a CSR, not a private
 key, to the control plane. A target-vantage connector test remains a separate useful
 check because it contacts the destination safely; **Configuration valid — target not

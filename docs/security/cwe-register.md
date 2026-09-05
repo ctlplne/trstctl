@@ -44,11 +44,11 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1363 annotated sites across 26 rules. Each row is
+1364 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (298 sites)
+### G101 — CWE-798 Use of hardcoded credentials (299 sites)
 
 | Location | Reason |
 |---|---|
@@ -290,6 +290,7 @@ not this file.
 | `internal/server/itsm_served_test.go:192` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/itsm_served_test.go:211` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/itsm_served_test.go:219` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/journey_delivery_served_test.go:683` | fabricated test-only credential (CWE-798) |
 | `internal/server/managedkeys_cloudkms_served_test.go:30` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/mdm_poller_served_test.go:33` | credential reference (env: pointer), no credential value present (CWE-798) |
 | `internal/server/mdm_poller_served_test.go:36` | credential reference (secret store pointer), no credential value present (CWE-798) |

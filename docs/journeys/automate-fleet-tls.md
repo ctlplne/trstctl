@@ -148,7 +148,10 @@ deployment happen on their own.
    The same flow is served in the console under **Deployment connectors** and over
    REST at `/api/v1/lifecycle/endpoint-bindings/preview` and
    `/api/v1/lifecycle/endpoint-bindings`. The target stores non-secret metadata and
-   credential references only. Initial issuance and renewal use the previewed issuer;
+   credential references only. When a host target declares `verify_server_name`, the
+   requested `identity_name` must be that exact DNS name. The console fills and locks
+   it from the destination; the API preview rejects a mismatch before issuance or a
+   target write. Initial issuance and renewal use the previewed issuer;
    an unavailable issuer fails closed instead of falling back. Actual target mutation
    still moves through `connector.deploy` outbox work; if no native registry or signed
    plugin owns the connector, the binary records a failed worker receipt and leaves

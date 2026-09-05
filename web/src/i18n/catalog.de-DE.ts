@@ -4594,6 +4594,8 @@ const deDECatalog = {
   "connectors.binding.selectOwner": "Verantwortlichen wählen",
   "connectors.binding.dnsName": "DNS-Name",
   "connectors.binding.dnsHelp": "Der Hostname, den Clients verwenden, zum Beispiel payments.example.com.",
+  "connectors.binding.dnsPinnedHelp":
+    "Dieses Ziel prüft {name}. trstctl verwendet genau diesen DNS-Namen, damit der Nachweis nach der Bereitstellung nicht erst nach dem Dateiaustausch fehlschlägt.",
   "connectors.binding.reasonHelp": "Warum diese Automatisierung autorisiert wird; wird mit dem Lifecycle-Ereignis aufbewahrt.",
   "connectors.binding.caAgnostic":
     "Verwenden Sie die CA, der Sie bereits vertrauen. trstctl automatisiert den Lebenszyklus; Ihre CA muss nicht ersetzt werden.",

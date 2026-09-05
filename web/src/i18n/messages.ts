@@ -13300,6 +13300,10 @@ export const messages = {
   "connectors.binding.selectOwner": { defaultMessage: "Choose an owner", description: "Endpoint lifecycle owner placeholder." },
   "connectors.binding.dnsName": { defaultMessage: "DNS name", description: "Endpoint lifecycle certificate name label." },
   "connectors.binding.dnsHelp": { defaultMessage: "The hostname clients use, for example payments.example.com.", description: "Endpoint lifecycle DNS help." },
+  "connectors.binding.dnsPinnedHelp": {
+    defaultMessage: "This destination verifies {name}. trstctl uses that exact DNS name so the post-deploy proof cannot fail after files change.",
+    description: "Endpoint lifecycle help when the destination fixes the TLS verification name.",
+  },
   "connectors.binding.reasonHelp": {
     defaultMessage: "Why this automation is being authorized; retained with the lifecycle event.",
     description: "Endpoint lifecycle reason help.",
