@@ -6,11 +6,12 @@ keys, tokens, and SPIFFE workload identities across hybrid infrastructure.
 
 You do not need public-key infrastructure vocabulary to find the first action.
 **Home** tells you what needs attention, what can break, when it is due, whether
-automation is proven, who owns it, and what to do next. Five workspaces keep each
-kind of daily work focused:
+automation is proven, who owns it, and what to do next. Six tools keep each kind
+of daily work focused:
 
-| Workspace | Plain-language question |
+| Tool | Plain-language question |
 | --- | --- |
+| **Discover** | What machine credentials exist, where did we observe them, and what did we not scan? |
 | **Certificate Lifecycle** | Which certificates could expire or fail renewal? |
 | **Machine & Workload Trust** | Which machines can prove who they are? |
 | **Secrets & Access** | Which secrets need rotation, delivery repair, or access review? |
@@ -18,7 +19,7 @@ kind of daily work focused:
 | **Trust Operations** | Which cross-product risk, incident, owner, alert, or system issue needs action? |
 
 [Learn the product map](product-map.md) in five minutes. It explains non-human
-identity (NHI), certificate lifecycle management (CLM), the five workspaces, shared
+identity (NHI), certificate lifecycle management (CLM), the six tools, shared
 safety rails, status words, and the shortest path for each role.
 
 ## Choose your first outcome

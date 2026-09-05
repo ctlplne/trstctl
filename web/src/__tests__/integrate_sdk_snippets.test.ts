@@ -8,14 +8,14 @@ function readRepoFile(relativePath: string): string {
   return readFileSync(path.join(repoRoot, relativePath), "utf8");
 }
 
-function extractSdkReferences(): Record<string, string> {
+function extractSdkReferences(): Record<string, { reference: string; statusKey: string }> {
   const source = readRepoFile("web/src/pages/Integrate.tsx");
-  const block = source.match(/const sdks = \[([\s\S]*?)\];/);
+  const block = source.match(/const sdks[^=]*=\s*\[([\s\S]*?)\];/);
   expect(block, "Integrate.tsx should define the copyable SDK list").not.toBeNull();
 
   return Object.fromEntries(
-    [...block![1].matchAll(/\{\s*name:\s*"([^"]+)",\s*reference:\s*("(?:[^"\\]|\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}))*")\s*\}/g)].map(
-      ([, name, encodedReference]) => [name, JSON.parse(encodedReference) as string],
+    [...block![1].matchAll(/\{\s*name:\s*"([^"]+)",\s*reference:\s*("(?:[^"\\]|\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}))*"),\s*statusKey:\s*"([^"]+)"\s*,?\s*\}/g)].map(
+      ([, name, encodedReference, statusKey]) => [name, { reference: JSON.parse(encodedReference) as string, statusKey }],
     ),
   );
 }
@@ -48,11 +48,18 @@ describe("Integrate SDK install snippets (PRODUCT-004)", () => {
     const javaCoordinate = `${pomTag(javaPom, "groupId")}:${pomTag(javaPom, "artifactId")}:${pomTag(javaPom, "version")}`;
 
     expect(references).toEqual({
-      "Python SDK": `pip install ${pythonName}`,
-      "Go SDK": `go get ${goModule}`,
-      "TypeScript SDK": "npm install ./clients/sdk/typescript",
-      "Java SDK": javaCoordinate,
+      "Python SDK": { reference: "python -m pip install ./trstctl/clients/sdk/python", statusKey: "integrate.sdks.sourceReady" },
+      "Go SDK": {
+        reference: `go mod edit -replace ${goModule}=./trstctl/clients/sdk/go`,
+        statusKey: "integrate.sdks.sourceReady",
+      },
+      "TypeScript SDK": { reference: "npm install ./trstctl/clients/sdk/typescript", statusKey: "integrate.sdks.sourceReady" },
+      "Java SDK": { reference: "mvn -f ./trstctl/clients/sdk/java/pom.xml install", statusKey: "integrate.sdks.sourceReady" },
     });
+    expect(Object.values(references).every((entry) => entry.statusKey === "integrate.sdks.sourceReady")).toBe(true);
+    expect(Object.values(references).some((entry) => /go get|pip install trstctl-sdk|com\.trstctl:/.test(entry.reference))).toBe(false);
+    expect(pythonName).toBe("trstctl-sdk");
+    expect(javaCoordinate).toBe("com.trstctl:trstctl-sdk:0.1.0");
     expect(tsPackage.name).toBe("@trstctl/sdk");
   });
 });

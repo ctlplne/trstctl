@@ -10,7 +10,7 @@ the first image build. **Safest next diagnostic:** if a step fails, keep the sta
 running and use [Troubleshooting](troubleshooting.md); do not delete volumes before
 you preserve the error and inspect service health.
 
-New to the product? Read the [five-workspace product map](product-map.md) first.
+New to the product? Read the [six-tool product map](product-map.md) first.
 
 One Compose command builds and starts the blank evaluation services. You then trust
 one certificate-only file, sign in through the loopback-only local identity

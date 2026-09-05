@@ -260,6 +260,24 @@ func TestCapabilitiesViewIsAuthenticatedSanitizedAndAuthorizationAware(t *testin
 			t.Fatalf("F33 %s unavailable=%+v, want exact approval dependency reason", operationID, action)
 		}
 	}
+	// Platform capability rows must not borrow an unrelated optional service's
+	// failure. F10 is the core REST contract; AI query/RCA are F75-F77. F20 is
+	// the plugin sandbox/catalog; external-CA configuration is F5.
+	f10 := findCapabilityViewItem(t, operator, "F10")
+	for _, unrelated := range []string{"aiQuery", "aiRCA", "callMCPTool"} {
+		if containsCapabilityString(f10.Actions.Allowed, unrelated) || containsCapabilityString(f10.Actions.Denied, unrelated) {
+			t.Errorf("F10 actions borrowed optional operation %s", unrelated)
+		}
+		for _, unavailable := range f10.Actions.Unavailable {
+			if unavailable.OperationID == unrelated {
+				t.Errorf("F10 unavailable reason borrowed optional operation %s: %+v", unrelated, unavailable)
+			}
+		}
+	}
+	f20 := findCapabilityViewItem(t, operator, "F20")
+	if f20.RuntimeState != "available" || !containsCapabilityString(f20.Actions.Allowed, "listConnectorCatalog") || len(f20.Actions.Unavailable) != 0 {
+		t.Fatalf("operator F20 runtime/allowed/unavailable=%q/%v/%v, want served plugin catalog independent of external CA configuration", f20.RuntimeState, f20.Actions.Allowed, f20.Actions.Unavailable)
+	}
 
 	capabilityOnlyResponse := httptest.NewRecorder()
 	handler.ServeHTTP(capabilityOnlyResponse, capabilityViewRequest(tenantID, capabilityOnly.Name))

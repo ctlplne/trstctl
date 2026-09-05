@@ -8,6 +8,21 @@ retry logic, idempotency, pagination, or error mapping. The SDKs are
 generated/blessed against the served OpenAPI 3.1 contract and are pinned to it
 so they cannot silently drift from the API.
 
+“Ships” currently means the source, generated contract, tests, and local build
+metadata are committed in this repository. It does **not** mean every library is
+published to a public package registry. The exact distribution boundary is:
+
+| SDK | Verified way to use it today | Public package claim |
+| --- | --- | --- |
+| Go | clone the repository and use a local `replace` to `clients/sdk/go` | none; the vanity `go-import` endpoint is not served |
+| TypeScript | `npm install` the checked-out `clients/sdk/typescript` directory | none |
+| Python | `python -m pip install` the checked-out `clients/sdk/python` directory | none |
+| Java | build/install the checked-out `clients/sdk/java/pom.xml` into the local Maven repository | none |
+
+The console uses only these verified local-source commands. A registry command can
+replace one of them only after CI installs that exact published artifact from a
+clean environment.
+
 *Code:* `clients/sdk/` (`go/`, `typescript/`, `python/`, `java/`, and the pinned `openapi.json`).
 *Regenerate:* `make sdk`. **Served contract + library.**
 

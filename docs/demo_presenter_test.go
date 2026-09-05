@@ -18,7 +18,8 @@ func TestDemoPresenterTracksKeepProofAndPrerequisitesVisible(t *testing.T) {
 		`id="demo-menu"`, `id="demo-preflight"`, `id="clm-5"`,
 		`id="clm-15"`, `id="clm-40"`, `id="internal-ca-lab"`,
 		`id="msp-demo"`, `id="device-demo"`, `id="machine-demo"`, `id="f5-demo"`,
-		`id="lab-manifest"`, `id="demo-proof"`,
+		`id="lab-manifest"`, `id="pilot-scorecard"`, `id="demo-proof"`,
+		"One scorecard decides whether the pilot proved value",
 		"Keep your CA. Automate the lifecycle.",
 		"IIS", "Apache", "F5", "5 minutes", "15 minutes", "40 minutes",
 		"Prepared live lab", "Recorded evidence", "Read-only tour",
@@ -29,7 +30,7 @@ func TestDemoPresenterTracksKeepProofAndPrerequisitesVisible(t *testing.T) {
 		"one stable idempotency key", "Do not paste private keys",
 		"Management readback is not traffic-path verification",
 		"Prepared connector targets are not contacted targets.",
-		"one active execution runtime",
+		"one active execution runtime", "Running-candidate boundary",
 		"No alert channel is configured in the shipped seed",
 		"The lifecycle issuer is not a pre-created CA hierarchy",
 		`id="zero-to-sale"`, `id="rehearsal-proof"`, `id="byo-ai-agent"`,
@@ -68,7 +69,7 @@ func TestDemoScreenshotsAreLocalCandidateLabelledEvidence(t *testing.T) {
 	}
 	for _, marker := range []string{
 		"g211", "f8a266242eab77737f88508f6cb7200d055d1cbe",
-		"4 September 2026", "sanitized", "exact-candidate",
+		"4 September 2026", "sanitized", "recorded screenshot evidence",
 	} {
 		if !strings.Contains(page, marker) {
 			t.Errorf("screenshot provenance is missing %q", marker)

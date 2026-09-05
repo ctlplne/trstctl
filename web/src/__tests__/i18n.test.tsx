@@ -1481,9 +1481,11 @@ describe("i18n boundary", () => {
       // F79 re-pin: exact erasure and retention review actions, matched-row and
       // legal-hold facts, prerequisites, effects, recovery, and verification
       // labels are translated in both production catalogs. Machine-authored
-      // es/de — FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "80a6f92dd4034d924386a9614b20400e509651daaa2f418894aaa246a29d4375",
-      "de-DE": "38ec920c41521bed4d0642aa605ec2cd13a9407697b1a23b8d6a06e715338d8c",
+      // The six-tool product map and repository-local SDK installation boundary
+      // were reviewed in English for g216. Machine-authored es/de remain
+      // FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "05fa84f06f44a73ec2608321e388321313da5b3cca452b0c60a404e86192ce5b",
+      "de-DE": "b73d30a5e38d9da2503aa567ba8ff03f9e4876afb24dfa23de7026b2c7112fbd",
     });
   });
 

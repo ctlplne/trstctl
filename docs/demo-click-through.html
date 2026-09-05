@@ -549,6 +549,7 @@
           <li><a href="#stop-14">14. Connectors</a></li>
           <li><a href="#stop-15">15. Administration</a></li>
           <li><a href="#optional-lab">Optional lab</a></li>
+          <li><a href="#pilot-scorecard">Pilot scorecard</a></li>
           <li><a href="#glossary">Glossary</a></li>
           <li><a href="#troubleshooting">Troubleshooting</a></li>
         </ol>
@@ -584,11 +585,12 @@
       </section>
 
       <section class="evidence-strip" id="rehearsal-proof" aria-labelledby="rehearsal-proof-title">
-        <p class="track-label">exact-candidate evidence · sanitized</p>
-        <h2 id="rehearsal-proof-title">What was actually verified for this guide</h2>
-        <p><strong>Live product candidate:</strong> g211, source commit <code>f8a266242eab77737f88508f6cb7200d055d1cbe</code>, observed 4 September 2026. The control plane reported build <code>g211-dev</code>, four of four core dependencies ready, an external signer, and zero live endpoint probe failures.</p>
-        <p><strong>Passed live now:</strong> authenticated Home, Discovery, Certificates, Alerts, Agents, System health, an API-playground <code>GET /api/v1/access/api-tokens</code> returning <code>200 OK</code>, temporary-key revocation, and an Apache target preview reaching <strong>Target path ready — no changes made</strong>.</p>
+        <p class="track-label">recorded screenshot evidence · sanitized</p>
+        <h2 id="rehearsal-proof-title">What this guide's retained evidence snapshot verified</h2>
+        <p><strong>Evidence snapshot candidate:</strong> g211, source commit <code>f8a266242eab77737f88508f6cb7200d055d1cbe</code>, observed 4 September 2026. The control plane reported build <code>g211-dev</code>, four of four core dependencies ready, an external signer, and zero live endpoint probe failures.</p>
+        <p><strong>Passed live on that snapshot:</strong> authenticated Home, Discovery, Certificates, Alerts, Agents, System health, an API-playground <code>GET /api/v1/access/api-tokens</code> returning <code>200 OK</code>, temporary-key revocation, and an Apache target preview reaching <strong>Target path ready — no changes made</strong>.</p>
         <p><strong>Recorded earlier on the same retained lab:</strong> g184/g185/g188 proved Apache issue, deploy, TLS listener readback, renewal to a distinct certificate, effect-free restore review, agent-executed rollback, CLI parity, and phone layout. Those are labelled recorded evidence, not a fresh g211 deployment.</p>
+        <p><strong>Running-candidate boundary:</strong> the <code>?candidate=</code> value below tells you which live build to compare in System health. It never relabels these g211 screenshots as newer evidence. If the running candidate differs, rehearse every live claim again or say “recorded g211 evidence.”</p>
         <p><strong>Still not claimed:</strong> a live IIS host, live F5 appliance, external vendor CA issuance on this exact candidate, a configured alert sink, or whole-product release readiness. “Not rehearsed on this candidate” remains the required label for those scenarios.</p>
       </section>
 
@@ -600,7 +602,7 @@
       <section id="demo-menu" class="section-title">
         <h2>What does this customer need to believe?</h2>
         <p>Start by asking: “Which certificate outage or manual renewal would you remove first?” Choose one endpoint, one owner, one issuer, and one measurable outcome. The existing 15-screen tour remains below as reference, not the default pitch.</p>
-        <p class="readiness">Partially rehearsed on g211 · read-only screens, safe API read, and Apache preview passed; use “Not rehearsed on this candidate” for IIS, F5, live alert delivery, external-vendor issuance, and any unlisted scenario</p>
+        <p class="readiness">Recorded snapshot: g211 · read-only screens, safe API read, and Apache preview passed; use “Not rehearsed on this candidate” for IIS, F5, live alert delivery, external-vendor issuance, and any unlisted scenario</p>
       </section>
       <div class="track-grid">
         <article class="track-card"><span class="track-label">Flagship · application / infrastructure team</span><h3>Stop renewing web certificates by hand</h3><p>Apache or IIS: find the endpoint, keep its chosen CA, deliver a replacement, verify the listener, and show the next renewal.</p><a href="#clm-5">5-minute pitch</a> · <a href="#clm-15">15-minute proof</a> · <a href="#clm-40">40-minute deep dive</a></article>
@@ -615,7 +617,7 @@
       <section class="demo-track" id="demo-preflight">
         <p class="track-label">Preparation is outside the pitch clock</p><h2>Earn the right to call it a live demo</h2>
         <p>Use a disposable, operator-owned lab. A Linux Compose stack does not supply a Windows IIS machine or an F5 appliance. Provision those separately. Record exact product, agent, operating-system, application, and device versions before rehearsal.</p>
-        <p class="honesty"><strong>Prepared connector targets are not contacted targets.</strong> The shipped seed creates clearly labelled Apache, IIS, and F5 destination records so the read-only pitch has concrete objects. The exact g211 rehearsal has <strong>one active execution runtime</strong> and a successful no-write Apache preview; that does not prove IIS, F5, a deployment, or a listener change. A presenter must say “prepared, not contacted” for every target that lacks candidate-specific runtime and independent listener proof.</p>
+        <p class="honesty"><strong>Prepared connector targets are not contacted targets.</strong> The shipped seed creates clearly labelled Apache, IIS, and F5 destination records so the read-only pitch has concrete objects. The recorded g211 rehearsal had <strong>one active execution runtime</strong> and a successful no-write Apache preview; that does not prove the running candidate, IIS, F5, a deployment, or a listener change. A presenter must say “prepared, not contacted” for every target that lacks candidate-specific runtime and independent listener proof.</p>
         <div class="proof-chain">
           <div><strong>Read-only tour</strong>Inspect seeded or existing records. Explain screens. Do not claim a new deployment occurred.</div>
           <div><strong>Recorded evidence</strong>Show a dated, candidate-labelled earlier rehearsal. State what ran and what was simulated.</div>
@@ -629,7 +631,7 @@
           <li><strong>Constrain privileges.</strong> Enable the named native connector in operator configuration. Allow only the lab paths, executable/argument profiles, network ranges, ports, and credential references required. Keep secrets in protected files or secret handles, never the demo JSON, command history, screenshots, or this guide.</li>
           <li><strong>Pick an issuer explicitly.</strong> For a keep-your-CA pitch, configure and rehearse that external CA and its validation prerequisites first. The generic endpoint-binding form does not expose issuer selection today. <strong>No silent switch to the built-in CA</strong> if the desired end-to-end path is unavailable: call that path blocked and show the exact gap.</li>
           <li><strong>Rehearse two cycles.</strong> Prove initial delivery, a later replacement, endpoint verification, alert delivery to a controlled sink, and supported recovery. Repeat after an agent restart. Use fresh operation keys for new actions and the same key only for the same logical retry.</li>
-          <li><strong>Close the loop.</strong> Fill the <a href="#lab-manifest">rehearsal record</a>. This guide supplies a current signed-in g211 inspection and no-write Apache preview, plus older labelled Apache lifecycle evidence. It does not supply a fresh g211 deployment to a customer-owned external target. If any required step is missing, label the slot Read-only tour or Recorded evidence before presenting.</li>
+          <li><strong>Close the loop.</strong> Fill the <a href="#lab-manifest">rehearsal record</a>. This guide supplies a dated signed-in g211 inspection and no-write Apache preview, plus older labelled Apache lifecycle evidence. It does not supply a fresh deployment on whichever candidate is running now or to a customer-owned external target. If any required step is missing, label the slot Read-only tour or Recorded evidence before presenting.</li>
         </ol>
         <details><summary>Apache / IIS / F5 setup details and important limits</summary>
           <div class="table-scroll" tabindex="0" role="region" aria-label="Target-specific lab prerequisites"><table class="run-table"><thead><tr><th>Target</th><th>Operator preparation</th><th>Proof / limit</th></tr></thead><tbody>
@@ -647,7 +649,7 @@
         <p><strong>Audience:</strong> application owner, infrastructure lead, or prospective design partner. <strong>Prepared object:</strong> one lab web service, one owner, one saved scan, one rehearsed delivery. Use the existing issuer name throughout. If external-CA automation has not been rehearsed, describe it as the intended workflow, not a completed capability.</p>
         <p class="honesty"><strong>Home is the executive signal; Certificates is the exact queue.</strong> On g211, Home's top cards intentionally say that deadline or ownership may be unreported. Do not point at Home and invent an owner. Open Certificates to show exact expiry, owner, and delivery state.</p>
         <div class="table-scroll" tabindex="0" role="region" aria-label="Five-minute CLM run of show"><table class="run-table"><thead><tr><th>Clock</th><th>Show / say</th><th>What earns the claim</th></tr></thead><tbody>
-          <tr><td>0:00–0:35</td><a href="https://127.0.0.1:9443/" data-demo-path="/" target="_blank" rel="noopener">Home</a>: “This is the control-tower view. It tells me where risk or missing accountability needs attention.”</td><td>Point to the served count only. Do not assign a name, owner, deadline, or cause that the card does not show.</td></tr>
+          <tr><td>0:00–0:35</td><td><a href="https://127.0.0.1:9443/" data-demo-path="/" target="_blank" rel="noopener">Home</a>: “This is the control-tower view. It tells me where risk or missing accountability needs attention.”</td><td>Point to the served count only. Do not assign a name, owner, deadline, or cause that the card does not show.</td></tr>
           <tr><td>0:35–1:20</td><a href="https://127.0.0.1:9443/certificates" data-demo-path="/certificates" target="_blank" rel="noopener">Certificates</a>: choose one action-queue row. “This is the exact certificate, its time window, its owner, and whether delivery is manual, delayed, or failed.”</td><td>Name the displayed row. Expiry, ownership, and deployment are separate facts; a certificate can be expiring without a failed renewal.</td></tr>
           <tr><td>1:20–2:05</td><a href="https://127.0.0.1:9443/discovery" data-demo-path="/discovery" target="_blank" rel="noopener">Discover</a>: click <strong>Review finding</strong>, then <strong>Exact finding evidence</strong>. “We know where this observation came from before we act.”</td><td>Show host/port or resource, source, collection time, run/provenance, finding ID, and fingerprint. <strong>No issuer is shown in this finding panel</strong>; get issuer detail from certificate inventory when it exists.</td></tr>
           <tr><td>2:05–3:25</td><a href="https://127.0.0.1:9443/connectors" data-demo-path="/connectors" target="_blank" rel="noopener">Where credentials are installed</a>: open <strong>Destinations and safe actions</strong>. Select only the rehearsed Apache target and identity, enter a reason, then choose <strong>Preview changes (no writes)</strong>.</td><td>Wait for <strong>Target path ready — no changes made</strong>. A status of <em>Preview queued — no result yet</em> is not success. The preview may create a durable job/receipt, but it must not change the target.</td></tr>
@@ -895,6 +897,26 @@ known_gaps_and_manual_steps: REQUIRED
 rehearsed_at_and_evidence_expiry: REQUIRED
 evidence_access_owner: REQUIRED</code></pre>
         <p><strong>Reset:</strong> retain evidence first, then use documented API cleanup or restore the explicitly named disposable lab snapshot. Do not edit product projections, delete unrelated volumes, erase an original failure, or reuse revoked credentials to manufacture a clean starting point.</p>
+      </section>
+
+      <section class="demo-track" id="pilot-scorecard">
+        <p class="track-label">External design-partner contract · pass or fail each row</p>
+        <h2>One scorecard decides whether the pilot proved value</h2>
+        <p>Agree this scorecard before the pilot starts. A row passes only with a dated evidence reference from the named candidate and customer-owned scope. “Configured,” “queued,” or “looked right in the UI” is not a pass.</p>
+        <div class="table-scroll" tabindex="0" role="region" aria-label="Design-partner pilot scorecard"><table class="run-table"><thead><tr><th>Required outcome</th><th>Pass evidence</th><th>Initial status</th></tr></thead><tbody>
+          <tr><td>Discovery provenance</td><td>Named source, scope, vantage, run, collection time, fingerprint, coverage denominator, and blind spots.</td><td>Not tested</td></tr>
+          <tr><td>Accountable owner</td><td>One team/person owns the selected identity and the ownership decision is visible in audit history.</td><td>Not tested</td></tr>
+          <tr><td>Policy and approval</td><td>The exact requested action, decision, actor, reason, and immutable intent digest agree.</td><td>Not tested</td></tr>
+          <tr><td>Key custody</td><td>Requester-, signer-, or Edge-held custody is named; no private key enters screenshots, logs, or prompts.</td><td>Not tested</td></tr>
+          <tr><td>Delivery receipt</td><td>The terminal connector/Edge receipt names the exact target, result, and rollback reference.</td><td>Not tested</td></tr>
+          <tr><td>Served fingerprint</td><td>An independent handshake from the agreed vantage matches the expected certificate fingerprint and application response.</td><td>Not tested</td></tr>
+          <tr><td>Second renewal</td><td>A distinct replacement is issued and served, and the next scheduled action is visible.</td><td>Not tested</td></tr>
+          <tr><td>Controlled failure and recovery</td><td>One dependency or target failure is preserved, explained, retried or reconciled safely, and verified after recovery.</td><td>Not tested</td></tr>
+          <tr><td>Alert receipt</td><td>A controlled sink receives the expected expiry or failure alert with owner, routing rule, and delivery receipt.</td><td>Not tested</td></tr>
+          <tr><td>Tenant denial</td><td>A neighboring tenant cannot read or mutate the selected identity, job, evidence, or alert.</td><td>Not tested</td></tr>
+          <tr><td>Evidence and retention owner</td><td>Sanitized export, access owner, retention period, and deletion date are recorded.</td><td>Not tested</td></tr>
+        </tbody></table></div>
+        <p><strong>Pilot decision:</strong> pass only when every row required by the agreed use case passes. Otherwise record the exact wall, owner, and executable unblock test; never average a security or delivery failure into a green score.</p>
       </section>
 
       <section id="before-you-start" class="section-title">

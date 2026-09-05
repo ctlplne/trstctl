@@ -5642,7 +5642,10 @@ const esESCatalog = {
   "integrate.protocols.title": "Protocolos de enrolamiento",
   "integrate.protocols.description": "Endpoints estandarizados de enrolamiento de certificados (por perfil de emision).",
   "integrate.sdks.title": "SDKs",
-  "integrate.sdks.description": "Bibliotecas cliente generadas para la API de trstctl.",
+  "integrate.sdks.description":
+    "Bibliotecas cliente generadas y vinculadas al contrato de la API. El estado de distribución se muestra para cada biblioteca.",
+  "integrate.sdks.sourceReady":
+    "Disponible desde el código fuente · clone el repositorio de trstctl antes de ejecutar este comando de ruta local. No se afirma que exista un paquete público.",
   "integrate.gitops.title": "Flujo GitOps",
   "integrate.gitops.description": "Genera declaraciones desde el estado vivo, validalas con dry-run de politicas y compara campos vivos contra declarados.",
   "integrate.gitops.loadUnavailable": "Estado vivo de GitOps no disponible",

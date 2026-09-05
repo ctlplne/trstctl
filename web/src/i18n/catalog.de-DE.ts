@@ -5690,7 +5690,10 @@ const deDECatalog = {
   "integrate.protocols.title": "Enrollment-Protokolle",
   "integrate.protocols.description": "Standardbasierte Zertifikats-Enrollment-Endpunkte (pro Ausstellungsprofil).",
   "integrate.sdks.title": "SDKs",
-  "integrate.sdks.description": "Generierte Client-Bibliotheken für die trstctl-API.",
+  "integrate.sdks.description":
+    "Generierte, an den API-Vertrag gebundene Clientbibliotheken. Der Veröffentlichungsstatus wird je Bibliothek angezeigt.",
+  "integrate.sdks.sourceReady":
+    "Aus dem Quellcode nutzbar · Klonen Sie das trstctl-Repository, bevor Sie diesen lokalen Pfadbefehl ausführen. Es wird kein öffentliches Paket behauptet.",
   "integrate.gitops.title": "GitOps-Workflow",
   "integrate.gitops.description":
     "Deklarationen aus dem Live-Zustand erzeugen, per Richtlinien-Probelauf validieren und live mit deklarierten Feldern vergleichen.",

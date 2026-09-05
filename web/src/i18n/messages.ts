@@ -12248,7 +12248,7 @@ export const messages = {
   },
   "notifications.center.tabWithCount": { defaultMessage: "{label} ({count})", description: "Alert Center tab label with its meaningful item count." },
   "notifications.routing.ruleLevel": { defaultMessage: "Rule level", description: "Label for the routing inheritance scope selector." },
-  "notifications.routing.levelGlobal": { defaultMessage: "Global fallback", description: "Routing scope applying across all five workspaces." },
+  "notifications.routing.levelGlobal": { defaultMessage: "Global fallback", description: "Routing scope applying across all six tools." },
   "notifications.routing.levelWorkspace": { defaultMessage: "Workspace", description: "Routing scope applying to one product workspace." },
   "notifications.routing.levelOwner": { defaultMessage: "Owner", description: "Routing scope applying to one accountable owner." },
   "notifications.routing.levelAsset": { defaultMessage: "Asset", description: "Most-specific routing scope applying to one asset." },
@@ -17921,8 +17921,12 @@ export const messages = {
     description: "Integrate route SDK section title.",
   },
   "integrate.sdks.description": {
-    defaultMessage: "Generated client libraries for the trstctl API.",
+    defaultMessage: "Generated client libraries pinned to the API contract. Distribution status is shown per library.",
     description: "Integrate route SDK section description.",
+  },
+  "integrate.sdks.sourceReady": {
+    defaultMessage: "Source-ready · clone the trstctl repository before running this local-path command. No public package is claimed.",
+    description: "Honest distribution status for an SDK that is committed and tested but not verified in a public package registry.",
   },
   "integrate.gitops.title": {
     defaultMessage: "GitOps workflow",

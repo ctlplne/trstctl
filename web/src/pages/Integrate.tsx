@@ -16,11 +16,15 @@ const protocols = [
   { name: "SCEP", reference: "/scep/{profile}", note: "MDM enrollment for laptops and mobile devices." },
 ];
 
-const sdks = [
-  { name: "Python SDK", reference: "pip install trstctl-sdk" },
-  { name: "Go SDK", reference: "go get trstctl.com/sdk/go" },
-  { name: "TypeScript SDK", reference: "npm install ./clients/sdk/typescript" },
-  { name: "Java SDK", reference: "com.trstctl:trstctl-sdk:0.1.0" },
+const sdks: Array<{ name: string; reference: string; statusKey: MessageKey }> = [
+  { name: "Python SDK", reference: "python -m pip install ./trstctl/clients/sdk/python", statusKey: "integrate.sdks.sourceReady" },
+  {
+    name: "Go SDK",
+    reference: "go mod edit -replace trstctl.com/sdk/go=./trstctl/clients/sdk/go",
+    statusKey: "integrate.sdks.sourceReady",
+  },
+  { name: "TypeScript SDK", reference: "npm install ./trstctl/clients/sdk/typescript", statusKey: "integrate.sdks.sourceReady" },
+  { name: "Java SDK", reference: "mvn -f ./trstctl/clients/sdk/java/pom.xml install", statusKey: "integrate.sdks.sourceReady" },
 ];
 
 const iac = [
@@ -94,9 +98,9 @@ function CopyRef({ value }: { value: string }) {
 }
 
 /** Integrate is the one place to wire trstctl into a stack: copy the served
- * ACME/EST/SCEP enrollment URLs, grab an SDK, or drop in the Terraform / cert-
- * manager / SPIRE integration. Every reference points at a served surface; no
- * internal-only endpoint is exposed here. */
+ * ACME/EST/SCEP enrollment URLs, use a source-ready SDK, or drop in the Terraform /
+ * cert-manager / SPIRE integration. Each entry states whether it is a served
+ * endpoint or a repository-local artifact; no unpublished package is implied. */
 export function Integrate() {
   const { locale, t } = useTranslation();
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -262,6 +266,7 @@ export function Integrate() {
                 <li key={sdk.name} className="grid gap-1">
                   <span className="text-sm font-medium">{sdk.name}</span>
                   <CopyRef value={sdk.reference} />
+                  <span className="text-caption text-muted-foreground">{t(sdk.statusKey)}</span>
                 </li>
               ))}
             </ul>

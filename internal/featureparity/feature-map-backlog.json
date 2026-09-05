@@ -19796,10 +19796,7 @@
             "status": "closed",
             "notes": "The served API playground closes the historical no-explorer gap through the exact OpenAPI contract, a safe read-first workflow, operation permissions, typed request preparation, a 15-minute least-privilege test key, explicit mutation confirmation, cancellation, readable/raw response evidence, and immediate revocation. The route-parity guard pins F10 to /integrate/api as an operate surface. COMPETE-044 update: CAP-SCALE-01 is served through GET /api/v1/scale/orchestration, exposing 100k/250k/1M credential bands, CAP-LARGE capacity posture, hot-path SLOs, execution lanes, bulkhead/backpressure controls, release gates, shard plan, and residuals. COMPETE-045 update: CAP-SCALE-02 is served through GET /api/v1/scale/ha-issuance, exposing active regional ingress, tenant write fences, failover gates, and RPO/RTO posture without claiming split-brain independent writers. B-1 adds listBulkheadStats: the AN-7 bounded worker-pool snapshot (per-pool queue depth, rejections, saturation) served for operators instead of only on the metrics endpoint.",
             "api_surface": [
-                "aiQuery",
-                "aiRCA",
                 "approveIdentityAction",
-                "callMCPTool",
                 "createEnrollmentToken",
                 "createIdentity",
                 "createIssuer",
@@ -19855,6 +19852,7 @@
                 "ingestCertificate",
                 "issuePKISecret",
                 "listAgents",
+                "listCapabilities",
                 "listCertificates",
                 "listIdentities",
                 "listIssuerCapabilities",
@@ -19905,10 +19903,7 @@
                 },
                 "api": {
                     "evidence": [
-                        "OpenAPI operationId: aiQuery",
-                        "OpenAPI operationId: aiRCA",
                         "OpenAPI operationId: approveIdentityAction",
-                        "OpenAPI operationId: callMCPTool",
                         "OpenAPI operationId: createEnrollmentToken",
                         "OpenAPI operationId: createIdentity",
                         "OpenAPI operationId: createIssuer",
@@ -19932,6 +19927,7 @@
                         "OpenAPI operationId: ingestCertificate",
                         "OpenAPI operationId: issuePKISecret",
                         "OpenAPI operationId: listAgents",
+                        "OpenAPI operationId: listCapabilities",
                         "OpenAPI operationId: listCertificates",
                         "OpenAPI operationId: listIdentities",
                         "OpenAPI operationId: listIssuers",
@@ -19982,7 +19978,7 @@
                 },
                 "rbac": {
                     "evidence": [
-                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: aiQuery, aiRCA, approveIdentityAction, callMCPTool, createEnrollmentToken, createIdentity, createIssuer, createOwner, createProfile, createSecret, createShare, deleteOwner, deleteSecret, exportAudit, getCertificate, getGraph, getIdentity, getIssuer, getOwner, getProfileVersion, getSecret, getScaleOrchestration, graphBlastRadius, graphQuery, graphReachable, ingestCertificate, issuePKISecret, listAgents, listCertificates, listIdentities, listIssuers, listMCPTools, listOwners, listProfiles, listRiskScores, listSecrets, machineLogin, redeemShare, rotateSecret, searchAudit, transitionIdentity, updateOwner",
+                        "feature authz manifest maps the core REST api_surface operations to route permissions or explicit public rationales. Optional AI query/RCA and tool-gateway operations are owned by F75-F77 instead of making F10 inherit their runtime dependencies.",
                         "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale.",
                         "machineLogin is a public credential exchange, not an RBAC-guarded route; the presented machine credential authenticates the workload and yields a tenant-scoped session."
                     ],
@@ -19996,7 +19992,7 @@
                 },
                 "audit": {
                     "evidence": [
-                        "mutating served surface requires audit/event evidence: aiQuery, aiRCA, approveIdentityAction, callMCPTool, createEnrollmentToken, createIdentity, createIssuer, createOwner, createProfile, createSecret, createShare, deleteOwner, deleteSecret, exportAudit, getCertificate, getGraph, getIdentity, getIssuer, getOwner, getProfileVersion, getSecret, graphBlastRadius, graphQuery, graphReachable, ingestCertificate, issuePKISecret, listAgents, listCertificates, listIdentities, listIssuers, listMCPTools, listOwners, listProfiles, listRiskScores, listSecrets, machineLogin, redeemShare, rotateSecret, searchAudit, transitionIdentity, updateOwner",
+                        "mutating core REST operations require audit/event evidence; optional AI query/RCA and tool-gateway mutations are audited and reported by their own F75-F77 capability rows.",
                         "served mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export."
                     ],
                     "refs": [
@@ -21780,8 +21776,7 @@
             "status": "closed",
             "notes": "Closed by route-level feature-map evidence and advanced by PLUGIN-01. Test evidence: internal/server/plugins_served_test.go loads signed reference CA and connector WASM plugins through the served binary, issues through the external-CA API, deploys through connector.deploy, and proves unsigned/tampered/out-of-grant plugins fail closed. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation. B-6 surfaces the sandbox contract in the served connector catalog: each row reports native availability, the declared capability grant, and the audited replay contract, read from the live registry so the catalog cannot claim a capability the process would not enforce (TestConnectorCatalogReportsRegistrySandboxFacts, TestConnectorCatalogWithoutRegistryClaimsNothing).",
             "api_surface": [
-                "listExternalCAs",
-                "issueExternalCA"
+                "listConnectorCatalog"
             ],
             "api_na": "",
             "cli_surface": [
@@ -21823,8 +21818,7 @@
                 },
                 "api": {
                     "evidence": [
-                        "OpenAPI operationId: listExternalCAs",
-                        "OpenAPI operationId: issueExternalCA"
+                        "OpenAPI operationId: listConnectorCatalog"
                     ],
                     "refs": [
                         "internal/api/testdata/openapi.golden.json",
@@ -21857,7 +21851,7 @@
                 },
                 "rbac": {
                     "evidence": [
-                        "feature authz manifest maps api_surface operations to route permissions: listExternalCAs uses issuers:read and issueExternalCA uses certs:issue for signed WASM CA plugin issuance."
+                        "feature authz manifest maps listConnectorCatalog to connectors:read. External-CA list/issue readiness remains owned by F5 so F20 never borrows an unrelated CA-configuration failure."
                     ],
                     "refs": [
                         "internal/api/feature_authz_test.go",

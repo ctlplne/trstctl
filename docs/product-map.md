@@ -1,4 +1,4 @@
-# Product map: Home plus five workspaces
+# Product map: Home plus six tools
 
 This page is for anyone opening trstctl for the first time. It gives you the
 smallest useful mental model before the certificate, secret, workload, or
@@ -18,23 +18,23 @@ that discovers, issues, deploys, renews, revokes, and retires certificates.
 trstctl keeps those credential types in one control plane because an incident does
 not respect product boundaries. One leaked build key can affect a certificate, a
 deployment secret, and several workloads. The console separates daily work into
-five focused workspaces, while Home, ownership, alerts, risk, and audit connect the
-whole estate.
+six focused tools, while Home, ownership, alerts, risk, and audit connect the whole
+estate.
 
 ```text
                                  Home
           what needs attention, by when, who owns it, what to do next
                                    │
-     ┌──────────────┬──────────────┼────────────┬──────────────┐
-     │              │              │            │              │
- Certificates   Machines &      Secrets &    Software      Trust
-    (CLM)       workloads        access       signing     operations
-     └──────────────┴──────────────┼────────────┴──────────────┘
+  ┌──────────┬─────────────┬──────────────┼───────────┬────────────┬────────────┐
+  │          │             │              │           │            │
+Discover  Certificates  Workloads &    Secrets    Software     Operations
+             (CLM)       Machines       & access     Trust
+  └──────────┴─────────────┴──────────────┼───────────┴────────────┴────────────┘
                                    │
              one identity graph · one event history · one audit trail
 ```
 
-The workspaces are views over shared evidence. They are not separate products,
+The tools are views over shared evidence. They are not separate products,
 databases, signers, or policy systems.
 
 ## Start with Home
@@ -52,7 +52,16 @@ Home also gives you one health door into every workspace. A zero means the serve
 check returned zero. **Unavailable** or **unknown** means trstctl could not prove a
 number; it does not mean zero or healthy.
 
-## Pick the workspace by question
+## Pick the tool by question
+
+### Discover — `/discovery`
+
+**Question:** What machine credentials exist, where did we observe them, and what
+is still outside the measured scope?
+
+**Owns:** bounded network and cloud source setup, effect-free scan previews,
+scheduled and live runs, provenance, coverage denominators, blind spots, findings,
+and the guarded handoff from an observation to a managed identity.
 
 ### Certificate Lifecycle — `/certificates`
 
@@ -87,11 +96,11 @@ and signing-custody evidence the running build serves.
 **Question:** What cross-product risk, incident, ownership, alert, or system work
 needs attention?
 
-**Owns:** risk, discovery, graph, incidents, ownership, Alert Center, policies,
+**Owns:** cross-product risk, graph, incidents, ownership, Alert Center, policies,
 approvals, audit, connectors, queues, privacy, and administration.
 
 Routes from older console versions remain stable. Opening a deep link selects its
-current workspace automatically. The complete route-to-workspace map is in
+current tool automatically. The complete route-to-tool map is in
 [The web console](web-console.md).
 
 ## Pick the shortest path for your role
