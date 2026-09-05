@@ -4,6 +4,7 @@ package store_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -556,6 +557,7 @@ func TestLastSuccessfulHostDeployAgentIDIsExactRecentAndTenantScoped(t *testing.
 		oldAgent   = "eeeeeeee-0000-0000-0000-000000000001"
 		newAgent   = "eeeeeeee-0000-0000-0000-000000000002"
 		otherAgent = "eeeeeeee-0000-0000-0000-000000000003"
+		renewAgent = "eeeeeeee-0000-0000-0000-000000000004"
 	)
 	seed := func(tenantID, idem, agentID, targetID string, delivered time.Time) {
 		t.Helper()
@@ -576,13 +578,35 @@ func TestLastSuccessfulHostDeployAgentIDIsExactRecentAndTenantScoped(t *testing.
 	seed(tenantA, "aud32-old", oldAgent, "target-a", now.Add(-time.Minute))
 	seed(tenantA, "aud32-new", newAgent, "target-a", now)
 	seed(tenantB, "aud32-other", otherAgent, "target-a", now.Add(time.Minute))
+	var renewalJobID int64
+	if err := st.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`INSERT INTO outbox
+			        (tenant_id, destination, payload, idempotency_key, status, delivered_at,
+			         required_agent_role, claimed_by_agent_id, claim_attempts,
+			         claim_expires_at, claim_completed_at)
+			 VALUES ($1, 'endpoint.renew', $2, 'aud32-host-renewal', 'delivered', $3,
+			         'host', $4::uuid, 3, $3, $3)
+			 RETURNING id`, tenantA,
+			[]byte(`{"target_id":"target-a","identity_id":"identity-host-renewal"}`),
+			now.Add(30*time.Second), renewAgent).Scan(&renewalJobID)
+	}); err != nil {
+		t.Fatalf("seed delivered host renewal: %v", err)
+	}
+	if _, err := st.UpsertCertificate(ctx, store.Certificate{
+		TenantID: tenantA, Subject: "host-renewal.example.test", Issuer: "test issuer",
+		Serial: "renewal-serial", Fingerprint: "fingerprint-host-renewal", Source: "issued",
+		IssuanceIdempotencyKey: fmt.Sprintf("agentcsr:%d:3:fixture", renewalJobID),
+	}); err != nil {
+		t.Fatalf("seed host-renewal certificate: %v", err)
+	}
 
 	got, found, err := st.LastSuccessfulHostDeployAgentID(ctx, tenantA, "target-a")
-	if err != nil || !found || got != newAgent {
-		t.Fatalf("tenant A exact host = %q found=%v err=%v, want %s", got, found, err, newAgent)
+	if err != nil || !found || got != renewAgent {
+		t.Fatalf("tenant A exact host = %q found=%v err=%v, want %s", got, found, err, renewAgent)
 	}
 	evidence, found, err := st.LastSuccessfulHostDeployEvidence(ctx, tenantA, "target-a")
-	if err != nil || !found || evidence.AgentID != newAgent || evidence.IdentityID != "identity-aud32-new" || evidence.Fingerprint != "fingerprint-aud32-new" {
+	if err != nil || !found || evidence.AgentID != renewAgent || evidence.IdentityID != "identity-host-renewal" || evidence.Fingerprint != "fingerprint-host-renewal" {
 		t.Fatalf("tenant A latest host evidence = %+v found=%v err=%v", evidence, found, err)
 	}
 	got, found, err = st.LastSuccessfulHostDeployAgentID(ctx, tenantB, "target-a")

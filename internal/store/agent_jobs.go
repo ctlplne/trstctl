@@ -62,6 +62,14 @@ type HostDeployEvidence struct {
 // successor identity for targetID. That agent owns the encrypted predecessor;
 // the fingerprint follows the certificate replacement edge even when the bad
 // successor's SAN no longer matches its identity.
+//
+// Two jobs can install a host certificate. connector.deploy carries an already
+// issued fingerprint in its immutable payload. endpoint.renew generates the key
+// on the host and therefore learns its fingerprint only after the control plane
+// signs that exact job attempt's CSR. For the second path, the certificate row's
+// agentcsr:<job>:<attempt>:... issuance key is the durable public join. Treating
+// only connector.deploy as a host deploy makes every host-generated renewal
+// impossible to roll back even though the same agent retained its predecessor.
 func (s *Store) LastSuccessfulHostDeployEvidence(ctx context.Context, tenantID, targetID string) (HostDeployEvidence, bool, error) {
 	targetID = strings.TrimSpace(targetID)
 	if targetID == "" {
@@ -71,17 +79,38 @@ func (s *Store) LastSuccessfulHostDeployEvidence(ctx context.Context, tenantID, 
 	found := false
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx,
-			`SELECT claimed_by_agent_id::text,
-			        COALESCE(convert_from(payload, 'UTF8')::jsonb ->> 'identity_id', ''),
-			        COALESCE(convert_from(payload, 'UTF8')::jsonb ->> 'fingerprint', '')
-			   FROM outbox
-			  WHERE tenant_id = $1
-			    AND destination = 'connector.deploy'
-			    AND status = 'delivered'
-			    AND delivered_at IS NOT NULL
-			    AND required_agent_role = 'host'
-			    AND claimed_by_agent_id IS NOT NULL
-			    AND convert_from(payload, 'UTF8')::jsonb ->> 'target_id' = $2
+			`WITH host_jobs AS (
+			     SELECT job.id, job.destination, job.payload, job.claim_attempts,
+			            job.claimed_by_agent_id, job.delivered_at
+			       FROM outbox job
+			      WHERE job.tenant_id = $1
+			        AND job.destination IN ('connector.deploy', 'endpoint.renew')
+			        AND job.status = 'delivered'
+			        AND job.delivered_at IS NOT NULL
+			        AND job.required_agent_role = 'host'
+			        AND job.claimed_by_agent_id IS NOT NULL
+			        AND convert_from(job.payload, 'UTF8')::jsonb ->> 'target_id' = $2
+			 ), routed AS (
+			     SELECT job.id, job.claimed_by_agent_id,
+			            COALESCE(convert_from(job.payload, 'UTF8')::jsonb ->> 'identity_id', '') AS identity_id,
+			            CASE
+			              WHEN job.destination = 'connector.deploy' THEN
+			                COALESCE(convert_from(job.payload, 'UTF8')::jsonb ->> 'fingerprint', '')
+			              ELSE COALESCE((
+			                SELECT cert.fingerprint
+			                  FROM certificates cert
+			                 WHERE cert.tenant_id = $1
+			                   AND cert.issuance_idempotency_key LIKE
+			                       format('agentcsr:%s:%s:%%', job.id, job.claim_attempts)
+			                 ORDER BY cert.created_at DESC, cert.id DESC
+			                 LIMIT 1
+			              ), '')
+			            END AS fingerprint,
+			            job.delivered_at
+			       FROM host_jobs job
+			 )
+			 SELECT claimed_by_agent_id::text, identity_id, fingerprint
+			   FROM routed
 			  ORDER BY delivered_at DESC, id DESC
 			  LIMIT 1`, tenantID, targetID).Scan(&out.AgentID, &out.IdentityID, &out.Fingerprint)
 		if errors.Is(err, pgx.ErrNoRows) {
