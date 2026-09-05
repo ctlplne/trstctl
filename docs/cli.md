@@ -485,8 +485,10 @@ it does not recover the Compose deployment.
   tenant is registered through the event log. If it already exists, the command
   first proves that the read model points to the exact retained
   `tenant.registered` event; it does not rename or register the tenant again.
-- The default scope set is full operator control **excluding** certificate
-  issuance (`certs:issue`) — bootstrapping a credential never grants self-issue.
+- The default scope set provides capability discovery and routine first-run
+  administration. It deliberately excludes certificate issuance
+  (`certs:issue`) and separately delegated high-risk permissions — bootstrapping
+  a credential never grants self-issue.
 - The raw `trst_…` token is printed once to stdout (only its hash is stored); save
   it immediately. Then export it as `TRSTCTL_TOKEN` for `trstctl-cli`.
 - Because this command can recover access without an existing HTTP token, run it

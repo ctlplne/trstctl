@@ -36,21 +36,24 @@ type TokenCreateOptions struct {
 	// the token and stamped onto every event the token's requests append.
 	Subject string
 	// Scopes is the exact permission set granted to the token. When empty the
-	// bootstrap grants BootstrapAdminScopes — full operator control DELIBERATELY
-	// EXCLUDING the issuance authority (certs:issue), so a bootstrap credential can
-	// administer the platform but cannot self-issue a certificate (RED-004). The
+	// bootstrap grants BootstrapAdminScopes — the bounded permissions needed for
+	// first-run discovery and routine administration. Issuance authority
+	// (certs:issue) and separately delegated high-risk permissions stay excluded,
+	// so a bootstrap credential cannot self-issue a certificate (RED-004). The
 	// bootstrap mints an API credential only; it invokes no signing/issuance path.
 	Scopes []string
 }
 
-// BootstrapAdminScopes is the default scope set for the first bootstrap token: it
-// grants every operator permission so the operator can drive the platform from a
-// fresh boot, but DELIBERATELY omits certs:issue. Minting the first credential
-// must not hand out issuance authority — that gate stays behind the RA split
+// BootstrapAdminScopes is the bounded default scope set for the first bootstrap
+// token. It grants read-only capability discovery plus the core permissions needed
+// to configure and inspect a fresh platform. It DELIBERATELY omits certs:issue and
+// separately delegated high-risk permissions. Minting the first credential must
+// not hand out issuance authority — that gate stays behind the RA split
 // (certs:request -> approve -> certs:issue); this token only creates an API
 // credential and never touches the signer (RED-004 / AN-4).
 func BootstrapAdminScopes() []string {
 	return []string{
+		string(authz.CapabilitiesRead),
 		string(authz.OwnersRead), string(authz.OwnersWrite),
 		string(authz.IssuersRead), string(authz.IssuersWrite),
 		string(authz.IdentitiesRead), string(authz.IdentitiesWrite),

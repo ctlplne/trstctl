@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
@@ -192,11 +193,20 @@ func TestBootstrapTokenAuthenticatesServedRequest(t *testing.T) {
 	}
 
 	// RED-004 guard: the bootstrap token must NOT carry issuance authority. The
-	// default scope set withholds certs:issue (it only creates an API credential).
+	// default scope set withholds certs:issue (it only creates an API credential),
+	// but it must be able to read the capability catalog so a clean client can
+	// discover what this exact server can safely do.
+	hasCapabilitiesRead := false
 	for _, s := range BootstrapAdminScopes() {
 		if s == "certs:issue" {
 			t.Fatal("bootstrap default scopes include certs:issue; the first token must not open self-issue (RED-004)")
 		}
+		if s == string(authz.CapabilitiesRead) {
+			hasCapabilitiesRead = true
+		}
+	}
+	if !hasCapabilitiesRead {
+		t.Fatal("bootstrap default scopes omit capabilities:read; a clean client cannot discover the server's supported operations")
 	}
 
 	// Plant an owner in the token's tenant (A) and one in another tenant (B) so the

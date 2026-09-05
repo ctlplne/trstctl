@@ -332,7 +332,7 @@ func runToken(ctx context.Context, args []string, getenv func(string) string, st
 	tenant := fs.String("tenant", "", "tenant id (UUID) the token is scoped to (required); registered via the event log if new")
 	tenantName := fs.String("tenant-name", "default", "human label recorded for a freshly registered tenant")
 	subject := fs.String("subject", "bootstrap-admin", "the token's principal subject (who it acts as)")
-	scopesCSV := fs.String("scopes", "", "comma-separated permission scopes; default is full operator control EXCLUDING certs:issue")
+	scopesCSV := fs.String("scopes", "", "comma-separated permission scopes; default is bounded bootstrap administration with capability discovery, EXCLUDING certs:issue and separately delegated high-risk scopes")
 	if err := fs.Parse(args[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
