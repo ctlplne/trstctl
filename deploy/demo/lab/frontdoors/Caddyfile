@@ -1,0 +1,9 @@
+{
+	admin 127.0.0.1:2019
+	auto_https off
+}
+
+:10446 {
+	tls /lab/tls/caddy.crt /lab/tls/caddy.key
+	respond "trstctl real Caddy target\n" 200
+}

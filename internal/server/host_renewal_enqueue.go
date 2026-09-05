@@ -218,8 +218,8 @@ func (d *issuanceDispatcher) recordAgentRenewalDispatch(
 	})
 }
 
-// completeHostRenewal moves an identity out of StateRenewing when a host agent
-// reports its renewal finished (epic B2).
+// completeHostRenewal closes the lifecycle edge after a host agent reports a
+// host-generated first issuance or renewal (epic B2).
 //
 // The dispatcher hands the renewal off and returns without transitioning,
 // because at that moment there is no certificate to transition to. That leaves
@@ -229,36 +229,56 @@ func (d *issuanceDispatcher) recordAgentRenewalDispatch(
 // identity already in renewing, so the endpoint quietly stops being renewed and
 // expires, with the rotation run that started it still reading "succeeded".
 //
-// A FAILED report deliberately transitions too. The renewal attempt is over
-// either way, and leaving a failed one stuck would produce the same silent
-// non-renewal as leaving a successful one stuck. The failure is recorded in the
-// receipt and the verification state; the lifecycle state records only that the
-// identity is no longer mid-renewal, which is true.
-func (s *Server) completeHostRenewal(ctx context.Context, tenantID string, payload []byte, outcome string) {
+// First issuance advances only after execution (and, when configured,
+// verification). Renewal success returns to deployed; failure moves to the
+// explicit retryable renewal_failed state while the predecessor remains the
+// known deployed credential. The transition records that the signed agent
+// result already completed the connector effect, so it must not enqueue a
+// duplicate connector.deploy after the private material was destroyed.
+func (s *Server) completeHostRenewal(ctx context.Context, tenantID string, payload []byte, outcome string) error {
 	if s.orch == nil || len(payload) == 0 {
-		return
+		return nil
 	}
 	var intent RelayDeployIntent
 	if err := json.Unmarshal(payload, &intent); err != nil {
-		return
+		return nil
 	}
 	identityID := intent.IdentityID
 	if identityID == "" {
-		return
+		return nil
 	}
 	state, err := s.orch.State(ctx, tenantID, identityID)
-	if err != nil || state != orchestrator.StateRenewing {
-		// Not mid-renewal: either it was already completed (a duplicate report,
-		// which must be a no-op) or it never entered renewing. Forcing a
-		// transition from an unexpected state would corrupt the lifecycle to
-		// paper over a case this function does not understand.
-		return
+	if err != nil {
+		return err
 	}
-	reason := "host-generated renewal completed"
-	if outcome == transport.JobOutcomeFailed || outcome == transport.JobOutcomeVerifyFailed {
-		reason = "host-generated renewal finished without a verified endpoint: " + outcome
+	switch state {
+	case orchestrator.StateIssued:
+		// endpoint.renew also carries first issuance for an agent-executed
+		// target: the name reflects where the key is generated, not the prior
+		// lifecycle state. Only a completed deploy may advance first issuance.
+		if outcome != transport.JobOutcomeExecuted && outcome != transport.JobOutcomeVerified {
+			return nil
+		}
+		return s.orch.TransitionAfterCompletedSideEffect(ctx, tenantID, identityID,
+			orchestrator.StateDeployed, "host-generated first issuance deployed", "connector.deploy")
+	case orchestrator.StateRenewing:
+		if outcome == transport.JobOutcomeFailed || outcome == transport.JobOutcomeVerifyFailed {
+			return s.orch.Transition(ctx, tenantID, identityID, orchestrator.StateRenewalFailed,
+				"host-generated renewal finished without a verified endpoint: "+outcome)
+		}
+		return s.orch.TransitionAfterCompletedSideEffect(ctx, tenantID, identityID,
+			orchestrator.StateDeployed, "host-generated renewal deployed", "connector.deploy")
+	case orchestrator.StateRenewalFailed:
+		if outcome == transport.JobOutcomeExecuted || outcome == transport.JobOutcomeVerified {
+			return s.orch.Transition(ctx, tenantID, identityID, orchestrator.StateDeployed,
+				"host-generated renewal retry deployed")
+		}
+		return nil
+	default:
+		// Already deployed means a duplicate signed report. Every other state is
+		// outside this receiver's authority and remains untouched.
+		return nil
 	}
-	_ = s.orch.Transition(ctx, tenantID, identityID, orchestrator.StateDeployed, reason)
 }
 
 // dispatchHostRenewal hands a renewal to a host agent instead of minting for it,

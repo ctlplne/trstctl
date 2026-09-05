@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/crypto"
@@ -177,7 +178,39 @@ func dvFailureOrGeneric(err error) error {
 			"so it can only obtain certificates for identifiers the authority has already authorized")
 	case errors.Is(err, acmekey.ErrNoSolvableChallenge):
 		return errors.New("letsencrypt: the authority offered no challenge this deployment can solve")
+	case strings.Contains(err.Error(), "acmekey: register:"):
+		return newSafeACMEError("external_ca_account_failed", "letsencrypt: ACME account setup failed", err)
+	case strings.Contains(err.Error(), "acmekey: authorize order:"):
+		return newSafeACMEError("external_ca_order_failed", "letsencrypt: ACME order creation failed", err)
+	case strings.Contains(err.Error(), "acmekey: finalize:"):
+		return newSafeACMEError("external_ca_finalize_failed", "letsencrypt: ACME certificate finalization failed", err)
 	default:
-		return errors.New("letsencrypt: upstream ACME issuance failed")
+		return newSafeACMEError("external_ca_protocol_failed", "letsencrypt: upstream ACME issuance failed", err)
 	}
+}
+
+// safeACMEError keeps the provider's arbitrary problem body out of logs and
+// PostgreSQL while carrying one closed diagnostic class to the outbox. The raw
+// cause remains unwrap-able for in-process control flow and is never rendered by
+// Error. An untrusted provider therefore cannot smuggle a credential into the
+// retained delivery ledger through its error text.
+type safeACMEError struct {
+	class string
+	text  string
+	cause error
+}
+
+func newSafeACMEError(class, text string, cause error) error {
+	return &safeACMEError{class: class, text: text, cause: cause}
+}
+
+func (e *safeACMEError) Error() string             { return e.text }
+func (e *safeACMEError) Unwrap() error             { return e.cause }
+func (e *safeACMEError) SafeDeliveryClass() string { return e.class }
+func (e *safeACMEError) Destroy() {
+	var destroyer interface{ Destroy() }
+	if errors.As(e.cause, &destroyer) {
+		destroyer.Destroy()
+	}
+	e.cause = nil
 }

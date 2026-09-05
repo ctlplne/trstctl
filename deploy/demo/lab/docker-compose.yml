@@ -1,0 +1,200 @@
+name: trstctl-demo
+
+services:
+  trstctl:
+    depends_on:
+      lab-init:
+        condition: service_completed_successfully
+    environment:
+      TRSTCTL_CONFIG_FILE: /etc/trstctl/partner-lab.json
+      TRSTCTL_AGENT_CHANNEL_CLAIMABLE_JOB_KINDS: "discovery.run,endpoint.verify,endpoint.renew,connector.test,connector.deploy,connector.rollback"
+      TRSTCTL_CONNECTORS_ENABLED: "apache,nginx,haproxy,caddy,traefik"
+    ports: !override
+      - "127.0.0.1:9443:8443"
+      - "127.0.0.1:29443:9443"
+      - "127.0.0.1:29444:9444"
+      - "127.0.0.1:10443:10443"
+      - "127.0.0.1:10444:10444"
+      - "127.0.0.1:10445:10445"
+      - "127.0.0.1:10446:10446"
+      - "127.0.0.1:10447:10447"
+    volumes:
+      - ./lab/trstctl-lab.json:/etc/trstctl/partner-lab.json:ro
+      - ./lab/certs:/lab-ca:ro
+      - labruntime:/lab-runtime:ro
+
+  lab-init:
+    image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
+    profiles: ["partner-lab"]
+    user: "0:0"
+    entrypoint: ["node", "/lab/lab-init.mjs"]
+    volumes:
+      - ./lab/lab-init.mjs:/lab/lab-init.mjs:ro
+      - labruntime:/lab-runtime
+      - labevidence:/lab-evidence
+
+  pebble-challtestsrv:
+    image: ghcr.io/letsencrypt/pebble-challtestsrv:2.10.1@sha256:12ce21884def456bcf9786542113949e1f19dc7738d2c70e156c2d0c38a1405b
+    profiles: ["partner-lab"]
+    restart: on-failure
+
+  pebble:
+    image: ghcr.io/letsencrypt/pebble:2.10.1@sha256:ddf230642b1a584f519f32e347de1b05a6e4c1f6c35c1863b33effeab5f78199
+    profiles: ["partner-lab"]
+    restart: on-failure
+    depends_on:
+      pebble-challtestsrv:
+        condition: service_started
+    command: ["-config", "test/config/pebble-config.json", "-dnsserver", "pebble-challtestsrv:8053"]
+    environment:
+      PEBBLE_VA_NOSLEEP: "1"
+      PEBBLE_WFE_NONCEREJECT: "0"
+
+  pebble-loopback:
+    image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
+    profiles: ["partner-lab"]
+    network_mode: "service:trstctl"
+    restart: on-failure
+    depends_on:
+      trstctl:
+        condition: service_started
+        restart: true
+      pebble:
+        condition: service_started
+    command:
+      - "node"
+      - "-e"
+      - |
+        const net = require("node:net");
+        net.createServer((client) => {
+          const upstream = net.connect(14000, "pebble");
+          client.pipe(upstream); upstream.pipe(client);
+          upstream.on("error", () => client.destroy()); client.on("error", () => upstream.destroy());
+        }).listen(14000, "127.0.0.1", () => console.log("Pebble loopback proxy listening on 127.0.0.1:14000"));
+
+  dns-webhook-loopback:
+    image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
+    profiles: ["partner-lab"]
+    network_mode: "service:trstctl"
+    restart: on-failure
+    depends_on:
+      trstctl:
+        condition: service_started
+        restart: true
+      pebble-challtestsrv:
+        condition: service_started
+    entrypoint: ["node", "/lab/dns-webhook.mjs"]
+    volumes:
+      - ./lab/dns-webhook.mjs:/lab/dns-webhook.mjs:ro
+
+  alert-sink:
+    image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
+    profiles: ["partner-lab"]
+    user: "65532:65532"
+    network_mode: "service:trstctl"
+    restart: on-failure
+    depends_on:
+      trstctl:
+        condition: service_started
+        restart: true
+      lab-init:
+        condition: service_completed_successfully
+    entrypoint: ["node", "/lab/alert-sink.mjs"]
+    volumes:
+      - ./lab/alert-sink.mjs:/lab/alert-sink.mjs:ro
+      - labevidence:/lab-evidence
+
+  lab-bootstrap:
+    image: ${TRSTCTL_DEMO_SEED_IMAGE:-ctlplne-demo-seed:local}
+    pull_policy: never
+    profiles: ["partner-lab"]
+    user: "0:0"
+    depends_on:
+      demo-seed:
+        condition: service_completed_successfully
+      pebble-loopback:
+        condition: service_started
+      dns-webhook-loopback:
+        condition: service_started
+      alert-sink:
+        condition: service_started
+    entrypoint: ["node", "/lab/bootstrap.mjs"]
+    environment:
+      NODE_EXTRA_CA_CERTS: /public-trust/control-plane.crt
+    volumes:
+      - ./lab/bootstrap.mjs:/lab/bootstrap.mjs:ro
+      - ./lab/certs:/lab-ca:ro
+      - seedstate:/seed-state:ro
+      - publictrust:/public-trust:ro
+      - trstctldata:/trstctl-data:ro
+      - frontdoorsstate:/frontdoors-state
+      - frontdoorstls:/frontdoors-tls
+      - labevidence:/lab-evidence
+
+  frontdoors-lab:
+    build:
+      context: ../..
+      dockerfile: deploy/demo/lab/frontdoors/Dockerfile
+      args:
+        TRSTCTL_IMAGE: ${TRSTCTL_DEMO_CONTROL_IMAGE:-ctlplne-demo-control:local}
+    image: ${TRSTCTL_DEMO_FRONTDOORS_IMAGE:-ctlplne-demo-frontdoors:local}
+    pull_policy: never
+    profiles: ["partner-lab"]
+    user: "65532:65532"
+    network_mode: "service:trstctl"
+    restart: on-failure
+    depends_on:
+      trstctl:
+        condition: service_healthy
+        restart: true
+      lab-bootstrap:
+        condition: service_completed_successfully
+    command:
+      - "--enroll-url=https://localhost:8443"
+      - "--bootstrap-token-file=/lab/state/bootstrap.token"
+      - "--server=127.0.0.1:9443"
+      - "--server-name=localhost"
+      - "--name=partner-lab-frontdoors"
+      - "--ca-bundle=/lab/state/ca-bundle.pem"
+      - "--cert=/lab/state/agent.crt"
+      - "--key=/lab/state/agent.key"
+      - "--relay-claim"
+      - "--relay-poll-every=1s"
+      - "--host-exec-profile=/lab/host-exec-profile.json"
+      - "--host-rollback-dir=/lab/state/rollbacks"
+    healthcheck:
+      test: ["CMD-SHELL", "/usr/local/apache2/bin/apachectl configtest >/dev/null 2>&1 && /usr/sbin/nginx -t >/dev/null 2>&1 && /usr/sbin/haproxy -c -f /lab/haproxy.cfg >/dev/null 2>&1 && /usr/sbin/caddy validate --config /lab/Caddyfile --adapter caddyfile >/dev/null 2>&1 && nc -z 127.0.0.1 10447"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - frontdoorsstate:/lab/state
+      - frontdoorstls:/lab/tls
+
+  lab-runner:
+    image: ${TRSTCTL_DEMO_SEED_IMAGE:-ctlplne-demo-seed:local}
+    pull_policy: never
+    profiles: ["partner-lab"]
+    user: "65532:65532"
+    depends_on:
+      frontdoors-lab:
+        condition: service_healthy
+      alert-sink:
+        condition: service_started
+    entrypoint: ["node", "/lab/journey-runner.mjs"]
+    environment:
+      NODE_EXTRA_CA_CERTS: /public-trust/control-plane.crt
+      TRSTCTL_LAB_SERVER: https://trstctl:8443
+    volumes:
+      - ./lab/journey-runner.mjs:/lab/journey-runner.mjs:ro
+      - ./lab/journey-matrix.json:/lab/journey-matrix.json:ro
+      - ./lab/certs:/lab-ca:ro
+      - seedstate:/seed-state:ro
+      - publictrust:/public-trust:ro
+      - labevidence:/lab-evidence
+
+volumes:
+  labruntime:
+  labevidence:
+  frontdoorsstate:
+  frontdoorstls:

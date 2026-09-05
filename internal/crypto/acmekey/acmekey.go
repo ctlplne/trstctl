@@ -269,18 +269,28 @@ func (d *Driver) IssueChain(ctx context.Context, req OrderRequest) ([][]byte, er
 		return nil, errors.New("acmekey: an order needs the tenant it is issued for")
 	}
 	dnsNames, csr := req.DNSNames, req.CSR
-	if _, err := d.client.Register(ctx, &acme.Account{}, acme.AcceptTOS); err != nil {
+	// RFC 8555 returns the existing account when this key is already known and
+	// x/crypto/acme surfaces that successful lookup as ErrAccountAlreadyExists.
+	// Reusing one long-lived signer-backed account is the normal second-order and
+	// retry path, not an issuance failure. Register still populates Client.KID
+	// before returning this sentinel, so continuing is both safe and required.
+	if _, err := d.client.Register(ctx, &acme.Account{}, acme.AcceptTOS); err != nil && !errors.Is(err, acme.ErrAccountAlreadyExists) {
 		return nil, fmt.Errorf("acmekey: register: %w", err)
 	}
 	order, err := d.client.AuthorizeOrder(ctx, acme.DomainIDs(dnsNames...))
 	if err != nil {
 		return nil, fmt.Errorf("acmekey: authorize order: %w", err)
 	}
+	// Keep the URL from the create-order Location header. Poll responses are
+	// not required to repeat Location, and x/crypto therefore returns a fresh
+	// Order with an empty URI after WaitOrder. This stable handle is also what
+	// lets us reconcile an ambiguous finalize without creating another order.
+	orderURL := order.URI
 	if order.Status != acme.StatusReady {
 		if err := d.fulfill(ctx, req.TenantID, order); err != nil {
 			return nil, err
 		}
-		if order, err = d.client.WaitOrder(ctx, order.URI); err != nil {
+		if order, err = d.client.WaitOrder(ctx, orderURL); err != nil {
 			return nil, fmt.Errorf("acmekey: wait order: %w", err)
 		}
 	} else {
@@ -297,8 +307,25 @@ func (d *Driver) IssueChain(ctx context.Context, req OrderRequest) ([][]byte, er
 		d.observeReusedOrder(ctx, req.TenantID, order)
 	}
 	der, _, err := d.client.CreateOrderCert(ctx, order.FinalizeURL, csr, true)
-	if err != nil {
-		return nil, fmt.Errorf("acmekey: finalize: %w", err)
+	if err == nil {
+		return der, nil
+	}
+
+	// Finalize is a mutation: an error after sending it is ambiguous. In
+	// particular, some ACME authorities answer an accepted asynchronous
+	// finalize without a Location header. x/crypto/acme then cannot poll the
+	// response order, even though the authority may already have minted the
+	// certificate. Never create or finalize a replacement here. Reconcile the
+	// original order URL returned by AuthorizeOrder and fetch its certificate
+	// if the authority says that exact order is valid.
+	finalizeErr := err
+	reconciled, reconcileErr := d.client.WaitOrder(ctx, orderURL)
+	if reconcileErr != nil || reconciled == nil || reconciled.Status != acme.StatusValid || reconciled.CertURL == "" {
+		return nil, fmt.Errorf("acmekey: finalize: %w", finalizeErr)
+	}
+	der, fetchErr := d.client.FetchCert(ctx, reconciled.CertURL, true)
+	if fetchErr != nil {
+		return nil, fmt.Errorf("acmekey: finalize: reconciled order certificate fetch failed: %w", fetchErr)
 	}
 	return der, nil
 }

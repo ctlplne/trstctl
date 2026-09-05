@@ -986,7 +986,13 @@ func (o *Outbox) finalizeClaim(ctx context.Context, claim claimedOutboxEntry, de
 		tag, err := tx.Exec(ctx,
 			`UPDATE outbox
 			    SET attempts = CASE WHEN $7 THEN GREATEST(attempts - 1, 0) ELSE attempts END,
-			        last_error = $4,
+			        last_error = CASE
+			          WHEN last_error LIKE 'external_ca_%'
+			           AND last_error <> 'external_ca_idempotency_failed'
+			           AND $4 = 'external_ca_idempotency_failed'
+			          THEN last_error
+			          ELSE $4
+			        END,
 			        next_attempt_at = $5,
 			        status = $6,
 			        worker_id = NULL,
@@ -1172,7 +1178,27 @@ func (o *Outbox) CompleteByKey(ctx context.Context, tenantID, destination, idemp
 // the credential/private key just sent to it in an error response; persisting
 // arbitrary err.Error() would turn that attacker-controlled body into an
 // unwipeable Go string and durable PostgreSQL secret leak (AN-8).
+func safePersistableDeliveryClass(err error) (string, bool) {
+	// A subsystem may attach one of these closed, credential-free classes while
+	// retaining its raw cause only in short-lived memory. Accept only this local
+	// allowlist: an untrusted connector can implement the same method, but it
+	// cannot choose arbitrary text that would become a durable secret leak.
+	var classified interface{ SafeDeliveryClass() string }
+	if errors.As(err, &classified) {
+		switch class := classified.SafeDeliveryClass(); class {
+		case "external_ca_account_failed", "external_ca_order_failed", "external_ca_finalize_failed", "external_ca_protocol_failed",
+			"external_ca_provider_failed", "external_ca_record_failed", "external_ca_result_encode_failed",
+			"external_ca_idempotency_failed", "external_ca_result_decode_failed", "external_ca_observation_failed":
+			return class, true
+		}
+	}
+	return "", false
+}
+
 func persistedDeliveryError(err error) string {
+	if class, ok := safePersistableDeliveryClass(err); ok {
+		return class
+	}
 	switch {
 	case IsDeliveryDeferred(err):
 		return "delivery_deferred"

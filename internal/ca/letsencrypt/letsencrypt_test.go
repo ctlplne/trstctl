@@ -89,3 +89,54 @@ func TestPluginIssuesRealCertEndToEnd(t *testing.T) {
 		t.Errorf("serial mismatch: cert %s vs result %s", info.SerialNumber, cert.Serial)
 	}
 }
+
+// A production ACME account is intentionally long-lived. Real authorities
+// answer a repeated newAccount request with HTTP 200 and x/crypto/acme returns
+// ErrAccountAlreadyExists after caching the account URL. That response must not
+// break the second certificate or a retry after a worker interruption.
+func TestPluginReusesRegisteredAccountAcrossIssuance(t *testing.T) {
+	srv, err := acmefake.NewServer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(srv.Close)
+	p := newRemoteAccountPlugin(t, "lets-encrypt", srv.DirectoryURL())
+
+	for _, name := range []string{"first.acme.test", "second.acme.test"} {
+		cert, issueErr := p.Issue(context.Background(), ca.IssueRequest{
+			TenantID: "t1", CSR: buildCSR(t, name, []string{name}), DNSNames: []string{name}, TTL: 24 * time.Hour,
+		})
+		if issueErr != nil {
+			t.Fatalf("Issue(%s): %v", name, issueErr)
+		}
+		if cert.Serial == "" || len(cert.CertificatePEM) == 0 {
+			t.Fatalf("Issue(%s) returned no certificate", name)
+		}
+	}
+}
+
+// Some conforming ACME authorities accept finalize asynchronously without
+// repeating the order URL in a Location header. The client must reconcile the
+// already-submitted order through the original order URL; submitting another
+// order can mint a duplicate certificate.
+func TestPluginReconcilesAsyncFinalizeWithoutLocation(t *testing.T) {
+	srv, err := acmefake.NewServer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(srv.Close)
+	srv.EmulateAsyncFinalizeWithoutLocation()
+	srv.RequireDomainValidation("async.acme.test", false)
+
+	p := newSolvingPlugin(t, srv.DirectoryURL(), &recordingSolver{})
+	name := "async.acme.test"
+	cert, err := p.Issue(context.Background(), ca.IssueRequest{
+		TenantID: "t1", CSR: buildCSR(t, name, []string{name}), DNSNames: []string{name}, TTL: 24 * time.Hour,
+	})
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+	if cert.Serial == "" || len(cert.CertificatePEM) == 0 {
+		t.Fatalf("reconciled issuance returned no certificate: %+v", cert)
+	}
+}

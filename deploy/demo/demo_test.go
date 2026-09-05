@@ -26,12 +26,23 @@ type composeService struct {
 	Build       map[string]any               `yaml:"build"`
 	PullPolicy  string                       `yaml:"pull_policy"`
 	User        string                       `yaml:"user"`
+	Profiles    []string                     `yaml:"profiles"`
 	Environment map[string]any               `yaml:"environment"`
+	Entrypoint  []string                     `yaml:"entrypoint"`
 	Command     []string                     `yaml:"command"`
 	Ports       []string                     `yaml:"ports"`
 	DependsOn   map[string]composeDependency `yaml:"depends_on"`
 	NetworkMode string                       `yaml:"network_mode"`
 	Volumes     []string                     `yaml:"volumes"`
+}
+
+func parseComposeAt(t *testing.T, parts ...string) composeFile {
+	t.Helper()
+	var cf composeFile
+	if err := yaml.Unmarshal([]byte(read(t, parts...)), &cf); err != nil {
+		t.Fatalf("%s is not valid Compose YAML: %v", filepath.Join(parts...), err)
+	}
+	return cf
 }
 
 type composeFile struct {
@@ -51,11 +62,119 @@ func read(t *testing.T, parts ...string) string {
 
 func parseCompose(t *testing.T) composeFile {
 	t.Helper()
-	var cf composeFile
-	if err := yaml.Unmarshal([]byte(read(t, "docker-compose.yml")), &cf); err != nil {
-		t.Fatalf("demo docker-compose.yml is not valid YAML: %v", err)
+	return parseComposeAt(t, "docker-compose.yml")
+}
+
+func TestPartnerLabComposeRunsRealLocalFrontDoorsWithoutPretendingLinuxIsIIS(t *testing.T) {
+	cf := parseComposeAt(t, "lab", "docker-compose.yml")
+	if cf.Name != "trstctl-demo" {
+		t.Fatalf("partner lab compose name = %q, want trstctl-demo so it overlays the retained demo", cf.Name)
 	}
-	return cf
+	for _, want := range []string{
+		"lab-init", "pebble", "pebble-challtestsrv", "pebble-loopback", "dns-webhook-loopback",
+		"alert-sink", "lab-bootstrap", "frontdoors-lab", "lab-runner",
+	} {
+		service, ok := cf.Services[want]
+		if !ok {
+			t.Fatalf("partner lab compose missing %s", want)
+		}
+		if !slices.Equal(service.Profiles, []string{"partner-lab"}) {
+			t.Fatalf("partner lab service %s profiles = %v, want opt-in partner-lab", want, service.Profiles)
+		}
+	}
+	for name, want := range map[string]string{
+		"pebble":              "ghcr.io/letsencrypt/pebble:2.10.1@sha256:ddf230642b1a584f519f32e347de1b05a6e4c1f6c35c1863b33effeab5f78199",
+		"pebble-challtestsrv": "ghcr.io/letsencrypt/pebble-challtestsrv:2.10.1@sha256:12ce21884def456bcf9786542113949e1f19dc7738d2c70e156c2d0c38a1405b",
+	} {
+		if got := cf.Services[name].Image; got != want {
+			t.Fatalf("partner lab %s image = %q, want exact digest %q", name, got, want)
+		}
+	}
+	if _, exists := cf.Services["iis-lab"]; exists {
+		t.Fatal("partner lab must not market a Linux container as real Windows IIS")
+	}
+	cp := cf.Services["trstctl"]
+	for _, want := range []string{"127.0.0.1:10443:10443", "127.0.0.1:10444:10444", "127.0.0.1:10445:10445", "127.0.0.1:10446:10446", "127.0.0.1:10447:10447"} {
+		if !contains(cp.Ports, want) {
+			t.Fatalf("partner lab trstctl ports = %v, missing real target listener %s", cp.Ports, want)
+		}
+	}
+	if got := stringValue(cp.Environment["TRSTCTL_CONNECTORS_ENABLED"]); got != "apache,nginx,haproxy,caddy,traefik" {
+		t.Fatalf("partner lab enabled connectors = %q, want apache,nginx,haproxy,caddy,traefik", got)
+	}
+	if got := stringValue(cp.Environment["TRSTCTL_AGENT_CHANNEL_CLAIMABLE_JOB_KINDS"]); !strings.Contains(got, "connector.deploy") || !strings.Contains(got, "connector.rollback") {
+		t.Fatalf("partner lab claimable jobs = %q, want deploy and rollback", got)
+	}
+	// One host agent owns all five real processes. Five same-role agents could
+	// otherwise race to claim a targetless endpoint.renew row and run it with the
+	// wrong host allowlist. The combined target is both smaller and faithfully
+	// models one edge host running several front doors.
+	for _, name := range []string{"frontdoors-lab"} {
+		service := cf.Services[name]
+		if service.NetworkMode != "service:trstctl" {
+			t.Fatalf("%s network_mode = %q, want service:trstctl", name, service.NetworkMode)
+		}
+		if service.User != "65532:65532" {
+			t.Fatalf("%s user = %q, want nonroot 65532:65532", name, service.User)
+		}
+		if service.DependsOn["trstctl"].Condition != "service_healthy" || !service.DependsOn["trstctl"].Restart {
+			t.Fatalf("%s must follow the control-plane network namespace across replacement", name)
+		}
+		if service.DependsOn["lab-bootstrap"].Condition != "service_completed_successfully" {
+			t.Fatalf("%s must wait for bounded runtime token and baseline preparation", name)
+		}
+	}
+}
+
+func TestPartnerLabRunnerIsPersistentTruthfulAndSecretSafe(t *testing.T) {
+	launcher := read(t, "lab", "run.sh")
+	if !strings.Contains(launcher, "TRSTCTL_LAB_PROJECT:-trstctl-partner-lab") || !strings.Contains(launcher, "-p $lab_project") {
+		t.Fatal("partner lab launcher must default and constrain its isolated Compose project name")
+	}
+	for _, want := range []string{
+		"up -d --no-deps signer", "up -d --no-deps trstctl",
+		"up -d --no-deps localstack-loopback", "run --rm --no-deps lab-runner",
+		"DOD_CENSUS_OUT=", "make dod-gate", "Connector census evidence:",
+		"TRSTCTL_LAB_RUN_DOD:-1", "live repair loop", "full qualification",
+		"${lab_project}-control:local", "${lab_project}-seed:local", "${lab_project}-frontdoors:local",
+		"dod_cache_parent", `chmod 0700 "$dod_cache_parent" "$dod_cache"`,
+	} {
+		if !strings.Contains(launcher, want) {
+			t.Errorf("partner lab launcher is missing staged startup %q", want)
+		}
+	}
+	runner := read(t, "lab", "journey-runner.mjs")
+	for _, want := range []string{
+		"apache", "nginx", "haproxy", "caddy", "traefik", "connector-contract-census", "iis-windows-required",
+		"continue_after_failure", "blocked_external", "before_fingerprint", "after_fingerprint",
+		"listed.agents ?? []", "runtime-pebble-root.crt", "subject_alt_name", "sink_receipts_after",
+		"network-discovery", "partner-lab-loopback", `agent.roles ?? []).includes(role)`,
+		"allow_loopback: true", "-renew-and-rollback", `"recover"`, "rollback_queued", "rolled_back",
+	} {
+		if !strings.Contains(runner, want) {
+			t.Errorf("partner lab runner is missing contract marker %q", want)
+		}
+	}
+	bootstrap := read(t, "lab", "bootstrap.mjs")
+	for _, want := range []string{"/roots/0", "runtime-pebble-root.crt", `roles: ["host", "network"]`} {
+		if !strings.Contains(bootstrap, want) {
+			t.Errorf("partner lab bootstrap is missing contract marker %q", want)
+		}
+	}
+	for _, forbidden := range []string{"console.log(token", "console.log(bearer", "NODE_TLS_REJECT_UNAUTHORIZED"} {
+		if strings.Contains(runner, forbidden) {
+			t.Errorf("partner lab runner contains secret-unsafe pattern %q", forbidden)
+		}
+	}
+	matrix := read(t, "lab", "journey-matrix.json")
+	for _, want := range []string{"\"real_local\"", "\"faithful_local\"", "\"external_only\"", "\"iis\"", "\"f5\"", "\"haproxy\""} {
+		if !strings.Contains(matrix, want) {
+			t.Errorf("partner lab journey matrix is missing %s", want)
+		}
+	}
+	if strings.Contains(matrix, "\"iis\": \"real_local\"") {
+		t.Fatal("journey matrix must not classify IIS as real-local on Linux Docker")
+	}
 }
 
 func TestDemoComposeIsSeparatePrepopulatedStack(t *testing.T) {
@@ -101,6 +220,8 @@ func TestDemoComposeIsSeparatePrepopulatedStack(t *testing.T) {
 		"TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS":             "env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID,env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY,env:TRSTCTL_DISCOVERY_GCP_TOKEN,env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID,env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY,env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN",
 		"TRSTCTL_SECRETS_ENABLE_API":                       "true",
 		"TRSTCTL_SECRETS_AUTH_SECRET_FILE":                 "/data/secrets/machine-auth.bin",
+		"TRSTCTL_SECRETS_AUTH_TOKEN_TENANT_ID":             "11111111-1111-4111-8111-111111111111",
+		"TRSTCTL_SECRETS_AUTH_TOKEN_SCOPES":                "secrets:read",
 		"TRSTCTL_LICENSE_FILE":                             "/etc/trstctl/demo-provider-license.json",
 		"TRSTCTL_MANAGED_KEYS_ENABLED":                     "true",
 		"TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT":                "http://127.0.0.1:4566",

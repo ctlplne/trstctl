@@ -1,0 +1,18 @@
+tls:
+  certificates:
+    - certFile: /lab/tls/traefik.crt
+      keyFile: /lab/tls/traefik.key
+
+http:
+  routers:
+    partner-lab:
+      entryPoints:
+        - websecure
+      rule: Host(`traefik.partner-lab.example.com`)
+      service: partner-lab
+      tls: {}
+  services:
+    partner-lab:
+      loadBalancer:
+        servers:
+          - url: http://127.0.0.1:9

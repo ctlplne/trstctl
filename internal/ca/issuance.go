@@ -349,12 +349,16 @@ func (s *IssuanceService) DeliverExternalIssue(ctx context.Context, m orchestrat
 		}
 		cert, err := s.ca.Issue(ctx, req)
 		if err != nil {
-			return nil, err
+			return nil, preserveOrClassifyExternalIssueError("external_ca_provider_failed", "external CA provider issuance failed", err)
 		}
 		if err := s.record(ctx, m.TenantID, m.IdempotencyKey, req.RequestBinding, cert); err != nil {
-			return nil, err
+			return nil, safeExternalIssueError("external_ca_record_failed", "external CA certificate recording failed", err)
 		}
-		return json.Marshal(cert)
+		raw, err := json.Marshal(cert)
+		if err != nil {
+			return nil, safeExternalIssueError("external_ca_result_encode_failed", "external CA result encoding failed", err)
+		}
+		return raw, nil
 	}
 	var raw []byte
 	var err error
@@ -367,13 +371,45 @@ func (s *IssuanceService) DeliverExternalIssue(ctx context.Context, m orchestrat
 		raw, err = s.idem.DoAtMostOnceEffect(ctx, m.TenantID, externalIssueResultKey(m.IdempotencyKey), effect)
 	}
 	if err != nil {
-		return err
+		return preserveOrClassifyExternalIssueError("external_ca_idempotency_failed", "external CA idempotency finalization failed", err)
 	}
 	var cert Certificate
 	if err := json.Unmarshal(raw, &cert); err != nil {
-		return err
+		return safeExternalIssueError("external_ca_result_decode_failed", "external CA result decoding failed", err)
 	}
-	return s.recordDependentOnce(ctx, req, m.IdempotencyKey, cert)
+	if err := s.recordDependentOnce(ctx, req, m.IdempotencyKey, cert); err != nil {
+		return safeExternalIssueError("external_ca_observation_failed", "external CA issuance observation failed", err)
+	}
+	return nil
+}
+
+type externalIssueSafeError struct {
+	class string
+	text  string
+	cause error
+}
+
+func (e *externalIssueSafeError) Error() string             { return e.text }
+func (e *externalIssueSafeError) Unwrap() error             { return e.cause }
+func (e *externalIssueSafeError) SafeDeliveryClass() string { return e.class }
+func (e *externalIssueSafeError) Destroy() {
+	var destroyer interface{ Destroy() }
+	if errors.As(e.cause, &destroyer) {
+		destroyer.Destroy()
+	}
+	e.cause = nil
+}
+
+func safeExternalIssueError(class, text string, cause error) error {
+	return &externalIssueSafeError{class: class, text: text, cause: cause}
+}
+
+func preserveOrClassifyExternalIssueError(class, text string, cause error) error {
+	var alreadyClassified interface{ SafeDeliveryClass() string }
+	if errors.As(cause, &alreadyClassified) {
+		return cause
+	}
+	return safeExternalIssueError(class, text, cause)
 }
 
 func (s *IssuanceService) recoverExternalIssue(ctx context.Context, tenantID, idempotencyKey, requestBinding string) (Certificate, bool, error) {

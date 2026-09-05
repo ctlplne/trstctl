@@ -1,0 +1,11 @@
+entryPoints:
+  websecure:
+    address: :10447
+
+providers:
+  file:
+    filename: /lab/tls/traefik-dynamic.yml
+    watch: true
+
+log:
+  level: WARN

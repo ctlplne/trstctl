@@ -465,6 +465,11 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 	if receiptErr := a.recordAgentConnectorDelivery(ctx, info, claim, req); receiptErr != nil {
 		return nil, status.Errorf(codes.Internal, "record signed agent connector delivery: %v", receiptErr)
 	}
+	if claim.Destination == agentJobKindEndpointRenew && a.completeHostRenewal != nil {
+		if err := a.completeHostRenewal(ctx, info.TenantID, claim.Payload, req.Outcome); err != nil {
+			return nil, status.Errorf(codes.Internal, "complete host-managed lifecycle: %v", err)
+		}
+	}
 
 	// Closing the exact claim and retiring its outbox intent is ONE durable
 	// transition. A crash before it leaves the claim retryable; after it, both
@@ -552,9 +557,6 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 		if a.recordDeployVerification != nil &&
 			(req.Outcome == transport.JobOutcomeVerified || req.Outcome == transport.JobOutcomeVerifyFailed) {
 			a.recordDeployVerification(ctx, info.TenantID, info.CommonName, idemKey, req.Detail, payload)
-		}
-		if a.completeHostRenewal != nil {
-			a.completeHostRenewal(ctx, info.TenantID, payload, req.Outcome)
 		}
 	}
 	// D2 + D4: the deploy applied and the listener is not serving it. That is
@@ -712,6 +714,11 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 	}
 
 	detail := strings.TrimSpace(req.Detail)
+	if claim.Destination == agentJobKindEndpointRenew && a.completeHostRenewal != nil {
+		if err := a.completeHostRenewal(ctx, info.TenantID, claim.Payload, req.Outcome); err != nil {
+			return nil, status.Errorf(codes.Internal, "record failed host-managed lifecycle: %v", err)
+		}
+	}
 	if claim.Destination == agentJobKindCMDBSync {
 		if a.recordCMDBSyncFailure == nil {
 			return nil, status.Error(codes.Internal, "CMDB failure receiver is not configured")
@@ -780,9 +787,6 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 		a.attachJobReceipt(failed, info, req)
 		a.recordAgentJobEvent(ctx, info.TenantID, "agent.job.failed", failed)
 		a.recordVerifiedReceipt(ctx, info, req, "", now)
-		if claim.Destination == agentJobKindEndpointRenew && a.completeHostRenewal != nil {
-			a.completeHostRenewal(ctx, info.TenantID, claim.Payload, req.Outcome)
-		}
 	}
 	return &transport.ReportJobResultResponse{Accepted: ok}, nil
 }

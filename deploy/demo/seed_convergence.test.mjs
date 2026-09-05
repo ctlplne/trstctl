@@ -101,6 +101,26 @@ test("AUD-66 identity convergence refuses an incompatible terminal state", async
   );
 });
 
+test("demo identity convergence accepts only the exact state that wins a transition race", async () => {
+  let status = "issued";
+  let transitionCalls = 0;
+  const request = async (method) => {
+    if (method === "GET") return { id: "identity-1", status };
+    transitionCalls += 1;
+    status = "deployed";
+    throw new Error("POST transition returned 409: deployed -> deployed");
+  };
+  const result = await advanceIdentity(
+    { key: "edge", name: "edge.example", targetState: "deployed", connector: "envoy", daysAgo: 10 },
+    { id: "identity-1" },
+    1,
+    request,
+    async () => {},
+  );
+  assert.equal(result.status, "deployed");
+  assert.equal(transitionCalls, 1);
+});
+
 test("AUD-66 checkpoint digest is deterministic and binds manifest plus inventory", () => {
   const first = seedInventoryDigest({ owners: [{ id: "b" }, { id: "a" }], version: 1 });
   const same = seedInventoryDigest({ version: 1, owners: [{ id: "b" }, { id: "a" }] });

@@ -33,8 +33,12 @@ O9xXOtFRqPTY0dXn
 
 func TestDeployWritesIdempotently(t *testing.T) {
 	base := connector.NewMemoryOps()
+	if err := base.WriteFile("/etc/traefik/dynamic.yml", []byte("tls: {}\n")); err != nil {
+		t.Fatal(err)
+	}
 	ops := &countingOps{MemoryOps: base}
-	c := traefik.New("/etc/traefik/certs/site.pem", "/etc/traefik/certs/site.key")
+	c := traefik.New("/etc/traefik/certs/site.pem", "/etc/traefik/certs/site.key",
+		traefik.WithDynamicConfigPath("/etc/traefik/dynamic.yml"))
 	dep := connector.NewDeployment("edge", certA, keyA)
 	assertShippedFingerprint(t, dep.Fingerprint, certA)
 
@@ -43,15 +47,15 @@ func TestDeployWritesIdempotently(t *testing.T) {
 	}
 	assertFile(t, base, "/etc/traefik/certs/site.pem", certA)
 	assertFile(t, base, "/etc/traefik/certs/site.key", keyA)
-	if ops.writes != 2 {
-		t.Fatalf("first deploy writes = %d, want cert+key", ops.writes)
+	if ops.writes != 3 {
+		t.Fatalf("first deploy writes = %d, want cert+key plus a dynamic-config watcher event", ops.writes)
 	}
 
 	if _, err := connector.Run(context.Background(), c, ops, dep); err != nil {
 		t.Fatalf("second Deploy: %v", err)
 	}
-	if ops.writes != 2 {
-		t.Fatalf("idempotent deploy writes = %d, want still 2", ops.writes)
+	if ops.writes != 3 {
+		t.Fatalf("idempotent deploy writes = %d, want still 3", ops.writes)
 	}
 }
 

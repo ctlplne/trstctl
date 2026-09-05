@@ -32,10 +32,11 @@ type Server struct {
 	ts        *httptest.Server
 	authority *cryptoca.Authority
 
-	mu     sync.Mutex
-	nonce  int
-	orders int
-	certs  map[string][]byte // path -> PEM chain
+	mu                sync.Mutex
+	nonce             int
+	orders            int
+	accountRegistered bool
+	certs             map[string][]byte // path -> PEM chain
 	// revocations records revoke-cert requests that actually arrived (epic R2).
 	revocations []string
 	// B7: domain-validation mode. Off by default so existing tests keep
@@ -45,6 +46,7 @@ type Server struct {
 	wildcard         bool
 	accepted         map[string]bool
 	challengeAccepts int
+	asyncFinalize    bool
 }
 
 // NewServer starts a fake ACME CA backed by a fresh internal CA.
@@ -92,6 +94,15 @@ func (s *Server) RequireDomainValidation(identifier string, wildcard bool) {
 	s.wildcard = wildcard
 }
 
+// EmulateAsyncFinalizeWithoutLocation models authorities such as Pebble that
+// may answer finalize with a processing order but no Location header. The
+// original order URL remains the only safe reconciliation handle in that case.
+func (s *Server) EmulateAsyncFinalizeWithoutLocation() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.asyncFinalize = true
+}
+
 // ChallengeAccepts counts challenges the client accepted. A DV test asserts
 // this moved: an order that finalized without it did not validate anything.
 func (s *Server) ChallengeAccepts() int {
@@ -127,8 +138,16 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == "/new-nonce":
 		return
 	case r.URL.Path == "/new-account":
+		s.mu.Lock()
+		alreadyRegistered := s.accountRegistered
+		s.accountRegistered = true
+		s.mu.Unlock()
 		w.Header().Set("Location", s.u("/account/1"))
-		w.WriteHeader(http.StatusCreated)
+		if alreadyRegistered {
+			w.WriteHeader(http.StatusOK)
+		} else {
+			w.WriteHeader(http.StatusCreated)
+		}
 		_, _ = fmt.Fprintf(w, `{"status":"valid","orders":%q}`, s.u("/account/1/orders"))
 	case r.URL.Path == "/new-order":
 		s.mu.Lock()
@@ -199,7 +218,15 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		authzPath := "/authz/" + n
 		s.mu.Lock()
 		accepted := s.accepted[authzPath]
+		_, finalized := s.certs["/cert/"+n]
 		s.mu.Unlock()
+		if finalized {
+			writeJSON(w, map[string]any{
+				"status": "valid", "authorizations": []string{s.u(authzPath)},
+				"finalize": s.u(r.URL.Path + "/finalize"), "certificate": s.u("/cert/" + n),
+			})
+			return
+		}
 		status := "pending"
 		if accepted || !s.requireDV {
 			status = "ready"
@@ -251,7 +278,12 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request) {
 	certPath := "/cert/" + id
 	s.mu.Lock()
 	s.certs[certPath] = issued.CertificatePEM
+	asyncFinalize := s.asyncFinalize
 	s.mu.Unlock()
+	if asyncFinalize {
+		_, _ = fmt.Fprintf(w, `{"status":"processing","finalize":%q}`, s.u(r.URL.Path)) // #nosec G705 -- test-support package compiled only into test binaries (CWE-79)
+		return
+	}
 	w.Header().Set("Location", s.u("/order/"+id))
 	_, _ = fmt.Fprintf(w, `{"status":"valid","finalize":%q,"certificate":%q}`, s.u(r.URL.Path), s.u(certPath)) // #nosec G705 -- test-support package compiled only into test binaries (CWE-79)
 }

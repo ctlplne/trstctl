@@ -201,7 +201,21 @@ type SideEffectPayloadTransform func(context.Context, SideEffectPayloadContext) 
 // transaction updates the identity's status and enqueues any outbox side effect,
 // so the external call is recorded with the state change (AN-6).
 func (o *Orchestrator) Transition(ctx context.Context, tenantID, identityID string, to State, reason string) error {
-	return o.transition(ctx, tenantID, identityID, to, reason, nil, "", "", nil, nil, nil, nil)
+	return o.transition(ctx, tenantID, identityID, to, reason, nil, "", "", nil, nil, nil, nil, "")
+}
+
+// TransitionAfterCompletedSideEffect records the lifecycle edge after a trusted
+// receiver has already performed and evidenced the edge's external effect. It
+// validates the named destination against the lifecycle registry and suppresses
+// only that exact outbox enqueue. This is intentionally narrower than a generic
+// "no side effect" escape hatch: callers cannot use it on an internal edge or
+// claim that one receiver completed another receiver's work.
+func (o *Orchestrator) TransitionAfterCompletedSideEffect(ctx context.Context, tenantID, identityID string, to State, reason, completedDestination string) error {
+	completedDestination = strings.TrimSpace(completedDestination)
+	if completedDestination == "" {
+		return errors.New("orchestrator: completed side-effect destination is required")
+	}
+	return o.transition(ctx, tenantID, identityID, to, reason, nil, "", "", nil, nil, nil, nil, completedDestination)
 }
 
 // TransitionWithIdempotency moves an identity like Transition, but binds any
@@ -211,7 +225,7 @@ func (o *Orchestrator) Transition(ctx context.Context, tenantID, identityID stri
 // async issue/revoke/deploy work from minting twice if the response cache is not
 // the layer that observes the retry (CORRECT-001).
 func (o *Orchestrator) TransitionWithIdempotency(ctx context.Context, tenantID, identityID string, to State, reason, idempotencyKey string) error {
-	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, "", nil, nil, nil, nil)
+	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, "", nil, nil, nil, nil, "")
 }
 
 // TransitionWithSubjectCSR is TransitionWithIdempotency for a requested→issued
@@ -231,9 +245,9 @@ func (o *Orchestrator) TransitionWithSubjectCSR(ctx context.Context, tenantID, i
 		binding = issuance[0]
 	}
 	if strings.TrimSpace(csrPEM) == "" {
-		return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, "", nil, nil, binding, nil)
+		return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, "", nil, nil, binding, nil, "")
 	}
-	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, csrPEM, nil, nil, binding, nil)
+	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, csrPEM, nil, nil, binding, nil, "")
 }
 
 // TransitionWithSubjectCSRAtVersion is the reviewed console path. A nil version
@@ -249,7 +263,7 @@ func (o *Orchestrator) TransitionWithSubjectCSRAtVersion(ctx context.Context, te
 		binding = issuance[0]
 	}
 	csrPEM = strings.TrimSpace(csrPEM)
-	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, csrPEM, nil, nil, binding, expectedVersion)
+	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, csrPEM, nil, nil, binding, expectedVersion, "")
 }
 
 // TransitionWithSubjectCSRAndApproval is the served dual-control path. The exact
@@ -257,13 +271,13 @@ func (o *Orchestrator) TransitionWithSubjectCSRAtVersion(ctx context.Context, te
 // consumes that authority in the same PostgreSQL transaction as the status and
 // external-effect outbox intent.
 func (o *Orchestrator) TransitionWithSubjectCSRAndApproval(ctx context.Context, tenantID, identityID string, to State, reason, idempotencyKey, csrPEM string, approval store.OperationApprovalUse) error {
-	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, strings.TrimSpace(csrPEM), nil, &approval, nil, nil)
+	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, strings.TrimSpace(csrPEM), nil, &approval, nil, nil, "")
 }
 
 // TransitionWithSubjectCSRAndApprovalAtVersion combines dual-control authority
 // with the same atomic reviewed-version fence used by non-approval transitions.
 func (o *Orchestrator) TransitionWithSubjectCSRAndApprovalAtVersion(ctx context.Context, tenantID, identityID string, to State, reason, idempotencyKey, csrPEM string, approval store.OperationApprovalUse, expectedVersion *uint64) error {
-	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, strings.TrimSpace(csrPEM), nil, &approval, nil, expectedVersion)
+	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, strings.TrimSpace(csrPEM), nil, &approval, nil, expectedVersion, "")
 }
 
 // TransitionWithSideEffectPayload moves an identity through the normal lifecycle
@@ -275,7 +289,7 @@ func (o *Orchestrator) TransitionWithSideEffectPayload(ctx context.Context, tena
 	if len(payload) == 0 {
 		return o.Transition(ctx, tenantID, identityID, to, reason)
 	}
-	return o.transition(ctx, tenantID, identityID, to, reason, payload, "", "", nil, nil, nil, nil)
+	return o.transition(ctx, tenantID, identityID, to, reason, payload, "", "", nil, nil, nil, nil, "")
 }
 
 // TransitionWithSideEffectPayloadTransform is TransitionWithSideEffectPayload with
@@ -286,10 +300,10 @@ func (o *Orchestrator) TransitionWithSideEffectPayloadTransform(ctx context.Cont
 	if len(payload) == 0 {
 		return o.Transition(ctx, tenantID, identityID, to, reason)
 	}
-	return o.transition(ctx, tenantID, identityID, to, reason, payload, "", "", transform, nil, nil, nil)
+	return o.transition(ctx, tenantID, identityID, to, reason, payload, "", "", transform, nil, nil, nil, "")
 }
 
-func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID string, to State, reason string, sideEffectPayload []byte, idempotencyKey, subjectCSRPEM string, transform SideEffectPayloadTransform, approval *store.OperationApprovalUse, issuance *store.OperationApprovalIssuanceBinding, expectedVersion *uint64) error {
+func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID string, to State, reason string, sideEffectPayload []byte, idempotencyKey, subjectCSRPEM string, transform SideEffectPayloadTransform, approval *store.OperationApprovalUse, issuance *store.OperationApprovalIssuanceBinding, expectedVersion *uint64, completedDestination string) error {
 	idempotencyKey = strings.TrimSpace(idempotencyKey)
 	subjectCSRPEM = strings.TrimSpace(subjectCSRPEM)
 	if approval != nil && issuance != nil {
@@ -369,6 +383,12 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 	}
 
 	sideEffectDest, hasSideEffect := sideEffectFor(from, to)
+	if completedDestination != "" {
+		if !hasSideEffect || sideEffectDest != completedDestination {
+			return fmt.Errorf("orchestrator: completed side effect %q does not satisfy %s -> %s", completedDestination, from, to)
+		}
+		hasSideEffect = false
+	}
 	schemaVersion := 0
 	if idempotencyKey != "" {
 		schemaVersion = projections.LifecycleEventSchemaVersion

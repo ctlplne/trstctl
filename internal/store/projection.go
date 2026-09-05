@@ -473,18 +473,48 @@ func (s *Store) ApplyCertificateRecordedTx(ctx context.Context, tx pgx.Tx, c Cer
 		        issuance_response = CASE WHEN octet_length($15::bytea) > 0 THEN $15 ELSE issuance_response END,
 		        issuance_idempotency_key = CASE WHEN $16::text <> '' THEN $16 ELSE issuance_idempotency_key END,
 		        issuance_request_binding = CASE WHEN $17::text <> '' THEN $17 ELSE issuance_request_binding END,
-		        replaces_id = $18
+		        replaces_id = $18,
+		        -- An external CA returns the public certificate before the edge
+		        -- collector's CSR correlation supplies the custody fact. Permit
+		        -- that one-way UNKNOWN -> KNOWN enrichment, but never erase or
+		        -- replace a custody value already retained for this fingerprint.
+		        key_origin = CASE WHEN key_origin = '' AND $19::text <> '' THEN $19 ELSE key_origin END,
+		        key_storage = CASE WHEN key_storage = '' AND $20::text <> '' THEN $20 ELSE key_storage END,
+		        key_exportable = CASE WHEN key_exportable = '' AND $21::text <> '' THEN $21 ELSE key_exportable END,
+		        key_generated_by = CASE WHEN key_generated_by = '' AND $22::text <> '' THEN $22 ELSE key_generated_by END
 		  WHERE tenant_id = $1 AND fingerprint = $7
 		    AND (issuance_idempotency_key NOT LIKE 'broker-issue:%'
 		      OR (($16::text = '' OR issuance_idempotency_key = $16)
-		        AND ($17::text = '' OR issuance_request_binding = $17)))`,
+		        AND ($17::text = '' OR issuance_request_binding = $17)))
+		    AND (key_origin = '' OR $19::text = '' OR key_origin = $19)
+		    AND (key_storage = '' OR $20::text = '' OR key_storage = $20)
+		    AND (key_exportable = '' OR $21::text = '' OR key_exportable = $21)
+		    AND (key_generated_by = '' OR $22::text = '' OR key_generated_by = $22)`,
 		c.TenantID, c.OwnerID, c.Subject, sans, c.Issuer, c.Serial, c.Fingerprint,
 		c.KeyAlgorithm, c.NotBefore, c.NotAfter, c.DeploymentLocation, c.Source, certDER, certPEM, issuanceResponse,
-		c.IssuanceIdempotencyKey, c.IssuanceRequestBinding, c.ReplacesID)
+		c.IssuanceIdempotencyKey, c.IssuanceRequestBinding, c.ReplacesID,
+		c.KeyOrigin, c.KeyStorage, c.KeyExportable, c.KeyGeneratedBy)
 	if err != nil {
 		return err
 	}
 	if tag.RowsAffected() == 0 {
+		var retainedOrigin, retainedStorage, retainedExportable, retainedGeneratedBy string
+		fingerprintErr := tx.QueryRow(ctx,
+			`SELECT key_origin, key_storage, key_exportable, key_generated_by
+			   FROM certificates WHERE tenant_id = $1 AND fingerprint = $2`,
+			c.TenantID, c.Fingerprint).
+			Scan(&retainedOrigin, &retainedStorage, &retainedExportable, &retainedGeneratedBy)
+		if fingerprintErr == nil {
+			custodyConflict := (c.KeyOrigin != "" && retainedOrigin != "" && c.KeyOrigin != retainedOrigin) ||
+				(c.KeyStorage != "" && retainedStorage != "" && c.KeyStorage != retainedStorage) ||
+				(c.KeyExportable != "" && retainedExportable != "" && c.KeyExportable != retainedExportable) ||
+				(c.KeyGeneratedBy != "" && retainedGeneratedBy != "" && c.KeyGeneratedBy != retainedGeneratedBy)
+			if custodyConflict {
+				return fmt.Errorf("store: certificate projection custody conflicts with retained custody")
+			}
+		} else if fingerprintErr != pgx.ErrNoRows {
+			return fingerprintErr
+		}
 		var existingFingerprint string
 		queryErr := tx.QueryRow(ctx,
 			`SELECT fingerprint FROM certificates WHERE tenant_id = $1 AND id = $2`,

@@ -118,6 +118,27 @@ type atMostOnceMemoryResult struct {
 	result    []byte
 }
 
+// effectIndeterminateSafeError preserves only a closed, credential-free
+// diagnostic class after an at-most-once receiver call becomes ambiguous. It
+// deliberately does not retain the provider error: callers can still prove the
+// no-retry invariant with errors.Is while the outbox can explain which bounded
+// stage failed without persisting attacker-controlled response text.
+type effectIndeterminateSafeError struct {
+	class string
+}
+
+func (e effectIndeterminateSafeError) Error() string             { return ErrEffectIndeterminate.Error() }
+func (e effectIndeterminateSafeError) Unwrap() error             { return ErrEffectIndeterminate }
+func (e effectIndeterminateSafeError) SafeDeliveryClass() string { return e.class }
+
+func classifiedEffectIndeterminate(cause error) error {
+	class, ok := safePersistableDeliveryClass(cause)
+	if !ok {
+		return ErrEffectIndeterminate
+	}
+	return effectIndeterminateSafeError{class: class}
+}
+
 type boundMemoryResult struct {
 	binding       string
 	persist       bool
@@ -1712,7 +1733,9 @@ func (i *Idempotency) DoAtMostOnceEffect(ctx context.Context, tenantID, key stri
 		out, err := fn(ctx)
 		if err != nil {
 			secret.Wipe(out)
-			return nil, ErrEffectIndeterminate
+			classified := classifiedEffectIndeterminate(err)
+			destroyDeliveryError(err)
+			return nil, classified
 		}
 		defer secret.Wipe(out)
 		codec, protected, err := i.protectResult(ctx, tenantID, key, "", out)
@@ -1783,7 +1806,9 @@ func (i *Idempotency) DoAtMostOnceEffect(ctx context.Context, tenantID, key stri
 		secret.Wipe(out)
 		// Deliberately retain the pending claim: without a provider-native lookup,
 		// the process cannot prove whether the receiver committed before erroring.
-		return nil, fmt.Errorf("%w", ErrEffectIndeterminate)
+		classified := classifiedEffectIndeterminate(err)
+		destroyDeliveryError(err)
+		return nil, classified
 	}
 	defer secret.Wipe(out)
 	codec, protected, err := i.protectResult(ctx, tenantID, key, "", out)

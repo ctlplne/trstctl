@@ -12,6 +12,8 @@ import (
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
 
+const postDeployConvergenceWindow = 3 * time.Second
+
 // Verifying a deploy against the listener it just changed (epic D2).
 //
 // This runs in the one window where it can: after the connector wrote its files
@@ -66,12 +68,35 @@ func postDeployVerification(ctx context.Context, intent DeployIntent, material M
 	probeCtx, cancel := context.WithTimeout(ctx, verify.DefaultTimeout+2*time.Second)
 	defer cancel()
 
-	res, err := verify.Endpoint(probeCtx, verify.Request{
+	request := verify.Request{
 		Address:    intent.VerifyAddress,
 		ServerName: intent.VerifyServerName,
 		Vantage:    transport.VantageLocal,
 		Expect:     expect,
-	})
+		Timeout:    time.Second,
+	}
+	// A graceful service reload can accept a connection on the predecessor
+	// worker for a short handoff window after the reload command succeeds. A
+	// single immediate probe turns that healthy transition into a false rollback
+	// signal. Retry only inside this small, fixed window; a killed or ignored
+	// reload still fails closed with the final signed observation.
+	deadline := time.Now().Add(postDeployConvergenceWindow)
+	var res verify.Result
+	for {
+		res, err = verify.Endpoint(probeCtx, request)
+		if err != nil || res.OK() || time.Now().After(deadline) {
+			break
+		}
+		select {
+		case <-probeCtx.Done():
+			err = probeCtx.Err()
+			break
+		case <-time.After(200 * time.Millisecond):
+		}
+		if err != nil {
+			break
+		}
+	}
 	if err != nil {
 		return transport.OutcomeVerifyFailed, "post-deploy verification could not run: " +
 			transport.SanitizeProbeError(err), ""

@@ -272,7 +272,7 @@ type agentService struct {
 	// agent reports its renewal finished (epic B2). Nil means the transition is
 	// not completed and the identity would stay in renewing forever, so this is
 	// wired unconditionally in the served assembly rather than being optional.
-	completeHostRenewal func(ctx context.Context, tenantID string, payload []byte, outcome string)
+	completeHostRenewal func(ctx context.Context, tenantID string, payload []byte, outcome string) error
 	// issueWorkloadSVID mints SVIDs for a workload a host agent attested (epic
 	// B3). Nil means the control plane serves no workload-identity surface and
 	// FetchWorkloadSVID fails closed, which is the honest answer for a

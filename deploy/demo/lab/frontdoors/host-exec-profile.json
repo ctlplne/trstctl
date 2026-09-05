@@ -1,0 +1,16 @@
+{
+  "allowed_roots": ["/lab/tls"],
+  "actions": [
+    { "logical_name": "apachectl", "command": "/usr/local/apache2/bin/apachectl", "pass_args": true, "timeout_seconds": 15 },
+    { "logical_name": "nginx", "command": "/usr/sbin/nginx", "pass_args": true, "timeout_seconds": 15 },
+    { "logical_name": "haproxy", "command": "/usr/sbin/haproxy", "pass_args": true, "timeout_seconds": 15 },
+    { "logical_name": "systemctl", "logical_args": ["reload", "haproxy"], "command": "/lab/reload-haproxy", "timeout_seconds": 15 },
+    {
+      "logical_name": "caddy",
+      "logical_args": ["reload"],
+      "command": "/usr/sbin/caddy",
+      "args": ["reload", "--config", "/lab/Caddyfile", "--force"],
+      "timeout_seconds": 15
+    }
+  ]
+}

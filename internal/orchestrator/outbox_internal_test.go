@@ -1490,17 +1490,34 @@ func TestIdempotencyDoDurableEffectBoundBlocksConcurrentChangedCaller(t *testing
 	}
 }
 
+type safelyClassifiedReceiverError struct {
+	class string
+	raw   string
+}
+
+func (e safelyClassifiedReceiverError) Error() string             { return e.raw }
+func (e safelyClassifiedReceiverError) SafeDeliveryClass() string { return e.class }
+
 func TestIdempotencyDoAtMostOnceEffectNeverBlindlyRetriesAmbiguousReceiver(t *testing.T) {
 	s := newStore(t)
 	idem := orchestrator.NewIdempotency(s)
 	ctx := context.Background()
 	calls := 0
+	const unsafe = "connection lost after request write; echoed private credential"
 	fn := func(context.Context) ([]byte, error) {
 		calls++
-		return nil, errors.New("connection lost after request write")
+		return nil, safelyClassifiedReceiverError{class: "external_ca_finalize_failed", raw: unsafe}
 	}
 	if _, err := idem.DoAtMostOnceEffect(ctx, tenantA, "external-ca:ambiguous", fn); !errors.Is(err, orchestrator.ErrEffectIndeterminate) {
 		t.Fatalf("first ambiguous result = %v, want ErrEffectIndeterminate", err)
+	} else {
+		classified, ok := err.(interface{ SafeDeliveryClass() string })
+		if !ok || classified.SafeDeliveryClass() != "external_ca_finalize_failed" {
+			t.Fatalf("first ambiguous result lost safe class: %T %v", err, err)
+		}
+		if strings.Contains(err.Error(), unsafe) {
+			t.Fatalf("first ambiguous result rendered unsafe detail: %q", err)
+		}
 	}
 	if _, err := idem.DoAtMostOnceEffect(ctx, tenantA, "external-ca:ambiguous", fn); !errors.Is(err, orchestrator.ErrEffectIndeterminate) {
 		t.Fatalf("replay ambiguous result = %v, want ErrEffectIndeterminate", err)

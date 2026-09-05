@@ -160,7 +160,8 @@ func TestHostRollbackRestoresReloadsAndReverifiesWithoutRedemption(t *testing.T)
 		"cert_path": filepath.Join(root, "server.crt"),
 		"key_path":  filepath.Join(root, "server.key"),
 	})
-	deploy := func(jobID int64, fingerprint string, certPEM []byte) {
+	firstIssuer := []byte("-----BEGIN CERTIFICATE-----\npredecessor-issuer-evidence\n-----END CERTIFICATE-----\n")
+	deploy := func(jobID int64, fingerprint string, certPEM, chainPEM []byte) {
 		t.Helper()
 		ch := &fakeChannel{
 			jobs: []relay.Job{intentJob(t, jobID, relay.DeployIntent{
@@ -168,8 +169,9 @@ func TestHostRollbackRestoresReloadsAndReverifiesWithoutRedemption(t *testing.T)
 				TargetConfig: config, Fingerprint: fingerprint,
 			})},
 			material: map[string][]byte{
-				"credential.cert_pem": certPEM,
-				"credential.key_pem":  []byte(testKeyPEM + fingerprint),
+				"credential.cert_pem":  certPEM,
+				"credential.chain_pem": chainPEM,
+				"credential.key_pem":   []byte(testKeyPEM + fingerprint),
 			},
 		}
 		if _, runErr := relay.RunOnceWithSelfUpgradeAndHostRollback(t.Context(), ch,
@@ -180,8 +182,8 @@ func TestHostRollbackRestoresReloadsAndReverifiesWithoutRedemption(t *testing.T)
 			t.Fatalf("deploy %s reports = %+v", fingerprint, ch.reports)
 		}
 	}
-	deploy(10, "first", predecessor.LeafPEM)
-	deploy(11, "second", successor.LeafPEM)
+	deploy(10, "first", predecessor.LeafPEM, firstIssuer)
+	deploy(11, "second", successor.LeafPEM, []byte("successor-issuer-evidence"))
 
 	rollback := &fakeChannel{jobs: []relay.Job{rollbackJob(t, 12, relay.RollbackIntent{
 		Connector: "nginx", Target: "edge", TargetID: "target-a", TargetConfig: config,
@@ -201,8 +203,9 @@ func TestHostRollbackRestoresReloadsAndReverifiesWithoutRedemption(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(got, predecessor.LeafPEM) {
-		t.Fatal("host certificate file was not restored to the predecessor")
+	want := append(append([]byte(nil), predecessor.LeafPEM...), firstIssuer...)
+	if !bytes.Equal(got, want) {
+		t.Fatal("host certificate file was not restored to the complete predecessor serving chain")
 	}
 }
 

@@ -216,6 +216,11 @@ services:
       # server creates this root 0600 on first boot in the existing secrets
       # volume; it is never placed inline in Compose or rendered by the UI.
       TRSTCTL_SECRETS_AUTH_SECRET_FILE: /data/secrets/machine-auth.bin
+      # Machine tokens must be tenant-bound and least-privilege at startup. A
+      # run-local override used to supply these two facts, which meant the
+      # checked-in demo failed closed when started on its own.
+      TRSTCTL_SECRETS_AUTH_TOKEN_TENANT_ID: "11111111-1111-4111-8111-111111111111"
+      TRSTCTL_SECRETS_AUTH_TOKEN_SCOPES: "secrets:read"
       TRSTCTL_LICENSE_FILE: /etc/trstctl/demo-provider-license.json
       # The demo is explicitly one licensed non-production deployment. Binding
       # the runtime identity to the baked v2 entitlement prevents copying the

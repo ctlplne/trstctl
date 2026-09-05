@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+pid="$(cat /lab/run/haproxy.pid)"
+case "$pid" in (*[!0-9]*|'') echo "invalid HAProxy pid" >&2; exit 1;; esac
+kill -USR2 "$pid"

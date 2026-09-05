@@ -1163,10 +1163,21 @@ async function transitionIdentityIfNeeded(identityID, targetState, reason, idemK
   if (current?.status === targetState) {
     return current;
   }
-  return request("POST", `/api/v1/identities/${identityID}/transitions`, {
-    to: targetState,
-    reason,
-  }, idemKey);
+  try {
+    return await request("POST", `/api/v1/identities/${identityID}/transitions`, {
+      to: targetState,
+      reason,
+    }, idemKey);
+  } catch (error) {
+    // Issuance and connector workers can advance the event-sourced projection
+    // between the read and mutation. Accept only proof that the exact requested
+    // state already won that race; every other conflict remains fatal.
+    const after = await request("GET", `/api/v1/identities/${identityID}`);
+    if (after?.status === targetState) {
+      return after;
+    }
+    throw error;
+  }
 }
 
 async function main() {

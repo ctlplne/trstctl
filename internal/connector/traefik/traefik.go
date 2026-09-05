@@ -26,9 +26,10 @@ const metricName = "trstctl_traefik_deployments_total"
 
 // Connector writes renewed credentials to Traefik file-provider paths.
 type Connector struct {
-	certPath string
-	keyPath  string
-	metrics  *observ.CounterVec
+	certPath          string
+	keyPath           string
+	dynamicConfigPath string
+	metrics           *observ.CounterVec
 }
 
 var _ connector.Connector = (*Connector)(nil)
@@ -43,6 +44,15 @@ func WithMetrics(reg *observ.Registry) Option {
 			c.metrics = reg.CounterVec(metricName, "Traefik connector deployments by target and result.", []string{"target", "result"})
 		}
 	}
+}
+
+// WithDynamicConfigPath identifies the file-provider document that references
+// certPath and keyPath. Traefik watches this document, but does not reliably
+// reload when only a referenced certificate file changes. Replacing the same
+// validated document after the credential files are durable emits the file
+// provider event that activates the new certificate.
+func WithDynamicConfigPath(configPath string) Option {
+	return func(c *Connector) { c.dynamicConfigPath = configPath }
 }
 
 // New returns a connector that writes certPath and keyPath for Traefik.
@@ -66,12 +76,25 @@ func (c *Connector) Capabilities() pluginhost.Grant {
 	if d := path.Dir(c.keyPath); d != path.Dir(c.certPath) {
 		g = g.WithPathPrefix(pluginhost.CapFSRead, d).WithPathPrefix(pluginhost.CapFSWrite, d)
 	}
+	if c.dynamicConfigPath != "" {
+		d := path.Dir(c.dynamicConfigPath)
+		g = g.WithPathPrefix(pluginhost.CapFSRead, d).WithPathPrefix(pluginhost.CapFSWrite, d)
+	}
 	return g
 }
 
 // Deploy writes cert/key unless the current files already match the renewed
 // credential. If the second write fails, the first file is restored.
 func (c *Connector) Deploy(_ context.Context, sb connector.Sandbox, dep connector.Deployment) error {
+	var dynamicConfig []byte
+	if c.dynamicConfigPath != "" {
+		var err error
+		dynamicConfig, err = sb.ReadFile(c.dynamicConfigPath)
+		if err != nil {
+			return fmt.Errorf("traefik: read dynamic config used to activate certificate changes: %w", err)
+		}
+		defer secret.Wipe(dynamicConfig)
+	}
 	oldCert, hadCert, err := readExisting(sb, c.certPath)
 	if err != nil {
 		c.observe(dep.Target, "error")
@@ -100,6 +123,16 @@ func (c *Connector) Deploy(_ context.Context, sb connector.Sandbox, dep connecto
 				return fmt.Errorf("traefik: write key failed and rollback failed: write=%w rollback=%v", err, rollbackErr)
 			}
 			return fmt.Errorf("traefik: write key failed; rollback complete: %w", err)
+		}
+	}
+	if c.dynamicConfigPath != "" {
+		if err := sb.WriteFile(c.dynamicConfigPath, dynamicConfig); err != nil {
+			rollbackErr := c.rollback(sb, oldCert, hadCert, oldKey, hadKey)
+			c.observe(dep.Target, "rollback")
+			if rollbackErr != nil {
+				return fmt.Errorf("traefik: activate certificate failed and rollback failed: activate=%w rollback=%v", err, rollbackErr)
+			}
+			return fmt.Errorf("traefik: activate certificate failed; rollback complete: %w", err)
 		}
 	}
 	c.observe(dep.Target, "deployed")

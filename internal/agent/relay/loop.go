@@ -396,8 +396,13 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 		return false
 	}
 	if hostJob && hostRollback != nil {
+		servingCertPEM, servingErr := servingCertificatePEM(material)
+		if servingErr != nil {
+			report(ctx, ch, job, OutcomeFailed, "host predecessor state could not be assembled")
+			return false
+		}
 		if err := hostRollback.RecordDeploy(intent.Connector, intent.TargetID, intent.Fingerprint,
-			material["credential.cert_pem"], material["credential.key_pem"]); err != nil {
+			servingCertPEM, material["credential.key_pem"]); err != nil {
 			// The target changed but its predecessor could not be retained. Do not
 			// claim a complete deploy: a retry is idempotent and gets another chance
 			// to durably bind the rollback state before verification is reported.

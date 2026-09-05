@@ -554,7 +554,7 @@ func dodRunAllNativeConnectorsProductionAssembly(t *testing.T) {
 	dodRunConnector(t, "connector.paloalto", "paloalto", paloaltoExternal, srv, token, ownerID, dodJSON(t, map[string]any{"endpoint": productionEndpoint(paloaltoExternal), "api_key_ref": "secret://dod/api-key"}), "dod-target", "")
 	postfixCfg := dodJSON(t, map[string]any{"profile": "postfix", "postfix_cert_path": filepath.Join(roots["postfix"], "postfix.crt"), "postfix_key_path": filepath.Join(roots["postfix"], "postfix.key"), "dovecot_cert_path": filepath.Join(roots["postfix"], "dovecot.crt"), "dovecot_key_path": filepath.Join(roots["postfix"], "dovecot.key")})
 	dodRunConnector(t, "connector.postfix", "postfix", postfixExternal, srv, token, ownerID, postfixCfg, "dod-target", filepath.Join(roots["postfix"], "postfix.crt"))
-	dodRunConnector(t, "connector.traefik", "traefik", traefikExternal, srv, token, ownerID, dodPairConfig(t, "traefik", roots["traefik"]), "dod-target", filepath.Join(roots["traefik"], "server.crt"))
+	dodRunConnector(t, "connector.traefik", "traefik", traefikExternal, srv, token, ownerID, dodTraefikConfig(t, roots["traefik"]), "dod-target", filepath.Join(roots["traefik"], "server.crt"))
 	dodRunConnector(t, "connector.acm", "aws-acm", acmExternal, srv, token, ownerID, dodJSON(t, map[string]any{"endpoint": productionEndpoint(acmExternal), "region": "us-east-1", "access_key_id": "AKIADODTEST", "secret_access_key_ref": "secret://dod/aws-secret"}), "arn:aws:acm:us-east-1:123456789012:certificate/dod", "")
 	dodRunConnector(t, "connector.azurekv", "azure-keyvault", azureExternal, srv, token, ownerID, dodJSON(t, map[string]any{"endpoint": productionEndpoint(azureExternal), "bearer_token_ref": "secret://dod/bearer"}), "dod-target", "")
 	dodRunConnector(t, "connector.gcpcm", "gcp-certificate-manager", gcpExternal, srv, token, ownerID, dodJSON(t, map[string]any{"endpoint": productionEndpoint(gcpExternal), "project": "dod-project", "location": "global", "bearer_token_ref": "secret://dod/bearer", "poll_interval": "1ms"}), "dod-target", "")
@@ -638,7 +638,7 @@ func dodRunFocusedNativeConnector(t *testing.T, entryID, connectorName string, e
 		targetConfig = dodJSON(t, map[string]any{"profile": "postfix", "postfix_cert_path": readbackPath, "postfix_key_path": filepath.Join(root, "postfix.key"), "dovecot_cert_path": filepath.Join(root, "dovecot.crt"), "dovecot_key_path": filepath.Join(root, "dovecot.key")})
 	case "connector.traefik":
 		root := local("traefik", nil)
-		targetConfig, readbackPath = dodPairConfig(t, "traefik", root), filepath.Join(root, "server.crt")
+		targetConfig, readbackPath = dodTraefikConfig(t, root), filepath.Join(root, "server.crt")
 	case "connector.acm":
 		target = "arn:aws:acm:us-east-1:123456789012:certificate/dod"
 		targetConfig = dodJSON(t, map[string]any{"endpoint": productionEndpoint, "region": "us-east-1", "access_key_id": "AKIADODTEST", "secret_access_key_ref": "secret://dod/aws-secret"})
@@ -940,6 +940,19 @@ func dodPairConfig(t *testing.T, profile, root string) json.RawMessage {
 	t.Helper()
 	return dodJSON(t, map[string]any{
 		"profile": profile, "cert_path": filepath.Join(root, "server.crt"), "key_path": filepath.Join(root, "server.key"),
+	})
+}
+
+func dodTraefikConfig(t *testing.T, root string) json.RawMessage {
+	t.Helper()
+	configPath := filepath.Join(root, "dynamic.yml")
+	config := []byte("tls:\n  certificates: []\n")
+	if err := os.WriteFile(configPath, config, 0o600); err != nil {
+		t.Fatalf("write Traefik file-provider fixture: %v", err)
+	}
+	return dodJSON(t, map[string]any{
+		"profile": "traefik", "cert_path": filepath.Join(root, "server.crt"),
+		"key_path": filepath.Join(root, "server.key"), "config_path": configPath,
 	})
 }
 

@@ -327,9 +327,9 @@ func TestAHostRenewalReportReturnsTheIdentityToDeployed(t *testing.T) {
 	}
 }
 
-// A FAILED renewal must also un-stick the identity. Leaving a failed one in
-// renewing produces the same silent non-renewal as leaving a successful one.
-func TestAFailedHostRenewalAlsoReturnsTheIdentityToDeployed(t *testing.T) {
+// A failed renewal must leave the known-good predecessor operational while
+// recording that the new attempt needs attention and can be retried.
+func TestAFailedHostRenewalMovesToRetryableFailure(t *testing.T) {
 	ctx := context.Background()
 	h := newIssuanceDispatcherHarness(t)
 	srv := &Server{orch: h.orch}
@@ -353,9 +353,67 @@ func TestAFailedHostRenewalAlsoReturnsTheIdentityToDeployed(t *testing.T) {
 	payload, _ := json.Marshal(RelayDeployIntent{IdentityID: ident.ID})
 	srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeFailed)
 
+	if state, _ := h.orch.State(ctx, h.tenant, ident.ID); state != orchestrator.StateRenewalFailed {
+		t.Fatalf("a failed host renewal left the identity in %s, want a retryable renewal failure", state)
+	}
+}
+
+func TestACompletedHostFirstIssuanceAdvancesWithoutQueuingASecondDeploy(t *testing.T) {
+	ctx := context.Background()
+	h := newIssuanceDispatcherHarness(t)
+	srv := &Server{orch: h.orch}
+	owner, err := h.store.CreateOwner(ctx, store.Owner{TenantID: h.tenant, Kind: store.OwnerTeam, Name: "P", Email: "first@example.test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ident, err := h.orch.CreateIdentity(ctx, h.tenant, store.Identity{Kind: store.KindX509Certificate, Name: "first.example.test", OwnerID: owner.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.orch.Transition(ctx, h.tenant, ident.ID, orchestrator.StateIssued, "setup"); err != nil {
+		t.Fatal(err)
+	}
+	dispatchOutbox(t, h, 1)
+	payload, err := json.Marshal(RelayDeployIntent{IdentityID: ident.ID, Target: "edge-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeVerified); err != nil {
+		t.Fatal(err)
+	}
 	if state, _ := h.orch.State(ctx, h.tenant, ident.ID); state != orchestrator.StateDeployed {
-		t.Fatalf("a failed host renewal left the identity in %s; it would never be renewed "+
-			"again", state)
+		t.Fatalf("completed first host issuance left identity %s, want deployed", state)
+	}
+	pending, err := h.outbox.Pending(ctx, h.tenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range pending {
+		if row.Destination == "connector.deploy" {
+			t.Fatalf("completed host deployment queued a duplicate connector deploy: %+v", row)
+		}
+	}
+}
+
+func TestAnUnverifiedHostFirstIssuanceRemainsIssued(t *testing.T) {
+	ctx := context.Background()
+	h := newIssuanceDispatcherHarness(t)
+	srv := &Server{orch: h.orch}
+	owner, _ := h.store.CreateOwner(ctx, store.Owner{TenantID: h.tenant, Kind: store.OwnerTeam, Name: "P", Email: "unverified@example.test"})
+	ident, err := h.orch.CreateIdentity(ctx, h.tenant, store.Identity{Kind: store.KindX509Certificate, Name: "unverified.example.test", OwnerID: owner.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.orch.Transition(ctx, h.tenant, ident.ID, orchestrator.StateIssued, "setup"); err != nil {
+		t.Fatal(err)
+	}
+	dispatchOutbox(t, h, 1)
+	payload, _ := json.Marshal(RelayDeployIntent{IdentityID: ident.ID})
+	if err := srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeVerifyFailed); err != nil {
+		t.Fatal(err)
+	}
+	if state, _ := h.orch.State(ctx, h.tenant, ident.ID); state != orchestrator.StateIssued {
+		t.Fatalf("unverified first host issuance became %s, want issued", state)
 	}
 }
 

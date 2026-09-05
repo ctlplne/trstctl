@@ -4,12 +4,89 @@ package store_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/store"
 )
+
+// The external-CA path records the public certificate as soon as the CA returns
+// it, then records the edge collector's custody fact for that same fingerprint.
+// Those are two events because the control plane must never pretend it witnessed
+// a host key before it has correlated the issued certificate to the agent CSR.
+// The projector must therefore allow UNKNOWN custody to become KNOWN while still
+// treating an attempted change to a known custody fact as a hard conflict.
+func TestCertificateProjectionEnrichesBlankCustodyAndRejectsConflict(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Acme"}); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	base := store.Certificate{
+		ID: "10000000-0000-4000-8000-000000000120", TenantID: tenantA,
+		Subject: "CN=edge.example.test", SANs: []string{"edge.example.test"},
+		Issuer: "CN=Independent Lab CA", Serial: "120", Fingerprint: "fp-projection-custody-enrichment",
+		KeyAlgorithm: "ECDSA-P256", Source: "external-ca", CreatedAt: now,
+	}
+	apply := func(c store.Certificate) error {
+		return s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+			return s.ApplyCertificateRecordedTx(ctx, tx, c)
+		})
+	}
+	if err := apply(base); err != nil {
+		t.Fatalf("record public certificate before custody correlation: %v", err)
+	}
+
+	enriched := base
+	enriched.ID = "10000000-0000-4000-8000-000000000121"
+	enriched.KeyOrigin = string(custody.OriginHostAgent)
+	enriched.KeyStorage = string(custody.StorageFile)
+	enriched.KeyExportable = string(custody.Exportable)
+	enriched.KeyGeneratedBy = "edge-collector-lab"
+	if err := apply(enriched); err != nil {
+		t.Fatalf("enrich blank custody from correlated edge issuance: %v", err)
+	}
+
+	got, err := s.GetCertificate(ctx, tenantA, base.ID)
+	if err != nil {
+		t.Fatalf("reload enriched certificate: %v", err)
+	}
+	if got.KeyOrigin != enriched.KeyOrigin || got.KeyStorage != enriched.KeyStorage ||
+		got.KeyExportable != enriched.KeyExportable || got.KeyGeneratedBy != enriched.KeyGeneratedBy {
+		t.Fatalf("projected custody = (%q, %q, %q, %q), want (%q, %q, %q, %q)",
+			got.KeyOrigin, got.KeyStorage, got.KeyExportable, got.KeyGeneratedBy,
+			enriched.KeyOrigin, enriched.KeyStorage, enriched.KeyExportable, enriched.KeyGeneratedBy)
+	}
+
+	conflict := enriched
+	conflict.ID = "10000000-0000-4000-8000-000000000122"
+	conflict.KeyGeneratedBy = "different-edge-collector"
+	if err := apply(conflict); err == nil || !strings.Contains(err.Error(), "custody") {
+		t.Fatalf("conflicting custody error = %v, want fail-closed custody conflict", err)
+	}
+
+	// A later observation without custody knowledge must still converge without
+	// erasing the verified fact.
+	observed := base
+	observed.ID = "10000000-0000-4000-8000-000000000123"
+	observed.Source = "network-discovery"
+	observed.DeploymentLocation = "edge.example.test:443"
+	if err := apply(observed); err != nil {
+		t.Fatalf("project discovery observation after custody enrichment: %v", err)
+	}
+	got, err = s.GetCertificate(ctx, tenantA, base.ID)
+	if err != nil {
+		t.Fatalf("reload certificate after discovery: %v", err)
+	}
+	if got.KeyGeneratedBy != enriched.KeyGeneratedBy {
+		t.Fatalf("discovery erased custody: key_generated_by = %q, want %q", got.KeyGeneratedBy, enriched.KeyGeneratedBy)
+	}
+}
 
 // Custody is recorded at issuance and survives every later observation (B5).
 //

@@ -198,9 +198,9 @@ func ExecuteOnHost(
 	if !ExecutesOnHost(intent.Connector) {
 		return connector.Stats{}, fmt.Errorf("relay: connector %q is not host-executable", intent.Connector)
 	}
-	certPEM, ok := material["credential.cert_pem"]
-	if !ok || len(certPEM) == 0 {
-		return connector.Stats{}, errors.New("relay: redeemed material carries no certificate")
+	servingCertPEM, err := servingCertificatePEM(material)
+	if err != nil {
+		return connector.Stats{}, err
 	}
 	keyPEM, ok := material["credential.key_pem"]
 	if !ok || len(keyPEM) == 0 {
@@ -239,10 +239,30 @@ func ExecuteOnHost(
 	}
 	return connector.Run(ctx, built, ops, connector.Deployment{
 		Target:      intent.Target,
-		CertPEM:     certPEM,
+		CertPEM:     servingCertPEM,
 		KeyPEM:      keyPEM,
 		Fingerprint: intent.Fingerprint,
 	})
+}
+
+// servingCertificatePEM turns the wire representation into the bytes a TLS
+// service must install and the rollback ledger must retain. Keeping this in one
+// function prevents a subtle split-brain failure where the live deploy receives
+// leaf+issuers but recovery remembers only the leaf and restores a listener that
+// reloads successfully while standards-compliant clients reject its chain.
+func servingCertificatePEM(material Material) ([]byte, error) {
+	leafPEM, ok := material["credential.cert_pem"]
+	if !ok || len(leafPEM) == 0 {
+		return nil, errors.New("relay: redeemed material carries no certificate")
+	}
+	servingPEM := append([]byte(nil), leafPEM...)
+	if chainPEM := material["credential.chain_pem"]; len(chainPEM) > 0 {
+		if servingPEM[len(servingPEM)-1] != '\n' {
+			servingPEM = append(servingPEM, '\n')
+		}
+		servingPEM = append(servingPEM, chainPEM...)
+	}
+	return servingPEM, nil
 }
 
 // DryRunOnHost validates a host connector on the machine that would execute it
@@ -452,8 +472,13 @@ func hostPreflightActions(name string, target HostTargetConfig) ([]connector.Loc
 			return nil, err
 		}
 		return nil, nil
-	case "elasticsearch", "traefik":
+	case "elasticsearch":
 		if err := require(field("cert_path", target.CertPath), field("key_path", target.KeyPath)); err != nil {
+			return nil, err
+		}
+		return nil, nil
+	case "traefik":
+		if err := require(field("cert_path", target.CertPath), field("key_path", target.KeyPath), field("config_path", target.ConfigPath)); err != nil {
 			return nil, err
 		}
 		return nil, nil
@@ -559,7 +584,11 @@ func buildHostConnector(name string, target HostTargetConfig, material Material)
 	case "caddy":
 		return caddy.New(target.CertPath, target.KeyPath), nil
 	case "traefik":
-		return traefik.New(target.CertPath, target.KeyPath), nil
+		if strings.TrimSpace(target.ConfigPath) == "" {
+			return nil, errors.New("relay: traefik target needs config_path so its file provider can be notified after credential changes")
+		}
+		return traefik.New(target.CertPath, target.KeyPath,
+			traefik.WithDynamicConfigPath(target.ConfigPath)), nil
 	case "postgresql":
 		return postgresql.New(target.CertPath, target.KeyPath), nil
 	case "mysql":

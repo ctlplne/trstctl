@@ -178,7 +178,12 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 				"host renewal is missing target or fingerprint rollback identity")
 			return false
 		}
-		if err := hostRollback.RecordDeploy(intent.Connector, intent.TargetID, fingerprint, certPEM, keyPEM); err != nil {
+		servingCertPEM, servingErr := servingCertificatePEM(material)
+		if servingErr != nil {
+			report(ctx, ch, job, OutcomeFailed, "host predecessor state could not be assembled")
+			return false
+		}
+		if err := hostRollback.RecordDeploy(intent.Connector, intent.TargetID, fingerprint, servingCertPEM, keyPEM); err != nil {
 			report(ctx, ch, job, OutcomeFailed, "host predecessor state could not be committed")
 			return false
 		}

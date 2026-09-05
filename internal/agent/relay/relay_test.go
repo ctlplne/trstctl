@@ -3,6 +3,7 @@
 package relay_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -638,6 +639,42 @@ func TestHostExecutorRefusesWorkItCannotDo(t *testing.T) {
 		map[string][]byte{"credential.cert_pem": []byte(testCertPEM), "credential.key_pem": []byte(testKeyPEM)},
 	); err == nil {
 		t.Fatal("the host executor accepted appliance work")
+	}
+}
+
+// An external CA commonly returns a leaf separately from its issuer chain.
+// The host must serve both: writing only the leaf can reload cleanly while every
+// standards-compliant client still rejects the listener as an incomplete chain.
+func TestHostExecutorInstallsIssuerChainWithLeaf(t *testing.T) {
+	dir := t.TempDir()
+	certPath, keyPath := filepath.Join(dir, "server.crt"), filepath.Join(dir, "server.key")
+	targetConfig, err := json.Marshal(map[string]string{"cert_path": certPath, "key_path": keyPath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := connector.LocalOpsConfig{
+		AllowedRoots: []string{dir},
+		Actions: []connector.LocalAction{{
+			LogicalName: "apachectl", Command: "/usr/bin/true", PassArgs: true,
+		}},
+	}
+	leaf := []byte(testCertPEM + "\n")
+	issuer := []byte(testCertPEM + "\n")
+	if _, err := relay.ExecuteOnHost(context.Background(), profile, relay.DeployIntent{
+		Connector: "apache", Target: "web01", TargetConfig: targetConfig,
+	}, map[string][]byte{
+		"credential.cert_pem":  leaf,
+		"credential.chain_pem": issuer,
+		"credential.key_pem":   []byte(testKeyPEM),
+	}); err != nil {
+		t.Fatalf("ExecuteOnHost(apache): %v", err)
+	}
+	installed, err := os.ReadFile(certPath)
+	if err != nil {
+		t.Fatalf("read installed certificate chain: %v", err)
+	}
+	if want := append(append([]byte(nil), leaf...), issuer...); !bytes.Equal(installed, want) {
+		t.Fatalf("installed certificate bytes = %q, want leaf followed by issuer chain %q", installed, want)
 	}
 }
 
