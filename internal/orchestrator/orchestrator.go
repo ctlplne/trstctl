@@ -383,11 +383,11 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 	}
 
 	sideEffectDest, hasSideEffect := sideEffectFor(from, to)
+	sideEffectCompleted := completedDestination != ""
 	if completedDestination != "" {
 		if !hasSideEffect || sideEffectDest != completedDestination {
 			return fmt.Errorf("orchestrator: completed side effect %q does not satisfy %s -> %s", completedDestination, from, to)
 		}
-		hasSideEffect = false
 	}
 	schemaVersion := 0
 	if idempotencyKey != "" {
@@ -414,12 +414,15 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 	if ownershipReadiness != nil {
 		schemaVersion = projections.LifecycleOwnershipReadinessEventSchemaVersion
 	}
+	if sideEffectCompleted {
+		schemaVersion = projections.LifecycleCompletedSideEffectEventSchemaVersion
+	}
 	// Classify the claim demand from the RAW side-effect payload, before any
 	// sealing transform makes it opaque (epic A3). The classifier is injected by
 	// the composition root because vantage is the connector registry's census,
 	// and the orchestrator must not import the registry.
 	requiredAgentRole := ""
-	if hasSideEffect && o.effectRole != nil {
+	if hasSideEffect && !sideEffectCompleted && o.effectRole != nil {
 		requiredAgentRole = o.effectRole(sideEffectDest, sideEffectPayload)
 	}
 	payload, err := json.Marshal(basePayload)
@@ -430,7 +433,7 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 	if len(sideEffectPayload) > 0 {
 		outboxPayload = sideEffectPayload
 	}
-	if hasSideEffect && len(sideEffectPayload) > 0 && transform != nil {
+	if hasSideEffect && !sideEffectCompleted && len(sideEffectPayload) > 0 && transform != nil {
 		outboxPayload, err = transform(ctx, SideEffectPayloadContext{
 			TenantID:       tenantID,
 			Destination:    sideEffectDest,
@@ -443,7 +446,7 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 	}
 	if hasSideEffect {
 		replayPayload := append([]byte(nil), outboxPayload...)
-		if approval != nil || issuance != nil || (ownershipReadiness != nil && len(sideEffectPayload) == 0) {
+		if sideEffectCompleted || approval != nil || issuance != nil || (ownershipReadiness != nil && len(sideEffectPayload) == 0) {
 			// V4 approval, v5 issuance, and v6 ownership-readiness events have one command body, not an
 			// opaque base64 copy inside themselves. An ownership-ready transition
 			// with an EXPLICIT side-effect body is different: its transformed body
@@ -458,6 +461,7 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 			IdempotencyKey:    sideEffectKey,
 			Payload:           replayPayload,
 			RequiredAgentRole: requiredAgentRole,
+			Completed:         sideEffectCompleted,
 		}
 		payload, err = json.Marshal(basePayload)
 		if err != nil {
@@ -557,7 +561,7 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 			if err := o.proj.ApplyTx(ctx, tx, ev); err != nil {
 				return err
 			}
-			if hasSideEffect {
+			if hasSideEffect && !sideEffectCompleted {
 				canonicalKey, canonicalPayload, err := lifecycleOutboxIntentFromEvent(ev, canonical, sideEffectDest)
 				if err != nil {
 					return err
@@ -1349,6 +1353,13 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			// point the boot pass never needs to inspect it again.
 			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
 		}
+		if pl.SideEffect != nil && pl.SideEffect.Completed {
+			// A v7 event is the durable receipt for work already completed by a
+			// trusted remote executor. Validation above proves its exact edge,
+			// destination, and event-derived key; advancing the checkpoint is the
+			// only safe recovery action because enqueueing would duplicate the work.
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
 		idempotencyKey, outboxPayload, err := lifecycleOutboxIntentFromEvent(ev, pl, dest)
 		if err != nil {
 			return err
@@ -1463,6 +1474,9 @@ func lifecycleOutboxIntentFromEvent(ev events.Event, pl transitionPayload, dest 
 			return "", nil, fmt.Errorf("orchestrator: reconcile %s (seq %d): replayable side_effect is required", ev.Type, ev.Sequence)
 		}
 		return expectedKey, ev.Data, nil
+	}
+	if pl.SideEffect.Completed {
+		return "", nil, fmt.Errorf("orchestrator: reconcile %s (seq %d): completed side effect is a receipt, not an outbox command", ev.Type, ev.Sequence)
 	}
 	if pl.SideEffect.Destination != dest {
 		return "", nil, fmt.Errorf("orchestrator: reconcile %s (seq %d): side_effect destination %q does not match transition destination %q", ev.Type, ev.Sequence, pl.SideEffect.Destination, dest)

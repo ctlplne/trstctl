@@ -302,6 +302,10 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/ownership_readiness/exception_expires_at", opaque),
 		privacyRule("/ownership_readiness/evaluated_at", opaque),
 	)
+	identityTransitionV7Rules := append([]events.PrivacyFieldRule(nil), identityTransitionV6.Rules...)
+	identityTransitionV7Rules = append(identityTransitionV7Rules,
+		privacyRule("/side_effect/completed", opaque))
+	identityTransitionV7 := privacyRules(identityTransitionV7Rules...)
 	agentHeartbeat := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/agent", exact),
 		privacyRule("/version", opaque), privacyRule("/status", opaque),
@@ -716,6 +720,9 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 	for _, eventType := range []string{EventIdentityDeployed, EventIdentityRenewed, EventIdentityRenewalRecovered} {
 		policies[privacyEventPolicyKey{EventType: eventType, Version: LifecycleOwnershipReadinessEventSchemaVersion}] = identityTransitionV6
 	}
+	for _, eventType := range []string{EventIdentityDeployed, EventIdentityRenewed} {
+		policies[privacyEventPolicyKey{EventType: eventType, Version: LifecycleCompletedSideEffectEventSchemaVersion}] = identityTransitionV7
+	}
 	for _, eventType := range []string{
 		EventIdentityIssued, EventIdentityDeployed, EventIdentityRevoked,
 		EventIdentityRenewing, EventIdentityRenewed, EventIdentityRetired,
@@ -999,8 +1006,15 @@ type privacyIdentityTransitionV2 struct {
 
 type privacyIdentityTransitionV3 struct {
 	privacyIdentityTransitionV2
-	SubjectCSRPEM string                    `json:"subject_csr_pem,omitempty"`
-	SideEffect    *identityTransitionEffect `json:"side_effect,omitempty"`
+	SubjectCSRPEM string                             `json:"subject_csr_pem,omitempty"`
+	SideEffect    *privacyIdentityTransitionEffectV3 `json:"side_effect,omitempty"`
+}
+
+type privacyIdentityTransitionEffectV3 struct {
+	Destination       string `json:"destination"`
+	IdempotencyKey    string `json:"idempotency_key"`
+	Payload           []byte `json:"payload,omitempty"`
+	RequiredAgentRole string `json:"required_agent_role,omitempty"`
 }
 
 type privacyIdentityTransitionV4 struct {
@@ -1016,6 +1030,13 @@ type privacyIdentityTransitionV5 struct {
 type privacyIdentityTransitionV6 struct {
 	privacyIdentityTransitionV3
 	OwnershipReadiness *store.OwnershipReadinessEvidence `json:"ownership_readiness"`
+}
+
+type privacyIdentityTransitionV7 struct {
+	privacyIdentityTransitionV2
+	SubjectCSRPEM      string                            `json:"subject_csr_pem,omitempty"`
+	SideEffect         *identityTransitionEffect         `json:"side_effect"`
+	OwnershipReadiness *store.OwnershipReadinessEvidence `json:"ownership_readiness,omitempty"`
 }
 
 // Legacy CA hierarchy events were audit breadcrumbs with event-specific wire
@@ -1262,6 +1283,9 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 	shapes[privacyEventPolicyKey{EventType: EventIdentityIssued, Version: LifecycleIssuanceEventSchemaVersion}] = privacyPayloadShape[privacyIdentityTransitionV5]()
 	for _, eventType := range []string{EventIdentityDeployed, EventIdentityRenewed, EventIdentityRenewalRecovered} {
 		shapes[privacyEventPolicyKey{EventType: eventType, Version: LifecycleOwnershipReadinessEventSchemaVersion}] = privacyPayloadShape[privacyIdentityTransitionV6]()
+	}
+	for _, eventType := range []string{EventIdentityDeployed, EventIdentityRenewed} {
+		shapes[privacyEventPolicyKey{EventType: eventType, Version: LifecycleCompletedSideEffectEventSchemaVersion}] = privacyPayloadShape[privacyIdentityTransitionV7]()
 	}
 	return shapes
 }

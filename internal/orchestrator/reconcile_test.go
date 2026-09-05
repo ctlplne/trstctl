@@ -25,6 +25,7 @@ type replayableTransitionSideEffect struct {
 	IdempotencyKey    string `json:"idempotency_key"`
 	Payload           []byte `json:"payload"`
 	RequiredAgentRole string `json:"required_agent_role,omitempty"`
+	Completed         bool   `json:"completed,omitempty"`
 }
 
 func replayableTransitionEvent(t *testing.T, identityID string, from, to orchestrator.State, requestKey string, sideEffect replayableTransitionSideEffect) []byte {
@@ -751,6 +752,91 @@ func TestOwnershipReadinessTransitionRetainsTransformedSideEffectForRecoveryAUD1
 		t.Fatalf("ordinary v6 derived outbox body has side_effect=%v ownership_readiness=%v",
 			bytes.Contains(ordinaryPayload, []byte(`"side_effect"`)),
 			bytes.Contains(ordinaryPayload, []byte(`"ownership_readiness"`)))
+	}
+}
+
+func TestCompletedConnectorEffectAdvancesOwnershipReadyIdentityWithoutReplay(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	ctx := context.Background()
+	const (
+		identityID = "acacacac-acac-4cac-8cac-acacacacacac"
+		ownerID    = "bdbdbdbd-bdbd-4dbd-8dbd-bdbdbdbdbdbd"
+	)
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "completed-effect tenant"}); err != nil {
+		t.Fatal(err)
+	}
+	verifiedAt := time.Now().UTC().Add(-time.Minute)
+	owner := store.Owner{
+		ID: ownerID, TenantID: tenantA, Kind: store.OwnerService, Name: "completed-effect owner",
+		ApplicationID: "APP-COMPLETED", Environment: "production",
+		OwnershipVerifiedAt: &verifiedAt, OwnershipVerifiedBy: "auditor@example.test",
+	}
+	var err error
+	owner.OwnershipModelDigest, err = store.OwnerModelDigest(owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpsertOwner(ctx, owner); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpsertIdentity(ctx, store.Identity{
+		ID: identityID, TenantID: tenantA, Kind: store.KindX509Certificate,
+		Name: "completed-effect.example.test", OwnerID: ownerID, Status: string(orchestrator.StateIssued),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	orch := orchestrator.NewOrchestrator(log, s, orchestrator.NewOutbox(s),
+		orchestrator.WithProjector(projections.New(s, projections.WithOwnershipAttestationCadence(time.Hour))),
+		orchestrator.WithOwnershipAttestationCadence(time.Hour))
+
+	if err := orch.TransitionAfterCompletedSideEffect(ctx, tenantA, identityID,
+		orchestrator.StateDeployed, "agent already deployed the credential", "connector.deploy"); err != nil {
+		t.Fatalf("record completed connector effect: %v", err)
+	}
+	if state, err := orch.State(ctx, tenantA, identityID); err != nil || state != orchestrator.StateDeployed {
+		t.Fatalf("completed connector effect state = %s, err=%v, want deployed", state, err)
+	}
+
+	var retained events.Event
+	if err := log.Replay(ctx, 1, func(ev events.Event) error {
+		if ev.Type == projections.EventIdentityDeployed {
+			retained = ev
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if retained.SchemaVersion != projections.LifecycleCompletedSideEffectEventSchemaVersion {
+		t.Fatalf("completed connector event schema = v%d, want v%d", retained.SchemaVersion,
+			projections.LifecycleCompletedSideEffectEventSchemaVersion)
+	}
+	var envelope struct {
+		SideEffect replayableTransitionSideEffect `json:"side_effect"`
+	}
+	if err := json.Unmarshal(retained.Data, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.SideEffect.Destination != "connector.deploy" || !envelope.SideEffect.Completed ||
+		envelope.SideEffect.IdempotencyKey == "" || len(envelope.SideEffect.Payload) != 0 ||
+		envelope.SideEffect.RequiredAgentRole != "" {
+		t.Fatalf("completed side-effect evidence is not closed and replay-safe: %+v", envelope.SideEffect)
+	}
+	var queued int
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT count(*) FROM outbox WHERE tenant_id = $1 AND destination = 'connector.deploy'`, tenantA).Scan(&queued)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if queued != 0 {
+		t.Fatalf("completed connector effect queued %d duplicate deployments", queued)
+	}
+	healed, err := orch.ReconcileOutbox(ctx, log)
+	if err != nil {
+		t.Fatalf("reconcile completed connector effect: %v", err)
+	}
+	if healed != 0 {
+		t.Fatalf("reconcile resurrected %d already-completed connector effects", healed)
 	}
 }
 

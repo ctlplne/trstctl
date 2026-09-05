@@ -314,6 +314,13 @@ const LifecycleIssuanceEventSchemaVersion = 5
 // emit a steady-state event without this proof when the cadence gate is enabled.
 const LifecycleOwnershipReadinessEventSchemaVersion = 6
 
+// LifecycleCompletedSideEffectEventSchemaVersion records that a trusted remote
+// executor already completed the external connector operation before reporting
+// the lifecycle edge. The event retains an event-derived side-effect identity as
+// immutable audit evidence, but warm enqueue and boot reconciliation must never
+// execute that effect a second time.
+const LifecycleCompletedSideEffectEventSchemaVersion = 7
+
 // OwnerDepthEventSchemaVersion is the first owner.created/owner.updated shape
 // that carries the complete I1 application model. V1 remains readable and is
 // deliberately applied as a basic-field update so absent legacy fields cannot
@@ -2734,6 +2741,7 @@ type identityTransitionEffect struct {
 	IdempotencyKey    string `json:"idempotency_key"`
 	Payload           []byte `json:"payload,omitempty"`
 	RequiredAgentRole string `json:"required_agent_role,omitempty"`
+	Completed         bool   `json:"completed,omitempty"`
 }
 
 // Projector derives PostgreSQL read models from the event stream (AN-2). The
@@ -3274,10 +3282,10 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventIssuerCreated:                            {1: true},
 	EventIdentityCreated:                          {1: true},
 	EventIdentityIssued:                           {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true, LifecycleIssuanceEventSchemaVersion: true},
-	EventIdentityDeployed:                         {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true, LifecycleOwnershipReadinessEventSchemaVersion: true},
+	EventIdentityDeployed:                         {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true, LifecycleOwnershipReadinessEventSchemaVersion: true, LifecycleCompletedSideEffectEventSchemaVersion: true},
 	EventIdentityRevoked:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true},
 	EventIdentityRenewing:                         {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true},
-	EventIdentityRenewed:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true, LifecycleOwnershipReadinessEventSchemaVersion: true},
+	EventIdentityRenewed:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true, LifecycleOwnershipReadinessEventSchemaVersion: true, LifecycleCompletedSideEffectEventSchemaVersion: true},
 	EventIdentityRenewalFailed:                    {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true},
 	EventIdentityRenewalRecovered:                 {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true, LifecycleOwnershipReadinessEventSchemaVersion: true},
 	EventIdentityRetired:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true},
@@ -5943,9 +5951,11 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 					return err
 				}
 			}
-			if schemaVersionOf(e) == LifecycleOwnershipReadinessEventSchemaVersion {
-				if pl.OwnershipReadiness == nil || p.ownershipAttestationCadence <= 0 ||
-					(pl.To != "deployed") || !pl.OwnershipReadiness.EvaluatedAt.Equal(e.Time) {
+			ownershipSchema := schemaVersionOf(e) == LifecycleOwnershipReadinessEventSchemaVersion ||
+				schemaVersionOf(e) == LifecycleCompletedSideEffectEventSchemaVersion
+			if ownershipSchema && p.ownershipAttestationCadence > 0 {
+				if pl.OwnershipReadiness == nil || pl.To != "deployed" ||
+					!pl.OwnershipReadiness.EvaluatedAt.Equal(e.Time) {
 					return fmt.Errorf("projections: %s v%d is missing exact ownership-readiness authority", e.Type, schemaVersionOf(e))
 				}
 				if err := p.store.ValidateOwnershipReadinessEvidenceTx(ctx, tx, e.TenantID,
@@ -6167,6 +6177,9 @@ func validateLifecycleApprovalShape(e events.Event, pl identityTransition) error
 	hasApproval := pl.Approval != nil
 	hasIssuance := pl.Issuance != nil
 	schemaVersion := schemaVersionOf(e)
+	if pl.SideEffect != nil && pl.SideEffect.Completed && schemaVersion != LifecycleCompletedSideEffectEventSchemaVersion {
+		return fmt.Errorf("projections: %s completed side-effect payload/schema mismatch", e.Type)
+	}
 	switch schemaVersion {
 	case LifecycleApprovalEventSchemaVersion:
 		if !hasApproval || hasIssuance {
@@ -6184,6 +6197,19 @@ func validateLifecycleApprovalShape(e events.Event, pl identityTransition) error
 		if pl.SideEffect == nil || pl.SideEffect.Destination != "connector.deploy" ||
 			pl.SideEffect.IdempotencyKey != lifecycleApprovalOutboxKey(e.ID, pl.IdempotencyKey) {
 			return fmt.Errorf("projections: %s ownership-readiness side-effect mismatch", e.Type)
+		}
+		return nil
+	case LifecycleCompletedSideEffectEventSchemaVersion:
+		if hasApproval || hasIssuance || pl.To != "deployed" ||
+			(e.Type != EventIdentityDeployed && e.Type != EventIdentityRenewed) ||
+			(pl.From != "issued" && pl.From != "renewing") {
+			return fmt.Errorf("projections: %s completed side-effect payload/schema mismatch", e.Type)
+		}
+		if pl.SideEffect == nil || !pl.SideEffect.Completed ||
+			pl.SideEffect.Destination != "connector.deploy" ||
+			pl.SideEffect.IdempotencyKey != lifecycleApprovalOutboxKey(e.ID, pl.IdempotencyKey) ||
+			len(pl.SideEffect.Payload) != 0 || pl.SideEffect.RequiredAgentRole != "" {
+			return fmt.Errorf("projections: %s completed side-effect receipt mismatch", e.Type)
 		}
 		return nil
 	default:
@@ -6241,7 +6267,8 @@ func validateLifecycleApprovalShape(e events.Event, pl identityTransition) error
 func ValidateLifecycleApprovalEvent(e events.Event) error {
 	if schemaVersionOf(e) != LifecycleApprovalEventSchemaVersion &&
 		schemaVersionOf(e) != LifecycleIssuanceEventSchemaVersion &&
-		schemaVersionOf(e) != LifecycleOwnershipReadinessEventSchemaVersion {
+		schemaVersionOf(e) != LifecycleOwnershipReadinessEventSchemaVersion &&
+		schemaVersionOf(e) != LifecycleCompletedSideEffectEventSchemaVersion {
 		return nil
 	}
 	var payload identityTransition

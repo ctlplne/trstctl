@@ -308,7 +308,9 @@ func TestAHostRenewalReportReturnsTheIdentityToDeployed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeVerified)
+	if err := srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeVerified); err != nil {
+		t.Fatalf("complete host renewal: %v", err)
+	}
 
 	state, err := h.orch.State(ctx, h.tenant, ident.ID)
 	if err != nil {
@@ -321,7 +323,9 @@ func TestAHostRenewalReportReturnsTheIdentityToDeployed(t *testing.T) {
 	}
 
 	// A duplicate report must be a no-op rather than forcing another transition.
-	srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeVerified)
+	if err := srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeVerified); err != nil {
+		t.Fatalf("repeat completed host renewal: %v", err)
+	}
 	if again, _ := h.orch.State(ctx, h.tenant, ident.ID); again != orchestrator.StateDeployed {
 		t.Errorf("a duplicate report moved the identity to %s", again)
 	}
@@ -351,7 +355,9 @@ func TestAFailedHostRenewalMovesToRetryableFailure(t *testing.T) {
 		}
 	}
 	payload, _ := json.Marshal(RelayDeployIntent{IdentityID: ident.ID})
-	srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeFailed)
+	if err := srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeFailed); err != nil {
+		t.Fatalf("record failed host renewal: %v", err)
+	}
 
 	if state, _ := h.orch.State(ctx, h.tenant, ident.ID); state != orchestrator.StateRenewalFailed {
 		t.Fatalf("a failed host renewal left the identity in %s, want a retryable renewal failure", state)

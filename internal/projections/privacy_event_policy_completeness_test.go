@@ -183,6 +183,11 @@ func TestShortSubjectDoesNotCollideWithOpaqueKnownSchemaValues(t *testing.T) {
 					data = []byte(mustPrivacyFixtureJSON(t, privacyIdentityTransitionV5{privacyIdentityTransitionV3: privacyIdentityTransitionV3{privacyIdentityTransitionV2: privacyIdentityTransitionV2{privacyIdentityTransitionV1: privacyIdentityTransitionV1{IdentityID: "identity", From: "requested", To: "issued"}}}, Issuance: &store.OperationApprovalIssuanceBinding{}}))
 				case LifecycleOwnershipReadinessEventSchemaVersion:
 					data = []byte(mustPrivacyFixtureJSON(t, privacyIdentityTransitionV6{privacyIdentityTransitionV3: privacyIdentityTransitionV3{privacyIdentityTransitionV2: privacyIdentityTransitionV2{privacyIdentityTransitionV1: privacyIdentityTransitionV1{IdentityID: "identity", From: "issued", To: "deployed"}}}, OwnershipReadiness: &store.OwnershipReadinessEvidence{}}))
+				case LifecycleCompletedSideEffectEventSchemaVersion:
+					data = []byte(mustPrivacyFixtureJSON(t, privacyIdentityTransitionV7{
+						privacyIdentityTransitionV2: privacyIdentityTransitionV2{privacyIdentityTransitionV1: privacyIdentityTransitionV1{IdentityID: "identity", From: "issued", To: "deployed"}},
+						SideEffect:                  &identityTransitionEffect{Destination: "connector.deploy", IdempotencyKey: "event", Completed: true},
+					}))
 				}
 			}
 			if isApplicationSecretMutationEvent(eventType) {
@@ -472,6 +477,10 @@ func TestCatalogedPersonalDataEventPathsRewriteAndStillDecode(t *testing.T) {
 			case LifecycleOwnershipReadinessEventSchemaVersion:
 				data = completePrivacyFixture[privacyIdentityTransitionV6](t,
 					`{"identity_id":"identity-a","from":"issued","to":"deployed","reason":"requested by privacy-policy-subject","idempotency_key":"stable-key","ownership_readiness":{"mode":"owner","identity_id":"identity-a","owner_id":"owner-a","owner_model_digest":"sha256:model","attested_by":"privacy-policy-subject","verified_at":"2026-08-12T10:00:00Z","attestation_due_at":"2026-11-10T10:00:00Z","evaluated_at":"2026-08-12T10:01:00Z"}}`)
+				wantPlaceholder = true
+			case LifecycleCompletedSideEffectEventSchemaVersion:
+				data = completePrivacyFixture[privacyIdentityTransitionV7](t,
+					`{"identity_id":"identity-a","from":"issued","to":"deployed","reason":"requested by privacy-policy-subject","idempotency_key":"stable-key","side_effect":{"destination":"connector.deploy","idempotency_key":"transition:stable-key","completed":true},"ownership_readiness":{"mode":"owner","identity_id":"identity-a","owner_id":"owner-a","owner_model_digest":"sha256:model","attested_by":"privacy-policy-subject","verified_at":"2026-08-12T10:00:00Z","attestation_due_at":"2026-11-10T10:00:00Z","evaluated_at":"2026-08-12T10:01:00Z"}}`)
 				wantPlaceholder = true
 			default:
 				t.Fatalf("identity transition %s has no privacy fixture for schema v%d", eventType, version)

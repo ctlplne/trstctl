@@ -192,4 +192,9 @@ type transitionSideEffect struct {
 	// first enqueue would strand replayed rows unstamped. Classified once, from
 	// the pre-seal payload; replay copies, never re-derives.
 	RequiredAgentRole string `json:"required_agent_role,omitempty"`
+	// Completed is true only when a trusted signed result proves the executor
+	// already performed this effect. The event keeps the intended destination
+	// for audit/replay validation, while reconciliation treats it as a receipt
+	// and never recreates an outbox command.
+	Completed bool `json:"completed,omitempty"`
 }

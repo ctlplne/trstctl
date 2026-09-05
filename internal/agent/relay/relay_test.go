@@ -669,6 +669,8 @@ func TestHostExecutorInstallsIssuerChainWithLeaf(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("ExecuteOnHost(apache): %v", err)
 	}
+	// #nosec G304 -- certPath is created beneath this test's private t.TempDir,
+	// passed through the executor's allowed-root check, and never comes from input.
 	installed, err := os.ReadFile(certPath)
 	if err != nil {
 		t.Fatalf("read installed certificate chain: %v", err)

@@ -82,6 +82,7 @@ func postDeployVerification(ctx context.Context, intent DeployIntent, material M
 	// reload still fails closed with the final signed observation.
 	deadline := time.Now().Add(postDeployConvergenceWindow)
 	var res verify.Result
+verifyLoop:
 	for {
 		res, err = verify.Endpoint(probeCtx, request)
 		if err != nil || res.OK() || time.Now().After(deadline) {
@@ -90,11 +91,8 @@ func postDeployVerification(ctx context.Context, intent DeployIntent, material M
 		select {
 		case <-probeCtx.Done():
 			err = probeCtx.Err()
-			break
+			break verifyLoop
 		case <-time.After(200 * time.Millisecond):
-		}
-		if err != nil {
-			break
 		}
 	}
 	if err != nil {
