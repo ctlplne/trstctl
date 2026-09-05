@@ -4,6 +4,7 @@ package store_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -66,5 +67,65 @@ func TestEffectiveNotificationRoutingPolicyUsesMostSpecificTenantRule(t *testing
 
 	if _, ok, err := s.ResolveEffectiveNotificationRoutingPolicy(ctx, tenantB, selector); err != nil || ok {
 		t.Fatalf("neighbor tenant resolution ok=%t err=%v, want no policy", ok, err)
+	}
+}
+
+func TestNotificationRoutingPolicyProjectionReplayUsesPrimaryIdentityAndKeepsTenantOwnership(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	apply := func(tenantID string, candidate store.NotificationRoutingPolicy) error {
+		return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+			return s.ApplyNotificationRoutingPolicyUpsertedTx(ctx, tx, candidate)
+		})
+	}
+	var policy store.NotificationRoutingPolicy
+	for attempt := 0; attempt < 24; attempt++ {
+		policy = store.NotificationRoutingPolicy{
+			ID:                 fmt.Sprintf("00000000-0000-0000-0000-%012d", 300+attempt),
+			TenantID:           tenantA,
+			Name:               fmt.Sprintf("Concurrent replay route %d", attempt),
+			ScopeKind:          "manual",
+			ChannelsBySeverity: map[string][]string{"critical": {"pagerduty"}},
+			DefaultChannels:    []string{"pagerduty"},
+			CreatedAt:          time.Date(2026, 9, 5, 4, 37, 25, 123456789, time.UTC),
+			UpdatedAt:          time.Date(2026, 9, 5, 4, 37, 25, 123456789, time.UTC),
+		}
+		ready := make(chan struct{}, 2)
+		start := make(chan struct{})
+		errs := make(chan error, 2)
+		for range 2 {
+			go func(candidate store.NotificationRoutingPolicy) {
+				errs <- s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+					ready <- struct{}{}
+					<-start
+					return s.ApplyNotificationRoutingPolicyUpsertedTx(ctx, tx, candidate)
+				})
+			}(policy)
+		}
+		<-ready
+		<-ready
+		close(start)
+		for range 2 {
+			if err := <-errs; err != nil {
+				t.Fatalf("concurrent identical event replay %d: %v", attempt, err)
+			}
+		}
+	}
+
+	neighbor := policy
+	neighbor.TenantID = tenantB
+	neighbor.Name = "Neighbor must not claim the same global ID"
+	if err := apply(tenantB, neighbor); err == nil {
+		t.Fatal("neighbor tenant reused a globally owned routing policy ID")
+	}
+	got, err := s.GetNotificationRoutingPolicy(ctx, tenantA, policy.ID)
+	if err != nil {
+		t.Fatalf("read tenant A policy after collision attempt: %v", err)
+	}
+	if got.TenantID != tenantA || got.Name != policy.Name {
+		t.Fatalf("tenant A policy changed after neighbor collision: %+v", got)
+	}
+	if _, err := s.GetNotificationRoutingPolicy(ctx, tenantB, policy.ID); !store.IsNotFound(err) {
+		t.Fatalf("tenant B lookup error = %v, want not found", err)
 	}
 }

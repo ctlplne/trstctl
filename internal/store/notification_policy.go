@@ -142,26 +142,51 @@ func (s *Store) ApplyNotificationRoutingPolicyUpsertedTx(ctx context.Context, tx
 	if p.ScopeKind == "" {
 		p.ScopeKind = "manual"
 	}
-	_, err = tx.Exec(ctx,
+	tag, err := tx.Exec(ctx,
 		`INSERT INTO notification_routing_policies (
 		     id, tenant_id, name, scope_kind, scope_ref, channels_by_severity, default_channels,
 		     owner_ref, owner_email, digest_interval_seconds, digest_timezone, created_at, updated_at
 		 )
 		 VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9, $10, $11, $12, $13)
-		 ON CONFLICT (tenant_id, id) DO UPDATE
-		      SET name = EXCLUDED.name,
-		          scope_kind = EXCLUDED.scope_kind,
-		          scope_ref = EXCLUDED.scope_ref,
-		          channels_by_severity = EXCLUDED.channels_by_severity,
-		          default_channels = EXCLUDED.default_channels,
-		          owner_ref = EXCLUDED.owner_ref,
-		          owner_email = EXCLUDED.owner_email,
-		          digest_interval_seconds = EXCLUDED.digest_interval_seconds,
-		          digest_timezone = EXCLUDED.digest_timezone,
-		          updated_at = EXCLUDED.updated_at`,
+		 ON CONFLICT DO NOTHING`,
 		p.ID, p.TenantID, p.Name, p.ScopeKind, p.ScopeRef, matrix, defaults,
 		p.OwnerRef, p.OwnerEmail, p.DigestInterval, p.DigestTimezone, p.CreatedAt.UTC(), p.UpdatedAt.UTC())
-	return err
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 1 {
+		return nil
+	}
+
+	// The event stream can race the command-side projector: both may try to
+	// install the same event at once. PostgreSQL is free to report either the
+	// global id primary key or the tenant/id unique key first, so targeting one
+	// constraint with ON CONFLICT leaves the other race unhandled. After any
+	// conflict, update only the exact tenant-owned identity. A name/scope clash
+	// with a different identity, or a globally colliding id owned by another
+	// tenant, changes zero rows and fails closed.
+	tag, err = tx.Exec(ctx,
+		`UPDATE notification_routing_policies
+		    SET name = $3,
+		        scope_kind = $4,
+		        scope_ref = $5,
+		        channels_by_severity = $6::jsonb,
+		        default_channels = $7::jsonb,
+		        owner_ref = $8,
+		        owner_email = $9,
+		        digest_interval_seconds = $10,
+		        digest_timezone = $11,
+		        updated_at = $12
+		  WHERE tenant_id = $2 AND id = $1`,
+		p.ID, p.TenantID, p.Name, p.ScopeKind, p.ScopeRef, matrix, defaults,
+		p.OwnerRef, p.OwnerEmail, p.DigestInterval, p.DigestTimezone, p.UpdatedAt.UTC())
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return errors.New("store: notification routing policy conflict does not match the tenant-owned identity")
+	}
+	return nil
 }
 
 // DeleteNotificationRoutingPolicyTx projects a notification.routing_policy.deleted
