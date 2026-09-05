@@ -154,6 +154,62 @@ Kubernetes Lease, so one replica reconciles and the other stays hot. Helm remain
 supported full control-plane install for services, ingress, generated secrets,
 network policy, and cross-pod signer mTLS topology — see [limitations](limitations.md).
 
+## Install the exact API client
+
+`trstctl-cli` is the standalone client for people, scripts, CI jobs, and customer
+AI agents. Each tagged release publishes Linux, macOS, and Windows archives, a
+machine-readable manifest, one `SHA256SUMS` file, and SLSA provenance named
+`trstctl-cli.intoto.jsonl`. The client archive contains no token and no CA
+bundle. You choose both when you connect it to a self-hosted control plane.
+
+This Linux example downloads one exact release, verifies the archive and manifest,
+then checks that the program reports the same full 40-character source commit as
+the manifest. Replace the version and platform deliberately; do not use a moving
+`latest` URL in automation.
+
+```bash
+version=0.5.4
+platform=linux_amd64
+base="https://github.com/ctlplne/trstctl/releases/download/v${version}"
+archive="trstctl-cli_${version}_${platform}.tar.gz"
+manifest="trstctl-cli_${version}_manifest.json"
+checksums="trstctl-cli_${version}_SHA256SUMS"
+
+curl --fail --location --proto '=https' --tlsv1.2 --remote-name "${base}/${archive}"
+curl --fail --location --proto '=https' --tlsv1.2 --remote-name "${base}/${manifest}"
+curl --fail --location --proto '=https' --tlsv1.2 --remote-name "${base}/${checksums}"
+grep -E " (${archive}|${manifest})$" "$checksums" | sha256sum -c -
+
+tar -xzf "$archive"
+expected_commit="$(jq -r .source_commit "$manifest")"
+case "$expected_commit" in (*[!0-9a-f]*|'') exit 1;; esac
+[ "${#expected_commit}" -eq 40 ]
+trstctl-cli --version | grep -F "commit ${expected_commit}"
+sudo install -m 0755 trstctl-cli /usr/local/bin/trstctl-cli
+```
+
+Before the first authenticated request, inspect the server certificate and set
+the public trust bundle explicitly. `TRSTCTL_CA_FILE` never disables TLS
+verification. Put the scoped API token in `TRSTCTL_TOKEN` only for the process
+that needs it; do not place it in shell history, an archive, or the manifest.
+
+```bash
+export TRSTCTL_SERVER=https://control.example:8443
+export TRSTCTL_CA_FILE=/path/to/inspected-control-plane-ca.pem
+read -r -s TRSTCTL_TOKEN
+export TRSTCTL_TOKEN
+trstctl-cli capabilities list
+```
+
+For a safely resumable mutation, choose and retain one explicit idempotency key;
+retrying the same request with that key returns the original result instead of
+performing the change twice. Unset the token when the task finishes.
+
+```bash
+trstctl-cli --idempotency-key owner-payments-bootstrap owners create -f owner.json
+unset TRSTCTL_TOKEN
+```
+
 ## Kubernetes (agent)
 
 The trstctl agent runs as a **DaemonSet** so every node is covered. The manifests

@@ -868,6 +868,26 @@ func TestRootHelpIsSuccessfulAndScriptFriendly(t *testing.T) {
 	}
 }
 
+// TestVersionAliasesDoNotNeedConnectionConfiguration is the DP-008 clean-client
+// control. ELI5: an evaluator must be able to identify the downloaded program
+// before trusting it with a server address or credential. Both the familiar
+// flag and the existing positional command must therefore stay offline.
+func TestVersionAliasesDoNotNeedConnectionConfiguration(t *testing.T) {
+	for _, args := range [][]string{{"--version"}, {"-version"}, {"version"}} {
+		code, stdout, stderr := run(t, args, cli.Env{}, "")
+		if code != 0 {
+			t.Errorf("%v exit = %d, want 0; stderr = %q", args, code, stderr)
+			continue
+		}
+		if !strings.Contains(stdout, "trstctl-cli") {
+			t.Errorf("%v stdout = %q, want the client binary identity", args, stdout)
+		}
+		if stderr != "" {
+			t.Errorf("%v wrote successful version output to stderr: %q", args, stderr)
+		}
+	}
+}
+
 func TestAttestedIssuanceCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 201, `{"certificate_pem":"-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n","credential_id":"cred:test","subject":"ns/default/sa/web","not_after":"2026-06-24T12:00:00Z","attestation":{"id":"att:k8s","method":"k8s_sat","subject":"ns/default/sa/web","issuer":"kubernetes","expires_at":"2026-06-24T12:00:00Z","verified_at":"2026-06-24T11:50:00Z"}}`, &cap)

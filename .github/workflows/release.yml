@@ -193,6 +193,89 @@ jobs:
           gh release upload "$GITHUB_REF_NAME" dist/release-evidence/npm-audit-dependency-surfaces.json --clobber
           gh release upload "$GITHUB_REF_NAME" dist/release-evidence/embedded-postgres-security-linux-amd64.tar.gz --clobber
 
+  cli-client:
+    name: CLI client / exact-candidate build + publish
+    if: ${{ github.ref_type == 'tag' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [test, required-checks, release-evidence]
+    permissions:
+      contents: write
+    outputs:
+      slsa_subjects: ${{ steps.slsa_subjects.outputs.encoded }}
+    steps:
+      - name: Checkout exact release tag
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Build deterministic CLI archives and checksums
+        run: scripts/release/cli-assets.sh "$GITHUB_REF_NAME" dist/cli
+
+      - name: Prove the Linux client reports this exact tag commit
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          install_dir="${RUNNER_TEMP}/trstctl-cli-smoke"
+          mkdir -p "$install_dir"
+          tar -xzf "dist/cli/trstctl-cli_${version}_linux_amd64.tar.gz" -C "$install_dir"
+          full_commit="$(git rev-parse HEAD)"
+          "$install_dir/trstctl-cli" --version | grep -F "commit ${full_commit}"
+          ( cd dist/cli && sha256sum -c "trstctl-cli_${version}_SHA256SUMS" )
+
+      - name: Compute SLSA subjects
+        id: slsa_subjects
+        run: |
+          set -euo pipefail
+          mapfile -t assets < <(find dist/cli -maxdepth 1 -type f -print | sort)
+          scripts/release/slsa-subjects.sh files "${RUNNER_TEMP}/trstctl-cli.subjects" "${assets[@]}"
+          echo "encoded=$(scripts/release/slsa-subjects.sh encode "${RUNNER_TEMP}/trstctl-cli.subjects")" >> "$GITHUB_OUTPUT"
+
+      - name: Upload exact CLI package evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: trstctl-cli-release
+          path: dist/cli/*
+          if-no-files-found: error
+
+      - name: Publish CLI assets to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes "trstctl $GITHUB_REF_NAME"
+          gh release upload "$GITHUB_REF_NAME" dist/cli/* --clobber
+          published="$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name')"
+          for asset in dist/cli/*; do
+            grep -qx "$(basename "$asset")" <<<"$published" || {
+              echo "::error::GitHub Release is missing CLI asset $(basename "$asset")"
+              exit 1
+            }
+          done
+
+  cli-client-provenance:
+    name: slsa / cli client provenance
+    needs: [cli-client]
+    if: ${{ github.ref_type == 'tag' }}
+    permissions:
+      contents: write
+      id-token: write
+      actions: read
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a # v2.1.0
+    with:
+      base64-subjects: ${{ needs.cli-client.outputs.slsa_subjects }}
+      provenance-name: trstctl-cli.intoto.jsonl
+      upload-assets: true
+      upload-tag-name: ${{ github.ref_name }}
+
   github-action:
     name: GitHub Action / package + publish
     if: ${{ github.ref_type == 'tag' }}

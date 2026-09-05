@@ -58,6 +58,8 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 	caFile := fs.String("ca-file", env.CAFile, "PEM CA bundle for control-plane TLS (env TRSTCTL_CA_FILE)")
 	idem := fs.String("idempotency-key", env.IdempotencyKey, "Idempotency-Key for a mutation (generated if unset)")
 	globalForce := fs.Bool("force", false, "allow a destructive command")
+	showVersion := false
+	fs.BoolVar(&showVersion, "version", false, "print client version information and exit")
 	fs.Usage = func() { usage(stderr) }
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -66,12 +68,16 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 		return 2
 	}
 	rest := fs.Args()
+	if showVersion {
+		_, _ = fmt.Fprintln(stdout, buildinfo.String("trstctl-cli"))
+		return 0
+	}
 	if len(rest) == 0 {
 		usage(stderr)
 		return 2
 	}
 	if rest[0] == "version" {
-		_, _ = fmt.Fprintln(stdout, buildinfo.String("trstctl"))
+		_, _ = fmt.Fprintln(stdout, buildinfo.String("trstctl-cli"))
 		return 0
 	}
 	if rest[0] == "run" {

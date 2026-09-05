@@ -151,6 +151,10 @@ build-trstctl: ## Build the default static control-plane artifact used by the Do
 	@mkdir -p $(BIN_DIR)
 	@$(GO_BUILD) -o $(BIN_DIR)/trstctl ./cmd/trstctl
 
+.PHONY: dist-cli
+dist-cli: ## Build checksum-pinned trstctl-cli release archives (VERSION=vX.Y.Z)
+	@scripts/release/cli-assets.sh "$(VERSION)" "$(DIST_DIR)/cli"
+
 .PHONY: airgap-bundle
 airgap-bundle: ## Build a platform-specific offline bundle (requires VERSION=vX.Y.Z and PLATFORM=linux/amd64|linux/arm64; docker unless TRSTCTL_AIRGAP_SKIP_IMAGES=1)
 	@scripts/airgap-bundle.sh
