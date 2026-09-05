@@ -79,3 +79,36 @@ func TestEveryCensusFamilyAppearsOnThePage(t *testing.T) {
 		}
 	}
 }
+
+// High-fidelity protocol proof and live vendor-account qualification answer two
+// different questions. The matrix must publish both boundaries together so an
+// evaluator neither misses evidence the repository has nor mistakes an emulator
+// for a vendor certification.
+func TestIssuerProofLevelSeparatesProtocolEvidenceFromVendorQualification(t *testing.T) {
+	t.Parallel()
+	page := strings.Join(strings.Fields(strings.ToLower(string(renderIssuers()))), " ")
+	for _, phrase := range []string{
+		"high-fidelity protocol issuance proof",
+		"not live vendor-account certification",
+		"run the same scoped issuance with your configured account",
+		"testdodexternalcauniversalproductionassembly",
+	} {
+		if !strings.Contains(page, phrase) {
+			t.Errorf("issuer capability page omits evidence boundary %q", phrase)
+		}
+	}
+	if strings.Contains(page, "today exactly one authority") {
+		t.Error("issuer capability page resurrected the stale one-authority proof claim")
+	}
+
+	limitations, err := os.ReadFile(filepath.Join("..", "..", "docs", "limitations.md")) // #nosec G304 -- fixed in-tree documentation contract
+	if err != nil {
+		t.Fatalf("read docs/limitations.md: %v", err)
+	}
+	limits := strings.Join(strings.Fields(strings.ToLower(string(limitations))), " ")
+	for _, phrase := range []string{"high-fidelity", "not live vendor-account", "testdodexternalcauniversalproductionassembly"} {
+		if !strings.Contains(limits, phrase) {
+			t.Errorf("limitations.md omits issuer proof boundary %q", phrase)
+		}
+	}
+}

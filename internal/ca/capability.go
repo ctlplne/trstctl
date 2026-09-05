@@ -146,12 +146,11 @@ type IssuerCapabilities struct {
 	// issuance against it" are different statements. Conflating them would make
 	// the table say the stronger one everywhere.
 	//
-	// FALSE FOR MOST EXTERNAL AUTHORITIES TODAY, and that is the fact rather
-	// than a gap in the table: the shared HTTP client is exercised (SSRF
-	// defaults, endpoint allowlisting, error redaction) and the revoke and
-	// unattended-DV columns are checked against the implementations, but no
-	// per-authority issuance test runs against a double of each vendor's API.
-	// Making that visible is the point of the column.
+	// The claim is narrower than vendor certification. The universal DoD proof
+	// drives the production assembly against a separate, high-fidelity protocol
+	// substrate for each authority and independently verifies its returned
+	// chain. It does not prove a customer's account, vendor deployment, policy,
+	// entitlement, firmware, or network. The public matrix must say both facts.
 	IssueProven bool
 	// Evidence names what backs this row, when something does. It names a TEST
 	// rather than a document: a doc page asserting a capability is the same
@@ -167,15 +166,15 @@ type IssuerCapabilities struct {
 // a test. Everything else is false with a note, including authorities whose
 // vendor API documents a revocation endpoint — because a documented endpoint we
 // have not implemented and cannot test is not a capability, it is a plan.
+const externalCAUniversalEvidence = "internal/server: TestDODExternalCAUniversalProductionAssembly; internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF"
+
 var issuerCapabilityMatrix = []IssuerCapabilities{
 	{
 		Issuer: "letsencrypt", Discover: false, Issue: true, Renew: true, Revoke: true,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationACME,
 		UnattendedDV: true,
-		// The ACME path is the one external authority with an issuance test: the
-		// served ACME protocol suite drives a full order against this build.
-		IssueProven: true,
-		Evidence:    "internal/server: served ACME order suite; internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations",
+		IssueProven:  true,
+		Evidence:     externalCAUniversalEvidence,
 		// The only true in this column. It requires all three: an ACME
 		// challenge model, a shipped dns-01 solver, and a DNS provider config
 		// that has consented to upstream publication.
@@ -183,19 +182,22 @@ var issuerCapabilityMatrix = []IssuerCapabilities{
 	{
 		Issuer: "vaultpki", Discover: false, Issue: true, Renew: true, Revoke: true,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationInternal,
-		Evidence:         "internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF",
+		IssueProven:      true,
+		Evidence:         externalCAUniversalEvidence,
 		UnattendedDVNote: "Vault PKI issues under its own role policy with no domain-validation challenge, so there is nothing to automate.",
 	},
 	{
 		Issuer: "ejbca", Discover: false, Issue: true, Renew: true, Revoke: true,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationInternal,
-		Evidence:         "internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF",
+		IssueProven:      true,
+		Evidence:         externalCAUniversalEvidence,
 		UnattendedDVNote: "EJBCA issues under its own certificate profile with no domain-validation challenge.",
 	},
 	{
 		Issuer: "digicert", Discover: false, Issue: true, Renew: true, Revoke: false,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationOrganizational,
-		Evidence: "internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF",
+		IssueProven: true,
+		Evidence:    externalCAUniversalEvidence,
 		RevokeNote: "DigiCert's API documents certificate revocation, but trstctl ships no " +
 			"implementation and none is tested against it. Revoke from the DigiCert console.",
 		UnattendedDVNote: "Public DV/OV issuance through DigiCert's API requires validation steps trstctl does not drive. Complete DCV in the DigiCert console; trstctl cannot keep this authority validated unattended.",
@@ -203,7 +205,8 @@ var issuerCapabilityMatrix = []IssuerCapabilities{
 	{
 		Issuer: "sectigo", Discover: false, Issue: true, Renew: true, Revoke: false,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationOrganizational,
-		Evidence: "internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF",
+		IssueProven: true,
+		Evidence:    externalCAUniversalEvidence,
 		RevokeNote: "Sectigo's API documents revocation; trstctl ships no implementation. " +
 			"Revoke from the Sectigo console.",
 		UnattendedDVNote: "Sectigo SCM validation is completed in Sectigo's own console; trstctl drives no DCV method for it.",
@@ -211,7 +214,8 @@ var issuerCapabilityMatrix = []IssuerCapabilities{
 	{
 		Issuer: "venafi", Discover: false, Issue: true, Renew: true, Revoke: false,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationAccountScoped,
-		Evidence: "internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF",
+		IssueProven: true,
+		Evidence:    externalCAUniversalEvidence,
 		RevokeNote: "Venafi's API documents revocation; trstctl ships no implementation. " +
 			"Revoke from Venafi.",
 		UnattendedDVNote: "Venafi issues against a policy folder the account is already scoped to; trstctl performs no domain validation.",
@@ -219,21 +223,24 @@ var issuerCapabilityMatrix = []IssuerCapabilities{
 	{
 		Issuer: "entrust", Discover: false, Issue: true, Renew: true, Revoke: false,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationOrganizational,
-		Evidence:         "internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF",
+		IssueProven:      true,
+		Evidence:         externalCAUniversalEvidence,
 		RevokeNote:       "No revocation implementation ships. Revoke from the Entrust console.",
 		UnattendedDVNote: "Entrust validation is an organizational step outside trstctl.",
 	},
 	{
 		Issuer: "globalsign", Discover: false, Issue: true, Renew: true, Revoke: false,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationOrganizational,
-		Evidence:         "internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF",
+		IssueProven:      true,
+		Evidence:         externalCAUniversalEvidence,
 		RevokeNote:       "No revocation implementation ships. Revoke from the GlobalSign console.",
 		UnattendedDVNote: "GlobalSign validation is an organizational step outside trstctl.",
 	},
 	{
 		Issuer: "awspca", Discover: false, Issue: true, Renew: true, Revoke: false,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationInternal,
-		Evidence: "internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF",
+		IssueProven: true,
+		Evidence:    externalCAUniversalEvidence,
 		RevokeNote: "AWS Private CA exposes RevokeCertificate; trstctl ships no implementation. " +
 			"Revoke with the AWS API or console.",
 		UnattendedDVNote: "AWS Private CA is internal and performs no domain validation.",
@@ -241,7 +248,8 @@ var issuerCapabilityMatrix = []IssuerCapabilities{
 	{
 		Issuer: "gcpcas", Discover: false, Issue: true, Renew: true, Revoke: false,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationInternal,
-		Evidence: "internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF",
+		IssueProven: true,
+		Evidence:    externalCAUniversalEvidence,
 		RevokeNote: "Google CAS exposes RevokeCertificate; trstctl ships no implementation. " +
 			"Revoke with the gcloud API or console.",
 		UnattendedDVNote: "Google CAS is internal and performs no domain validation.",
@@ -249,7 +257,8 @@ var issuerCapabilityMatrix = []IssuerCapabilities{
 	{
 		Issuer: "adcs", Discover: false, Issue: true, Renew: true, Revoke: false,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationInternal,
-		Evidence: "internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF",
+		IssueProven: true,
+		Evidence:    externalCAUniversalEvidence,
 		RevokeNote: "AD CS revocation runs through the CA's own management interface, which " +
 			"trstctl does not drive. Revoke with certutil or the Certification Authority console.",
 		UnattendedDVNote: "AD CS issues from template policy against a domain identity; there is no DCV challenge to solve.",
@@ -257,7 +266,8 @@ var issuerCapabilityMatrix = []IssuerCapabilities{
 	{
 		Issuer: "smallstep", Discover: false, Issue: true, Renew: true, Revoke: false,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationInternal,
-		Evidence: "internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF",
+		IssueProven: true,
+		Evidence:    externalCAUniversalEvidence,
 		RevokeNote: "step-ca exposes a revoke endpoint; trstctl ships no implementation. " +
 			"Revoke with the step CLI.",
 		UnattendedDVNote: "step-ca issues under provisioner policy; trstctl drives no ACME challenge against it.",
@@ -265,7 +275,8 @@ var issuerCapabilityMatrix = []IssuerCapabilities{
 	{
 		Issuer: "azurekv", Discover: false, Issue: true, Renew: true, Revoke: false,
 		KeyHandling: KeyAuthorityGenerated, Validation: ValidationInternal,
-		Evidence: "internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF",
+		IssueProven: true,
+		Evidence:    externalCAUniversalEvidence,
 		RevokeNote: "Azure Key Vault certificates are disabled rather than revoked, and " +
 			"trstctl does not drive that. Use the Azure portal or CLI.",
 		UnattendedDVNote: "Azure Key Vault issues from its own policy with no domain-validation challenge trstctl drives.",

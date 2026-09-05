@@ -5,36 +5,39 @@
 What this build can do with each certificate authority, per operation.
 
 Read this before believing a "CA-agnostic" claim, including ours. Every row
-names the test that backs it, and the **Issuance proven** column is separate from
+names the test that backs it, and the **Protocol issuance proof** column is separate from
 **Issue** on purpose: implementing an authority's API and having run an issuance
 against it are different statements, and only one of them is evidence.
 
-Today exactly one authority has an end-to-end issuance test. For the rest, the
-shared HTTP client is exercised (SSRF defaults, endpoint allowlisting, error
-redaction) and the revoke and unattended-DV columns are checked against the
-implementations — which is real, and is not the same as an issuance proof.
+This build has high-fidelity protocol issuance proof for 13 of 13 advertised authorities.
+Each proof starts a separate, nonce-bound authority-protocol substrate, drives the
+production server assembly through the provider-specific wire exchange, and
+independently verifies the returned certificate chain. That proves trstctl's
+adapter and custody path. It is **not live vendor-account certification** and does
+not prove a customer's policy, entitlement, network, appliance, or service version.
+Before production, run the same scoped issuance with your configured account.
 
-| Issuer | Issue | Issuance proven | Renew | Revoke | Unattended DV | Key handling |
+| Issuer | Issue | Protocol issuance proof | Renew | Revoke | Unattended DV | Key handling |
 | --- | --- | --- | --- | --- | --- | --- |
-| `adcs` | yes | not tested | yes | no | no | requester_csr |
-| `awspca` | yes | not tested | yes | no | no | requester_csr |
-| `azurekv` | yes | not tested | yes | no | no | authority_generated |
-| `digicert` | yes | not tested | yes | no | no | requester_csr |
-| `ejbca` | yes | not tested | yes | yes | no | requester_csr |
-| `entrust` | yes | not tested | yes | no | no | requester_csr |
-| `gcpcas` | yes | not tested | yes | no | no | requester_csr |
-| `globalsign` | yes | not tested | yes | no | no | requester_csr |
+| `adcs` | yes | yes | yes | no | no | requester_csr |
+| `awspca` | yes | yes | yes | no | no | requester_csr |
+| `azurekv` | yes | yes | yes | no | no | authority_generated |
+| `digicert` | yes | yes | yes | no | no | requester_csr |
+| `ejbca` | yes | yes | yes | yes | no | requester_csr |
+| `entrust` | yes | yes | yes | no | no | requester_csr |
+| `gcpcas` | yes | yes | yes | no | no | requester_csr |
+| `globalsign` | yes | yes | yes | no | no | requester_csr |
 | `letsencrypt` | yes | yes | yes | yes | yes | requester_csr |
-| `sectigo` | yes | not tested | yes | no | no | requester_csr |
-| `smallstep` | yes | not tested | yes | no | no | requester_csr |
-| `vaultpki` | yes | not tested | yes | yes | no | requester_csr |
-| `venafi` | yes | not tested | yes | no | no | requester_csr |
+| `sectigo` | yes | yes | yes | no | no | requester_csr |
+| `smallstep` | yes | yes | yes | no | no | requester_csr |
+| `vaultpki` | yes | yes | yes | yes | no | requester_csr |
+| `venafi` | yes | yes | yes | no | no | requester_csr |
 
 ## adcs
 
-**Backed by:** internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
+**Backed by:** internal/server: TestDODExternalCAUniversalProductionAssembly; internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
 
-**Issuance is implemented but not proven end to end** against a double of this authority's API in CI. Run a test issuance in your own environment before depending on it.
+**Protocol issuance proof:** the universal DoD test drives this driver through its high-fidelity authority-protocol substrate and independently verifies the returned chain. This does not replace a scoped test against your real vendor account.
 
 **Revocation:** AD CS revocation runs through the CA's own management interface, which trstctl does not drive. Revoke with certutil or the Certification Authority console.
 
@@ -42,9 +45,9 @@ implementations — which is real, and is not the same as an issuance proof.
 
 ## awspca
 
-**Backed by:** internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
+**Backed by:** internal/server: TestDODExternalCAUniversalProductionAssembly; internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
 
-**Issuance is implemented but not proven end to end** against a double of this authority's API in CI. Run a test issuance in your own environment before depending on it.
+**Protocol issuance proof:** the universal DoD test drives this driver through its high-fidelity authority-protocol substrate and independently verifies the returned chain. This does not replace a scoped test against your real vendor account.
 
 **Revocation:** AWS Private CA exposes RevokeCertificate; trstctl ships no implementation. Revoke with the AWS API or console.
 
@@ -52,9 +55,9 @@ implementations — which is real, and is not the same as an issuance proof.
 
 ## azurekv
 
-**Backed by:** internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
+**Backed by:** internal/server: TestDODExternalCAUniversalProductionAssembly; internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
 
-**Issuance is implemented but not proven end to end** against a double of this authority's API in CI. Run a test issuance in your own environment before depending on it.
+**Protocol issuance proof:** the universal DoD test drives this driver through its high-fidelity authority-protocol substrate and independently verifies the returned chain. This does not replace a scoped test against your real vendor account.
 
 **Revocation:** Azure Key Vault certificates are disabled rather than revoked, and trstctl does not drive that. Use the Azure portal or CLI.
 
@@ -62,9 +65,9 @@ implementations — which is real, and is not the same as an issuance proof.
 
 ## digicert
 
-**Backed by:** internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
+**Backed by:** internal/server: TestDODExternalCAUniversalProductionAssembly; internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
 
-**Issuance is implemented but not proven end to end** against a double of this authority's API in CI. Run a test issuance in your own environment before depending on it.
+**Protocol issuance proof:** the universal DoD test drives this driver through its high-fidelity authority-protocol substrate and independently verifies the returned chain. This does not replace a scoped test against your real vendor account.
 
 **Revocation:** DigiCert's API documents certificate revocation, but trstctl ships no implementation and none is tested against it. Revoke from the DigiCert console.
 
@@ -72,17 +75,17 @@ implementations — which is real, and is not the same as an issuance proof.
 
 ## ejbca
 
-**Backed by:** internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
+**Backed by:** internal/server: TestDODExternalCAUniversalProductionAssembly; internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
 
-**Issuance is implemented but not proven end to end** against a double of this authority's API in CI. Run a test issuance in your own environment before depending on it.
+**Protocol issuance proof:** the universal DoD test drives this driver through its high-fidelity authority-protocol substrate and independently verifies the returned chain. This does not replace a scoped test against your real vendor account.
 
 **Unattended domain validation:** EJBCA issues under its own certificate profile with no domain-validation challenge.
 
 ## entrust
 
-**Backed by:** internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
+**Backed by:** internal/server: TestDODExternalCAUniversalProductionAssembly; internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
 
-**Issuance is implemented but not proven end to end** against a double of this authority's API in CI. Run a test issuance in your own environment before depending on it.
+**Protocol issuance proof:** the universal DoD test drives this driver through its high-fidelity authority-protocol substrate and independently verifies the returned chain. This does not replace a scoped test against your real vendor account.
 
 **Revocation:** No revocation implementation ships. Revoke from the Entrust console.
 
@@ -90,9 +93,9 @@ implementations — which is real, and is not the same as an issuance proof.
 
 ## gcpcas
 
-**Backed by:** internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
+**Backed by:** internal/server: TestDODExternalCAUniversalProductionAssembly; internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
 
-**Issuance is implemented but not proven end to end** against a double of this authority's API in CI. Run a test issuance in your own environment before depending on it.
+**Protocol issuance proof:** the universal DoD test drives this driver through its high-fidelity authority-protocol substrate and independently verifies the returned chain. This does not replace a scoped test against your real vendor account.
 
 **Revocation:** Google CAS exposes RevokeCertificate; trstctl ships no implementation. Revoke with the gcloud API or console.
 
@@ -100,9 +103,9 @@ implementations — which is real, and is not the same as an issuance proof.
 
 ## globalsign
 
-**Backed by:** internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
+**Backed by:** internal/server: TestDODExternalCAUniversalProductionAssembly; internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
 
-**Issuance is implemented but not proven end to end** against a double of this authority's API in CI. Run a test issuance in your own environment before depending on it.
+**Protocol issuance proof:** the universal DoD test drives this driver through its high-fidelity authority-protocol substrate and independently verifies the returned chain. This does not replace a scoped test against your real vendor account.
 
 **Revocation:** No revocation implementation ships. Revoke from the GlobalSign console.
 
@@ -110,13 +113,15 @@ implementations — which is real, and is not the same as an issuance proof.
 
 ## letsencrypt
 
-**Backed by:** internal/server: served ACME order suite; internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations
+**Backed by:** internal/server: TestDODExternalCAUniversalProductionAssembly; internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
+
+**Protocol issuance proof:** the universal DoD test drives this driver through its high-fidelity authority-protocol substrate and independently verifies the returned chain. This does not replace a scoped test against your real vendor account.
 
 ## sectigo
 
-**Backed by:** internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
+**Backed by:** internal/server: TestDODExternalCAUniversalProductionAssembly; internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
 
-**Issuance is implemented but not proven end to end** against a double of this authority's API in CI. Run a test issuance in your own environment before depending on it.
+**Protocol issuance proof:** the universal DoD test drives this driver through its high-fidelity authority-protocol substrate and independently verifies the returned chain. This does not replace a scoped test against your real vendor account.
 
 **Revocation:** Sectigo's API documents revocation; trstctl ships no implementation. Revoke from the Sectigo console.
 
@@ -124,9 +129,9 @@ implementations — which is real, and is not the same as an issuance proof.
 
 ## smallstep
 
-**Backed by:** internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
+**Backed by:** internal/server: TestDODExternalCAUniversalProductionAssembly; internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
 
-**Issuance is implemented but not proven end to end** against a double of this authority's API in CI. Run a test issuance in your own environment before depending on it.
+**Protocol issuance proof:** the universal DoD test drives this driver through its high-fidelity authority-protocol substrate and independently verifies the returned chain. This does not replace a scoped test against your real vendor account.
 
 **Revocation:** step-ca exposes a revoke endpoint; trstctl ships no implementation. Revoke with the step CLI.
 
@@ -134,17 +139,17 @@ implementations — which is real, and is not the same as an issuance proof.
 
 ## vaultpki
 
-**Backed by:** internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
+**Backed by:** internal/server: TestDODExternalCAUniversalProductionAssembly; internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
 
-**Issuance is implemented but not proven end to end** against a double of this authority's API in CI. Run a test issuance in your own environment before depending on it.
+**Protocol issuance proof:** the universal DoD test drives this driver through its high-fidelity authority-protocol substrate and independently verifies the returned chain. This does not replace a scoped test against your real vendor account.
 
 **Unattended domain validation:** Vault PKI issues under its own role policy with no domain-validation challenge, so there is nothing to automate.
 
 ## venafi
 
-**Backed by:** internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
+**Backed by:** internal/server: TestDODExternalCAUniversalProductionAssembly; internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
 
-**Issuance is implemented but not proven end to end** against a double of this authority's API in CI. Run a test issuance in your own environment before depending on it.
+**Protocol issuance proof:** the universal DoD test drives this driver through its high-fidelity authority-protocol substrate and independently verifies the returned chain. This does not replace a scoped test against your real vendor account.
 
 **Revocation:** Venafi's API documents revocation; trstctl ships no implementation. Revoke from Venafi.
 

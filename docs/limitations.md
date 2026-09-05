@@ -947,14 +947,18 @@ never live in the API process. What you can do end to end against the running bi
   `issue_proven` column that is deliberately SEPARATE from `issue`, because
   "we implement this authority's API" and "we have run an issuance against it" are
   different claims and a table showing only the first states the stronger one
-  everywhere. Today exactly one authority — Let's Encrypt, via the served ACME order
-  suite — is issuance-proven end to end. For the other eleven the shared HTTP client
-  is exercised (SSRF defaults, endpoint allowlisting, error redaction) and the revoke
-  and unattended-DV columns are census-checked against the implementations, which is
-  real and is not an issuance proof; the published page marks them "not tested"
-  rather than "no", since the second would read as a defect when the fact is that
-  nobody has run it. Every row names the test backing it, and a guard fails the build
-  on a row that names none or that claims a proof which does not exist.
+  everywhere. All thirteen advertised authorities now have high-fidelity protocol
+  issuance proof in `TestDODExternalCAUniversalProductionAssembly`: each driver is
+  constructed by the production server assembly, talks to its own nonce-bound
+  authority-protocol substrate in the expected wire order, and returns a chain that
+  is independently verified. That proves the adapter and custody path. It is **not live
+  vendor-account certification** and does not prove a customer's policy,
+  entitlement, network, appliance, or service version; operators must still run one
+  scoped issuance against their configured account before depending on it. The
+  revoke and unattended-DV columns remain separately census-checked against the
+  implementations. Every row names the tests backing it, and a manifest-derived
+  guard fails both when a row outruns its proof and when new executable proof remains
+  incorrectly labelled "not tested."
   Support matrix (E3): docs/features/connector-support-matrix.md is GENERATED from
   the same census the API serves, and a Go test fails if the two diverge — so a
   capability cannot be removed while its published row survives. It deliberately

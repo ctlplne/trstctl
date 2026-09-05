@@ -3,6 +3,9 @@
 package ca_test
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -36,32 +39,64 @@ func TestEveryIssuerRowNamesItsEvidence(t *testing.T) {
 	}
 }
 
-// IssueProven must not outrun what exists.
+// IssueProven must match the executable DoD census rather than a remembered list.
 //
-// The column exists to make a gap visible, so a change that quietly sets it true
-// everywhere would defeat the point more thoroughly than not having it. Today
-// exactly one authority has an end-to-end issuance test; when that changes, this
-// test is where somebody has to say so.
+// The universal external-CA proof now starts a separate nonce-bound substrate for
+// every advertised driver, drives the production assembly through its provider-
+// specific wire exchange, and independently validates the issued chain. A static
+// allowlist here drifted after that proof landed and left the buyer-facing matrix
+// understating the evidence. Deriving this oracle from the runtime manifest makes
+// either direction of drift fail: an unproved claim is rejected, and a newly
+// proved authority cannot remain labelled "not tested".
 func TestIssueProvenMatchesWhatIsActuallyExercised(t *testing.T) {
 	t.Parallel()
-	proven := map[string]bool{}
-	for _, row := range ca.IssuerCapabilityMatrix() {
-		if row.IssueProven {
-			proven[row.Issuer] = true
+	type runtimeEntry struct {
+		ID          string `json:"id"`
+		Enforcement string `json:"enforcement"`
+		Runtime     struct {
+			Test        string `json:"test"`
+			Path        string `json:"path"`
+			SubstrateID string `json:"substrate_id"`
+		} `json:"runtime"`
+	}
+	var manifest struct {
+		Entries []runtimeEntry `json:"entries"`
+	}
+	data, err := os.ReadFile(filepath.Join("..", "..", "tools", "dodcensus", "manifest.json")) // #nosec G304 -- fixed in-tree proof manifest
+	if err != nil {
+		t.Fatalf("read DoD manifest: %v", err)
+	}
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		t.Fatalf("decode DoD manifest: %v", err)
+	}
+
+	proved := map[string]runtimeEntry{}
+	for _, entry := range manifest.Entries {
+		issuer, ok := strings.CutPrefix(entry.ID, "external_ca.")
+		if !ok || issuer == "registry" || issuer == "shellca" {
+			continue
 		}
+		if entry.Enforcement != "required" || entry.Runtime.Test != "TestDODExternalCAUniversalProductionAssembly" ||
+			entry.Runtime.SubstrateID != "external_ca_universal" ||
+			entry.Runtime.Path != "/api/v1/external-cas/"+issuer+"/issue" {
+			t.Errorf("%s does not carry the complete required universal issuance oracle: %+v", entry.ID, entry)
+			continue
+		}
+		proved[issuer] = entry
 	}
-	// letsencrypt is proven because the served ACME suite drives a full order.
-	if !proven["letsencrypt"] {
-		t.Error("letsencrypt is not marked issue-proven, but the served ACME order suite " +
-			"exercises a full issuance against this build")
+
+	for _, row := range ca.IssuerCapabilityMatrix() {
+		entry, exercised := proved[row.Issuer]
+		if row.IssueProven != exercised {
+			t.Errorf("%s IssueProven=%v, but exact DoD manifest exercise=%v", row.Issuer, row.IssueProven, exercised)
+		}
+		if exercised && !strings.Contains(row.Evidence, entry.Runtime.Test) {
+			t.Errorf("%s is exercised by %s but its evidence does not name that test: %q", row.Issuer, entry.Runtime.Test, row.Evidence)
+		}
+		delete(proved, row.Issuer)
 	}
-	delete(proven, "letsencrypt")
-	if len(proven) > 0 {
-		t.Errorf("these authorities claim a proven issuance: %v. No per-authority issuance test "+
-			"runs against a double of their APIs — the shared HTTP client is exercised and the "+
-			"revoke and unattended-DV columns are census-checked, which is not the same claim. "+
-			"If one of these gained a test, it lands in the same change that flips the flag",
-			keysOf(proven))
+	if len(proved) > 0 {
+		t.Errorf("DoD manifest proves external CA drivers missing from the public matrix: %v", keysOf(proved))
 	}
 }
 
@@ -84,7 +119,7 @@ func TestAnImplementedIssuerIsNotRenderedAsProven(t *testing.T) {
 		"matrix marks them so rather than as supported", implementedOnly)
 }
 
-func keysOf(m map[string]bool) []string {
+func keysOf[T any](m map[string]T) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)
