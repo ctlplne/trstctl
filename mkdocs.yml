@@ -58,7 +58,8 @@ nav:
       - Automate TLS across your fleet: journeys/automate-fleet-tls.md
       - Kubernetes workload identity: journeys/kubernetes-workload-identity.md
       - Enroll devices and IoT fleets: journeys/enroll-devices.md
-      - Migrate from your existing CA: journeys/migrate-from-existing-ca.md
+      - Keep your existing CA: journeys/preserve-existing-ca.md
+      - Replace your existing CA (optional): journeys/migrate-from-existing-ca.md
       - Onboard a team as a tenant: journeys/onboard-a-team.md
       - Manage application secrets: journeys/manage-secrets.md
       - SSH access at scale: journeys/ssh-at-scale.md

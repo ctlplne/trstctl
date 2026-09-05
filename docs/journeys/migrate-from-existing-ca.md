@@ -1,4 +1,4 @@
-# Migrate from your existing CA
+# Replace your existing CA (optional)
 
 <!-- trstctl:journey-census:start -->
 !!! success "Served path — wiring census 81/81"
@@ -12,7 +12,11 @@
 
 ## Goal
 
-You will move certificate issuance off your current authority and onto trstctl
+You do not need this journey to use trstctl. If your current authority should remain
+in charge of signing, start with [Keep your existing CA](preserve-existing-ca.md).
+
+This optional journey changes the authority itself. You will move certificate
+issuance off your current authority and onto trstctl
 without a flag day: first you find every certificate you already have, then you
 stand up trstctl's own issuing authority and the rulebook that constrains it, then
 you cut new issuance over to trstctl, and finally you watch the public logs for any

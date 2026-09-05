@@ -94,6 +94,19 @@
         "certificate_health"
       ]
     },
+    "preserve-existing-ca": {
+      "census_rows": [
+        "connector.registry",
+        "external_ca.registry",
+        "notification_channel.dispatch"
+      ],
+      "core_surfaces": [
+        "certificate_discovery",
+        "certificate_inventory",
+        "connector_target_test",
+        "notification_routing"
+      ]
+    },
     "onboard-a-team": {
       "census_rows": [],
       "core_surfaces": [

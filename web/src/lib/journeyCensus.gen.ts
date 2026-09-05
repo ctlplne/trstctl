@@ -147,6 +147,27 @@ export const journeyCensus = {
       core_surfaces: ["tenant_rls", "oidc", "rbac", "policy", "audit_export"],
       status: "served",
     },
+    "preserve-existing-ca": {
+      census_rows: [
+        {
+          enforcement: "required",
+          id: "connector.registry",
+          status: "served",
+        },
+        {
+          enforcement: "required",
+          id: "external_ca.registry",
+          status: "served",
+        },
+        {
+          enforcement: "required",
+          id: "notification_channel.dispatch",
+          status: "served",
+        },
+      ],
+      core_surfaces: ["certificate_discovery", "certificate_inventory", "connector_target_test", "notification_routing"],
+      status: "served",
+    },
     "respond-to-compromise": {
       census_rows: [
         {
