@@ -149,6 +149,7 @@ func TestPartnerLabRunnerIsPersistentTruthfulAndSecretSafe(t *testing.T) {
 		"up -d --no-deps localstack-loopback", "run --rm --no-deps lab-runner",
 		"DOD_CENSUS_OUT=", "make dod-gate", "Connector census evidence:",
 		"TRSTCTL_LAB_RUN_DOD:-1", "live repair loop", "full qualification",
+		"TRSTCTL_LAB_RUN_JOURNEYS:-1", "drive it yourself", `if [ "$run_journeys" -eq 1 ]; then`,
 		"${lab_project}-control:local", "${lab_project}-seed:local", "${lab_project}-frontdoors:local",
 		"dod_cache_parent", `chmod 0700 "$dod_cache_parent" "$dod_cache"`,
 		"TRSTCTL_LAB_BUILD_COMMIT", "dirty-$lab_head", "TRSTCTL_LAB_BUILD_VERSION", "TRSTCTL_LAB_BUILD_DATE",
@@ -170,12 +171,19 @@ func TestPartnerLabRunnerIsPersistentTruthfulAndSecretSafe(t *testing.T) {
 			t.Errorf("partner lab runner is missing contract marker %q", want)
 		}
 	}
+	labReadme := read(t, "lab", "README.md")
+	for _, want := range []string{"TRSTCTL_LAB_RUN_JOURNEYS=0", "Drive it yourself", "Local Pebble DNS validation", "Allow loopback targets", "External CA: Local independent ACME lab CA (Pebble)"} {
+		if !strings.Contains(labReadme, want) {
+			t.Errorf("partner lab README no longer documents the start-only mode marker %q", want)
+		}
+	}
 	bootstrap := read(t, "lab", "bootstrap.mjs")
 	postgresConfig := read(t, "lab", "frontdoors", "postgresql.conf")
 	if !strings.Contains(postgresConfig, "unix_socket_directories = '/lab/run'") {
 		t.Error("partner lab PostgreSQL target must keep its Unix socket inside the nonroot-owned lab run directory")
 	}
-	for _, want := range []string{"/roots/0", "runtime-pebble-root.crt", `roles: ["host", "network"]`} {
+	for _, want := range []string{"/roots/0", "runtime-pebble-root.crt", `roles: ["host", "network"]`,
+		"/api/v1/acme/dns-01/provider-configs", "partner-lab-dns-provider-v1", "allow_upstream_dv: true", "dns01_provider_config"} {
 		if !strings.Contains(bootstrap, want) {
 			t.Errorf("partner lab bootstrap is missing contract marker %q", want)
 		}

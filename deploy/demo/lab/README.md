@@ -49,6 +49,60 @@ Evidence is retained in the `trstctl-partner-lab_labevidence` named volume. It c
 
 Set `TRSTCTL_LAB_PROJECT` to a constrained Compose project name when you need a clean before/after qualification while preserving an earlier run, for example `TRSTCTL_LAB_PROJECT=trstctl-partner-lab-repair deploy/demo/lab/run.sh`. The default remains `trstctl-partner-lab`.
 
+## Drive it yourself (start only)
+
+To perform the lifecycle by hand from the console instead of watching the
+automated runner do it, start the lab without the journeys:
+
+```sh
+TRSTCTL_LAB_RUN_JOURNEYS=0 deploy/demo/lab/run.sh
+```
+
+This builds and starts every service, seeds the demo tenant, enrolls the
+`partner-lab-frontdoors` agent (host and network-relay roles), registers the
+tenant DNS-01 provider config (`Local Pebble DNS validation`, zone
+`partner-lab.example.com`) that the lab's ACME CA needs for every issuance, and
+leaves each listener on its self-signed one-day baseline. Nothing is issued or
+deployed until you do it. The definition-of-done census is skipped in this mode;
+run the default profile before calling a candidate qualified.
+
+Then:
+
+1. Trust the published console certificate in your evaluation browser
+   ([Trust the local evaluation certificate](../../../docs/local-evaluation-tls.md))
+   and sign in at <https://127.0.0.1:9443> with the demo SSO user.
+2. In **Discover → Sources**, add a *TLS endpoints* source for a listener. The
+   front doors share the control plane's network namespace, so target
+   `127.0.0.1` with the listener port (for example `10443` for Apache) and turn
+   on **Allow loopback targets** under *Advanced local-test boundary*. Reuse the
+   `demo-control-plane` scope or declare a new one; the enrolled relay claims
+   the run.
+3. Claim the finding into a managed identity, create an owner with an alert
+   contact, and add an enabled destination. Use the same shape the automated
+   runner uses, for Apache:
+
+   ```json
+   {"executor":"agent","required_agent_role":"host",
+    "cert_path":"/lab/tls/apache.crt","key_path":"/lab/tls/apache.key",
+    "verify_address":"127.0.0.1:10443","verify_server_name":"apache.partner-lab.example.com"}
+   ```
+
+   `executor: agent` makes the enrolled host agent generate the private key,
+   submit only a CSR to the CA, install the certificate, and re-handshake the
+   listener; that is the custody path the lab proves. Then run the endpoint
+   lifecycle wizard under **Operations → Where credentials are installed**,
+   choosing **External CA: Local independent ACME lab CA (Pebble)**.
+4. Prove the result yourself, exactly as the automated runner does:
+
+   ```sh
+   openssl s_client -connect 127.0.0.1:10443 -servername apache.partner-lab.example.com </dev/null 2>/dev/null \
+     | openssl x509 -noout -fingerprint -sha256 -issuer -dates
+   ```
+
+The other listeners are `nginx.partner-lab.example.com:10444`,
+`haproxy.partner-lab.example.com:10445`, `caddy.partner-lab.example.com:10446`,
+`traefik.partner-lab.example.com:10447`, and PostgreSQL on `10448`.
+
 ## Stop without losing the lab
 
 ```sh

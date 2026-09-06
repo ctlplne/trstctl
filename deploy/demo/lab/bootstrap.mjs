@@ -64,6 +64,28 @@ async function waitForHealth() {
 }
 
 await waitForHealth();
+
+// The lab's independent ACME CA validates every name with DNS-01. Register the
+// tenant DNS-01 provider config here, at bootstrap, so a person driving the
+// console by hand gets working external-CA issuance. Before this lived only in
+// the automated journey runner, and an interactive lab silently could not issue.
+async function ensureDNSProvider() {
+  const listed = await api("GET", "/api/v1/acme/dns-01/provider-configs?limit=100");
+  const existing = (listed.items ?? []).find((item) => item.name === "Local Pebble DNS validation");
+  if (existing) return existing;
+  return api("POST", "/api/v1/acme/dns-01/provider-configs", {
+    name: "Local Pebble DNS validation",
+    provider: "webhook",
+    zone: "partner-lab.example.com",
+    config: { endpoint: "http://127.0.0.1:8056" },
+    credential_refs: {},
+    caa_issuer_domain: "pebble.local",
+    allowed_methods: ["dns-01"],
+    allow_wildcards: false,
+    allow_upstream_dv: true,
+  }, "partner-lab-dns-provider-v1");
+}
+const dnsProvider = await ensureDNSProvider();
 for (const path of ["/frontdoors-state", "/frontdoors-state/rollbacks", "/frontdoors-tls", "/lab-evidence"]) {
   mkdirSync(path, { recursive: true, mode: 0o700 });
   chownSync(path, 65532, 65532);
@@ -123,6 +145,7 @@ writeFileSync("/lab-evidence/bootstrap.json", `${JSON.stringify({
   prepared_at: new Date().toISOString(),
   agent_identity: "partner-lab-frontdoors",
   agent_roles: ["host", "network"],
+  dns01_provider_config: { name: dnsProvider.name, zone: dnsProvider.zone, provider: dnsProvider.provider },
   real_targets: subjects.map(([connector, dns_name]) => ({ connector, dns_name })),
   secret_handling: "one-time token and private keys were written 0600 to named volumes and were not printed",
 }, null, 2)}\n`, { mode: 0o600 });
