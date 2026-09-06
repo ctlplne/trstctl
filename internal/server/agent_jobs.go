@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 	"time"
@@ -467,7 +468,10 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 	}
 	if claim.Destination == agentJobKindEndpointRenew && a.completeHostRenewal != nil {
 		if err := a.completeHostRenewal(ctx, info.TenantID, claim.Payload, req.Outcome); err != nil {
-			return nil, status.Errorf(codes.Internal, "complete host-managed lifecycle: %v", err)
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return nil, status.Errorf(codes.Unavailable, "complete host-managed lifecycle: %v", err)
+			}
+			return a.refuseExecutedReportPermanently(ctx, info, agentID, req, now, err)
 		}
 	}
 
@@ -714,6 +718,42 @@ func (a *agentService) ingestExecutedReport(
 
 // acceptFailedReport releases — or permanently retires — work an agent could not
 // perform.
+
+// refuseExecutedReportPermanently ends a host lifecycle job whose completed
+// world effect the control plane cannot accept — for example the identity's
+// owner has no current attestation, so issued->deployed is refused after the
+// agent already installed the certificate.
+//
+// Before this, the report was answered with a gRPC error. The agent discards
+// report errors (the claim lease is its safety net), the lease lapsed, the job
+// was re-offered on the next poll, and every re-execution generated a new key,
+// a new CSR and a new certificate from the customer's CA: an unbounded issuance
+// loop with nothing in the console or the log to explain it. The effect has
+// already happened, so the right terminal state is a failed job with a closed
+// reason, the retained receipt and event, and a WARN with routing metadata. An
+// operator fixes the cause (re-attest the owner) and re-runs the lifecycle on
+// purpose instead of the fleet doing it by accident.
+func (a *agentService) refuseExecutedReportPermanently(ctx context.Context, info mtls.PeerCertInfo, agentID string,
+	req *transport.ReportJobResultRequest, now time.Time, cause error) (*transport.ReportJobResultResponse, error) {
+	const reason = "lifecycle_transition_refused"
+	if a.logger != nil {
+		a.logger.Warn("host lifecycle job finished on the host but its lifecycle transition was refused; job failed terminally to stop re-execution",
+			slog.String("tenant_id", info.TenantID), slog.Int64("job_id", req.JobID), slog.Any("attempt", req.Attempt),
+			slog.String("outcome", strings.TrimSpace(req.Outcome)), slog.String("reason", reason), slog.String("cause", cause.Error()))
+	}
+	ok, err := a.store.FailAgentJobTerminally(ctx, info.TenantID, agentID, req.JobID, reason, now)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "fail refused host lifecycle job: %v", err)
+	}
+	if ok {
+		failed := map[string]any{"agent": info.CommonName, "job_id": req.JobID, "detail": reason, "outcome": strings.TrimSpace(req.Outcome)}
+		a.attachJobReceipt(failed, info, req)
+		a.recordAgentJobEvent(ctx, info.TenantID, "agent.job.failed", failed)
+		a.recordVerifiedReceipt(ctx, info, req, "", now)
+	}
+	return &transport.ReportJobResultResponse{Accepted: ok}, nil
+}
+
 func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCertInfo,
 	agentID string, req *transport.ReportJobResultRequest, now time.Time) (*transport.ReportJobResultResponse, error) {
 	claim, held, err := a.store.AgentJobClaimForResult(ctx, info.TenantID, agentID, req.JobID, req.Attempt, now)

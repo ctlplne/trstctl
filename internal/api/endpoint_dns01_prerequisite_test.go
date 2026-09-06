@@ -4,7 +4,9 @@ package api
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/store"
 )
@@ -82,6 +84,47 @@ func TestExternalIssuerRequiresHostCustody(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := externalIssuerRequiresHostCustody(tc.source, tc.connector, json.RawMessage(tc.cfg)); got != tc.want {
 				t.Fatalf("externalIssuerRequiresHostCustody(%q, %q, %s) = %v, want %v", tc.source, tc.connector, tc.cfg, got, tc.want)
+			}
+		})
+	}
+}
+
+// The preview must refuse an owner the lifecycle would later refuse at
+// issued->deployed, with the reason a person can act on.
+func TestOwnerReadyForLifecycleMirrorsDeploymentReadiness(t *testing.T) {
+	now := time.Date(2026, 9, 6, 17, 0, 0, 0, time.UTC)
+	cadence := store.DefaultOwnershipAttestationCadence
+	attested := func(o store.Owner, at time.Time) store.Owner {
+		o.OwnershipVerifiedAt = &at
+		o.OwnershipVerifiedBy = "demo-admin"
+		digest, err := store.OwnerModelDigest(o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		o.OwnershipModelDigest = digest
+		return o
+	}
+	base := store.Owner{Name: "Partner Lab Web Team", ApplicationID: "APP-PARTNER-LAB-WEB", Environment: "evaluation"}
+	fresh := now.Add(-time.Hour)
+	cases := []struct {
+		name  string
+		owner store.Owner
+		ready bool
+		why   string
+	}{
+		{"complete and freshly attested", attested(base, fresh), true, ""},
+		{"complete but never attested (Add owner form)", base, false, "no human has attested"},
+		{"incomplete record", store.Owner{Name: "x"}, false, "no application ID or environment"},
+		{"stale attestation", attested(base, now.Add(-cadence-time.Hour)), false, "stale"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ready, why := ownerReadyForLifecycle(tc.owner, now, cadence)
+			if ready != tc.ready {
+				t.Fatalf("ready = %v, want %v (why %q)", ready, tc.ready, why)
+			}
+			if tc.why != "" && !strings.Contains(why, tc.why) {
+				t.Fatalf("why = %q, want it to mention %q", why, tc.why)
 			}
 		})
 	}

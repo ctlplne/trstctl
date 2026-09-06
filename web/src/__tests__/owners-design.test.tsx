@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -130,6 +130,42 @@ describe("route 029 decision-first ownership design", () => {
     await user.click(screen.getByText("Sources, disagreements, and review history", { exact: true }));
     expect(await screen.findByRole("table", { name: "NHI ownership attribution" })).toHaveTextContent("unowned deployer token");
     expect(screen.getByText(/Human attestation is never overwritten by an import/, { exact: false })).toBeInTheDocument();
+  });
+
+  it("attests a new owner as part of creating it, so deployments are not refused later", async () => {
+    const user = userEvent.setup();
+    const created = { id: "owner-new", name: "Partner Lab Web Team", kind: "team", ownership_complete: true, ownership_attested: false, ownership_current: false };
+    apiMock.createOwner.mockResolvedValue(created);
+    apiMock.attestOwner.mockResolvedValue({ ...created, ownership_attested: true, ownership_current: true });
+    renderOwners();
+    await screen.findByRole("heading", { level: 1, name: "Ownership" });
+
+    await user.click(screen.getByRole("button", { name: /^Add owner$/ }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("checkbox", { name: /I attest this ownership record is current/ })).toBeChecked();
+    await user.type(within(dialog).getByLabelText("Name"), "Partner Lab Web Team");
+    await user.click(within(dialog).getByRole("button", { name: "Create owner" }));
+
+    await waitFor(() => expect(apiMock.attestOwner).toHaveBeenCalledWith("owner-new"));
+    expect(apiMock.createOwner).toHaveBeenCalledTimes(1);
+    expect(apiMock.createOwner.mock.invocationCallOrder[0]).toBeLessThan(apiMock.attestOwner.mock.invocationCallOrder[0]);
+  });
+
+  it("leaves attestation to a later human only when the person opts out", async () => {
+    const user = userEvent.setup();
+    apiMock.createOwner.mockResolvedValue({ id: "owner-later", name: "Later team", kind: "team", ownership_complete: false, ownership_attested: false, ownership_current: false });
+    renderOwners();
+    await screen.findByRole("heading", { level: 1, name: "Ownership" });
+
+    await user.click(screen.getByRole("button", { name: /^Add owner$/ }));
+    const dialog = screen.getByRole("dialog");
+    await user.click(within(dialog).getByRole("checkbox", { name: /I attest this ownership record is current/ }));
+    await user.type(within(dialog).getByLabelText("Name"), "Later team");
+    await user.click(within(dialog).getByRole("button", { name: "Create owner" }));
+
+    await waitFor(() => expect(apiMock.createOwner).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("Owner created", { exact: true })).toBeInTheDocument();
+    expect(apiMock.attestOwner).not.toHaveBeenCalled();
   });
 
   it("keeps the exact expert evidence named but closed on first view", async () => {

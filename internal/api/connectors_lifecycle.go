@@ -1000,6 +1000,11 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 	if err != nil {
 		return endpointBindingPreviewResponse{}, err
 	}
+	if ready, why := ownerReadyForLifecycle(owner, time.Now().UTC(), a.ownerAttestationCadence()); !ready {
+		return endpointBindingPreviewResponse{}, errStatus(http.StatusUnprocessableEntity,
+			"owner "+strings.TrimSpace(owner.Name)+" is not ready to own a deployed credential: "+why+
+				"; deployment would be refused after issuance. Complete the accountability record and use Ownership → Re-attest, then preview again; nothing was queued")
+	}
 	if err := validateWildcardIdentityPolicy(req.IdentityName, nil); err != nil {
 		return endpointBindingPreviewResponse{}, err
 	}
@@ -1253,6 +1258,22 @@ func externalIssuerRequiresHostCustody(source, connector string, cfg json.RawMes
 		return false
 	}
 	return !custody.TargetExecutorIsAgent(cfg)
+}
+
+// ownerReadyForLifecycle is the preview's copy of the rule the lifecycle enforces
+// at issued->deployed (ownership readiness). Checking it before authorization
+// turns a silent post-deploy refusal into an actionable 422 while nothing has
+// been issued yet.
+func ownerReadyForLifecycle(o store.Owner, now time.Time, cadence time.Duration) (bool, string) {
+	switch {
+	case !o.OwnershipComplete():
+		return false, "the record has no application ID or environment"
+	case !o.OwnershipAttested():
+		return false, "no human has attested this ownership yet"
+	case !o.OwnershipCurrent(now, cadence):
+		return false, "the ownership attestation is stale or no longer matches the record"
+	}
+	return true, ""
 }
 
 func stringInList(list []string, want string) bool {

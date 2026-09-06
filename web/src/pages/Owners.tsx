@@ -204,6 +204,7 @@ export function Owners() {
   const [attestingID, setAttestingID] = useState<string | null>(null);
   const [editBusy, setEditBusy] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [editAttestOnCreate, setEditAttestOnCreate] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<Owner | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -280,7 +281,13 @@ export function Owners() {
           .map((entry) => entry.trim())
           .filter(Boolean),
       };
-      const updated = editTarget ? await api.updateOwner(editTarget.id, input) : await api.createOwner(input);
+      let updated = editTarget ? await api.updateOwner(editTarget.id, input) : await api.createOwner(input);
+      if (!editTarget && editAttestOnCreate) {
+        // The person filling this form is the human decision the lifecycle
+        // requires: an owner without a current attestation cannot receive a
+        // deployed credential, and the endpoint preview now says so.
+        updated = await api.attestOwner(updated.id);
+      }
       queryClient.setQueryData<Owner[]>(["owners"], (current) => {
         if (!current) return current;
         return editTarget ? current.map((owner) => (owner.id === updated.id ? updated : owner)) : [...current, updated];
@@ -628,6 +635,25 @@ export function Owners() {
                 onChange={(event) => setEditEscalationChain(event.target.value)}
               />
             </label>
+            {!editTarget && (
+              <div className="rounded-control border border-border bg-muted/30 p-3 text-sm">
+                <label className="flex items-start gap-3 font-medium" htmlFor="owner-edit-attest">
+                  <input
+                    id="owner-edit-attest"
+                    className="mt-1 size-4"
+                    type="checkbox"
+                    checked={editAttestOnCreate}
+                    aria-describedby="owner-edit-attest-help"
+                    onChange={(event) => setEditAttestOnCreate(event.target.checked)}
+                  />
+                  <span>I attest this ownership record is current and I am accountable for it</span>
+                </label>
+                <p id="owner-edit-attest-help" className="mt-1 pl-7 text-muted-foreground">
+                  Deployments to identities this owner holds are refused until a human attests the record. Leave this
+                  unchecked only when someone else must attest later.
+                </p>
+              </div>
+            )}
             {editError && <p className="text-sm font-medium text-risk-critical">{editError}</p>}
             <div className="flex flex-wrap justify-end gap-2">
               <Button type="button" variant="ghost" onClick={() => setEditorOpen(false)} disabled={editBusy}>

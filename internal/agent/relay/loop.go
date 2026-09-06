@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
@@ -668,13 +669,27 @@ func report(ctx context.Context, ch Channel, job Job, outcome, detail string) {
 func reportWithEvidence(ctx context.Context, ch Channel, job Job, outcome, detail, evidence string) {
 	// A failed report is not retried here: the claim lease is the safety net.
 	// If the control plane never hears, the lease lapses and the work returns.
-	_, _ = ch.ReportJobResult(ctx, job.JobID, job.Attempt, outcome, detail, evidence)
+	// The outcome of the report is logged, though: a rejected report used to
+	// vanish, and a job whose result is refused every time re-executes on
+	// every poll — for a host issuance that means a new certificate each time.
+	accepted, err := ch.ReportJobResult(ctx, job.JobID, job.Attempt, outcome, detail, evidence)
+	logReportOutcome(job, outcome, accepted, err)
+}
+
+func logReportOutcome(job Job, outcome string, accepted bool, err error) {
+	switch {
+	case err != nil:
+		log.Printf("trstctl-agent: job %d attempt %d outcome %s: control plane rejected the report: %v", job.JobID, job.Attempt, outcome, err)
+	case !accepted:
+		log.Printf("trstctl-agent: job %d attempt %d outcome %s: report not accepted (claim no longer held); the work may be re-offered", job.JobID, job.Attempt, outcome)
+	}
 }
 
 func reportWithEvidenceAndCustody(ctx context.Context, ch CustodyReceiptChannel, job Job,
 	outcome, detail, evidence, fingerprint string, record custody.Record) {
-	_, _ = ch.ReportJobResultWithCustody(ctx, job.JobID, job.Attempt, outcome, detail,
+	accepted, err := ch.ReportJobResultWithCustody(ctx, job.JobID, job.Attempt, outcome, detail,
 		evidence, fingerprint, record)
+	logReportOutcome(job, outcome, accepted, err)
 }
 
 func decodeIntent(payload []byte, out *DeployIntent) error {

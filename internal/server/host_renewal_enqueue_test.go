@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -703,5 +704,121 @@ func TestHostRenewalUsesTheIdentityBoundDeployedCertificate(t *testing.T) {
 	if intent.PredecessorCertificateID != desired.ID {
 		t.Fatalf("renewal selected predecessor %q, want identity-bound deployed certificate %q; unrelated same-SAN certificate was %q",
 			intent.PredecessorCertificateID, desired.ID, wrong.ID)
+	}
+}
+
+// A host job whose completed effect the control plane refuses to accept must
+// END, not return to the queue (design-partner finding DP2-026).
+//
+// The agent installed a certificate and reported it; the lifecycle then refused
+// issued->deployed because the owner had no current attestation. The report
+// used to be answered with a gRPC error the agent discards, the lease lapsed,
+// the job was re-offered on the next poll, and every re-execution minted a new
+// certificate from the customer's CA — one per minute, forever, with nothing
+// in the console to explain it.
+func TestARefusedHostReportFailsTheJobInsteadOfReofferingIt(t *testing.T) {
+	ctx := context.Background()
+	h := newIssuanceDispatcherHarness(t)
+
+	owner, err := h.store.CreateOwner(ctx, store.Owner{
+		TenantID: h.tenant, Kind: store.OwnerTeam, Name: "P", Email: "p4@example.test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := agentExecutedTarget(t)
+	target.TenantID = h.tenant
+	if err := h.store.UpsertDeploymentTarget(ctx, target); err != nil {
+		t.Fatal(err)
+	}
+	attrs, _ := json.Marshal(map[string]any{
+		"deployment_target_id": target.ID, "connector": target.Type, "target": target.Name,
+	})
+	ident, err := h.orch.CreateIdentity(ctx, h.tenant, store.Identity{
+		Kind: store.KindX509Certificate, Name: "loop.example.test", OwnerID: owner.ID,
+		Attributes: attrs,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.orch.Transition(ctx, h.tenant, ident.ID, orchestrator.StateIssued, "initial issue"); err != nil {
+		t.Fatal(err)
+	}
+	dispatchOutbox(t, h, 1)
+
+	now := time.Now().UTC()
+	agentID := agentRowID(h.tenant, "edge-host")
+	claimHost := func(at time.Time) []store.AgentJob {
+		t.Helper()
+		jobs, err := h.store.ClaimAgentJobs(ctx, h.tenant, agentID,
+			[]string{agentJobKindEndpointRenew}, []string{mtls.AgentRoleHost}, 1, time.Minute, at)
+		if err != nil {
+			t.Fatalf("claim host jobs: %v", err)
+		}
+		return jobs
+	}
+	jobs := claimHost(now)
+	if len(jobs) != 1 {
+		t.Fatalf("claimed %d host jobs, want the queued first issuance", len(jobs))
+	}
+	job := jobs[0]
+
+	// The host signed a CSR through the control plane before reporting, so the
+	// certificate the report names exists; the report attests its key custody.
+	installedFingerprint := strings.Repeat("a", 64)
+	if _, err := h.orch.RecordCertificate(ctx, h.tenant, store.Certificate{
+		Subject: "CN=loop.example.test", Issuer: "CN=Partner Lab Issuing CA", Serial: "0a",
+		Fingerprint: installedFingerprint, Source: "issued",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	refusals := 0
+	service := &agentService{
+		store: h.store, outbox: h.outbox, orch: h.orch,
+		completeHostRenewal: func(context.Context, string, []byte, string) error {
+			refusals++
+			return errors.New("transition issued->deployed: ownership readiness: owner has no current attestation")
+		},
+	}
+	peer := mtls.PeerCertInfo{TenantID: h.tenant, CommonName: "edge-host", FingerprintSHA256: strings.Repeat("b", 64)}
+	// The report carries what a real host report carries: the installed
+	// certificate's fingerprint, the custody of the key born on the host and
+	// the agent's signature over the statement (verified before this point).
+	resp, err := service.acceptExecutedReport(ctx, peer, agentID, &transport.ReportJobResultRequest{
+		JobID: job.ID, Attempt: job.ClaimAttempts, Outcome: transport.JobOutcomeVerified,
+		Signature:             []byte("verified-upstream-in-ReportJobResult"),
+		CredentialFingerprint: installedFingerprint,
+		Custody: &custody.Record{
+			Origin: custody.OriginHostAgent, Storage: custody.StorageFile,
+			Exportable: custody.NonExportable, GeneratedBy: "edge-host",
+		},
+	}, now)
+	if err != nil {
+		t.Fatalf("a refused lifecycle transition became a transport error the agent discards: %v", err)
+	}
+	if !resp.Accepted {
+		t.Fatal("the refused report was not accepted, so the agent cannot tell it from a lost claim")
+	}
+
+	// The next poll — after the lease would have lapsed — must offer nothing.
+	if again := claimHost(now.Add(2 * time.Minute)); len(again) != 0 {
+		t.Fatalf("the refused job was re-offered (%+v); every re-execution mints another certificate", again)
+	}
+	if refusals != 1 {
+		t.Fatalf("lifecycle completion ran %d times, want exactly once", refusals)
+	}
+
+	// And the row says why, in a closed-set reason an operator can search for.
+	var rowStatus, lastError string
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		//trstctl:system-query — test-only read of this tenant's own outbox row.
+		return tx.QueryRow(ctx, `SELECT status, coalesce(last_error, '') FROM outbox WHERE tenant_id = $1 AND id = $2`,
+			h.tenant, job.ID).Scan(&rowStatus, &lastError)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if rowStatus != "failed" || lastError != "lifecycle_transition_refused" {
+		t.Fatalf("refused job row = %s/%q, want failed/lifecycle_transition_refused", rowStatus, lastError)
 	}
 }

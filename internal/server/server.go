@@ -1938,7 +1938,8 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 	s.agentChannelServerName = d.AgentChannelServerName
 	s.agentHeartbeatInterval = d.AgentHeartbeatInterval
 	agentSvc := &agentService{
-		store: d.Store, log: d.Log, orch: s.orch, idem: idem, caSigner: s.agentCASigner,
+		logger: s.logger,
+		store:  d.Store, log: d.Log, orch: s.orch, idem: idem, caSigner: s.agentCASigner,
 		caCertDER: s.agentCACertDER, beatInterval: d.AgentHeartbeatInterval,
 		metrics: s.agentMetrics,
 		// A1: nothing is claimable until an operator enables a kind AND an

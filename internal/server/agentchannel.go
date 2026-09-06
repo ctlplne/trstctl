@@ -37,6 +37,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/url"
 	"os"
@@ -241,6 +242,8 @@ func (s *Server) OutOfProcessAgentCA() bool {
 // the signer-held agent CA. All access is tenant-scoped by the agent's verified
 // certificate (AN-1).
 type agentService struct {
+	// logger receives operator-facing refusals with routing metadata only.
+	logger       *slog.Logger
 	store        *store.Store
 	log          *events.Log
 	orch         *orchestrator.Orchestrator

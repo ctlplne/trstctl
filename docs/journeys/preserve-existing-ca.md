@@ -72,6 +72,12 @@ The tenant operator needs `issuers:read`, `certificates:issue`, discovery access
 the permissions required for the chosen destination and notification route. Use a
 non-production hostname and destination for the first proof.
 
+The accountable owner must be ready before you bind an endpoint: a complete record
+(application ID and environment) with a current human attestation. Deployment is
+refused for an owner whose attestation is missing or stale, so the endpoint lifecycle
+preview refuses such an owner up front; use **Ownership → Re-attest** (or attest when
+creating the owner) and preview again.
+
 ## What the current workflow proves
 
 The upstream-CA registry and issue route are real served paths. The CA Hierarchy page
