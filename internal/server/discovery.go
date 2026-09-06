@@ -268,29 +268,31 @@ func (d *issuanceDispatcher) executeAPIKeyOrManualDiscoveryRun(ctx context.Conte
 }
 
 func (d *issuanceDispatcher) executeCloudCertificateDiscoveryRun(ctx context.Context, tenantID string, src store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error) {
-	providers, err := cloudCertificateProviders(ctx, src.Config)
+	providers, unbuilt, err := cloudCertificateProviders(ctx, src.Config)
 	if err != nil {
 		return netscan.Report{}, "failed", err.Error(), nil
 	}
-	if len(providers) == 0 {
+	if len(providers)+len(unbuilt) == 0 {
 		return netscan.Report{}, "failed", "cloud_certificate discovery requires at least one provider", nil
 	}
 	if run.DryRun {
-		return netscan.Report{Targets: len(providers)}, "succeeded", "", nil
+		return netscan.Report{Targets: len(providers) + len(unbuilt)}, "succeeded", "", nil
 	}
 	sink := cloudDiscoveryRunSink{orch: d.orch, tenantID: tenantID, runID: run.ID, sourceID: src.ID}
 	discoverer := cloudcert.NewDiscoverer(sink, cloudcert.WithWorkers(4), cloudcert.WithQueue(64), cloudcert.WithBackoff(10*time.Millisecond))
 	defer discoverer.Close()
 	rep := discoverer.Discover(ctx, providers)
-	outcomes := make([]cloudProviderOutcome, 0, len(rep.Outcomes))
+	outcomes := append([]cloudProviderOutcome(nil), unbuilt...)
 	for _, o := range rep.Outcomes {
 		outcomes = append(outcomes, cloudProviderOutcome{Provider: o.Provider, Status: o.Status, Error: o.Error})
 	}
-	out := netscan.Report{Targets: rep.Providers, Discovered: rep.Discovered, Failed: rep.Failed,
+	sortCloudProviderOutcomes(outcomes)
+	failed := rep.Failed + len(unbuilt)
+	out := netscan.Report{Targets: rep.Providers + len(unbuilt), Discovered: rep.Discovered, Failed: failed,
 		TargetResults: cloudProviderTargetResults(outcomes)}
 	status := "succeeded"
 	msg := ""
-	if rep.Failed > 0 {
+	if failed > 0 {
 		if rep.Discovered > 0 {
 			status = "partial"
 			msg = "some cloud certificate providers failed" + cloudProviderFailureSummary(outcomes)
@@ -299,7 +301,7 @@ func (d *issuanceDispatcher) executeCloudCertificateDiscoveryRun(ctx context.Con
 			msg = "all cloud certificate providers failed" + cloudProviderFailureSummary(outcomes)
 		}
 	}
-	if rep.Discovered == 0 && rep.Failed == 0 {
+	if rep.Discovered == 0 && failed == 0 {
 		status = "failed"
 		msg = "cloud certificate providers returned no certificates"
 	}
@@ -307,29 +309,31 @@ func (d *issuanceDispatcher) executeCloudCertificateDiscoveryRun(ctx context.Con
 }
 
 func (d *issuanceDispatcher) executeCloudSecretDiscoveryRun(ctx context.Context, tenantID string, src store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error) {
-	providers, err := cloudSecretProviders(ctx, src.Config)
+	providers, unbuilt, err := cloudSecretProviders(ctx, src.Config)
 	if err != nil {
 		return netscan.Report{}, "failed", err.Error(), nil
 	}
-	if len(providers) == 0 {
+	if len(providers)+len(unbuilt) == 0 {
 		return netscan.Report{}, "failed", src.Kind + " discovery requires at least one provider", nil
 	}
 	if run.DryRun {
-		return netscan.Report{Targets: len(providers)}, "succeeded", "", nil
+		return netscan.Report{Targets: len(providers) + len(unbuilt)}, "succeeded", "", nil
 	}
 	sink := cloudSecretDiscoveryRunSink{orch: d.orch, tenantID: tenantID, runID: run.ID, sourceID: src.ID}
 	discoverer := cloudsecret.NewDiscoverer(sink, cloudsecret.WithWorkers(4), cloudsecret.WithQueue(64), cloudsecret.WithBackoff(10*time.Millisecond))
 	defer discoverer.Close()
 	rep := discoverer.Discover(ctx, providers)
-	outcomes := make([]cloudProviderOutcome, 0, len(rep.Outcomes))
+	outcomes := append([]cloudProviderOutcome(nil), unbuilt...)
 	for _, o := range rep.Outcomes {
 		outcomes = append(outcomes, cloudProviderOutcome{Provider: o.Provider, Status: o.Status, Error: o.Error})
 	}
-	out := netscan.Report{Targets: rep.Providers, Discovered: rep.Discovered, Failed: rep.Failed,
+	sortCloudProviderOutcomes(outcomes)
+	failed := rep.Failed + len(unbuilt)
+	out := netscan.Report{Targets: rep.Providers + len(unbuilt), Discovered: rep.Discovered, Failed: failed,
 		TargetResults: cloudProviderTargetResults(outcomes)}
 	status := "succeeded"
 	msg := ""
-	if rep.Failed > 0 {
+	if failed > 0 {
 		if rep.Discovered > 0 {
 			status = "partial"
 			msg = "some cloud secret-manager providers failed" + cloudProviderFailureSummary(outcomes)
@@ -338,7 +342,7 @@ func (d *issuanceDispatcher) executeCloudSecretDiscoveryRun(ctx context.Context,
 			msg = "all cloud secret-manager providers failed" + cloudProviderFailureSummary(outcomes)
 		}
 	}
-	if rep.Discovered == 0 && rep.Failed == 0 {
+	if rep.Discovered == 0 && failed == 0 {
 		status = "failed"
 		msg = "cloud secret-manager providers returned no certificate secrets"
 	}
@@ -424,6 +428,10 @@ func cloudProviderTargetResults(outcomes []cloudProviderOutcome) []netscan.Targe
 		out = append(out, netscan.TargetResult{Kind: "cloud_provider", Target: target, Status: o.Status, Error: o.Error})
 	}
 	return out
+}
+
+func sortCloudProviderOutcomes(outcomes []cloudProviderOutcome) {
+	sort.SliceStable(outcomes, func(i, j int) bool { return outcomes[i].Provider < outcomes[j].Provider })
 }
 
 // cloudProviderFailureSummary names the failed providers (bounded) for the
@@ -892,36 +900,52 @@ func fileModeString(m os.FileMode) string {
 	return fmt.Sprintf("%04o", m.Perm())
 }
 
-func cloudCertificateProviders(ctx context.Context, raw json.RawMessage) ([]cloudcert.Provider, error) {
+// cloudCertificateProviders builds the source's providers. A provider that
+// cannot be built (an unset credential reference, a rejected endpoint) becomes a
+// named failed outcome instead of aborting the run, so the providers that are
+// configured correctly still enumerate and the run says which one is broken.
+func cloudCertificateProviders(ctx context.Context, raw json.RawMessage) ([]cloudcert.Provider, []cloudProviderOutcome, error) {
 	var cfg cloudCertificateDiscoveryConfig
 	if err := json.Unmarshal(raw, &cfg); err != nil {
-		return nil, fmt.Errorf("decode cloud_certificate discovery config: %w", err)
+		return nil, nil, fmt.Errorf("decode cloud_certificate discovery config: %w", err)
 	}
 	providers := make([]cloudcert.Provider, 0, len(cfg.Providers))
+	var unbuilt []cloudProviderOutcome
 	for i, p := range cfg.Providers {
 		provider, err := cloudCertificateProvider(ctx, p)
 		if err != nil {
-			return nil, fmt.Errorf("cloud_certificate provider %d: %w", i, err)
+			unbuilt = append(unbuilt, cloudProviderOutcome{Provider: cloudProviderLabel(p.Provider, i), Status: "failed", Error: err.Error()})
+			continue
 		}
 		providers = append(providers, provider)
 	}
-	return providers, nil
+	return providers, unbuilt, nil
 }
 
-func cloudSecretProviders(ctx context.Context, raw json.RawMessage) ([]cloudsecret.Provider, error) {
+func cloudSecretProviders(ctx context.Context, raw json.RawMessage) ([]cloudsecret.Provider, []cloudProviderOutcome, error) {
 	var cfg cloudSecretDiscoveryConfig
 	if err := json.Unmarshal(raw, &cfg); err != nil {
-		return nil, fmt.Errorf("decode cloud_secret discovery config: %w", err)
+		return nil, nil, fmt.Errorf("decode cloud_secret discovery config: %w", err)
 	}
 	providers := make([]cloudsecret.Provider, 0, len(cfg.Providers))
+	var unbuilt []cloudProviderOutcome
 	for i, p := range cfg.Providers {
 		provider, err := cloudSecretProvider(ctx, p)
 		if err != nil {
-			return nil, fmt.Errorf("cloud_secret provider %d: %w", i, err)
+			unbuilt = append(unbuilt, cloudProviderOutcome{Provider: cloudProviderLabel(p.Provider, i), Status: "failed", Error: err.Error()})
+			continue
 		}
 		providers = append(providers, provider)
 	}
-	return providers, nil
+	return providers, unbuilt, nil
+}
+
+// cloudProviderLabel names a provider that never got as far as Name().
+func cloudProviderLabel(provider string, index int) string {
+	if label := strings.TrimSpace(provider); label != "" {
+		return label
+	}
+	return fmt.Sprintf("provider %d", index)
 }
 
 func cloudSecretProvider(ctx context.Context, p cloudSecretProviderConfig) (cloudsecret.Provider, error) {
