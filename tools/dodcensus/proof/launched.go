@@ -230,11 +230,19 @@ func buildShippedProcess(expected expectation, publicKey []byte) (shippedBuild, 
 		}
 		return cached, nil
 	}
-	binDir := filepath.Join(receiptDir, "shipped-process-"+cacheKey[:16])
-	if err := os.Mkdir(binDir, 0o700); err != nil {
-		return shippedBuild{}, fmt.Errorf("create exclusive launched build directory: %w", err)
+	// Compile only in the runner's private tmpfs. Docker Desktop can deliver
+	// delayed VirtioFS notifications for compiler output written directly into
+	// the host-backed receipt mount. A watcher armed after go build then sees
+	// those old writes as if the executable changed at runtime. Publishing
+	// verified bytes into a fresh directory below makes the security boundary
+	// exact: the compiler never opens a watched executable, while every write
+	// after publication remains observable.
+	stagingDir, err := os.MkdirTemp("/tmp", "trstctl-dod-build-")
+	if err != nil {
+		return shippedBuild{}, fmt.Errorf("create private launched build staging directory: %w", err)
 	}
-	if err := validatePrivateDirectory(binDir); err != nil {
+	defer func() { _ = os.RemoveAll(stagingDir) }()
+	if err := validatePrivateDirectory(stagingDir); err != nil {
 		return shippedBuild{}, err
 	}
 	goTool, err := validateShippedGoToolchain()
@@ -248,7 +256,7 @@ func buildShippedProcess(expected expectation, publicKey []byte) (shippedBuild, 
 	ldflags := "-X trstctl.com/trstctl/internal/license.builtinPubKeysB64=" + base64.StdEncoding.EncodeToString(publicKey)
 	packages := append([]string{expected.LaunchedBinaryPackage}, expected.LaunchedCompanions...)
 	seen := map[string]bool{}
-	identities := make(map[string]executableIdentity, len(packages))
+	stagedIdentities := make(map[string]executableIdentity, len(packages))
 	for _, packagePath := range packages {
 		if seen[packagePath] {
 			return shippedBuild{}, fmt.Errorf("duplicate launched package %q", packagePath)
@@ -258,7 +266,7 @@ func buildShippedProcess(expected expectation, publicKey []byte) (shippedBuild, 
 		if err != nil {
 			return shippedBuild{}, err
 		}
-		output := filepath.Join(binDir, name)
+		output := filepath.Join(stagingDir, name)
 		args := shippedBuildArguments(expected, ldflags, output, packagePath, descriptorPackageParallelism())
 		command := exec.Command(goTool, args...) // #nosec G204 -- developer tool running fixed toolchain commands over the repo (CWE-78)
 		command.Dir = expected.Repo
@@ -272,12 +280,7 @@ func buildShippedProcess(expected expectation, publicKey []byte) (shippedBuild, 
 		if err != nil {
 			return shippedBuild{}, err
 		}
-		identities[packagePath] = identity
-	}
-	binary := filepath.Join(binDir, filepath.Base(expected.LaunchedBinaryPackage))
-	identity, err := validateShippedBinary(binary, expected, expected.LaunchedBinaryPackage, false)
-	if err != nil {
-		return shippedBuild{}, err
+		stagedIdentities[packagePath] = identity
 	}
 	dropper, err := validateRuntimePrivilegeDropper()
 	if err != nil {
@@ -294,12 +297,114 @@ func buildShippedProcess(expected expectation, publicKey []byte) (shippedBuild, 
 		}
 		companionFDIsolation = true
 	}
+	binDir := filepath.Join(receiptDir, "shipped-process-"+cacheKey[:16])
+	if err := os.Mkdir(binDir, 0o700); err != nil {
+		return shippedBuild{}, fmt.Errorf("create exclusive launched execution directory: %w", err)
+	}
+	if err := validatePrivateDirectory(binDir); err != nil {
+		return shippedBuild{}, err
+	}
+	identities := make(map[string]executableIdentity, len(packages))
+	for _, packagePath := range packages {
+		name, err := shippedPackageName(packagePath)
+		if err != nil {
+			return shippedBuild{}, err
+		}
+		staged := filepath.Join(stagingDir, name)
+		published := filepath.Join(binDir, name)
+		if err := publishShippedExecutable(staged, published); err != nil {
+			return shippedBuild{}, fmt.Errorf("publish launched binary %s: %w", packagePath, err)
+		}
+		identity, err := validateShippedBinary(published, expected, packagePath, false)
+		if err != nil {
+			return shippedBuild{}, err
+		}
+		stagedIdentity := stagedIdentities[packagePath]
+		if identity.Size != stagedIdentity.Size || identity.Digest != stagedIdentity.Digest {
+			return shippedBuild{}, fmt.Errorf("published launched binary %s does not match verified compiler output", packagePath)
+		}
+		identities[packagePath] = identity
+	}
+	if err := syncShippedDirectory(binDir); err != nil {
+		return shippedBuild{}, fmt.Errorf("sync launched execution directory: %w", err)
+	}
+	binary := filepath.Join(binDir, filepath.Base(expected.LaunchedBinaryPackage))
+	identity := identities[expected.LaunchedBinaryPackage]
 	result := shippedBuild{
 		binDir: binDir, binary: binary, identity: identity, dropper: dropper, companions: identities,
 		companionFDIsolation: companionFDIsolation,
 	}
 	shippedBuilds.items[cacheKey] = result
 	return result, nil
+}
+
+func publishShippedExecutable(source, destination string) error {
+	sourceDescriptor, err := unix.Open(source, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return fmt.Errorf("open verified compiler output: %w", err)
+	}
+	sourceFile := os.NewFile(uintptr(sourceDescriptor), source)
+	if sourceFile == nil {
+		_ = unix.Close(sourceDescriptor)
+		return fmt.Errorf("bind verified compiler output descriptor")
+	}
+	defer func() { _ = sourceFile.Close() }()
+	sourceBefore, err := sourceFile.Stat()
+	if err != nil {
+		return fmt.Errorf("inspect verified compiler output: %w", err)
+	}
+	if !sourceBefore.Mode().IsRegular() || sourceBefore.Size() <= 0 || sourceBefore.Size() > maxShippedBinaryBytes {
+		return fmt.Errorf("verified compiler output is not one bounded regular file")
+	}
+
+	destinationDescriptor, err := unix.Open(destination,
+		unix.O_WRONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW|unix.O_CREAT|unix.O_EXCL, 0o500)
+	if err != nil {
+		return fmt.Errorf("create exclusive published executable: %w", err)
+	}
+	destinationFile := os.NewFile(uintptr(destinationDescriptor), destination)
+	if destinationFile == nil {
+		_ = unix.Close(destinationDescriptor)
+		return fmt.Errorf("bind published executable descriptor")
+	}
+	closed := false
+	defer func() {
+		if !closed {
+			_ = destinationFile.Close()
+		}
+	}()
+
+	written, err := io.Copy(destinationFile, io.LimitReader(sourceFile, maxShippedBinaryBytes+1))
+	if err != nil {
+		return fmt.Errorf("copy verified compiler output: %w", err)
+	}
+	if written != sourceBefore.Size() || written > maxShippedBinaryBytes {
+		return fmt.Errorf("published executable size %d does not match verified compiler output size %d", written, sourceBefore.Size())
+	}
+	sourceAfter, err := sourceFile.Stat()
+	if err != nil {
+		return fmt.Errorf("reinspect verified compiler output: %w", err)
+	}
+	if !os.SameFile(sourceBefore, sourceAfter) || sourceBefore.Size() != sourceAfter.Size() || sourceBefore.Mode() != sourceAfter.Mode() {
+		return fmt.Errorf("verified compiler output changed while publishing")
+	}
+	if err := destinationFile.Sync(); err != nil {
+		return fmt.Errorf("sync published executable: %w", err)
+	}
+	if err := destinationFile.Close(); err != nil {
+		return fmt.Errorf("close published executable: %w", err)
+	}
+	closed = true
+	return nil
+}
+
+func syncShippedDirectory(directory string) error {
+	dir, err := os.Open(directory) // #nosec G304 -- gate-owned private directory created above (CWE-22)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = dir.Close() }()
+	return dir.Sync()
 }
 
 func ensureShippedGoCache(receiptDir string) (string, error) {
