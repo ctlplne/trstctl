@@ -21,6 +21,7 @@ import {
 } from "@/lib/api";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { EndpointBindingWorkflow } from "@/pages/connectors/EndpointBindingWorkflow";
+import { defaultTargetConfig } from "@/lib/connectorTargetTemplates";
 
 // VantageBadge names where a connector's deploy work executes (epic A3), read
 // from the live registry census. The distinction the operator cares about: work
@@ -64,7 +65,7 @@ export function Connectors() {
   const [targetActionBusy, setTargetActionBusy] = useState<"bind" | "test" | "deploy" | "rollback" | null>(null);
   const [targetName, setTargetName] = useState("edge/prod/payments");
   const [connectorName, setConnectorName] = useState("nginx");
-  const [targetConfig, setTargetConfig] = useState('{"credential_ref":"connector-credential-ref","host":"edge-1.internal"}');
+  const [targetConfig, setTargetConfig] = useState(() => defaultTargetConfig("nginx"));
   const [selectedTarget, setSelectedTarget] = useState("");
   const [selectedIdentity, setSelectedIdentity] = useState("");
   const [reason, setReason] = useState("");
@@ -1270,7 +1271,14 @@ export function Connectors() {
           </label>
           <label className="grid gap-1 text-sm font-medium">
             {t("connectors.design.connectorType")}
-            <select className="ui-input font-normal" value={connectorName} onChange={(event) => setConnectorName(event.target.value)}>
+            <select
+              className="ui-input font-normal"
+              value={connectorName}
+              onChange={(event) => {
+                setConnectorName(event.target.value);
+                setTargetConfig(defaultTargetConfig(event.target.value));
+              }}
+            >
               {connectorOptions.map((name) => (
                 <option key={name} value={name}>
                   {name}

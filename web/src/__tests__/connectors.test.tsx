@@ -455,7 +455,14 @@ describe("connector deployment disclosure surface", () => {
       expect(apiMock.createConnectorTarget).toHaveBeenCalledWith({
         name: "edge/prod/payments",
         connector: "nginx",
-        config: { credential_ref: "connector-credential-ref", host: "edge-1.internal" },
+        config: {
+          executor: "agent",
+          required_agent_role: "host",
+          cert_path: "/etc/nginx/tls/server.crt",
+          key_path: "/etc/nginx/tls/server.key",
+          verify_address: "service.example.com:443",
+          verify_server_name: "service.example.com",
+        },
         enabled: false,
       }),
     );
