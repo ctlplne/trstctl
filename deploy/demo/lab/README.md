@@ -41,7 +41,7 @@ The browser will not recognize the target DNS names when you use the IP address.
 
 ## What is honest local evidence?
 
-- **Real local:** actual Apache, NGINX, HAProxy, Caddy, Traefik, and PostgreSQL binaries receive an independently issued certificate, validate or watch their configs, activate the update, and serve the new certificate. PostgreSQL is verified with its real SSLRequest-to-TLS negotiation. Its raw-TLS network-discovery stage remains explicitly unclaimed until the scanner gains protocol-aware discovery.
+- **Real local:** actual Apache, NGINX, HAProxy, Caddy, Traefik, and PostgreSQL binaries receive an independently issued certificate, validate or watch their configs, activate the update, and serve the new certificate. PostgreSQL is verified with its real SSLRequest-to-TLS negotiation, and network discovery inventories it the same way: the scanner retries a reachable listener that rejects a bare TLS ClientHello with the PostgreSQL SSLRequest negotiation, so the lab's six listeners discover without a protocol hint.
 - **Faithful local:** the repository's production-assembly census drives every other shipped connector against a strict command or protocol receiver. This includes F5, NetScaler, A10, Kemp, Cisco, FortiGate, Palo Alto, cloud certificate stores, databases, and the exact IIS PowerShell/netsh contract.
 - **External-only:** full IIS still needs Windows + IIS + HTTP.sys; current Windows CI proves CryptoAPI and MSI/service lifecycle but not a live IIS binding. Physical/vendor appliance qualification needs that appliance; vendor entitlement and public Internet trust need real third-party accounts and domains. Those are the only remaining external walls.
 

@@ -2568,14 +2568,17 @@ export interface DiscoveryCoverageClass {
 export interface DiscoveryFinding {
   discovered_at: string;
   fingerprint: string;
+  first_seen_at: string;
   id: string;
   kind: string;
+  last_seen_at: string;
   managed_identity_id?: string;
   metadata: Record<string, unknown>;
   provenance: string;
   ref: string;
   risk_score?: number;
   run_id: string;
+  seen_count: number;
   source_id: string;
   tenant_id: string;
   triage_actor?: string;
@@ -2696,6 +2699,7 @@ export interface DiscoveryRun {
   source_id: string;
   started_at?: string;
   status: "queued" | "running" | "succeeded" | "partial" | "failed";
+  target_results: ({ error?: string; kind: "network" | "ssh" | "cloud_provider"; status: "succeeded" | "failed" | "blocked" | "rejected"; target: string })[];
   targets: number;
   tenant_id: string;
 }

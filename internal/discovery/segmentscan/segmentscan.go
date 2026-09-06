@@ -375,7 +375,29 @@ type Report struct {
 	Failed     int       `json:"failed"`
 	Rejected   int       `json:"rejected"`
 	Blocked    int       `json:"blocked"`
+	// TargetResults names every assigned target's outcome so a partial sweep
+	// says which listener failed or was blocked and why. Older relays omit it.
+	TargetResults []TargetResult `json:"target_results,omitempty"`
 }
+
+// TargetResult is one assigned target's terminal outcome.
+type TargetResult struct {
+	Target string `json:"target"`
+	Status string `json:"status"`
+	Error  string `json:"error,omitempty"`
+}
+
+// Target outcome statuses a relay may report.
+const (
+	TargetSucceeded = "succeeded"
+	TargetFailed    = "failed"
+	TargetBlocked   = "blocked"
+	TargetRejected  = "rejected"
+)
+
+// maxTargetsNamedInReason bounds how many failed targets the run's error text
+// names; the full per-target list travels in the completion event.
+const maxTargetsNamedInReason = 3
 
 // ValidateReport binds a report to the exact assigned command before any event
 // or read model is changed.
@@ -436,17 +458,87 @@ func ValidateReport(intent Intent, report Report) error {
 		}
 		seen[key] = struct{}{}
 	}
+	return validateTargetResults(report, assigned)
+}
+
+// validateTargetResults binds the optional per-target outcomes to the assigned
+// targets and to the report's counters, so the event never carries a target the
+// command did not name or an outcome the counts do not admit.
+func validateTargetResults(report Report, assigned map[string]struct{}) error {
+	if len(report.TargetResults) == 0 {
+		return nil
+	}
+	if len(report.TargetResults) != report.Targets {
+		return errors.New("segment scan: target results do not cover assigned targets")
+	}
+	counts := map[string]int{}
+	named := make(map[string]struct{}, len(report.TargetResults))
+	for i, result := range report.TargetResults {
+		if _, ok := assigned[result.Target]; !ok {
+			return fmt.Errorf("segment scan: target result %d names an unassigned target", i)
+		}
+		if _, duplicate := named[result.Target]; duplicate {
+			return fmt.Errorf("segment scan: target result %d repeats a target", i)
+		}
+		named[result.Target] = struct{}{}
+		switch result.Status {
+		case TargetSucceeded, TargetFailed, TargetBlocked, TargetRejected:
+		default:
+			return fmt.Errorf("segment scan: target result %d has an unknown status", i)
+		}
+		if result.Status == TargetSucceeded && result.Error != "" {
+			return fmt.Errorf("segment scan: target result %d succeeded with an error", i)
+		}
+		if err := boundedText("target error", result.Error); err != nil {
+			return fmt.Errorf("segment scan: target result %d: %w", i, err)
+		}
+		counts[result.Status]++
+	}
+	if counts[TargetSucceeded] != report.Discovered || counts[TargetFailed] != report.Failed ||
+		counts[TargetBlocked] != report.Blocked || counts[TargetRejected] != report.Rejected {
+		return errors.New("segment scan: target results disagree with the report counts")
+	}
 	return nil
 }
 
+// Status derives the run outcome and an operator-readable reason. When the
+// relay reported per-target outcomes, the reason names the targets that did not
+// succeed (bounded; the full list is in the completion event).
 func Status(report Report) (status, reason string) {
 	if report.Failed+report.Rejected+report.Blocked == 0 {
 		return "succeeded", ""
 	}
 	if report.Discovered > 0 {
-		return "partial", "some relay discovery probes failed or were blocked"
+		return "partial", "some relay discovery probes failed or were blocked" + failedTargetsSummary(report)
 	}
-	return "failed", "all relay discovery probes failed or were blocked"
+	return "failed", "all relay discovery probes failed or were blocked" + failedTargetsSummary(report)
+}
+
+func failedTargetsSummary(report Report) string {
+	var parts []string
+	total := 0
+	for _, result := range report.TargetResults {
+		if result.Status == TargetSucceeded {
+			continue
+		}
+		total++
+		if len(parts) >= maxTargetsNamedInReason {
+			continue
+		}
+		part := result.Target + " " + result.Status
+		if result.Error != "" {
+			part += " (" + result.Error + ")"
+		}
+		parts = append(parts, part)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	summary := ": " + strings.Join(parts, "; ")
+	if total > len(parts) {
+		summary += fmt.Sprintf("; and %d more", total-len(parts))
+	}
+	return summary
 }
 
 func stableUnique(values []string) []string {

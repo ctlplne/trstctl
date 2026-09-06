@@ -115,3 +115,63 @@ func TestValidateReportBindsModeTargetsCountsAndMetadata(t *testing.T) {
 		t.Fatal("incoherent outcome counts were accepted")
 	}
 }
+
+func TestValidateReportBindsTargetResultsToTheCommandAndCounts(t *testing.T) {
+	intent := segmentscan.Intent{
+		Execution: segmentscan.ExecutionRelay, RequiredAgentRole: segmentscan.RequiredRoleNetwork, Mode: segmentscan.ModeTLS,
+		Targets: []string{"10.20.0.1:443", "10.20.0.2:443", "10.20.0.3:5432"},
+	}
+	good := segmentscan.Report{
+		Mode: segmentscan.ModeTLS, Targets: 3, Discovered: 1, Failed: 1, Blocked: 1,
+		Findings: []segmentscan.Finding{{Address: "10.20.0.1:443", Fingerprint: "sha256:aa"}},
+		TargetResults: []segmentscan.TargetResult{
+			{Target: "10.20.0.1:443", Status: segmentscan.TargetSucceeded},
+			{Target: "10.20.0.2:443", Status: segmentscan.TargetBlocked, Error: "reserved IP blocked by SSRF guard"},
+			{Target: "10.20.0.3:5432", Status: segmentscan.TargetFailed, Error: "tlsprobe: handshake 10.20.0.3:5432: EOF"},
+		},
+	}
+	if err := segmentscan.ValidateReport(intent, good); err != nil {
+		t.Fatalf("valid per-target report rejected: %v", err)
+	}
+	status, reason := segmentscan.Status(good)
+	if status != "partial" {
+		t.Fatalf("status = %q, want partial", status)
+	}
+	for _, want := range []string{"10.20.0.3:5432 failed (tlsprobe: handshake 10.20.0.3:5432: EOF)", "10.20.0.2:443 blocked"} {
+		if !strings.Contains(reason, want) {
+			t.Fatalf("reason %q does not name %q", reason, want)
+		}
+	}
+	if strings.Contains(reason, "10.20.0.1:443") {
+		t.Fatalf("reason %q names a target that succeeded", reason)
+	}
+
+	bad := []struct {
+		name   string
+		mutate func(r *segmentscan.Report)
+	}{
+		{"unassigned target", func(r *segmentscan.Report) { r.TargetResults[0].Target = "10.99.0.1:443" }},
+		{"repeated target", func(r *segmentscan.Report) { r.TargetResults[1].Target = "10.20.0.1:443" }},
+		{"unknown status", func(r *segmentscan.Report) { r.TargetResults[2].Status = "exploded" }},
+		{"success with error", func(r *segmentscan.Report) { r.TargetResults[0].Error = "but also broken" }},
+		{"counts disagree", func(r *segmentscan.Report) { r.TargetResults[2].Status = segmentscan.TargetBlocked }},
+		{"partial coverage", func(r *segmentscan.Report) { r.TargetResults = r.TargetResults[:2] }},
+	}
+	for _, tc := range bad {
+		r := good
+		r.TargetResults = append([]segmentscan.TargetResult(nil), good.TargetResults...)
+		tc.mutate(&r)
+		if err := segmentscan.ValidateReport(intent, r); err == nil {
+			t.Errorf("%s: report accepted", tc.name)
+		}
+	}
+
+	legacy := good
+	legacy.TargetResults = nil
+	if err := segmentscan.ValidateReport(intent, legacy); err != nil {
+		t.Fatalf("report without per-target outcomes (older relay) rejected: %v", err)
+	}
+	if _, reason := segmentscan.Status(legacy); strings.Contains(reason, ":") {
+		t.Fatalf("legacy reason %q should not pretend to name targets", reason)
+	}
+}

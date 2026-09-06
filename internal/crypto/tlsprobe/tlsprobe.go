@@ -42,14 +42,52 @@ type Result struct {
 }
 
 type config struct {
-	timeout    time.Duration
-	dialer     *net.Dialer
-	alpn       []string
-	serverName string
+	timeout      time.Duration
+	dialer       *net.Dialer
+	alpn         []string
+	serverName   string
+	preHandshake PreHandshake
+}
+
+// PreHandshake negotiates an application-level upgrade to TLS on the raw TCP
+// connection before the ClientHello is sent (for example PostgreSQL's
+// SSLRequest). It must consume exactly the bytes of that negotiation and return
+// an error when the peer declines TLS.
+type PreHandshake func(ctx context.Context, conn net.Conn) error
+
+// WithPreHandshake runs an application-protocol negotiation (STARTTLS-style)
+// on the raw connection before the TLS handshake. See PostgresSSLRequest.
+func WithPreHandshake(negotiate PreHandshake) Option {
+	return func(c *config) {
+		c.preHandshake = negotiate
+	}
 }
 
 // Option configures a probe.
 type Option func(*config)
+
+// Probe stages named by StageError.
+const (
+	StageDial      = "dial"
+	StageNegotiate = "negotiate"
+	StageHandshake = "handshake"
+)
+
+// StageError reports which stage of a probe failed so callers can tell an
+// unreachable listener (dial) from one that is reachable but speaks a protocol
+// that needs negotiation before TLS (handshake). Its text is stable:
+// "tlsprobe: <stage> <addr>: <cause>".
+type StageError struct {
+	Stage string
+	Addr  string
+	Err   error
+}
+
+func (e *StageError) Error() string {
+	return "tlsprobe: " + e.Stage + " " + e.Addr + ": " + e.Err.Error()
+}
+
+func (e *StageError) Unwrap() error { return e.Err }
 
 // WithTimeout bounds the dial and handshake (default 10s).
 func WithTimeout(d time.Duration) Option {
@@ -101,9 +139,15 @@ func Probe(ctx context.Context, addr string, opts ...Option) (Result, error) {
 
 	conn, err := cfg.dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
-		return Result{}, fmt.Errorf("tlsprobe: dial %s: %w", addr, err)
+		return Result{}, &StageError{Stage: StageDial, Addr: addr, Err: err}
 	}
 	defer func() { _ = conn.Close() }()
+
+	if cfg.preHandshake != nil {
+		if err := cfg.preHandshake(ctx, conn); err != nil {
+			return Result{}, &StageError{Stage: StageNegotiate, Addr: addr, Err: err}
+		}
+	}
 
 	// InsecureSkipVerify: we inventory whatever certificate is presented, valid or
 	// not — this connection is never used to send or trust data.
@@ -120,7 +164,7 @@ func Probe(ctx context.Context, addr string, opts ...Option) (Result, error) {
 		NextProtos: cfg.alpn,
 	})
 	if err := tlsConn.HandshakeContext(ctx); err != nil {
-		return Result{}, fmt.Errorf("tlsprobe: handshake %s: %w", addr, err)
+		return Result{}, &StageError{Stage: StageHandshake, Addr: addr, Err: err}
 	}
 
 	// Deliberately send no application data — the probe is non-invasive.

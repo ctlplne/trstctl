@@ -1,9 +1,10 @@
 # trstctl Demo Stack
 
 Use this stack for a live solutions-engineering walkthrough. It brings up a local
-OIDC provider, PostgreSQL, NATS JetStream, an isolated signer, LocalStack KMS, the
-web/API server, and a seed job that creates realistic demo data through served
-HTTPS APIs.
+OIDC provider, PostgreSQL, NATS JetStream, an isolated signer, LocalStack (KMS for
+managed keys; Secrets Manager and ACM as targets for the seeded cloud discovery
+sources), the web/API server, and a seed job that creates realistic demo data
+through served HTTPS APIs.
 
 ```bash
 docker compose -f deploy/demo/docker-compose.yml up --build
@@ -47,7 +48,8 @@ The seed job creates a 180-day realistic history: owners, members, profiles, an
 internal CA catalog row, real signer-issued X.509 inventory, imported and
 discovered certificates with different expiries, stored secrets, a dynamic PKI
 secret, transit encryption/signing keys, LocalStack KMS-backed managed keys,
-discovery jobs/runs, API tokens, ephemeral API keys, agent enrollment tokens,
+cloud discovery sources whose AWS providers point at LocalStack (seeded with a
+tagged certificate secret and an ACM certificate), discovery jobs/runs, API tokens, ephemeral API keys, agent enrollment tokens,
 audit-producing lifecycle transitions, and notification-facing preview rows.
 
 The seed is a convergent, versioned migration. It first reads each logical

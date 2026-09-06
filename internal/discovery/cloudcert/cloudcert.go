@@ -16,6 +16,7 @@ package cloudcert
 import (
 	"context"
 	"errors"
+	"sort"
 	"sync"
 	"time"
 
@@ -73,7 +74,23 @@ type Report struct {
 	Providers  int
 	Discovered int
 	Failed     int // providers that returned an error
+	// Outcomes names every provider's terminal result (sorted by provider name)
+	// so a partial pass says which provider failed and why.
+	Outcomes []ProviderOutcome
 }
+
+// ProviderOutcome is one provider's terminal result in a discovery pass.
+type ProviderOutcome struct {
+	Provider string
+	Status   string // OutcomeSucceeded or OutcomeFailed
+	Error    string
+}
+
+// Provider outcome statuses.
+const (
+	OutcomeSucceeded = "succeeded"
+	OutcomeFailed    = "failed"
+)
 
 type config struct {
 	workers int
@@ -139,11 +156,17 @@ func (d *Discoverer) Close() { d.pool.Close() }
 // certificate to the sink. A provider error is counted, not fatal: the others'
 // results are still recorded.
 func (d *Discoverer) Discover(ctx context.Context, providers []Provider) Report {
-	rep := Report{Providers: len(providers)}
+	rep := Report{Providers: len(providers), Outcomes: make([]ProviderOutcome, 0, len(providers))}
 	var (
 		wg sync.WaitGroup
 		mu sync.Mutex
 	)
+	outcome := func(name, status, detail string) {
+		if status == OutcomeFailed {
+			rep.Failed++
+		}
+		rep.Outcomes = append(rep.Outcomes, ProviderOutcome{Provider: name, Status: status, Error: detail})
+	}
 	for _, p := range providers {
 		p := p
 		wg.Add(1)
@@ -153,25 +176,27 @@ func (d *Discoverer) Discover(ctx context.Context, providers []Provider) Report 
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
-				rep.Failed++
+				outcome(p.Name(), OutcomeFailed, err.Error())
 				return
 			}
 			for _, f := range found {
 				if err := d.sink.Record(ctx, f); err != nil {
-					rep.Failed++
+					outcome(p.Name(), OutcomeFailed, err.Error())
 					return
 				}
 				rep.Discovered++
 			}
+			outcome(p.Name(), OutcomeSucceeded, "")
 		}
 		if err := d.submit(ctx, task); err != nil {
 			wg.Done()
 			mu.Lock()
-			rep.Failed++
+			outcome(p.Name(), OutcomeFailed, err.Error())
 			mu.Unlock()
 		}
 	}
 	wg.Wait()
+	sort.SliceStable(rep.Outcomes, func(i, j int) bool { return rep.Outcomes[i].Provider < rep.Outcomes[j].Provider })
 	return rep
 }
 

@@ -1818,7 +1818,13 @@ func componentSchemas() map[string]*Schema {
 		"targets": {Type: "integer"}, "discovered": {Type: "integer"}, "failed": {Type: "integer"},
 		"rejected": {Type: "integer"}, "blocked": {Type: "integer"}, "error": str(), "started_at": timestamp(),
 		"completed_at": timestamp(), "created_at": timestamp(),
-	}, "id", "tenant_id", "source_id", "status", "dry_run", "execution", "targets", "discovered", "failed", "rejected", "blocked", "created_at")
+		"target_results": {Type: "array", Items: object(map[string]*Schema{
+			"kind":   {Type: "string", Enum: []string{"network", "ssh", "cloud_provider"}},
+			"target": str(),
+			"status": {Type: "string", Enum: []string{"succeeded", "failed", "blocked", "rejected"}},
+			"error":  str(),
+		}, "kind", "target", "status")},
+	}, "id", "tenant_id", "source_id", "status", "dry_run", "execution", "targets", "discovered", "failed", "rejected", "blocked", "created_at", "target_results")
 	discoveryRunReq := object(map[string]*Schema{
 		"source_id": uuid(), "schedule_id": uuid(), "dry_run": {Type: "boolean"},
 	}, "source_id")
@@ -1828,7 +1834,8 @@ func componentSchemas() map[string]*Schema {
 		"risk_score": {Type: "integer"}, "metadata": {Type: "object"}, "discovered_at": timestamp(),
 		"triage_status":       {Type: "string", Enum: []string{"unmanaged", "investigating", "managed", "dismissed"}},
 		"managed_identity_id": uuid(), "triage_actor": str(), "triage_reason": str(), "triaged_at": timestamp(),
-	}, "id", "tenant_id", "run_id", "source_id", "kind", "ref", "provenance", "fingerprint", "metadata", "discovered_at")
+		"first_seen_at": timestamp(), "last_seen_at": timestamp(), "seen_count": {Type: "integer"},
+	}, "id", "tenant_id", "run_id", "source_id", "kind", "ref", "provenance", "fingerprint", "metadata", "discovered_at", "first_seen_at", "last_seen_at", "seen_count")
 	discoveryFindingTriageReq := object(map[string]*Schema{
 		"managed_identity_id": uuid(), "reason": str(), "owner": str(), "team": str(),
 		"tags": {Type: "array", Items: str()},

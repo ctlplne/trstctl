@@ -99,6 +99,22 @@ disconnect after admission is durable and retryable instead of being done inline
 the request handler. Readiness proves that an eligible relay exists; it does not claim
 that a particular relay is connected at every millisecond.
 
+#### What a run tells you, target by target
+
+A completed run carries one outcome per assigned target in `target_results`
+(`succeeded`, `failed`, `blocked`, or `rejected`, with the reason for anything that
+did not succeed). A `partial` run's `error` names the targets that failed or were
+blocked, so **Discover → Runs** shows which listener is the problem instead of a bare
+count. Listeners that need an application-level upgrade to TLS are handled without a
+protocol hint: when a reachable target rejects a bare TLS ClientHello, the scanner
+retries with the PostgreSQL SSLRequest negotiation and inventories the certificate the
+server then presents.
+
+Running the same source again refreshes its findings instead of duplicating them: a
+listener observed by a later run keeps its one finding (and its triage decision) with
+`first_seen_at`, `last_seen_at`, `seen_count`, and `run_id` moved to the latest run,
+so the console and the open-finding counts describe the estate once.
+
 #### Recover a failed or partial run without erasing the failure
 
 Open **Discover → Runs** and choose **Retry** on a `failed` or `partial` run. The
@@ -511,11 +527,11 @@ code awaiting control-plane wiring (this matters for an honest evaluation — se
 | Capability                                                | Status today                                                                                                                                                                             |
 | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Certificate inventory (F1)                                | **Served** — REST + CLI, event-sourced, with the `/api/v1/certificates/health` expiry/source dashboard                                                                                   |
-| Network discovery (F2)                                    | **Served** — source/preview/preflight/schedule/run/finding APIs + CLI/UI; relay readiness is checked before admission, and TLS scans execute through the outbox with reserved-IP SSRF filtering |
+| Network discovery (F2)                                    | **Served** — source/preview/preflight/schedule/run/finding APIs + CLI/UI; relay readiness is checked before admission, TLS scans execute through the outbox with reserved-IP SSRF filtering; runs report per-target outcomes, PostgreSQL listeners are negotiated (SSLRequest) before TLS, and repeat runs refresh findings instead of duplicating them |
 | Agent-based discovery (F3)                                | **Served** — enrollment (`/enroll/bootstrap`, `/api/v1/agents`) and the mTLS `ReportInventory` path record source/run/finding rows and graph nodes                                       |
 | SSH discovery (F42)                                       | **Served** — source/schedule/run/finding APIs + CLI/UI; host-key scans execute through the outbox, and on-host SSH/private-key inventory reports through the agent mTLS path             |
-| Agentless cloud discovery (F49)                           | **Served** — AWS ACM, Azure Key Vault, and GCP Certificate Manager provider execution runs from the outbox with credential references                                                    |
-| Secret-store & API-key discovery (F35, F36)               | **Served for cloud secret managers** — AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV imports; metadata-only references and fingerprints, never values |
+| Agentless cloud discovery (F49)                           | **Served** — AWS ACM, Azure Key Vault, and GCP Certificate Manager provider execution runs from the outbox with credential references; the shipped demo lab proves the AWS provider against its LocalStack emulator, and a run names each provider's outcome |
+| Secret-store & API-key discovery (F35, F36)               | **Served for cloud secret managers** — AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV imports; metadata-only references and fingerprints, never values; the demo lab seeds a tagged certificate secret in LocalStack so the AWS collector is proven locally, and a partial run names the provider that failed |
 | Cross-surface NHI discovery                               | **Served** — six-surface (IdP/cloud/SaaS/on-prem/code/CI) metadata-only findings                                                                                                         |
 | Unified NHI inventory                                     | **Served** — `/api/v1/nhi/inventory` normalizes identities, certificates, tokens, agents, and findings across eleven kinds                                                               |
 | Service-account discovery (CAP-NHI-03)                    | **Served** — AD/on-prem and cloud service-account findings                                                                                                                               |

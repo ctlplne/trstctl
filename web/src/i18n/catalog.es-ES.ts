@@ -1245,6 +1245,7 @@ const esESCatalog = {
   "discovery.source.relayHint": "Déjelo vacío para que cualquier relé inscrito con rol de red reclame este trabajo.",
   "discovery.source.executionBinding": "Vinculación de ejecución",
   "discovery.run.executor": "Ejecutor",
+  "discovery.run.targetOutcomes": "Resultados por objetivo",
   "discovery.run.relay": "Retransmisor",
   "discovery.run.controlPlane": "Plano de control",
   "discovery.run.unbound": "Sin vincular",

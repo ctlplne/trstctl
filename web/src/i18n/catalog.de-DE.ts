@@ -1268,6 +1268,7 @@ const deDECatalog = {
   "discovery.source.relayHint": "Leer lassen, damit jeder registrierte Relay mit Netzwerkrolle diese Arbeit übernehmen kann.",
   "discovery.source.executionBinding": "Ausführungsbindung",
   "discovery.run.executor": "Ausführer",
+  "discovery.run.targetOutcomes": "Zielergebnisse",
   "discovery.run.relay": "Relay",
   "discovery.run.controlPlane": "Steuerungsebene",
   "discovery.run.unbound": "Nicht gebunden",

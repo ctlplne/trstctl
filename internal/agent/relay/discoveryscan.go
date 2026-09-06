@@ -125,10 +125,15 @@ func Sweep(ctx context.Context, intent DiscoveryScanIntent) (DiscoveryReport, er
 		scanner := netscan.New(sink, opts...)
 		defer scanner.Close()
 		rep := scanner.Scan(ctx, targets)
+		results := make([]segmentscan.TargetResult, 0, len(rep.TargetResults))
+		for _, r := range rep.TargetResults {
+			results = append(results, segmentscan.TargetResult{Target: r.Target, Status: r.Status, Error: r.Error})
+		}
 		return DiscoveryReport{
 			Mode: DiscoveryModeTLS, Findings: sortFindings(sink.findings),
 			Targets: rep.Targets, Discovered: rep.Discovered,
 			Failed: rep.Failed, Rejected: rep.Rejected, Blocked: rep.Blocked,
+			TargetResults: results,
 		}, nil
 	case DiscoveryModeSSH:
 		sink := &relaySSHSink{}
@@ -140,10 +145,15 @@ func Sweep(ctx context.Context, intent DiscoveryScanIntent) (DiscoveryReport, er
 		scanner := sshscan.New(sink, opts...)
 		defer scanner.Close()
 		rep := scanner.Scan(ctx, targets)
+		results := make([]segmentscan.TargetResult, 0, len(rep.TargetResults))
+		for _, r := range rep.TargetResults {
+			results = append(results, segmentscan.TargetResult{Target: r.Target, Status: r.Status, Error: r.Error})
+		}
 		return DiscoveryReport{
 			Mode: DiscoveryModeSSH, Findings: sortFindings(sink.findings),
 			Targets: rep.Targets, Discovered: rep.Discovered,
 			Failed: rep.Failed, Rejected: rep.Rejected, Blocked: rep.Blocked,
+			TargetResults: results,
 		}, nil
 	default:
 		return DiscoveryReport{}, fmt.Errorf("relay: unknown discovery mode %q", intent.Mode)

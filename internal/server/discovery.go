@@ -282,16 +282,21 @@ func (d *issuanceDispatcher) executeCloudCertificateDiscoveryRun(ctx context.Con
 	discoverer := cloudcert.NewDiscoverer(sink, cloudcert.WithWorkers(4), cloudcert.WithQueue(64), cloudcert.WithBackoff(10*time.Millisecond))
 	defer discoverer.Close()
 	rep := discoverer.Discover(ctx, providers)
-	out := netscan.Report{Targets: rep.Providers, Discovered: rep.Discovered, Failed: rep.Failed}
+	outcomes := make([]cloudProviderOutcome, 0, len(rep.Outcomes))
+	for _, o := range rep.Outcomes {
+		outcomes = append(outcomes, cloudProviderOutcome{Provider: o.Provider, Status: o.Status, Error: o.Error})
+	}
+	out := netscan.Report{Targets: rep.Providers, Discovered: rep.Discovered, Failed: rep.Failed,
+		TargetResults: cloudProviderTargetResults(outcomes)}
 	status := "succeeded"
 	msg := ""
 	if rep.Failed > 0 {
 		if rep.Discovered > 0 {
 			status = "partial"
-			msg = "some cloud certificate providers failed"
+			msg = "some cloud certificate providers failed" + cloudProviderFailureSummary(outcomes)
 		} else {
 			status = "failed"
-			msg = "all cloud certificate providers failed"
+			msg = "all cloud certificate providers failed" + cloudProviderFailureSummary(outcomes)
 		}
 	}
 	if rep.Discovered == 0 && rep.Failed == 0 {
@@ -316,16 +321,21 @@ func (d *issuanceDispatcher) executeCloudSecretDiscoveryRun(ctx context.Context,
 	discoverer := cloudsecret.NewDiscoverer(sink, cloudsecret.WithWorkers(4), cloudsecret.WithQueue(64), cloudsecret.WithBackoff(10*time.Millisecond))
 	defer discoverer.Close()
 	rep := discoverer.Discover(ctx, providers)
-	out := netscan.Report{Targets: rep.Providers, Discovered: rep.Discovered, Failed: rep.Failed}
+	outcomes := make([]cloudProviderOutcome, 0, len(rep.Outcomes))
+	for _, o := range rep.Outcomes {
+		outcomes = append(outcomes, cloudProviderOutcome{Provider: o.Provider, Status: o.Status, Error: o.Error})
+	}
+	out := netscan.Report{Targets: rep.Providers, Discovered: rep.Discovered, Failed: rep.Failed,
+		TargetResults: cloudProviderTargetResults(outcomes)}
 	status := "succeeded"
 	msg := ""
 	if rep.Failed > 0 {
 		if rep.Discovered > 0 {
 			status = "partial"
-			msg = "some cloud secret-manager providers failed"
+			msg = "some cloud secret-manager providers failed" + cloudProviderFailureSummary(outcomes)
 		} else {
 			status = "failed"
-			msg = "all cloud secret-manager providers failed"
+			msg = "all cloud secret-manager providers failed" + cloudProviderFailureSummary(outcomes)
 		}
 	}
 	if rep.Discovered == 0 && rep.Failed == 0 {
@@ -383,6 +393,66 @@ func (d *issuanceDispatcher) executeCTLogDiscoveryRun(ctx context.Context, tenan
 		return report, "partial", message, nil
 	}
 	return report, "failed", message, nil
+}
+
+// cloudProviderOutcome is one provider's terminal result in a cloud discovery run.
+type cloudProviderOutcome struct {
+	Provider string
+	Status   string
+	Error    string
+}
+
+// cloudProviderTargetResults carries provider outcomes into the completion
+// event as kind "cloud_provider". Provider names repeat when one source lists
+// the same provider twice (two regions), so repeats are suffixed to keep every
+// target result distinct.
+func cloudProviderTargetResults(outcomes []cloudProviderOutcome) []netscan.TargetResult {
+	if len(outcomes) == 0 {
+		return nil
+	}
+	seen := map[string]int{}
+	out := make([]netscan.TargetResult, 0, len(outcomes))
+	for _, o := range outcomes {
+		target := strings.TrimSpace(o.Provider)
+		if target == "" {
+			target = "provider"
+		}
+		seen[target]++
+		if n := seen[target]; n > 1 {
+			target = fmt.Sprintf("%s#%d", target, n)
+		}
+		out = append(out, netscan.TargetResult{Kind: "cloud_provider", Target: target, Status: o.Status, Error: o.Error})
+	}
+	return out
+}
+
+// cloudProviderFailureSummary names the failed providers (bounded) for the
+// run's error text; the full list travels in the completion event.
+func cloudProviderFailureSummary(outcomes []cloudProviderOutcome) string {
+	var parts []string
+	total := 0
+	for _, o := range outcomes {
+		if o.Status != "failed" {
+			continue
+		}
+		total++
+		if len(parts) >= 3 {
+			continue
+		}
+		part := o.Provider
+		if o.Error != "" {
+			part += " (" + o.Error + ")"
+		}
+		parts = append(parts, part)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	summary := ": " + strings.Join(parts, "; ")
+	if total > len(parts) {
+		summary += fmt.Sprintf("; and %d more", total-len(parts))
+	}
+	return summary
 }
 
 func discoveryTargetResults(in []netscan.TargetResult) []store.DiscoveryTargetResult {

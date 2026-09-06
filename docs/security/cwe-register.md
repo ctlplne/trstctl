@@ -44,11 +44,11 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1373 annotated sites across 26 rules. Each row is
+1378 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (299 sites)
+### G101 — CWE-798 Use of hardcoded credentials (303 sites)
 
 | Location | Reason |
 |---|---|
@@ -206,6 +206,7 @@ not this file.
 | `internal/discovery/apikey/apikey_test.go:13` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
 | `internal/discovery/apikey/apikey_test.go:20` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
 | `internal/discovery/apikey/apikey_test.go:25` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
+| `internal/discovery/cloudsecret/outcomes_test.go:35` | fabricated fixture secret name; the test needs the shape, no value is real (CWE-798) |
 | `internal/dns/akamai/akamai_test.go:26` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/dns/cloudflare/cloudflare_test.go:24` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/dns/googledns/googledns_test.go:267` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -256,6 +257,9 @@ not this file.
 | `internal/server/cmdb_served_test.go:32` | credential reference (env: pointer), no credential value present (CWE-798) |
 | `internal/server/cmdb_served_test.go:36` | credential reference (secret store pointer), no credential value present (CWE-798) |
 | `internal/server/cmdb_served_test.go:44` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/discovery_cloud_outcomes_served_test.go:51` | env credential references and fixture endpoints; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/discovery_cloud_outcomes_served_test.go:52` | env credential reference, not a value (CWE-798) |
+| `internal/server/discovery_cloud_outcomes_served_test.go:53` | env credential reference, not a value (CWE-798) |
 | `internal/server/discovery_recovery_served_test.go:202` | reference names only; fixture values are synthetic and never shipped |
 | `internal/server/discovery_recovery_served_test.go:211` | reference names only; fixture values are synthetic and never shipped |
 | `internal/server/discovery_recovery_served_test.go:220` | reference names only; fixture values are synthetic and never shipped |
@@ -378,7 +382,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:329` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (219 sites)
+### G115 — CWE-190 Integer overflow or wraparound (220 sites)
 
 | Location | Reason |
 |---|---|
@@ -467,6 +471,7 @@ not this file.
 | `internal/projections/aud64_test.go:42` | every generated fixture sequence is a positive small integer (CWE-190). |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:447` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `internal/projections/projections.go:4465` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:232` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:239` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -524,8 +529,8 @@ not this file.
 | `internal/store/connector_lifecycle.go:497` | constrained positive PostgreSQL bigint (CWE-190) |
 | `internal/store/connector_lifecycle.go:500` | constrained positive PostgreSQL bigint (CWE-190) |
 | `internal/store/cryptoasset_migration_test.go:38` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/store/discovery.go:177` | JetStream event sequences are stored in PostgreSQL bigint throughout the projection spine (CWE-190) |
-| `internal/store/discovery.go:221` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
+| `internal/store/discovery.go:190` | JetStream event sequences are stored in PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/store/discovery.go:234` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
 | `internal/store/discovery_coverage.go:37` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/discovery_coverage.go:57` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/discovery_coverage.go:81` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
@@ -691,7 +696,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:2988` | closed test table list above |
+| `internal/store/migration_content_test.go:3080` | closed test table list above |
 
 ### G203 — CWE-? (unmapped rule) (2 sites)
 
@@ -1435,7 +1440,7 @@ not this file.
 | `internal/crypto/mtls/server.go:476` | localhost liveness probe of this process's own ephemeral self-signed listener; no credential, no data (CWE-295) |
 | `internal/crypto/mtls/server_test.go:251` | test TLS client speaking to the test's own server (CWE-295) |
 | `internal/crypto/mtls/tls_floor_test.go:34` | loopback test dial against the test's own self-signed server (CWE-295) |
-| `internal/crypto/tlsprobe/tlsprobe.go:114` | discovery inventories whatever cert is served; the connection is never trusted and never carries data (CWE-295) |
+| `internal/crypto/tlsprobe/tlsprobe.go:158` | discovery inventories whatever cert is served; the connection is never trusted and never carries data (CWE-295) |
 
 ### G403 — CWE-326 Inadequate encryption strength (RSA key size) (1 sites)
 

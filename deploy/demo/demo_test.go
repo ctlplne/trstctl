@@ -1565,3 +1565,59 @@ func withoutString(values []string, remove string) []string {
 	}
 	return out
 }
+
+// The seeded cloud discovery sources must have a real local target: LocalStack
+// serves Secrets Manager and ACM, an init script seeds the fixtures the
+// collectors look for, the control plane holds the credential values the
+// sources reference, and the AWS providers point at the emulator through the
+// loopback proxy (the GCP references stay unset so a partial run is exercised).
+func TestDemoLocalStackBacksTheSeededCloudDiscoverySources(t *testing.T) {
+	cf := parseCompose(t)
+	services := fmt.Sprint(cf.Services["localstack"].Environment["SERVICES"])
+	for _, want := range []string{"kms", "secretsmanager", "acm"} {
+		if !strings.Contains(services, want) {
+			t.Fatalf("localstack SERVICES = %q, want %s enabled", services, want)
+		}
+	}
+	mounted := false
+	for _, v := range cf.Services["localstack"].Volumes {
+		if v == "./localstack-init:/etc/localstack/init/ready.d:ro" {
+			mounted = true
+		}
+	}
+	if !mounted {
+		t.Fatalf("localstack init directory is not mounted read-only: %v", cf.Services["localstack"].Volumes)
+	}
+	info, err := os.Stat(filepath.Join("localstack-init", "seed-discovery.sh"))
+	if err != nil {
+		t.Fatalf("localstack seed script: %v", err)
+	}
+	if info.Mode()&0o111 == 0 {
+		t.Fatalf("localstack seed script mode = %v, want executable so LocalStack runs it on ready", info.Mode())
+	}
+	env := cf.Services["trstctl"].Environment
+	for _, key := range []string{
+		"TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID", "TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY",
+		"TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID", "TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY",
+	} {
+		if got := fmt.Sprint(env[key]); got != "test" {
+			t.Fatalf("trstctl %s = %q, want the emulator's placeholder credential", key, got)
+		}
+	}
+	if _, set := env["TRSTCTL_DISCOVERY_GCP_SM_TOKEN"]; set {
+		t.Fatal("demo must leave the GCP credential unset so the seeded partial run is honest")
+	}
+	seed := read(t, "seed.mjs")
+	for _, provider := range []string{`provider: "aws-acm"`, `provider: "aws-secrets-manager"`} {
+		i := strings.Index(seed, provider)
+		if i < 0 {
+			t.Fatalf("seed.mjs no longer declares %s", provider)
+		}
+		entry := seed[i : strings.Index(seed[i:], "}")+i]
+		for _, want := range []string{`endpoint: "http://127.0.0.1:4566"`, `allow_private_endpoint: true`, `private_egress_cidrs: ["127.0.0.1/32"]`} {
+			if !strings.Contains(entry, want) {
+				t.Fatalf("seed.mjs %s does not point at the emulator (%s missing): %s", provider, want, entry)
+			}
+		}
+	}
+}

@@ -193,6 +193,8 @@ func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *t
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	203: true,
+	202: true,
 	199: true,
 	197: true,
 	194: true,
@@ -1396,6 +1398,96 @@ func TestMigrationDataContentBackfills(t *testing.T) {
 			   SET first_event_sequence = 144, latest_event_sequence = 143
 			 WHERE id = '10000000-0000-4000-8000-000000000143'`); err == nil {
 			t.Fatal("0143 accepted a latest event sequence before its first sequence")
+		}
+	})
+
+	// 0202 adds observation freshness to findings that already exist: every
+	// historical row must keep its exact identity and payload, and its first/last
+	// seen must equal the discovery time it already recorded (seen once, never
+	// re-observed, no projected event sequence yet).
+	t.Run("0202_discovery_finding_observation_freshness", func(t *testing.T) {
+		ctx := context.Background()
+		prefix, target := splitMigrationsAtVersion(t, 202)
+		dsn := createFreshMigrationDatabase(t)
+		pool, err := pgxpool.New(ctx, dsn)
+		if err != nil {
+			t.Fatalf("connect fresh content database: %v", err)
+		}
+		t.Cleanup(pool.Close)
+
+		applyMigrationFiles(t, ctx, pool, prefix)
+		seedDiscoveryFindingBackfillContent(t, ctx, pool)
+		beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, discoveryFindingStableProjectionSQL())
+		if beforeCount == 0 {
+			t.Fatal("precondition: migration 0202 needs existing discovery findings")
+		}
+
+		applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+		afterCount, afterChecksum := checksumQuery(t, ctx, pool, discoveryFindingStableProjectionSQL())
+		if afterCount != beforeCount || afterChecksum != beforeChecksum {
+			t.Fatalf("0202 changed existing discovery rows: %d/%s before, %d/%s after",
+				beforeCount, beforeChecksum, afterCount, afterChecksum)
+		}
+		var drifted int
+		if err := pool.QueryRow(ctx, `
+			SELECT count(*)
+			  FROM discovery_findings
+			 WHERE first_seen_at <> discovered_at
+			    OR last_seen_at <> discovered_at
+			    OR seen_count <> 1
+			    OR projection_event_sequence <> 0`).Scan(&drifted); err != nil {
+			t.Fatalf("read post-0202 freshness: %v", err)
+		}
+		if drifted != 0 {
+			t.Fatalf("0202 left %d existing findings whose freshness does not equal their recorded discovery", drifted)
+		}
+	})
+
+	// 0203 adds per-target outcomes to runs that already completed: their counts,
+	// status and error text stay exactly as recorded and the outcome list starts
+	// empty (older runs never carried one).
+	t.Run("0203_discovery_run_target_results", func(t *testing.T) {
+		ctx := context.Background()
+		prefix, target := splitMigrationsAtVersion(t, 203)
+		dsn := createFreshMigrationDatabase(t)
+		pool, err := pgxpool.New(ctx, dsn)
+		if err != nil {
+			t.Fatalf("connect fresh content database: %v", err)
+		}
+		t.Cleanup(pool.Close)
+
+		applyMigrationFiles(t, ctx, pool, prefix)
+		seedDiscoveryFindingBackfillContent(t, ctx, pool)
+		if _, err := pool.Exec(ctx, `
+			UPDATE discovery_runs
+			   SET status = 'partial', targets = 6, discovered = 5, failed = 1,
+			       error = 'some relay discovery probes failed or were blocked',
+			       completed_at = '2026-08-12T12:00:00Z'`); err != nil {
+			t.Fatalf("seed pre-0203 completed runs: %v", err)
+		}
+		const stableRuns = `
+			SELECT id::text, tenant_id::text, source_id::text, status, targets, discovered,
+			       failed, rejected, blocked, error, completed_at::text
+			  FROM discovery_runs
+			 ORDER BY tenant_id, id`
+		beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, stableRuns)
+		if beforeCount == 0 {
+			t.Fatal("precondition: migration 0203 needs existing discovery runs")
+		}
+
+		applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+		afterCount, afterChecksum := checksumQuery(t, ctx, pool, stableRuns)
+		if afterCount != beforeCount || afterChecksum != beforeChecksum {
+			t.Fatalf("0203 changed existing discovery runs: %d/%s before, %d/%s after",
+				beforeCount, beforeChecksum, afterCount, afterChecksum)
+		}
+		var withOutcomes int
+		if err := pool.QueryRow(ctx, `
+			SELECT count(*) FROM discovery_runs WHERE target_results <> '[]'::jsonb`).Scan(&withOutcomes); err != nil {
+			t.Fatalf("read post-0203 outcomes: %v", err)
+		}
+		if withOutcomes != 0 {
+			t.Fatalf("0203 manufactured per-target outcomes for %d historical runs", withOutcomes)
 		}
 	})
 

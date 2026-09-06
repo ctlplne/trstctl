@@ -4462,6 +4462,7 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			ID: pl.ID, TenantID: e.TenantID, RunID: pl.RunID, SourceID: pl.SourceID,
 			Kind: pl.Kind, Ref: pl.Ref, Provenance: pl.Provenance, Fingerprint: pl.Fingerprint,
 			RiskScore: pl.RiskScore, Metadata: pl.Metadata, DiscoveredAt: e.Time,
+			ProjectionEventSequence: int64(e.Sequence), // #nosec G115 -- event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190)
 		}
 		alertDestination, alertPayload, alertKey, err := discoveryUrgentRiskAlert(finding)
 		if err != nil {
@@ -4512,11 +4513,18 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			return err
 		}
 		completedAt := e.Time
+		targetResults := make([]store.DiscoveryTargetResult, 0, len(pl.TargetResults))
+		for _, result := range pl.TargetResults {
+			targetResults = append(targetResults, store.DiscoveryTargetResult{
+				Kind: result.Kind, Target: result.Target, Status: result.Status,
+				Cursor: result.Cursor, Error: result.Error,
+			})
+		}
 		if err := p.store.ApplyDiscoveryRunCompletedTx(ctx, tx, store.DiscoveryRun{
 			ID: pl.ID, TenantID: e.TenantID, Status: pl.Status, Targets: pl.Targets,
 			Discovered: pl.Discovered, Failed: pl.Failed, Rejected: pl.Rejected,
 			Blocked: pl.Blocked, Error: pl.Error, ExecutedByAgentID: pl.ExecutedByAgentID,
-			CompletedAt: &completedAt,
+			CompletedAt: &completedAt, TargetResults: targetResults,
 		}); err != nil {
 			return err
 		}

@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sort"
 	"sync"
 	"time"
 
@@ -50,7 +51,28 @@ type Report struct {
 	Failed     int
 	Rejected   int
 	Blocked    int
+	// TargetResults holds one bounded outcome per submitted address (sorted by
+	// target) so a partial sweep names which host failed or was blocked and why.
+	TargetResults []TargetResult
 }
+
+// TargetResult is one target's terminal outcome.
+type TargetResult struct {
+	Kind   string
+	Target string
+	Status string
+	Error  string
+}
+
+// Target outcome statuses carried in Report.TargetResults.
+const (
+	TargetSucceeded = "succeeded"
+	TargetFailed    = "failed"
+	TargetBlocked   = "blocked"
+	TargetRejected  = "rejected"
+	// TargetKindSSH labels SSH host-key probes in per-target results.
+	TargetKindSSH = "ssh"
+)
 
 type config struct {
 	prober        Prober
@@ -172,24 +194,35 @@ func (s *Scanner) Stats() bulkhead.Stats { return s.pool.Stats() }
 // by the pool's workers; a full queue throttles the producer rather than dropping
 // targets. Scan blocks until all submitted probes complete.
 func (s *Scanner) Scan(ctx context.Context, targets []string) Report {
-	rep := Report{Targets: len(targets)}
+	rep := Report{Targets: len(targets), TargetResults: make([]TargetResult, 0, len(targets))}
 	var wg sync.WaitGroup
 	var mu sync.Mutex
+	outcome := func(addr, status, detail string) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch status {
+		case TargetSucceeded:
+			rep.Discovered++
+		case TargetFailed:
+			rep.Failed++
+		case TargetBlocked:
+			rep.Blocked++
+		case TargetRejected:
+			rep.Rejected++
+		}
+		rep.TargetResults = append(rep.TargetResults, TargetResult{Kind: TargetKindSSH, Target: addr, Status: status, Error: detail})
+	}
 
 	for _, addr := range targets {
 		if blocked, ok := s.blockedTarget(addr); ok {
 			if s.blockedHook != nil {
 				s.blockedHook(ctx, blocked)
 			}
-			mu.Lock()
-			rep.Blocked++
-			mu.Unlock()
+			outcome(addr, TargetBlocked, blocked.Reason)
 			continue
 		}
 		if ctx.Err() != nil {
-			mu.Lock()
-			rep.Rejected++
-			mu.Unlock()
+			outcome(addr, TargetRejected, "scan cancelled before the probe was submitted")
 			continue
 		}
 		addr := addr
@@ -200,23 +233,20 @@ func (s *Scanner) Scan(ctx context.Context, targets []string) Report {
 			if err == nil {
 				err = s.sink.Record(ctx, found)
 			}
-			mu.Lock()
 			if err != nil {
-				rep.Failed++
+				outcome(addr, TargetFailed, err.Error())
 			} else {
-				rep.Discovered++
+				outcome(addr, TargetSucceeded, "")
 			}
-			mu.Unlock()
 		}
 		if err := s.submit(ctx, task); err != nil {
 			wg.Done()
-			mu.Lock()
-			rep.Rejected++
-			mu.Unlock()
+			outcome(addr, TargetRejected, err.Error())
 		}
 	}
 
 	wg.Wait()
+	sort.Slice(rep.TargetResults, func(i, j int) bool { return rep.TargetResults[i].Target < rep.TargetResults[j].Target })
 	return rep
 }
 

@@ -49,10 +49,16 @@ services:
   localstack:
     image: localstack/localstack:3.8.1@sha256:b279c01f4cfb8f985a482e4014cabc1e2697b9d7a6c8c8db2e40f4d9f93687c7
     environment:
-      SERVICES: kms
+      # KMS backs the managed keys; Secrets Manager and ACM give the seeded
+      # cloud_secret / cloud_certificate discovery sources a real local target.
+      SERVICES: kms,secretsmanager,acm
       LS_LOG: warn
     volumes:
       - localstack:/var/lib/localstack
+      # Seeds a tagged demo certificate secret and an ACM certificate once the
+      # emulator is ready (idempotent; throwaway key material never leaves the
+      # emulator).
+      - ./localstack-init:/etc/localstack/init/ready.d:ro
 
   oidc-keys:
     image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
@@ -179,6 +185,14 @@ services:
       TRSTCTL_NATS_REPLICAS: "1"
       TRSTCTL_NATS_ALLOW_SINGLE_REPLICA: "true"
       TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS: "env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID,env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY,env:TRSTCTL_DISCOVERY_GCP_TOKEN,env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID,env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY,env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN"
+      # LocalStack accepts any well-formed SigV4 credentials; these values let the
+      # seeded AWS discovery sources resolve their env credential references and
+      # prove the collectors against the emulator (the GCP references stay unset
+      # on purpose: that provider's failure is surfaced, named, on a partial run).
+      TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID: test
+      TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY: test
+      TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID: test
+      TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY: test
       TRSTCTL_LOG_FORMAT: json
       TRSTCTL_BULKHEAD_API_WORKERS: "8"
       TRSTCTL_BULKHEAD_API_QUEUE: "256"

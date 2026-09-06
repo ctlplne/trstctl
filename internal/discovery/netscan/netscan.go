@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sort"
 	"sync"
 	"time"
 
@@ -49,10 +50,38 @@ type Prober func(ctx context.Context, addr string) (certinfo.Info, error)
 func DefaultProber(ctx context.Context, addr string) (certinfo.Info, error) {
 	res, err := tlsprobe.Probe(ctx, addr)
 	if err != nil {
-		return certinfo.Info{}, err
+		negotiated, retryErr := probeWithNegotiation(ctx, addr, err)
+		if retryErr != nil {
+			return certinfo.Info{}, err
+		}
+		res = negotiated
 	}
 	return certinfo.Inspect(res.PeerCertificates[0])
 }
+
+// probeWithNegotiation retries a reachable listener that rejected a bare
+// ClientHello with the application-level TLS negotiations the scanner knows
+// (PostgreSQL's SSLRequest today). Unreachable targets are not retried.
+func probeWithNegotiation(ctx context.Context, addr string, first error) (tlsprobe.Result, error) {
+	var stage *tlsprobe.StageError
+	if errors.As(first, &stage) && stage.Stage == tlsprobe.StageDial {
+		return tlsprobe.Result{}, first
+	}
+	if ctx.Err() != nil {
+		return tlsprobe.Result{}, first
+	}
+	return tlsprobe.Probe(ctx, addr, tlsprobe.WithPreHandshake(tlsprobe.PostgresSSLRequest))
+}
+
+// Target outcome statuses carried in Report.TargetResults.
+const (
+	TargetSucceeded = "succeeded"
+	TargetFailed    = "failed"
+	TargetBlocked   = "blocked"
+	TargetRejected  = "rejected"
+	// TargetKindNetwork labels TLS listener probes in per-target results.
+	TargetKindNetwork = "network"
+)
 
 // Report summarizes a scan.
 type Report struct {
@@ -62,8 +91,9 @@ type Report struct {
 	Rejected   int // could not be submitted (pool closed or context cancelled)
 	Blocked    int // skipped before dialing by the SSRF/reserved-address guard
 	// TargetResults carries bounded per-target facts to the immutable run
-	// completion event. Most scanners leave it empty; CT monitoring needs it so
-	// one failed endpoint does not hide a peer's successful progress.
+	// completion event: one entry per submitted address (sorted by target) so a
+	// partial run names which listener failed or was blocked and why. CT
+	// monitoring fills it with its own kind and cursor.
 	TargetResults []TargetResult
 }
 
@@ -197,24 +227,35 @@ func (s *Scanner) Stats() bulkhead.Stats { return s.pool.Stats() }
 // (backpressure) rather than dropping targets, so every reachable target is
 // scanned. Scan blocks until all submitted probes complete.
 func (s *Scanner) Scan(ctx context.Context, targets []string) Report {
-	rep := Report{Targets: len(targets)}
+	rep := Report{Targets: len(targets), TargetResults: make([]TargetResult, 0, len(targets))}
 	var wg sync.WaitGroup
 	var mu sync.Mutex
+	outcome := func(addr, status, detail string) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch status {
+		case TargetSucceeded:
+			rep.Discovered++
+		case TargetFailed:
+			rep.Failed++
+		case TargetBlocked:
+			rep.Blocked++
+		case TargetRejected:
+			rep.Rejected++
+		}
+		rep.TargetResults = append(rep.TargetResults, TargetResult{Kind: TargetKindNetwork, Target: addr, Status: status, Error: detail})
+	}
 
 	for _, addr := range targets {
 		if blocked, ok := s.blockedTarget(addr); ok {
 			if s.blockedHook != nil {
 				s.blockedHook(ctx, blocked)
 			}
-			mu.Lock()
-			rep.Blocked++
-			mu.Unlock()
+			outcome(addr, TargetBlocked, blocked.Reason)
 			continue
 		}
 		if ctx.Err() != nil {
-			mu.Lock()
-			rep.Rejected++
-			mu.Unlock()
+			outcome(addr, TargetRejected, "scan cancelled before the probe was submitted")
 			continue
 		}
 		addr := addr
@@ -225,23 +266,20 @@ func (s *Scanner) Scan(ctx context.Context, targets []string) Report {
 			if err == nil {
 				err = s.sink.Record(ctx, Found{Address: addr, Cert: info})
 			}
-			mu.Lock()
 			if err != nil {
-				rep.Failed++
+				outcome(addr, TargetFailed, err.Error())
 			} else {
-				rep.Discovered++
+				outcome(addr, TargetSucceeded, "")
 			}
-			mu.Unlock()
 		}
 		if err := s.submit(ctx, task); err != nil {
 			wg.Done()
-			mu.Lock()
-			rep.Rejected++
-			mu.Unlock()
+			outcome(addr, TargetRejected, err.Error())
 		}
 	}
 
 	wg.Wait()
+	sort.Slice(rep.TargetResults, func(i, j int) bool { return rep.TargetResults[i].Target < rep.TargetResults[j].Target })
 	return rep
 }
 

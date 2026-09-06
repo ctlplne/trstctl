@@ -3106,6 +3106,10 @@ export const messages = {
     defaultMessage: "Executor",
     description: "C2: run table column showing the relay or control-plane executor provenance.",
   },
+  "discovery.run.targetOutcomes": {
+    defaultMessage: "Target outcomes",
+    description: "C2: accessible label for the per-target outcome list under a failed or partial discovery run.",
+  },
   "discovery.run.relay": {
     defaultMessage: "Relay",
     description: "C2: run or source is executed by an enrolled network-role relay.",

@@ -69,7 +69,9 @@ type DiscoveryRun struct {
 	CompletedAt       *time.Time
 	CreatedAt         time.Time
 	// TargetResults are immutable per-target completion facts carried by the
-	// completion event. They are command data, not a discovery_runs column.
+	// completion event. Network, SSH and cloud-provider outcomes are projected
+	// into discovery_runs.target_results; CT-log outcomes project into their own
+	// per-log read model instead.
 	TargetResults []DiscoveryTargetResult `json:"-"`
 	// OnlyIfDue is command-side scheduling policy and is never projected. The
 	// scheduler sets it so concurrent leader sweeps serialize and re-check the
@@ -81,11 +83,11 @@ type DiscoveryRun struct {
 // completion event. CT monitoring uses it to project log health without a
 // scheduler-side write to a derived table (AN-2).
 type DiscoveryTargetResult struct {
-	Kind   string
-	Target string
-	Status string
-	Cursor int64
-	Error  string
+	Kind   string `json:"kind"`
+	Target string `json:"target"`
+	Status string `json:"status"`
+	Cursor int64  `json:"cursor,omitempty"`
+	Error  string `json:"error,omitempty"`
 }
 
 // DiscoveryFinding is a metadata-only credential reference produced by a run.
@@ -110,6 +112,17 @@ type DiscoveryFinding struct {
 	TriageActor       string
 	TriageReason      string
 	TriagedAt         *time.Time
+	// FirstSeenAt, LastSeenAt and SeenCount describe repeat observations of the
+	// same credential by later runs of the same source (one row per observation
+	// identity); RunID always names the latest run that observed it.
+	FirstSeenAt time.Time
+	LastSeenAt  time.Time
+	SeenCount   int
+	// ProjectionEventSequence is the immutable event's log sequence when the
+	// projector applies it (0 for direct writes). The row remembers the newest
+	// applied sequence so a catch-up replay of an already applied observation
+	// is a no-op instead of a second sighting.
+	ProjectionEventSequence int64
 }
 
 // ErrDiscoveryFindingConflict means two immutable recorded events claimed the
@@ -361,11 +374,12 @@ func (s *Store) ApplyDiscoveryFindingRecordedTx(ctx context.Context, tx pgx.Tx, 
 	tag, err := tx.Exec(ctx,
 		`INSERT INTO discovery_findings
 		        (id, tenant_id, run_id, source_id, kind, ref, provenance, fingerprint,
-		         risk_score, metadata, discovered_at, recorded_ids)
-		      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, ARRAY[$12::uuid])
+		         risk_score, metadata, discovered_at, recorded_ids, first_seen_at, last_seen_at, seen_count,
+		         projection_event_sequence)
+		      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, ARRAY[$12::uuid], $11, $11, 1, $13)
 		 ON CONFLICT DO NOTHING`,
 		f.ID, f.TenantID, f.RunID, f.SourceID, f.Kind, f.Ref, f.Provenance, f.Fingerprint,
-		f.RiskScore, normalizeJSON(f.Metadata), f.DiscoveredAt, recordedID)
+		f.RiskScore, normalizeJSON(f.Metadata), f.DiscoveredAt, recordedID, f.ProjectionEventSequence)
 	if err != nil {
 		return err
 	}
@@ -373,21 +387,27 @@ func (s *Store) ApplyDiscoveryFindingRecordedTx(ctx context.Context, tx pgx.Tx, 
 		return nil
 	}
 
-	// The insert can conflict on either identity boundary: the payload ID or the
-	// tenant/run/kind/ref/fingerprint natural key. Lock the winner, compare every
-	// immutable observation field, and merge only a byte-for-byte semantic replay.
+	// The insert can conflict on either identity boundary: the observation identity
+	// (payload ID) or the tenant/run/kind/ref/fingerprint natural key. Lock the
+	// winner and decide between three outcomes: an already-projected event is a
+	// no-op; the same observation seen again by a later run refreshes the row; a
+	// same-run payload that disagrees on the immutable observation is a conflict.
 	// PostgreSQL compares metadata as jsonb, so harmless JSON key ordering does not
 	// turn an identical observation into a false conflict.
 	var (
-		existingID                                              string
+		existingID, existingRun                                 string
 		existingTime                                            time.Time
-		sameRun, sameSource, sameKind, sameRef                  bool
+		existingSequence                                        int64
+		alreadyRecorded                                         bool
+		sameSource, sameKind, sameRef                           bool
 		sameProvenance, sameFingerprint, sameRisk, sameMetadata bool
 	)
 	err = tx.QueryRow(ctx,
 		`SELECT id::text,
+		        run_id::text,
 		        discovered_at,
-		        run_id = $3::uuid,
+		        projection_event_sequence,
+		        $11::uuid = ANY(recorded_ids),
 		        source_id = $4::uuid,
 		        kind = $5,
 		        ref = $6,
@@ -403,17 +423,64 @@ func (s *Store) ApplyDiscoveryFindingRecordedTx(ctx context.Context, tx pgx.Tx, 
 		  LIMIT 1
 		  FOR UPDATE`,
 		f.TenantID, f.ID, f.RunID, f.SourceID, f.Kind, f.Ref, f.Provenance,
-		f.Fingerprint, f.RiskScore, normalizeJSON(f.Metadata)).Scan(
-		&existingID, &existingTime, &sameRun, &sameSource, &sameKind, &sameRef,
+		f.Fingerprint, f.RiskScore, normalizeJSON(f.Metadata), recordedID).Scan(
+		&existingID, &existingRun, &existingTime, &existingSequence, &alreadyRecorded, &sameSource, &sameKind, &sameRef,
 		&sameProvenance, &sameFingerprint, &sameRisk, &sameMetadata)
 	if err != nil {
 		return fmt.Errorf("store: locate conflicted discovery finding: %w", err)
 	}
-	differences := make([]string, 0, 8)
+	if alreadyRecorded && existingSequence >= f.ProjectionEventSequence {
+		// The row already remembers this payload and has applied an event at or
+		// beyond this one's log sequence: a catch-up replay or an at-least-once
+		// redelivery of an observation that is already projected. A repeat sighting
+		// by a later run carries a higher sequence and therefore falls through.
+		return nil
+	}
+	identityDifferences := make([]string, 0, 4)
 	for field, same := range map[string]bool{
-		"run_id": sameRun, "source_id": sameSource, "kind": sameKind, "ref": sameRef,
-		"provenance": sameProvenance, "fingerprint": sameFingerprint,
-		"risk_score": sameRisk, "metadata": sameMetadata,
+		"source_id": sameSource, "kind": sameKind, "ref": sameRef, "fingerprint": sameFingerprint,
+	} {
+		if !same {
+			identityDifferences = append(identityDifferences, field)
+		}
+	}
+	if len(identityDifferences) > 0 {
+		sort.Strings(identityDifferences)
+		return fmt.Errorf(
+			"%w: tenant=%s natural_key=(run_id=%s kind=%q ref=%q fingerprint=%q) existing_id=%s incoming_id=%s differing_fields=%s",
+			ErrDiscoveryFindingConflict, f.TenantID, f.RunID, f.Kind, f.Ref, f.Fingerprint,
+			existingID, f.ID, strings.Join(identityDifferences, ","),
+		)
+	}
+	if existingRun != f.RunID {
+		// The same credential observed again by a later run of the source: keep the
+		// row (and its triage state), move it to the latest run and observation
+		// payload, and record the repeat. Replaying the same history reproduces the
+		// same counts because every applied event ID is remembered in recorded_ids.
+		_, err = tx.Exec(ctx,
+			`UPDATE discovery_findings
+			    SET run_id = $3::uuid,
+			        provenance = $4,
+			        risk_score = $5,
+			        metadata = $6::jsonb,
+			        discovered_at = LEAST(discovered_at, $7),
+			        first_seen_at = LEAST(first_seen_at, $7),
+			        last_seen_at = GREATEST(last_seen_at, $7),
+			        seen_count = seen_count + 1,
+			        projection_event_sequence = GREATEST(projection_event_sequence, $9),
+			        recorded_ids = ARRAY(
+			            SELECT DISTINCT payload_id
+			              FROM unnest(recorded_ids || ARRAY[$8::uuid]) AS payload_id
+			             ORDER BY payload_id
+			        )
+			  WHERE tenant_id = $1::uuid AND id = $2::uuid`,
+			f.TenantID, existingID, f.RunID, f.Provenance, f.RiskScore, normalizeJSON(f.Metadata),
+			f.DiscoveredAt, recordedID, f.ProjectionEventSequence)
+		return err
+	}
+	differences := make([]string, 0, 3)
+	for field, same := range map[string]bool{
+		"provenance": sameProvenance, "risk_score": sameRisk, "metadata": sameMetadata,
 	} {
 		if !same {
 			differences = append(differences, field)
@@ -428,6 +495,9 @@ func (s *Store) ApplyDiscoveryFindingRecordedTx(ctx context.Context, tx pgx.Tx, 
 		)
 	}
 
+	// Same run, same observation, different payload ID: a byte-for-byte semantic
+	// replay of pre-AUD-96 history. Keep the earliest row identity and remember
+	// every payload ID as a triage-resolvable alias.
 	canonicalID := existingID
 	if f.DiscoveredAt.Before(existingTime) || (f.DiscoveredAt.Equal(existingTime) && f.ID < existingID) {
 		canonicalID = f.ID
@@ -436,13 +506,16 @@ func (s *Store) ApplyDiscoveryFindingRecordedTx(ctx context.Context, tx pgx.Tx, 
 		`UPDATE discovery_findings
 		    SET id = $3::uuid,
 		        discovered_at = LEAST(discovered_at, $4),
+		        first_seen_at = LEAST(first_seen_at, $4),
+		        last_seen_at = GREATEST(last_seen_at, $4),
+		        projection_event_sequence = GREATEST(projection_event_sequence, $6),
 		        recorded_ids = ARRAY(
 		            SELECT DISTINCT payload_id
 		              FROM unnest(recorded_ids || ARRAY[$5::uuid, $2::uuid, $3::uuid]) AS payload_id
 		             ORDER BY payload_id
 		        )
 		  WHERE tenant_id = $1::uuid AND id = $2::uuid`,
-		f.TenantID, existingID, canonicalID, f.DiscoveredAt, recordedID)
+		f.TenantID, existingID, canonicalID, f.DiscoveredAt, recordedID, f.ProjectionEventSequence)
 	return err
 }
 
@@ -527,6 +600,17 @@ func (s *Store) ApplyDiscoveryFindingTriageChangedTx(ctx context.Context, tx pgx
 
 // ApplyDiscoveryRunCompletedTx projects a discovery.run.completed event.
 func (s *Store) ApplyDiscoveryRunCompletedTx(ctx context.Context, tx pgx.Tx, run DiscoveryRun) error {
+	projected := make([]DiscoveryTargetResult, 0, len(run.TargetResults))
+	for _, result := range run.TargetResults {
+		if result.Kind == "ct_log" {
+			continue
+		}
+		projected = append(projected, result)
+	}
+	targetResultsJSON, err := json.Marshal(projected)
+	if err != nil {
+		return err
+	}
 	tag, err := tx.Exec(ctx,
 		`UPDATE discovery_runs
 		    SET status = $3,
@@ -537,10 +621,11 @@ func (s *Store) ApplyDiscoveryRunCompletedTx(ctx context.Context, tx pgx.Tx, run
 		        blocked = $8,
 		        error = $9,
 		        executed_by_agent_id = NULLIF($10, '')::uuid,
-		        completed_at = $11
+		        completed_at = $11,
+		        target_results = $12::jsonb
 		  WHERE tenant_id = $1 AND id = $2`,
 		run.TenantID, run.ID, run.Status, run.Targets, run.Discovered, run.Failed,
-		run.Rejected, run.Blocked, run.Error, run.ExecutedByAgentID, run.CompletedAt)
+		run.Rejected, run.Blocked, run.Error, run.ExecutedByAgentID, run.CompletedAt, targetResultsJSON)
 	if err != nil {
 		return err
 	}
@@ -708,7 +793,8 @@ func (s *Store) GetDiscoveryRun(ctx context.Context, tenantID, id string) (Disco
 		              COALESCE(retry_of_run_id::text, ''), status, dry_run,
 		              requested_by, execution, segment, required_agent_role,
 		              COALESCE(required_agent_id::text, ''), COALESCE(executed_by_agent_id::text, ''),
-		              targets, discovered, failed, rejected, blocked, error, started_at, completed_at, created_at
+		              targets, discovered, failed, rejected, blocked, error, started_at, completed_at, created_at,
+		              target_results
 		         FROM discovery_runs
 		        WHERE tenant_id = $1 AND id = $2`, tenantID, id), &out)
 	})
@@ -725,7 +811,8 @@ func (s *Store) GetLatestDiscoveryRunForSource(ctx context.Context, tenantID, so
 		              COALESCE(retry_of_run_id::text, ''), status, dry_run,
 		              requested_by, execution, segment, required_agent_role,
 		              COALESCE(required_agent_id::text, ''), COALESCE(executed_by_agent_id::text, ''),
-		              targets, discovered, failed, rejected, blocked, error, started_at, completed_at, created_at
+		              targets, discovered, failed, rejected, blocked, error, started_at, completed_at, created_at,
+		              target_results
 		         FROM discovery_runs
 		        WHERE tenant_id = $1 AND source_id = $2
 		     ORDER BY created_at DESC, id DESC
@@ -742,7 +829,8 @@ func (s *Store) ListDiscoveryRunsPage(ctx context.Context, tenantID, afterID str
 		              COALESCE(retry_of_run_id::text, ''), status, dry_run,
 		              requested_by, execution, segment, required_agent_role,
 		              COALESCE(required_agent_id::text, ''), COALESCE(executed_by_agent_id::text, ''),
-		              targets, discovered, failed, rejected, blocked, error, started_at, completed_at, created_at
+		              targets, discovered, failed, rejected, blocked, error, started_at, completed_at, created_at,
+		              target_results
 		         FROM discovery_runs
 		        WHERE tenant_id = $1 AND id > $2
 		     ORDER BY id LIMIT $3`, tenantID, afterID, limit)
@@ -768,7 +856,8 @@ func (s *Store) ListDiscoveryFindingsPage(ctx context.Context, tenantID, runID, 
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		sql := `SELECT id::text, tenant_id::text, run_id::text, source_id::text, kind, ref,
 		              provenance, fingerprint, risk_score, metadata, discovered_at,
-		              triage_status, managed_identity_id::text, triage_actor, triage_reason, triaged_at
+		              triage_status, managed_identity_id::text, triage_actor, triage_reason, triaged_at,
+		              first_seen_at, last_seen_at, seen_count
 		         FROM discovery_findings
 		        WHERE tenant_id = $1 AND id > $2`
 		args := []any{tenantID, afterID, limit}
@@ -801,7 +890,8 @@ func (s *Store) GetDiscoveryFinding(ctx context.Context, tenantID, id string) (D
 		return scanDiscoveryFinding(tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, run_id::text, source_id::text, kind, ref,
 			        provenance, fingerprint, risk_score, metadata, discovered_at,
-			        triage_status, managed_identity_id::text, triage_actor, triage_reason, triaged_at
+			        triage_status, managed_identity_id::text, triage_actor, triage_reason, triaged_at,
+			        first_seen_at, last_seen_at, seen_count
 			   FROM discovery_findings
 			  WHERE tenant_id = $1 AND (id = $2 OR $2::uuid = ANY(recorded_ids))`, tenantID, id), &out)
 	})
@@ -907,17 +997,28 @@ func scanDiscoverySource(row rowScanner, src *DiscoverySource) error {
 }
 
 func scanDiscoveryRun(row rowScanner, run *DiscoveryRun) error {
-	return row.Scan(&run.ID, &run.TenantID, &run.SourceID, &run.ScheduleID, &run.RetryOfRunID, &run.Status, &run.DryRun,
+	var targetResults []byte
+	if err := row.Scan(&run.ID, &run.TenantID, &run.SourceID, &run.ScheduleID, &run.RetryOfRunID, &run.Status, &run.DryRun,
 		&run.RequestedBy, &run.Execution, &run.Segment, &run.RequiredAgentRole, &run.RequiredAgentID,
 		&run.ExecutedByAgentID, &run.Targets, &run.Discovered, &run.Failed, &run.Rejected, &run.Blocked, &run.Error,
-		&run.StartedAt, &run.CompletedAt, &run.CreatedAt)
+		&run.StartedAt, &run.CompletedAt, &run.CreatedAt, &targetResults); err != nil {
+		return err
+	}
+	run.TargetResults = nil
+	if len(targetResults) > 0 && string(targetResults) != "[]" {
+		if err := json.Unmarshal(targetResults, &run.TargetResults); err != nil {
+			return fmt.Errorf("store: decode discovery run target results: %w", err)
+		}
+	}
+	return nil
 }
 
 func scanDiscoveryFinding(row rowScanner, f *DiscoveryFinding) error {
 	var meta []byte
 	if err := row.Scan(&f.ID, &f.TenantID, &f.RunID, &f.SourceID, &f.Kind, &f.Ref,
 		&f.Provenance, &f.Fingerprint, &f.RiskScore, &meta, &f.DiscoveredAt,
-		&f.TriageStatus, &f.ManagedIdentityID, &f.TriageActor, &f.TriageReason, &f.TriagedAt); err != nil {
+		&f.TriageStatus, &f.ManagedIdentityID, &f.TriageActor, &f.TriageReason, &f.TriagedAt,
+		&f.FirstSeenAt, &f.LastSeenAt, &f.SeenCount); err != nil {
 		return err
 	}
 	f.Metadata = json.RawMessage(meta)

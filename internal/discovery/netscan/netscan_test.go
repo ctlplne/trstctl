@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -215,4 +216,49 @@ func containsBlocked(xs []netscan.BlockedTarget, x string) bool {
 		}
 	}
 	return false
+}
+
+// A scan names every submitted target's outcome so a partial run can say which
+// listener failed (and why) instead of only counting failures.
+func TestScanReportsEveryTargetOutcome(t *testing.T) {
+	sink := netscan.NewMemorySink()
+	failing := "127.0.0.1:65530"
+	s := netscan.New(sink,
+		netscan.WithAllowLoopbackTargets(true),
+		netscan.WithProber(func(_ context.Context, addr string) (certinfo.Info, error) {
+			if addr == failing {
+				return certinfo.Info{}, errors.New("tlsprobe: handshake " + addr + ": EOF")
+			}
+			return certinfo.Info{SHA256Fingerprint: "fp-" + addr}, nil
+		}),
+	)
+	defer s.Close()
+	rep := s.Scan(context.Background(), []string{"127.0.0.1:65531", failing, "10.0.0.9:443"})
+	if rep.Targets != 3 || rep.Discovered != 1 || rep.Failed != 1 || rep.Blocked != 1 {
+		t.Fatalf("report counts = %+v, want 1 discovered, 1 failed, 1 blocked", rep)
+	}
+	if len(rep.TargetResults) != 3 {
+		t.Fatalf("target results = %d, want one per submitted target", len(rep.TargetResults))
+	}
+	byTarget := map[string]netscan.TargetResult{}
+	for _, r := range rep.TargetResults {
+		if r.Kind != netscan.TargetKindNetwork {
+			t.Fatalf("target result kind = %q, want %q", r.Kind, netscan.TargetKindNetwork)
+		}
+		byTarget[r.Target] = r
+	}
+	if r := byTarget[failing]; r.Status != netscan.TargetFailed || !strings.Contains(r.Error, "handshake") {
+		t.Fatalf("failed target result = %+v, want the probe error named", r)
+	}
+	if r := byTarget["10.0.0.9:443"]; r.Status != netscan.TargetBlocked || !strings.Contains(r.Error, "SSRF guard") {
+		t.Fatalf("blocked target result = %+v, want the guard reason named", r)
+	}
+	if r := byTarget["127.0.0.1:65531"]; r.Status != netscan.TargetSucceeded || r.Error != "" {
+		t.Fatalf("succeeded target result = %+v, want no error", r)
+	}
+	for i := 1; i < len(rep.TargetResults); i++ {
+		if rep.TargetResults[i-1].Target > rep.TargetResults[i].Target {
+			t.Fatalf("target results are not sorted: %+v", rep.TargetResults)
+		}
+	}
 }

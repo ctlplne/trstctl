@@ -81,6 +81,7 @@ func (s *Server) recordDiscoveryScan(ctx context.Context, tenantID, agentName, i
 			ID: intent.ID, Status: status, Targets: report.Targets, Discovered: report.Discovered,
 			Failed: report.Failed, Rejected: report.Rejected, Blocked: report.Blocked, Error: reason,
 			Segment: intent.Segment, ExecutedByAgentID: agentID,
+			TargetResults: relayTargetResults(report),
 		}); err != nil {
 		return err
 	}
@@ -167,4 +168,21 @@ func decodeStrictJSON(raw []byte, out any) error {
 		return errors.New("JSON value has trailing content")
 	}
 	return nil
+}
+
+// relayTargetResults carries the relay's per-target outcomes into the completion
+// event under the kind of probe the mode ran.
+func relayTargetResults(report segmentscan.Report) []store.DiscoveryTargetResult {
+	if len(report.TargetResults) == 0 {
+		return nil
+	}
+	kind := "network"
+	if report.Mode == segmentscan.ModeSSH {
+		kind = "ssh"
+	}
+	out := make([]store.DiscoveryTargetResult, 0, len(report.TargetResults))
+	for _, result := range report.TargetResults {
+		out = append(out, store.DiscoveryTargetResult{Kind: kind, Target: result.Target, Status: result.Status, Error: result.Error})
+	}
+	return out
 }

@@ -419,7 +419,13 @@ func (o *Orchestrator) RecordDiscoveryFindingWithEventID(ctx context.Context, te
 func (o *Orchestrator) recordDiscoveryFinding(ctx context.Context, tenantID string, in store.DiscoveryFinding, eventID string) (store.DiscoveryFinding, error) {
 	id := in.ID
 	if id == "" {
-		id = discovery.FindingID(tenantID, in.RunID, in.Kind, in.Ref, in.Fingerprint)
+		if in.SourceID != "" {
+			// One row per observed credential per source: a repeat observation by a
+			// later run projects onto the same finding (see store.ApplyDiscoveryFindingRecordedTx).
+			id = discovery.FindingIdentity(tenantID, in.SourceID, in.Kind, in.Ref, in.Fingerprint)
+		} else {
+			id = discovery.FindingID(tenantID, in.RunID, in.Kind, in.Ref, in.Fingerprint)
+		}
 	}
 	meta := in.Metadata
 	if len(meta) == 0 {
@@ -810,7 +816,9 @@ func SanitizeDiscoveryRunError(detail string) string {
 func validateDiscoveryTargetResults(results []store.DiscoveryTargetResult) error {
 	seen := make(map[string]struct{}, len(results))
 	for _, result := range results {
-		if result.Kind != "ct_log" {
+		switch result.Kind {
+		case "ct_log", "network", "ssh", "cloud_provider":
+		default:
 			return fmt.Errorf("orchestrator: unsupported discovery target result kind %q", result.Kind)
 		}
 		target := strings.TrimSpace(result.Target)
@@ -824,11 +832,20 @@ func validateDiscoveryTargetResults(results []store.DiscoveryTargetResult) error
 			return fmt.Errorf("orchestrator: duplicate discovery target result %q", target)
 		}
 		seen[target] = struct{}{}
-		if result.Status != "succeeded" && result.Status != "failed" {
+		switch result.Status {
+		case "succeeded", "failed":
+		case "blocked", "rejected":
+			if result.Kind == "ct_log" {
+				return fmt.Errorf("orchestrator: invalid discovery target result status %q", result.Status)
+			}
+		default:
 			return fmt.Errorf("orchestrator: invalid discovery target result status %q", result.Status)
 		}
 		if result.Cursor < 0 {
 			return errors.New("orchestrator: discovery target result cursor must be non-negative")
+		}
+		if result.Kind != "ct_log" && result.Cursor != 0 {
+			return errors.New("orchestrator: only CT-log target results carry a cursor")
 		}
 		if result.Status == "succeeded" && result.Error != "" {
 			return errors.New("orchestrator: successful discovery target result cannot carry an error")

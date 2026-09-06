@@ -2092,14 +2092,32 @@ function RunTable({
     {
       id: "failure-detail",
       header: "Failure detail",
-      cell: (run) =>
-        run.error ? (
-          <span className="block max-w-[28rem] break-words text-xs text-risk-critical" title={run.error}>
-            {run.error}
-          </span>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        ),
+      cell: (run) => {
+        const unresolved = (run.target_results ?? []).filter((result) => result.status !== "succeeded");
+        if (!run.error && unresolved.length === 0) {
+          return <span className="text-muted-foreground">—</span>;
+        }
+        return (
+          <div className="max-w-[28rem] space-y-1 text-xs">
+            {run.error ? (
+              <span className="block break-words text-risk-critical" title={run.error}>
+                {run.error}
+              </span>
+            ) : null}
+            {unresolved.length > 0 ? (
+              <ul className="list-none space-y-0.5 pl-0 font-mono" aria-label={translateNow("discovery.run.targetOutcomes")}>
+                {unresolved.map((result) => (
+                  <li key={`${run.id}:${result.target}`} className="break-words">
+                    <span className="text-foreground">{result.target}</span>{" "}
+                    <StatusBadge vocabulary="lifecycle" value={result.status} />
+                    {result.error ? <span className="text-muted-foreground"> {result.error}</span> : null}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        );
+      },
     },
     {
       id: "executor",

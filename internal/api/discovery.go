@@ -331,6 +331,17 @@ type discoveryRunResponse struct {
 	StartedAt         *time.Time `json:"started_at"`
 	CompletedAt       *time.Time `json:"completed_at"`
 	CreatedAt         time.Time  `json:"created_at"`
+	// TargetResults names every assigned target's outcome for network, SSH and
+	// cloud-provider runs (empty for runs recorded before per-target outcomes and
+	// for CT-log monitoring, which has its own per-log view).
+	TargetResults []discoveryTargetResultResponse `json:"target_results"`
+}
+
+type discoveryTargetResultResponse struct {
+	Kind   string `json:"kind"`
+	Target string `json:"target"`
+	Status string `json:"status"`
+	Error  string `json:"error,omitempty"`
 }
 
 type discoveryFindingResponse struct {
@@ -350,6 +361,9 @@ type discoveryFindingResponse struct {
 	TriageActor       string          `json:"triage_actor,omitempty"`
 	TriageReason      string          `json:"triage_reason,omitempty"`
 	TriagedAt         *time.Time      `json:"triaged_at,omitempty"`
+	FirstSeenAt       time.Time       `json:"first_seen_at"`
+	LastSeenAt        time.Time       `json:"last_seen_at"`
+	SeenCount         int             `json:"seen_count"`
 }
 
 type discoveryFindingTriageRequest struct {
@@ -1421,8 +1435,15 @@ func toDiscoveryScheduleResponse(s store.DiscoverySchedule) discoveryScheduleRes
 }
 
 func toDiscoveryRunResponse(run store.DiscoveryRun) discoveryRunResponse {
+	targetResults := make([]discoveryTargetResultResponse, 0, len(run.TargetResults))
+	for _, result := range run.TargetResults {
+		targetResults = append(targetResults, discoveryTargetResultResponse{
+			Kind: result.Kind, Target: result.Target, Status: result.Status, Error: result.Error,
+		})
+	}
 	return discoveryRunResponse{
-		ID: run.ID, TenantID: run.TenantID, SourceID: run.SourceID, ScheduleID: run.ScheduleID,
+		TargetResults: targetResults,
+		ID:            run.ID, TenantID: run.TenantID, SourceID: run.SourceID, ScheduleID: run.ScheduleID,
 		RetryOfRunID: run.RetryOfRunID,
 		Status:       run.Status, DryRun: run.DryRun, RequestedBy: run.RequestedBy,
 		Execution: run.Execution, Segment: run.Segment, RequiredAgentRole: run.RequiredAgentRole,
@@ -1437,12 +1458,23 @@ func toDiscoveryFindingResponse(f store.DiscoveryFinding) discoveryFindingRespon
 	if len(meta) == 0 {
 		meta = json.RawMessage(`{}`)
 	}
+	firstSeen, lastSeen, seen := f.FirstSeenAt, f.LastSeenAt, f.SeenCount
+	if firstSeen.IsZero() {
+		firstSeen = f.DiscoveredAt
+	}
+	if lastSeen.IsZero() {
+		lastSeen = f.DiscoveredAt
+	}
+	if seen < 1 {
+		seen = 1
+	}
 	return discoveryFindingResponse{
 		ID: f.ID, TenantID: f.TenantID, RunID: f.RunID, SourceID: f.SourceID,
 		Kind: f.Kind, Ref: f.Ref, Provenance: f.Provenance, Fingerprint: f.Fingerprint,
 		RiskScore: f.RiskScore, Metadata: meta, DiscoveredAt: f.DiscoveredAt,
 		TriageStatus: f.TriageStatus, ManagedIdentityID: f.ManagedIdentityID,
 		TriageActor: f.TriageActor, TriageReason: f.TriageReason, TriagedAt: f.TriagedAt,
+		FirstSeenAt: firstSeen, LastSeenAt: lastSeen, SeenCount: seen,
 	}
 }
 

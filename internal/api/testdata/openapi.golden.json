@@ -10523,11 +10523,19 @@
           "fingerprint": {
             "type": "string"
           },
+          "first_seen_at": {
+            "format": "date-time",
+            "type": "string"
+          },
           "id": {
             "format": "uuid",
             "type": "string"
           },
           "kind": {
+            "type": "string"
+          },
+          "last_seen_at": {
+            "format": "date-time",
             "type": "string"
           },
           "managed_identity_id": {
@@ -10549,6 +10557,9 @@
           "run_id": {
             "format": "uuid",
             "type": "string"
+          },
+          "seen_count": {
+            "type": "integer"
           },
           "source_id": {
             "format": "uuid",
@@ -10588,7 +10599,10 @@
           "provenance",
           "fingerprint",
           "metadata",
-          "discovered_at"
+          "discovered_at",
+          "first_seen_at",
+          "last_seen_at",
+          "seen_count"
         ],
         "type": "object"
       },
@@ -11049,6 +11063,42 @@
             ],
             "type": "string"
           },
+          "target_results": {
+            "items": {
+              "properties": {
+                "error": {
+                  "type": "string"
+                },
+                "kind": {
+                  "enum": [
+                    "network",
+                    "ssh",
+                    "cloud_provider"
+                  ],
+                  "type": "string"
+                },
+                "status": {
+                  "enum": [
+                    "succeeded",
+                    "failed",
+                    "blocked",
+                    "rejected"
+                  ],
+                  "type": "string"
+                },
+                "target": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "target",
+                "status"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
           "targets": {
             "type": "integer"
           },
@@ -11069,7 +11119,8 @@
           "failed",
           "rejected",
           "blocked",
-          "created_at"
+          "created_at",
+          "target_results"
         ],
         "type": "object"
       },
