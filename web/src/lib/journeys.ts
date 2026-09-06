@@ -75,6 +75,27 @@ export const journeys: Journey[] = [
     ],
   },
   {
+    id: "preserve-existing-ca",
+    titleKey: "journeys.pec.title",
+    descriptionKey: "journeys.pec.description",
+    doc: "docs/journeys/preserve-existing-ca.md",
+    steps: [
+      {
+        id: "baseline",
+        titleKey: "journeys.pec.baseline.title",
+        bodyKey: "journeys.pec.baseline.body",
+        command:
+          "openssl s_client -connect web-canary.example.test:443 \\\n  -servername web-canary.example.test -showcerts </dev/null 2>/dev/null \\\n  | openssl x509 -noout -fingerprint -sha256 -issuer -subject -dates",
+      },
+      { id: "discover", titleKey: "journeys.pec.discover.title", bodyKey: "journeys.pec.discover.body", to: "/discovery?tab=sources", detect: "sources" },
+      { id: "authority", titleKey: "journeys.pec.authority.title", bodyKey: "journeys.pec.authority.body", to: "/ca-hierarchy", detect: "issuers" },
+      { id: "preview", titleKey: "journeys.pec.preview.title", bodyKey: "journeys.pec.preview.body", to: "/connectors" },
+      { id: "authorize", titleKey: "journeys.pec.authorize.title", bodyKey: "journeys.pec.authorize.body", to: "/connectors" },
+      { id: "inspect", titleKey: "journeys.pec.inspect.title", bodyKey: "journeys.pec.inspect.body", to: "/certificates?tab=health", detect: "certificates" },
+      { id: "routing", titleKey: "journeys.pec.routing.title", bodyKey: "journeys.pec.routing.body", to: "/notifications" },
+    ],
+  },
+  {
     id: "respond-to-compromise",
     titleKey: "journeys.ir.title",
     descriptionKey: "journeys.ir.description",

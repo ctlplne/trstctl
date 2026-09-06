@@ -79,7 +79,21 @@ export function EndpointBindingWorkflow({
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const [ownerResult, externalResult, privateResult] = await Promise.allSettled([api.owners(), api.externalCAs(), api.caAuthorities()]);
+      // A roster call that throws synchronously (a missing method in a stubbed
+      // client, a broken build) must land in the same settled slot as a
+      // rejected request, so the page shows the error instead of dying quietly.
+      const settle = <T,>(call: () => Promise<T>): Promise<T> => {
+        try {
+          return call();
+        } catch (err) {
+          return Promise.reject(err instanceof Error ? err : new Error(String(err)));
+        }
+      };
+      const [ownerResult, externalResult, privateResult] = await Promise.allSettled([
+        settle(() => api.owners()),
+        settle(() => api.externalCAs()),
+        settle(() => api.caAuthorities()),
+      ]);
       if (cancelled) return;
       if (ownerResult.status === "fulfilled") setOwners(ownerResult.value ?? []);
       else setRosterError(ownerResult.reason instanceof Error ? ownerResult.reason.message : String(ownerResult.reason));

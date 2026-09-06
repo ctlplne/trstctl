@@ -646,11 +646,10 @@ export function Owners() {
                     aria-describedby="owner-edit-attest-help"
                     onChange={(event) => setEditAttestOnCreate(event.target.checked)}
                   />
-                  <span>I attest this ownership record is current and I am accountable for it</span>
+                  <span>{t("owners.readiness.attestOnCreate")}</span>
                 </label>
                 <p id="owner-edit-attest-help" className="mt-1 pl-7 text-muted-foreground">
-                  Deployments to identities this owner holds are refused until a human attests the record. Leave this
-                  unchecked only when someone else must attest later.
+                  {t("owners.readiness.attestOnCreateHelp")}
                 </p>
               </div>
             )}

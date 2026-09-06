@@ -1488,8 +1488,13 @@ describe("i18n boundary", () => {
       // and all queued effects in a zero-write preview, and binds execution to
       // that review. Machine-authored es/de remain FLAGGED FOR HUMAN
       // TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "3f502f09eadf798d78d3074a5b8352f2213fa6cd12633cb462b7e78528ebb1a6",
-      "de-DE": "c7ef042c3417d51171629d16aa705f408bb5510bec80de09b6fedfb5fbcfe078",
+      // QA cold design-partner g255 re-pin: the endpoint lifecycle DNS-pinned
+      // help (dev fix 847fb9d15) shipped without a re-pin; this generation adds
+      // the attest-on-create copy on the Ownership form and the
+      // preserve-existing-ca journey. Machine-authored es/de — FLAGGED FOR
+      // HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "640d08302d6e494e16588980e1efa7411506c4899813475290ffb80121558fe9",
+      "de-DE": "96a0ca1d80940e9ad1bc7d8e4d5e9f19aa3e65d837a968856d2a323aebe55ded",
     });
   });
 

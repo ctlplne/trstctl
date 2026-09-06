@@ -584,6 +584,10 @@ describe("exported API surface census", () => {
       "/api/v1/migrations/assess",
       "/api/v1/agents/enrollment-tokens/preview",
       "/api/v1/issuance-requests/preview",
+      // Endpoint lifecycle preview: computes the exact plan (issuer, destination,
+      // custody, DNS-01 coverage, owner readiness) and fails closed on missing
+      // prerequisites; it queues, issues, and persists nothing (qa-repair g250).
+      "/api/v1/lifecycle/endpoint-bindings/preview",
       // F25: the temporary-credential review computes the exact bounded plan
       // and proof digests without persisting, signing, or contacting a target.
       "/api/v1/ephemeral/preview",
