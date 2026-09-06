@@ -44,11 +44,11 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1378 annotated sites across 26 rules. Each row is
+1381 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (303 sites)
+### G101 — CWE-798 Use of hardcoded credentials (306 sites)
 
 | Location | Reason |
 |---|---|
@@ -260,6 +260,9 @@ not this file.
 | `internal/server/discovery_cloud_outcomes_served_test.go:51` | env credential references and fixture endpoints; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/discovery_cloud_outcomes_served_test.go:52` | env credential reference, not a value (CWE-798) |
 | `internal/server/discovery_cloud_outcomes_served_test.go:53` | env credential reference, not a value (CWE-798) |
+| `internal/server/discovery_cloud_unbuilt_provider_served_test.go:46` | env credential references and fixture endpoints; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/discovery_cloud_unbuilt_provider_served_test.go:47` | env credential reference, not a value (CWE-798) |
+| `internal/server/discovery_cloud_unbuilt_provider_served_test.go:48` | env credential reference, not a value (CWE-798) |
 | `internal/server/discovery_recovery_served_test.go:202` | reference names only; fixture values are synthetic and never shipped |
 | `internal/server/discovery_recovery_served_test.go:211` | reference names only; fixture values are synthetic and never shipped |
 | `internal/server/discovery_recovery_served_test.go:220` | reference names only; fixture values are synthetic and never shipped |
