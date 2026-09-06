@@ -1,0 +1,11 @@
+README.md
+pyproject.toml
+src/trstctl_sdk/__init__.py
+src/trstctl_sdk/client.py
+src/trstctl_sdk/py.typed
+src/trstctl_sdk/types.py
+src/trstctl_sdk.egg-info/PKG-INFO
+src/trstctl_sdk.egg-info/SOURCES.txt
+src/trstctl_sdk.egg-info/dependency_links.txt
+src/trstctl_sdk.egg-info/top_level.txt
+tests/test_client.py

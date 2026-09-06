@@ -4084,6 +4084,7 @@ const esESCatalog = {
   "owners.readiness.attestFailed": "Falló la confirmación de responsabilidad",
   "owners.readiness.create": "Crear responsable",
   "owners.readiness.created": "Responsable creado",
+  "shell.demoBanner.landmark": "Aviso de demostración con datos de ejemplo",
   "owners.readiness.attestOnCreate": "Confirmo que este registro de responsabilidad está actualizado y que soy responsable de él",
   "owners.readiness.attestOnCreateHelp": "Los despliegues a identidades de este responsable se rechazan hasta que una persona confirme el registro. Déjelo sin marcar solo si otra persona debe confirmarlo más tarde.",
   "owners.readiness.editTitle": "Editar {name}",

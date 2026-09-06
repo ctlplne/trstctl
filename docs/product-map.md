@@ -63,21 +63,21 @@ is still outside the measured scope?
 scheduled and live runs, provenance, coverage denominators, blind spots, findings,
 and the guarded handoff from an observation to a managed identity.
 
-### Certificate Lifecycle — `/certificates`
+### Certificates (Certificate Lifecycle workspace) — `/certificates`
 
 **Question:** Which certificates need attention, and is renewal safe?
 
 **Owns:** certificate inventory, expiry, renewal, deployment receipts, certificate
 authorities (CAs), profiles, ACME/EST/SCEP/CMP enrollment, and revocation.
 
-### Machine & Workload Trust — `/workloads`
+### Workloads & Machines (Machine & Workload Trust workspace) — `/workloads`
 
 **Question:** Which machines can prove who they are, and what needs repair?
 
 **Owns:** SPIFFE identities, workloads, machine credentials, SSH trust, attestation,
 agents, and stale-agent work.
 
-### Secrets & Access — `/secrets`
+### Secrets (Secrets & Access workspace) — `/secrets`
 
 **Question:** Which secrets need rotation, repair, or access review?
 
@@ -91,7 +91,7 @@ scanning, delivery, and access evidence.
 **Owns:** code-signing operations, approvals, timestamps, verification outcomes,
 and signing-custody evidence the running build serves.
 
-### Trust Operations — `/trust-operations`
+### Operations (Trust Operations workspace) — `/trust-operations`
 
 **Question:** What cross-product risk, incident, ownership, alert, or system work
 needs attention?

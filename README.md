@@ -171,17 +171,16 @@ is the [feature index](docs/features.md).
 
 ## Capabilities
 
-"Built and tested" means real library code with unit, property, integration,
-and conformance tests; [Current limitations](docs/limitations.md) is the
-single authority on what is served end to end versus library-complete. The
-served denominators below are checked against the repo-native
-[census gate](tools/dodcensus/manifest.json) (`make dod-gate` emits the local
-`wiring-census.json` receipt). Proof modes are not uniform:
-**12 of 81 census rows launch the shipped binary**;
-**69 of 81 are proved through the production-assembled handler** — the
-production `buildRunDeps` output driving the assembled `Server.Handler`
-in-process, with a hand-built `Deps` rejected. Only the process launch differs,
-so each row below names the mode that proved it.
+**What you can complete today:** discover a listener, take it under management,
+issue and deploy from your own CA or the built-in one through the host agent, renew,
+route the expiry alert, and export signed evidence — the journey in
+[Keep your existing CA](docs/journeys/preserve-existing-ca.md), rehearsed end to end
+against the shipped partner lab. "Built and tested" means real library code with
+unit, property, integration, and conformance tests;
+[Current limitations](docs/limitations.md) is the single authority on what is served
+end to end versus library-complete, and its
+[census proof modes](docs/limitations.md#census-proof-modes) section explains how
+each served claim below was proved.
 
 | Area                    | What's there                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

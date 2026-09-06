@@ -19,7 +19,7 @@ func TestOperationalVocabularyIsDefinedAndLinked(t *testing.T) {
 		"### Service",
 		"### Destination / deployment target",
 		"### Connector",
-		"### trstctl Edge (agent runtime)",
+		"### Agent (trstctl Edge runtime)",
 		"### Edge Collector",
 		"### Network relay",
 		"### Execution vantage",
@@ -36,7 +36,7 @@ func TestOperationalVocabularyIsDefinedAndLinked(t *testing.T) {
 		"getting-started.md": {
 			"[owner](glossary.md#owner)",
 			"[deployment target](glossary.md#destination-deployment-target)",
-			"[trstctl Edge runtime](glossary.md#trstctl-edge-agent-runtime)",
+			"[trstctl Edge runtime](glossary.md#agent-trstctl-edge-runtime)",
 		},
 		"features/deployment-connectors.md": {
 			"[deployment connector](../glossary.md#connector)",
@@ -44,7 +44,7 @@ func TestOperationalVocabularyIsDefinedAndLinked(t *testing.T) {
 			"[execution vantage](../glossary.md#execution-vantage)",
 		},
 		"features/discovery-and-inventory.md": {
-			"[trstctl Edge runtime](../glossary.md#trstctl-edge-agent-runtime)",
+			"[trstctl Edge runtime](../glossary.md#agent-trstctl-edge-runtime)",
 			"[network relay](../glossary.md#network-relay)",
 		},
 	}

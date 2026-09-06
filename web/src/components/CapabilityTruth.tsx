@@ -92,7 +92,7 @@ export function CapabilityToolSummary({ featureIds }: { featureIds: readonly Can
       ? t("capabilities.tool.ready", { count: summary.total })
       : t("capabilities.tool.mixed", { ready: summary.counts.ready, total: summary.total });
   return (
-    <p className="mt-2 text-2xs leading-relaxed text-sidebar-foreground/70" data-capability-tool-state={summary.state}>
+    <p className="mt-2 text-2xs leading-relaxed text-sidebar-foreground" data-capability-tool-state={summary.state}>
       {text}
     </p>
   );

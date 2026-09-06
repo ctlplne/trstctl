@@ -12,11 +12,15 @@ of daily work focused:
 | Tool | Plain-language question |
 | --- | --- |
 | **Discover** | What machine credentials exist, where did we observe them, and what did we not scan? |
-| **Certificate Lifecycle** | Which certificates could expire or fail renewal? |
-| **Machine & Workload Trust** | Which machines can prove who they are? |
-| **Secrets & Access** | Which secrets need rotation, delivery repair, or access review? |
+| **Certificates** (the Certificate Lifecycle workspace) | Which certificates could expire or fail renewal? |
+| **Workloads & Machines** (the Machine & Workload Trust workspace) | Which machines can prove who they are? |
+| **Secrets** (the Secrets & Access workspace) | Which secrets need rotation, delivery repair, or access review? |
 | **Software Trust** | What was signed, who approved it, and was the signing key healthy? |
-| **Trust Operations** | Which cross-product risk, incident, owner, alert, or system issue needs action? |
+| **Operations** (the Trust Operations workspace) | Which cross-product risk, incident, owner, alert, or system issue needs action? |
+
+The bold names are the console's own navigation labels, so what you read here is what
+you click there; the workspace name in parentheses is the page title you land on.
+**Home** is the seventh page: what needs attention now.
 
 [Learn the product map](product-map.md) in five minutes. It explains non-human
 identity (NHI), certificate lifecycle management (CLM), the six tools, shared
@@ -29,6 +33,9 @@ safety rails, status words, and the shortest path for each role.
 - **Blank installation:** [start the real stack and issue one certificate](getting-started.md).
 - **Populated tour:** [follow the seeded demo browser walkthrough](demo-click-through.html).
 - **Before relying on a capability:** read [Current limitations](limitations.md).
+- **Which browsers are tested:** [Browser support](browser-support.md).
+- **Open the console with TLS validation on, without touching your workstation trust store:**
+  [isolated browser profile](local-evaluation-tls.md#isolated-browser-profile-any-os).
 
 Success is concrete: verified HTTPS health, local single sign-on (SSO), one served
 certificate, and visible event/audit readback. If any proof is missing, the
@@ -39,11 +46,16 @@ certificate, and visible event/audit readback. If any proof is missing, the
 Start on Home, then follow the workspace named on the highest-priority item. For a
 complete task, choose a journey:
 
+- [Keep your existing CA and automate the endpoint lifecycle around it](journeys/preserve-existing-ca.md)
 - [Automate TLS across your fleet](journeys/automate-fleet-tls.md)
 - [Give Kubernetes workloads an identity](journeys/kubernetes-workload-identity.md)
 - [Manage application secrets](journeys/manage-secrets.md)
 - [Issue and trust SSH at scale](journeys/ssh-at-scale.md)
-- [Migrate from an existing certificate authority](journeys/migrate-from-existing-ca.md)
+- [Replace your existing certificate authority (optional)](journeys/migrate-from-existing-ca.md)
+
+Starting from a specific place? [Web servers: Apache, NGINX, and IIS on one host](start-here/web-servers.md)
+and [Managed service providers](start-here/managed-service-providers.md) each begin
+where that reader stands.
 
 ### I am responding to an incident
 

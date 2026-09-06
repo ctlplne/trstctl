@@ -55,11 +55,14 @@ contract. Seeing a connector in the catalog proves the implementation is shipped
 enabled; it does not prove a destination is configured, reachable, or already
 automated.
 
-### trstctl Edge (agent runtime)
+### Agent (trstctl Edge runtime)
 
-The human-facing name for the optional trstctl process that runs inside a customer
-network or beside a host, opens an outbound mTLS channel to the control plane, and
-claims only allowed job kinds. Its enrolled certificate fixes whether it has the
+The optional trstctl process that runs inside a customer network or beside a host,
+opens an outbound mTLS channel to the control plane, and claims only allowed job
+kinds. The product calls it the **agent** everywhere you meet it — the
+`trstctl-agent` binary, the setup wizard, the `agents` API and CLI resource, and the
+console pages. "trstctl Edge" is the packaging name for that runtime in pricing and
+roadmap language; when you read it, read "agent". Its enrolled certificate fixes whether it has the
 `host` role, the `network` role, or both; an ordinary host enrollment cannot silently
 become a network relay. The binary remains `trstctl-agent` and the API/CLI resource
 remains `agents` so existing automation does not break while product wording evolves.
@@ -132,6 +135,23 @@ certificate the CA signed is trusted too. A **public CA** (like Let's Encrypt) i
 trusted by browsers worldwide; a **private CA** is trusted only inside your company.
 trstctl can run its own private CA and can also drive certificates out of external
 CAs.
+
+### Issuer
+
+The authority that signed a certificate, and the product's everyday word for "which
+CA will sign this". Every certificate record names its issuer; an identity can be
+bound to a preferred issuer (`issuer_id`); the endpoint lifecycle preview names the
+issuing authority it will use — the built-in evaluation CA, a private CA you run in
+trstctl, or an external CA such as an ACME service — before anything is issued.
+"CA" describes what kind of thing an issuer is; "issuer" is the one that signed *this*
+certificate. See [Certificate Authority (CA)](#certificate-authority-ca).
+
+### Machine identity
+
+Plain-language alias for a [non-human identity](#non-human-identity-nhi) that belongs
+to a server, service, workload, or device rather than a person. The console's
+**Workloads & Machines** tool lists them; "identity" in the API and this documentation
+means the same thing.
 
 ### CSR (Certificate Signing Request)
 

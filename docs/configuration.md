@@ -21,6 +21,7 @@ trstctl -check-config
 | `TRSTCTL_SERVER_TLS_KEY_FILE` | — | Server private key (PEM); **required** when `mode=file`. |
 | `TRSTCTL_SERVER_TLS_INTERNAL_STATE_FILE` | `data/tls/internal-server.pem` | Mode-`0600` combined certificate/private-key state used only by `mode=internal`. Keep it on persistent private storage so an inspected evaluation trust pin survives restart. Never distribute this file; capture only the public certificate from the TLS endpoint. |
 | `TRSTCTL_SERVER_TLS_INTERNAL_TRUST_FILE` | `data/tls/internal-server.crt` | Certificate-only PEM published by `mode=internal`. Give this file to evaluation clients that must verify the self-signed server. It contains no private key and must never point at the private state file above. |
+| `TRSTCTL_SERVER_TLS_MIN_VERSION` | `1.3` | Lowest TLS version the served listener negotiates. `1.3` is the default and the only floor for a credential control plane; `1.2` is an explicit opt-in for device-enrollment fleets whose stock EST/SCEP/CMP clients cap at TLS 1.2 (cisco libest does), and offers AEAD suites only. |
 | `TRSTCTL_DEV_ALLOW_PLAINTEXT` | `false` | Explicit local-dev override required when `TRSTCTL_SERVER_TLS_MODE=disabled`; `TRSTCTL_SERVER_ADDR` must also bind loopback only. |
 | `TRSTCTL_CORS_ALLOWED_ORIGINS` | empty (same-origin only) | Comma-separated exact browser Origins (scheme+host+port, e.g. `https://console.example.com`) allowed to make cross-origin, credentialed requests to the API (SEC-003). Empty means same-origin only: no `Access-Control-Allow-Origin` is emitted, so a cross-origin XHR is blocked by the browser. `*` is deliberately not honored for a credentialed API. |
 | `TRSTCTL_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, or `error`. |
@@ -1455,7 +1456,12 @@ single-node deployments are unaffected.
 
 The AI/RCA/MCP surface is off by default. MCP investigation tools are read-only when
 enabled; MCP write tools require the separate `TRSTCTL_AI_MCP_WRITE_TOOLS=true`
-operator opt-in. The model adapter is separately off by default: with
+operator opt-in. The control plane serves the tools as authenticated REST routes
+(`GET /api/v1/mcp/tools`, `POST /api/v1/mcp/tools/{tool}`); a standard Model Context
+Protocol client connects through `trstctl-cli mcp serve`, which speaks the MCP stdio
+transport (JSON-RPC 2.0: `initialize`, `tools/list`, `tools/call`) and forwards every
+call to those routes with the caller's own token, so tenant scope, RBAC, rate limits
+and audit apply unchanged. Verified with the official MCP SDK client. The model adapter is separately off by default: with
 `TRSTCTL_AI_MODEL_MODE=off` (or unset), query/RCA still return grounded citations, but
 no prompt leaves the process.
 `GET /api/v1/ai/status` reports the live enabled state, model mode, endpoint host,

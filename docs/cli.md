@@ -211,7 +211,7 @@ exhaustive subcommand list:
 | `lifecycle`                       | CA-explicit endpoint lifecycle review/execution and rotation-run history (`endpoint-bindings preview` · `endpoint-bindings create` · `rotation-runs list` · `rotation-runs get`)                                                                                                                                      |
 | `managed-keys`                    | BYOK/HSM-resident key lifecycle: generate, dual-control approve, rotate, revoke, zeroize (`generate` · `approve` · `rotate` · `revoke` · `zeroize`)                                                                                                                                                                 |
 | `managed-offering`                | Managed-offering/provider-plane posture and hosted-tenant provisioning (`status` · `tenants provision`)                                                                                                                                                                                                             |
-| `mcp`                             | List and invoke the MCP tools the server exposes (`tools` · `call`)                                                                                                                                                                                                                                                 |
+| `mcp`                             | List and invoke the MCP tools the server exposes (`tools` · `call`), or serve them to a standard MCP client over stdio (`serve`)                                                                                                                                                                                                                                                 |
 | `mdm`                             | MDM SCEP policy/challenge status and enrollment-policy management (`scep status` · `scep policies`)                                                                                                                                                                                                                 |
 | `migration`                       | Licensed crypto-migration runs over CBOM findings — Enterprise PQC only (`plan` · `start` · `status` · `rollback`)                                                                                                                                                                                                  |
 | `nhi`                             | Unified NHI inventory, posture findings, policy compliance, decommissioning (`inventory` · `posture shadow/stale/overprivilege/static-credentials/exposure` · `policy compliance` · `decommission`)                                                                                                                 |
@@ -1014,3 +1014,22 @@ after inspection and never sends PEM/DER key bytes to the control plane.
 
 Path parameters are positional; list filters (`--limit`, `--cursor`, `--sort`,
 …) are flags; request bodies come from `-f <file>` or `-f -` (stdin).
+
+## MCP stdio transport (`mcp serve`)
+
+A standard Model Context Protocol client (an IDE, an agent framework) spawns the CLI
+and talks JSON-RPC 2.0 over stdin/stdout, one message per line:
+
+```json
+{"command": "trstctl-cli", "args": ["mcp", "serve"],
+ "env": {"TRSTCTL_SERVER": "https://cp.example:8443", "TRSTCTL_CA_FILE": "/etc/trstctl/control-plane.crt", "TRSTCTL_TOKEN": "trst_…"}}
+```
+
+`initialize`, `ping`, `tools/list` and `tools/call` are served; the token travels in
+the environment, never on the command line. Every `tools/call` becomes
+`POST /api/v1/mcp/tools/{tool}` with your token and a fresh `Idempotency-Key`, so the
+server's tenant scope, RBAC, rate limit and audit apply exactly as for REST; a
+refused call comes back as a readable tool error (`isError: true`), not as a
+transport failure. Write tools appear only when the control plane exposes them
+(`TRSTCTL_AI_MCP_WRITE_TOOLS=true`) and still require `certs:issue`.
+

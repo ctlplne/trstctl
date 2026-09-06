@@ -17,7 +17,7 @@ existing discovery source or add your first one.
 
 trstctl discovers credentials five ways, and each suits a different corner of your
 estate: scanning the network from outside, asking a
-[trstctl Edge runtime](../glossary.md#trstctl-edge-agent-runtime) what a host can see from
+[trstctl Edge runtime](../glossary.md#agent-trstctl-edge-runtime) what a host can see from
 inside, pulling inventory straight from cloud provider APIs, reading SSH key files and
 trust config, and connecting to external secret stores. Everything they find lands in
 one inventory.

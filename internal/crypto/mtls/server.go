@@ -38,6 +38,25 @@ type ServerCert struct {
 	// server (for an internal cert, the self-signed certificate itself; for a
 	// file cert, the provided chain).
 	TrustPEM []byte
+	// AllowTLS12 lowers the served floor from TLS 1.3 to TLS 1.2 (operator
+	// opt-in for device fleets whose stock enrollment clients cap at 1.2). False
+	// keeps the TLS 1.3 floor. At 1.2 only AEAD suites are offered, so the
+	// "never a non-AEAD cipher" guarantee (WIRE-008) holds.
+	AllowTLS12 bool
+}
+
+// tls12AEADSuites lists the only suites offered when an operator lowers the
+// floor to TLS 1.2: ECDHE key exchange, AEAD record protection, nothing else.
+// A function, not a package variable: nothing may mutate the set at runtime.
+func tls12AEADSuites() []uint16 {
+	return []uint16{
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+	}
 }
 
 // SelfSignedServerCert generates a self-signed server (ServerAuth) certificate
@@ -426,6 +445,10 @@ func (s *ServerCert) ServeHTTPS(srv *http.Server, ln net.Listener) error {
 	srv.TLSConfig = &tls.Config{
 		MinVersion:       tls.VersionTLS13,
 		CurvePreferences: CurvePreferences(),
+	}
+	if s.AllowTLS12 {
+		srv.TLSConfig.MinVersion = tls.VersionTLS12
+		srv.TLSConfig.CipherSuites = tls12AEADSuites()
 	}
 	if s.reload != nil {
 		// File mode: serve through the reload hook so a rotated pair is

@@ -50,6 +50,15 @@ tokens without enrollment scope receive `insufficient_scope`. A Basic-authentica
 deployment still advertises Basic because the authenticator, not the EST handler,
 owns the challenge.
 
+#### Device TLS floor
+
+The served listener negotiates TLS 1.3 only. Many device enrollment stacks cap at
+TLS 1.2 — cisco libest's `estclient` does (`SSL_CTX_set_max_proto_version(TLS1_2_VERSION)`)
+— and such a client fails the handshake with a `protocol version` alert before EST
+starts. For those fleets set `TRSTCTL_SERVER_TLS_MIN_VERSION=1.2`; the listener then
+offers TLS 1.2 with AEAD suites only and still prefers TLS 1.3 for capable clients.
+Found by the cold design-partner run 20260906t143500z (DP2-036).
+
 #### Check EST safely from the console
 
 Open **Certificates → Enrollment methods**, expand **Set up and operate

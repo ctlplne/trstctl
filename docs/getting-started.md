@@ -195,7 +195,7 @@ was proven.
 ### Connect an agent (optional)
 
 This optional step connects a
-[trstctl Edge runtime](glossary.md#trstctl-edge-agent-runtime). The shipped wizard,
+[trstctl Edge runtime](glossary.md#agent-trstctl-edge-runtime). The shipped wizard,
 binary, and API still use **agent** for compatibility; the glossary separates this
 execution runtime from a customer AI agent.
 

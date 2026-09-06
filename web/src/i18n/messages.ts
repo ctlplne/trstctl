@@ -12114,6 +12114,7 @@ export const messages = {
   "owners.readiness.attestFailed": { defaultMessage: "Ownership attestation failed", description: "Failed ownership-attestation toast." },
   "owners.readiness.create": { defaultMessage: "Create owner", description: "Submit a new owner record." },
   "owners.readiness.created": { defaultMessage: "Owner created", description: "Successful owner-create toast." },
+  "shell.demoBanner.landmark": { defaultMessage: "Seeded demo notice", description: "Accessible name of the seeded-demo banner landmark." },
   "owners.readiness.attestOnCreate": { defaultMessage: "I attest this ownership record is current and I am accountable for it", description: "Checkbox on the owner-create form; checked by default so the new owner is attested as part of creation." },
   "owners.readiness.attestOnCreateHelp": { defaultMessage: "Deployments to identities this owner holds are refused until a human attests the record. Leave this unchecked only when someone else must attest later.", description: "Help text under the attest-on-create checkbox." },
   "owners.readiness.editTitle": { defaultMessage: "Edit {name}", description: "Owner editor title." },

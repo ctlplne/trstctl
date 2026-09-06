@@ -964,6 +964,19 @@ type TLS struct {
 	// combined private state file. Mount or distribute this file, never the state.
 	InternalTrustFile string `json:"internal_trust_file,omitempty"`
 	AllowPlaintextDev bool   `json:"allow_plaintext_dev,omitempty"`
+	// MinVersion is the lowest TLS version the served listener negotiates:
+	// "1.3" (the default; the credential control plane never negotiates a
+	// legacy version) or "1.2", an explicit opt-in for device-enrollment fleets
+	// whose stock EST/SCEP/CMP clients cap at TLS 1.2 (cisco libest does). At
+	// 1.2 only AEAD cipher suites are offered. Design-partner finding DP2-036.
+	MinVersion string `json:"min_version,omitempty"`
+}
+
+// AllowsTLS12 reports whether the operator lowered the served floor to TLS 1.2.
+// The crypto constants stay behind internal/crypto (AN-3); configuration only
+// carries the decision. Validate rejects anything but "", "1.3" and "1.2".
+func (t TLS) AllowsTLS12() bool {
+	return strings.TrimSpace(t.MinVersion) == "1.2"
 }
 
 // Postgres selects the bundled single-node datastore or an external cluster.
@@ -2540,6 +2553,7 @@ func applyServerAndSpineEnv(getenv func(string) string, c *Config) {
 	setString(getenv, "TRSTCTL_SERVER_TLS_INTERNAL_STATE_FILE", &c.Server.TLS.InternalStateFile)
 	setString(getenv, "TRSTCTL_SERVER_TLS_INTERNAL_TRUST_FILE", &c.Server.TLS.InternalTrustFile)
 	setBool(getenv, "TRSTCTL_DEV_ALLOW_PLAINTEXT", &c.Server.TLS.AllowPlaintextDev)
+	setString(getenv, "TRSTCTL_SERVER_TLS_MIN_VERSION", &c.Server.TLS.MinVersion)
 	setCSV(getenv, "TRSTCTL_CORS_ALLOWED_ORIGINS", &c.Server.CORSAllowedOrigins)
 	setString(getenv, "TRSTCTL_POSTGRES_MODE", &c.Postgres.Mode)
 	setString(getenv, "TRSTCTL_POSTGRES_DSN", &c.Postgres.DSN)
@@ -3136,6 +3150,11 @@ func validateServerConfig(c *Config) []error {
 	var errs []error
 	if c.Server.Addr == "" {
 		errs = append(errs, errors.New("server.addr must not be empty"))
+	}
+	switch strings.TrimSpace(c.Server.TLS.MinVersion) {
+	case "", "1.3", "1.2":
+	default:
+		errs = append(errs, fmt.Errorf("server.tls.min_version %q is invalid (want \"1.3\" or \"1.2\")", c.Server.TLS.MinVersion))
 	}
 	switch c.Server.TLS.Mode {
 	case TLSInternal:

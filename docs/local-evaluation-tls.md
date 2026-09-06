@@ -91,6 +91,32 @@ Firefox may use its own certificate database. In Firefox, open
 Authorities → Import**, select the same public file, and trust it only for
 identifying websites.
 
+### Isolated browser profile (any OS)
+
+Every option above changes a trust store on your workstation. If you would rather
+change nothing, give the evaluation its own Firefox profile that trusts only this one
+certificate, with TLS validation fully on:
+
+```sh
+# 1. An empty profile directory and the certificate you inspected above.
+mkdir -p ./trstctl-eval-profile && cp control-plane.crt ./trstctl-eval-profile/
+
+# 2. Build the profile's certificate database with NSS certutil (here from a
+#    throwaway container, so nothing is installed on the workstation).
+docker run --rm -v "$PWD/trstctl-eval-profile:/profile" alpine:3.20 sh -c \
+  'apk add --no-cache nss-tools >/dev/null && certutil -N -d sql:/profile --empty-password && \
+   certutil -A -n "trstctl evaluation" -t "C,," -i /profile/control-plane.crt -d sql:/profile && \
+   certutil -L -d sql:/profile'
+
+# 3. Open Firefox on that profile only.
+firefox --profile "$PWD/trstctl-eval-profile" https://127.0.0.1:9443
+```
+
+`scripts/dev/isolated-firefox-profile.sh` does the same three steps. Delete the
+directory when you finish; no other profile or store ever learned about the
+certificate. The same profile drives headless Playwright (`launchPersistentContext`)
+for scripted evaluations without `ignoreHTTPSErrors`.
+
 ## 3. Open the UI
 
 - Blank evaluation: <https://localhost:8443>

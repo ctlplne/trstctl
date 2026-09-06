@@ -4123,6 +4123,7 @@ const deDECatalog = {
   "owners.readiness.attestFailed": "Verantwortungsbestätigung fehlgeschlagen",
   "owners.readiness.create": "Verantwortlichen erstellen",
   "owners.readiness.created": "Verantwortlicher erstellt",
+  "shell.demoBanner.landmark": "Hinweis zur Demo mit Beispieldaten",
   "owners.readiness.attestOnCreate": "Ich bestätige, dass dieser Verantwortlichkeitsdatensatz aktuell ist und ich dafür verantwortlich bin",
   "owners.readiness.attestOnCreateHelp": "Bereitstellungen für Identitäten dieses Verantwortlichen werden abgelehnt, bis eine Person den Datensatz bestätigt. Lassen Sie das Feld nur leer, wenn jemand anderes später bestätigen muss.",
   "owners.readiness.editTitle": "{name} bearbeiten",

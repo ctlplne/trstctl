@@ -760,7 +760,8 @@ function LiveSeededDemoBanner({ label }: { label: string }) {
   if (!isSeededDemo) return null;
   return (
     <div
-      role="note"
+      role="region"
+      aria-label={translateNow("shell.demoBanner.landmark")}
       data-testid="seeded-demo-banner"
       className="border-b border-status-warning/40 bg-status-warning/10 px-4 py-2 text-center text-sm text-foreground"
     >

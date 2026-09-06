@@ -114,10 +114,19 @@ func TestPublicCensusClaimsStateTheProofModeSplit(t *testing.T) {
 	if strings.Contains(readme, "served in the shipped binary") {
 		t.Error(`DOCS-011: README still reports rows as "served in the shipped binary"; only launched-binary census rows may claim a binary served them`)
 	}
+	// The proof split lives in limitations.md (maintainer vocabulary); the README
+	// keeps a one-line customer summary and links there (DP2-007).
+	limitations := read(t, "limitations.md")
 	for _, want := range []string{launchedClaim, assembledClaim} {
-		if !strings.Contains(readme, want) {
-			t.Errorf("DOCS-011: README must state the derived census proof split %q", want)
+		if !strings.Contains(limitations, want) {
+			t.Errorf("DOCS-011: limitations.md must state the derived census proof split %q", want)
 		}
+		if strings.Contains(readme, want) {
+			t.Errorf("DP2-007: README must not carry the census proof vocabulary %q; link limitations.md#census-proof-modes instead", want)
+		}
+	}
+	if !strings.Contains(readme, "limitations.md#census-proof-modes") {
+		t.Error("DP2-007: README must link the census proof modes section of limitations.md")
 	}
 
 	// Expressed as a slice, not a map[string]string: gosec G101 reads a map whose

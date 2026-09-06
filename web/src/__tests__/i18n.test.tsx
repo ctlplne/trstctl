@@ -1496,8 +1496,11 @@ describe("i18n boundary", () => {
       // QA cold design-partner g256 re-pin: the certificate cockpit gains a
       // "Not yet valid" expiry band (DP2-033). Machine-authored es/de — FLAGGED
       // FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "d5967f5fb7a441f0c485904d12a2aed992a8b96512e2ffa3795b36eb6e5e9f30",
-      "de-DE": "b573513adf37e8ea7478be053bde433bb7b068bc1f517fe55b88db26545b9119",
+      // QA cold design-partner g257 re-pin: the seeded-demo banner becomes a named
+      // landmark (DP2-042). Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION
+      // REVIEW before release.
+      "es-ES": "894456b095c9c1403d0dcaa4f4942c24d51a86bb979ba1585057efb0ca4bf67f",
+      "de-DE": "bc9769d28e044b7f3a83436c9b9bbda81feb2f767071937934187e8f91b17e30",
     });
   });
 

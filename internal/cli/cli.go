@@ -83,6 +83,9 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 	if rest[0] == "run" {
 		return runWithSecrets(ctx, rest[1:], env, stdin, stdout, stderr, *server, *token, *tenant, *caFile)
 	}
+	if len(rest) >= 2 && hasPrefix(rest, []string{"mcp", "serve"}) {
+		return runMCPServe(ctx, rest[2:], env, stdin, stdout, stderr, *server, *token, *tenant, *caFile)
+	}
 	if len(rest) >= 2 && hasPrefix(rest, []string{"audit", "verify"}) {
 		if commandHelpRequested(rest[2:]) {
 			auditVerifyUsage(stdout)

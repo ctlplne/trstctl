@@ -59,7 +59,7 @@ services:
     # the lab pins one profile and issues a deterministic 90-day certificate;
     # see docs/limitations.md "ACME certificate profiles".
     volumes:
-      - ./pebble-config.json:/test/config/pebble-config.json:ro
+      - ./lab/pebble-config.json:/test/config/pebble-config.json:ro
     environment:
       PEBBLE_VA_NOSLEEP: "1"
       PEBBLE_WFE_NONCEREJECT: "0"

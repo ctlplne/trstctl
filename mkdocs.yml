@@ -3,6 +3,16 @@ site_description: Self-hosted control plane for every non-human identity.
 docs_dir: docs
 site_dir: .site
 
+# The docs directory also holds the Go and Node tests that keep these pages honest
+# and the JSON fixtures they read. They are not reader-facing pages: keep them out of
+# the rendered site (DP2-009).
+exclude_docs: |
+  *_test.go
+  *_test.mjs
+  journeys/census-requirements.json
+  journeys/served-census.json
+  requirements.normalized.json
+
 theme:
   name: material
   logo: assets/trstctl-mark.svg
@@ -47,6 +57,7 @@ nav:
       - First evaluation: getting-started.md
       - Trust local evaluation TLS: local-evaluation-tls.md
       - Demo browser walkthrough: demo-click-through.html
+      - Browser support: browser-support.md
       - Install: install.md
       - Air-gapped install: airgap.md
       - Support and defect reporting: support.md
@@ -59,6 +70,8 @@ nav:
       - Kubernetes workload identity: journeys/kubernetes-workload-identity.md
       - Enroll devices and IoT fleets: journeys/enroll-devices.md
       - Keep your existing CA: journeys/preserve-existing-ca.md
+      - 'Start here: web servers (Apache, NGINX, IIS)': start-here/web-servers.md
+      - 'Start here: managed service providers': start-here/managed-service-providers.md
       - Replace your existing CA (optional): journeys/migrate-from-existing-ca.md
       - Onboard a team as a tenant: journeys/onboard-a-team.md
       - Manage application secrets: journeys/manage-secrets.md

@@ -179,3 +179,52 @@ class ClientTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CAFileTests(unittest.TestCase):
+    """A self-hosted control plane presents a private-CA certificate; the SDK must
+    validate against a named bundle rather than the system store (DP2-038)."""
+
+    def test_from_env_reads_the_ca_file_like_the_cli(self) -> None:
+        import os
+        import ssl
+        import tempfile
+
+        with tempfile.NamedTemporaryFile("w", suffix=".pem", delete=False) as fh:
+            # Any well-formed certificate serves as a bundle for construction; the
+            # point is that the opener carries an SSLContext built from it.
+            fh.write(ssl.get_server_certificate(("localhost", 0)) if False else _SELF_SIGNED_PEM)
+            path = fh.name
+        old = dict(os.environ)
+        try:
+            os.environ["TRSTCTL_SERVER"] = "https://cp.example:8443"
+            os.environ["TRSTCTL_TOKEN"] = "trst_test"
+            os.environ["TRSTCTL_CA_FILE"] = path
+            client = TrstctlClient.from_env()
+            handlers = [h for h in client.opener.handlers if h.__class__.__name__ == "HTTPSHandler"]
+            self.assertTrue(handlers, "from_env must install an HTTPS handler carrying the CA bundle")
+            context = getattr(handlers[0], "_context", None)
+            self.assertIsNotNone(context)
+            self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
+        finally:
+            os.environ.clear()
+            os.environ.update(old)
+            os.unlink(path)
+
+    def test_missing_ca_file_keeps_the_default_opener(self) -> None:
+        client = TrstctlClient(base_url="https://cp.example:8443", token="trst_test")
+        self.assertIsNotNone(client.opener)
+
+
+_SELF_SIGNED_PEM = """-----BEGIN CERTIFICATE-----
+MIIBfTCCASOgAwIBAgIQGS1GVv2HGs/qeD7ctYlnLjAKBggqhkjOPQQDAjAdMRsw
+GQYDVQQDExJ0cnN0Y3RsIElzc3VpbmcgQ0EwHhcNMjYwOTA2MTcyMjU0WhcNMjYx
+MjA1MTcyNzU0WjAdMRswGQYDVQQDExJ0cnN0Y3RsIElzc3VpbmcgQ0EwWTATBgcq
+hkjOPQIBBggqhkjOPQMBBwNCAASADgAEUmPOH5A9/dw3vOfsxjfRnQ0QuHnXDRVx
+USP60ZLvPxtXjJUgzMzQIy4sBTPJIipl7A8VceivDFNahAOOo0UwQzAOBgNVHQ8B
+Af8EBAMCAYYwEgYDVR0TAQH/BAgwBgEB/wIBADAdBgNVHQ4EFgQU+YQjb83F9HyK
+BJGeVKcgbUo/mnkwCgYIKoZIzj0EAwIDSAAwRQIhAIGd5y0wdnRijXMhPVvwWgui
+H2S18RE+O70u+pmApt+VAiAv0HUEGDgxBf3NrJdMNSN2BI+015UQlsy0Td6bWsRP
+Ug==
+-----END CERTIFICATE-----
+"""
