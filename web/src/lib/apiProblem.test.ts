@@ -78,3 +78,14 @@ describe("WEB-APIPROBLEM-001: one error renderer", () => {
     expect(offenders.map((file) => path.relative(SRC, file))).toEqual([]);
   });
 });
+
+describe("ApiError message", () => {
+  it("surfaces the server's problem detail with the status and keeps the generic wording otherwise", () => {
+    const detailed = new ApiError(422, JSON.stringify({ type: "about:blank", title: "Unprocessable", status: 422, detail: "selected external CA needs a DNS-01 provider config; no CA was substituted" }));
+    expect(detailed.message).toBe("selected external CA needs a DNS-01 provider config; no CA was substituted (HTTP 422)");
+    expect(new ApiError(422, JSON.stringify({ title: "Unprocessable", status: 422 })).message).toBe("Unprocessable (HTTP 422)");
+    expect(new ApiError(500, "<html>oops</html>").message).toBe("request failed (500)");
+    expect(new ApiError(500, "{not json").message).toBe("request failed (500)");
+    expect(new ApiError(429, "", 7).message).toBe("rate limited (429) — retry in 7s");
+  });
+});

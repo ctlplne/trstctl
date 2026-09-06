@@ -1120,6 +1120,31 @@ export class UnauthorizedError extends Error {
   }
 }
 
+
+/** apiErrorMessage turns a failed response into the sentence a page shows. The
+ * server answers refusals with RFC 9457 problem+json whose `detail` names the
+ * exact prerequisite and remedy (for example which DNS-01 provider config or
+ * custody setting an endpoint lifecycle needs). Showing only "request failed
+ * (422)" threw that guidance away, so a refused preview looked like an outage.
+ * The status stays in the message; a body without a usable detail keeps the
+ * generic wording. */
+export function apiErrorMessage(status: number, body: string, retryAfterSeconds?: number): string {
+  if (status === 429) return `rate limited (429)${retryAfterSeconds != null ? ` — retry in ${retryAfterSeconds}s` : ""}`;
+  const generic = `request failed (${status})`;
+  const trimmed = (body ?? "").trim();
+  if (!trimmed.startsWith("{")) return generic;
+  try {
+    const parsed = JSON.parse(trimmed) as { detail?: unknown; title?: unknown };
+    const detail = typeof parsed.detail === "string" ? parsed.detail.trim() : "";
+    const title = typeof parsed.title === "string" ? parsed.title.trim() : "";
+    const text = detail || title;
+    if (!text) return generic;
+    return `${text} (HTTP ${status})`;
+  } catch {
+    return generic;
+  }
+}
+
 export class ApiError extends Error {
   status: number;
   body: string;
@@ -1128,7 +1153,7 @@ export class ApiError extends Error {
    * (SURFACE-007; the server emits Retry-After on rate-limit at api.go). */
   retryAfterSeconds?: number;
   constructor(status: number, body: string, retryAfterSeconds?: number) {
-    super(status === 429 ? `rate limited (429)${retryAfterSeconds != null ? ` — retry in ${retryAfterSeconds}s` : ""}` : `request failed (${status})`);
+    super(apiErrorMessage(status, body, retryAfterSeconds));
     this.name = "ApiError";
     this.status = status;
     this.body = body;
