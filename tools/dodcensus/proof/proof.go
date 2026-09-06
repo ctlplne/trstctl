@@ -36,9 +36,18 @@ const maxEvidenceBody = 1 << 20
 // can be much longer and remain mounted separately for parent receipt access.
 const RuntimeTempDir = "/dod-tmp"
 
+// RuntimeExecDir is a bounded, private, executable tmpfs owned by the dropped
+// runtime UID. Compiler output never lands here: BuildShippedProcess copies
+// already-validated bytes from the noexec /tmp staging area into this mount,
+// then arms the mutation watcher. Keeping executable publication off Docker
+// Desktop's host bind prevents delayed VirtioFS events from crossing the watch
+// boundary without weakening post-publication mutation detection.
+const RuntimeExecDir = "/dod-exec"
+
 const (
 	HostReceiptRootEnv = "TRSTCTL_DOD_HOST_RECEIPT_ROOT"
 	RuntimeTempRootEnv = "TRSTCTL_DOD_RUNTIME_TEMP_ROOT"
+	RuntimeExecRootEnv = "TRSTCTL_DOD_RUNTIME_EXEC_ROOT"
 	// ShippedGoCacheEnv is issued by the census runner after it validates the
 	// gate-private cache mount. Keeping compiled packages there prevents every
 	// nonce-bound receipt mount from copying another complete Go cache tree.

@@ -297,8 +297,12 @@ func buildShippedProcess(expected expectation, publicKey []byte) (shippedBuild, 
 		}
 		companionFDIsolation = true
 	}
-	binDir := filepath.Join(receiptDir, "shipped-process-"+cacheKey[:16])
-	if err := os.Mkdir(binDir, 0o700); err != nil {
+	execRoot, err := validateRuntimeExecDirectory(receiptDir)
+	if err != nil {
+		return shippedBuild{}, err
+	}
+	binDir, err := os.MkdirTemp(execRoot, "shipped-process-"+cacheKey[:16]+"-")
+	if err != nil {
 		return shippedBuild{}, fmt.Errorf("create exclusive launched execution directory: %w", err)
 	}
 	if err := validatePrivateDirectory(binDir); err != nil {
@@ -1615,6 +1619,37 @@ func validateRuntimeTempDirectory(receiptDir string) (string, error) {
 		return "", fmt.Errorf("DOD-CENSUS: short runtime directory is not the private receipt mount")
 	}
 	return RuntimeTempDir, nil
+}
+
+func validateRuntimeExecDirectory(receiptDir string) (string, error) {
+	execRoot := os.Getenv(RuntimeExecRootEnv)
+	if execRoot != RuntimeExecDir || !filepath.IsAbs(execRoot) || filepath.Clean(execRoot) != execRoot {
+		return "", fmt.Errorf("DOD-CENSUS: runtime executable root is not gate-owned %q", RuntimeExecDir)
+	}
+	receiptInfo, err := os.Stat(receiptDir)
+	if err != nil {
+		return "", fmt.Errorf("DOD-CENSUS: inspect private receipt directory: %w", err)
+	}
+	execInfo, err := os.Lstat(RuntimeExecDir)
+	if err != nil {
+		return "", fmt.Errorf("DOD-CENSUS: inspect runtime executable root: %w", err)
+	}
+	stat, ok := execInfo.Sys().(*syscall.Stat_t)
+	if !receiptInfo.IsDir() || !execInfo.IsDir() || execInfo.Mode()&os.ModeSymlink != 0 ||
+		!ok || int64(stat.Uid) != int64(os.Geteuid()) || int64(stat.Gid) != int64(os.Getegid()) || execInfo.Mode().Perm() != 0o700 {
+		return "", fmt.Errorf("DOD-CENSUS: runtime executable root is not a private directory owned by the dropped runtime identity")
+	}
+	if os.SameFile(receiptInfo, execInfo) || pathsOverlap(receiptDir, execRoot) {
+		return "", fmt.Errorf("DOD-CENSUS: runtime executable root overlaps the host-backed receipt mount")
+	}
+	var filesystem unix.Statfs_t
+	if err := unix.Statfs(execRoot, &filesystem); err != nil {
+		return "", fmt.Errorf("DOD-CENSUS: inspect runtime executable tmpfs: %w", err)
+	}
+	if uint64(filesystem.Blocks)*uint64(filesystem.Bsize) != 1<<30 {
+		return "", fmt.Errorf("DOD-CENSUS: runtime executable tmpfs is not the bounded 1 GiB mount")
+	}
+	return execRoot, nil
 }
 
 func pathInside(root, candidate string) bool {

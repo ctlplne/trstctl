@@ -336,6 +336,22 @@ descriptor = os.open(tmp_probe, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
 os.close(descriptor)
 tmp_probe.unlink()
 
+exec_root = pathlib.Path(os.environ["TRSTCTL_DOD_RUNTIME_EXEC_ROOT"])
+exec_metadata = os.lstat(exec_root)
+exec_capacity = os.statvfs(exec_root).f_blocks * os.statvfs(exec_root).f_frsize
+if (not stat.S_ISDIR(exec_metadata.st_mode) or stat.S_ISLNK(exec_metadata.st_mode) or
+        stat.S_IMODE(exec_metadata.st_mode) != 0o700 or
+        exec_metadata.st_uid != expected_uid or exec_metadata.st_gid != expected_gid or
+        exec_capacity != 1024 * 1024 * 1024):
+    raise RuntimeError("runtime executable root is not the bounded private 0700 tmpfs")
+exec_probe = exec_root / ".trstctl-dod-exec-preflight"
+exec_probe.write_bytes(pathlib.Path("/usr/bin/true").read_bytes())
+exec_probe.chmod(0o500)
+try:
+    subprocess.run([str(exec_probe)], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+finally:
+    exec_probe.unlink()
+
 socket_metadata = os.stat("/var/run/docker.sock")
 if (not stat.S_ISSOCK(socket_metadata.st_mode) or
         socket_metadata.st_uid != expected_socket_uid or
@@ -479,7 +495,7 @@ func (r *linuxRuntimeExecutor) run(ctx context.Context, repo, cacheDir string, p
 		"--mount", "type=bind,src="+passwdFile+",dst=/etc/passwd,readonly",
 		"--mount", "type=bind,src="+groupFile+",dst=/etc/group,readonly",
 	)
-	dockerArgs = append(dockerArgs, runtimeRunnerScratchArgs(receiptDir)...)
+	dockerArgs = append(dockerArgs, runtimeRunnerScratchArgs(receiptDir, uid, gid)...)
 	dockerArgs = append(dockerArgs, runtimeRunnerGoEnvironment(profile, cacheDir)...)
 	dockerArgs = append(dockerArgs,
 		"--env", "DOCKER_HOST=unix:///var/run/docker.sock",
@@ -556,15 +572,18 @@ func runtimeRunnerPrivilegeDropArgs(uid, gid, socketGID uint32) []string {
 	}
 }
 
-func runtimeRunnerScratchArgs(receiptDir string) []string {
+func runtimeRunnerScratchArgs(receiptDir string, uid, gid uint32) []string {
 	return []string{
 		"--mount", "type=bind,src=" + receiptDir + ",dst=" + receiptDir,
 		"--mount", "type=bind,src=" + receiptDir + ",dst=" + dodproof.RuntimeTempDir,
 		"--tmpfs", "/tmp:rw,nosuid,nodev,noexec,size=2g,mode=1777",
+		"--tmpfs", dodproof.RuntimeExecDir + ":rw,nosuid,nodev,exec,size=1g,mode=0700,uid=" +
+			strconv.FormatUint(uint64(uid), 10) + ",gid=" + strconv.FormatUint(uint64(gid), 10),
 		"--env", "HOME=" + dodproof.RuntimeTempDir,
 		"--env", "TMPDIR=" + dodproof.RuntimeTempDir,
 		"--env", dodproof.HostReceiptRootEnv + "=" + receiptDir,
 		"--env", dodproof.RuntimeTempRootEnv + "=" + dodproof.RuntimeTempDir,
+		"--env", dodproof.RuntimeExecRootEnv + "=" + dodproof.RuntimeExecDir,
 	}
 }
 

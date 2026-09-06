@@ -87,15 +87,17 @@ func TestRuntimeRunnerRootFilesystemIsReadOnlyAndPrivilegeBootstrapIsBounded(t *
 
 func TestRuntimeRunnerScratchMountsBoundedTmpfsAndShortReceiptAlias(t *testing.T) {
 	receiptDir := "/private/tmp/" + strings.Repeat("very-long-host-receipt-path-", 8)
-	got := runtimeRunnerScratchArgs(receiptDir)
+	got := runtimeRunnerScratchArgs(receiptDir, 501, 20)
 	want := []string{
 		"--mount", "type=bind,src=" + receiptDir + ",dst=" + receiptDir,
 		"--mount", "type=bind,src=" + receiptDir + ",dst=/dod-tmp",
 		"--tmpfs", "/tmp:rw,nosuid,nodev,noexec,size=2g,mode=1777",
+		"--tmpfs", "/dod-exec:rw,nosuid,nodev,exec,size=1g,mode=0700,uid=501,gid=20",
 		"--env", "HOME=/dod-tmp",
 		"--env", "TMPDIR=/dod-tmp",
 		"--env", "TRSTCTL_DOD_HOST_RECEIPT_ROOT=" + receiptDir,
 		"--env", "TRSTCTL_DOD_RUNTIME_TEMP_ROOT=/dod-tmp",
+		"--env", "TRSTCTL_DOD_RUNTIME_EXEC_ROOT=/dod-exec",
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("runtime scratch argv = %v, want exact %v", got, want)
