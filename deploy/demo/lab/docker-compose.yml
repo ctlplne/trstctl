@@ -2,6 +2,11 @@ name: trstctl-demo
 
 services:
   trstctl:
+    build:
+      args:
+        VERSION: ${TRSTCTL_LAB_BUILD_VERSION:-dev}
+        COMMIT: ${TRSTCTL_LAB_BUILD_COMMIT:-none}
+        DATE: ${TRSTCTL_LAB_BUILD_DATE:-1970-01-01T00:00:00Z}
     depends_on:
       lab-init:
         condition: service_completed_successfully

@@ -25,7 +25,19 @@ esac
 TRSTCTL_DEMO_CONTROL_IMAGE="${TRSTCTL_DEMO_CONTROL_IMAGE:-${lab_project}-control:local}"
 TRSTCTL_DEMO_SEED_IMAGE="${TRSTCTL_DEMO_SEED_IMAGE:-${lab_project}-seed:local}"
 TRSTCTL_DEMO_FRONTDOORS_IMAGE="${TRSTCTL_DEMO_FRONTDOORS_IMAGE:-${lab_project}-frontdoors:local}"
+lab_head="$(git -C "$repo_dir" rev-parse --verify HEAD 2>/dev/null || printf '%s' none)"
+lab_commit="${TRSTCTL_LAB_BUILD_COMMIT:-$lab_head}"
+if [ -z "${TRSTCTL_LAB_BUILD_COMMIT:-}" ] && [ -n "$(git -C "$repo_dir" status --porcelain --untracked-files=normal 2>/dev/null)" ]; then
+  # A repair-loop image is allowed, but it must not impersonate the clean HEAD.
+  # Once the repair is committed, this marker disappears on the next rebuild.
+  lab_commit="dirty-$lab_head"
+fi
+lab_short="$(printf '%s' "$lab_commit" | cut -c1-12)"
+TRSTCTL_LAB_BUILD_COMMIT="$lab_commit"
+TRSTCTL_LAB_BUILD_VERSION="${TRSTCTL_LAB_BUILD_VERSION:-dev-$lab_short}"
+TRSTCTL_LAB_BUILD_DATE="${TRSTCTL_LAB_BUILD_DATE:-$(git -C "$repo_dir" show -s --format=%cI "$lab_head" 2>/dev/null || printf '%s' 1970-01-01T00:00:00Z)}"
 export TRSTCTL_DEMO_CONTROL_IMAGE TRSTCTL_DEMO_SEED_IMAGE TRSTCTL_DEMO_FRONTDOORS_IMAGE
+export TRSTCTL_LAB_BUILD_COMMIT TRSTCTL_LAB_BUILD_VERSION TRSTCTL_LAB_BUILD_DATE
 compose="docker compose -p $lab_project -f $repo_dir/deploy/demo/docker-compose.yml -f $lab_dir/docker-compose.yml --profile partner-lab"
 
 live_status=0

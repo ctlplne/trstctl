@@ -94,6 +94,19 @@ func TestPartnerLabComposeRunsRealLocalFrontDoorsWithoutPretendingLinuxIsIIS(t *
 		t.Fatal("partner lab must not market a Linux container as real Windows IIS")
 	}
 	cp := cf.Services["trstctl"]
+	buildArgs, ok := cp.Build["args"].(map[string]any)
+	if !ok {
+		t.Fatalf("partner lab trstctl build args = %#v, want candidate provenance mapping", cp.Build["args"])
+	}
+	for key, want := range map[string]string{
+		"VERSION": "${TRSTCTL_LAB_BUILD_VERSION:-dev}",
+		"COMMIT":  "${TRSTCTL_LAB_BUILD_COMMIT:-none}",
+		"DATE":    "${TRSTCTL_LAB_BUILD_DATE:-1970-01-01T00:00:00Z}",
+	} {
+		if got := stringValue(buildArgs[key]); got != want {
+			t.Fatalf("partner lab build arg %s = %q, want %q", key, got, want)
+		}
+	}
 	for _, want := range []string{"127.0.0.1:10443:10443", "127.0.0.1:10444:10444", "127.0.0.1:10445:10445", "127.0.0.1:10446:10446", "127.0.0.1:10447:10447", "127.0.0.1:10448:10448"} {
 		if !contains(cp.Ports, want) {
 			t.Fatalf("partner lab trstctl ports = %v, missing real target listener %s", cp.Ports, want)
@@ -105,7 +118,7 @@ func TestPartnerLabComposeRunsRealLocalFrontDoorsWithoutPretendingLinuxIsIIS(t *
 	if got := stringValue(cp.Environment["TRSTCTL_AGENT_CHANNEL_CLAIMABLE_JOB_KINDS"]); !strings.Contains(got, "connector.deploy") || !strings.Contains(got, "connector.rollback") {
 		t.Fatalf("partner lab claimable jobs = %q, want deploy and rollback", got)
 	}
-	// One host agent owns all five real processes. Five same-role agents could
+	// One host agent owns all six real processes. Six same-role agents could
 	// otherwise race to claim a targetless endpoint.renew row and run it with the
 	// wrong host allowlist. The combined target is both smaller and faithfully
 	// models one edge host running several front doors.
@@ -138,6 +151,7 @@ func TestPartnerLabRunnerIsPersistentTruthfulAndSecretSafe(t *testing.T) {
 		"TRSTCTL_LAB_RUN_DOD:-1", "live repair loop", "full qualification",
 		"${lab_project}-control:local", "${lab_project}-seed:local", "${lab_project}-frontdoors:local",
 		"dod_cache_parent", `chmod 0700 "$dod_cache_parent" "$dod_cache"`,
+		"TRSTCTL_LAB_BUILD_COMMIT", "dirty-$lab_head", "TRSTCTL_LAB_BUILD_VERSION", "TRSTCTL_LAB_BUILD_DATE",
 	} {
 		if !strings.Contains(launcher, want) {
 			t.Errorf("partner lab launcher is missing staged startup %q", want)
