@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"sort"
@@ -165,11 +166,11 @@ func (e *Enumerator) listSecrets(ctx context.Context) ([]secretSummary, error) {
 		}
 		var resp struct {
 			SecretList []struct {
-				Name            string `json:"Name"`
-				ARN             string `json:"ARN"`
-				CreatedDate     string `json:"CreatedDate"`
-				LastChangedDate string `json:"LastChangedDate"`
-				RotationEnabled bool   `json:"RotationEnabled"`
+				Name            string       `json:"Name"`
+				ARN             string       `json:"ARN"`
+				CreatedDate     awsTimestamp `json:"CreatedDate"`
+				LastChangedDate awsTimestamp `json:"LastChangedDate"`
+				RotationEnabled bool         `json:"RotationEnabled"`
 				Tags            []struct {
 					Key   string `json:"Key"`
 					Value string `json:"Value"`
@@ -186,8 +187,8 @@ func (e *Enumerator) listSecrets(ctx context.Context) ([]secretSummary, error) {
 				tags[tag.Key] = tag.Value
 			}
 			out = append(out, secretSummary{
-				Name: s.Name, ARN: s.ARN, Tags: tags, CreatedAt: s.CreatedDate,
-				UpdatedAt: s.LastChangedDate, RotationEnabled: s.RotationEnabled,
+				Name: s.Name, ARN: s.ARN, Tags: tags, CreatedAt: string(s.CreatedDate),
+				UpdatedAt: string(s.LastChangedDate), RotationEnabled: s.RotationEnabled,
 			})
 		}
 		if resp.NextToken == "" {
@@ -323,4 +324,32 @@ func (e *Enumerator) signV4(req *http.Request, body []byte, t time.Time) {
 		"Credential="+e.cfg.AccessKeyID+"/"+credScope+", "+
 		"SignedHeaders="+signedHeaders+", "+
 		"Signature="+signature)
+}
+
+// awsTimestamp accepts the two shapes Secrets Manager timestamps arrive in: the
+// JSON-protocol epoch number (seconds, possibly fractional) that AWS and
+// LocalStack send, or an RFC 3339 string. It is kept as RFC 3339 UTC text.
+type awsTimestamp string
+
+func (t *awsTimestamp) UnmarshalJSON(raw []byte) error {
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" || trimmed == "null" {
+		*t = ""
+		return nil
+	}
+	if trimmed[0] == '"' {
+		var text string
+		if err := json.Unmarshal(raw, &text); err != nil {
+			return err
+		}
+		*t = awsTimestamp(text)
+		return nil
+	}
+	var epoch float64
+	if err := json.Unmarshal(raw, &epoch); err != nil {
+		return fmt.Errorf("timestamp is neither a string nor an epoch number: %w", err)
+	}
+	sec, frac := math.Modf(epoch)
+	*t = awsTimestamp(time.Unix(int64(sec), int64(frac*1e9)).UTC().Format(time.RFC3339))
+	return nil
 }

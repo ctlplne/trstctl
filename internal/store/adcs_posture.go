@@ -329,7 +329,8 @@ func (s *Store) ListADCSTemplateDrift(ctx context.Context, tenantID string, limi
 		rows, err := tx.Query(ctx,
 			`SELECT id::text, tenant_id::text, run_id::text, source_id::text, kind, ref,
 			        provenance, fingerprint, risk_score, metadata, discovered_at,
-			        triage_status, managed_identity_id::text, triage_actor, triage_reason, triaged_at
+			        triage_status, managed_identity_id::text, triage_actor, triage_reason, triaged_at,
+		              first_seen_at, last_seen_at, seen_count
 			   FROM discovery_findings
 			  WHERE tenant_id = $1 AND kind = $2
 			  ORDER BY discovered_at DESC, id DESC LIMIT $3`,
