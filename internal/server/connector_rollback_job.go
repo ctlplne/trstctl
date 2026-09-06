@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -30,7 +31,7 @@ var rollbackReceiptNamespace = uuid.MustParse("6f1d9a52-0f2a-4a5e-9a41-2f9c7f6b0
 // outcome is the relay's own terminal outcome, already verified by the signed
 // receipt gate (epic A1) before this runs — so what is recorded here is a claim
 // the agent signed, not a claim the control plane invented about itself.
-func (s *Server) rollbackReceipt(ctx context.Context, tenantID, agentName, idempotencyKey, payloadJSON, outcome, reason string) {
+func (s *Server) rollbackReceipt(ctx context.Context, tenantID, agentName string, jobID int64, idempotencyKey, payloadJSON, outcome, reason string) {
 	if s.orch == nil {
 		return
 	}
@@ -40,6 +41,7 @@ func (s *Server) rollbackReceipt(ctx context.Context, tenantID, agentName, idemp
 	var req struct {
 		Connector              string `json:"connector"`
 		Target                 string `json:"target"`
+		IdentityID             string `json:"identity_id"`
 		PredecessorFingerprint string `json:"predecessor_fingerprint"`
 		PredecessorSerial      string `json:"predecessor_serial"`
 	}
@@ -88,8 +90,12 @@ func (s *Server) rollbackReceipt(ctx context.Context, tenantID, agentName, idemp
 	// by timestamp, and an evidence export would show conflicting outcomes for
 	// the same operation.
 	receiptID := uuid.NewSHA1(rollbackReceiptNamespace, []byte(tenantID+"\x00"+idempotencyKey)).String()
+	var identityID *string
+	if value := strings.TrimSpace(req.IdentityID); value != "" {
+		identityID = &value
+	}
 	if _, err := s.orch.RecordConnectorDelivery(ctx, tenantID, store.ConnectorDeliveryReceipt{
-		ID:          receiptID,
+		ID: receiptID, OutboxID: outboxPtr(jobID), IdentityID: identityID,
 		Destination: "connector.rollback", Connector: req.Connector, Target: req.Target,
 		Fingerprint: req.PredecessorFingerprint,
 		Status:      status, Attempts: 1, Reason: receiptReason, Detail: detail,

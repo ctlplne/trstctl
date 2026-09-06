@@ -590,7 +590,16 @@ func (a *agentService) recordAgentConnectorDelivery(
 	claim store.AgentJobResultClaim,
 	req *transport.ReportJobResultRequest,
 ) error {
-	if claim.Destination != "connector.deploy" {
+	if claim.Destination != "connector.deploy" && claim.Destination != agentJobKindEndpointRenew {
+		return nil
+	}
+	switch strings.TrimSpace(req.Outcome) {
+	case transport.JobOutcomeExecuted, transport.JobOutcomeVerified, transport.JobOutcomeVerifyFailed:
+		// Executed proves delivery. A verification failure still proves the
+		// write/reload happened; it says the listener did not serve the expected
+		// identity afterward. Refused and failed jobs prove neither and must not
+		// manufacture a successful delivery receipt.
+	default:
 		return nil
 	}
 	intent, rollback := deployIntentForVerificationReceipt(claim.Payload)
@@ -599,6 +608,18 @@ func (a *agentService) recordAgentConnectorDelivery(
 	}
 	if a.orch == nil {
 		return errors.New("agent connector delivery projection is not configured")
+	}
+	fingerprint := strings.TrimSpace(intent.Fingerprint)
+	if claim.Destination == agentJobKindEndpointRenew {
+		// First host issuance has no fingerprint when it is queued: the key and
+		// CSR do not exist until the agent executes the job. The terminal report's
+		// credential fingerprint is inside the detached agent signature and was
+		// already accepted by the custody projector above, so it is the
+		// authoritative public identifier for this delivery.
+		fingerprint = strings.TrimSpace(req.CredentialFingerprint)
+	}
+	if fingerprint == "" {
+		return errors.New("agent connector delivery has no signed credential fingerprint")
 	}
 	var identityID *string
 	if value := strings.TrimSpace(intent.IdentityID); value != "" {
@@ -616,8 +637,12 @@ func (a *agentService) recordAgentConnectorDelivery(
 	eventID := evidenceID("connector-delivery-agent-event", info.TenantID, eventKey, req.JobID)
 	_, err := a.orch.RecordConnectorDeliveryWithEventID(ctx, info.TenantID, eventID, store.ConnectorDeliveryReceipt{
 		ID: receiptID, OutboxID: outboxPtr(req.JobID), IdentityID: identityID,
-		Destination: claim.Destination, Connector: intent.Connector, Target: intent.Target,
-		Fingerprint: intent.Fingerprint, Status: servedstatus.ConnectorDelivered,
+		// endpoint.renew is the agent job kind, not an operator-facing delivery
+		// destination. Both first host issuance and later renewal are certificate
+		// deliveries and belong to the same identity-bound connector.deploy
+		// timeline the lifecycle selector consumes.
+		Destination: "connector.deploy", Connector: intent.Connector, Target: intent.Target,
+		Fingerprint: fingerprint, Status: servedstatus.ConnectorDelivered,
 		Attempts: req.Attempt, Reason: reason,
 		Detail:         "delivered by enrolled agent " + info.CommonName,
 		RollbackRef:    "restore previous certificate for " + intent.Target,
@@ -962,7 +987,7 @@ func (a *agentService) recordRollbackFromJob(ctx context.Context, tenantID, agen
 	if idemKey == "" {
 		idemKey = key
 	}
-	a.recordRollback(ctx, tenantID, agentName, idemKey, string(payload), outcome, reason)
+	a.recordRollback(ctx, tenantID, agentName, jobID, idemKey, string(payload), outcome, reason)
 }
 
 func (a *agentService) recordVerifiedReceipt(ctx context.Context, info mtls.PeerCertInfo,

@@ -788,10 +788,10 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 				return d.completeRecoveredRenewalRun(ctx, m.TenantID, p, run, recovered)
 			}
 		}
-		certs, err := d.store.ListActiveIssuedCertificatesForIdentity(ctx, m.TenantID, ident.OwnerID, ident.Name)
+		certs, err := d.activeRenewalCertificates(ctx, m.TenantID, ident)
 		if err != nil {
 			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
-			return nil, fmt.Errorf("server: find issued certs for identity %s: %w", p.IdentityID, err)
+			return nil, err
 		}
 		certs, err = renewalCertificatesForTrigger(certs, p)
 		if err != nil {
@@ -891,6 +891,28 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 		return err
 	}
 	return d.ensureTenantCRL(ctx, m.TenantID)
+}
+
+// activeRenewalCertificates resolves the predecessor candidates for one
+// lifecycle identity. Owner plus DNS name is a compatibility fallback, not an
+// identity key: retained estates can contain several endpoints with both.
+func (d *issuanceDispatcher) activeRenewalCertificates(ctx context.Context, tenantID string, ident store.Identity) ([]store.Certificate, error) {
+	certs, err := d.store.ListActiveIssuedCertificatesForIdentity(ctx, tenantID, ident.OwnerID, ident.Name)
+	if err != nil {
+		return nil, fmt.Errorf("server: find issued certs for identity %s: %w", ident.ID, err)
+	}
+	deployedFingerprint, deployed, err := d.store.LatestDeployedCertificateFingerprintForIdentity(ctx, tenantID, ident.ID)
+	if err != nil {
+		return nil, fmt.Errorf("server: resolve deployed certificate for identity %s: %w", ident.ID, err)
+	}
+	if !deployed {
+		return certs, nil
+	}
+	deployedCertificate, err := d.store.GetCertificateByFingerprint(ctx, tenantID, deployedFingerprint)
+	if err != nil {
+		return nil, fmt.Errorf("server: load deployed certificate for identity %s: %w", ident.ID, err)
+	}
+	return []store.Certificate{deployedCertificate}, nil
 }
 
 // enforceProfile applies the served-side certificate-profile model to a mint

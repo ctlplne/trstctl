@@ -531,6 +531,39 @@ func (s *Store) ListConnectorDeliveryReceiptsPage(ctx context.Context, tenantID,
 	return out, err
 }
 
+// LatestDeployedCertificateFingerprintForIdentity returns the exact public
+// certificate fingerprint most recently proved on the wire for one identity.
+//
+// Owner plus DNS name is not an identity key: a retained estate can contain
+// several independent identities for the same service name and owner. Renewal
+// must follow the identity-bound delivery evidence or it can replace a
+// different certificate that merely has the same SAN. Only an issued, active
+// inventory row can be selected; a forged or stale receipt cannot manufacture
+// a renewal candidate.
+func (s *Store) LatestDeployedCertificateFingerprintForIdentity(ctx context.Context, tenantID, identityID string) (string, bool, error) {
+	var fingerprint string
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT r.fingerprint
+			   FROM connector_delivery_receipts r
+			   JOIN certificates c
+			     ON c.tenant_id = r.tenant_id
+			    AND c.fingerprint = r.fingerprint
+			  WHERE r.tenant_id = $1
+			    AND r.identity_id = $2
+			    AND r.destination = 'connector.deploy'
+			    AND r.status IN ('delivered', 'verified')
+			    AND c.source = 'issued'
+			    AND c.status = 'active'
+			  ORDER BY r.updated_at DESC, r.id DESC
+			  LIMIT 1`, tenantID, identityID).Scan(&fingerprint)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, nil
+	}
+	return fingerprint, err == nil, err
+}
+
 // GetConnectorDeliveryReceipt loads one receipt in its tenant context.
 func (s *Store) GetConnectorDeliveryReceipt(ctx context.Context, tenantID, id string) (ConnectorDeliveryReceipt, error) {
 	var r ConnectorDeliveryReceipt

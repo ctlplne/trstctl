@@ -664,6 +664,7 @@ func TestServedHostRollbackG1AutomaticAndManualAcrossAgentRestartsAUD32(t *testi
 	}
 	var manualReceipt struct {
 		RollbackRef string `json:"rollback_ref"`
+		OutboxID    *int64 `json:"outbox_id"`
 	}
 	if err := json.Unmarshal(body, &manualReceipt); err != nil {
 		t.Fatalf("decode manual rollback receipt: %v body=%s", err, body)
@@ -672,6 +673,9 @@ func TestServedHostRollbackG1AutomaticAndManualAcrossAgentRestartsAUD32(t *testi
 		!strings.Contains(manualReceipt.RollbackRef, second.Fingerprint) ||
 		strings.Contains(manualReceipt.RollbackRef, "re-bind") {
 		t.Fatalf("manual host rollback describes the wrong execution model: %q", manualReceipt.RollbackRef)
+	}
+	if manualReceipt.OutboxID == nil || *manualReceipt.OutboxID != rollbackJobID {
+		t.Fatalf("manual host rollback lost its queued job correlation: %+v", manualReceipt)
 	}
 	runColdAgent(transport.JobOutcomeVerified)
 	assertFileEquals(t, certPath, secondCert)
@@ -729,6 +733,10 @@ func TestServedHostRollbackG1AutomaticAndManualAcrossAgentRestartsAUD32(t *testi
 	for _, receipt := range receipts {
 		if receipt.Destination == "connector.rollback" && receipt.Status == servedstatus.ConnectorRolledBack &&
 			receipt.Reason == "rolled_back_and_reverified" && strings.Contains(receipt.Detail, h.agent) {
+			if receipt.OutboxID == nil || *receipt.OutboxID != rollbackJobID ||
+				receipt.IdentityID == nil || *receipt.IdentityID != identity.ID {
+				t.Fatalf("terminal rollback receipt lost job/identity correlation: %+v", receipt)
+			}
 			verifiedRollback = true
 		}
 	}

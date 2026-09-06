@@ -7,12 +7,15 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/agent/transport"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/servedstatus"
 
 	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/store"
@@ -331,6 +334,66 @@ func TestAHostRenewalReportReturnsTheIdentityToDeployed(t *testing.T) {
 	}
 }
 
+// A host-generated issuance with no generic TLS verification address still
+// proves that the edge collector executed the connector. PostgreSQL is the
+// concrete case: its listener needs SSLRequest negotiation, so the generic
+// verifier is intentionally absent. The executed job must remain visible as an
+// identity-bound delivery without being overstated as listener verification.
+func TestExecutedEndpointRenewRecordsIdentityBoundConnectorDelivery(t *testing.T) {
+	ctx := context.Background()
+	h := newIssuanceDispatcherHarness(t)
+	identityID := "55555555-5555-4555-8555-55555555d101"
+	intent := RelayDeployIntent{
+		Connector: "postgresql", Target: "Partner lab PostgreSQL listener",
+		IdentityID: identityID,
+	}
+	credentialFingerprint := strings.Repeat("c", 64)
+	payload, err := json.Marshal(intent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := &agentService{orch: h.orch}
+	claim := store.AgentJobResultClaim{
+		Destination: agentJobKindEndpointRenew, IdempotencyKey: "postgresql-first-issuance", Payload: payload,
+	}
+	peer := mtls.PeerCertInfo{TenantID: h.tenant, CommonName: "edge-collector"}
+	if err := service.recordAgentConnectorDelivery(ctx, peer, claim, &transport.ReportJobResultRequest{
+		JobID: 901, Attempt: 1, Outcome: transport.JobOutcomeExecuted,
+		CredentialFingerprint: credentialFingerprint,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	receipts, err := h.store.ListConnectorDeliveryReceiptsPage(ctx, h.tenant, identityID, store.ZeroUUID, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(receipts) != 1 {
+		t.Fatalf("executed endpoint renewal receipts = %+v, want one identity-bound delivery", receipts)
+	}
+	got := receipts[0]
+	if got.Destination != "connector.deploy" || got.Connector != intent.Connector || got.Target != intent.Target ||
+		got.Fingerprint != credentialFingerprint || got.Status != servedstatus.ConnectorDelivered ||
+		got.OutboxID == nil || *got.OutboxID != 901 {
+		t.Fatalf("executed endpoint renewal receipt lost delivery correlation: %+v", got)
+	}
+
+	// A refused execution is signed evidence of refusal, not evidence that a
+	// certificate reached the target.
+	claim.IdempotencyKey = "postgresql-refused-issuance"
+	if err := service.recordAgentConnectorDelivery(ctx, peer, claim, &transport.ReportJobResultRequest{
+		JobID: 902, Attempt: 1, Outcome: transport.JobOutcomeFailed,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	after, err := h.store.ListConnectorDeliveryReceiptsPage(ctx, h.tenant, identityID, store.ZeroUUID, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(after) != 1 {
+		t.Fatalf("failed endpoint renewal manufactured a delivery receipt: %+v", after)
+	}
+}
+
 // A failed renewal must leave the known-good predecessor operational while
 // recording that the new attempt needs attention and can be retried.
 func TestAFailedHostRenewalMovesToRetryableFailure(t *testing.T) {
@@ -553,5 +616,92 @@ func TestAHostRenewalNamesTheCertificateItReplaces(t *testing.T) {
 			"recorded with no ReplacesID, the old certificate is never superseded, and the "+
 			"identity reads as having two active certificates",
 			intent.PredecessorCertificateID, certs[0].ID)
+	}
+}
+
+// A service name is not a certificate identity. Retained estates commonly
+// contain repeated SANs (multiple endpoints, blue/green migrations, and old
+// demo generations). Renewal must follow the exact identity-bound delivery
+// receipt, not whichever active certificate with that owner/SAN sorts first.
+func TestHostRenewalUsesTheIdentityBoundDeployedCertificate(t *testing.T) {
+	ctx := context.Background()
+	h := newIssuanceDispatcherHarness(t)
+
+	owner, err := h.store.CreateOwner(ctx, store.Owner{
+		TenantID: h.tenant, Kind: store.OwnerTeam, Name: "Shared service owner", Email: "shared@example.test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := agentExecutedTarget(t)
+	target.ID = "44444444-4444-4444-4444-44444444d001"
+	target.TenantID = h.tenant
+	if err := h.store.UpsertDeploymentTarget(ctx, target); err != nil {
+		t.Fatal(err)
+	}
+	attrs, err := json.Marshal(map[string]any{
+		"deployment_target_id": target.ID, "connector": target.Type, "target": target.Name,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity := store.Identity{
+		ID: "55555555-5555-4555-8555-55555555d001", TenantID: h.tenant,
+		Kind: store.KindX509Certificate, Name: "shared.example.test", OwnerID: owner.ID,
+		Status: string(orchestrator.StateDeployed), Attributes: attrs,
+	}
+	if err := h.store.UpsertIdentity(ctx, identity); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	ownerID := owner.ID
+	issuedPEM, err := h.handler.issue(ctx, serverTestCSR(t, "shared.example.test", nil), 24*time.Hour, crypto.LeafProfile{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	certificateDER := firstCertDERFromPEM(t, issuedPEM)
+	record := func(fingerprint string) store.Certificate {
+		t.Helper()
+		cert, recordErr := h.store.UpsertCertificate(ctx, store.Certificate{
+			TenantID: h.tenant, OwnerID: &ownerID, Subject: "CN=shared.example.test",
+			SANs: []string{"shared.example.test"}, Issuer: "test issuer", Serial: fingerprint[:16],
+			Fingerprint: fingerprint, KeyAlgorithm: "ECDSA P-256", NotBefore: &now,
+			CertificateDER: certificateDER,
+			NotAfter:       func() *time.Time { end := now.Add(24 * time.Hour); return &end }(),
+			Source:         "issued",
+		})
+		if recordErr != nil {
+			t.Fatal(recordErr)
+		}
+		return cert
+	}
+	wrong := record(strings.Repeat("a", 64))
+	desired := record(strings.Repeat("b", 64))
+	if wrong.ID == desired.ID {
+		t.Fatal("test setup did not create distinct same-SAN certificates")
+	}
+	if _, err := h.orch.RecordConnectorDelivery(ctx, h.tenant, store.ConnectorDeliveryReceipt{
+		IdentityID: &identity.ID, Destination: "connector.deploy", Connector: target.Type,
+		Target: target.Name, Fingerprint: desired.Fingerprint, Status: "verified",
+		Reason: "identity-bound served certificate", IdempotencyKey: "shared-service-delivery",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := h.orch.Transition(ctx, h.tenant, identity.ID, orchestrator.StateRenewing, "renew exact deployed identity"); err != nil {
+		t.Fatal(err)
+	}
+	dispatchOutbox(t, h, 1)
+	payload, _ := queuedHostRenewal(t, ctx, h)
+	if len(payload) == 0 {
+		t.Fatal("identity-bound renewal queued no host work")
+	}
+	var intent RelayDeployIntent
+	if err := json.Unmarshal(payload, &intent); err != nil {
+		t.Fatal(err)
+	}
+	if intent.PredecessorCertificateID != desired.ID {
+		t.Fatalf("renewal selected predecessor %q, want identity-bound deployed certificate %q; unrelated same-SAN certificate was %q",
+			intent.PredecessorCertificateID, desired.ID, wrong.ID)
 	}
 }

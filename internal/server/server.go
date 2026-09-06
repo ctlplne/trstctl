@@ -3240,6 +3240,24 @@ func (s *Server) RunLifecycleOnce(ctx context.Context) (int, error) {
 						continue
 					}
 					seen[ident.ID] = struct{}{}
+					// The SQL prefilter is intentionally broad for legacy
+					// identities. Where a signed connector timeline exists,
+					// replace its owner+SAN candidate with the exact certificate
+					// this identity is proved to serve before making the ARI/time
+					// decision.
+					deployedFingerprint, deployed, resolveErr := s.store.LatestDeployedCertificateFingerprintForIdentity(ctx, tenant, ident.ID)
+					if resolveErr != nil {
+						s.observeLifecycleSweep(queued, 0, resolveErr)
+						return queued, resolveErr
+					}
+					if deployed && deployedFingerprint != candidate.Certificate.Fingerprint {
+						deployedCertificate, loadErr := s.store.GetCertificateByFingerprint(ctx, tenant, deployedFingerprint)
+						if loadErr != nil {
+							s.observeLifecycleSweep(queued, 0, loadErr)
+							return queued, loadErr
+						}
+						candidate.Certificate = deployedCertificate
+					}
 					reason, due := lifecycleRenewalReason(candidate.Certificate, now, cutoff)
 					if !due {
 						continue

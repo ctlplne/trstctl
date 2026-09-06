@@ -786,6 +786,7 @@ func (a *API) rollbackConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		status := servedstatus.ConnectorRollbackQueued
 		statusReason := "rollback_queued_for_agent_execution"
 		var requiredAgentID string
+		var queuedOutboxID int64
 		if connector.CanRollbackOnHost(target.Type) {
 			evidence, found, evidenceErr := a.store.LastSuccessfulHostDeployEvidence(ctx, tenantID, target.ID)
 			err = evidenceErr
@@ -840,6 +841,7 @@ func (a *API) rollbackConnectorTarget(w http.ResponseWriter, r *http.Request) {
 					"a rollback for this target and predecessor exists and could not be re-queued; "+
 						"inspect the connector delivery receipts for its outcome before retrying")
 			}
+			queuedOutboxID = queued.OutboxID
 			if connector.CanRollbackOnHost(target.Type) {
 				rollbackRef = "queued for exact enrolled host-agent execution on " + target.Name +
 					": restore predecessor certificate serial " + predecessor.Serial +
@@ -863,7 +865,8 @@ func (a *API) rollbackConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		}
 
 		receipt, err := a.orch.RecordConnectorDelivery(ctx, tenantID, store.ConnectorDeliveryReceipt{
-			IdentityID: identityID, Destination: "connector.rollback", Connector: target.Type, Target: target.Name,
+			OutboxID: &queuedOutboxID, IdentityID: identityID,
+			Destination: "connector.rollback", Connector: target.Type, Target: target.Name,
 			Fingerprint: fingerprint, Status: status, Attempts: 1, Reason: statusReason,
 			Detail:      reason,
 			RollbackRef: rollbackRef, IdempotencyKey: idempotencyKey,
