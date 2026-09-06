@@ -28,6 +28,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/acmekey"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/protocols/acme"
 )
 
 // Plugin is an ACME CA plugin.
@@ -173,6 +174,10 @@ func (p *Plugin) Revoke(ctx context.Context, req ca.RevokeRequest) error {
 // or five things to go and look at.
 func dvFailureOrGeneric(err error) error {
 	switch {
+	case errors.Is(err, acme.ErrNoDNS01ProviderConfig):
+		return newSafeACMEError("external_ca_dns01_unconfigured",
+			"letsencrypt: no DNS-01 provider config covers the requested name; add a tenant DNS-01 provider config "+
+				"(allow_upstream_dv) for its zone before issuing through this authority", err)
 	case errors.Is(err, acmekey.ErrSolverNotConfigured):
 		return errors.New("letsencrypt: this issuer has no domain-validation solver configured, " +
 			"so it can only obtain certificates for identifiers the authority has already authorized")

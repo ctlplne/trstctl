@@ -10,11 +10,13 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/plugincensus"
+	"trstctl.com/trstctl/internal/protocols/acme"
 	"trstctl.com/trstctl/internal/servedstatus"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -222,6 +224,9 @@ type endpointIssuerSummary struct {
 	Name         string `json:"name"`
 	Type         string `json:"type"`
 	Availability string `json:"availability"`
+	// upstreamDNS01 is in-process only: the authority needs a tenant DNS-01
+	// provider config to validate names (see checkEndpointIssuerValidationPrerequisites).
+	upstreamDNS01 bool
 }
 
 type endpointBindingTargetSummary struct {
@@ -991,7 +996,8 @@ func endpointBindingReason(req endpointBindingRequest) string {
 }
 
 func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req endpointBindingRequest) (endpointBindingPreviewResponse, error) {
-	if _, err := a.store.GetOwner(ctx, tenantID, req.OwnerID); err != nil {
+	owner, err := a.store.GetOwner(ctx, tenantID, req.OwnerID)
+	if err != nil {
 		return endpointBindingPreviewResponse{}, err
 	}
 	if err := validateWildcardIdentityPolicy(req.IdentityName, nil); err != nil {
@@ -1012,6 +1018,14 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 	issuer, err := a.resolveEndpointIssuer(ctx, tenantID, req.Issuer)
 	if err != nil {
 		return endpointBindingPreviewResponse{}, err
+	}
+	if err := a.checkEndpointIssuerValidationPrerequisites(ctx, tenantID, issuer, req.IdentityName); err != nil {
+		return endpointBindingPreviewResponse{}, err
+	}
+	if externalIssuerRequiresHostCustody(issuer.Source, target.Connector, target.Config) {
+		return endpointBindingPreviewResponse{}, errStatus(http.StatusUnprocessableEntity,
+			"selected external CA answers asynchronously, and destination "+target.Name+" ("+target.Connector+") executes on a host agent with control-plane key custody; "+
+				"a slow CA answer would strand the certificate without its private key. Set \"executor\": \"agent\" on the destination so the enrolled host agent generates the key, submits only a CSR, installs the certificate, and verifies the listener; no CA was substituted and nothing was queued")
 	}
 	fingerprintInput := struct {
 		OwnerID      string                       `json:"owner_id"`
@@ -1049,7 +1063,7 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 		Target:             target,
 		Custody:            custodySummary,
 		Changes: []string{
-			"Create one X.509 identity for " + req.IdentityName + " owned by " + req.OwnerID + ".",
+			"Create one X.509 identity for " + req.IdentityName + " owned by " + strings.TrimSpace(owner.Name) + " (" + req.OwnerID + ").",
 			"Pin issuance and renewal to " + issuer.Name + " (" + issuer.Source + ":" + issuer.ID + ").",
 			"Bind the identity to " + target.Name + " through the " + target.Connector + " connector.",
 		},
@@ -1156,7 +1170,7 @@ func (a *API) resolveEndpointIssuer(ctx context.Context, tenantID string, req en
 				return endpointIssuerSummary{}, errStatus(http.StatusConflict,
 					"selected external CA is unavailable; no CA was substituted and nothing was queued")
 			}
-			return endpointIssuerSummary{Source: req.Source, ID: item.ID, Name: item.Name, Type: item.Type, Availability: item.Status}, nil
+			return endpointIssuerSummary{Source: req.Source, ID: item.ID, Name: item.Name, Type: item.Type, Availability: item.Status, upstreamDNS01: item.UpstreamDNS01}, nil
 		}
 		return endpointIssuerSummary{}, errStatus(http.StatusUnprocessableEntity,
 			"selected external CA is not configured for this tenant; no CA was substituted and nothing was queued")
@@ -1164,6 +1178,90 @@ func (a *API) resolveEndpointIssuer(ctx context.Context, tenantID string, req en
 		return endpointIssuerSummary{}, errStatus(http.StatusBadRequest,
 			"issuer.source must be platform, private, or external")
 	}
+}
+
+// checkEndpointIssuerValidationPrerequisites fails the preview closed when the
+// pinned authority cannot validate the requested name. An ACME authority with
+// upstream DNS-01 publishes its challenge through a tenant DNS-01 provider
+// config; without one covering the name (dns-01 allowed, wildcards where needed,
+// allow_upstream_dv on) issuance would queue, fail asynchronously, and dead-letter
+// while the identity reads "waiting to be issued". The preview promises
+// readiness, so it must check the prerequisite the worker will enforce, using
+// the same matching rule (acme.DNS01ZoneCovers).
+func (a *API) checkEndpointIssuerValidationPrerequisites(ctx context.Context, tenantID string, issuer endpointIssuerSummary, identityName string) error {
+	if issuer.Source != endpointIssuerExternal || !issuer.upstreamDNS01 {
+		return nil
+	}
+	if a.store == nil {
+		return nil
+	}
+	configs, err := a.store.ListACMEDNS01ProviderConfigs(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+	name := strings.TrimSpace(identityName)
+	covered, consented := evaluateDNS01Coverage(configs, name)
+	switch {
+	case consented:
+		return nil
+	case covered:
+		return errStatus(http.StatusUnprocessableEntity,
+			"selected external CA "+issuer.Name+" validates "+name+" with DNS-01, and a tenant DNS-01 provider config covers that zone but none is enabled for upstream domain validation; set allow_upstream_dv on the config that should publish challenge records, then preview again; no CA was substituted and nothing was queued")
+	default:
+		return errStatus(http.StatusUnprocessableEntity,
+			"selected external CA "+issuer.Name+" validates "+name+" with DNS-01, but no tenant DNS-01 provider config covers that zone; add one (POST /api/v1/acme/dns-01/provider-configs or `trstctl-cli acme dns-01 provider-configs`) with dns-01 allowed and allow_upstream_dv enabled, then preview again; no CA was substituted and nothing was queued")
+	}
+}
+
+// evaluateDNS01Coverage reports whether any tenant DNS-01 provider config could
+// publish a challenge for name (covered) and whether one of those is enabled for
+// upstream domain validation (consented). It mirrors the worker's selection
+// rule so the preview and order-time automation cannot disagree.
+func evaluateDNS01Coverage(configs []store.ACMEDNS01ProviderConfig, name string) (covered, consented bool) {
+	for _, cfg := range configs {
+		if !stringInList(cfg.AllowedMethods, acme.ChallengeDNS01) {
+			continue
+		}
+		if acme.IsWildcard(name) && !cfg.AllowWildcards {
+			continue
+		}
+		if !acme.DNS01ZoneCovers(cfg.Zone, cfg.ChallengeDomain, name) {
+			continue
+		}
+		covered = true
+		if cfg.AllowUpstreamDV {
+			return true, true
+		}
+	}
+	return covered, false
+}
+
+// externalIssuerRequiresHostCustody is the custody rule the preview enforces for
+// external authorities. An external CA is asynchronous from the control plane's
+// point of view (an outbox worker submits the CSR and waits), while a
+// control-plane-generated key lives only for one attempt (AN-8) and is wiped on
+// timeout. If the CA answers after that attempt, the retry recovers the
+// certificate by issuance key with no key to deploy: the identity reads issued,
+// the listener never changes, and nothing errors. Host-executed connectors have
+// the supported alternative — executor=agent, where the host generates the key,
+// sends only a CSR, installs, and verifies — so the preview requires it.
+func externalIssuerRequiresHostCustody(source, connector string, cfg json.RawMessage) bool {
+	if source != endpointIssuerExternal {
+		return false
+	}
+	if !relay.ExecutesOnHost(strings.TrimSpace(connector)) {
+		return false
+	}
+	return !custody.TargetExecutorIsAgent(cfg)
+}
+
+func stringInList(list []string, want string) bool {
+	for _, item := range list {
+		if item == want {
+			return true
+		}
+	}
+	return false
 }
 
 func canonicalEndpointBindingConfig(raw json.RawMessage) (json.RawMessage, error) {

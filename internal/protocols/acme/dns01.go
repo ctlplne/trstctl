@@ -4,12 +4,45 @@ package acme
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
 
 	"trstctl.com/trstctl/internal/crypto"
 )
+
+// ErrNoDNS01ProviderConfig is returned when an ACME order needs a DNS-01 record
+// for a name that no tenant DNS-01 provider config covers. It is a sentinel so
+// callers can classify the failure (a missing prerequisite an operator can add)
+// without inspecting error text.
+var ErrNoDNS01ProviderConfig = errors.New("acme: no served dns-01 provider config matches the requested name")
+
+// DNS01ZoneCovers reports whether a provider config declared for zone (or its
+// challenge delegation domain) is allowed to publish the _acme-challenge record
+// for domain. It is the single matching rule shared by order-time automation,
+// the endpoint-lifecycle preview, and preflight checks, so a prerequisite that
+// the preview accepts cannot be rejected later at issuance time.
+func DNS01ZoneCovers(zone, challengeDomain, domain string) bool {
+	base := strings.TrimSuffix(strings.TrimPrefix(strings.ToLower(strings.TrimSpace(domain)), "*."), ".")
+	if base == "" {
+		return false
+	}
+	recordName := strings.TrimSuffix(strings.ToLower(DNS01RecordName(domain)), ".")
+	for _, candidate := range []string{zone, challengeDomain} {
+		candidate = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(candidate)), ".")
+		if candidate == "" {
+			continue
+		}
+		if base == candidate || strings.HasSuffix(base, "."+candidate) {
+			return true
+		}
+		if recordName == candidate || strings.HasSuffix(recordName, "."+candidate) {
+			return true
+		}
+	}
+	return false
+}
 
 // Resolver looks up TXT records; *net.Resolver satisfies it. It is an injectable
 // seam so the DNS-01 validator can be tested without real DNS.

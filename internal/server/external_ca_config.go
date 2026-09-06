@@ -85,7 +85,7 @@ func externalCAsFromConfig(ctx context.Context, items []config.ExternalCAConfig,
 		if err != nil {
 			return nil, fmt.Errorf("external CA %q: %w", item.ID, err)
 		}
-		out = append(out, ExternalCA{ID: item.ID, Type: item.Type, Name: item.Name, TenantID: item.TenantID, Endpoint: item.Endpoint, Factory: factory})
+		out = append(out, ExternalCA{ID: item.ID, Type: item.Type, Name: item.Name, TenantID: item.TenantID, Endpoint: item.Endpoint, Factory: factory, UpstreamDNS01: item.Type == "letsencrypt" && item.UpstreamDNS01})
 	}
 	return out, nil
 }

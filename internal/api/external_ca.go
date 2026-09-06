@@ -45,6 +45,10 @@ type ExternalCA struct {
 	Type   string `json:"type"`
 	Name   string `json:"name"`
 	Status string `json:"status"`
+	// UpstreamDNS01 is in-process metadata (never serialized): the authority
+	// validates names through tenant DNS-01 provider configs, so the endpoint
+	// preview must confirm one can publish for the requested name.
+	UpstreamDNS01 bool `json:"-"`
 }
 
 type ExternalCAIssueRequest struct {

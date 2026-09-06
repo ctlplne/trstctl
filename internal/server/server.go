@@ -1098,6 +1098,16 @@ func (s *Server) configureMutationSpine(
 		}),
 		orchestrator.WithCircuitObserver(func(tr orchestrator.CircuitTransition) {
 			s.mOutboxCircuitTransitions.WithLabelValues(tr.TenantID, tr.Destination, string(tr.From), string(tr.To)).Inc()
+			// An opened circuit means repeated external failures that the
+			// console only shows on the connector health page. Log it so an
+			// operator tailing the control plane sees the stall without
+			// database access. Only routing metadata is logged (AN-8): no
+			// error text, payload, or credential can appear here.
+			if tr.To == orchestrator.CircuitOpen && s.logger != nil {
+				s.logger.Warn("outbox circuit opened after repeated delivery failures",
+					slog.String("tenant_id", tr.TenantID), slog.String("destination", tr.Destination),
+					slog.Int("failures", tr.Failures), slog.Time("open_until", tr.OpenUntil))
+			}
 		}),
 	)
 	orchOptions := historyRewriteOrchestratorOptions(d.Store, d.AuditSigningKey)

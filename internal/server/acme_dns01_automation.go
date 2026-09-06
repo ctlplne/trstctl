@@ -265,7 +265,7 @@ func (a *servedACMEDNS01Automation) selectProviderConfig(ctx context.Context, te
 				"domain validation; enable allow_upstream_dv on the one that should publish "+
 				"challenge records into that zone on an external CA's behalf", domain)
 	}
-	return store.ACMEDNS01ProviderConfig{}, fmt.Errorf("acme: no served dns-01 provider config matches %s", domain)
+	return store.ACMEDNS01ProviderConfig{}, fmt.Errorf("%w: %s", acme.ErrNoDNS01ProviderConfig, domain)
 }
 
 func allExtraPredicatesPass(cfg store.ACMEDNS01ProviderConfig, extra []func(store.ACMEDNS01ProviderConfig) bool) bool {
@@ -954,21 +954,7 @@ func acmeDNS01IdempotencyKey(destination, configID, recordName, value string) st
 }
 
 func dns01ConfigMatchesDomain(cfg store.ACMEDNS01ProviderConfig, domain string) bool {
-	base := strings.TrimSuffix(strings.TrimPrefix(strings.ToLower(strings.TrimSpace(domain)), "*."), ".")
-	for _, zone := range []string{cfg.Zone, cfg.ChallengeDomain} {
-		zone = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(zone)), ".")
-		if zone == "" {
-			continue
-		}
-		if base == zone || strings.HasSuffix(base, "."+zone) {
-			return true
-		}
-		recordName := strings.TrimSuffix(strings.ToLower(acme.DNS01RecordName(domain)), ".")
-		if recordName == zone || strings.HasSuffix(recordName, "."+zone) {
-			return true
-		}
-	}
-	return false
+	return acme.DNS01ZoneCovers(cfg.Zone, cfg.ChallengeDomain, domain)
 }
 
 func stringIn(needle string, haystack []string) bool {

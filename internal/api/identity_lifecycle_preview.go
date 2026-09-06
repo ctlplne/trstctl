@@ -153,10 +153,57 @@ func (a *API) previewIdentityTransition(w http.ResponseWriter, r *http.Request) 
 	if to == orchestrator.StateIssued {
 		plan.Prerequisites = append(plan.Prerequisites,
 			"Certificate profile, quota, approval, CSR, and signer checks run again at execution.")
+		authorityFact, authorityWarning := issuingAuthorityFacts(identity.Attributes)
+		plan.Prerequisites = append(plan.Prerequisites, authorityFact)
+		if authorityWarning != "" {
+			plan.Warnings = append(plan.Warnings, authorityWarning)
+		}
 		if csrPEM == "" {
 			plan.Warnings = append(plan.Warnings,
 				"No requester-generated CSR is attached. The deprecated compatibility path may generate a subject key inside the control plane.")
 		}
 	}
 	a.writeJSON(w, http.StatusOK, plan)
+}
+
+// issuingAuthorityFacts explains which CA will sign when this identity moves to
+// issued. The dispatcher pins the authority from the identity's
+// issuing_authority_* attributes and otherwise falls back to the built-in
+// platform CA. That fallback was invisible in the preview: an operator who
+// claimed a discovered listener and pressed Issue got a platform-CA
+// certificate without ever choosing a CA. The preview now names the authority
+// and warns when it is the silent default, so a CA-preserving customer can stop
+// before execution and use the endpoint lifecycle wizard instead.
+func issuingAuthorityFacts(raw json.RawMessage) (fact, warning string) {
+	const defaultFact = "Issuing authority: the built-in platform CA (trstctl issuing CA) — no CA is pinned on this identity."
+	const defaultWarning = "No issuing authority is pinned on this identity, so execution uses the built-in platform CA. " +
+		"To issue through an external or private CA, use the endpoint lifecycle wizard or pin the authority before issuing."
+	if len(raw) == 0 {
+		return defaultFact, defaultWarning
+	}
+	var attrs map[string]any
+	if err := json.Unmarshal(raw, &attrs); err != nil {
+		return defaultFact, defaultWarning
+	}
+	source, _ := attrs["issuing_authority_source"].(string)
+	id, _ := attrs["issuing_authority_id"].(string)
+	name, _ := attrs["issuing_authority_name"].(string)
+	source, id, name = strings.TrimSpace(source), strings.TrimSpace(id), strings.TrimSpace(name)
+	if source == "" && id == "" {
+		return defaultFact, defaultWarning
+	}
+	label := name
+	if label == "" {
+		label = id
+	}
+	switch source {
+	case "external":
+		return "Issuing authority: external CA " + label + " (" + source + ":" + id + "), pinned on this identity; no built-in CA is substituted.", ""
+	case "private":
+		return "Issuing authority: private CA " + label + " (" + source + ":" + id + "), pinned on this identity; no built-in CA is substituted.", ""
+	case "platform":
+		return "Issuing authority: the built-in platform CA (" + label + "), pinned on this identity.", ""
+	default:
+		return "Issuing authority: " + source + ":" + id + " is pinned on this identity but is not a supported source; execution refuses rather than substituting a CA.", ""
+	}
 }

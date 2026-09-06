@@ -51,6 +51,22 @@ below. The control-plane operator must:
 4. Configure a notification channel and an owner-scoped route before relying on
    expiry alerts. A row in the notification inbox is not proof that Slack, email, or
    another receiver accepted the message.
+5. For an ACME authority that validates names with DNS-01 (`upstream_dns01`), make
+   sure the tenant has a **DNS-01 provider config** that covers the zone of every
+   name you will issue, with `dns-01` in `allowed_methods` and
+   `allow_upstream_dv` enabled. Without it, issuance cannot publish the challenge
+   record. The endpoint lifecycle preview now refuses with that exact reason instead
+   of queueing work that would fail asynchronously. Create the config through
+   `POST /api/v1/acme/dns-01/provider-configs` or
+   `trstctl-cli acme dns-01 provider-configs`; the console has no page for it yet.
+   See [ACME and DNS validation](../features/acme-and-dns.md).
+6. For a host-executed destination (Apache, NGINX, HAProxy, Caddy, Traefik, IIS,
+   PostgreSQL, and the other file-and-reload connectors), set
+   `"executor": "agent"` in the destination configuration. An external CA answers
+   asynchronously, so the enrolled host agent must generate the private key, submit
+   only a CSR, install the returned certificate, and verify the listener. The preview
+   refuses control-plane key custody for an external CA on a host connector rather
+   than risk a certificate whose key no longer exists.
 
 The tenant operator needs `issuers:read`, `certificates:issue`, discovery access, and
 the permissions required for the chosen destination and notification route. Use a

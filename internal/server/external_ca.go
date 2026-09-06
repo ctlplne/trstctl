@@ -44,6 +44,11 @@ type ExternalCA struct {
 	// ReplaySafety may opt a custom adapter into retry-after-ambiguous-failure
 	// only when its receiver enforces ca.ProviderIdempotencyKey.
 	ReplaySafety ca.ExternalIssueReplaySafety
+	// UpstreamDNS01 records that this ACME authority validates names through the
+	// tenant's DNS-01 provider configs. It is non-secret routing metadata used by
+	// the endpoint-lifecycle preview to fail closed when no provider config can
+	// publish a challenge for the requested name.
+	UpstreamDNS01 bool
 }
 
 type factoryExternalCA struct {
@@ -153,7 +158,7 @@ func (s *Server) buildExternalCAService(d Deps, idem *orchestrator.Idempotency) 
 				inner: implementation, authorityID: id, endpoint: strings.TrimSpace(cfg.Endpoint), orch: s.orch,
 			}
 		}
-		meta := api.ExternalCA{ID: id, Type: typ, Name: name, Status: "available"}
+		meta := api.ExternalCA{ID: id, Type: typ, Name: name, Status: "available", UpstreamDNS01: cfg.UpstreamDNS01}
 		replaySafety := cfg.ReplaySafety
 		if externalCATypeHasReceiverIdempotency(typ) {
 			replaySafety = ca.ExternalIssueReconciled

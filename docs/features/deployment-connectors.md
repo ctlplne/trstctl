@@ -296,6 +296,23 @@ instead of being ignored:
 | `azure-keyvault` | `endpoint`, `bearer_token_ref`; optional `api_version` |
 | `gcp-certificate-manager` | `endpoint`, `project`, `location`, `bearer_token_ref`; optional `poll_interval` |
 
+Host-executed targets (the file-and-reload families above) also accept the custody
+and verification keys the enrolled host agent honours: `"executor": "agent"` makes
+the agent generate the private key on the host and submit only a CSR;
+`required_agent_role` (`host`) names the enrolment role that may claim the work; and
+`verify_address` plus `verify_server_name` tell the agent which listener to
+re-handshake after the reload, so a receipt is backed by an independent TLS check.
+Use `executor: agent` whenever the identity's CA is external: an external CA
+answers asynchronously, and the endpoint lifecycle preview refuses control-plane key
+custody for an external CA on a host connector rather than risk a certificate whose
+key no longer exists. The partner lab's working Apache target is:
+
+```json
+{"executor":"agent","required_agent_role":"host",
+ "cert_path":"/lab/tls/apache.crt","key_path":"/lab/tls/apache.key",
+ "verify_address":"127.0.0.1:10443","verify_server_name":"apache.partner-lab.example.com"}
+```
+
 Every `*_ref` is a `secret://name` or `secret://name?version=N` reference in the same
 tenant, and every `profile` points to an operator-owned `connectors.local_profiles`
 entry, which maps the connector's logical command (`nginx`, `apachectl`, `caddy`,
