@@ -7,7 +7,7 @@ site_dir: .site
 # and the JSON fixtures they read. They are not reader-facing pages: keep them out of
 # the rendered site (DP2-009).
 exclude_docs: |
-  *_test.go
+  *.go
   *_test.mjs
   journeys/census-requirements.json
   journeys/served-census.json

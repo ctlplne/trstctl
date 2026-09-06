@@ -182,7 +182,7 @@ statusless.
 ## Census proof modes
 
 The served denominators quoted in the README and on this page are checked against the
-repo-native [census gate](../tools/dodcensus/manifest.json) (`make dod-gate` emits the
+repo-native census gate (`tools/dodcensus/manifest.json` in the repository) (`make dod-gate` emits the
 local `wiring-census.json` receipt). Proof modes are not uniform:
 **12 of 81 census rows launch the shipped binary**;
 **69 of 81 are proved through the production-assembled handler** — the production

@@ -296,6 +296,8 @@ instead of being ignored:
 | `azure-keyvault` | `endpoint`, `bearer_token_ref`; optional `api_version` |
 | `gcp-certificate-manager` | `endpoint`, `project`, `location`, `bearer_token_ref`; optional `poll_interval` |
 
+### Host-executed keys
+
 Host-executed targets (the file-and-reload families above) also accept the custody
 and verification keys the enrolled host agent honours: `"executor": "agent"` makes
 the agent generate the private key on the host and submit only a CSR;
