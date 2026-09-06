@@ -5,7 +5,7 @@ import { ApiError, api, type Agent, type EnrollmentToken, type Identity, type Ow
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
-import { markOnboardingComplete, resetOnboarding } from "@/lib/onboardingState";
+import { forgetIssuedIdentity, markOnboardingComplete, recallIssuedIdentity, rememberIssuedIdentity, resetOnboarding } from "@/lib/onboardingState";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { useCapabilityExecution } from "@/lib/capabilities";
 import { buildAgentInstallPlan } from "@/lib/agentInstall";
@@ -73,6 +73,40 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
   const [completed, setCompleted] = useState(false);
 
   const currentStep = steps[stepIndex]?.id as WizardStepID;
+
+  // Resume after a reload: if this browser already issued the first certificate,
+  // re-read that identity from the server and treat the certificate step as done
+  // only when the server still reports it issued or deployed. A stale or foreign
+  // id is forgotten and the form is shown as before, so nothing is trusted from
+  // storage alone and no second certificate is needed to continue.
+  useEffect(() => {
+    if (certificate) return;
+    const remembered = recallIssuedIdentity();
+    if (!remembered) return;
+    let cancelled = false;
+    api
+      .getIdentity(remembered)
+      .then((identity) => {
+        if (cancelled) return;
+        if (identity && (identity.status === "issued" || identity.status === "deployed")) {
+          setCertificate(identity);
+          setStepIndex((current) => {
+            const certificateIndex = steps.findIndex((step) => step.id === "certificate");
+            return current < certificateIndex ? certificateIndex : current;
+          });
+        } else {
+          forgetIssuedIdentity();
+        }
+      })
+      .catch(() => {
+        if (!cancelled) forgetIssuedIdentity();
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const nextEnabled =
     (currentStep === "issuer" && issuerReady) ||
     (currentStep === "protocols" && Boolean(protocolSummary)) ||
@@ -91,6 +125,7 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
     setAgent(null);
     setAgentDeferred(false);
     setCompleted(false);
+    forgetIssuedIdentity();
     resetOnboarding();
   }
 
@@ -167,7 +202,15 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
           />
         )}
         {currentStep === "protocols" && <ProtocolProfileStep onReady={setProtocolSummary} />}
-        {currentStep === "certificate" && <CertificateStep certificate={certificate} onIssued={setCertificate} />}
+        {currentStep === "certificate" && (
+          <CertificateStep
+            certificate={certificate}
+            onIssued={(identity) => {
+              setCertificate(identity);
+              rememberIssuedIdentity(identity.id);
+            }}
+          />
+        )}
         {currentStep === "integrations" && certificate && <IntegrationProofStep identity={certificate} onReady={setIntegrationSummary} />}
         {currentStep === "agent" && (
           <AgentStep

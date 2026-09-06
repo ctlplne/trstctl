@@ -14,6 +14,7 @@ const { apiMock } = vi.hoisted(() => ({
     createOwner: vi.fn(),
     attestOwner: vi.fn(),
     issueCertificate: vi.fn(),
+    getIdentity: vi.fn(),
     protocolProfileStatus: vi.fn(),
     activateProtocolProfile: vi.fn(),
     connectorCatalog: vi.fn(),
@@ -81,6 +82,8 @@ describe("first-run wizard", () => {
       ownership_current: true,
     });
     apiMock.issueCertificate.mockReset().mockResolvedValue({ id: "id-1", name: "payments", status: "issued" });
+    apiMock.getIdentity.mockReset().mockRejectedValue(new Error("not found"));
+    localStorage.removeItem("trstctl:onboarding-issued-identity");
     apiMock.protocolProfileStatus.mockReset().mockResolvedValue({
       profile: "eval",
       active: false,
@@ -294,5 +297,36 @@ describe("first-run wizard", () => {
     await user.click(screen.getByRole("button", { name: /mint enrollment token/i }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/did not publish its agent endpoint/i);
     expect(screen.queryByText(/reveal the exact server-verified install command/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("first-run wizard resumes after a reload", () => {
+  it("re-reads the issued identity from the server and lands on the certificate step as done", async () => {
+    localStorage.setItem("trstctl:onboarding-issued-identity", "id-1");
+    apiMock.getIdentity.mockResolvedValueOnce({ id: "id-1", name: "payments", status: "issued" });
+    renderWizard();
+    await waitFor(() => expect(apiMock.getIdentity).toHaveBeenCalledWith("id-1"));
+    expect(await screen.findByText(/payments was issued/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /next: prove integrations/i })).toBeEnabled();
+  });
+
+  it("forgets a remembered identity the server no longer reports and shows the form", async () => {
+    localStorage.setItem("trstctl:onboarding-issued-identity", "id-stale");
+    apiMock.getIdentity.mockRejectedValueOnce(new Error("not found"));
+    renderWizard();
+    await waitFor(() => expect(apiMock.getIdentity).toHaveBeenCalledWith("id-stale"));
+    await waitFor(() => expect(localStorage.getItem("trstctl:onboarding-issued-identity")).toBeNull());
+    expect(screen.getByRole("button", { name: /check signing health/i })).toBeInTheDocument();
+  });
+
+  it("remembers the identity it issued", async () => {
+    const user = userEvent.setup();
+    renderWizard();
+    await user.click(await screen.findByRole("button", { name: /check signing health/i }));
+    await user.click(await screen.findByRole("button", { name: /next: enable protocols/i }));
+    await user.click(await screen.findByRole("button", { name: /activate eval protocol profile/i }));
+    await user.click(await screen.findByRole("button", { name: /next: issue certificate/i }));
+    await issueFirstCertificate(user);
+    await waitFor(() => expect(localStorage.getItem("trstctl:onboarding-issued-identity")).toBe("id-1"));
   });
 });

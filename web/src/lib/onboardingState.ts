@@ -35,3 +35,39 @@ export function resetOnboarding(): void {
     /* storage unavailable — nothing to reset */
   }
 }
+
+// The first-run guide's certificate step issues once and then depends on React
+// state; a reload (or the in-step "Open certificate inventory" link) dropped
+// that state, so the guide fell back to an empty form with Next disabled and the
+// only way forward was a second issuance. Remember the issued identity's id
+// (a UUID, never a secret) so the guide can re-read the identity from the server
+// on the next visit and treat the step as done only if the server still agrees.
+const ONBOARDING_ISSUED_IDENTITY_KEY = "trstctl:onboarding-issued-identity";
+
+/** Remember which identity the first-run guide issued so a reload can resume from the server's view of it. */
+export function rememberIssuedIdentity(id: string): void {
+  try {
+    localStorage.setItem(ONBOARDING_ISSUED_IDENTITY_KEY, id);
+  } catch {
+    /* storage unavailable — the guide simply cannot resume across reloads */
+  }
+}
+
+/** The remembered first-run identity id, or null. Callers must validate it against the server before trusting it. */
+export function recallIssuedIdentity(): string | null {
+  try {
+    const value = localStorage.getItem(ONBOARDING_ISSUED_IDENTITY_KEY);
+    return value && value.trim() ? value.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Forget the remembered identity (start over, or the server no longer knows it). */
+export function forgetIssuedIdentity(): void {
+  try {
+    localStorage.removeItem(ONBOARDING_ISSUED_IDENTITY_KEY);
+  } catch {
+    /* storage unavailable — nothing to forget */
+  }
+}
