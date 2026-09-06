@@ -7,6 +7,7 @@ package proof
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -38,5 +39,7 @@ func TestArtifactMutationWatchRejectsSwapRestoreInputs(t *testing.T) {
 	}
 	if err := watch.AssertQuiet(); err == nil {
 		t.Fatal("swap-then-restore mutation was not observed")
+	} else if !strings.Contains(err.Error(), "trstctl-signer[MOVED_FROM]") {
+		t.Fatalf("mutation evidence = %q, want exact affected artifact and operation", err)
 	}
 }

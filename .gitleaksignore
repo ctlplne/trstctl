@@ -190,3 +190,19 @@ c5a260d61b49b2d9f70e3c406ee6bf463c86f60e:internal/store/migration_content_test.g
 # not credential material. Pin only this commit/path/rule/line; every new value
 # and every real credential in test sources remains subject to the scanner.
 118a25c0e7fd71d4f1d62dd5ee14ef8f002820ca:internal/server/attested_issuance_served_test.go:generic-api-key:121
+
+# G241 pre-push full-history calibration (2026-09-05): these exact matches were
+# inspected at their introducing commits. The journey-delivery value is a
+# fabricated AWS access-key fixture paired with a test-only SigV4 receiver; the
+# code-signing values are deterministic idempotency keys; and the minified
+# Journey bundles contain generated `bodyKey` localization identifiers that the
+# generic assignment rule mistakes for credentials. Each suppression is pinned
+# to one immutable commit/path/rule/line fingerprint. No rule, path, value, or
+# future match is broadly exempted.
+847fb9d1569ff9bbe3d4335e89aa85bedef3fd67:internal/server/journey_delivery_served_test.go:generic-api-key:682
+040600df4a1c228076a99f34b44f6df61e5daac0:internal/server/codesign_served_test.go:generic-api-key:128
+040600df4a1c228076a99f34b44f6df61e5daac0:internal/server/codesign_served_test.go:generic-api-key:135
+040600df4a1c228076a99f34b44f6df61e5daac0:internal/server/codesign_served_test.go:generic-api-key:180
+1f628c298458ca53837053304bd3203b9c595c95:internal/webui/dist/assets/Journeys-CJ0EMTMF.js:generic-api-key:7
+3daab5833cfaca39b1285335a6224a1211122dae:internal/webui/dist/assets/Journeys-JUq_i8hM.js:generic-api-key:8
+3daab5833cfaca39b1285335a6224a1211122dae:internal/webui/dist/assets/Journeys-JUq_i8hM.js:generic-api-key:13

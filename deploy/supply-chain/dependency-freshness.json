@@ -52,9 +52,9 @@
       "owner": "Store/Operations",
       "status": "accepted_deferral",
       "behind_since": "2026-06-21",
-      "next_review_by": "2026-09-05",
-      "deferral_until": "2026-09-05",
-      "rationale": "AUD-15 dated deferral. The 2026-08-30 review reconfirmed v1.34.0 as the latest upstream release and confirmed that it still imports github.com/lib/pq, so it cannot replace the security-maintained source fork without restoring the dependency the fork removes. The fork is compiled from third_party/embedded-postgres and affects local integration tests and single-node eval startup only. The upgrade must rebase the reviewed fork, preserve the pgx and mandatory-checksum repairs, refresh committed archive pins, and refresh Trivy receipts together, so it is one reviewed change and not a source-version-only bump."
+      "next_review_by": "2026-10-05",
+      "deferral_until": "2026-10-05",
+      "rationale": "AUD-15 dated deferral. The 2026-09-06 review downloaded the authoritative latest Go module v1.34.0 (sum h1:c6RKhPKFsLVU+Tdxsx8q0UxCHsvZZ/iShAnljRBXs6s=) and reconfirmed that its go.mod and prepare_database.go still import github.com/lib/pq, so it cannot replace the security-maintained source fork without restoring the dependency the fork removes. The fork is compiled from third_party/embedded-postgres and affects local integration tests and single-node eval startup only. The upgrade must rebase the reviewed fork, preserve the pgx and mandatory-checksum-through-internal/crypto repairs, refresh committed archive pins, and refresh Trivy receipts together, so it is one reviewed change and not a source-version-only bump. The deferral is bounded to 29 days and must be reviewed again by 2026-10-05."
     },
     {
       "ecosystem": "gomod",

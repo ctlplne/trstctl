@@ -5,8 +5,11 @@
 package proof
 
 import (
+	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"golang.org/x/sys/unix"
@@ -52,7 +55,7 @@ func (w *artifactMutationWatch) AssertQuiet() error {
 		n, err := unix.Read(w.fd, buffer)
 		switch {
 		case n > 0:
-			return fmt.Errorf("gate-built executable directory recorded a mutation event")
+			return fmt.Errorf("gate-built executable directory recorded a mutation event: %s", describeArtifactMutation(buffer[:n]))
 		case err == nil:
 			return nil
 		case errors.Is(err, unix.EINTR):
@@ -63,6 +66,59 @@ func (w *artifactMutationWatch) AssertQuiet() error {
 			return fmt.Errorf("read shipped-artifact mutation watch: %w", err)
 		}
 	}
+}
+
+func describeArtifactMutation(buffer []byte) string {
+	const headerSize = 16
+	var events []string
+	for len(buffer) >= headerSize {
+		mask := binary.NativeEndian.Uint32(buffer[4:8])
+		nameLength := int(binary.NativeEndian.Uint32(buffer[12:16]))
+		if nameLength < 0 || nameLength > len(buffer)-headerSize {
+			events = append(events, "malformed-event")
+			break
+		}
+		name := string(bytes.TrimRight(buffer[headerSize:headerSize+nameLength], "\x00"))
+		if name == "" {
+			name = "."
+		}
+		events = append(events, name+"["+artifactMutationMask(mask)+"]")
+		buffer = buffer[headerSize+nameLength:]
+	}
+	if len(events) == 0 {
+		return "unparseable-event"
+	}
+	return strings.Join(events, ",")
+}
+
+func artifactMutationMask(mask uint32) string {
+	type namedMask struct {
+		value uint32
+		name  string
+	}
+	known := []namedMask{
+		{unix.IN_ATTRIB, "ATTRIB"}, {unix.IN_CLOSE_WRITE, "CLOSE_WRITE"},
+		{unix.IN_CREATE, "CREATE"}, {unix.IN_DELETE, "DELETE"},
+		{unix.IN_DELETE_SELF, "DELETE_SELF"}, {unix.IN_MODIFY, "MODIFY"},
+		{unix.IN_MOVE_SELF, "MOVE_SELF"}, {unix.IN_MOVED_FROM, "MOVED_FROM"},
+		{unix.IN_MOVED_TO, "MOVED_TO"}, {unix.IN_IGNORED, "IGNORED"},
+		{unix.IN_ISDIR, "ISDIR"}, {unix.IN_Q_OVERFLOW, "Q_OVERFLOW"},
+	}
+	parts := make([]string, 0, len(known)+1)
+	remaining := mask
+	for _, item := range known {
+		if mask&item.value != 0 {
+			parts = append(parts, item.name)
+			remaining &^= item.value
+		}
+	}
+	if remaining != 0 {
+		parts = append(parts, fmt.Sprintf("0x%x", remaining))
+	}
+	if len(parts) == 0 {
+		return "NONE"
+	}
+	return strings.Join(parts, "|")
 }
 
 func (w *artifactMutationWatch) Close() error {

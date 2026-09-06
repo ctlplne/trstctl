@@ -44,7 +44,7 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1366 annotated sites across 26 rules. Each row is
+1368 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -54,7 +54,7 @@ not this file.
 |---|---|
 | `cmd/trstctl-agent/bootstrap_token_test.go:96` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `cmd/trstctl/main_test.go:445` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/demo/demo_test.go:87` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/demo/demo_test.go:211` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/deploycheck_test.go:1483` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/deploycheck_test.go:1485` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/deploycheck_test.go:1505` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -89,10 +89,10 @@ not this file.
 | `internal/agent/relay/relay_appliance_e2e_test.go:190` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
 | `internal/agent/relay/relay_appliance_e2e_test.go:259` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
 | `internal/agent/relay/relay_appliance_e2e_test.go:297` | credential REFERENCE NAMES, not credentials: the relay looks values up in redeemed material by these keys (CWE-798) |
-| `internal/agent/relay/relay_test.go:139` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
-| `internal/agent/relay/relay_test.go:181` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
-| `internal/agent/relay/relay_test.go:334` | reference NAME, not a credential (CWE-798) |
-| `internal/agent/relay/relay_test.go:392` | reference NAME (CWE-798) |
+| `internal/agent/relay/relay_test.go:140` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
+| `internal/agent/relay/relay_test.go:182` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
+| `internal/agent/relay/relay_test.go:335` | reference NAME, not a credential (CWE-798) |
+| `internal/agent/relay/relay_test.go:393` | reference NAME (CWE-798) |
 | `internal/agent/relay/ticketsync_test.go:66` | TokenRef is a non-secret locator in a deterministic test fixture (CWE-798). |
 | `internal/agent/transport/agentservice.go:742` | an RPC method name, not a credential. The material this |
 | `internal/agent/transport/agentservice.go:749` | an RPC method name. This call carries a CSR up and returns |
@@ -554,10 +554,10 @@ not this file.
 | `internal/store/ownership_readiness.go:226` | event sequences fit PostgreSQL bigint |
 | `internal/store/ownership_readiness.go:286` | database constraint/event writer keeps sequence non-negative |
 | `internal/store/pam.go:73` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:641` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:696` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:840` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:854` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:671` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:726` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:870` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:884` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:136` | event sequence fits the PostgreSQL bigint used by the event log (CWE-190) |
 | `internal/store/projection_checkpoint.go:192` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:213` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
@@ -946,7 +946,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (368 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (369 sites)
 
 | Location | Reason |
 |---|---|
@@ -975,7 +975,7 @@ not this file.
 | `cmd/trstctl/ee_attach.go:503` | operator-supplied path to their own IdP's JWKS (CWE-22) |
 | `cmd/trstctl/ee_attach.go:531` | operator-pinned local IdP metadata, validated as configuration. |
 | `deploy/demo/aud66_test.go:105` | fixed repository test path (CWE-22) |
-| `deploy/demo/demo_test.go:45` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/demo/demo_test.go:56` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/deploycheck_test.go:98` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/deploycheck_test.go:212` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/deploycheck_test.go:294` | test reads its own fixture/tempdir path (CWE-22) |
@@ -1044,8 +1044,9 @@ not this file.
 | `internal/agent/relay/hostrollback_test.go:46` | test-owned temporary directory (CWE-22) |
 | `internal/agent/relay/plugins.go:141` | operator-configured plugin directory (CWE-22) |
 | `internal/agent/relay/plugins.go:145` | sibling of an operator-configured module (CWE-22) |
-| `internal/agent/relay/relay_test.go:1064` | callers pass paths created inside this test package's t.TempDir fixtures (CWE-22). |
-| `internal/agent/relay/rollback_test.go:200` | test-owned temporary path (CWE-22) |
+| `internal/agent/relay/relay_test.go:672` | certPath is created beneath this test's private t.TempDir, |
+| `internal/agent/relay/relay_test.go:1103` | callers pass paths created inside this test package's t.TempDir fixtures (CWE-22). |
+| `internal/agent/relay/rollback_test.go:202` | test-owned temporary path (CWE-22) |
 | `internal/agent/relay/selfupgrade_test.go:87` | test reads its own tempdir fixture path (CWE-22) |
 | `internal/agent/relay/selfupgrade_test.go:152` | test reads its own tempdir fixture path (CWE-22) |
 | `internal/agent/relay/selfupgrade_test.go:156` | test reads its own tempdir fixture path (CWE-22) |
@@ -1182,7 +1183,7 @@ not this file.
 | `internal/server/host_agent_remote_served_test.go:139` | parent-created test fixture path (CWE-22) |
 | `internal/server/host_agent_remote_served_test.go:193` | parent-created public fixture (CWE-22) |
 | `internal/server/host_agent_remote_served_test.go:380` | test reads its own remote-host fixture (CWE-22) |
-| `internal/server/host_agent_remote_served_test.go:742` | test-owned target fixture (CWE-22) |
+| `internal/server/host_agent_remote_served_test.go:750` | test-owned target fixture (CWE-22) |
 | `internal/server/idempotency_protection_wiring_test.go:61` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/migration_run_served_test.go:249` | test-owned fixture path (CWE-22) |
 | `internal/server/migration_run_served_test.go:258` | test-owned fixture path (CWE-22) |
@@ -1577,12 +1578,13 @@ not this file.
 | `internal/discovery/cloudcert/httpfetch.go:42` | fetches the cloud provider endpoint declared by the operator's discovery source (CWE-918) |
 | `tools/dodcensus/proof/launched.go:1603` | developer tool calling the endpoint it was pointed at (CWE-918) |
 
-### G705 — CWE-79 Cross-site scripting (taint) (11 sites)
+### G705 — CWE-79 Cross-site scripting (taint) (12 sites)
 
 | Location | Reason |
 |---|---|
-| `internal/ca/letsencrypt/acmefake/acmefake.go:233` | test-support package compiled only into test binaries (CWE-79) |
-| `internal/ca/letsencrypt/acmefake/acmefake.go:256` | test-support package compiled only into test binaries (CWE-79) |
+| `internal/ca/letsencrypt/acmefake/acmefake.go:260` | test-support package compiled only into test binaries (CWE-79) |
+| `internal/ca/letsencrypt/acmefake/acmefake.go:284` | test-support package compiled only into test binaries (CWE-79) |
+| `internal/ca/letsencrypt/acmefake/acmefake.go:288` | test-support package compiled only into test binaries (CWE-79) |
 | `internal/connector/fortigate/fortigatetest/fortigatetest.go:219` | test-support package compiled only into test binaries (CWE-79) |
 | `internal/dns/akamai/akamai_test.go:131` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/operator/reconcile_test.go:217` | test writes fixture bytes to its own recorder/local server (CWE-79) |
