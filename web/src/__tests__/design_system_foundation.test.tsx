@@ -11,7 +11,7 @@ import { DataGrid, type DataGridSort } from "@/components/DataGrid";
 import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { DetailDrawer } from "@/components/DetailDrawer";
 import { StatusBadge } from "@/components/StatusBadge";
-import { describeStatus, expiryBandForDate, riskBand } from "@/lib/statusVocab";
+import { describeStatus, expiryBandForDate, expiryBands, riskBand, validityBandForDates } from "@/lib/statusVocab";
 
 const webRoot = process.cwd();
 const css = readFileSync(path.join(webRoot, "src/index.css"), "utf8");
@@ -376,6 +376,12 @@ describe("Clarity/Console design-system foundation", () => {
     expect(container.querySelectorAll("[data-status-dot]")).toHaveLength(4);
     expect(describeStatus("agent", "online")).toMatchObject({ label: "online", tone: "success" });
     expect(expiryBandForDate(new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString())).toBe("critical");
+    // A certificate whose validity has not started is waiting, never healthy (DP2-033).
+    const day = 24 * 60 * 60 * 1000;
+    expect(validityBandForDates(new Date(Date.now() + 120 * day).toISOString(), new Date(Date.now() + 180 * day).toISOString())).toBe("pending");
+    expect(validityBandForDates(new Date(Date.now() - day).toISOString(), new Date(Date.now() + 180 * day).toISOString())).toBe("healthy");
+    expect(validityBandForDates(undefined, new Date(Date.now() - day).toISOString())).toBe("expired");
+    expect(expiryBands.pending.label).toBe("Not yet valid");
 
     const results = await axe(container);
     expect(results).toHaveNoViolations();

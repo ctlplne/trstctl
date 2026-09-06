@@ -2537,6 +2537,7 @@ const esESCatalog = {
   "certificateCockpit.detail.reachable": "Contacto de alerta disponible",
   "certificateCockpit.detail.noAlertContact": "Sin contacto de alerta",
   "certificateCockpit.detail.activity": "Actividad de la credencial",
+  "certificateCockpit.expiry.notYetValid": "Aún no válido",
   "certificateCockpit.reason.expired": "El certificado está vencido",
   "certificateCockpit.reason.sevenDays": "Vence dentro de 7 días",
   "certificateCockpit.reason.thirtyDays": "Vence dentro de 30 días",

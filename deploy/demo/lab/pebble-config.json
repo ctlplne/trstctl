@@ -1,0 +1,26 @@
+{
+  "pebble": {
+    "listenAddress": "0.0.0.0:14000",
+    "managementListenAddress": "0.0.0.0:15000",
+    "certificate": "test/certs/localhost/cert.pem",
+    "privateKey": "test/certs/localhost/key.pem",
+    "httpPort": 5002,
+    "tlsPort": 5001,
+    "ocspResponderURL": "",
+    "externalAccountBindingRequired": false,
+    "domainBlocklist": [
+      "blocked-domain.example"
+    ],
+    "retryAfter": {
+      "authz": 3,
+      "order": 5
+    },
+    "keyAlgorithm": "ecdsa",
+    "profiles": {
+      "default": {
+        "description": "Partner lab profile: one deterministic 90-day lifetime (Pebble picks a random profile when a client omits one; trstctl's ACME client cannot request one yet)",
+        "validityPeriod": 7776000
+      }
+    }
+  }
+}

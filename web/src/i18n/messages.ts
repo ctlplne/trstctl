@@ -6805,6 +6805,7 @@ export const messages = {
   "certificateCockpit.detail.noAlertContact": { defaultMessage: "No alert contact", description: "Certificate owner has no alert contact." },
   "certificateCockpit.detail.activity": { defaultMessage: "Credential activity", description: "Accessible certificate activity definition label." },
   "certificateCockpit.reason.expired": { defaultMessage: "Certificate is expired", description: "Expired certificate queue reason." },
+  "certificateCockpit.expiry.notYetValid": { defaultMessage: "Not yet valid", description: "Expiry band for a certificate whose validity has not started; it must not read as healthy." },
   "certificateCockpit.reason.sevenDays": { defaultMessage: "Expires within 7 days", description: "Seven-day certificate queue reason." },
   "certificateCockpit.reason.thirtyDays": { defaultMessage: "Expires within 30 days", description: "Thirty-day certificate queue reason." },
   "certificateCockpit.reason.renewalFailed": { defaultMessage: "Renewal job failed", description: "Failed renewal queue reason." },

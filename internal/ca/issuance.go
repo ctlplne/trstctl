@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -40,6 +41,16 @@ type IssuanceService struct {
 	wakeOutbox        func()
 	dependentRecorder dependents.Recorder
 	externalReplay    ExternalIssueReplaySafety
+
+	// lifetimeLogger and lifetimeWarnBelow surface a certificate whose whole
+	// remaining lifetime is shorter than the tenant's expiry alert window. An
+	// external authority chooses the lifetime (trstctl cannot request an ACME
+	// profile yet), and a six-day certificate against a fourteen-day window
+	// raises an expiry alert within a minute of issuance. The WARN names the
+	// tenant and authority so the operator can read the alert as "the CA's
+	// lifetime policy", not "renewal is broken".
+	lifetimeLogger    *slog.Logger
+	lifetimeWarnBelow time.Duration
 }
 
 // ExternalIssueReplaySafety is the audited upstream crash contract. The default
@@ -59,6 +70,13 @@ type Option func(*IssuanceService)
 // WithAuditLog wires the event log so profile-gated issuance decisions are emitted
 // as AN-2 audit events (with the actor from the request context).
 func WithAuditLog(log *events.Log) Option { return func(s *IssuanceService) { s.log = log } }
+
+// WithLifetimeWarning logs a WARN when an issued certificate's remaining
+// lifetime is below the given window (the tenant's expiry alert window). A nil
+// logger or a non-positive window disables the check.
+func WithLifetimeWarning(logger *slog.Logger, below time.Duration) Option {
+	return func(s *IssuanceService) { s.lifetimeLogger, s.lifetimeWarnBelow = logger, below }
+}
 
 // WithOutboxIssueWorker moves provider issuance to the shared outbox dispatcher.
 // authorityID identifies which configured CA owns the external-ca.issue row, and
@@ -207,6 +225,7 @@ func (s *IssuanceService) Issue(ctx context.Context, req IssueRequest, idempoten
 		if err != nil {
 			return nil, err
 		}
+		s.observeLifetime(req.TenantID, cert)
 		if err := s.record(ctx, req.TenantID, idempotencyKey, req.RequestBinding, cert); err != nil {
 			return nil, err
 		}
@@ -313,6 +332,23 @@ func (s *IssuanceService) waitForExternalIssue(ctx context.Context, tenantID, id
 
 // DeliverExternalIssue performs one external-ca.issue outbox message. It is the
 // only place the provider-backed CA is called when WithOutboxIssueWorker is set.
+
+// observeLifetime is the WithLifetimeWarning check. It reads only public
+// certificate facts (expiry) and routing metadata; no error text, no body.
+func (s *IssuanceService) observeLifetime(tenantID string, cert Certificate) {
+	if s.lifetimeLogger == nil || s.lifetimeWarnBelow <= 0 || cert.NotAfter.IsZero() {
+		return
+	}
+	remaining := time.Until(cert.NotAfter)
+	if remaining >= s.lifetimeWarnBelow {
+		return
+	}
+	s.lifetimeLogger.Warn("external CA issued a certificate whose whole lifetime is inside the expiry alert window; the authority chose the lifetime because trstctl does not request an ACME profile yet — expect an immediate expiry alert",
+		slog.String("tenant_id", tenantID), slog.String("authority_id", s.outboxAuthorityID),
+		slog.Duration("remaining_lifetime", remaining.Round(time.Minute)), slog.Duration("alert_before", s.lifetimeWarnBelow),
+		slog.String("finding", "DP2-032"))
+}
+
 func (s *IssuanceService) DeliverExternalIssue(ctx context.Context, m orchestrator.Message) error {
 	if m.Destination != DestinationExternalCAIssue {
 		return fmt.Errorf("ca: unsupported external issue destination %q", m.Destination)
@@ -351,6 +387,7 @@ func (s *IssuanceService) DeliverExternalIssue(ctx context.Context, m orchestrat
 		if err != nil {
 			return nil, preserveOrClassifyExternalIssueError("external_ca_provider_failed", "external CA provider issuance failed", err)
 		}
+		s.observeLifetime(m.TenantID, cert)
 		if err := s.record(ctx, m.TenantID, m.IdempotencyKey, req.RequestBinding, cert); err != nil {
 			return nil, safeExternalIssueError("external_ca_record_failed", "external CA certificate recording failed", err)
 		}

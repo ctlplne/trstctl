@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { StatTile, Meter, BucketBar, type BucketDatum } from "@/components/charts";
 import { DashboardGrid, SectionCard, AttentionList, AttentionRow } from "@/components/dashboard";
 import { StatusBadge } from "@/components/StatusBadge";
-import { expiryBandForDate, type StatusTone } from "@/lib/statusVocab";
+import { validityBandForDates, type StatusTone } from "@/lib/statusVocab";
 import type { Certificate, ConnectorDelivery, RotationRun } from "@/lib/api";
 import type { RiskItem } from "@/components/risk";
 import { translateNow } from "@/i18n/I18nProvider";
@@ -103,7 +103,7 @@ export function CertificatesDashboard({ certificates, risks }: { certificates: C
               <AttentionRow key={certificate.id}>
                 <span className="flex-1 truncate font-mono text-caption">{certificate.subject}</span>
                 <span className="w-40 truncate text-muted-foreground">{certificate.issuer ?? "—"}</span>
-                <StatusBadge vocabulary="expiry" value={expiryBandForDate(certificate.not_after)} />
+                <StatusBadge vocabulary="expiry" value={validityBandForDates(certificate.not_before, certificate.not_after)} />
                 <span className="w-16 text-right tabular-nums">
                   {Number.isFinite(days) ? translateNow("source.value1.d.eb20d8f12a", { value1: days }) : "—"}
                 </span>

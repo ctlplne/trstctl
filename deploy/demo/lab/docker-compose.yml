@@ -52,6 +52,14 @@ services:
       pebble-challtestsrv:
         condition: service_started
     command: ["-config", "test/config/pebble-config.json", "-dnsserver", "pebble-challtestsrv:8053"]
+    # Pebble 2.10 picks a RANDOM certificate profile for orders that name none
+    # ("in true pebble chaos fashion"), and its stock config carries a 6-day
+    # "shortlived" profile next to the 90-day default. trstctl's ACME client
+    # cannot request a profile yet (x/crypto/acme has no profiles support), so
+    # the lab pins one profile and issues a deterministic 90-day certificate;
+    # see docs/limitations.md "ACME certificate profiles".
+    volumes:
+      - ./pebble-config.json:/test/config/pebble-config.json:ro
     environment:
       PEBBLE_VA_NOSLEEP: "1"
       PEBBLE_WFE_NONCEREJECT: "0"

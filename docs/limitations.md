@@ -4270,6 +4270,26 @@ can serve with. [Key custody](custody.md) states this in full. Host-executed
 renewal is what fixes it, and until it lands the count of successors reading
 `control_plane` is the honest measure of the gap.
 
+## ACME certificate profiles
+
+trstctl's ACME client (the `letsencrypt` external CA type, built on `x/crypto/acme`)
+does not send the `profile` field of draft-ietf-acme-profiles in `newOrder`, and the
+external CA configuration has no way to name one. The certificate lifetime is therefore
+whatever the authority applies to an order without a profile:
+
+- Let's Encrypt production applies its classic profile today; when the short-lived
+  (six-day) profile becomes a default it will apply without any change on this side.
+- Pebble 2.10 picks a **random** profile for such orders ("in true pebble chaos fashion"),
+  so its stock configuration alternates between 90-day and 6-day certificates. The
+  partner lab pins Pebble to a single 90-day profile (`deploy/demo/lab/pebble-config.json`)
+  so lab issuance is deterministic.
+
+When an external CA returns a certificate whose whole lifetime is shorter than the
+tenant's expiry alert window, the control plane logs a WARN naming the tenant and the
+authority; the ordinary expiry alert then fires immediately, which is honest but noisy.
+Profile selection will follow once the ACME client can express it. Found by the cold
+design-partner run 20260906t143500z (DP2-032).
+
 ## Upstream domain validation
 
 trstctl is an ACME server and an ACME client, and until now only one of those

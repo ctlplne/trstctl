@@ -35,7 +35,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { PageHeader } from "@/components/PageHeader";
-import { expiryBandForDate } from "@/lib/statusVocab";
+import { validityBandForDates } from "@/lib/statusVocab";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { formatNumber as formatNumberPolicy } from "@/i18n/format";
 import { certificateDisplayName, certificateReplacementPath } from "@/lib/certificatePresentation";
@@ -1911,7 +1911,7 @@ function certificateColumns(
       className: "whitespace-nowrap align-middle",
       cell: (c) =>
         c.status === "active" ? (
-          <StatusBadge vocabulary="expiry" value={expiryBandForDate(c.not_after)} />
+          <StatusBadge vocabulary="expiry" value={validityBandForDates(c.not_before, c.not_after)} />
         ) : (
           <StatusBadge vocabulary="certificate" value={c.status} />
         ),
@@ -1934,7 +1934,7 @@ function certificateColumns(
 
 function certificateRowActionLabel(certificate: Certificate): string {
   if (certificate.status !== "active") return translateNow("certificates.inventory.review");
-  const expiry = expiryBandForDate(certificate.not_after);
+  const expiry = validityBandForDates(certificate.not_before, certificate.not_after);
   return expiry === "healthy" || expiry === "planned" ? translateNow("certificates.inventory.view") : translateNow("certificates.inventory.review");
 }
 

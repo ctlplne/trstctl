@@ -165,7 +165,7 @@ func (s *Server) buildExternalCAService(d Deps, idem *orchestrator.Idempotency) 
 		}
 		reg.byID[id] = externalCAEntry{
 			meta: meta, tenantID: strings.TrimSpace(cfg.TenantID),
-			svc: ca.NewIssuanceService(implementation, idem, s.outbox, d.Store, ca.WithAuditLog(d.Log),
+			svc: ca.NewIssuanceService(implementation, idem, s.outbox, d.Store, ca.WithAuditLog(d.Log), ca.WithLifetimeWarning(d.Logger, d.LifecycleAlertBefore),
 				ca.WithOutboxIssueWorker(id, s.wakeOutbox), ca.WithExternalIssueReplaySafety(replaySafety)),
 		}
 		reg.items = append(reg.items, meta)

@@ -1493,8 +1493,11 @@ describe("i18n boundary", () => {
       // the attest-on-create copy on the Ownership form and the
       // preserve-existing-ca journey. Machine-authored es/de — FLAGGED FOR
       // HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "640d08302d6e494e16588980e1efa7411506c4899813475290ffb80121558fe9",
-      "de-DE": "96a0ca1d80940e9ad1bc7d8e4d5e9f19aa3e65d837a968856d2a323aebe55ded",
+      // QA cold design-partner g256 re-pin: the certificate cockpit gains a
+      // "Not yet valid" expiry band (DP2-033). Machine-authored es/de — FLAGGED
+      // FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "d5967f5fb7a441f0c485904d12a2aed992a8b96512e2ffa3795b36eb6e5e9f30",
+      "de-DE": "b573513adf37e8ea7478be053bde433bb7b068bc1f517fe55b88db26545b9119",
     });
   });
 

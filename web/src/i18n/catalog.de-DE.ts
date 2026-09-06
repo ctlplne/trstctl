@@ -2569,6 +2569,7 @@ const deDECatalog = {
   "certificateCockpit.detail.reachable": "Warnungskontakt erreichbar",
   "certificateCockpit.detail.noAlertContact": "Kein Warnungskontakt",
   "certificateCockpit.detail.activity": "Credential-Aktivität",
+  "certificateCockpit.expiry.notYetValid": "Noch nicht gültig",
   "certificateCockpit.reason.expired": "Zertifikat ist abgelaufen",
   "certificateCockpit.reason.sevenDays": "Läuft innerhalb von 7 Tagen ab",
   "certificateCockpit.reason.thirtyDays": "Läuft innerhalb von 30 Tagen ab",

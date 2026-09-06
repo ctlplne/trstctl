@@ -1000,10 +1000,15 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 	if err != nil {
 		return endpointBindingPreviewResponse{}, err
 	}
-	if ready, why := ownerReadyForLifecycle(owner, time.Now().UTC(), a.ownerAttestationCadence()); !ready {
-		return endpointBindingPreviewResponse{}, errStatus(http.StatusUnprocessableEntity,
-			"owner "+strings.TrimSpace(owner.Name)+" is not ready to own a deployed credential: "+why+
-				"; deployment would be refused after issuance. Complete the accountability record and use Ownership → Re-attest, then preview again; nothing was queued")
+	// Mirror the lifecycle exactly: issued->deployed checks ownership readiness
+	// only when an attestation cadence is configured, so the preview refuses
+	// only what deployment would refuse.
+	if cadence := a.ownershipAttestationCadence; cadence > 0 {
+		if ready, why := ownerReadyForLifecycle(owner, time.Now().UTC(), cadence); !ready {
+			return endpointBindingPreviewResponse{}, errStatus(http.StatusUnprocessableEntity,
+				"owner "+strings.TrimSpace(owner.Name)+" is not ready to own a deployed credential: "+why+
+					"; deployment would be refused after issuance. Complete the accountability record and use Ownership → Re-attest, then preview again; nothing was queued")
+		}
 	}
 	if err := validateWildcardIdentityPolicy(req.IdentityName, nil); err != nil {
 		return endpointBindingPreviewResponse{}, err

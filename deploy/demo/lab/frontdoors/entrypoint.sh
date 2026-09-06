@@ -18,7 +18,16 @@ for required in apache.crt apache.key nginx.crt nginx.key haproxy.pem caddy.crt 
 done
 
 postgres_data=/lab/state/postgresql
-mkdir -p "$postgres_data"
+mkdir -p "$postgres_data" /lab/run
+# A container restart (docker stop/start, a host reboot, a compose restart) keeps
+# the run and state volumes — /lab/run is an image volume that compose also keeps
+# across an ordinary recreate — so the lock, socket and pid files of the previous
+# life are still there. PostgreSQL refuses to start over a stale lock file, the
+# readiness loop below then fails ten times, the entrypoint exits, and the
+# container restarts forever — with the trstctl agent never launched, which
+# reads as "the agent does not reconnect". Nothing else owns these files at this
+# point: every service is started below, after this line.
+rm -f /lab/run/.s.PGSQL.10448.lock /lab/run/.s.PGSQL.10448 "$postgres_data/postmaster.pid" /lab/run/httpd.pid /lab/run/haproxy.pid
 if [ ! -s "$postgres_data/PG_VERSION" ]; then
   /usr/bin/initdb -D "$postgres_data" --username=postgres --auth-local=trust --auth-host=reject --no-locale --encoding=UTF8 >/dev/null
 fi
@@ -43,14 +52,19 @@ terminate() {
 }
 trap terminate INT TERM EXIT
 
-for attempt in 1 2 3 4 5 6 7 8 9 10; do
+# Thirty seconds, not ten: on a loaded evaluation host PostgreSQL alone can
+# take longer than ten seconds to accept connections after a restart, and an
+# entrypoint that gives up sooner turns a slow start into a restart loop.
+attempt=0
+while :; do
+  attempt=$((attempt + 1))
   if /usr/local/apache2/bin/apachectl configtest >/dev/null 2>&1 && \
      /usr/sbin/nginx -t >/dev/null 2>&1 && \
      /usr/sbin/haproxy -c -f /lab/haproxy.cfg >/dev/null 2>&1 && \
      /usr/sbin/caddy validate --config /lab/Caddyfile --adapter caddyfile >/dev/null 2>&1 && \
      kill -0 "$traefik_pid" 2>/dev/null && \
      /usr/bin/pg_isready -h /lab/run -p 10448 -U postgres >/dev/null 2>&1; then break; fi
-  if [ "$attempt" -eq 10 ]; then echo "one or more real local TLS services failed initial validation" >&2; exit 1; fi
+  if [ "$attempt" -ge 30 ]; then echo "one or more real local TLS services failed initial validation after ${attempt}s" >&2; exit 1; fi
   sleep 1
 done
 

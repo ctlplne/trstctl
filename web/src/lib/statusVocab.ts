@@ -124,6 +124,13 @@ export const riskBands: Record<string, StatusDescriptor> = {
 };
 
 export const expiryBands: Record<string, StatusDescriptor> = {
+  pending: {
+    get label() {
+      return translateNow("certificateCockpit.expiry.notYetValid");
+    },
+    tone: "warning",
+    order: 0,
+  },
   expired: {
     get label() {
       return translateNow("source.expired.424a2551d3");
@@ -426,6 +433,20 @@ export function expiryBandForDate(value?: string): keyof typeof expiryBands {
   if (days <= 30) return "watch";
   if (days <= 90) return "planned";
   return "healthy";
+}
+
+/**
+ * The band for a certificate's whole validity window. A certificate whose
+ * notBefore is still in the future is not "healthy" for any number of days:
+ * nothing can present it yet, and a pre-dated certificate in a rotation review
+ * must read as waiting, not as the best row on the page (DP2-033).
+ */
+export function validityBandForDates(notBefore?: string, notAfter?: string): keyof typeof expiryBands {
+  if (notBefore) {
+    const starts = new Date(notBefore).getTime();
+    if (!Number.isNaN(starts) && starts > Date.now()) return "pending";
+  }
+  return expiryBandForDate(notAfter);
 }
 
 export function humanizeStatus(value: string): string {
