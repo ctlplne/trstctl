@@ -13,9 +13,17 @@ if [ ! -s /lab/tls/traefik-dynamic.yml ]; then
   cp /lab/traefik-dynamic.template.yml /lab/tls/traefik-dynamic.yml
 fi
 
-for required in apache.crt apache.key nginx.crt nginx.key haproxy.pem caddy.crt caddy.key traefik.crt traefik.key; do
+for required in apache.crt apache.key nginx.crt nginx.key haproxy.pem caddy.crt caddy.key traefik.crt traefik.key postgresql.crt postgresql.key; do
   if [ ! -s "/lab/tls/$required" ]; then echo "missing prepared /lab/tls/$required" >&2; exit 1; fi
 done
+
+postgres_data=/lab/state/postgresql
+mkdir -p "$postgres_data"
+if [ ! -s "$postgres_data/PG_VERSION" ]; then
+  /usr/bin/initdb -D "$postgres_data" --username=postgres --auth-local=trust --auth-host=reject --no-locale --encoding=UTF8 >/dev/null
+fi
+cp /lab/postgresql.conf "$postgres_data/postgresql.conf"
+chmod 0600 "$postgres_data/postgresql.conf"
 
 /usr/local/apache2/bin/httpd -DFOREGROUND &
 apache_pid=$!
@@ -27,9 +35,11 @@ haproxy_pid=$!
 caddy_pid=$!
 /usr/sbin/traefik --configFile=/lab/traefik-static.yml &
 traefik_pid=$!
+/usr/libexec/postgresql16/postgres -D "$postgres_data" &
+postgres_pid=$!
 
 terminate() {
-  kill "$apache_pid" "$nginx_pid" "$haproxy_pid" "$caddy_pid" "$traefik_pid" "${agent_pid:-}" 2>/dev/null || true
+  kill "$apache_pid" "$nginx_pid" "$haproxy_pid" "$caddy_pid" "$traefik_pid" "$postgres_pid" "${agent_pid:-}" 2>/dev/null || true
 }
 trap terminate INT TERM EXIT
 
@@ -38,8 +48,9 @@ for attempt in 1 2 3 4 5 6 7 8 9 10; do
      /usr/sbin/nginx -t >/dev/null 2>&1 && \
      /usr/sbin/haproxy -c -f /lab/haproxy.cfg >/dev/null 2>&1 && \
      /usr/sbin/caddy validate --config /lab/Caddyfile --adapter caddyfile >/dev/null 2>&1 && \
-     kill -0 "$traefik_pid" 2>/dev/null; then break; fi
-  if [ "$attempt" -eq 10 ]; then echo "one or more real front doors failed initial validation" >&2; exit 1; fi
+     kill -0 "$traefik_pid" 2>/dev/null && \
+     /usr/bin/pg_isready -h /lab/run -p 10448 -U postgres >/dev/null 2>&1; then break; fi
+  if [ "$attempt" -eq 10 ]; then echo "one or more real local TLS services failed initial validation" >&2; exit 1; fi
   sleep 1
 done
 

@@ -94,13 +94,13 @@ func TestPartnerLabComposeRunsRealLocalFrontDoorsWithoutPretendingLinuxIsIIS(t *
 		t.Fatal("partner lab must not market a Linux container as real Windows IIS")
 	}
 	cp := cf.Services["trstctl"]
-	for _, want := range []string{"127.0.0.1:10443:10443", "127.0.0.1:10444:10444", "127.0.0.1:10445:10445", "127.0.0.1:10446:10446", "127.0.0.1:10447:10447"} {
+	for _, want := range []string{"127.0.0.1:10443:10443", "127.0.0.1:10444:10444", "127.0.0.1:10445:10445", "127.0.0.1:10446:10446", "127.0.0.1:10447:10447", "127.0.0.1:10448:10448"} {
 		if !contains(cp.Ports, want) {
 			t.Fatalf("partner lab trstctl ports = %v, missing real target listener %s", cp.Ports, want)
 		}
 	}
-	if got := stringValue(cp.Environment["TRSTCTL_CONNECTORS_ENABLED"]); got != "apache,nginx,haproxy,caddy,traefik" {
-		t.Fatalf("partner lab enabled connectors = %q, want apache,nginx,haproxy,caddy,traefik", got)
+	if got := stringValue(cp.Environment["TRSTCTL_CONNECTORS_ENABLED"]); got != "apache,nginx,haproxy,caddy,traefik,postgresql" {
+		t.Fatalf("partner lab enabled connectors = %q, want apache,nginx,haproxy,caddy,traefik,postgresql", got)
 	}
 	if got := stringValue(cp.Environment["TRSTCTL_AGENT_CHANNEL_CLAIMABLE_JOB_KINDS"]); !strings.Contains(got, "connector.deploy") || !strings.Contains(got, "connector.rollback") {
 		t.Fatalf("partner lab claimable jobs = %q, want deploy and rollback", got)
@@ -145,17 +145,22 @@ func TestPartnerLabRunnerIsPersistentTruthfulAndSecretSafe(t *testing.T) {
 	}
 	runner := read(t, "lab", "journey-runner.mjs")
 	for _, want := range []string{
-		"apache", "nginx", "haproxy", "caddy", "traefik", "connector-contract-census", "iis-windows-required",
+		"apache", "nginx", "haproxy", "caddy", "traefik", "postgresql", "postgresTLSProbe", "connector-contract-census", "iis-windows-required",
 		"continue_after_failure", "blocked_external", "before_fingerprint", "after_fingerprint",
 		"listed.agents ?? []", "runtime-pebble-root.crt", "subject_alt_name", "sink_receipts_after",
 		"network-discovery", "partner-lab-loopback", `agent.roles ?? []).includes(role)`,
 		"allow_loopback: true", "-renew-and-rollback", `"recover"`, "rollback_queued", "rolled_back",
+		"runNonce", "targetName", "planKey", "normalizedFingerprint", "waitForDelivery", "delivery_id", "renewal_delivery_id", "partner-lab-dry-run-${target.connector}-${created.target.id}", "candidate.outbox_id === queued.outbox_id", "-renew-${runNonce}", "-rollback-${runNonce}",
 	} {
 		if !strings.Contains(runner, want) {
 			t.Errorf("partner lab runner is missing contract marker %q", want)
 		}
 	}
 	bootstrap := read(t, "lab", "bootstrap.mjs")
+	postgresConfig := read(t, "lab", "frontdoors", "postgresql.conf")
+	if !strings.Contains(postgresConfig, "unix_socket_directories = '/lab/run'") {
+		t.Error("partner lab PostgreSQL target must keep its Unix socket inside the nonroot-owned lab run directory")
+	}
 	for _, want := range []string{"/roots/0", "runtime-pebble-root.crt", `roles: ["host", "network"]`} {
 		if !strings.Contains(bootstrap, want) {
 			t.Errorf("partner lab bootstrap is missing contract marker %q", want)

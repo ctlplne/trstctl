@@ -1,4 +1,5 @@
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import net from "node:net";
 import tls from "node:tls";
 
 const server = process.env.TRSTCTL_LAB_SERVER ?? "https://trstctl:8443";
@@ -9,6 +10,7 @@ const bearer = readFileSync("/seed-state/bootstrap.token", "utf8").trim();
 const pebbleRoot = readFileSync("/lab-evidence/runtime-pebble-root.crt");
 const matrix = JSON.parse(readFileSync("/lab/journey-matrix.json", "utf8"));
 const startedAt = new Date().toISOString();
+const runNonce = startedAt.replace(/[^0-9]/g, "");
 const results = [];
 
 function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
@@ -54,6 +56,55 @@ function tlsProbe(port, servername, requirePebble = false) {
     });
     socket.once("timeout", () => socket.destroy(new Error("TLS probe timed out")));
     socket.once("error", reject);
+  });
+}
+
+// PostgreSQL does not accept a raw TLS ClientHello. A client first sends the
+// fixed eight-byte SSLRequest and upgrades the same socket only after the server
+// answers "S". This proves what the real daemon serves without pretending its
+// wire protocol is ordinary HTTPS or raw TLS.
+function postgresTLSProbe(port, servername, requirePebble = false) {
+  return new Promise((resolve, reject) => {
+    const socket = net.connect({ host: "trstctl", port, timeout: 5000 });
+    const fail = (error) => { socket.destroy(); reject(error); };
+    socket.once("timeout", () => fail(new Error("PostgreSQL SSLRequest timed out")));
+    socket.once("error", fail);
+    socket.once("connect", () => {
+      const request = Buffer.alloc(8);
+      request.writeInt32BE(8, 0);
+      request.writeInt32BE(80877103, 4);
+      socket.write(request);
+    });
+    socket.once("data", (chunk) => {
+      socket.removeListener("error", fail);
+      if (chunk.length === 0 || chunk[0] !== 0x53) {
+        fail(new Error("PostgreSQL listener refused TLS upgrade"));
+        return;
+      }
+      socket.pause();
+      if (chunk.length > 1) socket.unshift(chunk.subarray(1));
+      const secure = tls.connect({
+        socket, servername,
+        rejectUnauthorized: requirePebble,
+        ...(requirePebble ? { ca: pebbleRoot } : {}),
+      }, () => {
+        const peer = secure.getPeerCertificate();
+        const result = {
+          authorized: secure.authorized,
+          authorization_error: secure.authorizationError || "",
+          subject_cn: peer?.subject?.CN ?? "",
+          subject_alt_name: peer?.subjectaltname ?? "",
+          issuer_cn: peer?.issuer?.CN ?? "",
+          fingerprint_sha256: String(peer?.fingerprint256 ?? "").replaceAll(":", "").toLowerCase(),
+          valid_from: peer?.valid_from ?? "",
+          valid_to: peer?.valid_to ?? "",
+          negotiation: "postgresql-sslrequest",
+        };
+        secure.end(); resolve(result);
+      });
+      secure.once("error", reject);
+      secure.resume();
+    });
   });
 }
 
@@ -112,7 +163,51 @@ const targets = [
   { connector: "haproxy", dns: "haproxy.partner-lab.example.com", port: 10445, config: { crt_path: "/lab/tls/haproxy.pem", config_path: "/lab/haproxy.cfg" } },
   { connector: "caddy", dns: "caddy.partner-lab.example.com", port: 10446, config: { cert_path: "/lab/tls/caddy.crt", key_path: "/lab/tls/caddy.key" } },
   { connector: "traefik", dns: "traefik.partner-lab.example.com", port: 10447, config: { cert_path: "/lab/tls/traefik.crt", key_path: "/lab/tls/traefik.key", config_path: "/lab/tls/traefik-dynamic.yml" } },
+  {
+    connector: "postgresql", dns: "postgresql.partner-lab.example.com", port: 10448,
+    config: { cert_path: "/lab/tls/postgresql.crt", key_path: "/lab/tls/postgresql.key" },
+    probe: postgresTLSProbe,
+    raw_tls_discovery: false,
+    stages: ["understand", "configure", "preview", "execute", "observe", "recover", "verify", "automate"],
+    remaining_stage: "protocol-aware discovery",
+  },
 ];
+
+function probeTarget(target, requirePebble = false) {
+  return (target.probe ?? tlsProbe)(target.port, target.dns, requirePebble);
+}
+
+function normalizedFingerprint(value) {
+  return String(value ?? "").replace(/^sha256:/i, "").replaceAll(":", "").toLowerCase();
+}
+
+async function waitForDelivery(identityID, targetName, connector, description, excludedID = "", excludedFingerprint = "") {
+  return waitFor(description, async () => {
+    return findDelivery((item) => item.id !== excludedID && item.target === targetName &&
+      item.connector === connector && ["delivered", "verified"].includes(item.status) && normalizedFingerprint(item.fingerprint) &&
+      normalizedFingerprint(item.fingerprint) !== normalizedFingerprint(excludedFingerprint),
+    identityID);
+  });
+}
+
+// A retained partner lab intentionally accumulates evidence. Delivery ids are
+// UUIDs and the API paginates by UUID order, not creation time, so reading only
+// the first page eventually makes a fresh receipt disappear at random. Walk the
+// bounded cursor chain and stop as soon as the exact predicate is found.
+async function findDelivery(predicate, identityID = "") {
+  let after = "";
+  for (let pageNumber = 0; pageNumber < 100; pageNumber += 1) {
+    const query = new URLSearchParams({ limit: "100" });
+    if (identityID) query.set("identity_id", identityID);
+    if (after) query.set("cursor", after);
+    const page = await api("GET", `/api/v1/connectors/deliveries?${query.toString()}`);
+    const found = (page.items ?? []).find(predicate);
+    if (found) return found;
+    after = String(page.next_cursor ?? "");
+    if (!after) return false;
+  }
+  throw new Error("connector delivery pagination exceeded 100 pages");
+}
 
 async function ensureNetworkDiscoverySource() {
   const segmentName = "partner-lab-loopback";
@@ -133,7 +228,7 @@ async function ensureNetworkDiscoverySource() {
       kind: "network",
       config: {
         segment: segmentName,
-        targets: targets.map((target) => `127.0.0.1:${target.port}`),
+        targets: targets.filter((target) => target.raw_tls_discovery !== false).map((target) => `127.0.0.1:${target.port}`),
         // Loopback is denied by the scanner unless the operator explicitly
         // opts in. This lab's declared segment is the exact one-host address,
         // so the exception cannot broaden to RFC1918 or arbitrary endpoints.
@@ -146,8 +241,9 @@ async function ensureNetworkDiscoverySource() {
     kind: source.kind,
     config: source.config,
   });
-  if (!preview.ready || preview.side_effects || preview.normalized_target_count !== targets.length) {
-    throw new Error(`network discovery preview was not ready, effect-free, and bound to ${targets.length} targets`);
+  const rawTLSTargetCount = targets.filter((target) => target.raw_tls_discovery !== false).length;
+  if (!preview.ready || preview.side_effects || preview.normalized_target_count !== rawTLSTargetCount) {
+    throw new Error(`network discovery preview was not ready, effect-free, and bound to ${rawTLSTargetCount} raw-TLS targets`);
   }
   return { source, segment, preview };
 }
@@ -164,8 +260,9 @@ async function runNetworkDiscovery(source, phase) {
   }, 90000);
   const page = await api("GET", `/api/v1/discovery/findings?run_id=${encodeURIComponent(completed.id)}&limit=100`);
   const findings = page.items ?? [];
-  if (completed.discovered !== targets.length || findings.length !== targets.length) {
-    throw new Error(`${phase} discovery observed ${findings.length}/${targets.length} expected TLS listeners`);
+  const rawTLSTargetCount = targets.filter((target) => target.raw_tls_discovery !== false).length;
+  if (completed.discovered !== rawTLSTargetCount || findings.length !== rawTLSTargetCount) {
+    throw new Error(`${phase} discovery observed ${findings.length}/${rawTLSTargetCount} expected raw-TLS listeners`);
   }
   return {
     id: `network-discovery-${phase}`,
@@ -183,48 +280,62 @@ async function runNetworkDiscovery(source, phase) {
 }
 
 async function runTargetJourney(target, owner) {
-  const before = await tlsProbe(target.port, target.dns, false);
+  const before = await probeTarget(target, false);
+	const targetName = `Partner lab ${target.connector.toUpperCase()} listener ${runNonce}`;
+	const targetConfig = {
+		...target.config,
+		executor: "agent",
+		required_agent_role: "host",
+		lab_class: "real_local",
+	};
+	if (target.raw_tls_discovery !== false) {
+		targetConfig.verify_address = `127.0.0.1:${target.port}`;
+		targetConfig.verify_server_name = target.dns;
+	}
   const plan = {
     owner_id: owner,
     identity_name: target.dns,
     target: {
-      name: `Partner lab ${target.connector.toUpperCase()} listener`,
+      name: targetName,
       connector: target.connector,
       enabled: true,
-      config: {
-        ...target.config,
-        executor: "agent",
-        required_agent_role: "host",
-        verify_address: `127.0.0.1:${target.port}`,
-        verify_server_name: target.dns,
-        lab_class: "real_local",
-      },
+      config: targetConfig,
     },
     issuer: { source: "external", id: "local-pebble" },
     reason: `partner lab ${target.connector} external-CA lifecycle`,
   };
   const preview = await api("POST", "/api/v1/lifecycle/endpoint-bindings/preview", plan);
   if (!preview.ready || !preview.effect_free || !preview.request_fingerprint) throw new Error("endpoint-binding preview was not ready and effect-free");
+  // Bind retained-lab idempotency to the exact reviewed plan. An identical
+  // rerun returns the original identity and target; a deliberate plan change
+  // gets a distinct key instead of colliding with stale request bytes.
+  const planKey = String(preview.request_fingerprint).replace(/^sha256:/, "");
   const created = await api("POST", "/api/v1/lifecycle/endpoint-bindings", {
     ...plan, preview_fingerprint: preview.request_fingerprint,
-  }, `partner-lab-binding-${target.connector}-v1`);
+  }, `partner-lab-binding-${target.connector}-${planKey}`);
+  const delivery = await waitForDelivery(created.identity.id, created.target.name, target.connector,
+    `${target.connector} identity-bound delivery receipt`);
   const after = await waitFor(`${target.connector} external certificate deployment`, async () => {
-    const probe = await tlsProbe(target.port, target.dns, true);
-    return probe.authorized && probe.subject_alt_name.split(", ").includes(`DNS:${target.dns}`) ? probe : false;
+    const probe = await probeTarget(target, true);
+    return probe.authorized && probe.subject_alt_name.split(", ").includes(`DNS:${target.dns}`) &&
+      probe.fingerprint_sha256 === normalizedFingerprint(delivery.fingerprint) ? probe : false;
   });
-  const dryRun = await api("POST", `/api/v1/connectors/targets/${encodeURIComponent(created.target.id)}/test`, {}, `partner-lab-dry-run-${target.connector}-v1`);
+  const dryRun = await api("POST", `/api/v1/connectors/targets/${encodeURIComponent(created.target.id)}/test`, {}, `partner-lab-dry-run-${target.connector}-${created.target.id}`);
   await waitFor(`${target.connector} target-vantage dry run`, async () => {
-    const page = await api("GET", "/api/v1/connectors/deliveries?limit=100");
-    return (page.items ?? []).find((item) => item.target === created.target.name && item.connector === target.connector && item.status === "dry_run_planned") || false;
+    return findDelivery((item) => item.target === created.target.name && item.connector === target.connector && item.status === "dry_run_planned");
   }, 60000);
   return {
     id: target.connector,
     class: "real_local",
     status: "pass",
-    stages: ["discover", "understand", "configure", "preview", "execute", "observe", "verify", "automate"],
+    stages: target.stages ?? ["discover", "understand", "configure", "preview", "execute", "observe", "verify", "automate"],
+		...(target.remaining_stage ? { remaining_stage: target.remaining_stage } : {}),
     issuer: created.issuer,
     identity_id: created.identity.id,
     target_id: created.target.id,
+    target_name: created.target.name,
+    delivery_id: delivery.id,
+    delivery_status: delivery.status,
     preview_fingerprint: preview.request_fingerprint,
     before_fingerprint: before.fingerprint_sha256,
     after_fingerprint: after.fingerprint_sha256,
@@ -246,26 +357,34 @@ async function runRenewAndRollbackJourney(deployed, target) {
 	await api("POST", `/api/v1/identities/${encodeURIComponent(deployed.identity_id)}/transitions`, {
 		...transition,
 		expected_version: preview.expected_version,
-	}, `partner-lab-${target.connector}-renew-v1`);
+	}, `partner-lab-${target.connector}-renew-${runNonce}`);
+	const renewalDelivery = await waitForDelivery(deployed.identity_id, deployed.target_name, target.connector,
+		`${label} successor delivery receipt`, deployed.delivery_id, deployed.after_fingerprint);
 	const renewed = await waitFor(`${label} successor certificate deployment`, async () => {
-		const probe = await tlsProbe(target.port, target.dns, true);
-		return probe.authorized && probe.fingerprint_sha256 !== deployed.after_fingerprint ? probe : false;
+		const probe = await probeTarget(target, true);
+		return probe.authorized && probe.fingerprint_sha256 !== deployed.after_fingerprint &&
+			probe.fingerprint_sha256 === normalizedFingerprint(renewalDelivery.fingerprint) ? probe : false;
 	});
 
 	const queued = await api("POST", `/api/v1/connectors/targets/${encodeURIComponent(deployed.target_id)}/rollback`, {
 		identity_id: deployed.identity_id,
 		reason: "partner lab restores the proven predecessor after renewal",
-	}, `partner-lab-${target.connector}-rollback-v1`);
+	}, `partner-lab-${target.connector}-rollback-${runNonce}`);
 	if (queued.status !== "rollback_queued") throw new Error(`rollback API status was ${clean(queued.status)}, not rollback_queued`);
-	const restored = await waitFor(`${label} predecessor restoration`, async () => {
-		const probe = await tlsProbe(target.port, target.dns, true);
-		return probe.authorized && probe.fingerprint_sha256 === deployed.after_fingerprint ? probe : false;
-	});
 	const receipt = await waitFor(`${label} executed rollback receipt`, async () => {
-		const page = await api("GET", "/api/v1/connectors/deliveries?limit=100");
-    return (page.items ?? []).find((item) => item.target === `Partner lab ${target.connector.toUpperCase()} listener` &&
-      item.connector === target.connector && item.status === "rolled_back") || false;
+		const item = await findDelivery((candidate) => candidate.outbox_id === queued.outbox_id &&
+			["rolled_back", "rollback_refused", "rollback_failed", "failed"].includes(candidate.status), deployed.identity_id);
+		if (!item) return false;
+		if (item.status !== "rolled_back") {
+			throw new Error(`rollback ended ${clean(item.status)}: ${clean(item.detail || item.reason)}`);
+		}
+		return item;
 	}, 60000);
+	const restored = await waitFor(`${label} predecessor restoration`, async () => {
+		const probe = await probeTarget(target, true);
+		return probe.authorized && probe.fingerprint_sha256 === deployed.after_fingerprint &&
+			probe.fingerprint_sha256 === normalizedFingerprint(receipt.fingerprint) ? probe : false;
+	});
 	return {
 		id: `${target.connector}-renew-and-rollback`,
     class: "real_local",
@@ -274,6 +393,8 @@ async function runRenewAndRollbackJourney(deployed, target) {
     identity_id: deployed.identity_id,
     target_id: deployed.target_id,
     renewal_preview_fingerprint: preview.request_fingerprint,
+    renewal_delivery_id: renewalDelivery.id,
+    renewal_delivery_status: renewalDelivery.status,
     predecessor_fingerprint: deployed.after_fingerprint,
     successor_fingerprint: renewed.fingerprint_sha256,
     restored_fingerprint: restored.fingerprint_sha256,

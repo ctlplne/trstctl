@@ -8,7 +8,7 @@ services:
     environment:
       TRSTCTL_CONFIG_FILE: /etc/trstctl/partner-lab.json
       TRSTCTL_AGENT_CHANNEL_CLAIMABLE_JOB_KINDS: "discovery.run,endpoint.verify,endpoint.renew,connector.test,connector.deploy,connector.rollback"
-      TRSTCTL_CONNECTORS_ENABLED: "apache,nginx,haproxy,caddy,traefik"
+      TRSTCTL_CONNECTORS_ENABLED: "apache,nginx,haproxy,caddy,traefik,postgresql"
     ports: !override
       - "127.0.0.1:9443:8443"
       - "127.0.0.1:29443:9443"
@@ -18,6 +18,7 @@ services:
       - "127.0.0.1:10445:10445"
       - "127.0.0.1:10446:10446"
       - "127.0.0.1:10447:10447"
+      - "127.0.0.1:10448:10448"
     volumes:
       - ./lab/trstctl-lab.json:/etc/trstctl/partner-lab.json:ro
       - ./lab/certs:/lab-ca:ro
@@ -163,7 +164,7 @@ services:
       - "--host-exec-profile=/lab/host-exec-profile.json"
       - "--host-rollback-dir=/lab/state/rollbacks"
     healthcheck:
-      test: ["CMD-SHELL", "/usr/local/apache2/bin/apachectl configtest >/dev/null 2>&1 && /usr/sbin/nginx -t >/dev/null 2>&1 && /usr/sbin/haproxy -c -f /lab/haproxy.cfg >/dev/null 2>&1 && /usr/sbin/caddy validate --config /lab/Caddyfile --adapter caddyfile >/dev/null 2>&1 && nc -z 127.0.0.1 10447"]
+      test: ["CMD-SHELL", "/usr/local/apache2/bin/apachectl configtest >/dev/null 2>&1 && /usr/sbin/nginx -t >/dev/null 2>&1 && /usr/sbin/haproxy -c -f /lab/haproxy.cfg >/dev/null 2>&1 && /usr/sbin/caddy validate --config /lab/Caddyfile --adapter caddyfile >/dev/null 2>&1 && nc -z 127.0.0.1 10447 && /usr/bin/pg_isready -h /lab/run -p 10448 -U postgres >/dev/null 2>&1"]
       interval: 2s
       timeout: 5s
       retries: 30

@@ -2,8 +2,8 @@
   "schema_version": 1,
   "principle": "Run every safe local journey; distinguish an actual substrate from a faithful contract receiver and from a truly external wall.",
   "classes": {
-    "real_local": ["apache", "nginx", "haproxy", "caddy", "traefik"],
-    "faithful_local": ["postfix", "java-keystore", "postgresql", "mysql", "rabbitmq", "elasticsearch", "tomcat", "envoy", "f5", "netscaler", "a10", "kemp", "cisco", "fortigate", "paloalto", "aws-acm", "azure-keyvault", "gcp-certificate-manager", "iis"],
+    "real_local": ["apache", "nginx", "haproxy", "caddy", "traefik", "postgresql"],
+    "faithful_local": ["postfix", "java-keystore", "mysql", "rabbitmq", "elasticsearch", "tomcat", "envoy", "f5", "netscaler", "a10", "kemp", "cisco", "fortigate", "paloalto", "aws-acm", "azure-keyvault", "gcp-certificate-manager", "iis"],
     "external_only": ["iis-real-windows-kernel-and-certificate-store", "f5-physical-or-vendor-virtual-appliance", "vendor-account-entitlement", "public-internet-trust"]
   },
   "journeys": [
@@ -12,6 +12,7 @@
     { "id": "haproxy", "class": "real_local", "stages": ["discover", "understand", "configure", "preview", "issue", "deploy", "observe", "recover", "verify", "automate"] },
     { "id": "caddy", "class": "real_local", "stages": ["discover", "understand", "configure", "preview", "issue", "deploy", "observe", "recover", "verify", "automate"] },
     { "id": "traefik", "class": "real_local", "stages": ["discover", "understand", "configure", "preview", "issue", "deploy", "observe", "recover", "verify", "automate"] },
+    { "id": "postgresql", "class": "real_local", "stages": ["understand", "configure", "preview", "issue", "deploy", "observe", "recover", "verify", "automate"], "protocol": "PostgreSQL SSLRequest followed by TLS", "remaining_stage": "protocol-aware discovery" },
     { "id": "connector-contract-census", "class": "faithful_local", "command": "DOD_CENSUS_OUT=/private/tmp/trstctl-connector-census.json make dod-gate" },
     { "id": "iis", "class": "faithful_local", "result": "iis-windows-required for a full substrate claim; exact PowerShell, netsh, PFX, rollback, and refusal contracts still run locally" }
   ],

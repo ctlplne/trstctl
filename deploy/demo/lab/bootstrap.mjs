@@ -83,6 +83,7 @@ const subjects = [
   ["haproxy", "haproxy.partner-lab.example.com"],
   ["caddy", "caddy.partner-lab.example.com"],
   ["traefik", "traefik.partner-lab.example.com"],
+  ["postgresql", "postgresql.partner-lab.example.com"],
 ];
 for (const [name, dns] of subjects) {
   const cert = `/frontdoors-tls/${name}.crt`;

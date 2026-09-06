@@ -11,6 +11,13 @@
       "command": "/usr/sbin/caddy",
       "args": ["reload", "--config", "/lab/Caddyfile", "--force"],
       "timeout_seconds": 15
+    },
+    {
+      "logical_name": "pg_ctl",
+      "logical_args": ["reload"],
+      "command": "/usr/libexec/postgresql16/pg_ctl",
+      "args": ["-D", "/lab/state/postgresql", "reload"],
+      "timeout_seconds": 15
     }
   ]
 }

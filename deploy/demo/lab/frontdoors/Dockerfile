@@ -6,7 +6,15 @@ ARG APACHE_IMAGE=httpd:2.4-alpine@sha256:1b766f17b84026429b7cb243317b142921b2443
 FROM ${TRSTCTL_IMAGE} AS trstctl
 FROM ${APACHE_IMAGE}
 
-RUN apk add --no-cache nginx=1.30.4-r1 haproxy=3.4.4-r0 caddy=2.11.4-r0 traefik=3.7.1-r0
+RUN apk add --no-cache \
+    nginx=1.30.4-r1 \
+    haproxy=3.4.4-r0 \
+    caddy=2.11.4-r1 \
+    traefik=3.7.1-r1 \
+    postgresql16=16.15-r0 \
+    postgresql16-client=16.15-r0 \
+    && addgroup -S -g 65532 trstctl \
+    && adduser -S -D -H -u 65532 -G trstctl trstctl
 COPY --from=trstctl /usr/local/bin/trstctl-agent /usr/local/bin/trstctl-agent
 COPY deploy/demo/lab/frontdoors/httpd-lab.conf /usr/local/apache2/conf/extra/httpd-lab.conf
 COPY deploy/demo/lab/frontdoors/nginx.conf /etc/nginx/nginx.conf
@@ -14,6 +22,7 @@ COPY deploy/demo/lab/frontdoors/haproxy.cfg /lab/haproxy.cfg
 COPY deploy/demo/lab/frontdoors/Caddyfile /lab/Caddyfile
 COPY deploy/demo/lab/frontdoors/traefik-dynamic.yml /lab/traefik-dynamic.template.yml
 COPY deploy/demo/lab/frontdoors/traefik-static.yml /lab/traefik-static.yml
+COPY deploy/demo/lab/frontdoors/postgresql.conf /lab/postgresql.conf
 COPY deploy/demo/lab/frontdoors/host-exec-profile.json /lab/host-exec-profile.json
 COPY deploy/demo/lab/frontdoors/reload-haproxy /lab/reload-haproxy
 COPY deploy/demo/lab/frontdoors/entrypoint.sh /lab/entrypoint.sh
@@ -33,5 +42,5 @@ RUN set -eu; \
 
 USER 65532:65532
 WORKDIR /lab
-EXPOSE 10443 10444 10445 10446 10447
+EXPOSE 10443 10444 10445 10446 10447 10448
 ENTRYPOINT ["/lab/entrypoint.sh"]
