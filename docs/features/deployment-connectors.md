@@ -241,6 +241,11 @@ families without an executable restore path show the manual boundary and keep th
 button disabled; the API also fails closed instead of recording a rollback-shaped
 success.
 
+Disabling a destination pauses the agent-claimable work already queued for it:
+deploys and rollbacks stamped with that destination's lane are handed to no agent
+while it is disabled, nothing is dropped, and the same rows resume unchanged the
+moment it is enabled again. The Jobs page keeps showing them as pending meanwhile.
+
 The REST surface is `/api/v1/connectors/targets` for CRUD,
 `/api/v1/identities/{id}/connector-target` for identity binding, and
 `/api/v1/connectors/targets/{id}/{test,deploy,rollback}` for actions; CRUD and binding

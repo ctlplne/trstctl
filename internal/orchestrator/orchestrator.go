@@ -1464,7 +1464,7 @@ func ConnectorDeployEffectLane(identityID string, payload []byte) string {
 
 // ConnectorTargetEffectLane is shared by a target deploy and its inverse.
 func ConnectorTargetEffectLane(targetID string) string {
-	return "connector.bind:target:" + strings.TrimSpace(targetID)
+	return store.ConnectorTargetLanePrefix + strings.TrimSpace(targetID)
 }
 
 func lifecycleOutboxIntentFromEvent(ev events.Event, pl transitionPayload, dest string) (string, []byte, error) {

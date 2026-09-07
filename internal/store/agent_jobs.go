@@ -166,6 +166,11 @@ func (s *Store) AgentJobClaimForResult(ctx context.Context, tenantID, agentID st
 // across the queue, not serialize on its head. An entry whose lease has expired
 // is claimable again, which is how a dead agent's work comes back without anyone
 // intervening.
+// ConnectorTargetLanePrefix prefixes the outbox effect lane that every deploy or
+// rollback of one deployment target shares; the claim below reads it to pause
+// work for a disabled target, so the orchestrator derives its lanes from here.
+const ConnectorTargetLanePrefix = "connector.bind:target:"
+
 // ClaimAgentJobs leases up to limit pending jobs of the given kinds to agentID.
 // roles is the capability set from the agent's CERTIFICATE (epic A2/A3): a row
 // stamped with a required_agent_role is handed out only to an agent holding that
@@ -210,6 +215,16 @@ func (s *Store) ClaimAgentJobs(ctx context.Context, tenantID, agentID string, de
 			           AND (c.claimed_by_agent_id IS NULL OR c.claim_expires_at < $5)
 			           AND (c.required_agent_role = '' OR c.required_agent_role = ANY($7::text[]))
 			           AND (c.required_agent_id IS NULL OR c.required_agent_id = $2::uuid)
+			           -- A destination an operator has disabled hands out no work: rows stamped
+			           -- with that target's lane stay pending, never dropped, and are claimable
+			           -- again the moment it is enabled (DP2-028).
+			           AND NOT EXISTS (
+			                 SELECT 1
+			                   FROM deployment_targets AS dt
+			                  WHERE dt.tenant_id = c.tenant_id
+			                    AND NOT dt.enabled
+			                    AND c.effect_lane = '`+ConnectorTargetLanePrefix+`' || dt.id::text
+			           )
 			           AND NOT EXISTS (
 			                 SELECT 1
 			                   FROM outbox AS held
