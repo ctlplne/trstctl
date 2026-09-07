@@ -206,7 +206,9 @@ services:
       - ./lab/customer-enroll.mjs:/lab/customer-enroll.mjs:ro
       - publictrust:/public-trust:ro
       - frontdoorsstate:/frontdoors-state
-      - ${TRSTCTL_LAB_CUSTOMER_TOKEN_FILE:?set TRSTCTL_LAB_CUSTOMER_TOKEN_FILE to the customer tenant's 0600 API token file}:/customer/token:ro
+      # Defaults to an empty file so ordinary lab starts interpolate cleanly; the
+      # helper refuses an empty token and explains what to mount.
+      - ${TRSTCTL_LAB_CUSTOMER_TOKEN_FILE:-/dev/null}:/customer/token:ro
 
   lab-runner:
     image: ${TRSTCTL_DEMO_SEED_IMAGE:-ctlplne-demo-seed:local}

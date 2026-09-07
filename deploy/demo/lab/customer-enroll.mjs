@@ -19,7 +19,7 @@ if (!existsSync(tokenFile)) {
 }
 const bearer = readFileSync(tokenFile, "utf8").trim();
 if (!bearer) {
-  console.error("customer enroll: token file is empty");
+  console.error("customer enroll: the mounted token file is empty; set TRSTCTL_LAB_CUSTOMER_TOKEN_FILE to the customer tenant's 0600 API token file");
   process.exit(2);
 }
 mkdirSync(stateDir, { recursive: true, mode: 0o700 });
