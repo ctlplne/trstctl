@@ -45,7 +45,7 @@ func TestApprovalIdentityActionAcceptsRotate(t *testing.T) {
 	recorder := &captureApprovalRecorder{}
 	handler := New(nil, orchestrator.NewMemoryIdempotency(), nil, WithInsecureHeaderResolver(), WithRoles(role), WithApprovals(recorder))
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/identities/identity-rotate-1/approvals", strings.NewReader(`{"action":"rotate","request_id":"11111111-1111-1111-1111-111111111111","intent_digest":"sha256:test"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/identities/6f9a1c2e-0d4b-4b7e-9a1e-000000000001/approvals", strings.NewReader(`{"action":"rotate","request_id":"11111111-1111-1111-1111-111111111111","intent_digest":"sha256:test"}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Idempotency-Key", "approve-rotate-1")
 	req.Header.Set("X-Tenant-ID", "tenant-rotate")
@@ -58,14 +58,14 @@ func TestApprovalIdentityActionAcceptsRotate(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("approve rotate status = %d, want 200: %s", rr.Code, rr.Body.String())
 	}
-	if recorder.tenantID != "tenant-rotate" || recorder.command.ExpectedResourceID != "identity-rotate-1" || recorder.command.ExpectedAction != "rotate" || recorder.command.Approver != "ra-approver" {
+	if recorder.tenantID != "tenant-rotate" || recorder.command.ExpectedResourceID != "6f9a1c2e-0d4b-4b7e-9a1e-000000000001" || recorder.command.ExpectedAction != "rotate" || recorder.command.Approver != "ra-approver" {
 		t.Fatalf("recorded approval = tenant:%q command:%+v", recorder.tenantID, recorder.command)
 	}
 	var body approvalResponse
 	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode approval response: %v", err)
 	}
-	if body.Action != "rotate" || body.Resource != "identity-rotate-1" || body.Approver != "ra-approver" || body.Approvals != 2 {
+	if body.Action != "rotate" || body.Resource != "6f9a1c2e-0d4b-4b7e-9a1e-000000000001" || body.Approver != "ra-approver" || body.Approvals != 2 {
 		t.Fatalf("approval response = %+v", body)
 	}
 }

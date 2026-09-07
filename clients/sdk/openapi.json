@@ -53314,11 +53314,11 @@
             }
           },
           {
+            "description": "Owner action id (not a UUID)",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "format": "uuid",
               "type": "string"
             }
           }

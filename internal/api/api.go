@@ -607,6 +607,9 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		if a.tenantCrypto != nil && r.perm != "" && !tenantCryptoExemptOperation(r.opID) {
 			handler = a.guardTenantCrypto(handler)
 		}
+		if !r.handlerOwnsPathIDs {
+			handler = a.requireUUIDPathParams(r.pathParams, handler)
+		}
 		mux.HandleFunc(r.method+" "+r.path, a.guard(r.perm, r.scope, handler))
 	}
 	// Compatibility alias for the probectl editions surface. The canonical,
@@ -790,23 +793,24 @@ func routeParams(in []RouteParam) []param {
 // route binds an HTTP method+path to a handler and carries the metadata used to
 // generate the OpenAPI document and to enforce RBAC.
 type route struct {
-	method            string
-	path              string
-	opID              string
-	summary           string
-	handler           http.HandlerFunc
-	pathParams        []param
-	query             []param
-	reqSchema         string
-	reqOptional       bool
-	resSchema         string
-	successCode       string
-	responseOverrides map[string]Response
-	unavailableReason string
-	mutation          bool
-	sensitiveResponse bool
-	perm              authz.Permission // required permission; "" means public
-	scope             routeScope
+	method             string
+	path               string
+	opID               string
+	summary            string
+	handler            http.HandlerFunc
+	pathParams         []param
+	handlerOwnsPathIDs bool // the handler decides malformed path ids itself (AUD-77 tenant-safe 404); the registration guard is skipped
+	query              []param
+	reqSchema          string
+	reqOptional        bool
+	resSchema          string
+	successCode        string
+	responseOverrides  map[string]Response
+	unavailableReason  string
+	mutation           bool
+	sensitiveResponse  bool
+	perm               authz.Permission // required permission; "" means public
+	scope              routeScope
 }
 
 type routeScope func(*http.Request) (authz.Scope, error)
@@ -913,6 +917,7 @@ func jsonBodyStringField(r *http.Request, field string) (string, error) {
 
 func (a *API) routes() []route {
 	idPath := []param{pathUUID("id")}
+	ownerActionPath := []param{pathString("id", "Owner action id (not a UUID)")}
 	ownershipExceptionPath := []param{pathUUID("id"), pathUUID("exception_id")}
 	graphNodePath := []param{pathString("id", "credential graph node id")}
 	profileVersionPath := []param{
@@ -1114,15 +1119,15 @@ func (a *API) routes() []route {
 		}, mutation: true, perm: authz.CertsRequest},
 		{method: "POST", path: "/api/v1/ephemeral/api-keys/preview", opID: "previewEphemeralAPIKey", summary: "Review one exact short-TTL API key without minting or storing a bearer", handler: a.previewEphemeralAPIKey, reqSchema: "EphemeralAPIKeyRequest", resSchema: "EphemeralAPIKeyPreview", successCode: "200", perm: authz.AccessWrite},
 		{method: "POST", path: "/api/v1/ephemeral/api-keys", opID: "issueEphemeralAPIKey", summary: "Mint a short-TTL API key for machine workflows", handler: a.issueEphemeralAPIKey, reqSchema: "EphemeralAPIKeyRequest", resSchema: "EphemeralAPIKey", successCode: "201", mutation: true, sensitiveResponse: true, perm: authz.AccessWrite},
-		{method: "POST", path: "/api/v1/ephemeral/{id}/approvals", opID: "approveEphemeralCredential", summary: "Approve a pending ephemeral JIT credential request", handler: a.approveEphemeralCredential, pathParams: ephemeralRequestPath, reqSchema: "EphemeralApprovalRequest", resSchema: "EphemeralApproval", successCode: "200", mutation: true, perm: authz.CertsIssue},
+		{method: "POST", path: "/api/v1/ephemeral/{id}/approvals", opID: "approveEphemeralCredential", summary: "Approve a pending ephemeral JIT credential request", handler: a.approveEphemeralCredential, pathParams: ephemeralRequestPath, handlerOwnsPathIDs: true, reqSchema: "EphemeralApprovalRequest", resSchema: "EphemeralApproval", successCode: "200", mutation: true, perm: authz.CertsIssue},
 
 		{method: "GET", path: "/api/v1/approval-requests", opID: "listApprovalRequests", summary: "List immutable operation approval requests in authorized review domains", handler: a.listApprovalRequests, query: []param{
 			{name: "status", typ: "string", desc: "request status filter: pending, approved, denied, expired, superseded, or consumed"},
 			{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
 			{name: "cursor", typ: "string", desc: "opaque newest-first pagination cursor from a prior page"},
 		}, resSchema: "ApprovalRequestList", successCode: "200", perm: authz.ApprovalsReview},
-		{method: "POST", path: "/api/v1/approval-requests/{id}/approvals", opID: "approveApprovalRequest", summary: "Approve one exact immutable operation request", handler: a.approveApprovalRequest, pathParams: idPath, reqSchema: "ApprovalDecisionInput", resSchema: "ApprovalDecision", successCode: "200", mutation: true, perm: authz.ApprovalsReview},
-		{method: "POST", path: "/api/v1/approval-requests/{id}/denials", opID: "denyApprovalRequest", summary: "Deny one exact immutable operation request without mutating its target", handler: a.denyApprovalRequest, pathParams: idPath, reqSchema: "ApprovalDenialInput", resSchema: "ApprovalDecision", successCode: "200", mutation: true, perm: authz.ApprovalsReview},
+		{method: "POST", path: "/api/v1/approval-requests/{id}/approvals", opID: "approveApprovalRequest", summary: "Approve one exact immutable operation request", handler: a.approveApprovalRequest, pathParams: idPath, handlerOwnsPathIDs: true, reqSchema: "ApprovalDecisionInput", resSchema: "ApprovalDecision", successCode: "200", mutation: true, perm: authz.ApprovalsReview},
+		{method: "POST", path: "/api/v1/approval-requests/{id}/denials", opID: "denyApprovalRequest", summary: "Deny one exact immutable operation request without mutating its target", handler: a.denyApprovalRequest, pathParams: idPath, handlerOwnsPathIDs: true, reqSchema: "ApprovalDenialInput", resSchema: "ApprovalDecision", successCode: "200", mutation: true, perm: authz.ApprovalsReview},
 		{method: "POST", path: "/api/v1/identities", opID: "createIdentity", summary: "Create an identity", handler: a.createIdentity, reqSchema: "IdentityRequest", resSchema: "Identity", successCode: "201", mutation: true, perm: authz.IdentitiesWrite},
 		{method: "GET", path: "/api/v1/identities", opID: "listIdentities", summary: "List identities", handler: a.listIdentities, query: page, resSchema: "IdentityList", successCode: "200", perm: authz.IdentitiesRead},
 		{method: "POST", path: "/api/v1/identities/bulk-revoke", opID: "bulkRevokeIdentities", summary: "Bulk revoke identities by id or criteria", handler: a.bulkRevoke, reqSchema: "BulkRevokeRequest", resSchema: "BulkRevokeResult", successCode: "200", mutation: true, perm: authz.IdentitiesWrite},
@@ -1251,7 +1256,7 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/remediation/playbook-runs", opID: "listRemediationPlaybookRuns", summary: "List remediation playbook run evidence", handler: a.listRemediationPlaybookRuns, query: playbookScopedPage, resSchema: "RemediationPlaybookRunList", successCode: "200", perm: authz.IncidentsRead},
 		{method: "GET", path: "/api/v1/remediation/playbook-runs/{id}", opID: "getRemediationPlaybookRun", summary: "Get a remediation playbook run evidence pack", handler: a.getRemediationPlaybookRun, pathParams: idPath, resSchema: "RemediationPlaybookRun", successCode: "200", perm: authz.IncidentsRead},
 		{method: "GET", path: "/api/v1/remediation/owner-actions", opID: "listOwnerRemediationActions", summary: "List owner-driven self-remediation actions", handler: a.listOwnerRemediationActions, query: []param{{name: "owner_id", typ: "string", desc: "return only actions for one owner id"}}, resSchema: "OwnerRemediationQueue", successCode: "200", perm: authz.OwnersRead},
-		{method: "POST", path: "/api/v1/remediation/owner-actions/{id}/accept", opID: "acceptOwnerRemediationAction", summary: "Accept an owner-driven self-remediation action", handler: a.acceptOwnerRemediationAction, pathParams: idPath, reqSchema: "OwnerRemediationAcceptRequest", resSchema: "OwnerRemediationRun", successCode: "201", mutation: true, perm: authz.OwnersWrite},
+		{method: "POST", path: "/api/v1/remediation/owner-actions/{id}/accept", opID: "acceptOwnerRemediationAction", summary: "Accept an owner-driven self-remediation action", handler: a.acceptOwnerRemediationAction, pathParams: ownerActionPath, reqSchema: "OwnerRemediationAcceptRequest", resSchema: "OwnerRemediationRun", successCode: "201", mutation: true, perm: authz.OwnersWrite},
 
 		{method: "GET", path: "/api/v1/access/roles", opID: "listAccessRoles", summary: "List built-in and configured access roles", handler: a.listAccessRoles, resSchema: "RoleList", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/access/oidc-mapping", opID: "getOIDCMappingStatus", summary: "Show served OIDC tenant and group mapping status", handler: a.getOIDCMappingStatus, resSchema: "OIDCMappingStatus", successCode: "200", perm: authz.AccessRead},

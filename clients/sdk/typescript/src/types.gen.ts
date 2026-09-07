@@ -29194,6 +29194,7 @@ export interface operations {
                 "Idempotency-Key": string;
             };
             path: {
+                /** @description Owner action id (not a UUID) */
                 id: string;
             };
             cookie?: never;
