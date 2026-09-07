@@ -7922,6 +7922,38 @@ export const messages = {
     defaultMessage: "More actions",
     description: "Disclosure that contains lifecycle and dismissal actions after a finding is reviewed.",
   },
+  "discovery.findings.observedHeading": {
+    defaultMessage: "What was observed",
+    description: "C2: discovery finding evidence — observed certificate facts.",
+  },
+  "discovery.findings.observedSubject": {
+    defaultMessage: "Subject",
+    description: "C2: discovery finding evidence — observed certificate facts.",
+  },
+  "discovery.findings.observedIssuer": {
+    defaultMessage: "Issuer",
+    description: "C2: discovery finding evidence — observed certificate facts.",
+  },
+  "discovery.findings.observedValidity": {
+    defaultMessage: "Validity",
+    description: "C2: discovery finding evidence — observed certificate facts.",
+  },
+  "discovery.findings.observedSans": {
+    defaultMessage: "Subject alternative names",
+    description: "C2: discovery finding evidence — observed certificate facts.",
+  },
+  "discovery.findings.observedSerial": {
+    defaultMessage: "Serial",
+    description: "C2: discovery finding evidence — observed certificate facts.",
+  },
+  "discovery.findings.observedKey": {
+    defaultMessage: "Public key",
+    description: "C2: discovery finding evidence — observed certificate facts.",
+  },
+  "discovery.findings.observedLocation": {
+    defaultMessage: "Observed at",
+    description: "C2: discovery finding evidence — observed certificate facts.",
+  },
   "discovery.findings.exactEvidence": {
     defaultMessage: "Exact finding evidence",
     description: "Collapsed disclosure for raw finding identifiers, kinds, fingerprints, and provenance.",

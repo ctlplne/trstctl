@@ -2614,6 +2614,17 @@ function FindingTable({
             </div>
           )}
 
+          {observedCertificateDetails(selected).length > 0 && (
+            <div className="border-t border-border pt-4">
+              <h3 className="text-sm font-medium">{t("discovery.findings.observedHeading")}</h3>
+              <dl className="mt-3 grid gap-3 rounded-control bg-muted/30 p-3 md:grid-cols-2 xl:grid-cols-4">
+                {observedCertificateDetails(selected).map((detail) => (
+                  <FindingDetail key={detail.label} label={detail.label} value={detail.value} />
+                ))}
+              </dl>
+            </div>
+          )}
+
           <details className="group border-t border-border pt-4">
             <summary className="cursor-pointer text-sm font-medium">{t("discovery.findings.exactEvidence")}</summary>
             <dl className="mt-3 grid gap-3 rounded-control bg-muted/30 p-3 md:grid-cols-2 xl:grid-cols-4">
@@ -2765,6 +2776,39 @@ function FindingTable({
       )}
     </div>
   );
+}
+
+
+// observedCertificateDetails surfaces what a discovery finding actually observed
+// — the certificate's subject, issuer, validity window, SANs and key — from the
+// finding metadata, so the evidence panel answers "what is this?" and not only
+// "which fingerprint/ids". Empty for findings that carry none.
+function observedCertificateDetails(finding: DiscoveryFinding): Array<{ label: string; value: string }> {
+  const metadata = (finding.metadata ?? {}) as Record<string, unknown>;
+  const out: Array<{ label: string; value: string }> = [];
+  const push = (label: string, keys: string[]) => {
+    const value = metadataString(metadata, keys);
+    if (value) out.push({ label, value });
+  };
+  push(translateNow("discovery.findings.observedSubject"), ["subject", "common_name", "cn"]);
+  push(translateNow("discovery.findings.observedIssuer"), ["issuer", "issuer_cn"]);
+  const notBefore = metadataString(metadata, ["not_before", "valid_from"]);
+  const notAfter = metadataString(metadata, ["not_after", "valid_to", "expires_at"]);
+  if (notBefore || notAfter) {
+    out.push({ label: translateNow("discovery.findings.observedValidity"), value: `${notBefore || "?"} → ${notAfter || "?"}` });
+  }
+  const sans = metadata["sans"];
+  if (Array.isArray(sans) && sans.length > 0) {
+    out.push({ label: translateNow("discovery.findings.observedSans"), value: sans.map((san) => String(san)).join(", ") });
+  }
+  push(translateNow("discovery.findings.observedSerial"), ["serial", "serial_number"]);
+  const keyAlg = metadataString(metadata, ["key_algorithm", "key_type"]);
+  const keyBits = metadata["public_key_bits"];
+  if (keyAlg || typeof keyBits === "number") {
+    out.push({ label: translateNow("discovery.findings.observedKey"), value: [keyAlg, typeof keyBits === "number" ? `${keyBits}-bit` : ""].filter(Boolean).join(" ") });
+  }
+  push(translateNow("discovery.findings.observedLocation"), ["location", "address", "endpoint"]);
+  return out;
 }
 
 function FindingDetail({ label, value }: { label: string; value: string }) {
