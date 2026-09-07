@@ -13,6 +13,7 @@ RUN apk add --no-cache \
     traefik=3.7.1-r1 \
     postgresql16=16.15-r0 \
     postgresql16-client=16.15-r0 \
+    openssl=3.5.8-r0 \
     && addgroup -S -g 65532 trstctl \
     && adduser -S -D -H -u 65532 -G trstctl trstctl
 COPY --from=trstctl /usr/local/bin/trstctl-agent /usr/local/bin/trstctl-agent
