@@ -41,6 +41,9 @@ type ComplianceInventoryCounts struct {
 // ApplyComplianceReportScheduleUpsertedTx projects a
 // compliance.report_schedule.upserted event.
 func (s *Store) ApplyComplianceReportScheduleUpsertedTx(ctx context.Context, tx pgx.Tx, sched ComplianceReportSchedule) error {
+	if err := lockUpsertArbiterTx(ctx, tx, "compliance_report_schedules", sched.TenantID, sched.ID); err != nil {
+		return err
+	}
 	_, err := tx.Exec(ctx,
 		`INSERT INTO compliance_report_schedules
 		        (id, tenant_id, framework, name, report_type, interval_seconds, enabled,

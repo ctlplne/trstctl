@@ -126,6 +126,9 @@ func (s *Store) ApplyCryptoAssetObservedTx(ctx context.Context, tx pgx.Tx, a Cry
 		// case after a synchronous migration or rollback projection.
 		return nil
 	}
+	if err := lockUpsertArbiterTx(ctx, tx, "crypto_assets", a.TenantID, signature); err != nil {
+		return err
+	}
 	_, err = tx.Exec(ctx,
 		`INSERT INTO crypto_assets
 		        (id, tenant_id, signature, kind, location, algorithm, key_bits, protocol, cipher,

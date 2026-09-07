@@ -7,7 +7,10 @@ import (
 	"net/http"
 	"strings"
 
+	"errors"
+	"fmt"
 	fleet "trstctl.com/trstctl/internal/agentupgrade"
+	"trstctl.com/trstctl/internal/orchestrator"
 )
 
 type upgradeCampaignBody struct {
@@ -100,6 +103,10 @@ func (a *API) openUpgradeCampaign(w http.ResponseWriter, r *http.Request) {
 		}
 		c, err := a.orch.OpenAgentUpgradeCampaign(ctx, tenantID, body.TargetVersion, principalSubject(ctx), body.Artifacts)
 		if err != nil {
+			var active *orchestrator.AgentUpgradeCampaignActiveError
+			if errors.As(err, &active) {
+				return 0, nil, errStatus(http.StatusConflict, fmt.Sprintf("a campaign is already active for this tenant (id %s, target %s); finish, halt, or cancel it before starting another", active.ActiveID, active.TargetVersion))
+			}
 			return 0, nil, err
 		}
 		return http.StatusCreated, upgradeCampaignResponse{

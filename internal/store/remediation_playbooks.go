@@ -49,6 +49,9 @@ type RemediationPlaybookRun struct {
 // event. Re-emitting the same run id converges on one evidence row, so replay and
 // idempotent request handling cannot duplicate a remediation.
 func (s *Store) ApplyRemediationPlaybookRunRecordedTx(ctx context.Context, tx pgx.Tx, r RemediationPlaybookRun) error {
+	if err := lockUpsertArbiterTx(ctx, tx, "remediation_playbook_runs", r.TenantID, r.ID); err != nil {
+		return err
+	}
 	_, err := tx.Exec(ctx,
 		`INSERT INTO remediation_playbook_runs
 		        (id, tenant_id, playbook_id, target_identity_id, inventory_id,

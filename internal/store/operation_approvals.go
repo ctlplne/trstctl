@@ -254,6 +254,9 @@ func (s *Store) ApplyOperationApprovalRequestedTx(ctx context.Context, tx pgx.Tx
 	if err != nil {
 		return err
 	}
+	if err := lockUpsertArbiterTx(ctx, tx, "operation_approval_requests", r.TenantID, r.ID); err != nil {
+		return err
+	}
 	command, err := tx.Exec(ctx, `
 		INSERT INTO operation_approval_requests
 		       (tenant_id, id, intent_digest, resource_kind, resource_id,
@@ -349,6 +352,9 @@ func (s *Store) ApplyOperationApprovalDecisionTx(ctx context.Context, tx pgx.Tx,
 		return ErrApprovalConsumed
 	default:
 		return ErrApprovalNotReady
+	}
+	if err := lockUpsertArbiterTx(ctx, tx, "operation_approval_decisions", d.TenantID, d.RequestID, d.Approver); err != nil {
+		return err
 	}
 	command, err := tx.Exec(ctx, `
 		INSERT INTO operation_approval_decisions

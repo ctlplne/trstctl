@@ -102,6 +102,9 @@ func (s *Store) ApplyEdgeSegmentPolicyTx(ctx context.Context, tx pgx.Tx, p EdgeS
 
 // ApplyEdgeDelegationIssuedTx projects edge.delegation.issued.
 func (s *Store) ApplyEdgeDelegationIssuedTx(ctx context.Context, tx pgx.Tx, d EdgeDelegation, eventSequence uint64) error {
+	if err := lockUpsertArbiterTx(ctx, tx, "edge_delegations", d.TenantID, d.ID); err != nil {
+		return err
+	}
 	_, err := tx.Exec(ctx,
 		`INSERT INTO edge_delegations
 		        (tenant_id, id, segment_id, ca_id, host, common_name, serial,

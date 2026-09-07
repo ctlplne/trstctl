@@ -55,6 +55,9 @@ func (s *Store) ApplySSHKeyDiscoveredTx(ctx context.Context, tx pgx.Tx, k SSHKey
 	if k.CreatedAt.IsZero() {
 		k.CreatedAt = time.Now().UTC()
 	}
+	if err := lockUpsertArbiterTx(ctx, tx, "ssh_keys", k.TenantID, k.Fingerprint); err != nil {
+		return err
+	}
 	_, err := tx.Exec(ctx,
 		`INSERT INTO ssh_keys
 		        (id, tenant_id, fingerprint, key_type, comment, source, location, standing_access, orphaned, created_at)

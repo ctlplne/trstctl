@@ -191,6 +191,12 @@ func (s *Store) ApplyDiscoverySourceUpsertedTx(ctx context.Context, tx pgx.Tx, s
 	manualWrite := src.ProjectionEventID == "" || src.ProjectionEventSequence == 0
 	var applied DiscoverySource
 	var appliedSequence int64
+	// The typed conflict error below is for a genuine cross-id name collision; two
+	// identical applies of one event must converge instead, so they are serialized
+	// on the row first (DP2-043/DP2-046 family).
+	if err := lockUpsertArbiterTx(ctx, tx, "discovery_sources", src.TenantID, src.ID); err != nil {
+		return err
+	}
 	err := tx.QueryRow(ctx,
 		`INSERT INTO discovery_sources
 		      (id, tenant_id, kind, name, config, created_at, updated_at,
@@ -289,6 +295,9 @@ func discoveryDeclarationWriteError(kind string, err error) error {
 
 // ApplyDiscoveryScheduleUpsertedTx projects a discovery.schedule.upserted event.
 func (s *Store) ApplyDiscoveryScheduleUpsertedTx(ctx context.Context, tx pgx.Tx, sched DiscoverySchedule) error {
+	if err := lockUpsertArbiterTx(ctx, tx, "discovery_schedules", sched.TenantID, sched.ID); err != nil {
+		return err
+	}
 	tag, err := tx.Exec(ctx,
 		`INSERT INTO discovery_schedules (id, tenant_id, source_id, name, interval_seconds, enabled, created_at, updated_at)
 		      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)

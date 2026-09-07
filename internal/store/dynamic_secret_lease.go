@@ -118,6 +118,14 @@ func (s *Store) ApplyDynamicSecretLeasePendingTx(ctx context.Context, tx pgx.Tx,
 		prepared := updatedAt
 		preparedAt = &prepared
 	}
+	// The same per-command lock the issued/revoked applies take, and taken before
+	// the leases table for the same reason (operations -> leases on the request
+	// side, leases -> operations on the worker side must not form a cycle). It also
+	// makes a concurrent identical pending apply converge on ON CONFLICT instead of
+	// tripping the outbox or idempotency unique indexes (DP2-043/DP2-046 family).
+	if err := lockDynamicSecretOperationTx(ctx, tx, lease.TenantID, lease.TenantEpoch, lease.IdempotencyKey); err != nil {
+		return err
+	}
 	tag, err := tx.Exec(ctx,
 		`INSERT INTO dynamic_secret_leases
 		        (tenant_id, tenant_epoch, id, idempotency_key, request_binding, provider, role, backend_ref,

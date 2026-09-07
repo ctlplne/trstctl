@@ -174,6 +174,9 @@ type SecretRotationScheduleScanCursor struct {
 // ApplySecretRotationScheduleUpsertedTx projects a
 // secret.rotation_schedule.upserted event.
 func (s *Store) ApplySecretRotationScheduleUpsertedTx(ctx context.Context, tx pgx.Tx, sched SecretRotationSchedule) error {
+	if err := lockUpsertArbiterTx(ctx, tx, "secret_rotation_schedules", sched.TenantID, sched.ID); err != nil {
+		return err
+	}
 	_, err := tx.Exec(ctx,
 		`INSERT INTO secret_rotation_schedules
 		        (id, tenant_id, name, provider, secret_key, old_ref, interval_seconds,

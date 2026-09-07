@@ -17,6 +17,18 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
+// AgentUpgradeCampaignActiveError refuses a second rollout while one is active.
+// The API renders it as a 409 problem naming the active campaign.
+type AgentUpgradeCampaignActiveError struct {
+	ActiveID      string
+	TargetVersion string
+}
+
+func (e *AgentUpgradeCampaignActiveError) Error() string {
+	return fmt.Sprintf("orchestrator: a campaign is already active for this tenant (%s, target %s); finish, halt, or cancel it "+
+		"before starting another — two rollouts over one fleet cannot tell each other's agents apart", e.ActiveID, e.TargetVersion)
+}
+
 // OpenAgentUpgradeCampaign starts a staged rollout (A5).
 //
 // artifacts may be empty: that opens an OBSERVE-ONLY campaign, which gates
@@ -30,17 +42,6 @@ func (o *Orchestrator) OpenAgentUpgradeCampaign(ctx context.Context, tenantID, t
 	if err := fleet.ValidateArtifacts(artifacts); err != nil {
 		return store.AgentUpgradeCampaign{}, fmt.Errorf("orchestrator: %w", err)
 	}
-	if _, active, err := o.store.ActiveAgentUpgradeCampaign(ctx, tenantID); err != nil {
-		return store.AgentUpgradeCampaign{}, err
-	} else if active {
-		// Two concurrent rollouts to one fleet would each see the other's
-		// agents as unexpectedly-versioned. One would halt on the other's work,
-		// or worse, would not.
-		return store.AgentUpgradeCampaign{}, fmt.Errorf(
-			"orchestrator: a campaign is already active for this tenant; finish, halt, or cancel it " +
-				"before starting another — two rollouts over one fleet cannot tell each other's " +
-				"agents apart")
-	}
 	id := uuid.NewString()
 	payload, err := json.Marshal(projections.AgentUpgradeCampaignOpened{
 		ID: id, TargetVersion: strings.TrimSpace(targetVersion), CreatedBy: createdBy,
@@ -49,7 +50,34 @@ func (o *Orchestrator) OpenAgentUpgradeCampaign(ctx context.Context, tenantID, t
 	if err != nil {
 		return store.AgentUpgradeCampaign{}, err
 	}
-	ev, err := o.emit(ctx, projections.EventAgentUpgradeCampaignOpened, tenantID, payload)
+	// The one-active-campaign rule is checked and the event appended under one
+	// tenant-scoped lock, inside the transaction that projects it. A check outside
+	// the lock let concurrent opens all pass, all append events, and every loser's
+	// projection fail on the active-campaign index after its event was already
+	// durable, which wedged the event tail and dropped readiness (DP2-048).
+	next := events.Event{Type: projections.EventAgentUpgradeCampaignOpened, TenantID: tenantID, Data: payload}
+	var ev events.Event
+	err = o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+			"agent-upgrade-campaign-open\x1f"+tenantID); err != nil {
+			return fmt.Errorf("orchestrator: lock campaign open: %w", err)
+		}
+		active, found, err := o.store.ActiveAgentUpgradeCampaignTx(ctx, tx, tenantID)
+		if err != nil {
+			return err
+		}
+		if found {
+			// Two concurrent rollouts to one fleet would each see the other's
+			// agents as unexpectedly-versioned. One would halt on the other's work,
+			// or worse, would not.
+			return &AgentUpgradeCampaignActiveError{ActiveID: active.ID, TargetVersion: active.TargetVersion}
+		}
+		ev, err = o.log.Append(ctx, next)
+		if err != nil {
+			return err
+		}
+		return o.proj.ApplyTx(ctx, tx, ev)
+	})
 	if err != nil {
 		return store.AgentUpgradeCampaign{}, err
 	}

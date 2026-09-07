@@ -146,9 +146,15 @@ func (s *Store) ApplyOwnerReattestationRequestedTx(
 
 // ApplyAgentUpgradeCampaignOpenedTx projects agent.upgrade.campaign.opened (A5).
 func (s *Store) ApplyAgentUpgradeCampaignOpenedTx(ctx context.Context, tx pgx.Tx, tenantID, id, version, createdBy string, artifacts []byte, at time.Time) error {
+	// Target-less ON CONFLICT DO NOTHING on purpose: besides the primary key the
+	// table has the one-active-campaign partial index. The command refuses a second
+	// open before appending (DP2-048), but a log that already carries such an
+	// event must project through instead of wedging the durable tail: the loser is
+	// absorbed, its id was never returned to a caller, and replaying the winner
+	// converges the same way.
 	_, err := tx.Exec(ctx,
 		`INSERT INTO agent_upgrade_campaigns (id, tenant_id, target_version, created_by, artifacts, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO NOTHING`,
+		 VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`,
 		id, tenantID, version, createdBy, artifacts, at)
 	return err
 }
@@ -326,6 +332,9 @@ func (s *Store) ApplyOwnershipReconciledTx(ctx context.Context, tx pgx.Tx, tenan
 		}
 	}
 	for _, c := range conflicts {
+		if err := lockUpsertArbiterTx(ctx, tx, "owner_ownership_conflicts", tenantID, sourceEventID, c.Field); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx,
 			`INSERT INTO owner_ownership_conflicts
 			   (tenant_id, source_event_id, owner_id, field, current_value, current_source,
@@ -347,6 +356,9 @@ func (s *Store) ApplyOwnershipReconciledTx(ctx context.Context, tx pgx.Tx, tenan
 // a different query or instance and cannot be resumed safely. The last terminal
 // run stays visible as historical evidence until the new sweep completes.
 func (s *Store) ApplyCMDBScheduleConfiguredTx(ctx context.Context, tx pgx.Tx, tenantID string, in CMDBReconcileSchedule) error {
+	if err := lockUpsertArbiterTx(ctx, tx, "cmdb_reconcile_schedules", tenantID); err != nil {
+		return err
+	}
 	_, err := tx.Exec(ctx,
 		`INSERT INTO cmdb_reconcile_schedules (tenant_id, instance_url, token_ref, ci_query, allow_private_endpoint, interval_seconds, enabled, execution)
 		 VALUES ($1, $2, $3, $4, false, $5, $6, 'relay')
@@ -677,6 +689,13 @@ func (s *Store) AppendIdentityTransitionTx(ctx context.Context, tx pgx.Tx, tenan
 // versions for the same tenant/name in the same transaction, then upserts the carried
 // version row. Replaying the log in order reproduces the active version exactly.
 func (s *Store) ApplyProfileVersionTx(ctx context.Context, tx pgx.Tx, r ProfileRecord) error {
+	// Serialize every version apply of one profile name: the deactivate + upsert
+	// pair below must not interleave with a concurrent identical apply, and the
+	// (tenant_id, name, version) arbiter does not cover the id or the active-name
+	// unique indexes (DP2-043/DP2-046 family).
+	if err := lockUpsertArbiterTx(ctx, tx, "certificate_profiles", r.TenantID, r.Name); err != nil {
+		return err
+	}
 	if r.Active {
 		if _, err := tx.Exec(ctx,
 			`UPDATE certificate_profiles

@@ -80,6 +80,9 @@ func (s *Store) ApplyDiscoverySegmentUpsertedTx(ctx context.Context, tx pgx.Tx, 
 		// command path. Preserve their historical tenant+name upsert contract, but
 		// never let an unversioned write overwrite a row already owned by an
 		// immutable event.
+		if err := lockUpsertArbiterTx(ctx, tx, "discovery_segments", tenantID, seg.Name); err != nil {
+			return DiscoverySegment{}, err
+		}
 		err := tx.QueryRow(ctx,
 			`INSERT INTO discovery_segments
 			     (tenant_id, id, name, ranges, staleness_hours, excluded, exclusion_reason, created_at)
@@ -142,6 +145,9 @@ func (s *Store) ApplyDiscoverySegmentUpsertedTx(ctx context.Context, tx pgx.Tx, 
 		return DiscoverySegment{}, discoveryDeclarationWriteError("segment", err)
 	}
 
+	if err := lockUpsertArbiterTx(ctx, tx, "discovery_segments", tenantID, seg.ID); err != nil {
+		return DiscoverySegment{}, err
+	}
 	err = tx.QueryRow(ctx,
 		`INSERT INTO discovery_segments
 			     (tenant_id, id, name, ranges, staleness_hours, excluded, exclusion_reason, created_at,

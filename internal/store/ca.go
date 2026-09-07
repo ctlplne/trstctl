@@ -275,6 +275,9 @@ func applyCAAuthorityUpsertTx(ctx context.Context, tx pgx.Tx, authority CAAuthor
 	if status == "" {
 		status = "active"
 	}
+	if err := lockUpsertArbiterTx(ctx, tx, "ca_authorities", authority.TenantID, authority.ID); err != nil {
+		return err
+	}
 	tag, err := tx.Exec(ctx,
 		`INSERT INTO ca_authorities
 		        (id, tenant_id, parent_id, common_name, kind, status, certificate_pem,
@@ -446,6 +449,9 @@ func (s *Store) ApplyKeyCeremonyApprovedTx(ctx context.Context, tx pgx.Tx, tenan
 	}
 	if opener != "" && opener == custodian {
 		return ErrSelfApproval
+	}
+	if err := lockUpsertArbiterTx(ctx, tx, "ca_ceremony_approvals", tenantID, ceremonyID, custodian); err != nil {
+		return err
 	}
 	_, err := tx.Exec(ctx,
 		`INSERT INTO ca_ceremony_approvals

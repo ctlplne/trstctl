@@ -52,20 +52,28 @@ func (s *Store) ActiveAgentUpgradeCampaign(ctx context.Context, tenantID string)
 	var out AgentUpgradeCampaign
 	found := false
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		c, err := scanCampaign(tx.QueryRow(ctx,
-			`SELECT `+campaignCols+` FROM agent_upgrade_campaigns
-			  WHERE tenant_id = $1 AND status IN ('pending','running','halted','paused')
-			  ORDER BY created_at DESC LIMIT 1`, tenantID))
-		if err != nil {
-			if pgx.ErrNoRows.Error() == err.Error() {
-				return nil
-			}
-			return err
-		}
-		out, found = c, true
-		return nil
+		var err error
+		out, found, err = s.ActiveAgentUpgradeCampaignTx(ctx, tx, tenantID)
+		return err
 	})
 	return out, found, err
+}
+
+// ActiveAgentUpgradeCampaignTx is ActiveAgentUpgradeCampaign inside the caller's
+// tenant transaction, so a command can check the one-active-campaign rule and
+// append its event under one lock (DP2-048).
+func (s *Store) ActiveAgentUpgradeCampaignTx(ctx context.Context, tx pgx.Tx, tenantID string) (AgentUpgradeCampaign, bool, error) {
+	c, err := scanCampaign(tx.QueryRow(ctx,
+		`SELECT `+campaignCols+` FROM agent_upgrade_campaigns
+		  WHERE tenant_id = $1 AND status IN ('pending','running','halted','paused')
+		  ORDER BY created_at DESC LIMIT 1`, tenantID))
+	if err != nil {
+		if pgx.ErrNoRows.Error() == err.Error() {
+			return AgentUpgradeCampaign{}, false, nil
+		}
+		return AgentUpgradeCampaign{}, false, err
+	}
+	return c, true, nil
 }
 
 // AgentRingCounts reports how many agents sit in each ring, and how many are

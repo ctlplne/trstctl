@@ -51,6 +51,9 @@ func (s *Store) ApplyAPITokenCreatedTx(ctx context.Context, tx pgx.Tx, r APIToke
 	if scopes == nil {
 		scopes = []string{}
 	}
+	if err := lockUpsertArbiterTx(ctx, tx, "api_tokens", r.TenantID, r.ID); err != nil {
+		return err
+	}
 	_, err := tx.Exec(ctx,
 		`INSERT INTO api_tokens (id, tenant_id, token_hash, subject, subject_ref, scopes, expires_at, created_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)

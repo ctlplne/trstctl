@@ -52,6 +52,7 @@ type Site struct {
 type schema struct {
 	unique map[string][]colset // table -> unique column sets
 	named  map[string]colset   // constraint/index name -> columns (incl. <table>_pkey)
+	owners map[string]owner    // constraint/index name -> the unique set it enforces
 }
 
 type colset []string
@@ -71,20 +72,40 @@ func cols(s string) colset {
 }
 
 var (
-	reComment     = regexp.MustCompile(`--[^\n]*`)
-	reCreateTable = regexp.MustCompile(`(?is)CREATE TABLE (?:IF NOT EXISTS )?"?(\w+)"?\s*\((.*?)\);`)
-	rePK          = regexp.MustCompile(`(?i)PRIMARY KEY\s*\(([^)]*)\)`)
-	reUnique      = regexp.MustCompile(`(?i)(?:CONSTRAINT\s+(\w+)\s+)?UNIQUE\s*\(([^)]*)\)`)
-	reInlineCol   = regexp.MustCompile(`(?i)^\s*"?(\w+)"?\s+\w[^,(]*?\b(PRIMARY KEY|UNIQUE)\b`)
-	reUniqueIndex = regexp.MustCompile(`(?i)CREATE UNIQUE INDEX (?:CONCURRENTLY )?(?:IF NOT EXISTS )?"?(\w+)"?\s+ON\s+"?(\w+)"?\s*(?:USING \w+\s*)?\(([^)]*)\)`)
-	reAddConstr   = regexp.MustCompile(`(?i)ALTER TABLE (?:ONLY )?"?(\w+)"?\s+ADD CONSTRAINT\s+"?(\w+)"?\s+(UNIQUE|PRIMARY KEY)\s*\(([^)]*)\)`)
+	reComment      = regexp.MustCompile(`--[^\n]*`)
+	reCreateTable  = regexp.MustCompile(`(?is)^CREATE TABLE (?:IF NOT EXISTS )?"?(\w+)"?\s*\((.*)\)\s*$`)
+	rePK           = regexp.MustCompile(`(?i)PRIMARY KEY\s*\(([^)]*)\)`)
+	reUnique       = regexp.MustCompile(`(?i)(?:CONSTRAINT\s+(\w+)\s+)?UNIQUE\s*\(([^)]*)\)`)
+	reInlineCol    = regexp.MustCompile(`(?i)^\s*"?(\w+)"?\s+\w[^,(]*?\b(PRIMARY KEY|UNIQUE)\b`)
+	reUniqueIndex  = regexp.MustCompile(`(?is)^CREATE UNIQUE INDEX (?:CONCURRENTLY )?(?:IF NOT EXISTS )?"?(\w+)"?\s+ON\s+(?:ONLY\s+)?"?(\w+)"?\s*(?:USING \w+\s*)?\(([^)]*)\)`)
+	reAlterTable   = regexp.MustCompile(`(?is)^ALTER TABLE (?:ONLY )?(?:IF EXISTS )?"?(\w+)"?\s+(.*)$`)
+	reActAddConstr = regexp.MustCompile(`(?is)^ADD CONSTRAINT\s+"?(\w+)"?\s+(UNIQUE|PRIMARY KEY)\s*\(([^)]*)\)`)
+	reActAddBare   = regexp.MustCompile(`(?is)^ADD (UNIQUE|PRIMARY KEY)\s*\(([^)]*)\)`)
+	reActUsingIdx  = regexp.MustCompile(`(?is)^ADD CONSTRAINT\s+"?(\w+)"?\s+(UNIQUE|PRIMARY KEY)\s+USING INDEX\s+"?(\w+)"?`)
+	reActDrop      = regexp.MustCompile(`(?is)^DROP CONSTRAINT\s+(?:IF EXISTS\s+)?"?(\w+)"?`)
+	reDropIndex    = regexp.MustCompile(`(?is)^DROP INDEX\s+(?:CONCURRENTLY\s+)?(?:IF EXISTS\s+)?"?(\w+)"?`)
 )
 
 var schemaCache sync.Map // migrations dir -> *schema
 
-func (s *schema) add(table string, c colset) {
+// owner records which table a named constraint or index belongs to and the
+// unique column set it enforces, so a later DROP can retire exactly that set.
+type owner struct {
+	table string
+	cols  colset
+}
+
+// add registers a unique column set under a constraint or index name. The same
+// set may be enforced by several names (a UNIQUE constraint plus the primary key
+// re-pinned onto the same index); it stays live until the last owner is dropped.
+func (s *schema) add(table, name string, c colset) {
 	if len(c) == 0 {
 		return
+	}
+	name = strings.ToLower(name)
+	if name != "" {
+		s.owners[name] = owner{table: table, cols: c}
+		s.named[name] = c
 	}
 	for _, have := range s.unique[table] {
 		if have.key() == c.key() {
@@ -92,6 +113,156 @@ func (s *schema) add(table string, c colset) {
 		}
 	}
 	s.unique[table] = append(s.unique[table], c)
+}
+
+// drop retires the unique set a constraint or index name enforced, unless another
+// live name still enforces the same set on the same table.
+func (s *schema) drop(name string) {
+	name = strings.ToLower(name)
+	o, ok := s.owners[name]
+	if !ok {
+		return
+	}
+	delete(s.owners, name)
+	delete(s.named, name)
+	for _, other := range s.owners {
+		if other.table == o.table && other.cols.key() == o.cols.key() {
+			return
+		}
+	}
+	kept := s.unique[o.table][:0]
+	for _, have := range s.unique[o.table] {
+		if have.key() != o.cols.key() {
+			kept = append(kept, have)
+		}
+	}
+	s.unique[o.table] = kept
+}
+
+// defaultKeyName mirrors PostgreSQL's generated name for an unnamed UNIQUE
+// constraint (<table>_<col>_..._key), which is what a later DROP CONSTRAINT names.
+func defaultKeyName(table string, c colset) string {
+	return table + "_" + strings.Join(c, "_") + "_key"
+}
+
+// splitStatements cuts the migration stream at top-level semicolons, honouring
+// parentheses and single-quoted strings, so DDL is applied in migration order.
+func splitStatements(sql string) []string {
+	var out []string
+	var b strings.Builder
+	depth, quoted := 0, false
+	for _, r := range sql {
+		switch {
+		case r == '\'':
+			quoted = !quoted
+		case quoted:
+		case r == '(':
+			depth++
+		case r == ')':
+			if depth > 0 {
+				depth--
+			}
+		case r == ';' && depth == 0:
+			if stmt := strings.TrimSpace(b.String()); stmt != "" {
+				out = append(out, stmt)
+			}
+			b.Reset()
+			continue
+		}
+		b.WriteRune(r)
+	}
+	if stmt := strings.TrimSpace(b.String()); stmt != "" {
+		out = append(out, stmt)
+	}
+	return out
+}
+
+// splitActions cuts one ALTER TABLE statement's action list at top-level commas.
+func splitActions(actions string) []string {
+	var out []string
+	var b strings.Builder
+	depth := 0
+	for _, r := range actions {
+		switch r {
+		case '(':
+			depth++
+		case ')':
+			if depth > 0 {
+				depth--
+			}
+		case ',':
+			if depth == 0 {
+				out = append(out, strings.TrimSpace(b.String()))
+				b.Reset()
+				continue
+			}
+		}
+		b.WriteRune(r)
+	}
+	if a := strings.TrimSpace(b.String()); a != "" {
+		out = append(out, a)
+	}
+	return out
+}
+
+func (s *schema) applyCreateTable(table, body string) {
+	for _, pk := range rePK.FindAllStringSubmatch(body, -1) {
+		s.add(table, table+"_pkey", cols(pk[1]))
+	}
+	for _, u := range reUnique.FindAllStringSubmatch(body, -1) {
+		c := cols(u[2])
+		name := strings.ToLower(u[1])
+		if name == "" {
+			name = defaultKeyName(table, c)
+		}
+		s.add(table, name, c)
+	}
+	for _, line := range splitActions(body) {
+		// table-level constraint clauses are not inline column definitions
+		if first := strings.ToUpper(strings.Fields(line + " x")[0]); first == "CONSTRAINT" || first == "PRIMARY" || first == "UNIQUE" || first == "FOREIGN" || first == "CHECK" || first == "EXCLUDE" {
+			continue
+		}
+		if im := reInlineCol.FindStringSubmatch(line); im != nil {
+			c := cols(im[1])
+			if strings.EqualFold(im[2], "PRIMARY KEY") {
+				s.add(table, table+"_pkey", c)
+			} else {
+				s.add(table, defaultKeyName(table, c), c)
+			}
+		}
+	}
+}
+
+func (s *schema) applyAlterTable(table, actions string) {
+	for _, act := range splitActions(actions) {
+		switch {
+		case reActUsingIdx.MatchString(act):
+			m := reActUsingIdx.FindStringSubmatch(act)
+			if o, ok := s.owners[strings.ToLower(m[3])]; ok {
+				s.add(table, m[1], o.cols)
+				if strings.EqualFold(m[2], "PRIMARY KEY") {
+					s.add(table, table+"_pkey", o.cols)
+				}
+			}
+		case reActAddConstr.MatchString(act):
+			m := reActAddConstr.FindStringSubmatch(act)
+			c := cols(m[3])
+			s.add(table, m[1], c)
+			if strings.EqualFold(m[2], "PRIMARY KEY") {
+				s.add(table, table+"_pkey", c)
+			}
+		case reActAddBare.MatchString(act):
+			m := reActAddBare.FindStringSubmatch(act)
+			c := cols(m[2])
+			if strings.EqualFold(m[1], "PRIMARY KEY") {
+				s.add(table, table+"_pkey", c)
+			} else {
+				s.add(table, defaultKeyName(table, c), c)
+			}
+		case reActDrop.MatchString(act):
+			s.drop(reActDrop.FindStringSubmatch(act)[1])
+		}
+	}
 }
 
 func loadSchema(migrationsDir string) (*schema, error) {
@@ -119,46 +290,24 @@ func loadSchema(migrationsDir string) (*schema, error) {
 		b.WriteString("\n")
 	}
 	sql := reComment.ReplaceAllString(b.String(), "")
-	s := &schema{unique: map[string][]colset{}, named: map[string]colset{}}
-	for _, m := range reCreateTable.FindAllStringSubmatch(sql, -1) {
-		table, body := strings.ToLower(m[1]), m[2]
-		for _, pk := range rePK.FindAllStringSubmatch(body, -1) {
-			c := cols(pk[1])
-			s.add(table, c)
-			s.named[table+"_pkey"] = c
-		}
-		for _, u := range reUnique.FindAllStringSubmatch(body, -1) {
-			c := cols(u[2])
-			s.add(table, c)
-			if u[1] != "" {
-				s.named[strings.ToLower(u[1])] = c
-			}
-		}
-		for _, line := range strings.Split(body, ",") {
-			// table-level constraint clauses are not inline column definitions
-			if first := strings.ToUpper(strings.Fields(strings.TrimSpace(line) + " x")[0]); first == "CONSTRAINT" || first == "PRIMARY" || first == "UNIQUE" || first == "FOREIGN" || first == "CHECK" || first == "EXCLUDE" {
-				continue
-			}
-			if im := reInlineCol.FindStringSubmatch(line); im != nil {
-				c := cols(im[1])
-				s.add(table, c)
-				if strings.EqualFold(im[2], "PRIMARY KEY") {
-					s.named[table+"_pkey"] = c
-				}
-			}
-		}
-	}
-	for _, m := range reUniqueIndex.FindAllStringSubmatch(sql, -1) {
-		c := cols(m[3])
-		s.add(strings.ToLower(m[2]), c)
-		s.named[strings.ToLower(m[1])] = c
-	}
-	for _, m := range reAddConstr.FindAllStringSubmatch(sql, -1) {
-		table, c := strings.ToLower(m[1]), cols(m[4])
-		s.add(table, c)
-		s.named[strings.ToLower(m[2])] = c
-		if strings.EqualFold(m[3], "PRIMARY KEY") {
-			s.named[table+"_pkey"] = c
+	s := &schema{unique: map[string][]colset{}, named: map[string]colset{}, owners: map[string]owner{}}
+	// Statements are applied in migration order: a unique set is live from the
+	// CREATE/ADD that introduces it until the DROP that retires it, so a primary
+	// key moved onto other columns or a dropped index no longer counts as a
+	// second arbiter-less index.
+	for _, stmt := range splitStatements(sql) {
+		switch {
+		case reCreateTable.MatchString(stmt):
+			m := reCreateTable.FindStringSubmatch(stmt)
+			s.applyCreateTable(strings.ToLower(m[1]), m[2])
+		case reUniqueIndex.MatchString(stmt):
+			m := reUniqueIndex.FindStringSubmatch(stmt)
+			s.add(strings.ToLower(m[2]), m[1], cols(m[3]))
+		case reAlterTable.MatchString(stmt):
+			m := reAlterTable.FindStringSubmatch(stmt)
+			s.applyAlterTable(strings.ToLower(m[1]), m[2])
+		case reDropIndex.MatchString(stmt):
+			s.drop(reDropIndex.FindStringSubmatch(stmt)[1])
 		}
 	}
 	schemaCache.Store(migrationsDir, s)

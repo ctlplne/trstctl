@@ -92,6 +92,9 @@ func (s *Store) ApplyAuditFeedConfiguredTx(ctx context.Context, tx pgx.Tx, feed 
 	if err != nil {
 		return err
 	}
+	if err := lockUpsertArbiterTx(ctx, tx, "audit_feed_destinations", feed.TenantID, feed.ID); err != nil {
+		return err
+	}
 	_, err = tx.Exec(ctx,
 		`INSERT INTO audit_feed_destinations
 		        (id, tenant_id, name, provider, endpoint_url, token_ref, interval_seconds,
@@ -144,6 +147,9 @@ func (s *Store) ApplyAuditFeedScheduleCheckedTx(
 }
 
 func (s *Store) ApplyAuditFeedBatchQueuedTx(ctx context.Context, tx pgx.Tx, batch AuditFeedBatch, intervalSeconds int) error {
+	if err := lockUpsertArbiterTx(ctx, tx, "audit_feed_deliveries", batch.TenantID, batch.BatchID); err != nil {
+		return err
+	}
 	command, err := tx.Exec(ctx,
 		`INSERT INTO audit_feed_deliveries
 		        (batch_id, tenant_id, destination_id, provider, start_sequence, end_sequence,

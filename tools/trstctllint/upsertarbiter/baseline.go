@@ -7,75 +7,8 @@ package upsertarbiter
 // They are the DP2-043/DP2-046 family still owed a fix; each is keyed by
 // repo-relative file and enclosing function so a NEW site fails closed, and
 // TestReviewedBaselineIsNotStale fails when an entry no longer needs listing.
-var reviewedUpserts = map[string]map[string]bool{
-	"internal/store/agent.go": {
-		"ApplyAgentCertRenewedTx": true,
-		"ApplyAgentHeartbeatTx":   true,
-		"ApplyAgentOffboardedTx":  true,
-	},
-	"internal/store/api_token.go": {
-		"ApplyAPITokenCreatedTx": true,
-	},
-	"internal/store/audit_feed.go": {
-		"ApplyAuditFeedBatchQueuedTx": true,
-		"ApplyAuditFeedConfiguredTx":  true,
-	},
-	"internal/store/ca.go": {
-		"ApplyKeyCeremonyApprovedTx": true,
-		"applyCAAuthorityUpsertTx":   true,
-	},
-	"internal/store/compliance_report.go": {
-		"ApplyComplianceReportScheduleUpsertedTx": true,
-	},
-	"internal/store/cryptoasset.go": {
-		"ApplyCryptoAssetObservedTx": true,
-	},
-	"internal/store/ctmonitor_reconcile.go": {
-		"reconcileCTMonitoringFromSourcesTx": true,
-	},
-	"internal/store/dynamic_secret_epoch.go": {
-		"ResolveDynamicSecretPendingTenantEpochTx": true,
-		"ensureDynamicSecretTenantEpochTx":         true,
-	},
-	"internal/store/dynamic_secret_lease.go": {
-		"ApplyDynamicSecretLeasePendingTx": true,
-	},
-	"internal/store/edge_delegation.go": {
-		"ApplyEdgeDelegationIssuedTx": true,
-	},
-	"internal/store/enrollment_diagnostics.go": {
-		"ApplyEnrollmentDiagnosticObservedTx": true,
-	},
-	"internal/store/mdm_correlation.go": {
-		"ApplyMDMDeviceCorrelatedTx": true,
-	},
-	"internal/store/operation_approvals.go": {
-		"ApplyOperationApprovalDecisionTx":  true,
-		"ApplyOperationApprovalRequestedTx": true,
-	},
-	"internal/store/outbox_reconciliation_conflicts.go": {
-		"ApplyOutboxReconciliationConflictRecordedTx": true,
-	},
-	"internal/store/projection.go": {
-		"ApplyAgentUpgradeCampaignOpenedTx": true,
-		"ApplyCMDBScheduleConfiguredTx":     true,
-		"ApplyOwnershipReconciledTx":        true,
-		"ApplyProfileVersionTx":             true,
-	},
-	"internal/store/remediation_playbooks.go": {
-		"ApplyRemediationPlaybookRunRecordedTx": true,
-	},
-	"internal/store/secret_rotation_schedule.go": {
-		"ApplySecretRotationScheduleUpsertedTx": true,
-	},
-	"internal/store/secret_sync_job.go": {
-		"ResolveSecretSyncQueuedTenantEpochTx": true,
-		"applySecretSyncJobQueuedTx":           true,
-	},
-	"internal/store/secret_sync_workload_identity.go": {
-		"ApplySecretSyncWorkloadIdentitySourceUpsertedTx": true,
-	},
-	"internal/store/sshkey.go": {
-		"ApplySSHKeyDiscoveredTx": true,
-	},
-}
+// reviewedUpserts is intentionally empty: every dual-unique upsert in
+// internal/store is guarded (advisory lock keyed on its arbiter, a unique_violation
+// handler, or a target-less ON CONFLICT DO NOTHING). An entry here is a reviewed,
+// dated exception and must name the finding that owns it.
+var reviewedUpserts = map[string]map[string]bool{}

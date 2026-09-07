@@ -93,6 +93,9 @@ func (s *Store) reconcileCTMonitoringFromSourcesTx(ctx context.Context, tx pgx.T
 		return err
 	}
 	for _, domain := range domains {
+		if err := lockUpsertArbiterTx(ctx, tx, "ct_watched_domains", tenantID, domain); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx,
 			`INSERT INTO ct_watched_domains (id, tenant_id, domain, activated_at, created_at)
 			 VALUES (gen_random_uuid(), $1, $2, $3, $3)

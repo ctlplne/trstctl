@@ -166,7 +166,7 @@ func (s *Store) ResolveDynamicSecretPendingTenantEpochTx(
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO application_secret_tenant_epochs (tenant_id, epoch_id)
 		VALUES ($1, gen_random_uuid())
-		ON CONFLICT (tenant_id) DO NOTHING`, tenantID); err != nil {
+		ON CONFLICT DO NOTHING`, tenantID); err != nil {
 		return "", fmt.Errorf("store: create dynamic-secret pending tenant epoch: %w", err)
 	}
 	var currentEpoch string
@@ -202,6 +202,13 @@ func lockDynamicSecretTenantRegistrationTx(ctx context.Context, tx pgx.Tx, tenan
 	return nil
 }
 
+// The epoch inserts here and in ResolveDynamicSecretPendingTenantEpochTx use a
+// target-less ON CONFLICT DO NOTHING on purpose: the table is unique on both
+// tenant_id and epoch_id, and only a target-less clause absorbs a concurrent
+// duplicate on either index (DP2-043/DP2-046 family). A per-tenant advisory lock
+// was rejected because these run inside flows that already hold the per-command
+// dynamic-secret lock in the other order. The FOR KEY SHARE read below then
+// returns whichever epoch committed.
 func ensureDynamicSecretTenantEpochTx(ctx context.Context, tx pgx.Tx, tenantID string) (string, error) {
 	if err := lockDynamicSecretTenantRegistrationTx(ctx, tx, tenantID); err != nil {
 		return "", err
@@ -209,7 +216,7 @@ func ensureDynamicSecretTenantEpochTx(ctx context.Context, tx pgx.Tx, tenantID s
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO application_secret_tenant_epochs (tenant_id, epoch_id)
 		VALUES ($1, gen_random_uuid())
-		ON CONFLICT (tenant_id) DO NOTHING`, tenantID); err != nil {
+		ON CONFLICT DO NOTHING`, tenantID); err != nil {
 		return "", fmt.Errorf("store: create dynamic-secret tenant epoch: %w", err)
 	}
 	var epoch string

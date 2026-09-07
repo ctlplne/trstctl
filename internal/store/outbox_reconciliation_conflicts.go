@@ -41,6 +41,9 @@ type OutboxReconciliationConflict struct {
 // incident. Replaying the exact source event is a no-op; a changed event with the
 // same tenant/source identity is rejected instead of rewriting recovery evidence.
 func (s *Store) ApplyOutboxReconciliationConflictRecordedTx(ctx context.Context, tx pgx.Tx, c OutboxReconciliationConflict) error {
+	if err := lockUpsertArbiterTx(ctx, tx, "outbox_reconciliation_conflicts", c.TenantID, c.SourceEventID); err != nil {
+		return err
+	}
 	tag, err := tx.Exec(ctx,
 		`INSERT INTO outbox_reconciliation_conflicts
 		 (id, tenant_id, source_event_id, source_event_sequence, source_event_type,

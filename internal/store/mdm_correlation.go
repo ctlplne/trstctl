@@ -96,6 +96,9 @@ func (s *Store) ApplyMDMDeviceCorrelatedTx(ctx context.Context, tx pgx.Tx, c MDM
 	if c.IdentityID != "" {
 		identity = c.IdentityID
 	}
+	if err := lockUpsertArbiterTx(ctx, tx, "mdm_device_correlations", c.TenantID, c.MDM, c.MDMDeviceID, c.TransactionID); err != nil {
+		return err
+	}
 	_, err := tx.Exec(ctx,
 		`INSERT INTO mdm_device_correlations
 		   (tenant_id, mdm, mdm_device_id, device_name, serial_number, transaction_id,

@@ -60,6 +60,9 @@ func (s *Store) ApplySecretSyncWorkloadIdentitySourceUpsertedTx(ctx context.Cont
 			source.Status = SecretSyncWorkloadIdentityDisabled
 		}
 	}
+	if err := lockUpsertArbiterTx(ctx, tx, "secret_sync_workload_identity_sources", source.TenantID, source.ID); err != nil {
+		return err
+	}
 	_, err := tx.Exec(ctx,
 		`INSERT INTO secret_sync_workload_identity_sources
 		    (tenant_id, id, name, provider, role_arn, service_account, azure_tenant_id, client_id,

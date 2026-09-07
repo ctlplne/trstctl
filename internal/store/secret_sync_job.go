@@ -219,6 +219,9 @@ func (s *Store) applySecretSyncJobQueuedTx(ctx context.Context, tx pgx.Tx, job S
 	if updatedAt.IsZero() {
 		updatedAt = job.RequestedAt
 	}
+	if err := lockUpsertArbiterTx(ctx, tx, "secret_sync_jobs", job.TenantID, job.ID); err != nil {
+		return err
+	}
 	tag, err := tx.Exec(ctx,
 		`INSERT INTO secret_sync_jobs
 		        (tenant_id, tenant_epoch, id, secret_name, secret_version, target, remote_key,
@@ -960,16 +963,20 @@ func (s *Store) ResolveSecretSyncQueuedTenantEpochTx(
 	if uint64(eventSequence) < registration.EventSeq {
 		return "", ErrApplicationSecretTenantEpochMismatch
 	}
+	// Target-less ON CONFLICT DO NOTHING on purpose: the epoch table is unique on
+	// both tenant_id and epoch_id, and only a target-less clause absorbs a
+	// concurrent duplicate on either index (DP2-043/DP2-046 family); the FOR KEY
+	// SHARE read below returns whichever epoch committed.
 	insertSQL := `
 		INSERT INTO application_secret_tenant_epochs (tenant_id, epoch_id)
 		VALUES ($1, gen_random_uuid())
-		ON CONFLICT (tenant_id) DO NOTHING`
+		ON CONFLICT DO NOTHING`
 	insertArgs := []any{tenantID}
 	if eventEpoch != "" {
 		insertSQL = `
 			INSERT INTO application_secret_tenant_epochs (tenant_id, epoch_id)
 			VALUES ($1, $2)
-			ON CONFLICT (tenant_id) DO NOTHING`
+			ON CONFLICT DO NOTHING`
 		insertArgs = append(insertArgs, eventEpoch)
 	}
 	if _, err := tx.Exec(ctx, insertSQL, insertArgs...); err != nil {

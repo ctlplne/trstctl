@@ -69,3 +69,22 @@ func ApplyIndexedUnguarded(ctx context.Context, t tx, id, tenant, ref string) er
 	_, err := t.Exec(ctx, `INSERT INTO indexed (id, tenant_id, ref) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET ref = EXCLUDED.ref`, id, tenant, ref) // want "upsert on indexed arbitrates on \\(id\\) but the table also has unique \\(ref,tenant_id\\)"
 	return err
 }
+
+// Dropped or moved keys are honoured: none of these is reported.
+func ApplyMoved(ctx context.Context, t tx, id, tenant string) error {
+	_, err := t.Exec(ctx, `INSERT INTO moved (tenant_id, id) VALUES ($1, $2)
+	 ON CONFLICT (tenant_id, id) DO NOTHING`, tenant, id)
+	return err
+}
+
+func ApplyRepinned(ctx context.Context, t tx, id, tenant string) error {
+	_, err := t.Exec(ctx, `INSERT INTO repinned (tenant_id, id) VALUES ($1, $2)
+	 ON CONFLICT (tenant_id, diagnostic_id) DO NOTHING`, tenant, id)
+	return err
+}
+
+func ApplyUnindexed(ctx context.Context, t tx, id, tenant string) error {
+	_, err := t.Exec(ctx, `INSERT INTO unindexed (tenant_id, id) VALUES ($1, $2)
+	 ON CONFLICT (id) DO NOTHING`, tenant, id)
+	return err
+}
