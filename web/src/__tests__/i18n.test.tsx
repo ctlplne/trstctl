@@ -357,6 +357,10 @@ describe("i18n boundary", () => {
       // QA product g13 re-pin: the Spanish tool-health explanation now says
       // "the system" instead of the ordinary Spanish word that the source-debt
       // oracle reads as an English marker. Meaning and fail-honest tone reviewed.
+      // Closure re-pin: discovery finding evidence now surfaces observed certificate
+      // facts (subject/issuer/validity/SANs) and the provider operating journey adds
+      // its operator-facing labels. Machine-authored es/de — FLAGGED FOR HUMAN
+      // TRANSLATION REVIEW before release.
       // QA design g16 re-pin: the discovery journey now names the operator goal,
       // puts findings before scan machinery, translates human credential kinds,
       // and keeps raw monitoring and finding evidence behind named disclosures.
@@ -1499,8 +1503,8 @@ describe("i18n boundary", () => {
       // QA cold design-partner g257 re-pin: the seeded-demo banner becomes a named
       // landmark (DP2-042). Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION
       // REVIEW before release.
-      "es-ES": "894456b095c9c1403d0dcaa4f4942c24d51a86bb979ba1585057efb0ca4bf67f",
-      "de-DE": "bc9769d28e044b7f3a83436c9b9bbda81feb2f767071937934187e8f91b17e30",
+      "es-ES": "7258018b29133abf2e10c91d2def7cb05f93ac1c9d14516a87f5cd5af774f15d",
+      "de-DE": "176f17be6304cbb478d06bd346a1c62edc9b9515f005c00b1ac9b3d83520ed01",
     });
   });
 

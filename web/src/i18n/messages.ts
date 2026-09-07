@@ -5348,6 +5348,54 @@ export const messages = {
     defaultMessage: "Once cert-based access holds, retire the standing keys and keep the rollout ledger as proof.",
     description: "SSH journey step body.",
   },
+  "journeys.provider.title": {
+    defaultMessage: "Operate as a managed-service provider",
+    description: "C2: provider operating journey.",
+  },
+  "journeys.provider.description": {
+    defaultMessage: "Run trstctl for several customers from one provider plane with per-customer delegation.",
+    description: "C2: provider operating journey.",
+  },
+  "journeys.provider.entitlement.title": {
+    defaultMessage: "Confirm the entitlement",
+    description: "C2: provider operating journey.",
+  },
+  "journeys.provider.entitlement.body": {
+    defaultMessage: "Open Plan and license and confirm the Provider plan is active and the signature verified.",
+    description: "C2: provider operating journey.",
+  },
+  "journeys.provider.signin.title": {
+    defaultMessage: "Sign in as a provider operator",
+    description: "C2: provider operating journey.",
+  },
+  "journeys.provider.signin.body": {
+    defaultMessage: "Open the Provider page and authenticate with your identity provider; the plane derives your role and MFA from the signed claims.",
+    description: "C2: provider operating journey.",
+  },
+  "journeys.provider.delegate.title": {
+    defaultMessage: "Delegate a customer",
+    description: "C2: provider operating journey.",
+  },
+  "journeys.provider.delegate.body": {
+    defaultMessage: "Grant an operator authority over one customer by slug with a stable idempotency key; a time-boxed grant takes -expires-at.",
+    description: "C2: provider operating journey.",
+  },
+  "journeys.provider.customers.title": {
+    defaultMessage: "Provision customers",
+    description: "C2: provider operating journey.",
+  },
+  "journeys.provider.customers.body": {
+    defaultMessage: "Provision each customer as an isolated tenant; the tenant list shows only the customers delegated to you.",
+    description: "C2: provider operating journey.",
+  },
+  "journeys.provider.lifecycle.title": {
+    defaultMessage: "Run a customer lifecycle",
+    description: "C2: provider operating journey.",
+  },
+  "journeys.provider.lifecycle.body": {
+    defaultMessage: "Issue, deploy, verify and renew a certificate inside one customer's boundary, then pull its metering as invoice evidence.",
+    description: "C2: provider operating journey.",
+  },
   "journeys.team.title": { defaultMessage: "Onboard a team", description: "Journey title: team onboarding." },
   "journeys.team.description": {
     defaultMessage: "An isolated tenant slice with SSO, roles, default-deny policy, and a signed audit trail.",

@@ -256,6 +256,19 @@ export const journeys: Journey[] = [
     ],
   },
   {
+    id: "operate-as-a-provider",
+    titleKey: "journeys.provider.title",
+    descriptionKey: "journeys.provider.description",
+    doc: "docs/journeys/operate-as-a-provider.md",
+    steps: [
+      { id: "entitlement", titleKey: "journeys.provider.entitlement.title", bodyKey: "journeys.provider.entitlement.body", to: "/admin/editions", command: "trstctl-cli managed-offering status" },
+      { id: "signin", titleKey: "journeys.provider.signin.title", bodyKey: "journeys.provider.signin.body", command: "trstctl-cli managed-offering status" },
+      { id: "delegate", titleKey: "journeys.provider.delegate.title", bodyKey: "journeys.provider.delegate.body", command: "trstctl provider-grant -operator op-1 -customer acme-robotics -operations read,provision,suspend,resume -granted-by platform-admin -idempotency-key acme-robotics-op-1-v1" },
+      { id: "customers", titleKey: "journeys.provider.customers.title", bodyKey: "journeys.provider.customers.body", command: "trstctl-cli managed-offering tenants provision -f hosted-tenant.json" },
+      { id: "lifecycle", titleKey: "journeys.provider.lifecycle.title", bodyKey: "journeys.provider.lifecycle.body", to: "/connectors" },
+    ],
+  },
+  {
     id: "onboard-a-team",
     titleKey: "journeys.team.title",
     descriptionKey: "journeys.team.description",
