@@ -62,7 +62,8 @@ func TestReviewedBaselineIsNotStale(t *testing.T) {
 			b.WriteString("\t},\n")
 		}
 		b.WriteString("}\n")
-		if err := os.WriteFile(out, []byte(b.String()), 0o600); err != nil {
+		out = filepath.Clean(out)
+		if err := os.WriteFile(out, []byte(b.String()), 0o600); err != nil { // #nosec G703 G304 -- test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22)
 			t.Fatal(err)
 		}
 	}

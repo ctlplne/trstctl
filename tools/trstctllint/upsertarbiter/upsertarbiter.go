@@ -197,8 +197,7 @@ type literalUnit struct {
 // lines with + still parses as one statement.
 func literalUnits(fn *ast.FuncDecl) []literalUnit {
 	var units []literalUnit
-	var walk func(n ast.Node) bool
-	walk = func(n ast.Node) bool {
+	walk := func(n ast.Node) bool {
 		switch e := n.(type) {
 		case *ast.BinaryExpr:
 			if e.Op == token.ADD {
@@ -451,7 +450,7 @@ func ScanDir(dir string) ([]Site, error) {
 		return nil, err
 	}
 	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, abs, func(fi os.FileInfo) bool { return !strings.HasSuffix(fi.Name(), "_test.go") }, 0)
+	entries, err := os.ReadDir(abs)
 	if err != nil {
 		return nil, err
 	}
@@ -466,10 +465,16 @@ func ScanDir(dir string) ([]Site, error) {
 		return filepath.ToSlash(name)
 	}
 	var files []*ast.File
-	for _, p := range pkgs {
-		for _, f := range p.Files {
-			files = append(files, f)
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
 		}
+		f, parseErr := parser.ParseFile(fset, filepath.Join(abs, name), nil, 0)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		files = append(files, f)
 	}
 	sort.Slice(files, func(i, j int) bool {
 		return fset.Position(files[i].Pos()).Filename < fset.Position(files[j].Pos()).Filename
