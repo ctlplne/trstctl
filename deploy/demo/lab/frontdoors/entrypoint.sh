@@ -16,6 +16,15 @@ fi
 for required in apache.crt apache.key nginx.crt nginx.key haproxy.pem caddy.crt caddy.key traefik.crt traefik.key postgresql.crt postgresql.key; do
   if [ ! -s "/lab/tls/$required" ]; then echo "missing prepared /lab/tls/$required" >&2; exit 1; fi
 done
+# The customer listener (provider journey) starts with its own self-signed
+# baseline so NGINX can serve it before any customer agent exists.
+mkdir -p /lab/tls/customer-edge
+if [ ! -s /lab/tls/customer-edge/edge.crt ] || [ ! -s /lab/tls/customer-edge/edge.key ]; then
+  openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj "/CN=customer-edge.acme-robotics.example.com" \
+    -addext "subjectAltName=DNS:customer-edge.acme-robotics.example.com" \
+    -keyout /lab/tls/customer-edge/edge.key -out /lab/tls/customer-edge/edge.crt >/dev/null 2>&1
+fi
+chmod 0600 /lab/tls/customer-edge/edge.key
 
 postgres_data=/lab/state/postgresql
 mkdir -p "$postgres_data" /lab/run
@@ -48,7 +57,7 @@ traefik_pid=$!
 postgres_pid=$!
 
 terminate() {
-  kill "$apache_pid" "$nginx_pid" "$haproxy_pid" "$caddy_pid" "$traefik_pid" "$postgres_pid" "${agent_pid:-}" 2>/dev/null || true
+  kill "$apache_pid" "$nginx_pid" "$haproxy_pid" "$caddy_pid" "$traefik_pid" "$postgres_pid" "${agent_pid:-}" "${customer_watch_pid:-}" "${customer_pid:-}" 2>/dev/null || true
 }
 trap terminate INT TERM EXIT
 
@@ -70,4 +79,25 @@ done
 
 /usr/local/bin/trstctl-agent "$@" &
 agent_pid=$!
+
+# Provider journey: a customer tenant enrolls its own agent for the customer
+# listener. The lab's customer-enroll helper writes /lab/state/customer/args
+# (one flag per line) once the tenant has minted its enrollment token; this
+# loop starts that second agent with the customer-only host profile and keeps
+# it running beside the partner-lab agent. Nothing starts until the file exists.
+customer_pid=""
+( while :; do
+    if [ -z "$customer_pid" ] && [ -s /lab/state/customer/args ]; then
+      set --
+      while IFS= read -r line; do [ -n "$line" ] && set -- "$@" "$line"; done < /lab/state/customer/args
+      /usr/local/bin/trstctl-agent "$@" --host-exec-profile=/lab/host-exec-profile-customer.json --host-rollback-dir=/lab/state/customer/rollbacks &
+      customer_pid=$!
+      echo "customer agent started for the customer listener (pid $customer_pid)"
+    fi
+    if [ -n "$customer_pid" ] && ! kill -0 "$customer_pid" 2>/dev/null; then
+      echo "customer agent exited; restarting in 5s" >&2; customer_pid=""; sleep 5; continue
+    fi
+    sleep 2
+  done ) &
+customer_watch_pid=$!
 wait "$agent_pid"

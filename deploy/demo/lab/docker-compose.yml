@@ -24,6 +24,7 @@ services:
       - "127.0.0.1:10446:10446"
       - "127.0.0.1:10447:10447"
       - "127.0.0.1:10448:10448"
+      - "127.0.0.1:10449:10449"
     volumes:
       - ./lab/trstctl-lab.json:/etc/trstctl/partner-lab.json:ro
       - ./lab/certs:/lab-ca:ro
@@ -184,6 +185,28 @@ services:
     volumes:
       - frontdoorsstate:/lab/state
       - frontdoorstls:/lab/tls
+
+  # Provider journey: enroll a customer tenant's own agent for the customer
+  # listener (port 10449). One-shot; needs the customer's API token file.
+  lab-customer-enroll:
+    image: ${TRSTCTL_DEMO_SEED_IMAGE:-ctlplne-demo-seed:local}
+    pull_policy: never
+    profiles: ["partner-lab-customer"]
+    user: "0:0"
+    depends_on:
+      trstctl:
+        condition: service_healthy
+    entrypoint: ["node", "/lab/customer-enroll.mjs"]
+    environment:
+      NODE_EXTRA_CA_CERTS: /public-trust/control-plane.crt
+      TRSTCTL_LAB_SERVER: https://trstctl:8443
+      TRSTCTL_LAB_CUSTOMER_TOKEN_FILE_IN: /customer/token
+      TRSTCTL_LAB_CUSTOMER_AGENT_NAME: ${TRSTCTL_LAB_CUSTOMER_AGENT_NAME:-customer-edge-agent}
+    volumes:
+      - ./lab/customer-enroll.mjs:/lab/customer-enroll.mjs:ro
+      - publictrust:/public-trust:ro
+      - frontdoorsstate:/frontdoors-state
+      - ${TRSTCTL_LAB_CUSTOMER_TOKEN_FILE:?set TRSTCTL_LAB_CUSTOMER_TOKEN_FILE to the customer tenant's 0600 API token file}:/customer/token:ro
 
   lab-runner:
     image: ${TRSTCTL_DEMO_SEED_IMAGE:-ctlplne-demo-seed:local}

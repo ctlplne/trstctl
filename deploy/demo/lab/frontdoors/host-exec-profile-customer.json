@@ -1,0 +1,6 @@
+{
+  "allowed_roots": ["/lab/tls/customer-edge"],
+  "actions": [
+    { "logical_name": "nginx", "command": "/usr/sbin/nginx", "pass_args": true, "timeout_seconds": 15 }
+  ]
+}

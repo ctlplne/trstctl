@@ -24,6 +24,7 @@ COPY deploy/demo/lab/frontdoors/traefik-dynamic.yml /lab/traefik-dynamic.templat
 COPY deploy/demo/lab/frontdoors/traefik-static.yml /lab/traefik-static.yml
 COPY deploy/demo/lab/frontdoors/postgresql.conf /lab/postgresql.conf
 COPY deploy/demo/lab/frontdoors/host-exec-profile.json /lab/host-exec-profile.json
+COPY deploy/demo/lab/frontdoors/host-exec-profile-customer.json /lab/host-exec-profile-customer.json
 COPY deploy/demo/lab/frontdoors/reload-haproxy /lab/reload-haproxy
 COPY deploy/demo/lab/frontdoors/entrypoint.sh /lab/entrypoint.sh
 
@@ -36,11 +37,11 @@ RUN set -eu; \
       -e 's/^Group www-data$/Group #65532/' \
       /usr/local/apache2/conf/httpd.conf; \
     printf '\nInclude conf/extra/httpd-lab.conf\n' >> /usr/local/apache2/conf/httpd.conf; \
-    install -d -m 0700 -o 65532 -g 65532 /lab/state /lab/tls /lab/run /lab/state/rollbacks; \
+    install -d -m 0700 -o 65532 -g 65532 /lab/state /lab/tls /lab/run /lab/state/rollbacks /lab/state/customer /lab/state/customer/rollbacks /lab/tls/customer-edge; \
     chown -R 65532:65532 /lab /usr/local/apache2/logs /var/lib/nginx /var/log/nginx; \
     chmod 0500 /lab/entrypoint.sh /lab/reload-haproxy
 
 USER 65532:65532
 WORKDIR /lab
-EXPOSE 10443 10444 10445 10446 10447 10448
+EXPOSE 10443 10444 10445 10446 10447 10448 10449
 ENTRYPOINT ["/lab/entrypoint.sh"]

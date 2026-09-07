@@ -1720,3 +1720,62 @@ func containsPrefix(list []string, want string) bool {
 	}
 	return false
 }
+
+// The provider journey's customer listener is real and isolated: a separate
+// NGINX server block on 10449 whose certificate lives in a directory only the
+// customer tenant's agent may touch, a front-door entrypoint that starts that
+// agent from a staged enrollment, and a one-shot enroll helper that needs the
+// customer's own API token.
+func TestPartnerLabServesAnIsolatedCustomerListenerForTheProviderJourney(t *testing.T) {
+	nginx := read(t, "lab", "frontdoors", "nginx.conf")
+	for _, want := range []string{"listen 10449 ssl;", "server_name customer-edge.acme-robotics.example.com;", "/lab/tls/customer-edge/edge.crt", "/lab/tls/customer-edge/edge.key"} {
+		if !strings.Contains(nginx, want) {
+			t.Fatalf("nginx.conf lacks the customer listener element %q", want)
+		}
+	}
+	profile := read(t, "lab", "frontdoors", "host-exec-profile-customer.json")
+	if !strings.Contains(profile, `"allowed_roots": ["/lab/tls/customer-edge"]`) || strings.Contains(profile, "apachectl") || strings.Contains(profile, "pg_ctl") {
+		t.Fatalf("customer host profile must allow only the customer directory and an nginx reload: %s", profile)
+	}
+	entrypoint := read(t, "lab", "frontdoors", "entrypoint.sh")
+	for _, want := range []string{"/lab/state/customer/args", "--host-exec-profile=/lab/host-exec-profile-customer.json", "--host-rollback-dir=/lab/state/customer/rollbacks", "/lab/tls/customer-edge/edge.crt"} {
+		if !strings.Contains(entrypoint, want) {
+			t.Fatalf("front-door entrypoint lacks the customer agent element %q", want)
+		}
+	}
+	dockerfile := read(t, "lab", "frontdoors", "Dockerfile")
+	if !strings.Contains(dockerfile, "host-exec-profile-customer.json") || !strings.Contains(dockerfile, "EXPOSE 10443 10444 10445 10446 10447 10448 10449") {
+		t.Fatal("front-door image must ship the customer profile and expose the customer listener")
+	}
+	cf := parseComposeAt(t, "lab", "docker-compose.yml")
+	if !contains(cf.Services["trstctl"].Ports, "127.0.0.1:10449:10449") {
+		t.Fatalf("lab must publish the customer listener on loopback: %v", cf.Services["trstctl"].Ports)
+	}
+	enroll, ok := cf.Services["lab-customer-enroll"]
+	if !ok {
+		t.Fatal("lab must ship the one-shot customer enroll helper")
+	}
+	if !contains(enroll.Profiles, "partner-lab-customer") {
+		t.Fatalf("customer enroll helper must sit behind its own profile so a plain lab start never runs it: %v", enroll.Profiles)
+	}
+	mounted := false
+	for _, v := range enroll.Volumes {
+		if strings.HasPrefix(v, "${TRSTCTL_LAB_CUSTOMER_TOKEN_FILE") && strings.HasSuffix(v, ":/customer/token:ro") {
+			mounted = true
+		}
+	}
+	if !mounted {
+		t.Fatalf("customer enroll helper must read the customer token from a read-only mounted file, never an environment value: %v", enroll.Volumes)
+	}
+	for _, key := range enroll.Environment {
+		if strings.Contains(fmt.Sprint(key), "TRSTCTL_LAB_CUSTOMER_TOKEN=") {
+			t.Fatal("customer token must not be passed as an environment value")
+		}
+	}
+	helper := read(t, "lab", "customer-enroll.mjs")
+	for _, want := range []string{"/api/v1/agents/enrollment-tokens", `roles: ["host"]`, "flag: \"wx\"", "chownSync(path, 65532, 65532)"} {
+		if !strings.Contains(helper, want) {
+			t.Fatalf("customer enroll helper lacks %q", want)
+		}
+	}
+}

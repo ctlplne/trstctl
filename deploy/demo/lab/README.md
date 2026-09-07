@@ -61,7 +61,29 @@ operator can sign in at `/provider` with a token from
 `http://127.0.0.1:19081/provider/sign-in`. Delegations are bootstrapped with
 `trstctl provider-grant` inside the control-plane container (docs/editions.md).
 
-## What is honest local evidence?
+## Customer listener for the provider journey
+
+The front doors also serve `customer-edge.acme-robotics.example.com` on
+`127.0.0.1:10449`, a listener reserved for a provider customer's own agent. After
+the provider has provisioned the customer tenant, mint an API token in that
+tenant (`trstctl token create --tenant <customer tenant id> ...`, kept as a 0600
+file) and enroll the customer agent:
+
+```bash
+TRSTCTL_LAB_CUSTOMER_TOKEN_FILE=/secure/acme-robotics.token \
+docker compose -p <project> -f deploy/demo/docker-compose.yml -f deploy/demo/lab/docker-compose.yml \
+  --profile partner-lab-customer run --rm lab-customer-enroll
+```
+
+The helper mints a one-time enrollment token inside the customer tenant and
+stages it in the front-door state volume; the front-door entrypoint starts a
+second `trstctl-agent` (identity `customer-edge-agent`, tenant = the customer)
+whose host profile allows only `/lab/tls/customer-edge` and an NGINX reload. The
+customer's lifecycle then runs as in the journeys: an NGINX destination with
+`cert_path=/lab/tls/customer-edge/edge.crt` and `key_path=/lab/tls/customer-edge/edge.key`,
+verified on the wire at `127.0.0.1:10449`.
+
+
 
 - **Real local:** actual Apache, NGINX, HAProxy, Caddy, Traefik, and PostgreSQL binaries receive an independently issued certificate, validate or watch their configs, activate the update, and serve the new certificate. PostgreSQL is verified with its real SSLRequest-to-TLS negotiation, and network discovery inventories it the same way: the scanner retries a reachable listener that rejects a bare TLS ClientHello with the PostgreSQL SSLRequest negotiation, so the lab's six listeners discover without a protocol hint.
 - **Faithful local:** the repository's production-assembly census drives every other shipped connector against a strict command or protocol receiver. This includes F5, NetScaler, A10, Kemp, Cisco, FortiGate, Palo Alto, cloud certificate stores, databases, and the exact IIS PowerShell/netsh contract.

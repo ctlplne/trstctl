@@ -90,7 +90,10 @@ delegated to all of it.
 Acting for one customer, issue a certificate for a real endpoint, deploy it
 through that customer's connector, verify it on the wire, and renew it: the same
 journey as [Keep your existing CA](preserve-existing-ca.md), inside the customer's
-boundary. Then pull the customer's metering (`/provider/v1/tenants/{id}/quota` and
+boundary. The customer's endpoint is served by the customer's own agent, enrolled
+with a token minted in the customer tenant, never by the provider's agent; in the
+partner lab that is the customer listener on port 10449
+(`deploy/demo/lab/README.md`). Then pull the customer's metering (`/provider/v1/tenants/{id}/quota` and
 the provider evidence endpoints) as invoice evidence; the verification keys for
 that evidence are published at `/provider/v1/evidence/verification-keys`.
 
