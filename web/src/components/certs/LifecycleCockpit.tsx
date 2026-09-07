@@ -170,10 +170,16 @@ function automationState(
   return "manual";
 }
 
+// A revoked certificate and a discovery baseline superseded by the managed
+// certificate now verified at its listener (DP2-030) are no longer live work.
+function isLiveCertificate(certificate: Certificate): boolean {
+  return certificate.status !== "revoked" && certificate.status !== "superseded";
+}
+
 function workArrivalData(certificates: Certificate[], now: number, labelForRange: (start: number, end: number) => string): TimeBarDatum[] {
   const data = Array.from({ length: 6 }, (_, index) => ({ label: labelForRange(index * 15, index * 15 + 14), value: 0, tone: "warning" as const }));
   for (const certificate of certificates) {
-    if (certificate.status === "revoked") continue;
+    if (!isLiveCertificate(certificate)) continue;
     const days = daysUntil(certificate.not_after, now);
     if (days === null || days < 0 || days > 90) continue;
     const index = Math.min(5, Math.floor(days / 15));
@@ -279,7 +285,7 @@ export function LifecycleCockpit(props: LifecycleCockpitProps) {
 
   const allActionRows = props.certificates
     .map((certificate): ActionRow | null => {
-      if (certificate.status === "revoked") return null;
+      if (!isLiveCertificate(certificate)) return null;
       const days = daysUntil(certificate.not_after, now);
       const identity = matchingIdentity(certificate, identities);
       const run = matchingRun(certificate, identity, scopedRuns);

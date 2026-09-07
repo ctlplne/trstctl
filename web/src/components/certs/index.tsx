@@ -10,6 +10,12 @@ import { translateNow } from "@/i18n/I18nProvider";
 
 const DAY = 86_400_000;
 
+// Revoked certificates and discovery baselines superseded by a verified managed
+// certificate (DP2-030) are out of the live estate: no bucket, no attention row.
+function isLive(certificate: Certificate): boolean {
+  return certificate.status !== "revoked" && certificate.status !== "superseded";
+}
+
 export function daysUntil(notAfter?: string): number {
   if (!notAfter) return Infinity;
   const time = new Date(notAfter).getTime();
@@ -24,7 +30,7 @@ function expiryBuckets(certificates: Certificate[]): BucketDatum[] {
   let within90 = 0;
   let beyond = 0;
   for (const certificate of certificates) {
-    if (certificate.status === "revoked") continue;
+    if (!isLive(certificate)) continue;
     const days = daysUntil(certificate.not_after);
     if (days < 0) expired += 1;
     else if (days <= 7) within7 += 1;
@@ -52,11 +58,11 @@ function rotationFingerprints(runs: RotationRun[]): Set<string> {
 
 export function autoRenewingCount(certificates: Certificate[], runs: RotationRun[]): number {
   const fingerprints = rotationFingerprints(runs);
-  return certificates.filter((certificate) => certificate.status !== "revoked" && fingerprints.has(certificate.fingerprint)).length;
+  return certificates.filter((certificate) => isLive(certificate) && fingerprints.has(certificate.fingerprint)).length;
 }
 
 export function CertKpis({ certificates, risks }: { certificates: Certificate[]; risks: RiskItem[] }) {
-  const active = certificates.filter((certificate) => certificate.status !== "revoked");
+  const active = certificates.filter((certificate) => isLive(certificate));
   const expiring7 = active.filter((certificate) => {
     const days = daysUntil(certificate.not_after);
     return days >= 0 && days <= 7;
@@ -83,7 +89,7 @@ export function CertKpis({ certificates, risks }: { certificates: Certificate[];
 export function CertificatesDashboard({ certificates, risks }: { certificates: Certificate[]; risks: RiskItem[] }) {
   const buckets = expiryBuckets(certificates);
   const attention = certificates
-    .filter((certificate) => certificate.status !== "revoked")
+    .filter((certificate) => isLive(certificate))
     .map((certificate) => ({ certificate, days: daysUntil(certificate.not_after) }))
     .filter((entry) => entry.days <= 30)
     .sort((a, b) => a.days - b.days)
@@ -128,7 +134,7 @@ export function ReadinessPanel({
   actions?: ReactNode;
 }) {
   const fingerprints = rotationFingerprints(rotationRuns);
-  const active = certificates.filter((certificate) => certificate.status !== "revoked");
+  const active = certificates.filter((certificate) => isLive(certificate));
   const auto = active.filter((certificate) => fingerprints.has(certificate.fingerprint)).length;
   const manual = Math.max(active.length - auto, 0);
   const pct = active.length ? Math.round((auto / active.length) * 100) : 0;
@@ -162,7 +168,7 @@ export function ReadinessPanel({
 
 export function ReadinessSimulator({ certificates, autoRenewing }: { certificates: Certificate[]; autoRenewing: number }) {
   const [cap, setCap] = useState(47);
-  const active = certificates.filter((certificate) => certificate.status !== "revoked").length;
+  const active = certificates.filter((certificate) => isLive(certificate)).length;
   const manual = Math.max(active - autoRenewing, 0);
   const renewalsPerYear = Math.ceil(365 / cap);
   const manualLoad = manual * renewalsPerYear;

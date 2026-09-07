@@ -4796,7 +4796,7 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		if observedAt.IsZero() {
 			observedAt = e.Time
 		}
-		return p.store.ApplyEndpointVerificationTx(ctx, tx, store.EndpointVerification{
+		if err := p.store.ApplyEndpointVerificationTx(ctx, tx, store.EndpointVerification{
 			TenantID: e.TenantID, EndpointID: pl.EndpointID, Address: pl.Address,
 			Vantage: pl.Vantage, Reached: pl.Reached, Mismatch: pl.Mismatch,
 			ExpectedFingerprint: pl.ExpectedFingerprint, ObservedFingerprint: pl.ObservedFingerprint,
@@ -4806,7 +4806,20 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			AgentCommonName: pl.AgentCommonName,
 			LastCheckedAt:   observedAt,
 			EventSequence:   e.Sequence,
-		})
+		}); err != nil {
+			return err
+		}
+		// A listener that now demonstrably serves its managed certificate has
+		// replaced whatever discovery observed there before. Retire those baseline
+		// rows so the inventory stops reporting an owner gap and an imminent expiry
+		// for a certificate that is no longer live (DP2-030). Derived from this
+		// event alone, so a replay converges to the same rows.
+		if pl.Reached && pl.Mismatch == "" && pl.ObservedFingerprint != "" {
+			if _, err := p.store.SupersedeObservedCertificatesAtTx(ctx, tx, e.TenantID, pl.Address, pl.ObservedFingerprint); err != nil {
+				return err
+			}
+		}
+		return nil
 	case EventACMEUpstreamAuthorizationObserved:
 		var pl ACMEUpstreamAuthorizationObserved
 		if err := decode(e, &pl); err != nil {

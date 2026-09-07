@@ -520,4 +520,41 @@ describe("Certificate Lifecycle cockpit", () => {
     const cockpit = await screen.findByRole("region", { name: "Certificate Lifecycle cockpit" });
     expect(within(cockpit).getByText("Not checked", { selector: "[data-metric='owner-gaps']" })).toBeInTheDocument();
   });
+  it("keeps a superseded discovery baseline out of the work queue and the arrival bins (DP2-030)", async () => {
+    vi.setSystemTime(new Date("2026-08-24T12:00:00Z"));
+    apiMock.certificatePage.mockResolvedValue({
+      items: [
+        {
+          id: "cert-baseline",
+          tenant_id: "tenant-1",
+          subject: "CN=superseded.partner-lab.example",
+          issuer: "CN=Old Vendor CA",
+          // The listener now verifiably serves its managed certificate; this observed
+          // baseline is retired, so its missing owner and its expiry tomorrow are not work.
+          status: "superseded",
+          fingerprint: "fp-baseline",
+          not_after: "2026-08-25T12:00:00Z",
+          deployment_location: "127.0.0.1:10443",
+          attributes: {},
+        },
+      ],
+    });
+    apiMock.certificateHealth.mockResolvedValue({
+      generated_at: "2026-08-24T12:00:00Z",
+      inventory_path: "/api/v1/certificates",
+      expiring_path: "/api/v1/certificates?expiring_before=2026-09-23T12:00:00Z",
+      expiry_buckets: [],
+      source_breakdown: [],
+      expiring: [],
+      summary: {
+        total: 1, active: 0, expired: 0, expiring_7d: 0, expiring_30d: 0, expiring_90d: 0, revoked: 0, superseded: 1,
+        external_source_count: 1, imported_count: 0, discovered_count: 1, unknown_expiry_count: 0, health: "ok",
+      },
+    });
+    renderPage();
+    const cockpit = await screen.findByRole("region", { name: "Certificate Lifecycle cockpit" });
+    const arrival = within(cockpit).getByRole("table", { name: "Certificate work arrival data" });
+    expect(within(arrival).getByRole("row", { name: /^0–14 days/ })).toHaveTextContent(/0–14 days\s*0$/);
+    expect(within(cockpit).queryByText(/superseded\.partner-lab\.example/)).toBeNull();
+  });
 });
