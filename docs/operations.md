@@ -33,6 +33,35 @@ listener also caps streams per connection.
 
 The pool sizes ship with conservative defaults and are tuned per deployment.
 
+### Datastore backpressure and idempotent retries
+
+The PostgreSQL pool is bounded too. A request that cannot obtain a connection
+within the acquire window (10 s by default, `TRSTCTL_POSTGRES_ACQUIRE_TIMEOUT`),
+or whose statement is cancelled by the server-side statement deadline, or that
+runs into its own request deadline while the datastore is busy, is refused with
+**503** and a `Retry-After` header; the problem detail says so ("datastore is
+busy ... retry"). It is safe to retry such a request with the **same**
+`Idempotency-Key`: the mutation either never claimed the key (the retry executes
+it) or completed (the retry replays the recorded response).
+
+Two more answers are part of the idempotency contract under concurrency:
+
+- **409 with `Retry-After`, "still in progress"**: an identical request with the
+  same `Idempotency-Key` is executing at that moment (a client retry storm, or
+  two replicas). The control plane waits briefly for it; if it has not finished,
+  the retry is told to come back. The next retry replays the recorded response.
+- **409, "effect is indeterminate"**: the original request's command ran but its
+  result could not be recorded (for example the datastore became unavailable
+  right after the effect committed). The key is walled rather than re-executed,
+  because re-running would duplicate the effect. Inspect the resource, then
+  retry with a **new** key if the effect is missing.
+
+Every mutation claims its `Idempotency-Key` in a short transaction, runs the
+command with **no pooled connection held**, and records the result in a second
+short transaction (the same discipline the outbox uses for external calls), so
+parallel writes never deadlock on the pool waiting for each other. A claim
+abandoned by a crashed process is taken over after ten minutes.
+
 ## Outbox delivery fairness
 
 The outbox worker does not keep a PostgreSQL transaction open while it calls an

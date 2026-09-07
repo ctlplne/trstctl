@@ -1888,7 +1888,21 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 	case a.writePAMError(w, err):
 	case a.writeSSHWorkflowError(w, err):
 	case writeTenantCryptoError(a, w, err):
+	case errors.Is(err, orchestrator.ErrInProgress):
+		// An identical request with this Idempotency-Key is still executing; the
+		// recorded result is not there yet. A retry will replay it (AN-5).
+		w.Header().Set("Retry-After", "1")
+		a.writeProblem(w, problem.New(http.StatusConflict, "an identical request with this Idempotency-Key is still in progress; retry shortly to receive its result"))
+	case errors.Is(err, orchestrator.ErrEffectIndeterminate):
+		a.writeProblem(w, problem.New(http.StatusConflict, "the original request's effect is indeterminate: inspect the resource before retrying with a new Idempotency-Key"))
+	case errors.Is(err, context.DeadlineExceeded):
+		// The request ran into its deadline while the datastore was saturated
+		// (DP2-052): the same retryable 503 as the pool-acquire timeout, not a
+		// misleading 500.
+		w.Header().Set("Retry-After", "1")
+		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "the request was bounded by its deadline while the datastore was busy — retry"))
 	case store.IsBusy(err):
+		w.Header().Set("Retry-After", "1")
 		// Bounded-latency datastore failure (pool saturation or server-side
 		// statement deadline): a structured 503 tells the caller to retry
 		// rather than hanging or mislabeling it a 500 (OPS-TIMEOUTS-001).
