@@ -76,6 +76,28 @@ fi
 live_status=0
 census_status=0
 
+# OPP-C03: fail loud, and early, when this lab's published ports are already held.
+# A stale lab from another Compose project (a profile-filtered stop leaves the
+# control plane running) or a non-Docker process on 127.0.0.1:9443 used to let
+# the bring-up "succeed": the health probe below reached the stale plane and the
+# runner reported exit 0 while this project's control plane never came up.
+lab_ports="9443 10443 10444 10445 10446 10447 10448 10449 19081 29443 29444"
+port_holders=""
+for port in $lab_ports; do
+  holder="$(docker ps --filter "publish=$port" --format '{{.Names}} (compose project {{.Label "com.docker.compose.project"}})' 2>/dev/null | grep -v "^${lab_project}-" | head -n 1)"
+  if [ -z "$holder" ] && command -v lsof >/dev/null 2>&1; then
+    # A non-Docker holder. Docker's own proxy shows up as com.docker.backend/vpnkit; only report foreign processes.
+    holder="$(lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | awk 'NR>1 && $1 !~ /^com\.docke|^vpnkit|^docker/ {print $1 " (pid " $2 ")"; exit}')"
+  fi
+  if [ -n "$holder" ]; then port_holders="$port_holders
+  127.0.0.1:$port is held by $holder"; fi
+done
+if [ -n "$port_holders" ]; then
+  printf '%s\n' "Partner lab $lab_project cannot start: its published ports are already in use.$port_holders" >&2
+  printf '%s\n' "Tear the other lab down first (deploy/demo/lab/down.sh with its TRSTCTL_LAB_PROJECT) or stop the process, then rerun." >&2
+  exit 1
+fi
+
 # Start namespace owners before the loopback helpers that join them. Creating
 # both in one parallel `compose up` can race Docker's network-namespace mount on
 # busy workstations. This staged order is safe to rerun and preserves volumes.
@@ -97,6 +119,19 @@ while [ "$attempt" -lt 120 ]; do
 done
 if [ "$healthy" != true ]; then
   printf '%s\n' "Partner lab control plane did not become healthy within 120 seconds." >&2
+  exit 1
+fi
+# OPP-C03: /healthz answered on 127.0.0.1:9443 — prove it was THIS project's control
+# plane. A stale plane on the same port, or a half-torn container with no network
+# attachment, answers just as convincingly.
+plane_id="$($compose ps -q trstctl 2>/dev/null | head -n 1)"
+plane_running="$(docker inspect -f '{{.State.Running}}' "$plane_id" 2>/dev/null || printf '%s' false)"
+plane_networks="$(docker inspect -f '{{len .NetworkSettings.Networks}}' "$plane_id" 2>/dev/null || printf '%s' 0)"
+plane_port="$(docker port "$plane_id" 8443 2>/dev/null | grep -c ':9443$' || true)"
+if [ -z "$plane_id" ] || [ "$plane_running" != true ] || [ "$plane_networks" -lt 1 ] || [ "$plane_port" -lt 1 ]; then
+  holder="$(docker ps --filter publish=9443 --format '{{.Names}} (compose project {{.Label "com.docker.compose.project"}})' 2>/dev/null | head -n 1)"
+  printf '%s\n' "127.0.0.1:9443 answered /healthz, but not from $lab_project's control plane (container '${plane_id:-none}' running=$plane_running networks=$plane_networks publishes-9443=$plane_port; port held by ${holder:-an unknown process})." >&2
+  printf '%s\n' "Tear the other lab down (deploy/demo/lab/down.sh) and rerun." >&2
   exit 1
 fi
 

@@ -1813,3 +1813,29 @@ func TestPartnerLabTeardownIsOwnedAndProven(t *testing.T) {
 		}
 	}
 }
+
+// The partner lab runner fails loud on a port collision (OPP-C03): a stale lab
+// or a foreign process holding a published port used to let the bring-up
+// "succeed" because the health probe reached whatever answered on 9443. The
+// runner must refuse before any build, naming the holder, and must prove that
+// the plane which answered /healthz is this project's own control plane.
+func TestPartnerLabRunnerFailsLoudOnPortCollision(t *testing.T) {
+	launcher := read(t, "lab", "run.sh")
+	for _, want := range []string{
+		`lab_ports="9443 10443 10444 10445 10446 10447 10448 10449 19081 29443 29444"`,
+		`--filter "publish=$port"`, "is held by", "cannot start: its published ports are already in use",
+		"deploy/demo/lab/down.sh", "lsof -nP -iTCP:",
+		`plane_id="$($compose ps -q trstctl`, "{{.State.Running}}", "{{len .NetworkSettings.Networks}}", `docker port "$plane_id" 8443`,
+		"answered /healthz, but not from $lab_project's control plane", "publishes-9443=",
+	} {
+		if !strings.Contains(launcher, want) {
+			t.Errorf("partner lab launcher is missing the port-collision contract marker %q", want)
+		}
+	}
+	// The pre-flight must run before the first image build so a collision costs no build.
+	pre := strings.Index(launcher, `lab_ports=`)
+	build := strings.Index(launcher, "$compose build trstctl demo-seed")
+	if pre < 0 || build < 0 || pre > build {
+		t.Fatal("the port pre-flight must precede the first compose build")
+	}
+}
