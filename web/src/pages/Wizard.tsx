@@ -416,6 +416,7 @@ function CertificateStep({ certificate, onIssued }: { certificate: Identity | nu
   const [name, setName] = useState("");
   const [applicationID, setApplicationID] = useState("");
   const [environment, setEnvironment] = useState("");
+  const [alertContact, setAlertContact] = useState("");
   const [ownershipConfirmed, setOwnershipConfirmed] = useState(false);
   const [createdOwner, setCreatedOwner] = useState<Owner | null>(null);
   const [wildcardAck, setWildcardAck] = useState(false);
@@ -432,6 +433,12 @@ function CertificateStep({ certificate, onIssued }: { certificate: Identity | nu
       if (!applicationID.trim() || !environment.trim() || !ownershipConfirmed) {
         throw new Error(t("wizard.certificate.ownerRequired"));
       }
+      // DP2-013: an owner without an alert contact is unreachable, and every
+      // wizard-issued certificate then opened as an owner gap. The contact is part
+      // of naming the owner, not a later chore.
+      if (!alertContact.trim() || !alertContact.includes("@")) {
+        throw new Error(t("wizard.certificate.ownerAlertContactRequired"));
+      }
       let owner = createdOwner;
       if (!owner) {
         owner = await api.createOwner({
@@ -440,6 +447,7 @@ function CertificateStep({ certificate, onIssued }: { certificate: Identity | nu
           service: serviceName,
           application_id: applicationID.trim(),
           environment: environment.trim(),
+          email: alertContact.trim(),
         });
         setCreatedOwner(owner);
       }
@@ -515,6 +523,19 @@ function CertificateStep({ certificate, onIssued }: { certificate: Identity | nu
             className="w-full rounded-control border border-border bg-background px-3 py-2 text-body"
             placeholder={t("owners.readiness.environmentPlaceholder")}
           />
+        </label>
+        <label htmlFor="wizard-owner-alert-contact" className="grid gap-1 text-sm font-medium">
+          {t("wizard.certificate.ownerAlertContact")}
+          <input
+            id="wizard-owner-alert-contact"
+            type="email"
+            className="ui-input"
+            value={alertContact}
+            onChange={(event) => setAlertContact(event.target.value)}
+            placeholder={t("wizard.certificate.ownerAlertContactPlaceholder")}
+            required
+          />
+          <span className="text-xs font-normal text-muted-foreground">{t("wizard.certificate.ownerAlertContactHelp")}</span>
         </label>
         <label className="flex items-start gap-2 text-sm font-medium" htmlFor="wizard-owner-confirm">
           <input

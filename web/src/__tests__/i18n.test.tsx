@@ -1503,8 +1503,8 @@ describe("i18n boundary", () => {
       // QA cold design-partner g257 re-pin: the seeded-demo banner becomes a named
       // landmark (DP2-042). Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION
       // REVIEW before release.
-      "es-ES": "bc7a163b7561fff73d53e03a0494c129d84536bcab2d50bde8e829d54411c66d",
-      "de-DE": "2da3ee2bf88964759712dda1d8a941b9918148d2f91c9690cf9c3ac078bea1e3",
+      "es-ES": "11b99f0d6ad8f2797bf3b7b45ea621842fb47aa709544db0e1c31f7f15f10aed",
+      "de-DE": "ecbe5fcc157aa0ca893d7ee835904836c0d7d319a27e735d5dd18c4a4b6bd159",
     });
   });
 

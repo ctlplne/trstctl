@@ -1679,6 +1679,10 @@ const deDECatalog = {
   "wizard.certificate.ownerConfirm": "Ich bestätige, dass dieses Zertifikat dieser Anwendung gehört",
   "wizard.certificate.ownerConfirmHelp":
     "trstctl zeichnet eine aktuelle Verantwortungsbestätigung auf, damit Bereitstellung und Erneuerung geschlossen fehlschlagen, wenn die Verantwortlichkeit später veraltet ist.",
+  "wizard.certificate.ownerAlertContact": "Alarmkontakt",
+  "wizard.certificate.ownerAlertContactPlaceholder": "team@example.com",
+  "wizard.certificate.ownerAlertContactHelp": "Ablauf- und Fehlerwarnungen für dieses Zertifikat gehen hierhin. Ohne Kontakt gilt der Eigentümer als nicht erreichbar.",
+  "wizard.certificate.ownerAlertContactRequired": "Geben Sie vor der Ausstellung eine Alarmkontakt-E-Mail für den Eigentümer ein.",
   "wizard.certificate.ownerRequired": "Anwendungs-ID und Umgebung hinzufügen und anschließend die Verantwortung vor der Ausstellung bestätigen.",
   "wizard.certificate.ownerNotReady":
     "Der Eigentümerdatensatz ist nicht vollständig und aktuell bestätigt. Korrigieren Sie die Verantwortung, bevor Sie dieses Zertifikat ausstellen.",

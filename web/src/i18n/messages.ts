@@ -4079,6 +4079,10 @@ export const messages = {
     defaultMessage: "trstctl records a current ownership attestation so deployment and renewal can fail closed if accountability later becomes stale.",
     description: "Technical ELI5 explanation of the ownership attestation created by the wizard.",
   },
+  "wizard.certificate.ownerAlertContact": { defaultMessage: "Alert contact", description: "Wizard owner step: email that receives expiry and failure alerts for this certificate's owner." },
+  "wizard.certificate.ownerAlertContactPlaceholder": { defaultMessage: "team@example.com", description: "Wizard owner step: alert contact placeholder." },
+  "wizard.certificate.ownerAlertContactHelp": { defaultMessage: "Expiry and failure alerts for this certificate go here. Without it the owner counts as unreachable.", description: "Wizard owner step: alert contact help." },
+  "wizard.certificate.ownerAlertContactRequired": { defaultMessage: "Enter an alert contact email for the owner before issuing.", description: "Wizard owner step: validation when the alert contact is missing." },
   "wizard.certificate.ownerRequired": {
     defaultMessage: "Add an application ID and environment, then confirm ownership before issuing.",
     description: "Recovery instruction when owner fields are missing from first-run issuance.",

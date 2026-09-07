@@ -41,6 +41,7 @@ async function issueFirstCertificate(user: ReturnType<typeof userEvent.setup>, n
   await user.type(serviceName, name);
   await user.type(screen.getByLabelText("Application ID"), "APP-PAYMENTS");
   await user.type(screen.getByLabelText("Environment"), "production");
+  await user.type(screen.getByLabelText(/alert contact/i), "web-team@example.test");
   await user.click(screen.getByLabelText("I confirm this application owns the certificate"));
   await user.click(screen.getByRole("button", { name: /issue certificate/i }));
 }
@@ -134,6 +135,7 @@ describe("first-run wizard", () => {
         service: "payments",
         application_id: "APP-PAYMENTS",
         environment: "production",
+        email: "web-team@example.test",
       }),
     );
     expect(apiMock.attestOwner).toHaveBeenCalledWith("owner-1");

@@ -1652,6 +1652,10 @@ const esESCatalog = {
   "wizard.certificate.ownerConfirm": "Confirmo que esta aplicación es propietaria del certificado",
   "wizard.certificate.ownerConfirmHelp":
     "trstctl registra una confirmación de responsabilidad vigente para que el despliegue y la renovación se bloqueen si la responsabilidad queda desactualizada.",
+  "wizard.certificate.ownerAlertContact": "Contacto de alertas",
+  "wizard.certificate.ownerAlertContactPlaceholder": "equipo@example.com",
+  "wizard.certificate.ownerAlertContactHelp": "Las alertas de caducidad y de fallo de este certificado llegan aquí. Sin él, el propietario cuenta como inalcanzable.",
+  "wizard.certificate.ownerAlertContactRequired": "Introduzca un correo de contacto de alertas para el propietario antes de emitir.",
   "wizard.certificate.ownerRequired": "Añada un ID de aplicación y un entorno, y luego confirme la responsabilidad antes de emitir.",
   "wizard.certificate.ownerNotReady":
     "El registro del responsable no está completo y confirmado actualmente. Corrija la responsabilidad antes de emitir este certificado.",
