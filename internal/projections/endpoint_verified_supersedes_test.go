@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"testing"
 	"time"
 
@@ -102,6 +101,6 @@ func TestEndpointVerifiedSupersedesObservedBaseline(t *testing.T) {
 		t.Fatal(err)
 	}
 	if superseded != 1 {
-		t.Fatal(fmt.Sprintf("superseded rows after replay = %d, want exactly the baseline", superseded))
+		t.Fatalf("superseded rows after replay = %d, want exactly the baseline", superseded)
 	}
 }
