@@ -9159,9 +9159,13 @@ export interface components {
             /** Format: date-time */
             discovered_at: string;
             fingerprint: string;
+            /** Format: date-time */
+            first_seen_at: string;
             /** Format: uuid */
             id: string;
             kind: string;
+            /** Format: date-time */
+            last_seen_at: string;
             /** Format: uuid */
             managed_identity_id?: string;
             metadata: Record<string, never>;
@@ -9170,6 +9174,7 @@ export interface components {
             risk_score?: number;
             /** Format: uuid */
             run_id: string;
+            seen_count: number;
             /** Format: uuid */
             source_id: string;
             /** Format: uuid */
@@ -9304,6 +9309,14 @@ export interface components {
             started_at?: string;
             /** @enum {string} */
             status: "queued" | "running" | "succeeded" | "partial" | "failed";
+            target_results: {
+                error?: string;
+                /** @enum {string} */
+                kind: "network" | "ssh" | "cloud_provider";
+                /** @enum {string} */
+                status: "succeeded" | "failed" | "blocked" | "rejected";
+                target: string;
+            }[];
             targets: number;
             /** Format: uuid */
             tenant_id: string;
@@ -9746,6 +9759,7 @@ export interface components {
             changes: string[];
             custody: components["schemas"]["EndpointBindingCustody"];
             effect_free: boolean;
+            existing_identity?: components["schemas"]["Identity"];
             identity_name: string;
             issuer: components["schemas"]["EndpointIssuer"];
             /** Format: uuid */

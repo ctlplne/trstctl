@@ -12864,6 +12864,9 @@
           "effect_free": {
             "type": "boolean"
           },
+          "existing_identity": {
+            "$ref": "#/components/schemas/Identity"
+          },
           "identity_name": {
             "type": "string"
           },

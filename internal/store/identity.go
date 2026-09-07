@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -170,6 +171,37 @@ func (s *Store) GetIdentity(ctx context.Context, tenantID, id string) (Identity,
 	it.Kind = IdentityKind(kind)
 	it.Attributes = attrs
 	return it, err
+}
+
+// FindIdentityByName returns the newest identity with this tenant-local name that
+// is not revoked or retired, so a second enrollment for the same DNS name binds the
+// identity discovery already claimed instead of minting a twin (DP2-019).
+func (s *Store) FindIdentityByName(ctx context.Context, tenantID, name string) (Identity, bool, error) {
+	var (
+		it    Identity
+		kind  string
+		attrs []byte
+	)
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT id::text, tenant_id::text, kind, name, owner_id::text, issuer_id::text,
+			        status, not_before, not_after, attributes, created_at
+			   FROM identities
+			  WHERE tenant_id = $1 AND name = $2 AND status NOT IN ('revoked', 'retired')
+			  ORDER BY created_at DESC
+			  LIMIT 1`, tenantID, name).
+			Scan(&it.ID, &it.TenantID, &kind, &it.Name, &it.OwnerID, &it.IssuerID,
+				&it.Status, &it.NotBefore, &it.NotAfter, &attrs, &it.CreatedAt)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Identity{}, false, nil
+	}
+	if err != nil {
+		return Identity{}, false, err
+	}
+	it.Kind = IdentityKind(kind)
+	it.Attributes = attrs
+	return it, true, nil
 }
 
 // ListIdentities returns all identities for a tenant.

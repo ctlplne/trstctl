@@ -251,6 +251,7 @@ type endpointBindingPreviewResponse struct {
 	RequestFingerprint     string                       `json:"request_fingerprint"`
 	OwnerID                string                       `json:"owner_id"`
 	IdentityName           string                       `json:"identity_name"`
+	ExistingIdentity       *identityResponse            `json:"existing_identity,omitempty"`
 	Issuer                 endpointIssuerSummary        `json:"issuer"`
 	Target                 endpointBindingTargetSummary `json:"target"`
 	Custody                endpointBindingCustody       `json:"custody"`
@@ -957,12 +958,19 @@ func (a *API) createEndpointBinding(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
-		identity, err := a.orch.CreateIdentity(ctx, tenantID, store.Identity{
-			Kind:       store.KindX509Certificate,
-			Name:       req.IdentityName,
-			OwnerID:    req.OwnerID,
-			Attributes: attributes,
-		})
+		var identity store.Identity
+		if preview.ExistingIdentity != nil {
+			// DP2-019: the DNS name already has an identity (typically claimed from
+			// discovery); enroll that one rather than creating a duplicate.
+			identity, err = a.store.GetIdentity(ctx, tenantID, preview.ExistingIdentity.ID)
+		} else {
+			identity, err = a.orch.CreateIdentity(ctx, tenantID, store.Identity{
+				Kind:       store.KindX509Certificate,
+				Name:       req.IdentityName,
+				OwnerID:    req.OwnerID,
+				Attributes: attributes,
+			})
+		}
 		if err != nil {
 			return 0, nil, err
 		}
@@ -1037,13 +1045,27 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 			"selected external CA answers asynchronously, and destination "+target.Name+" ("+target.Connector+") executes on a host agent with control-plane key custody; "+
 				"a slow CA answer would strand the certificate without its private key. Set \"executor\": \"agent\" on the destination so the enrolled host agent generates the key, submits only a CSR, installs the certificate, and verifies the listener; no CA was substituted and nothing was queued")
 	}
+	// DP2-019: discovery may already have claimed this DNS name into an identity.
+	// Bind that identity instead of minting a twin, and say so in the preview; its
+	// id is part of the request fingerprint so a change between preview and create
+	// is caught like any other.
+	var existingResp *identityResponse
+	existingID := ""
+	if existing, found, err := a.store.FindIdentityByName(ctx, tenantID, req.IdentityName); err != nil {
+		return endpointBindingPreviewResponse{}, err
+	} else if found {
+		resp := toIdentityResponse(existing)
+		existingResp = &resp
+		existingID = existing.ID
+	}
 	fingerprintInput := struct {
-		OwnerID      string                       `json:"owner_id"`
-		IdentityName string                       `json:"identity_name"`
-		Reason       string                       `json:"reason"`
-		Issuer       endpointIssuerSummary        `json:"issuer"`
-		Target       endpointBindingTargetSummary `json:"target"`
-	}{req.OwnerID, req.IdentityName, endpointBindingReason(req), issuer, target}
+		OwnerID            string                       `json:"owner_id"`
+		IdentityName       string                       `json:"identity_name"`
+		Reason             string                       `json:"reason"`
+		Issuer             endpointIssuerSummary        `json:"issuer"`
+		Target             endpointBindingTargetSummary `json:"target"`
+		ExistingIdentityID string                       `json:"existing_identity_id,omitempty"`
+	}{req.OwnerID, req.IdentityName, endpointBindingReason(req), issuer, target, existingID}
 	raw, err := json.Marshal(fingerprintInput)
 	if err != nil {
 		return endpointBindingPreviewResponse{}, err
@@ -1063,6 +1085,7 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 		}
 	}
 	return endpointBindingPreviewResponse{
+		ExistingIdentity:   existingResp,
 		Capability:         "endpoint_binding",
 		Ready:              true,
 		EffectFree:         true,

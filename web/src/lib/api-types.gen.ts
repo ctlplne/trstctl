@@ -3125,6 +3125,7 @@ export interface EndpointBindingPreview {
   changes: string[];
   custody: EndpointBindingCustody;
   effect_free: boolean;
+  existing_identity?: Identity;
   identity_name: string;
   issuer: EndpointIssuer;
   owner_id: string;

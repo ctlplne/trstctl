@@ -2943,7 +2943,8 @@ func componentSchemas() map[string]*Schema {
 	endpointBindingPreview := object(map[string]*Schema{
 		"capability": str(), "ready": {Type: "boolean"}, "effect_free": {Type: "boolean"},
 		"request_fingerprint": str(), "owner_id": uuid(), "identity_name": str(),
-		"issuer": ref("EndpointIssuer"), "target": ref("EndpointBindingTarget"), "custody": ref("EndpointBindingCustody"),
+		"existing_identity": ref("Identity"),
+		"issuer":            ref("EndpointIssuer"), "target": ref("EndpointBindingTarget"), "custody": ref("EndpointBindingCustody"),
 		"changes": {Type: "array", Items: str()}, "queued_lifecycle_intents": {Type: "array", Items: str()},
 		"recovery_steps": {Type: "array", Items: str()}, "verification_steps": {Type: "array", Items: str()},
 		"preview_writes": {Type: "array", Items: str()}, "preview_external_effects": {Type: "array", Items: str()},
