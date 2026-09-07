@@ -2103,14 +2103,24 @@ func (s *Server) configurePrivacyRetentionWorker(d Deps, orch *orchestrator.Orch
 
 func (s *Server) readinessChecks(ctx context.Context, d Deps) []observ.Check {
 	checks := []observ.Check{
-		{Name: "db", Probe: func(ctx context.Context) error { return d.Store.SystemPool().Ping(ctx) }},
-		{Name: "nats", Probe: func(ctx context.Context) error { return s.probeEventLog(ctx) }},
-		{Name: "projection", Probe: s.probeProjectionTail},
-		{Name: "secret_sync_recovery_authority", Probe: d.Store.RequireSecretSyncReceiverRecoveryAuthorized},
+		// The db check runs on the store's dedicated probe pool, so a saturated
+		// request pool (correctly shedding load with a 503) cannot make PostgreSQL
+		// read as unreachable and drop the replica out of rotation (DP2-054).
+		{Name: "db", Probe: d.Store.ProbePing},
+		// The event-log probe also samples outbox reconciliation lag and dead-letter
+		// depth through the request pool, so it takes the same backpressure budget;
+		// a NATS ping failure itself still fails readiness.
+		{Name: "nats", Probe: readyDespiteBackpressure(func(ctx context.Context) error { return s.probeEventLog(ctx) })},
+		// The datastore-reading probes read through the shared request pool; a
+		// pool-acquire or statement timeout there is AN-7 load shedding, not
+		// unreadiness, so it is tolerated (the db check above still proves the
+		// datastore itself is reachable). A genuine failure still fails the probe.
+		{Name: "projection", Probe: readyDespiteBackpressure(s.probeProjectionTail)},
+		{Name: "secret_sync_recovery_authority", Probe: readyDespiteBackpressure(d.Store.RequireSecretSyncReceiverRecoveryAuthorized)},
 	}
 	if s.api != nil {
 		checks = append(checks, observ.Check{
-			Name: "application_secret_reconciliation", Probe: s.api.ApplicationSecretMutationReconcileHealth,
+			Name: "application_secret_reconciliation", Probe: readyDespiteBackpressure(s.api.ApplicationSecretMutationReconcileHealth),
 		})
 	}
 	if d.Signer == nil {

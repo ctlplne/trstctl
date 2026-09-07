@@ -45,6 +45,11 @@ const appRole = "trstctl_app"
 // projections) use the pool directly.
 type Store struct {
 	pool *pgxpool.Pool
+	// probePool is a tiny dedicated pool for readiness/liveness probes, so a
+	// request-pool saturation (AN-7 backpressure: the main pool sheds load with a
+	// 503) can never make /readyz report PostgreSQL unreachable. It carries no
+	// request work (DP2-054).
+	probePool *pgxpool.Pool
 	// historyRewriteOperationGate admits only one local contender to the
 	// deployment-wide PostgreSQL operation lock. Without it, maxConns local
 	// waiters can each pin a session and starve the elected callback's cutover.
@@ -62,6 +67,11 @@ type Store struct {
 // idempotent retries (AN-5) deliberately block on one another inside Postgres
 // while a key is claimed; too small a pool would starve the waiters.
 const maxConns = 16
+
+// probePoolMaxConns bounds the dedicated readiness/liveness probe pool. Two is
+// enough for the handful of concurrent probes a /readyz call runs and small
+// enough that the probes cannot themselves become a load source.
+const probePoolMaxConns = 2
 
 // Bounded-latency defaults (OPS-TIMEOUTS-001): a saturated pool or a runaway
 // query fails closed with a structured error instead of hanging a request.
@@ -129,8 +139,26 @@ func Open(ctx context.Context, dsn string, opts ...OpenOption) (*Store, error) {
 		pool.Close()
 		return nil, fmt.Errorf("store: ping: %w", err)
 	}
+	// A separate, tiny pool reserved for readiness/liveness probes. It never
+	// carries request work, so a saturated request pool (which correctly sheds
+	// load with a 503) cannot make a datastore probe time out and drop the whole
+	// replica out of rotation (DP2-054).
+	probeCfg := cfg.Copy()
+	probeCfg.MaxConns = probePoolMaxConns
+	probeCfg.MinConns = 1
+	probePool, err := pgxpool.NewWithConfig(ctx, probeCfg)
+	if err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("store: connect probe pool: %w", err)
+	}
+	if err := probePool.Ping(ctx); err != nil {
+		probePool.Close()
+		pool.Close()
+		return nil, fmt.Errorf("store: ping probe pool: %w", err)
+	}
 	return &Store{
 		pool:                        pool,
+		probePool:                   probePool,
 		acquireTimeout:              options.acquireTimeout,
 		historyRewriteOperationGate: make(chan struct{}, 1),
 	}, nil
@@ -176,7 +204,29 @@ func IsBusy(err error) bool {
 }
 
 // Close releases the connection pool.
-func (s *Store) Close() { s.pool.Close() }
+func (s *Store) Close() {
+	if s.probePool != nil {
+		s.probePool.Close()
+	}
+	s.pool.Close()
+}
+
+// ProbePing checks PostgreSQL reachability on the dedicated probe pool, bounded
+// by a short deadline. It is the readiness "db" check: it proves the datastore
+// is reachable independently of request-pool saturation, so load shedding on the
+// main pool never reads as PostgreSQL being down (DP2-054).
+func (s *Store) ProbePing(ctx context.Context) error {
+	pool := s.probePool
+	if pool == nil {
+		pool = s.pool
+	}
+	pingCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	if err := pool.Ping(pingCtx); err != nil {
+		return fmt.Errorf("store: probe ping: %w", err)
+	}
+	return nil
+}
 
 // SystemPool exposes the underlying connection pool for SYSTEM operations only:
 // cross-tenant, RLS-BYPASSING work such as migrations, projection writes, and the
