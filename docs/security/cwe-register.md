@@ -742,7 +742,7 @@ not this file.
 | `deploy/kubernetes/manifests_test.go:434` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/local-oidc/oidc_test.go:79` | node path comes from LookPath and the script is a checked-in test target (CWE-78) |
 | `deploy/local-oidc/oidc_test.go:155` | arguments are fixed checked-in scripts (CWE-78) |
-| `deploy/local-oidc/oidc_test.go:325` | node path comes from LookPath and the script is a checked-in test target (CWE-78) |
+| `deploy/local-oidc/oidc_test.go:326` | node path comes from LookPath and the script is a checked-in test target (CWE-78) |
 | `docs/claim_applications_test.go:67` | test runs the repository's own committed generator against tempdir fixtures it just wrote itself (CWE-78) |
 | `docs/cwe_register_test.go:18` | test runs the repo's own committed generator (CWE-78) |
 | `docs/cwe_register_test.go:40` | test runs the repo's own committed generator against a tempdir fixture (CWE-78) |

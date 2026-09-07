@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -67,6 +68,31 @@ func DiscoveryRelayEventID(tenantID, idempotencyKey, purpose string) string {
 // UpsertDiscoverySegment records the operator's declared scan denominator as
 // an event. Completing a run records freshness separately; editing the declared
 // boundary never manufactures an observation.
+// emitDiscoveryDeclaration appends a discovery declaration event and applies it
+// inline. When the projection tail concurrently applies the SAME logical
+// declaration (a tight declare-then-create), the inline upsert and the tail
+// upsert race on the row and one aborts with a transient conflict. The event is
+// durable either way, so retrying is safe: the deterministic per-tenant id and
+// the projection sequence guard make the re-emitted event a no-op if the row is
+// already at or past it, and a clean apply otherwise. This keeps a rapid
+// declare-then-create a 201 instead of a spurious 500.
+func (o *Orchestrator) emitDiscoveryDeclaration(ctx context.Context, eventType, tenantID string, payload json.RawMessage) (events.Event, error) {
+	var ev events.Event
+	var err error
+	for attempt := 0; attempt < 4; attempt++ {
+		ev, err = o.emit(ctx, eventType, tenantID, payload)
+		if err == nil || !errors.Is(err, store.ErrDiscoveryDeclarationEventConflict) {
+			return ev, err
+		}
+		select {
+		case <-ctx.Done():
+			return ev, ctx.Err()
+		case <-time.After(time.Duration(attempt+1) * 10 * time.Millisecond):
+		}
+	}
+	return ev, err
+}
+
 func (o *Orchestrator) UpsertDiscoverySegment(ctx context.Context, tenantID string, in store.DiscoverySegment) (store.DiscoverySegment, error) {
 	name := strings.TrimSpace(in.Name)
 	id := in.ID
@@ -84,7 +110,7 @@ func (o *Orchestrator) UpsertDiscoverySegment(ctx context.Context, tenantID stri
 	if err != nil {
 		return store.DiscoverySegment{}, err
 	}
-	if _, err := o.emit(ctx, projections.EventDiscoverySegmentUpserted, tenantID, payload); err != nil {
+	if _, err := o.emitDiscoveryDeclaration(ctx, projections.EventDiscoverySegmentUpserted, tenantID, payload); err != nil {
 		return store.DiscoverySegment{}, err
 	}
 	return o.store.GetDiscoverySegmentByName(ctx, tenantID, name)
@@ -120,7 +146,7 @@ func (o *Orchestrator) UpsertDiscoverySource(ctx context.Context, tenantID strin
 	if err != nil {
 		return store.DiscoverySource{}, err
 	}
-	ev, err := o.emit(ctx, projections.EventDiscoverySourceUpserted, tenantID, payload)
+	ev, err := o.emitDiscoveryDeclaration(ctx, projections.EventDiscoverySourceUpserted, tenantID, payload)
 	if err != nil {
 		return store.DiscoverySource{}, err
 	}
