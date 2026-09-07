@@ -7613,6 +7613,11 @@ export const messages = {
     defaultMessage: "Add a host, address, CIDR, or explicit IP range to define this fence.",
     description: "Discovery empty proposed-scope explanation.",
   },
+  "discovery.setup.relayPick": { defaultMessage: "Enrolled network relays", description: "Discovery source setup: picker of the tenant's enrolled network-role agents." },
+  "discovery.setup.relayPickAny": { defaultMessage: "Any enrolled network-role relay (leave the ID empty)", description: "Discovery source setup: relay picker default option." },
+  "discovery.setup.relayPickDescription": { defaultMessage: "Pick an agent by name to fill its ID below, or type an ID.", description: "Discovery source setup: relay picker help." },
+  "discovery.setup.relayPickNone": { defaultMessage: "No network-role agents are enrolled yet; type an ID or leave it empty.", description: "Discovery source setup: relay picker when none are enrolled." },
+  "discovery.setup.relayPickUnavailable": { defaultMessage: "Agents could not be listed; type the relay agent ID below.", description: "Discovery source setup: relay picker when the agents API failed." },
   "discovery.setup.relay": { defaultMessage: "Network relay", description: "Discovery network-relay field." },
   "discovery.setup.relayDescription": {
     defaultMessage: "Connections originate here. Leave blank only when the server can select an active network-role relay.",

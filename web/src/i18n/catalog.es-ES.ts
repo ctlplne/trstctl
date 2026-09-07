@@ -8341,6 +8341,11 @@ const esESCatalog = {
   "discovery.setup.newScopeBody":
     "La siguiente acción solo registra este límite autorizado y después pide al servidor una vista previa del plan exacto. Todavía no se ejecuta ningún escaneo ni se guarda ninguna fuente.",
   "discovery.setup.newScopeEmpty": "Añada un host, una dirección, un CIDR o un intervalo IP explícito para definir esta barrera.",
+  "discovery.setup.relayPick": "Relés de red inscritos",
+  "discovery.setup.relayPickAny": "Cualquier relé inscrito con rol de red (deje el ID vacío)",
+  "discovery.setup.relayPickDescription": "Elija un agente por nombre para rellenar su ID abajo, o escriba un ID.",
+  "discovery.setup.relayPickNone": "Aún no hay agentes con rol de red inscritos; escriba un ID o déjelo vacío.",
+  "discovery.setup.relayPickUnavailable": "No se pudieron listar los agentes; escriba el ID del agente relé abajo.",
   "discovery.setup.relay": "Relay de red",
   "discovery.setup.relayDescription": "Las conexiones se originan aquí. Déjelo vacío solo si el servidor puede elegir un relay activo con rol de red.",
   "discovery.setup.rangesAndExclusions": "Rangos de direcciones y exclusiones explícitos",

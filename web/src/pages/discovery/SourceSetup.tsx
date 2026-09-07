@@ -11,7 +11,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { api, type DiscoveryCapability, type DiscoveryPlanPreview, type DiscoverySegmentCoverage, type DiscoverySource } from "@/lib/api";
+import { api, type DiscoveryCapability, type DiscoveryPlanPreview, type DiscoverySegmentCoverage, type DiscoverySource, type Agent } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
 import { useApiQuery } from "@/lib/query";
 import { translateNow, useTranslation } from "@/i18n/I18nProvider";
@@ -288,6 +288,25 @@ export function SourceSetup({ onCreated }: { onCreated: (source: DiscoverySource
     () => (capabilities.data?.items ?? []).filter((item) => item.setup_surface === "source_wizard" && primaryKinds.includes(item.kind as PrimaryKind)),
     [capabilities.data?.items],
   );
+  // DP2-015: the relay used to be a hand-typed UUID while the Agents page shows a
+  // truncated ID. Offer the tenant's enrolled network-role agents by name; the
+  // pick fills the ID field below, which stays editable as the manual fallback.
+  const [relayPick, setRelayPick] = useState("");
+  const [relayAgents, setRelayAgents] = useState<{ state: "loading" | "ready" | "unavailable"; list: Agent[] }>({ state: "loading", list: [] });
+  useEffect(() => {
+    let live = true;
+    api
+      .agents()
+      .then((list) => {
+        if (live) setRelayAgents({ state: "ready", list: list.filter((agent) => agent.roles?.includes("network")) });
+      })
+      .catch(() => {
+        if (live) setRelayAgents({ state: "unavailable", list: [] });
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
   const contractProblems = useMemo(() => sourceWizardContractProblems(capabilities.data?.items ?? []), [capabilities.data?.items]);
   const capability = available.find((item) => item.kind === values.kind);
   const providers = capability?.providers ?? noProviders;
@@ -427,7 +446,7 @@ export function SourceSetup({ onCreated }: { onCreated: (source: DiscoverySource
                 declaredScopes={declaredScopes}
                 scopesLoading={coverage.loading}
                 scopesError={coverage.error}
-              />
+              relayAgents={relayAgents} relayPick={relayPick} onRelayPick={(value) => { setRelayPick(value); form.setValue("relayAgentID", value, { shouldDirty: true, shouldValidate: true }); }} />
             ) : null}
             {values.kind === "adcs" ? <ADCSFields form={form} /> : null}
             {values.kind === "cloud_certificate" || values.kind === "cloud_secret" || values.kind === "secret_store" ? (
@@ -538,6 +557,9 @@ function NetworkFields({
   declaredScopes,
   scopesLoading,
   scopesError,
+  relayAgents,
+  relayPick,
+  onRelayPick,
 }: {
   form: ReturnType<typeof useForm<SetupValues>>;
   kind: "network" | "ssh";
@@ -545,6 +567,9 @@ function NetworkFields({
   declaredScopes: DiscoverySegmentCoverage[];
   scopesLoading: boolean;
   scopesError: string | null;
+  relayAgents: { state: "loading" | "ready" | "unavailable"; list: Agent[] };
+  relayPick: string;
+  onRelayPick: (value: string) => void;
 }) {
   const { t } = useTranslation();
   const portPreset = kind === "ssh" ? "22" : "443, 8443";
@@ -555,6 +580,23 @@ function NetworkFields({
       <div className="grid gap-4 lg:grid-cols-2">
         <Field label={t("discovery.setup.scope")} description={t("discovery.setup.scopeDescription")} error={form.formState.errors.segment?.message} required>
           {(control) => <Input {...control} {...form.register("segment")} placeholder={examples.scope} />}
+        </Field>
+        <Field label={t("discovery.setup.relayPick")} description={t(relayAgents.state === "unavailable" ? "discovery.setup.relayPickUnavailable" : relayAgents.state === "ready" && relayAgents.list.length === 0 ? "discovery.setup.relayPickNone" : "discovery.setup.relayPickDescription")}>
+          {(control) => (
+            <select
+              {...control}
+              className="ui-input"
+              value={relayPick}
+              onChange={(event) => onRelayPick(event.target.value)}
+            >
+              <option value="">{t("discovery.setup.relayPickAny")}</option>
+              {relayAgents.list.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.name} · {agent.id.slice(0, 8)}
+                </option>
+              ))}
+            </select>
+          )}
         </Field>
         <Field label={t("discovery.setup.relay")} description={t("discovery.setup.relayDescription")} error={form.formState.errors.relayAgentID?.message}>
           {(control) => <Input {...control} {...form.register("relayAgentID")} className="font-mono text-xs" placeholder={examples.agentID} />}

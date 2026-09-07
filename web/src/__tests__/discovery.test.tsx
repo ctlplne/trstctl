@@ -25,6 +25,7 @@ const { apiMock } = vi.hoisted(() => ({
     claimDiscoveryFinding: vi.fn(),
     dismissDiscoveryFinding: vi.fn(),
     createDiscoverySource: vi.fn(),
+    agents: vi.fn(),
     createDiscoverySchedule: vi.fn(),
     startDiscoveryRun: vi.fn(),
     retryDiscoveryRun: vi.fn(),
@@ -82,6 +83,7 @@ function wizardCapability(kind: PrimaryKind, providers?: DiscoveryCapability["pr
 }
 
 function seedDiscoveryMocks() {
+  apiMock.agents.mockResolvedValue([]);
   apiMock.identities.mockResolvedValue([
     {
       id: "identity-1",
@@ -1600,5 +1602,28 @@ describe("discovery control-plane surface", () => {
     expect(apiMock.preflightDiscoverySource).toHaveBeenCalledWith("source-cloud-certificate");
     expect(apiMock.retryDiscoveryRun).toHaveBeenCalledWith("run-failed");
     expect(await screen.findByRole("status")).toHaveTextContent(/Recovery run run-retry queued/);
+  });
+
+  it("offers the enrolled network-role relays by name and fills the relay ID from the pick (DP2-015)", async () => {
+    apiMock.agents.mockResolvedValue([
+      { id: "11111111-2222-4333-8444-555555555555", name: "dmz-relay", status: "active", roles: ["network", "host"] },
+      { id: "99999999-8888-4777-8666-555555555555", name: "host-only", status: "active", roles: ["host"] },
+    ]);
+    const user = userEvent.setup();
+    renderDiscovery(["/discovery?tab=sources"]);
+    const sourceForm = await screen.findByRole("form", { name: "Set up a discovery source" });
+    const picker = (await within(sourceForm).findByLabelText("Enrolled network relays")) as HTMLSelectElement;
+    const offered = Array.from(picker.options).map((option) => option.textContent ?? "");
+    expect(offered.some((label) => label.startsWith("dmz-relay"))).toBe(true);
+    expect(offered.some((label) => label.startsWith("host-only"))).toBe(false);
+    await user.selectOptions(picker, "11111111-2222-4333-8444-555555555555");
+    expect(within(sourceForm).getByLabelText("Network relay")).toHaveValue("11111111-2222-4333-8444-555555555555");
+    await user.type(within(sourceForm).getByLabelText("Source name"), "edge-3");
+    await user.type(within(sourceForm).getByLabelText("Authorized scope"), "production-dmz");
+    await user.type(within(sourceForm).getByLabelText(/Hosts, IPs/), "10.0.0.13:443");
+    await user.click(within(sourceForm).getByRole("button", { name: "Review exact plan" }));
+    await user.click(await within(sourceForm).findByRole("button", { name: "Save source" }));
+    const request = apiMock.createDiscoverySource.mock.calls.at(-1)?.[0];
+    expect(request?.config.relay_agent_id).toBe("11111111-2222-4333-8444-555555555555");
   });
 });

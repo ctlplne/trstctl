@@ -8409,6 +8409,11 @@ const deDECatalog = {
   "discovery.setup.newScopeBody":
     "Die nächste Aktion speichert nur diese erlaubte Grenze und fordert danach vom Server eine Vorschau des genauen Scanplans an. Es wird noch nichts gescannt und keine Quelle gespeichert.",
   "discovery.setup.newScopeEmpty": "Fügen Sie einen Host, eine Adresse, ein CIDR oder einen eindeutigen IP-Bereich hinzu, um diesen Zaun festzulegen.",
+  "discovery.setup.relayPick": "Registrierte Netzwerk-Relays",
+  "discovery.setup.relayPickAny": "Beliebiger registrierter Relay mit Netzwerkrolle (ID leer lassen)",
+  "discovery.setup.relayPickDescription": "Agent per Name auswählen, um die ID unten auszufüllen, oder eine ID eingeben.",
+  "discovery.setup.relayPickNone": "Noch keine Agenten mit Netzwerkrolle registriert; ID eingeben oder leer lassen.",
+  "discovery.setup.relayPickUnavailable": "Agenten konnten nicht aufgelistet werden; Relay-Agent-ID unten eingeben.",
   "discovery.setup.relay": "Netzwerk-Relay",
   "discovery.setup.relayDescription":
     "Verbindungen beginnen hier. Lassen Sie das Feld nur leer, wenn der Server ein aktives Relay mit Netzwerkrolle auswählen kann.",
