@@ -446,7 +446,13 @@ export function SourceSetup({ onCreated }: { onCreated: (source: DiscoverySource
                 declaredScopes={declaredScopes}
                 scopesLoading={coverage.loading}
                 scopesError={coverage.error}
-              relayAgents={relayAgents} relayPick={relayPick} onRelayPick={(value) => { setRelayPick(value); form.setValue("relayAgentID", value, { shouldDirty: true, shouldValidate: true }); }} />
+                relayAgents={relayAgents}
+                relayPick={relayPick}
+                onRelayPick={(value) => {
+                  setRelayPick(value);
+                  form.setValue("relayAgentID", value, { shouldDirty: true, shouldValidate: true });
+                }}
+              />
             ) : null}
             {values.kind === "adcs" ? <ADCSFields form={form} /> : null}
             {values.kind === "cloud_certificate" || values.kind === "cloud_secret" || values.kind === "secret_store" ? (
@@ -581,14 +587,18 @@ function NetworkFields({
         <Field label={t("discovery.setup.scope")} description={t("discovery.setup.scopeDescription")} error={form.formState.errors.segment?.message} required>
           {(control) => <Input {...control} {...form.register("segment")} placeholder={examples.scope} />}
         </Field>
-        <Field label={t("discovery.setup.relayPick")} description={t(relayAgents.state === "unavailable" ? "discovery.setup.relayPickUnavailable" : relayAgents.state === "ready" && relayAgents.list.length === 0 ? "discovery.setup.relayPickNone" : "discovery.setup.relayPickDescription")}>
+        <Field
+          label={t("discovery.setup.relayPick")}
+          description={t(
+            relayAgents.state === "unavailable"
+              ? "discovery.setup.relayPickUnavailable"
+              : relayAgents.state === "ready" && relayAgents.list.length === 0
+                ? "discovery.setup.relayPickNone"
+                : "discovery.setup.relayPickDescription",
+          )}
+        >
           {(control) => (
-            <select
-              {...control}
-              className="ui-input"
-              value={relayPick}
-              onChange={(event) => onRelayPick(event.target.value)}
-            >
+            <select {...control} className="ui-input" value={relayPick} onChange={(event) => onRelayPick(event.target.value)}>
               <option value="">{t("discovery.setup.relayPickAny")}</option>
               {relayAgents.list.map((agent) => (
                 <option key={agent.id} value={agent.id}>

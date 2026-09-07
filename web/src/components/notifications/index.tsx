@@ -49,7 +49,8 @@ export function deriveAlerts(risks: CredentialRisk[], certs: Certificate[]): Ale
   const now = Date.now();
   for (const cert of certs) {
     const days = daysUntil(cert.not_after);
-    if (days < 0 || expiresWithinDays(cert.not_after, now, 7)) alerts.push({ id: `cert-${cert.id}`, severity: "critical", title: `Expiring now: ${cert.subject}`, detail: `${days} day(s) to expiry` });
+    if (days < 0 || expiresWithinDays(cert.not_after, now, 7))
+      alerts.push({ id: `cert-${cert.id}`, severity: "critical", title: `Expiring now: ${cert.subject}`, detail: `${days} day(s) to expiry` });
     else if (expiresWithinDays(cert.not_after, now, 30))
       alerts.push({ id: `cert-${cert.id}`, severity: "warning", title: `Expiring soon: ${cert.subject}`, detail: `${days} day(s) to expiry` });
   }

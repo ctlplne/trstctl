@@ -4079,10 +4079,19 @@ export const messages = {
     defaultMessage: "trstctl records a current ownership attestation so deployment and renewal can fail closed if accountability later becomes stale.",
     description: "Technical ELI5 explanation of the ownership attestation created by the wizard.",
   },
-  "wizard.certificate.ownerAlertContact": { defaultMessage: "Alert contact", description: "Wizard owner step: email that receives expiry and failure alerts for this certificate's owner." },
+  "wizard.certificate.ownerAlertContact": {
+    defaultMessage: "Alert contact",
+    description: "Wizard owner step: email that receives expiry and failure alerts for this certificate's owner.",
+  },
   "wizard.certificate.ownerAlertContactPlaceholder": { defaultMessage: "team@example.com", description: "Wizard owner step: alert contact placeholder." },
-  "wizard.certificate.ownerAlertContactHelp": { defaultMessage: "Expiry and failure alerts for this certificate go here. Without it the owner counts as unreachable.", description: "Wizard owner step: alert contact help." },
-  "wizard.certificate.ownerAlertContactRequired": { defaultMessage: "Enter an alert contact email for the owner before issuing.", description: "Wizard owner step: validation when the alert contact is missing." },
+  "wizard.certificate.ownerAlertContactHelp": {
+    defaultMessage: "Expiry and failure alerts for this certificate go here. Without it the owner counts as unreachable.",
+    description: "Wizard owner step: alert contact help.",
+  },
+  "wizard.certificate.ownerAlertContactRequired": {
+    defaultMessage: "Enter an alert contact email for the owner before issuing.",
+    description: "Wizard owner step: validation when the alert contact is missing.",
+  },
   "wizard.certificate.ownerRequired": {
     defaultMessage: "Add an application ID and environment, then confirm ownership before issuing.",
     description: "Recovery instruction when owner fields are missing from first-run issuance.",
@@ -5074,22 +5083,54 @@ export const messages = {
     defaultMessage: "The issued certificate lands in the inventory and starts counting toward estate health.",
     description: "First-certificate journey step 4 body.",
   },
-  "journeys.pec.title": { defaultMessage: "Preserve your existing CA", description: "Journey title: automate the endpoint lifecycle around a CA the customer already trusts." },
-  "journeys.pec.description": { defaultMessage: "Keep the certificate authority you already trust and let trstctl automate the endpoint lifecycle around it: discover the listener, preview the exact plan, authorize once, and prove the result on the wire.", description: "Journey description." },
+  "journeys.pec.title": {
+    defaultMessage: "Preserve your existing CA",
+    description: "Journey title: automate the endpoint lifecycle around a CA the customer already trusts.",
+  },
+  "journeys.pec.description": {
+    defaultMessage:
+      "Keep the certificate authority you already trust and let trstctl automate the endpoint lifecycle around it: discover the listener, preview the exact plan, authorize once, and prove the result on the wire.",
+    description: "Journey description.",
+  },
   "journeys.pec.baseline.title": { defaultMessage: "Record the before baseline", description: "Journey step title." },
-  "journeys.pec.baseline.body": { defaultMessage: "Query the live listener and keep its fingerprint, issuer, and expiry outside trstctl. A later certificate that is not observable on the listener is not proof.", description: "Journey step body." },
+  "journeys.pec.baseline.body": {
+    defaultMessage:
+      "Query the live listener and keep its fingerprint, issuer, and expiry outside trstctl. A later certificate that is not observable on the listener is not proof.",
+    description: "Journey step body.",
+  },
   "journeys.pec.discover.title": { defaultMessage: "Discover the certificate before managing it", description: "Journey step title." },
-  "journeys.pec.discover.body": { defaultMessage: "Create a bounded network discovery source for the canary host and run it. The finding must agree with your baseline before you continue.", description: "Journey step body." },
+  "journeys.pec.discover.body": {
+    defaultMessage: "Create a bounded network discovery source for the canary host and run it. The finding must agree with your baseline before you continue.",
+    description: "Journey step body.",
+  },
   "journeys.pec.authority.title": { defaultMessage: "Select the authority explicitly", description: "Journey step title." },
-  "journeys.pec.authority.body": { defaultMessage: "Pick the configured upstream CA by its exact registry entry. A similar display name is not a safe substitute.", description: "Journey step body." },
+  "journeys.pec.authority.body": {
+    defaultMessage: "Pick the configured upstream CA by its exact registry entry. A similar display name is not a safe substitute.",
+    description: "Journey step body.",
+  },
   "journeys.pec.preview.title": { defaultMessage: "Preview the exact lifecycle", description: "Journey step title." },
-  "journeys.pec.preview.body": { defaultMessage: "Register an enabled destination with non-secret metadata, then build the effect-free preview. Stop unless it names your CA and destination, explains key custody, and says nothing was queued.", description: "Journey step body." },
+  "journeys.pec.preview.body": {
+    defaultMessage:
+      "Register an enabled destination with non-secret metadata, then build the effect-free preview. Stop unless it names your CA and destination, explains key custody, and says nothing was queued.",
+    description: "Journey step body.",
+  },
   "journeys.pec.authorize.title": { defaultMessage: "Authorize the unchanged plan", description: "Journey step title." },
-  "journeys.pec.authorize.body": { defaultMessage: "Authorize the reviewed fingerprint once. Repeating the same request is idempotent; changing the plan after the preview is refused.", description: "Journey step body." },
+  "journeys.pec.authorize.body": {
+    defaultMessage: "Authorize the reviewed fingerprint once. Repeating the same request is idempotent; changing the plan after the preview is refused.",
+    description: "Journey step body.",
+  },
   "journeys.pec.inspect.title": { defaultMessage: "Inspect issuance, deployment, and listener proof", description: "Journey step title." },
-  "journeys.pec.inspect.body": { defaultMessage: "Check the certificate inventory, the connector receipt, and the listener itself. The public issuer must match the CA you chose and the fingerprint must differ from the baseline.", description: "Journey step body." },
+  "journeys.pec.inspect.body": {
+    defaultMessage:
+      "Check the certificate inventory, the connector receipt, and the listener itself. The public issuer must match the CA you chose and the fingerprint must differ from the baseline.",
+    description: "Journey step body.",
+  },
   "journeys.pec.routing.title": { defaultMessage: "Verify expiry routing and ownership", description: "Journey step title." },
-  "journeys.pec.routing.body": { defaultMessage: "Preview the owner, asset, and severity route, then acknowledge the controlled alert so the accountable owner can see and work the warning.", description: "Journey step body." },
+  "journeys.pec.routing.body": {
+    defaultMessage:
+      "Preview the owner, asset, and severity route, then acknowledge the controlled alert so the accountable owner can see and work the warning.",
+    description: "Journey step body.",
+  },
   "journeys.mig.title": {
     defaultMessage: "Migrate from an existing CA",
     description: "Journey title: CA migration.",
@@ -6861,7 +6902,10 @@ export const messages = {
   "certificateCockpit.detail.noAlertContact": { defaultMessage: "No alert contact", description: "Certificate owner has no alert contact." },
   "certificateCockpit.detail.activity": { defaultMessage: "Credential activity", description: "Accessible certificate activity definition label." },
   "certificateCockpit.reason.expired": { defaultMessage: "Certificate is expired", description: "Expired certificate queue reason." },
-  "certificateCockpit.expiry.notYetValid": { defaultMessage: "Not yet valid", description: "Expiry band for a certificate whose validity has not started; it must not read as healthy." },
+  "certificateCockpit.expiry.notYetValid": {
+    defaultMessage: "Not yet valid",
+    description: "Expiry band for a certificate whose validity has not started; it must not read as healthy.",
+  },
   "certificateCockpit.reason.sevenDays": { defaultMessage: "Expires within 7 days", description: "Seven-day certificate queue reason." },
   "certificateCockpit.reason.thirtyDays": { defaultMessage: "Expires within 30 days", description: "Thirty-day certificate queue reason." },
   "certificateCockpit.reason.renewalFailed": { defaultMessage: "Renewal job failed", description: "Failed renewal queue reason." },
@@ -7617,11 +7661,26 @@ export const messages = {
     defaultMessage: "Add a host, address, CIDR, or explicit IP range to define this fence.",
     description: "Discovery empty proposed-scope explanation.",
   },
-  "discovery.setup.relayPick": { defaultMessage: "Enrolled network relays", description: "Discovery source setup: picker of the tenant's enrolled network-role agents." },
-  "discovery.setup.relayPickAny": { defaultMessage: "Any enrolled network-role relay (leave the ID empty)", description: "Discovery source setup: relay picker default option." },
-  "discovery.setup.relayPickDescription": { defaultMessage: "Pick an agent by name to fill its ID below, or type an ID.", description: "Discovery source setup: relay picker help." },
-  "discovery.setup.relayPickNone": { defaultMessage: "No network-role agents are enrolled yet; type an ID or leave it empty.", description: "Discovery source setup: relay picker when none are enrolled." },
-  "discovery.setup.relayPickUnavailable": { defaultMessage: "Agents could not be listed; type the relay agent ID below.", description: "Discovery source setup: relay picker when the agents API failed." },
+  "discovery.setup.relayPick": {
+    defaultMessage: "Enrolled network relays",
+    description: "Discovery source setup: picker of the tenant's enrolled network-role agents.",
+  },
+  "discovery.setup.relayPickAny": {
+    defaultMessage: "Any enrolled network-role relay (leave the ID empty)",
+    description: "Discovery source setup: relay picker default option.",
+  },
+  "discovery.setup.relayPickDescription": {
+    defaultMessage: "Pick an agent by name to fill its ID below, or type an ID.",
+    description: "Discovery source setup: relay picker help.",
+  },
+  "discovery.setup.relayPickNone": {
+    defaultMessage: "No network-role agents are enrolled yet; type an ID or leave it empty.",
+    description: "Discovery source setup: relay picker when none are enrolled.",
+  },
+  "discovery.setup.relayPickUnavailable": {
+    defaultMessage: "Agents could not be listed; type the relay agent ID below.",
+    description: "Discovery source setup: relay picker when the agents API failed.",
+  },
   "discovery.setup.relay": { defaultMessage: "Network relay", description: "Discovery network-relay field." },
   "discovery.setup.relayDescription": {
     defaultMessage: "Connections originate here. Leave blank only when the server can select an active network-role relay.",
@@ -12208,8 +12267,15 @@ export const messages = {
   "owners.readiness.create": { defaultMessage: "Create owner", description: "Submit a new owner record." },
   "owners.readiness.created": { defaultMessage: "Owner created", description: "Successful owner-create toast." },
   "shell.demoBanner.landmark": { defaultMessage: "Seeded demo notice", description: "Accessible name of the seeded-demo banner landmark." },
-  "owners.readiness.attestOnCreate": { defaultMessage: "I attest this ownership record is current and I am accountable for it", description: "Checkbox on the owner-create form; checked by default so the new owner is attested as part of creation." },
-  "owners.readiness.attestOnCreateHelp": { defaultMessage: "Deployments to identities this owner holds are refused until a human attests the record. Leave this unchecked only when someone else must attest later.", description: "Help text under the attest-on-create checkbox." },
+  "owners.readiness.attestOnCreate": {
+    defaultMessage: "I attest this ownership record is current and I am accountable for it",
+    description: "Checkbox on the owner-create form; checked by default so the new owner is attested as part of creation.",
+  },
+  "owners.readiness.attestOnCreateHelp": {
+    defaultMessage:
+      "Deployments to identities this owner holds are refused until a human attests the record. Leave this unchecked only when someone else must attest later.",
+    description: "Help text under the attest-on-create checkbox.",
+  },
   "owners.readiness.editTitle": { defaultMessage: "Edit {name}", description: "Owner editor title." },
   "owners.readiness.staleCount": { defaultMessage: "Stale attestations: {count}.", description: "Count of identities whose owner attestation is stale." },
   "owners.readiness.grantTemporary": { defaultMessage: "Grant temporary exception", description: "Open a bounded ownership-exception dialog." },

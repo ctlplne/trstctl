@@ -22,6 +22,29 @@ export function daysUntil(notAfter?: string): number {
   return libDaysUntil(notAfter, Date.now()) ?? Infinity;
 }
 
+// The clock is read inside these helpers, never in a component body, so render
+// stays pure (react-hooks/purity) while every count uses the shared rule.
+function expiringCounts(certificates: Certificate[]): { within7: number; within30: number } {
+  const now = Date.now();
+  return {
+    within7: certificates.filter((certificate) => expiresWithinDays(certificate.not_after, now, 7)).length,
+    within30: certificates.filter((certificate) => expiresWithinDays(certificate.not_after, now, 30)).length,
+  };
+}
+
+function attentionRows(certificates: Certificate[]): { certificate: Certificate; days: number }[] {
+  const now = Date.now();
+  return certificates
+    .filter((certificate) => isLive(certificate))
+    .map((certificate) => ({ certificate, days: daysUntil(certificate.not_after) }))
+    .filter((entry) => {
+      const remaining = remainingMs(entry.certificate.not_after, now);
+      return remaining !== null && remaining < 30 * DAY;
+    })
+    .sort((a, b) => a.days - b.days)
+    .slice(0, 6);
+}
+
 function expiryBuckets(certificates: Certificate[]): BucketDatum[] {
   const now = Date.now();
   let expired = 0;
@@ -65,9 +88,7 @@ export function autoRenewingCount(certificates: Certificate[], runs: RotationRun
 
 export function CertKpis({ certificates, risks }: { certificates: Certificate[]; risks: RiskItem[] }) {
   const active = certificates.filter((certificate) => isLive(certificate));
-  const now = Date.now();
-  const expiring7 = active.filter((certificate) => expiresWithinDays(certificate.not_after, now, 7)).length;
-  const expiring30 = active.filter((certificate) => expiresWithinDays(certificate.not_after, now, 30)).length;
+  const { within7: expiring7, within30: expiring30 } = expiringCounts(active);
   const revoked = certificates.filter((certificate) => certificate.status === "revoked").length;
   const highRisk = risks.filter((risk) => (risk.score ?? 0) >= 70).length;
   // Total + expiring counts intentionally live on the server-backed estate
@@ -85,16 +106,7 @@ export function CertKpis({ certificates, risks }: { certificates: Certificate[];
 
 export function CertificatesDashboard({ certificates, risks }: { certificates: Certificate[]; risks: RiskItem[] }) {
   const buckets = expiryBuckets(certificates);
-  const now = Date.now();
-  const attention = certificates
-    .filter((certificate) => isLive(certificate))
-    .map((certificate) => ({ certificate, days: daysUntil(certificate.not_after) }))
-    .filter((entry) => {
-      const remaining = remainingMs(entry.certificate.not_after, now);
-      return remaining !== null && remaining < 30 * DAY;
-    })
-    .sort((a, b) => a.days - b.days)
-    .slice(0, 6);
+  const attention = attentionRows(certificates);
   return (
     <div className="grid gap-4">
       <CertKpis certificates={certificates} risks={risks} />

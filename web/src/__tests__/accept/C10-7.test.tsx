@@ -55,6 +55,7 @@ function renderWizard() {
 async function completeOwnerFields(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText("Application ID"), "APP-PAYMENTS");
   await user.type(screen.getByLabelText("Environment"), "production");
+  await user.type(screen.getByLabelText("Alert contact"), "web-team@example.test");
   await user.click(screen.getByLabelText("I confirm this application owns the certificate"));
 }
 

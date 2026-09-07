@@ -533,10 +533,13 @@ function CertificateStep({ certificate, onIssued }: { certificate: Identity | nu
             value={alertContact}
             onChange={(event) => setAlertContact(event.target.value)}
             placeholder={t("wizard.certificate.ownerAlertContactPlaceholder")}
+            aria-describedby="wizard-owner-alert-contact-help"
             required
           />
-          <span className="text-xs font-normal text-muted-foreground">{t("wizard.certificate.ownerAlertContactHelp")}</span>
         </label>
+        <p id="wizard-owner-alert-contact-help" className="text-xs text-muted-foreground">
+          {t("wizard.certificate.ownerAlertContactHelp")}
+        </p>
         <label className="flex items-start gap-2 text-sm font-medium" htmlFor="wizard-owner-confirm">
           <input
             id="wizard-owner-confirm"

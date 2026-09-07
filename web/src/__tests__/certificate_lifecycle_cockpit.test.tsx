@@ -547,8 +547,19 @@ describe("Certificate Lifecycle cockpit", () => {
       source_breakdown: [],
       expiring: [],
       summary: {
-        total: 1, active: 0, expired: 0, expiring_7d: 0, expiring_30d: 0, expiring_90d: 0, revoked: 0, superseded: 1,
-        external_source_count: 1, imported_count: 0, discovered_count: 1, unknown_expiry_count: 0, health: "ok",
+        total: 1,
+        active: 0,
+        expired: 0,
+        expiring_7d: 0,
+        expiring_30d: 0,
+        expiring_90d: 0,
+        revoked: 0,
+        superseded: 1,
+        external_source_count: 1,
+        imported_count: 0,
+        discovered_count: 1,
+        unknown_expiry_count: 0,
+        health: "ok",
       },
     });
     renderPage();
@@ -585,8 +596,19 @@ describe("Certificate Lifecycle cockpit", () => {
       source_breakdown: [],
       expiring: [],
       summary: {
-        total: 1, active: 1, expired: 0, expiring_7d: 0, expiring_30d: 1, expiring_90d: 1, revoked: 0, superseded: 0,
-        external_source_count: 0, imported_count: 0, discovered_count: 0, unknown_expiry_count: 0, health: "critical",
+        total: 1,
+        active: 1,
+        expired: 0,
+        expiring_7d: 0,
+        expiring_30d: 1,
+        expiring_90d: 1,
+        revoked: 0,
+        superseded: 0,
+        external_source_count: 0,
+        imported_count: 0,
+        discovered_count: 0,
+        unknown_expiry_count: 0,
+        health: "critical",
       },
     });
     renderPage();

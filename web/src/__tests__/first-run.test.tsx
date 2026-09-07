@@ -114,6 +114,7 @@ describe("first-run served capability journey", () => {
     await user.type(await screen.findByLabelText(/service name/i), "payments");
     await user.type(screen.getByLabelText("Application ID"), "APP-PAYMENTS");
     await user.type(screen.getByLabelText("Environment"), "production");
+    await user.type(screen.getByLabelText("Alert contact"), "web-team@example.test");
     await user.click(screen.getByLabelText("I confirm this application owns the certificate"));
     await user.click(screen.getByRole("button", { name: /^issue certificate$/i }));
     await waitFor(() => expect(apiMock.issueCertificate).toHaveBeenCalledWith({ name: "payments", ownerId: "owner-1" }));

@@ -1654,7 +1654,8 @@ const esESCatalog = {
     "trstctl registra una confirmación de responsabilidad vigente para que el despliegue y la renovación se bloqueen si la responsabilidad queda desactualizada.",
   "wizard.certificate.ownerAlertContact": "Contacto de alertas",
   "wizard.certificate.ownerAlertContactPlaceholder": "equipo@example.com",
-  "wizard.certificate.ownerAlertContactHelp": "Las alertas de caducidad y de fallo de este certificado llegan aquí. Sin él, el propietario cuenta como inalcanzable.",
+  "wizard.certificate.ownerAlertContactHelp":
+    "Las alertas de caducidad y de fallo de este certificado llegan aquí. Sin él, el propietario cuenta como inalcanzable.",
   "wizard.certificate.ownerAlertContactRequired": "Introduzca un correo de contacto de alertas para el propietario antes de emitir.",
   "wizard.certificate.ownerRequired": "Añada un ID de aplicación y un entorno, y luego confirme la responsabilidad antes de emitir.",
   "wizard.certificate.ownerNotReady":
@@ -1930,21 +1931,28 @@ const esESCatalog = {
   "journeys.fc.inventory.title": "Verla en el inventario",
   "journeys.fc.inventory.body": "El certificado emitido llega al inventario y empieza a contar en la salud del entorno.",
   "journeys.pec.title": "Conserve su CA actual",
-  "journeys.pec.description": "Mantenga la autoridad de certificación en la que ya confía y deje que trstctl automatice el ciclo de vida del punto final a su alrededor: descubra el listener, revise el plan exacto, autorice una vez y demuestre el resultado en la conexión.",
+  "journeys.pec.description":
+    "Mantenga la autoridad de certificación en la que ya confía y deje que trstctl automatice el ciclo de vida del punto final a su alrededor: descubra el listener, revise el plan exacto, autorice una vez y demuestre el resultado en la conexión.",
   "journeys.pec.baseline.title": "Registre la situación previa",
-  "journeys.pec.baseline.body": "Consulte el listener en producción y guarde su huella, emisor y caducidad fuera de trstctl. Un certificado posterior que no se observe en el listener no es prueba.",
+  "journeys.pec.baseline.body":
+    "Consulte el listener en producción y guarde su huella, emisor y caducidad fuera de trstctl. Un certificado posterior que no se observe en el listener no es prueba.",
   "journeys.pec.discover.title": "Descubra el certificado antes de gestionarlo",
-  "journeys.pec.discover.body": "Cree una fuente de descubrimiento de red acotada para el host canario y ejecútela. El hallazgo debe coincidir con su situación previa antes de continuar.",
+  "journeys.pec.discover.body":
+    "Cree una fuente de descubrimiento de red acotada para el host canario y ejecútela. El hallazgo debe coincidir con su situación previa antes de continuar.",
   "journeys.pec.authority.title": "Seleccione la autoridad de forma explícita",
   "journeys.pec.authority.body": "Elija la CA superior configurada por su entrada exacta en el registro. Un nombre parecido no es un sustituto seguro.",
   "journeys.pec.preview.title": "Revise el ciclo de vida exacto",
-  "journeys.pec.preview.body": "Registre un destino habilitado con metadatos no secretos y genere la vista previa sin efectos. Deténgase salvo que nombre su CA y su destino, explique la custodia de la clave y confirme que no se encoló nada.",
+  "journeys.pec.preview.body":
+    "Registre un destino habilitado con metadatos no secretos y genere la vista previa sin efectos. Deténgase salvo que nombre su CA y su destino, explique la custodia de la clave y confirme que no se encoló nada.",
   "journeys.pec.authorize.title": "Autorice el plan sin cambios",
-  "journeys.pec.authorize.body": "Autorice una vez la huella revisada. Repetir la misma solicitud es idempotente; cambiar el plan después de la vista previa se rechaza.",
+  "journeys.pec.authorize.body":
+    "Autorice una vez la huella revisada. Repetir la misma solicitud es idempotente; cambiar el plan después de la vista previa se rechaza.",
   "journeys.pec.inspect.title": "Inspeccione la emisión, el despliegue y la prueba del listener",
-  "journeys.pec.inspect.body": "Compruebe el inventario de certificados, el recibo del conector y el propio listener. El emisor público debe coincidir con la CA elegida y la huella debe diferir de la situación previa.",
+  "journeys.pec.inspect.body":
+    "Compruebe el inventario de certificados, el recibo del conector y el propio listener. El emisor público debe coincidir con la CA elegida y la huella debe diferir de la situación previa.",
   "journeys.pec.routing.title": "Verifique el enrutamiento de caducidad y la responsabilidad",
-  "journeys.pec.routing.body": "Revise la ruta de responsable, activo y gravedad y luego confirme la alerta controlada para que el responsable pueda verla y atenderla.",
+  "journeys.pec.routing.body":
+    "Revise la ruta de responsable, activo y gravedad y luego confirme la alerta controlada para que el responsable pueda verla y atenderla.",
   "journeys.mig.title": "Migrar desde una CA existente",
   "journeys.mig.description": "Encuentre cada certificado que emitió la CA antigua, fije sus reglas y traslade la emisión de forma deliberada.",
   "journeys.mig.source.title": "Apuntar el descubrimiento a su entorno",
@@ -2042,13 +2050,16 @@ const esESCatalog = {
   "journeys.provider.entitlement.title": "Confirmar la habilitación",
   "journeys.provider.entitlement.body": "Abra Plan y licencia y confirme que el plan Proveedor está activo y la firma verificada.",
   "journeys.provider.signin.title": "Iniciar sesión como operador de proveedor",
-  "journeys.provider.signin.body": "Abra la página Proveedor y autentíquese con su proveedor de identidad; el plano deriva su rol y MFA de las reclamaciones firmadas.",
+  "journeys.provider.signin.body":
+    "Abra la página Proveedor y autentíquese con su proveedor de identidad; el plano deriva su rol y MFA de las reclamaciones firmadas.",
   "journeys.provider.delegate.title": "Delegar un cliente",
-  "journeys.provider.delegate.body": "Conceda a un operador autoridad sobre un cliente por slug con una clave de idempotencia estable; una concesión con caducidad usa -expires-at.",
+  "journeys.provider.delegate.body":
+    "Conceda a un operador autoridad sobre un cliente por slug con una clave de idempotencia estable; una concesión con caducidad usa -expires-at.",
   "journeys.provider.customers.title": "Aprovisionar clientes",
   "journeys.provider.customers.body": "Aprovisione cada cliente como un inquilino aislado; la lista de clientes muestra solo los clientes delegados a usted.",
   "journeys.provider.lifecycle.title": "Ejecutar un ciclo de vida de cliente",
-  "journeys.provider.lifecycle.body": "Emita, despliegue, verifique y renueve un certificado dentro del límite de un cliente y luego extraiga su medición como evidencia de factura.",
+  "journeys.provider.lifecycle.body":
+    "Emita, despliegue, verifique y renueve un certificado dentro del límite de un cliente y luego extraiga su medición como evidencia de factura.",
   "journeys.team.description": "Una porción de tenant aislada con SSO, roles, política de denegación por defecto y un rastro de auditoría firmado.",
   "journeys.team.token.title": "Emitir el token del tenant",
   "journeys.team.token.body": "Un token con ámbito de tenant es la frontera del equipo: cada recurso que toca permanece dentro del tenant.",
@@ -4103,7 +4114,8 @@ const esESCatalog = {
   "owners.readiness.created": "Responsable creado",
   "shell.demoBanner.landmark": "Aviso de demostración con datos de ejemplo",
   "owners.readiness.attestOnCreate": "Confirmo que este registro de responsabilidad está actualizado y que soy responsable de él",
-  "owners.readiness.attestOnCreateHelp": "Los despliegues a identidades de este responsable se rechazan hasta que una persona confirme el registro. Déjelo sin marcar solo si otra persona debe confirmarlo más tarde.",
+  "owners.readiness.attestOnCreateHelp":
+    "Los despliegues a identidades de este responsable se rechazan hasta que una persona confirme el registro. Déjelo sin marcar solo si otra persona debe confirmarlo más tarde.",
   "owners.readiness.editTitle": "Editar {name}",
   "owners.readiness.staleCount": "Confirmaciones vencidas: {count}.",
   "owners.readiness.grantTemporary": "Conceder excepción temporal",

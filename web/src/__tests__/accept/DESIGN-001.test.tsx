@@ -78,6 +78,7 @@ describe("DESIGN-001 first-certificate onboarding cues", () => {
     await user.type(screen.getByLabelText("Service name"), "payments");
     await user.type(screen.getByLabelText("Application ID"), "APP-PAYMENTS");
     await user.type(screen.getByLabelText("Environment"), "production");
+    await user.type(screen.getByLabelText("Alert contact"), "web-team@example.test");
     await user.click(screen.getByLabelText("I confirm this application owns the certificate"));
     await user.click(screen.getByRole("button", { name: "Issue certificate" }));
     await waitFor(() => expect(apiMock.issueCertificate).toHaveBeenCalledWith({ name: "payments", ownerId: "owner-1" }));

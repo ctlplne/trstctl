@@ -1681,7 +1681,8 @@ const deDECatalog = {
     "trstctl zeichnet eine aktuelle Verantwortungsbestätigung auf, damit Bereitstellung und Erneuerung geschlossen fehlschlagen, wenn die Verantwortlichkeit später veraltet ist.",
   "wizard.certificate.ownerAlertContact": "Alarmkontakt",
   "wizard.certificate.ownerAlertContactPlaceholder": "team@example.com",
-  "wizard.certificate.ownerAlertContactHelp": "Ablauf- und Fehlerwarnungen für dieses Zertifikat gehen hierhin. Ohne Kontakt gilt der Eigentümer als nicht erreichbar.",
+  "wizard.certificate.ownerAlertContactHelp":
+    "Ablauf- und Fehlerwarnungen für dieses Zertifikat gehen hierhin. Ohne Kontakt gilt der Eigentümer als nicht erreichbar.",
   "wizard.certificate.ownerAlertContactRequired": "Geben Sie vor der Ausstellung eine Alarmkontakt-E-Mail für den Eigentümer ein.",
   "wizard.certificate.ownerRequired": "Anwendungs-ID und Umgebung hinzufügen und anschließend die Verantwortung vor der Ausstellung bestätigen.",
   "wizard.certificate.ownerNotReady":
@@ -1962,21 +1963,29 @@ const deDECatalog = {
   "journeys.fc.inventory.title": "Im Inventar sehen",
   "journeys.fc.inventory.body": "Das ausgestellte Zertifikat landet im Inventar und zählt ab sofort zum Bestandszustand.",
   "journeys.pec.title": "Bestehende CA beibehalten",
-  "journeys.pec.description": "Behalten Sie die Zertifizierungsstelle, der Sie bereits vertrauen, und lassen Sie trstctl den Endpunkt-Lebenszyklus darum herum automatisieren: Listener erkennen, den exakten Plan prüfen, einmal autorisieren und das Ergebnis auf der Leitung nachweisen.",
+  "journeys.pec.description":
+    "Behalten Sie die Zertifizierungsstelle, der Sie bereits vertrauen, und lassen Sie trstctl den Endpunkt-Lebenszyklus darum herum automatisieren: Listener erkennen, den exakten Plan prüfen, einmal autorisieren und das Ergebnis auf der Leitung nachweisen.",
   "journeys.pec.baseline.title": "Ausgangszustand festhalten",
-  "journeys.pec.baseline.body": "Fragen Sie den laufenden Listener ab und bewahren Sie Fingerabdruck, Aussteller und Ablauf außerhalb von trstctl auf. Ein späteres Zertifikat, das auf dem Listener nicht sichtbar ist, ist kein Nachweis.",
+  "journeys.pec.baseline.body":
+    "Fragen Sie den laufenden Listener ab und bewahren Sie Fingerabdruck, Aussteller und Ablauf außerhalb von trstctl auf. Ein späteres Zertifikat, das auf dem Listener nicht sichtbar ist, ist kein Nachweis.",
   "journeys.pec.discover.title": "Zertifikat erkennen, bevor es verwaltet wird",
-  "journeys.pec.discover.body": "Legen Sie eine begrenzte Netzwerk-Erkennungsquelle für den Canary-Host an und führen Sie sie aus. Der Fund muss mit Ihrem Ausgangszustand übereinstimmen, bevor Sie fortfahren.",
+  "journeys.pec.discover.body":
+    "Legen Sie eine begrenzte Netzwerk-Erkennungsquelle für den Canary-Host an und führen Sie sie aus. Der Fund muss mit Ihrem Ausgangszustand übereinstimmen, bevor Sie fortfahren.",
   "journeys.pec.authority.title": "Zertifizierungsstelle ausdrücklich auswählen",
-  "journeys.pec.authority.body": "Wählen Sie die konfigurierte übergeordnete CA anhand ihres exakten Registrierungseintrags. Ein ähnlicher Anzeigename ist kein sicherer Ersatz.",
+  "journeys.pec.authority.body":
+    "Wählen Sie die konfigurierte übergeordnete CA anhand ihres exakten Registrierungseintrags. Ein ähnlicher Anzeigename ist kein sicherer Ersatz.",
   "journeys.pec.preview.title": "Exakten Lebenszyklus prüfen",
-  "journeys.pec.preview.body": "Registrieren Sie ein aktiviertes Ziel mit nicht geheimen Metadaten und erstellen Sie dann die wirkungsfreie Vorschau. Fahren Sie nur fort, wenn sie Ihre CA und Ihr Ziel nennt, die Schlüsselverwahrung erklärt und bestätigt, dass nichts eingereiht wurde.",
+  "journeys.pec.preview.body":
+    "Registrieren Sie ein aktiviertes Ziel mit nicht geheimen Metadaten und erstellen Sie dann die wirkungsfreie Vorschau. Fahren Sie nur fort, wenn sie Ihre CA und Ihr Ziel nennt, die Schlüsselverwahrung erklärt und bestätigt, dass nichts eingereiht wurde.",
   "journeys.pec.authorize.title": "Unveränderten Plan autorisieren",
-  "journeys.pec.authorize.body": "Autorisieren Sie den geprüften Fingerabdruck einmal. Dieselbe Anfrage zu wiederholen ist idempotent; eine Änderung des Plans nach der Vorschau wird abgelehnt.",
+  "journeys.pec.authorize.body":
+    "Autorisieren Sie den geprüften Fingerabdruck einmal. Dieselbe Anfrage zu wiederholen ist idempotent; eine Änderung des Plans nach der Vorschau wird abgelehnt.",
   "journeys.pec.inspect.title": "Ausstellung, Bereitstellung und Listener-Nachweis prüfen",
-  "journeys.pec.inspect.body": "Prüfen Sie den Zertifikatsbestand, die Connector-Quittung und den Listener selbst. Der öffentliche Aussteller muss mit der gewählten CA übereinstimmen und der Fingerabdruck muss sich vom Ausgangszustand unterscheiden.",
+  "journeys.pec.inspect.body":
+    "Prüfen Sie den Zertifikatsbestand, die Connector-Quittung und den Listener selbst. Der öffentliche Aussteller muss mit der gewählten CA übereinstimmen und der Fingerabdruck muss sich vom Ausgangszustand unterscheiden.",
   "journeys.pec.routing.title": "Ablauf-Weiterleitung und Verantwortung prüfen",
-  "journeys.pec.routing.body": "Prüfen Sie die Route aus Verantwortlichem, Asset und Schweregrad in der Vorschau und bestätigen Sie dann die kontrollierte Warnung, damit der verantwortliche Eigentümer sie sehen und bearbeiten kann.",
+  "journeys.pec.routing.body":
+    "Prüfen Sie die Route aus Verantwortlichem, Asset und Schweregrad in der Vorschau und bestätigen Sie dann die kontrollierte Warnung, damit der verantwortliche Eigentümer sie sehen und bearbeiten kann.",
   "journeys.mig.title": "Von einer bestehenden CA migrieren",
   "journeys.mig.description": "Alles finden, was die alte CA ausgestellt hat, Regeln festschreiben und die Neuausstellung kontrolliert umstellen.",
   "journeys.mig.source.title": "Discovery auf Ihren Bestand richten",
@@ -2075,13 +2084,16 @@ const deDECatalog = {
   "journeys.provider.entitlement.title": "Berechtigung prüfen",
   "journeys.provider.entitlement.body": "Öffnen Sie Plan und Lizenz und prüfen Sie, dass der Provider-Plan aktiv und die Signatur verifiziert ist.",
   "journeys.provider.signin.title": "Als Provider-Operator anmelden",
-  "journeys.provider.signin.body": "Öffnen Sie die Provider-Seite und authentifizieren Sie sich über Ihren Identitätsanbieter; die Ebene leitet Rolle und MFA aus den signierten Claims ab.",
+  "journeys.provider.signin.body":
+    "Öffnen Sie die Provider-Seite und authentifizieren Sie sich über Ihren Identitätsanbieter; die Ebene leitet Rolle und MFA aus den signierten Claims ab.",
   "journeys.provider.delegate.title": "Einen Kunden delegieren",
-  "journeys.provider.delegate.body": "Erteilen Sie einem Operator Autorität über einen Kunden per Slug mit einem stabilen Idempotenzschlüssel; ein zeitlich begrenztes Recht nimmt -expires-at.",
+  "journeys.provider.delegate.body":
+    "Erteilen Sie einem Operator Autorität über einen Kunden per Slug mit einem stabilen Idempotenzschlüssel; ein zeitlich begrenztes Recht nimmt -expires-at.",
   "journeys.provider.customers.title": "Kunden bereitstellen",
   "journeys.provider.customers.body": "Stellen Sie jeden Kunden als isolierten Mandanten bereit; die Kundenliste zeigt nur die Ihnen delegierten Kunden.",
   "journeys.provider.lifecycle.title": "Einen Kundenlebenszyklus ausführen",
-  "journeys.provider.lifecycle.body": "Stellen Sie ein Zertifikat innerhalb der Grenze eines Kunden aus, verteilen, prüfen und erneuern Sie es und ziehen Sie dann dessen Messung als Rechnungsnachweis.",
+  "journeys.provider.lifecycle.body":
+    "Stellen Sie ein Zertifikat innerhalb der Grenze eines Kunden aus, verteilen, prüfen und erneuern Sie es und ziehen Sie dann dessen Messung als Rechnungsnachweis.",
   "journeys.team.description": "Ein isolierter Tenant-Ausschnitt mit SSO, Rollen, Default-Deny-Richtlinie und signiertem Audit-Trail.",
   "journeys.team.token.title": "Tenant-Token ausstellen",
   "journeys.team.token.body": "Ein tenant-gebundenes Token ist die Grenze des Teams: Alles, was es berührt, bleibt im Tenant.",
@@ -4142,7 +4154,8 @@ const deDECatalog = {
   "owners.readiness.created": "Verantwortlicher erstellt",
   "shell.demoBanner.landmark": "Hinweis zur Demo mit Beispieldaten",
   "owners.readiness.attestOnCreate": "Ich bestätige, dass dieser Verantwortlichkeitsdatensatz aktuell ist und ich dafür verantwortlich bin",
-  "owners.readiness.attestOnCreateHelp": "Bereitstellungen für Identitäten dieses Verantwortlichen werden abgelehnt, bis eine Person den Datensatz bestätigt. Lassen Sie das Feld nur leer, wenn jemand anderes später bestätigen muss.",
+  "owners.readiness.attestOnCreateHelp":
+    "Bereitstellungen für Identitäten dieses Verantwortlichen werden abgelehnt, bis eine Person den Datensatz bestätigt. Lassen Sie das Feld nur leer, wenn jemand anderes später bestätigen muss.",
   "owners.readiness.editTitle": "{name} bearbeiten",
   "owners.readiness.staleCount": "Veraltete Bestätigungen: {count}.",
   "owners.readiness.grantTemporary": "Temporäre Ausnahme gewähren",
