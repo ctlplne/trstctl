@@ -44,7 +44,7 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1382 annotated sites across 26 rules. Each row is
+1386 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -956,7 +956,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (370 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (374 sites)
 
 | Location | Reason |
 |---|---|
@@ -1257,6 +1257,8 @@ not this file.
 | `internal/tsa/http_test.go:107` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/tsa/http_test.go:112` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
 | `internal/tsa/tsa_rfc3161_test.go:136` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/webui/source_digest_test.go:63` | console build inputs inside the repository (CWE-22) |
+| `internal/webui/source_digest_test.go:70` | fixed repository path (CWE-22) |
 | `scripts/perf/cmd/capacitycalibrate/main.go:346` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `scripts/perf/cmd/soakcapture/main_test.go:68` | test reads its own fixture/tempdir path (CWE-22) |
 | `scripts/perf/cmd/soakgate/main.go:130` | developer tool reading the repo paths it is pointed at (CWE-22) |
@@ -1330,6 +1332,8 @@ not this file.
 | `tools/trstctllint/hotspot_test.go:205` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/trstctllint/hotspot_test.go:303` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/trstctllint/licenseboundary/licenseboundary.go:37` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/trstctllint/upsertarbiter/upsertarbiter.go:114` | migration files under the repository store package (CWE-22) |
+| `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
 ### G306 — CWE-276 Incorrect default permissions (file write) (90 sites)
 
@@ -1517,7 +1521,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1142` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:888` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (60 sites)
+### G703 — CWE-22 Path traversal (taint) (61 sites)
 
 | Location | Reason |
 |---|---|
@@ -1581,6 +1585,7 @@ not this file.
 | `tools/dodcensus/runtime_runner.go:873` | developer tool probing repo/toolchain paths, not a served binary (CWE-22) |
 | `tools/dodcensus/runtime_runner_test.go:345` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/runtime_runner_test.go:479` | test path inside its own tempdir/checkout (CWE-22) |
+| `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
 ### G704 — CWE-918 Server-side request forgery (taint) (5 sites)
 

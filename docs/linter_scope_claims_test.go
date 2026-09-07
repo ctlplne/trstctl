@@ -51,6 +51,7 @@ var linterNonANAnalyzers = map[string]bool{
 	"cryptoagility": true, // PQC-00
 	"netexec":       true, // SEC-005
 	"tlsverify":     true, // SEC-CWE-295
+	"upsertarbiter": true, // OPP-C01 (DP2-043/DP2-046 upsert-arbiter race class)
 }
 
 var (

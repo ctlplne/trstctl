@@ -379,10 +379,10 @@ spine-burst: ## Capture and analyze an event-spine burst artifact (SPINE-002; de
 	echo ">> spine-burst: trend report at $$report"
 
 .PHONY: lint lint-partial
-lint-partial: ## Run gofmt, go vet, architecture lint, and action-pin checks; warn if optional lint tools are absent
+lint-partial: ## Run gofmt, go vet, architecture lint, and action-pin checks; warn if optional lint tools (golangci-lint, actionlint, node for the web console checks) are absent
 	@$(MAKE) -f $(firstword $(MAKEFILE_LIST)) lint LINT_ALLOW_PARTIAL=1
 
-lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint, actionlint, and action-pin checks
+lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint, actionlint, web console eslint/prettier/embed-freshness, and action-pin checks
 	@echo ">> gofmt"
 	@unformatted=$$(git ls-files -z --cached --others --exclude-standard -- '*.go' ':!:**/testdata/**' | xargs -0 sh -c 'for file do [ ! -f "$$file" ] || gofmt -l -s "$$file"; done' sh); \
 	if [ -n "$$unformatted" ]; then \
@@ -392,16 +392,6 @@ lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint
 	fi
 	@echo ">> go vet"
 	$(GO) vet $(GO_PACKAGES)
-	@# OPP-C05: the web console is part of the served product; format and lint
-	@# drift used to accumulate silently because make lint ran Go checks only.
-	@echo ">> web deps (exact lock digest)"
-	@scripts/ci/install-web-deps.sh web >/dev/null
-	@echo ">> web lint (eslint --max-warnings=0)"
-	@$(WEB_NPM) run lint
-	@echo ">> web format:check (prettier)"
-	@$(WEB_NPM) run format:check
-	@echo ">> web embed freshness (OPP-C02: dist must be built from the checked-in console source)"
-	@scripts/ci/web-source-digest.sh --check
 	@echo ">> trstctllint (architecture rules: AN-1, AN-3, AN-5, AN-8, crypto-agility)"
 	@vettool=$$(mktemp "$${TMPDIR:-/tmp}/trstctllint.XXXXXX"); \
 	trap 'rm -f "$$vettool"' EXIT; \
@@ -435,6 +425,28 @@ lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint
 		echo "!! WARNING: actionlint NOT installed — SKIPPING workflow lint (install with: make tools)"; \
 	else \
 		echo "FAIL: actionlint is not installed, so make lint would skip workflow lint. Run 'make tools' or use 'make lint-partial' deliberately." >&2; \
+		exit 1; \
+	fi
+	@# OPP-C05/OPP-C02: the web console is part of the served product, so its
+	@# eslint, prettier and embed-freshness checks are part of the gate; that drift
+	@# used to accumulate silently because make lint ran Go checks only. Node is an
+	@# optional tool on a Go-only machine, so the block follows the golangci-lint /
+	@# actionlint convention (CODE-005): present -> run; missing -> fail closed, or
+	@# skip loudly under lint-partial. It sits after those discoveries on purpose:
+	@# a machine without golangci-lint must still fail with the CODE-005 message.
+	@if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then \
+		echo ">> web deps (exact lock digest)" && \
+		scripts/ci/install-web-deps.sh web >/dev/null && \
+		echo ">> web lint (eslint --max-warnings=0)" && \
+		$(WEB_NPM) run lint && \
+		echo ">> web format:check (prettier)" && \
+		$(WEB_NPM) run format:check && \
+		echo ">> web embed freshness (OPP-C02: dist must be built from the checked-in console source)" && \
+		scripts/ci/web-source-digest.sh --check; \
+	elif [ "$${LINT_ALLOW_PARTIAL:-0}" = "1" ]; then \
+		echo "!! WARNING: node/npm NOT installed — SKIPPING the web console eslint, prettier and embed-freshness checks (OPP-C05/OPP-C02); this is a PARTIAL lint."; \
+	else \
+		echo "FAIL: node/npm are not installed, so make lint would skip the web console eslint/prettier/embed-freshness checks. Install Node 20+ (see web/README.md) or use 'make lint-partial' deliberately." >&2; \
 		exit 1; \
 	fi
 	@echo ">> third-party GitHub Actions are SHA-pinned (SUPPLY-002)"
