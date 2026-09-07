@@ -2,8 +2,36 @@ import { describe, expect, it } from "vitest";
 
 import { defaultTargetConfig, defaultTargetConfigObject } from "@/lib/connectorTargetTemplates";
 
-const HOST_FAMILIES = ["nginx", "apache", "caddy", "traefik", "postgresql", "mysql", "rabbitmq", "elasticsearch", "tomcat", "haproxy", "iis", "postfix", "java-keystore"];
-const ALL = [...HOST_FAMILIES, "envoy", "f5", "netscaler", "a10", "cisco", "kemp", "fortigate", "paloalto", "aws-acm", "azure-keyvault", "gcp-certificate-manager", "unknown-plugin"];
+const HOST_FAMILIES = [
+  "nginx",
+  "apache",
+  "caddy",
+  "traefik",
+  "postgresql",
+  "mysql",
+  "rabbitmq",
+  "elasticsearch",
+  "tomcat",
+  "haproxy",
+  "iis",
+  "postfix",
+  "java-keystore",
+];
+const ALL = [
+  ...HOST_FAMILIES,
+  "envoy",
+  "f5",
+  "netscaler",
+  "a10",
+  "cisco",
+  "kemp",
+  "fortigate",
+  "paloalto",
+  "aws-acm",
+  "azure-keyvault",
+  "gcp-certificate-manager",
+  "unknown-plugin",
+];
 
 describe("connector target templates", () => {
   it("emits valid JSON for every connector family", () => {
@@ -20,7 +48,11 @@ describe("connector target templates", () => {
       expect(cfg.executor).toBe("agent");
       expect(cfg.required_agent_role).toBe("host");
     }
-    expect(defaultTargetConfigObject("apache")).toMatchObject({ cert_path: "/etc/apache2/tls/server.crt", key_path: "/etc/apache2/tls/server.key", verify_server_name: "service.example.com" });
+    expect(defaultTargetConfigObject("apache")).toMatchObject({
+      cert_path: "/etc/apache2/tls/server.crt",
+      key_path: "/etc/apache2/tls/server.key",
+      verify_server_name: "service.example.com",
+    });
     expect(defaultTargetConfigObject("haproxy")).toMatchObject({ crt_path: "/etc/haproxy/tls/server.pem", config_path: "/etc/haproxy/haproxy.cfg" });
     expect(defaultTargetConfigObject("iis")).toMatchObject({ binding: "*:443:service.example.com", import_dir: "C:/trstctl/import" });
   });

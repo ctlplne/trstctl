@@ -134,7 +134,14 @@ describe("route 029 decision-first ownership design", () => {
 
   it("attests a new owner as part of creating it, so deployments are not refused later", async () => {
     const user = userEvent.setup();
-    const created = { id: "owner-new", name: "Partner Lab Web Team", kind: "team", ownership_complete: true, ownership_attested: false, ownership_current: false };
+    const created = {
+      id: "owner-new",
+      name: "Partner Lab Web Team",
+      kind: "team",
+      ownership_complete: true,
+      ownership_attested: false,
+      ownership_current: false,
+    };
     apiMock.createOwner.mockResolvedValue(created);
     apiMock.attestOwner.mockResolvedValue({ ...created, ownership_attested: true, ownership_current: true });
     renderOwners();
@@ -153,7 +160,14 @@ describe("route 029 decision-first ownership design", () => {
 
   it("leaves attestation to a later human only when the person opts out", async () => {
     const user = userEvent.setup();
-    apiMock.createOwner.mockResolvedValue({ id: "owner-later", name: "Later team", kind: "team", ownership_complete: false, ownership_attested: false, ownership_current: false });
+    apiMock.createOwner.mockResolvedValue({
+      id: "owner-later",
+      name: "Later team",
+      kind: "team",
+      ownership_complete: false,
+      ownership_attested: false,
+      ownership_current: false,
+    });
     renderOwners();
     await screen.findByRole("heading", { level: 1, name: "Ownership" });
 

@@ -2108,8 +2108,7 @@ function RunTable({
               <ul className="list-none space-y-0.5 pl-0 font-mono" aria-label={translateNow("discovery.run.targetOutcomes")}>
                 {unresolved.map((result) => (
                   <li key={`${run.id}:${result.target}`} className="break-words">
-                    <span className="text-foreground">{result.target}</span>{" "}
-                    <StatusBadge vocabulary="lifecycle" value={result.status} />
+                    <span className="text-foreground">{result.target}</span> <StatusBadge vocabulary="lifecycle" value={result.status} />
                     {result.error ? <span className="text-muted-foreground"> {result.error}</span> : null}
                   </li>
                 ))}
@@ -2778,7 +2777,6 @@ function FindingTable({
   );
 }
 
-
 // observedCertificateDetails surfaces what a discovery finding actually observed
 // — the certificate's subject, issuer, validity window, SANs and key — from the
 // finding metadata, so the evidence panel answers "what is this?" and not only
@@ -2805,7 +2803,10 @@ function observedCertificateDetails(finding: DiscoveryFinding): Array<{ label: s
   const keyAlg = metadataString(metadata, ["key_algorithm", "key_type"]);
   const keyBits = metadata["public_key_bits"];
   if (keyAlg || typeof keyBits === "number") {
-    out.push({ label: translateNow("discovery.findings.observedKey"), value: [keyAlg, typeof keyBits === "number" ? `${keyBits}-bit` : ""].filter(Boolean).join(" ") });
+    out.push({
+      label: translateNow("discovery.findings.observedKey"),
+      value: [keyAlg, typeof keyBits === "number" ? `${keyBits}-bit` : ""].filter(Boolean).join(" "),
+    });
   }
   push(translateNow("discovery.findings.observedLocation"), ["location", "address", "endpoint"]);
   return out;

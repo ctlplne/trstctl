@@ -81,7 +81,15 @@ describe("WEB-APIPROBLEM-001: one error renderer", () => {
 
 describe("ApiError message", () => {
   it("surfaces the server's problem detail with the status and keeps the generic wording otherwise", () => {
-    const detailed = new ApiError(422, JSON.stringify({ type: "about:blank", title: "Unprocessable", status: 422, detail: "selected external CA needs a DNS-01 provider config; no CA was substituted" }));
+    const detailed = new ApiError(
+      422,
+      JSON.stringify({
+        type: "about:blank",
+        title: "Unprocessable",
+        status: 422,
+        detail: "selected external CA needs a DNS-01 provider config; no CA was substituted",
+      }),
+    );
     expect(detailed.message).toBe("selected external CA needs a DNS-01 provider config; no CA was substituted (HTTP 422)");
     expect(new ApiError(422, JSON.stringify({ title: "Unprocessable", status: 422 })).message).toBe("Unprocessable (HTTP 422)");
     expect(new ApiError(500, "<html>oops</html>").message).toBe("request failed (500)");

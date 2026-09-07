@@ -392,6 +392,14 @@ lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint
 	fi
 	@echo ">> go vet"
 	$(GO) vet $(GO_PACKAGES)
+	@# OPP-C05: the web console is part of the served product; format and lint
+	@# drift used to accumulate silently because make lint ran Go checks only.
+	@echo ">> web deps (exact lock digest)"
+	@scripts/ci/install-web-deps.sh web >/dev/null
+	@echo ">> web lint (eslint --max-warnings=0)"
+	@$(WEB_NPM) run lint
+	@echo ">> web format:check (prettier)"
+	@$(WEB_NPM) run format:check
 	@echo ">> trstctllint (architecture rules: AN-1, AN-3, AN-5, AN-8, crypto-agility)"
 	@vettool=$$(mktemp "$${TMPDIR:-/tmp}/trstctllint.XXXXXX"); \
 	trap 'rm -f "$$vettool"' EXIT; \

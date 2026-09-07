@@ -1120,7 +1120,6 @@ export class UnauthorizedError extends Error {
   }
 }
 
-
 /** apiErrorMessage turns a failed response into the sentence a page shows. The
  * server answers refusals with RFC 9457 problem+json whose `detail` names the
  * exact prerequisite and remedy (for example which DNS-01 provider config or

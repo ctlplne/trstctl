@@ -64,7 +64,12 @@ export function defaultTargetConfigObject(connector: string): Record<string, str
     case "envoy":
       return { endpoint: "http://127.0.0.1:9901", secret_name: "server_cert" };
     case "f5":
-      return { endpoint: "https://bigip.example.com", client_ssl_profile: "clientssl-service", username: "trstctl", password_ref: "secret://connectors/f5-password" };
+      return {
+        endpoint: "https://bigip.example.com",
+        client_ssl_profile: "clientssl-service",
+        username: "trstctl",
+        password_ref: "secret://connectors/f5-password",
+      };
     case "netscaler":
     case "a10":
     case "cisco":
@@ -75,11 +80,21 @@ export function defaultTargetConfigObject(connector: string): Record<string, str
     case "paloalto":
       return { endpoint: "https://panorama.example.com", api_key_ref: "secret://connectors/paloalto-api-key" };
     case "aws-acm":
-      return { endpoint: "https://acm.us-east-1.amazonaws.com", region: "us-east-1", access_key_id: "AKIA...", secret_access_key_ref: "secret://connectors/aws-secret-access-key" };
+      return {
+        endpoint: "https://acm.us-east-1.amazonaws.com",
+        region: "us-east-1",
+        access_key_id: "AKIA...",
+        secret_access_key_ref: "secret://connectors/aws-secret-access-key",
+      };
     case "azure-keyvault":
       return { endpoint: "https://vault.vault.azure.net", bearer_token_ref: "secret://connectors/azure-bearer-token" };
     case "gcp-certificate-manager":
-      return { endpoint: "https://certificatemanager.googleapis.com", project: "my-project", location: "global", bearer_token_ref: "secret://connectors/gcp-bearer-token" };
+      return {
+        endpoint: "https://certificatemanager.googleapis.com",
+        project: "my-project",
+        location: "global",
+        bearer_token_ref: "secret://connectors/gcp-bearer-token",
+      };
     default:
       return { credential_ref: `secret://connectors/${name || "connector"}`, host: "edge-1.internal" };
   }
