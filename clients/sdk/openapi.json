@@ -25150,6 +25150,121 @@
         ],
         "type": "object"
       },
+      "ProfileEditApprovalDecision": {
+        "properties": {
+          "approver": {
+            "type": "string"
+          },
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "decision": {
+            "enum": [
+              "approve"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "approver",
+          "decision",
+          "at"
+        ],
+        "type": "object"
+      },
+      "ProfileEditApprovalDecisionRequest": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ProfileEditApprovalList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileEditApprovalRecord"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "ProfileEditApprovalRecord": {
+        "properties": {
+          "approvals": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileEditApprovalDecision"
+            },
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "profile_edit"
+            ],
+            "type": "string"
+          },
+          "profile_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "profile_name": {
+            "type": "string"
+          },
+          "requester": {
+            "type": "string"
+          },
+          "required_approvals": {
+            "type": "integer"
+          },
+          "resource": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "awaiting_approval",
+              "approved",
+              "issued",
+              "denied",
+              "expired"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "resource",
+          "profile_name",
+          "requester",
+          "required_approvals",
+          "approvals",
+          "state",
+          "created_at",
+          "expires_at"
+        ],
+        "type": "object"
+      },
       "ProfileList": {
         "properties": {
           "items": {
@@ -52859,6 +52974,187 @@
           }
         ],
         "summary": "Create a certificate profile version",
+        "x-trstctl-permission": "profiles:write"
+      }
+    },
+    "/api/v1/profiles/approvals": {
+      "get": {
+        "operationId": "listProfileEditApprovals",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileEditApprovalList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List parked profile create/edit approval requests (dual control)",
+        "x-trstctl-permission": "profiles:read"
+      }
+    },
+    "/api/v1/profiles/approvals/{id}": {
+      "get": {
+        "operationId": "getProfileEditApproval",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileEditApprovalRecord"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get one parked profile create/edit approval request",
+        "x-trstctl-permission": "profiles:read"
+      }
+    },
+    "/api/v1/profiles/approvals/{id}/approvals": {
+      "post": {
+        "operationId": "approveProfileEdit",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileEditApprovalDecisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileEditApprovalRecord"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Approve a parked profile create/edit as a distinct reviewer; quorum applies the queued spec",
         "x-trstctl-permission": "profiles:write"
       }
     },

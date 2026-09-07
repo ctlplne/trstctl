@@ -598,10 +598,22 @@ func (a *API) createSecret(w http.ResponseWriter, r *http.Request) {
 			fence, fenceErr = a.secrets.be.Store.FinalizeApplicationSecretMutationFence(
 				ctx, tenantID, req.Name, eventID, nil, time.Now().UTC())
 			if fenceErr != nil {
+				if receipt, ok, retiredErr := a.applicationSecretResultAfterFenceRetired(
+					ctx, tenantID, eventID, requestBinding, req.Name, operation, fenceErr); retiredErr != nil {
+					return 0, nil, retiredErr
+				} else if ok {
+					return http.StatusCreated, applicationSecretReceiptMeta(receipt), nil
+				}
 				return 0, nil, applicationSecretMutationError(fenceErr)
 			}
 		}
 		if _, _, appendErr := a.appendAndProjectApplicationSecretMutation(ctx, tenantID, fence, payload, prepared); appendErr != nil {
+			if receipt, ok, retiredErr := a.applicationSecretResultAfterFenceRetired(
+				ctx, tenantID, eventID, requestBinding, req.Name, operation, appendErr); retiredErr != nil {
+				return 0, nil, retiredErr
+			} else if ok {
+				return http.StatusCreated, applicationSecretReceiptMeta(receipt), nil
+			}
 			return 0, nil, applicationSecretMutationError(appendErr)
 		}
 		rec, getErr := a.secrets.be.Store.GetSecret(ctx, tenantID, req.Name)
@@ -800,6 +812,12 @@ func (a *API) rotateSecret(w http.ResponseWriter, r *http.Request) {
 		}
 		event, canonical, err := a.appendAndProjectApplicationSecretMutation(ctx, tenantID, fence, payload, prepared)
 		if err != nil {
+			if receipt, ok, retiredErr := a.applicationSecretResultAfterFenceRetired(
+				ctx, tenantID, eventID, requestBinding, name, "rotate", err); retiredErr != nil {
+				return 0, nil, retiredErr
+			} else if ok {
+				return http.StatusOK, applicationSecretReceiptMeta(receipt), nil
+			}
 			return 0, nil, applicationSecretMutationError(err)
 		}
 		rec := applicationSecretResultMeta(current, event, canonical)
@@ -915,6 +933,12 @@ func (a *API) recoverSecretAt(w http.ResponseWriter, r *http.Request) {
 		}
 		event, canonical, err := a.appendAndProjectApplicationSecretMutation(ctx, tenantID, fence, payload, prepared)
 		if err != nil {
+			if receipt, ok, retiredErr := a.applicationSecretResultAfterFenceRetired(
+				ctx, tenantID, eventID, requestBinding, name, "recover", err); retiredErr != nil {
+				return 0, nil, retiredErr
+			} else if ok {
+				return http.StatusOK, applicationSecretReceiptMeta(receipt), nil
+			}
 			return 0, nil, applicationSecretMutationError(err)
 		}
 		rec := applicationSecretResultMeta(current, event, canonical)
@@ -1245,6 +1269,12 @@ func (a *API) deleteSecret(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, applicationSecretMutationError(err)
 		}
 		if _, _, err := a.appendAndProjectApplicationSecretMutation(ctx, tenantID, fence, payload, prepared); err != nil {
+			if _, ok, retiredErr := a.applicationSecretResultAfterFenceRetired(
+				ctx, tenantID, eventID, requestBinding, name, "delete", err); retiredErr != nil {
+				return 0, nil, retiredErr
+			} else if ok {
+				return http.StatusNoContent, nil, nil
+			}
 			return 0, nil, applicationSecretMutationError(err)
 		}
 		return http.StatusNoContent, nil, nil

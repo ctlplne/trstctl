@@ -4847,6 +4847,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/profiles/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List parked profile create/edit approval requests (dual control) */
+        get: operations["listProfileEditApprovals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/profiles/approvals/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one parked profile create/edit approval request */
+        get: operations["getProfileEditApproval"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/profiles/approvals/{id}/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve a parked profile create/edit as a distinct reviewer; quorum applies the queued spec */
+        post: operations["approveProfileEdit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/profiles/{name}/versions/{version}": {
         parameters: {
             query?: never;
@@ -12916,6 +12967,39 @@ export interface components {
             approval_id: string;
             resource: string;
             state: string;
+        };
+        ProfileEditApprovalDecision: {
+            approver: string;
+            /** Format: date-time */
+            at: string;
+            /** @enum {string} */
+            decision: "approve";
+        };
+        ProfileEditApprovalDecisionRequest: {
+            reason?: string;
+        };
+        ProfileEditApprovalList: {
+            items: components["schemas"]["ProfileEditApprovalRecord"][];
+            next_cursor?: string;
+        };
+        ProfileEditApprovalRecord: {
+            approvals: components["schemas"]["ProfileEditApprovalDecision"][];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            kind: "profile_edit";
+            /** Format: uuid */
+            profile_id?: string;
+            profile_name: string;
+            requester: string;
+            required_approvals: number;
+            resource: string;
+            /** @enum {string} */
+            state: "awaiting_approval" | "approved" | "issued" | "denied" | "expired";
         };
         ProfileList: {
             items: components["schemas"]["Profile"][];
@@ -28860,6 +28944,131 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProfileApprovalResponse"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listProfileEditApprovals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileEditApprovalList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getProfileEditApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileEditApprovalRecord"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    approveProfileEdit: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ProfileEditApprovalDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileEditApprovalRecord"];
                 };
             };
             /** @description client error */

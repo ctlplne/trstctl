@@ -5143,6 +5143,17 @@ func componentSchemas() map[string]*Schema {
 	profileReq := object(map[string]*Schema{
 		"name": str(), "spec": ref("CertificateProfileSpec"),
 	}, "name", "spec")
+	profileEditApprovalDecision := &Schema{Type: "object", Properties: map[string]*Schema{
+		"approver": str(), "decision": {Type: "string", Enum: []string{"approve"}}, "at": timestamp(),
+	}, Required: []string{"approver", "decision", "at"}}
+	profileEditApprovalRecord := &Schema{Type: "object", Properties: map[string]*Schema{
+		"id": uuid(), "kind": {Type: "string", Enum: []string{"profile_edit"}}, "resource": str(), "profile_name": str(),
+		"requester": str(), "required_approvals": {Type: "integer"},
+		"approvals":  {Type: "array", Items: ref("ProfileEditApprovalDecision")},
+		"state":      {Type: "string", Enum: []string{"awaiting_approval", "approved", "issued", "denied", "expired"}},
+		"profile_id": uuid(), "created_at": timestamp(), "expires_at": timestamp(),
+	}, Required: []string{"id", "kind", "resource", "profile_name", "requester", "required_approvals", "approvals", "state", "created_at", "expires_at"}}
+	profileEditApprovalDecisionReq := &Schema{Type: "object", Properties: map[string]*Schema{"reason": str()}}
 	profileApproval := object(map[string]*Schema{
 		"approval_id": uuid(), "state": str(), "resource": str(),
 	}, "approval_id", "state", "resource")
@@ -6520,6 +6531,10 @@ func componentSchemas() map[string]*Schema {
 		"ProfileRequest":                           profileReq,
 		"ProfileList":                              list("Profile"),
 		"ProfileApprovalResponse":                  profileApproval,
+		"ProfileEditApprovalDecision":              profileEditApprovalDecision,
+		"ProfileEditApprovalRecord":                profileEditApprovalRecord,
+		"ProfileEditApprovalList":                  list("ProfileEditApprovalRecord"),
+		"ProfileEditApprovalDecisionRequest":       profileEditApprovalDecisionReq,
 		"ProfileRestoreRequest":                    profileRestoreReq,
 		"ProfileRestorePreview":                    profileRestorePreview,
 		"CertificateProfileSpec":                   certificateProfileSpec,

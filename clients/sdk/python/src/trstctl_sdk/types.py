@@ -8457,6 +8457,51 @@ ProfileApprovalResponse = TypedDict(
     total=False,
 )
 
+ProfileEditApprovalDecision = TypedDict(
+    'ProfileEditApprovalDecision',
+    {
+        'approver': str,
+        'at': str,
+        'decision': str,
+    },
+    total=False,
+)
+
+ProfileEditApprovalDecisionRequest = TypedDict(
+    'ProfileEditApprovalDecisionRequest',
+    {
+        'reason': str,
+    },
+    total=False,
+)
+
+ProfileEditApprovalList = TypedDict(
+    'ProfileEditApprovalList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+ProfileEditApprovalRecord = TypedDict(
+    'ProfileEditApprovalRecord',
+    {
+        'approvals': list[dict[str, Any]],
+        'created_at': str,
+        'expires_at': str,
+        'id': str,
+        'kind': str,
+        'profile_id': str,
+        'profile_name': str,
+        'requester': str,
+        'required_approvals': int,
+        'resource': str,
+        'state': str,
+    },
+    total=False,
+)
+
 ProfileList = TypedDict(
     'ProfileList',
     {

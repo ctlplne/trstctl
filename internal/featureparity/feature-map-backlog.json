@@ -4258,7 +4258,10 @@
                 "listProfiles",
                 "getProfileVersion",
                 "previewProfileRestore",
-                "restoreProfileVersion"
+                "restoreProfileVersion",
+                "listProfileEditApprovals",
+                "getProfileEditApproval",
+                "approveProfileEdit"
             ],
             "api_na": "",
             "cli_surface": [

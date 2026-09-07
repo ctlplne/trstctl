@@ -215,13 +215,14 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		// "is the fabric moving" is a whole-system question one tenant's view
 		// cannot answer — and it reads ages, kinds and the role demand, never a
 		// payload, a credential or a tenant id.
-		"internal/cli/doctor/probes_ops.go":     3,
-		"internal/store/rls_inventory.go":       3,
-		"internal/idemgc/idemgc.go":             2,
-		"internal/perf/live.go":                 1,
-		"internal/orchestrator/outbox.go":       2,
-		"internal/outboxgc/outboxgc.go":         2,
-		"internal/server/server.go":             1,
+		"internal/cli/doctor/probes_ops.go": 3,
+		"internal/store/rls_inventory.go":   3,
+		"internal/idemgc/idemgc.go":         2,
+		"internal/perf/live.go":             1,
+		"internal/orchestrator/outbox.go":   2,
+		"internal/outboxgc/outboxgc.go":     2,
+		// The readiness "db" check moved to the store's dedicated probe pool
+		// (ProbePing, DP2-054), so server.go no longer touches SystemPool.
 		"internal/store/connector_lifecycle.go": 1,
 		"internal/store/lifecycle.go":           1,
 		// AUD-109: startup/rebuild must compare every tenant's terminal

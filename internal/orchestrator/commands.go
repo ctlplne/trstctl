@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/url"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 
@@ -569,6 +570,41 @@ func (o *Orchestrator) requestProfileEditApproval(ctx context.Context, tenantID,
 	o.profileEditApprovals[profileEditApprovalKey(tenantID, req.ID)] = entry
 	o.profileEditMu.Unlock()
 	return req, nil
+}
+
+// ListProfileEditApprovals returns the tenant's parked profile create/edit
+// approval requests, oldest first, so a reviewer can find the request a 202
+// "awaiting_approval" answer referred to (DP2-057). The spec payload is not
+// included: the reviewer reads the queued spec through GetProfileEditApproval.
+func (o *Orchestrator) ListProfileEditApprovals(tenantID string) []approval.Request {
+	o.profileEditMu.Lock()
+	defer o.profileEditMu.Unlock()
+	items := make([]approval.Request, 0)
+	for _, entry := range o.profileEditApprovals {
+		if entry.Request.TenantID != tenantID {
+			continue
+		}
+		items = append(items, entry.Request)
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if !items[i].CreatedAt.Equal(items[j].CreatedAt) {
+			return items[i].CreatedAt.Before(items[j].CreatedAt)
+		}
+		return items[i].ID < items[j].ID
+	})
+	return items
+}
+
+// GetProfileEditApproval returns one parked profile edit approval request of the
+// tenant with the queued profile name, or false when the request is unknown.
+func (o *Orchestrator) GetProfileEditApproval(tenantID, requestID string) (approval.Request, string, bool) {
+	o.profileEditMu.Lock()
+	defer o.profileEditMu.Unlock()
+	entry, ok := o.profileEditApprovals[profileEditApprovalKey(tenantID, requestID)]
+	if !ok || entry.Request.TenantID != tenantID {
+		return approval.Request{}, "", false
+	}
+	return entry.Request, entry.Name, true
 }
 
 // ApproveProfileEdit records a non-requester approval and applies the queued

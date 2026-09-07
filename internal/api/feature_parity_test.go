@@ -231,9 +231,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// exact, effect-free unsaved routing-policy review raises it to 430. F62's
 	// exact report-schedule preview plus pause and resume recovery operations raise
 	// F79's subject-erasure and retention reviews raise it to 435. F6's exact,
-	// effect-free endpoint-binding review raises it to 436.
-	if len(out) != 436 {
-		t.Fatalf("OpenAPI operationIds = %d, want 436", len(out))
+	// effect-free endpoint-binding review raises it to 436, and the served
+	// profile-edit approval review surface (DP2-057) to 439.
+	if len(out) != 439 {
+		t.Fatalf("OpenAPI operationIds = %d, want 439", len(out))
 	}
 	return out
 }

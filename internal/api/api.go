@@ -1465,6 +1465,7 @@ func (a *API) routes() []route {
 		{method: "GET", path: specPath, opID: "getOpenAPISpec", summary: "OpenAPI 3.1 specification", handler: a.openapiHandler, successCode: "200"},
 	}
 	routes = append(routes, a.acmeDNS01Routes(dns01ProviderConfigPath)...)
+	routes = append(routes, a.profileEditApprovalRoutes()...)
 	// Extracted so this file stays inside the served-surface size budget: the
 	// route table is the bulk of api.go, and moving a coherent workflow out is
 	// the split the budget asks for rather than a waiver.

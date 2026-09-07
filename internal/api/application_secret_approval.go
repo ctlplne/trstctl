@@ -651,6 +651,35 @@ func applicationSecretResultMeta(current store.Secret, event events.Event, paylo
 	}
 }
 
+// applicationSecretResultAfterFenceRetired answers a retry whose prepared fence
+// was completed and retired by the crash-recovery sweep while the retry was in
+// flight (DP2-058). The first attempt was shed by backpressure after claiming its
+// durable fence; the sweep then finalized, appended and projected that exact
+// command and retired the fence, so the retry's own finalize/append found no
+// row. The command ran once: the retry gets the canonical receipt instead of
+// the sweep's absence of a fence surfacing as 404.
+func (a *API) applicationSecretResultAfterFenceRetired(
+	ctx context.Context,
+	tenantID, eventID, requestBinding, name, action string,
+	err error,
+) (store.ApplicationSecretMutationReceipt, bool, error) {
+	if !applicationSecretFenceRetired(err) {
+		return store.ApplicationSecretMutationReceipt{}, false, nil
+	}
+	receipt, ok, receiptErr := a.applicationSecretMaterializedResult(ctx, tenantID, eventID, requestBinding, name, action)
+	if receiptErr != nil {
+		return store.ApplicationSecretMutationReceipt{}, false, applicationSecretMutationError(receiptErr)
+	}
+	return receipt, ok, nil
+}
+
+// applicationSecretFenceRetired reports whether err is the store's not-found
+// answer for a fence row that a retry expected to still exist. Only the generic
+// row-level not-found qualifies; a missing secret is a different contract.
+func applicationSecretFenceRetired(err error) bool {
+	return err != nil && store.IsNotFound(err) && !errors.Is(err, store.ErrSecretNotFound)
+}
+
 func applicationSecretMutationError(err error) error {
 	switch {
 	case errors.Is(err, store.ErrSecretNotFound):
@@ -771,6 +800,11 @@ func (a *API) ReconcileApplicationSecretMutationFences(ctx context.Context) (rec
 				fence, err = a.secrets.be.Store.FinalizeApplicationSecretMutationFence(
 					ctx, tenant.TenantID, fence.Name, fence.EventID, use, time.Now().UTC())
 				if err != nil {
+					if applicationSecretFenceRetired(err) {
+						// The live retry completed and retired this fence under the
+						// sweep (DP2-058): nothing is stranded any more.
+						continue
+					}
 					if errors.Is(err, store.ErrApprovalNotReady) ||
 						errors.Is(err, store.ErrApprovalExpired) ||
 						errors.Is(err, store.ErrApprovalSuperseded) ||
@@ -783,11 +817,17 @@ func (a *API) ReconcileApplicationSecretMutationFences(ctx context.Context) (rec
 			use, err := a.secrets.be.Store.ApplicationSecretMutationFenceApprovalUse(
 				ctx, tenant.TenantID, fence)
 			if err != nil {
+				if applicationSecretFenceRetired(err) {
+					continue
+				}
 				return reconciled, err
 			}
 			payload.Approval = use
 			if _, _, err := a.appendAndProjectApplicationSecretMutation(
 				ctx, tenant.TenantID, fence, payload, true); err != nil {
+				if applicationSecretFenceRetired(err) {
+					continue
+				}
 				if errors.Is(err, errApplicationSecretLegacyActorUnavailable) {
 					blocked[applicationSecretReconcileLegacyActorUnavailable]++
 					continue

@@ -56,6 +56,14 @@ Two more answers are part of the idempotency contract under concurrency:
   because re-running would duplicate the effect. Inspect the resource, then
   retry with a **new** key if the effect is missing.
 
+Two small pools sit beside the request pool and never carry request work: the
+readiness probes ping the datastore on a two-connection **probe pool**, and the
+durable projection tail applies events on a two-connection **reserved pool**. A
+tenant burst that holds every request-pool connection is shed with 503s as
+above, but it cannot make `/readyz` time out or starve the tail into
+"projection tail worker stopped; retrying", so the replica stays in rotation and
+the read model keeps catching up while the burst is refused.
+
 Every mutation claims its `Idempotency-Key` in a short transaction, runs the
 command with **no pooled connection held**, and records the result in a second
 short transaction (the same discipline the outbox uses for external calls), so

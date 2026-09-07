@@ -51,7 +51,7 @@ type ProjectionTailHealth struct {
 // when fn returns (even on error or a cancelled ctx). It is a system operation on
 // the pool, like the migration lock.
 func (s *Store) WithProjectionLock(ctx context.Context, fn func(context.Context) error) error {
-	conn, err := s.pool.Acquire(ctx)
+	conn, err := s.poolFor(ctx).Acquire(ctx)
 	if err != nil {
 		return fmt.Errorf("store: acquire projection-lock connection: %w", err)
 	}
@@ -76,7 +76,7 @@ func (s *Store) ProjectionCheckpoint(ctx context.Context) (uint64, error) {
 	var seq int64
 	// projection_checkpoint is a system table (no tenant_id by design); it is read
 	// on the pool, not under a tenant RLS context, like schema_migrations.
-	err := s.pool.QueryRow(ctx,
+	err := s.poolFor(ctx).QueryRow(ctx,
 		`SELECT applied_seq FROM projection_checkpoint WHERE id = 1`).Scan(&seq)
 	if err != nil {
 		return 0, fmt.Errorf("store: read projection checkpoint: %w", err)
@@ -98,7 +98,7 @@ func (s *Store) ProjectionTailHealth(ctx context.Context) (ProjectionTailHealth,
 		lastError  *string
 		failedAt   *time.Time
 	)
-	err := s.pool.QueryRow(ctx,
+	err := s.poolFor(ctx).QueryRow(ctx,
 		`SELECT applied_seq, failed_seq, last_error, failed_at, updated_at
 		   FROM projection_checkpoint
 		  WHERE id = 1`).Scan(&appliedSeq, &failedSeq, &lastError, &failedAt, &health.UpdatedAt)
@@ -127,7 +127,7 @@ func (s *Store) RecordProjectionTailFailure(ctx context.Context, seq uint64, cau
 		return errors.New("store: projection tail failure sequence must be positive")
 	}
 	detail := sanitizeProjectionTailError(cause)
-	_, err := s.pool.Exec(ctx,
+	_, err := s.poolFor(ctx).Exec(ctx,
 		`UPDATE projection_checkpoint
 		    SET failed_seq = $1, last_error = $2, failed_at = now(), updated_at = now()
 		  WHERE id = 1
@@ -173,7 +173,7 @@ func sanitizeProjectionTailError(cause error) string {
 func (s *Store) AdvanceProjectionCheckpoint(ctx context.Context, seq uint64) error {
 	// System table (no tenant_id by design): advance the single global watermark
 	// row on the pool. GREATEST makes the advance monotonic and idempotent.
-	_, err := s.pool.Exec(ctx,
+	_, err := s.poolFor(ctx).Exec(ctx,
 		`UPDATE projection_checkpoint
 		    SET applied_seq = GREATEST(applied_seq, $1),
 		        failed_seq = CASE

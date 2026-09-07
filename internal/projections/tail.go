@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // LagSampler receives the current projection lag — the number of events the read
@@ -75,6 +76,11 @@ func (w *TailWorker) Lag(ctx context.Context) (uint64, error) {
 // goroutine; a tail error (e.g. a poison event leaving the cursor stuck) is returned
 // so the caller can log it and the lag metric surfaces the stall.
 func (w *TailWorker) Run(ctx context.Context) error {
+	// The tail is a bounded system worker: it applies one event at a time on the
+	// store's reserved pool so a tenant burst that saturates the request pool
+	// (correctly shed with 503s) cannot starve it into "tail worker stopped;
+	// retrying" and take the projection out of readiness (DP2-056).
+	ctx = store.WithReservedPool(ctx)
 	if err := w.syncAppliedCheckpoint(ctx); err != nil {
 		return err
 	}

@@ -6139,6 +6139,35 @@ export interface ProfileApprovalResponse {
   state: string;
 }
 
+export interface ProfileEditApprovalDecision {
+  approver: string;
+  at: string;
+  decision: "approve";
+}
+
+export interface ProfileEditApprovalDecisionRequest {
+  reason?: string;
+}
+
+export interface ProfileEditApprovalList {
+  items: ProfileEditApprovalRecord[];
+  next_cursor?: string;
+}
+
+export interface ProfileEditApprovalRecord {
+  approvals: ProfileEditApprovalDecision[];
+  created_at: string;
+  expires_at: string;
+  id: string;
+  kind: "profile_edit";
+  profile_id?: string;
+  profile_name: string;
+  requester: string;
+  required_approvals: number;
+  resource: string;
+  state: "awaiting_approval" | "approved" | "issued" | "denied" | "expired";
+}
+
 export interface ProfileList {
   items: Profile[];
   next_cursor?: string;

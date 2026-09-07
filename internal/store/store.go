@@ -50,6 +50,11 @@ type Store struct {
 	// 503) can never make /readyz report PostgreSQL unreachable. It carries no
 	// request work (DP2-054).
 	probePool *pgxpool.Pool
+	// reservedPool carries only the durable projection tail (and other bounded
+	// system workers that opt in through WithReservedPool). Request work never
+	// touches it, so a tenant burst that saturates the request pool cannot starve
+	// the tail into a retry loop that reports the projection as failed (DP2-056).
+	reservedPool *pgxpool.Pool
 	// historyRewriteOperationGate admits only one local contender to the
 	// deployment-wide PostgreSQL operation lock. Without it, maxConns local
 	// waiters can each pin a session and starve the elected callback's cutover.
@@ -72,6 +77,11 @@ const maxConns = 16
 // enough for the handful of concurrent probes a /readyz call runs and small
 // enough that the probes cannot themselves become a load source.
 const probePoolMaxConns = 2
+
+// reservedPoolMaxConns bounds the system-worker pool: the tail applies one event
+// at a time, so two connections leave headroom for a checkpoint advance beside
+// an in-flight apply without competing with request work.
+const reservedPoolMaxConns = 2
 
 // Bounded-latency defaults (OPS-TIMEOUTS-001): a saturated pool or a runaway
 // query fails closed with a structured error instead of hanging a request.
@@ -156,9 +166,25 @@ func Open(ctx context.Context, dsn string, opts ...OpenOption) (*Store, error) {
 		pool.Close()
 		return nil, fmt.Errorf("store: ping probe pool: %w", err)
 	}
+	reservedCfg := cfg.Copy()
+	reservedCfg.MaxConns = reservedPoolMaxConns
+	reservedCfg.MinConns = 1
+	reservedPool, err := pgxpool.NewWithConfig(ctx, reservedCfg)
+	if err != nil {
+		probePool.Close()
+		pool.Close()
+		return nil, fmt.Errorf("store: connect reserved pool: %w", err)
+	}
+	if err := reservedPool.Ping(ctx); err != nil {
+		reservedPool.Close()
+		probePool.Close()
+		pool.Close()
+		return nil, fmt.Errorf("store: ping reserved pool: %w", err)
+	}
 	return &Store{
 		pool:                        pool,
 		probePool:                   probePool,
+		reservedPool:                reservedPool,
 		acquireTimeout:              options.acquireTimeout,
 		historyRewriteOperationGate: make(chan struct{}, 1),
 	}, nil
@@ -177,12 +203,13 @@ func (s *Store) begin(ctx context.Context) (pgx.Tx, error) {
 // scheduler work snapshot) must choose the isolation level at BEGIN; PostgreSQL
 // rejects SET TRANSACTION after the backup-fence statement has already run.
 func (s *Store) beginTx(ctx context.Context, options pgx.TxOptions) (pgx.Tx, error) {
+	pool := s.poolFor(ctx)
 	if s.acquireTimeout <= 0 {
-		return s.pool.BeginTx(ctx, options)
+		return pool.BeginTx(ctx, options)
 	}
 	boundedCtx, cancel := context.WithTimeoutCause(ctx, s.acquireTimeout, ErrDatastoreBusy)
 	defer cancel()
-	tx, err := s.pool.BeginTx(boundedCtx, options)
+	tx, err := pool.BeginTx(boundedCtx, options)
 	if err != nil {
 		if cause := context.Cause(boundedCtx); errors.Is(cause, ErrDatastoreBusy) && ctx.Err() == nil {
 			return nil, fmt.Errorf("%w (acquire window %v)", ErrDatastoreBusy, s.acquireTimeout)
@@ -208,7 +235,35 @@ func (s *Store) Close() {
 	if s.probePool != nil {
 		s.probePool.Close()
 	}
+	if s.reservedPool != nil {
+		s.reservedPool.Close()
+	}
 	s.pool.Close()
+}
+
+type reservedPoolKey struct{}
+
+// WithReservedPool marks ctx so the store serves its transactions and direct
+// statements from the reserved system-worker pool instead of the request pool.
+// Only bounded system workers whose progress must not depend on request-pool
+// headroom (the durable projection tail) may opt in; request handlers never do.
+func WithReservedPool(ctx context.Context) context.Context {
+	return context.WithValue(ctx, reservedPoolKey{}, true)
+}
+
+// UsesReservedPool reports whether ctx was marked by WithReservedPool.
+func UsesReservedPool(ctx context.Context) bool {
+	v, _ := ctx.Value(reservedPoolKey{}).(bool)
+	return v
+}
+
+// poolFor picks the pool a ctx is entitled to: the reserved pool for marked
+// system workers when it exists, the request pool otherwise.
+func (s *Store) poolFor(ctx context.Context) *pgxpool.Pool {
+	if s.reservedPool != nil && UsesReservedPool(ctx) {
+		return s.reservedPool
+	}
+	return s.pool
 }
 
 // ProbePing checks PostgreSQL reachability on the dedicated probe pool, bounded

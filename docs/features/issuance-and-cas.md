@@ -339,6 +339,16 @@ flow after a version diff; the CLI commands are `profiles restore-preview` and
 `profiles restore`. See the [profile-authoring guide](../guides/profile-authoring.md)
 for a complete example.
 
+A profile create or edit that falls under `requires_approval` answers **202**
+with an `approval_id` and `state: awaiting_approval` instead of a new version.
+A distinct reviewer holding `profiles:write` finds the parked request with
+`GET /api/v1/profiles/approvals` (or `GET /api/v1/profiles/approvals/{id}`) and
+approves it with `POST /api/v1/profiles/approvals/{id}/approvals`; quorum (one
+non-requester approval) applies the queued spec as the new active version and the
+record reads `state: issued` with the created `profile_id`. The requester's own
+approval is refused with **403** (dual control). Identical retries of the
+approval with the same `Idempotency-Key` replay the one decision.
+
 ### Telling clients when to renew: ARI (F46)
 
 If thousands of clients renew at the same fixed "30 days before expiry," they
