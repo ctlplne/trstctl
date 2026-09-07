@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	googleuuid "github.com/google/uuid"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -104,13 +105,30 @@ func (a *API) previewDiscoveryPlan(w http.ResponseWriter, r *http.Request) {
 
 // preflightDiscoverySource recomputes execution readiness from the saved source
 // and current tenant infrastructure. It performs no scan and writes no state.
+// discoveryUUIDPathID reads a uuid path parameter, writing a 400 problem when it
+// is malformed so a bad id is an explicit bad request, not an internal error
+// from a uuid-typed query. An absent-but-valid id still reaches the store and
+// returns 404.
+func (a *API) discoveryUUIDPathID(w http.ResponseWriter, r *http.Request) (string, bool) {
+	id := r.PathValue("id")
+	if _, err := googleuuid.Parse(id); err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, "id must be a valid UUID"))
+		return "", false
+	}
+	return id, true
+}
+
 func (a *API) preflightDiscoverySource(w http.ResponseWriter, r *http.Request) {
 	tenantID, ok := a.tenant(r)
 	if !ok {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
-	source, err := a.store.GetDiscoverySource(r.Context(), tenantID, r.PathValue("id"))
+	id, ok := a.discoveryUUIDPathID(w, r)
+	if !ok {
+		return
+	}
+	source, err := a.store.GetDiscoverySource(r.Context(), tenantID, id)
 	if err != nil {
 		a.writeError(w, err)
 		return
@@ -926,6 +944,9 @@ func (a *API) startDiscoveryRun(w http.ResponseWriter, r *http.Request) {
 func (a *API) retryDiscoveryRun(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if _, uerr := googleuuid.Parse(r.PathValue("id")); uerr != nil {
+			return 0, nil, errStatus(http.StatusBadRequest, "id must be a valid UUID")
+		}
 		original, err := a.store.GetDiscoveryRun(ctx, tenantID, r.PathValue("id"))
 		if err != nil {
 			return 0, nil, err
@@ -975,7 +996,11 @@ func (a *API) getDiscoveryRun(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
-	run, err := a.store.GetDiscoveryRun(r.Context(), tenantID, r.PathValue("id"))
+	id, ok := a.discoveryUUIDPathID(w, r)
+	if !ok {
+		return
+	}
+	run, err := a.store.GetDiscoveryRun(r.Context(), tenantID, id)
 	if err != nil {
 		a.writeError(w, err)
 		return
@@ -1100,6 +1125,9 @@ func (a *API) claimDiscoveryFinding(w http.ResponseWriter, r *http.Request) {
 			id := strings.TrimSpace(req.ManagedIdentityID)
 			managedID = &id
 		}
+		if _, uerr := googleuuid.Parse(r.PathValue("id")); uerr != nil {
+			return 0, nil, errStatus(http.StatusBadRequest, "id must be a valid UUID")
+		}
 		f, err := a.orch.ClaimDiscoveryFinding(ctx, tenantID, r.PathValue("id"), managedID, req.Reason, req.metadataPatch())
 		if err != nil {
 			return 0, nil, discoveryTriageError(err)
@@ -1115,6 +1143,9 @@ func (a *API) dismissDiscoveryFinding(w http.ResponseWriter, r *http.Request) {
 		var req discoveryFindingTriageRequest
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		if _, uerr := googleuuid.Parse(r.PathValue("id")); uerr != nil {
+			return 0, nil, errStatus(http.StatusBadRequest, "id must be a valid UUID")
 		}
 		f, err := a.orch.DismissDiscoveryFinding(ctx, tenantID, r.PathValue("id"), req.Reason, req.metadataPatch())
 		if err != nil {
