@@ -1906,10 +1906,7 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 		}
 		a.writeProblem(w, p)
 	default:
-		// The client only ever sees "internal error"; the operator must still be
-		// able to find out what it was (DP2-059: two 500s under a burst left no
-		// trace in the plane log).
-		a.logInternalError(err)
+		a.logInternalError(err) // the client sees "internal error"; the operator sees why (DP2-059)
 		a.writeProblem(w, problem.New(http.StatusInternalServerError, "internal error"))
 	}
 }
