@@ -134,3 +134,40 @@ func TestIdenticalInFlightBoundRequestsExecuteOnceAndReplay(t *testing.T) {
 		t.Fatalf("waiters did not replay the canonical result: %v", seen)
 	}
 }
+
+// A claim left pending by an abandoned request (the process died, or its release
+// failed under pool pressure) must not lock the key for good: once it is older
+// than any live command can be, the next identical retry takes it over and
+// executes, and later retries replay that result.
+func TestStalePendingClaimIsTakenOverByTheNextRetry(t *testing.T) {
+	st := poolTestStore(t)
+	idem := orchestrator.NewIdempotency(st)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	t.Cleanup(cancel)
+	if _, err := st.SystemPool().Exec(ctx,
+		`INSERT INTO idempotency_keys (tenant_id, key, status, request_binding, created_at)
+		 VALUES ($1, 'stale-claim', 'pending', 'sha256:stale', now() - interval '3 minutes')`, poolTestTenant); err != nil {
+		t.Fatalf("seed stale claim: %v", err)
+	}
+	var executions atomic.Int32
+	run := func() ([]byte, error) {
+		return idem.DoBound(ctx, poolTestTenant, "stale-claim", "sha256:stale", func(context.Context) ([]byte, error) {
+			executions.Add(1)
+			return []byte(`{"taken":true}`), nil
+		})
+	}
+	began := time.Now()
+	out, err := run()
+	if err != nil || string(out) != `{"taken":true}` {
+		t.Fatalf("takeover of a stale claim: %v %s", err, out)
+	}
+	if time.Since(began) > 10*time.Second {
+		t.Fatalf("takeover waited %s; a stale claim must be reclaimed without the in-progress wait", time.Since(began))
+	}
+	if out2, err := run(); err != nil || string(out2) != `{"taken":true}` {
+		t.Fatalf("replay after takeover: %v %s", err, out2)
+	}
+	if n := executions.Load(); n != 1 {
+		t.Fatalf("command executed %d times, want once (takeover) then replay", n)
+	}
+}

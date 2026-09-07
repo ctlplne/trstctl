@@ -434,12 +434,16 @@ const (
 
 // pendingClaimWait bounds how long an identical in-flight request waits for the
 // claimant before answering ErrInProgress. pendingClaimStale is the age after
-// which a pending claim counts as abandoned by a crashed process: every command
-// is bounded far below it by the statement and request deadlines, so a takeover
-// cannot race a live claimant.
+// which a pending claim counts as abandoned: a command on this path is bounded
+// by its request deadline and by the 60 s server-side statement timeout, and
+// the record or release step by its own bounded context, so no live claimant
+// can still own a claim two minutes after making it. A claim left pending by a
+// cancelled request whose release failed under pool pressure (seen on the lab
+// at 24-way concurrency) is therefore reclaimable by the customer's next retry
+// within two minutes instead of ten.
 const (
 	pendingClaimWait  = 20 * time.Second
-	pendingClaimStale = 10 * time.Minute
+	pendingClaimStale = 2 * time.Minute
 )
 
 // doClaimed is the claim -> execute -> record protocol shared by Do, DoBound and
@@ -648,18 +652,28 @@ func (i *Idempotency) executeClaim(ctx context.Context, tenantID, key, binding s
 // try the command again. It runs on a detached, bounded context: the release
 // must happen even when the request context is already gone.
 func (i *Idempotency) releaseClaim(ctx context.Context, tenantID, key, binding string) error {
-	releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-	defer cancel()
-	return i.store.WithTenant(releaseCtx, tenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(releaseCtx,
-			`DELETE FROM idempotency_keys
-			  WHERE tenant_id = $1 AND key = $2 AND request_binding = $3 AND status = 'pending'`,
-			tenantID, key, binding)
-		if err != nil {
-			return fmt.Errorf("orchestrator: release idempotency claim: %w", err)
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		err = i.store.WithTenant(releaseCtx, tenantID, func(tx pgx.Tx) error {
+			_, execErr := tx.Exec(releaseCtx,
+				`DELETE FROM idempotency_keys
+				  WHERE tenant_id = $1 AND key = $2 AND request_binding = $3 AND status = 'pending'`,
+				tenantID, key, binding)
+			if execErr != nil {
+				return fmt.Errorf("orchestrator: release idempotency claim: %w", execErr)
+			}
+			return nil
+		})
+		cancel()
+		if err == nil {
+			return nil
 		}
-		return nil
-	})
+		// The release runs while the pool may still be under the same pressure
+		// that failed the command; a short backoff usually finds a connection.
+		time.Sleep(time.Duration(attempt+1) * 200 * time.Millisecond)
+	}
+	return err
 }
 
 func (i *Idempotency) markProtectedIndeterminate(ctx context.Context, tenantID, key, binding string) error {
