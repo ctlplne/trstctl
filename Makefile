@@ -400,6 +400,8 @@ lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint
 	@$(WEB_NPM) run lint
 	@echo ">> web format:check (prettier)"
 	@$(WEB_NPM) run format:check
+	@echo ">> web embed freshness (OPP-C02: dist must be built from the checked-in console source)"
+	@scripts/ci/web-source-digest.sh --check
 	@echo ">> trstctllint (architecture rules: AN-1, AN-3, AN-5, AN-8, crypto-agility)"
 	@vettool=$$(mktemp "$${TMPDIR:-/tmp}/trstctllint.XXXXXX"); \
 	trap 'rm -f "$$vettool"' EXIT; \
@@ -730,6 +732,8 @@ web: ## Install deps, build the web console into internal/webui/dist (embedded b
 	@# (gen:api --check); this asserts the embedded artifact end-to-end on the Go side.
 	@echo ">> verify embedded console is a real build (TRSTCTL_REQUIRE_BUILT_UI=1)"
 	TRSTCTL_REQUIRE_BUILT_UI=1 $(GO) test $(GO_TEST_EXACT_FLAG) ./internal/webui/...
+	@# OPP-C02: stamp the console build inputs so make lint can prove the embed is current.
+	@scripts/ci/web-source-digest.sh --write
 
 .PHONY: web-contract
 web-contract: ## Regenerate FE OpenAPI and capability contracts; commit the reviewed diff
