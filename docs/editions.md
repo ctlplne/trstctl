@@ -222,7 +222,11 @@ log**. Name the customer by the slug you will provision (its tenant id is
 derived from the slug, so a customer can be delegated before it exists; the
 command prints the derived id) or by an existing tenant id. Every invocation
 needs a stable idempotency key; an identical retry returns the canonical
-authority event, while reusing the key for a changed grant is refused:
+authority event, while reusing the key for a changed grant is refused. The same
+rule holds for every provider mutation over the API: a key binds its first
+answer, a refusal included, and a replayed answer carries the
+`Idempotent-Replayed: true` header. After you fix the cause of a refusal, retry
+with a new key:
 
 ```
 trstctl provider-grant -operator op-1 -customer acme \

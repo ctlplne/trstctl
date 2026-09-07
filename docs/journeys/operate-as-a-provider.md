@@ -78,7 +78,9 @@ identity provider signs (`sub`).
 ### 4. Provision two customers
 
 From the Provider page (or `POST /provider/v1/tenants` with an `Idempotency-Key`),
-provision two customers with distinct slugs. Each becomes an isolated tenant with
+provision two customers with distinct slugs. A refused request stays bound to
+its `Idempotency-Key` (the replay carries `Idempotent-Replayed: true`), so after
+fixing a delegation retry with a new key. Each becomes an isolated tenant with
 its own row-level-security boundary, quota, health view, ownership, delegation
 list, issuer selection, and alert routing. `GET /provider/v1/tenants` returns
 only the customers delegated to the signed-in operator; the full roster is the

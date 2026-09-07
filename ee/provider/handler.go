@@ -305,8 +305,14 @@ func (h *handler) serveIdempotentMutation(w http.ResponseWriter, r *http.Request
 	ctx := ContextWithMutationKey(r.Context(), key)
 	ctx = contextWithMutationBinding(ctx, binding)
 	idempotencyTenant := h.mutationTenant(r, body)
+	// A key binds its FIRST outcome, refusals included, so an operator who fixes
+	// the cause and retries with the same key gets the recorded refusal back.
+	// Say so: a replayed answer carries Idempotent-Replayed so the operator knows
+	// to retry with a new key instead of re-checking the fix.
+	executed := false
 	encoded, err := h.idem.DoDurableEffectBound(ctx, idempotencyTenant, key, binding,
 		func(runCtx context.Context) ([]byte, error) {
+			executed = true
 			request := r.Clone(runCtx)
 			request.Body = io.NopCloser(bytes.NewReader(body))
 			capture := newProviderResponseCapture()
@@ -336,6 +342,9 @@ func (h *handler) serveIdempotentMutation(w http.ResponseWriter, r *http.Request
 		for _, value := range values {
 			w.Header().Add(name, value)
 		}
+	}
+	if !executed {
+		w.Header().Set("Idempotent-Replayed", "true")
 	}
 	if response.Status == 0 {
 		response.Status = http.StatusOK
