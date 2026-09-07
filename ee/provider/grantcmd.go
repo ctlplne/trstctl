@@ -5,6 +5,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -28,6 +29,7 @@ func RunGrantCommand(ctx context.Context, dsn string, natsConfig config.NATS, ar
 		operations = fs.String("operations", "", "comma-separated operations: read,provision,suspend,resume,offboard,break-glass")
 		grantedBy  = fs.String("granted-by", "", "who issued this grant, recorded for audit")
 		revoke     = fs.Bool("revoke", false, "remove the named grants instead of adding them")
+		expiresAt  = fs.String("expires-at", "", "optional RFC3339 time after which the grant no longer authorizes anything (grants only)")
 		idemKey    = fs.String("idempotency-key", "", "required stable key; identical retry returns the original authority event")
 	)
 	fs.Usage = func() {
@@ -52,6 +54,17 @@ func RunGrantCommand(ctx context.Context, dsn string, natsConfig config.NATS, ar
 	ops, err := parseDelegatedOperations(*operations)
 	if err != nil {
 		return err
+	}
+	var expiry time.Time
+	if strings.TrimSpace(*expiresAt) != "" {
+		if *revoke {
+			return errors.New("provider-grant: -expires-at applies to a grant, not a revoke")
+		}
+		parsed, perr := time.Parse(time.RFC3339, strings.TrimSpace(*expiresAt))
+		if perr != nil {
+			return fmt.Errorf("provider-grant: -expires-at must be RFC3339: %w", perr)
+		}
+		expiry = parsed
 	}
 	customerID, derived := ResolveCustomerRef(*customer)
 
@@ -81,16 +94,16 @@ func RunGrantCommand(ctx context.Context, dsn string, natsConfig config.NATS, ar
 	for _, op := range ops {
 		mutations = append(mutations, DelegationMutation{
 			OperatorID: strings.TrimSpace(*operator), CustomerID: customerID,
-			Operation: op, GrantedBy: strings.TrimSpace(*grantedBy),
+			Operation: op, GrantedBy: strings.TrimSpace(*grantedBy), ExpiresAt: expiry,
 		})
 	}
 	bindingBytes, err := json.Marshal(struct {
-		Operator, Customer, Operations, GrantedBy string
-		Revoke                                    bool
+		Operator, Customer, Operations, GrantedBy, ExpiresAt string
+		Revoke                                               bool
 	}{
 		Operator: strings.TrimSpace(*operator), Customer: customerID,
 		Operations: strings.TrimSpace(*operations), GrantedBy: strings.TrimSpace(*grantedBy),
-		Revoke: *revoke,
+		ExpiresAt: strings.TrimSpace(*expiresAt), Revoke: *revoke,
 	})
 	if err != nil {
 		return err

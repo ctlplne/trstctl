@@ -232,6 +232,11 @@ with a new key:
 trstctl provider-grant -operator op-1 -customer acme \
   -operations read,provision,suspend -granted-by platform-admin \
   -idempotency-key acme-op-1-read-provision-suspend-v1
+# time-boxed: the grant stops authorizing after -expires-at (RFC3339)
+trstctl provider-grant -operator op-1 -customer acme \
+  -operations read -granted-by platform-admin \
+  -expires-at 2027-01-01T00:00:00Z \
+  -idempotency-key acme-op-1-read-until-2027-v1
 trstctl provider-grant -operator op-1 -customer acme \
   -operations offboard -revoke -granted-by platform-admin \
   -idempotency-key acme-op-1-offboard-revoke-v1
