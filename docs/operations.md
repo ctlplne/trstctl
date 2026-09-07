@@ -64,6 +64,19 @@ above, but it cannot make `/readyz` time out or starve the tail into
 "projection tail worker stopped; retrying", so the replica stays in rotation and
 the read model keeps catching up while the burst is refused.
 
+One more retryable answer: **503 with `Retry-After`, "rolled back by a
+concurrent transaction"**. PostgreSQL detected a serialization failure or a
+deadlock (for example the request's inline projection racing the durable tail
+on the same rows) and rolled the command back; nothing was committed and the
+idempotency claim was released, so the same request retries as-is. Anything
+that still answers **500** is logged by the control plane with the underlying
+error text so an operator can correlate it.
+
+The idempotency claim, record and release statements run on their own small
+**bookkeeping pool**: a burst that saturates the request pool sheds commands
+with 503 but cannot make a completed command's result unrecordable, which is
+what used to wall keys as "indeterminate" under load.
+
 Every mutation claims its `Idempotency-Key` in a short transaction, runs the
 command with **no pooled connection held**, and records the result in a second
 short transaction (the same discipline the outbox uses for external calls), so

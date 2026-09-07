@@ -221,7 +221,7 @@ func (a *API) approveApprovalRequest(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	a.mutateDurableBound(w, r, r.Header.Get("Idempotency-Key"), binding,
+	a.mutateBound(w, r, r.Header.Get("Idempotency-Key"), binding,
 		func(ctx context.Context, tenantID string) (int, any, error) {
 			record, err := a.approvals.RecordApproval(ctx, tenantID, command)
 			if err != nil {
@@ -274,7 +274,7 @@ func (a *API) denyApprovalRequest(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	a.mutateDurableBound(w, r, r.Header.Get("Idempotency-Key"), binding,
+	a.mutateBound(w, r, r.Header.Get("Idempotency-Key"), binding,
 		func(ctx context.Context, tenantID string) (int, any, error) {
 			denied, err := a.approvals.RecordApproval(ctx, tenantID, command)
 			if err != nil {
@@ -325,7 +325,7 @@ func (a *API) approveIdentityAction(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	a.mutateDurableBound(w, r, r.Header.Get("Idempotency-Key"), binding,
+	a.mutateBound(w, r, r.Header.Get("Idempotency-Key"), binding,
 		func(ctx context.Context, tenantID string) (int, any, error) {
 			record, err := a.approvals.RecordApproval(ctx, tenantID, command)
 			if err != nil {

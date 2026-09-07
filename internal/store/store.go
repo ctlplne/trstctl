@@ -55,6 +55,11 @@ type Store struct {
 	// touches it, so a tenant burst that saturates the request pool cannot starve
 	// the tail into a retry loop that reports the projection as failed (DP2-056).
 	reservedPool *pgxpool.Pool
+	// bookkeepingPool carries only the idempotency claim/record/release
+	// statements (WithBookkeepingPool). They are tiny transactions whose failure
+	// walls a completed command as indeterminate, so they must not compete with
+	// the commands themselves for request-pool headroom (DP2-060).
+	bookkeepingPool *pgxpool.Pool
 	// historyRewriteOperationGate admits only one local contender to the
 	// deployment-wide PostgreSQL operation lock. Without it, maxConns local
 	// waiters can each pin a session and starve the elected callback's cutover.
@@ -82,6 +87,11 @@ const probePoolMaxConns = 2
 // at a time, so two connections leave headroom for a checkpoint advance beside
 // an in-flight apply without competing with request work.
 const reservedPoolMaxConns = 2
+
+// bookkeepingPoolMaxConns bounds the idempotency bookkeeping pool; each claim,
+// record or release is one short statement, so four connections keep pace with
+// the API bulkhead's eight workers without holding request-pool connections.
+const bookkeepingPoolMaxConns = 4
 
 // Bounded-latency defaults (OPS-TIMEOUTS-001): a saturated pool or a runaway
 // query fails closed with a structured error instead of hanging a request.
@@ -181,10 +191,28 @@ func Open(ctx context.Context, dsn string, opts ...OpenOption) (*Store, error) {
 		pool.Close()
 		return nil, fmt.Errorf("store: ping reserved pool: %w", err)
 	}
+	bookkeepingCfg := cfg.Copy()
+	bookkeepingCfg.MaxConns = bookkeepingPoolMaxConns
+	bookkeepingCfg.MinConns = 1
+	bookkeepingPool, err := pgxpool.NewWithConfig(ctx, bookkeepingCfg)
+	if err != nil {
+		reservedPool.Close()
+		probePool.Close()
+		pool.Close()
+		return nil, fmt.Errorf("store: connect bookkeeping pool: %w", err)
+	}
+	if err := bookkeepingPool.Ping(ctx); err != nil {
+		bookkeepingPool.Close()
+		reservedPool.Close()
+		probePool.Close()
+		pool.Close()
+		return nil, fmt.Errorf("store: ping bookkeeping pool: %w", err)
+	}
 	return &Store{
 		pool:                        pool,
 		probePool:                   probePool,
 		reservedPool:                reservedPool,
+		bookkeepingPool:             bookkeepingPool,
 		acquireTimeout:              options.acquireTimeout,
 		historyRewriteOperationGate: make(chan struct{}, 1),
 	}, nil
@@ -230,6 +258,19 @@ func IsBusy(err error) bool {
 	return errors.As(err, &pgErr) && pgErr.Code == "57014"
 }
 
+// IsTransactionRollback reports whether PostgreSQL rolled the statement's
+// transaction back because of a concurrent transaction: a serialization
+// failure (40001) or a detected deadlock (40P01). Nothing was committed, so the
+// same request may be retried as-is; callers must never let it surface as an
+// internal error (DP2-059/060).
+func IsTransactionRollback(err error) bool {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return false
+	}
+	return pgErr.Code == "40001" || pgErr.Code == "40P01"
+}
+
 // Close releases the connection pool.
 func (s *Store) Close() {
 	if s.probePool != nil {
@@ -238,10 +279,28 @@ func (s *Store) Close() {
 	if s.reservedPool != nil {
 		s.reservedPool.Close()
 	}
+	if s.bookkeepingPool != nil {
+		s.bookkeepingPool.Close()
+	}
 	s.pool.Close()
 }
 
 type reservedPoolKey struct{}
+
+type bookkeepingPoolKey struct{}
+
+// WithBookkeepingPool marks ctx so the store serves its transactions from the
+// idempotency bookkeeping pool. Only the claim/record/release statements of the
+// idempotency protocol opt in; the commands they bracket keep the request pool.
+func WithBookkeepingPool(ctx context.Context) context.Context {
+	return context.WithValue(ctx, bookkeepingPoolKey{}, true)
+}
+
+// UsesBookkeepingPool reports whether ctx was marked by WithBookkeepingPool.
+func UsesBookkeepingPool(ctx context.Context) bool {
+	v, _ := ctx.Value(bookkeepingPoolKey{}).(bool)
+	return v
+}
 
 // WithReservedPool marks ctx so the store serves its transactions and direct
 // statements from the reserved system-worker pool instead of the request pool.
@@ -262,6 +321,9 @@ func UsesReservedPool(ctx context.Context) bool {
 func (s *Store) poolFor(ctx context.Context) *pgxpool.Pool {
 	if s.reservedPool != nil && UsesReservedPool(ctx) {
 		return s.reservedPool
+	}
+	if s.bookkeepingPool != nil && UsesBookkeepingPool(ctx) {
+		return s.bookkeepingPool
 	}
 	return s.pool
 }

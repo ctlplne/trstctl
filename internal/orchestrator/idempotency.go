@@ -486,6 +486,7 @@ func (i *Idempotency) doClaimed(ctx context.Context, tenantID, key, binding stri
 
 // claimKey inserts the pending claim in its own short transaction.
 func (i *Idempotency) claimKey(ctx context.Context, tenantID, key, binding string) (bool, error) {
+	ctx = store.WithBookkeepingPool(ctx)
 	claimed := false
 	err := i.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx,
@@ -507,6 +508,7 @@ func (i *Idempotency) claimKey(ctx context.Context, tenantID, key, binding strin
 // one is waited for (bounded) and then answers ErrInProgress unless it is stale
 // enough to be taken over.
 func (i *Idempotency) awaitClaim(ctx context.Context, tenantID, key, binding string) (claimOutcome, string, []byte, error) {
+	ctx = store.WithBookkeepingPool(ctx)
 	deadline := time.Now().Add(pendingClaimWait)
 	backoff := 50 * time.Millisecond
 	for {
@@ -582,6 +584,7 @@ func (i *Idempotency) awaitClaim(ctx context.Context, tenantID, key, binding str
 
 // takeOverStaleClaim re-stamps an abandoned pending claim for this caller.
 func (i *Idempotency) takeOverStaleClaim(ctx context.Context, tenantID, key, binding string) (bool, error) {
+	ctx = store.WithBookkeepingPool(ctx)
 	taken := false
 	err := i.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx,
@@ -627,10 +630,11 @@ func (i *Idempotency) executeClaim(ctx context.Context, tenantID, key, binding s
 	// through a burst's pool pressure (each attempt already waits the acquire
 	// window) before walling the claim.
 	var recordErr error
+	recordCtx := store.WithBookkeepingPool(ctx)
 	for attempt := 0; attempt < recordAttempts; attempt++ {
 		recorded := false
-		recordErr = i.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-			tag, err := tx.Exec(ctx,
+		recordErr = i.store.WithTenant(recordCtx, tenantID, func(tx pgx.Tx) error {
+			tag, err := tx.Exec(recordCtx,
 				`UPDATE idempotency_keys
 				    SET status = 'completed', result_codec = $4, result = $5, completed_at = now()
 				  WHERE tenant_id = $1 AND key = $2 AND request_binding = $3 AND status = 'pending'`,
@@ -664,7 +668,7 @@ func (i *Idempotency) executeClaim(ctx context.Context, tenantID, key, binding s
 func (i *Idempotency) releaseClaim(ctx context.Context, tenantID, key, binding string) error {
 	var err error
 	for attempt := 0; attempt < 3; attempt++ {
-		releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		releaseCtx, cancel := context.WithTimeout(store.WithBookkeepingPool(context.WithoutCancel(ctx)), 5*time.Second)
 		err = i.store.WithTenant(releaseCtx, tenantID, func(tx pgx.Tx) error {
 			_, execErr := tx.Exec(releaseCtx,
 				`DELETE FROM idempotency_keys
@@ -687,7 +691,7 @@ func (i *Idempotency) releaseClaim(ctx context.Context, tenantID, key, binding s
 }
 
 func (i *Idempotency) markProtectedIndeterminate(ctx context.Context, tenantID, key, binding string) error {
-	repairCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	repairCtx, cancel := context.WithTimeout(store.WithBookkeepingPool(context.WithoutCancel(ctx)), 5*time.Second)
 	defer cancel()
 	return i.store.WithTenant(repairCtx, tenantID, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(repairCtx,
