@@ -317,6 +317,7 @@ func TestLocalEvaluationOIDCMintsProviderOperatorTokensOnlyWhenRegistered(t *tes
 			"OIDC_PROVIDER_EMAIL=op-1@provider.test",
 			"OIDC_PROVIDER_ROLES=provider-admin",
 			"OIDC_PROVIDER_MFA=mfa",
+			"OIDC_PROVIDER_OPERATORS=op-2:op-2@provider.test:provider-operator",
 		)
 		if providerClient != "" {
 			serverEnv = append(serverEnv, "OIDC_PROVIDER_CLIENT_ID="+providerClient)
@@ -413,5 +414,54 @@ func TestLocalEvaluationOIDCMintsProviderOperatorTokensOnlyWhenRegistered(t *tes
 	_ = replay.Body.Close()
 	if replay.StatusCode != http.StatusBadRequest {
 		t.Fatalf("replayed sign-in nonce = %d, want 400", replay.StatusCode)
+	}
+
+	// A registered second operator signs in with its own roles; an unknown subject is refused.
+	mintAs := func(subject string) (*http.Response, string) {
+		page, err := client.Get(issuer + "/provider/sign-in")
+		if err != nil {
+			t.Fatal(err)
+		}
+		body := readBody(page)
+		_ = page.Body.Close()
+		i := strings.Index(body, marker)
+		if i < 0 {
+			t.Fatalf("sign-in page carries no form nonce: %s", body)
+		}
+		n := body[i+len(marker):]
+		n = n[:strings.Index(n, `"`)]
+		req, err := http.NewRequest(http.MethodPost, issuer+"/provider/token", strings.NewReader(url.Values{"nonce": {n}, "subject": {subject}}.Encode()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Accept", "application/json")
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp, body
+	}
+	second, page2 := mintAs("op-2")
+	if !strings.Contains(page2, "op-2@provider.test") {
+		t.Fatalf("sign-in page does not offer the registered second operator: %s", page2)
+	}
+	if second.StatusCode != http.StatusOK {
+		body := readBody(second)
+		t.Fatalf("second operator token = %d body=%s", second.StatusCode, body)
+	}
+	decodeJSON(t, second.Body, &tokenBody)
+	_ = second.Body.Close()
+	claims2 := jwtClaims(t, tokenBody.AccessToken)
+	if got, _ := claims2["sub"].(string); got != "op-2" {
+		t.Errorf("second operator sub = %q", got)
+	}
+	if list, _ := claims2["roles"].([]any); len(list) != 1 || list[0] != "provider-operator" {
+		t.Errorf("second operator roles = %v, want [provider-operator]", claims2["roles"])
+	}
+	unknown, _ := mintAs("nobody")
+	_ = unknown.Body.Close()
+	if unknown.StatusCode != http.StatusBadRequest {
+		t.Fatalf("unknown operator subject = %d, want 400", unknown.StatusCode)
 	}
 }

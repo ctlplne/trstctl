@@ -56,3 +56,5 @@ services:
       OIDC_PROVIDER_NAME: Provider Admin
       OIDC_PROVIDER_ROLES: provider-admin
       OIDC_PROVIDER_MFA: mfa
+      # A second, limited operator so delegation and refusal between operators can be shown.
+      OIDC_PROVIDER_OPERATORS: "op-2:op-2@trstctl.local:provider-operator"
