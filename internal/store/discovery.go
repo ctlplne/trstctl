@@ -315,6 +315,20 @@ func (s *Store) ApplyDiscoveryRunQueuedTx(ctx context.Context, tx pgx.Tx, run Di
 	if execution == "" {
 		execution = "control_plane"
 	}
+	// The inline request projector and the durable event-tail projector apply
+	// the same discovery.run.queued event. ON CONFLICT is only race-safe on its
+	// arbiter (the primary key): two applies that pass that pre-check together
+	// both insert speculatively and the loser trips the tenant+ID unique index,
+	// which is not arbitrated. Unlike a declaration, a run cannot be re-emitted
+	// (the event is already durable and a retry would enqueue a second job), so
+	// the race is removed rather than retried: a transaction-scoped advisory lock
+	// keyed on the run makes the second apply observe the first's committed row
+	// and take the idempotent update.
+	if _, err := tx.Exec(ctx,
+		`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+		"discovery-run-projection\x1f"+run.TenantID+"\x1f"+run.ID); err != nil {
+		return fmt.Errorf("store: lock discovery run projection: %w", err)
+	}
 	tag, err := tx.Exec(ctx,
 		`INSERT INTO discovery_runs
 		        (id, tenant_id, source_id, schedule_id, retry_of_run_id, status, dry_run, requested_by,
