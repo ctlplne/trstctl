@@ -277,3 +277,141 @@ func readBody(resp *http.Response) string {
 	b, _ := io.ReadAll(resp.Body)
 	return string(b)
 }
+
+// The provider-operator sign-in is opt-in and mints a bearer with the role and
+// MFA claims a licensed provider plane pins; its form nonce is single-use, and
+// a server without a registered provider client does not expose the path.
+func TestLocalEvaluationOIDCMintsProviderOperatorTokensOnlyWhenRegistered(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node is required to execute the local evaluation OIDC contract")
+	}
+	privateDir := filepath.Join(t.TempDir(), "private")
+	publicDir := filepath.Join(t.TempDir(), "public")
+	keyEnv := append(os.Environ(),
+		"OIDC_PRIVATE_KEY_DIR="+privateDir,
+		"OIDC_JWKS_DIR="+publicDir,
+		"OIDC_KEY_ID=trstctl-local-oidc-test-key",
+	)
+	runNode(t, node, keyEnv, "oidc-keygen.mjs")
+
+	start := func(t *testing.T, providerClient string) (string, *http.Client) {
+		t.Helper()
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatalf("reserve local OIDC port: %v", err)
+		}
+		port := listener.Addr().(*net.TCPAddr).Port
+		_ = listener.Close()
+		issuer := fmt.Sprintf("http://127.0.0.1:%d", port)
+		serverEnv := append(os.Environ(),
+			"OIDC_HOST=127.0.0.1",
+			fmt.Sprintf("OIDC_PORT=%d", port),
+			"OIDC_ISSUER="+issuer,
+			"OIDC_CLIENT_ID="+testClientID,
+			"OIDC_REDIRECT_URI="+testRedirectURI,
+			"OIDC_KEY_ID=trstctl-local-oidc-test-key",
+			"OIDC_PRIVATE_KEY="+filepath.Join(privateDir, "idp-private.pem"),
+			"OIDC_JWKS="+filepath.Join(publicDir, "jwks.json"),
+			"OIDC_PROVIDER_SUBJECT=op-1",
+			"OIDC_PROVIDER_EMAIL=op-1@provider.test",
+			"OIDC_PROVIDER_ROLES=provider-admin",
+			"OIDC_PROVIDER_MFA=mfa",
+		)
+		if providerClient != "" {
+			serverEnv = append(serverEnv, "OIDC_PROVIDER_CLIENT_ID="+providerClient)
+		}
+		var serverOutput bytes.Buffer
+		cmd := exec.Command(node, "oidc-server.mjs") // #nosec G204 -- node path comes from LookPath and the script is a checked-in test target (CWE-78)
+		cmd.Env = serverEnv
+		cmd.Stdout = &serverOutput
+		cmd.Stderr = &serverOutput
+		if err := cmd.Start(); err != nil {
+			t.Fatalf("start local OIDC server: %v", err)
+		}
+		t.Cleanup(func() {
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+		})
+		client := &http.Client{Timeout: 2 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
+		waitForHealth(t, client, issuer, &serverOutput)
+		return issuer, client
+	}
+
+	unregistered, client := start(t, "")
+	resp, err := client.Get(unregistered + "/provider/sign-in")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("provider sign-in without a registered provider client = %d, want 404", resp.StatusCode)
+	}
+
+	issuer, client := start(t, "trstctl-provider-console")
+	page, err := client.Get(issuer + "/provider/sign-in")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pageBody := readBody(page)
+	_ = page.Body.Close()
+	if page.StatusCode != http.StatusOK || !strings.Contains(pageBody, "op-1@provider.test") || !strings.Contains(pageBody, "provider-admin") {
+		t.Fatalf("provider sign-in page = %d body=%s", page.StatusCode, pageBody)
+	}
+	marker := `name="nonce" value="`
+	i := strings.Index(pageBody, marker)
+	if i < 0 {
+		t.Fatalf("sign-in page carries no form nonce: %s", pageBody)
+	}
+	nonce := pageBody[i+len(marker):]
+	nonce = nonce[:strings.Index(nonce, `"`)]
+
+	mint := func(nonce string) *http.Response {
+		req, err := http.NewRequest(http.MethodPost, issuer+"/provider/token", strings.NewReader(url.Values{"nonce": {nonce}}.Encode()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Accept", "application/json")
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+	minted := mint(nonce)
+	if minted.StatusCode != http.StatusOK {
+		body := readBody(minted)
+		t.Fatalf("provider token = %d body=%s", minted.StatusCode, body)
+	}
+	var tokenBody struct {
+		AccessToken string `json:"access_token"`
+		TokenType   string `json:"token_type"`
+	}
+	decodeJSON(t, minted.Body, &tokenBody)
+	_ = minted.Body.Close()
+	if tokenBody.TokenType != "Bearer" || tokenBody.AccessToken == "" {
+		t.Fatalf("provider token body = %+v", tokenBody)
+	}
+	claims := jwtClaims(t, tokenBody.AccessToken)
+	for key, want := range map[string]string{"iss": issuer, "aud": "trstctl-provider-console", "sub": "op-1", "email": "op-1@provider.test"} {
+		if got, _ := claims[key].(string); got != want {
+			t.Errorf("operator token claim %s = %q, want %q", key, got, want)
+		}
+	}
+	for key, want := range map[string]string{"roles": "provider-admin", "amr": "mfa"} {
+		list, _ := claims[key].([]any)
+		if len(list) != 1 || list[0] != want {
+			t.Errorf("operator token claim %s = %v, want [%s]", key, claims[key], want)
+		}
+	}
+	if _, tenantScoped := claims["tenant"]; tenantScoped {
+		t.Error("operator token must not carry the tenant login claim")
+	}
+
+	replay := mint(nonce)
+	_ = replay.Body.Close()
+	if replay.StatusCode != http.StatusBadRequest {
+		t.Fatalf("replayed sign-in nonce = %d, want 400", replay.StatusCode)
+	}
+}

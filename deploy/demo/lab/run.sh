@@ -47,6 +47,31 @@ TRSTCTL_LAB_BUILD_DATE="${TRSTCTL_LAB_BUILD_DATE:-$(git -C "$repo_dir" show -s -
 export TRSTCTL_DEMO_CONTROL_IMAGE TRSTCTL_DEMO_SEED_IMAGE TRSTCTL_DEMO_FRONTDOORS_IMAGE
 export TRSTCTL_LAB_BUILD_COMMIT TRSTCTL_LAB_BUILD_VERSION TRSTCTL_LAB_BUILD_DATE
 compose="docker compose -p $lab_project -f $repo_dir/deploy/demo/docker-compose.yml -f $lab_dir/docker-compose.yml --profile partner-lab"
+# Licensed profile (docs/editions.md, "Add license"): an operator-controlled license
+# file plus the vendor's license signing public key turn the lab into a licensed
+# customer deployment built from the clean release image target.
+if [ -n "${TRSTCTL_LAB_LICENSE_FILE:-}" ]; then
+  if [ ! -f "$TRSTCTL_LAB_LICENSE_FILE" ]; then
+    printf '%s\n' "TRSTCTL_LAB_LICENSE_FILE=$TRSTCTL_LAB_LICENSE_FILE is not a readable file." >&2
+    exit 2
+  fi
+  case "$(stat -f '%Lp' "$TRSTCTL_LAB_LICENSE_FILE" 2>/dev/null || stat -c '%a' "$TRSTCTL_LAB_LICENSE_FILE" 2>/dev/null)" in
+    600|400) ;;
+    *)
+      printf '%s\n' "TRSTCTL_LAB_LICENSE_FILE must be an operator-controlled 0600 (or 0400) file; refusing a group- or world-readable license." >&2
+      exit 2
+      ;;
+  esac
+  if [ -z "${TRSTCTL_LAB_LICENSE_KEYS_B64:-}" ]; then
+    printf '%s\n' "TRSTCTL_LAB_LICENSE_KEYS_B64 (the vendor license signing public key, base64 PEM) is required with TRSTCTL_LAB_LICENSE_FILE." >&2
+    exit 2
+  fi
+  TRSTCTL_LAB_LICENSE_DEPLOYMENT_ID="${TRSTCTL_LAB_LICENSE_DEPLOYMENT_ID:-partner-lab}"
+  TRSTCTL_LAB_LICENSE_ENVIRONMENT="${TRSTCTL_LAB_LICENSE_ENVIRONMENT:-non_production}"
+  export TRSTCTL_LAB_LICENSE_FILE TRSTCTL_LAB_LICENSE_KEYS_B64 TRSTCTL_LAB_LICENSE_DEPLOYMENT_ID TRSTCTL_LAB_LICENSE_ENVIRONMENT
+  compose="$compose -f $lab_dir/docker-compose.licensed.yml"
+  printf '%s\n' "Licensed partner lab: release image with the vendor public key baked in; license bound to $TRSTCTL_LAB_LICENSE_DEPLOYMENT_ID ($TRSTCTL_LAB_LICENSE_ENVIRONMENT)."
+fi
 
 live_status=0
 census_status=0

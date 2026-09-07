@@ -494,6 +494,7 @@ jobs:
             WEB_BUILD_IMAGE=${{ steps.basedigest.outputs.web_ref }}
             BUILD_IMAGE=${{ steps.basedigest.outputs.build_ref }}
             BASE_IMAGE=${{ steps.basedigest.outputs.runtime_ref }}
+            LICENSE_KEYS_B64=${{ vars.TRSTCTL_LICENSE_KEYS_B64 }}
           tags: trstctl:sizecheck
 
       - name: Enforce the image size budget
@@ -533,6 +534,7 @@ jobs:
             WEB_BUILD_IMAGE=${{ steps.basedigest.outputs.web_ref }}
             BUILD_IMAGE=${{ steps.basedigest.outputs.build_ref }}
             BASE_IMAGE=${{ steps.basedigest.outputs.runtime_ref }}
+            LICENSE_KEYS_B64=${{ vars.TRSTCTL_LICENSE_KEYS_B64 }}
           # Rewrite layer timestamps to SOURCE_DATE_EPOCH for reproducibility.
           outputs: type=image,rewrite-timestamp=true
           tags: ${{ steps.tags.outputs.tags }}

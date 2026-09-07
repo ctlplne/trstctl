@@ -79,8 +79,14 @@ ENV CGO_ENABLED=0 \
 # The shipped reproducible flags. Build the control plane and the signer with
 # identical flags so a rebuild of the same commit yields identical binaries.
 ARG LDFLAGS="-s -w -buildid= -X trstctl.com/trstctl/internal/buildinfo.version=${VERSION} -X trstctl.com/trstctl/internal/buildinfo.commit=${COMMIT} -X trstctl.com/trstctl/internal/buildinfo.date=${DATE}"
-RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS}" -o /out/trstctl          ./cmd/trstctl
-RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS}" -o /out/trstctl-signer   ./cmd/trstctl-signer
+# The vendor's license signing PUBLIC keys, comma-separated base64 PEM, baked into
+# the binaries exactly as `make LICENSE_KEYS_B64=...` does for native builds. A
+# customer's signed license verifies only against keys baked here; an empty value
+# (the default for local builds) bakes no key, so no license file can verify and
+# the deployment stays Community. Public keys only: never pass signing material.
+ARG LICENSE_KEYS_B64=""
+RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS} -X trstctl.com/trstctl/internal/license.builtinPubKeysB64=${LICENSE_KEYS_B64}" -o /out/trstctl          ./cmd/trstctl
+RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS} -X trstctl.com/trstctl/internal/license.builtinPubKeysB64=${LICENSE_KEYS_B64}" -o /out/trstctl-signer   ./cmd/trstctl-signer
 RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS}" -o /out/trstctl-agent    ./cmd/trstctl-agent
 RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS}" -o /out/trstctl-operator ./cmd/trstctl-operator
 
@@ -120,7 +126,7 @@ RUN set -eu; \
       --issued-at 2026-01-01T00:00:00Z \
       --expires-at "${DEMO_LICENSE_EXPIRES_AT}"; \
     license_keys_b64="$(base64 -w 0 /tmp/demo-license-public.pem)"; \
-    demo_ldflags="${LDFLAGS} -X trstctl.com/trstctl/internal/license.builtinPubKeysB64=${license_keys_b64}"; \
+    demo_ldflags="${LDFLAGS} -X trstctl.com/trstctl/internal/license.builtinPubKeysB64=${LICENSE_KEYS_B64:+${LICENSE_KEYS_B64},}${license_keys_b64}"; \
     go build -trimpath -buildvcs=false -ldflags "${demo_ldflags}" -o /out/trstctl ./cmd/trstctl; \
     go build -trimpath -buildvcs=false -ldflags "${demo_ldflags}" -o /out/trstctl-signer ./cmd/trstctl-signer; \
     rm -f /tmp/trstctl-license /tmp/demo-license-private.pem /tmp/demo-license-public.pem

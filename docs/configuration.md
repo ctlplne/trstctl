@@ -654,7 +654,7 @@ an otherwise valid token/session and revokes the operator's live delegations.
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `TRSTCTL_PROVIDER_OIDC_ISSUER` / `TRSTCTL_PROVIDER_OIDC_AUDIENCE` | unset | Required OIDC issuer and audience. |
-| `TRSTCTL_PROVIDER_OIDC_JWKS_FILE` / `TRSTCTL_PROVIDER_OIDC_JWKS_JSON` | unset | Exactly one offline-pinned IdP signing-key source. |
+| `TRSTCTL_PROVIDER_OIDC_JWKS_FILE` / `TRSTCTL_PROVIDER_OIDC_JWKS_JSON` | unset | Exactly one offline-pinned IdP signing-key source. The partner lab's licensed profile pins its local IdP this way (`deploy/demo/lab/docker-compose.licensed.yml`). |
 | `TRSTCTL_PROVIDER_OIDC_ROLE_CLAIM` | `roles` | Signed claim containing Provider role values. |
 | `TRSTCTL_PROVIDER_OIDC_ADMIN_VALUES` / `TRSTCTL_PROVIDER_OIDC_OPERATOR_VALUES` | unset | Maps signed values to the two Provider roles. |
 | `TRSTCTL_PROVIDER_OIDC_MFA_CLAIM` / `TRSTCTL_PROVIDER_OIDC_MFA_VALUES` | `amr` / `mfa,otp,hwk,swk` | Signed claim and accepted values that positively prove MFA. |

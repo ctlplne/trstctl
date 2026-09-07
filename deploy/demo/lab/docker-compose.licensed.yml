@@ -1,0 +1,58 @@
+name: trstctl-demo
+
+# Opt-in overlay: run the partner lab the way a licensed customer deployment runs.
+#   TRSTCTL_LAB_LICENSE_FILE       operator-controlled 0600 license file on the host
+#   TRSTCTL_LAB_LICENSE_KEYS_B64   the vendor's license signing PUBLIC key(s), base64 PEM
+#   TRSTCTL_LAB_LICENSE_DEPLOYMENT_ID / TRSTCTL_LAB_LICENSE_ENVIRONMENT  the signed binding
+# run.sh adds this file when TRSTCTL_LAB_LICENSE_FILE is set. The control-plane image is
+# the clean `release` target with the vendor public key baked in (the demo target's
+# self-minted key and license are not used), the license is copied once by lab-init
+# into the run-owned runtime volume (0400, service uid), and both the control plane
+# and the isolated signer read that one file with the same bound deployment ID and
+# environment. The provider plane pins the lab's local IdP JWKS offline for
+# operator sign-in; the IdP mints operator tokens only for the provider client.
+services:
+  lab-init:
+    environment:
+      TRSTCTL_LAB_LICENSE_IN: /license-in/license.json
+    volumes:
+      - ${TRSTCTL_LAB_LICENSE_FILE:?set TRSTCTL_LAB_LICENSE_FILE to the operator-controlled license file}:/license-in/license.json:ro
+
+  trstctl:
+    build:
+      target: release
+      args:
+        LICENSE_KEYS_B64: ${TRSTCTL_LAB_LICENSE_KEYS_B64:?set TRSTCTL_LAB_LICENSE_KEYS_B64 to the vendor license public key (base64 PEM)}
+    environment:
+      TRSTCTL_LICENSE_FILE: /lab-runtime/license.json
+      TRSTCTL_LICENSE_DEPLOYMENT_ID: ${TRSTCTL_LAB_LICENSE_DEPLOYMENT_ID:-partner-lab}
+      TRSTCTL_LICENSE_ENVIRONMENT: ${TRSTCTL_LAB_LICENSE_ENVIRONMENT:-non_production}
+      TRSTCTL_PROVIDER_OIDC_ISSUER: "http://127.0.0.1:19081"
+      TRSTCTL_PROVIDER_OIDC_AUDIENCE: trstctl-provider-console
+      TRSTCTL_PROVIDER_OIDC_JWKS_FILE: /demo-oidc/jwks.json
+      TRSTCTL_PROVIDER_OIDC_ROLE_CLAIM: roles
+      TRSTCTL_PROVIDER_OIDC_ADMIN_VALUES: provider-admin
+      TRSTCTL_PROVIDER_OIDC_OPERATOR_VALUES: provider-operator
+
+  signer:
+    volumes:
+      - labruntime:/lab-runtime:ro
+    command: !override
+      - "--socket=/run/trstctl/signer.sock"
+      - "--keystore=/data/signer/keys"
+      - "--kek=/data/secrets/kek.bin"
+      - "--auth-secret=/data/secrets/sign-auth.bin"
+      - "--legacy-audit-key=/data/audit/signing-key.pem"
+      - "--license=/lab-runtime/license.json"
+      - "--license-deployment-id=${TRSTCTL_LAB_LICENSE_DEPLOYMENT_ID:-partner-lab}"
+      - "--license-environment=${TRSTCTL_LAB_LICENSE_ENVIRONMENT:-non_production}"
+      - "--managed-keys-config=/demo-managed-keys/provider.json"
+
+  demo-oidc:
+    environment:
+      OIDC_PROVIDER_CLIENT_ID: trstctl-provider-console
+      OIDC_PROVIDER_SUBJECT: provider-admin
+      OIDC_PROVIDER_EMAIL: provider-admin@trstctl.local
+      OIDC_PROVIDER_NAME: Provider Admin
+      OIDC_PROVIDER_ROLES: provider-admin
+      OIDC_PROVIDER_MFA: mfa

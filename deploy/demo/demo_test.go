@@ -1621,3 +1621,102 @@ func TestDemoLocalStackBacksTheSeededCloudDiscoverySources(t *testing.T) {
 		}
 	}
 }
+
+// The licensed partner-lab profile is the customer path for a license: the clean
+// release image with the vendor's public key baked in, an operator-controlled file
+// copied once for the service user, the same bound deployment ID and environment
+// for the control plane and the isolated signer, and a provider-operator IdP pinned
+// offline. It must never fall back to the demo target's self-minted license.
+func TestPartnerLabLicensedProfileDeliversAnOperatorLicenseTheCustomerWay(t *testing.T) {
+	cf := parseComposeAt(t, "lab", "docker-compose.licensed.yml")
+	cp := cf.Services["trstctl"]
+	if got := stringValue(cp.Build["target"]); got != "release" {
+		t.Fatalf("licensed control plane build target = %q, want release (not the demo target's self-minted license)", got)
+	}
+	args, _ := cp.Build["args"].(map[string]any)
+	if !strings.Contains(fmt.Sprint(args["LICENSE_KEYS_B64"]), "TRSTCTL_LAB_LICENSE_KEYS_B64") {
+		t.Fatalf("licensed control plane must bake the vendor public key from TRSTCTL_LAB_LICENSE_KEYS_B64, got %v", args)
+	}
+	for key, want := range map[string]string{
+		"TRSTCTL_LICENSE_FILE":                  "/lab-runtime/license.json",
+		"TRSTCTL_PROVIDER_OIDC_JWKS_FILE":       "/demo-oidc/jwks.json",
+		"TRSTCTL_PROVIDER_OIDC_ADMIN_VALUES":    "provider-admin",
+		"TRSTCTL_PROVIDER_OIDC_OPERATOR_VALUES": "provider-operator",
+	} {
+		if got := fmt.Sprint(cp.Environment[key]); got != want {
+			t.Fatalf("licensed control plane %s = %q, want %q", key, got, want)
+		}
+	}
+	if _, viaURL := cp.Environment["TRSTCTL_PROVIDER_OIDC_JWKS_URL"]; viaURL {
+		t.Fatal("provider IdP keys must be pinned offline (file), never fetched from a URL")
+	}
+	for _, key := range []string{"TRSTCTL_LICENSE_DEPLOYMENT_ID", "TRSTCTL_LICENSE_ENVIRONMENT"} {
+		if got := fmt.Sprint(cp.Environment[key]); !strings.Contains(got, "TRSTCTL_LAB_LICENSE_") {
+			t.Fatalf("licensed control plane %s = %q, want the operator-bound value", key, got)
+		}
+	}
+	signer := cf.Services["signer"]
+	for _, want := range []string{"--license=/lab-runtime/license.json", "--license-deployment-id=${TRSTCTL_LAB_LICENSE_DEPLOYMENT_ID:-partner-lab}", "--license-environment=${TRSTCTL_LAB_LICENSE_ENVIRONMENT:-non_production}", "--managed-keys-config=/demo-managed-keys/provider.json"} {
+		if !contains(signer.Command, want) {
+			t.Fatalf("licensed signer command %v lacks %q", signer.Command, want)
+		}
+	}
+	if contains(signer.Command, "--license=/etc/trstctl/demo-provider-license.json") {
+		t.Fatal("licensed signer must not read the demo target's self-minted license")
+	}
+	if !containsPrefix(signer.Volumes, "labruntime:/lab-runtime:ro") {
+		t.Fatalf("licensed signer must read the runtime volume read-only: %v", signer.Volumes)
+	}
+	init := cf.Services["lab-init"]
+	if got := fmt.Sprint(init.Environment["TRSTCTL_LAB_LICENSE_IN"]); got != "/license-in/license.json" {
+		t.Fatalf("lab-init license input = %q", got)
+	}
+	mounted := false
+	for _, v := range init.Volumes {
+		if strings.HasPrefix(v, "${TRSTCTL_LAB_LICENSE_FILE") && strings.HasSuffix(v, ":/license-in/license.json:ro") {
+			mounted = true
+		}
+	}
+	if !mounted {
+		t.Fatalf("lab-init must bind-mount the operator's license file read-only: %v", init.Volumes)
+	}
+	idp := cf.Services["demo-oidc"]
+	if got := fmt.Sprint(idp.Environment["OIDC_PROVIDER_CLIENT_ID"]); got != fmt.Sprint(cp.Environment["TRSTCTL_PROVIDER_OIDC_AUDIENCE"]) {
+		t.Fatalf("provider IdP client %q must equal the pinned audience %q", got, cp.Environment["TRSTCTL_PROVIDER_OIDC_AUDIENCE"])
+	}
+
+	initScript := read(t, "lab", "lab-init.mjs")
+	for _, want := range []string{"TRSTCTL_LAB_LICENSE_IN", "/lab-runtime/license.json", "mode: 0o400", "chownSync(licenseOut, 65532, 65532)"} {
+		if !strings.Contains(initScript, want) {
+			t.Fatalf("lab-init.mjs must copy the license for the service user (%s missing)", want)
+		}
+	}
+	script := read(t, "lab", "run.sh")
+	for _, want := range []string{"TRSTCTL_LAB_LICENSE_FILE", "TRSTCTL_LAB_LICENSE_KEYS_B64", "docker-compose.licensed.yml", "600|400)", "refusing a group- or world-readable license"} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("run.sh licensed profile lacks %q", want)
+		}
+	}
+	dockerfile := read(t, "..", "docker", "Dockerfile")
+	for _, want := range []string{"ARG LICENSE_KEYS_B64=\"\"", "builtinPubKeysB64=${LICENSE_KEYS_B64}\" -o /out/trstctl ", "builtinPubKeysB64=${LICENSE_KEYS_B64}\" -o /out/trstctl-signer"} {
+		if !strings.Contains(dockerfile, want) {
+			t.Fatalf("Dockerfile must bake LICENSE_KEYS_B64 into the release control plane and signer (%q missing)", want)
+		}
+	}
+	if !strings.Contains(dockerfile, "${LICENSE_KEYS_B64:+${LICENSE_KEYS_B64},}${license_keys_b64}") {
+		t.Fatal("demo target must keep an operator-supplied key beside its throw-away key instead of discarding it")
+	}
+	release := read(t, "..", "..", ".github", "workflows", "release.yml")
+	if strings.Count(release, "LICENSE_KEYS_B64=${{ vars.TRSTCTL_LICENSE_KEYS_B64 }}") < 2 {
+		t.Fatal("release pipeline must bake the vendor public key into both release image builds")
+	}
+}
+
+func containsPrefix(list []string, want string) bool {
+	for _, item := range list {
+		if item == want {
+			return true
+		}
+	}
+	return false
+}

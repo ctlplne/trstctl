@@ -44,7 +44,7 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1381 annotated sites across 26 rules. Each row is
+1382 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -708,7 +708,7 @@ not this file.
 | `ee/whitelabel/email.go:99` | scheme and host validated above; https only (CWE-79) |
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 
-### G204 — CWE-78 OS command injection (154 sites)
+### G204 — CWE-78 OS command injection (155 sites)
 
 | Location | Reason |
 |---|---|
@@ -742,6 +742,7 @@ not this file.
 | `deploy/kubernetes/manifests_test.go:434` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `deploy/local-oidc/oidc_test.go:79` | node path comes from LookPath and the script is a checked-in test target (CWE-78) |
 | `deploy/local-oidc/oidc_test.go:155` | arguments are fixed checked-in scripts (CWE-78) |
+| `deploy/local-oidc/oidc_test.go:325` | node path comes from LookPath and the script is a checked-in test target (CWE-78) |
 | `docs/claim_applications_test.go:67` | test runs the repository's own committed generator against tempdir fixtures it just wrote itself (CWE-78) |
 | `docs/cwe_register_test.go:18` | test runs the repo's own committed generator (CWE-78) |
 | `docs/cwe_register_test.go:40` | test runs the repo's own committed generator against a tempdir fixture (CWE-78) |

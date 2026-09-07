@@ -94,6 +94,25 @@
         "certificate_health"
       ]
     },
+    "onboard-a-team": {
+      "census_rows": [],
+      "core_surfaces": [
+        "tenant_rls",
+        "oidc",
+        "rbac",
+        "policy",
+        "audit_export"
+      ]
+    },
+    "operate-as-a-provider": {
+      "census_rows": [],
+      "core_surfaces": [
+        "provider_plane",
+        "license_verification",
+        "tenant_rls",
+        "audit_export"
+      ]
+    },
     "preserve-existing-ca": {
       "census_rows": [
         "connector.registry",
@@ -105,16 +124,6 @@
         "certificate_inventory",
         "connector_target_test",
         "notification_routing"
-      ]
-    },
-    "onboard-a-team": {
-      "census_rows": [],
-      "core_surfaces": [
-        "tenant_rls",
-        "oidc",
-        "rbac",
-        "policy",
-        "audit_export"
       ]
     },
     "respond-to-compromise": {

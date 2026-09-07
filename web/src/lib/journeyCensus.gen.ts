@@ -147,6 +147,11 @@ export const journeyCensus = {
       core_surfaces: ["tenant_rls", "oidc", "rbac", "policy", "audit_export"],
       status: "served",
     },
+    "operate-as-a-provider": {
+      census_rows: [],
+      core_surfaces: ["provider_plane", "license_verification", "tenant_rls", "audit_export"],
+      status: "served",
+    },
     "preserve-existing-ca": {
       census_rows: [
         {

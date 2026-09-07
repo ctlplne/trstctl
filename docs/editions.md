@@ -45,6 +45,43 @@ the license and prevents the control plane and signer from temporarily applying
 different rights. Read or verification failures are shown with sanitized,
 fail-closed language and a safe retry; raw server errors are not displayed.
 
+### Where the trusted vendor key comes from
+
+A license verifies only against the vendor's license signing public keys baked
+into the binaries at build time. Native builds bake them with
+`make LICENSE_KEYS_B64=$(base64 -w0 license-signing.pub)`; container images bake
+them with the `LICENSE_KEYS_B64` build argument of `deploy/docker/Dockerfile`
+(the release pipeline passes the repository variable
+`TRSTCTL_LICENSE_KEYS_B64`). Only public keys are ever baked. A build without
+a baked key bakes no trust: no license file can verify and the deployment stays
+Community, which is the fail-closed default for local builds. The local
+click-through demo is the one exception: its image target mints a throw-away
+key and license inside the build and deletes the signing material, so a demo
+license never verifies on any other build.
+
+### Containers and the partner lab
+
+In containers the license is a read-only mounted file owned by the operator,
+never an image layer. The partner lab ships this path as an opt-in profile:
+
+```bash
+TRSTCTL_LAB_LICENSE_FILE=/secure/acme-license.json \
+TRSTCTL_LAB_LICENSE_KEYS_B64="$(base64 -w0 vendor-ed25519.pub)" \
+TRSTCTL_LAB_LICENSE_DEPLOYMENT_ID=acme-lab \
+TRSTCTL_LAB_LICENSE_ENVIRONMENT=non_production \
+deploy/demo/lab/run.sh
+```
+
+`run.sh` refuses a license file that is group- or world-readable, builds the
+clean `release` image target with the vendor key baked in, copies the file once
+into the run-owned runtime volume for the service user, and starts the control
+plane and the isolated signer with the same bound deployment ID and
+environment. The deployment ID must be one the license signed for that
+environment; a copied file with another binding fails startup. The same profile
+pins the lab's local identity provider for provider-operator sign-in (see
+[Provider operator delegation](#provider-operator-delegation) and the
+[provider journey](journeys/operate-as-a-provider.md)).
+
 ## Buyer Matrix
 
 | Packaging line | Free | Enterprise | Provider / MSP |

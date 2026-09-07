@@ -75,6 +75,7 @@ nav:
       - 'Start here: managed service providers': start-here/managed-service-providers.md
       - Replace your existing CA (optional): journeys/migrate-from-existing-ca.md
       - Onboard a team as a tenant: journeys/onboard-a-team.md
+      - Operate as a managed-service provider: journeys/operate-as-a-provider.md
       - Manage application secrets: journeys/manage-secrets.md
       - SSH access at scale: journeys/ssh-at-scale.md
       - Respond to a compromise: journeys/respond-to-compromise.md

@@ -39,6 +39,28 @@ Open the console at <https://127.0.0.1:9443>. The real target listeners remain a
 
 The browser will not recognize the target DNS names when you use the IP address. The automated probes connect to the published ports with the correct SNI names and verify the resulting chains against Pebble's pinned public test root.
 
+## Licensed profile (Enterprise Provider)
+
+The lab can run as a licensed customer deployment. Sign a license with the
+vendor helper (`trstctl-license sign --tier provider ...`, see
+`docs/editions.md`), keep it as a `0600` file, and start the lab with the
+vendor's public key:
+
+```bash
+TRSTCTL_LAB_LICENSE_FILE=/secure/partner-lab-license.json \
+TRSTCTL_LAB_LICENSE_KEYS_B64="$(base64 -w0 vendor-ed25519.pub)" \
+TRSTCTL_LAB_LICENSE_DEPLOYMENT_ID=partner-lab \
+TRSTCTL_LAB_RUN_JOURNEYS=0 deploy/demo/lab/run.sh
+```
+
+This adds `docker-compose.licensed.yml`: the control plane and signer are built
+from the clean `release` image target (not the demo target and its self-minted
+license), read the operator's license from the run-owned runtime volume, and
+the provider plane pins the lab's local identity provider offline so a provider
+operator can sign in at `/provider` with a token from
+`http://127.0.0.1:19081/provider/sign-in`. Delegations are bootstrapped with
+`trstctl provider-grant` inside the control-plane container (docs/editions.md).
+
 ## What is honest local evidence?
 
 - **Real local:** actual Apache, NGINX, HAProxy, Caddy, Traefik, and PostgreSQL binaries receive an independently issued certificate, validate or watch their configs, activate the update, and serve the new certificate. PostgreSQL is verified with its real SSLRequest-to-TLS negotiation, and network discovery inventories it the same way: the scanner retries a reachable listener that rejects a bare TLS ClientHello with the PostgreSQL SSLRequest negotiation, so the lab's six listeners discover without a protocol hint.
