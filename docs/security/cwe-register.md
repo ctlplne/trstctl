@@ -44,11 +44,11 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1386 annotated sites across 26 rules. Each row is
+1391 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (306 sites)
+### G101 — CWE-798 Use of hardcoded credentials (307 sites)
 
 | Location | Reason |
 |---|---|
@@ -347,11 +347,12 @@ not this file.
 | `internal/server/unvaulted_secret_posture_served_test.go:152` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/store/agent_bootstrap_token_test.go:67` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/store/approved_target_fences.go:229` | SQL column identifiers only; this constant contains no credential material. |
-| `internal/store/dynamic_secret_lease.go:579` | sealed_credential is a SQL column name, not a hardcoded credential (CWE-798). |
+| `internal/store/dynamic_secret_lease.go:587` | sealed_credential is a SQL column name, not a hardcoded credential (CWE-798). |
 | `internal/store/privacy_erasure_preparation.go:153` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/secret_rotation_schedule_privacy.go:694` | SQL authority columns are names, not embedded credentials (CWE-798). |
 | `internal/store/secret_store.go:325` | SQL column identifiers only; this constant contains no credential material. |
-| `internal/store/secret_sync_workload_identity.go:202` | SQL column list matching the secret-name heuristic; a query, not a credential (CWE-798) |
+| `internal/store/secret_sync_workload_identity.go:205` | SQL column list matching the secret-name heuristic; a query, not a credential (CWE-798) |
+| `internal/store/upsert_arbiter_race_test.go:239` | an env reference name in a fixture, not a credential (CWE-798) |
 | `internal/ticketintake/intake_test.go:103` | TokenRef is a non-secret locator in a deterministic fixture (CWE-798). |
 | `internal/ticketintake/intake_test.go:150` | TokenRef is a non-secret locator in a deterministic fixture (CWE-798). |
 | `tools/dodcensus/claims.go:162` | developer-tool constant matching the secret-name heuristic; no credential value (CWE-798) |
@@ -385,7 +386,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:329` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (220 sites)
+### G115 — CWE-190 Integer overflow or wraparound (223 sites)
 
 | Location | Reason |
 |---|---|
@@ -520,27 +521,27 @@ not this file.
 | `internal/store/audit_checkpoint.go:30` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/audit_checkpoint.go:52` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/audit_checkpoint.go:72` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/audit_feed.go:397` | PostgreSQL bigint event sequence is non-negative by schema (CWE-190) |
-| `internal/store/audit_feed.go:398` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
-| `internal/store/audit_feed.go:399` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
-| `internal/store/audit_feed.go:400` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
-| `internal/store/audit_feed.go:413` | positive PostgreSQL bigint by schema (CWE-190) |
-| `internal/store/audit_feed.go:414` | positive PostgreSQL bigint by schema (CWE-190) |
-| `internal/store/ca.go:457` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/ca.go:527` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/audit_feed.go:403` | PostgreSQL bigint event sequence is non-negative by schema (CWE-190) |
+| `internal/store/audit_feed.go:404` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
+| `internal/store/audit_feed.go:405` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
+| `internal/store/audit_feed.go:406` | PostgreSQL bigint tenant sequence is non-negative by schema (CWE-190) |
+| `internal/store/audit_feed.go:419` | positive PostgreSQL bigint by schema (CWE-190) |
+| `internal/store/audit_feed.go:420` | positive PostgreSQL bigint by schema (CWE-190) |
+| `internal/store/ca.go:463` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/ca.go:533` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/connector_lifecycle.go:443` | JetStream sequence fits PostgreSQL bigint by construction (CWE-190) |
 | `internal/store/connector_lifecycle.go:497` | constrained positive PostgreSQL bigint (CWE-190) |
 | `internal/store/connector_lifecycle.go:500` | constrained positive PostgreSQL bigint (CWE-190) |
 | `internal/store/cryptoasset_migration_test.go:38` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/store/discovery.go:190` | JetStream event sequences are stored in PostgreSQL bigint throughout the projection spine (CWE-190) |
-| `internal/store/discovery.go:234` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
+| `internal/store/discovery.go:240` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
 | `internal/store/discovery_coverage.go:37` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/discovery_coverage.go:57` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/discovery_coverage.go:81` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/discovery_segments.go:74` | JetStream event sequences are stored in PostgreSQL bigint throughout the projection spine (CWE-190) |
-| `internal/store/discovery_segments.go:104` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
-| `internal/store/discovery_segments.go:135` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
-| `internal/store/discovery_segments.go:193` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
+| `internal/store/discovery_segments.go:107` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
+| `internal/store/discovery_segments.go:138` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
+| `internal/store/discovery_segments.go:199` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
 | `internal/store/endpoint_verification.go:112` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/endpoint_verification.go:156` | non-negative by construction (CWE-190) |
 | `internal/store/endpoint_verification.go:197` | constrained positive database sequence (CWE-190) |
@@ -556,26 +557,29 @@ not this file.
 | `internal/store/offboard_test.go:44` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/store/operation_approvals.go:252` | the explicit MaxInt64 bound above prevents narrowing (CWE-190). |
 | `internal/store/outbox_reconciliation_checkpoint.go:34` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/outbox_reconciliation_conflicts.go:73` | JetStream sequence fits PostgreSQL bigint by construction (CWE-190). |
+| `internal/store/outbox_reconciliation_conflicts.go:76` | JetStream sequence fits PostgreSQL bigint by construction (CWE-190). |
 | `internal/store/ownership_assignment.go:65` | event sequences fit PostgreSQL bigint |
 | `internal/store/ownership_readiness.go:205` | event sequences fit PostgreSQL bigint |
 | `internal/store/ownership_readiness.go:226` | event sequences fit PostgreSQL bigint |
 | `internal/store/ownership_readiness.go:286` | database constraint/event writer keeps sequence non-negative |
 | `internal/store/pam.go:73` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:671` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:726` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:870` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:884` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:683` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:745` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:889` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:903` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:136` | event sequence fits the PostgreSQL bigint used by the event log (CWE-190) |
 | `internal/store/projection_checkpoint.go:192` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:213` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/secret_rotation_schedule.go:289` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
-| `internal/store/secret_rotation_schedule.go:313` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
+| `internal/store/secret_rotation_schedule.go:292` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
+| `internal/store/secret_rotation_schedule.go:316` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/snapshot.go:445` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
 | `internal/store/snapshot.go:460` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant.go:58` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant.go:76` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant_key_domain.go:146` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/upsert_arbiter_race_test.go:94` | small fixture counters (CWE-190) |
+| `internal/store/upsert_arbiter_race_test.go:105` | small fixture counter (CWE-190) |
+| `internal/store/upsert_arbiter_race_test.go:220` | small fixture counter (CWE-190) |
 | `internal/tenantseal/idempotency.go:96` | length framing of short bounded fields (CWE-190) |
 | `internal/tsa/fuzz_test.go:133` | crafted DER length byte for fuzz corpus; truncation is the crafted input (CWE-190) |
 | `internal/tsa/fuzz_test.go:135` | crafted DER length byte for fuzz corpus (CWE-190) |
@@ -956,7 +960,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (374 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (375 sites)
 
 | Location | Reason |
 |---|---|
@@ -1332,7 +1336,8 @@ not this file.
 | `tools/trstctllint/hotspot_test.go:205` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/trstctllint/hotspot_test.go:303` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/trstctllint/licenseboundary/licenseboundary.go:37` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/trstctllint/upsertarbiter/upsertarbiter.go:114` | migration files under the repository store package (CWE-22) |
+| `tools/trstctllint/upsertarbiter/sites_dump_test.go:30` | test-only maintenance dump to an operator-chosen path (CWE-22) |
+| `tools/trstctllint/upsertarbiter/upsertarbiter.go:285` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
 ### G306 — CWE-276 Incorrect default permissions (file write) (90 sites)
@@ -1521,7 +1526,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1142` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:888` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (61 sites)
+### G703 — CWE-22 Path traversal (taint) (62 sites)
 
 | Location | Reason |
 |---|---|
@@ -1585,6 +1590,7 @@ not this file.
 | `tools/dodcensus/runtime_runner.go:873` | developer tool probing repo/toolchain paths, not a served binary (CWE-22) |
 | `tools/dodcensus/runtime_runner_test.go:345` | test path inside its own tempdir/checkout (CWE-22) |
 | `tools/dodcensus/runtime_runner_test.go:479` | test path inside its own tempdir/checkout (CWE-22) |
+| `tools/trstctllint/upsertarbiter/sites_dump_test.go:30` | test-only maintenance dump to an operator-chosen path (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
 ### G704 — CWE-918 Server-side request forgery (taint) (5 sites)

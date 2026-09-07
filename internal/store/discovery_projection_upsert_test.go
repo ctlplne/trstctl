@@ -85,7 +85,8 @@ func TestDiscoverySourceProjectionConcurrentReplayUsesPrimaryKeyArbiter(t *testi
 			     SELECT 1
 			       FROM pg_stat_activity
 			      WHERE pid <> pg_backend_pid()
-			        AND query LIKE '%INSERT INTO discovery_sources%'
+			        AND (query LIKE '%INSERT INTO discovery_sources%'
+				             OR query LIKE '%pg_advisory_xact_lock%')
 			        AND wait_event_type = 'Lock'
 			)`).Scan(&waiting); err != nil {
 			t.Fatalf("observe competing projection: %v", err)
