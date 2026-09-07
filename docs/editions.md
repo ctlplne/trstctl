@@ -218,17 +218,19 @@ every customer-scoped action:
   when it is least healthy.
 
 Grants are minted with a local subcommand against PostgreSQL **and the event
-log**. Every invocation needs a stable idempotency key; an identical retry
-returns the canonical authority event, while reusing the key for a changed
-grant is refused:
+log**. Name the customer by the slug you will provision (its tenant id is
+derived from the slug, so a customer can be delegated before it exists; the
+command prints the derived id) or by an existing tenant id. Every invocation
+needs a stable idempotency key; an identical retry returns the canonical
+authority event, while reusing the key for a changed grant is refused:
 
 ```
-trstctl provider-grant -operator op-1 -customer tenant-acme \
-  -operations read,suspend -granted-by platform-admin \
-  -idempotency-key tenant-acme-op-1-read-suspend-v1
-trstctl provider-grant -operator op-1 -customer tenant-acme \
+trstctl provider-grant -operator op-1 -customer acme \
+  -operations read,provision,suspend -granted-by platform-admin \
+  -idempotency-key acme-op-1-read-provision-suspend-v1
+trstctl provider-grant -operator op-1 -customer acme \
   -operations offboard -revoke -granted-by platform-admin \
-  -idempotency-key tenant-acme-op-1-offboard-revoke-v1
+  -idempotency-key acme-op-1-offboard-revoke-v1
 ```
 
 Offboarding a customer clears every grant over it. Tenant ids are derived from

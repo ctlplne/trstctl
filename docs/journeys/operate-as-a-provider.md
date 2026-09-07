@@ -60,17 +60,20 @@ plane derived from the signed claims.
 
 Authority over customers is never granted through the API by someone who does not
 already hold it. On the control-plane host, mint the first grants with the local
-command and a stable idempotency key:
+command and a stable idempotency key, naming each customer by the slug you will
+provision in the next step (the command prints the tenant id it derived; a grant
+over an existing tenant id also works):
 
 ```bash
-trstctl provider-grant -operator op-1 -customer tenant-acme \
+trstctl provider-grant -operator op-1 -customer acme-robotics \
   -operations read,provision,suspend,resume -granted-by platform-admin \
-  -idempotency-key tenant-acme-op-1-v1
+  -idempotency-key acme-robotics-op-1-v1
 ```
 
 An identical retry returns the same authority event; reusing the key with a
 different grant is refused. Every grant names one customer and the operations it
-covers; there is no wildcard customer.
+covers; there is no wildcard customer. The operator id is the subject your
+identity provider signs (`sub`).
 
 ### 4. Provision two customers
 

@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
@@ -22,7 +24,7 @@ func RunGrantCommand(ctx context.Context, dsn string, natsConfig config.NATS, ar
 	fs.SetOutput(stderr)
 	var (
 		operator   = fs.String("operator", "", "operator id the grant is for")
-		customer   = fs.String("customer", "", "customer tenant id the grant is over")
+		customer   = fs.String("customer", "", "customer the grant is over: the tenant id, or the customer slug you will provision (its id is derived from the slug and printed)")
 		operations = fs.String("operations", "", "comma-separated operations: read,provision,suspend,resume,offboard,break-glass")
 		grantedBy  = fs.String("granted-by", "", "who issued this grant, recorded for audit")
 		revoke     = fs.Bool("revoke", false, "remove the named grants instead of adding them")
@@ -51,6 +53,7 @@ func RunGrantCommand(ctx context.Context, dsn string, natsConfig config.NATS, ar
 	if err != nil {
 		return err
 	}
+	customerID, derived := ResolveCustomerRef(*customer)
 
 	st, err := corestore.Open(ctx, dsn)
 	if err != nil {
@@ -77,7 +80,7 @@ func RunGrantCommand(ctx context.Context, dsn string, natsConfig config.NATS, ar
 	mutations := make([]DelegationMutation, 0, len(ops))
 	for _, op := range ops {
 		mutations = append(mutations, DelegationMutation{
-			OperatorID: strings.TrimSpace(*operator), CustomerID: strings.TrimSpace(*customer),
+			OperatorID: strings.TrimSpace(*operator), CustomerID: customerID,
 			Operation: op, GrantedBy: strings.TrimSpace(*grantedBy),
 		})
 	}
@@ -85,7 +88,7 @@ func RunGrantCommand(ctx context.Context, dsn string, natsConfig config.NATS, ar
 		Operator, Customer, Operations, GrantedBy string
 		Revoke                                    bool
 	}{
-		Operator: strings.TrimSpace(*operator), Customer: strings.TrimSpace(*customer),
+		Operator: strings.TrimSpace(*operator), Customer: customerID,
 		Operations: strings.TrimSpace(*operations), GrantedBy: strings.TrimSpace(*grantedBy),
 		Revoke: *revoke,
 	})
@@ -98,9 +101,9 @@ func RunGrantCommand(ctx context.Context, dsn string, natsConfig config.NATS, ar
 		typ, verb = EventDelegationRevoked, "revoked"
 	}
 	now := time.Now().UTC()
-	if _, err := runtime.Mutations.Append(ctx, strings.TrimSpace(*idemKey), typ, strings.TrimSpace(*customer),
+	if _, err := runtime.Mutations.Append(ctx, strings.TrimSpace(*idemKey), typ, customerID,
 		AuthorityEvent{Delegations: mutations, EffectiveAt: now,
-			Audit: AuditEvent{Type: typ, TenantID: strings.TrimSpace(*customer),
+			Audit: AuditEvent{Type: typ, TenantID: customerID,
 				OperatorID: strings.TrimSpace(*grantedBy), Subject: "provider-grant", At: now}}); err != nil {
 		return fmt.Errorf("provider-grant: %w", err)
 	}
@@ -108,8 +111,26 @@ func RunGrantCommand(ctx context.Context, dsn string, natsConfig config.NATS, ar
 	if *revoke {
 		preposition = "from"
 	}
-	_, _ = fmt.Fprintf(stdout, "%s %s on %s %s %s\n", verb, *operations, *customer, preposition, *operator)
+	if derived {
+		_, _ = fmt.Fprintf(stdout, "%s %s on customer %s (id %s, derived from the slug) %s %s\n", verb, *operations, strings.TrimSpace(*customer), customerID, preposition, *operator)
+	} else {
+		_, _ = fmt.Fprintf(stdout, "%s %s on %s %s %s\n", verb, *operations, customerID, preposition, *operator)
+	}
 	return nil
+}
+
+// ResolveCustomerRef turns the operator's -customer value into the customer
+// tenant id the provider plane authorizes against. A customer does not exist
+// before it is provisioned, and its id is derived deterministically from its
+// slug (CustomerID), so a grant may name the slug the operator is about to
+// provision; a value that already is a uuid is used as given. The second
+// result reports whether the id was derived.
+func ResolveCustomerRef(value string) (string, bool) {
+	value = strings.TrimSpace(value)
+	if _, err := uuid.Parse(value); err == nil {
+		return strings.ToLower(value), false
+	}
+	return CustomerID(value), true
 }
 
 // parseDelegatedOperations refuses anything outside the closed vocabulary.
