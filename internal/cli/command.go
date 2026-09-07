@@ -356,6 +356,9 @@ var coreCommandTable = []Command{
 	{Name: []string{"profiles", "get-version"}, Method: "GET", Path: "/api/v1/profiles/{name}/versions/{version}", Summary: "Get a certificate-profile version"},
 	{Name: []string{"profiles", "restore-preview"}, Method: "POST", Path: "/api/v1/profiles/{name}/versions/{version}/restore/preview", Body: bodyFile, Summary: "Review restoring a historical certificate-profile version without changing state"},
 	{Name: []string{"profiles", "restore"}, Method: "POST", Path: "/api/v1/profiles/{name}/versions/{version}/restore", Body: bodyFile, Summary: "Restore a historical certificate profile as one new active version"},
+	{Name: []string{"profiles", "approvals", "list"}, Method: "GET", Path: "/api/v1/profiles/approvals", Summary: "List parked profile create/edit approval requests (dual control)"},
+	{Name: []string{"profiles", "approvals", "get"}, Method: "GET", Path: "/api/v1/profiles/approvals/{id}", Summary: "Get one parked profile create/edit approval request"},
+	{Name: []string{"profiles", "approvals", "approve"}, Method: "POST", Path: "/api/v1/profiles/approvals/{id}/approvals", Body: bodyOptionalFile, Summary: "Approve a parked profile create/edit as a distinct reviewer; quorum applies the queued spec"},
 
 	{Name: []string{"audit", "events"}, Method: "GET", Path: "/api/v1/audit/events", Query: []string{"tool", "feature_id", "action", "type", "since", "until", "as_of", "q", "limit"}, Summary: "Query the audit log"},
 	{Name: []string{"audit", "export"}, Method: "GET", Path: "/api/v1/audit/export", Query: []string{"tool", "feature_id", "action", "type", "since", "until", "as_of", "q", "limit", "format"}, Summary: "Export a signed audit bundle or record stream"},

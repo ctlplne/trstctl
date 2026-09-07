@@ -277,8 +277,11 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// effect-free unsaved routing-policy review raises it to 442. F62's exact
 	// F79's subject-erasure and retention reviews raise it to 447. F6's exact,
 	// effect-free endpoint-binding review raises it to 448.
-	if len(out) != 448 {
-		t.Fatalf("CLI commands = %d, want 448", len(out))
+	// DP2-057's three `profiles approvals` commands (list, get, approve) raised
+	// it to 451, mapped onto the certificate-profile row F53 beside the rest of
+	// the profile surface whose governed edits they review.
+	if len(out) != 451 {
+		t.Fatalf("CLI commands = %d, want 451", len(out))
 	}
 	return out
 }

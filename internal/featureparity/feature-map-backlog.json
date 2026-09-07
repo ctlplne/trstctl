@@ -4269,7 +4269,10 @@
                 "profiles list",
                 "profiles get-version",
                 "profiles restore-preview",
-                "profiles restore"
+                "profiles restore",
+                "profiles approvals list",
+                "profiles approvals get",
+                "profiles approvals approve"
             ],
             "cli_na": "",
             "facet_evidence": {
