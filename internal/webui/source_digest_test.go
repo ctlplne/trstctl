@@ -3,8 +3,7 @@
 package webui_test
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
+	"bytes"
 	"fmt"
 	"io/fs"
 	"os"
@@ -12,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // The embedded console must be built from the console source that is checked
@@ -56,16 +57,16 @@ func TestEmbeddedConsoleIsBuiltFromCheckedInSource(t *testing.T) {
 		}
 	}
 	sort.Strings(files)
-	stream := sha256.New()
+	// Hashing goes through the sanctioned internal/crypto boundary (AN-3).
+	var stream bytes.Buffer
 	for _, f := range files {
 		raw, readErr := os.ReadFile(filepath.Join(repo, f)) // #nosec G304 -- console build inputs inside the repository (CWE-22)
 		if readErr != nil {
 			t.Fatalf("read %s: %v", f, readErr)
 		}
-		sum := sha256.Sum256(raw)
-		fmt.Fprintf(stream, "%s\n%s\n", f, hex.EncodeToString(sum[:]))
+		fmt.Fprintf(&stream, "%s\n%s\n", f, crypto.SHA256Hex(raw))
 	}
-	have := hex.EncodeToString(stream.Sum(nil))
+	have := crypto.SHA256Hex(stream.Bytes())
 	stamp, readErr := os.ReadFile(filepath.Join(repo, "internal/webui/SOURCE_DIGEST")) // #nosec G304 -- fixed repository path (CWE-22)
 	if readErr != nil {
 		t.Fatalf("SOURCE_DIGEST is missing: run `make web` to rebuild the console and stamp its source digest (OPP-C02): %v", readErr)
