@@ -225,7 +225,18 @@ func (m *Manager) AlertExpiring(ctx context.Context, tenantID string) (int, erro
 		if c.NotAfter != nil {
 			na = *c.NotAfter
 		}
-		alertContext, err := m.store.CertificateAlertContextForOwner(ctx, tenantID, certificateOwnerID(c))
+		ownerID := certificateOwnerID(c)
+		if ownerID == "" {
+			// DP2-020: a certificate discovery observed carries no owner of its own; once
+			// its finding is claimed into a managed identity, that identity's current
+			// owner is the one to alert.
+			viaClaim, err := m.store.CertificateOwnerIDViaClaim(ctx, tenantID, c.Fingerprint)
+			if err != nil {
+				return alerted, err
+			}
+			ownerID = viaClaim
+		}
+		alertContext, err := m.store.CertificateAlertContextForOwner(ctx, tenantID, ownerID)
 		if err != nil {
 			return alerted, err
 		}

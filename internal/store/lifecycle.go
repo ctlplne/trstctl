@@ -4,6 +4,8 @@ package store
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -128,6 +130,33 @@ func (s *Store) TenantsWithAlertableCertificates(ctx context.Context, now, befor
 type CertificateAlertContext struct {
 	Owner     *Owner
 	Approvers []TenantMember
+}
+
+// CertificateOwnerIDViaClaim resolves the owner to alert for a certificate that
+// carries no owner of its own: a certificate discovery observed and an operator
+// then claimed into a managed identity is owned by that identity's current owner
+// (DP2-020). Empty when no claim links it.
+func (s *Store) CertificateOwnerIDViaClaim(ctx context.Context, tenantID, fingerprint string) (string, error) {
+	if fingerprint == "" {
+		return "", nil
+	}
+	var ownerID string
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT i.owner_id::text
+			   FROM discovery_findings AS f
+			   JOIN identities AS i ON i.tenant_id = f.tenant_id AND i.id = f.managed_identity_id
+			  WHERE f.tenant_id = $1 AND f.fingerprint = $2 AND f.managed_identity_id IS NOT NULL
+			  ORDER BY f.discovered_at DESC
+			  LIMIT 1`, tenantID, fingerprint).Scan(&ownerID)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("store: certificate owner via claim: %w", err)
+	}
+	return ownerID, nil
 }
 
 // CertificateAlertContextForOwner loads alert-routing context for a certificate
