@@ -542,7 +542,7 @@ func (a *API) createSecret(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	a.mutateDurableBound(w, r, idempotencyKey, requestBinding, func(ctx context.Context, tenantID string) (int, any, error) {
+	a.mutateBound(w, r, idempotencyKey, requestBinding, func(ctx context.Context, tenantID string) (int, any, error) {
 		if tenantID != bindingTenantID {
 			return 0, nil, errors.New("api: application-secret binding tenant changed")
 		}
@@ -739,7 +739,7 @@ func (a *API) rotateSecret(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	a.mutateDurableBound(w, r, idempotencyKey, requestBinding, func(ctx context.Context, tenantID string) (int, any, error) {
+	a.mutateBound(w, r, idempotencyKey, requestBinding, func(ctx context.Context, tenantID string) (int, any, error) {
 		if tenantID != bindingTenantID {
 			return 0, nil, errors.New("api: application-secret binding tenant changed")
 		}
@@ -849,7 +849,7 @@ func (a *API) recoverSecretAt(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	a.mutateDurableBound(w, r, idempotencyKey, requestBinding, func(ctx context.Context, tenantID string) (int, any, error) {
+	a.mutateBound(w, r, idempotencyKey, requestBinding, func(ctx context.Context, tenantID string) (int, any, error) {
 		if tenantID != bindingTenantID {
 			return 0, nil, errors.New("api: application-secret binding tenant changed")
 		}
@@ -970,7 +970,7 @@ func (a *API) rotateStaticSecret(w http.ResponseWriter, r *http.Request) {
 			a.writeError(w, err)
 			return
 		}
-		a.mutateDurableBound(w, r, idempotencyKey, requestBinding, func(ctx context.Context, tenantID string) (int, any, error) {
+		a.mutateBound(w, r, idempotencyKey, requestBinding, func(ctx context.Context, tenantID string) (int, any, error) {
 			if tenantID != bindingTenantID {
 				return 0, nil, errors.New("api: connector rotation binding tenant changed")
 			}
@@ -1191,7 +1191,7 @@ func (a *API) deleteSecret(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	a.mutateDurableBound(w, r, idempotencyKey, requestBinding, func(ctx context.Context, tenantID string) (int, any, error) {
+	a.mutateBound(w, r, idempotencyKey, requestBinding, func(ctx context.Context, tenantID string) (int, any, error) {
 		if tenantID != bindingTenantID {
 			return 0, nil, errors.New("api: application-secret binding tenant changed")
 		}

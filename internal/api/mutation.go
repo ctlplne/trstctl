@@ -59,6 +59,15 @@ func (a *API) mutate(w http.ResponseWriter, r *http.Request, idempotencyKey stri
 	a.mutateWithRecorder(w, r, idempotencyKey, "", fn, false)
 }
 
+// mutateBound is mutate with a command-specific binding on the claim path:
+// identical in-flight requests coalesce and replay the one execution. The
+// secret-store mutations use it (DP2-053): their fence-based callbacks are
+// durable across processes, but running them concurrently for one key from the
+// durable path let a second execution observe a half-committed state.
+func (a *API) mutateBound(w http.ResponseWriter, r *http.Request, idempotencyKey, binding string, fn func(ctx context.Context, tenantID string) (int, any, error)) {
+	a.mutateWithRecorder(w, r, idempotencyKey, binding, fn, false)
+}
+
 // mutateDurable wraps a mutation whose callback is itself an independently
 // durable, idempotent state machine (normally event -> projection -> outbox). It
 // preserves the identical HTTP response for replay, but unlike mutate it releases

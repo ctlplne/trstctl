@@ -444,6 +444,12 @@ const (
 const (
 	pendingClaimWait  = 20 * time.Second
 	pendingClaimStale = 2 * time.Minute
+	// recordAttempts x recordBackoff bounds how long a completed command keeps
+	// trying to record its result under pool pressure before the claim is
+	// walled as indeterminate (five attempts, 1..5 s apart, plus the acquire
+	// window each attempt already waits).
+	recordAttempts = 5
+	recordBackoff  = time.Second
 )
 
 // doClaimed is the claim -> execute -> record protocol shared by Do, DoBound and
@@ -616,8 +622,12 @@ func (i *Idempotency) executeClaim(ctx context.Context, tenantID, key, binding s
 	}
 	defer secret.Wipe(protected)
 
+	// The effect has committed; recording it is what makes every later retry a
+	// replay instead of an indeterminate wall, so the record step keeps trying
+	// through a burst's pool pressure (each attempt already waits the acquire
+	// window) before walling the claim.
 	var recordErr error
-	for attempt := 0; attempt < 3; attempt++ {
+	for attempt := 0; attempt < recordAttempts; attempt++ {
 		recorded := false
 		recordErr = i.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 			tag, err := tx.Exec(ctx,
@@ -640,7 +650,7 @@ func (i *Idempotency) executeClaim(ctx context.Context, tenantID, key, binding s
 		if ctx.Err() != nil {
 			break
 		}
-		time.Sleep(time.Duration(attempt+1) * 100 * time.Millisecond)
+		time.Sleep(time.Duration(attempt+1) * recordBackoff)
 	}
 	if markErr := i.markProtectedIndeterminate(ctx, tenantID, key, binding); markErr != nil {
 		recordErr = errors.Join(recordErr, markErr)
