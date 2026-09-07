@@ -155,7 +155,18 @@ docker compose -p trstctl-partner-lab -f deploy/demo/docker-compose.yml -f deplo
 
 ## Explicit full reset
 
-This deletes only the `trstctl-partner-lab` Compose project's containers and named volumes:
+The lab runner owns its teardown. `deploy/demo/lab/down.sh` removes exactly one
+Compose project's containers, named volumes, and network — across every profile,
+so the control plane is torn down too — and exits non-zero if anything of that
+project survives (a profile-filtered `stop` is not a teardown: it leaves the
+control plane holding 9443 and 10443-10449, which breaks the next bring-up):
+
+```sh
+deploy/demo/lab/down.sh                                  # trstctl-partner-lab
+TRSTCTL_LAB_PROJECT=my-lab deploy/demo/lab/down.sh       # another project
+```
+
+The equivalent raw command, which deletes only the `trstctl-partner-lab` Compose project's containers and named volumes:
 
 ```sh
 docker compose -p trstctl-partner-lab -f deploy/demo/docker-compose.yml -f deploy/demo/lab/docker-compose.yml --profile partner-lab down --volumes --remove-orphans

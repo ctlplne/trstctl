@@ -1779,3 +1779,37 @@ func TestPartnerLabServesAnIsolatedCustomerListenerForTheProviderJourney(t *test
 		}
 	}
 }
+
+// The partner lab owns its teardown (OPP-C04). A profile-filtered
+// `docker compose --profile partner-lab stop` skips out-of-profile services —
+// the control plane — which keeps 9443 and 10443-10449 bound and breaks the next
+// bring-up. deploy/demo/lab/down.sh must tear down exactly one Compose project
+// across every profile, prove nothing of it survives, and be the teardown the
+// README points at.
+func TestPartnerLabTeardownIsOwnedAndProven(t *testing.T) {
+	info, err := os.Stat(filepath.Join("lab", "down.sh"))
+	if err != nil {
+		t.Fatalf("deploy/demo/lab/down.sh must exist: %v", err)
+	}
+	if info.Mode()&0o111 == 0 {
+		t.Fatal("deploy/demo/lab/down.sh must be executable")
+	}
+	down := read(t, "lab", "down.sh")
+	for _, want := range []string{
+		"TRSTCTL_LAB_PROJECT:-trstctl-partner-lab", `[!a-z0-9]*`,
+		"--profile partner-lab --profile partner-lab-customer down --volumes --remove-orphans",
+		`label=com.docker.compose.project=$lab_project`, "docker rm -f", "docker volume rm",
+		"remaining_containers", "remaining_volumes", "remaining_networks",
+		"Teardown incomplete", "exit 1",
+	} {
+		if !strings.Contains(down, want) {
+			t.Errorf("partner lab teardown script is missing contract marker %q", want)
+		}
+	}
+	labReadme := read(t, "lab", "README.md")
+	for _, want := range []string{"deploy/demo/lab/down.sh", "profile-filtered `stop` is not a teardown", "exits non-zero if anything of that\nproject survives"} {
+		if !strings.Contains(labReadme, want) {
+			t.Errorf("partner lab README must document the owned teardown marker %q", want)
+		}
+	}
+}
