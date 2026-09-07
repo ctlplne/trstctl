@@ -10,7 +10,9 @@
       "caa_issuer_domain": "pebble.local",
       "network": {
         "allow_private_endpoint": true,
-        "private_egress_cidrs": ["127.0.0.1/32"],
+        "private_egress_cidrs": [
+          "127.0.0.1/32"
+        ],
         "root_ca_file": "/lab-ca/pebble.minica.crt",
         "server_name": "localhost",
         "timeout": "15s"
@@ -23,8 +25,28 @@
       "endpoint": "http://127.0.0.1:18082/v2/alerts",
       "api_key_file": "/lab-runtime/opsgenie-api-key",
       "timeout": "5s",
-      "allow_private_cidrs": ["127.0.0.1/32"],
+      "allow_private_cidrs": [
+        "127.0.0.1/32"
+      ],
       "allow_insecure_http": true
     }
+  },
+  "secret_integrations": {
+    "sync_targets": [
+      {
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "ci",
+        "type": "aws-secrets-manager",
+        "endpoint": "http://127.0.0.1:4566",
+        "region": "us-east-1",
+        "access_key_id": "test",
+        "secret_access_key_ref": "env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY",
+        "allow_private_endpoint": true,
+        "allow_insecure_loopback": true,
+        "private_egress_cidrs": [
+          "127.0.0.1/32"
+        ]
+      }
+    ]
   }
 }
