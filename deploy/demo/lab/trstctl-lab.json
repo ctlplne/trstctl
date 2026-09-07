@@ -40,7 +40,7 @@
         "endpoint": "http://127.0.0.1:4566",
         "region": "us-east-1",
         "access_key_id": "test",
-        "secret_access_key_ref": "env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY",
+        "secret_access_key_ref": "file:/etc/trstctl/ci-secret-access-key",
         "allow_private_endpoint": true,
         "allow_insecure_loopback": true,
         "private_egress_cidrs": [

@@ -27,6 +27,7 @@ services:
       - "127.0.0.1:10449:10449"
     volumes:
       - ./lab/trstctl-lab.json:/etc/trstctl/partner-lab.json:ro
+      - ./lab/ci-secret-access-key:/etc/trstctl/ci-secret-access-key:ro
       - ./lab/certs:/lab-ca:ro
       - labruntime:/lab-runtime:ro
 
