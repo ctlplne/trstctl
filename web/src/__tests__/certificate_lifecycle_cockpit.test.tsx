@@ -557,4 +557,43 @@ describe("Certificate Lifecycle cockpit", () => {
     expect(within(arrival).getByRole("row", { name: /^0–14 days/ })).toHaveTextContent(/0–14 days\s*0$/);
     expect(within(cockpit).queryByText(/superseded\.partner-lab\.example/)).toBeNull();
   });
+  it("counts a certificate in its 30th day once: within 30 days and in the 15–29 bin, never under 30–44 (DP2-012)", async () => {
+    vi.setSystemTime(new Date("2026-08-24T12:00:00Z"));
+    apiMock.certificatePage.mockResolvedValue({
+      items: [
+        {
+          id: "cert-day30",
+          tenant_id: "tenant-1",
+          subject: "CN=edge.partner-lab.example",
+          issuer: "CN=Issuing CA",
+          status: "active",
+          fingerprint: "fp-day30",
+          // 29 days 23 hours out: within 30 days by the served half-open rule, and
+          // "30 days" once rounded up for display. It must be counted exactly once.
+          not_after: "2026-09-23T11:00:00Z",
+          owner_id: "team-platform",
+          deployment_location: "127.0.0.1:10443",
+          attributes: { team_id: "team-platform" },
+        },
+      ],
+    });
+    apiMock.certificateHealth.mockResolvedValue({
+      generated_at: "2026-08-24T12:00:00Z",
+      inventory_path: "/api/v1/certificates",
+      expiring_path: "/api/v1/certificates?expiring_before=2026-09-23T12:00:00Z",
+      expiry_buckets: [],
+      source_breakdown: [],
+      expiring: [],
+      summary: {
+        total: 1, active: 1, expired: 0, expiring_7d: 0, expiring_30d: 1, expiring_90d: 1, revoked: 0, superseded: 0,
+        external_source_count: 0, imported_count: 0, discovered_count: 0, unknown_expiry_count: 0, health: "critical",
+      },
+    });
+    renderPage();
+    const cockpit = await screen.findByRole("region", { name: "Certificate Lifecycle cockpit" });
+    expect(within(cockpit).getByText("1", { selector: "[data-metric='expiring-30d']" })).toBeInTheDocument();
+    const arrival = within(cockpit).getByRole("table", { name: "Certificate work arrival data" });
+    expect(within(arrival).getByRole("row", { name: /^15–29 days/ })).toHaveTextContent(/15–29 days\s*1$/);
+    expect(within(arrival).getByRole("row", { name: /^30–44 days/ })).toHaveTextContent(/30–44 days\s*0$/);
+  });
 });

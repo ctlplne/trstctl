@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, BellRing, CheckCircle2 } from "lucide-react";
 import { StackedTimeBarChart, TimeBarChart, type StackedTimeBarDatum, type TimeBarDatum } from "@/components/charts";
+import { arrivalBinIndex, daysUntil, expiresWithinDays } from "@/lib/expiry";
 import { ScrollableTableRegion } from "@/components/ScrollableTableRegion";
 import type {
   Certificate,
@@ -91,14 +92,6 @@ function environmentFor(certificate: Certificate, owner: Owner | undefined): str
   return "Not recorded";
 }
 
-function daysUntil(value: string | undefined, now: number): number | null {
-  if (!value) return null;
-  const time = new Date(value).getTime();
-  if (!Number.isFinite(time)) return null;
-  const remaining = time - now;
-  return remaining <= 0 ? -Math.max(1, Math.floor(-remaining / DAY)) : Math.ceil(remaining / DAY);
-}
-
 function ownerIsReachable(owner: Owner | undefined): boolean {
   return Boolean(owner && (owner.email?.trim() || owner.escalation_chain.some((entry) => entry.trim())));
 }
@@ -180,9 +173,11 @@ function workArrivalData(certificates: Certificate[], now: number, labelForRange
   const data = Array.from({ length: 6 }, (_, index) => ({ label: labelForRange(index * 15, index * 15 + 14), value: 0, tone: "warning" as const }));
   for (const certificate of certificates) {
     if (!isLiveCertificate(certificate)) continue;
-    const days = daysUntil(certificate.not_after, now);
-    if (days === null || days < 0 || days > 90) continue;
-    const index = Math.min(5, Math.floor(days / 15));
+    // Bin by exact remaining time, half-open like the served expiring_Nd counts: a
+    // certificate in its 30th day is "≤30d" and in the 15–29 bin, never counted
+    // again under 30–44 (DP2-012). The rounded-up day count is for display only.
+    const index = arrivalBinIndex(certificate.not_after, now);
+    if (index === null) continue;
     data[index]!.value += 1;
   }
   return data;
@@ -298,15 +293,15 @@ export function LifecycleCockpit(props: LifecycleCockpitProps) {
       const renewalFailure = run?.status === "failed";
       const deploymentIssueState = deliveryIssue(delivery, now);
       const deploymentFailure = deploymentIssueState !== null;
-      const urgentExpiry = days !== null && days <= 30;
+      const urgentExpiry = expiresWithinDays(certificate.not_after, now, 30);
       if (!urgentExpiry && !renewalFailure && !deploymentFailure && hasOwner && reachable) return null;
 
       const deadline = certificateDeadline(certificate.not_after, now, t);
 
       const reasons: string[] = [];
       if (days !== null && days < 0) reasons.push(t("certificateCockpit.reason.expired"));
-      else if (days !== null && days <= 7) reasons.push(t("certificateCockpit.reason.sevenDays"));
-      else if (days !== null && days <= 30) reasons.push(t("certificateCockpit.reason.thirtyDays"));
+      else if (expiresWithinDays(certificate.not_after, now, 7)) reasons.push(t("certificateCockpit.reason.sevenDays"));
+      else if (expiresWithinDays(certificate.not_after, now, 30)) reasons.push(t("certificateCockpit.reason.thirtyDays"));
       if (renewalFailure) reasons.push(t("certificateCockpit.reason.renewalFailed"));
       if (deploymentIssueState === "failed")
         reasons.push(t(delivery?.status === "verify_failed" ? "certificateCockpit.reason.verificationFailed" : "certificateCockpit.reason.deploymentFailed"));

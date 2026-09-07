@@ -3,6 +3,7 @@ import { StatTile } from "@/components/charts";
 import { StatusBadge } from "@/components/StatusBadge";
 import type { CredentialRisk, Certificate } from "@/lib/api";
 import { translateNow } from "@/i18n/I18nProvider";
+import { expiresWithinDays } from "@/lib/expiry";
 
 export type AlertSeverity = "critical" | "high" | "warning";
 
@@ -43,10 +44,13 @@ export function deriveAlerts(risks: CredentialRisk[], certs: Certificate[]): Ale
         detail: `composite score ${Math.round(risk.score)}`,
       });
   }
+  // Severity follows the served half-open rule (DP2-012); the rounded-up day
+  // count is only the wording. An already-expired certificate stays critical.
+  const now = Date.now();
   for (const cert of certs) {
     const days = daysUntil(cert.not_after);
-    if (days <= 7) alerts.push({ id: `cert-${cert.id}`, severity: "critical", title: `Expiring now: ${cert.subject}`, detail: `${days} day(s) to expiry` });
-    else if (days <= 30)
+    if (days < 0 || expiresWithinDays(cert.not_after, now, 7)) alerts.push({ id: `cert-${cert.id}`, severity: "critical", title: `Expiring now: ${cert.subject}`, detail: `${days} day(s) to expiry` });
+    else if (expiresWithinDays(cert.not_after, now, 30))
       alerts.push({ id: `cert-${cert.id}`, severity: "warning", title: `Expiring soon: ${cert.subject}`, detail: `${days} day(s) to expiry` });
   }
   return alerts.sort((a, b) => severityRank[a.severity] - severityRank[b.severity]);

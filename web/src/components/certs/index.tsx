@@ -7,6 +7,7 @@ import { validityBandForDates, type StatusTone } from "@/lib/statusVocab";
 import type { Certificate, ConnectorDelivery, RotationRun } from "@/lib/api";
 import type { RiskItem } from "@/components/risk";
 import { translateNow } from "@/i18n/I18nProvider";
+import { daysUntil as libDaysUntil, expiresWithinDays, remainingMs } from "@/lib/expiry";
 
 const DAY = 86_400_000;
 
@@ -16,14 +17,13 @@ function isLive(certificate: Certificate): boolean {
   return certificate.status !== "revoked" && certificate.status !== "superseded";
 }
 
+// Display-only day count (rounds up); never use it to decide a bucket, see @/lib/expiry.
 export function daysUntil(notAfter?: string): number {
-  if (!notAfter) return Infinity;
-  const time = new Date(notAfter).getTime();
-  if (Number.isNaN(time)) return Infinity;
-  return Math.ceil((time - Date.now()) / DAY);
+  return libDaysUntil(notAfter, Date.now()) ?? Infinity;
 }
 
 function expiryBuckets(certificates: Certificate[]): BucketDatum[] {
+  const now = Date.now();
   let expired = 0;
   let within7 = 0;
   let within30 = 0;
@@ -31,11 +31,13 @@ function expiryBuckets(certificates: Certificate[]): BucketDatum[] {
   let beyond = 0;
   for (const certificate of certificates) {
     if (!isLive(certificate)) continue;
-    const days = daysUntil(certificate.not_after);
-    if (days < 0) expired += 1;
-    else if (days <= 7) within7 += 1;
-    else if (days <= 30) within30 += 1;
-    else if (days <= 90) within90 += 1;
+    // Half-open by exact remaining time: the served rule (DP2-012).
+    const remaining = remainingMs(certificate.not_after, now);
+    if (remaining === null) beyond += 1;
+    else if (remaining < 0) expired += 1;
+    else if (remaining < 7 * DAY) within7 += 1;
+    else if (remaining < 30 * DAY) within30 += 1;
+    else if (remaining < 90 * DAY) within90 += 1;
     else beyond += 1;
   }
   return [
@@ -63,14 +65,9 @@ export function autoRenewingCount(certificates: Certificate[], runs: RotationRun
 
 export function CertKpis({ certificates, risks }: { certificates: Certificate[]; risks: RiskItem[] }) {
   const active = certificates.filter((certificate) => isLive(certificate));
-  const expiring7 = active.filter((certificate) => {
-    const days = daysUntil(certificate.not_after);
-    return days >= 0 && days <= 7;
-  }).length;
-  const expiring30 = active.filter((certificate) => {
-    const days = daysUntil(certificate.not_after);
-    return days >= 0 && days <= 30;
-  }).length;
+  const now = Date.now();
+  const expiring7 = active.filter((certificate) => expiresWithinDays(certificate.not_after, now, 7)).length;
+  const expiring30 = active.filter((certificate) => expiresWithinDays(certificate.not_after, now, 30)).length;
   const revoked = certificates.filter((certificate) => certificate.status === "revoked").length;
   const highRisk = risks.filter((risk) => (risk.score ?? 0) >= 70).length;
   // Total + expiring counts intentionally live on the server-backed estate
@@ -88,10 +85,14 @@ export function CertKpis({ certificates, risks }: { certificates: Certificate[];
 
 export function CertificatesDashboard({ certificates, risks }: { certificates: Certificate[]; risks: RiskItem[] }) {
   const buckets = expiryBuckets(certificates);
+  const now = Date.now();
   const attention = certificates
     .filter((certificate) => isLive(certificate))
     .map((certificate) => ({ certificate, days: daysUntil(certificate.not_after) }))
-    .filter((entry) => entry.days <= 30)
+    .filter((entry) => {
+      const remaining = remainingMs(entry.certificate.not_after, now);
+      return remaining !== null && remaining < 30 * DAY;
+    })
     .sort((a, b) => a.days - b.days)
     .slice(0, 6);
   return (
