@@ -1906,7 +1906,7 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 		}
 		a.writeProblem(w, p)
 	default:
-		a.logInternalError(err) // the client sees "internal error"; the operator sees why (DP2-059)
+		a.logInternalError(w, err) // the client sees "internal error"; the operator sees why, redacted (DP2-059)
 		a.writeProblem(w, problem.New(http.StatusInternalServerError, "internal error"))
 	}
 }

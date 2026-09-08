@@ -799,6 +799,8 @@ type Server struct {
 	// projects events appended out of band and surfaces projection lag.
 	tailWorker          *projections.TailWorker
 	mProjLag            *observ.Gauge
+	mReadinessShed      *observ.GaugeVec
+	mStorePool          *observ.GaugeVec
 	mOutboxReconcileLag *observ.Gauge
 	mOutboxDeadLetter   *observ.GaugeVec
 	// outboxDeadLetterSeen tracks label tuples previously reported non-zero so a
@@ -1999,6 +2001,8 @@ func (s *Server) configureObservability(ctx context.Context, d Deps, proj *proje
 	s.mIdemPurged = s.registry.CounterVec("trstctl_idempotency_keys_purged_total", "Completed idempotency keys reclaimed by the retention sweep.", nil).WithLabelValues()
 	s.mOutboxPurged = s.registry.CounterVec("trstctl_outbox_delivered_purged_total", "Delivered outbox rows reclaimed by the retention sweep.", nil).WithLabelValues()
 	s.mProjLag = s.registry.Gauge("trstctl_projection_lag_events", "Number of events the read model is behind the head of the event log.")
+	s.mReadinessShed = s.registry.GaugeVec("trstctl_readiness_probe_shed", "1 while a datastore-reading readiness probe is being shed by load (readiness answers degraded, still 200); 0 otherwise.", []string{"check"})
+	s.mStorePool = s.registry.GaugeVec("trstctl_store_pool_connections", "PostgreSQL connections per store pool and state (max, total, acquired, idle).", []string{"pool", "state"})
 	s.tailWorker = projections.NewTailWorker(d.Log, proj, s.mProjLag.Set, 0)
 	s.mOutboxReconcileLag = s.registry.Gauge("trstctl_outbox_reconciliation_lag_events", "Number of events after the last boot reconciliation checkpoint.")
 	s.mOutboxDeadLetter = s.registry.GaugeVec("trstctl_outbox_deadletter_depth", "Dead-lettered (permanently failed) outbox rows awaiting operator sweep or replay.", []string{"tenant_id", "destination"})
@@ -2110,17 +2114,17 @@ func (s *Server) readinessChecks(ctx context.Context, d Deps) []observ.Check {
 		// The event-log probe also samples outbox reconciliation lag and dead-letter
 		// depth through the request pool, so it takes the same backpressure budget;
 		// a NATS ping failure itself still fails readiness.
-		{Name: "nats", Probe: readyDespiteBackpressure(func(ctx context.Context) error { return s.probeEventLog(ctx) })},
+		{Name: "nats", Probe: readyDespiteBackpressure("nats", func(ctx context.Context) error { return s.probeEventLog(ctx) }, s.readinessShedGauge("nats"))},
 		// The datastore-reading probes read through the shared request pool; a
 		// pool-acquire or statement timeout there is AN-7 load shedding, not
 		// unreadiness, so it is tolerated (the db check above still proves the
 		// datastore itself is reachable). A genuine failure still fails the probe.
-		{Name: "projection", Probe: readyDespiteBackpressure(s.probeProjectionTail)},
-		{Name: "secret_sync_recovery_authority", Probe: readyDespiteBackpressure(d.Store.RequireSecretSyncReceiverRecoveryAuthorized)},
+		{Name: "projection", Probe: readyDespiteBackpressure("projection", s.probeProjectionTail, s.readinessShedGauge("projection"))},
+		{Name: "secret_sync_recovery_authority", Probe: readyDespiteBackpressure("secret_sync_recovery_authority", d.Store.RequireSecretSyncReceiverRecoveryAuthorized, s.readinessShedGauge("secret_sync_recovery_authority"))},
 	}
 	if s.api != nil {
 		checks = append(checks, observ.Check{
-			Name: "application_secret_reconciliation", Probe: readyDespiteBackpressure(s.api.ApplicationSecretMutationReconcileHealth),
+			Name: "application_secret_reconciliation", Probe: readyDespiteBackpressure("application_secret_reconciliation", s.api.ApplicationSecretMutationReconcileHealth, s.readinessShedGauge("application_secret_reconciliation")),
 		})
 	}
 	if d.Signer == nil {
@@ -3511,10 +3515,34 @@ func (s *Server) sampleBulkheads() {
 	s.mBulkheads.Observe(s.bulk.Stats())
 }
 
+// readinessShedGauge is the per-check gauge a shed probe flips while readiness
+// answers degraded for it (nil when metrics are not wired).
+func (s *Server) readinessShedGauge(check string) *observ.Gauge {
+	if s.mReadinessShed == nil {
+		return nil
+	}
+	return s.mReadinessShed.WithLabelValues(check)
+}
+
+// sampleStorePools exports every store pool's live usage on each scrape so an
+// operator can see the five-pool connection budget being consumed.
+func (s *Server) sampleStorePools() {
+	if s.mStorePool == nil || s.store == nil {
+		return
+	}
+	for name, st := range s.store.PoolStats() {
+		s.mStorePool.WithLabelValues(name, "max").Set(float64(st.Max))
+		s.mStorePool.WithLabelValues(name, "total").Set(float64(st.Total))
+		s.mStorePool.WithLabelValues(name, "acquired").Set(float64(st.Acquired))
+		s.mStorePool.WithLabelValues(name, "idle").Set(float64(st.Idle))
+	}
+}
+
 func (s *Server) metricsHandler() http.Handler {
 	registryHandler := s.registry.Handler()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.sampleBulkheads()
+		s.sampleStorePools()
 		registryHandler.ServeHTTP(w, r)
 	})
 }

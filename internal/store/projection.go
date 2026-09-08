@@ -783,6 +783,9 @@ var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "id
 	// legacy issuance_approval_* tables remain independent PostgreSQL history
 	// because old rows have no reconstructible request ID or intent digest.
 	"operation_approval_requests", "operation_approval_decisions",
+	// OPP-R09: parked profile create/edit approvals rebuild from the
+	// profile.edit_approval.* family and the profile version event that closes them.
+	"profile_edit_approvals",
 	// AUD-52: standing collector configuration and exact immutable delivery
 	// receipts rebuild from the audit.feed.* event family.
 	"audit_feed_destinations", "audit_feed_deliveries"}

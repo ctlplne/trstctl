@@ -347,7 +347,12 @@ approves it with `POST /api/v1/profiles/approvals/{id}/approvals`; quorum (one
 non-requester approval) applies the queued spec as the new active version and the
 record reads `state: issued` with the created `profile_id`. The requester's own
 approval is refused with **403** (dual control). Identical retries of the
-approval with the same `Idempotency-Key` replay the one decision.
+approval with the same `Idempotency-Key` replay the one decision. The parked
+request is event-sourced (`profile.edit_approval.requested` / `.approved`,
+projected into `profile_edit_approvals`), so it survives a control-plane
+restart and is visible to every replica; it expires 24 hours after the 202
+(`state: expired`, approval answers **409**) and the requester resubmits the
+change to open a new request.
 
 ### Telling clients when to renew: ARI (F46)
 

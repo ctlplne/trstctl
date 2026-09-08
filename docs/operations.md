@@ -56,32 +56,72 @@ Two more answers are part of the idempotency contract under concurrency:
   because re-running would duplicate the effect. Inspect the resource, then
   retry with a **new** key if the effect is missing.
 
-Two small pools sit beside the request pool and never carry request work: the
-readiness probes ping the datastore on a two-connection **probe pool**, and the
-durable projection tail applies events on a two-connection **reserved pool**. A
-tenant burst that holds every request-pool connection is shed with 503s as
-above, but it cannot make `/readyz` time out or starve the tail into
-"projection tail worker stopped; retrying", so the replica stays in rotation and
-the read model keeps catching up while the burst is refused.
+### Connection budget
 
-One more retryable answer: **503 with `Retry-After`, "rolled back by a
-concurrent transaction"**. PostgreSQL detected a serialization failure or a
-deadlock (for example the request's inline projection racing the durable tail
-on the same rows) and rolled the command back; nothing was committed and the
-idempotency claim was released, so the same request retries as-is. Anything
-that still answers **500** is logged by the control plane with the underlying
-error text so an operator can correlate it.
+Each replica opens five PostgreSQL pools from the same DSN. The request pool
+carries client commands; the four small pools carry work that must keep moving
+while the request pool sheds load, and request handlers can never borrow from
+them:
 
-The idempotency claim, record and release statements run on their own small
-**bookkeeping pool**: a burst that saturates the request pool sheds commands
-with 503 but cannot make a completed command's result unrecordable, which is
-what used to wall keys as "indeterminate" under load.
+| Pool | Default | Setting | Carries |
+| --- | --- | --- | --- |
+| request | 16 | `TRSTCTL_POSTGRES_MAX_CONNS` / `postgres.max_conns` | client commands and their transactions |
+| probe | 2 | `TRSTCTL_POSTGRES_PROBE_CONNS` / `postgres.probe_conns` | the readiness `db` check |
+| reserved | 2 | `TRSTCTL_POSTGRES_RESERVED_CONNS` / `postgres.reserved_conns` | the durable projection tail (apply and checkpoint) |
+| bookkeeping | 4 | `TRSTCTL_POSTGRES_BOOKKEEPING_CONNS` / `postgres.bookkeeping_conns` | idempotency claim, record and release statements |
+| lock | 8 | `TRSTCTL_POSTGRES_LOCK_CONNS` / `postgres.lock_conns` | sessions holding the projection advisory lock |
 
-Commands that serialize on the projection advisory lock park their
-lock-holding session on a separate **lock pool**, so a burst of commands waiting
-for that lock never occupies request-pool connections; the holder's own
-transactions keep their headroom and the burst drains at the lock's pace instead
-of stalling in acquire-window steps.
+The default budget is **32 connections per replica** (each small pool keeps one
+connection warm, so an idle replica holds about five). Size PostgreSQL so that
+`max_connections` ≥ replicas × 32 + `superuser_reserved_connections` + every
+other client of the database (backup tooling, the doctor, dashboards). Every
+pool is opened and pinged at startup: a PostgreSQL that cannot honour the budget
+fails the process closed with a message naming the budget and the settings,
+instead of starving at runtime. The control plane logs `store: connection
+budget` at startup and exports `trstctl_store_pool_connections{pool,state}`
+(max, total, acquired, idle) on every `/metrics` scrape.
+
+A tenant burst that holds every request-pool connection is shed with 503s as
+above, but it cannot make `/readyz` time out (probe pool), starve the tail into
+"projection tail worker stopped; retrying" (reserved pool), leave a completed
+command's result unrecorded and wall its key as "indeterminate" (bookkeeping
+pool), or convoy commands behind the projection lock in acquire-window steps
+(lock pool).
+
+### Readiness under load
+
+The `db` check pings the probe pool and fails readiness when PostgreSQL is
+unreachable. The datastore-reading checks (`nats` samples, `projection`,
+`secret_sync_recovery_authority`, `application_secret_reconciliation`) read
+through the request pool under a one-second budget. When one of them is shed by
+load (the store's busy signal, or the budget runs out) `/readyz` still answers
+**200** so the replica stays in rotation, but the check reads `degraded: …`,
+the body carries a `degraded` list naming the checks, and
+`trstctl_readiness_probe_shed{check}` is 1 for as long as it lasts. Shedding
+that outlasts the **two-minute grace window** fails the check: a datastore that
+has been too slow for that long is a stall, not a burst. A check that fails for
+a real reason (a stalled projection, a missing recovery authority) fails
+readiness immediately, as before.
+
+One more retryable answer: **503 with `Retry-After`, "rolled back because of a
+concurrent transaction"** (extensions `retryable: true` and `sqlstate` 40001 or
+40P01). PostgreSQL detected a serialization failure or a deadlock (for example
+the request's inline projection racing the durable tail on the same rows) and
+rolled the current transaction back. The idempotency claim is released, so the
+same request retries as-is; commands that span several transactions recover
+their own committed steps through their durable fences and receipts, so the
+retry never duplicates them. Anything that still answers **500** is logged by
+the control plane (`api: internal error answered as 500`) with the response's
+`traceparent`, the error's type chain, the SQLSTATE and constraint when it is a
+PostgreSQL error, and a message with every quoted literal masked; row values
+never reach the log.
+
+Approval decisions (`/api/v1/approval-requests/{id}/approvals` and
+`/denials`, `/api/v1/identities/{id}/approvals`) run on this claim path too:
+identical in-flight decisions execute once and replay; a retry that arrives
+after the idempotency retention window re-executes the decision and finds it
+already recorded for that approver, so the answer is the recorded decision and
+never a second one.
 
 Every mutation claims its `Idempotency-Key` in a short transaction, runs the
 command with **no pooled connection held**, and records the result in a second

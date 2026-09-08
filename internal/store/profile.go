@@ -123,6 +123,19 @@ func (s *Store) GetProfileVersion(ctx context.Context, tenantID, name string, ve
 	return r, err
 }
 
+// GetProfileVersionByID loads one profile version row by its id (the id a
+// closed dual-control request names as its profile_id).
+func (s *Store) GetProfileVersionByID(ctx context.Context, tenantID, id string) (ProfileRecord, error) {
+	var r ProfileRecord
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return scanProfile(tx.QueryRow(ctx,
+			`SELECT id::text, tenant_id::text, name, version, spec, active, created_by, created_at
+			   FROM certificate_profiles WHERE tenant_id = $1 AND id = $2`,
+			tenantID, id), &r)
+	})
+	return r, err
+}
+
 // ValidateActiveProfileApprovalBindingTx locks the currently active profile row
 // and proves it is still the exact revision reviewers authorized. The shared row
 // lock serializes against deactivation by a concurrent same-name profile update.

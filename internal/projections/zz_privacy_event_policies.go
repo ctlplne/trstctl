@@ -370,6 +370,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/id", opaque), privacyRule("/name", opaque),
 		privacyRule("/version", opaque), privacyRule("/spec", opaque),
 		privacyRule("/active", opaque), privacyRule("/created_by", exact),
+		privacyRule("/approval_request_id", opaque),
 	)
 	discoverySource := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/kind", opaque),

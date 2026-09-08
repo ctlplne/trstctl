@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -54,14 +53,12 @@ type licensedCryptoMigrationTLSRollbackRequested struct {
 // transaction. The read model is written only by the projector, so the state and
 // history are reconstructable purely from the event log.
 type Orchestrator struct {
-	log                  *events.Log
-	store                *store.Store
-	outbox               *Outbox
-	proj                 *projections.Projector
-	durableIdem          *Idempotency
-	tenantDataRewrite    []events.TenantDataRewriteOption
-	profileEditApprovals map[string]approvalProfileEditRequest
-	profileEditMu        sync.Mutex
+	log               *events.Log
+	store             *store.Store
+	outbox            *Outbox
+	proj              *projections.Projector
+	durableIdem       *Idempotency
+	tenantDataRewrite []events.TenantDataRewriteOption
 	// effectRole classifies a transition side effect's per-row agent-role demand
 	// (epic A3) from its destination and RAW (pre-seal) payload. Injected by the
 	// composition root; nil means every row gets the empty demand, which is the
@@ -168,8 +165,7 @@ func WithTenantDataRewriteOptions(options ...events.TenantDataRewriteOption) Orc
 func NewOrchestrator(log *events.Log, st *store.Store, ob *Outbox, options ...OrchestratorOption) *Orchestrator {
 	orch := &Orchestrator{
 		log: log, store: st, outbox: ob, proj: projections.New(st),
-		durableIdem:          NewIdempotency(st),
-		profileEditApprovals: map[string]approvalProfileEditRequest{},
+		durableIdem: NewIdempotency(st),
 	}
 	for _, option := range options {
 		if option != nil {

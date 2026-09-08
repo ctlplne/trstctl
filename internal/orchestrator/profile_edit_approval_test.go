@@ -67,7 +67,7 @@ func TestProfileEditRequiresApprovalAndDualControl(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ApproveProfileEdit by non-requester: %v", err)
 	}
-	if applied.State != approval.StateIssued {
+	if applied.State != string(approval.StateIssued) {
 		t.Fatalf("approved state = %q, want issued", applied.State)
 	}
 	active, err := st.GetActiveProfile(ctx, tenantA, "web")

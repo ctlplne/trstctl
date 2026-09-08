@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -66,6 +67,7 @@ type Store struct {
 	// the request pool, and waiters parked there starved it into the acquire
 	// window under a burst (DP2-061 convoy).
 	lockPool *pgxpool.Pool
+	sizes    PoolSizes
 	// historyRewriteOperationGate admits only one local contender to the
 	// deployment-wide PostgreSQL operation lock. Without it, maxConns local
 	// waiters can each pin a session and starve the elected callback's cutover.
@@ -121,6 +123,7 @@ type OpenOption func(*openOptions)
 type openOptions struct {
 	statementTimeout time.Duration
 	acquireTimeout   time.Duration
+	pools            PoolSizes
 }
 
 // WithStatementTimeout bounds every statement server-side (0 keeps the default).
@@ -134,6 +137,34 @@ func WithStatementTimeout(d time.Duration) OpenOption {
 
 // WithAcquireTimeout bounds how long a transaction may wait for a pooled
 // connection before failing closed with ErrDatastoreBusy (0 keeps the default).
+// PoolSizes is the per-replica connection budget: the request pool and the four
+// dedicated pools. Zero fields keep the defaults (16, 2, 2, 4, 8).
+type PoolSizes struct {
+	Request, Probe, Reserved, Bookkeeping, Lock int32
+}
+
+// Total is the number of PostgreSQL connections one replica may hold.
+func (p PoolSizes) Total() int32 { return p.Request + p.Probe + p.Reserved + p.Bookkeeping + p.Lock }
+
+func (p PoolSizes) withDefaults() PoolSizes {
+	pick := func(v, def int32) int32 {
+		if v > 0 {
+			return v
+		}
+		return def
+	}
+	return PoolSizes{Request: pick(p.Request, maxConns), Probe: pick(p.Probe, probePoolMaxConns), Reserved: pick(p.Reserved, reservedPoolMaxConns),
+		Bookkeeping: pick(p.Bookkeeping, bookkeepingPoolMaxConns), Lock: pick(p.Lock, lockPoolMaxConns)}
+}
+
+// WithPoolSizes sets the connection budget (docs/operations.md, "Connection
+// budget"). Every pool is opened at startup and pinged, so a PostgreSQL whose
+// max_connections cannot honour the total fails the process closed with a
+// message naming the budget instead of starving at runtime.
+func WithPoolSizes(sizes PoolSizes) OpenOption {
+	return func(o *openOptions) { o.pools = sizes }
+}
+
 func WithAcquireTimeout(d time.Duration) OpenOption {
 	return func(o *openOptions) {
 		if d > 0 {
@@ -152,7 +183,8 @@ func Open(ctx context.Context, dsn string, opts ...OpenOption) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("store: parse dsn: %w", err)
 	}
-	cfg.MaxConns = maxConns
+	sizes := options.pools.withDefaults()
+	cfg.MaxConns = sizes.Request
 	if cfg.ConnConfig.RuntimeParams == nil {
 		cfg.ConnConfig.RuntimeParams = map[string]string{}
 	}
@@ -174,12 +206,12 @@ func Open(ctx context.Context, dsn string, opts ...OpenOption) (*Store, error) {
 	// load with a 503) cannot make a datastore probe time out and drop the whole
 	// replica out of rotation (DP2-054).
 	probeCfg := cfg.Copy()
-	probeCfg.MaxConns = probePoolMaxConns
+	probeCfg.MaxConns = sizes.Probe
 	probeCfg.MinConns = 1
 	probePool, err := pgxpool.NewWithConfig(ctx, probeCfg)
 	if err != nil {
 		pool.Close()
-		return nil, fmt.Errorf("store: connect probe pool: %w", err)
+		return nil, fmt.Errorf("store: connect probe pool (connection budget %d per replica: request %d, probe %d, reserved %d, bookkeeping %d, lock %d; raise PostgreSQL max_connections or lower TRSTCTL_POSTGRES_*_CONNS): %w", sizes.Total(), sizes.Request, sizes.Probe, sizes.Reserved, sizes.Bookkeeping, sizes.Lock, err)
 	}
 	if err := probePool.Ping(ctx); err != nil {
 		probePool.Close()
@@ -187,13 +219,13 @@ func Open(ctx context.Context, dsn string, opts ...OpenOption) (*Store, error) {
 		return nil, fmt.Errorf("store: ping probe pool: %w", err)
 	}
 	reservedCfg := cfg.Copy()
-	reservedCfg.MaxConns = reservedPoolMaxConns
+	reservedCfg.MaxConns = sizes.Reserved
 	reservedCfg.MinConns = 1
 	reservedPool, err := pgxpool.NewWithConfig(ctx, reservedCfg)
 	if err != nil {
 		probePool.Close()
 		pool.Close()
-		return nil, fmt.Errorf("store: connect reserved pool: %w", err)
+		return nil, fmt.Errorf("store: connect reserved pool (connection budget %d per replica: request %d, probe %d, reserved %d, bookkeeping %d, lock %d; raise PostgreSQL max_connections or lower TRSTCTL_POSTGRES_*_CONNS): %w", sizes.Total(), sizes.Request, sizes.Probe, sizes.Reserved, sizes.Bookkeeping, sizes.Lock, err)
 	}
 	if err := reservedPool.Ping(ctx); err != nil {
 		reservedPool.Close()
@@ -202,14 +234,14 @@ func Open(ctx context.Context, dsn string, opts ...OpenOption) (*Store, error) {
 		return nil, fmt.Errorf("store: ping reserved pool: %w", err)
 	}
 	bookkeepingCfg := cfg.Copy()
-	bookkeepingCfg.MaxConns = bookkeepingPoolMaxConns
+	bookkeepingCfg.MaxConns = sizes.Bookkeeping
 	bookkeepingCfg.MinConns = 1
 	bookkeepingPool, err := pgxpool.NewWithConfig(ctx, bookkeepingCfg)
 	if err != nil {
 		reservedPool.Close()
 		probePool.Close()
 		pool.Close()
-		return nil, fmt.Errorf("store: connect bookkeeping pool: %w", err)
+		return nil, fmt.Errorf("store: connect bookkeeping pool (connection budget %d per replica: request %d, probe %d, reserved %d, bookkeeping %d, lock %d; raise PostgreSQL max_connections or lower TRSTCTL_POSTGRES_*_CONNS): %w", sizes.Total(), sizes.Request, sizes.Probe, sizes.Reserved, sizes.Bookkeeping, sizes.Lock, err)
 	}
 	if err := bookkeepingPool.Ping(ctx); err != nil {
 		bookkeepingPool.Close()
@@ -219,7 +251,7 @@ func Open(ctx context.Context, dsn string, opts ...OpenOption) (*Store, error) {
 		return nil, fmt.Errorf("store: ping bookkeeping pool: %w", err)
 	}
 	lockCfg := cfg.Copy()
-	lockCfg.MaxConns = lockPoolMaxConns
+	lockCfg.MaxConns = sizes.Lock
 	lockCfg.MinConns = 1
 	lockPool, err := pgxpool.NewWithConfig(ctx, lockCfg)
 	if err != nil {
@@ -227,7 +259,7 @@ func Open(ctx context.Context, dsn string, opts ...OpenOption) (*Store, error) {
 		reservedPool.Close()
 		probePool.Close()
 		pool.Close()
-		return nil, fmt.Errorf("store: connect lock pool: %w", err)
+		return nil, fmt.Errorf("store: connect lock pool (connection budget %d per replica: request %d, probe %d, reserved %d, bookkeeping %d, lock %d; raise PostgreSQL max_connections or lower TRSTCTL_POSTGRES_*_CONNS): %w", sizes.Total(), sizes.Request, sizes.Probe, sizes.Reserved, sizes.Bookkeeping, sizes.Lock, err)
 	}
 	if err := lockPool.Ping(ctx); err != nil {
 		lockPool.Close()
@@ -237,12 +269,15 @@ func Open(ctx context.Context, dsn string, opts ...OpenOption) (*Store, error) {
 		pool.Close()
 		return nil, fmt.Errorf("store: ping lock pool: %w", err)
 	}
+	slog.Info("store: connection budget", slog.Int("request", int(sizes.Request)), slog.Int("probe", int(sizes.Probe)), slog.Int("reserved", int(sizes.Reserved)),
+		slog.Int("bookkeeping", int(sizes.Bookkeeping)), slog.Int("lock", int(sizes.Lock)), slog.Int("total_per_replica", int(sizes.Total())))
 	return &Store{
 		pool:                        pool,
 		probePool:                   probePool,
 		reservedPool:                reservedPool,
 		bookkeepingPool:             bookkeepingPool,
 		lockPool:                    lockPool,
+		sizes:                       sizes,
 		acquireTimeout:              options.acquireTimeout,
 		historyRewriteOperationGate: make(chan struct{}, 1),
 	}, nil
@@ -301,6 +336,17 @@ func IsTransactionRollback(err error) bool {
 	return pgErr.Code == "40001" || pgErr.Code == "40P01"
 }
 
+// SQLState returns the PostgreSQL SQLSTATE carried by err, or "" when err is
+// not a PostgreSQL error. It is safe to surface: a five-character class code,
+// never a row value.
+func SQLState(err error) string {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code
+	}
+	return ""
+}
+
 // Close releases the connection pool.
 func (s *Store) Close() {
 	if s.probePool != nil {
@@ -327,6 +373,34 @@ func (s *Store) lockSessionPool(ctx context.Context) *pgxpool.Pool {
 	}
 	return s.poolFor(ctx)
 }
+
+// PoolStat is one pool's live usage for the operator-facing gauges.
+type PoolStat struct {
+	Max, Total, Acquired, Idle int32
+	EmptyAcquires              int64
+}
+
+// PoolStats reports every pool by name (request, probe, reserved, bookkeeping,
+// lock) so the server can export trstctl_store_pool_connections.
+func (s *Store) PoolStats() map[string]PoolStat {
+	out := map[string]PoolStat{}
+	add := func(name string, p *pgxpool.Pool) {
+		if p == nil {
+			return
+		}
+		st := p.Stat()
+		out[name] = PoolStat{Max: st.MaxConns(), Total: st.TotalConns(), Acquired: st.AcquiredConns(), Idle: st.IdleConns(), EmptyAcquires: st.EmptyAcquireCount()}
+	}
+	add("request", s.pool)
+	add("probe", s.probePool)
+	add("reserved", s.reservedPool)
+	add("bookkeeping", s.bookkeepingPool)
+	add("lock", s.lockPool)
+	return out
+}
+
+// Sizes is the connection budget the store was opened with.
+func (s *Store) Sizes() PoolSizes { return s.sizes }
 
 type reservedPoolKey struct{}
 

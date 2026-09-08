@@ -79,6 +79,7 @@ var TenantScopedTables = []string{
 	// independently backed-up history until its retention window ends.
 	"operation_approval_decisions",
 	"operation_approval_requests",
+	"profile_edit_approvals",     // OPP-R09: parked profile create/edit approvals leave with the tenant
 	"issuance_approvals",         // EXC-WIRE-03: FK -> issuance_approval_requests
 	"issuance_approval_requests", // EXC-WIRE-03: served dual-control approval state
 	// I3: the first-class request object. Tenant history — who asked for what,

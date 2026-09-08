@@ -4,12 +4,15 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/approval"
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // Profile create/edit under dual control (a profile whose spec carries
@@ -47,22 +50,38 @@ type profileEditApprovalDecisionRequest struct {
 	Reason string `json:"reason"`
 }
 
-func toProfileEditApprovalRecord(req approval.Request) profileEditApprovalRecord {
+func toProfileEditApprovalRecord(r store.ProfileEditApproval, now time.Time) profileEditApprovalRecord {
 	rec := profileEditApprovalRecord{
-		ID: req.ID, Kind: string(req.Kind), Resource: req.Resource,
-		ProfileName:       strings.TrimPrefix(req.Resource, "profile:"),
-		Requester:         req.Requester,
-		RequiredApprovals: req.RequiredApprovals,
-		Approvals:         make([]profileEditApprovalDecision, 0, len(req.Approvals)),
-		State:             string(req.State),
-		ProfileID:         req.CredentialID,
-		CreatedAt:         req.CreatedAt.UTC().Format(time.RFC3339),
-		ExpiresAt:         req.ExpiresAt.UTC().Format(time.RFC3339),
+		ID: r.ID, Kind: string(approval.KindProfileEdit), Resource: "profile:" + r.Name,
+		ProfileName:       r.Name,
+		Requester:         r.Requester,
+		RequiredApprovals: r.RequiredApprovals,
+		Approvals:         make([]profileEditApprovalDecision, 0, len(r.Approvals)),
+		State:             orchestrator.ProfileEditApprovalState(r, now),
+		ProfileID:         r.ProfileID,
+		CreatedAt:         r.CreatedAt.UTC().Format(time.RFC3339),
+		ExpiresAt:         r.ExpiresAt.UTC().Format(time.RFC3339),
 	}
-	for _, a := range req.Approvals {
+	for _, a := range r.Approvals {
 		rec.Approvals = append(rec.Approvals, profileEditApprovalDecision{Approver: a.Approver, Decision: a.Decision, At: a.At.UTC().Format(time.RFC3339)})
 	}
 	return rec
+}
+
+// profileEditApprovalError maps the orchestrator's typed refusals to problems:
+// unknown ids are tenant-safe 404s, an expired window is a 409 the requester
+// resolves by resubmitting, and a self-approval is the documented 403.
+func profileEditApprovalError(err error) error {
+	switch {
+	case errors.Is(err, orchestrator.ErrProfileEditApprovalUnknown):
+		return errStatus(http.StatusNotFound, "no such profile approval request")
+	case errors.Is(err, orchestrator.ErrProfileEditApprovalExpired):
+		return errStatus(http.StatusConflict, "the profile approval request expired; resubmit the profile change to open a new request")
+	case errors.Is(err, orchestrator.ErrProfileEditSelfApproval):
+		return errStatus(http.StatusForbidden, "dual control: the requester cannot approve their own profile edit")
+	default:
+		return err
+	}
 }
 
 func (a *API) profileEditApprovalRoutes() []route {
@@ -80,10 +99,15 @@ func (a *API) listProfileEditApprovals(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusUnauthorized, "missing or invalid tenant"))
 		return
 	}
-	items := a.orch.ListProfileEditApprovals(tenantID)
+	items, err := a.orch.ListProfileEditApprovals(r.Context(), tenantID)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	now := time.Now().UTC()
 	out := profileEditApprovalList{Items: make([]profileEditApprovalRecord, 0, len(items))}
 	for _, it := range items {
-		out.Items = append(out.Items, toProfileEditApprovalRecord(it))
+		out.Items = append(out.Items, toProfileEditApprovalRecord(it, now))
 	}
 	a.writeJSON(w, http.StatusOK, out)
 }
@@ -94,12 +118,12 @@ func (a *API) getProfileEditApproval(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusUnauthorized, "missing or invalid tenant"))
 		return
 	}
-	req, _, found := a.orch.GetProfileEditApproval(tenantID, r.PathValue("id"))
-	if !found {
-		a.writeError(w, errStatus(http.StatusNotFound, "no such profile approval request"))
+	parked, err := a.orch.GetProfileEditApproval(r.Context(), tenantID, r.PathValue("id"))
+	if err != nil {
+		a.writeError(w, profileEditApprovalError(err))
 		return
 	}
-	a.writeJSON(w, http.StatusOK, toProfileEditApprovalRecord(req))
+	a.writeJSON(w, http.StatusOK, toProfileEditApprovalRecord(parked, time.Now().UTC()))
 }
 
 //trstctl:mutation
@@ -117,16 +141,10 @@ func (a *API) approveProfileEdit(w http.ResponseWriter, r *http.Request) {
 		if strings.TrimSpace(principal.Subject) == "" {
 			return 0, nil, errStatus(http.StatusUnauthorized, "missing authenticated principal")
 		}
-		if _, _, found := a.orch.GetProfileEditApproval(tenantID, requestID); !found {
-			return 0, nil, errStatus(http.StatusNotFound, "no such profile approval request")
-		}
-		req, err := a.orch.ApproveProfileEdit(ctx, tenantID, requestID, principal.Subject)
+		parked, err := a.orch.ApproveProfileEdit(ctx, tenantID, requestID, principal.Subject)
 		if err != nil {
-			if strings.Contains(err.Error(), "dual control") {
-				return 0, nil, errStatus(http.StatusForbidden, "dual control: the requester cannot approve their own profile edit")
-			}
-			return 0, nil, err
+			return 0, nil, profileEditApprovalError(err)
 		}
-		return http.StatusOK, toProfileEditApprovalRecord(req), nil
+		return http.StatusOK, toProfileEditApprovalRecord(parked, time.Now().UTC()), nil
 	})
 }

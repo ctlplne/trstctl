@@ -138,6 +138,30 @@ func TestServedIdenticalApprovalDecisionsCoalesce(t *testing.T) {
 	if !found {
 		t.Fatalf("approval request %s vanished from the listing after the storm: %s", requestID, body)
 	}
+	// A very late identical retry, after the recorder's retention window has
+	// reclaimed the key, re-executes the decision on the claim path and finds the
+	// decision already recorded: 200, still exactly one decision (review of the
+	// move from the durable path to the claim path in g308).
+	if _, err := h.store.SystemPool().Exec(t.Context(), `DELETE FROM idempotency_keys WHERE tenant_id = $1 AND key = 'identical-decision'`, h.tenant); err != nil {
+		t.Fatalf("simulate idempotency retention: %v", err)
+	}
+	st, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/approval-requests/"+requestID+"/approvals", reviewer, "identical-decision", map[string]any{"intent_digest": digest, "reason": "looks right"})
+	if st != http.StatusOK {
+		t.Fatalf("identical decision after retention: %d %s (want 200, the recorded decision)", st, body)
+	}
+	st, body = secretsReq(t, h, http.MethodGet, "/api/v1/approval-requests", reviewer, nil)
+	if st != http.StatusOK {
+		t.Fatalf("list after the late retry: %d %s", st, body)
+	}
+	if err := json.Unmarshal(body, &after); err != nil {
+		t.Fatal(err)
+	}
+	for _, it := range after.Items {
+		if it.ID == requestID && it.ApprovalCount != 1 {
+			t.Fatalf("late identical retry doubled the decision: approval_count=%d: %s", it.ApprovalCount, body)
+		}
+	}
+
 	// The requester's replay consumes the authority exactly once.
 	st, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/identities/"+identity.ID+"/transitions", requester, "identical-issue", map[string]any{"to": "issued", "reason": "identical decisions"})
 	if st != http.StatusOK {

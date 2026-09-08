@@ -206,7 +206,9 @@ func openMigratedStore(ctx context.Context, cfg *config.Config, logger *slog.Log
 	if err != nil {
 		return nil, nil, fmt.Errorf("postgres acquire timeout: %w", err)
 	}
-	st, err := store.Open(ctx, dsn, store.WithStatementTimeout(stmtTimeout), store.WithAcquireTimeout(acquireTimeout))
+	reqConns, probeConns, reservedConns, bookkeepingConns, lockConns, _ := cfg.Postgres.ConnectionBudget()
+	st, err := store.Open(ctx, dsn, store.WithStatementTimeout(stmtTimeout), store.WithAcquireTimeout(acquireTimeout),
+		store.WithPoolSizes(store.PoolSizes{Request: int32(reqConns), Probe: int32(probeConns), Reserved: int32(reservedConns), Bookkeeping: int32(bookkeepingConns), Lock: int32(lockConns)})) // #nosec G115 -- bounded small ints from config (CWE-190)
 	if err != nil {
 		if stopPG != nil {
 			_ = stopPG()

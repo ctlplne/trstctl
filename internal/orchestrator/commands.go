@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"net/url"
 	"reflect"
-	"sort"
 	"strings"
 	"time"
 
@@ -161,6 +160,10 @@ type profileVersionOptions struct {
 	RestoredFromVersion   int
 	RestoreReason         string
 	ExpectedActiveVersion int
+	// ApprovalRequestID is the parked dual-control request this version closes;
+	// the emitted profile event carries it so the projection marks the request
+	// issued, and the create is skipped when another replica already did so.
+	ApprovalRequestID string
 }
 
 // AuthzDecision records the governed authorization decision for a sensitive
@@ -294,6 +297,22 @@ func (o *Orchestrator) createProfileVersionWithOptions(ctx context.Context, tena
 	}
 	var rec store.ProfileRecord
 	err := o.store.WithProjectionLock(ctx, func(ctx context.Context) error {
+		if opts.ApprovalRequestID != "" {
+			// Two reviewers reaching quorum at once both arrive here; the lock
+			// serializes them and the second finds the request already issued.
+			parked, err := o.store.GetProfileEditApproval(ctx, tenantID, opts.ApprovalRequestID)
+			if err != nil {
+				return err
+			}
+			if parked.State == "issued" && parked.ProfileID != "" {
+				existing, err := o.store.GetProfileVersionByID(ctx, tenantID, parked.ProfileID)
+				if err != nil {
+					return err
+				}
+				rec = existing
+				return nil
+			}
+		}
 		if opts.ExpectedActiveVersion > 0 {
 			active, err := o.store.GetActiveProfile(ctx, tenantID, name)
 			if err != nil {
@@ -324,6 +343,7 @@ func (o *Orchestrator) createProfileVersionWithOptions(ctx context.Context, tena
 			RestoredFromVersion:   opts.RestoredFromVersion,
 			RestoreReason:         opts.RestoreReason,
 			ExpectedActiveVersion: opts.ExpectedActiveVersion,
+			ApprovalRequestID:     opts.ApprovalRequestID,
 		})
 		if err != nil {
 			return err
@@ -563,128 +583,116 @@ func (o *Orchestrator) requestProfileEditApproval(ctx context.Context, tenantID,
 	if err != nil {
 		return approval.Request{}, err
 	}
+	// The event is the record: its inline projection parks the request in
+	// profile_edit_approvals, where every replica and every restart finds it.
 	if _, err := o.emit(ctx, eventProfileEditApprovalRequested, tenantID, payload); err != nil {
 		return approval.Request{}, err
 	}
-	o.profileEditMu.Lock()
-	o.profileEditApprovals[profileEditApprovalKey(tenantID, req.ID)] = entry
-	o.profileEditMu.Unlock()
 	return req, nil
 }
 
-// ListProfileEditApprovals returns the tenant's parked profile create/edit
-// approval requests, oldest first, so a reviewer can find the request a 202
-// "awaiting_approval" answer referred to (DP2-057). The spec payload is not
-// included: the reviewer reads the queued spec through GetProfileEditApproval.
-func (o *Orchestrator) ListProfileEditApprovals(tenantID string) []approval.Request {
-	o.profileEditMu.Lock()
-	defer o.profileEditMu.Unlock()
-	items := make([]approval.Request, 0)
-	for _, entry := range o.profileEditApprovals {
-		if entry.Request.TenantID != tenantID {
-			continue
-		}
-		items = append(items, entry.Request)
+// ErrProfileEditApprovalUnknown reports an approval id the tenant does not own.
+var ErrProfileEditApprovalUnknown = errors.New("orchestrator: unknown profile edit approval request")
+
+// ErrProfileEditApprovalExpired reports a parked request past its 24-hour window.
+var ErrProfileEditApprovalExpired = errors.New("orchestrator: profile edit approval request expired")
+
+// ErrProfileEditSelfApproval reports the requester approving their own edit.
+var ErrProfileEditSelfApproval = errors.New("orchestrator: requester cannot approve own profile edit (dual control)")
+
+// ProfileEditApprovalState reads the served state of a parked request: the
+// projected state, or "expired" when it is still awaiting approval past its
+// window.
+func ProfileEditApprovalState(r store.ProfileEditApproval, now time.Time) string {
+	if r.State == string(approval.StateAwaitingApproval) && !now.Before(r.ExpiresAt) {
+		return string(approval.StateExpired)
 	}
-	sort.Slice(items, func(i, j int) bool {
-		if !items[i].CreatedAt.Equal(items[j].CreatedAt) {
-			return items[i].CreatedAt.Before(items[j].CreatedAt)
-		}
-		return items[i].ID < items[j].ID
-	})
-	return items
+	return r.State
 }
 
-// GetProfileEditApproval returns one parked profile edit approval request of the
-// tenant with the queued profile name, or false when the request is unknown.
-func (o *Orchestrator) GetProfileEditApproval(tenantID, requestID string) (approval.Request, string, bool) {
-	o.profileEditMu.Lock()
-	defer o.profileEditMu.Unlock()
-	entry, ok := o.profileEditApprovals[profileEditApprovalKey(tenantID, requestID)]
-	if !ok || entry.Request.TenantID != tenantID {
-		return approval.Request{}, "", false
+// ListProfileEditApprovals returns the tenant's parked profile create/edit
+// approval requests, oldest first, from the projection (DP2-057, OPP-R09).
+func (o *Orchestrator) ListProfileEditApprovals(ctx context.Context, tenantID string) ([]store.ProfileEditApproval, error) {
+	return o.store.ListProfileEditApprovals(ctx, tenantID)
+}
+
+// GetProfileEditApproval returns one parked request of the tenant.
+func (o *Orchestrator) GetProfileEditApproval(ctx context.Context, tenantID, requestID string) (store.ProfileEditApproval, error) {
+	r, err := o.store.GetProfileEditApproval(ctx, tenantID, requestID)
+	if errors.Is(err, store.ErrProfileEditApprovalNotFound) {
+		return store.ProfileEditApproval{}, ErrProfileEditApprovalUnknown
 	}
-	return entry.Request, entry.Name, true
+	return r, err
 }
 
 // ApproveProfileEdit records a non-requester approval and applies the queued
-// profile spec when quorum is reached.
-func (o *Orchestrator) ApproveProfileEdit(ctx context.Context, tenantID, requestID, approver string) (approval.Request, error) {
+// profile spec when quorum is reached. The decision is an event; the projection
+// carries the state, so the same call on any replica, or after a restart, sees
+// the same request and an identical decision is absorbed rather than doubled.
+func (o *Orchestrator) ApproveProfileEdit(ctx context.Context, tenantID, requestID, approver string) (store.ProfileEditApproval, error) {
 	if approver == "" {
 		if actor, ok := events.ActorFromContext(ctx); ok {
 			approver = actor.Subject
 		}
 	}
 	if approver == "" {
-		return approval.Request{}, fmt.Errorf("orchestrator: profile edit approval requires an authenticated approver")
+		return store.ProfileEditApproval{}, fmt.Errorf("orchestrator: profile edit approval requires an authenticated approver")
 	}
-	key := profileEditApprovalKey(tenantID, requestID)
-
-	o.profileEditMu.Lock()
-	entry, ok := o.profileEditApprovals[key]
-	o.profileEditMu.Unlock()
-	if !ok {
-		return approval.Request{}, fmt.Errorf("orchestrator: unknown profile edit approval request %q", requestID)
-	}
-	if entry.Request.State == approval.StateIssued || entry.Request.State == approval.StateDenied {
-		return entry.Request, nil
-	}
-	if approver == entry.Request.Requester {
-		payload, _ := json.Marshal(map[string]string{
-			"id":       entry.Request.ID,
-			"approver": approver,
-			"reason":   "self-approval",
-		})
-		if _, err := o.emit(ctx, eventProfileEditApprovalRefused, tenantID, payload); err != nil {
-			return approval.Request{}, err
-		}
-		return entry.Request, fmt.Errorf("orchestrator: requester cannot approve own profile edit (dual control)")
-	}
-	for _, a := range entry.Request.Approvals {
-		if a.Approver == approver && a.Decision == "approve" {
-			return entry.Request, nil
-		}
+	parked, err := o.GetProfileEditApproval(ctx, tenantID, requestID)
+	if err != nil {
+		return store.ProfileEditApproval{}, err
 	}
 	now := time.Now().UTC()
-	entry.Request.Approvals = append(entry.Request.Approvals, approval.Approval{
-		Approver: approver,
-		Decision: "approve",
-		At:       now,
-	})
-	approvedPayload, err := json.Marshal(map[string]any{
-		"id":        entry.Request.ID,
-		"approver":  approver,
-		"requester": entry.Request.Requester,
-		"resource":  entry.Request.Resource,
-	})
-	if err != nil {
-		return approval.Request{}, err
+	switch ProfileEditApprovalState(parked, now) {
+	case string(approval.StateIssued), string(approval.StateDenied):
+		return parked, nil
+	case string(approval.StateExpired):
+		return parked, ErrProfileEditApprovalExpired
 	}
-	if _, err := o.emit(ctx, eventProfileEditApprovalApproved, tenantID, approvedPayload); err != nil {
-		return approval.Request{}, err
+	if approver == parked.Requester {
+		payload, _ := json.Marshal(map[string]string{"id": parked.ID, "approver": approver, "reason": "self-approval"})
+		if _, err := o.emit(ctx, eventProfileEditApprovalRefused, tenantID, payload); err != nil {
+			return store.ProfileEditApproval{}, err
+		}
+		return parked, ErrProfileEditSelfApproval
 	}
-	entry.Request.State = approval.StateApproved
-	rec, err := o.createProfileVersionWithOptions(ctx, tenantID, entry.Name, entry.Spec, profileVersionOptions{
-		RestoredFromVersion:   entry.RestoredFromVersion,
-		RestoreReason:         entry.RestoreReason,
-		ExpectedActiveVersion: entry.ExpectedActiveVersion,
-	})
-	if err != nil {
-		o.profileEditMu.Lock()
-		o.profileEditApprovals[key] = entry
-		o.profileEditMu.Unlock()
-		return entry.Request, err
+	alreadyApproved := false
+	for _, a := range parked.Approvals {
+		if a.Approver == approver && a.Decision == "approve" {
+			alreadyApproved = true
+		}
 	}
-	entry.Request.State = approval.StateIssued
-	entry.Request.CredentialID = rec.ID
-	o.profileEditMu.Lock()
-	o.profileEditApprovals[key] = entry
-	o.profileEditMu.Unlock()
-	return entry.Request, nil
-}
-
-func profileEditApprovalKey(tenantID, requestID string) string {
-	return tenantID + "|" + requestID
+	if !alreadyApproved {
+		approvedPayload, err := json.Marshal(map[string]any{
+			"id": parked.ID, "approver": approver, "requester": parked.Requester, "resource": "profile:" + parked.Name,
+		})
+		if err != nil {
+			return store.ProfileEditApproval{}, err
+		}
+		if _, err := o.emit(ctx, eventProfileEditApprovalApproved, tenantID, approvedPayload); err != nil {
+			return store.ProfileEditApproval{}, err
+		}
+		parked, err = o.GetProfileEditApproval(ctx, tenantID, requestID)
+		if err != nil {
+			return store.ProfileEditApproval{}, err
+		}
+	}
+	if len(parked.Approvals) < parked.RequiredApprovals {
+		return parked, nil
+	}
+	// Quorum: apply the queued spec as the new active version. The version event
+	// carries the request id, so the projection closes the request; a replica
+	// that lost the race finds it issued under the projection lock and returns
+	// the version the winner created.
+	if _, err := o.createProfileVersionWithOptions(ctx, tenantID, parked.Name, parked.Spec, profileVersionOptions{
+		RestoredFromVersion:   parked.RestoredFromVersion,
+		RestoreReason:         parked.RestoreReason,
+		ExpectedActiveVersion: parked.ExpectedActiveVersion,
+		ApprovalRequestID:     parked.ID,
+	}); err != nil {
+		return parked, err
+	}
+	return o.GetProfileEditApproval(ctx, tenantID, requestID)
 }
 
 // CreateOwner records an owner.created event and returns the new owner.

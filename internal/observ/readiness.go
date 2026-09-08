@@ -5,6 +5,7 @@ package observ
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 )
 
@@ -30,25 +31,52 @@ func NewReadiness(tracer *Tracer, checks ...Check) *Readiness {
 	return &Readiness{tracer: tracer, checks: checks}
 }
 
+// DegradedError is a probe outcome between ok and failed: the dependency is
+// reachable but the probe was shed by load (a saturated request pool, an
+// exhausted probe budget). Readiness stays 200 so a load balancer keeps the
+// replica in rotation, and the check text and the "degraded" list say why, so
+// an operator can alert on a replica that is shedding for longer than a burst.
+type DegradedError struct{ Reason string }
+
+func (e DegradedError) Error() string { return "degraded: " + e.Reason }
+
+// Degraded builds the shed-by-load probe outcome.
+func Degraded(reason string) error { return DegradedError{Reason: reason} }
+
 // Evaluate runs every probe and returns whether all passed plus a per-dependency
-// result ("ok" or the error text). Each probe runs under a child span of ctx.
+// result ("ok", "degraded: …" or the error text). A degraded probe does not fail
+// readiness. Each probe runs under a child span of ctx.
 func (r *Readiness) Evaluate(ctx context.Context) (bool, map[string]string) {
+	ok, results, _ := r.EvaluateDetailed(ctx)
+	return ok, results
+}
+
+// EvaluateDetailed is Evaluate plus the names of the probes that answered
+// degraded, in check order.
+func (r *Readiness) EvaluateDetailed(ctx context.Context) (bool, map[string]string, []string) {
 	allOK := true
 	results := make(map[string]string, len(r.checks))
+	var degraded []string
 	for _, c := range r.checks {
 		cctx, span := r.tracer.Start(ctx, "readiness."+c.Name)
 		err := c.Probe(cctx)
-		if err != nil {
+		var shed DegradedError
+		switch {
+		case err == nil:
+			results[c.Name] = "ok"
+			span.SetAttr("status", "ok")
+		case errors.As(err, &shed):
+			results[c.Name] = shed.Error()
+			degraded = append(degraded, c.Name)
+			span.SetAttr("status", "degraded")
+		default:
 			allOK = false
 			results[c.Name] = err.Error()
 			span.SetAttr("status", "error")
-		} else {
-			results[c.Name] = "ok"
-			span.SetAttr("status", "ok")
 		}
 		span.End()
 	}
-	return allOK, results
+	return allOK, results, degraded
 }
 
 // Handler serves GET /readyz: 200 with per-dependency status when ready, 503 when
@@ -56,15 +84,21 @@ func (r *Readiness) Evaluate(ctx context.Context) (bool, map[string]string) {
 // rotation, and an operator sees which dependency hurts).
 func (r *Readiness) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		ok, results := r.Evaluate(req.Context())
+		ok, results, degraded := r.EvaluateDetailed(req.Context())
 		status := http.StatusOK
 		overall := "ok"
 		if !ok {
 			status = http.StatusServiceUnavailable
 			overall = "degraded"
 		}
+		body := map[string]any{"status": overall, "checks": results}
+		if len(degraded) > 0 {
+			// Ready, but these probes were shed by load: 200 keeps the replica in
+			// rotation while the list makes the shedding visible and alertable.
+			body["degraded"] = degraded
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
-		_ = json.NewEncoder(w).Encode(map[string]any{"status": overall, "checks": results})
+		_ = json.NewEncoder(w).Encode(body)
 	}
 }

@@ -100,6 +100,11 @@ lives in **NATS JetStream**). PostgreSQL is the datastore in every deployment mo
 | `TRSTCTL_POSTGRES_PORT` | `5432` | Loopback port for the **bundled** datastore (override if 5432 is taken). |
 | `TRSTCTL_POSTGRES_STATEMENT_TIMEOUT` | `60s` | Server-side deadline applied to every statement (OPS-TIMEOUTS-001), so a stuck query fails closed instead of holding a connection indefinitely. DR rebuild/restore transactions widen this explicitly. |
 | `TRSTCTL_POSTGRES_ACQUIRE_TIMEOUT` | `10s` | How long a request may wait for a pooled PostgreSQL connection before failing closed with a structured `503`. |
+| `TRSTCTL_POSTGRES_MAX_CONNS` | `16` | Request pool: connections for client commands and their transactions (`postgres.max_conns`). |
+| `TRSTCTL_POSTGRES_PROBE_CONNS` | `2` | Probe pool: the readiness `db` check, never request work (`postgres.probe_conns`). |
+| `TRSTCTL_POSTGRES_RESERVED_CONNS` | `2` | Reserved pool: the durable projection tail's apply and checkpoint statements (`postgres.reserved_conns`). |
+| `TRSTCTL_POSTGRES_BOOKKEEPING_CONNS` | `4` | Bookkeeping pool: idempotency claim, record and release statements (`postgres.bookkeeping_conns`). |
+| `TRSTCTL_POSTGRES_LOCK_CONNS` | `8` | Lock pool: sessions holding the projection advisory lock while a command runs (`postgres.lock_conns`). The five pools total 32 connections per replica by default; see the connection budget in [operations](operations.md). |
 | `TRSTCTL_NATS_MODE` | `embedded` | `embedded` (in-process file-backed JetStream for single-node eval) or `external` (NATS cluster; recommended for production). |
 | `TRSTCTL_NATS_URL` | — | NATS URL; **required** when external (i.e. to serve). |
 | `TRSTCTL_NATS_STORE_DIR` | `data/nats` | JetStream store directory for the embedded datastore. |

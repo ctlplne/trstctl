@@ -991,6 +991,30 @@ type Postgres struct {
 	// AcquireTimeout bounds how long a transaction may wait for a pooled
 	// connection before failing closed with a structured 503. Default "10s".
 	AcquireTimeout string `json:"acquire_timeout,omitempty"`
+	// Connection budget per replica (0 = default). The request pool carries
+	// client commands; the four small pools carry work that must not compete
+	// with them: readiness probes, the durable projection tail, the idempotency
+	// bookkeeping statements and the projection-lock sessions. PostgreSQL's
+	// max_connections must allow the sum for every replica (docs/operations.md).
+	MaxConns         int `json:"max_conns,omitempty"`         // request pool, default 16
+	ProbeConns       int `json:"probe_conns,omitempty"`       // default 2
+	ReservedConns    int `json:"reserved_conns,omitempty"`    // default 2
+	BookkeepingConns int `json:"bookkeeping_conns,omitempty"` // default 4
+	LockConns        int `json:"lock_conns,omitempty"`        // default 8
+}
+
+// ConnectionBudget is the per-replica PostgreSQL connection budget: the sum of
+// the request pool and the four dedicated pools, with zero fields defaulted.
+func (p Postgres) ConnectionBudget() (request, probe, reserved, bookkeeping, lock, total int) {
+	pick := func(v, def int) int {
+		if v > 0 {
+			return v
+		}
+		return def
+	}
+	request, probe, reserved = pick(p.MaxConns, 16), pick(p.ProbeConns, 2), pick(p.ReservedConns, 2)
+	bookkeeping, lock = pick(p.BookkeepingConns, 4), pick(p.LockConns, 8)
+	return request, probe, reserved, bookkeeping, lock, request + probe + reserved + bookkeeping + lock
 }
 
 // StatementTimeoutDuration parses the statement deadline ("" = default 60s).
@@ -2559,6 +2583,11 @@ func applyServerAndSpineEnv(getenv func(string) string, c *Config) {
 	setString(getenv, "TRSTCTL_POSTGRES_DSN", &c.Postgres.DSN)
 	setString(getenv, "TRSTCTL_POSTGRES_STATEMENT_TIMEOUT", &c.Postgres.StatementTimeout)
 	setString(getenv, "TRSTCTL_POSTGRES_ACQUIRE_TIMEOUT", &c.Postgres.AcquireTimeout)
+	setInt(getenv, "TRSTCTL_POSTGRES_MAX_CONNS", &c.Postgres.MaxConns)
+	setInt(getenv, "TRSTCTL_POSTGRES_PROBE_CONNS", &c.Postgres.ProbeConns)
+	setInt(getenv, "TRSTCTL_POSTGRES_RESERVED_CONNS", &c.Postgres.ReservedConns)
+	setInt(getenv, "TRSTCTL_POSTGRES_BOOKKEEPING_CONNS", &c.Postgres.BookkeepingConns)
+	setInt(getenv, "TRSTCTL_POSTGRES_LOCK_CONNS", &c.Postgres.LockConns)
 	setString(getenv, "TRSTCTL_POSTGRES_DATA_DIR", &c.Postgres.DataDir)
 	setInt(getenv, "TRSTCTL_POSTGRES_PORT", &c.Postgres.Port)
 	setString(getenv, "TRSTCTL_NATS_MODE", &c.NATS.Mode)

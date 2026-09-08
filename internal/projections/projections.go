@@ -1847,6 +1847,50 @@ type ProfileVersioned struct {
 	RestoredFromVersion   int             `json:"restored_from_version,omitempty"`
 	RestoreReason         string          `json:"restore_reason,omitempty"`
 	ExpectedActiveVersion int             `json:"expected_active_version,omitempty"`
+	// ApprovalRequestID names the parked dual-control request this version
+	// closes (profile.edit_approval.requested), so the projection can mark it
+	// issued from the event stream alone (OPP-R09).
+	ApprovalRequestID string `json:"approval_request_id,omitempty"`
+}
+
+// Profile edit approval events (dual control on profiles whose spec carries
+// requires_approval). The orchestrator emits them; the projector keeps the
+// parked request in profile_edit_approvals so it survives restarts and is
+// visible to every replica.
+const (
+	EventProfileEditApprovalRequested = "profile.edit_approval.requested"
+	EventProfileEditApprovalApproved  = "profile.edit_approval.approved"
+	EventProfileEditApprovalRefused   = "profile.edit_approval.refused"
+)
+
+// ProfileEditApprovalRequested is the payload of profile.edit_approval.requested
+// (the orchestrator's parked entry: the approval request plus the queued spec).
+type ProfileEditApprovalRequested struct {
+	Request struct {
+		ID                string          `json:"id"`
+		TenantID          string          `json:"tenant_id"`
+		Kind              string          `json:"kind"`
+		Resource          string          `json:"resource"`
+		Requester         string          `json:"requester"`
+		RequiredApprovals int             `json:"required_approvals"`
+		State             string          `json:"state"`
+		CreatedAt         time.Time       `json:"created_at"`
+		ExpiresAt         time.Time       `json:"expires_at"`
+		Payload           json.RawMessage `json:"payload,omitempty"`
+	} `json:"request"`
+	Name                  string          `json:"name"`
+	Spec                  json.RawMessage `json:"spec"`
+	RestoredFromVersion   int             `json:"restored_from_version,omitempty"`
+	RestoreReason         string          `json:"restore_reason,omitempty"`
+	ExpectedActiveVersion int             `json:"expected_active_version,omitempty"`
+}
+
+// ProfileEditApprovalApproved is the payload of profile.edit_approval.approved.
+type ProfileEditApprovalApproved struct {
+	ID        string `json:"id"`
+	Approver  string `json:"approver"`
+	Requester string `json:"requester"`
+	Resource  string `json:"resource"`
 }
 
 // DiscoverySourceUpserted is the payload of discovery.source.upserted.
@@ -4392,10 +4436,51 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		return p.store.ApplyProfileVersionTx(ctx, tx, store.ProfileRecord{
+		if err := p.store.ApplyProfileVersionTx(ctx, tx, store.ProfileRecord{
 			ID: pl.ID, TenantID: e.TenantID, Name: pl.Name, Version: pl.Version,
 			Spec: pl.Spec, Active: pl.Active, CreatedBy: pl.CreatedBy, CreatedAt: e.Time,
+		}); err != nil {
+			return err
+		}
+		if pl.ApprovalRequestID != "" {
+			return p.store.ApplyProfileEditApprovalIssuedTx(ctx, tx, e.TenantID, pl.ApprovalRequestID, pl.ID, e.Time)
+		}
+		return nil
+	case EventProfileEditApprovalRequested:
+		var pl ProfileEditApprovalRequested
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.Request.ID == "" || pl.Name == "" || pl.Request.Requester == "" {
+			return nil // a malformed legacy payload cannot become a parked request
+		}
+		required := pl.Request.RequiredApprovals
+		if required <= 0 {
+			required = 1
+		}
+		created, expires := pl.Request.CreatedAt, pl.Request.ExpiresAt
+		if created.IsZero() {
+			created = e.Time
+		}
+		if !expires.After(created) {
+			expires = created.Add(24 * time.Hour)
+		}
+		return p.store.ApplyProfileEditApprovalRequestedTx(ctx, tx, store.ProfileEditApproval{
+			TenantID: e.TenantID, ID: pl.Request.ID, Name: pl.Name, Spec: pl.Spec, Requester: pl.Request.Requester,
+			RequiredApprovals: required, RestoredFromVersion: pl.RestoredFromVersion, RestoreReason: pl.RestoreReason,
+			ExpectedActiveVersion: pl.ExpectedActiveVersion, CreatedAt: created, ExpiresAt: expires,
 		})
+	case EventProfileEditApprovalApproved:
+		var pl ProfileEditApprovalApproved
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.Approver == "" {
+			return nil
+		}
+		return p.store.ApplyProfileEditApprovalApprovedTx(ctx, tx, e.TenantID, pl.ID, pl.Approver, e.Time)
+	case EventProfileEditApprovalRefused:
+		return nil // audit only: a refused self-approval changes no parked state
 	case EventDiscoverySegmentUpserted:
 		var pl DiscoverySegmentUpserted
 		if err := decode(e, &pl); err != nil {
