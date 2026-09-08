@@ -514,9 +514,9 @@ editions-gate: ## Prove the open-core one-way valve and core-only build
 	@echo ">> trstctl_core tests over non-ee packages"
 	@set -euo pipefail; parallelism="$$(scripts/ci/go-package-parallelism.sh)"; \
 	pkgs="$$( $(GO) list $(GO_PACKAGES) | grep -v -E '^$(MODULE)/ee(/|$$)' | grep -v -E '^$(LIVE_PERF_IMPORT_RE)$$' )"; \
-	$(GO) test -tags trstctl_core $(GO_TEST_EXACT_FLAG) -p=$$parallelism -timeout=$(SERVER_COMPLEMENTARY_TIMEOUT) $$pkgs
+	GOFLAGS="$${GOFLAGS:-} -timeout=$(SERVER_COMPLEMENTARY_TIMEOUT)" $(GO) test -tags trstctl_core $(GO_TEST_EXACT_FLAG) -p=$$parallelism $$pkgs
 	@echo ">> trstctl_core live perf packages (serial)"
-	@$(GO) test -tags trstctl_core $(GO_TEST_EXACT_FLAG) -p=1 -timeout=$(SERVER_COMPLEMENTARY_TIMEOUT) $(LIVE_PERF_PACKAGES)
+	@GOFLAGS="$${GOFLAGS:-} -timeout=$(SERVER_COMPLEMENTARY_TIMEOUT)" $(GO) test -tags trstctl_core $(GO_TEST_EXACT_FLAG) -p=1 $(LIVE_PERF_PACKAGES)
 
 .PHONY: pcas-caller-gate pcas-caller-gate-strong
 pcas-caller-gate: ## PCAS-INT-CALL production-caller FLOOR: the non-constructor mechanism gate plus the auto-enumerated ee/succession constructor floor + seam

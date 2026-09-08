@@ -115,7 +115,7 @@
     {
       "ecosystem": "gomod",
       "name": "google.golang.org/grpc",
-      "current_version": "v1.82.1",
+      "current_version": "v1.83.1",
       "latest_observed_version": "v1.83.2",
       "update_type": "minor",
       "freshness_slo_class": "critical-go-runtime",

@@ -573,8 +573,8 @@ not this file.
 | `internal/store/projection_checkpoint.go:218` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/secret_rotation_schedule.go:292` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:316` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
-| `internal/store/snapshot.go:445` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
-| `internal/store/snapshot.go:460` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/snapshot.go:447` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
+| `internal/store/snapshot.go:462` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant.go:58` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant.go:76` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant_key_domain.go:146` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
