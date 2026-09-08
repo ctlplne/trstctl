@@ -64,7 +64,11 @@ func TestServedRepositorySecretScanWebhookQueuesAndExecutesCAPSCAN01(t *testing.
 	}
 
 	var scannedPath string
-	deadline := time.After(5 * time.Second)
+	// The scan runs asynchronously through the outbox; it completes in about a
+	// second on an idle machine and has taken longer than five seconds under a
+	// full core-tag package run, so the windows are generous. They bound a stall,
+	// not the expected latency.
+	deadline := time.After(repositoryScanWait)
 	for scannedPath == "" {
 		h.srv.dispatchOnce(context.Background())
 		select {
@@ -78,7 +82,7 @@ func TestServedRepositorySecretScanWebhookQueuesAndExecutesCAPSCAN01(t *testing.
 		t.Fatalf("scanner target = %q, want checkout path %q", scannedPath, repo)
 	}
 	findingsURL := "/api/v1/discovery/findings?run_id=" + receipt.RunID
-	deadline = time.After(5 * time.Second)
+	deadline = time.After(repositoryScanWait)
 	for {
 		status, body = secretsReq(t, h, http.MethodGet, findingsURL, tok, nil)
 		if status != http.StatusOK {
@@ -112,3 +116,7 @@ func (f *fakeSecretRepoScanner) Scan(_ context.Context, path string) (secretscan
 	f.called <- path
 	return f.report, nil
 }
+
+// repositoryScanWait bounds the asynchronous CAP-SCAN-01 run in the served
+// guards above: a stall, not the expected latency (about one second).
+const repositoryScanWait = 30 * time.Second
