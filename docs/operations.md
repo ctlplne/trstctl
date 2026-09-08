@@ -77,6 +77,12 @@ The idempotency claim, record and release statements run on their own small
 with 503 but cannot make a completed command's result unrecordable, which is
 what used to wall keys as "indeterminate" under load.
 
+Commands that serialize on the projection advisory lock park their
+lock-holding session on a separate **lock pool**, so a burst of commands waiting
+for that lock never occupies request-pool connections; the holder's own
+transactions keep their headroom and the burst drains at the lock's pace instead
+of stalling in acquire-window steps.
+
 Every mutation claims its `Idempotency-Key` in a short transaction, runs the
 command with **no pooled connection held**, and records the result in a second
 short transaction (the same discipline the outbox uses for external calls), so

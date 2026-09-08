@@ -51,7 +51,12 @@ type ProjectionTailHealth struct {
 // when fn returns (even on error or a cancelled ctx). It is a system operation on
 // the pool, like the migration lock.
 func (s *Store) WithProjectionLock(ctx context.Context, fn func(context.Context) error) error {
-	conn, err := s.poolFor(ctx).Acquire(ctx)
+	// The lock-holding session comes from the lock pool: a command parked on
+	// the advisory lock must not hold a request-pool connection, because the
+	// holder's nested transactions need that pool and a burst of waiters starved
+	// it into the acquire window (DP2-061). The callback still runs its own
+	// transactions on the pool ctx is entitled to.
+	conn, err := s.lockSessionPool(ctx).Acquire(ctx)
 	if err != nil {
 		return fmt.Errorf("store: acquire projection-lock connection: %w", err)
 	}

@@ -60,6 +60,12 @@ type Store struct {
 	// walls a completed command as indeterminate, so they must not compete with
 	// the commands themselves for request-pool headroom (DP2-060).
 	bookkeepingPool *pgxpool.Pool
+	// lockPool holds only the session connections that carry the projection
+	// advisory lock (WithProjectionLock). A command waiting for that lock must not
+	// occupy a request-pool connection: the holder runs nested transactions on
+	// the request pool, and waiters parked there starved it into the acquire
+	// window under a burst (DP2-061 convoy).
+	lockPool *pgxpool.Pool
 	// historyRewriteOperationGate admits only one local contender to the
 	// deployment-wide PostgreSQL operation lock. Without it, maxConns local
 	// waiters can each pin a session and starve the elected callback's cutover.
@@ -92,6 +98,10 @@ const reservedPoolMaxConns = 2
 // record or release is one short statement, so four connections keep pace with
 // the API bulkhead's eight workers without holding request-pool connections.
 const bookkeepingPoolMaxConns = 4
+
+// lockPoolMaxConns matches the API bulkhead's eight workers: every in-flight
+// command can wait for the projection lock without touching the request pool.
+const lockPoolMaxConns = 8
 
 // Bounded-latency defaults (OPS-TIMEOUTS-001): a saturated pool or a runaway
 // query fails closed with a structured error instead of hanging a request.
@@ -208,11 +218,31 @@ func Open(ctx context.Context, dsn string, opts ...OpenOption) (*Store, error) {
 		pool.Close()
 		return nil, fmt.Errorf("store: ping bookkeeping pool: %w", err)
 	}
+	lockCfg := cfg.Copy()
+	lockCfg.MaxConns = lockPoolMaxConns
+	lockCfg.MinConns = 1
+	lockPool, err := pgxpool.NewWithConfig(ctx, lockCfg)
+	if err != nil {
+		bookkeepingPool.Close()
+		reservedPool.Close()
+		probePool.Close()
+		pool.Close()
+		return nil, fmt.Errorf("store: connect lock pool: %w", err)
+	}
+	if err := lockPool.Ping(ctx); err != nil {
+		lockPool.Close()
+		bookkeepingPool.Close()
+		reservedPool.Close()
+		probePool.Close()
+		pool.Close()
+		return nil, fmt.Errorf("store: ping lock pool: %w", err)
+	}
 	return &Store{
 		pool:                        pool,
 		probePool:                   probePool,
 		reservedPool:                reservedPool,
 		bookkeepingPool:             bookkeepingPool,
+		lockPool:                    lockPool,
 		acquireTimeout:              options.acquireTimeout,
 		historyRewriteOperationGate: make(chan struct{}, 1),
 	}, nil
@@ -282,7 +312,20 @@ func (s *Store) Close() {
 	if s.bookkeepingPool != nil {
 		s.bookkeepingPool.Close()
 	}
+	if s.lockPool != nil {
+		s.lockPool.Close()
+	}
 	s.pool.Close()
+}
+
+// lockSessionPool is where WithProjectionLock parks the connection that holds
+// the advisory lock: the lock pool when the store has one, else the pool the
+// context is entitled to.
+func (s *Store) lockSessionPool(ctx context.Context) *pgxpool.Pool {
+	if s.lockPool != nil && !UsesReservedPool(ctx) {
+		return s.lockPool
+	}
+	return s.poolFor(ctx)
 }
 
 type reservedPoolKey struct{}
