@@ -35,11 +35,11 @@ require (
 	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8
 	go.mongodb.org/mongo-driver/v2 v2.8.0
 	go.opentelemetry.io/proto/otlp v1.5.0
-	golang.org/x/crypto v0.55.0
+	golang.org/x/crypto v0.56.0
 	golang.org/x/sys v0.47.0
 	golang.org/x/text v0.41.0
 	golang.org/x/tools v0.48.0
-	google.golang.org/grpc v1.82.1
+	google.golang.org/grpc v1.83.1
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1
 	software.sslmate.com/src/go-pkcs12 v0.7.2
@@ -142,7 +142,7 @@ require (
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20260414002931-afd174a4e478 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260414002931-afd174a4e478 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20260526163538-3dc84a4a5aaa // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )

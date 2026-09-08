@@ -197,6 +197,7 @@ var snapshotTables = []string{"owners", "ownership_assignments", "issuers", "cer
 	// Format 21: parent before child keeps restore safe for the decision table's
 	// composite foreign key into the immutable request.
 	"operation_approval_requests", "operation_approval_decisions",
+	"profile_edit_approvals",
 	// Format 32: parent before child for the delivery FK.
 	"audit_feed_destinations", "audit_feed_deliveries"}
 
@@ -429,6 +430,7 @@ SELECT jsonb_build_object(
   'enrollment_diagnostics', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM enrollment_diagnostics t),
   'outbox_reconciliation_conflicts', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM outbox_reconciliation_conflicts t),
   'operation_approval_requests', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM operation_approval_requests t),
+  'profile_edit_approvals', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM profile_edit_approvals t),
   'operation_approval_decisions', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM operation_approval_decisions t),
   'audit_feed_destinations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM audit_feed_destinations t),
   'audit_feed_deliveries', (SELECT coalesce(jsonb_agg(to_jsonb(t.*) ORDER BY t.queued_at, t.batch_id), '[]'::jsonb) FROM audit_feed_deliveries t)
