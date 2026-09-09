@@ -21,7 +21,9 @@
 # is exactly the operator's real first-run step.
 #
 # Requires: docker compose (the eval stack up), a reachable served control plane
-# (BASE_URL), curl, jq, openssl.
+# (BASE_URL), curl, jq, openssl. Optional COMPOSE_E2E_CA_FILE supplies an
+# independently trusted public CA bundle; otherwise copy the selected stack's
+# certificate-only /public-trust/control-plane.crt through Docker Compose.
 set -euo pipefail
 
 say()  { printf '\n>> %s\n' "$*"; }
@@ -113,36 +115,30 @@ COMPOSE_FILE="${COMPOSE_FILE:-deploy/docker/docker-compose.yml}"
 COMPOSE_E2E_TENANT="${COMPOSE_E2E_TENANT:-11111111-1111-4111-8111-111111111111}"
 COMPOSE=(docker compose -f "$COMPOSE_FILE")
 compose_e2e_init_ids || fail "could not generate portable UUIDs for TENANT/IDEM_BASE"
-CURL=(curl -fsS -k)          # -k: the eval stack serves a self-signed cert (TLS internal mode)
-Q=(curl -s -k -o /dev/null -w '%{http_code}')
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source "$script_dir/compose-e2e-tls.sh"
+trust_file="$tmpdir/control-plane.crt"
+if [[ -n "${COMPOSE_E2E_CA_FILE:-}" ]]; then
+  cp -- "$COMPOSE_E2E_CA_FILE" "$trust_file" || fail "could not snapshot COMPOSE_E2E_CA_FILE"
+else
+  "${COMPOSE[@]}" cp trstctl:/public-trust/control-plane.crt "$trust_file" \
+    || fail "could not copy the selected stack's public HTTPS certificate"
+fi
+compose_e2e_tls_init "$BASE_URL" "$trust_file" || fail "HTTPS trust setup failed"
 
 # Every mutating POST must carry an Idempotency-Key — the served API rejects a mutation
 # without one (AN-5). post <idempotency-key> <path> <json-body>. AUTH is resolved at
 # call time (set after the bootstrap-token step).
-post() {
-  local key="$1" path="$2" body="$3" out code
-  out="$(mktemp)"
-  code=$(curl -sS -k "${AUTH[@]}" -H "Idempotency-Key: $key" -H "Content-Type: application/json" \
-    -XPOST "$BASE_URL$path" -d "$body" -w '%{http_code}' -o "$out" || true)
-  case "$code" in
-    2*) cat "$out"; rm -f "$out";;
-    *)
-      printf '::error::compose-e2e: POST %s returned HTTP %s\n' "$path" "$code" >&2
-      sed 's/^/response: /' "$out" >&2
-      rm -f "$out"
-      return 1
-      ;;
-  esac
-}
+post() { compose_e2e_post "$@"; }
 
 say "1. control plane is serving (/readyz)"
-code=$("${Q[@]}" "$BASE_URL/readyz" || true)
+code=$("${Q[@]}" "$BASE_URL/readyz") || fail "/readyz transport failed"
 [ "$code" = "200" ] || fail "/readyz returned '$code' (control plane not serving on $BASE_URL)"
 
 say "2. served auth + RLS: unauthenticated is rejected, a bootstrapped token is accepted"
-code=$("${Q[@]}" "$BASE_URL/api/v1/owners" || true)
+code=$("${Q[@]}" "$BASE_URL/api/v1/owners") || fail "unauthenticated GET transport failed"
 [ "$code" = "401" ] || fail "unauthenticated GET /api/v1/owners returned '$code', want 401 (auth not enforced)"
 # A first-run, network-trust-free token, minted INSIDE the control-plane container so it
 # lands in the same Postgres the server reads (the compose DB has no host port). Grant
@@ -154,7 +150,7 @@ TOKEN=$("${COMPOSE[@]}" exec -T trstctl /usr/local/bin/trstctl token create \
         2>/dev/null | grep -oE 'trst_[A-Za-z0-9_.-]+' | head -1)
 [ -n "${TOKEN:-}" ] || fail "bootstrap token mint (docker compose exec trstctl token create) produced no trst_ token"
 AUTH=(-H "Authorization: Bearer ${TOKEN}")
-code=$("${Q[@]}" "${AUTH[@]}" "$BASE_URL/api/v1/owners" || true)
+code=$("${Q[@]}" "${AUTH[@]}" "$BASE_URL/api/v1/owners") || fail "bootstrapped GET transport failed"
 [ "$code" = "200" ] || fail "bootstrapped GET /api/v1/owners returned '$code', want 200"
 
 say "   activate the tenant-bound eval protocol profile through the same first-run API the wizard uses"

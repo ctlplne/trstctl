@@ -56,6 +56,16 @@ and import that certificate-only file using
 [the local TLS trust guide](../../docs/local-evaluation-tls.md). Never copy the
 private `/data/tls/internal-server.pem` identity or bypass the warning.
 
+The lifecycle gate (`BASE_URL=https://localhost:8443 bash scripts/ci/compose-e2e.sh`)
+uses that public file too: it copies it through the selected `COMPOSE_FILE` before
+sending requests. For an operator-issued certificate, set `COMPOSE_E2E_CA_FILE` to
+an independently trusted public CA bundle. The gate snapshots the file, requires
+HTTPS, and lets stock curl verify both trust and hostname. It ignores `.curlrc`
+and bounds each connection to 5 seconds and each request to 30 seconds. CI retains
+one public snapshot across readiness and the lifecycle gate; startup retries do
+not replace a certificate after verification fails. This evaluation trust step
+is separate from the independent signing authority required in production.
+
 The control plane is wired to Postgres and NATS through the external datastore
 configuration (`TRSTCTL_POSTGRES_MODE=external`, `TRSTCTL_NATS_MODE=external`),
 so the eval stack exercises the same code path a production deployment uses. The

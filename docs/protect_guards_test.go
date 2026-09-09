@@ -1217,7 +1217,9 @@ func TestComposeE2EGateStaysRequired(t *testing.T) {
 		"compose-e2e:",
 		"name: compose e2e + PKI conformance (EXC-GATE-01)",
 		"docker compose -f deploy/docker/docker-compose.yml up -d --build",
-		"curl -fsk https://localhost:8443/readyz",
+		"source scripts/ci/compose-e2e-tls.sh",
+		"compose_e2e_wait_ready https://localhost:8443/readyz",
+		"COMPOSE_E2E_CA_FILE",
 		"run: bash scripts/ci/compose-e2e.sh",
 		"go install github.com/zmap/zlint/v3/cmd/zlint@v3.6.0",
 		"bash scripts/ci/profile-zlint.sh served-ca.pem",
@@ -4645,5 +4647,63 @@ func TestFederationIsDocumentedAsNotBuiltAndAbsentInCode(t *testing.T) {
 	// No federation code: the honest not-built disclosure must be present.
 	if !discloses {
 		t.Error("DOCS-009: there is no federation code in internal/, but features/platform-and-api.md does not disclose F41 (federation) as planned/not-built")
+	}
+}
+
+// Stock curl tests exercise the real TLS transport; this guard keeps each CI
+// caller connected to that policy and preserves the separate lifecycle proof.
+func TestComposeE2EUsesVerifiedCurlPolicy(t *testing.T) {
+	e2e := read(t, "../scripts/ci/compose-e2e.sh")
+	policy := read(t, "../scripts/ci/compose-e2e-tls.sh")
+	ci := read(t, "../.github/workflows/ci.yml")
+	_, job, ok := strings.Cut(ci, "\n  compose-e2e:")
+	if !ok {
+		t.Fatal("Compose CI job missing")
+	}
+	job, _, ok = strings.Cut(job, "\n  windows-build:")
+	if !ok {
+		t.Fatal("Compose CI job boundary missing")
+	}
+	for name, body := range map[string]string{"compose client": e2e, "curl policy": policy, "CI readiness": job} {
+		if strings.Contains(body, "--insecure") || regexp.MustCompile(`(?m)(^|[ \t])-[a-zA-Z]*k[a-zA-Z]*([ \t]|$)`).MatchString(body) {
+			t.Errorf("%s permits an insecure curl option", name)
+		}
+	}
+	for _, want := range []string{
+		`source "$script_dir/compose-e2e-tls.sh"`,
+		`compose_e2e_tls_init "$BASE_URL" "$trust_file"`,
+		`post() { compose_e2e_post "$@"; }`,
+		`trstctl:/public-trust/control-plane.crt`,
+		`code=$("${Q[@]}" "$BASE_URL/readyz") || fail`,
+		`code=$("${Q[@]}" "$BASE_URL/api/v1/owners") || fail`,
+		`code=$("${Q[@]}" "${AUTH[@]}" "$BASE_URL/api/v1/owners") || fail`,
+	} {
+		if !strings.Contains(e2e, want) {
+			t.Errorf("Compose client lost verified request path %q", want)
+		}
+	}
+	for _, want := range []string{
+		`curl --disable --proto '=https' --cacert "$trust_file" --connect-timeout 5 --max-time 30`,
+		`CURL=("${CURL_TLS[@]}" -fsS)`, `Q=("${CURL_TLS[@]}" -sS`,
+		`if code=$("${CURL_TLS[@]}"`, `return "$native"`, `--max-time "$total"`,
+	} {
+		if !strings.Contains(policy, want) {
+			t.Errorf("shared curl policy lost %q", want)
+		}
+	}
+	for _, want := range []string{
+		`COMPOSE_E2E_CA_FILE`, `"$GITHUB_ENV"`, `deadline=$((SECONDS + 180))`,
+		`timeout --signal=TERM --kill-after=2s`, `trstctl:/public-trust/control-plane.crt`,
+		`source scripts/ci/compose-e2e-tls.sh`,
+		`compose_e2e_tls_init https://localhost:8443 "$COMPOSE_E2E_CA_FILE"`,
+		`compose_e2e_wait_ready https://localhost:8443/readyz "$deadline"`,
+	} {
+		if !strings.Contains(job, want) {
+			t.Errorf("CI readiness lost %q", want)
+		}
+	}
+	if !anyTestDeclaresUnder(t, "../internal/server", "TestComposeE2EStockCurlTrustAndHostname") ||
+		!anyTestDeclaresUnder(t, "../internal/server", "TestComposeE2EStockCurlRejectsPartialSuccess") {
+		t.Fatal("real stock-curl verification/partial-response tests missing")
 	}
 }

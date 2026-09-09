@@ -1403,17 +1403,36 @@ jobs:
           # budget, dump the stack logs and FAIL the job (do not silently proceed to a
           # curl that connection-refuses). The control plane self-heals a first-boot
           # signer/KEK race via restart:on-failure, so allow generous time.
-          ready=""
-          for _ in $(seq 1 90); do
-            if curl -fsk https://localhost:8443/readyz >/dev/null 2>&1; then ready=1; echo "control plane ready"; break; fi
-            sleep 2
+          set -euo pipefail
+          trustdir="$(mktemp -d "${RUNNER_TEMP}/compose-e2e-trust.XXXXXX")"
+          export COMPOSE_E2E_CA_FILE="$trustdir/control-plane.crt"
+          printf 'COMPOSE_E2E_CA_FILE=%s\n' "$COMPOSE_E2E_CA_FILE" >> "$GITHUB_ENV"
+          deadline=$((SECONDS + 180))
+          copied=""
+          while (( SECONDS < deadline )); do
+            remaining=$((deadline - SECONDS))
+            (( remaining > 0 )) || break
+            if timeout --signal=TERM --kill-after=2s "${remaining}s" \
+              docker compose -f deploy/docker/docker-compose.yml cp \
+              trstctl:/public-trust/control-plane.crt "$COMPOSE_E2E_CA_FILE" \
+              >"$trustdir/copy.log" 2>&1; then copied=1; break; fi
+            rm -f "$COMPOSE_E2E_CA_FILE"
+            (( SECONDS < deadline )) && sleep 1
           done
-          if [ -z "$ready" ]; then
-            echo "::error::control plane did not serve /readyz within the budget"
+          if [[ -z "$copied" ]]; then
+            cat "$trustdir/copy.log" >&2
+            echo "::error::control plane did not publish its public HTTPS certificate"
+            exit 1
+          fi
+          source scripts/ci/compose-e2e-tls.sh
+          compose_e2e_tls_init https://localhost:8443 "$COMPOSE_E2E_CA_FILE"
+          if ! compose_e2e_wait_ready https://localhost:8443/readyz "$deadline"; then
+            echo "::error::control plane did not serve verified HTTPS within the readiness budget"
             docker compose -f deploy/docker/docker-compose.yml ps
             docker compose -f deploy/docker/docker-compose.yml logs --no-color --tail=300
             exit 1
           fi
+          echo "control plane ready"
       - name: Issuance lifecycle e2e (issue -> idempotent retry -> revoke -> ACME/OCSP/cacerts)
         env:
           BASE_URL: https://localhost:8443
@@ -1446,7 +1465,13 @@ jobs:
           docker compose -f deploy/docker/docker-compose.yml logs --no-color --tail=400 || true
       - name: Tear down
         if: always()
-        run: docker compose -f deploy/docker/docker-compose.yml down -v || true
+        run: |
+          docker compose -f deploy/docker/docker-compose.yml down -v || true
+          if [[ -n "${COMPOSE_E2E_CA_FILE:-}" ]]; then
+            trustdir="$(dirname -- "$COMPOSE_E2E_CA_FILE")"
+            rm -f -- "$COMPOSE_E2E_CA_FILE" "$trustdir/copy.log"
+            rmdir -- "$trustdir"
+          fi
 
   windows-build:
     name: windows cross-build

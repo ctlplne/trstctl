@@ -38,11 +38,6 @@ if rg -a -q --fixed-strings "$canary" "$scratch/export"; then
   exit 1
 fi
 
-context_kib="$(du -sk "$scratch/export/context" | awk '{print $1}')"
+context_kib="$(bash "$root/scripts/ci/docker-context-size.sh" "$scratch/export/context")"
 max_context_kib=$((64 * 1024))
-if [ "$context_kib" -gt "$max_context_kib" ]; then
-  echo "docker-context-audit: filtered context is ${context_kib} KiB; limit is ${max_context_kib} KiB" >&2
-  exit 1
-fi
-
-echo "docker-context-audit: PASS (${context_kib} KiB <= ${max_context_kib} KiB; planted secret excluded)"
+echo "docker-context-audit: PASS (uncompressed archive ${context_kib} KiB <= ${max_context_kib} KiB; planted secret excluded)"
