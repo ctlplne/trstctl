@@ -1,20 +1,26 @@
 # golangci-lint v2 configuration.
 #
 # The standard linter set (errcheck, govet, ineffassign, staticcheck, unused) —
-# the same set the project has always used — plus gosec (G1xx-G6xx, the
-# CWE-mapped Go security rules) and the architecture linter (tools/trstctllint)
+# the same set the project has always used — plus gosec (including G7xx taint
+# analyzers and CWE-mapped Go security rules) and the architecture linter (tools/trstctllint)
 # which runs separately via `make lint`. golangci-lint v2 is required for
 # Go 1.25.
 #
-# No exclusions: errcheck is fully strict. Every ignored error is acknowledged
+# errcheck is fully strict. Every ignored error is acknowledged
 # explicitly at its call site (`_ = f()`), so a genuinely-dropped error is never
 # silently muted by a name-pattern exclusion, and any new unchecked error fails
 # the build.
 #
-# gosec runs with no rule or path exclusions either. A finding is either fixed
-# or carries an inline `#nosec G### -- reason` at the exact call site, and every
-# such waiver must have a matching entry in docs/security/cwe-register.md — a
-# guard test (docs/security) fails on an unregistered or reasonless #nosec.
+# This file adds no gosec rule/path exclusions. The pinned golangci-lint v2.12.2
+# integration itself disables G407 and filters generated-file findings by
+# default. Its discarded internal gosec logger also limits visibility of SSA
+# analyzer failures. A clean outer report does not prove every rule completed.
+# Standalone gosec, generated-source checks and independent review must account
+# for those gaps when qualifying a candidate. Both core and ee/ are scanned;
+# the separate ee-lint-ratchet target enforces the EE baseline.
+# Inline `#nosec G### -- reason` waivers remain effective. Every waiver must have
+# a matching entry in docs/security/cwe-register.md; docs/security tests reject
+# an unregistered or reasonless annotation.
 version: "2"
 
 linters:
@@ -26,7 +32,7 @@ linters:
 #
 # golangci-lint defaults to max-issues-per-linter: 50 and max-same-issues: 3, and
 # this file used to set neither. Those defaults are not cosmetic: they are a
-# silent exclusion that contradicts the "No exclusions" paragraph above. A run
+# silent report filter that hides findings from review. A run
 # can report green-ish while hiding a regression behind the cap, and reviewers
 # read the printed count as the total.
 #

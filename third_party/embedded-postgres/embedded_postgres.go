@@ -21,13 +21,18 @@ var mu sync.Mutex
 
 // EmbeddedPostgres maintains all configuration and runtime functions for maintaining the lifecycle of one Postgres process.
 type EmbeddedPostgres struct {
-	config              Config
-	cacheLocator        CacheLocator
-	remoteFetchStrategy RemoteFetchStrategy
-	initDatabase        initDatabase
-	createDatabase      createDatabase
-	started             bool
-	syncedLogger        *syncedLogger
+	config                 Config
+	cacheLocator           CacheLocator
+	remoteFetchStrategy    RemoteFetchStrategy
+	initDatabase           initDatabase
+	createDatabase         createDatabase
+	started                bool
+	syncedLogger           *syncedLogger
+	archiveIdentity        *ArchiveIdentity
+	verifiedConfig         Config
+	verifiedRunPath        string
+	verifiedStartUncertain bool
+	fetchVerifiedArchive   func(string) error
 }
 
 // NewDatabase creates a new EmbeddedPostgres struct that can be used to start and stop a Postgres process.
@@ -50,37 +55,43 @@ func newDatabaseWithConfig(config Config) *EmbeddedPostgres {
 		shouldUseAlpineLinuxBuild,
 	)
 	cacheLocator := defaultCacheLocator(config.cachePath, versionStrategy)
-	remoteFetchStrategy := defaultRemoteFetchStrategy(
-		config.binaryRepositoryURL,
-		versionStrategy,
-		cacheLocator,
-		netsec.SafeClient(30*time.Second),
-	)
-
+	client := netsec.SafeClient(30 * time.Second)
 	return &EmbeddedPostgres{
-		config:              config,
-		cacheLocator:        cacheLocator,
-		remoteFetchStrategy: remoteFetchStrategy,
-		initDatabase:        defaultInitDatabase,
-		createDatabase:      defaultCreateDatabase,
-		started:             false,
+		config: config, cacheLocator: cacheLocator,
+		remoteFetchStrategy: defaultRemoteFetchStrategy(config.binaryRepositoryURL, versionStrategy, cacheLocator, client),
+		fetchVerifiedArchive: func(destination string) error {
+			return defaultRemoteFetchStrategy(config.binaryRepositoryURL, versionStrategy,
+				func() (string, bool) { return destination, false }, client, expectedTXZName(versionStrategy))()
+		},
+		initDatabase: defaultInitDatabase, createDatabase: defaultCreateDatabase,
 	}
+
 }
 
 // Start will try to start the configured Postgres process returning an error when there were any problems with invocation.
 // If any error occurs Start will try to also Stop the Postgres process in order to not leave any sub-process running.
 //
 //nolint:funlen
-func (ep *EmbeddedPostgres) Start() error {
+func (ep *EmbeddedPostgres) Start() (err error) {
 	if ep.started {
 		return errors.New("server is already started")
+	}
+	if ep.archiveIdentity != nil {
+		if err := ep.prepareVerifiedBinary(); err != nil {
+			return err
+		}
+		defer func() {
+			if err != nil && !ep.started && !ep.verifiedStartUncertain {
+				err = errors.Join(err, ep.cleanupVerifiedBinary())
+			}
+		}()
 	}
 
 	if err := ensurePortAvailable(ep.config.port); err != nil {
 		return err
 	}
 
-	logger, err := newSyncedLogger("", ep.config.logger)
+	logger, err := newSyncedLogger(ep.verifiedRunPath, ep.config.logger)
 	if err != nil {
 		return errors.New("unable to create logger")
 	}
@@ -113,7 +124,15 @@ func (ep *EmbeddedPostgres) Start() error {
 		return fmt.Errorf("unable to create runtime directory %s with error: %s", ep.config.runtimePath, err)
 	}
 
-	reuseData := dataDirIsValid(ep.config.dataPath, ep.config.version)
+	var reuseData bool
+	if ep.archiveIdentity != nil {
+		reuseData, err = ep.verifiedDataReady()
+		if err != nil {
+			return err
+		}
+	} else {
+		reuseData = dataDirIsValid(ep.config.dataPath, ep.config.version)
+	}
 
 	if !reuseData {
 		if err := ep.cleanDataDirectoryAndInit(); err != nil {
@@ -122,20 +141,35 @@ func (ep *EmbeddedPostgres) Start() error {
 	}
 
 	if err := startPostgres(ep); err != nil {
-		return err
-	}
-
-	if err := ep.syncedLogger.flush(); err != nil {
+		if ep.archiveIdentity != nil {
+			// A failed pg_ctl start cannot establish whether it launched a child or
+			// encountered another owner's server. Do not stop that unproven process.
+			// Preserve this private tree for diagnosis instead of deleting live bytes.
+			ep.verifiedStartUncertain = true
+			closeErr := ep.syncedLogger.file.Close()
+			ep.syncedLogger = nil
+			return fmt.Errorf("%w; startup ownership uncertain; private tree retained at %s", errors.Join(err, closeErr), ep.verifiedRunPath)
+		}
 		return err
 	}
 
 	ep.started = true
+	if err := ep.syncedLogger.flush(); err != nil {
+		if ep.archiveIdentity != nil {
+			if stopErr := stopPostgres(ep); stopErr != nil {
+				return errors.Join(err, stopErr)
+			}
+			ep.started = false
+		}
+		return err
+	}
 
 	if !reuseData {
 		if err := ep.createDatabase(ep.config.port, ep.config.username, ep.config.password, ep.config.database); err != nil {
 			if stopErr := stopPostgres(ep); stopErr != nil {
-				return fmt.Errorf("unable to stop database casused by error %s", err)
+				return fmt.Errorf("database operation failed and shutdown failed: %w", errors.Join(err, stopErr))
 			}
+			ep.started = false
 
 			return err
 		}
@@ -143,8 +177,9 @@ func (ep *EmbeddedPostgres) Start() error {
 
 	if err := healthCheckDatabaseOrTimeout(ep.config); err != nil {
 		if stopErr := stopPostgres(ep); stopErr != nil {
-			return fmt.Errorf("unable to stop database casused by error %s", err)
+			return fmt.Errorf("database operation failed and shutdown failed: %w", errors.Join(err, stopErr))
 		}
+		ep.started = false
 
 		return err
 	}
@@ -153,6 +188,12 @@ func (ep *EmbeddedPostgres) Start() error {
 }
 
 func (ep *EmbeddedPostgres) downloadAndExtractBinary(cacheExists bool, cacheLocation string) error {
+	if ep.archiveIdentity != nil {
+		if ep.verifiedRunPath == "" {
+			return errors.New("postgres verified binary preparation is missing")
+		}
+		return nil
+	}
 	// lock to prevent collisions with duplicate downloads
 	mu.Lock()
 	defer mu.Unlock()
@@ -173,6 +214,9 @@ func (ep *EmbeddedPostgres) downloadAndExtractBinary(cacheExists bool, cacheLoca
 }
 
 func (ep *EmbeddedPostgres) cleanDataDirectoryAndInit() error {
+	if ep.archiveIdentity != nil {
+		return ep.initVerifiedDataDirectory()
+	}
 	if err := os.RemoveAll(ep.config.dataPath); err != nil {
 		return fmt.Errorf("unable to clean up data directory %s with error: %s", ep.config.dataPath, err)
 	}
@@ -196,11 +240,11 @@ func (ep *EmbeddedPostgres) Stop() error {
 
 	ep.started = false
 
-	if err := ep.syncedLogger.flush(); err != nil {
-		return err
+	flushErr := ep.syncedLogger.flush()
+	if ep.archiveIdentity != nil {
+		return errors.Join(flushErr, ep.cleanupVerifiedBinary())
 	}
-
-	return nil
+	return flushErr
 }
 
 func encodeOptions(port uint32, parameters map[string]string) string {
@@ -219,10 +263,10 @@ func startPostgres(ep *EmbeddedPostgres) error {
 	postgresProcess.Stderr = ep.syncedLogger.file
 
 	if err := postgresProcess.Run(); err != nil {
-		_ = ep.syncedLogger.flush()
-		logContent, _ := readLogsOrTimeout(ep.syncedLogger.file)
+		flushErr := ep.syncedLogger.flush()
+		logContent, readErr := readLogsOrTimeout(ep.syncedLogger.file)
 
-		return fmt.Errorf("could not start postgres using %s:\n%s", postgresProcess.String(), string(logContent))
+		return fmt.Errorf("could not start postgres using %s: %w\n%s", postgresProcess.String(), errors.Join(err, flushErr, readErr), string(logContent))
 	}
 
 	return nil

@@ -15,9 +15,8 @@ import (
 //
 // golangci-lint defaults them to 50 and 3. Those defaults are a SILENT
 // EXCLUSION: the run exits with whatever it printed, and both the reader and any
-// script counting lines take the printed number as the total. The config's own
-// header promises "No exclusions" for errcheck and gosec, which is not true while
-// the caps are unset.
+// script counting lines take the printed number as the total. The old config
+// claimed "No exclusions" for errcheck and gosec despite those default caps.
 //
 // The cost is measured, not theoretical. An audit of ee/ was filed as "73 issues
 // (50 gosec)" because that is exactly what the capped run prints — 50 is the cap.

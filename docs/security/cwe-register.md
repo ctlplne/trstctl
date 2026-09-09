@@ -10,19 +10,19 @@ false-positive verdict, harvested from the `#nosec G### -- reason` waivers
 in the source itself. A waiver with no rule id or no reason fails the
 generator, so a blanket suppression cannot exist in the tree.
 
-The scan scope is the `make lint` scope (`clients cmd deploy docs internal
-scripts tools`). `ee/` is outside the golangci/gosec scope and is covered by
-CodeQL in CI. CodeQL itself runs server-side (`security-extended`, push/PR/
-weekly); its findings are triaged in the code-scanning UI and land here as
-fixes or waivers when they surface. There are currently no open CodeQL
-alerts recorded against this register.
+The scan scope includes `clients cmd deploy docs internal scripts tools`
+and `ee/`, which runs through the separate EE lint ratchet. The table below
+records configured detectors and their known limits. It does not establish
+that a scan completed on the current candidate. CI declares CodeQL
+`security-extended`; exact-commit results require separate evidence. Local
+golangci-lint results do not replace that evidence.
 
 ## Detectors wired into CI
 
 | Detector | Coverage | Wired at |
 |---|---|---|
 | CodeQL `security-extended` | the broadest CWE query set; push, PR, and weekly | `.github/workflows/codeql.yml` |
-| gosec (in golangci-lint) | Go-specific CWE-mapped rules G1xx-G7xx over the full lint scope; zero open findings — every site is fixed or carries a reasoned in-source waiver listed below | `.golangci.yml via make lint` |
+| gosec (in golangci-lint) | Core and EE Go analysis; pinned integration disables G407, filters generated-file findings and discards internal analyzer logs. Standalone analysis and independent review must account for those limits. Inline waivers are listed below; configured coverage is not current scan proof | `.golangci.yml via make lint and ee-lint-ratchet` |
 | govulncheck | reachability-aware dependency vulnerabilities | `make vuln + the govulncheck CI job` |
 | gitleaks | committed secrets (CWE-798) | `.github/workflows/security.yml` |
 | Trivy | container image and native-binary CVEs | `.github/workflows/security.yml` |
@@ -34,6 +34,13 @@ alerts recorded against this register.
 
 | CWE | Where | What was fixed | Guard that fails if it returns |
 |---|---|---|---|
+| CWE-494 | `internal/server/bundled_pg.go` | Bundled PostgreSQL could execute a cold download before its committed archive checksum was checked, or reuse unrelated extracted binaries. Startup now requires independent archive authentication and fresh private extraction before execution. | TestBundledPostgresRejectsUnrelatedExtractedCache and TestBundledPostgresAuthenticatedFixtureReachesInitializerAndCleansUp (internal/server/bundled_pg_start_test.go) + TestVerifiedStartAuthenticatesColdArchiveBeforeInit (third_party/embedded-postgres/verified_binary_test.go) |
+| CWE-22 | `third_party/embedded-postgres/verified_binary.go` | The served loader uses rooted extraction into a fresh private directory and rejects traversal, escaping links, special files and duplicate entries. Legacy NewDatabase callers remain a separate unresolved scope. | TestVerifiedExtractionRejectsUnsafePathsLinksAndTypes (third_party/embedded-postgres/verified_binary_test.go) |
+| CWE-400 | `third_party/embedded-postgres/verified_binary.go` | Served archive acquisition and extraction now bound compressed bytes, XZ dictionary memory, the raw expanded stream including hidden TAR metadata, individual files and visible entries. | TestVerifiedExtractionBoundsHiddenMetadataAndDictionary and TestVerifiedDownloadClosesBodiesAndBoundsResponses (third_party/embedded-postgres/verified_acquisition_test.go) |
+| CWE-362 | `third_party/embedded-postgres/verified_binary.go` | Served cache publication no longer depends on a process-local mutex. Atomic create-if-absent publication validates the winning archive bytes; private extracted trees are published only after complete validation. | TestVerifiedPublicationCrossProcess (third_party/embedded-postgres/verified_acquisition_test.go) + TestVerifiedPreparationConcurrencyUsesDistinctTrees (third_party/embedded-postgres/verified_binary_test.go) |
+| CWE-252 | `Makefile` | Formatting enumeration, gofmt, temporary-file creation and architecture-analyzer build errors could be hidden by later successful commands. The lint gate now stops on each prerequisite failure. | TestMakeLintStopsOnToolFailure (docs/lint_failure_test.go) |
+| CWE-754 | `scripts/ci/ee-lint-ratchet.py` | EE lint counted text findings without checking scanner completion. It now requires a complete, uncapped six-linter JSON report and a matching native exit status; malformed reports, tool errors and timeouts fail without changing the baseline. | TestEELintRejectsIncompleteScans and TestMakeLintStopsOnToolFailure/python-deadline-retains-output (docs/lint_failure_test.go) |
+| CWE-772 | `scripts/ci/ee-lint-ratchet.py` | The scanner timeout killed only the direct child. EE lint now bounds live output and terminates the owned scanner process group on timeout, SIGINT, SIGTERM, or a leader exit that leaves descendants. | TestEELintScannerSupervision (docs/lint_supervision_test.go) |
 | CWE-287 | `internal/server/workload_identity.go` | Automatic workload identities omitted the authenticated tenant under a shared CA. Versioned names now bind tenant, route, verified method and broker agent; approval recovery checks the signed tenant and method. | TestServedWorkloadIdentitiesAreTenantIsolated and TestServedEphemeralIdentitiesAndApprovalsAreTenantIsolated (internal/server/workload_identity_tenant_test.go) + TestApprovalBindingDecodesScopedSubjectWithoutChangingAuthority (internal/ephemeral/approval_test.go) |
 | CWE-863 | `internal/crypto/workload_namespace.go` | Ordinary CSR profiles and manual Workload API registrations could claim automatic workload names. Both now refuse the reserved /_trstctl namespace, including alias attempts. | TestLeafProfilesCannotMintReservedWorkloadIdentities (internal/crypto/workload_namespace_test.go) + TestRegistrationCannotClaimAutomaticWorkloadNamespace (internal/protocols/spiffe/workload_namespace_test.go) |
 | CWE-863 | `internal/crypto/leafca.go` | LeafProfile.ExtraExtensions could overwrite a checked SAN or another core certificate policy field. The shared classical/opaque profile gate now rejects those parsed OIDs before signing; non-core extensions remain supported. | TestLeafProfileExtraExtensionsCannotOverrideIdentityPolicy (internal/crypto/workload_namespace_test.go) |
@@ -44,7 +51,7 @@ alerts recorded against this register.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1392 annotated sites across 26 rules. Each row is
+1394 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -498,7 +505,7 @@ not this file.
 | `internal/server/aud65_test.go:37` | fixture sequences are single-digit seconds (CWE-190). |
 | `internal/server/backup.go:209` | record counts bounded by the event log (CWE-190) |
 | `internal/server/backup.go:369` | record counts bounded by the event log (CWE-190) |
-| `internal/server/bundled_pg.go:65` | port validated into uint16 range by config parsing (CWE-190) |
+| `internal/server/bundled_pg.go:77` | cfg.Port is checked above and the zero default is 5432 (CWE-190) |
 | `internal/server/managedkeys_pkcs11_served_test.go:47` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/pam_served_test.go:216` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/protocol_mounts.go:899` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
@@ -713,7 +720,7 @@ not this file.
 | `ee/whitelabel/email.go:99` | scheme and host validated above; https only (CWE-79) |
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 
-### G204 — CWE-78 OS command injection (155 sites)
+### G204 — CWE-78 OS command injection (158 sites)
 
 | Location | Reason |
 |---|---|
@@ -752,8 +759,11 @@ not this file.
 | `docs/cwe_register_test.go:18` | test runs the repo's own committed generator (CWE-78) |
 | `docs/cwe_register_test.go:40` | test runs the repo's own committed generator against a tempdir fixture (CWE-78) |
 | `docs/docs_drift_test.go:184` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `docs/lint_failure_test.go:59` | fixed timeout regression over an owned Python child (CWE-78) |
+| `docs/lint_failure_test.go:232` | fixed local Make target in an owned test fixture (CWE-78) |
 | `docs/lint_gate_test.go:25` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `docs/lint_gate_test.go:39` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `docs/lint_supervision_test.go:19` | fixed supervision regression with owned scanner and child fixtures (CWE-78) |
 | `docs/vuln_gate_test.go:44` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `ee/agentid/delegation/signer_subprocess_test.go:144` | executable and argv are fixed; output is confined to TempDir (CWE-78). |
 | `ee/agentid/verify/wasm_parity_test.go:49` | executable and argv are fixed; output is confined to TempDir (CWE-78). |
@@ -961,7 +971,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (375 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (374 sites)
 
 | Location | Reason |
 |---|---|
@@ -1185,7 +1195,6 @@ not this file.
 | `internal/server/breakglass.go:152` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/bundled_pg_dependency_test.go:32` | fixed repository source path (CWE-22) |
 | `internal/server/bundled_pg_dependency_test.go:46` | fixed repository source path (CWE-22) |
-| `internal/server/bundled_pg_verify.go:110` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/ca_custody_test.go:91` | test-owned path verifies upgrade custody |
 | `internal/server/ca_custody_test.go:95` | test-owned path verifies public mirror |
 | `internal/server/ca_custody_test.go:226` | test-owned path under t.TempDir verifies fail-closed preservation (CWE-22) |
@@ -1357,7 +1366,7 @@ not this file.
 | `deploy/docker/dist_test.go:1038` | non-secret npm fixture manifest in t.TempDir (CWE-276) |
 | `deploy/docker/dist_test.go:1041` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `deploy/docker/dist_test.go:1047` | fake npm shim in a test tempdir must be executable (CWE-276) |
-| `docs/lint_gate_test.go:88` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `docs/lint_gate_test.go:91` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/destination/fs_unix_test.go:57` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/discovery/discovery_test.go:273` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/discovery/privatekey_test.go:34` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |

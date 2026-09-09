@@ -13,6 +13,35 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### Bundled PostgreSQL authenticates executable bytes before startup (2026-09-09)
+
+- The evaluation database verifies its independent committed archive checksum
+  before extraction or execution, including on a cold download. Maven's checksum
+  sidecar remains an additional transport check.
+- Each start extracts authenticated bytes into a fresh private directory. The
+  archive cache includes platform, version and digest; stale extracted binaries
+  cannot survive a pin change. Existing database data and legacy caches remain
+  intact.
+- Rooted extraction rejects unsafe paths, links and file types, and enforces
+  expansion limits.
+  Complete archives and executable trees are published atomically. Startup errors
+  preserve their original cause and never stop an unproven existing server.
+- Regression tests call the actual startup wrapper and check executable markers,
+  tampered archives, extraction limits and concurrent publication. Legacy test
+  and developer-tool loaders remain outside this served-path provenance claim.
+
+### Lint tool failures cannot qualify unchecked source (2026-09-08)
+
+- Formatting and architecture lint stop on failed prerequisites, including an
+  unavailable temporary file or a failed analyzer build.
+- The EE lint gate validates the full scanner report and exit status, requires
+  every configured linter, retains diagnostics and refuses malformed results.
+  It reports potential baseline reductions without editing the baseline file.
+- The EE scanner also bounds output while running and stops its process group
+  on timeout or cancellation. A scanner that leaves children behind fails.
+- Regression tests inject tool failures into the actual Make recipes and verify
+  that incomplete checks fail before later work can hide them.
+
 ### Dark-segment enrollment relay failover is observable and stock-ACME-safe (A4, 2026-08-12)
 
 - **A relay returned an ACME directory whose absolute URLs named the control

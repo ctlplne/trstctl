@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"net"
+	"net/url"
 	"testing"
 
 	"trstctl.com/trstctl/internal/config"
@@ -38,13 +39,35 @@ func TestBundledPostgresServes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("start bundled postgres: %v", err)
 	}
-	defer func() { _ = stop() }()
+	defer func() {
+		if err := stop(); err != nil {
+			t.Errorf("stop owned bundled postgres: %v", err)
+		}
+	}()
+	connection, err := url.Parse(dsn)
+	if err != nil || connection.Hostname() != "127.0.0.1" {
+		t.Fatalf("bundled connection must use numeric loopback: %q, %v", dsn, err)
+	}
 
 	st, err := store.Open(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open store against bundled postgres: %v", err)
 	}
 	defer st.Close()
+	var listenAddresses string
+	if err := st.SystemPool().QueryRow(ctx, "SHOW listen_addresses").Scan(&listenAddresses); err != nil {
+		t.Fatalf("inspect actual bundled postgres TCP listener configuration: %v", err)
+	}
+	if listenAddresses != "127.0.0.1" {
+		t.Fatalf("bundled postgres must listen on numeric loopback, got %q", listenAddresses)
+	}
+	var socketDirectories string
+	if err := st.SystemPool().QueryRow(ctx, "SHOW unix_socket_directories").Scan(&socketDirectories); err != nil {
+		t.Fatalf("inspect actual bundled postgres listeners: %v", err)
+	}
+	if socketDirectories != "" {
+		t.Fatalf("bundled postgres created an unused Unix listener in %q", socketDirectories)
+	}
 	if err := st.Migrate(ctx); err != nil {
 		t.Fatalf("migrate bundled postgres: %v", err)
 	}

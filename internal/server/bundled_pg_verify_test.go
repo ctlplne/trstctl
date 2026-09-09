@@ -135,7 +135,8 @@ func TestArchiveArchMirrorsEmbeddedPostgresStrategy(t *testing.T) {
 
 // TestVerifyBundledPostgresArchiveRejectsTamper is the SUPPLY-003 acceptance, part
 // 2: tampering the cached binary makes the runtime verifier refuse, a matching
-// binary verifies, and a cold (absent) cache is a non-error no-op. It exercises the
+// binary verifies, and a cold (absent) cache remains unverified and requires
+// authenticated acquisition. It exercises the
 // real verifier the served startBundledPostgres calls (verifyArchiveFileAgainst).
 func TestVerifyBundledPostgresArchiveRejectsTamper(t *testing.T) {
 	dir := t.TempDir()
@@ -167,20 +168,17 @@ func TestVerifyBundledPostgresArchiveRejectsTamper(t *testing.T) {
 		t.Errorf("rejection should be a provenance error, got: %v", err)
 	}
 
-	// (3) Cold cache (file absent) is a non-error no-op (the post-download check
-	// gates the cold path).
+	// (3) Absence remains unverified. The caller must acquire authenticated bytes
+	// and require a second true result before startup.
 	if ok, err := verifyArchiveFileAgainst(filepath.Join(dir, "absent.txz"), wantHex); err != nil || ok {
 		t.Errorf("a cold (absent) cache should be (false, nil), got ok=%v err=%v", ok, err)
 	}
 }
 
-// TestStartBundledPostgresVerifierGatesTheCachePath exercises the EXACT path the
-// served startBundledPostgres uses (bundledPGCacheArchive -> verifyBundledPostgresArchive):
-// a cached archive whose bytes match the committed pin verifies, and a tampered one
-// at the same cache path is refused — so a real `bin/trstctl` in bundled mode would
-// not db.Start() on a tampered binary (SUPPLY-003). It writes into an isolated temp
-// "BinariesPath" so it never touches the shared cache other tests use.
-func TestStartBundledPostgresVerifierGatesTheCachePath(t *testing.T) {
+// TestBundledPostgresArchiveVerifierUsesExpectedCachePath checks the verifier's
+// archive filename and absent/mismatched results. It does not call Start; the
+// wrapper startup regressions separately prove no executable runs before trust.
+func TestBundledPostgresArchiveVerifierUsesExpectedCachePath(t *testing.T) {
 	archKey := runtime.GOOS + "-" + archiveArch()
 	want, pinned := bundledPGTxzSHA256[archKey]
 	if !pinned {

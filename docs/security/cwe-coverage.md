@@ -15,7 +15,7 @@ coverage ledger applies to assets, applied to weaknesses.
 | Detector | Classes |
 |---|---|
 | CodeQL `security-extended` | the broadest CWE query set; push, PR, and weekly |
-| gosec (in golangci-lint) | Go-specific CWE-mapped rules G1xx-G7xx over the full lint scope; zero open findings — every site is fixed or carries a reasoned in-source waiver listed below |
+| gosec (in golangci-lint) | Core and EE Go analysis; pinned integration disables G407, filters generated-file findings and discards internal analyzer logs. Standalone analysis and independent review must account for those limits. Inline waivers are listed below; configured coverage is not current scan proof |
 | govulncheck | reachability-aware dependency vulnerabilities |
 | gitleaks | committed secrets (CWE-798) |
 | Trivy | container image and native-binary CVEs |
@@ -27,6 +27,13 @@ coverage ledger applies to assets, applied to weaknesses.
 
 | CWE | Where | Guard |
 |---|---|---|
+| CWE-494 | `internal/server/bundled_pg.go` | TestBundledPostgresRejectsUnrelatedExtractedCache and TestBundledPostgresAuthenticatedFixtureReachesInitializerAndCleansUp (internal/server/bundled_pg_start_test.go) + TestVerifiedStartAuthenticatesColdArchiveBeforeInit (third_party/embedded-postgres/verified_binary_test.go) |
+| CWE-22 | `third_party/embedded-postgres/verified_binary.go` | TestVerifiedExtractionRejectsUnsafePathsLinksAndTypes (third_party/embedded-postgres/verified_binary_test.go) |
+| CWE-400 | `third_party/embedded-postgres/verified_binary.go` | TestVerifiedExtractionBoundsHiddenMetadataAndDictionary and TestVerifiedDownloadClosesBodiesAndBoundsResponses (third_party/embedded-postgres/verified_acquisition_test.go) |
+| CWE-362 | `third_party/embedded-postgres/verified_binary.go` | TestVerifiedPublicationCrossProcess (third_party/embedded-postgres/verified_acquisition_test.go) + TestVerifiedPreparationConcurrencyUsesDistinctTrees (third_party/embedded-postgres/verified_binary_test.go) |
+| CWE-252 | `Makefile` | TestMakeLintStopsOnToolFailure (docs/lint_failure_test.go) |
+| CWE-754 | `scripts/ci/ee-lint-ratchet.py` | TestEELintRejectsIncompleteScans and TestMakeLintStopsOnToolFailure/python-deadline-retains-output (docs/lint_failure_test.go) |
+| CWE-772 | `scripts/ci/ee-lint-ratchet.py` | TestEELintScannerSupervision (docs/lint_supervision_test.go) |
 | CWE-287 | `internal/server/workload_identity.go` | TestServedWorkloadIdentitiesAreTenantIsolated and TestServedEphemeralIdentitiesAndApprovalsAreTenantIsolated (internal/server/workload_identity_tenant_test.go) + TestApprovalBindingDecodesScopedSubjectWithoutChangingAuthority (internal/ephemeral/approval_test.go) |
 | CWE-863 | `internal/crypto/workload_namespace.go` | TestLeafProfilesCannotMintReservedWorkloadIdentities (internal/crypto/workload_namespace_test.go) + TestRegistrationCannotClaimAutomaticWorkloadNamespace (internal/protocols/spiffe/workload_namespace_test.go) |
 | CWE-863 | `internal/crypto/leafca.go` | TestLeafProfileExtraExtensionsCannotOverrideIdentityPolicy (internal/crypto/workload_namespace_test.go) |
@@ -39,11 +46,11 @@ coverage ledger applies to assets, applied to weaknesses.
 
 | CWE | Waived sites | Register section |
 |---|---|---|
-| CWE-22 | 437 | [cwe-register.md](cwe-register.md) |
+| CWE-22 | 436 | [cwe-register.md](cwe-register.md) |
 | CWE-798 | 307 | [cwe-register.md](cwe-register.md) |
 | CWE-190 | 224 | [cwe-register.md](cwe-register.md) |
 | CWE-276 | 168 | [cwe-register.md](cwe-register.md) |
-| CWE-78 | 162 | [cwe-register.md](cwe-register.md) |
+| CWE-78 | 165 | [cwe-register.md](cwe-register.md) |
 | CWE-1004 | 38 | [cwe-register.md](cwe-register.md) |
 | CWE-338 | 29 | [cwe-register.md](cwe-register.md) |
 | CWE-367 | 24 | [cwe-register.md](cwe-register.md) |

@@ -11,8 +11,9 @@ package server
 // is a SAME-ORIGIN `.sha256` sidecar fetched from the same Maven URL — which a
 // Maven/MITM compromise serving a matching jar+sidecar would defeat. To close
 // that, we pin the SHA-256 of the per-arch `.txz` archive the library caches and
-// extracts, COMMITTED here (independent of Maven), and verify the cached artifact
-// against this pin before trusting the binary (see verifyBundledPostgresProvenance).
+// extracts, COMMITTED here (independent of Maven), and require authenticated acquisition before startup. NewVerifiedDatabase
+// independently hashes its exact bytes and derives a fresh private executable
+// tree; a cached bin/ directory never establishes trust.
 //
 // These hashes are the human-readable manifest's `archives[].txz_sha256` values in
 // deploy/supply-chain/embedded-postgres.json; TestBundledPGPinsMatchManifest
@@ -38,7 +39,7 @@ var bundledPGTxzSHA256 = map[string]string{
 // (CVSS 8.8) — and, worse, it is a SECOND source of truth: bundledPGCacheArchive
 // builds the cache filename from bundledPGVersion, so if the two ever disagreed
 // the library would download and cache under a different name, the provenance
-// check would find nothing at the pinned path, take the documented cold-cache
-// (false, nil) branch, and start an unverified binary. One source of truth keeps
-// SUPPLY-003 from silently degrading into a no-op.
+// check would find nothing at the pinned path. A missing archive is explicitly
+// unverified: the served wrapper acquires it and requires a second true result
+// before Start. One version source also keeps acquisition and the pin aligned.
 const bundledPGVersion = "16.15.0"

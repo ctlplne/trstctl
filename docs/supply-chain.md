@@ -154,11 +154,12 @@ path described below. Its vendor wrapper is pinned independently, and the
 supply-chain gate stays red whenever the official PostgreSQL catalog reports a
 HIGH/CRITICAL advisory fixed after that exact pin.
 
-The `embedded-postgres` dependency downloads a real PostgreSQL 16.15.0 binary
-from Maven Central at runtime — outside `go.sum`. It backs both the
-integration tests and the served single-node/eval path that starts bundled
-PostgreSQL, so its provenance is committed and enforced at runtime, not
-merely scanned in CI:
+The served single-node/evaluation path downloads the pinned PostgreSQL 16.15.0
+archive from Maven Central, outside `go.sum`. Its committed checksum is a runtime
+execution gate. Tests and developer performance tools that explicitly select
+the library's `V16` constant still use 16.4.0; those separate fixtures are not
+covered by the served 16.15.0 manifest or its assurance claims. Tests can run on a
+developer's machine as well as in CI.
 
 - `deploy/supply-chain/embedded-postgres.json` records the exact version,
   Maven coordinates, source URLs, and a committed per-arch SHA-256 pin for
@@ -167,13 +168,27 @@ merely scanned in CI:
   hard fail, not a no-op. The 16.15.0 pins were captured only after Maven
   Central published all three architectures; each jar matched its Maven
   SHA-256 sidecar and each inner `.txz` was hashed independently.
-- The served binary carries the same per-arch pins and enforces them at
-  runtime: before starting bundled PostgreSQL it verifies the cached `.txz`
-  against the committed pin and refuses to start a tampered or MITM'd
-  binary, fail-closed — independent of the library's same-origin `.sha256`
-  sidecar, so a Maven/MITM compromise serving a matching jar+sidecar is
-  still caught. A test asserts the binary's built-in pins and the JSON
-  manifest never drift.
+- Before downloading or launching PostgreSQL, the served path resolves its
+  platform, version and committed archive digest. A missing archive requests
+  acquisition; it never means verification succeeded. Downloaded bytes remain
+  private and bounded until the independent committed `.txz` checksum matches.
+  Maven's JAR checksum remains a transport-integrity check, not the authority
+  that permits execution.
+- The executable tree is derived afresh from those authenticated bytes in a
+  private directory. Rooted extraction rejects traversal, escaping or invalid
+  links, special files, duplicate entries and size/count overflows. Only a
+  complete tree is published atomically for execution. Cache identity includes
+  the platform, version and archive digest; an old extracted `bin/` directory
+  is never evidence that its files match the pin. Existing legacy caches and
+  database data are preserved rather than deleted to make startup succeed.
+- Regression tests invoke `startBundledPostgres` with harmless executable
+  markers and assert that missing or incorrect provenance prevents execution.
+  Loader tests separately exercise extraction, publication and cleanup. The
+  manifest/pin consistency test proves only that the two declarations agree;
+  it is not a substitute for these startup-order tests. Native startup and
+  supply-chain scans remain separate obligations for every claimed platform.
+The runtime creates its archive namespace relative to the operator-selected temporary directory using held directory handles. The anchor must be private to the current user, or a sticky directory owned by root or that user. Cache children must be owned directories without symlinks or shared write access. This prevents another user from redirecting publication through a precreated ancestor; it does not isolate malicious code running as the same user. Invalid configured ports are rejected before acquisition. The served database explicitly listens on `127.0.0.1`, and the returned connection URL uses that numeric address, so these paths do not need hostname resolution. Its unused default Unix socket is disabled, avoiding socket and lock files in shared `/tmp` and macOS Unix socket path limits. The vendored loader still uses `localhost` for its own port check and database preparation; this is not a claim that the entire startup avoids the host resolver.
+
 - `scripts/supply-chain/verify-embedded-postgres.sh` verifies the downloaded
   jar and its inner `.txz` against the committed pins, Trivy-scans the
   extracted binaries, and fetches the supported-major security table from the

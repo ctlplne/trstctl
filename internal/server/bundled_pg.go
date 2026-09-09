@@ -3,10 +3,12 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
@@ -29,67 +31,101 @@ func bundledPort(cfg config.Postgres) int {
 }
 
 // startBundledPostgres delivers the PRD "bundled single-node Postgres for eval"
-// (R4.5): it starts a managed PostgreSQL using the SAME pinned binary the tests and
-// the supply-chain manifest record (bundledPGVersion = 16.15.0, see
+// (R4.5): it starts a managed PostgreSQL using the pinned binary the
+// supply-chain manifest records (bundledPGVersion = 16.15.0, see
 // deploy/supply-chain/embedded-postgres.json), and returns a loopback DSN plus a
 // stop function. The control plane connects as the bootstrap superuser, but the
 // store drops to the non-superuser `trstctl_app` role per transaction (SET LOCAL
 // ROLE), so row-level security still applies (AN-1) exactly as in external mode.
 //
-// Evaluation state persists under cfg.DataDir/db so it survives restarts; the
-// pinned Postgres binary is cached in a shared path. Provenance is ENFORCED
-// (SUPPLY-003): before starting, a cached binary archive is verified against the
-// committed per-arch SHA-256 pin (independent of Maven's same-origin sidecar), and
-// a mismatch refuses to start; on a cold cache the freshly-downloaded archive is
-// verified before the database is trusted. Bundled mode is the ONLY path that
-// fetches that binary on first run; external mode never downloads anything.
+// Evaluation data persists under cfg.DataDir/db. The exact platform/version
+// archive must match a committed pin before it is extracted or any executable is
+// invoked. Every start derives a fresh private binary tree; existing extracted
+// caches are neither trusted nor deleted.
 func startBundledPostgres(cfg config.Postgres) (dsn string, stop func() error, err error) {
+	if cfg.Port < 0 || cfg.Port > 65535 {
+		return "", nil, fmt.Errorf("bundled postgres: port must be between 1 and 65535, or zero for the default")
+	}
 	dataDir := cfg.DataDir
 	if dataDir == "" {
 		dataDir = "data/postgres"
 	}
 	port := bundledPort(cfg)
-	binariesPath := filepath.Join(os.TempDir(), "trstctl-pg-bin")
 
-	// Provenance, phase 1 (warm cache): if the PostgreSQL archive is already
-	// cached, verify it against the committed pin BEFORE starting anything, so a
-	// tampered cached binary never executes (SUPPLY-003). A cold cache returns
-	// (false, nil) and is gated by phase 2 after the download.
-	archive := bundledPGCacheArchive(binariesPath)
-	if _, verr := verifyBundledPostgresArchive(archive); verr != nil {
-		return "", nil, verr
+	identity, err := bundledPGArchiveIdentity()
+	if err != nil {
+		return "", nil, err
 	}
 
-	db := embeddedpostgres.NewDatabase(embeddedpostgres.DefaultConfig().
+	legacyArchive := bundledPGCacheArchive(filepath.Join(os.TempDir(), "trstctl-pg-bin"))
+	cache, err := embeddedpostgres.OpenVerifiedCache(os.TempDir(), "trstctl-pg-archives", identity.OS+"-"+identity.Arch+"-"+string(identity.Version)+"-"+identity.SHA256)
+	if err != nil {
+		return "", nil, err
+	}
+	defer func() {
+		if closeErr := cache.Close(); closeErr != nil {
+			err = errors.Join(err, closeErr)
+			if stop != nil {
+				err = errors.Join(err, stop())
+				dsn, stop = "", nil
+			}
+		}
+	}()
+	cachePath := cache.Path()
+	db, err := embeddedpostgres.NewVerifiedDatabase(embeddedpostgres.DefaultConfig().
 		Version(embeddedpostgres.PostgresVersion(bundledPGVersion)).
-		Port(uint32(port)). // #nosec G115 -- port validated into uint16 range by config parsing (CWE-190)
+		Port(uint32(port)). // #nosec G115 -- cfg.Port is checked above and the zero default is 5432 (CWE-190)
 		DataPath(filepath.Join(dataDir, "db")).
-		RuntimePath(filepath.Join(dataDir, "rt")).
-		// Cache the pinned binary outside the data dir so it is not re-downloaded on
-		// every fresh eval; the same path the integration tests use.
-		BinariesPath(binariesPath).
-		// Co-locate the downloaded `.txz` archive with the binaries (the library
-		// otherwise caches it under ~/.embedded-postgres-go), so the provenance check
-		// (SUPPLY-003) verifies the archive in a path we control deterministically.
-		CachePath(binariesPath).
+		CachePath(cachePath).
+		ArchiveSourcePath(legacyArchive).
+		// Use the numeric loopback address for this local-only server. Resolving
+		// localhost otherwise makes PostgreSQL depend on the host's resolver.
+		// Disable the unused Unix listener and its shared /tmp lock file.
+		StartParameters(map[string]string{"listen_addresses": "127.0.0.1", "unix_socket_directories": ""}).
 		Logger(io.Discard).
-		StartTimeout(90 * time.Second))
+		StartTimeout(90*time.Second), identity)
+	if err != nil {
+		return "", nil, err
+	}
+	archivePath := bundledPGCacheArchive(cachePath)
+	verified, err := verifyArchiveFileAgainst(archivePath, identity.SHA256)
+	if err != nil {
+		return "", nil, err
+	}
+	if !verified {
+		if err := db.AcquireArchive(); err != nil {
+			return "", nil, err
+		}
+	}
+	verified, err = verifyArchiveFileAgainst(archivePath, identity.SHA256)
+	if err != nil {
+		return "", nil, err
+	}
+	if !verified {
+		return "", nil, fmt.Errorf("bundled postgres: archive absent after authenticated acquisition")
+	}
+	// Start independently hashes its opened bytes and extracts a fresh tree, so
+	// these wrapper checks never grant trust to a later pathname reopen.
 	if err := db.Start(); err != nil {
 		return "", nil, fmt.Errorf("start bundled postgres on port %d: %w (set TRSTCTL_POSTGRES_PORT to a free port, or use TRSTCTL_POSTGRES_MODE=external)", port, err)
 	}
 
-	// Provenance, phase 2 (cold cache just downloaded): a cold Start writes the
-	// `.txz` into BinariesPath as it extracts, so verify it now against the committed
-	// pin; if it does not match (a Maven/MITM that defeated the same-origin sidecar),
-	// stop the database and fail closed (SUPPLY-003). A warm cache that was already
-	// extracted by a prior (verified) run keeps only the extracted bin/ and no
-	// archive — verifyBundledPostgresArchive returns (false, nil) for that absent
-	// case, which phase 1 already covered, so we do not require the archive to exist.
-	if _, verr := verifyBundledPostgresArchive(archive); verr != nil {
-		_ = db.Stop()
-		return "", nil, verr
-	}
-
-	dsn = fmt.Sprintf("postgres://postgres:postgres@localhost:%d/postgres", port)
+	dsn = fmt.Sprintf("postgres://postgres:postgres@127.0.0.1:%d/postgres", port)
 	return dsn, db.Stop, nil
+}
+
+// bundledPGArchiveIdentity is the served trust authority. Empty or unsupported
+// pins are errors, never a request to fall back to the legacy fixture loader.
+func bundledPGArchiveIdentity() (embeddedpostgres.ArchiveIdentity, error) {
+	supported := runtime.GOOS == "linux" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64")
+	supported = supported || runtime.GOOS == "darwin" && runtime.GOARCH == "arm64"
+	if !supported {
+		return embeddedpostgres.ArchiveIdentity{}, fmt.Errorf("bundled postgres: unsupported pinned runtime %s/%s", runtime.GOOS, runtime.GOARCH)
+	}
+	arch := archiveArch()
+	digest, ok := bundledPGTxzSHA256[runtime.GOOS+"-"+arch]
+	if !ok {
+		return embeddedpostgres.ArchiveIdentity{}, fmt.Errorf("bundled postgres: no committed provenance pin for %s/%s", runtime.GOOS, arch)
+	}
+	return embeddedpostgres.ArchiveIdentity{OS: runtime.GOOS, Arch: arch, Version: embeddedpostgres.PostgresVersion(bundledPGVersion), SHA256: digest}, nil
 }

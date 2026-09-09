@@ -37,11 +37,9 @@ from collections import defaultdict
 REGISTER_PATH = os.path.join("docs", "security", "cwe-register.md")
 COVERAGE_PATH = os.path.join("docs", "security", "cwe-coverage.md")
 
-# The same tree make lint's golangci-lint (and therefore gosec) runs over.
-# "ee" is included even though ee/ is not yet in the Makefile's GO_PACKAGES: the
-# register must be ready to receive an ee/ waiver the day one is added, or the
-# first #nosec written under ee/ would silently never reach
-# docs/security/cwe-register.md. It is a no-op today (ee/ has zero #nosec).
+# Scan the core package roots and ee/, which make lint checks through its
+# separate ee-lint-ratchet target. Both contain effective inline waivers;
+# every matching annotation must appear in the generated register.
 SCAN_DIRS = ["clients", "cmd", "deploy", "docs", "ee", "internal", "scripts", "tools"]
 
 # Matches only what gosec itself honors: #nosec as the first token of a
@@ -80,6 +78,27 @@ CWE_BY_RULE = {
 # The weaknesses that were FIXED (not waived), each with the guard that fails
 # if the weakness returns. Hand-maintained: a fix lands here in the same change.
 FIXED = [
+    ("CWE-494", "internal/server/bundled_pg.go",
+     "Bundled PostgreSQL could execute a cold download before its committed archive checksum was checked, or reuse unrelated extracted binaries. Startup now requires independent archive authentication and fresh private extraction before execution.",
+     "TestBundledPostgresRejectsUnrelatedExtractedCache and TestBundledPostgresAuthenticatedFixtureReachesInitializerAndCleansUp (internal/server/bundled_pg_start_test.go) + TestVerifiedStartAuthenticatesColdArchiveBeforeInit (third_party/embedded-postgres/verified_binary_test.go)"),
+    ("CWE-22", "third_party/embedded-postgres/verified_binary.go",
+     "The served loader uses rooted extraction into a fresh private directory and rejects traversal, escaping links, special files and duplicate entries. Legacy NewDatabase callers remain a separate unresolved scope.",
+     "TestVerifiedExtractionRejectsUnsafePathsLinksAndTypes (third_party/embedded-postgres/verified_binary_test.go)"),
+    ("CWE-400", "third_party/embedded-postgres/verified_binary.go",
+     "Served archive acquisition and extraction now bound compressed bytes, XZ dictionary memory, the raw expanded stream including hidden TAR metadata, individual files and visible entries.",
+     "TestVerifiedExtractionBoundsHiddenMetadataAndDictionary and TestVerifiedDownloadClosesBodiesAndBoundsResponses (third_party/embedded-postgres/verified_acquisition_test.go)"),
+    ("CWE-362", "third_party/embedded-postgres/verified_binary.go",
+     "Served cache publication no longer depends on a process-local mutex. Atomic create-if-absent publication validates the winning archive bytes; private extracted trees are published only after complete validation.",
+     "TestVerifiedPublicationCrossProcess (third_party/embedded-postgres/verified_acquisition_test.go) + TestVerifiedPreparationConcurrencyUsesDistinctTrees (third_party/embedded-postgres/verified_binary_test.go)"),
+    ("CWE-252", "Makefile",
+     "Formatting enumeration, gofmt, temporary-file creation and architecture-analyzer build errors could be hidden by later successful commands. The lint gate now stops on each prerequisite failure.",
+     "TestMakeLintStopsOnToolFailure (docs/lint_failure_test.go)"),
+    ("CWE-754", "scripts/ci/ee-lint-ratchet.py",
+     "EE lint counted text findings without checking scanner completion. It now requires a complete, uncapped six-linter JSON report and a matching native exit status; malformed reports, tool errors and timeouts fail without changing the baseline.",
+     "TestEELintRejectsIncompleteScans and TestMakeLintStopsOnToolFailure/python-deadline-retains-output (docs/lint_failure_test.go)"),
+    ("CWE-772", "scripts/ci/ee-lint-ratchet.py",
+     "The scanner timeout killed only the direct child. EE lint now bounds live output and terminates the owned scanner process group on timeout, SIGINT, SIGTERM, or a leader exit that leaves descendants.",
+     "TestEELintScannerSupervision (docs/lint_supervision_test.go)"),
     ("CWE-287", "internal/server/workload_identity.go",
      "Automatic workload identities omitted the authenticated tenant under a shared CA. Versioned names now bind tenant, route, verified method and broker agent; approval recovery checks the signed tenant and method.",
      "TestServedWorkloadIdentitiesAreTenantIsolated and TestServedEphemeralIdentitiesAndApprovalsAreTenantIsolated (internal/server/workload_identity_tenant_test.go) + TestApprovalBindingDecodesScopedSubjectWithoutChangingAuthority (internal/ephemeral/approval_test.go)"),
@@ -105,7 +124,7 @@ FIXED = [
 
 DETECTORS = [
     ("CodeQL `security-extended`", "the broadest CWE query set; push, PR, and weekly", ".github/workflows/codeql.yml"),
-    ("gosec (in golangci-lint)", "Go-specific CWE-mapped rules G1xx-G7xx over the full lint scope; zero open findings — every site is fixed or carries a reasoned in-source waiver listed below", ".golangci.yml via make lint"),
+    ("gosec (in golangci-lint)", "Core and EE Go analysis; pinned integration disables G407, filters generated-file findings and discards internal analyzer logs. Standalone analysis and independent review must account for those limits. Inline waivers are listed below; configured coverage is not current scan proof", ".golangci.yml via make lint and ee-lint-ratchet"),
     ("govulncheck", "reachability-aware dependency vulnerabilities", "make vuln + the govulncheck CI job"),
     ("gitleaks", "committed secrets (CWE-798)", ".github/workflows/security.yml"),
     ("Trivy", "container image and native-binary CVEs", ".github/workflows/security.yml"),
@@ -176,12 +195,12 @@ def render_register(waivers):
     w("in the source itself. A waiver with no rule id or no reason fails the")
     w("generator, so a blanket suppression cannot exist in the tree.")
     w("")
-    w("The scan scope is the `make lint` scope (`clients cmd deploy docs internal")
-    w("scripts tools`). `ee/` is outside the golangci/gosec scope and is covered by")
-    w("CodeQL in CI. CodeQL itself runs server-side (`security-extended`, push/PR/")
-    w("weekly); its findings are triaged in the code-scanning UI and land here as")
-    w("fixes or waivers when they surface. There are currently no open CodeQL")
-    w("alerts recorded against this register.")
+    w("The scan scope includes `clients cmd deploy docs internal scripts tools`")
+    w("and `ee/`, which runs through the separate EE lint ratchet. The table below")
+    w("records configured detectors and their known limits. It does not establish")
+    w("that a scan completed on the current candidate. CI declares CodeQL")
+    w("`security-extended`; exact-commit results require separate evidence. Local")
+    w("golangci-lint results do not replace that evidence.")
     w("")
     w("## Detectors wired into CI")
     w("")

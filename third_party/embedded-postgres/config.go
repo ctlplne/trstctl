@@ -17,6 +17,7 @@ type Config struct {
 	username            string
 	password            string
 	cachePath           string
+	archiveSourcePath   string
 	runtimePath         string
 	dataPath            string
 	binariesPath        string
@@ -90,6 +91,14 @@ func (c Config) RuntimePath(path string) Config {
 // If this option is not set, ~/.go-embedded-postgres will be used.
 func (c Config) CachePath(path string) Config {
 	c.cachePath = path
+	return c
+}
+
+// ArchiveSourcePath names an optional existing archive to authenticate and copy
+// into the verified cache. It never grants trust to the file or adjacent bin/.
+// Only NewVerifiedDatabase uses this read-only acquisition source.
+func (c Config) ArchiveSourcePath(path string) Config {
+	c.archiveSourcePath = path
 	return c
 }
 

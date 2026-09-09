@@ -10,7 +10,7 @@ import (
 	"runtime"
 	"strings"
 
-	"trstctl.com/trstctl/internal/crypto"
+	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
 )
 
 // archiveArch reproduces the embedded-postgres library's per-arch naming for the
@@ -84,7 +84,7 @@ func bundledPGCacheArchive(binariesPath string) string {
 // against the committed provenance pin (SUPPLY-003). It returns:
 //   - (true, nil)  when the cache exists and its SHA-256 matches the pin;
 //   - (false, nil) when the cache is not present yet (cold cache — nothing to
-//     verify pre-download; the post-download check gates that case);
+//     verify yet; callers must acquire and require true before startup);
 //   - (false, err) when the cache exists but does NOT match the pin (tampered or
 //     wrong binary), or when this arch has no committed pin (so an unpinned arch
 //     fails closed rather than running an unverified binary).
@@ -107,18 +107,9 @@ func verifyBundledPostgresArchive(path string) (verified bool, err error) {
 // file is a fail-closed error. Split out so it is unit-testable with controlled
 // bytes without touching the global pin map.
 func verifyArchiveFileAgainst(path, wantHex string) (verified bool, err error) {
-	data, rerr := os.ReadFile(path) // #nosec G304 -- operator-configured local file path from deployment config (CWE-22)
-	if rerr != nil {
-		if os.IsNotExist(rerr) {
-			return false, nil // cold cache: not an error, just nothing to verify yet
-		}
-		return false, fmt.Errorf("bundled postgres: read cached binary archive: %w", rerr)
+	verified, err = embeddedpostgres.VerifyArchiveFile(path, wantHex)
+	if err != nil {
+		return false, fmt.Errorf("bundled postgres: verify cached archive %s: %w", filepath.Base(path), err)
 	}
-	got := crypto.SHA256Hex(data)
-	if got != wantHex {
-		return false, fmt.Errorf("bundled postgres: provenance check FAILED for %s — the cached PostgreSQL binary does not match the committed pin "+
-			"(want %s, got %s); the binary may be tampered or corrupt. Refusing to start it (SUPPLY-003). "+
-			"Delete the cache to re-fetch, or use TRSTCTL_POSTGRES_MODE=external", filepath.Base(path), wantHex, got)
-	}
-	return true, nil
+	return verified, nil
 }

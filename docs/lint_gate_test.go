@@ -68,6 +68,9 @@ esac
 exec `+realBash+` "$@"
 `)
 	writeExecutable(t, filepath.Join(dir, "find"), "#!/bin/sh\nexit 0\n")
+	// This fixture deliberately has no files to format; enumeration still runs.
+	writeExecutable(t, filepath.Join(dir, "git"), "#!/bin/sh\nexit 0\n")
+	writeExecutable(t, filepath.Join(dir, "xargs"), "#!/bin/sh\nexit 0\n")
 	writeExecutable(t, filepath.Join(dir, "gofmt"), "#!/bin/sh\nexit 0\n")
 	writeExecutable(t, filepath.Join(dir, "go"), "#!/bin/sh\nexit 0\n")
 	writeExecutable(t, filepath.Join(dir, "mktemp"), `#!/bin/sh

@@ -5,11 +5,9 @@ package embeddedpostgres
 import (
 	"archive/zip"
 	"bytes"
+	"errors"
 	"fmt"
-	"io"
-	"log"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -17,159 +15,102 @@ import (
 	"trstctl.com/trstctl/internal/netsec"
 )
 
-// RemoteFetchStrategy provides a strategy to fetch a Postgres binary so that it is available for use.
+// RemoteFetchStrategy fetches an archive to its designated acquisition path.
 type RemoteFetchStrategy func() error
 
-//nolint:funlen
-func defaultRemoteFetchStrategy(remoteFetchHost string, versionStrategy VersionStrategy, cacheLocator CacheLocator, client *http.Client) RemoteFetchStrategy {
+func defaultRemoteFetchStrategy(host string, versionStrategy VersionStrategy, cacheLocator CacheLocator, client *http.Client, expectedName ...string) RemoteFetchStrategy {
 	return func() error {
 		operatingSystem, architecture, version := versionStrategy()
-
-		jarDownloadURL := fmt.Sprintf("%s/io/zonky/test/postgres/embedded-postgres-binaries-%s-%s/%s/embedded-postgres-binaries-%s-%s-%s.jar",
-			remoteFetchHost,
-			operatingSystem,
-			architecture,
-			version,
-			operatingSystem,
-			architecture,
-			version)
+		jarURL := fmt.Sprintf("%s/io/zonky/test/postgres/embedded-postgres-binaries-%s-%s/%s/embedded-postgres-binaries-%s-%s-%s.jar", host, operatingSystem, architecture, version, operatingSystem, architecture, version)
 		if client == nil {
-			return fmt.Errorf("download client is required")
+			return errors.New("download client is required")
 		}
-		if err := netsec.ValidatePublicHTTPSURL(jarDownloadURL); err != nil {
+		if err := netsec.ValidatePublicHTTPSURL(jarURL); err != nil {
 			return fmt.Errorf("validate PostgreSQL download URL: %w", err)
 		}
-
-		jarDownloadResponse, err := client.Get(jarDownloadURL)
+		jar, err := fetchBoundedResponse(client, jarURL, maxPostgresArchiveBytes)
 		if err != nil {
-			return fmt.Errorf("unable to connect to %s", remoteFetchHost)
+			return err
 		}
-
-		defer closeBody(jarDownloadResponse)()
-
-		if jarDownloadResponse.StatusCode != http.StatusOK {
-			return fmt.Errorf("no version found matching %s", version)
-		}
-
-		jarBodyBytes, err := io.ReadAll(jarDownloadResponse.Body)
+		sidecar, err := fetchBoundedResponse(client, jarURL+".sha256", 4096)
 		if err != nil {
-			return errorFetchingPostgres(err)
+			return err
 		}
-
-		shaDownloadURL := fmt.Sprintf("%s.sha256", jarDownloadURL)
-		shaDownloadResponse, err := client.Get(shaDownloadURL)
-		if err != nil {
-			return fmt.Errorf("download checksum from %s: %w", shaDownloadURL, err)
+		if strings.TrimSpace(string(sidecar)) != boundarycrypto.SHA256Hex(jar) {
+			return errors.New("downloaded checksums do not match")
 		}
-		defer closeBody(shaDownloadResponse)()
-		if shaDownloadResponse.StatusCode != http.StatusOK {
-			return fmt.Errorf("download checksum from %s: HTTP %d", shaDownloadURL, shaDownloadResponse.StatusCode)
-		}
-		shaBodyBytes, err := io.ReadAll(shaDownloadResponse.Body)
-		if err != nil {
-			return fmt.Errorf("read checksum from %s: %w", shaDownloadURL, err)
-		}
-		if strings.TrimSpace(string(shaBodyBytes)) != boundarycrypto.SHA256Hex(jarBodyBytes) {
-			return fmt.Errorf("downloaded checksums do not match")
-		}
-
-		return decompressResponse(jarBodyBytes, jarDownloadResponse.ContentLength, cacheLocator, jarDownloadURL)
+		return decompressResponse(jar, int64(len(jar)), cacheLocator, jarURL, expectedName...)
 	}
 }
 
-func closeBody(resp *http.Response) func() {
-	return func() {
-		if err := resp.Body.Close(); err != nil {
-			log.Fatal(err)
-		}
+func fetchBoundedResponse(client *http.Client, url string, maximum int64) (data []byte, err error) {
+	response, err := client.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("download postgres archive: %w", err)
 	}
+	defer func() { err = errors.Join(err, response.Body.Close()) }()
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("download %s: HTTP %d", url, response.StatusCode)
+	}
+	if response.ContentLength > maximum {
+		return nil, errors.New("postgres response exceeds byte limit")
+	}
+	return readBounded(response.Body, maximum)
 }
 
-func decompressResponse(bodyBytes []byte, contentLength int64, cacheLocator CacheLocator, downloadURL string) error {
-	size := contentLength
-	// if the content length is not set (i.e. chunked encoding),
-	// we need to use the length of the bodyBytes otherwise
-	// the unzip operation will fail
-	if contentLength < 0 {
-		size = int64(len(bodyBytes))
+func decompressResponse(body []byte, _ int64, cacheLocator CacheLocator, downloadURL string, expectedName ...string) error {
+	if int64(len(body)) > maxPostgresArchiveBytes {
+		return errors.New("postgres JAR exceeds byte limit")
 	}
-	zipReader, err := zip.NewReader(bytes.NewReader(bodyBytes), size)
+	reader, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
 	if err != nil {
 		return errorFetchingPostgres(err)
 	}
-
-	cacheLocation, _ := cacheLocator()
-
-	if err := os.MkdirAll(filepath.Dir(cacheLocation), 0755); err != nil {
-		return errorExtractingPostgres(err)
+	if len(reader.File) > maxPostgresEntries {
+		return errors.New("postgres JAR exceeds entry limit")
 	}
-
-	for _, file := range zipReader.File {
-		if !file.FileHeader.FileInfo().IsDir() && strings.HasSuffix(file.FileHeader.Name, ".txz") {
-			if err := decompressSingleFile(file, cacheLocation); err != nil {
-				return err
+	var selected *zip.File
+	for _, file := range reader.File {
+		if strings.HasSuffix(file.Name, ".txz") {
+			if selected != nil || !file.Mode().IsRegular() {
+				return errors.New("postgres JAR must contain exactly one regular TXZ")
 			}
-
-			// we have successfully found the file, return early
-			return nil
+			name, err := archiveEntryName(file.Name)
+			if err != nil || strings.Contains(name, "/") || name != file.Name {
+				return errors.New("unsafe postgres JAR TXZ name")
+			}
+			if len(expectedName) > 0 && file.Name != expectedName[0] {
+				return errors.New("postgres JAR contains an unexpected platform TXZ")
+			}
+			selected = file
 		}
 	}
-
-	return fmt.Errorf("error fetching postgres: cannot find binary in archive retrieved from %s", downloadURL)
+	if selected == nil {
+		return fmt.Errorf("error fetching postgres: cannot find binary in archive retrieved from %s", downloadURL)
+	}
+	location, _ := cacheLocator()
+	return decompressSingleFile(selected, location)
 }
 
-func decompressSingleFile(file *zip.File, cacheLocation string) error {
-	renamed := false
-
-	archiveReader, err := file.Open()
+func decompressSingleFile(file *zip.File, location string) (err error) {
+	if file.UncompressedSize64 > uint64(maxPostgresArchiveBytes) {
+		return errors.New("postgres TXZ exceeds byte limit")
+	}
+	reader, err := file.Open()
 	if err != nil {
 		return errorExtractingPostgres(err)
 	}
-
-	archiveBytes, err := io.ReadAll(archiveReader)
-	if err != nil {
+	archive, readErr := readBounded(reader, maxPostgresArchiveBytes)
+	closeErr := reader.Close()
+	if err := errors.Join(readErr, closeErr); err != nil {
 		return errorExtractingPostgres(err)
 	}
-
-	// if multiple processes attempt to extract
-	// to prevent file corruption when multiple processes attempt to extract at the same time
-	// first to a cache location, and then move the file into place.
-	tmp, err := os.CreateTemp(filepath.Dir(cacheLocation), "temp_")
-	if err != nil {
-		return errorExtractingPostgres(err)
-	}
-	defer func() {
-		// if anything failed before the rename then the temporary file should be cleaned up.
-		// if the rename was successful then there is no temporary file to remove.
-		if !renamed {
-			if err := os.Remove(tmp.Name()); err != nil {
-				panic(err)
-			}
-		}
-	}()
-
-	if _, err := tmp.Write(archiveBytes); err != nil {
-		return errorExtractingPostgres(err)
-	}
-
-	// Windows cannot rename a file if is it still open.
-	// The file needs to be manually closed to allow the rename to happen
-	if err := tmp.Close(); err != nil {
-		return errorExtractingPostgres(err)
-	}
-
-	if err := renameOrIgnore(tmp.Name(), cacheLocation); err != nil {
-		return errorExtractingPostgres(err)
-	}
-	renamed = true
-
-	return nil
+	// Served acquisition points here at a new private directory. The immutable
+	// shared cache is published separately, only after its independent pin passes.
+	return publishVerifiedArchive(filepath.Dir(location), filepath.Base(location), archive, true)
 }
 
 func errorExtractingPostgres(err error) error {
-	return fmt.Errorf("unable to extract postgres archive: %s", err)
+	return fmt.Errorf("unable to extract postgres archive: %w", err)
 }
-
-func errorFetchingPostgres(err error) error {
-	return fmt.Errorf("error fetching postgres: %s", err)
-}
+func errorFetchingPostgres(err error) error { return fmt.Errorf("error fetching postgres: %w", err) }

@@ -80,6 +80,16 @@ change with a test fixture rather than adding a blanket ignore.
 6. Open one focused pull request. Do not bundle unrelated changes; note adjacent
    work as a follow-up instead.
 
+`make lint` stops when file enumeration, formatting, analyzer allocation or
+analyzer compilation fails. The EE gate requires a complete golangci-lint JSON
+report with the configured linters enabled before comparing its issue count to
+`.ee-lint-baseline`; a scanner error cannot count as a clean scan. It retains
+scanner diagnostics, rejects malformed reports and uses the existing 25-minute
+scanner limit. It limits captured output to 64 MiB and cleans its scanner process
+group on timeout, cancellation or abnormal exit. This gate requires Python 3
+on a POSIX host. A lower count is reported for a
+reviewed baseline change; lint never rewrites the baseline itself.
+
 ## Security
 
 Do not open a public issue for a vulnerability. Follow
