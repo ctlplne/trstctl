@@ -16,6 +16,11 @@ const { apiMock } = vi.hoisted(() => ({
   },
 }));
 
+vi.mock("@/lib/bootstrapApi", async (orig) => {
+  const actual = await orig<typeof import("@/lib/bootstrapApi")>();
+  return { ...actual, bootstrapApi: { ...actual.bootstrapApi, ...apiMock } };
+});
+
 vi.mock("@/lib/api", async (orig) => {
   const actual = await orig<typeof import("@/lib/api")>();
   return { ...actual, api: { ...actual.api, ...apiMock } };

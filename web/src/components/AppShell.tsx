@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useRef, useState, type RefObject } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type RefObject } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Activity,
@@ -36,10 +36,8 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
-import { CommandPalette } from "@/components/CommandPalette";
 import { BrandMark } from "@/components/BrandMark";
 import { Dialog } from "@/components/Dialog";
-import { ShortcutsHelp } from "@/components/ShortcutsHelp";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { hasAnyPermission } from "@/lib/access";
@@ -48,12 +46,37 @@ import { persistCollapsedGroups, readCollapsedGroups } from "@/lib/navPreference
 import { Eyebrow } from "@/components/typography";
 import { cn } from "@/lib/utils";
 import type { Me } from "@/lib/api";
-import { api } from "@/lib/api";
+import { bootstrapApi as api } from "@/lib/bootstrapApi";
 import { useApiQuery, useHasAppQueryProvider } from "@/lib/query";
-import { meaningfulAttention } from "@/pages/notifications/AlertCenterTabs";
+import { meaningfulAttention } from "@/lib/notificationAttention";
 import { useTranslation, type I18nContextValue, translateNow } from "@/i18n/I18nProvider";
 import { localeLabelKeys, productionLocales, supportedLocales, type Locale, type MessageKey } from "@/i18n/messages";
 import { CapabilityNavStatus, CapabilityRouteNotice, CapabilityToolSummary } from "@/components/CapabilityTruth";
+
+// Fetch optional overlays only after the operator opens one. Mounting a lazy
+// component with open=false would still fetch it during initial navigation.
+const CommandPalette = lazy(() => import("@/components/CommandPalette").then((module) => ({ default: module.CommandPalette })));
+const ShortcutsHelp = lazy(() => import("@/components/ShortcutsHelp").then((module) => ({ default: module.ShortcutsHelp })));
+
+function OverlayLoading({ onCancel, returnFocusRef }: { onCancel: () => void; returnFocusRef: RefObject<HTMLElement> }) {
+  const { t } = useTranslation();
+  useEffect(() => {
+    const returnTarget = returnFocusRef.current ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      onCancel();
+      if (returnTarget && document.contains(returnTarget)) returnTarget.focus();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onCancel, returnFocusRef]);
+  return (
+    <p role="status" className="fixed right-4 top-16 z-50 rounded-panel border border-border bg-card p-4 shadow-elevation3">
+      {t("app.loading")}
+    </p>
+  );
+}
 
 // Pseudo-locales (en-XA/ar-XB) are i18n test fixtures; only offer them in dev
 // builds so real users never see them in the language picker.
@@ -736,8 +759,16 @@ export function AppShell() {
       <div aria-live="polite" aria-atomic="true" className="sr-only" data-testid="route-announcer">
         {routeAnnouncement}
       </div>
-      <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} returnFocusRef={commandButtonRef} user={user} />
-      <ShortcutsHelp open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} returnFocusRef={shortcutsButtonRef} />
+      {commandPaletteOpen && (
+        <Suspense fallback={<OverlayLoading onCancel={() => setCommandPaletteOpen(false)} returnFocusRef={commandButtonRef} />}>
+          <CommandPalette open onClose={() => setCommandPaletteOpen(false)} returnFocusRef={commandButtonRef} user={user} />
+        </Suspense>
+      )}
+      {shortcutsOpen && (
+        <Suspense fallback={<OverlayLoading onCancel={() => setShortcutsOpen(false)} returnFocusRef={shortcutsButtonRef} />}>
+          <ShortcutsHelp open onClose={() => setShortcutsOpen(false)} returnFocusRef={shortcutsButtonRef} />
+        </Suspense>
+      )}
     </div>
   );
 }

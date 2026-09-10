@@ -1,3 +1,5 @@
+import { AppQueryProvider } from "@/lib/query";
+import { installWizardWireFixture, wizardFixtureCSR } from "@/test/wizardWireFixture";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -13,7 +15,7 @@ const { apiMock } = vi.hoisted(() => ({
     agents: vi.fn(),
     createOwner: vi.fn(),
     attestOwner: vi.fn(),
-    issueCertificate: vi.fn(),
+    transitionIdentity: vi.fn(),
     getIdentity: vi.fn(),
     protocolProfileStatus: vi.fn(),
     activateProtocolProfile: vi.fn(),
@@ -22,6 +24,10 @@ const { apiMock } = vi.hoisted(() => ({
   },
 }));
 
+vi.mock("@/auth/AuthProvider", async (orig) => ({
+  ...(await orig<typeof import("@/auth/AuthProvider")>()),
+  useAuth: () => ({ user: { tenant_id: "t1", subject: "operator-1" }, preview: false }),
+}));
 vi.mock("@/lib/api", async (orig) => {
   const actual = await orig<typeof import("@/lib/api")>();
   return { ...actual, api: apiMock };
@@ -30,7 +36,9 @@ vi.mock("@/lib/api", async (orig) => {
 function renderWizard() {
   return render(
     <MemoryRouter>
-      <Wizard pollMs={50} />
+      <AppQueryProvider>
+        <Wizard pollMs={50} />
+      </AppQueryProvider>
     </MemoryRouter>,
   );
 }
@@ -43,11 +51,13 @@ async function issueFirstCertificate(user: ReturnType<typeof userEvent.setup>, n
   await user.type(screen.getByLabelText("Environment"), "production");
   await user.type(screen.getByLabelText(/alert contact/i), "web-team@example.test");
   await user.click(screen.getByLabelText("I confirm this application owns the certificate"));
+  await user.type(screen.getByLabelText("Public certificate request (CSR)"), wizardFixtureCSR);
   await user.click(screen.getByRole("button", { name: /issue certificate/i }));
 }
 
 describe("first-run wizard", () => {
   beforeEach(() => {
+    installWizardWireFixture(apiMock);
     apiMock.createIssuer.mockReset();
     apiMock.issuers.mockReset().mockResolvedValue([{ id: "iss-1", name: "Internal CA", internal: true }]);
     apiMock.platformSystem.mockReset().mockResolvedValue({
@@ -82,7 +92,7 @@ describe("first-run wizard", () => {
       ownership_attested: true,
       ownership_current: true,
     });
-    apiMock.issueCertificate.mockReset().mockResolvedValue({ id: "id-1", name: "payments", status: "issued" });
+    apiMock.transitionIdentity.mockReset().mockResolvedValue({ id: "id-1", name: "payments", status: "issued" });
     apiMock.getIdentity.mockReset().mockRejectedValue(new Error("not found"));
     localStorage.removeItem("trstctl:onboarding-issued-identity");
     apiMock.protocolProfileStatus.mockReset().mockResolvedValue({
@@ -107,10 +117,10 @@ describe("first-run wizard", () => {
     // must not post a name-only x509_ca issuer, because the served API rejects X.509
     // issuers without a certificate chain.
     expect(screen.getByRole("heading", { name: /confirm certificate signing/i })).toBeInTheDocument();
-    expect(screen.getByText(/built-in setup issuer/i)).toBeInTheDocument();
+    expect(screen.getByText(/completed certificate result names the actual issuer/i)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /check signing health/i }));
-    await waitFor(() => expect(apiMock.issuers).toHaveBeenCalled());
-    await waitFor(() => expect(screen.getByText(/internal ca.*signer health check passed/i)).toBeInTheDocument());
+    await waitFor(() => expect(apiMock.platformSystem).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByText(/separate signer health check passed/i)).toBeInTheDocument());
     expect(apiMock.platformSystem).toHaveBeenCalledTimes(1);
     expect(apiMock.createIssuer).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: /next: enable protocols/i }));
@@ -139,8 +149,10 @@ describe("first-run wizard", () => {
       }),
     );
     expect(apiMock.attestOwner).toHaveBeenCalledWith("owner-1");
-    expect(apiMock.issueCertificate).toHaveBeenCalledWith({ name: "payments", ownerId: "owner-1" });
+    expect(apiMock.transitionIdentity).toHaveBeenCalledWith(expect.objectContaining({ to: "issued", subject_csr_pem: wizardFixtureCSR }));
+    await screen.findByRole("button", { name: "Download leaf certificate" });
     expect(screen.getByRole("link", { name: /open certificate inventory/i })).toHaveAttribute("href", "/certificates");
+    await screen.findByRole("button", { name: "Download leaf certificate" });
     await user.click(screen.getByRole("button", { name: /next: prove integrations/i }));
 
     // Step 4 — configured integration proof is optional on a core-only install.
@@ -170,7 +182,7 @@ describe("first-run wizard", () => {
     expect(await screen.findByText(/Agent edge-01 registered/i)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /next: review setup/i }));
 
-    expect(await screen.findByText(/ready for certificate operations/i)).toBeInTheDocument();
+    expect(await screen.findByText(/review recorded setup/i)).toBeInTheDocument();
   });
 
   it("does not promise automatic renewal after setup and links to the track/renew worklist", async () => {
@@ -178,13 +190,15 @@ describe("first-run wizard", () => {
     renderWizard();
 
     await user.click(screen.getByRole("button", { name: /check signing health/i }));
-    await waitFor(() => expect(screen.getByText(/internal ca.*signer health check passed/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/separate signer health check passed/i)).toBeInTheDocument());
     await user.click(screen.getByRole("button", { name: /next: enable protocols/i }));
     await screen.findByRole("heading", { name: /enable enrollment protocols/i });
     await user.click(screen.getByRole("button", { name: /activate eval protocol profile/i }));
     await screen.findByText(/eval protocol profile is active/i);
     await user.click(screen.getByRole("button", { name: /next: issue certificate/i }));
     await issueFirstCertificate(user);
+    await screen.findByRole("button", { name: "Download leaf certificate" });
+    await screen.findByRole("button", { name: "Download leaf certificate" });
     await user.click(await screen.findByRole("button", { name: /next: prove integrations/i }));
     await screen.findByRole("heading", { name: /verify configured integrations/i });
     await user.click(screen.getByRole("button", { name: /skip integration proof/i }));
@@ -194,19 +208,19 @@ describe("first-run wizard", () => {
     await user.click(screen.getByRole("button", { name: /next: review setup/i }));
     await user.click(screen.getByRole("button", { name: /complete setup/i }));
 
-    expect(await screen.findByText(/alert before expiry/i)).toBeInTheDocument();
-    expect(screen.getByText(/manual, one-click action/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Deployment, TLS checks and renewal are separate lifecycle operations/)).toBeInTheDocument();
+    expect(screen.queryByText(/manual, one-click action/i)).not.toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/rotate.*automatically|renew.*automatically/i);
     expect(screen.getByRole("link", { name: /track and renew certificates/i })).toHaveAttribute("href", "/certificates");
   });
 
   it("surfaces a failure to issue without creating an issuer", async () => {
-    apiMock.issueCertificate.mockRejectedValueOnce(new Error("boom"));
+    apiMock.transitionIdentity.mockRejectedValueOnce(new Error("boom"));
     const user = userEvent.setup();
     renderWizard();
 
     await user.click(screen.getByRole("button", { name: /check signing health/i }));
-    await waitFor(() => expect(screen.getByText(/internal ca.*signer health check passed/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/separate signer health check passed/i)).toBeInTheDocument());
     await user.click(screen.getByRole("button", { name: /next: enable protocols/i }));
     await screen.findByRole("heading", { name: /enable enrollment protocols/i });
     await user.click(screen.getByRole("button", { name: /activate eval protocol profile/i }));
@@ -214,11 +228,11 @@ describe("first-run wizard", () => {
     await user.click(screen.getByRole("button", { name: /next: issue certificate/i }));
     await issueFirstCertificate(user);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/boom|could not|failed/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/uncertain|interrupted/i);
     expect(apiMock.createIssuer).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole("button", { name: /issue certificate/i }));
-    await waitFor(() => expect(apiMock.issueCertificate).toHaveBeenCalledTimes(2));
+    await user.click(screen.getByRole("button", { name: /retry the same issuance attempt/i }));
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledTimes(2));
     expect(apiMock.createOwner).toHaveBeenCalledTimes(1);
     expect(apiMock.attestOwner).toHaveBeenCalledTimes(1);
   });
@@ -230,8 +244,8 @@ describe("first-run wizard", () => {
 
     await user.click(screen.getByRole("button", { name: /check signing health/i }));
 
-    expect(await screen.findByText(/built-in setup issuer is selected/i)).toBeInTheDocument();
-    expect(screen.getByText(/next certificate step proves end-to-end signing/i)).toBeInTheDocument();
+    expect(await screen.findByText(/does not select or verify a certificate authority/i)).toBeInTheDocument();
+    expect(apiMock.issuers).not.toHaveBeenCalled();
     expect(screen.queryByText(/internal ca is ready/i)).not.toBeInTheDocument();
   });
 
@@ -260,6 +274,8 @@ describe("first-run wizard", () => {
     await screen.findByText(/eval protocol profile is active/i);
     await user.click(screen.getByRole("button", { name: /next: issue certificate/i }));
     await issueFirstCertificate(user, "first-service");
+    await screen.findByRole("button", { name: "Download leaf certificate" });
+    await screen.findByRole("button", { name: "Download leaf certificate" });
     await user.click(await screen.findByRole("button", { name: /next: prove integrations/i }));
     await user.click(await screen.findByRole("button", { name: /skip integration proof/i }));
     await user.click(screen.getByRole("button", { name: /next: optional agent/i }));
@@ -290,6 +306,8 @@ describe("first-run wizard", () => {
     await screen.findByText(/eval protocol profile is active/i);
     await user.click(screen.getByRole("button", { name: /next: issue certificate/i }));
     await issueFirstCertificate(user, "agent-endpoint-control");
+    await screen.findByRole("button", { name: "Download leaf certificate" });
+    await screen.findByRole("button", { name: "Download leaf certificate" });
     await user.click(await screen.findByRole("button", { name: /next: prove integrations/i }));
     await user.click(await screen.findByRole("button", { name: /skip integration proof/i }));
     await user.click(screen.getByRole("button", { name: /next: optional agent/i }));
@@ -302,33 +320,26 @@ describe("first-run wizard", () => {
   });
 });
 
-describe("first-run wizard resumes after a reload", () => {
-  it("re-reads the issued identity from the server and lands on the certificate step as done", async () => {
+describe("legacy unbound reload hint", () => {
+  beforeEach(() => {
+    installWizardWireFixture(apiMock);
+  });
+  it("does not use an old issued identity ID as exact certificate delivery", async () => {
     localStorage.setItem("trstctl:onboarding-issued-identity", "id-1");
-    apiMock.getIdentity.mockResolvedValueOnce({ id: "id-1", name: "payments", status: "issued" });
+    apiMock.getIdentity.mockClear().mockResolvedValue({ id: "id-1", name: "payments", status: "issued" });
     renderWizard();
-    await waitFor(() => expect(apiMock.getIdentity).toHaveBeenCalledWith("id-1"));
-    expect(await screen.findByText(/payments was issued/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /next: prove integrations/i })).toBeEnabled();
-  });
-
-  it("forgets a remembered identity the server no longer reports and shows the form", async () => {
-    localStorage.setItem("trstctl:onboarding-issued-identity", "id-stale");
-    apiMock.getIdentity.mockRejectedValueOnce(new Error("not found"));
-    renderWizard();
-    await waitFor(() => expect(apiMock.getIdentity).toHaveBeenCalledWith("id-stale"));
     await waitFor(() => expect(localStorage.getItem("trstctl:onboarding-issued-identity")).toBeNull());
-    expect(screen.getByRole("button", { name: /check signing health/i })).toBeInTheDocument();
+    expect(apiMock.getIdentity).not.toHaveBeenCalled();
+    expect(screen.queryByText(/payments was issued/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /next: enable protocols/i })).toBeDisabled();
   });
-
-  it("remembers the identity it issued", async () => {
-    const user = userEvent.setup();
+  it("does not create or issue anything merely because a prior identity hint is stale", async () => {
+    localStorage.setItem("trstctl:onboarding-issued-identity", "id-stale");
+    apiMock.createOwner.mockClear();
+    apiMock.transitionIdentity.mockClear();
     renderWizard();
-    await user.click(await screen.findByRole("button", { name: /check signing health/i }));
-    await user.click(await screen.findByRole("button", { name: /next: enable protocols/i }));
-    await user.click(await screen.findByRole("button", { name: /activate eval protocol profile/i }));
-    await user.click(await screen.findByRole("button", { name: /next: issue certificate/i }));
-    await issueFirstCertificate(user);
-    await waitFor(() => expect(localStorage.getItem("trstctl:onboarding-issued-identity")).toBe("id-1"));
+    await waitFor(() => expect(localStorage.getItem("trstctl:onboarding-issued-identity")).toBeNull());
+    expect(apiMock.createOwner).not.toHaveBeenCalled();
+    expect(apiMock.transitionIdentity).not.toHaveBeenCalled();
   });
 });

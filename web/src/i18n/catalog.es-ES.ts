@@ -8,6 +8,64 @@ import type { MessageKey } from "@/i18n/messages";
  * error, so every new message key still ships with its translation in the
  * same commit. */
 const esESCatalog = {
+  // Machine-authored correction translations; human language review required before release.
+  "wizard.firstLeaf.submitCorrection": "Enviar el CSR corregido para esta identidad",
+  "wizard.firstLeaf.correctionDisposition":
+    "El servidor confirmó que este CSR exacto fue rechazado antes de la transición de emisión. Puede corregir el CSR deliberadamente; el propietario y la identidad permanecen iguales.",
+  "wizard.firstLeaf.cancelCorrection": "Cancelar la corrección del CSR",
+  "wizard.firstLeaf.editCSR": "Corregir el CSR rechazado",
+  "wizard.firstLeaf.completed":
+    "El resultado público del certificado está registrado. El despliegue, las comprobaciones TLS y la renovación son operaciones separadas; esta guía no las ha realizado.",
+  "wizard.firstLeaf.reviewSetup": "Revisar la configuración registrada",
+
+  "wizard.firstLeaf.heading": "Emita su primer certificado",
+  "wizard.firstLeaf.custody":
+    "Use una credencial de operador con permiso de emisión. Genere la clave privada y el CSR en la carga de trabajo, conserve allí la clave y pegue solo el CSR público. Los tokens de configuración y agente no pueden emitir certificados.",
+  "wizard.firstLeaf.reload":
+    "Esta página conserva los reintentos solo en memoria. Recargar, cerrar sesión o cerrar la pestaña puede perder las claves de solicitud. Si se interrumpió una solicitud, revise el inventario y la auditoría antes de iniciar otra; que no aparezca aquí no demuestra que no se emitiera.",
+  "wizard.firstLeaf.service": "Nombre del servicio",
+  "wizard.firstLeaf.csr": "Solicitud pública de certificado (CSR)",
+  "wizard.firstLeaf.csrHelp": "Un bloque PEM CERTIFICATE REQUEST, de hasta 64 KiB. Este formulario no acepta ni genera claves privadas.",
+  "wizard.firstLeaf.csrError": "Introduzca un bloque PEM de CSR público. Nunca pegue una clave privada.",
+  "wizard.firstLeaf.fieldError": "Revise este valor obligatorio.",
+  "wizard.firstLeaf.wildcard": "Reconozco el alcance del comodín y la validación DNS-01 requerida",
+  "wizard.firstLeaf.submit": "Emitir certificado",
+  "wizard.firstLeaf.retry": "Reintentar la misma solicitud de emisión",
+  "wizard.firstLeaf.submitting": "Enviando la solicitud conservada. La entrega del certificado aún no está confirmada.",
+  "wizard.firstLeaf.retained":
+    "Esta solicitud está bloqueada para reintentar: propietario, CSR y claves de idempotencia no cambian. El servidor vuelve a comprobar la misma operación.",
+  "wizard.firstLeaf.requestKey": "clave de solicitud de emisión",
+  "wizard.firstLeaf.approval":
+    "El servidor rechazó este intento en la comprobación de aprobación. Revise la cola y su decisión; esta página no puede aprobar la solicitud. Reintente el mismo intento solo al cumplir el requisito.",
+  "wizard.firstLeaf.refused":
+    "El servidor rechazó la solicitud. Revise autorización, política y datos antes de reintentar sin cambios. No se ha confirmado la entrega del certificado público.",
+  "wizard.firstLeaf.uncertain":
+    "La operación se interrumpió o su respuesta no era utilizable. El resultado es incierto. Mantenga la página abierta, consulte el resultado exacto y reutilice el intento conservado si necesita reintentar.",
+  "wizard.firstLeaf.pending": "Comprobando el resultado exacto. Una transición de identidad aceptada no confirma un certificado registrado.",
+  "wizard.firstLeaf.paused":
+    "La consulta se pausó tras cuatro minutos. Esto no significa que la emisión fallara. Actualice el mismo resultado sin enviar otra mutación.",
+  "wizard.firstLeaf.readFailed":
+    "No se pudo confirmar el resultado exacto. Una respuesta ausente, prohibida o incoherente no es un certificado pendiente ni completado. Revise permisos y estado del servidor y actualice.",
+  "wizard.firstLeaf.refresh": "Volver a leer el mismo resultado",
+  "wizard.firstLeaf.recorded": "El resultado público exacto del certificado está registrado y disponible para descargar.",
+  "wizard.firstLeaf.authority": "Emisor registrado en el certificado: {issuer}",
+  "wizard.firstLeaf.unknownAuthority": "No informado por el resultado del certificado",
+  "wizard.firstLeaf.issuerLabel": "Emisor registrado del certificado",
+  "wizard.firstLeaf.fingerprint": "huella del certificado",
+  "wizard.firstLeaf.status": "Estado del certificado en la última lectura: {status}",
+  "wizard.firstLeaf.downloadLeaf": "Descargar certificado final",
+  "wizard.firstLeaf.downloadChain": "Descargar cadena devuelta",
+  "wizard.firstLeaf.trust":
+    "La descarga contiene solo los certificados públicos devueltos por el servidor. No añade confianza a este equipo ni demuestra despliegue, validación de nombre o una conexión TLS real. Puede faltar la raíz; obtenga confianza mediante su autoridad independiente.",
+  "wizard.firstLeaf.authRequired": "Inicie sesión en un tenant real con permiso de emisión. El modo de vista previa no puede realizar esta solicitud.",
+  "wizard.firstLeaf.approvals": "Abrir cola de aprobación",
+  "wizard.firstLeaf.inventory": "Inspeccionar inventario de identidades",
+  "wizard.firstLeaf.signerOnly": "Servicio de firma separado",
+  "wizard.firstLeaf.signerHealth":
+    "La comprobación de salud del firmante separado fue correcta. Esto no selecciona ni verifica una autoridad de certificación.",
+  "wizard.firstLeaf.signerDescription":
+    "Compruebe el servicio de firma separado. Su salud y el catálogo no determinan qué autoridad firma una solicitud; el resultado completado indica el emisor real.",
+
   "broker.description":
     "Dé una identidad de corta duración a un agente y siga su certificado en el inventario compartido. El servidor verifica la prueba y la política antes de firmar.",
   "broker.start": "Solicitar identidad de agente",
@@ -6712,7 +6770,6 @@ const esESCatalog = {
   "source.issue.leaf.from.47e7b2541d": "Emitir certificado final desde",
   "source.issue.pki.secret.692ee4b6e2": "Emitir secreto PKI",
   "source.issue.through.external.ca.671d1a629f": "Emitir mediante CA externa",
-  "source.issue.your.first.certificate.8fbb374ce0": "Emitir su primer certificado",
   "source.issue.your.first.certificate.to.start.trac.355cebb739": "Emita su primer certificado para comenzar a rastrear y rotar credenciales.",
   "source.issued.0221e48751": "Emitido",
   "source.issued.ssh.certificate.3775bb2dee": "Certificado SSH emitido",
@@ -7074,14 +7131,13 @@ const esESCatalog = {
   "source.reachability.unavailable.526510e61e": "Alcanzabilidad no disponible",
   "source.reachable.nodes.ebf8d10fa5": "Nodos alcanzables",
   "source.read.only.responder.probe.23655af063": "Sondeo del respondedor de solo lectura",
-  "source.ready.for.certificate.operations.e99f6e538f": "Listo para operaciones de certificados",
   "source.reason.3425d10869": "Reason:",
   "source.reason.f81ab834de": "Motivo",
   "source.reason.for.revoke.or.exception.5df8423828": "Motivo de la revocación o excepción",
   "source.recent.activity.6cb44b5633": "Actividad reciente",
-  "source.recent.connector.delivery.receipts.3a2bf7db18": "Comprobantes recientes de entrega del conector",
+  "source.recent.connector.delivery.receipts.3a2bf7db18": "Comprobantes cargados de entrega del conector",
   "source.recent.delivery.receipts.a9cb8f42a9": "Comprobantes recientes de entrega",
-  "source.recent.lifecycle.rotation.runs.4de11752b6": "Ejecuciones recientes de rotación del ciclo de vida",
+  "source.recent.lifecycle.rotation.runs.4de11752b6": "Ejecuciones cargadas de rotación del ciclo de vida",
   "source.recorded.approvals.and.required.approvals.4d359a312b": "Aprobaciones registradas y aprobaciones requeridas para esta solicitud.",
   "source.redacted.reference.f904f7809b": "Referencia ocultada",
   "source.redaction.boundary.134ed7be9f": "Límite de ocultación:",
@@ -7390,8 +7446,6 @@ const esESCatalog = {
   "source.transport.aaead4abf5": "Transport",
   "source.trigger.8b9c643731": "Trigger",
   "source.trstctl.74de2c6ee4": "trstctl",
-  "source.trstctl.will.track.this.credential.and.ale.258f3fc1df":
-    "trstctl supervisará esta credencial y avisará antes de que venza. Por ahora, la renovación es una acción manual de un solo clic.",
   "source.ttl.seconds.862d08de5a": "Segundos de TTL",
   "source.type.baaddf70fb": "Tipo",
   "source.type.credential.name.to.confirm.cc8d26a179": "Escriba el nombre de la credencial para confirmar",
@@ -7412,7 +7466,6 @@ const esESCatalog = {
   "source.view.certificates.dcc999606f": "Ver certificados",
   "source.view.details.d1bf045bb5": "Ver detalles",
   "source.waiting.for.the.agent.to.register.3e78d9c8a6": "Esperando a que el agente se registre...",
-  "source.was.issued.fe1574675b": "se emitió.",
   "source.web.server.e4d165cf07": "web-server",
   "source.welcome.to.trstctl.let.s.set.it.up.7d04de0c8b": "Le damos la bienvenida a trstctl: vamos a configurarlo",
   "source.what.happened.483bd49023": "Qué ocurrió",
@@ -7614,7 +7667,6 @@ const esESCatalog = {
   "source.view.details.for.notification.value1.786c365358": "Ver detalles de la notificación {value1}",
   "source.view.value1.version.value2.bcb23df652": "Ver {value1}, versión {value2}",
   "source.yes.value1.0cb667502c": "Sí, {value1}",
-  "source.your.first.certificate.d48ee36f3a": "Su primer certificado",
   "posture.pqcMigration.heading": "Flujo de migración PQC",
   "posture.pqcMigration.description":
     "Seleccione activos CBOM vulnerables, previsualice el plan exacto y autorice explícitamente una migración con reversión segura.",
@@ -8066,7 +8118,7 @@ const esESCatalog = {
   "identities.lifecycle.reviewUpdated": "Revisar acción actualizada",
   "identities.lifecycle.previewFailed": "No se pudo previsualizar la acción del ciclo de vida",
   "identities.lifecycle.verificationFailed": "La verificación falló: el servidor devolvió {actual}, no {expected}.",
-  "identities.lifecycle.verified": "Verificado: {identity} ahora está en {state}. {detail}",
+  "identities.lifecycle.verified": "Solicitud aceptada para {identity}: {state}. {detail}",
   "identities.find.action": "Buscar identidades",
   "identities.search.label": "Buscar identidades",
   "identities.search.placeholder": "Nombre, responsable o tipo",
@@ -8673,6 +8725,17 @@ const esESCatalog = {
   "privacy.review.executeErasure": "Borrar el sujeto revisado",
   "privacy.review.executeRetention": "Aplicar la retención revisada",
   "privacy.review.dataHandling": "Límite de datos",
+  "identities.evidence.partialSummary": "El historial es parcial. Abre los detalles.",
+  "identities.evidence.partialHistory": "Se cargaron {count} registros. Puede haber más historial; el resultado más reciente no está confirmado.",
+  "identities.evidence.incompleteRollback": "El historial de reversión está incompleto o no está disponible.",
+  "identities.evidence.scanMeaning":
+    "Se muestran los registros actualizados más recientemente que devolvió esta consulta. El historial puede cambiar mientras se cargan las páginas.",
+  "identities.evidence.moreDeliveries": "Cargar más registros de entrega",
+  "identities.evidence.moreRotations": "Cargar más registros de rotación",
+  "identities.evidence.retryDeliveries": "Reintentar el historial de entrega",
+  "identities.evidence.retryRotations": "Reintentar el historial de rotación",
+  "identities.evidence.globalPartial":
+    "Se muestran hasta cinco registros cargados por flujo de un historial incompleto del tenant. Abre una identidad para ver su propio historial.",
 } satisfies Record<MessageKey, string>;
 
 export default esESCatalog;

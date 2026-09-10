@@ -129,6 +129,11 @@ const { apiMock, clearApiCalls } = vi.hoisted(() => {
   };
 });
 
+vi.mock("@/lib/bootstrapApi", async (orig) => {
+  const actual = await orig<typeof import("@/lib/bootstrapApi")>();
+  return { ...actual, bootstrapApi: apiMock };
+});
+
 vi.mock("@/lib/api", async (orig) => {
   const actual = await orig<typeof import("@/lib/api")>();
   return { ...actual, api: apiMock };

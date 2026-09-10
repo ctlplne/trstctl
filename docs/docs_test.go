@@ -656,6 +656,8 @@ func cliCommandNames() map[string]bool {
 func TestWizardFirstCertificateContractIsBackedByOpenAPIAndStoreValidator(t *testing.T) {
 	apiTS := read(t, "../web/src/lib/api.ts")
 	wizardTS := read(t, "../web/src/pages/Wizard.tsx")
+	wizardStep := read(t, "../web/src/pages/wizard/FirstCertificateStep.tsx")
+	wizardAttempt := read(t, "../web/src/lib/wizardFirstCertificate.ts")
 	wizardTest := read(t, "../web/src/__tests__/wizard.test.tsx")
 	issuerStore := read(t, "../internal/store/issuer.go")
 
@@ -676,29 +678,47 @@ func TestWizardFirstCertificateContractIsBackedByOpenAPIAndStoreValidator(t *tes
 	if strings.Contains(apiTS, `kind: "x509_ca"`) || strings.Contains(apiTS, `"kind":"x509_ca"`) {
 		t.Error("wizard convenience client must not create a name-only x509_ca issuer")
 	}
+	// The owner/CSR operation moved out of the page. Pin both the rendered
+	// component and its actual operation before checking the retained contract.
+	requireAllContained(t, "DOCS-003", "Wizard.tsx", wizardTS,
+		`import { FirstCertificateStep } from "@/pages/wizard/FirstCertificateStep"`,
+		`<FirstCertificateStep onRecorded={onRecorded} />`,
+	)
+	requireAllContained(t, "DOCS-003", "FirstCertificateStep.tsx", wizardStep,
+		`from "@/lib/wizardFirstCertificate"`, "submitWizardCertificateAttempt(",
+		"newWizardCertificateAttempt(input, principal)",
+	)
 	for _, want := range []string{
-		`const serviceName = name.trim() || "first-service";`,
-		`const isWildcard = serviceName.startsWith("*.");`,
+		"const clean = wizardCertificateForm.parse(input)",
+		"input: Object.freeze(clean)",
+		`name: z.string().trim().min(1).max(255)`,
+		`applicationID: z.string().trim().min(1).max(255)`,
+		`environment: z.string().trim().min(1).max(255)`,
 		`kind: "workload"`,
-		"application_id: applicationID.trim()",
-		"environment: environment.trim()",
-		"api.attestOwner(owner.id)",
+		"application_id: current.input.applicationID",
+		"environment: current.input.environment",
+		`op.mutation<Owner>("/api/v1/owners", input, current.ownerKey)`,
+		"op.mutation<Owner>(`/api/v1/owners/${encodeURIComponent(current.owner.id)}/attest`, {}, current.attestKey)",
 		"!owner.ownership_complete || !owner.ownership_current",
-		"ownerId: owner.id",
-		`...(isWildcard ? { wildcardBlastRadiusAcknowledged: wildcardAck } : {})`,
+		"ownerId: current.owner.id",
+		"subjectCSRPEM: current.input.subjectCSRPEM",
+		`...(current.input.name.startsWith("*.") ? { wildcardBlastRadiusAcknowledged: current.input.wildcardAck } : {})`,
+		"submitFirstCertificateAttempt(current.issuance, current.principal,",
+		"{ to, reason, subject_csr_pem: csr }, key)",
 	} {
-		if !strings.Contains(wizardTS, want) {
-			t.Errorf("wizard should call the first-certificate convenience API with service name plus conditional wildcard acknowledgement; missing %q", want)
+		if !strings.Contains(wizardAttempt, want) {
+			t.Errorf("wizard operation must retain owner, CSR, idempotency and conditional wildcard acknowledgement; missing %q", want)
 		}
 	}
-	if strings.Contains(wizardTS, "api.createIssuer") {
+	if strings.Contains(wizardTS+wizardStep+wizardAttempt, "api.createIssuer") {
 		t.Error("wizard should not post an issuer payload during first-run setup")
 	}
 	for _, want := range []string{
 		"createIssuer).not.toHaveBeenCalled",
 		`createOwner).toHaveBeenCalledWith({`,
 		`attestOwner).toHaveBeenCalledWith("owner-1")`,
-		`issueCertificate).toHaveBeenCalledWith({ name: "payments", ownerId: "owner-1" })`,
+		`transitionIdentity).toHaveBeenCalledWith(expect.objectContaining({ to: "issued", subject_csr_pem: wizardFixtureCSR }))`,
+		`findByRole("button", { name: "Download leaf certificate" })`,
 	} {
 		if !strings.Contains(wizardTest, want) {
 			t.Errorf("wizard test should pin the served first-run contract with %q", want)

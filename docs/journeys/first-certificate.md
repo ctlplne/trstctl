@@ -10,22 +10,36 @@
     This badge is generated from `wiring-census.json`; `make journey-census-check` fails closed if the census or this page drifts.
 <!-- trstctl:journey-census:end -->
 
-This walkthrough now lives in **[Getting started](../getting-started.md)** —
-the wizard path and the equivalent CLI path, end to end, including the
-issuer-credential step. This page remains as a pointer for existing links.
+The [Getting started](../getting-started.md) page explains installation. In the
+first-certificate wizard, enter the owner attribution and paste a public PKCS#10
+CSR made where the workload's private key is held. The wizard accepts no private
+key and does not create one. The separate signer's health is a prerequisite;
+a catalog label is not an issuing-authority selection. The completed certificate
+reports its actual issuer.
 
+Submitting the identity transition accepts work. It does not mean that a
+certificate exists yet. Keep the page open while it reads the result for that
+identity and its exact issuance request key. A pending result offers no download.
+An issued result exposes only the recorded public leaf and the returned public
+chain. Neither downloading a chain nor seeing an issuer name installs trust,
+proves a hostname match, or proves that the workload uses the certificate.
 
-The served API exposes `GET /api/v1/identities/{id}/issuance-result` for an
-accepted issuance. Supply the exact transition `Idempotency-Key` as the required
-`request_key` query parameter. The caller needs certificate-read permission and
-the identity must belong to its tenant. A `pending` result contains no certificate;
-`issued` returns the public leaf and its recorded public chain. This result does
-not prove connector deployment, workload key possession, or TLS acceptance.
+If a response is lost, retry the retained attempt without changing its CSR or
+keys. The owner, attestation, identity creation and issuance each retain their
+original key. An unrelated 400/403/409 response is not permission to start a new
+issuance. When the server returns the exact `identity_csr_rejected_before_transition`
+disposition for the retained tenant, subject, identity, CSR and key, the wizard
+offers an explicit CSR correction. That action keeps the owner and identity and
+creates one new issuance key. The original refusal remains replayable. An
+approval refusal still needs the actual approval workflow; this page cannot
+approve its own request.
 
-The transition accepts one public PKCS#10 CSR, at most 64 KiB, with a valid
-signature and no additional PEM blocks. An exact
-`identity_csr_rejected_before_transition` response is retained for replay with
-that request key. A generic error does not authorize starting a new issuance.
+Recovery keys stay only in this document's memory. Route navigation preserves
+them; reloading, signing out or closing the tab can lose them. After such an
+interruption, inspect identity inventory and audit history before deliberately
+starting another request. Absence of local browser state does not prove that
+issuance failed. Fresh principal checks do not form an atomic cross-tab cookie
+session lock.
 
 For a requester-held key, served renewal follows the certificate's explicit
 same-tenant predecessor chain to that identity's exact issued transition CSR.

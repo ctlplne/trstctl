@@ -32,7 +32,8 @@ describe("IA ratchets (S-R1)", () => {
   });
 
   it("keeps preview fixtures behind the compile-time demo boundary (DA-01/DA-12)", () => {
-    const api = readFileSync(path.join(SRC, "lib", "api.ts"), "utf8");
+    // Startup and lazy routes now share this single preview transport.
+    const api = readFileSync(path.join(SRC, "lib", "apiTransport.ts"), "utf8");
     expect(api).toMatch(/import\.meta\.env\.DEV\s*\|\|\s*import\.meta\.env\.VITE_TRSTCTL_DEMO\s*===\s*["']1["']/);
     expect(api).toMatch(/await import\(["']\.\/previewData["']\)/);
     expect(api).not.toMatch(/^import .*previewData/m);

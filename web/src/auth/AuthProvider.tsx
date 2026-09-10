@@ -1,5 +1,8 @@
+import { bindFirstCertificatePrincipal } from "@/lib/firstCertificateMemory";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { api, loginURL, setAuthenticatedBrowserTenantID, setPreviewTransportIsolation, UnauthorizedError, type Me } from "@/lib/api";
+import { bootstrapApi as api, loginURL } from "@/lib/bootstrapApi";
+import { setAuthenticatedBrowserTenantID, setPreviewTransportIsolation, UnauthorizedError } from "@/lib/apiTransport";
+import type { Me } from "@/lib/api";
 
 /** The static demo build (demo.trstctl.com) sets VITE_TRSTCTL_DEMO=1 at
  * build time: preview becomes available in a production bundle AND starts
@@ -59,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const startPreview = useCallback(() => {
     if (!previewAllowed) return;
+    bindFirstCertificatePrincipal(null);
     previewRef.current = true;
     setPreviewTransportIsolation(true);
     setAuthenticatedBrowserTenantID(previewUser.tenant_id);
@@ -91,6 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState((current) => ({ ...current, error: null }));
     try {
       await api.logout();
+      bindFirstCertificatePrincipal(null);
       setAuthenticatedBrowserTenantID(null);
       setState((current) => ({
         user: null,
@@ -117,6 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const user = await api.me();
         if (!active || previewRef.current) return;
+        bindFirstCertificatePrincipal({ tenantId: user.tenant_id, subject: user.subject });
         setAuthenticatedBrowserTenantID(user.tenant_id);
         setState({
           user,
@@ -128,6 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
       } catch (err) {
         if (!active || previewRef.current) return;
+        bindFirstCertificatePrincipal(null);
         if (err instanceof UnauthorizedError) {
           setAuthenticatedBrowserTenantID(null);
           setState({

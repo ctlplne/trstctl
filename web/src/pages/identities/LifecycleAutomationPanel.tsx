@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
 import { Eyebrow } from "@/components/typography";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { api, type Identity, type LifecycleAutomationPlan } from "@/lib/api";
-import { apiProblemContext } from "@/lib/apiProblem";
+import { useApiQuery } from "@/lib/query";
 
 type Props = {
   identities: Identity[];
@@ -37,28 +37,21 @@ function isLifecycleAutomationPlan(value: unknown): value is LifecycleAutomation
 
 export function LifecycleAutomationPanel({ identities, onReviewRenewal }: Props) {
   const { t, formatDateTime } = useTranslation();
-  const [plan, setPlan] = useState<LifecycleAutomationPlan | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const identityByID = useMemo(() => new Map(identities.map((identity) => [identity.id, identity])), [identities]);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
+  const {
+    data: plan,
+    error,
+    loading,
+    refetch: load,
+  } = useApiQuery(
+    ["lifecycle-automation-plan"],
+    async () => {
       const nextPlan: unknown = await api.lifecycleAutomationPlan();
       if (!isLifecycleAutomationPlan(nextPlan)) throw new Error(t("identities.automation.loadFailed"));
-      setPlan(nextPlan);
-      setError(null);
-    } catch (err) {
-      setError(apiProblemContext(err, t("identities.automation.loadFailed")));
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+      return nextPlan;
+    },
+    { retry: false, live: { intervalMs: 10_000 } },
+  );
+  const identityByID = useMemo(() => new Map(identities.map((identity) => [identity.id, identity])), [identities]);
 
   const renewDays = plan ? durationDays(plan.scheduler.renew_before, plan.scheduler.renew_before_seconds) : null;
   const alertDays = plan ? durationDays(plan.scheduler.alert_before, plan.scheduler.alert_before_seconds) : null;

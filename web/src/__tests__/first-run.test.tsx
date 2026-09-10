@@ -1,3 +1,5 @@
+import { AppQueryProvider } from "@/lib/query";
+import { installWizardWireFixture, wizardFixtureCSR } from "@/test/wizardWireFixture";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -12,7 +14,7 @@ const { apiMock } = vi.hoisted(() => ({
     activateProtocolProfile: vi.fn(),
     createOwner: vi.fn(),
     attestOwner: vi.fn(),
-    issueCertificate: vi.fn(),
+    transitionIdentity: vi.fn(),
     connectorCatalog: vi.fn(),
     createConnectorTarget: vi.fn(),
     deployConnectorTarget: vi.fn(),
@@ -24,6 +26,10 @@ const { apiMock } = vi.hoisted(() => ({
   },
 }));
 
+vi.mock("@/auth/AuthProvider", async (orig) => ({
+  ...(await orig<typeof import("@/auth/AuthProvider")>()),
+  useAuth: () => ({ user: { tenant_id: "t1", subject: "operator-1" }, preview: false }),
+}));
 vi.mock("@/lib/api", async (orig) => {
   const actual = await orig<typeof import("@/lib/api")>();
   return { ...actual, api: apiMock };
@@ -32,6 +38,7 @@ vi.mock("@/lib/api", async (orig) => {
 describe("first-run served capability journey", () => {
   beforeEach(() => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
+    installWizardWireFixture(apiMock, "identity-1");
     apiMock.issuers.mockResolvedValue([{ id: "issuer-1", name: "Internal CA", internal: true }]);
     apiMock.platformSystem.mockResolvedValue({ signer_mode: "external", dependencies: [{ name: "signer", ready: true }] });
     apiMock.protocolProfileStatus.mockResolvedValue({
@@ -46,7 +53,7 @@ describe("first-run served capability journey", () => {
     });
     apiMock.createOwner.mockResolvedValue({ id: "owner-1", ownership_complete: true, ownership_current: false });
     apiMock.attestOwner.mockResolvedValue({ id: "owner-1", ownership_complete: true, ownership_current: true });
-    apiMock.issueCertificate.mockResolvedValue({
+    apiMock.transitionIdentity.mockResolvedValue({
       id: "identity-1",
       name: "payments",
       owner_id: "owner-1",
@@ -101,12 +108,14 @@ describe("first-run served capability journey", () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter>
-        <Wizard pollMs={50} />
+        <AppQueryProvider>
+          <Wizard pollMs={50} />
+        </AppQueryProvider>
       </MemoryRouter>,
     );
 
     await user.click(screen.getByRole("button", { name: /check signing health/i }));
-    await screen.findByText(/internal ca.*signer health check passed/i);
+    await screen.findByText(/separate signer health check passed/i);
     await user.click(screen.getByRole("button", { name: /next: enable protocols/i }));
     await user.click(await screen.findByRole("button", { name: /activate eval protocol profile/i }));
     await screen.findByText(/eval protocol profile is active/i);
@@ -116,8 +125,11 @@ describe("first-run served capability journey", () => {
     await user.type(screen.getByLabelText("Environment"), "production");
     await user.type(screen.getByLabelText("Alert contact"), "web-team@example.test");
     await user.click(screen.getByLabelText("I confirm this application owns the certificate"));
+    await user.type(screen.getByLabelText("Public certificate request (CSR)"), wizardFixtureCSR);
     await user.click(screen.getByRole("button", { name: /^issue certificate$/i }));
-    await waitFor(() => expect(apiMock.issueCertificate).toHaveBeenCalledWith({ name: "payments", ownerId: "owner-1" }));
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith(expect.objectContaining({ to: "issued", subject_csr_pem: wizardFixtureCSR })));
+    await screen.findByRole("button", { name: "Download leaf certificate" });
+    await screen.findByRole("button", { name: "Download leaf certificate" });
     await user.click(await screen.findByRole("button", { name: /next: prove integrations/i }));
 
     expect(await screen.findByRole("heading", { name: /verify configured integrations/i })).toBeInTheDocument();

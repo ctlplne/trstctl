@@ -1,4 +1,4 @@
-import { ApiError, UnauthorizedError, csrfHeaders, previewRefusal, previewTransportIsIsolated } from "./api";
+import { ApiError, UnauthorizedError, csrfHeaders, previewRefusal, previewTransportIsIsolated } from "./apiTransport";
 import type { AuditQuery } from "./api";
 import { auditQueryParams, auditReadSignal } from "./auditQuery";
 

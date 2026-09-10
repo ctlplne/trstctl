@@ -15,11 +15,7 @@ import type { NHIShadowPosture } from "@/lib/api";
  * vs H1 vs title) becomes impossible to reintroduce silently once this holds
  * in CI. */
 
-vi.mock("@/lib/api", async (orig) => {
-  const actual = await orig<typeof import("@/lib/api")>();
-  // Resolve every api call to a benign empty shape; pages render their chrome
-  // (header + H1) regardless of data. Permissions listed inline because the
-  // vi.mock factory is hoisted above module-scope consts.
+const { bootstrapFixture } = vi.hoisted(() => {
   const permissions = [
     "access:read",
     "agents:read",
@@ -45,6 +41,28 @@ vi.mock("@/lib/api", async (orig) => {
     "secrets:read",
     "secrets:write",
   ];
+  return {
+    bootstrapFixture: {
+      me: vi.fn().mockResolvedValue({ subject: "np", tenant_id: "t1", email: "np@example.test", permissions }),
+      authMethods: vi.fn().mockResolvedValue({}),
+      logout: vi.fn().mockResolvedValue(undefined),
+      editions: vi.fn().mockResolvedValue({ items: [] }),
+      capabilities: vi.fn().mockResolvedValue({ items: [] }),
+      notifications: vi.fn().mockResolvedValue({ items: [] }),
+    },
+  };
+});
+vi.mock("@/lib/bootstrapApi", async (original) => {
+  const actual = await original<typeof import("@/lib/bootstrapApi")>();
+  return { ...actual, bootstrapApi: bootstrapFixture };
+});
+
+vi.mock("@/lib/api", async (orig) => {
+  const actual = await orig<typeof import("@/lib/api")>();
+  // Resolve every api call to a benign empty shape; pages render their chrome
+  // (header + H1) regardless of data. Permissions listed inline because the
+  // vi.mock factory is hoisted above module-scope consts.
+
   // A value that satisfies BOTH array-returning api methods (.filter/.map) and
   // paged/object-returning ones (.items/.events/…): an array with the common
   // container fields attached.
@@ -128,7 +146,7 @@ vi.mock("@/lib/api", async (orig) => {
     evidence_refs: [],
   } satisfies NHIShadowPosture;
   base.nhiShadowPosture = vi.fn().mockResolvedValue(emptyShadowPosture);
-  base.me = vi.fn().mockResolvedValue({ subject: "np", tenant_id: "t1", email: "np@example.test", permissions });
+  base.me = bootstrapFixture.me;
   return { ...actual, api: base };
 });
 

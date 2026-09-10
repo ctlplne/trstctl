@@ -10,6 +10,11 @@ const { apiMock } = vi.hoisted(() => ({
   apiMock: { me: vi.fn(), authMethods: vi.fn().mockResolvedValue({ oidc: true, saml: false, ldap: false }), auditEvents: vi.fn(), exportAudit: vi.fn() },
 }));
 
+vi.mock("@/lib/bootstrapApi", async (orig) => {
+  const actual = await orig<typeof import("@/lib/bootstrapApi")>();
+  return { ...actual, bootstrapApi: apiMock };
+});
+
 vi.mock("@/lib/api", async (orig) => {
   const actual = await orig<typeof import("@/lib/api")>();
   return { ...actual, api: apiMock };

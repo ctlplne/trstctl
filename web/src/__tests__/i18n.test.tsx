@@ -138,7 +138,7 @@ describe("i18n boundary", () => {
     });
   }
 
-  it("resolves shell navigation through the pseudo-locale catalog", () => {
+  it("resolves shell navigation through the pseudo-locale catalog", async () => {
     render(
       <IntlProvider initialLocale="en-XA" initialTimeZone="UTC">
         <ThemeProvider>
@@ -161,7 +161,7 @@ describe("i18n boundary", () => {
     fireEvent.keyDown(document, { key: "?" });
     // The shortcuts dialog title went through the DA-14 sweep, so under the
     // pseudo-locale its accessible name is pseudo-localized like all shell copy.
-    expect(screen.getByRole("dialog", { name: pseudoLocalize("Keyboard shortcuts") })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: pseudoLocalize("Keyboard shortcuts") })).toBeInTheDocument();
   });
 
   it("renders real Spanish page chrome and lets the operator switch locale in memory", async () => {
@@ -1503,8 +1503,16 @@ describe("i18n boundary", () => {
       // QA cold design-partner g257 re-pin: the seeded-demo banner becomes a named
       // landmark (DP2-042). Machine-authored es/de — FLAGGED FOR HUMAN TRANSLATION
       // REVIEW before release.
-      "es-ES": "11b99f0d6ad8f2797bf3b7b45ea621842fb47aa709544db0e1c31f7f15f10aed",
-      "de-DE": "ecbe5fcc157aa0ca893d7ee835904836c0d7d319a27e735d5dd18c4a4b6bd159",
+      // First-leaf repair: reviewed CSR custody, exact-result polling, retained
+      // retries, deliberate rejected-CSR correction, actual issuer disclosure,
+      // and explicit deployment/TLS limits; removed five retired wizard keys.
+      // Placeholders and security negations agree in both catalogs. Machine-
+      // authored es/de remain FLAGGED FOR HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      // Live receipt repair: partial/loading/error history, incremental pages,
+      // loaded-record labels and historical request acknowledgement reviewed.
+      // Machine-authored es/de: HUMAN TRANSLATION REVIEW required before release.
+      "es-ES": "809a0a3a68288731357d17e3424b66269f887505382ba9695c576422e878de4b",
+      "de-DE": "a2e3769dc3c6aec3d32d16b05d87034c79036cabfa227c0bdeda850a399f4df6",
     });
   });
 

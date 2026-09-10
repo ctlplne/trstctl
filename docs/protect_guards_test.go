@@ -2520,6 +2520,17 @@ func TestSecurityPostureStrengthGuardsStayRequired(t *testing.T) {
 		}
 	}
 	webAPI := read(t, "../web/src/lib/api.ts")
+	requireAllContained(t, "SEC-004", "api.ts transport import", webAPI,
+		`import { createPreviewAwareApi, mutate, mutateForAuthenticatedBrowserTenant, req } from "./apiTransport"`,
+		"mutate<Identity>(",
+	)
+	webTransport := read(t, "../web/src/lib/apiTransport.ts")
+	bootstrapClient := read(t, "../web/src/lib/bootstrapApi.ts")
+	requireAllContained(t, "SEC-004", "bootstrapApi.ts transport and logout", bootstrapClient,
+		`import { createPreviewAwareApi, req } from "./apiTransport"`,
+		"createPreviewAwareApi<BootstrapApi>({",
+		`req<void>("/auth/logout", { method: "POST" })`,
+	)
 	for _, want := range []string{
 		"function readCookie(name: string)",
 		"function csrfHeaders(method: string | undefined)",
@@ -2527,8 +2538,8 @@ func TestSecurityPostureStrengthGuardsStayRequired(t *testing.T) {
 		"\"X-CSRF-Token\"",
 		"...csrfHeaders(method)",
 	} {
-		if !strings.Contains(webAPI, want) {
-			t.Errorf("SEC-004: web api.ts no longer contains %q; SPA CSRF header echo may have drifted", want)
+		if !strings.Contains(webTransport, want) {
+			t.Errorf("SEC-004: web apiTransport.ts no longer contains %q; SPA CSRF header echo may have drifted", want)
 		}
 	}
 	webAPITest := read(t, "../web/src/lib/api.test.ts")
@@ -3771,10 +3782,14 @@ func TestSurfaceStrengthGuardsStayRequired(t *testing.T) {
 	)
 	apiClient := read(t, "../web/src/lib/api.ts")
 	check("web/src/lib/api.ts", apiClient,
+		`import { createPreviewAwareApi, mutate, mutateForAuthenticatedBrowserTenant, req } from "./apiTransport"`,
+		"no token/secret ever crosses to the client",
+	)
+	apiTransport := read(t, "../web/src/lib/apiTransport.ts")
+	check("web/src/lib/apiTransport.ts", apiTransport,
 		`credentials: "include"`,
 		`readCookie("trstctl_csrf")`,
 		`"X-CSRF-Token"`,
-		"no token/secret ever crosses to the client",
 	)
 	auth := read(t, "../internal/api/auth.go")
 	check("internal/api/auth.go browser session controls", auth,

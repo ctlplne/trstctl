@@ -9,7 +9,21 @@
 // or removes a field, the generated types change and any code in the SPA that reads a
 // now-missing field fails `tsc` — the drift cannot ship silently. Regenerate with
 // `npm run gen:api`; `npm run build` runs `gen:api --check` first and fails on drift.
-import { translateNow } from "@/i18n/I18nProvider";
+import { bootstrapApi, type BootstrapApi } from "./bootstrapApi";
+import { createPreviewAwareApi, mutate, mutateForAuthenticatedBrowserTenant, req } from "./apiTransport";
+export {
+  ApiError,
+  UnauthorizedError,
+  apiErrorMessage,
+  csrfHeaders,
+  mutate,
+  previewRefusal,
+  previewTransportIsIsolated,
+  req,
+  setAuthenticatedBrowserTenantID,
+  setPreviewTransportIsolation,
+} from "./apiTransport";
+export { loginURL } from "./bootstrapApi";
 import * as estate from "./estateApi";
 import { downloadAuditExport as downloadAuditExportImpl } from "./auditExport";
 import { auditQueryParams, auditReadSignal } from "./auditQuery";
@@ -1113,91 +1127,6 @@ export type {
 // transition actions are typed against it so an invalid target fails the build.
 export type TransitionTo = TransitionRequest["to"];
 
-export class UnauthorizedError extends Error {
-  constructor() {
-    super("unauthorized");
-    this.name = "UnauthorizedError";
-  }
-}
-
-/** apiErrorMessage turns a failed response into the sentence a page shows. The
- * server answers refusals with RFC 9457 problem+json whose `detail` names the
- * exact prerequisite and remedy (for example which DNS-01 provider config or
- * custody setting an endpoint lifecycle needs). Showing only "request failed
- * (422)" threw that guidance away, so a refused preview looked like an outage.
- * The status stays in the message; a body without a usable detail keeps the
- * generic wording. */
-export function apiErrorMessage(status: number, body: string, retryAfterSeconds?: number): string {
-  if (status === 429) return `rate limited (429)${retryAfterSeconds != null ? ` — retry in ${retryAfterSeconds}s` : ""}`;
-  const generic = `request failed (${status})`;
-  const trimmed = (body ?? "").trim();
-  if (!trimmed.startsWith("{")) return generic;
-  try {
-    const parsed = JSON.parse(trimmed) as { detail?: unknown; title?: unknown };
-    const detail = typeof parsed.detail === "string" ? parsed.detail.trim() : "";
-    const title = typeof parsed.title === "string" ? parsed.title.trim() : "";
-    const text = detail || title;
-    if (!text) return generic;
-    return `${text} (HTTP ${status})`;
-  } catch {
-    return generic;
-  }
-}
-
-export class ApiError extends Error {
-  status: number;
-  body: string;
-  /** retryAfterSeconds is set for a 429 when the server sends Retry-After, so the UI
-   * can surface a concrete "try again in N seconds" hint instead of a bare failure
-   * (SURFACE-007; the server emits Retry-After on rate-limit at api.go). */
-  retryAfterSeconds?: number;
-  constructor(status: number, body: string, retryAfterSeconds?: number) {
-    super(apiErrorMessage(status, body, retryAfterSeconds));
-    this.name = "ApiError";
-    this.status = status;
-    this.body = body;
-    this.retryAfterSeconds = retryAfterSeconds;
-  }
-  /** isRateLimited is a convenience for the UI's special-case path. */
-  get isRateLimited(): boolean {
-    return this.status === 429;
-  }
-}
-
-/** parseRetryAfter reads a Retry-After header (RFC 7231: either delta-seconds or an
- * HTTP-date) into seconds, or undefined when absent/unparseable. */
-function parseRetryAfter(h: string | null): number | undefined {
-  if (!h) return undefined;
-  const secs = Number(h);
-  if (Number.isFinite(secs)) return Math.max(0, Math.round(secs));
-  const when = Date.parse(h);
-  if (!Number.isNaN(when)) return Math.max(0, Math.round((when - Date.now()) / 1000));
-  return undefined;
-}
-
-function isUnsafeMethod(method: string | undefined): boolean {
-  const m = (method ?? "GET").toUpperCase();
-  return m !== "GET" && m !== "HEAD" && m !== "OPTIONS" && m !== "TRACE";
-}
-
-function readCookie(name: string): string | undefined {
-  if (typeof document === "undefined") return undefined;
-  const prefix = `${name}=`;
-  for (const part of document.cookie.split(";")) {
-    const trimmed = part.trim();
-    if (trimmed.startsWith(prefix)) return decodeURIComponent(trimmed.slice(prefix.length));
-  }
-  return undefined;
-}
-
-// Exported for the audit-export workflow, which issues a blob fetch rather
-// than a JSON request and so cannot go through req<T> (epic J1).
-export function csrfHeaders(method: string | undefined): Record<string, string> {
-  if (!isUnsafeMethod(method)) return {};
-  const token = readCookie("trstctl_csrf");
-  return token ? { "X-CSRF-Token": token } : {};
-}
-
 // Me is the browser-session principal returned by GET /auth/me. It is NOT a REST
 // component schema (it comes from the auth/session layer, not the resource API), so it
 // is hand-written here rather than generated — and stays minimal by design (subject +
@@ -1461,505 +1390,6 @@ export interface EditionsInfo {
   packaging: EditionPackaging;
 }
 
-interface ProtocolProbeSpec {
-  protocol: string;
-  endpoint: string;
-  method?: "GET" | "HEAD";
-  credentials?: RequestCredentials;
-  accept?: string;
-  methodMismatchMeansServed?: boolean;
-  successDetail: string;
-  methodMismatchDetail?: string;
-}
-
-const protocolStatusProbes: ProtocolProbeSpec[] = [
-  {
-    protocol: "acme",
-    endpoint: "/directory",
-    accept: "application/json",
-    successDetail: "ACME directory responded.",
-  },
-  {
-    protocol: "est",
-    endpoint: "/.well-known/est/cacerts",
-    credentials: "omit",
-    accept: "application/pkcs7-mime, application/pkcs7, */*",
-    successDetail: "EST CA-certs responder returned a chain.",
-  },
-  {
-    protocol: "scep",
-    endpoint: "/scep?operation=GetCACaps",
-    accept: "text/plain, */*",
-    successDetail: "SCEP capabilities responder returned caps.",
-  },
-  {
-    protocol: "cmp",
-    endpoint: "/cmp",
-    method: "GET",
-    methodMismatchMeansServed: true,
-    successDetail: "CMP responder accepted the probe.",
-    methodMismatchDetail: "CMP route is mounted and expects a PKIMessage request.",
-  },
-  {
-    protocol: "ssh",
-    endpoint: "/ssh/ca",
-    accept: "text/plain, */*",
-    successDetail: "SSH CA public-key endpoint responded.",
-  },
-  {
-    protocol: "tsa",
-    endpoint: "/tsa",
-    method: "GET",
-    methodMismatchMeansServed: true,
-    successDetail: "TSA responder accepted the probe.",
-    methodMismatchDetail: "TSA route is mounted and expects a timestamp request.",
-  },
-];
-
-/** Preview transport isolation (mirrors probectl's demo model): while preview
- * mode is active, the client refuses EVERY server call before fetch — the
- * showcase runs entirely in the browser, so a hosted demo bundle can never
- * leak a request. The demo host's Worker 404s /api/* as belt-and-suspenders;
- * this is the wall. Set by AuthProvider on preview start/stop. */
-let previewTransportIsolated = false;
-export function setPreviewTransportIsolation(isolated: boolean): void {
-  previewTransportIsolated = isolated;
-}
-
-// The machine-login exchange is intentionally public because the submitted
-// machine credential is what authenticates the workload. The server still
-// needs an explicit tenant lookup hint before it can choose a verifier. The
-// browser may use only the tenant returned by /auth/me; it never accepts this
-// value from a route, query string, form field, or the machine credential.
-let authenticatedBrowserTenantID = "";
-export function setAuthenticatedBrowserTenantID(tenantID: string | null | undefined): void {
-  authenticatedBrowserTenantID = tenantID?.trim() ?? "";
-}
-
-/** Read the preview-isolation wall. A reader rather than an exported binding,
- * so this module stays the only writer (epic J1's audit download needs to
- * honour the same wall without being able to lower it). */
-export function previewTransportIsIsolated(): boolean {
-  return previewTransportIsolated;
-}
-
-const previewFixturesCompiled = import.meta.env.DEV || import.meta.env.VITE_TRSTCTL_DEMO === "1";
-
-export function previewRefusal(): ApiError {
-  const refusal = new ApiError(0, translateNow("preview.transportIsolated"));
-  refusal.message = refusal.body;
-  return refusal;
-}
-
-async function previewResponse(method: string): Promise<unknown> {
-  // This branch is a compile-time constant. Vite removes both the import and
-  // its chunk from the ordinary embedded product build; dev and the explicit
-  // demo build retain it.
-  if (previewFixturesCompiled) {
-    const { previewRead } = await import("./previewData");
-    const response = previewRead(method);
-    if (response.matched) return response.value;
-  }
-  throw previewRefusal();
-}
-
-// Exported for the estate-shape workflow module (H1/H2/H4/I1), which must go
-// through this same bounded transport.
-export async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  if (previewTransportIsolated) {
-    // api methods are intercepted before reaching req. Keep this second wall
-    // for direct/internal callers and future code that accidentally bypasses
-    // the exported client wrapper.
-    throw previewRefusal();
-  }
-  const method = init?.method;
-  const res = await fetch(path, {
-    credentials: "include",
-    ...init,
-    headers: { Accept: "application/json", ...csrfHeaders(method), ...(init?.headers ?? {}) },
-  });
-  if (res.status === 401) throw new UnauthorizedError();
-  if (res.status === 429) {
-    // Rate limited: surface Retry-After so the UI can show a concrete retry hint
-    // (SURFACE-007). The server emits Retry-After on its per-tenant bulkhead/limit.
-    throw new ApiError(429, await res.text(), parseRetryAfter(res.headers.get("Retry-After")));
-  }
-  if (!res.ok) throw new ApiError(res.status, await res.text());
-  if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
-}
-
-async function protocolProbe(spec: ProtocolProbeSpec): Promise<ProtocolRuntimeStatus> {
-  if (previewTransportIsolated) {
-    return {
-      protocol: spec.protocol,
-      endpoint: spec.endpoint,
-      enabled: false,
-      served: false,
-      get detail() {
-        return translateNow("preview.probesDisabled");
-      },
-    };
-  }
-  try {
-    const res = await fetch(spec.endpoint, {
-      method: spec.method ?? "GET",
-      credentials: spec.credentials ?? "include",
-      headers: { Accept: spec.accept ?? "*/*" },
-    });
-    const methodMismatchServed = spec.methodMismatchMeansServed === true && res.status === 405;
-    const candidateStatus = res.ok || methodMismatchServed;
-    const contentMatches = candidateStatus && (await protocolProbeContentMatches(spec, res));
-    const ok = candidateStatus && contentMatches;
-    return {
-      protocol: spec.protocol,
-      endpoint: spec.endpoint,
-      enabled: ok,
-      served: ok,
-      status_code: res.status,
-      detail: ok
-        ? methodMismatchServed
-          ? (spec.methodMismatchDetail ?? "Responder is mounted and expects a protocol request.")
-          : spec.successDetail
-        : candidateStatus
-          ? "Unexpected responder content; protocol status could not be verified."
-          : protocolProbeFailureDetail(res),
-    };
-  } catch {
-    return {
-      protocol: spec.protocol,
-      endpoint: spec.endpoint,
-      enabled: false,
-      served: false,
-      get detail() {
-        return translateNow("source.responder.probe.failed.before.an.http.stat.e6657440c5");
-      },
-    };
-  }
-}
-
-async function protocolProbeContentMatches(spec: ProtocolProbeSpec, res: Response): Promise<boolean> {
-  const mediaType = (res.headers.get("Content-Type") ?? "").split(";", 1)[0].trim().toLowerCase();
-  const bytes = new Uint8Array(await res.arrayBuffer());
-  if (bytes.byteLength === 0 || bytes.byteLength > 1 << 20) return false;
-  const text = new TextDecoder().decode(bytes);
-
-  switch (spec.protocol) {
-    case "acme": {
-      if (mediaType !== "application/json") return false;
-      try {
-        const directory = JSON.parse(text) as Record<string, unknown>;
-        return ["newNonce", "newAccount", "newOrder", "keyChange", "revokeCert"].every(
-          (field) => typeof directory[field] === "string" && (directory[field] as string).length > 0,
-        );
-      } catch {
-        return false;
-      }
-    }
-    case "est": {
-      if (mediaType !== "application/pkcs7-mime" || res.headers.get("Content-Transfer-Encoding")?.toLowerCase() !== "base64") return false;
-      const encoded = text.replace(/\s/g, "");
-      if (!encoded || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) return false;
-      try {
-        const der = globalThis.atob(encoded);
-        return der.length > 1 && der.charCodeAt(0) === 0x30;
-      } catch {
-        return false;
-      }
-    }
-    case "scep": {
-      if (mediaType !== "text/plain") return false;
-      const capabilities = new Set(
-        text
-          .split(/\r?\n/)
-          .map((line) => line.trim())
-          .filter(Boolean),
-      );
-      return ["POSTPKIOperation", "SHA-256", "SCEPStandard"].every((capability) => capabilities.has(capability));
-    }
-    case "cmp":
-      return res.status === 405 && mediaType === "text/plain" && text.trim() === "cmp: POST required (RFC 6712)";
-    case "ssh":
-      return mediaType === "text/plain" && /^(?:ssh-(?:rsa|ed25519)|ecdsa-sha2-nistp(?:256|384|521))\s+[A-Za-z0-9+/]+={0,3}(?:\s|$)/.test(text.trim());
-    case "tsa":
-      return (
-        res.status === 405 &&
-        mediaType === "text/plain" &&
-        (res.headers.get("Allow") ?? "")
-          .split(",")
-          .map((method) => method.trim().toUpperCase())
-          .includes("POST") &&
-        text.trim() === "method not allowed"
-      );
-    default:
-      return false;
-  }
-}
-
-async function estQualification(): Promise<ESTQualificationResult> {
-  const ca = await protocolProbe(protocolStatusProbes.find((spec) => spec.protocol === "est")!);
-  const checks: ESTQualificationCheck[] = [
-    {
-      id: "ca-chain",
-      method: "GET",
-      endpoint: "/.well-known/est/cacerts",
-      expected: "HTTP 200 with a base64 PKCS#7 CA chain",
-      status_code: ca.status_code,
-      passed: ca.served,
-      detail: ca.served ? translateNow("protocols.estCheck.caPassed") : (ca.detail ?? translateNow("protocols.estCheck.caFailed")),
-    },
-  ];
-
-  if (previewTransportIsolated) {
-    checks.push(
-      {
-        id: "csr-rules",
-        method: "GET",
-        endpoint: "/.well-known/est/csrattrs",
-        expected: "HTTP 204 or a valid CSR-attributes response",
-        passed: false,
-        detail: translateNow("preview.probesDisabled"),
-      },
-      {
-        id: "auth-gate",
-        method: "POST",
-        endpoint: "/.well-known/est/simpleenroll",
-        expected: "HTTP 401 with a Bearer authentication challenge",
-        passed: false,
-        detail: translateNow("preview.probesDisabled"),
-      },
-    );
-    return { checked_at: new Date().toISOString(), passed: false, checks };
-  }
-
-  try {
-    const response = await fetch("/.well-known/est/csrattrs", {
-      method: "GET",
-      credentials: "omit",
-      headers: { Accept: "application/csrattrs, */*" },
-    });
-    const passed = response.status === 204;
-    checks.push({
-      id: "csr-rules",
-      method: "GET",
-      endpoint: "/.well-known/est/csrattrs",
-      expected: "HTTP 204 or a valid CSR-attributes response",
-      status_code: response.status,
-      passed,
-      detail: passed ? translateNow("protocols.estCheck.csrPassed") : translateNow("protocols.estCheck.csrHTTPFailed", { status: response.status }),
-    });
-  } catch {
-    checks.push({
-      id: "csr-rules",
-      method: "GET",
-      endpoint: "/.well-known/est/csrattrs",
-      expected: "HTTP 204 or a valid CSR-attributes response",
-      passed: false,
-      detail: translateNow("protocols.estCheck.csrNetworkFailed"),
-    });
-  }
-
-  try {
-    const response = await fetch("/.well-known/est/simpleenroll", {
-      method: "POST",
-      credentials: "omit",
-      headers: { Accept: "application/pkcs7-mime, */*", "Content-Type": "application/pkcs10" },
-    });
-    const challenge = response.headers.get("WWW-Authenticate") ?? "";
-    const passed = response.status === 401 && /^Bearer(?:\s|$)/i.test(challenge);
-    checks.push({
-      id: "auth-gate",
-      method: "POST",
-      endpoint: "/.well-known/est/simpleenroll",
-      expected: "HTTP 401 with a Bearer authentication challenge",
-      status_code: response.status,
-      passed,
-      detail: passed
-        ? translateNow("protocols.estCheck.authPassed")
-        : response.status === 401
-          ? translateNow("protocols.estCheck.authChallengeFailed")
-          : translateNow("protocols.estCheck.authHTTPFailed", { status: response.status }),
-    });
-  } catch {
-    checks.push({
-      id: "auth-gate",
-      method: "POST",
-      endpoint: "/.well-known/est/simpleenroll",
-      expected: "HTTP 401 with a Bearer authentication challenge",
-      passed: false,
-      detail: translateNow("protocols.estCheck.authNetworkFailed"),
-    });
-  }
-
-  return {
-    checked_at: new Date().toISOString(),
-    passed: checks.every((check) => check.passed),
-    checks,
-  };
-}
-
-function isDefiniteLengthDERSequence(bytes: Uint8Array): boolean {
-  if (bytes.byteLength < 3 || bytes.byteLength > 1 << 20 || bytes[0] !== 0x30) return false;
-  const firstLength = bytes[1];
-  if (firstLength < 0x80) return 2 + firstLength === bytes.byteLength;
-  const lengthOctets = firstLength & 0x7f;
-  if (lengthOctets === 0 || lengthOctets > 4 || bytes.byteLength < 2 + lengthOctets) return false;
-  if (bytes[2] === 0) return false;
-  let contentLength = 0;
-  for (let index = 0; index < lengthOctets; index += 1) contentLength = contentLength * 256 + bytes[2 + index];
-  return 2 + lengthOctets + contentLength === bytes.byteLength;
-}
-
-async function scepQualification(): Promise<SCEPQualificationResult> {
-  if (previewTransportIsolated) throw previewRefusal();
-
-  const checks: SCEPQualificationCheck[] = [];
-  try {
-    const response = await fetch("/scep?operation=GetCACaps", {
-      method: "GET",
-      credentials: "omit",
-      headers: { Accept: "text/plain" },
-    });
-    const mediaType = (response.headers.get("Content-Type") ?? "").split(";", 1)[0].trim().toLowerCase();
-    const capabilities = new Set(
-      (await response.text())
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean),
-    );
-    const passed =
-      response.status === 200 &&
-      mediaType === "text/plain" &&
-      ["POSTPKIOperation", "SHA-256", "SCEPStandard"].every((capability) => capabilities.has(capability));
-    checks.push({
-      id: "capabilities",
-      method: "GET",
-      endpoint: "/scep?operation=GetCACaps",
-      expected: "HTTP 200 with POSTPKIOperation, SHA-256, and SCEPStandard",
-      status_code: response.status,
-      passed,
-      detail: passed
-        ? translateNow("protocols.scepCheck.capabilitiesPassed")
-        : translateNow("protocols.scepCheck.capabilitiesHTTPFailed", { status: response.status }),
-    });
-  } catch {
-    checks.push({
-      id: "capabilities",
-      method: "GET",
-      endpoint: "/scep?operation=GetCACaps",
-      expected: "HTTP 200 with POSTPKIOperation, SHA-256, and SCEPStandard",
-      passed: false,
-      detail: translateNow("protocols.scepCheck.capabilitiesNetworkFailed"),
-    });
-  }
-
-  try {
-    const response = await fetch("/scep?operation=GetCACert", {
-      method: "GET",
-      credentials: "omit",
-      headers: { Accept: "application/x-x509-ca-cert, application/x-x509-ca-ra-cert" },
-    });
-    const mediaType = (response.headers.get("Content-Type") ?? "").split(";", 1)[0].trim().toLowerCase();
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    const passed =
-      response.status === 200 &&
-      (mediaType === "application/x-x509-ca-cert" || mediaType === "application/x-x509-ca-ra-cert") &&
-      isDefiniteLengthDERSequence(bytes);
-    checks.push({
-      id: "ca-material",
-      method: "GET",
-      endpoint: "/scep?operation=GetCACert",
-      expected: "HTTP 200 with a structurally valid CA certificate or CA/RA bundle",
-      status_code: response.status,
-      passed,
-      detail: passed ? translateNow("protocols.scepCheck.caPassed") : translateNow("protocols.scepCheck.caHTTPFailed", { status: response.status }),
-    });
-  } catch {
-    checks.push({
-      id: "ca-material",
-      method: "GET",
-      endpoint: "/scep?operation=GetCACert",
-      expected: "HTTP 200 with a structurally valid CA certificate or CA/RA bundle",
-      passed: false,
-      detail: translateNow("protocols.scepCheck.caNetworkFailed"),
-    });
-  }
-
-  try {
-    const response = await fetch("/scep?operation=PKIOperation", {
-      method: "POST",
-      credentials: "omit",
-      headers: { Accept: "text/plain", "Content-Type": "application/x-pki-message" },
-    });
-    const mediaType = (response.headers.get("Content-Type") ?? "").split(";", 1)[0].trim().toLowerCase();
-    const body = await response.text();
-    const passed = response.status === 400 && mediaType === "text/plain" && body.trim() === "scep: empty PKIOperation body";
-    checks.push({
-      id: "empty-message-gate",
-      method: "POST",
-      endpoint: "/scep?operation=PKIOperation",
-      expected: "HTTP 400 before an empty PKI message can reach enrollment",
-      status_code: response.status,
-      passed,
-      detail: passed ? translateNow("protocols.scepCheck.emptyPassed") : translateNow("protocols.scepCheck.emptyHTTPFailed", { status: response.status }),
-    });
-  } catch {
-    checks.push({
-      id: "empty-message-gate",
-      method: "POST",
-      endpoint: "/scep?operation=PKIOperation",
-      expected: "HTTP 400 before an empty PKI message can reach enrollment",
-      passed: false,
-      detail: translateNow("protocols.scepCheck.emptyNetworkFailed"),
-    });
-  }
-
-  return { checked_at: new Date().toISOString(), passed: checks.every((check) => check.passed), checks };
-}
-
-function protocolProbeFailureDetail(res: Response): string {
-  if (res.status === 404) return "Responder path was not mounted by this control plane.";
-  if (res.status === 503) return "Responder is mounted but currently unavailable.";
-  if (res.status === 401 || res.status === 403) return "Responder rejected the browser session.";
-  return res.statusText || `Responder returned HTTP ${res.status}.`;
-}
-
-/** newIdempotencyKey returns a fresh key so a retried mutation cannot execute
- * twice (AN-5). */
-function newIdempotencyKey(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
-  return `idem-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-/** mutate issues a state-changing request with an optional JSON body and an
- * Idempotency-Key. */
-export function mutate<T>(method: string, path: string, body?: unknown, idempotencyKey = newIdempotencyKey()): Promise<T> {
-  return req<T>(path, {
-    method,
-    headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-}
-
-/** A public mutation whose tenant hint comes only from the authenticated
- * browser session. Refuse before serializing or sending a credential when the
- * session tenant has not been resolved. The server still authenticates the
- * credential and rejects a tenant/MAC mismatch. */
-function mutateForAuthenticatedBrowserTenant<T>(path: string, body: unknown, idempotencyKey = newIdempotencyKey()): Promise<T> {
-  if (!authenticatedBrowserTenantID) {
-    return Promise.reject(new ApiError(0, "The browser session has no verified tenant. Reload and sign in before testing a machine credential."));
-  }
-  return req<T>(path, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Idempotency-Key": idempotencyKey,
-      "X-Tenant-ID": authenticatedBrowserTenantID,
-    },
-    body: JSON.stringify(body),
-  });
-}
-
 // AUD-42: this licensed command is intentionally typed beside the shared HTTP
 // client. Community builds can still compile the thin client, but an unlicensed
 // server has no POST route and therefore fails closed before any command exists.
@@ -2140,7 +1570,7 @@ export interface Api {
   decommissionNHI(input: NHIDecommissionRequest): Promise<NHIDecommissionResponse>;
   ownershipAttribution(): Promise<OwnershipAttribution>;
   getIdentity(id: string): Promise<Identity>;
-  createIdentity(input: IdentityRequest): Promise<Identity>;
+  createIdentity(input: IdentityRequest, idempotencyKey?: string): Promise<Identity>;
   previewIdentityTransition(id: string, to: TransitionRequest["to"], reason?: string, subjectCSRPEM?: string): Promise<IdentityTransitionPreview>;
   transitionIdentity(
     id: string,
@@ -2534,12 +1964,7 @@ async function allPendingApprovalRequests(): Promise<PendingApprovalRequest[]> {
   return items;
 }
 
-const liveApi: Api = {
-  me: () => req<Me>("/auth/me"),
-  authMethods: () => req<AuthMethods>("/auth/methods"),
-  logout: () => req<void>("/auth/logout", { method: "POST" }),
-  capabilities: () => req<CapabilityView>("/api/v1/capabilities"),
-  editions: () => req<EditionsInfo>("/api/v1/editions"),
+const liveApi: Omit<Api, keyof BootstrapApi> = {
   enterpriseSupportStatus: () => req<EnterpriseSupportStatus>("/api/v1/support/enterprise"),
   managedOfferingStatus: () => req<ManagedOfferingStatus>("/api/v1/managed-offering/status"),
   scaleOrchestration: () => req<ScaleOrchestrationPlan>("/api/v1/scale/orchestration"),
@@ -2671,7 +2096,7 @@ const liveApi: Api = {
   decommissionNHI: (input) => mutate<NHIDecommissionResponse>("POST", "/api/v1/nhi/decommission", input),
   ownershipAttribution: () => req<OwnershipAttribution>("/api/v1/ownership/attribution"),
   getIdentity: (id) => req<Identity>(`/api/v1/identities/${encodeURIComponent(id)}`),
-  createIdentity: (input) => mutate<Identity>("POST", "/api/v1/identities", input),
+  createIdentity: (input, idempotencyKey) => mutate<Identity>("POST", "/api/v1/identities", input, idempotencyKey),
   previewIdentityTransition: (id, to, reason, subjectCSRPEM) =>
     postRead<IdentityTransitionPreview>(`/api/v1/identities/${encodeURIComponent(id)}/transitions/preview`, {
       to,
@@ -2991,13 +2416,12 @@ const liveApi: Api = {
   issueAttestedSSHUserCert: (input, idempotencyKey) => mutate<SSHAttestedUserCert>("POST", "/api/v1/ssh/attested-user-certs", input, idempotencyKey),
   revokeSSHCertificate: (input) => mutate<SSHStatus>("POST", "/api/v1/ssh/certificates/revoke", input),
   retireSSHHost: (input) => mutate<SSHHostRetirement>("POST", "/api/v1/ssh/hosts/retire", input),
-  protocolStatuses: async () => ({
-    source: "public_responder_probe",
-    checked_at: new Date().toISOString(),
-    items: await Promise.all(protocolStatusProbes.map((spec) => protocolProbe(spec))),
-  }),
-  estQualification,
-  scepQualification,
+  // Browser protocol probes are feature work. Keep their parsers and probe
+  // tables out of login and the shell; preview isolation is still enforced by
+  // this stable API wrapper and again inside the loaded implementation.
+  protocolStatuses: () => import("./protocolProbes").then((module) => module.protocolStatuses()),
+  estQualification: () => import("./protocolProbes").then((module) => module.estQualification()),
+  scepQualification: () => import("./protocolProbes").then((module) => module.scepQualification()),
   cmpQualification: () => postRead<CMPQualification>("/api/v1/protocols/cmp/qualification"),
   tsaQualification: () => postRead<TSAQualification>("/api/v1/protocols/tsa/qualification"),
   spiffeQualification: () => postRead<SPIFFEQualification>("/api/v1/protocols/spiffe/qualification"),
@@ -3093,7 +2517,6 @@ const liveApi: Api = {
   rewrapTransit: (input) => mutate<TransitCiphertext>("POST", "/api/v1/transit/rewrap", input),
   signTransit: (input) => mutate<TransitSignature>("POST", "/api/v1/transit/sign", input),
   verifyTransit: (input) => mutate<TransitVerify>("POST", "/api/v1/transit/verify", input),
-  notifications: (options) => req<NotificationList>(`/api/v1/notifications${notificationQueryString(options)}`),
   notificationChannels: () => req<NotificationChannelList>("/api/v1/notification-channels"),
   createNotificationChannel: (input) => mutate<NotificationChannel>("POST", "/api/v1/notification-channels", input),
   getNotificationChannel: (id) => req<NotificationChannel>(`/api/v1/notification-channels/${encodeURIComponent(id)}`),
@@ -3116,23 +2539,7 @@ const liveApi: Api = {
   requeueNotification: (id) => mutate<Notification>("POST", `/api/v1/notifications/${encodeURIComponent(id)}/requeue`),
 };
 
-/** One stable wrapper per API method keeps normal query function identities
- * unchanged. In preview, only methods explicitly present in previewData can
- * resolve; mutations and unmodeled reads fail before liveApi can reach req or
- * fetch. */
-function createPreviewAwareApi(implementation: Api): Api {
-  const wrapped: Record<string, (...args: unknown[]) => Promise<unknown>> = {};
-  for (const [method, candidate] of Object.entries(implementation)) {
-    const invoke = candidate as (...args: unknown[]) => Promise<unknown>;
-    wrapped[method] = (...args: unknown[]) => (previewTransportIsolated ? previewResponse(method) : invoke(...args));
-  }
-  return wrapped as unknown as Api;
-}
-
-export const api: Api = createPreviewAwareApi(liveApi);
-
-/** loginURL is where the browser is sent to begin the OIDC flow. */
-export const loginURL = "/auth/login";
+export const api: Api = { ...createPreviewAwareApi(liveApi), ...bootstrapApi };
 
 function auditQueryString(options?: AuditQuery): string {
   return `?${auditQueryParams(options).toString()}`;
@@ -3181,15 +2588,6 @@ function pageQueryString(options?: { limit?: number; cursor?: string }, scopedId
   if (options?.limit != null) qs.set("limit", String(options.limit));
   if (options?.cursor) qs.set("cursor", options.cursor);
   if (scopedId) qs.set(scopedKey, scopedId);
-  const suffix = qs.toString();
-  return suffix ? `?${suffix}` : "";
-}
-
-function notificationQueryString(options?: { limit?: number; cursor?: string; status?: Notification["status"] }): string {
-  const qs = new URLSearchParams();
-  if (options?.limit != null) qs.set("limit", String(options.limit));
-  if (options?.cursor) qs.set("cursor", options.cursor);
-  if (options?.status) qs.set("status", options.status);
   const suffix = qs.toString();
   return suffix ? `?${suffix}` : "";
 }

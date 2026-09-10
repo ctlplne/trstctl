@@ -1,11 +1,14 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { Cable, CheckCircle2, FileKey2, KeyRound, Loader2, Network, RotateCcw, Server, ShieldCheck } from "lucide-react";
-import { ApiError, api, type Agent, type EnrollmentToken, type Identity, type Owner, type ProtocolProfileStatus } from "@/lib/api";
+import { Cable, CheckCircle2, KeyRound, Loader2, Network, RotateCcw, Server, ShieldCheck } from "lucide-react";
+import { ApiError, api, type Agent, type EnrollmentToken, type Identity, type ProtocolProfileStatus } from "@/lib/api";
+import { useAuth } from "@/auth/AuthProvider";
+import { FirstCertificateStep } from "@/pages/wizard/FirstCertificateStep";
+import type { WizardRecordedCertificate } from "@/lib/wizardFirstCertificate";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
-import { forgetIssuedIdentity, markOnboardingComplete, recallIssuedIdentity, rememberIssuedIdentity, resetOnboarding } from "@/lib/onboardingState";
+import { forgetIssuedIdentity, markOnboardingComplete, resetOnboarding } from "@/lib/onboardingState";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { useCapabilityExecution } from "@/lib/capabilities";
 import { buildAgentInstallPlan } from "@/lib/agentInstall";
@@ -59,14 +62,21 @@ function onboardingSteps(t: ReturnType<typeof useTranslation>["t"]): CarouselSte
  * flag (see lib/onboardingState) so the dashboard stops prompting setup on later
  * visits. "Reopen setup guide" clears the flag. */
 export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
+  const { user, preview } = useAuth();
+  const scope = JSON.stringify([user?.tenant_id, user?.subject, preview]);
+  return <WizardBody key={scope} pollMs={pollMs} />;
+}
+
+function WizardBody({ pollMs }: { pollMs: number }) {
   const { t } = useTranslation();
   const steps = onboardingSteps(t);
   const [stepIndex, setStepIndex] = useState(0);
   const [issuerReady, setIssuerReady] = useState(false);
-  const [issuerName, setIssuerName] = useState<string | null>(null);
   const [issuerProof, setIssuerProof] = useState<string | null>(null);
   const [protocolSummary, setProtocolSummary] = useState<string | null>(null);
-  const [certificate, setCertificate] = useState<Identity | null>(null);
+  const [recorded, setRecorded] = useState<WizardRecordedCertificate | null>(null);
+  const certificate = recorded?.result.certificate.status === "active" ? recorded.identity : null;
+  const onRecorded = useCallback((value: WizardRecordedCertificate | null) => setRecorded(value), []);
   const [integrationSummary, setIntegrationSummary] = useState<string | null>(null);
   const [agent, setAgent] = useState<Agent | null>(null);
   const [agentDeferred, setAgentDeferred] = useState(false);
@@ -74,37 +84,11 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
 
   const currentStep = steps[stepIndex]?.id as WizardStepID;
 
-  // Resume after a reload: if this browser already issued the first certificate,
-  // re-read that identity from the server and treat the certificate step as done
-  // only when the server still reports it issued or deployed. A stale or foreign
-  // id is forgotten and the form is shown as before, so nothing is trusted from
-  // storage alone and no second certificate is needed to continue.
+  // The old browser-local identity ID has no CSR or request-key binding.
+  // It cannot establish delivery. The new workflow retains an exact attempt
+  // in memory only and explains reload uncertainty instead of minting on mount.
   useEffect(() => {
-    if (certificate) return;
-    const remembered = recallIssuedIdentity();
-    if (!remembered) return;
-    let cancelled = false;
-    api
-      .getIdentity(remembered)
-      .then((identity) => {
-        if (cancelled) return;
-        if (identity && (identity.status === "issued" || identity.status === "deployed")) {
-          setCertificate(identity);
-          setStepIndex((current) => {
-            const certificateIndex = steps.findIndex((step) => step.id === "certificate");
-            return current < certificateIndex ? certificateIndex : current;
-          });
-        } else {
-          forgetIssuedIdentity();
-        }
-      })
-      .catch(() => {
-        if (!cancelled) forgetIssuedIdentity();
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    forgetIssuedIdentity();
   }, []);
 
   const nextEnabled =
@@ -117,10 +101,9 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
   function resetWizard() {
     setStepIndex(0);
     setIssuerReady(false);
-    setIssuerName(null);
     setIssuerProof(null);
     setProtocolSummary(null);
-    setCertificate(null);
+    setRecorded(null);
     setIntegrationSummary(null);
     setAgent(null);
     setAgentDeferred(false);
@@ -149,10 +132,7 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
               <h2 id="setup-complete-heading" className="text-title font-semibold">
                 {translateNow("source.setup.complete.aadaf35950")}
               </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {certificate?.name ?? translateNow("source.your.first.certificate.d48ee36f3a")} is tracked. trstctl will alert before expiry; renewal is a
-                manual, one-click action today.
-              </p>
+              <p className="mt-1 text-sm text-muted-foreground">{t("wizard.firstLeaf.completed")}</p>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -192,25 +172,15 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
         {currentStep === "issuer" && (
           <IssuerStep
             ready={issuerReady}
-            issuerName={issuerName}
             proof={issuerProof}
-            onReady={(name, proof) => {
-              setIssuerName(name);
+            onReady={(_name, proof) => {
               setIssuerProof(proof);
               setIssuerReady(true);
             }}
           />
         )}
         {currentStep === "protocols" && <ProtocolProfileStep onReady={setProtocolSummary} />}
-        {currentStep === "certificate" && (
-          <CertificateStep
-            certificate={certificate}
-            onIssued={(identity) => {
-              setCertificate(identity);
-              rememberIssuedIdentity(identity.id);
-            }}
-          />
-        )}
+        {currentStep === "certificate" && <FirstCertificateStep onRecorded={onRecorded} />}
         {currentStep === "integrations" && certificate && <IntegrationProofStep identity={certificate} onReady={setIntegrationSummary} />}
         {currentStep === "agent" && (
           <AgentStep
@@ -227,7 +197,7 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
         {currentStep === "complete" && (
           <CompleteStep
             certificateName={certificate?.name ?? null}
-            issuerName={issuerName}
+            issuerName={recorded?.result.certificate.issuer ?? null}
             protocolSummary={protocolSummary}
             integrationSummary={integrationSummary}
             agent={agent}
@@ -343,17 +313,7 @@ function ProtocolProfileStep({ onReady }: { onReady: (summary: string) => void }
   );
 }
 
-function IssuerStep({
-  issuerName,
-  onReady,
-  proof,
-  ready,
-}: {
-  issuerName: string | null;
-  onReady: (name: string, proof: string) => void;
-  proof: string | null;
-  ready: boolean;
-}) {
+function IssuerStep({ onReady, proof, ready }: { onReady: (name: string, proof: string) => void; proof: string | null; ready: boolean }) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -362,17 +322,12 @@ function IssuerStep({
     setBusy(true);
     setError(null);
     try {
-      const [system, issuers] = await Promise.all([api.platformSystem(), api.issuers()]);
+      const system = await api.platformSystem();
       const signer = system.dependencies.find((dependency) => dependency.name.toLowerCase() === "signer");
       if (system.signer_mode === "none" || !signer?.ready) {
         throw new Error(t("wizard.issuer.signerUnhealthy", { error: signer?.error ?? t("wizard.issuer.signerMissing") }));
       }
-      const selected = issuers.find((issuer) => issuer.internal) ?? issuers[0];
-      if (selected) {
-        onReady(selected.name, t("wizard.issuer.readyNamed", { name: selected.name }));
-      } else {
-        onReady(t("wizard.issuer.builtinName"), t("wizard.issuer.readyBuiltIn"));
-      }
+      onReady(t("wizard.firstLeaf.signerOnly"), t("wizard.firstLeaf.signerHealth"));
     } catch (err) {
       setError(t("wizard.issuer.error", { error: String(err instanceof Error ? err.message : err) }));
     } finally {
@@ -388,13 +343,13 @@ function IssuerStep({
           <h3 id="step-issuer-heading" className="text-title font-semibold">
             {t("wizard.issuer.heading")}
           </h3>
-          <p className="mt-1 text-sm text-muted-foreground">{t("wizard.issuer.description")}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t("wizard.firstLeaf.signerDescription")}</p>
         </div>
       </div>
       {ready ? (
         <p className="flex items-center gap-2 text-sm font-medium text-status-success">
           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-          {proof ?? t("wizard.issuer.readyNamed", { name: issuerName ?? t("wizard.issuer.builtinName") })}
+          {proof ?? t("wizard.firstLeaf.signerHealth")}
         </p>
       ) : (
         <Button type="button" className="justify-self-start" onClick={() => void confirmIssuer()} disabled={busy}>
@@ -408,194 +363,6 @@ function IssuerStep({
         </p>
       )}
     </section>
-  );
-}
-
-function CertificateStep({ certificate, onIssued }: { certificate: Identity | null; onIssued: (identity: Identity) => void }) {
-  const { t } = useTranslation();
-  const [name, setName] = useState("");
-  const [applicationID, setApplicationID] = useState("");
-  const [environment, setEnvironment] = useState("");
-  const [alertContact, setAlertContact] = useState("");
-  const [ownershipConfirmed, setOwnershipConfirmed] = useState(false);
-  const [createdOwner, setCreatedOwner] = useState<Owner | null>(null);
-  const [wildcardAck, setWildcardAck] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const serviceName = name.trim() || "first-service";
-  const isWildcard = serviceName.startsWith("*.");
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-    setBusy(true);
-    try {
-      if (!applicationID.trim() || !environment.trim() || !ownershipConfirmed) {
-        throw new Error(t("wizard.certificate.ownerRequired"));
-      }
-      // DP2-013: an owner without an alert contact is unreachable, and every
-      // wizard-issued certificate then opened as an owner gap. The contact is part
-      // of naming the owner, not a later chore.
-      if (!alertContact.trim() || !alertContact.includes("@")) {
-        throw new Error(t("wizard.certificate.ownerAlertContactRequired"));
-      }
-      let owner = createdOwner;
-      if (!owner) {
-        owner = await api.createOwner({
-          kind: "workload",
-          name: serviceName,
-          service: serviceName,
-          application_id: applicationID.trim(),
-          environment: environment.trim(),
-          email: alertContact.trim(),
-        });
-        setCreatedOwner(owner);
-      }
-      if (!owner.ownership_complete) {
-        throw new Error(t("wizard.certificate.ownerNotReady"));
-      }
-      if (!owner.ownership_current) {
-        owner = await api.attestOwner(owner.id);
-        setCreatedOwner(owner);
-      }
-      if (!owner.ownership_complete || !owner.ownership_current) {
-        throw new Error(t("wizard.certificate.ownerNotReady"));
-      }
-      const issued = await api.issueCertificate({
-        name: serviceName,
-        ownerId: owner.id,
-        ...(isWildcard ? { wildcardBlastRadiusAcknowledged: wildcardAck } : {}),
-      });
-      onIssued(issued);
-    } catch (err) {
-      setError(`Could not issue the certificate: ${String(err instanceof Error ? err.message : err)}`);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <form onSubmit={submit} aria-labelledby="step-cert-heading" className="grid gap-4">
-      <div className="flex items-start gap-3">
-        <FileKey2 className="mt-1 h-5 w-5 shrink-0 text-brand-accent" aria-hidden="true" />
-        <div>
-          <h3 id="step-cert-heading" className="text-title font-semibold">
-            {translateNow("source.issue.your.first.certificate.8fbb374ce0")}
-          </h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Name the service this certificate belongs to. This action uses an operator credential with certificate issuance authority; setup and agent tokens
-            cannot issue certificates.
-          </p>
-        </div>
-      </div>
-      <label htmlFor="svc-name" className="grid gap-1 text-sm font-medium">
-        {translateNow("source.service.name.1bb8870cc0")}
-        <input
-          id="svc-name"
-          value={name}
-          onChange={(event) => {
-            setName(event.target.value);
-            if (!event.target.value.trim().startsWith("*.")) setWildcardAck(false);
-          }}
-          className="w-full rounded-control border border-border bg-background px-3 py-2 text-body"
-          placeholder={translateNow("source.payments.api.682a1c47a1")}
-        />
-      </label>
-      <fieldset className="grid gap-3 rounded-control border border-border bg-muted/20 p-3">
-        <legend className="px-1 text-sm font-semibold">{t("wizard.certificate.ownerHeading")}</legend>
-        <p className="text-sm text-muted-foreground">{t("wizard.certificate.ownerHelp")}</p>
-        <label htmlFor="wizard-owner-application-id" className="grid gap-1 text-sm font-medium">
-          {t("owners.readiness.applicationID")}
-          <input
-            id="wizard-owner-application-id"
-            value={applicationID}
-            onChange={(event) => setApplicationID(event.target.value)}
-            className="w-full rounded-control border border-border bg-background px-3 py-2 text-body"
-            placeholder={t("owners.readiness.applicationPlaceholder")}
-          />
-        </label>
-        <label htmlFor="wizard-owner-environment" className="grid gap-1 text-sm font-medium">
-          {t("owners.readiness.environment")}
-          <input
-            id="wizard-owner-environment"
-            value={environment}
-            onChange={(event) => setEnvironment(event.target.value)}
-            className="w-full rounded-control border border-border bg-background px-3 py-2 text-body"
-            placeholder={t("owners.readiness.environmentPlaceholder")}
-          />
-        </label>
-        <label htmlFor="wizard-owner-alert-contact" className="grid gap-1 text-sm font-medium">
-          {t("wizard.certificate.ownerAlertContact")}
-          <input
-            id="wizard-owner-alert-contact"
-            type="email"
-            className="ui-input"
-            value={alertContact}
-            onChange={(event) => setAlertContact(event.target.value)}
-            placeholder={t("wizard.certificate.ownerAlertContactPlaceholder")}
-            aria-describedby="wizard-owner-alert-contact-help"
-            required
-          />
-        </label>
-        <p id="wizard-owner-alert-contact-help" className="text-xs text-muted-foreground">
-          {t("wizard.certificate.ownerAlertContactHelp")}
-        </p>
-        <label className="flex items-start gap-2 text-sm font-medium" htmlFor="wizard-owner-confirm">
-          <input
-            id="wizard-owner-confirm"
-            type="checkbox"
-            aria-label={t("wizard.certificate.ownerConfirm")}
-            checked={ownershipConfirmed}
-            onChange={(event) => setOwnershipConfirmed(event.target.checked)}
-            className="mt-1 h-4 w-4 rounded border-border"
-          />
-          <span>
-            {t("wizard.certificate.ownerConfirm")}
-            <span className="block text-xs font-normal text-muted-foreground">{t("wizard.certificate.ownerConfirmHelp")}</span>
-          </span>
-        </label>
-      </fieldset>
-      {isWildcard && (
-        <label className="flex items-start gap-2 text-sm font-medium" htmlFor="wizard-wildcard-ack">
-          <input
-            id="wizard-wildcard-ack"
-            type="checkbox"
-            checked={wildcardAck}
-            onChange={(event) => setWildcardAck(event.target.checked)}
-            className="mt-1 h-4 w-4 rounded border-border"
-          />
-          <span>
-            {translateNow("source.acknowledge.wildcard.blast.radius.868520eb71")}
-            <span className="block text-xs font-normal text-muted-foreground">DNS-01 validation is required; renewal uses the lifecycle scheduler.</span>
-          </span>
-        </label>
-      )}
-      {certificate ? (
-        <div className="flex flex-wrap items-center gap-3">
-          <p className="flex items-center gap-2 text-sm font-medium text-status-success">
-            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-            {certificate.name} {translateNow("source.was.issued.fe1574675b")}
-          </p>
-          <Link to="/certificates" className="text-sm font-medium text-brand-accent underline underline-offset-2 hover:text-foreground">
-            {t("wizard.certificate.openInventory")}
-          </Link>
-        </div>
-      ) : (
-        <Button
-          type="submit"
-          className="justify-self-start"
-          disabled={busy || !applicationID.trim() || !environment.trim() || !ownershipConfirmed || (isWildcard && !wildcardAck)}
-        >
-          {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-          {translateNow("source.issue.certificate.ff84c7ec37")}
-        </Button>
-      )}
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
-    </form>
   );
 }
 
@@ -1117,16 +884,16 @@ function CompleteStep({
     <section aria-labelledby="step-complete-heading" className="grid gap-4">
       <h3 id="step-complete-heading" className="flex items-center gap-2 text-title font-semibold">
         <CheckCircle2 className="h-5 w-5 text-status-success" aria-hidden="true" />
-        {translateNow("source.ready.for.certificate.operations.e99f6e538f")}
+        {t("wizard.firstLeaf.reviewSetup")}
       </h3>
       <dl className="grid gap-3 sm:grid-cols-2">
-        <SummaryItem label="Issuer" value={issuerName ?? "Internal CA"} />
+        <SummaryItem label={t("wizard.firstLeaf.issuerLabel")} value={issuerName ?? t("wizard.firstLeaf.unknownAuthority")} />
         <SummaryItem label="Protocols" value={protocolSummary ?? "Not configured"} />
         <SummaryItem label="Certificate" value={certificateName ?? "first-service"} />
         <SummaryItem label="Integrations" value={integrationSummary ?? "Not exercised"} />
         <SummaryItem label="Agent" value={agent?.name ?? t(agentDeferred ? "wizard.agent.summaryDeferred" : "wizard.agent.summaryMissing")} />
       </dl>
-      <p className="text-sm text-muted-foreground">{translateNow("source.trstctl.will.track.this.credential.and.ale.258f3fc1df")}</p>
+      <p className="text-sm text-muted-foreground">{t("wizard.firstLeaf.completed")}</p>
       <Button type="button" className="justify-self-start" onClick={onComplete}>
         {translateNow("source.complete.setup.fe3da4e70b")}
       </Button>

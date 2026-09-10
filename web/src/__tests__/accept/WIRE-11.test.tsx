@@ -5,6 +5,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Identities } from "@/pages/Identities";
+import { AppQueryProvider } from "@/lib/query";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -26,7 +27,9 @@ vi.mock("@/lib/api", async (orig) => {
 function renderIdentities() {
   return render(
     <MemoryRouter>
-      <Identities />
+      <AppQueryProvider>
+        <Identities />
+      </AppQueryProvider>
     </MemoryRouter>,
   );
 }

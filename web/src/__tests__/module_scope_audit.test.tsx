@@ -25,6 +25,11 @@ const { apiMock } = vi.hoisted(() => ({
   } as Record<string, ReturnType<typeof vi.fn>>,
 }));
 
+vi.mock("@/lib/bootstrapApi", async (orig) => {
+  const actual = await orig<typeof import("@/lib/bootstrapApi")>();
+  return { ...actual, bootstrapApi: apiMock };
+});
+
 vi.mock("@/lib/api", async (orig) => {
   const actual = await orig<typeof import("@/lib/api")>();
   return { ...actual, api: apiMock };
@@ -161,6 +166,8 @@ describe("audit module scope (S-B4)", () => {
     );
     renderAt("/audit?module=workload");
     await screen.findByTestId("audit-module-scope");
+    // The scope chip renders from the URL before the deferred query starts.
+    await waitFor(() => expect(apiMock.auditEvents).toHaveBeenCalledWith({ tool: "workloads_machines", limit: 50 }, expect.any(AbortSignal)));
     const oldSignal = apiMock.auditEvents.mock.calls[0][1] as AbortSignal;
     await userEvent.setup().click(screen.getByRole("button", { name: "Clear module scope" }));
     await screen.findByText("secret.rotate");

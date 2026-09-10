@@ -1,3 +1,5 @@
+import { AppQueryProvider } from "@/lib/query";
+import { installWizardWireFixture, wizardFixtureCSR } from "@/test/wizardWireFixture";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -13,7 +15,7 @@ const { apiMock } = vi.hoisted(() => ({
     agents: vi.fn(),
     createOwner: vi.fn(),
     attestOwner: vi.fn(),
-    issueCertificate: vi.fn(),
+    transitionIdentity: vi.fn(),
     protocolProfileStatus: vi.fn(),
     activateProtocolProfile: vi.fn(),
     connectorCatalog: vi.fn(),
@@ -21,6 +23,10 @@ const { apiMock } = vi.hoisted(() => ({
   },
 }));
 
+vi.mock("@/auth/AuthProvider", async (orig) => ({
+  ...(await orig<typeof import("@/auth/AuthProvider")>()),
+  useAuth: () => ({ user: { tenant_id: "t1", subject: "operator-1" }, preview: false }),
+}));
 vi.mock("@/lib/api", async (orig) => {
   const actual = await orig<typeof import("@/lib/api")>();
   return { ...actual, api: { ...actual.api, ...apiMock } };
@@ -29,7 +35,9 @@ vi.mock("@/lib/api", async (orig) => {
 function renderWizard() {
   return render(
     <MemoryRouter>
-      <Wizard pollMs={10} />
+      <AppQueryProvider>
+        <Wizard pollMs={10} />
+      </AppQueryProvider>
     </MemoryRouter>,
   );
 }
@@ -38,13 +46,14 @@ describe("DESIGN-001 first-certificate onboarding cues", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     for (const mock of Object.values(apiMock)) mock.mockReset();
+    installWizardWireFixture(apiMock);
     apiMock.issuers.mockResolvedValue([{ id: "iss-1", tenant_id: "t1", name: "Internal CA", kind: "x509_ca", internal: true }]);
     apiMock.platformSystem.mockResolvedValue({ signer_mode: "external", dependencies: [{ name: "signer", ready: true }] });
     apiMock.createEnrollmentToken.mockResolvedValue({ token: "BOOT-TOKEN-DESIGN-001" });
     apiMock.agents.mockResolvedValue([{ id: "agent-1", tenant_id: "t1", name: "edge-01", status: "online" }]);
     apiMock.createOwner.mockResolvedValue({ id: "owner-1", ownership_complete: true, ownership_current: false });
     apiMock.attestOwner.mockResolvedValue({ id: "owner-1", ownership_complete: true, ownership_current: true });
-    apiMock.issueCertificate.mockResolvedValue({ id: "id-1", tenant_id: "t1", name: "payments", kind: "x509_certificate", status: "issued" });
+    apiMock.transitionIdentity.mockResolvedValue({ id: "id-1", tenant_id: "t1", name: "payments", kind: "x509_certificate", status: "issued" });
     apiMock.protocolProfileStatus.mockResolvedValue({
       profile: "eval",
       active: false,
@@ -65,7 +74,7 @@ describe("DESIGN-001 first-certificate onboarding cues", () => {
 
     expect(screen.getByRole("heading", { name: "Confirm certificate signing" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Check signing health" }));
-    await waitFor(() => expect(apiMock.issuers).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(apiMock.platformSystem).toHaveBeenCalledTimes(1));
     await user.click(screen.getByRole("button", { name: "Next: enable protocols" }));
 
     expect(await screen.findByRole("heading", { name: "Enable enrollment protocols" })).toBeInTheDocument();
@@ -80,8 +89,11 @@ describe("DESIGN-001 first-certificate onboarding cues", () => {
     await user.type(screen.getByLabelText("Environment"), "production");
     await user.type(screen.getByLabelText("Alert contact"), "web-team@example.test");
     await user.click(screen.getByLabelText("I confirm this application owns the certificate"));
+    await user.type(screen.getByLabelText("Public certificate request (CSR)"), wizardFixtureCSR);
     await user.click(screen.getByRole("button", { name: "Issue certificate" }));
-    await waitFor(() => expect(apiMock.issueCertificate).toHaveBeenCalledWith({ name: "payments", ownerId: "owner-1" }));
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith(expect.objectContaining({ to: "issued", subject_csr_pem: wizardFixtureCSR })));
+    await screen.findByRole("button", { name: "Download leaf certificate" });
+    await screen.findByRole("button", { name: "Download leaf certificate" });
     await user.click(screen.getByRole("button", { name: "Next: prove integrations" }));
     expect(await screen.findByRole("heading", { name: "Verify configured integrations" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Skip integration proof for now" }));

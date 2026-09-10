@@ -625,13 +625,30 @@ func TestJourney005IssueFlowAndRouteParityStayWired(t *testing.T) {
 		"idempotencyKey,",
 	)
 	requireAllContained(t, "JOURNEY-005", "web/src/pages/Wizard.tsx", wizardTS,
-		"api.createOwner({",
+		`import { FirstCertificateStep } from "@/pages/wizard/FirstCertificateStep"`,
+		`<FirstCertificateStep onRecorded={onRecorded} />`,
+	)
+	wizardStep := read(t, "../web/src/pages/wizard/FirstCertificateStep.tsx")
+	requireAllContained(t, "JOURNEY-005", "FirstCertificateStep.tsx", wizardStep,
+		`from "@/lib/wizardFirstCertificate"`, "submitWizardCertificateAttempt(",
+		"newWizardCertificateAttempt(input, principal)",
+	)
+	wizardAttempt := read(t, "../web/src/lib/wizardFirstCertificate.ts")
+	requireAllContained(t, "JOURNEY-005", "wizardFirstCertificate.ts", wizardAttempt,
+		"const clean = wizardCertificateForm.parse(input)",
+		"input: Object.freeze(clean)",
+		`op.mutation<Owner>("/api/v1/owners", input, current.ownerKey)`,
 		`kind: "workload"`,
-		"application_id: applicationID.trim()",
-		"environment: environment.trim()",
-		"api.attestOwner(owner.id)",
+		`applicationID: z.string().trim().min(1).max(255)`,
+		`environment: z.string().trim().min(1).max(255)`,
+		"application_id: current.input.applicationID",
+		"environment: current.input.environment",
+		"op.mutation<Owner>(`/api/v1/owners/${encodeURIComponent(current.owner.id)}/attest`, {}, current.attestKey)",
 		"!owner.ownership_complete || !owner.ownership_current",
-		"ownerId: owner.id",
+		"ownerId: current.owner.id",
+		"subjectCSRPEM: current.input.subjectCSRPEM",
+		"submitFirstCertificateAttempt(current.issuance, current.principal,",
+		"{ to, reason, subject_csr_pem: csr }, key)",
 	)
 
 	// Route-parity proof must still exist (the docs-side parity test that binds web

@@ -177,7 +177,7 @@ describe("route 031 decision-first deployment destination design", () => {
     expect(apiMock.outboxCircuits).toHaveBeenCalledTimes(1);
     expect(apiMock.endpointKeyCustody).toHaveBeenCalledTimes(1);
     expect(await screen.findByRole("heading", { name: "Recent delivery receipts" })).toBeInTheDocument();
-    const deliveryTable = screen.getByRole("table", { name: "Recent connector delivery receipts" });
+    const deliveryTable = screen.getByRole("table", { name: "Loaded connector delivery receipts" });
     expect(within(deliveryTable).getByText("rollback:delivery-31")).toBeInTheDocument();
     expect(deliveryTable.parentElement).toHaveAttribute("tabindex", "0");
     expect(deliveryTable.parentElement).toHaveClass("min-w-0", "max-w-full", "w-full");

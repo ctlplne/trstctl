@@ -1,11 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Identities, graphNodeIdForIdentity } from "@/pages/Identities";
 // The real ApiError class (the vi.mock below spreads the real module and only
 // replaces `api`), used to simulate a 429 with a Retry-After hint (SURFACE-007).
 import { ApiError } from "@/lib/api";
+import { AppQueryProvider } from "@/lib/query";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -34,7 +35,9 @@ vi.mock("@/lib/api", async (orig) => {
 function renderIdentities() {
   return render(
     <MemoryRouter>
-      <Identities />
+      <AppQueryProvider>
+        <Identities />
+      </AppQueryProvider>
     </MemoryRouter>,
   );
 }
@@ -95,6 +98,260 @@ async function confirmReviewedAction(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("lifecycle actions from the UI", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
+  });
+
+  it.each(["pending", "refused"])("does not turn a %s global stream into absent receipts", async (state) => {
+    apiMock.connectorDeliveries.mockResolvedValue({ items: [], next_cursor: "" });
+    apiMock.rotationRuns.mockImplementation(() =>
+      state === "pending" ? new Promise(() => {}) : Promise.reject(new ApiError(403, JSON.stringify({ detail: "rotation read refused" }))),
+    );
+    const user = userEvent.setup();
+    renderIdentities();
+    await user.click((await screen.findAllByText("Delivery and rotation evidence"))[0]);
+    await waitFor(() => expect(apiMock.connectorDeliveries).toHaveBeenCalled());
+    expect(screen.queryByText("No delivery or rotation receipts yet")).not.toBeInTheDocument();
+    expect(screen.queryByText("No rotation runs")).not.toBeInTheDocument();
+    if (state === "refused") {
+      expect((await screen.findAllByText(/rotation read refused/)).length).toBeGreaterThan(0);
+      expect(screen.queryByText("No delivery or rotation receipts yet")).not.toBeInTheDocument();
+    }
+  });
+
+  it("reads selected-identity history beyond a partial tenant page", async () => {
+    const identity = { id: "dep-1", name: "scoped-history", kind: "x509_certificate", owner_id: "own-1", status: "deployed" };
+    apiMock.identities.mockResolvedValue([identity]);
+    apiMock.getIdentity.mockResolvedValue(identity);
+    apiMock.rotationRuns.mockImplementation(async (options) =>
+      options?.identityId
+        ? {
+            items: [
+              {
+                id: "scoped-run",
+                identity_id: identity.id,
+                status: "succeeded",
+                trigger: "manual",
+                successor_fingerprint: "actual-scoped-successor",
+                updated_at: "2026-09-10T17:26:45Z",
+              },
+            ],
+            next_cursor: "",
+          }
+        : { items: [], next_cursor: "tenant-next" },
+    );
+    apiMock.connectorDeliveries.mockImplementation(async (options) =>
+      options?.identityId ? { items: [], next_cursor: "" } : { items: [], next_cursor: "tenant-next" },
+    );
+    const user = userEvent.setup();
+    renderIdentities();
+    const drawer = await openIdentityDetails(user, identity.name);
+    expect(await within(drawer).findByText(/succeeded via manual; successor actual-scope/)).toBeInTheDocument();
+    expect(within(drawer).queryByText("no lifecycle rotation run yet")).not.toBeInTheDocument();
+    expect(apiMock.rotationRuns).toHaveBeenCalledWith(expect.objectContaining({ identityId: identity.id, limit: 50 }));
+    const row = screen
+      .getAllByText(identity.name)
+      .find((e) => e.closest("tr"))!
+      .closest("tr")!;
+    expect(row).toHaveTextContent("History is partial. Open details.");
+  });
+
+  it("keeps scoped history partial until the operator loads the remaining page", async () => {
+    const identity = { id: "dep-1", name: "paged-history", kind: "x509_certificate", owner_id: "own-1", status: "deployed" };
+    apiMock.identities.mockResolvedValue([identity]);
+    apiMock.getIdentity.mockResolvedValue(identity);
+    apiMock.rotationRuns.mockImplementation(async (options) => {
+      if (!options?.identityId) return { items: [], next_cursor: "tenant-next" };
+      return options.cursor
+        ? {
+            items: [
+              {
+                id: "last-id",
+                identity_id: identity.id,
+                status: "succeeded",
+                trigger: "manual",
+                successor_fingerprint: "newer-scoped-successor",
+                updated_at: "2026-09-10T17:26:45Z",
+              },
+            ],
+            next_cursor: "",
+          }
+        : {
+            items: [{ id: "first-id", identity_id: identity.id, status: "failed", trigger: "manual", updated_at: "2026-09-09T17:26:45Z" }],
+            next_cursor: "scoped-next",
+          };
+    });
+    const user = userEvent.setup();
+    renderIdentities();
+    const drawer = await openIdentityDetails(user, identity.name);
+    const more = await within(drawer).findByRole("button", { name: "Load more rotation records" });
+    expect(within(drawer).queryByText("no lifecycle rotation run yet")).not.toBeInTheDocument();
+    expect(within(drawer).queryByText(/failed via manual/)).not.toBeInTheDocument();
+    expect(apiMock.rotationRuns.mock.calls.some(([options]) => options?.cursor === "scoped-next")).toBe(false);
+    await user.click(more);
+    expect(await within(drawer).findByText(/succeeded via manual; successor newer-scoped/)).toBeInTheDocument();
+    expect(apiMock.rotationRuns).toHaveBeenCalledWith({ identityId: identity.id, limit: 50, cursor: "scoped-next" });
+  });
+
+  it("does not describe a refused scoped receipt read as no history", async () => {
+    const identity = { id: "dep-1", name: "unavailable-history", kind: "x509_certificate", owner_id: "own-1", status: "deployed" };
+    apiMock.identities.mockResolvedValue([identity]);
+    apiMock.getIdentity.mockResolvedValue(identity);
+    apiMock.rotationRuns.mockImplementation(async (options) => {
+      if (options?.identityId) throw new ApiError(403, JSON.stringify({ detail: "receipt access refused" }));
+      return { items: [], next_cursor: "" };
+    });
+    const user = userEvent.setup();
+    renderIdentities();
+    const drawer = await openIdentityDetails(user, identity.name);
+    expect(await within(drawer).findByText(/receipt access refused/)).toBeInTheDocument();
+    expect(within(drawer).queryByText("no lifecycle rotation run yet")).not.toBeInTheDocument();
+    expect(within(drawer).queryByText("no rollback reference recorded yet")).not.toBeInTheDocument();
+  });
+
+  it.each(["succeeded", "failed"])("refreshes an asynchronously %s renewal without reloading the page", async (outcome) => {
+    const identity = { id: "dep-1", name: "live-renewal", kind: "x509_certificate", owner_id: "own-1", status: "deployed" };
+    let current = identity;
+    apiMock.identities.mockImplementation(async () => [current]);
+    apiMock.getIdentity.mockImplementation(async () => current);
+    apiMock.transitionIdentity.mockImplementation(async () => {
+      current = { ...identity, status: "renewing" };
+      return current;
+    });
+    const user = userEvent.setup();
+    renderIdentities();
+    const drawer = await openIdentityDetails(user, identity.name);
+    await user.click(within(drawer).getByRole("button", { name: /^renew$/i }));
+    await confirmReviewedAction(user);
+    await screen.findByText(/Request accepted for live-renewal: renewing/i);
+    expect(within(drawer).queryByRole("button", { name: /^renew$/i })).not.toBeInTheDocument();
+
+    vi.useFakeTimers();
+    current = { ...identity, status: outcome === "succeeded" ? "deployed" : "renewal_failed" };
+    apiMock.rotationRuns.mockResolvedValue({
+      items: [
+        {
+          id: "completed-live-renewal",
+          identity_id: identity.id,
+          status: outcome,
+          trigger: "manual",
+          successor_fingerprint: outcome === "succeeded" ? "actual-test-successor" : "",
+          error: outcome === "failed" ? "signer refused" : "",
+          created_at: "2026-09-10T15:28:24Z",
+          completed_at: "2026-09-10T15:28:26Z",
+        },
+      ],
+    });
+    // This is a source-only asynchronous API fixture. Product runtime evidence
+    // is the retained campaign observation, not these fixture values.
+    const initialReads = apiMock.identities.mock.calls.length;
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+    expect(apiMock.identities).toHaveBeenCalledTimes(initialReads);
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
+    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
+    });
+    expect(apiMock.identities.mock.calls.length).toBeGreaterThan(initialReads);
+    const row = screen
+      .getAllByText(identity.name)
+      .find((e) => e.closest("tr"))!
+      .closest("tr")!;
+    expect(within(row).getByText(outcome === "succeeded" ? "deployed" : "Renewal Failed")).toBeInTheDocument();
+    expect(within(drawer).getByText(new RegExp(`${outcome} via manual; successor`))).toBeInTheDocument();
+    if (outcome === "succeeded") expect(within(drawer).getByRole("button", { name: /^renew$/i })).toBeEnabled();
+    else expect(within(drawer).queryByRole("button", { name: /^renew$/i })).not.toBeInTheDocument();
+    const visibleReads = apiMock.identities.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_050);
+    });
+    expect(apiMock.identities.mock.calls.length).toBeGreaterThan(visibleReads);
+    expect(apiMock.transitionIdentity).toHaveBeenCalledTimes(1);
+  });
+
+  it("discards inventory and drawer reads started before an accepted renewal", async () => {
+    const before = { id: "dep-1", name: "late-read-renewal", kind: "x509_certificate", owner_id: "own-1", status: "deployed" };
+    let current = before;
+    let holdInventory = false;
+    let holdDetail = false;
+    let finishInventory!: (value: (typeof before)[]) => void;
+    let finishDetail!: (value: typeof before) => void;
+    apiMock.identities.mockImplementation(() => {
+      if (!holdInventory) return Promise.resolve([current]);
+      holdInventory = false;
+      return new Promise<(typeof before)[]>((resolve) => {
+        finishInventory = resolve;
+      });
+    });
+    apiMock.getIdentity.mockImplementation(() => {
+      if (!holdDetail) return Promise.resolve(current);
+      holdDetail = false;
+      return new Promise<typeof before>((resolve) => {
+        finishDetail = resolve;
+      });
+    });
+    apiMock.transitionIdentity.mockImplementation(async () => {
+      current = { ...before, status: "renewing" };
+      return current;
+    });
+    const user = userEvent.setup();
+    renderIdentities();
+    const drawer = await openIdentityDetails(user, before.name);
+    await within(drawer).findByRole("button", { name: /^renew$/i });
+    holdInventory = true;
+    holdDetail = true;
+    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    await waitFor(() => expect(finishInventory).toBeTypeOf("function"));
+    await waitFor(() => expect(finishDetail).toBeTypeOf("function"));
+    await user.click(within(drawer).getByRole("button", { name: /^renew$/i }));
+    await confirmReviewedAction(user);
+    await screen.findByText(/Request accepted for late-read-renewal: renewing/i);
+    await act(async () => {
+      finishInventory([before]);
+      finishDetail(before);
+    });
+    const row = screen
+      .getAllByText(before.name)
+      .find((e) => e.closest("tr"))!
+      .closest("tr")!;
+    expect(within(row).getByText("renewing")).toBeInTheDocument();
+    expect(within(drawer).queryByRole("button", { name: /^renew$/i })).not.toBeInTheDocument();
+    expect(apiMock.transitionIdentity).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the selected identity when a previous drawer response arrives late", async () => {
+    const a = { id: "dep-a", name: "slow-drawer-a", kind: "x509_certificate", owner_id: "own-1", status: "deployed" };
+    const b = { ...a, id: "dep-b", name: "current-drawer-b", status: "revoked" };
+    let finishA!: (value: typeof a) => void;
+    apiMock.identities.mockResolvedValue([a, b]);
+    apiMock.getIdentity.mockImplementation((id) =>
+      id === a.id
+        ? new Promise<typeof a>((resolve) => {
+            finishA = resolve;
+          })
+        : Promise.resolve(b),
+    );
+    const user = userEvent.setup();
+    renderIdentities();
+    const first = await openIdentityDetails(user, a.name);
+    await waitFor(() => expect(finishA).toBeTypeOf("function"));
+    await user.click(within(first).getByRole("button", { name: "Close" }));
+    const second = await openIdentityDetails(user, b.name);
+    await within(second).findByRole("button", { name: /^retire$/i });
+    await act(async () => {
+      finishA(a);
+    });
+    expect(within(second).getByText(b.name)).toBeInTheDocument();
+    expect(within(second).queryByText(a.name)).not.toBeInTheDocument();
+    expect(within(second).getByRole("button", { name: /^retire$/i })).toBeEnabled();
+    expect(within(second).queryByRole("button", { name: /^renew$/i })).not.toBeInTheDocument();
+  });
+
   beforeEach(() => {
     apiMock.issuers.mockReset().mockResolvedValue([{ id: "iss-1", kind: "x509_ca", name: "LE" }]);
     apiMock.owners.mockReset().mockResolvedValue([
@@ -284,7 +541,7 @@ describe("lifecycle actions from the UI", () => {
 
     await user.click(within(review).getByRole("button", { name: "Run reviewed action" }));
     await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-1", "renewing", "rotate before maintenance", undefined, undefined, 2));
-    expect(await screen.findByText(/Verified: deployed-svc is now renewing/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Request accepted for deployed-svc: renewing/i)).toBeInTheDocument();
   });
 
   it("renders identities on the shared DataGrid with lifecycle badges and all six kind filters", async () => {
@@ -362,7 +619,7 @@ describe("lifecycle actions from the UI", () => {
     expect(screen.getByRole("link", { name: "Find identities" })).toHaveAttribute("href", "#identity-search");
     expect(screen.getByRole("button", { name: "Add identity" })).toBeInTheDocument();
 
-    const paymentsRow = screen.getByText("payments-api").closest("tr")!;
+    const paymentsRow = (await screen.findByText("payments-api")).closest("tr")!;
     expect(paymentsRow).toHaveTextContent("TLS certificate");
     expect(paymentsRow).toHaveTextContent("Payments API");
     expect(paymentsRow).toHaveTextContent("Production");
@@ -945,7 +1202,7 @@ describe("lifecycle actions from the UI", () => {
     const heading = await screen.findByRole("heading", { name: "Lifecycle automation" });
     const panel = heading.closest("section");
     expect(panel).toHaveClass("min-w-0", "max-w-full");
-    expect(panel?.querySelector('[data-testid="lifecycle-automation-body"]')).toHaveClass("min-w-0", "grid-cols-[minmax(0,1fr)]");
+    expect(await within(panel!).findByTestId("lifecycle-automation-body")).toHaveClass("min-w-0", "grid-cols-[minmax(0,1fr)]");
     expect(within(panel!).getByText(longIdentityName)).toHaveClass("break-all");
     expect(screen.getByText("Automatic renewals are running")).toBeInTheDocument();
     expect(screen.getByText(/Renew 30 days before expiry/)).toBeInTheDocument();
@@ -1161,7 +1418,7 @@ describe("lifecycle actions from the UI", () => {
 
     await user.click(screen.getByRole("button", { name: "Close" }));
     await user.click(screen.getByText("Delivery and rotation evidence", { selector: "summary" }));
-    const rotationTable = screen.getByRole("table", { name: "Recent lifecycle rotation runs" });
+    const rotationTable = screen.getByRole("table", { name: "Loaded lifecycle rotation runs" });
     expect(within(rotationTable).getByText("*.renew.example")).toBeInTheDocument();
     expect(within(rotationTable).getByText("scheduler")).toBeInTheDocument();
     expect(within(rotationTable).getByText("restore sha256:old")).toBeInTheDocument();

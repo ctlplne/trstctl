@@ -12,6 +12,64 @@ import type { MessageKey } from "@/i18n/messages";
  * clause turns a missing key into a type error, so every new message key
  * ships with an es-ES AND a de-DE entry from the same commit. */
 const deDECatalog = {
+  // Machine-authored correction translations; human language review required before release.
+  "wizard.firstLeaf.submitCorrection": "Korrigierten CSR für diese Identität senden",
+  "wizard.firstLeaf.correctionDisposition":
+    "Der Server hat bestätigt, dass genau dieser CSR vor dem Ausstellungsschritt abgelehnt wurde. Sie können den CSR gezielt korrigieren; Eigentümer und Identität bleiben gleich.",
+  "wizard.firstLeaf.cancelCorrection": "CSR-Korrektur abbrechen",
+  "wizard.firstLeaf.editCSR": "Abgelehnten CSR korrigieren",
+  "wizard.firstLeaf.completed":
+    "Das öffentliche Zertifikatsergebnis ist gespeichert. Bereitstellung, TLS-Prüfungen und Erneuerung sind separate Vorgänge; diese Anleitung hat sie nicht ausgeführt.",
+  "wizard.firstLeaf.reviewSetup": "Gespeicherte Einrichtung prüfen",
+
+  "wizard.firstLeaf.heading": "Erstes Zertifikat ausstellen",
+  "wizard.firstLeaf.custody":
+    "Verwenden Sie eine Betreiberanmeldung mit Ausstellungsberechtigung. Erstellen Sie privaten Schlüssel und CSR auf dem Zielsystem, behalten Sie den Schlüssel dort und fügen Sie nur den öffentlichen CSR ein. Setup- und Agent-Token können keine Zertifikate ausstellen.",
+  "wizard.firstLeaf.reload":
+    "Diese Seite hält Wiederholungen nur im Arbeitsspeicher. Neuladen, Abmelden oder Schließen des Tabs kann die Anfrageschlüssel verlieren. Prüfen Sie nach einem Abbruch Inventar und Auditverlauf vor einer neuen Anfrage; eine leere Seite beweist keine ausgebliebene Ausstellung.",
+  "wizard.firstLeaf.service": "Dienstname",
+  "wizard.firstLeaf.csr": "Öffentliche Zertifikatsanfrage (CSR)",
+  "wizard.firstLeaf.csrHelp": "Ein PEM-Block CERTIFICATE REQUEST, höchstens 64 KiB. Dieses Formular akzeptiert oder erzeugt keinen privaten Schlüssel.",
+  "wizard.firstLeaf.csrError": "Geben Sie einen öffentlichen CSR-PEM-Block an. Fügen Sie niemals einen privaten Schlüssel ein.",
+  "wizard.firstLeaf.fieldError": "Prüfen Sie diesen Pflichtwert.",
+  "wizard.firstLeaf.wildcard": "Ich bestätige den Geltungsbereich des Wildcards und die erforderliche DNS-01-Prüfung",
+  "wizard.firstLeaf.submit": "Zertifikat ausstellen",
+  "wizard.firstLeaf.retry": "Dieselbe Ausstellung erneut versuchen",
+  "wizard.firstLeaf.submitting": "Gespeicherte Anfrage wird gesendet. Die Zertifikatsbereitstellung ist noch nicht bestätigt.",
+  "wizard.firstLeaf.retained":
+    "Diese Anfrage bleibt für Wiederholungen unverändert: Eigentümer, CSR und Idempotenzschlüssel bleiben gleich. Der Server prüft denselben Vorgang erneut.",
+  "wizard.firstLeaf.requestKey": "Ausstellungs-Anfrageschlüssel",
+  "wizard.firstLeaf.approval":
+    "Der Server hat diesen Versuch an der Genehmigungsprüfung abgelehnt. Prüfen Sie die Warteschlange und Entscheidung; diese Seite kann nicht genehmigen. Wiederholen Sie denselben Versuch erst nach Erfüllung der Anforderung.",
+  "wizard.firstLeaf.refused":
+    "Der Server hat die Anfrage abgelehnt. Prüfen Sie Berechtigung, Richtlinie und Eingaben vor einer unveränderten Wiederholung. Eine öffentliche Zertifikatsbereitstellung ist nicht bestätigt.",
+  "wizard.firstLeaf.uncertain":
+    "Der Vorgang wurde unterbrochen oder lieferte keine nutzbare Antwort. Das Ergebnis ist ungewiss. Lassen Sie diese Seite offen, lesen Sie das genaue Ergebnis und verwenden Sie bei Bedarf denselben Versuch erneut.",
+  "wizard.firstLeaf.pending": "Das genaue Ausstellungsergebnis wird geprüft. Ein akzeptierter Identitätsübergang bestätigt noch kein gespeichertes Zertifikat.",
+  "wizard.firstLeaf.paused":
+    "Die Abfrage wurde nach vier Minuten angehalten. Das bedeutet keinen Ausstellungsfehler. Aktualisieren Sie dasselbe Ergebnis ohne weitere Änderung.",
+  "wizard.firstLeaf.readFailed":
+    "Das genaue Ergebnis konnte nicht bestätigt werden. Eine fehlende, verbotene oder widersprüchliche Antwort ist kein ausstehendes oder fertiges Zertifikat. Prüfen Sie Berechtigungen und Serverzustand, dann aktualisieren Sie.",
+  "wizard.firstLeaf.refresh": "Dasselbe Ergebnis erneut lesen",
+  "wizard.firstLeaf.recorded": "Das genaue öffentliche Zertifikatsergebnis ist gespeichert und kann heruntergeladen werden.",
+  "wizard.firstLeaf.authority": "Im Zertifikat verzeichneter Aussteller: {issuer}",
+  "wizard.firstLeaf.unknownAuthority": "Im Zertifikatsergebnis nicht angegeben",
+  "wizard.firstLeaf.issuerLabel": "Verzeichneter Zertifikatsaussteller",
+  "wizard.firstLeaf.fingerprint": "Zertifikatsfingerabdruck",
+  "wizard.firstLeaf.status": "Zertifikatsstatus bei der letzten Abfrage: {status}",
+  "wizard.firstLeaf.downloadLeaf": "Endzertifikat herunterladen",
+  "wizard.firstLeaf.downloadChain": "Zurückgegebene Zertifikatskette herunterladen",
+  "wizard.firstLeaf.trust":
+    "Der Download enthält nur die vom Server gelieferten öffentlichen Zertifikate. Er installiert kein Vertrauen und beweist weder Bereitstellung noch Hostnamenprüfung oder eine echte TLS-Verbindung. Ein Wurzelzertifikat kann fehlen; beziehen Sie Vertrauen von Ihrer unabhängigen Instanz.",
+  "wizard.firstLeaf.authRequired":
+    "Melden Sie sich in einem echten Mandanten mit Ausstellungsberechtigung an. Der Vorschaumodus kann diese Anfrage nicht ausführen.",
+  "wizard.firstLeaf.approvals": "Genehmigungswarteschlange öffnen",
+  "wizard.firstLeaf.inventory": "Identitätsinventar prüfen",
+  "wizard.firstLeaf.signerOnly": "Separater Signaturdienst",
+  "wizard.firstLeaf.signerHealth": "Die Zustandsprüfung des separaten Signaturdienstes war erfolgreich. Sie wählt oder prüft keine Zertifizierungsstelle.",
+  "wizard.firstLeaf.signerDescription":
+    "Prüfen Sie den separaten Signaturdienst. Sein Zustand und der Ausstellerkatalog bestimmen nicht, welche Instanz signiert; das fertige Zertifikatsergebnis nennt den tatsächlichen Aussteller.",
+
   "broker.description":
     "Geben Sie einem Agenten eine kurzlebige Identität und verfolgen Sie sein Zertifikat im gemeinsamen Inventar. Der Server prüft Nachweis und Richtlinie vor dem Signieren.",
   "broker.start": "Agentenidentität anfordern",
@@ -6766,7 +6824,6 @@ const deDECatalog = {
   "source.issue.leaf.from.47e7b2541d": "Endzertifikat ausstellen über",
   "source.issue.pki.secret.692ee4b6e2": "PKI-Secret ausstellen",
   "source.issue.through.external.ca.671d1a629f": "Über externe CA ausstellen",
-  "source.issue.your.first.certificate.8fbb374ce0": "Ihr erstes Zertifikat ausstellen",
   "source.issue.your.first.certificate.to.start.trac.355cebb739":
     "Stellen Sie Ihr erstes Zertifikat aus, um mit dem Verfolgen und Rotieren von Zugangsdaten zu beginnen.",
   "source.issued.0221e48751": "Ausgestellt",
@@ -7133,14 +7190,13 @@ const deDECatalog = {
   "source.reachability.unavailable.526510e61e": "Erreichbarkeit nicht verfügbar",
   "source.reachable.nodes.ebf8d10fa5": "Erreichbare Knoten",
   "source.read.only.responder.probe.23655af063": "Prüfung des schreibgeschützten Responders",
-  "source.ready.for.certificate.operations.e99f6e538f": "Bereit für Zertifikatsoperationen",
   "source.reason.3425d10869": "Reason:",
   "source.reason.f81ab834de": "Grund",
   "source.reason.for.revoke.or.exception.5df8423828": "Grund für Widerruf oder Ausnahme",
   "source.recent.activity.6cb44b5633": "Aktuelle Aktivitäten",
-  "source.recent.connector.delivery.receipts.3a2bf7db18": "Aktuelle Connector-Auslieferungsnachweise",
+  "source.recent.connector.delivery.receipts.3a2bf7db18": "Geladene Connector-Auslieferungsnachweise",
   "source.recent.delivery.receipts.a9cb8f42a9": "Aktuelle Auslieferungsnachweise",
-  "source.recent.lifecycle.rotation.runs.4de11752b6": "Letzte Lifecycle-Rotationsläufe",
+  "source.recent.lifecycle.rotation.runs.4de11752b6": "Geladene Lifecycle-Rotationsläufe",
   "source.recorded.approvals.and.required.approvals.4d359a312b": "Aufgezeichnete und für diese Anfrage erforderliche Genehmigungen.",
   "source.redacted.reference.f904f7809b": "Geschwärzte Referenz",
   "source.redaction.boundary.134ed7be9f": "Schwärzungsgrenze:",
@@ -7449,8 +7505,6 @@ const deDECatalog = {
   "source.transport.aaead4abf5": "Transport",
   "source.trigger.8b9c643731": "Trigger",
   "source.trstctl.74de2c6ee4": "trstctl",
-  "source.trstctl.will.track.this.credential.and.ale.258f3fc1df":
-    "trstctl überwacht diese Zugangsdaten und warnt vor dem Ablauf. Die Erneuerung ist derzeit eine manuelle Aktion mit einem Klick.",
   "source.ttl.seconds.862d08de5a": "TTL in Sekunden",
   "source.type.baaddf70fb": "Typ",
   "source.type.credential.name.to.confirm.cc8d26a179": "Zur Bestätigung den Namen der Zugangsdaten eingeben",
@@ -7471,7 +7525,6 @@ const deDECatalog = {
   "source.view.certificates.dcc999606f": "Zertifikate anzeigen",
   "source.view.details.d1bf045bb5": "Details anzeigen",
   "source.waiting.for.the.agent.to.register.3e78d9c8a6": "Warten auf die Registrierung des Agenten...",
-  "source.was.issued.fe1574675b": "wurde ausgestellt.",
   "source.web.server.e4d165cf07": "web-server",
   "source.welcome.to.trstctl.let.s.set.it.up.7d04de0c8b": "Willkommen bei trstctl — richten wir es ein",
   "source.what.happened.483bd49023": "Was ist passiert?",
@@ -7673,7 +7726,6 @@ const deDECatalog = {
   "source.view.details.for.notification.value1.786c365358": "Details für Benachrichtigung {value1} anzeigen",
   "source.view.value1.version.value2.bcb23df652": "{value1}, Version {value2} anzeigen",
   "source.yes.value1.0cb667502c": "Ja, {value1}",
-  "source.your.first.certificate.d48ee36f3a": "Ihr erstes Zertifikat",
   "posture.pqcMigration.heading": "PQC-Migrationsablauf",
   "posture.pqcMigration.description":
     "Wählen Sie gefährdete CBOM-Assets, prüfen Sie den exakten Plan und autorisieren Sie anschließend ausdrücklich eine rollback-sichere Migration.",
@@ -8131,7 +8183,7 @@ const deDECatalog = {
   "identities.lifecycle.reviewUpdated": "Aktualisierte Aktion prüfen",
   "identities.lifecycle.previewFailed": "Lebenszyklusaktion konnte nicht vorab geprüft werden",
   "identities.lifecycle.verificationFailed": "Verifizierung fehlgeschlagen: Der Server gab {actual} statt {expected} zurück.",
-  "identities.lifecycle.verified": "Verifiziert: {identity} befindet sich jetzt im Zustand {state}. {detail}",
+  "identities.lifecycle.verified": "Anfrage für {identity} angenommen: {state}. {detail}",
   "identities.find.action": "Identitäten suchen",
   "identities.search.label": "Identitäten suchen",
   "identities.search.placeholder": "Name, verantwortliche Stelle oder Typ",
@@ -8743,6 +8795,18 @@ const deDECatalog = {
   "privacy.review.executeErasure": "Geprüfte Betroffenenlöschung ausführen",
   "privacy.review.executeRetention": "Geprüfte Aufbewahrung durchsetzen",
   "privacy.review.dataHandling": "Datengrenze",
+  "identities.evidence.partialSummary": "Der Verlauf ist unvollständig. Details öffnen.",
+  "identities.evidence.partialHistory":
+    "{count} Datensätze geladen. Weiterer Verlauf ist möglicherweise verfügbar; das neueste Ergebnis steht noch nicht fest.",
+  "identities.evidence.incompleteRollback": "Der Rollback-Verlauf ist unvollständig oder nicht verfügbar.",
+  "identities.evidence.scanMeaning":
+    "Diese Ansicht zeigt die zuletzt aktualisierten Datensätze dieses Abrufs. Der Verlauf kann sich ändern, während die Seiten geladen werden.",
+  "identities.evidence.moreDeliveries": "Weitere Auslieferungsdatensätze laden",
+  "identities.evidence.moreRotations": "Weitere Rotationsdatensätze laden",
+  "identities.evidence.retryDeliveries": "Auslieferungsverlauf erneut laden",
+  "identities.evidence.retryRotations": "Rotationsverlauf erneut laden",
+  "identities.evidence.globalPartial":
+    "Bis zu fünf geladene Datensätze je Datenstrom aus dem unvollständigen Mandantenverlauf. Eine Identität öffnen, um ihren eigenen Verlauf zu sehen.",
 } satisfies Record<MessageKey, string>;
 
 export default deDECatalog;

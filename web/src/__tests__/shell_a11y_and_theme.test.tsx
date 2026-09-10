@@ -44,6 +44,11 @@ const { apiMock } = vi.hoisted(() => ({
   },
 }));
 
+vi.mock("@/lib/bootstrapApi", async (orig) => {
+  const actual = await orig<typeof import("@/lib/bootstrapApi")>();
+  return { ...actual, bootstrapApi: apiMock };
+});
+
 vi.mock("@/lib/api", async (orig) => {
   const actual = await orig<typeof import("@/lib/api")>();
   return { ...actual, api: apiMock };
@@ -597,7 +602,7 @@ describe("app shell accessibility and theme", () => {
 
     await user.keyboard("?");
 
-    let overlay = screen.getByRole("dialog", { name: "Keyboard shortcuts" });
+    let overlay = await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
     expect(within(overlay).getByText("Open task search")).toBeInTheDocument();
     expect(within(overlay).getByText("Show keyboard shortcuts")).toBeInTheDocument();
     expect(await axe(container)).toHaveNoViolations();
@@ -607,7 +612,7 @@ describe("app shell accessibility and theme", () => {
 
     await user.click(screen.getByRole("button", { name: "Account and preferences" }));
     await user.click(screen.getByRole("button", { name: "Open keyboard shortcuts" }));
-    overlay = screen.getByRole("dialog", { name: "Keyboard shortcuts" });
+    overlay = await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
     expect(within(overlay).getByText("Close open overlay")).toBeInTheDocument();
   });
 

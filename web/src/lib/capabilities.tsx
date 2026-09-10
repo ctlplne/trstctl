@@ -1,5 +1,6 @@
 import { createContext, useContext, type ReactNode } from "react";
-import { api, type Api } from "@/lib/api";
+import { bootstrapApi as api } from "@/lib/bootstrapApi";
+import type { Api } from "@/lib/api";
 import type { CapabilityRuntimeOperation, CapabilityUnavailableAction, CapabilityView, CapabilityViewItem } from "@/lib/api-types.gen";
 import { canonicalCapabilityIDs, type CanonicalCapabilityID } from "@/lib/feature-contracts.gen";
 import { useApiQuery, useHasAppQueryProvider } from "@/lib/query";

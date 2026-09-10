@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import {
   api,
@@ -16,12 +16,13 @@ import {
   type RotationRun,
   type TransitionTo,
 } from "@/lib/api";
+import { useApiQuery, useQueryClient } from "@/lib/query";
 import { apiProblemContext, apiProblemMessage } from "@/lib/apiProblem";
 import { Dialog } from "@/components/Dialog";
 import { IssuancePipeline } from "@/components/issuance";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DetailDrawer } from "@/components/DetailDrawer";
-import { CredentialActivityTimeline } from "@/components/CredentialActivityTimeline";
+import { IdentityActivityEvidence } from "@/pages/identities/IdentityActivityEvidence";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
@@ -304,19 +305,41 @@ function attributeRows(identity: Identity): Array<[string, string]> {
 
 export function Identities() {
   const { t } = useTranslation();
-  const [items, setItems] = useState<Identity[] | null>(null);
-  const [owners, setOwners] = useState<Owner[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [deliveryReceipts, setDeliveryReceipts] = useState<ConnectorDelivery[] | null>(null);
-  const [rotationRuns, setRotationRuns] = useState<RotationRun[] | null>(null);
-  const [evidenceError, setEvidenceError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const [actionError, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [deniedTransitions, setDeniedTransitions] = useState<Record<string, string>>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [detail, setDetail] = useState<Identity | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [detailError, setDetailError] = useState<string | null>(null);
+  // Acceptance and outbox completion are different moments. Keep the inventory,
+  // open drawer and projected receipts live, using the shared visible-tab gate.
+  const inventory = useApiQuery(["identities"], api.identities, { live: { intervalMs: 10_000 } });
+  const ownerQuery = useApiQuery(["owners"], api.owners);
+  const deliveries = useApiQuery(["connector-deliveries", { limit: 50 }], () => api.connectorDeliveries({ limit: 50 }), {
+    live: { intervalMs: 10_000 },
+  });
+  const rotations = useApiQuery(["rotation-runs", { limit: 50 }], () => api.rotationRuns({ limit: 50 }), { live: { intervalMs: 10_000 } });
+  const identityDetail = useApiQuery(["identity", selectedId], () => api.getIdentity(selectedId!), {
+    enabled: selectedId !== null,
+    live: { intervalMs: 10_000 },
+  });
+  const items = inventory.data;
+  const owners = ownerQuery.data;
+  const error = actionError ?? inventory.error;
+  const deliveryReceipts = deliveries.data?.items ?? null;
+  const rotationRuns = rotations.data?.items ?? null;
+  const evidenceError = deliveries.error ?? rotations.error;
+  const evidencePartial = Boolean(deliveries.data?.next_cursor || rotations.data?.next_cursor);
+  const evidenceNotice = evidenceError
+    ? translateNow("source.delivery.evidence.failed.to.load.2625e33346")
+    : !deliveries.data || !rotations.data
+      ? translateNow("source.loading.delivery.evidence.7f2cdadedd")
+      : evidencePartial
+        ? translateNow("identities.evidence.partialSummary")
+        : null;
+  const detail = identityDetail.data ?? items?.find((identity) => identity.id === selectedId) ?? null;
+  const detailLoading = identityDetail.loading && selectedId !== null;
+  const detailError = identityDetail.errorValue ? apiProblemContext(identityDetail.errorValue, "Could not load identity detail") : null;
   const [transitionReasons, setTransitionReasons] = useState<Record<string, string>>({});
   const [showForm, setShowForm] = useState(false);
   // A destructive transition awaiting explicit confirmation (SURFACE-007). null
@@ -360,51 +383,43 @@ export function Identities() {
   const latestRotation = useMemo(() => latestRotationByIdentity(rotationRuns), [rotationRuns]);
 
   const load = useCallback(async () => {
-    try {
-      const [identityRows, ownerRows] = await Promise.all([api.identities(), api.owners().catch(() => null)]);
-      setItems(identityRows);
-      setOwners(ownerRows);
-      setError(null);
-    } catch (err) {
-      setError(String(err));
-    }
-  }, []);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["identities"] }),
+      queryClient.invalidateQueries({ queryKey: ["owners"] }),
+      queryClient.invalidateQueries({ queryKey: ["identity"] }),
+    ]);
+  }, [queryClient]);
 
   const loadEvidence = useCallback(async () => {
-    try {
-      const [deliveries, rotations] = await Promise.all([api.connectorDeliveries({ limit: 50 }), api.rotationRuns({ limit: 50 })]);
-      setDeliveryReceipts(deliveries.items ?? []);
-      setRotationRuns(rotations.items ?? []);
-      setEvidenceError(null);
-    } catch (err) {
-      setEvidenceError(err instanceof Error ? err.message : String(err));
-    }
-  }, []);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["connector-deliveries"] }),
+      queryClient.invalidateQueries({ queryKey: ["rotation-runs"] }),
+      queryClient.invalidateQueries({ queryKey: ["lifecycle-automation-plan"] }),
+    ]);
+  }, [queryClient]);
 
-  useEffect(() => {
-    void load();
-    void loadEvidence();
-  }, [load, loadEvidence]);
-
-  const loadDetail = useCallback(async (id: string) => {
-    setDetailLoading(true);
-    setDetailError(null);
-    try {
-      setDetail(await api.getIdentity(id));
-    } catch (err) {
-      setDetailError(apiProblemContext(err, "Could not load identity detail"));
-    } finally {
-      setDetailLoading(false);
-    }
-  }, []);
+  const acceptIdentity = useCallback(
+    async (identity: Identity) => {
+      // Discard reads started before this actual mutation response, then publish
+      // the returned state. The subsequent invalidation and live reads obtain the
+      // asynchronous outcome; the browser never invents a completed transition.
+      await Promise.all([queryClient.cancelQueries({ queryKey: ["identities"] }), queryClient.cancelQueries({ queryKey: ["identity", identity.id] })]);
+      queryClient.setQueryData<Identity[]>(["identities"], (current) =>
+        current?.some((item) => item.id === identity.id) ? current.map((item) => (item.id === identity.id ? identity : item)) : [...(current ?? []), identity],
+      );
+      queryClient.setQueryData(["identity", identity.id], identity);
+    },
+    [queryClient],
+  );
 
   const openDetail = useCallback(
     (identity: Identity) => {
       setSelectedId(identity.id);
-      setDetail(identity);
-      void loadDetail(identity.id);
+      // Opening a recently cached identity also asks the server for its current
+      // state. A late response for a previously selected ID stays in its own key.
+      void queryClient.invalidateQueries({ queryKey: ["identity", identity.id] });
     },
-    [loadDetail],
+    [queryClient],
   );
 
   const act = useCallback(
@@ -422,11 +437,9 @@ export function Identities() {
             }),
           );
         }
+        await acceptIdentity(updated);
         await load();
         await loadEvidence();
-        if (selectedId === id) {
-          await loadDetail(id);
-        }
         setNotice(
           translateNow("identities.lifecycle.verified", {
             identity: identityName || updated.name || id,
@@ -450,7 +463,7 @@ export function Identities() {
         setBusyId(null);
       }
     },
-    [load, loadDetail, loadEvidence, selectedId],
+    [acceptIdentity, load, loadEvidence],
   );
 
   /** request runs a transition immediately, EXCEPT a destructive one (revoke/retire)
@@ -538,7 +551,6 @@ export function Identities() {
       // owned by that drawer, so bind the exact row before setting `pending`;
       // otherwise the button looks enabled but renders no review surface.
       setSelectedId(identity.id);
-      setDetail(identity);
       setPendingConfirmName("");
       setPendingReason(reviewedReason);
       setPending(transition);
@@ -642,7 +654,9 @@ export function Identities() {
         id: "delivery",
         header: "Delivery evidence",
         cell: (identity) => (
-          <span className="text-muted-foreground">{deliverySummary(identity, latestDelivery.get(identity.id), latestRotation.get(identity.id))}</span>
+          <span className="text-muted-foreground">
+            {evidenceNotice ?? deliverySummary(identity, latestDelivery.get(identity.id), latestRotation.get(identity.id))}
+          </span>
         ),
       },
       {
@@ -655,7 +669,7 @@ export function Identities() {
         ),
       },
     ],
-    [latestDelivery, latestRotation, openDetail, ownerByID],
+    [evidenceNotice, latestDelivery, latestRotation, openDetail, ownerByID],
   );
 
   return (
@@ -684,10 +698,10 @@ export function Identities() {
       {showForm && (
         <NewIdentityForm
           owners={owners ?? []}
-          onDone={(issued) => {
+          onDone={async (issued) => {
+            await acceptIdentity(issued);
             setShowForm(false);
             setSelectedId(issued.id);
-            setDetail(issued);
             setNotice(issued.name.startsWith("*.") ? `${t("identities.wildcard.issued", { name: issued.name })} ${t("identities.wildcard.issuedNext")}` : null);
             void load();
             void loadEvidence();
@@ -856,7 +870,14 @@ export function Identities() {
           <span className="ms-2 text-xs font-normal text-muted-foreground group-open:hidden">{t("identities.evidence.openHint")}</span>
           <span className="ms-2 hidden text-xs font-normal text-muted-foreground group-open:inline">{t("identities.evidence.closeHint")}</span>
         </summary>
-        <DeliveryEvidencePanel identities={items ?? []} deliveries={deliveryReceipts} rotations={rotationRuns} error={evidenceError} />
+        <DeliveryEvidencePanel
+          identities={items ?? []}
+          deliveries={deliveryReceipts}
+          rotations={rotationRuns}
+          error={evidenceError}
+          partial={evidencePartial}
+          notice={evidenceNotice}
+        />
       </details>
 
       <section aria-labelledby="decommission-heading" className="mb-3 border-y border-border py-4">
@@ -964,8 +985,6 @@ export function Identities() {
           error={detailError}
           busy={busyId === selectedId}
           deniedTransitions={deniedTransitions}
-          deliveryReceipt={selectedId ? latestDelivery.get(selectedId) : undefined}
-          rotationRun={selectedId ? latestRotation.get(selectedId) : undefined}
           reason={selectedId ? (transitionReasons[selectedId] ?? "") : ""}
           onReasonChange={(value) => {
             if (!selectedId) return;
@@ -1173,15 +1192,19 @@ function DeliveryEvidencePanel({
   deliveries,
   rotations,
   error,
+  partial,
+  notice,
 }: {
   identities: Identity[];
   deliveries: ConnectorDelivery[] | null;
   rotations: RotationRun[] | null;
   error: string | null;
+  partial: boolean;
+  notice: string | null;
 }) {
-  const loading = !deliveries && !rotations && !error;
-  const recentDeliveries = (deliveries ?? []).slice(0, 5);
-  const recentRotations = (rotations ?? []).slice(0, 5);
+  const loading = (!deliveries || !rotations) && !error;
+  const loadedDeliveries = (deliveries ?? []).slice(0, 5);
+  const loadedRotations = (rotations ?? []).slice(0, 5);
   const identityByID = new Map(identities.map((identity) => [identity.id, identity]));
 
   return (
@@ -1192,14 +1215,19 @@ function DeliveryEvidencePanel({
         </h2>
         <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.the.console.reads.projected.connector.deli.091ecd8115")}</p>
       </div>
+      {partial && (
+        <p role="status" className="mb-3 text-sm text-muted-foreground">
+          {translateNow("identities.evidence.globalPartial")}
+        </p>
+      )}
       {loading && <LoadingState>{translateNow("source.loading.delivery.evidence.7f2cdadedd")}</LoadingState>}
       {error && <ErrorState title={translateNow("source.delivery.evidence.failed.to.load.2625e33346")}>{error}</ErrorState>}
-      {!loading && !error && recentDeliveries.length === 0 && recentRotations.length === 0 && (
+      {!loading && !error && !notice && loadedDeliveries.length === 0 && loadedRotations.length === 0 && (
         <EmptyState title={translateNow("source.no.delivery.or.rotation.receipts.yet.21fb574bf8")}>
           {translateNow("source.issue.deploy.or.renew.an.identity.to.produ.722d26ac6c")}
         </EmptyState>
       )}
-      {(recentDeliveries.length > 0 || recentRotations.length > 0) && (
+      {(loadedDeliveries.length > 0 || loadedRotations.length > 0) && (
         <div className="grid gap-4 xl:grid-cols-2">
           <div className="ui-panel overflow-x-auto">
             <table className="ui-table min-w-[42rem]">
@@ -1214,14 +1242,14 @@ function DeliveryEvidencePanel({
                 </tr>
               </thead>
               <tbody>
-                {recentDeliveries.length === 0 ? (
+                {loadedDeliveries.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="text-muted-foreground">
-                      {translateNow("source.no.connector.receipts.86d1a1527d")}
+                      {notice ?? translateNow("source.no.connector.receipts.86d1a1527d")}
                     </td>
                   </tr>
                 ) : (
-                  recentDeliveries.map((receipt) => (
+                  loadedDeliveries.map((receipt) => (
                     <tr key={receipt.id} className="align-top">
                       <td className="font-mono text-xs">{receipt.status}</td>
                       <td>{receipt.connector}</td>
@@ -1256,14 +1284,14 @@ function DeliveryEvidencePanel({
                 </tr>
               </thead>
               <tbody>
-                {recentRotations.length === 0 ? (
+                {loadedRotations.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="text-muted-foreground">
-                      {translateNow("source.no.rotation.runs.cf68af2637")}
+                      {notice ?? translateNow("source.no.rotation.runs.cf68af2637")}
                     </td>
                   </tr>
                 ) : (
-                  recentRotations.map((run) => (
+                  loadedRotations.map((run) => (
                     <tr key={run.id} className="align-top">
                       <td className="break-all font-medium">{identityByID.get(run.identity_id)?.name || run.identity_id}</td>
                       <td className="font-mono text-xs">{run.status}</td>
@@ -1334,8 +1362,6 @@ function IdentityDetailPanel({
   error,
   busy,
   deniedTransitions,
-  deliveryReceipt,
-  rotationRun,
   reason,
   onReasonChange,
   onTransition,
@@ -1346,8 +1372,6 @@ function IdentityDetailPanel({
   error: string | null;
   busy: boolean;
   deniedTransitions: Record<string, string>;
-  deliveryReceipt?: ConnectorDelivery;
-  rotationRun?: RotationRun;
   reason: string;
   onReasonChange: (value: string) => void;
   onTransition: (to: TransitionTo, label: string, returnFocus?: HTMLButtonElement) => void;
@@ -1462,7 +1486,7 @@ function IdentityDetailPanel({
             )}
           </section>
 
-          <CredentialActivityTimeline credentialLabel={identity.name} deliveryReceipt={deliveryReceipt} rotationRun={rotationRun} />
+          <IdentityActivityEvidence key={identity.id} identity={identity} />
 
           <section aria-labelledby="identity-lifecycle-heading" className="mt-5 border-t border-border pt-4">
             <h3 id="identity-lifecycle-heading" className="font-semibold">
