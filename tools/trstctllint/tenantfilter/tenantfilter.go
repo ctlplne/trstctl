@@ -628,6 +628,14 @@ var sessionControlCallPattern = func() *regexp.Regexp {
 // than a data query over a table.
 func isSessionControl(s string) bool {
 	lower := strings.ToLower(s)
+	// The application-owned certificate ordering routine validates its UUID
+	// against current tenant scope before relation/advisory locks; it reads
+	// only pg_locks. Recognize the whole reviewed statement, not a function
+	// name anywhere in a SELECT list: extra expressions/statements and table
+	// reads must still satisfy the ordinary tenant predicate rule.
+	if strings.TrimSpace(lower) == "select lock_certificate_metadata_order($1::uuid)" {
+		return true
+	}
 	// Exact function-call tokens stop lookalikes such as
 	// fake_pg_advisory_lock() from inheriting the exemption. A FROM/JOIN clause
 	// means the SELECT also reads rows and must go through the tenant predicate
