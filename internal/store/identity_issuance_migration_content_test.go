@@ -46,7 +46,7 @@ func firstLeafHistoricalContent(t *testing.T, ctx context.Context, pool *pgxpool
 	// hand-selected subset that could miss an accidental metadata rewrite.
 	if err := pool.QueryRow(ctx, `SELECT jsonb_build_object(
 		'transitions',(SELECT jsonb_agg(to_jsonb(t)-ARRAY['idempotency_key','subject_csr_pem'] ORDER BY tenant_id,identity_id,seq) FROM identity_transitions t),
-		'certificates',(SELECT jsonb_agg(to_jsonb(c)-ARRAY['recording_event_id','recording_sequence','issuance_event_id','metadata_sequence'] ORDER BY tenant_id,id) FROM certificates c))::text`).Scan(&content); err != nil {
+		'certificates',(SELECT jsonb_agg(to_jsonb(c)-ARRAY['recording_event_id','recording_sequence','issuance_event_id','metadata_sequence','validity_anchor'] ORDER BY tenant_id,id) FROM certificates c))::text`).Scan(&content); err != nil {
 		t.Fatal(err)
 	}
 	return content

@@ -71,28 +71,36 @@ func (d *issuanceDispatcher) issueEndpointCSR(
 	dnsNames []string,
 	ttl time.Duration,
 	leafProfile crypto.LeafProfile,
-) (leafPEM, chainPEM []byte, caID, source string, err error) {
+) (leafPEM, chainPEM []byte, caID, source string, anchor *time.Time, err error) {
+	var issued crypto.IssuedLeaf
 	switch selection.Source {
 	case "platform":
 		if d.issue == nil {
-			return nil, nil, "", "", errors.New("server: selected platform issuing CA is unavailable; no CA was substituted")
+			return nil, nil, "", "", nil, errors.New("server: selected platform issuing CA is unavailable; no CA was substituted")
 		}
-		leafPEM, err = d.issue(ctx, csrDER, ttl, leafProfile)
-		return leafPEM, append([]byte(nil), d.chainPEM...), IssuingCAID(), "issued", err
+		issued, err = d.issue(ctx, csrDER, ttl, leafProfile)
+		chainPEM, caID = append([]byte(nil), d.chainPEM...), IssuingCAID()
 	case "private":
 		if d.authorityIssue == nil {
-			return nil, nil, "", "", errors.New("server: selected private CA issuance is unavailable; no CA was substituted")
+			return nil, nil, "", "", nil, errors.New("server: selected private CA issuance is unavailable; no CA was substituted")
 		}
-		leafPEM, chainPEM, caID, err = d.authorityIssue(ctx, tenantID, selection.ID, csrDER, ttl, leafProfile)
+		issued, chainPEM, caID, err = d.authorityIssue(ctx, tenantID, selection.ID, csrDER, ttl, leafProfile)
 		if err == nil && caID != selection.ID {
-			return nil, nil, "", "", errors.New("server: selected private CA returned a different authority; no certificate was accepted")
+			return nil, nil, "", "", nil, errors.New("server: selected private CA returned a different authority; no certificate was accepted")
 		}
-		return leafPEM, chainPEM, caID, "issued", err
 	case "external":
-		return d.issueEndpointCSRExternal(ctx, tenantID, selection.ID, issueKey, csrDER, dnsNames, ttl)
+		leafPEM, chainPEM, caID, source, err = d.issueEndpointCSRExternal(ctx, tenantID, selection.ID, issueKey, csrDER, dnsNames, ttl)
+		return leafPEM, chainPEM, caID, source, nil, err
 	default:
-		return nil, nil, "", "", errors.New("server: unsupported endpoint issuing authority; no CA was substituted")
+		return nil, nil, "", "", nil, errors.New("server: unsupported endpoint issuing authority; no CA was substituted")
 	}
+	if err != nil {
+		return nil, nil, "", "", nil, err
+	}
+	if !issued.ValidityAnchor.IsZero() {
+		anchor = &issued.ValidityAnchor
+	}
+	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: issued.DER}), chainPEM, caID, "issued", anchor, nil
 }
 
 func (d *issuanceDispatcher) issueEndpointCSRExternal(

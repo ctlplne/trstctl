@@ -332,7 +332,11 @@ func TestServedDeployAndRotationPublishReceipts(t *testing.T) {
 		t.Fatalf("bad deploy receipt: %+v", got)
 	}
 
-	queued, err := h.srv.RunLifecycleOnce(t.Context())
+	active, err := h.store.ListActiveIssuedCertificatesForIdentity(t.Context(), h.tenant, owner.ID, "journey-002.served.test")
+	if err != nil || len(active) != 1 || active[0].NotAfter == nil {
+		t.Fatalf("load signed renewal predecessor: %+v %v", active, err)
+	}
+	queued, err := h.srv.runLifecycleOnceAt(t.Context(), active[0].NotAfter.Add(-12*time.Hour))
 	if err != nil {
 		t.Fatalf("run lifecycle scheduler: %v", err)
 	}
@@ -451,20 +455,13 @@ func TestServedLifecycleSchedulerUsesARIWindowForRenewal(t *testing.T) {
 		t.Fatalf("issued certs = %d, want 1", len(certs))
 	}
 	predecessor := certs[0]
-	now := time.Now().UTC()
-	notBefore := now.Add(-20*24*time.Hour - time.Hour)
-	notAfter := now.Add(10 * 24 * time.Hour)
-	if !notAfter.After(now.Add(time.Hour)) {
-		t.Fatalf("test setup invalid: fixed one-hour threshold would also renew not_after=%s", notAfter.Format(time.RFC3339))
-	}
-	window := ari.SuggestWindow(notBefore, notAfter, now, false)
-	if !ari.RenewNow(ari.RenewalInfo{SuggestedWindow: window}, now) {
-		t.Fatalf("test setup invalid: ARI window %s..%s is not due at %s", window.Start.Format(time.RFC3339), window.End.Format(time.RFC3339), now.Format(time.RFC3339))
-	}
-	predecessor.NotBefore = &notBefore
-	predecessor.NotAfter = &notAfter
-	if _, err := h.srv.orch.RecordCertificate(t.Context(), h.tenant, predecessor); err != nil {
-		t.Fatalf("record ARI validity window: %v", err)
+	// Keep the real signed certificate unchanged. Evaluate its actual ARI
+	// window later using only the scheduler's source-test clock.
+	notBefore, notAfter := *predecessor.NotBefore, *predecessor.NotAfter
+	window := ari.SuggestWindow(notBefore, notAfter, time.Now().UTC(), false)
+	now := window.Start.Add(time.Second)
+	if !notAfter.After(now.Add(time.Hour)) || !ari.RenewNow(ari.RenewalInfo{SuggestedWindow: window}, now) {
+		t.Fatal("actual ARI window does not precede the fixed one-hour deadline")
 	}
 
 	before := ariPostureForTenant(t, h, tok)
@@ -487,7 +484,7 @@ func TestServedLifecycleSchedulerUsesARIWindowForRenewal(t *testing.T) {
 			window.End.Format(time.RFC3339Nano))
 	}
 
-	queued, err := h.srv.RunLifecycleOnce(t.Context())
+	queued, err := h.srv.runLifecycleOnceAt(t.Context(), now)
 	if err != nil {
 		t.Fatalf("run lifecycle scheduler: %v", err)
 	}
@@ -638,16 +635,11 @@ func TestServedWildcardIdentityRequiresAcknowledgementAndRenewsTRACE017(t *testi
 		t.Fatalf("issued wildcard certs = %+v, want one active cert retaining %s SAN", certs, wildcardName)
 	}
 	predecessor := certs[0]
-	now := time.Now().UTC()
-	notBefore := now.Add(-45 * 24 * time.Hour)
-	notAfter := now.Add(12 * time.Hour)
-	predecessor.NotBefore = &notBefore
-	predecessor.NotAfter = &notAfter
-	if _, err := h.srv.orch.RecordCertificate(t.Context(), h.tenant, predecessor); err != nil {
-		t.Fatalf("record wildcard renewal window: %v", err)
+	if predecessor.NotBefore == nil || predecessor.NotAfter == nil {
+		t.Fatal("wildcard certificate lacks signed validity")
 	}
-
-	queued, err := h.srv.RunLifecycleOnce(t.Context())
+	// Evaluate the actual leaf near expiry without rewriting its signed dates.
+	queued, err := h.srv.runLifecycleOnceAt(t.Context(), predecessor.NotAfter.Add(-12*time.Hour))
 	if err != nil {
 		t.Fatalf("run wildcard lifecycle scheduler: %v", err)
 	}
@@ -818,7 +810,11 @@ func TestServedConnectorTargetJourneyJOURNEY001EndToEnd(t *testing.T) {
 		t.Fatalf("delivery receipt after target deploy = %+v raw=%s", first.Items, first.Raw)
 	}
 
-	queued, err := h.srv.RunLifecycleOnce(t.Context())
+	servedLeaf, err := h.store.GetCertificateByFingerprint(t.Context(), h.tenant, first.Items[0].Fingerprint)
+	if err != nil || servedLeaf.NotAfter == nil {
+		t.Fatalf("load delivered signed leaf: %+v %v", servedLeaf, err)
+	}
+	queued, err := h.srv.runLifecycleOnceAt(t.Context(), servedLeaf.NotAfter.Add(-12*time.Hour))
 	if err != nil {
 		t.Fatalf("run lifecycle scheduler: %v", err)
 	}
@@ -977,7 +973,10 @@ func TestServedEndpointBindingAutomationCAPLIFE01(t *testing.T) {
 		t.Fatalf("deployed identity after endpoint binding drain: status %d body %s", status, body)
 	}
 
-	queued, err := h.srv.RunLifecycleOnce(t.Context())
+	if certs[0].NotAfter == nil {
+		t.Fatal("endpoint certificate lacks signed expiry")
+	}
+	queued, err := h.srv.runLifecycleOnceAt(t.Context(), certs[0].NotAfter.Add(-12*time.Hour))
 	if err != nil {
 		t.Fatalf("run lifecycle scheduler: %v", err)
 	}

@@ -19,16 +19,20 @@ type Certificate struct {
 	TenantID string
 	// CAID is not stored on the inventory row. Served issuance sets it so the
 	// certificate.recorded event can also rebuild the OCSP/CRL responder row.
-	CAID               string
-	OwnerID            *string
-	Subject            string
-	SANs               []string
-	Issuer             string
-	Serial             string
-	Fingerprint        string
-	KeyAlgorithm       string
-	NotBefore          *time.Time
-	NotAfter           *time.Time
+	CAID         string
+	OwnerID      *string
+	Subject      string
+	SANs         []string
+	Issuer       string
+	Serial       string
+	Fingerprint  string
+	KeyAlgorithm string
+	NotBefore    *time.Time
+	NotAfter     *time.Time
+	// ValidityAnchor is the actual clock selected when the issuing crypto
+	// boundary constructed this leaf. Nil means unknown; CreatedAt cannot
+	// substitute for it. It survives later observations of this fingerprint.
+	ValidityAnchor     *time.Time
 	DeploymentLocation string
 	Source             string
 	CertificateDER     []byte
@@ -367,7 +371,7 @@ const certificateColumns = `id::text, tenant_id::text, owner_id::text, subject, 
         certificate_der, issuance_idempotency_key, certificate_pem, created_at,
         status, replaces_id::text, revoked_at, revocation_reason, renewed_at, alerted_at,
         key_origin, key_storage, key_exportable, key_generated_by,
-        observed_by, observed_kind, last_seen_at, issuance_request_binding, broker_issuance, issuance_event_id`
+        observed_by, observed_kind, last_seen_at, issuance_request_binding, broker_issuance, issuance_event_id, validity_anchor`
 
 func scanCertificate(row pgx.Row, c *Certificate) error {
 	return row.Scan(&c.ID, &c.TenantID, &c.OwnerID, &c.Subject, &c.SANs, &c.Issuer, &c.Serial,
@@ -380,7 +384,7 @@ func scanCertificate(row pgx.Row, c *Certificate) error {
 		// C3: provenance. Which source last confirmed this certificate exists,
 		// and when — distinct from created_at, which only says when trstctl
 		// first recorded it.
-		&c.ObservedBy, &c.ObservedKind, &c.LastSeenAt, &c.IssuanceRequestBinding, &c.BrokerIssuance, &c.IssuanceEventID)
+		&c.ObservedBy, &c.ObservedKind, &c.LastSeenAt, &c.IssuanceRequestBinding, &c.BrokerIssuance, &c.IssuanceEventID, &c.ValidityAnchor)
 }
 
 // GetCertificate loads a certificate in its tenant context.

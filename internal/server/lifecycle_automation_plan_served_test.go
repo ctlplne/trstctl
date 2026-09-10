@@ -131,13 +131,9 @@ func TestServedLifecycleAutomationPlanListsDueWorkWithoutTenantLeakage(t *testin
 	if err != nil || len(certs) != 1 {
 		t.Fatalf("load active certificate: count=%d err=%v", len(certs), err)
 	}
-	now := time.Now().UTC()
 	cert := certs[0]
-	start := now.Add(-20 * 24 * time.Hour)
-	end := now.Add(10 * 24 * time.Hour)
-	cert.NotBefore, cert.NotAfter = &start, &end
-	if _, err := h.srv.orch.RecordCertificate(t.Context(), h.tenant, cert); err != nil {
-		t.Fatalf("record due validity: %v", err)
+	if cert.ValidityAnchor == nil {
+		t.Fatal("served issuance lost its constructor anchor")
 	}
 
 	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/lifecycle/automation-plan", tok, nil)
@@ -147,6 +143,22 @@ func TestServedLifecycleAutomationPlanListsDueWorkWithoutTenantLeakage(t *testin
 	var plan apiLifecycleAutomationPlanTestResponse
 	if err := json.Unmarshal(body, &plan); err != nil {
 		t.Fatalf("decode due plan: %v (%s)", err, body)
+	}
+	if plan.Summary.Monitored != 1 || plan.Summary.DueNow != 0 || len(plan.Items) != 1 || plan.Items[0].Due {
+		t.Fatalf("HTTP plan immediately requeues a fresh certificate: %+v", plan)
+	}
+	// The public route above uses the real clock. Evaluate its same served
+	// planner at the actual future renewal window without editing signed data.
+	future, err := h.srv.LifecycleAutomationPlan(t.Context(), h.tenant, cert.ValidityAnchor.Add(21*24*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err = json.Marshal(future)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(body, &plan); err != nil {
+		t.Fatal(err)
 	}
 	if plan.Summary.Monitored != 1 || plan.Summary.DueNow != 1 || len(plan.Items) != 1 {
 		t.Fatalf("due summary/items = %+v/%+v", plan.Summary, plan.Items)

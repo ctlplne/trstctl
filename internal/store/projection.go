@@ -422,6 +422,9 @@ func (s *Store) ApplyIdentityCreatedTx(ctx context.Context, tx pgx.Tx, it Identi
 // creation and predecessor retirement are one replay step, so a crash or replay
 // before a later lifecycle/audit event cannot leave two active certificates.
 func (s *Store) ApplyCertificateRecordedTx(ctx context.Context, tx pgx.Tx, c Certificate) error {
+	if err := s.ValidateCertificateIssuanceBindingTx(ctx, tx, c.TenantID, c); err != nil {
+		return err
+	}
 	if err := validateBrokerIssuance(c); err != nil {
 		return err
 	}
@@ -465,20 +468,23 @@ func (s *Store) ApplyCertificateRecordedTx(ctx context.Context, tx pgx.Tx, c Cer
 		         -- recorded an empty custody origin. A custody claim that lives
 		         -- in the code and not in the row is not auditable, which is the
 		         -- entire reason the column exists.
-		         key_origin, key_storage, key_exportable, key_generated_by)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+		         key_origin, key_storage, key_exportable, key_generated_by, validity_anchor)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
 		 ON CONFLICT DO NOTHING`,
 		c.ID, c.TenantID, c.OwnerID, c.Subject, sans, c.Issuer, c.Serial, c.Fingerprint,
 		c.KeyAlgorithm, c.NotBefore, c.NotAfter, c.DeploymentLocation, c.Source, certDER, certPEM, issuanceResponse,
 		c.IssuanceIdempotencyKey, c.IssuanceRequestBinding, c.ReplacesID, c.CreatedAt,
-		c.KeyOrigin, c.KeyStorage, c.KeyExportable, c.KeyGeneratedBy)
+		c.KeyOrigin, c.KeyStorage, c.KeyExportable, c.KeyGeneratedBy, c.ValidityAnchor)
 	if err != nil {
 		return err
 	}
 	tag, err := tx.Exec(ctx,
 		`UPDATE certificates
 		    SET owner_id = $2, subject = $3, sans = $4, issuer = $5, serial = $6,
-		        key_algorithm = $8, not_before = $9, not_after = $10,
+		        key_algorithm = $8,
+		        not_before = CASE WHEN validity_anchor IS NULL THEN $9 ELSE not_before END,
+		        not_after = CASE WHEN validity_anchor IS NULL THEN $10 ELSE not_after END,
+		        validity_anchor = coalesce(validity_anchor, $23),
 		        deployment_location = $11, source = $12,
 		        certificate_der = CASE WHEN octet_length($13::bytea) > 0 THEN $13 ELSE certificate_der END,
 		        certificate_pem = CASE WHEN octet_length($14::bytea) > 0 THEN $14 ELSE certificate_pem END,
@@ -508,7 +514,7 @@ func (s *Store) ApplyCertificateRecordedTx(ctx context.Context, tx pgx.Tx, c Cer
 		c.TenantID, c.OwnerID, c.Subject, sans, c.Issuer, c.Serial, c.Fingerprint,
 		c.KeyAlgorithm, c.NotBefore, c.NotAfter, c.DeploymentLocation, c.Source, certDER, certPEM, issuanceResponse,
 		c.IssuanceIdempotencyKey, c.IssuanceRequestBinding, c.ReplacesID,
-		c.KeyOrigin, c.KeyStorage, c.KeyExportable, c.KeyGeneratedBy)
+		c.KeyOrigin, c.KeyStorage, c.KeyExportable, c.KeyGeneratedBy, c.ValidityAnchor)
 	if err != nil {
 		return err
 	}

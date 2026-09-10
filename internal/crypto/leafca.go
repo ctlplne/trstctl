@@ -148,9 +148,25 @@ func SignLeafFromCSR(caCertDER []byte, caSigner DigestSigner, csrDER []byte, ttl
 // previously omitted. The issued certificate is verified against the CA before
 // return (fail closed).
 func SignLeafFromCSRWithProfile(caCertDER []byte, caSigner DigestSigner, csrDER []byte, ttl time.Duration, prof LeafProfile) ([]byte, error) {
+	issued, err := SignLeafFromCSRWithValidity(caCertDER, caSigner, csrDER, ttl, prof)
+	return issued.DER, err
+}
+
+// IssuedLeaf retains the clock value used to construct this signed leaf's
+// validity. ValidityAnchor is neither its backdated NotBefore nor the time an
+// inventory later observed it. Existing callers that need only DER can continue
+// using SignLeafFromCSRWithProfile.
+type IssuedLeaf struct {
+	DER            []byte
+	ValidityAnchor time.Time
+}
+
+// SignLeafFromCSRWithValidity returns the same verified certificate plus its
+// actual validity anchor. No private key material crosses the signing boundary.
+func SignLeafFromCSRWithValidity(caCertDER []byte, caSigner DigestSigner, csrDER []byte, ttl time.Duration, prof LeafProfile) (IssuedLeaf, error) {
 	caCert, err := x509.ParseCertificate(caCertDER)
 	if err != nil {
-		return nil, fmt.Errorf("crypto: parse CA cert: %w", err)
+		return IssuedLeaf{}, fmt.Errorf("crypto: parse CA cert: %w", err)
 	}
 	if prof.ClampTTLToIssuer {
 		// Clamp BEFORE profile enforcement, matching the order the served
@@ -159,7 +175,7 @@ func SignLeafFromCSRWithProfile(caCertDER []byte, caSigner DigestSigner, csrDER 
 		// the clamp costs nothing extra.
 		remaining := time.Until(caCert.NotAfter)
 		if remaining <= 0 {
-			return nil, &leafProfileError{fmt.Sprintf("issuing CA expired at %s; it cannot vouch for a new leaf",
+			return IssuedLeaf{}, &leafProfileError{fmt.Sprintf("issuing CA expired at %s; it cannot vouch for a new leaf",
 				caCert.NotAfter.UTC().Format(time.RFC3339))}
 		}
 		if ttl <= 0 || ttl > remaining {
@@ -168,35 +184,35 @@ func SignLeafFromCSRWithProfile(caCertDER []byte, caSigner DigestSigner, csrDER 
 	}
 	csr, err := x509.ParseCertificateRequest(csrDER)
 	if err != nil {
-		return nil, fmt.Errorf("crypto: parse CSR: %w", err)
+		return IssuedLeaf{}, fmt.Errorf("crypto: parse CSR: %w", err)
 	}
 	if err := csr.CheckSignature(); err != nil {
-		return nil, fmt.Errorf("crypto: CSR signature: %w", err)
+		return IssuedLeaf{}, fmt.Errorf("crypto: CSR signature: %w", err)
 	}
 	// Enforce the profile's constraints before signing (PKIGOV-002): an
 	// out-of-profile request is rejected, never minted.
 	if err := enforceLeafProfile(csr, ttl, prof); err != nil {
-		return nil, err
+		return IssuedLeaf{}, err
 	}
 	adapter, err := newX509Signer(caSigner)
 	if err != nil {
-		return nil, err
+		return IssuedLeaf{}, err
 	}
 	knownEKUs, customEKUs, err := leafExtKeyUsage(prof.AllowedExtKeyUsage)
 	if err != nil {
-		return nil, &leafProfileError{err.Error()}
+		return IssuedLeaf{}, &leafProfileError{err.Error()}
 	}
 	serial, err := randomSerial()
 	if err != nil {
-		return nil, err
+		return IssuedLeaf{}, err
 	}
 	// Subject Key Identifier from the subject public key (RFC 5280 method 1) so the
 	// leaf is chain-buildable even when the CA cert lacks one to copy.
 	ski, err := subjectKeyID(csr.PublicKey)
 	if err != nil {
-		return nil, err
+		return IssuedLeaf{}, err
 	}
-	now := time.Now()
+	now := time.Now().UTC().Truncate(time.Microsecond)
 	leaf := &x509.Certificate{
 		SerialNumber:          serial,
 		Subject:               csr.Subject,
@@ -219,7 +235,7 @@ func SignLeafFromCSRWithProfile(caCertDER []byte, caSigner DigestSigner, csrDER 
 	if len(prof.ExtraExtensions) > 0 {
 		extra, err := x509Extensions(prof.ExtraExtensions)
 		if err != nil {
-			return nil, err
+			return IssuedLeaf{}, err
 		}
 		leaf.ExtraExtensions = append(leaf.ExtraExtensions, extra...)
 	}
@@ -235,27 +251,27 @@ func SignLeafFromCSRWithProfile(caCertDER []byte, caSigner DigestSigner, csrDER 
 		// extension present across Go versions.
 		pols, err := policyOIDs(prof.CertificatePolicyOIDs)
 		if err != nil {
-			return nil, err
+			return IssuedLeaf{}, err
 		}
 		leaf.PolicyIdentifiers = pols
 		modern, err := modernPolicyOIDs(prof.CertificatePolicyOIDs)
 		if err != nil {
-			return nil, err
+			return IssuedLeaf{}, err
 		}
 		leaf.Policies = modern
 	}
 	der, err := x509.CreateCertificate(rand.Reader, leaf, caCert, csr.PublicKey, adapter)
 	if err != nil {
-		return nil, fmt.Errorf("crypto: sign leaf: %w", err)
+		return IssuedLeaf{}, fmt.Errorf("crypto: sign leaf: %w", err)
 	}
 	issued, err := x509.ParseCertificate(der)
 	if err != nil {
-		return nil, fmt.Errorf("crypto: parse issued leaf: %w", err)
+		return IssuedLeaf{}, fmt.Errorf("crypto: parse issued leaf: %w", err)
 	}
 	if err := issued.CheckSignatureFrom(caCert); err != nil {
-		return nil, fmt.Errorf("crypto: issued leaf failed verification (signer misbehaved): %w", err)
+		return IssuedLeaf{}, fmt.Errorf("crypto: issued leaf failed verification (signer misbehaved): %w", err)
 	}
-	return der, nil
+	return IssuedLeaf{DER: der, ValidityAnchor: now.UTC()}, nil
 }
 
 // SignTimestampingCertFromCSR signs a TSA end-entity certificate from a CSR. The

@@ -26,6 +26,7 @@ func CertificateRecordingMaterial(e events.Event) (store.Certificate, bool, erro
 		}
 		return store.Certificate{
 			Fingerprint: p.Fingerprint, ReplacesID: p.ReplacesID, Source: p.Source,
+			NotBefore: p.NotBefore, NotAfter: p.NotAfter, ValidityAnchor: p.ValidityAnchor,
 			CertificateDER: p.CertificateDER, CertificatePEM: p.CertificatePEM,
 			IssuanceIdempotencyKey: p.IssuanceIdempotencyKey, IssuanceRequestBinding: p.IssuanceRequestBinding,
 		}, true, nil

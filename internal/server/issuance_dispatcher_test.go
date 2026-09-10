@@ -17,6 +17,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/app"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/connector/gcpcm"
@@ -232,8 +233,8 @@ func TestIssuanceDispatcherRenewalMintsSuccessorAndSupersedesPredecessor(t *test
 	}
 
 	baseIssue := h.handler.issue
-	h.handler.issue = func(context.Context, []byte, time.Duration, crypto.LeafProfile) ([]byte, error) {
-		return nil, errors.New("forced pre-mint renewal failure")
+	h.handler.issue = func(context.Context, []byte, time.Duration, crypto.LeafProfile) (crypto.IssuedLeaf, error) {
+		return crypto.IssuedLeaf{}, errors.New("forced pre-mint renewal failure")
 	}
 	if err := h.orch.Transition(ctx, h.tenant, ident.ID, orchestrator.StateRenewing, "operator renewal expected to fail"); err != nil {
 		t.Fatalf("transition successor to failing renewal: %v", err)
@@ -281,74 +282,66 @@ func TestIssuanceDispatcherRenewalMintsSuccessorAndSupersedesPredecessor(t *test
 }
 
 func TestIssuanceDispatcherRecoversRecordedCertificateBeforeRetryingSigner(t *testing.T) {
-	h := newIssuanceDispatcherHarness(t)
-	ctx := context.Background()
+	for _, gap := range []string{"projection rollback", "side effects committed"} {
+		t.Run(gap, func(t *testing.T) {
+			h := newIssuanceDispatcherHarness(t)
+			ctx := context.Background()
 
-	baseIssue := h.handler.issue
-	signCalls := 0
-	h.handler.issue = func(ctx context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) ([]byte, error) {
-		signCalls++
-		return baseIssue(ctx, csrDER, ttl, leafProfile)
-	}
+			baseIssue := h.handler.issue
+			signCalls := 0
+			h.handler.issue = func(ctx context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) (crypto.IssuedLeaf, error) {
+				signCalls++
+				return baseIssue(ctx, csrDER, ttl, leafProfile)
+			}
 
-	owner, err := h.orch.CreateOwner(ctx, h.tenant, "service", "correct-001-owner", "")
-	if err != nil {
-		t.Fatalf("create owner: %v", err)
-	}
-	ident, err := h.orch.CreateIdentity(ctx, h.tenant, store.Identity{
-		Kind: store.KindX509Certificate, Name: "correct-001.served.test", OwnerID: owner.ID,
-	})
-	if err != nil {
-		t.Fatalf("create identity: %v", err)
-	}
-	if err := h.orch.Transition(ctx, h.tenant, ident.ID, orchestrator.StateIssued, "issue with crash gap"); err != nil {
-		t.Fatalf("transition to issued: %v", err)
-	}
-	issue := pendingOutboxByDestination(t, h, "ca.issue")
-	msg := orchestrator.Message{
-		TenantID: h.tenant, Destination: issue.Destination,
-		Payload: issue.Payload, IdempotencyKey: issue.IdempotencyKey,
-	}
+			owner, err := h.orch.CreateOwner(ctx, h.tenant, "service", "correct-001-owner", "")
+			if err != nil {
+				t.Fatalf("create owner: %v", err)
+			}
+			ident, err := h.orch.CreateIdentity(ctx, h.tenant, store.Identity{
+				Kind: store.KindX509Certificate, Name: "correct-001.served.test", OwnerID: owner.ID,
+			})
+			if err != nil {
+				t.Fatalf("create identity: %v", err)
+			}
+			if err := h.orch.Transition(ctx, h.tenant, ident.ID, orchestrator.StateIssued, "issue with crash gap"); err != nil {
+				t.Fatalf("transition to issued: %v", err)
+			}
+			issue := pendingOutboxByDestination(t, h, "ca.issue")
+			msg := orchestrator.Message{
+				TenantID: h.tenant, Destination: issue.Destination,
+				Payload: issue.Payload, IdempotencyKey: issue.IdempotencyKey,
+			}
 
-	injected := errors.New("crash after certificate.recorded before idempotency completion")
-	failOnce := true
-	h.handler.afterIssueSideEffects = func(context.Context) error {
-		if !failOnce {
-			return nil
-		}
-		failOnce = false
-		return injected
-	}
-	if err := h.handler.Deliver(ctx, msg); !errors.Is(err, injected) {
-		t.Fatalf("first delivery error = %v, want injected crash gap", err)
-	}
-	idemKey := "issue:" + msg.IdempotencyKey
-	deleteCertificatesByIssuanceKey(t, h, idemKey)
-
-	h.handler.afterIssueSideEffects = nil
-	if err := h.handler.Deliver(ctx, msg); err != nil {
-		t.Fatalf("retry delivery: %v", err)
-	}
-	if signCalls != 1 {
-		t.Fatalf("signer calls = %d, want 1; retry must recover recorded certificate before signing", signCalls)
-	}
-	certs, err := h.store.ListCertificatesByIssuanceIdempotencyKey(ctx, h.tenant, idemKey)
-	if err != nil {
-		t.Fatalf("list recovered certificates: %v", err)
-	}
-	if len(certs) != 1 {
-		t.Fatalf("recovered certificates = %d, want 1", len(certs))
-	}
-	if certs[0].IssuanceIdempotencyKey != idemKey {
-		t.Fatalf("issuance idempotency key = %q, want %q", certs[0].IssuanceIdempotencyKey, idemKey)
-	}
-	if len(certs[0].CertificateDER) == 0 {
-		t.Fatal("recovered certificate has no DER; protocol retries could not return the original certificate")
-	}
-	if _, found, err := h.store.LookupIssuedCert(ctx, h.tenant, IssuingCAID(), certs[0].Serial); err != nil {
-		t.Fatalf("lookup recovered issued-cert row: %v", err)
-	} else if !found {
-		t.Fatal("recovered certificate serial was not projected into ca_issued_certs")
+			idemKey := "issue:" + msg.IdempotencyKey
+			checkGap := prepareCertificateRecoveryGap(t, h, idemKey, gap, &h.handler.afterIssueSideEffects)
+			firstErr := h.handler.Deliver(ctx, msg)
+			checkGap(firstErr)
+			if err := h.handler.Deliver(ctx, msg); err != nil {
+				t.Fatalf("retry delivery: %v", err)
+			}
+			if signCalls != 1 {
+				t.Fatalf("signer calls = %d, want 1; retry must recover recorded certificate before signing", signCalls)
+			}
+			certs, err := h.store.ListCertificatesByIssuanceIdempotencyKey(ctx, h.tenant, idemKey)
+			if err != nil {
+				t.Fatalf("list recovered certificates: %v", err)
+			}
+			if len(certs) != 1 {
+				t.Fatalf("recovered certificates = %d, want 1", len(certs))
+			}
+			if certs[0].IssuanceIdempotencyKey != idemKey {
+				t.Fatalf("issuance idempotency key = %q, want %q", certs[0].IssuanceIdempotencyKey, idemKey)
+			}
+			if len(certs[0].CertificateDER) == 0 {
+				t.Fatal("recovered certificate has no DER; protocol retries could not return the original certificate")
+			}
+			if _, found, err := h.store.LookupIssuedCert(ctx, h.tenant, IssuingCAID(), certs[0].Serial); err != nil {
+				t.Fatalf("lookup recovered issued-cert row: %v", err)
+			} else if !found {
+				t.Fatal("recovered certificate serial was not projected into ca_issued_certs")
+			}
+		})
 	}
 }
 
@@ -826,17 +819,17 @@ func TestIssuanceDispatcherServedProfileControlsLeafEKUs(t *testing.T) {
 
 	var issuedEKUs []string
 	h.handler.defaultProfile = "tls-server"
-	h.handler.issue = func(_ context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) ([]byte, error) {
-		leafDER, err := crypto.SignLeafFromCSRWithProfile(caDER, caKey, csrDER, ttl, leafProfile)
+	h.handler.issue = func(_ context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) (crypto.IssuedLeaf, error) {
+		issued, err := crypto.SignLeafFromCSRWithValidity(caDER, caKey, csrDER, ttl, leafProfile)
 		if err != nil {
-			return nil, err
+			return crypto.IssuedLeaf{}, err
 		}
-		info, err := certinfo.Inspect(leafDER)
+		info, err := certinfo.Inspect(issued.DER)
 		if err != nil {
-			return nil, err
+			return crypto.IssuedLeaf{}, err
 		}
 		issuedEKUs = info.ExtKeyUsages
-		return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER}), nil
+		return issued, nil
 	}
 
 	if _, err := h.handler.mintServedLeaf(ctx, h.tenant, "owner-1", "api.eku.test", []string{"api.eku.test"}); err != nil {
@@ -931,7 +924,7 @@ func TestIssuanceDispatcherUsesCommittedApprovalProfileRevisionAfterLaterUpdate(
 	h.handler.defaultProfile = profileName
 	baseIssue := h.handler.issue
 	var gotTTL time.Duration
-	h.handler.issue = func(ctx context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) ([]byte, error) {
+	h.handler.issue = func(ctx context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) (crypto.IssuedLeaf, error) {
 		gotTTL = ttl
 		return baseIssue(ctx, csrDER, ttl, leafProfile)
 	}
@@ -992,9 +985,9 @@ func TestIssuanceDispatcherRejectsChangedSpecAtPinnedProfileIdentity(t *testing.
 	}); err != nil {
 		t.Fatalf("simulate changed spec at same profile identity: %v", err)
 	}
-	h.handler.issue = func(context.Context, []byte, time.Duration, crypto.LeafProfile) ([]byte, error) {
+	h.handler.issue = func(context.Context, []byte, time.Duration, crypto.LeafProfile) (crypto.IssuedLeaf, error) {
 		t.Fatal("signing must not be reached after pinned profile spec drift")
-		return nil, nil
+		return crypto.IssuedLeaf{}, nil
 	}
 	_, err = h.handler.mintServedLeafMaterial(ctx, h.tenant, "owner", "spec-integrity.example.test",
 		[]string{"spec-integrity.example.test"}, binding)
@@ -1066,9 +1059,9 @@ func TestIssuanceDispatcherRejectsExcludedCSRRequestedEKUBeforeSigning(t *testin
 		t.Fatal(err)
 	}
 	h.handler.defaultProfile = "tls-server"
-	h.handler.issue = func(context.Context, []byte, time.Duration, crypto.LeafProfile) ([]byte, error) {
+	h.handler.issue = func(context.Context, []byte, time.Duration, crypto.LeafProfile) (crypto.IssuedLeaf, error) {
 		t.Fatal("signing must not be reached for an excluded EKU")
-		return nil, nil
+		return crypto.IssuedLeaf{}, nil
 	}
 
 	_, err = h.handler.enforceProfile(ctx, h.tenant, csrDER, []string{"client-only.eku.test"}, time.Hour)
@@ -1236,63 +1229,54 @@ func TestProtocolIssuerServedProfileControlsAndRejectsLeafEKUs(t *testing.T) {
 }
 
 func TestProtocolIssuerRecoversRecordedDERBeforeRetryingSigner(t *testing.T) {
-	h := newIssuanceDispatcherHarness(t)
-	ctx := context.Background()
+	for _, gap := range []string{"projection rollback", "side effects committed"} {
+		t.Run(gap, func(t *testing.T) {
+			h := newIssuanceDispatcherHarness(t)
+			ctx := context.Background()
 
-	caKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(caKey.Destroy)
-	caDER, err := crypto.SelfSignedCACert(caKey, "Protocol Crash Gap CA", 24*time.Hour)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var firstDER []byte
-	signCalls := 0
-	issuer := &protocolIssuer{
-		issue: func(_ context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) ([]byte, error) {
-			signCalls++
-			leafDER, err := crypto.SignLeafFromCSRWithProfile(caDER, caKey, csrDER, ttl, leafProfile)
+			caKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 			if err != nil {
-				return nil, err
+				t.Fatal(err)
 			}
-			if firstDER == nil {
-				firstDER = append([]byte(nil), leafDER...)
+			t.Cleanup(caKey.Destroy)
+			caDER, err := crypto.SelfSignedCACert(caKey, "Protocol Crash Gap CA", 24*time.Hour)
+			if err != nil {
+				t.Fatal(err)
 			}
-			return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER}), nil
-		},
-		orch: h.orch, idem: orchestrator.NewIdempotency(h.store), store: h.store, log: h.log, caID: IssuingCAID(),
-	}
 
-	injected := errors.New("crash after protocol certificate.recorded before idempotency completion")
-	failOnce := true
-	issuer.afterIssueSideEffects = func(context.Context) error {
-		if !failOnce {
-			return nil
-		}
-		failOnce = false
-		return injected
-	}
+			var firstDER []byte
+			signCalls := 0
+			issuer := &protocolIssuer{
+				issue: func(_ context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) ([]byte, error) {
+					signCalls++
+					leafDER, err := crypto.SignLeafFromCSRWithProfile(caDER, caKey, csrDER, ttl, leafProfile)
+					if err != nil {
+						return nil, err
+					}
+					if firstDER == nil {
+						firstDER = append([]byte(nil), leafDER...)
+					}
+					return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER}), nil
+				},
+				orch: h.orch, idem: orchestrator.NewIdempotency(h.store), store: h.store, log: h.log, caID: IssuingCAID(),
+			}
 
-	csrDER := serverTestCSR(t, "correct-001.protocol.test", nil)
-	if _, err := issuer.IssueProtocolLeaf(ctx, h.tenant, "acme", "correct-001-protocol", csrDER, time.Hour); !errors.Is(err, injected) {
-		t.Fatalf("first protocol issue error = %v, want injected crash gap", err)
-	}
-	idemKey := "protocol-issue:correct-001-protocol"
-	deleteCertificatesByIssuanceKey(t, h, idemKey)
-
-	issuer.afterIssueSideEffects = nil
-	raw, err := issuer.IssueProtocolLeaf(ctx, h.tenant, "acme", "correct-001-protocol", csrDER, time.Hour)
-	if err != nil {
-		t.Fatalf("retry protocol issue: %v", err)
-	}
-	if signCalls != 1 {
-		t.Fatalf("protocol signer calls = %d, want 1; retry must not mint another leaf", signCalls)
-	}
-	if !bytes.Equal(raw, firstDER) {
-		t.Fatal("protocol retry did not return the DER from the first recorded certificate")
+			idemKey := "protocol-issue:correct-001-protocol"
+			checkGap := prepareCertificateRecoveryGap(t, h, idemKey, gap, &issuer.afterIssueSideEffects)
+			csrDER := serverTestCSR(t, "correct-001.protocol.test", nil)
+			_, firstErr := issuer.IssueProtocolLeaf(ctx, h.tenant, "acme", "correct-001-protocol", csrDER, time.Hour)
+			checkGap(firstErr)
+			raw, err := issuer.IssueProtocolLeaf(ctx, h.tenant, "acme", "correct-001-protocol", csrDER, time.Hour)
+			if err != nil {
+				t.Fatalf("retry protocol issue: %v", err)
+			}
+			if signCalls != 1 {
+				t.Fatalf("protocol signer calls = %d, want 1; retry must not mint another leaf", signCalls)
+			}
+			if !bytes.Equal(raw, firstDER) {
+				t.Fatal("protocol retry did not return the DER from the first recorded certificate")
+			}
+		})
 	}
 }
 
@@ -1332,12 +1316,8 @@ func newIssuanceDispatcherHarness(t *testing.T) *issuanceDispatcherHarness {
 	idem := orchestrator.NewIdempotency(st)
 	orch := orchestrator.NewOrchestrator(log, st, outbox)
 	handler := &issuanceDispatcher{
-		issue: func(_ context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) ([]byte, error) {
-			leafDER, err := crypto.SignLeafFromCSRWithProfile(caDER, caKey, csrDER, ttl, leafProfile)
-			if err != nil {
-				return nil, err
-			}
-			return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER}), nil
+		issue: func(_ context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) (crypto.IssuedLeaf, error) {
+			return crypto.SignLeafFromCSRWithValidity(caDER, caKey, csrDER, ttl, leafProfile)
 		},
 		orch: orch, idem: idem, store: st, log: log,
 		// B2: the dispatcher queues endpoint.renew work for agent-executed
@@ -1350,8 +1330,11 @@ func newIssuanceDispatcherHarness(t *testing.T) *issuanceDispatcherHarness {
 		store: st, log: log, outbox: outbox, orch: orch, handler: handler,
 		tenant: "11111111-1111-1111-1111-111111111111",
 	}
-	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: h.tenant, Name: "dispatcher-renewal"}); err != nil {
-		t.Fatalf("upsert tenant: %v", err)
+	// Use the same event-sourced registration prerequisite as real bootstrap.
+	svc := app.New(log, st, nil)
+	t.Cleanup(svc.Close)
+	if err := svc.RegisterTenant(ctx, h.tenant, "dispatcher-renewal", "bootstrap-dispatcher-tenant"); err != nil {
+		t.Fatalf("register fixture tenant: %v", err)
 	}
 	return h
 }
@@ -1432,15 +1415,75 @@ func dispatcherCertificates(t *testing.T, h *issuanceDispatcherHarness) []store.
 	return certs
 }
 
-func deleteCertificatesByIssuanceKey(t *testing.T, h *issuanceDispatcherHarness, key string) {
+// Exercise two real crash boundaries: an event whose SQL projection rolls back,
+// and committed side effects whose outer idempotency completion has not run.
+// These disposable SQL triggers never touch the customer deployment.
+func prepareCertificateRecoveryGap(t *testing.T, h *issuanceDispatcherHarness, key, gap string, hook *func(context.Context) error) func(error) {
 	t.Helper()
-	if _, err := h.store.SystemPool().Exec(context.Background(),
-		`DELETE FROM certificates WHERE tenant_id = $1 AND issuance_idempotency_key = $2`,
-		h.tenant, key); err != nil {
-		t.Fatalf("delete certificate read-model row for %s: %v", key, err)
+	const marker = "owned certificate recovery gap"
+	cleanup := func() {}
+	if gap == "projection rollback" {
+		_, err := h.store.SystemPool().Exec(t.Context(), `CREATE FUNCTION issued_recording_gap() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.tenant_id='11111111-1111-1111-1111-111111111111'::uuid THEN RAISE EXCEPTION 'owned certificate recovery gap'; END IF; RETURN NEW; END $$;
+CREATE TRIGGER issued_recording_gap BEFORE INSERT ON certificates FOR EACH ROW EXECUTE FUNCTION issued_recording_gap()`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cleanup = func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if _, err := h.store.SystemPool().Exec(ctx, `DROP TRIGGER IF EXISTS issued_recording_gap ON certificates; DROP FUNCTION IF EXISTS issued_recording_gap()`); err != nil {
+				t.Error(err)
+			}
+		}
+		t.Cleanup(cleanup)
+	} else {
+		*hook = func(context.Context) error { return errors.New(marker) }
 	}
-	if _, err := h.store.SystemPool().Exec(context.Background(),
-		`DELETE FROM ca_issued_certs WHERE tenant_id = $1`, h.tenant); err != nil {
-		t.Fatalf("delete issued-cert read-model rows for %s: %v", key, err)
+	return func(firstErr error) {
+		t.Helper()
+		if firstErr == nil || !strings.Contains(firstErr.Error(), marker) {
+			t.Fatalf("first issue missed %s: %v", gap, firstErr)
+		}
+		var retained []events.Event
+		if err := h.log.Replay(t.Context(), 0, func(e events.Event) error {
+			if e.TenantID != h.tenant || e.Type != projections.EventCertificateRecorded {
+				return nil
+			}
+			var pl projections.CertificateRecorded
+			if err := json.Unmarshal(e.Data, &pl); err != nil {
+				return err
+			}
+			if pl.IssuanceIdempotencyKey == key {
+				retained = append(retained, e)
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if len(retained) != 1 {
+			t.Fatalf("crash retained %d certificate events, want exactly one", len(retained))
+		}
+		rows, err := h.store.ListCertificatesByIssuanceIdempotencyKey(t.Context(), h.tenant, key)
+		want := 0
+		if gap == "side effects committed" {
+			want = 1
+		}
+		if err != nil || len(rows) != want {
+			t.Fatalf("crash projection rows=%d want=%d: %v", len(rows), want, err)
+		}
+		var receipts, issued int
+		if err := h.store.WithTenant(t.Context(), h.tenant, func(tx pgx.Tx) error {
+			if err := tx.QueryRow(t.Context(), `SELECT count(*) FROM certificate_metadata_receipts WHERE tenant_id=$1 AND event_id=$2`, h.tenant, retained[0].ID).Scan(&receipts); err != nil {
+				return err
+			}
+			return tx.QueryRow(t.Context(), `SELECT count(*) FROM ca_issued_certs WHERE tenant_id=$1`, h.tenant).Scan(&issued)
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if receipts != want || issued != want {
+			t.Fatalf("crash committed receipts=%d serial rows=%d, want=%d", receipts, issued, want)
+		}
+		*hook = nil
+		cleanup()
 	}
 }

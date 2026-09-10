@@ -64,13 +64,15 @@ func IssuingCAID() string {
 // leaf profile (Server.IssueLeafWithProfile satisfies it).
 type issueFunc func(ctx context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) ([]byte, error)
 
+type endpointIssueFunc func(context.Context, []byte, time.Duration, crypto.LeafProfile) (crypto.IssuedLeaf, error)
+
 type authorityIssueFunc func(
 	ctx context.Context,
 	tenantID, authorityID string,
 	csrDER []byte,
 	ttl time.Duration,
 	leafProfile crypto.LeafProfile,
-) (leafPEM, chainPEM []byte, effectiveAuthorityID string, err error)
+) (issued crypto.IssuedLeaf, chainPEM []byte, effectiveAuthorityID string, err error)
 
 // connectorPluginDeployer is the narrow signed-plugin surface needed by the
 // outbox dispatcher. Keeping the seam small also lets replay-safety tests prove
@@ -111,7 +113,7 @@ type issuanceDispatcher struct {
 	// relayPresence overrides the store for the E1 control-plane refusal; nil in
 	// production, where the store answers.
 	relayPresence  relayPresence
-	issue          issueFunc
+	issue          endpointIssueFunc
 	authorityIssue authorityIssueFunc
 	orch           *orchestrator.Orchestrator
 	idem           *orchestrator.Idempotency
@@ -710,7 +712,7 @@ func (d *issuanceDispatcher) mintServedLeafMaterialForSelection(
 	if err != nil {
 		return issuedLeafMaterial{}, err
 	}
-	leafPEM, chainPEM, caID, source, err := d.issueEndpointCSR(ctx, tenantID, selection, issueKey, csrDER, dnsNames, ttl, leafProfile)
+	leafPEM, chainPEM, caID, source, anchor, err := d.issueEndpointCSR(ctx, tenantID, selection, issueKey, csrDER, dnsNames, ttl, leafProfile)
 	if err != nil {
 		return issuedLeafMaterial{}, err
 	}
@@ -734,7 +736,8 @@ func (d *issuanceDispatcher) mintServedLeafMaterialForSelection(
 			CAID: caID, OwnerID: ownerPtr, Subject: info.Subject, SANs: sansOf(info),
 			Issuer: info.Issuer, Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
 			KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
-			Source: source, CertificateDER: append([]byte(nil), blk.Bytes...),
+			ValidityAnchor: anchor,
+			Source:         source, CertificateDER: append([]byte(nil), blk.Bytes...),
 			// B5: the deprecated path. The key was held in locked memory and
 			// wiped, but it existed outside the requester, and a credential on
 			// this path is one an operator should plan to replace. They cannot
@@ -1934,7 +1937,7 @@ func (d *issuanceDispatcher) mintServedLeafFromCSRForSelection(
 	if err != nil {
 		return issuedLeafMaterial{}, err
 	}
-	leafPEM, chainPEM, caID, source, err := d.issueEndpointCSR(ctx, tenantID, selection, issueKey, csrDER, dnsNames, ttl, leafProfile)
+	leafPEM, chainPEM, caID, source, anchor, err := d.issueEndpointCSR(ctx, tenantID, selection, issueKey, csrDER, dnsNames, ttl, leafProfile)
 	if err != nil {
 		return issuedLeafMaterial{}, err
 	}
@@ -1957,7 +1960,8 @@ func (d *issuanceDispatcher) mintServedLeafFromCSRForSelection(
 			CAID: caID, OwnerID: ownerPtr, Subject: info.Subject, SANs: sansOf(info),
 			Issuer: info.Issuer, Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
 			KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
-			Source: source, CertificateDER: append([]byte(nil), blk.Bytes...),
+			ValidityAnchor: anchor,
+			Source:         source, CertificateDER: append([]byte(nil), blk.Bytes...),
 			// B5: the requester generated this key and the control plane never
 			// held it. That is a fact about THIS certificate, recorded from what
 			// the code did rather than from what the documentation says the

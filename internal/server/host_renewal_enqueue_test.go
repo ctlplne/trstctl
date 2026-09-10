@@ -660,7 +660,7 @@ func TestHostRenewalUsesTheIdentityBoundDeployedCertificate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	certificateDER := firstCertDERFromPEM(t, issuedPEM)
+	certificateDER := issuedPEM.DER
 	record := func(fingerprint string) store.Certificate {
 		t.Helper()
 		cert, recordErr := h.store.UpsertCertificate(ctx, store.Certificate{

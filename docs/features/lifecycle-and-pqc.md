@@ -36,8 +36,18 @@ three signals, tenant-isolated at the database layer:
   (default `720h` = 30 days), a safety fallback for certificates with no usable ARI span.
   Each renewal re-issues through the one [issuance path](issuance-and-cas.md) with an
   `Idempotency-Key`, supersedes the old certificate in a single transaction, and emits
-  immutable lifecycle/rotation evidence. The fresh subject key is generated in a locked,
-  zeroized buffer and destroyed the instant the CSR is built.
+  immutable lifecycle/rotation evidence. Requester-held issuance retains the original
+  authorized CSR through renewal; the requester keeps the private key. The deprecated
+  server-generated path records its separate custody and key-generation event.
+
+  A fallback longer than the certificate's entire lifetime must not cause renewal on
+  every sweep. New endpoint leaves issued by the platform or a selected private CA
+  retain the actual signing constructor's validity timestamp. When `renew_before` is
+  at least the interval from that timestamp to signed expiry, the scheduler waits for
+  the ARI window. Thus a new 30-day leaf with a 30-day lead does not immediately renew.
+  A 47-day leaf with a 30-day lead still becomes due around day 17; this repair does
+  not shorten the configured lead or postpone that deadline. The automation plan uses
+  the same decision as the scheduler.
 - **Revoke with propagation.** `Revoke(certID, reason)` is idempotent, updates the
   inventory, enqueues a `revocation.publish` to the [outbox](../glossary.md) in the same
   transaction so a crash can't drop it, and emits `certificate.revoked`.
@@ -275,6 +285,14 @@ from proprietary EE.
 - **ARI-driven renewal** covers trstctl-issued deployed X.509 identities. Rows discovered
   from an outside CA stay visible for expiry/risk, but renewing them needs an issuer or
   connector path that can actually replace that external certificate.
+- **Unknown issuance time remains unknown.** Older records, external CA responses and
+  protocol issuance paths that do not retain the constructor timestamp still use the
+  existing fixed fallback alongside ARI. Discovery time and the backdated X.509
+  `notBefore` are not substituted for issuance time. An older local leaf can therefore
+  renew once before its new endpoint successor gains this protection; external
+  successors without the timestamp can still repeat. This change covers the served
+  identity scheduler and its plan, not the separate fixed-threshold
+  `lifecycle.Manager.RenewExpiring` library method.
 - **PQC execution** is licensed EE scope. The MPL core exposes CBOM posture and the
   useful standalone `pqc campaigns` API/CLI/UI, but not PQC algorithms or automated
   fleet execution.

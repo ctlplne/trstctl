@@ -1755,12 +1755,12 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 	connectorPlugins := connectorPluginDeployerFromManager(s.plugins)
 	var authorityIssue authorityIssueFunc
 	if s.caHierarchy != nil {
-		authorityIssue = s.caHierarchy.issueLeafForExactAuthority
+		authorityIssue = s.caHierarchy.issueLeafForExactAuthorityWithValidity
 	}
 	switch {
 	case s.obHandler != nil:
 	case s.caSigner != nil:
-		s.obHandler = &issuanceDispatcher{issue: s.IssueLeafWithProfile, authorityIssue: authorityIssue, chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.caCertDER}), orch: orch, idem: idem, outbox: s.outbox, store: d.Store, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
+		s.obHandler = &issuanceDispatcher{issue: s.issueLeafWithValidity, authorityIssue: authorityIssue, chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.caCertDER}), orch: orch, idem: idem, outbox: s.outbox, store: d.Store, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
 	default:
 		s.obHandler = &issuanceDispatcher{authorityIssue: authorityIssue, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
 	}
@@ -2374,8 +2374,16 @@ func (s *Server) IssueLeaf(ctx context.Context, csrDER []byte, ttl time.Duration
 // certificate-profile constraints here so the signer emits exactly the EKUs that
 // were validated, not the legacy default set.
 func (s *Server) IssueLeafWithProfile(ctx context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) ([]byte, error) {
+	issued, err := s.issueLeafWithValidity(ctx, csrDER, ttl, leafProfile)
+	if err != nil {
+		return nil, err
+	}
+	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: issued.DER}), nil
+}
+
+func (s *Server) issueLeafWithValidity(ctx context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) (crypto.IssuedLeaf, error) {
 	if s.caSigner == nil || s.caCertDER == nil {
-		return nil, errors.New("server: issuance unavailable — no out-of-process signer (fail closed)")
+		return crypto.IssuedLeaf{}, errors.New("server: issuance unavailable — no out-of-process signer (fail closed)")
 	}
 	// A mathematically valid signature from an expired CA is still an unusable
 	// credential. Make issuer-lifetime enforcement a property of the served
@@ -2388,33 +2396,33 @@ func (s *Server) IssueLeafWithProfile(ctx context.Context, csrDER []byte, ttl ti
 		healthy := c != nil && c.Healthy(hctx)
 		cancel()
 		if !healthy {
-			return nil, errors.New("server: signer unavailable (fail closed)")
+			return crypto.IssuedLeaf{}, errors.New("server: signer unavailable (fail closed)")
 		}
 	}
 	// Bound the signing operation so a slow signer fails closed instead of
 	// hanging the request.
 	type result struct {
-		der []byte
-		err error
+		issued crypto.IssuedLeaf
+		err    error
 	}
 	ch := make(chan result, 1)
 	go func() {
 		// Sign under the served issuing profile (PKIGOV-001/002): the leaf carries
 		// the configured CDP/AIA/policy pointers + an always-present SKI, and any
 		// profile constraints (validity/EKU/DNS-suffix) are enforced before signing.
-		der, err := crypto.SignLeafFromCSRWithProfile(s.caCertDER, s.caSigner, csrDER, ttl, leafProfile)
-		ch <- result{der, err}
+		issued, err := crypto.SignLeafFromCSRWithValidity(s.caCertDER, s.caSigner, csrDER, ttl, leafProfile)
+		ch <- result{issued, err}
 	}()
 	select {
 	case <-time.After(s.signTO):
-		return nil, errors.New("server: signer timed out (fail closed)")
+		return crypto.IssuedLeaf{}, errors.New("server: signer timed out (fail closed)")
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return crypto.IssuedLeaf{}, ctx.Err()
 	case r := <-ch:
 		if r.err != nil {
-			return nil, fmt.Errorf("server: issuance failed: %w", r.err)
+			return crypto.IssuedLeaf{}, fmt.Errorf("server: issuance failed: %w", r.err)
 		}
-		return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: r.der}), nil
+		return r.issued, nil
 	}
 }
 
@@ -3227,10 +3235,18 @@ func (s *Server) RunLifecycleScheduler(ctx context.Context) {
 // but are counted on their own metric so callers that care about renewal behavior keep
 // the old return contract. Exported for served-path tests.
 func (s *Server) RunLifecycleOnce(ctx context.Context) (int, error) {
+	return s.runLifecycleOnceAt(ctx, time.Now().UTC())
+}
+
+// runLifecycleOnceAt separates the renewal evaluation clock from certificate
+// facts. Source tests can evaluate a real leaf later in its lifetime without
+// rewriting signed validity or changing the host clock. Alert workers retain
+// their own clocks, as they do in an ordinary sweep.
+func (s *Server) runLifecycleOnceAt(ctx context.Context, renewalAt time.Time) (int, error) {
 	if (s.lifecycleRenewBefore <= 0 && s.lifecycleAlertBefore <= 0 && s.ownershipAttestationCadence <= 0) || s.orch == nil || s.store == nil {
 		return 0, nil
 	}
-	now := time.Now().UTC()
+	now := renewalAt.UTC()
 	queued := 0
 	if s.lifecycleRenewBefore > 0 {
 		// D6: a closed maintenance window DEFERS renewals, it never drops them.
@@ -3420,6 +3436,16 @@ func lifecycleRenewalReason(cert store.Certificate, now, fixedCutoff time.Time) 
 			return fmt.Sprintf(lifecycleARIRenewalReasonPrefix+"%s..%s",
 				info.SuggestedWindow.Start.Format(time.RFC3339),
 				info.SuggestedWindow.End.Format(time.RFC3339)), true
+		}
+		// A lead covering the leaf's whole minted lifetime is already open at
+		// issuance. Reapplying it to each fresh successor creates an endless
+		// renewal loop. Use the existing ARI window in that overlapping case.
+		// First inventory observation is not issuance; legacy and external
+		// leaves without an actual constructor anchor retain the fixed fallback.
+		if anchor := cert.ValidityAnchor; anchor != nil &&
+			!anchor.Before(notBefore) && anchor.Before(notAfter) &&
+			fixedCutoff.Sub(now) >= notAfter.Sub(*anchor) {
+			return "", false
 		}
 	}
 	if notAfter.Before(fixedCutoff) {

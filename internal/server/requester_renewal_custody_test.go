@@ -40,7 +40,7 @@ func TestRequesterRenewalRetainsTransitionCSRThroughTwoRenewalsAndReplay(t *test
 	canonicalCSR := strings.TrimSpace(string(csr))
 	nativeIssue := h.handler.issue
 	seen := 0
-	h.handler.issue = func(ctx context.Context, der []byte, ttl time.Duration, profile crypto.LeafProfile) ([]byte, error) {
+	h.handler.issue = func(ctx context.Context, der []byte, ttl time.Duration, profile crypto.LeafProfile) (crypto.IssuedLeaf, error) {
 		seen++
 		if !bytes.Equal(der, key.CSRDER) {
 			t.Error("renewal replaced the original requester CSR")
@@ -148,9 +148,9 @@ func TestRequesterRenewalRefusesMissingOrMismatchedCustodyBeforeSigner(t *testin
 	if got, err := h.store.IdentityRenewalCSR(ctx, h.tenant, ident.ID, old.ID); err != nil || got != canonicalCSR {
 		t.Fatalf("original transition CSR before corruption: %v", err)
 	}
-	h.handler.issue = func(context.Context, []byte, time.Duration, crypto.LeafProfile) ([]byte, error) {
+	h.handler.issue = func(context.Context, []byte, time.Duration, crypto.LeafProfile) (crypto.IssuedLeaf, error) {
 		t.Fatal("custody refusal reached signer")
-		return nil, nil
+		return crypto.IssuedLeaf{}, nil
 	}
 	other := ident
 	other.ID = "22222222-2222-4222-8222-222222222222"

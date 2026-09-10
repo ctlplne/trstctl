@@ -21,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/notify"
 	notifyemail "trstctl.com/trstctl/internal/notify/email"
 	"trstctl.com/trstctl/internal/notify/siem"
@@ -88,32 +89,31 @@ func TestServedLifecycleSchedulerDispatchesExpiryWebhookNotification(t *testing.
 		t.Fatalf("decode identity: %v", err)
 	}
 
-	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/identities/"+ident.ID+"/transitions", tok, map[string]any{
-		"to":     "issued",
-		"reason": "NOTIF-01 initial issue",
-	})
-	if status != http.StatusOK {
-		t.Fatalf("issue transition: status %d body %s", status, body)
-	}
-	if err := h.srv.Drain(t.Context()); err != nil {
-		t.Fatalf("drain issue: %v", err)
-	}
-
-	certs, err := h.store.ListActiveIssuedCertificatesForIdentity(t.Context(), h.tenant, owner.ID, name)
+	// Notification timing needs a genuinely short-lived certificate. This is
+	// a source fixture using the real UDS signer and event recording, not a
+	// claim that the identity transition API exposes a three-day TTL setting.
+	key, err := crypto.GenerateHostSubjectKey(name, []string{name})
 	if err != nil {
-		t.Fatalf("load issued cert: %v", err)
+		t.Fatal(err)
 	}
-	if len(certs) != 1 {
-		t.Fatalf("issued certs = %d, want 1", len(certs))
+	defer key.Destroy()
+	issued, err := h.srv.issueLeafWithValidity(t.Context(), key.CSRDER, 72*time.Hour, crypto.LeafProfile{ClampTTLToIssuer: true})
+	if err != nil {
+		t.Fatal(err)
 	}
-	cert := certs[0]
-	now := time.Now().UTC()
-	notBefore := now.Add(-24 * time.Hour)
-	notAfter := now.Add(72 * time.Hour)
-	cert.NotBefore = &notBefore
-	cert.NotAfter = &notAfter
-	if _, err := h.srv.orch.RecordCertificate(t.Context(), h.tenant, cert); err != nil {
-		t.Fatalf("record near-expiry certificate: %v", err)
+	info, err := certinfo.Inspect(issued.DER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	notAfter := info.NotAfter
+	cert, err := h.srv.orch.RecordCertificate(t.Context(), h.tenant, store.Certificate{
+		OwnerID: &owner.ID, Subject: info.Subject, SANs: info.DNSNames, Issuer: info.Issuer,
+		Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint, KeyAlgorithm: info.KeyAlgorithm,
+		Source: "issued", CertificateDER: issued.DER, NotBefore: &info.NotBefore, NotAfter: &info.NotAfter,
+		ValidityAnchor: &issued.ValidityAnchor,
+	})
+	if err != nil {
+		t.Fatalf("record signed near-expiry certificate: %v", err)
 	}
 
 	queued, err := h.srv.RunLifecycleOnce(t.Context())

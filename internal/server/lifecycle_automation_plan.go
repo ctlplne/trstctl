@@ -87,7 +87,7 @@ func (s *Server) LifecycleAutomationPlan(ctx context.Context, tenantID string, a
 	plan.Summary.OutboxFailed = outbox.Failed
 	cutoff := at.Add(s.lifecycleRenewBefore)
 	for _, row := range rows {
-		reason, due := lifecycleRenewalReason(store.Certificate{NotBefore: row.CertificateStart, NotAfter: row.CertificateEnd}, at, cutoff)
+		reason, due := lifecycleRenewalReason(store.Certificate{NotBefore: row.CertificateStart, NotAfter: row.CertificateEnd, ValidityAnchor: row.CertificateValidityAnchor}, at, cutoff)
 		source := "not_due"
 		explanation := "No renewal is due yet."
 		switch {

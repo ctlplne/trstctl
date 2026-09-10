@@ -95,7 +95,15 @@ func TestServedDefaultWindowRenewalBurstConvergesWithLiveTail(t *testing.T) {
 		t.Fatalf("drain burst deployment: %v", err)
 	}
 
-	queued, err := h.srv.RunLifecycleOnce(t.Context())
+	// Fresh 30-day leaves must not renew merely because the default lead is
+	// also 30 days. Exercise the actual served store/outbox path twice before
+	// advancing only this test's evaluation clock into the real ARI window.
+	for i := 0; i < 2; i++ {
+		if queued, err := h.srv.RunLifecycleOnce(t.Context()); err != nil || queued != 0 {
+			t.Fatalf("fresh sweep %d queued %d renewals: %v", i, queued, err)
+		}
+	}
+	queued, err := h.srv.runLifecycleOnceAt(t.Context(), time.Now().UTC().Add(21*24*time.Hour))
 	if err != nil {
 		t.Fatalf("run default-window lifecycle sweep: %v", err)
 	}
@@ -113,6 +121,9 @@ func TestServedDefaultWindowRenewalBurstConvergesWithLiveTail(t *testing.T) {
 		if runs.Items[0].Status != "succeeded" {
 			t.Fatalf("identity %s rotation run = %+v, want one succeeded terminal row", identityID, runs.Items[0])
 		}
+	}
+	if queued, err := h.srv.RunLifecycleOnce(t.Context()); err != nil || queued != 0 {
+		t.Fatalf("fresh successors reentered the scheduler: queued=%d err=%v", queued, err)
 	}
 
 	// This event is intentionally outside the request's inline projector. It can

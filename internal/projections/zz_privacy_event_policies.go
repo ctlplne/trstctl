@@ -10,6 +10,7 @@ import (
 	"trstctl.com/trstctl/internal/audit"
 	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/discovery/segmentscan"
+	ephemerallib "trstctl.com/trstctl/internal/ephemeral"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/revocationhealth"
 	"trstctl.com/trstctl/internal/store"
@@ -169,6 +170,8 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/broker_issuance/requested_ttl_seconds", opaque),
 		privacyRule("/broker_issuance/effective_ttl_seconds", opaque),
 	)
+	anchoredCertificate := certificateRecorded
+	anchoredCertificate.Rules = append(append([]events.PrivacyFieldRule{}, certificateRecorded.Rules...), privacyRule("/validity_anchor", opaque))
 	certificateCustodyAttested := privacyRules(
 		privacyRule("/fingerprint", opaque), privacyRule("/key_origin", opaque),
 		privacyRule("/key_storage", opaque), privacyRule("/key_exportable", opaque),
@@ -702,6 +705,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		),
 		{EventCertificateRecorded, 1}:                                                certificateRecorded,
 		{EventCertificateRecorded, CertificateApprovalEventSchemaVersion}:            approvedCertificate,
+		{EventCertificateRecorded, CertificateValidityEventSchemaVersion}:            anchoredCertificate,
 		{EventCertificateCustodyAttested, 1}:                                         certificateCustodyAttested,
 		{EventPrivacySubjectErased, 1}:                                               privacyErasedV1,
 		{EventPrivacySubjectErased, PrivacySubjectErasedOperationEventSchemaVersion}: privacyErasedV2,
@@ -927,6 +931,59 @@ type privacyDynamicSecretOperationCompletedV2 struct {
 	LeaseID        string `json:"lease_id"`
 }
 
+type privacyCertificateRecordedV3 struct {
+	ID                     string                `json:"id"`
+	CAID                   string                `json:"ca_id,omitempty"`
+	OwnerID                *string               `json:"owner_id"`
+	Subject                string                `json:"subject"`
+	SANs                   []string              `json:"sans"`
+	Issuer                 string                `json:"issuer"`
+	Serial                 string                `json:"serial"`
+	Fingerprint            string                `json:"fingerprint"`
+	KeyAlgorithm           string                `json:"key_algorithm"`
+	NotBefore              *time.Time            `json:"not_before"`
+	NotAfter               *time.Time            `json:"not_after"`
+	DeploymentLocation     string                `json:"deployment_location"`
+	Source                 string                `json:"source"`
+	ReplacesID             *string               `json:"replaces_id,omitempty"`
+	CertificateDER         []byte                `json:"certificate_der,omitempty"`
+	CertificatePEM         []byte                `json:"certificate_pem,omitempty"`
+	IssuanceResponse       []byte                `json:"issuance_response,omitempty"`
+	IssuanceIdempotencyKey string                `json:"issuance_idempotency_key,omitempty"`
+	IssuanceRequestBinding string                `json:"issuance_request_binding,omitempty"`
+	BrokerIssuance         *store.BrokerIssuance `json:"broker_issuance,omitempty"`
+	// Approval and ApprovalBinding are present only on schema v3. The projector
+	// recomputes the binding from the public certificate before consuming the
+	// exact request/digest in the same PostgreSQL transaction as the row.
+	Approval        *store.OperationApprovalUse   `json:"approval,omitempty"`
+	ApprovalBinding *ephemerallib.ApprovalBinding `json:"approval_binding,omitempty"`
+	// KeyOrigin records whose process generated this certificate's private key
+	// (epic B5's vocabulary, internal/custody).
+	//
+	// It travels in the EVENT, not merely on the struct the issuing code built.
+	// It was previously absent here, so every issuing path that set
+	// Certificate.KeyOrigin — the CSR-first mint, and B2's host-generated
+	// renewal — had the value silently dropped at the projection boundary and
+	// wrote an empty column. The custody claim existed in the code and in the
+	// documentation and nowhere an auditor could read it.
+	//
+	// Event-sourced state means a Rebuild() must reproduce it too, which is the
+	// other reason it belongs on the event rather than being written directly.
+	KeyOrigin string `json:"key_origin,omitempty"`
+	// KeyStorage, KeyExportable and KeyGeneratedBy are the rest of the custody
+	// record (B5).
+	//
+	// They were added to the schema and to the issuing code and to the served
+	// API, and never to this event — so every one of them projected as empty
+	// while three layers of the system agreed they had been recorded. The
+	// key_origin half of the same bug was found while implementing B2; these
+	// three were found by going back and looking, which is the only way this
+	// class of defect ever is.
+	KeyStorage     string `json:"key_storage,omitempty"`
+	KeyExportable  string `json:"key_exportable,omitempty"`
+	KeyGeneratedBy string `json:"key_generated_by,omitempty"`
+}
+
 type privacyCertificateRecordedV1 struct {
 	ID                     string                `json:"id"`
 	CAID                   string                `json:"ca_id,omitempty"`
@@ -939,6 +996,34 @@ type privacyCertificateRecordedV1 struct {
 	KeyAlgorithm           string                `json:"key_algorithm"`
 	NotBefore              *time.Time            `json:"not_before"`
 	NotAfter               *time.Time            `json:"not_after"`
+	DeploymentLocation     string                `json:"deployment_location"`
+	Source                 string                `json:"source"`
+	ReplacesID             *string               `json:"replaces_id,omitempty"`
+	CertificateDER         []byte                `json:"certificate_der,omitempty"`
+	CertificatePEM         []byte                `json:"certificate_pem,omitempty"`
+	IssuanceResponse       []byte                `json:"issuance_response,omitempty"`
+	IssuanceIdempotencyKey string                `json:"issuance_idempotency_key,omitempty"`
+	IssuanceRequestBinding string                `json:"issuance_request_binding,omitempty"`
+	BrokerIssuance         *store.BrokerIssuance `json:"broker_issuance,omitempty"`
+	KeyOrigin              string                `json:"key_origin,omitempty"`
+	KeyStorage             string                `json:"key_storage,omitempty"`
+	KeyExportable          string                `json:"key_exportable,omitempty"`
+	KeyGeneratedBy         string                `json:"key_generated_by,omitempty"`
+}
+
+type privacyCertificateRecordedV4 struct {
+	ID                     string                `json:"id"`
+	CAID                   string                `json:"ca_id,omitempty"`
+	OwnerID                *string               `json:"owner_id"`
+	Subject                string                `json:"subject"`
+	SANs                   []string              `json:"sans"`
+	Issuer                 string                `json:"issuer"`
+	Serial                 string                `json:"serial"`
+	Fingerprint            string                `json:"fingerprint"`
+	KeyAlgorithm           string                `json:"key_algorithm"`
+	NotBefore              *time.Time            `json:"not_before"`
+	NotAfter               *time.Time            `json:"not_after"`
+	ValidityAnchor         *time.Time            `json:"validity_anchor,omitempty"`
 	DeploymentLocation     string                `json:"deployment_location"`
 	Source                 string                `json:"source"`
 	ReplacesID             *string               `json:"replaces_id,omitempty"`
@@ -1263,7 +1348,8 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventCertificateRevoked, 1}:                                                 privacyPayloadShape[CertificateRevoked](),
 		{EventCertificateRevocationBatchApplied, 1}:                                  privacyPayloadShape[CertificateRevocationBatchApplied](),
 		{EventCertificateRecorded, 1}:                                                privacyPayloadShape[privacyCertificateRecordedV1](),
-		{EventCertificateRecorded, CertificateApprovalEventSchemaVersion}:            privacyPayloadShape[CertificateRecorded](),
+		{EventCertificateRecorded, CertificateApprovalEventSchemaVersion}:            privacyPayloadShape[privacyCertificateRecordedV3](),
+		{EventCertificateRecorded, CertificateValidityEventSchemaVersion}:            privacyPayloadShape[privacyCertificateRecordedV4](),
 		{EventCertificateCustodyAttested, 1}:                                         privacyPayloadShape[CertificateCustodyAttested](),
 		{EventPrivacySubjectErased, 1}:                                               privacyPayloadShape[privacySubjectErasedV1](),
 		{EventPrivacySubjectErased, PrivacySubjectErasedOperationEventSchemaVersion}: privacyPayloadShape[privacySubjectErasedV2](),

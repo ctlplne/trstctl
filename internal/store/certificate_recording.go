@@ -9,8 +9,11 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
 
 // LockCertificateRecordingTx serializes even the first record, when no row yet
@@ -116,16 +119,40 @@ func (s *Store) ApplyCertificateRecordingHeadTx(ctx context.Context, tx pgx.Tx, 
 // been recovered, under the same fingerprint transaction lock as the append.
 // Empty ordinary import fields update metadata without replacing public output.
 func (s *Store) ValidateCertificateIssuanceBindingTx(ctx context.Context, tx pgx.Tx, tenantID string, in Certificate) error {
+	if in.ValidityAnchor != nil {
+		if in.NotBefore == nil || in.NotAfter == nil {
+			return fmt.Errorf("%w: validity anchor requires both signed bounds", ErrIdempotencyConflict)
+		}
+		if err := validateCertificateValidityAnchor(in, in.CertificateDER); err != nil {
+			return err
+		}
+	}
 	var retainedKey, binding string
 	var der, public []byte
-	err := tx.QueryRow(ctx, `SELECT issuance_idempotency_key,issuance_request_binding,certificate_der,certificate_pem
+	var anchor *time.Time
+	err := tx.QueryRow(ctx, `SELECT issuance_idempotency_key,issuance_request_binding,certificate_der,certificate_pem,validity_anchor
 		FROM certificates WHERE tenant_id=$1 AND fingerprint=$2`, tenantID, in.Fingerprint).
-		Scan(&retainedKey, &binding, &der, &public)
+		Scan(&retainedKey, &binding, &der, &public, &anchor)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
 	if err != nil {
 		return err
+	}
+	if anchor != nil {
+		if len(in.CertificateDER) > 0 && !bytes.Equal(in.CertificateDER, der) {
+			return fmt.Errorf("%w: anchored certificate public material differs", ErrIdempotencyConflict)
+		}
+		if in.ValidityAnchor != nil && !anchor.Equal(*in.ValidityAnchor) {
+			return fmt.Errorf("%w: certificate validity anchor differs", ErrIdempotencyConflict)
+		}
+		// A later observation cannot change the signed bounds used with this
+		// immutable anchor. Missing observation fields preserve those bounds.
+		retained := in
+		retained.ValidityAnchor = anchor
+		if err := validateCertificateValidityAnchor(retained, der); err != nil {
+			return err
+		}
 	}
 	if strings.HasPrefix(retainedKey, "broker-issue:") &&
 		((in.IssuanceIdempotencyKey != "" && in.IssuanceIdempotencyKey != retainedKey) ||
@@ -137,6 +164,27 @@ func (s *Store) ValidateCertificateIssuanceBindingTx(ctx context.Context, tx pgx
 			(len(in.CertificatePEM) > 0 && len(public) > 0 && !bytes.Equal(in.CertificatePEM, public)) ||
 			(len(in.CertificateDER) > 0 && len(der) > 0 && !bytes.Equal(in.CertificateDER, der))) {
 		return fmt.Errorf("%w: certificate issuance key or public material differs", ErrIdempotencyConflict)
+	}
+	return nil
+}
+
+func validateCertificateValidityAnchor(in Certificate, der []byte) error {
+	if len(in.CertificatePEM) > 0 {
+		if _, err := certinfo.ParsePublicPEMChain(in.CertificatePEM, der); err != nil {
+			return fmt.Errorf("%w: anchored certificate public envelope differs: %v", ErrIdempotencyConflict, err)
+		}
+	}
+	info, err := certinfo.Inspect(der)
+	if err != nil {
+		return fmt.Errorf("%w: validity anchor requires the signed certificate: %v", ErrIdempotencyConflict, err)
+	}
+	anchor := in.ValidityAnchor
+	if anchor == nil || anchor.IsZero() || anchor.Before(info.NotBefore) || !anchor.Before(info.NotAfter) ||
+		!anchor.Equal(anchor.Truncate(time.Microsecond)) ||
+		info.SHA256Fingerprint != in.Fingerprint ||
+		(in.NotBefore != nil && !in.NotBefore.Equal(info.NotBefore)) ||
+		(in.NotAfter != nil && !in.NotAfter.Equal(info.NotAfter)) {
+		return fmt.Errorf("%w: certificate validity anchor or signed bounds differ", ErrIdempotencyConflict)
 	}
 	return nil
 }

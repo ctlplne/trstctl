@@ -148,7 +148,10 @@ const (
 	// certificate. Version 1 remains replayable for ordinary inventory and
 	// historical issuance events. The incomplete draft v2 shape is deliberately
 	// not accepted because it could attach authority A to certificate B.
-	CertificateApprovalEventSchemaVersion         = 3
+	CertificateApprovalEventSchemaVersion = 3
+	// CertificateValidityEventSchemaVersion adds the actual mint-time validity anchor.
+	// Old inventory and approval schemas remain closed and independently replayable.
+	CertificateValidityEventSchemaVersion         = 4
 	EventCertificateRevoked                       = "certificate.revoked"
 	EventCertificateSuperseded                    = "certificate.superseded"
 	EventCAIssuedCertificate                      = "ca.certificate.issued"
@@ -949,6 +952,7 @@ type CertificateRecorded struct {
 	KeyAlgorithm           string                `json:"key_algorithm"`
 	NotBefore              *time.Time            `json:"not_before"`
 	NotAfter               *time.Time            `json:"not_after"`
+	ValidityAnchor         *time.Time            `json:"validity_anchor,omitempty"`
 	DeploymentLocation     string                `json:"deployment_location"`
 	Source                 string                `json:"source"`
 	ReplacesID             *string               `json:"replaces_id,omitempty"`
@@ -3333,7 +3337,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventIdentityRenewalFailed:                    {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true},
 	EventIdentityRenewalRecovered:                 {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true, LifecycleOwnershipReadinessEventSchemaVersion: true},
 	EventIdentityRetired:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true},
-	EventCertificateRecorded:                      {1: true, CertificateApprovalEventSchemaVersion: true},
+	EventCertificateRecorded:                      {1: true, CertificateApprovalEventSchemaVersion: true, CertificateValidityEventSchemaVersion: true},
 	EventCertificateCustodyAttested:               {1: true},
 	EventCertificateRevoked:                       {1: true},
 	EventCertificateRevocationBatchApplied:        {1: true},
@@ -4029,6 +4033,10 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
+		anchoredSchema := schemaVersionOf(e) == CertificateValidityEventSchemaVersion
+		if (pl.ValidityAnchor != nil) != anchoredSchema {
+			return fmt.Errorf("projections: %s validity anchor/schema mismatch", e.Type)
+		}
 		approvedSchema := schemaVersionOf(e) == CertificateApprovalEventSchemaVersion
 		if (pl.Approval != nil) != approvedSchema || (pl.ApprovalBinding != nil) != approvedSchema {
 			return fmt.Errorf("projections: %s approval payload/schema mismatch", e.Type)
@@ -4048,7 +4056,8 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			ID: pl.ID, TenantID: e.TenantID, CAID: pl.CAID, OwnerID: pl.OwnerID, Subject: pl.Subject, SANs: pl.SANs,
 			Issuer: pl.Issuer, Serial: pl.Serial, Fingerprint: pl.Fingerprint, KeyAlgorithm: pl.KeyAlgorithm,
 			NotBefore: pl.NotBefore, NotAfter: pl.NotAfter, DeploymentLocation: pl.DeploymentLocation,
-			Source: pl.Source, CertificateDER: pl.CertificateDER, CertificatePEM: pl.CertificatePEM,
+			ValidityAnchor: pl.ValidityAnchor,
+			Source:         pl.Source, CertificateDER: pl.CertificateDER, CertificatePEM: pl.CertificatePEM,
 			IssuanceResponse:       pl.IssuanceResponse,
 			IssuanceIdempotencyKey: pl.IssuanceIdempotencyKey, IssuanceRequestBinding: pl.IssuanceRequestBinding,
 			BrokerIssuance: pl.BrokerIssuance,

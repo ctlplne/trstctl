@@ -14,17 +14,18 @@ import (
 // outbox payloads, and idempotency keys: the console needs to know what will run,
 // not receive the credential-bearing command.
 type LifecycleAutomationInventory struct {
-	IdentityID       string
-	IdentityName     string
-	IdentityStatus   string
-	OwnerID          string
-	OwnerName        string
-	CertificateID    string
-	CertificateStart *time.Time
-	CertificateEnd   *time.Time
-	LatestRunID      string
-	LatestRunStatus  string
-	RollbackRef      string
+	IdentityID                string
+	IdentityName              string
+	IdentityStatus            string
+	OwnerID                   string
+	OwnerName                 string
+	CertificateID             string
+	CertificateStart          *time.Time
+	CertificateEnd            *time.Time
+	CertificateValidityAnchor *time.Time
+	LatestRunID               string
+	LatestRunStatus           string
+	RollbackRef               string
 }
 
 // LifecycleAutomationOutboxSummary reports only aggregate command state for the
@@ -46,13 +47,13 @@ func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID s
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
 			SELECT i.id::text, i.name, i.status, i.owner_id::text, o.name,
-			       cert.id::text, cert.not_before, cert.not_after,
+			       cert.id::text, cert.not_before, cert.not_after, cert.validity_anchor,
 			       coalesce(run.id::text, ''), coalesce(run.status, ''), coalesce(run.rollback_ref, '')
 			  FROM identities AS i
 			  JOIN owners AS o
 			    ON o.tenant_id = $1 AND o.tenant_id = i.tenant_id AND o.id = i.owner_id
 			  JOIN LATERAL (
-			       SELECT c.id, c.not_before, c.not_after
+			       SELECT c.id, c.not_before, c.not_after, c.validity_anchor
 			         FROM certificates AS c
 			        WHERE c.tenant_id = $1
 			          AND c.tenant_id = i.tenant_id
@@ -86,7 +87,7 @@ func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID s
 			if err := rows.Scan(
 				&item.IdentityID, &item.IdentityName, &item.IdentityStatus,
 				&item.OwnerID, &item.OwnerName, &item.CertificateID,
-				&item.CertificateStart, &item.CertificateEnd,
+				&item.CertificateStart, &item.CertificateEnd, &item.CertificateValidityAnchor,
 				&item.LatestRunID, &item.LatestRunStatus, &item.RollbackRef,
 			); err != nil {
 				return err

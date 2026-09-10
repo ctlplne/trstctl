@@ -698,7 +698,7 @@ func (s *Store) ListRenewalIdentityCandidates(ctx context.Context, tenantID stri
 			        i.issuer_id::text, i.status, i.not_before, i.not_after, i.attributes, i.created_at,
 			        c.id::text, c.tenant_id::text, c.owner_id::text, c.subject, c.sans, c.issuer, c.serial,
 			        c.fingerprint, c.key_algorithm, c.not_before, c.not_after, c.deployment_location, c.source,
-			        c.certificate_der, c.issuance_idempotency_key, c.created_at,
+			        c.certificate_der, c.issuance_idempotency_key, c.created_at, c.validity_anchor,
 			        c.status, c.replaces_id::text, c.revoked_at, c.revocation_reason, c.renewed_at, c.alerted_at
 			   FROM identities i
 			   JOIN certificates c
@@ -735,7 +735,7 @@ func (s *Store) ListRenewalIdentityCandidates(ctx context.Context, tenantID stri
 				&it.Status, &it.NotBefore, &it.NotAfter, &attrs, &it.CreatedAt,
 				&cert.ID, &cert.TenantID, &cert.OwnerID, &cert.Subject, &cert.SANs, &cert.Issuer, &cert.Serial,
 				&cert.Fingerprint, &cert.KeyAlgorithm, &cert.NotBefore, &cert.NotAfter, &cert.DeploymentLocation, &cert.Source,
-				&cert.CertificateDER, &cert.IssuanceIdempotencyKey, &cert.CreatedAt,
+				&cert.CertificateDER, &cert.IssuanceIdempotencyKey, &cert.CreatedAt, &cert.ValidityAnchor,
 				&cert.Status, &cert.ReplacesID, &cert.RevokedAt, &cert.RevocationReason, &cert.RenewedAt, &cert.AlertedAt); err != nil {
 				return err
 			}

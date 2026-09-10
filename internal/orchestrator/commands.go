@@ -1468,7 +1468,7 @@ func (o *Orchestrator) recordCertificateCommand(ctx context.Context, tenantID st
 	if err != nil {
 		return store.Certificate{}, err
 	}
-	if _, err := o.emitPrepared(ctx, events.Event{ID: eventID, Type: projections.EventCertificateRecorded, TenantID: tenantID, Data: payload}); err != nil {
+	if _, err := o.emitPrepared(ctx, events.Event{ID: eventID, Type: projections.EventCertificateRecorded, SchemaVersion: certificateRecordingSchema(in), TenantID: tenantID, Data: payload}); err != nil {
 		return store.Certificate{}, err
 	}
 	return o.store.GetCertificateByFingerprint(ctx, tenantID, in.Fingerprint)
@@ -1914,6 +1914,7 @@ func certificateRecordedPayload(id string, in store.Certificate, approval *store
 	return projections.CertificateRecorded{
 		ID: id, CAID: in.CAID, OwnerID: in.OwnerID, Subject: in.Subject, SANs: sans, Issuer: in.Issuer, Serial: in.Serial,
 		Fingerprint: in.Fingerprint, KeyAlgorithm: in.KeyAlgorithm, NotBefore: in.NotBefore, NotAfter: in.NotAfter,
+		ValidityAnchor:     in.ValidityAnchor,
 		DeploymentLocation: in.DeploymentLocation, Source: in.Source,
 		CertificateDER:         in.CertificateDER,
 		CertificatePEM:         in.CertificatePEM,
@@ -2568,6 +2569,7 @@ func (o *Orchestrator) RecordSuccessorCertificate(ctx context.Context, tenantID 
 	payload, err := json.Marshal(projections.CertificateRecorded{
 		ID: id, CAID: in.CAID, OwnerID: in.OwnerID, Subject: in.Subject, SANs: sans, Issuer: in.Issuer, Serial: in.Serial,
 		Fingerprint: in.Fingerprint, KeyAlgorithm: in.KeyAlgorithm, NotBefore: in.NotBefore, NotAfter: in.NotAfter,
+		ValidityAnchor:     in.ValidityAnchor,
 		DeploymentLocation: in.DeploymentLocation, Source: in.Source, ReplacesID: &rep,
 		CertificateDER:         in.CertificateDER,
 		CertificatePEM:         in.CertificatePEM,
@@ -2580,8 +2582,15 @@ func (o *Orchestrator) RecordSuccessorCertificate(ctx context.Context, tenantID 
 	if err != nil {
 		return store.Certificate{}, err
 	}
-	if _, err := o.emit(ctx, projections.EventCertificateRecorded, tenantID, payload); err != nil {
+	if _, err := o.emitPrepared(ctx, events.Event{Type: projections.EventCertificateRecorded, SchemaVersion: certificateRecordingSchema(in), TenantID: tenantID, Data: payload}); err != nil {
 		return store.Certificate{}, err
 	}
 	return o.store.GetCertificateByFingerprint(ctx, tenantID, in.Fingerprint)
+}
+
+func certificateRecordingSchema(in store.Certificate) int {
+	if in.ValidityAnchor != nil {
+		return projections.CertificateValidityEventSchemaVersion
+	}
+	return events.DefaultSchemaVersion
 }

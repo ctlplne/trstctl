@@ -39,8 +39,14 @@ Migration 0208 adds exact completion receipts for certificate-dependent events.
 Each receipt commits with the whole event transaction and binds its immutable
 envelope. A repeated completed event is inert, including a duplicate retained
 after JetStream's deduplication window expires. A sequence watermark or old
-recording cursor alone cannot establish that completion. Snapshot format 40
-includes these receipts; earlier snapshots and legacy rows cannot supply them.
+recording cursor alone cannot establish that completion. Snapshot format 40 added
+these receipts; earlier snapshots and legacy rows cannot supply them. Current format
+41 also retains the nullable certificate validity anchor added by migration 0209.
+This is the actual local signing constructor's timestamp, bound to the signed leaf
+and preserved through observations, event replay and snapshot recovery. Historical
+and external rows are not backfilled with guessed issuance times. The current
+reader rejects older snapshot formats and rebuilds from retained events rather than
+advancing a checkpoint from an incomplete snapshot.
 
 When recovery reports that a certificate recording requires a full retained
 read-model rebuild, stop mutating control-plane replicas and use the existing

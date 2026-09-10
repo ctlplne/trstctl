@@ -138,7 +138,9 @@ import (
 // that a missing recording predates an already-projected ownership/privacy event.
 // Bumped to 40 for exact certificate metadata event completion. Earlier
 // snapshots cannot distinguish completed old events from missing old effects.
-const SnapshotFormatVersion = 40
+// Version 41 retains the immutable certificate validity anchor. Older snapshots
+// cannot establish this fact and must not erase it during restore.
+const SnapshotFormatVersion = 41
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

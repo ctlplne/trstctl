@@ -41,23 +41,23 @@ func seedRenewalJob(t *testing.T, ctx context.Context, h *roleHarness, idemKey s
 	// A real identity, because the CSR is issued AGAINST one: the certificate
 	// this produces is recorded on the identity's own history, which is what
 	// makes the custody column mean something to an operator reading it later.
-	owner, err := h.store.CreateOwner(ctx, store.Owner{
-		TenantID: h.tenant, Kind: store.OwnerTeam, Name: "Platform Team", Email: "platform@example.test",
-	})
+	owner, err := h.srv.orch.CreateOwner(ctx, h.tenant, string(store.OwnerTeam), "Platform Team", "platform@example.test")
 	if err != nil {
 		t.Fatalf("create owner: %v", err)
 	}
-	identityID := "33333333-3333-3333-3333-33333333b001"
-	if err := h.store.UpsertIdentity(ctx, store.Identity{
-		ID: identityID, TenantID: h.tenant, Kind: store.KindX509Certificate, Name: names[0],
-		OwnerID: owner.ID, Status: "deployed",
-	}); err != nil {
+	identity, err := h.srv.orch.CreateIdentity(ctx, h.tenant, store.Identity{
+		Kind: store.KindX509Certificate, Name: names[0], OwnerID: owner.ID,
+	})
+	if err != nil {
 		t.Fatalf("seed identity: %v", err)
 	}
+	// This source fixture targets job authorization and signed custody. The
+	// identity stays requested; the test-only queue seed below does not prove
+	// deployment or the end-to-end lifecycle scheduler's job creation.
 	payload, err := json.Marshal(RelayDeployIntent{
 		Connector:         "nginx",
 		Target:            "edge-1",
-		IdentityID:        identityID,
+		IdentityID:        identity.ID,
 		SubjectCommonName: names[0],
 		SubjectDNSNames:   names,
 	})
@@ -342,30 +342,31 @@ func TestServedHostRenewalReceiptRequiresAndBindsCustodyAUD25(t *testing.T) {
 	if err := mtls.VerifyStatement(id.CertificateDER(), []byte(statement), sig); err != nil {
 		t.Fatalf("persisted custody statement is not independently verifiable: %v", err)
 	}
-	// Replay the immutable custody event after clearing only its read-model
-	// projection. The owner/identity fixture predates this event and is seeded
-	// directly, so a whole-store Rebuild would correctly reject that unrelated
-	// non-event-sourced test fixture before reaching the custody event.
-	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx,
-			`UPDATE certificates
-			    SET key_origin = '', key_storage = '', key_exportable = '', key_generated_by = ''
-			  WHERE tenant_id = $1 AND fingerprint = $2`, h.tenant, issued.Fingerprint)
-		return err
-	}); err != nil {
-		t.Fatal(err)
+	// A full rebuild atomically replaces both projections and their completion
+	// receipts. Replaying a completed event alone is deliberately inert; it is
+	// not a recovery primitive for manually damaged SQL fields.
+	projector := projections.New(h.store)
+	if err := projector.Rebuild(ctx, h.log); err != nil {
+		t.Fatalf("full custody rebuild: %v", err)
 	}
-	if err := projections.New(h.store).Apply(ctx, custodyEvent); err != nil {
+	assertCustody := func(stage string) {
+		t.Helper()
+		rebuilt, err := h.store.GetCertificateByFingerprint(ctx, h.tenant, issued.Fingerprint)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if rebuilt.KeyOrigin != cert.KeyOrigin || rebuilt.KeyStorage != cert.KeyStorage ||
+			rebuilt.KeyExportable != cert.KeyExportable || rebuilt.KeyGeneratedBy != cert.KeyGeneratedBy ||
+			rebuilt.Fingerprint != cert.Fingerprint || rebuilt.ValidityAnchor == nil || cert.ValidityAnchor == nil ||
+			!rebuilt.ValidityAnchor.Equal(*cert.ValidityAnchor) {
+			t.Fatalf("%s custody = %+v, want %+v", stage, rebuilt, cert)
+		}
+	}
+	assertCustody("full rebuild")
+	if err := projector.Apply(ctx, custodyEvent); err != nil {
 		t.Fatalf("replay custody attestation: %v", err)
 	}
-	rebuilt, err := h.store.GetCertificateByFingerprint(ctx, h.tenant, issued.Fingerprint)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if rebuilt.KeyOrigin != cert.KeyOrigin || rebuilt.KeyStorage != cert.KeyStorage ||
-		rebuilt.KeyExportable != cert.KeyExportable || rebuilt.KeyGeneratedBy != cert.KeyGeneratedBy {
-		t.Fatalf("cold rebuild custody = %+v, want %+v", rebuilt, cert)
-	}
+	assertCustody("exact duplicate")
 }
 
 // The name-widening attack via NON-DNS identifiers (epic B2).
