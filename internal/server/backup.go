@@ -51,14 +51,20 @@ func recoveryProjectionOptions(
 	log *events.Log,
 	factories []EditionProjectionOptionsFactory,
 ) ([]projections.Option, error) {
+	cadence, err := ownershipAttestationCadenceFromConfig(cfg.Lifecycle)
+	if err != nil {
+		return nil, err
+	}
+	// Recovery validates the same ownership authority as the running server.
+	// Core options must not depend on the presence of an edition factory.
+	options := ownershipProjectionOptions(cadence)
 	if len(factories) == 0 {
-		return nil, nil
+		return options, nil
 	}
 	lic, err := loadConfiguredLicense(cfg, license.TrustedKeys())
 	if err != nil {
 		return nil, fmt.Errorf("load license for recovery projections: %w", err)
 	}
-	var options []projections.Option
 	for _, factory := range factories {
 		if factory == nil {
 			continue

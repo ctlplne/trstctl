@@ -127,7 +127,10 @@ import (
 // Bumped to 36 when original broker issuance facts joined the certificate row.
 // Older snapshots lack these facts and must replay instead of claiming complete
 // history at a checkpoint that already skips the corresponding issuance events.
-const SnapshotFormatVersion = 36
+// Bumped to 37 to capture every restore-owned table. Older payloads omit six
+// tables even though restoring them truncates those tables, so rebuild from
+// retained events instead of treating those snapshots as a complete cache.
+const SnapshotFormatVersion = 37
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -399,6 +402,12 @@ SELECT jsonb_build_object(
   -- hard ceiling of 100 function arguments (50 tables), and a 51st entry
   -- there fails capture outright with SQLSTATE 54023 rather than
   -- degrading. Add new tables here.
+  'adcs_enrollment_service_posture', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM adcs_enrollment_service_posture t),
+  'adcs_template_posture', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM adcs_template_posture t),
+  'kubernetes_controller_posture', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM kubernetes_controller_posture t),
+  'migration_runs', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM migration_runs t),
+  'notification_routing_policies', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM notification_routing_policies t),
+  'ownership_readiness_exceptions', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM ownership_readiness_exceptions t),
   'discovery_segments', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM discovery_segments t),
   'acme_upstream_authorizations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM acme_upstream_authorizations t),
   'endpoint_verifications', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM endpoint_verifications t),

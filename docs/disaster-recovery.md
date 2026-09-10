@@ -6,6 +6,25 @@ restore the event log, rebuild the read model, and the control plane's state is
 reconstructed. This page covers what to back up, how to restore, the recovery
 objectives, and the DR runbook.
 
+Recovery must use the deployment's ownership-attestation cadence, just as normal
+startup does. Otherwise replay can reject a deployment event that the running
+server accepted. Both core and edition recovery use that configured cadence;
+invalid configuration still fails rather than skipping the ownership check.
+
+Read-model snapshot format 37 also restores the missing capture of AD CS service
+and template posture, Kubernetes controller posture, migration runs, notification
+routing policies and ownership exceptions. Startup discards older snapshot blobs
+and installs a database floor that rejects inserts of earlier formats. This is not
+a rolling-version fence: an older binary can currently lower that floor during
+its own startup. Keep older replicas stopped during this upgrade. A fresh recovery
+rebuilds from retained events.
+This does not repair rows already lost by an earlier snapshot restore: a warm
+restart can retain that restore's checkpoint and skip the missing history. Such a
+deployment still needs an explicit full rebuild from complete retained events;
+automatic repair of that upgrade path remains unresolved. This cache repair does
+not replace the full backup set or establish that an operator's backup is complete.
+Retain the event history needed for recovery.
+
 ## The backup set
 
 Back up **all** of the following. The convention is that **any new persistent

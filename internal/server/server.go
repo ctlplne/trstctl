@@ -1038,9 +1038,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 
 func catchUpReadModel(ctx context.Context, d Deps) (*projections.Projector, error) {
 	options := append([]projections.Option(nil), d.LicensedProjectionOptions...)
-	if d.OwnershipAttestationCadence > 0 {
-		options = append(options, projections.WithOwnershipAttestationCadence(d.OwnershipAttestationCadence))
-	}
+	options = append(options, ownershipProjectionOptions(d.OwnershipAttestationCadence)...)
 	if d.AuditSigningKey != nil {
 		options = append(options, projections.WithRestoreDrillVerificationKeys(d.AuditSigningKey.JWKS()))
 	}
