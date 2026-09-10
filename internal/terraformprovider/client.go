@@ -10,11 +10,13 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
 type Client struct {
@@ -25,9 +27,12 @@ type Client struct {
 }
 
 type ClientConfig struct {
-	Endpoint   string
-	Token      string
-	Tenant     string
+	Endpoint string
+	Token    string
+	Tenant   string
+	CAFile   string
+	// HTTPClient is an injected transport override. It cannot be combined with
+	// CAFile because the provider cannot enforce trust on an arbitrary transport.
 	HTTPClient *http.Client
 }
 
@@ -74,12 +79,42 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	if endpoint == "" {
 		return nil, fmt.Errorf("endpoint is required")
 	}
-	if _, err := url.ParseRequestURI(endpoint); err != nil {
+	parsedEndpoint, err := url.ParseRequestURI(endpoint)
+	if err != nil {
 		return nil, fmt.Errorf("endpoint must be an absolute URL: %w", err)
 	}
 	httpClient := cfg.HTTPClient
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 30 * time.Second}
+	}
+	if cfg.CAFile != "" {
+		if cfg.HTTPClient != nil {
+			return nil, fmt.Errorf("CA file cannot be combined with an injected HTTPClient")
+		}
+		if !strings.EqualFold(parsedEndpoint.Scheme, "https") || parsedEndpoint.Host == "" {
+			return nil, fmt.Errorf("CA file requires an HTTPS endpoint")
+		}
+		caPEM, err := os.ReadFile(cfg.CAFile) // #nosec G304 -- operator-selected public trust bundle (CWE-22)
+		if err != nil {
+			return nil, fmt.Errorf("CA file: %w", err)
+		}
+		transport, err := mtls.HTTPTransport(caPEM)
+		if err != nil {
+			return nil, fmt.Errorf("CA file: %w", err)
+		}
+		// Keep the default client's operator-configured proxy routing when
+		// replacing its TLS trust roots.
+		transport.Proxy = http.ProxyFromEnvironment
+		httpClient.Transport = transport
+		httpClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			if req.URL.Scheme != "https" {
+				return fmt.Errorf("CA file requires HTTPS redirects")
+			}
+			if len(via) >= 10 {
+				return fmt.Errorf("stopped after 10 redirects")
+			}
+			return nil
+		}
 	}
 	return &Client{
 		endpoint: endpoint,

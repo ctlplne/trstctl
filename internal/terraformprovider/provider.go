@@ -26,6 +26,7 @@ type providerModel struct {
 	Endpoint types.String `tfsdk:"endpoint"`
 	Token    types.String `tfsdk:"token"`
 	Tenant   types.String `tfsdk:"tenant"`
+	CAFile   types.String `tfsdk:"ca_file"`
 }
 
 func New(version string) func() provider.Provider {
@@ -62,6 +63,10 @@ func (p *Provider) Schema(_ context.Context, _ provider.SchemaRequest, resp *pro
 				Optional:            true,
 				MarkdownDescription: "Tenant id sent as `X-Tenant-ID` for header/dev auth. Defaults to `TRSTCTL_TENANT`; bearer tokens may carry the tenant without this field.",
 			},
+			"ca_file": schema.StringAttribute{
+				Optional:            true,
+				MarkdownDescription: "Path to a PEM CA bundle for control-plane HTTPS. When set, trusts only this bundle and still verifies the server hostname. Defaults to `TRSTCTL_CA_FILE`; otherwise uses system trust.",
+			},
 		},
 	}
 }
@@ -76,7 +81,8 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 	endpoint := stringConfig(cfg.Endpoint, "TRSTCTL_SERVER")
 	token := stringConfig(cfg.Token, "TRSTCTL_TOKEN")
 	tenant := stringConfig(cfg.Tenant, "TRSTCTL_TENANT")
-	client, err := NewClient(ClientConfig{Endpoint: endpoint, Token: token, Tenant: tenant, HTTPClient: p.httpClient})
+	caFile := stringConfig(cfg.CAFile, "TRSTCTL_CA_FILE")
+	client, err := NewClient(ClientConfig{Endpoint: endpoint, Token: token, Tenant: tenant, CAFile: caFile, HTTPClient: p.httpClient})
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid trstctl provider configuration", err.Error())
 		return

@@ -6280,6 +6280,13 @@ func adcsDriftAlertDetail(pl ADCSTemplateDriftObserved) string {
 // even when consumed_event_id already equals e.ID: JetStream duplicate
 // suppression expires, so a later same-ID publish cannot retarget another row.
 func validateLifecycleApprovalShape(e events.Event, pl identityTransition) error {
+	// Ownership authority is for this identity, not merely a ready identity in
+	// the same tenant. Check the binding before projection or outbox recovery
+	// can consume any authority from the event.
+	if pl.OwnershipReadiness != nil &&
+		(pl.IdentityID == "" || pl.OwnershipReadiness.IdentityID != pl.IdentityID) {
+		return fmt.Errorf("projections: %s ownership-readiness target mismatch", e.Type)
+	}
 	hasApproval := pl.Approval != nil
 	hasIssuance := pl.Issuance != nil
 	schemaVersion := schemaVersionOf(e)

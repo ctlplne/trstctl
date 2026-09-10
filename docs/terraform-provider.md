@@ -54,9 +54,19 @@ The provider uses the same connection contract as `trstctl-cli`:
 | `endpoint` | `TRSTCTL_SERVER` | Base URL, for example `https://trstctl.example.com` |
 | `token` | `TRSTCTL_TOKEN` | `Authorization: Bearer <token>` |
 | `tenant` | `TRSTCTL_TENANT` | `X-Tenant-ID` for header/dev auth |
+| `ca_file` | `TRSTCTL_CA_FILE` | Local PEM CA bundle used to verify control-plane HTTPS |
 
 Bearer API tokens carry their own tenant in normal production use, so `tenant` is
 usually only needed in local/dev header-auth environments.
+
+For a control plane with a private CA, set `ca_file` to its public trust bundle or
+export `TRSTCTL_CA_FILE=/path/to/control-plane-ca.pem`. An explicit Terraform field
+overrides the environment. The bundle replaces system roots for this provider
+client only; certificate-chain and URL-hostname verification remain enabled. A
+missing or invalid bundle fails provider configuration. Leave the setting empty to
+use system trust. Configured bundles require HTTPS and reject redirects to HTTP.
+The provider continues to honor `HTTPS_PROXY` and `NO_PROXY` with a custom bundle.
+No host-wide trust-store change is required.
 
 ```hcl
 terraform {

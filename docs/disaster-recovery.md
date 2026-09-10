@@ -10,6 +10,9 @@ Recovery must use the deployment's ownership-attestation cadence, just as normal
 startup does. Otherwise replay can reject a deployment event that the running
 server accepted. Both core and edition recovery use that configured cadence;
 invalid configuration still fails rather than skipping the ownership check.
+Ownership evidence must name the same identity as the lifecycle transition.
+Replaying an event cannot borrow another identity's owner attestation or exception,
+even when both identities belong to the same tenant.
 
 Read-model snapshot format 37 also restores the missing capture of AD CS service
 and template posture, Kubernetes controller posture, migration runs, notification
