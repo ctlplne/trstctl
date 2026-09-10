@@ -53,7 +53,7 @@ func (o *Orchestrator) BulkRevokeCertificates(ctx context.Context, tenantID, com
 	}
 	sort.Strings(selected)
 	var batch projections.CertificateRevocationBatchApplied
-	// Preserve the shared privacy -> history -> lifecycle -> row lock order.
+	// Preserve privacy -> history -> lifecycle -> certificate metadata -> rows.
 	// Holding a tenant row before a history read can deadlock a rewrite/rebuild.
 	err := o.store.WithPrivacyRecoveryBarrier(ctx, tenantID, "certificate revocation", func(ctx context.Context) error {
 		return o.log.WithHistoryRead(ctx, func(ctx context.Context) error {
@@ -84,6 +84,11 @@ func (o *Orchestrator) BulkRevokeCertificates(ctx context.Context, tenantID, com
 					return err
 				}
 				eventID := "certificate-revocation:" + crypto.SHA256Hex(coordinates)
+				// Recording holds metadata before certificate rows. Take it before
+				// our command/row locks too, including retained-result projection.
+				if err := o.store.LockCertificateMetadataOrderTx(ctx, tx, tenantID); err != nil {
+					return err
+				}
 				if err := o.store.LockCertificateRevocationCommandTx(ctx, tx, tenantID, eventID); err != nil {
 					return err
 				}

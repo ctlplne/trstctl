@@ -1,0 +1,38 @@
+// SPDX-License-Identifier: MPL-2.0
+
+package api_test
+
+import "testing"
+
+func TestOpenAPIIdentityIssuanceResultRequiresOriginalRequestKey(t *testing.T) {
+	doc := fetchSpec(t)
+	paths := doc["paths"].(map[string]any)
+	operation := paths["/api/v1/identities/{id}/issuance-result"].(map[string]any)["get"].(map[string]any)
+	parameters := operation["parameters"].([]any)
+	keys := 0
+	for _, value := range parameters {
+		parameter := value.(map[string]any)
+		if parameter["in"] != "query" || parameter["name"] != "request_key" {
+			continue
+		}
+		keys++
+		if parameter["required"] != true {
+			t.Error("generated clients may omit the exact request key required by the served result handler")
+		}
+		if schema := parameter["schema"].(map[string]any); schema["type"] != "string" {
+			t.Fatalf("request_key schema=%v, want string", schema)
+		}
+	}
+	if keys != 1 {
+		t.Fatalf("request_key appears %d times, want exactly once", keys)
+	}
+	// Required query metadata must not turn unrelated optional filters into
+	// new customer prerequisites.
+	list := paths["/api/v1/certificates"].(map[string]any)["get"].(map[string]any)
+	for _, value := range list["parameters"].([]any) {
+		parameter := value.(map[string]any)
+		if parameter["in"] == "query" && parameter["required"] == true {
+			t.Fatalf("optional certificate filter became required: %v", parameter["name"])
+		}
+	}
+}

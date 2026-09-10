@@ -498,6 +498,9 @@ func (s *Store) ApplyCertificateRecordedTx(ctx context.Context, tx pgx.Tx, c Cer
 		    AND (issuance_idempotency_key NOT LIKE 'broker-issue:%'
 		      OR (($16::text = '' OR issuance_idempotency_key = $16)
 		        AND ($17::text = '' OR issuance_request_binding = $17)))
+		    AND (issuance_idempotency_key NOT LIKE 'issue:transition:%'
+		      OR (($16::text = '' OR issuance_idempotency_key = $16)
+		        AND (octet_length($14::bytea) = 0 OR octet_length(certificate_pem) = 0 OR certificate_pem = $14)))
 		    AND (key_origin = '' OR $19::text = '' OR key_origin = $19)
 		    AND (key_storage = '' OR $20::text = '' OR key_storage = $20)
 		    AND (key_exportable = '' OR $21::text = '' OR key_exportable = $21)
@@ -655,13 +658,15 @@ func (s *Store) GetCertificateByFingerprint(ctx context.Context, tenantID, finge
 // (monotonic within a tenant), giving the deterministic order a replay
 // reproduces.
 type IdentityTransition struct {
-	IdentityID string
-	Seq        uint64
-	FromState  string
-	ToState    string
-	EventType  string
-	Reason     string
-	OccurredAt time.Time
+	IdentityID     string
+	Seq            uint64
+	FromState      string
+	ToState        string
+	EventType      string
+	Reason         string
+	OccurredAt     time.Time
+	IdempotencyKey string
+	SubjectCSRPEM  string // Public request retained for exact result/custody correlation.
 }
 
 // AppendIdentityTransitionTx projects a lifecycle transition event into the
@@ -674,13 +679,14 @@ type IdentityTransition struct {
 func (s *Store) AppendIdentityTransitionTx(ctx context.Context, tx pgx.Tx, tenantID string, t IdentityTransition) error {
 	_, err := tx.Exec(ctx,
 		`INSERT INTO identity_transitions
-		        (tenant_id, identity_id, seq, from_state, to_state, event_type, reason, occurred_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		        (tenant_id, identity_id, seq, from_state, to_state, event_type, reason, occurred_at, idempotency_key, subject_csr_pem)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		 ON CONFLICT (tenant_id, identity_id, seq) DO UPDATE
 		    SET from_state = EXCLUDED.from_state, to_state = EXCLUDED.to_state,
 		        event_type = EXCLUDED.event_type, reason = EXCLUDED.reason,
-		        occurred_at = EXCLUDED.occurred_at`,
-		tenantID, t.IdentityID, int64(t.Seq), t.FromState, t.ToState, t.EventType, t.Reason, t.OccurredAt) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
+		        occurred_at = EXCLUDED.occurred_at, idempotency_key = EXCLUDED.idempotency_key,
+		        subject_csr_pem = EXCLUDED.subject_csr_pem`,
+		tenantID, t.IdentityID, int64(t.Seq), t.FromState, t.ToState, t.EventType, t.Reason, t.OccurredAt, strings.TrimSpace(t.IdempotencyKey), strings.TrimSpace(t.SubjectCSRPEM)) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 	return err
 }
 
@@ -756,7 +762,7 @@ func (s *Store) ListIdentityTransitions(ctx context.Context, tx pgx.Tx, tenantID
 // backup-set manifest test (internal/backup) enforces that every persistent table
 // is classified one way or the other, so a new store cannot silently fall out of
 // the disaster-recovery plan (SF.4).
-var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "identities", "ownership_readiness_exceptions", "certificates", "crypto_assets", "pqc_migration_campaigns", "pqc_migration_campaign_findings", "agents", "agent_cert_revocations", "kubernetes_controller_posture", "tenants", "tenant_key_domains", "identity_transitions", "certificate_profiles", "acme_dns01_provider_configs", "acme_upstream_authorizations", "endpoint_verifications", "revocation_endpoint_health", "migration_runs", "mdm_scep_policies", "workload_attester_trust_sources", "secret_sync_workload_identity_sources", "tenant_members", "ca_authorities", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_segments", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "discovery_coverage", "adcs_template_posture", "adcs_enrollment_service_posture", "notification_channels", "notification_routing_policies", "notification_reads", "notification_threshold_deliveries", "notification_test_operations", "notification_delivery_receipts", "connector_delivery_receipts", "lifecycle_rotation_runs", "outbox_reconciliation_conflicts", "incident_executions", "incident_fleet_reissuance_runs", "remediation_playbook_runs", "pam_sessions", "compliance_report_schedules", "secret_rotation_schedules", "dynamic_secret_operations", "dynamic_secret_leases", "secret_sync_jobs", "managed_key_operations", "managed_keys", "code_signing_operations", "privacy_subject_erasures", "privacy_retention_runs", "privacy_archive_erasure_attestations", "nhi_access_review_campaigns", "nhi_access_review_items", "access_change_requests", "access_change_request_decisions", "machine_sessions", "machine_auth_method_overrides",
+var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "identities", "ownership_readiness_exceptions", "certificates", "certificate_metadata_watermarks", "certificate_metadata_receipts", "crypto_assets", "pqc_migration_campaigns", "pqc_migration_campaign_findings", "agents", "agent_cert_revocations", "kubernetes_controller_posture", "tenants", "tenant_key_domains", "identity_transitions", "certificate_profiles", "acme_dns01_provider_configs", "acme_upstream_authorizations", "endpoint_verifications", "revocation_endpoint_health", "migration_runs", "mdm_scep_policies", "workload_attester_trust_sources", "secret_sync_workload_identity_sources", "tenant_members", "ca_authorities", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_segments", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "discovery_coverage", "adcs_template_posture", "adcs_enrollment_service_posture", "notification_channels", "notification_routing_policies", "notification_reads", "notification_threshold_deliveries", "notification_test_operations", "notification_delivery_receipts", "connector_delivery_receipts", "lifecycle_rotation_runs", "outbox_reconciliation_conflicts", "incident_executions", "incident_fleet_reissuance_runs", "remediation_playbook_runs", "pam_sessions", "compliance_report_schedules", "secret_rotation_schedules", "dynamic_secret_operations", "dynamic_secret_leases", "secret_sync_jobs", "managed_key_operations", "managed_keys", "code_signing_operations", "privacy_subject_erasures", "privacy_retention_runs", "privacy_archive_erasure_attestations", "nhi_access_review_campaigns", "nhi_access_review_items", "access_change_requests", "access_change_request_decisions", "machine_sessions", "machine_auth_method_overrides",
 	// I2/AUD-46. Conflicts, the bounded CI inventory, and every schedule
 	// checkpoint/failure are projections of ownership/CMDB events. A rebuild
 	// therefore resumes the same page instead of manufacturing a new run.

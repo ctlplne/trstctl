@@ -28,6 +28,36 @@ automatic repair of that upgrade path remains unresolved. This cache repair does
 not replace the full backup set or establish that an operator's backup is complete.
 Retain the event history needed for recovery.
 
+## Certificate replay after an interrupted write
+
+A certificate event can reach JetStream before its PostgreSQL transaction fails.
+Recovery must preserve the order of ownership, verification, revocation and
+certificate recording. Applying an old event to newer rows can change its meaning,
+including when its original SQL predicate now matches no rows.
+
+Migration 0208 adds exact completion receipts for certificate-dependent events.
+Each receipt commits with the whole event transaction and binds its immutable
+envelope. A repeated completed event is inert, including a duplicate retained
+after JetStream's deduplication window expires. A sequence watermark or old
+recording cursor alone cannot establish that completion. Snapshot format 40
+includes these receipts; earlier snapshots and legacy rows cannot supply them.
+
+When recovery reports that a certificate recording requires a full retained
+read-model rebuild, stop mutating control-plane replicas and use the existing
+deployment configuration with `trstctl --rebuild`. This reconstructs state and
+receipts from complete retained events. Do not clear a checkpoint, manufacture
+a receipt, or change lifecycle rows to get past the refusal. A warm restart does
+not automatically perform this full rebuild.
+
+The served privacy-erasure path rebinds existing receipts inside its verified
+generation preparation transaction. Generic tenant-key-domain rewrapping has a
+different limit: it refuses a changed certificate-dependent envelope until a
+recovery-safe bridge for the actual old/new pair exists. This includes an encoded
+CSL container in a certificate ownership reason. Hot PostgreSQL migration stages
+may already have run before that history refusal, so the operation remains failed
+and retryable, not a completed migration. The refusal preserves the original
+history; it does not establish full support for migrating that input.
+
 ## The backup set
 
 Back up **all** of the following. The convention is that **any new persistent

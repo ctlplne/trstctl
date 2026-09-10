@@ -58,6 +58,9 @@ func TestInspectExtractsMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Inspect: %v", err)
 	}
+	if info.CommonName != "svc.acme.test" {
+		t.Fatalf("parsed CommonName = %q", info.CommonName)
+	}
 	if want := "svc.acme.test"; !contains(info.DNSNames, want) || !contains(info.DNSNames, "alt.acme.test") {
 		t.Errorf("DNSNames = %v, want both SANs incl %q", info.DNSNames, want)
 	}

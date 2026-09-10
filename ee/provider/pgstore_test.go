@@ -88,7 +88,7 @@ func openProviderStore(t *testing.T) *corestore.Store {
 		t.Fatalf("Migrate: %v", err)
 	}
 	if _, err := s.SystemPool().Exec(ctx,
-		`TRUNCATE provider_tenants, provider_breakglass_grants, certificates RESTART IDENTITY CASCADE`); err != nil {
+		`TRUNCATE provider_tenants, provider_breakglass_grants, certificates, certificate_metadata_watermarks RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	t.Cleanup(func() { s.Close() })

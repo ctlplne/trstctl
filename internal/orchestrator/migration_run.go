@@ -121,6 +121,9 @@ func (o *Orchestrator) UpdateMigrationRun(
 			return store.MigrationRun{}, fmt.Errorf("%w: migration event identity is already bound", store.ErrIdempotencyConflict)
 		}
 		if err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+			if err := o.store.LockCertificateMetadataOrderTx(ctx, tx, tenantID); err != nil {
+				return err
+			}
 			current, err := o.store.MigrationRunForUpdateTx(ctx, tx, tenantID, runID)
 			if err != nil {
 				return err
@@ -133,6 +136,11 @@ func (o *Orchestrator) UpdateMigrationRun(
 	}
 
 	err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		// Cover catch-up and rollback decisions before the aggregate row lock;
+		// projection may read successor state before its first certificate write.
+		if err := o.store.LockCertificateMetadataOrderTx(ctx, tx, tenantID); err != nil {
+			return err
+		}
 		current, err := o.store.MigrationRunForUpdateTx(ctx, tx, tenantID, runID)
 		if err != nil {
 			return err

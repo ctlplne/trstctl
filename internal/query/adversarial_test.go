@@ -86,7 +86,7 @@ func newStore(t *testing.T) *store.Store {
 		t.Fatalf("Migrate: %v", err)
 	}
 	if _, err := s.SystemPool().Exec(ctx,
-		`TRUNCATE tenants, owners, certificates, crypto_assets, identities, issuers
+		`TRUNCATE tenants, owners, certificates, certificate_metadata_watermarks, certificate_metadata_receipts, crypto_assets, identities, issuers
 		 RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}

@@ -130,7 +130,15 @@ import (
 // Bumped to 37 to capture every restore-owned table. Older payloads omit six
 // tables even though restoring them truncates those tables, so rebuild from
 // retained events instead of treating those snapshots as a complete cache.
-const SnapshotFormatVersion = 37
+// Bumped to 38 for exact lifecycle issuance correlation and the certificate
+// recording recovery cursor. A v37 checkpoint skips the events that populate
+// these fields. A full retained rebuild is required; the startup snapshot floor
+// alone does not rebuild already-populated rows with a warm checkpoint.
+// Bumped to 39 for certificate metadata event order; old snapshots cannot prove
+// that a missing recording predates an already-projected ownership/privacy event.
+// Bumped to 40 for exact certificate metadata event completion. Earlier
+// snapshots cannot distinguish completed old events from missing old effects.
+const SnapshotFormatVersion = 40
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -163,7 +171,7 @@ type snapshotSetQuerier interface {
 // identity_transitions (which references identities) comes last. The revocation
 // responder tables have no foreign keys, but they are pure projections too, so
 // snapshots carry them with the rest of the tenant read model.
-var snapshotTables = []string{"owners", "ownership_assignments", "issuers", "certificate_profiles", "acme_dns01_provider_configs", "acme_upstream_authorizations", "endpoint_verifications", "revocation_endpoint_health", "migration_runs", "mdm_scep_policies", "workload_attester_trust_sources", "secret_sync_workload_identity_sources", "tenant_key_domains", "identities", "ownership_readiness_exceptions", "certificates", "crypto_assets", "pqc_migration_campaigns", "pqc_migration_campaign_findings", "agents", "kubernetes_controller_posture", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_segments", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "discovery_coverage", "notification_channels", "notification_routing_policies", "notification_reads", "notification_threshold_deliveries", "notification_test_operations", "notification_delivery_receipts", "connector_delivery_receipts", "lifecycle_rotation_runs", "outbox_reconciliation_conflicts", "incident_executions", "incident_fleet_reissuance_runs", "remediation_playbook_runs", "pam_sessions", "compliance_report_schedules", "secret_rotation_schedules", "dynamic_secret_operations", "dynamic_secret_leases", "secret_sync_jobs", "managed_key_operations", "managed_keys", "code_signing_operations", "privacy_subject_erasures", "privacy_retention_runs", "privacy_archive_erasure_attestations", "nhi_access_review_campaigns", "nhi_access_review_items", "access_change_requests", "access_change_request_decisions", "machine_sessions", "machine_auth_method_overrides", "identity_transitions",
+var snapshotTables = []string{"owners", "ownership_assignments", "issuers", "certificate_profiles", "acme_dns01_provider_configs", "acme_upstream_authorizations", "endpoint_verifications", "revocation_endpoint_health", "migration_runs", "mdm_scep_policies", "workload_attester_trust_sources", "secret_sync_workload_identity_sources", "tenant_key_domains", "identities", "ownership_readiness_exceptions", "certificates", "certificate_metadata_watermarks", "certificate_metadata_receipts", "crypto_assets", "pqc_migration_campaigns", "pqc_migration_campaign_findings", "agents", "kubernetes_controller_posture", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_segments", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "discovery_coverage", "notification_channels", "notification_routing_policies", "notification_reads", "notification_threshold_deliveries", "notification_test_operations", "notification_delivery_receipts", "connector_delivery_receipts", "lifecycle_rotation_runs", "outbox_reconciliation_conflicts", "incident_executions", "incident_fleet_reissuance_runs", "remediation_playbook_runs", "pam_sessions", "compliance_report_schedules", "secret_rotation_schedules", "dynamic_secret_operations", "dynamic_secret_leases", "secret_sync_jobs", "managed_key_operations", "managed_keys", "code_signing_operations", "privacy_subject_erasures", "privacy_retention_runs", "privacy_archive_erasure_attestations", "nhi_access_review_campaigns", "nhi_access_review_items", "access_change_requests", "access_change_request_decisions", "machine_sessions", "machine_auth_method_overrides", "identity_transitions",
 	// Format 13. EIGHT tables sat in ReadModelTables without entering this
 	// list or the capture payload — and the restore truncates the WHOLE read
 	// model, then reloads only what snapshots carry, so any restore erased
@@ -402,6 +410,8 @@ SELECT jsonb_build_object(
   -- hard ceiling of 100 function arguments (50 tables), and a 51st entry
   -- there fails capture outright with SQLSTATE 54023 rather than
   -- degrading. Add new tables here.
+  'certificate_metadata_watermarks', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM certificate_metadata_watermarks t),
+  'certificate_metadata_receipts', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM certificate_metadata_receipts t),
   'adcs_enrollment_service_posture', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM adcs_enrollment_service_posture t),
   'adcs_template_posture', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM adcs_template_posture t),
   'kubernetes_controller_posture', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM kubernetes_controller_posture t),
@@ -637,8 +647,21 @@ func (s *Store) RestoreSnapshotsTx(ctx context.Context, tx pgx.Tx) (restored int
 				//trstctl:system-query — cross-tenant snapshot reload into the read model; owner role, not under RLS; each row carries its tenant_id (AN-1 exemption).
 				`INSERT INTO %s SELECT (jsonb_populate_recordset(NULL::%s, $1::jsonb -> $2)).*`,
 				table, table)
+			if table == "certificates" {
+				// Only the trusted owner-role full snapshot replacement may
+				// preserve captured metadata order. The trigger independently
+				// checks owner identity and the held AccessExclusive relation lock.
+				if _, err := tx.Exec(ctx, `SET LOCAL trstctl.certificate_snapshot_restore = 'true'`); err != nil {
+					return 0, err
+				}
+			}
 			if _, err := tx.Exec(ctx, sql, sn.payload, table); err != nil {
 				return 0, fmt.Errorf("store: restore snapshot rows into %s: %w", table, err)
+			}
+			if table == "certificates" {
+				if _, err := tx.Exec(ctx, `SET LOCAL trstctl.certificate_snapshot_restore = 'false'`); err != nil {
+					return 0, err
+				}
 			}
 		}
 		restored++

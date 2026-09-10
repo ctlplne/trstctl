@@ -6,13 +6,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -511,7 +511,18 @@ func (a *API) transitionIdentity(w http.ResponseWriter, r *http.Request) {
 				return 0, nil, errStatus(http.StatusBadRequest, "subject_csr_pem is only meaningful on a transition to issued")
 			}
 			if err := validateSubjectCSRPEM(csrPEM); err != nil {
-				return 0, nil, errWithStatus(http.StatusBadRequest, err)
+				// Persist this exact refusal through the bound recorder. No
+				// transition, approval intent or signer/outbox call has run.
+				// A lost reply can retry the SAME key and recover this specific
+				// disposition; generic 4xx responses do not authorize a new key.
+				refused := problem.New(http.StatusBadRequest, err.Error()).
+					WithExtension("code", "identity_csr_rejected_before_transition").
+					WithExtension("disposition", map[string]any{
+						"tenant_id": tenantID, "subject": principal.Subject, "identity_id": id,
+						"request_key": idempotencyKey, "subject_csr_sha256": subjectCSRDigest,
+						"to": req.To, "reason": req.Reason,
+					})
+				return http.StatusBadRequest, refused, nil
 			}
 		}
 		if _, ok := orchestrator.EventTypeFor(orchestrator.State(identity.Status), state); !ok {
@@ -751,15 +762,9 @@ func flattenABACResource(prefix string, attrs map[string]any, out map[string]str
 // caller mistake and belongs in the response to the request that carried it —
 // not surfaced minutes later as a failed outbox delivery nobody is watching.
 func validateSubjectCSRPEM(csrPEM string) error {
-	blk, _ := pem.Decode([]byte(csrPEM))
-	if blk == nil {
-		return errors.New("subject_csr_pem is not PEM")
-	}
-	if blk.Type != "CERTIFICATE REQUEST" && blk.Type != "NEW CERTIFICATE REQUEST" {
-		return fmt.Errorf("subject_csr_pem PEM block is %q, want CERTIFICATE REQUEST", blk.Type)
-	}
-	if _, err := crypto.InspectCSR(blk.Bytes); err != nil {
-		return fmt.Errorf("subject_csr_pem is not a valid, self-signed PKCS#10 request: %w", err)
+	_, _, err := crypto.ParsePublicCSRPEM([]byte(csrPEM))
+	if err != nil {
+		return fmt.Errorf("subject_csr_pem: %w", err)
 	}
 	return nil
 }

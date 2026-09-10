@@ -356,23 +356,25 @@ func (o *Orchestrator) CompleteIssuanceRequest(ctx context.Context, tenantID, id
 		if identity.Status != string(StateIssued) {
 			return fmt.Errorf("%w: linked identity %s is %s, not issued", ErrIssuanceRequestNotReady, identity.ID, identity.Status)
 		}
-		issueKey := IssuanceRequestCertificateIdempotencyKey(current.ID)
-		certificates, err := o.store.ListCertificatesByIssuanceIdempotencyKey(lockCtx, tenantID, issueKey)
+		result, err := o.store.GetIdentityIssuanceResult(lockCtx, tenantID, identity.ID, IssuanceRequestIssueIdempotencyKey(current.ID))
+		if store.IsNotFound(err) || errors.Is(err, store.ErrIdempotencyConflict) {
+			return fmt.Errorf("%w: exact issuance transition/result is unavailable or ambiguous", ErrIssuanceRequestNotReady)
+		}
 		if err != nil {
 			return err
 		}
 		// The identity name is an operator-facing label. The certificate subject
 		// and SANs come from the requester-held CSR and can legitimately differ.
 		// The canonical issuance key is the exact command/result correlation;
-		// owner, source, status, and real public bytes close the remaining gaps.
-		if len(certificates) != 1 {
-			return fmt.Errorf("%w: expected one signer-backed certificate for request %s; found %d",
-				ErrIssuanceRequestNotReady, current.ID, len(certificates))
+		// owner, immutable issuance provenance, status, and real public bytes
+		// close the remaining gaps; an ordinary import can change Source.
+		if result.Certificate == nil {
+			return fmt.Errorf("%w: signer-backed certificate for request %s is pending", ErrIssuanceRequestNotReady, current.ID)
 		}
-		certificate := certificates[0]
+		certificate := *result.Certificate
 		ownerMatches := certificate.OwnerID != nil && *certificate.OwnerID == current.OwnerID
-		if !ownerMatches || certificate.Source != "issued" || certificate.Status != "active" ||
-			(len(certificate.CertificateDER) == 0 && len(certificate.CertificatePEM) == 0) {
+		if !ownerMatches || certificate.IssuanceEventID == "" || certificate.Status != "active" ||
+			(len(certificate.CertificateDER) == 0 || len(certificate.CertificatePEM) == 0) {
 			return fmt.Errorf("%w: signer-backed certificate for request %s is not in inventory yet",
 				ErrIssuanceRequestNotReady, current.ID)
 		}

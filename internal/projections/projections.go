@@ -3517,13 +3517,13 @@ func isLifecycleEvent(eventType string) bool {
 	return lifecycleEventTypes[eventType]
 }
 
-// ApplyTx applies a single domain event to the read model on the caller's
+// applyCoreEventTx applies an admitted event to the read model on the caller's
 // transaction. The orchestrator uses it to project a lifecycle transition in the
 // same transaction as the outbox enqueue (AN-6). Unknown event types are
 // ignored, so projections are forward-compatible to *new* types; a *known* type
 // carrying an unknown schema version is rejected (SCHEMA-001), so a payload-shape
 // change to an existing type cannot silently mis-project on replay/rebuild.
-func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) error {
+func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Event) error {
 	// Version gate (SCHEMA-001): for a type this projector decodes, the envelope's
 	// schema version must be one it knows. An unrecognized version fails closed
 	// rather than being decoded against the wrong struct.
@@ -6077,6 +6077,7 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			return p.store.AppendIdentityTransitionTx(ctx, tx, e.TenantID, store.IdentityTransition{
 				IdentityID: pl.IdentityID, Seq: e.Sequence, FromState: pl.From, ToState: pl.To,
 				EventType: e.Type, Reason: pl.Reason, OccurredAt: e.Time,
+				IdempotencyKey: pl.IdempotencyKey, SubjectCSRPEM: pl.SubjectCSRPEM,
 			})
 		}
 		return nil

@@ -215,7 +215,7 @@ func buildSpec(routes []route, extraSchemas map[string]*Schema) *Document {
 			op.Parameters = append(op.Parameters, Parameter{Name: pp.name, In: "path", Required: true, Description: pp.desc, Schema: schemaForParam(pp)})
 		}
 		for _, q := range r.query {
-			op.Parameters = append(op.Parameters, Parameter{Name: q.name, In: "query", Description: q.desc, Schema: schemaForParam(q)})
+			op.Parameters = append(op.Parameters, Parameter{Name: q.name, In: "query", Required: q.required, Description: q.desc, Schema: schemaForParam(q)})
 		}
 		if r.reqSchema != "" {
 			op.RequestBody = &RequestBody{Required: !r.reqOptional, Content: map[string]MediaType{
@@ -828,7 +828,7 @@ func componentSchemas() map[string]*Schema {
 	transitionReq := object(map[string]*Schema{
 		"to":               {Type: "string", Enum: []string{"issued", "deployed", "renewing", "renewal_failed", "revoked", "retired"}},
 		"reason":           str(),
-		"subject_csr_pem":  str(),
+		"subject_csr_pem":  {Type: "string", Description: "One public PKCS#10 CSR PEM, at most 64 KiB. A malformed nonempty CSR can return a durably replayed 400 problem with code identity_csr_rejected_before_transition and an exact tenant/subject/identity/request-key/CSR-SHA256/to/reason disposition. Only that exact disposition confirms no issuance transition was performed for this attempt; arbitrary 4xx responses do not authorize replacing an uncertain request key."},
 		"expected_version": {Type: "integer"},
 	}, "to")
 	identityTransitionPreview := object(map[string]*Schema{
@@ -1594,6 +1594,11 @@ func componentSchemas() map[string]*Schema {
 		"key_generated_by": str(),
 		"custody_summary":  str(),
 	}, "id", "tenant_id", "subject", "fingerprint", "status")
+	identityIssuanceResult := object(map[string]*Schema{
+		"identity_id": uuid(), "request_key": str(),
+		"state":       {Type: "string", Enum: []string{"pending", "issued"}},
+		"certificate": ref("Certificate"), "certificate_pem": str(),
+	}, "identity_id", "request_key", "state")
 	certificateIngest := object(map[string]*Schema{
 		"pem": str(), "owner_id": uuid(), "deployment_location": str(), "source": str(),
 	}, "pem")
@@ -6116,6 +6121,7 @@ func componentSchemas() map[string]*Schema {
 		"CBOMAsset":                                cbomAsset,
 		"CBOMInventory":                            cbomInventory,
 		"CBOMScan":                                 cbomScan,
+		"IdentityIssuanceResult":                   identityIssuanceResult,
 		"Certificate":                              certificate,
 		"CertificateIngest":                        certificateIngest,
 		"CertificateList":                          list("Certificate"),

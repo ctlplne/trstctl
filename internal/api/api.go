@@ -761,10 +761,11 @@ func publicRationaleForRoute(r route) string {
 
 // param is an OpenAPI query parameter descriptor.
 type param struct {
-	name   string
-	typ    string
-	format string
-	desc   string
+	required bool
+	name     string
+	typ      string
+	format   string
+	desc     string
 }
 
 func pathUUID(name string) param {
@@ -1165,6 +1166,7 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/revocation/crls", opID: "listCRLDistributions", summary: "List published full, sharded, and delta CRL distribution artifacts", handler: a.listCRLDistributions, resSchema: "CRLDistributionList", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/revocation/rogue-certificates", opID: "listRogueCertificates", summary: "List rogue and non-compliant certificate detection findings", handler: a.listRogueCertificates, resSchema: "RogueCertificatePosture", successCode: "200", perm: authz.CertsRead},
 		{method: "POST", path: "/api/v1/revocation/ct-submissions", opID: "submitCertificateTransparency", summary: "Queue precertificate and certificate submission to Certificate Transparency logs", handler: a.submitCertificateTransparency, reqSchema: "CTLogSubmissionRequest", resSchema: "CTLogSubmission", successCode: "202", mutation: true, perm: authz.CertsWrite},
+		{method: "GET", path: "/api/v1/identities/{id}/issuance-result", opID: "getIdentityIssuanceResult", summary: "Read the exact asynchronous public certificate result of one accepted identity issuance", handler: a.getIdentityIssuanceResult, pathParams: idPath, query: []param{{name: "request_key", typ: "string", desc: "Exact original transition Idempotency-Key", required: true}}, resSchema: "IdentityIssuanceResult", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/certificates/{id}", opID: "getCertificate", summary: "Get an inventoried certificate", handler: a.getCertificate, pathParams: idPath, resSchema: "Certificate", successCode: "200", perm: authz.CertsRead},
 
 		{method: "POST", path: "/api/v1/discovery/sources", opID: "createDiscoverySource", summary: "Create a discovery source", handler: a.createDiscoverySource, reqSchema: "DiscoverySourceRequest", resSchema: "DiscoverySource", successCode: "201", mutation: true, perm: authz.DiscoveryWrite},

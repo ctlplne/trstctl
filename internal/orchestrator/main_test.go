@@ -105,7 +105,7 @@ func newStore(t *testing.T) *store.Store {
 	if _, err := s.SystemPool().Exec(ctx,
 		`TRUNCATE secret_rotation_schedule_commands, secret_rotation_schedules, migration_runs,
 		          tenants, idempotency_keys, outbox,
-		          owners, issuers, identities, identity_transitions, deployment_targets, certificates,
+		          owners, issuers, identities, identity_transitions, deployment_targets, certificates, certificate_metadata_watermarks, certificate_metadata_receipts,
 		          connector_delivery_receipts, lifecycle_rotation_runs
 		 RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)

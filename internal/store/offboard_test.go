@@ -91,7 +91,7 @@ func newStore(t *testing.T) *store.Store {
 		          audit_feed_deliveries, audit_feed_destinations,
 		          owners, issuers, identities, identity_transitions, deployment_targets,
 		          acme_upstream_authorizations,
-		          agents, agent_bootstrap_tokens, agent_job_receipts, kubernetes_controller_posture, policy_bindings, tenant_members, attestations, api_tokens, certificates,
+		          agents, agent_bootstrap_tokens, agent_job_receipts, kubernetes_controller_posture, policy_bindings, tenant_members, attestations, api_tokens, certificates, certificate_metadata_watermarks, certificate_metadata_receipts,
 		          ca_authorities, ca_key_ceremonies, ca_ceremony_approvals,
 		          ca_issued_certs, ca_crls, ca_ocsp_responders, ssh_keys, ct_watched_domains, ct_log_checkpoints,
 		          discovery_findings, notification_channels, notification_reads, notification_threshold_deliveries,
@@ -369,6 +369,155 @@ func TestOffboardTenantIsIdempotent(t *testing.T) {
 	}
 	if !att.Complete || att.Total != 0 {
 		t.Errorf("re-offboard should delete 0 rows and be complete; got %+v", att)
+	}
+}
+
+func TestOffboardTenantErasesMetadataWithoutRegistration(t *testing.T) {
+	s := newStore(t)
+	ctx := t.Context()
+	// Isolated SQL residue fixture, not a customer lifecycle: an absent tenant
+	// row is not proof that all its other tables are empty. No early return is
+	// allowed, even when certificates itself is empty.
+	for _, tenant := range []string{tenantA, tenantB} {
+		if err := s.WithTenant(ctx, tenant, func(tx pgx.Tx) error {
+			if _, err := tx.Exec(ctx, `INSERT INTO certificate_metadata_watermarks
+				(tenant_id,latest_sequence,unknown_write) VALUES($1,7,false)`, tenant); err != nil {
+				return err
+			}
+			_, err := tx.Exec(ctx, `INSERT INTO certificate_metadata_receipts
+				(tenant_id,event_sequence,event_id,event_digest) VALUES($1,7,'isolated-residue',$2)`, tenant, strings.Repeat("a", 64))
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	countMetadata := func(tenant string) int {
+		t.Helper()
+		var count int
+		if err := s.WithTenant(ctx, tenant, func(tx pgx.Tx) error {
+			return tx.QueryRow(ctx, `SELECT
+				(SELECT count(*) FROM certificate_metadata_watermarks WHERE tenant_id=$1) +
+				(SELECT count(*) FROM certificate_metadata_receipts WHERE tenant_id=$1)`, tenant).Scan(&count)
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return count
+	}
+	before := countMetadata(tenantB)
+	att, err := s.OffboardTenant(ctx, tenantA)
+	if err != nil || !att.Complete || att.Total != 2 || att.Deleted["certificates"] != 0 ||
+		att.Deleted["certificate_metadata_watermarks"] != 1 || att.Deleted["certificate_metadata_receipts"] != 1 {
+		t.Fatalf("erase orphan metadata: %+v, %v", att, err)
+	}
+	if got := countMetadata(tenantA); got != 0 {
+		t.Fatalf("orphan rows survived: %d", got)
+	}
+	if got := countMetadata(tenantB); got != before || got != 2 {
+		t.Fatalf("neighbor metadata changed: %d, before %d", got, before)
+	}
+	att, err = s.OffboardTenant(ctx, tenantA)
+	if err != nil || !att.Complete || att.Total != 0 {
+		t.Fatalf("repeat orphan erase: %+v, %v", att, err)
+	}
+	// Also exercise the nonempty certificate branch with no registration row.
+	// These are isolated recovery residues, not fabricated served lifecycle data.
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `INSERT INTO owners (id,tenant_id,kind,name)
+			VALUES($1,$2,'Service','orphan fixture')`, uuid(tenantA, 1), tenantA); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `INSERT INTO certificates (id,tenant_id,owner_id,subject,fingerprint)
+			VALUES($1,$2,$3,'CN=orphan','orphan-fixture')`, uuid(tenantA, 3), tenantA, uuid(tenantA, 1))
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	att, err = s.OffboardTenant(ctx, tenantA)
+	if err != nil || !att.Complete || att.Total != 3 || att.Deleted["certificates"] != 1 ||
+		att.Deleted["certificate_metadata_watermarks"] != 1 || att.Deleted["owners"] != 1 {
+		t.Fatalf("erase orphan certificate and dependencies: %+v, %v", att, err)
+	}
+	if got := countMetadata(tenantB); got != before {
+		t.Fatalf("orphan certificate erase changed neighbor metadata: %d, before %d", got, before)
+	}
+}
+
+func TestOffboardTenantLocksLifecycleThenMetadataBeforeDependencies(t *testing.T) {
+	for _, held := range []string{"lifecycle", "metadata"} {
+		t.Run(held, func(t *testing.T) {
+			s := newStore(t)
+			ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+			defer cancel()
+			if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "lock-order"}); err != nil {
+				t.Fatal(err)
+			}
+			const runID = "33333333-3333-4333-8333-333333333333"
+			if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+				_, err := tx.Exec(ctx, `INSERT INTO privacy_retention_runs (tenant_id,run_id,enforced_at)
+					VALUES($1,$2,now())`, tenantA, runID)
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+			result := make(chan error, 1)
+			started := false
+			err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+				if held == "lifecycle" {
+					if _, err := s.LockLiveTenantRegistrationSnapshotTx(ctx, tx, tenantA); err != nil {
+						return err
+					}
+				} else if err := s.LockCertificateMetadataOrderTx(ctx, tx, tenantA); err != nil {
+					return err
+				}
+				var blocker int
+				if err := tx.QueryRow(ctx, `SELECT pg_backend_pid()`).Scan(&blocker); err != nil {
+					return err
+				}
+				started = true
+				go func() {
+					_, err := s.OffboardTenant(ctx, tenantA)
+					result <- err
+				}()
+				// Observe a real waiter on this backend's advisory grant. Timing
+				// alone would not prove that offboard reached the competing lock.
+				for {
+					var waiting bool
+					if err := tx.QueryRow(ctx, `SELECT EXISTS (
+						SELECT 1 FROM pg_locks l WHERE l.locktype='advisory' AND NOT l.granted
+						AND $1::int=ANY(pg_blocking_pids(l.pid))
+					)`, blocker).Scan(&waiting); err != nil {
+						return err
+					}
+					if waiting {
+						break
+					}
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					case <-time.After(5 * time.Millisecond):
+					}
+				}
+				if held == "lifecycle" {
+					// Mirrors revocation's real order. Offboard must not hold
+					// metadata while waiting for our shared lifecycle grant.
+					return s.LockCertificateMetadataOrderTx(ctx, tx, tenantA)
+				}
+				var id string
+				// Offboard waiting on metadata must not already own a dependent
+				// retention row, which the metadata projector writes before
+				// certificates and the offboard catalog deletes before them too.
+				return tx.QueryRow(ctx, `SELECT run_id::text FROM privacy_retention_runs
+					WHERE tenant_id=$1 AND run_id=$2 FOR UPDATE NOWAIT`, tenantA, runID).Scan(&id)
+			})
+			if started {
+				if peerErr := <-result; peerErr != nil {
+					t.Errorf("competing offboard: %v", peerErr)
+				}
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }
 

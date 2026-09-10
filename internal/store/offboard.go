@@ -69,6 +69,7 @@ var TenantScopedTables = []string{
 	"connector_delivery_receipts",
 	"lifecycle_rotation_runs",
 	"certificates",
+	"certificate_metadata_watermarks", "certificate_metadata_receipts",
 	"identity_transitions",
 	"ownership_readiness_exceptions",
 	"identities",
@@ -271,8 +272,9 @@ type tenantSecretSyncEffectAuthority struct {
 	receiverIOStarts int64
 }
 
-// PreflightTenantOffboardTx acquires the exclusive lifecycle fence before the
-// tenant row, then proves every effect_possible receiver is an exact delivered
+// PreflightTenantOffboardTx acquires the exclusive lifecycle fence and tenant
+// row, then certificate metadata ordering before other dependency rows. It
+// proves every effect_possible receiver is an exact delivered
 // command with one and only one receiver generation. Orphaned or malformed
 // authority is itself unsafe: deleting it would erase the only warning that an
 // external write may still finish.
@@ -293,6 +295,12 @@ func (s *Store) PreflightTenantOffboardTx(ctx context.Context, tx pgx.Tx, tenant
 		return ErrPrivacyHistoryOperationActive
 	}
 	if _, err := lockTenantRegistrationForOffboardTx(ctx, tx, tenantID); err != nil {
+		return err
+	}
+	// Revocation also takes lifecycle before certificate metadata. Preserve
+	// that order, then fence certificates before deleting their dependencies.
+	// This keeps the later certificate emptiness check stable until commit.
+	if err := s.LockCertificateMetadataOrderTx(ctx, tx, tenantID); err != nil {
 		return err
 	}
 	preparationActive, err := hasPrivacySubjectErasurePreparationTx(ctx, tx, tenantID)
@@ -472,6 +480,22 @@ func (s *Store) OffboardTenantTx(ctx context.Context, tx pgx.Tx, tenantID string
 		return att, err
 	}
 	for _, table := range TenantScopedTables {
+		if table == "certificates" {
+			var exists bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (
+				SELECT 1 FROM certificates WHERE tenant_id = $1
+			)`, tenantID).Scan(&exists); err != nil {
+				return att, fmt.Errorf("store: offboard inspect certificates: %w", err)
+			}
+			if !exists {
+				// Even a zero-row DELETE creates an unknown-write watermark.
+				// Under the metadata fence acquired before dependency row locks,
+				// omit this unnecessary statement, not its accounting or guard.
+				// Existing watermark/receipt residue is still erased below.
+				att.Deleted[table] = 0
+				continue
+			}
+		}
 		if table == "secret_rotation_schedule_tick_rows" ||
 			table == "secret_rotation_schedule_ticks" ||
 			table == "secret_rotation_schedule_commands" ||

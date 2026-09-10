@@ -12,6 +12,8 @@ import (
 	"fmt"
 
 	"trstctl.com/trstctl/internal/crypto/seal"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 )
 
 const maxNestedHistoryDepth = 12
@@ -26,6 +28,10 @@ var (
 	// ErrLegacyEnvelope keeps pre-CSL JSON envelope history visible as partial;
 	// it cannot be silently treated as a current binary container.
 	ErrLegacyEnvelope = errors.New("tenantseal: legacy JSON envelope requires explicit migration")
+	// ErrCertificateMetadataReceiptBridge preserves the original generation
+	// until randomized payload changes can rebind existing completion receipts
+	// through an actual-pair, crash-safe transaction bridge.
+	ErrCertificateMetadataReceiptBridge = errors.New("tenantseal: changed certificate metadata receipt requires a history-rewrite bridge")
 )
 
 // HistoryRewrapper transforms sealed containers embedded anywhere in event JSON,
@@ -91,10 +97,24 @@ func (r *HistoryRewrapper) Transform(_ string, _ int, data []byte) ([]byte, bool
 // keys, array positions, scalar values, and non-container base64 bytes must be
 // unchanged. No record plaintext or row-specific AAD is opened.
 func (r *HistoryRewrapper) ValidatePair(
-	_ string,
-	_ int,
+	eventType string,
+	schemaVersion int,
 	before, after []byte,
 ) error {
+	if err := r.validateRewrappedPair(before, after); err != nil {
+		return err
+	}
+	dependent, err := projections.CertificateMetadataEvent(events.Event{Type: eventType, SchemaVersion: schemaVersion, Data: before})
+	if err != nil {
+		return err
+	}
+	if dependent {
+		return ErrCertificateMetadataReceiptBridge
+	}
+	return nil
+}
+
+func (r *HistoryRewrapper) validateRewrappedPair(before, after []byte) error {
 	if bytes.Equal(before, after) {
 		return errors.New("tenantseal: rewritten history pair is byte-identical")
 	}

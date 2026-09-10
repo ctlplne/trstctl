@@ -19,6 +19,7 @@ import (
 	"trstctl.com/trstctl/internal/approval"
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	ephemerallib "trstctl.com/trstctl/internal/ephemeral"
 	"trstctl.com/trstctl/internal/events"
@@ -239,6 +240,9 @@ func (o *Orchestrator) emitPrepared(ctx context.Context, next events.Event) (eve
 	}
 	if next.Type == projections.EventTenantOffboarded {
 		return o.emitTenantOffboard(ctx, next)
+	}
+	if next.Type == projections.EventCertificateRecorded || next.Type == projections.EventEdgeIssuanceReconciled {
+		return o.emitCertificateRecording(ctx, next)
 	}
 
 	var ev events.Event
@@ -861,7 +865,10 @@ func (o *Orchestrator) erasePrivacySubjectBound(
 			var err error
 			prepared, err = o.store.PreparePrivacySubjectErasureWithSchedulerResolver(
 				preparationCtx, tenantID, subject, candidate,
-				o.durableIdem.ResolveSecretRotationSchedulePrivacyOuter)
+				o.durableIdem.ResolveSecretRotationSchedulePrivacyOuter,
+				func(receiptCtx context.Context, tx pgx.Tx) error {
+					return o.store.RebindCertificateMetadataPrivacyReceiptsTx(receiptCtx, tx, tenantID, subject, o.log.ReplayThrough)
+				})
 			if err != nil {
 				return fmt.Errorf("orchestrator: prepare privacy subject erasure: %w", err)
 			}
@@ -1427,12 +1434,41 @@ func deploymentRoute(target store.DeploymentTarget) string {
 // and returns the canonical inventoried row — whose id and created_at are stable
 // across a re-ingest of the same certificate.
 func (o *Orchestrator) RecordCertificate(ctx context.Context, tenantID string, in store.Certificate) (store.Certificate, error) {
+	return o.recordCertificateCommand(ctx, tenantID, in, nil)
+}
+
+// recordCertificateCommand binds one issued result to one immutable event.
+// The predecessor is payload data, not identity: changing or removing it
+// under the same tenant, fingerprint and key must conflict across both APIs.
+// Empty keys remain ordinary observations with a new event on each call.
+func (o *Orchestrator) recordCertificateCommand(ctx context.Context, tenantID string, in store.Certificate, replacesID *string) (store.Certificate, error) {
+	if len(in.CertificatePEM) != 0 {
+		public, err := certinfo.ParsePublicPEMChain(in.CertificatePEM, in.CertificateDER)
+		if err != nil {
+			return store.Certificate{}, err
+		}
+		in.CertificatePEM = public
+	}
 	id := uuid.NewString()
-	payload, err := json.Marshal(certificateRecordedPayload(id, in, nil, nil))
+	eventID := ""
+	if in.IssuanceIdempotencyKey != "" {
+		// Keep the existing identity for lifecycle issuance; renewal, agent CSR
+		// and other keyed issuers now use the same retry contract.
+		tenantUUID, err := uuid.Parse(tenantID)
+		if err != nil {
+			return store.Certificate{}, fmt.Errorf("orchestrator: invalid certificate tenant: %w", err)
+		}
+		command := tenantUUID.String() + "\x00" + in.Fingerprint + "\x00" + in.IssuanceIdempotencyKey
+		id = uuid.NewSHA1(uuid.NameSpaceOID, []byte("lifecycle-certificate-row\x00"+command)).String()
+		eventID = uuid.NewSHA1(uuid.NameSpaceOID, []byte("lifecycle-certificate-event\x00"+command)).String()
+	}
+	material := certificateRecordedPayload(id, in, nil, nil)
+	material.ReplacesID = replacesID
+	payload, err := json.Marshal(material)
 	if err != nil {
 		return store.Certificate{}, err
 	}
-	if _, err := o.emit(ctx, projections.EventCertificateRecorded, tenantID, payload); err != nil {
+	if _, err := o.emitPrepared(ctx, events.Event{ID: eventID, Type: projections.EventCertificateRecorded, TenantID: tenantID, Data: payload}); err != nil {
 		return store.Certificate{}, err
 	}
 	return o.store.GetCertificateByFingerprint(ctx, tenantID, in.Fingerprint)
@@ -1760,12 +1796,20 @@ func (o *Orchestrator) projectApprovedCertificateFenceUnbarriered(
 	if fence.TenantID != tenantID || fence.TargetKind != store.ApprovedTargetEphemeralCertificate {
 		return store.Certificate{}, fmt.Errorf("%w: approved certificate fence scope differs", store.ErrIdempotencyConflict)
 	}
-	retained, retainedFound, err := o.log.EventByID(ctx, fence.EventID)
-	if err != nil {
-		return store.Certificate{}, err
+	var proposed projections.CertificateRecorded
+	if err := json.Unmarshal(fence.Payload, &proposed); err != nil {
+		return store.Certificate{}, fmt.Errorf("orchestrator: decode certificate fence before locking: %w", err)
 	}
 	var canonical projections.CertificateRecorded
-	err = o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		// Match the inline/tail projector lock order: certificate first, then
+		// approval. The public caller already owns the privacy-history barrier.
+		if err := o.store.LockCertificateRecordingTx(ctx, tx, tenantID, proposed.Fingerprint); err != nil {
+			return err
+		}
+		if err := o.catchUpCertificateRecordingTx(ctx, tx, tenantID, proposed.Fingerprint); err != nil {
+			return err
+		}
 		locked, use, privacyRewritten, err := o.store.LockApprovedTargetFenceTx(ctx, tx, tenantID,
 			store.ApprovedTargetEphemeralCertificate, fence.CommandKey)
 		if err != nil {
@@ -1774,6 +1818,9 @@ func (o *Orchestrator) projectApprovedCertificateFenceUnbarriered(
 		var payload projections.CertificateRecorded
 		if err := json.Unmarshal(locked.Payload, &payload); err != nil {
 			return fmt.Errorf("orchestrator: decode approved certificate fence: %w", err)
+		}
+		if payload.Fingerprint != proposed.Fingerprint {
+			return fmt.Errorf("%w: approved certificate fingerprint changed across lock", store.ErrIdempotencyConflict)
 		}
 		originalApproval := payload.Approval
 		payload.Approval = &use
@@ -1792,8 +1839,24 @@ func (o *Orchestrator) projectApprovedCertificateFenceUnbarriered(
 			}
 			return fmt.Errorf("%w: approved certificate fence semantic digest differs", err)
 		}
+		material, _, err := projections.CertificateRecordingMaterial(candidate)
+		if err != nil {
+			return err
+		}
+		if err := o.store.ValidateCertificateIssuanceBindingTx(ctx, tx, tenantID, material); err != nil {
+			return err
+		}
+		// Refresh under the same lock: another process may have appended while
+		// this process waited. Never rely on the pre-lock absence observation.
+		retained, retainedFound, err := o.log.EventByID(ctx, locked.EventID)
+		if err != nil {
+			return err
+		}
 		event := retained
 		if !retainedFound {
+			if err := o.guardCertificateRecordingAppendTx(ctx, tx, tenantID, material); err != nil {
+				return err
+			}
 			event, err = o.log.Append(ctx, candidate)
 			if err != nil {
 				return err
@@ -1853,6 +1916,7 @@ func certificateRecordedPayload(id string, in store.Certificate, approval *store
 		Fingerprint: in.Fingerprint, KeyAlgorithm: in.KeyAlgorithm, NotBefore: in.NotBefore, NotAfter: in.NotAfter,
 		DeploymentLocation: in.DeploymentLocation, Source: in.Source,
 		CertificateDER:         in.CertificateDER,
+		CertificatePEM:         in.CertificatePEM,
 		IssuanceIdempotencyKey: in.IssuanceIdempotencyKey,
 		IssuanceRequestBinding: in.IssuanceRequestBinding,
 		BrokerIssuance:         in.BrokerIssuance,
@@ -2490,6 +2554,11 @@ func (o *Orchestrator) RecordIncidentFleetReissuanceAndEnqueueBatch(
 // inventoried row. This is the event-sourced replacement for the former direct
 // successor-insert write into the read table.
 func (o *Orchestrator) RecordSuccessorCertificate(ctx context.Context, tenantID string, in store.Certificate, replacesID string) (store.Certificate, error) {
+	if in.IssuanceIdempotencyKey != "" {
+		return o.recordCertificateCommand(ctx, tenantID, in, &replacesID)
+	}
+	// Preserve the existing unkeyed observation contract. Keyed issuance
+	// uses the canonical public payload and exact retained event above.
 	id := uuid.NewString()
 	sans := in.SANs
 	if sans == nil {
@@ -2501,6 +2570,7 @@ func (o *Orchestrator) RecordSuccessorCertificate(ctx context.Context, tenantID 
 		Fingerprint: in.Fingerprint, KeyAlgorithm: in.KeyAlgorithm, NotBefore: in.NotBefore, NotAfter: in.NotAfter,
 		DeploymentLocation: in.DeploymentLocation, Source: in.Source, ReplacesID: &rep,
 		CertificateDER:         in.CertificateDER,
+		CertificatePEM:         in.CertificatePEM,
 		IssuanceIdempotencyKey: in.IssuanceIdempotencyKey,
 		KeyOrigin:              in.KeyOrigin,
 		KeyStorage:             in.KeyStorage,

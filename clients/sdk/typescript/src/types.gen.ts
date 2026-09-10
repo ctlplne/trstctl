@@ -2796,6 +2796,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/identities/{id}/issuance-result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the exact asynchronous public certificate result of one accepted identity issuance */
+        get: operations["getIdentityIssuanceResult"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/identities/{id}/ownership-exceptions": {
         parameters: {
             query?: never;
@@ -10442,6 +10459,15 @@ export interface components {
             /** Format: uuid */
             target_id: string;
         };
+        IdentityIssuanceResult: {
+            certificate?: components["schemas"]["Certificate"];
+            certificate_pem?: string;
+            /** Format: uuid */
+            identity_id: string;
+            request_key: string;
+            /** @enum {string} */
+            state: "pending" | "issued";
+        };
         IdentityList: {
             items: components["schemas"]["Identity"][];
             next_cursor?: string;
@@ -14650,6 +14676,7 @@ export interface components {
         TransitionRequest: {
             expected_version?: number;
             reason?: string;
+            /** @description One public PKCS#10 CSR PEM, at most 64 KiB. A malformed nonempty CSR can return a durably replayed 400 problem with code identity_csr_rejected_before_transition and an exact tenant/subject/identity/request-key/CSR-SHA256/to/reason disposition. Only that exact disposition confirms no issuance transition was performed for this attempt; arbitrary 4xx responses do not authorize replacing an uncertain request key. */
             subject_csr_pem?: string;
             /** @enum {string} */
             to: "issued" | "deployed" | "renewing" | "renewal_failed" | "revoked" | "retired";
@@ -22716,6 +22743,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Identity"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getIdentityIssuanceResult: {
+        parameters: {
+            query: {
+                /** @description Exact original transition Idempotency-Key */
+                request_key: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityIssuanceResult"];
                 };
             };
             /** @description client error */

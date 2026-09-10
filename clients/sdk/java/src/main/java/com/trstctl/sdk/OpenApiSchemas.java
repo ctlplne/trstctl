@@ -372,6 +372,7 @@ public final class OpenApiSchemas {
       "IdempotencyResultProtectionReadout",
       "Identity",
       "IdentityConnectorTargetRequest",
+      "IdentityIssuanceResult",
       "IdentityList",
       "IdentityRequest",
       "IdentityTransitionPreview",

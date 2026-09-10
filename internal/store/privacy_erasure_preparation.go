@@ -233,7 +233,11 @@ func (s *Store) PreparePrivacySubjectErasureWithSchedulerResolver(
 	tenantID, subject string,
 	candidate PrivacySubjectErasurePreparation,
 	resolveSchedulerOuter SecretRotationSchedulePrivacyOuterResolver,
+	resolveCertificateMetadata ...func(context.Context, pgx.Tx) error,
 ) (PrivacySubjectErasurePreparation, error) {
+	if len(resolveCertificateMetadata) > 1 {
+		return PrivacySubjectErasurePreparation{}, errors.New("store: privacy preparation accepts one certificate metadata resolver")
+	}
 	if tenantID == "" {
 		return PrivacySubjectErasurePreparation{}, errors.New("store: privacy erasure preparation requires tenant id (AN-1)")
 	}
@@ -300,6 +304,23 @@ func (s *Store) PreparePrivacySubjectErasureWithSchedulerResolver(
 		}
 		if collision {
 			return fmt.Errorf("%w: privacy erasure operation identity is already prepared", ErrIdempotencyConflict)
+		}
+		// The signed target is staged before this transaction. Rebind only
+		// already-completed certificate events while their actual old source is
+		// frozen, atomically with the crash marker below. A standalone caller
+		// cannot silently leave stale digests for a later canonical replay.
+		if len(resolveCertificateMetadata) == 1 && resolveCertificateMetadata[0] != nil {
+			if err := resolveCertificateMetadata[0](ctx, tx); err != nil {
+				return err
+			}
+		} else {
+			var existingReceipts bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM certificate_metadata_receipts WHERE tenant_id=$1)`, tenantID).Scan(&existingReceipts); err != nil {
+				return err
+			}
+			if existingReceipts {
+				return errors.New("store: privacy preparation requires the frozen-source certificate metadata resolver")
+			}
 		}
 
 		var selected PrivacySubjectErasure

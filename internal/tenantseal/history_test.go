@@ -7,10 +7,42 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/crypto/seal"
 )
+
+func TestTenantKeyDomainHistoryRefusesChangedCertificateMetadataWithoutReceiptBridge(t *testing.T) {
+	deployment, tenant := testKEK(t, 0x31), testKEK(t, 0x32)
+	legacy, err := seal.Seal(deployment, []byte("owned source regression"), []byte("owned-aad"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reason := base64.StdEncoding.EncodeToString(legacy)
+	if len(reason) > 2000 {
+		t.Fatal("fixture exceeds the shipped ownership reason bound")
+	}
+	rewriter, err := NewHistoryRewrapper(deployment, tenant, []byte("tenant:11111111-1111-1111-1111-111111111111:generation:1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []string{"certificate", "identity"} {
+		before := mustJSON(t, map[string]any{"owner_id": "10000000-0000-4000-8000-000000000001", "inventory_ids": []string{kind + "/10000000-0000-4000-8000-000000000002"}, "reason": reason})
+		after, changed, err := rewriter.Transform("ownership.assigned", 1, before)
+		if err != nil || !changed {
+			t.Fatalf("real rewrap was not exercised: %t %v", changed, err)
+		}
+		err = rewriter.ValidatePair("ownership.assigned", 1, before, after)
+		if kind == "certificate" {
+			if err == nil || !strings.Contains(err.Error(), "certificate metadata receipt") {
+				t.Fatalf("changed certificate envelope could stale its receipt: %v", err)
+			}
+		} else if err != nil {
+			t.Fatalf("unrelated identity envelope rewrap refused: %v", err)
+		}
+	}
+}
 
 func TestTenantKeyDomainHistoryRewrapsNestedContainersWithoutPlaintext(t *testing.T) {
 	deployment := testKEK(t, 0x11)

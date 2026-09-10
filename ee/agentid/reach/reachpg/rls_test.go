@@ -95,7 +95,7 @@ func newStore(t *testing.T) *corestore.Store {
 	}
 	// Reset the tenant-scoped inventory tables between tests (the package shares one DB).
 	if _, err := s.SystemPool().Exec(ctx,
-		`TRUNCATE tenants, owners, issuers, identities, deployment_targets RESTART IDENTITY CASCADE`); err != nil {
+		`TRUNCATE certificate_metadata_watermarks, tenants, owners, issuers, identities, deployment_targets RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	t.Cleanup(func() { s.Close() })

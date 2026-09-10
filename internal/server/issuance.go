@@ -547,6 +547,8 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 		defer secret.Wipe(material.KeyPEM)
 		cert := material.Certificate
 		cert.IssuanceIdempotencyKey = idemKey
+		// Retain exactly the public chain selected at issuance, never a later active CA.
+		cert.CertificatePEM = append(append([]byte(nil), material.CertPEM...), material.ChainPEM...)
 		recorded, err := d.orch.RecordCertificate(ctx, m.TenantID, cert)
 		if err != nil {
 			return nil, err
@@ -846,7 +848,7 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 			// the server-side-keygen deprecation event the issue path emits.
 			// Custody that degrades automatically is worse than custody that
 			// was never claimed, because the claim outlives the property.
-			material, err := d.mintServedLeafForRenewal(ctx, m.TenantID, ident, commonName, dnsNames, idemKey)
+			material, err := d.mintServedLeafForRenewal(ctx, m.TenantID, ident, old, commonName, dnsNames, idemKey)
 			if err != nil {
 				_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
 				return nil, err
@@ -1810,36 +1812,78 @@ func (d *issuanceDispatcher) mintServedLeafForTrigger(ctx context.Context, tenan
 	return d.mintServedLeafMaterialForSelection(ctx, tenantID, ident.OwnerID, ident.Name, []string{ident.Name}, selection, issueKey, binding)
 }
 
-// mintServedLeafForRenewal mints a renewal leaf, honouring a recorded CSR.
-//
-// Separate from mintServedLeafForTrigger because a renewal has no transition
-// CSR to prefer — the scheduler queued it, not a requester — and because the
-// subject and SAN set come from the certificate being REPLACED rather than from
-// the identity name. Renewing a certificate for a different name set than the
-// one it is replacing would be a reissue wearing a renewal's clothes.
-//
-// A CSR recorded on the identity means the requester holds the key, and they
-// still hold it: nothing about a renewal transfers custody. Falling back to
-// control-plane keygen for such an identity is what this exists to prevent.
+// mintServedLeafForRenewal preserves the predecessor's proven key custody.
+// Requester renewal requires the exact retained lifecycle CSR and a matching
+// predecessor public key and identifiers; mutable identity attributes never
+// authorize a new key. Unknown/external custody must renew through its own
+// protocol/agent flow. Only an explicitly recorded legacy control-plane key
+// can use the existing announced control-plane generation path.
 func (d *issuanceDispatcher) mintServedLeafForRenewal(
-	ctx context.Context, tenantID string, ident store.Identity, commonName string, dnsNames []string, issueKey string,
+	ctx context.Context, tenantID string, ident store.Identity, predecessor store.Certificate, commonName string, dnsNames []string, issueKey string,
 ) (issuedLeafMaterial, error) {
 	selection, err := endpointIssuingAuthority(ident.Attributes)
 	if err != nil {
 		return issuedLeafMaterial{}, err
 	}
-	if csr := subjectCSRFromIdentity(ident); csr != "" {
-		// The recorded CSR fixes the public key; its own subject and SANs are
-		// re-validated against the profile inside mintServedLeafFromCSR, so a
-		// stale CSR cannot widen what the renewal asserts.
+	if predecessor.KeyOrigin == string(custody.OriginRequester) {
+		csr, err := d.store.IdentityRenewalCSR(ctx, tenantID, ident.ID, predecessor.ID)
+		if err != nil {
+			return issuedLeafMaterial{}, fmt.Errorf("server: requester renewal requires retained authorized CSR: %w", err)
+		}
+		if err := validateRequesterRenewalCSR([]byte(csr), predecessor); err != nil {
+			return issuedLeafMaterial{}, err
+		}
+		// The current renewal admission/profile/authority checks still apply.
+		// Retaining public CSR custody does not reuse an old approval vote.
 		return d.mintServedLeafFromCSRForSelection(ctx, tenantID, ident, selection, issueKey, []byte(csr))
 	}
-	// No CSR on record: this identity's key has always been control-plane
-	// generated, so a renewal that generates one changes nothing about its
-	// custody. It is still worth announcing, for the same reason the issue path
-	// announces it.
+	if predecessor.KeyOrigin != string(custody.OriginControlPlane) || subjectCSRFromIdentity(ident) != "" {
+		return issuedLeafMaterial{}, errors.New("server: renewal key custody is unknown or requires its original requester/agent protocol")
+	}
 	d.recordServerSideKeygenDeprecation(ctx, tenantID, ident)
 	return d.mintServedLeafMaterialForSelection(ctx, tenantID, ident.OwnerID, commonName, dnsNames, selection, issueKey)
+}
+
+// Existing crypto-boundary parsers supply both verified request attributes and
+// SPKI bytes. The opaque parser is used only for public-key extraction AFTER
+// InspectCSR checks proof of possession; it is never signature authorization.
+func validateRequesterRenewalCSR(publicCSR []byte, predecessor store.Certificate) error {
+	der, info, err := crypto.ParsePublicCSRPEM(publicCSR)
+	if err != nil {
+		return err
+	}
+	parsed, err := crypto.InspectOpaqueCSR(der)
+	if err != nil {
+		return err
+	}
+	old, err := certinfo.Inspect(predecessor.CertificateDER)
+	if err != nil {
+		return err
+	}
+	if old.SHA256Fingerprint != predecessor.Fingerprint || crypto.SHA256Hex(parsed.RawSubjectPublicKeyInfo) != old.SPKISHA256 {
+		return errors.New("server: authorized renewal CSR public key differs from predecessor")
+	}
+	if info.CommonName != old.CommonName || !sameRenewalIdentifiers(info.DNSNames, old.DNSNames) || !sameRenewalIdentifiers(info.IPAddresses, old.IPAddresses) ||
+		!sameRenewalIdentifiers(info.EmailAddresses, old.EmailAddresses) || !sameRenewalIdentifiers(info.URIs, old.URIs) {
+		return errors.New("server: authorized renewal CSR identifiers differ from predecessor")
+	}
+	return nil
+}
+func sameRenewalIdentifiers(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	counts := map[string]int{}
+	for _, value := range left {
+		counts[value]++
+	}
+	for _, value := range right {
+		if counts[value] == 0 {
+			return false
+		}
+		counts[value]--
+	}
+	return true
 }
 
 // subjectCSRFromIdentity reads the CSR a requester attached when they created the
@@ -1958,22 +2002,15 @@ func (d *issuanceDispatcher) recordServerSideKeygenDeprecation(ctx context.Conte
 // unsigned CSR is a caller mistake, and it should come back as one instead of
 // surfacing as an opaque signing failure later in the outbox.
 func decodeSubjectCSR(csrPEM []byte) (der []byte, dnsNames []string, err error) {
-	blk, _ := pem.Decode(csrPEM)
-	if blk == nil {
-		return nil, nil, errors.New("server: subject CSR is not PEM")
-	}
-	if blk.Type != "CERTIFICATE REQUEST" && blk.Type != "NEW CERTIFICATE REQUEST" {
-		return nil, nil, fmt.Errorf("server: subject CSR PEM block is %q, want CERTIFICATE REQUEST", blk.Type)
-	}
-	info, err := crypto.InspectCSR(blk.Bytes)
+	der, info, err := crypto.ParsePublicCSRPEM(csrPEM)
 	if err != nil {
-		return nil, nil, fmt.Errorf("server: subject CSR is not a valid, self-signed PKCS#10 request: %w", err)
+		return nil, nil, fmt.Errorf("server: subject CSR is not one valid, self-signed PKCS#10 request: %w", err)
 	}
 	names := append([]string(nil), info.DNSNames...)
 	if len(names) == 0 && strings.TrimSpace(info.CommonName) != "" {
 		names = []string{info.CommonName}
 	}
-	return append([]byte(nil), blk.Bytes...), names, nil
+	return der, names, nil
 }
 
 // relayPresence answers whether a tenant runs a network relay (epic E1).

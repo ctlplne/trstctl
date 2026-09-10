@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("-----BEGIN CERTIFICATE REQUEST-----\n-----BEGIN PRIVATE KEY-----\nAQID\n-----END PRIVATE KEY-----\n")

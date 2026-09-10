@@ -31,6 +31,7 @@ import (
 // Info is the inventory metadata of a certificate.
 type Info struct {
 	Subject           string
+	CommonName        string // parsed subject CN, not inferred from the display string
 	Issuer            string
 	SerialNumber      string // hex
 	DNSNames          []string
@@ -108,6 +109,7 @@ func Inspect(raw []byte) (Info, error) {
 	spkiSum := sha256.Sum256(cert.RawSubjectPublicKeyInfo)
 	info := Info{
 		Subject:           cert.Subject.String(),
+		CommonName:        cert.Subject.CommonName,
 		Issuer:            cert.Issuer.String(),
 		SerialNumber:      cert.SerialNumber.Text(16),
 		DNSNames:          cert.DNSNames,
@@ -228,6 +230,7 @@ func inspectDER(der []byte) (Info, error) {
 	spkiSum := sha256.Sum256(cert.RawSubjectPublicKeyInfo)
 	info := Info{
 		Subject:           cert.Subject.String(),
+		CommonName:        cert.Subject.CommonName,
 		Issuer:            cert.Issuer.String(),
 		SerialNumber:      cert.SerialNumber.Text(16),
 		DNSNames:          cert.DNSNames,

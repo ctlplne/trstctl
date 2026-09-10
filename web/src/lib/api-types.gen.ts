@@ -3741,6 +3741,14 @@ export interface IdentityConnectorTargetRequest {
   target_id: string;
 }
 
+export interface IdentityIssuanceResult {
+  certificate?: Certificate;
+  certificate_pem?: string;
+  identity_id: string;
+  request_key: string;
+  state: "pending" | "issued";
+}
+
 export interface IdentityList {
   items: Identity[];
   next_cursor?: string;

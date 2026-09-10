@@ -78,7 +78,7 @@ func (d *issuanceDispatcher) issueEndpointCSR(
 			return nil, nil, "", "", errors.New("server: selected platform issuing CA is unavailable; no CA was substituted")
 		}
 		leafPEM, err = d.issue(ctx, csrDER, ttl, leafProfile)
-		return leafPEM, nil, IssuingCAID(), "issued", err
+		return leafPEM, append([]byte(nil), d.chainPEM...), IssuingCAID(), "issued", err
 	case "private":
 		if d.authorityIssue == nil {
 			return nil, nil, "", "", errors.New("server: selected private CA issuance is unavailable; no CA was substituted")

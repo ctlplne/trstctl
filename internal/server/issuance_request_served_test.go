@@ -392,7 +392,7 @@ func TestServedApprovedIssuanceRequestCanBePreparedIssuedAndCompleted(t *testing
 		string(authz.CertsIssue))
 	issuer := seedScopedTokenSubject(t, h.store, h.tenant, "issuer@example.test",
 		string(authz.IdentitiesWrite), string(authz.IdentitiesRead),
-		string(authz.CertsIssue), string(authz.CertsRead))
+		string(authz.CertsIssue), string(authz.CertsRead), string(authz.CertsWrite))
 
 	ownerID := servedCreateID(t, h, admin, "i3-fulfill-owner", "/api/v1/owners", map[string]any{
 		"kind": "workload", "name": "payments-platform",
@@ -496,6 +496,24 @@ func TestServedApprovedIssuanceRequestCanBePreparedIssuedAndCompleted(t *testing
 	preCompletionKeys := make([]string, 0, len(preCompletionCerts))
 	for _, certificate := range preCompletionCerts {
 		preCompletionKeys = append(preCompletionKeys, certificate.IssuanceIdempotencyKey)
+	}
+	// Re-import through the normal served inventory path before completing the
+	// approval. This must update observation provenance without stranding the
+	// exact requester-held issuance at approved or altering its public output.
+	if len(preCompletionCerts) != 1 || len(preCompletionCerts[0].CertificateDER) == 0 {
+		t.Fatalf("expected one real pre-completion leaf: %+v", preCompletionCerts)
+	}
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/certificates", issuer,
+		"i3-fulfill-public-reimport", map[string]any{
+			"pem":      string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: preCompletionCerts[0].CertificateDER})),
+			"owner_id": ownerID,
+		})
+	if status != http.StatusCreated {
+		t.Fatalf("approved leaf import: %d %s", status, body)
+	}
+	imported, err := h.store.GetCertificate(t.Context(), h.tenant, preCompletionCerts[0].ID)
+	if err != nil || imported.Source != "import" || !bytes.Equal(imported.CertificatePEM, preCompletionCerts[0].CertificatePEM) {
+		t.Fatalf("import changed public issuance or hid provenance: source=%q err=%v", imported.Source, err)
 	}
 	// A rollover after the signer result is a new rule for the next mint. It
 	// cannot rewrite history or strand this already-minted v1 request at

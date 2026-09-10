@@ -15392,6 +15392,36 @@
         ],
         "type": "object"
       },
+      "IdentityIssuanceResult": {
+        "properties": {
+          "certificate": {
+            "$ref": "#/components/schemas/Certificate"
+          },
+          "certificate_pem": {
+            "type": "string"
+          },
+          "identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "request_key": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "pending",
+              "issued"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity_id",
+          "request_key",
+          "state"
+        ],
+        "type": "object"
+      },
       "IdentityList": {
         "properties": {
           "items": {
@@ -31625,6 +31655,7 @@
             "type": "string"
           },
           "subject_csr_pem": {
+            "description": "One public PKCS#10 CSR PEM, at most 64 KiB. A malformed nonempty CSR can return a durably replayed 400 problem with code identity_csr_rejected_before_transition and an exact tenant/subject/identity/request-key/CSR-SHA256/to/reason disposition. Only that exact disposition confirms no issuance transition was performed for this attempt; arbitrary 4xx responses do not authorize replacing an uncertain request key.",
             "type": "string"
           },
           "to": {
@@ -43973,6 +44004,73 @@
         ],
         "summary": "Bind an identity to a deployment connector target",
         "x-trstctl-permission": "connectors:write"
+      }
+    },
+    "/api/v1/identities/{id}/issuance-result": {
+      "get": {
+        "operationId": "getIdentityIssuanceResult",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Exact original transition Idempotency-Key",
+            "in": "query",
+            "name": "request_key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityIssuanceResult"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read the exact asynchronous public certificate result of one accepted identity issuance",
+        "x-trstctl-permission": "certs:read"
       }
     },
     "/api/v1/identities/{id}/ownership-exceptions": {
