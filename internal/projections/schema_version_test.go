@@ -276,6 +276,15 @@ func TestApplyTxRejectsUnknownVersionForKnownType(t *testing.T) {
 	if err := p.Apply(ctx, v99); !errors.Is(err, projections.ErrUnknownSchemaVersion) {
 		t.Fatalf("Apply owner.created v99 err = %v, want ErrUnknownSchemaVersion", err)
 	}
+	// Metadata classification must not decode a payload before its version is
+	// admitted. Even malformed bytes at an unknown version take the schema gate.
+	badOwnership := events.Event{
+		Type: projections.EventOwnershipAssigned, TenantID: tenantA, SchemaVersion: 99,
+		Data: []byte(`not-json`),
+	}
+	if err := p.Apply(ctx, badOwnership); !errors.Is(err, projections.ErrUnknownSchemaVersion) {
+		t.Fatalf("Apply ownership.assigned v99 decoded before schema admission: %v", err)
+	}
 
 	// A wholly unknown *type* stays forward-compatible (ignored, not an error),
 	// regardless of version — only known types are version-gated.

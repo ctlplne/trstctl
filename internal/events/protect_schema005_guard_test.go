@@ -151,18 +151,24 @@ func TestProtectSCHEMA005_ProjectorRejectsUnknownVersionAnchor(t *testing.T) {
 			t.Errorf("SCHEMA-005: projector reject path missing %q in %s; unknown-version events may no longer fail closed", needle, path)
 		}
 	}
-	// The gate must be invoked before any payload decode in ApplyTx.
-	applyIdx := strings.Index(body, "func (p *Projector) ApplyTx(")
+	// ApplyTx moved into certificate_recording.go. It must admit the schema
+	// before entering metadata classification, which can decode ownership data.
+	path = filepath.Join("..", "projections", "certificate_recording.go")
+	src, err = os.ReadFile(path) // #nosec G304 -- fixed repository source anchor, not caller input (CWE-22)
+	if err != nil {
+		t.Fatalf("SCHEMA-005 anchor: cannot read %s: %v", path, err)
+	}
+	applyIdx := strings.Index(string(src), "func (p *Projector) ApplyTx(")
 	if applyIdx < 0 {
 		t.Fatalf("SCHEMA-005: ApplyTx no longer exists in %s; re-point this guard", path)
 	}
-	rest := body[applyIdx:]
+	rest := string(src)[applyIdx:]
 	gateIdx := strings.Index(rest, "ValidateSchemaVersion(e)")
-	switchIdx := strings.Index(rest, "switch e.Type")
+	switchIdx := strings.Index(rest, "p.store.WithCertificateProjectionOrderTx(")
 	if gateIdx < 0 || switchIdx < 0 {
-		t.Fatalf("SCHEMA-005: ApplyTx no longer gates on ValidateSchemaVersion before dispatching on e.Type; re-validate the reject path")
+		t.Fatalf("SCHEMA-005: ApplyTx must validate schema before entering metadata classification; re-validate the reject path")
 	}
 	if gateIdx >= switchIdx {
-		t.Errorf("SCHEMA-005: ApplyTx dispatches on e.Type (@%d) before validating the schema version (@%d); a known type at an unknown version could be decoded against the wrong struct", switchIdx, gateIdx)
+		t.Errorf("SCHEMA-005: ApplyTx enters metadata classification (@%d) before validating the schema version (@%d); a known type at an unknown version could be decoded against the wrong struct", switchIdx, gateIdx)
 	}
 }

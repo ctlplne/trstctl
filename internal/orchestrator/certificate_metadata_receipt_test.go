@@ -78,7 +78,12 @@ func TestCertificateMetadataCompletedZeroRowRepeatIsInertAcrossSnapshotAndRebuil
 			case "schema":
 				wrong.SchemaVersion++
 			}
-			if err := projector.Apply(ctx, wrong); !errors.Is(err, store.ErrIdempotencyConflict) {
+			wantErr := store.ErrIdempotencyConflict
+			if field == "schema" {
+				// Unknown versions are refused before any receipt lookup/decoding.
+				wantErr = projections.ErrUnknownSchemaVersion
+			}
+			if err := projector.Apply(ctx, wrong); !errors.Is(err, wantErr) {
 				t.Fatalf("changed envelope accepted: %v", err)
 			}
 			if !bytes.Equal(before, read()) {

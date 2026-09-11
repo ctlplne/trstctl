@@ -18,6 +18,9 @@ import (
 // update certificate public material. Command recovery and projection share this
 // list so edge reconciliation cannot bypass the same fingerprint fence.
 func CertificateRecordingMaterial(e events.Event) (store.Certificate, bool, error) {
+	if err := ValidateSchemaVersion(e); err != nil {
+		return store.Certificate{}, false, err
+	}
 	switch e.Type {
 	case EventCertificateRecorded:
 		var p CertificateRecorded
@@ -48,6 +51,9 @@ func CertificateRecordingMaterial(e events.Event) (store.Certificate, bool, erro
 // inline and tail projectors follow this order. An older already-projected
 // recording cannot overwrite current import provenance or an immutable origin.
 func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) error {
+	if err := ValidateSchemaVersion(e); err != nil {
+		return err
+	}
 	// All existing event families enter this transaction boundary. The narrow
 	// certificate trigger records their actual sequence when they touch a leaf;
 	// a later ownership/privacy/migration write cannot go unnoticed by recovery.
@@ -119,6 +125,9 @@ func (p *Projector) applyCertificateOrderedEventTx(ctx context.Context, tx pgx.T
 // prelock rows before ApplyTx (revocation and migration updates) must also take
 // this fence at command entry. Unrelated events keep their own domain ordering.
 func CertificateMetadataEvent(e events.Event) (bool, error) {
+	if err := ValidateSchemaVersion(e); err != nil {
+		return false, err
+	}
 	switch e.Type {
 	case EventCertificateRecorded, EventEdgeIssuanceReconciled,
 		EventCertificateCustodyAttested, EventCertificateRevoked, EventCertificateSuperseded,
