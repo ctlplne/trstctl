@@ -9,7 +9,6 @@ type ResourcePlan = {
 
 const cfg = new pulumi.Config();
 const endpoint = cfg.require("endpoint").replace(/\/+$/, "");
-const token = cfg.requireSecret("token");
 const plan: ResourcePlan = JSON.parse(fs.readFileSync(new URL("./trstctl.resources.json", import.meta.url), "utf8"));
 
 async function trstctlPost(path: string, bearer: string, idempotencyKey: string, body: unknown): Promise<Record<string, unknown>> {
@@ -59,13 +58,22 @@ class SecretResource extends pulumi.dynamic.Resource {
 }
 
 class TrstctlProvider implements pulumi.dynamic.ResourceProvider {
+  private bearer?: string;
+
   constructor(
     private readonly path: string,
     private readonly body: (bearer: string) => Record<string, unknown>,
   ) {}
 
-  async create(inputs: pulumi.dynamic.Inputs): Promise<pulumi.dynamic.CreateResult> {
-    const bearer = await pulumi.output(token).promise();
+  async configure(request: pulumi.dynamic.ConfigureRequest): Promise<void> {
+    // Resolve provider configuration in the provider process. Capturing an
+    // Output and calling its private promise API cannot resolve it here.
+    this.bearer = request.config.require("token");
+  }
+
+  async create(inputs: pulumi.Inputs): Promise<pulumi.dynamic.CreateResult> {
+    const bearer = this.bearer;
+    if (!bearer) throw new Error("trstctl provider requires configured token");
     const idempotencyKey = `pulumi-${this.path.replaceAll("/", "-")}-${inputs.name ?? "resource"}`;
     const body = this.body(String(bearer));
     delete body.bearer;
