@@ -98,8 +98,8 @@ func TestSDKGeneratorAdvisoriesStayRemediated(t *testing.T) {
 		t.Fatalf("decode TypeScript SDK generator lockfile: %v", err)
 	}
 	for path, want := range map[string]string{
-		"node_modules/@redocly/openapi-core": "1.34.19",
-		"node_modules/js-yaml":               "4.3.1",
+		"node_modules/@redocly/openapi-core": "1.34.20",
+		"node_modules/js-yaml":               "4.3.2",
 		"node_modules/brace-expansion":       "2.1.4",
 	} {
 		if got := lock.Packages[path].Version; got != want {
