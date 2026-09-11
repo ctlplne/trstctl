@@ -1011,7 +1011,14 @@ func (o *Outbox) finalizeClaim(ctx context.Context, claim claimedOutboxEntry, de
 		if err := tx.Commit(ctx); err != nil {
 			return err
 		}
-		if !deferred {
+		var existingClaim existingAtMostOnceClaimError
+		if errors.As(deliverErr, &existingClaim) {
+			// The old effect remains unknown and this attempt still consumes its
+			// retry budget. It made no new receiver call, so release any probe
+			// reservation without recording either success or another failure.
+			key := circuitKey{tenantID: claim.msg.TenantID, destination: effectiveOutboxLane(claim.msg.Destination, claim.msg.EffectLane)}
+			o.releaseUnclaimedHalfOpenProbes(map[circuitKey]bool{key: true}, circuitKey{}, now)
+		} else if !deferred {
 			o.recordCircuitFailure(claim.msg, deliverErr, now)
 		}
 		return nil
@@ -1189,7 +1196,7 @@ func safePersistableDeliveryClass(err error) (string, bool) {
 		case "external_ca_account_failed", "external_ca_order_failed", "external_ca_finalize_failed", "external_ca_protocol_failed",
 			"external_ca_provider_failed", "external_ca_record_failed", "external_ca_result_encode_failed",
 			"external_ca_idempotency_failed", "external_ca_result_decode_failed", "external_ca_observation_failed",
-			"external_ca_dns01_unconfigured":
+			"external_ca_dns01_unconfigured", "notification_receiver_not_configured":
 			return class, true
 		}
 	}

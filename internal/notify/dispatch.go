@@ -31,6 +31,15 @@ type Notifier interface {
 	Notify(ctx context.Context, alert Alert) error
 }
 
+// noReceiverError carries a fixed public class; receiver URLs, credentials and
+// raw transport errors must never enter the outbox's operator-visible error.
+type noReceiverError struct{}
+
+func (noReceiverError) Error() string {
+	return "notify: no configured notification receiver; configure a channel and retry delivery"
+}
+func (noReceiverError) SafeDeliveryClass() string { return "notification_receiver_not_configured" }
+
 // RoutingPolicy is the tenant-scoped severity-to-channel matrix used at dispatch
 // time. Channel names are matched against Notifier.Name case-insensitively.
 type RoutingPolicy struct {
@@ -237,6 +246,9 @@ func (d *Dispatcher) dispatchAlert(ctx context.Context, message DeliveryMessage,
 	channels, err := d.effectiveChannels(ctx, alert)
 	if err != nil {
 		return err
+	}
+	if len(channels) == 0 {
+		return noReceiverError{}
 	}
 	failed := make([]string, 0)
 	type deliveryAttempt struct {

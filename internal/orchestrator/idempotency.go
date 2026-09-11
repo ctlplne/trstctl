@@ -47,6 +47,15 @@ var ErrIdempotencyConflict = errors.New("orchestrator: idempotency key was alrea
 // reconciliation rather than blind redelivery.
 var ErrEffectIndeterminate = errors.New("orchestrator: external effect outcome is indeterminate; reconciliation required")
 
+// existingAtMostOnceClaimError means this invocation refused an already-pending
+// command before entering its receiver callback. The original effect is still
+// unknown, but this refusal provides no new observation of receiver health.
+// Keep this type private so only the proven local-claim branches can mint it.
+type existingAtMostOnceClaimError struct{}
+
+func (existingAtMostOnceClaimError) Error() string { return ErrEffectIndeterminate.Error() }
+func (existingAtMostOnceClaimError) Unwrap() error { return ErrEffectIndeterminate }
+
 // Result codecs make the on-disk shape explicit. raw-v0 is a compatibility
 // format for rows written before tenant-domain protection is attached. It keeps
 // upgrades readable, but it is not the production-complete posture for
@@ -1596,7 +1605,7 @@ func (i *Idempotency) DoAtMostOnceEffect(ctx context.Context, tenantID, key stri
 		if prior, ok := i.atMostOnceMemory[memoryKey]; ok {
 			i.memoryMu.Unlock()
 			if !prior.completed {
-				return nil, ErrEffectIndeterminate
+				return nil, existingAtMostOnceClaimError{}
 			}
 			return i.openResult(ctx, tenantID, key, "", prior.codec, append([]byte(nil), prior.result...))
 		}
@@ -1656,7 +1665,7 @@ func (i *Idempotency) DoAtMostOnceEffect(ctx context.Context, tenantID, key stri
 			return ErrIdempotencyConflict
 		}
 		if status != "completed" {
-			return ErrEffectIndeterminate
+			return existingAtMostOnceClaimError{}
 		}
 		if err := tx.QueryRow(ctx,
 			`SELECT result_codec, result FROM idempotency_keys

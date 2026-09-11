@@ -14,6 +14,9 @@ func (e classifiedOutboxTestError) Error() string             { return "attacker
 func (e classifiedOutboxTestError) SafeDeliveryClass() string { return e.class }
 
 func TestPersistedDeliveryErrorAcceptsOnlyClosedSafeClasses(t *testing.T) {
+	if got := persistedDeliveryError(classifiedOutboxTestError{class: "notification_receiver_not_configured"}); got != "notification_receiver_not_configured" {
+		t.Fatalf("missing receiver class = %q", got)
+	}
 	if got := persistedDeliveryError(classifiedOutboxTestError{class: "external_ca_finalize_failed"}); got != "external_ca_finalize_failed" {
 		t.Fatalf("known safe class = %q", got)
 	}
