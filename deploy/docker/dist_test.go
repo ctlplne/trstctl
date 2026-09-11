@@ -232,7 +232,8 @@ func TestPostgresRuntimeImageIsHardenedAndNonRoot(t *testing.T) {
 		"test ! -e /usr/local/bin/gosu",
 		"USER postgres",
 	)
-	for _, forbidden := range []string{"apt-get", "apk add", "curl ", "wget "} {
+	assertPostgresPatchConstruction(t, df)
+	for _, forbidden := range []string{"apt-get", "curl ", "wget "} {
 		if strings.Contains(df, forbidden) {
 			t.Errorf("hardened PostgreSQL Dockerfile downloads or installs mutable runtime content via %q", forbidden)
 		}
@@ -1031,7 +1032,8 @@ func TestNpmAuditDependencySurfacesPublishesSeverityReceipt(t *testing.T) {
 	tmp := t.TempDir()
 	web := filepath.Join(tmp, "web")
 	sdk := filepath.Join(tmp, "sdk")
-	for _, dir := range []string{web, sdk} {
+	pulumi := filepath.Join(tmp, "pulumi")
+	for _, dir := range []string{web, sdk, pulumi} {
 		if err := os.MkdirAll(dir, 0o755); err != nil { // #nosec G301 -- npm fixture tree in t.TempDir; mirrors a real package layout, nothing secret (CWE-276)
 			t.Fatalf("mkdir %s: %v", dir, err)
 		}
@@ -1040,6 +1042,40 @@ func TestNpmAuditDependencySurfacesPublishesSeverityReceipt(t *testing.T) {
 		}
 		if err := os.WriteFile(filepath.Join(dir, "package-lock.json"), []byte(`{"name":"fixture","version":"0.0.0","lockfileVersion":3,"packages":{"":{"name":"fixture","version":"0.0.0"}}}`), 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
 			t.Fatalf("write package-lock.json: %v", err)
+		}
+	}
+
+	// Preserve the severity-receipt assertions with complete npm v2 reports:
+	// counts alone must not bypass the production advisory-inventory validator.
+	for dir, severities := range map[string][]string{
+		web: {"info", "low", "low", "moderate", "moderate", "moderate"},
+		sdk: {"moderate"}, pulumi: {},
+	} {
+		counts := map[string]int{"info": 0, "low": 0, "moderate": 0, "high": 0, "critical": 0, "total": len(severities)}
+		vulnerabilities := make(map[string]any)
+		for i, severity := range severities {
+			name := fmt.Sprintf("fixture-package-%d", i)
+			counts[severity]++
+			vulnerabilities[name] = map[string]any{
+				"name": name, "severity": severity, "isDirect": true,
+				"via": []any{map[string]any{"source": i + 1, "name": name, "dependency": name,
+					"title": "Receipt fixture advisory", "url": "https://example.invalid/advisory",
+					"severity": severity, "range": "<1.0.1"}},
+				"effects": []string{}, "nodes": []string{"node_modules/" + name},
+				"range": "<1.0.1", "fixAvailable": true,
+			}
+		}
+		report, err := json.Marshal(map[string]any{
+			"auditReportVersion": 2, "vulnerabilities": vulnerabilities,
+			"metadata": map[string]any{"vulnerabilities": counts, "dependencies": map[string]int{
+				"prod": len(severities) + 1, "dev": 0, "optional": 0, "peer": 0, "peerOptional": 0, "total": len(severities),
+			}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "audit.json"), report, 0o600); err != nil {
+			t.Fatal(err)
 		}
 	}
 
@@ -1062,27 +1098,7 @@ if [[ " $* " != *" --json "* ]]; then
   echo "missing --json" >&2
   exit 2
 fi
-case "$prefix" in
-  *web)
-    cat <<'JSON'
-{"metadata":{"vulnerabilities":{"info":1,"low":2,"moderate":3,"high":0,"critical":0,"total":6}}}
-JSON
-    ;;
-  *sdk)
-    cat <<'JSON'
-{"metadata":{"vulnerabilities":{"info":0,"low":0,"moderate":1,"high":0,"critical":0,"total":1}}}
-JSON
-    ;;
-  *trstctl-resources)
-    cat <<'JSON'
-{"metadata":{"vulnerabilities":{"info":0,"low":0,"moderate":0,"high":0,"critical":0,"total":0}}}
-JSON
-    ;;
-  *)
-    echo "unexpected prefix: $prefix" >&2
-    exit 2
-    ;;
-esac
+cat "$prefix/audit.json"
 `), 0o755); err != nil {
 		t.Fatalf("write fake npm: %v", err)
 	}
@@ -1094,6 +1110,7 @@ esac
 		"NPM="+fakeNPM,
 		"TRSTCTL_WEB_NPM_PREFIX="+web,
 		"TRSTCTL_TS_SDK_NPM_PREFIX="+sdk,
+		"TRSTCTL_PULUMI_IAC_NPM_PREFIX="+pulumi,
 		"TRSTCTL_NPM_AUDIT_RECEIPT="+receipt,
 	)
 	out, err := cmd.CombinedOutput()
