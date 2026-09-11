@@ -166,8 +166,8 @@ func TestCSRFirstIssuanceIsActuallyWired(t *testing.T) {
 		{"../internal/api/handlers.go", "SubjectCSRPEM", "the transition request must accept a caller-supplied CSR"},
 		{"../internal/api/handlers.go", "validateSubjectCSRPEM", "a malformed CSR must be rejected at the API edge, not in the outbox worker"},
 		{"../internal/orchestrator/orchestrator.go", "TransitionWithSubjectCSR", "the CSR must reach the issuance dispatcher on the transition"},
-		{"../internal/server/issuance.go", "mintServedLeafFromCSRForSelection", "the mint must sign the caller's request instead of generating a key"},
-		{"../internal/server/issuance.go", "issuance.server_side_keygen", "the legacy keygen path must record its own deprecation"},
+		{"../internal/server/issuance_csr.go", "mintServedLeafFromCSRForSelection", "the mint must sign the caller's request instead of generating a key"},
+		{"../internal/server/issuance_csr.go", "issuance.server_side_keygen", "the legacy keygen path must record its own deprecation"},
 	} {
 		body := read(t, want.file)
 		if !strings.Contains(body, want.token) {
@@ -181,7 +181,7 @@ func TestCSRFirstIssuanceIsActuallyWired(t *testing.T) {
 // wipe, or accidentally encode into a deploy intent.
 func TestCSRFirstMintReturnsNoKeyMaterial(t *testing.T) {
 	t.Parallel()
-	body := read(t, "../internal/server/issuance.go")
+	body := read(t, "../internal/server/issuance_csr.go")
 	start := strings.Index(body, "func (d *issuanceDispatcher) mintServedLeafFromCSRForSelection(")
 	if start < 0 {
 		t.Fatal("mintServedLeafFromCSRForSelection is gone; the custody table's CSR row depends on it")

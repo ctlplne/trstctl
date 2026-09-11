@@ -3556,7 +3556,10 @@ func TestSupplyChainStrengthGuardsStayRequired(t *testing.T) {
 		"TestRuntimePinsMatchManifest",
 		"TestArchiveArchMirrorsEmbeddedPostgresStrategy",
 		"TestVerifyBundledPostgresArchiveRejectsTamper",
-		"TestStartBundledPostgresVerifierGatesTheCachePath",
+		"TestBundledPostgresArchiveVerifierUsesExpectedCachePath",
+		"TestBundledPostgresRejectsUnrelatedExtractedCache",
+		"TestBundledPostgresAuthenticatedFixtureReachesInitializerAndCleansUp",
+		"TestBundledPostgresRejectsMismatchedArchiveBeforeCachedInit",
 		"TestUnpinnedArchFailsClosed",
 	} {
 		if !anyTestDeclaresUnder(t, "../internal/server", testName) {
@@ -3575,9 +3578,25 @@ func TestSupplyChainStrengthGuardsStayRequired(t *testing.T) {
 		"no committed provenance pin",
 		"refusing to run an unverified PostgreSQL binary",
 		"TRSTCTL_POSTGRES_MODE=external",
-		"crypto.SHA256Hex(data)",
+		"embeddedpostgres.VerifyArchiveFile(path, wantHex)",
+	)
+	// The authenticated archive implementation lives in the reviewed source
+	// fork. Require its boundary hash and cold/cached negative controls as well
+	// as the served caller; an inline implementation is no longer the contract.
+	verifiedPG := read(t, "../third_party/embedded-postgres/verified_binary.go")
+	check("third_party/embedded-postgres/verified_binary.go", verifiedPG,
+		"boundarycrypto.SHA256Hex(data)",
+		"boundarycrypto.SHA256Hex(archive)",
 		"provenance check FAILED",
 	)
+	for _, testName := range []string{
+		"TestVerifiedStartAuthenticatesColdArchiveBeforeInit",
+		"TestVerifiedStartRejectsCachedMismatchWithoutDataMutation",
+	} {
+		if !anyTestDeclaresUnder(t, "../third_party/embedded-postgres", testName) {
+			t.Errorf("SUPPLY-007: verified archive implementation no longer declares %s", testName)
+		}
+	}
 	pgManifest := read(t, "../deploy/supply-chain/embedded-postgres.json")
 	check("deploy/supply-chain/embedded-postgres.json", pgManifest,
 		`"runtimeEnforced": true`,

@@ -115,13 +115,13 @@
     {
       "ecosystem": "gomod",
       "name": "google.golang.org/grpc",
-      "current_version": "v1.83.1",
+      "current_version": "v1.83.2",
       "latest_observed_version": "v1.83.2",
       "update_type": "minor",
       "freshness_slo_class": "critical-go-runtime",
       "owner": "Transport/Signer",
-      "status": "planned",
-      "behind_since": "2026-08-27",
+      "status": "current",
+      "behind_since": "",
       "next_review_by": "2026-09-26",
       "deferral_until": "",
       "rationale": "SEC-de4eb072 upgraded the agent, SPIFFE, and signer RPC transport to the fixed v1.82.1 release. The 2026-08-27 observation found v1.83.2; it is scheduled as ordinary minor-version hygiene because govulncheck reports zero called vulnerabilities on the current pin. Its acceptance gate remains UDS, mTLS, workload, process-boundary, editions, and whole-module vulnerability testing."
@@ -185,30 +185,30 @@
     {
       "ecosystem": "npm",
       "name": "vitest",
-      "current_version": "4.1.10",
+      "current_version": "4.1.11",
       "latest_observed_version": "4.1.11",
       "update_type": "patch",
       "freshness_slo_class": "web-runtime",
       "owner": "Web/Quality",
-      "status": "planned",
-      "behind_since": "2026-08-27",
+      "status": "current",
+      "behind_since": "",
       "next_review_by": "2026-09-26",
       "deferral_until": "",
-      "rationale": "S-7268c77e upgraded Vitest to the patched v4.1.10 release. The 2026-08-27 observation found v4.1.11; this patch is scheduled with coverage-v8, and must preserve the complete test run and configured coverage floors under the supported worker model."
+      "rationale": "The 2026-09-11 repository check finds vitest already pinned to 4.1.11 in package.json and package-lock.json, matching the latest version observed in this report. This corrects the installed-version record; the registry observation date and next review deadline are unchanged. Full web test and coverage gates remain required."
     },
     {
       "ecosystem": "npm",
       "name": "@vitest/coverage-v8",
-      "current_version": "4.1.10",
+      "current_version": "4.1.11",
       "latest_observed_version": "4.1.11",
       "update_type": "patch",
       "freshness_slo_class": "web-runtime",
       "owner": "Web/Quality",
-      "status": "planned",
-      "behind_since": "2026-08-27",
+      "status": "current",
+      "behind_since": "",
       "next_review_by": "2026-09-26",
       "deferral_until": "",
-      "rationale": "S-7268c77e moved coverage-v8 with Vitest to v4.1.10 and proved the formerly vacuous exclusion pattern measures production code. The 2026-08-27 observation found v4.1.11; it is scheduled with Vitest and must preserve every configured floor."
+      "rationale": "The 2026-09-11 repository check finds @vitest/coverage-v8 already pinned to 4.1.11 in package.json and package-lock.json, matching the latest version observed in this report. This corrects the installed-version record; the registry observation date and next review deadline are unchanged. Full web test and coverage gates remain required."
     },
     {
       "ecosystem": "npm",
