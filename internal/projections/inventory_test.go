@@ -10,6 +10,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto/mtls"
@@ -135,6 +137,10 @@ func TestCertificateExpiringFilter(t *testing.T) {
 func TestCertificateAPIIngestAndQuery(t *testing.T) {
 	s := newStore(t)
 	log := openLog(t)
+	mustAppend(t, log, events.Event{Type: projections.EventTenantRegistered, TenantID: tenantA, Data: tenantRegistered("Ingest fixture")})
+	if err := projections.New(s).ProjectCatchUp(t.Context(), log); err != nil {
+		t.Fatal(err)
+	}
 	a := api.New(s, orchestrator.NewIdempotency(s), orchestrator.NewOrchestrator(log, s, orchestrator.NewOutbox(s)), api.WithInsecureHeaderResolver())
 	srv := httptest.NewServer(a)
 	t.Cleanup(srv.Close)

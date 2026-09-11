@@ -94,7 +94,11 @@ func TestBrokerFactsSurviveRediscoverySnapshotAndEventOnlyRebuild(t *testing.T) 
 	metadata := *fixture.BrokerIssuance
 	metadata.Scopes = []string{"tool:inventory.write"}
 	changed.BrokerIssuance, changed.Subject = &metadata, "must not commit"
-	if err := p.Apply(ctx, brokerRecordedEvent(t, changed)); !errors.Is(err, store.ErrIdempotencyConflict) {
+	conflicting, err := log.Append(ctx, brokerRecordedEvent(t, changed))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Apply(ctx, conflicting); !errors.Is(err, store.ErrIdempotencyConflict) {
 		t.Fatalf("conflicting broker facts: got %v, want explicit command conflict", err)
 	}
 	assertOriginal("rejected conflicting fact")

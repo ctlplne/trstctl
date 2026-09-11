@@ -45,10 +45,13 @@ func TestBrokerHistoryValidityBoundariesFiltersAndLegacyGaps(t *testing.T) {
 		wantByID[id] = tc.want
 		// Deliberate pre-metadata/erased read-model fixtures. This is not a
 		// product write path: it verifies we never infer missing original facts.
-		if _, err := s.SystemPool().Exec(ctx, `INSERT INTO certificates
+		if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `INSERT INTO certificates
 			(id, tenant_id, fingerprint, subject, source, issuance_idempotency_key, status, not_before, not_after, created_at)
 			VALUES ($1, $2, $3, $3, 'rediscovered', $4, $5, $6, $7, $8)`,
-			id, tenantA, tc.name, "broker-issue:"+tc.name, tc.status, tc.before, tc.after, now); err != nil {
+				id, tenantA, tc.name, "broker-issue:"+tc.name, tc.status, tc.before, tc.after, now)
+			return err
+		}); err != nil {
 			t.Fatal(err)
 		}
 		got, err := s.GetBrokerCertificate(ctx, tenantA, id, now)
@@ -108,10 +111,13 @@ func TestBrokerHistoryKeysetKeepsTimeTiesAndExcludesOtherInventory(t *testing.T)
 		if i == 16 {
 			key = "ordinary-issuance"
 		}
-		if _, err := s.SystemPool().Exec(ctx, `INSERT INTO certificates
+		if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `INSERT INTO certificates
 			(id, tenant_id, fingerprint, subject, source, issuance_idempotency_key, created_at)
 			VALUES ($1, $2, $3, 'history', 'broker:untrusted-source-label', $4, $5)`,
-			uuid(tenantA, 88000+i), tenantA, fmt.Sprintf("history-%d", i), key, now.Add(time.Duration(i/4)*time.Second)); err != nil {
+				uuid(tenantA, 88000+i), tenantA, fmt.Sprintf("history-%d", i), key, now.Add(time.Duration(i/4)*time.Second))
+			return err
+		}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -197,10 +203,13 @@ func TestBrokerHistorySignedIDComesOnlyFromFingerprintBoundCanonicalLeaf(t *test
 			id := uuid(tenantA, 89000+i)
 			// Deliberately incomplete/corrupt historical fixtures, not a product
 			// mutation path. A friendly subject must never fill missing evidence.
-			if _, err := s.SystemPool().Exec(ctx, `INSERT INTO certificates
+			if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+				_, err := tx.Exec(ctx, `INSERT INTO certificates
 				(id, tenant_id, fingerprint, subject, source, issuance_idempotency_key, certificate_der)
 				VALUES ($1, $2, $3, 'spiffe://wrong.test/friendly-subject', 'broker:k8s_sat', $4, $5)`,
-				id, tenantA, tc.fingerprint, "broker-issue:signed-id-"+tc.name, tc.der); err != nil {
+					id, tenantA, tc.fingerprint, "broker-issue:signed-id-"+tc.name, tc.der)
+				return err
+			}); err != nil {
 				t.Fatal(err)
 			}
 			row, err := s.GetBrokerCertificate(ctx, tenantA, id, time.Now())

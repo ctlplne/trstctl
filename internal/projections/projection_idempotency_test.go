@@ -28,18 +28,27 @@ func TestCertificateProjectionRejectsIDReuseAsDomainCorruption(t *testing.T) {
 	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Acme"}); err != nil {
 		t.Fatalf("seed tenant: %v", err)
 	}
+	log := openLog(t)
 	proj := projections.New(s)
 	const certID = "10000000-0000-4000-8000-000000000098"
 	first := projectorEvent(t, projections.EventCertificateRecorded, projections.CertificateRecorded{
 		ID: certID, Subject: "CN=first.example", Fingerprint: "sha256:first", Serial: "98",
 	})
+	first, err := log.Append(ctx, first)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := proj.Apply(ctx, first); err != nil {
 		t.Fatalf("first certificate: %v", err)
 	}
 	corrupt := projectorEvent(t, projections.EventCertificateRecorded, projections.CertificateRecorded{
 		ID: certID, Subject: "CN=different.example", Fingerprint: "sha256:different", Serial: "99",
 	})
-	err := proj.Apply(ctx, corrupt)
+	corrupt, err = log.Append(ctx, corrupt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = proj.Apply(ctx, corrupt)
 	if err == nil || !strings.Contains(err.Error(), "reuses id") || strings.Contains(err.Error(), "certificates_pkey") {
 		t.Fatalf("corrupt certificate id reuse error = %v, want stable domain error without raw SQL constraint", err)
 	}
@@ -634,17 +643,19 @@ func TestCertificateProjectionConvergesWithInlineTailRace(t *testing.T) {
 		ID: certID, Subject: "CN=race.example", SANs: []string{"race.example"},
 		Fingerprint: "sha256:projection-race", Serial: "99", Source: "issued",
 	})
-	cert := store.Certificate{
-		ID: certID, TenantID: tenantA, Subject: "CN=race.example", SANs: []string{"race.example"},
-		Fingerprint: "sha256:projection-race", Serial: "99", Source: "issued", CreatedAt: event.Time,
+	log := openLog(t)
+	event, err := log.Append(ctx, event)
+	if err != nil {
+		t.Fatal(err)
 	}
+	projector := projections.New(s)
 
 	rowInserted := make(chan struct{})
 	releaseCommit := make(chan struct{})
 	inlineDone := make(chan error, 1)
 	go func() {
 		inlineDone <- s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
-			if err := s.ApplyCertificateRecordedTx(ctx, tx, cert); err != nil {
+			if err := projector.ApplyTx(ctx, tx, event); err != nil {
 				return err
 			}
 			close(rowInserted)
@@ -659,13 +670,13 @@ func TestCertificateProjectionConvergesWithInlineTailRace(t *testing.T) {
 	}
 
 	tailDone := make(chan error, 1)
-	go func() { tailDone <- projections.New(s).Apply(ctx, event) }()
+	go func() { tailDone <- projector.Apply(ctx, event) }()
 	select {
 	case err := <-tailDone:
 		close(releaseCommit)
-		t.Fatalf("tail projection returned before the inline uniqueness lock committed: %v", err)
+		t.Fatalf("tail projection returned before the inline metadata transaction committed: %v", err)
 	case <-time.After(100 * time.Millisecond):
-		// The second transaction is waiting on the first transaction's unique row.
+		// The second transaction is waiting on the first transaction's uncommitted event receipt.
 	}
 	close(releaseCommit)
 	if err := <-inlineDone; err != nil {
@@ -679,7 +690,7 @@ func TestCertificateProjectionConvergesWithInlineTailRace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list certificates: %v", err)
 	}
-	if len(items) != 1 || items[0].ID != certID || items[0].Fingerprint != cert.Fingerprint {
+	if len(items) != 1 || items[0].ID != certID || items[0].Fingerprint != "sha256:projection-race" {
 		t.Fatalf("racing projections = %+v, want one canonical certificate", items)
 	}
 }

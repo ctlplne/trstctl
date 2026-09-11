@@ -41,7 +41,7 @@ func (s *Store) LockCertificateRecordingTx(ctx context.Context, tx pgx.Tx, tenan
 		return err
 	}
 	var ownsWholeTable bool
-	//trstctl:system-query — inspect only this backend's granted lock on the routed certificate relation; no tenant data or other backend identity is selected (AN-1 exemption).
+	//trstctl:system-query — within the tenant's RLS context, inspect only this backend's granted lock in the system pg_locks catalog; no tenant data or other backend identity is selected (AN-1 exemption).
 	if err := tx.QueryRow(ctx, `SELECT EXISTS (
 		SELECT 1 FROM pg_locks WHERE pid=pg_backend_pid() AND locktype='relation'
 		AND relation='certificates'::regclass AND mode='AccessExclusiveLock' AND granted

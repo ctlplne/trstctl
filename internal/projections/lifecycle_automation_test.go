@@ -34,16 +34,16 @@ func lifecycleCSR(t *testing.T, cn string) []byte {
 	return csr
 }
 
-// newLifecycleManager wires a Manager over the built-in CA and the real spine.
+// newLifecycleManager is the same retained-history fixture for tests that do
+// not need direct access to its log.
 func newLifecycleManager(t *testing.T, s *store.Store, cfg lifecycle.Config) (*lifecycle.Manager, *ca.IssuanceService) {
 	t.Helper()
 	m, svc, _ := newLifecycleManagerWithLog(t, s, cfg)
 	return m, svc
 }
 
-// newLifecycleManagerWithLog is newLifecycleManager but also returns the shared
-// event log, so an event-sourcing test can Rebuild the read model from the very
-// log the Manager appended to (CORRECT-002).
+// newLifecycleManagerWithLog wires a lifecycle manager and its retained event
+// log over the real spine, including the tenant registration needed for replay.
 func newLifecycleManagerWithLog(t *testing.T, s *store.Store, cfg lifecycle.Config) (*lifecycle.Manager, *ca.IssuanceService, *events.Log) {
 	t.Helper()
 	builtin, err := ca.NewBuiltin("trstctl Built-in CA")
@@ -54,14 +54,19 @@ func newLifecycleManagerWithLog(t *testing.T, s *store.Store, cfg lifecycle.Conf
 	ob := orchestrator.NewOutbox(s)
 	svc := ca.NewIssuanceService(builtin, idem, ob, s)
 	log := openLog(t)
+	for _, tenant := range []string{tenantA, tenantB} {
+		mustAppend(t, log, events.Event{Type: projections.EventTenantRegistered, TenantID: tenant, Data: tenantRegistered("Lifecycle fixture")})
+	}
+	if err := projections.New(s).ProjectCatchUp(t.Context(), log); err != nil {
+		t.Fatal(err)
+	}
 	return lifecycle.NewManager(s, svc, ob, idem, log, cfg), svc, log
 }
 
 // seedInventoryCertEventSourced issues a real certificate and inventories it
 // through the event-sourced command path (orchestrator.RecordCertificate emits a
 // certificate.recorded event and projects it), so the row is reconstructable from
-// the log on a Rebuild() — unlike seedInventoryCert, which writes the read table
-// directly. CORRECT-002 tests that Rebuild from this log preserves later status
+// the log on a Rebuild() — including its original metadata provenance. CORRECT-002 tests that Rebuild from this log preserves later status
 // transitions, so the seed itself must be event-sourced too.
 func seedInventoryCertEventSourced(t *testing.T, s *store.Store, svc *ca.IssuanceService, log *events.Log, tenantID, cn string, ttl time.Duration) store.Certificate {
 	t.Helper()
@@ -87,31 +92,6 @@ func seedInventoryCertEventSourced(t *testing.T, s *store.Store, svc *ca.Issuanc
 	return c
 }
 
-// seedInventoryCert issues a real certificate with the given lifetime and
-// inventories it, returning the stored row (with id, serial, not_after).
-func seedInventoryCert(t *testing.T, s *store.Store, svc *ca.IssuanceService, tenantID, cn string, ttl time.Duration) store.Certificate {
-	t.Helper()
-	ctx := context.Background()
-	issued, err := svc.Issue(ctx, ca.IssueRequest{TenantID: tenantID, CSR: lifecycleCSR(t, cn), DNSNames: []string{cn}, TTL: ttl}, "seed:"+tenantID+":"+cn)
-	if err != nil {
-		t.Fatalf("seed Issue: %v", err)
-	}
-	info, err := certinfo.Inspect(issued.CertificatePEM)
-	if err != nil {
-		t.Fatalf("seed inspect: %v", err)
-	}
-	nb, na := info.NotBefore, info.NotAfter
-	c, err := s.UpsertCertificate(ctx, store.Certificate{
-		TenantID: tenantID, Subject: info.Subject, SANs: info.DNSNames, Issuer: info.Issuer,
-		Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint, KeyAlgorithm: info.KeyAlgorithm,
-		NotBefore: &nb, NotAfter: &na, Source: "seed",
-	})
-	if err != nil {
-		t.Fatalf("seed Upsert: %v", err)
-	}
-	return c
-}
-
 func countOutbox(t *testing.T, s *store.Store, tenantID, destination string) int {
 	t.Helper()
 	pending, err := orchestrator.NewOutbox(s).Pending(context.Background(), tenantID)
@@ -133,9 +113,9 @@ func countOutbox(t *testing.T, s *store.Store, tenantID, destination string) int
 func TestCertificateAutoRenewsAtThreshold(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
-	m, svc := newLifecycleManager(t, s, lifecycle.Config{RenewBefore: 24 * time.Hour, AlertBefore: 7 * 24 * time.Hour, TTL: 90 * 24 * time.Hour})
+	m, svc, log := newLifecycleManagerWithLog(t, s, lifecycle.Config{RenewBefore: 24 * time.Hour, AlertBefore: 7 * 24 * time.Hour, TTL: 90 * 24 * time.Hour})
 
-	old := seedInventoryCert(t, s, svc, tenantA, "renew.acme.test", 1*time.Hour) // within 24h window
+	old := seedInventoryCertEventSourced(t, s, svc, log, tenantA, "renew.acme.test", 1*time.Hour) // within 24h window
 
 	n, err := m.RenewExpiring(ctx, tenantA)
 	if err != nil {
@@ -186,9 +166,9 @@ func TestCertificateAutoRenewsAtThreshold(t *testing.T) {
 func TestRevocationPropagates(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
-	m, svc := newLifecycleManager(t, s, lifecycle.Config{RenewBefore: 24 * time.Hour, AlertBefore: 7 * 24 * time.Hour, TTL: 90 * 24 * time.Hour})
+	m, svc, log := newLifecycleManagerWithLog(t, s, lifecycle.Config{RenewBefore: 24 * time.Hour, AlertBefore: 7 * 24 * time.Hour, TTL: 90 * 24 * time.Hour})
 
-	old := seedInventoryCert(t, s, svc, tenantA, "revoke.acme.test", 720*time.Hour)
+	old := seedInventoryCertEventSourced(t, s, svc, log, tenantA, "revoke.acme.test", 720*time.Hour)
 
 	if err := m.Revoke(ctx, tenantA, old.ID, "keyCompromise", "rev-1"); err != nil {
 		t.Fatalf("Revoke: %v", err)
@@ -218,9 +198,9 @@ func TestRevocationPropagates(t *testing.T) {
 func TestRotationProducesNewCredentialAndRetiresOld(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
-	m, svc := newLifecycleManager(t, s, lifecycle.Config{RenewBefore: 24 * time.Hour, AlertBefore: 7 * 24 * time.Hour, TTL: 90 * 24 * time.Hour})
+	m, svc, log := newLifecycleManagerWithLog(t, s, lifecycle.Config{RenewBefore: 24 * time.Hour, AlertBefore: 7 * 24 * time.Hour, TTL: 90 * 24 * time.Hour})
 
-	old := seedInventoryCert(t, s, svc, tenantA, "rotate.acme.test", 720*time.Hour) // not near expiry
+	old := seedInventoryCertEventSourced(t, s, svc, log, tenantA, "rotate.acme.test", 720*time.Hour) // not near expiry
 
 	fresh, err := m.Rotate(ctx, tenantA, old.ID, "rot-1")
 	if err != nil {
@@ -254,10 +234,10 @@ func TestRotationProducesNewCredentialAndRetiresOld(t *testing.T) {
 func TestExpiryAlertsFireBeforeExpiry(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
-	m, svc := newLifecycleManager(t, s, lifecycle.Config{RenewBefore: 1 * time.Hour, AlertBefore: 7 * 24 * time.Hour, TTL: 90 * 24 * time.Hour})
+	m, svc, log := newLifecycleManagerWithLog(t, s, lifecycle.Config{RenewBefore: 1 * time.Hour, AlertBefore: 7 * 24 * time.Hour, TTL: 90 * 24 * time.Hour})
 
-	soon := seedInventoryCert(t, s, svc, tenantA, "soon.acme.test", 72*time.Hour)      // 3d: inside 7d window
-	later := seedInventoryCert(t, s, svc, tenantA, "later.acme.test", 60*24*time.Hour) // 60d: outside
+	soon := seedInventoryCertEventSourced(t, s, svc, log, tenantA, "soon.acme.test", 72*time.Hour)      // 3d: inside 7d window
+	later := seedInventoryCertEventSourced(t, s, svc, log, tenantA, "later.acme.test", 60*24*time.Hour) // 60d: outside
 
 	n, err := m.AlertExpiring(ctx, tenantA)
 	if err != nil {
