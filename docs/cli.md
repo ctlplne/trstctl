@@ -109,6 +109,13 @@ does not need `TRSTCTL_SERVER`, a token, or a running control plane. It verifies
 the canonical JWS envelope and the exact CSV, NDJSON, Splunk HEC (`splunk-hec`),
 and Microsoft Sentinel (`sentinel`) record-stream shapes served by `audit export`.
 
+A JWS export accepts at most 512 KiB of serialized audit payload. Larger queries
+return HTTP 413 with code `audit_export_too_large`. Choose `--format ndjson` to
+export the same range with its chain and timestamp trailer, or reduce the time
+range or record limit. The product never silently truncates the requested JWS
+range or changes its format. Pin TSA trust for an independently verifiable
+record stream, as described below.
+
 Bootstrap trust **before disconnecting** from the deployment:
 
 ```bash
@@ -1032,4 +1039,3 @@ server's tenant scope, RBAC, rate limit and audit apply exactly as for REST; a
 refused call comes back as a readable tool error (`isError: true`), not as a
 transport failure. Write tools appear only when the control plane exposes them
 (`TRSTCTL_AI_MCP_WRITE_TOOLS=true`) and still require `certs:issue`.
-

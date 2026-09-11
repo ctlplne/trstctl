@@ -49,7 +49,7 @@ func auditQueryParams() []param {
 		{name: "as_of", typ: "integer", desc: "point-in-time: only tenant-local audit events with sequence <= this"},
 		{name: "q", typ: "string", desc: "case-insensitive substring match on event type, privacy-filtered actor subject or role, or event data"},
 		{name: "limit", typ: "integer", desc: "maximum records to return"},
-		{name: "format", typ: "string", desc: "export encoding: jws (default, signed bundle), ndjson, csv, splunk-hec, sentinel"},
+		{name: "format", typ: "string", desc: "export encoding: jws (default, signed bundle; 512 KiB serialized payload maximum), ndjson, csv, splunk-hec, sentinel. Oversized JWS downloads return 413 audit_export_too_large; use a record stream or a smaller query."},
 	}
 }
 
@@ -152,7 +152,13 @@ func (a *API) exportAudit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if format == auditanchor.FormatJWS {
-		signed, bundle, err := a.audit.ExportWithBundle(r.Context(), q)
+		signed, bundle, err := a.audit.ExportDownload(r.Context(), q)
+		if errors.Is(err, audit.ErrJWSExportTooLarge) {
+			a.writeProblem(w, problem.New(http.StatusRequestEntityTooLarge,
+				"This range is too large for a JWS export. Export as NDJSON (format=ndjson), or narrow the time range or record limit.").
+				WithExtension("code", "audit_export_too_large"))
+			return
+		}
 		if err != nil {
 			a.writeError(w, err)
 			return

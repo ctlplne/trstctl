@@ -40,6 +40,17 @@ var ErrMissingTenant = errors.New("audit: query requires a tenant id (AN-1)")
 // the service was configured only for tenant-scoped search.
 var ErrMissingSigner = errors.New("audit: signing key is required for signed export")
 
+// MaxJWSExportPayloadBytes bounds an operator download's serialized Bundle before
+// it enters the signer. A compact JWS encodes the payload and adds a header, signature
+// and public signer identity. 512 KiB leaves room for all of those inside the
+// isolated signer's unchanged 1 MiB request/response limit. Record-stream
+// exports do not send the records to the signer and do not use this format cap.
+const MaxJWSExportPayloadBytes = 512 << 10
+
+// ErrJWSExportTooLarge asks the caller to choose a record stream or smaller
+// query. It is a format constraint, not a failed signer-health observation.
+var ErrJWSExportTooLarge = errors.New("audit: JWS export exceeds the payload size limit")
+
 // Query selects a slice of the audit log. TenantID is required for tenant
 // isolation; the zero value of the other fields means "unbounded".
 type Query struct {
@@ -347,6 +358,18 @@ func (s *Service) Export(ctx context.Context, q Query) (string, error) {
 // anchor) must use the returned Bundle. Running Search again creates a race in
 // which the signature covers one head and the timestamp covers another.
 func (s *Service) ExportWithBundle(ctx context.Context, q Query) (string, Bundle, error) {
+	return s.exportWithBundle(ctx, q, 0)
+}
+
+// ExportDownload signs one operator-selected query with the documented download
+// budget. Automatic callers that require a complete JWS (such as terminal
+// incident evidence) retain Export/ExportWithBundle and their existing signer
+// transport limits; the download policy must not reduce their usable budget.
+func (s *Service) ExportDownload(ctx context.Context, q Query) (string, Bundle, error) {
+	return s.exportWithBundle(ctx, q, MaxJWSExportPayloadBytes)
+}
+
+func (s *Service) exportWithBundle(ctx context.Context, q Query, maxPayloadBytes int) (string, Bundle, error) {
 	if s.signer == nil {
 		return "", Bundle{}, ErrMissingSigner
 	}
@@ -361,6 +384,9 @@ func (s *Service) ExportWithBundle(ctx context.Context, q Query) (string, Bundle
 	payload, err := json.Marshal(bundle)
 	if err != nil {
 		return "", Bundle{}, err
+	}
+	if maxPayloadBytes > 0 && len(payload) > maxPayloadBytes {
+		return "", Bundle{}, ErrJWSExportTooLarge
 	}
 	signed, err := s.signer.SignArtifact(jose.ArtifactAuditExport, payload)
 	if err != nil {
