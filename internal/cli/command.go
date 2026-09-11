@@ -264,7 +264,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"connector", "target", "update"}, Method: "PUT", Path: "/api/v1/connectors/targets/{id}", Body: bodyFile, Summary: "Replace a deployment connector target"},
 	{Name: []string{"connector", "target", "delete"}, Method: "DELETE", Path: "/api/v1/connectors/targets/{id}", Summary: "Delete a deployment connector target"},
 	{Name: []string{"connector", "target", "bind"}, Method: "POST", Path: "/api/v1/identities/{id}/connector-target", Body: bodyFile, Summary: "Bind an identity to a deployment connector target"},
-	{Name: []string{"connector", "target", "test"}, Method: "POST", Path: "/api/v1/connectors/targets/{id}/test", Body: bodyFile, Summary: "Preview connector target changes without writing"},
+	{Name: []string{"connector", "target", "test"}, Method: "POST", Path: "/api/v1/connectors/targets/{id}/test", Body: bodyNone, Summary: "Preview connector target changes without writing"},
 	{Name: []string{"connector", "target", "deploy"}, Method: "POST", Path: "/api/v1/connectors/targets/{id}/deploy", Body: bodyFile, Summary: "Deploy an identity through a connector target"},
 	{Name: []string{"connector", "target", "rollback"}, Method: "POST", Path: "/api/v1/connectors/targets/{id}/rollback", Body: bodyFile, Summary: "Queue restoration of a proven connector predecessor"},
 	{Name: []string{"notifications", "channels"}, Method: "GET", Path: "/api/v1/notification-channels", Summary: "List supported and configured notification channel families"},
