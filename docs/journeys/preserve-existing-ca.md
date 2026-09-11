@@ -257,23 +257,55 @@ and work the warning.
 
 Use a disposable certificate for this step. Record its exact inventory ID, serial,
 fingerprint, and issuing authority before changing it. If it is serving traffic,
-first deploy and independently verify a replacement with a new key. Include any
+first deploy and independently verify a replacement with a new key. Identity-wide
+revocation includes the identity's current and historical certificates, so keep
+the replacement under a separate identity if it must remain valid. Include any
 predecessor restored during rollback in the containment plan: a `superseded`
 inventory row can still be the certificate served by the workload.
 
-Current limitation: the identity revocation workflow does not dispatch revocation
-to the selected external CA. It can mark an external certificate `revoked` and
-publish its serial under trstctl's own CA. That CRL cannot revoke a certificate
-signed by a different authority. The exact-certificate bulk-revoke route instead
-returns a failed item for an unsupported issuer, even when HTTP status is 200.
-Neither result proves external-CA containment. Use the issuing CA's supported
-revocation procedure and record this manual step as an automation gap.
+The identity workflow resolves each certificate's authority from retained issuance
+evidence and dispatches through that integration's revocation adapter. A later
+change to the identity's selected CA does not redirect revocation. Selection uses
+exact issuance and delivery bindings, including superseded certificates restored
+by rollback and certificates minted for host jobs that never finished deployment.
+An external certificate is recorded as revoked only after its authority accepts
+the request; its serial is not added to trstctl's own CA ledger or CRL.
+
+Preview and execute the identity transition with `identities:write` permission:
+
+```sh
+printf '%s\n' '{"to":"revoked","reason":"keyCompromise"}' > revoke-plan.json
+trstctl-cli identities transition-preview <identity-id> -f revoke-plan.json \
+  > revoke-preview.json
+jq '{ready,from,to,expected_version,side_effect_destination,warnings}' revoke-preview.json
+# After reviewing the plan and confirming ready=true:
+jq --argjson version "$(jq .expected_version revoke-preview.json)" \
+  '. + {expected_version:$version}' revoke-plan.json > revoke-execute.json
+trstctl-cli --idempotency-key preserve-ca-revoke-001 \
+  identities transition <identity-id> -f revoke-execute.json
+```
+
+This is asynchronous: the identity's `revoked` status acknowledges the intent,
+not the external outcome. Missing issuance evidence, unavailable credentials, or
+an unsupported revocation adapter leave the worker unsuccessful; no different CA
+is substituted. The exact-certificate bulk-revoke route still rejects unsupported
+external issuers in individual result items, even when HTTP status is 200. For
+those integrations, use the issuing CA's supported revocation procedure and
+record the manual step as an automation gap. Certificates incorrectly marked
+revoked by older versions require separate reconciliation with their issuer;
+upgrading does not establish that those earlier revocations actually happened.
 
 Confirm the issuing authority accepted the exact serial and factual revocation
 reason. Where that authority publishes CRL or OCSP data, verify its signature and
 status, then use a stock client configured to enforce revocation to prove that the
 old certificate is rejected. Record any authority or client enforcement limit.
 A normal TLS handshake does not usually check revocation by itself.
+
+Current containment limitation: rollback can restore a predecessor that has
+already been revoked for key compromise. Do not use rollback to recover that
+identity; remove the compromised material through your target's operating
+procedure and independently verify the safe replacement. This remains an
+automation gap even when the CA has accepted revocation.
 
 Verify that the workload serves the replacement and cannot restore compromised
 key material through rollback. When the identity is no longer needed, retire it
@@ -301,8 +333,9 @@ following evidence:
   client; the workload serves the replacement and cannot restore compromised material;
 - retirement stops future automation and retains the complete lifecycle audit export.
 
-The current external-CA revocation limitation above leaves this full-lifecycle gate
-open even when issuance, deployment, renewal, alerts, and rollback succeed.
+The rollback containment and unsupported-authority limits above leave this
+full-lifecycle gate open even when issuance, deployment, renewal, alerts, and
+upstream revocation succeed.
 
 Until every item is evidenced, describe the demonstrated boundary precisely: trstctl
 can discover the existing certificate and create one CA-explicit, fingerprint-bound

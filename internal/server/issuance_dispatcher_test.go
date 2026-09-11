@@ -1316,6 +1316,7 @@ func newIssuanceDispatcherHarness(t *testing.T) *issuanceDispatcherHarness {
 	idem := orchestrator.NewIdempotency(st)
 	orch := orchestrator.NewOrchestrator(log, st, outbox)
 	handler := &issuanceDispatcher{
+		chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER}),
 		issue: func(_ context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) (crypto.IssuedLeaf, error) {
 			return crypto.SignLeafFromCSRWithValidity(caDER, caKey, csrDER, ttl, leafProfile)
 		},

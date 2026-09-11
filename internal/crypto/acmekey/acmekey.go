@@ -515,6 +515,13 @@ func (d *Driver) RevokeChain(ctx context.Context, certDER []byte, reason int) er
 		crlReason = acme.CRLReasonUnspecified
 	}
 	if err := d.client.RevokeCert(ctx, nil, certDER, crlReason); err != nil {
+		// The outbox may retry after the CA accepted revocation but before local
+		// completion committed. RFC 8555's exact alreadyRevoked problem confirms
+		// the requested terminal state; other 4xx failures are not success.
+		var problem *acme.Error
+		if errors.As(err, &problem) && problem.ProblemType == "urn:ietf:params:acme:error:alreadyRevoked" {
+			return nil
+		}
 		return fmt.Errorf("acmekey: revoke: %w", err)
 	}
 	return nil

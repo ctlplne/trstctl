@@ -72,6 +72,22 @@ func (c factoryExternalCA) Issue(ctx context.Context, req ca.IssueRequest) (ca.C
 	return implementation.Issue(ctx, req)
 }
 
+// Revoke uses the same short-lived factory as issuance. No standing upstream
+// credential or client is retained in the registry between worker attempts.
+func (c factoryExternalCA) Revoke(ctx context.Context, req ca.RevokeRequest) error {
+	implementation, cleanup, err := c.factory(ctx)
+	if cleanup != nil {
+		defer cleanup()
+	}
+	if err != nil {
+		return err
+	}
+	if implementation == nil {
+		return errors.New("external CA factory returned no implementation")
+	}
+	return ca.RevokeThrough(ctx, implementation, req)
+}
+
 type externalCAOperationRefContextKey struct{}
 
 // diagnosticExternalCA observes the raw provider refusal before AD CS's
@@ -111,9 +127,10 @@ type externalCARegistry struct {
 }
 
 type externalCAEntry struct {
-	meta     api.ExternalCA
-	tenantID string
-	svc      *ca.IssuanceService
+	meta         api.ExternalCA
+	tenantID     string
+	svc          *ca.IssuanceService
+	revocationCA ca.CA
 }
 
 func (s *Server) buildExternalCAService(d Deps, idem *orchestrator.Idempotency) (api.ExternalCAService, error) {
@@ -164,7 +181,7 @@ func (s *Server) buildExternalCAService(d Deps, idem *orchestrator.Idempotency) 
 			replaySafety = ca.ExternalIssueReconciled
 		}
 		reg.byID[id] = externalCAEntry{
-			meta: meta, tenantID: strings.TrimSpace(cfg.TenantID),
+			meta: meta, tenantID: strings.TrimSpace(cfg.TenantID), revocationCA: implementation,
 			svc: ca.NewIssuanceService(implementation, idem, s.outbox, d.Store, ca.WithAuditLog(d.Log), ca.WithLifetimeWarning(d.Logger, d.LifecycleAlertBefore),
 				ca.WithOutboxIssueWorker(id, s.wakeOutbox), ca.WithExternalIssueReplaySafety(replaySafety)),
 		}

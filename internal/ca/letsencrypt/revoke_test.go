@@ -91,3 +91,31 @@ func TestLetsEncryptIsInTheRevokeMatrix(t *testing.T) {
 	}
 	var _ ca.Revoker = (*letsencrypt.Plugin)(nil)
 }
+
+// An acknowledged revoke whose local completion was interrupted may be retried.
+// Only the exact alreadyRevoked problem proves the authority reached that state;
+// authorization failures must still propagate.
+func TestRevocationRetryAcceptsOnlyAlreadyRevoked(t *testing.T) {
+	for _, problem := range []string{"alreadyRevoked", "unauthorized"} {
+		t.Run(problem, func(t *testing.T) {
+			srv, err := acmefake.NewServer()
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(srv.Close)
+			plugin := newRemoteAccountPlugin(t, "letsencrypt", srv.DirectoryURL())
+			issued, err := plugin.Issue(t.Context(), ca.IssueRequest{TenantID: "tenant-a", CSR: buildCSR(t, "retry.example.test", []string{"retry.example.test"}), DNSNames: []string{"retry.example.test"}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			srv.SetRevocationProblem("urn:ietf:params:acme:error:" + problem)
+			err = plugin.Revoke(t.Context(), ca.RevokeRequest{TenantID: "tenant-a", Serial: issued.Serial, CertificatePEM: issued.CertificatePEM, ReasonCode: 1})
+			if problem == "alreadyRevoked" && err != nil || problem != "alreadyRevoked" && err == nil {
+				t.Fatalf("%s returned %v", problem, err)
+			}
+			if len(srv.Revocations()) != 1 {
+				t.Fatal("revocation never reached the authority")
+			}
+		})
+	}
+}

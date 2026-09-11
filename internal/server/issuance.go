@@ -1058,61 +1058,6 @@ func (d *issuanceDispatcher) auditProfileDecision(ctx context.Context, tenantID,
 	return err
 }
 
-// handleRevoke processes a revocation.publish outbox entry (the side effect of an
-// *→revoked lifecycle transition): it actually invalidates the identity's issued
-// certificate(s). For each active issued cert it emits a certificate.revoked
-// event whose projection flips both the inventory status and the OCSP/CRL serial
-// row. It is idempotent on the outbox key (AN-5): a redelivery returns the
-// recorded result rather than revoking again, and the projection keeps the first
-// revocation time. All access is tenant-scoped under RLS (AN-1).
-//
-// Note: the served binary's CA key lives in the signer (AN-4). This handler makes
-// revocation real and recorded — the certificate stops validating and the serial
-// is on record in ca_issued_certs — and the served OCSP responder and CRL endpoint
-// (EXC-REVOKE-01, internal/server/revocation.go) then publish that revocation to
-// relying parties, signing through the signer so the CA key never enters the
-// control plane.
-func (d *issuanceDispatcher) handleRevoke(ctx context.Context, m orchestrator.Message) error {
-	var p transitionTrigger
-	if err := json.Unmarshal(m.Payload, &p); err != nil {
-		return fmt.Errorf("server: decode revocation.publish payload: %w", err)
-	}
-	if p.IdentityID == "" || p.To != string(orchestrator.StateRevoked) {
-		return nil
-	}
-	_, err := d.idem.Do(ctx, m.TenantID, "revoke:"+m.IdempotencyKey, func(ctx context.Context) ([]byte, error) {
-		ident, err := d.store.GetIdentity(ctx, m.TenantID, p.IdentityID)
-		if err != nil {
-			return nil, fmt.Errorf("server: load identity %s: %w", p.IdentityID, err)
-		}
-		certs, err := d.store.ListActiveIssuedCertificatesForIdentity(ctx, m.TenantID, ident.OwnerID, ident.Name)
-		if err != nil {
-			return nil, fmt.Errorf("server: find issued certs for identity %s: %w", p.IdentityID, err)
-		}
-		reason := p.Reason
-		if reason == "" {
-			reason = string(crypto.RevocationReasonUnspecified)
-		}
-		reasonCode := crypto.CRLReasonCode(crypto.RevocationReason(reason))
-		now := time.Now()
-		for _, c := range certs {
-			if c.Serial == "" {
-				continue
-			}
-			// Flip inventory and responder state through one projected event (AN-2),
-			// so a Rebuild() reproduces both from the log.
-			if err := d.orch.RevokeCertificateForCA(ctx, m.TenantID, c.Fingerprint, c.Serial, IssuingCAID(), reason, reasonCode, now); err != nil {
-				return nil, err
-			}
-		}
-		return []byte(fmt.Sprintf("revoked:%d", len(certs))), nil
-	})
-	if err != nil {
-		return err
-	}
-	return d.publishTenantCRL(ctx, m.TenantID)
-}
-
 func (d *issuanceDispatcher) publishTenantCRL(ctx context.Context, tenantID string) error {
 	if d.publishCRL == nil {
 		return nil

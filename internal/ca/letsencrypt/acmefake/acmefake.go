@@ -38,7 +38,8 @@ type Server struct {
 	accountRegistered bool
 	certs             map[string][]byte // path -> PEM chain
 	// revocations records revoke-cert requests that actually arrived (epic R2).
-	revocations []string
+	revocations       []string
+	revocationProblem string
 	// B7: domain-validation mode. Off by default so existing tests keep
 	// exercising what they were written for.
 	requireDV        bool
@@ -62,6 +63,13 @@ func NewServer() (*Server, error) {
 
 // DirectoryURL is the ACME directory endpoint to configure a client with.
 func (s *Server) DirectoryURL() string { return s.ts.URL + "/directory" }
+
+// SetRevocationProblem configures a typed ACME refusal for client retry tests.
+func (s *Server) SetRevocationProblem(problem string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.revocationProblem = problem
+}
 
 // CACertificatePEM is the fake CA's certificate (the trust anchor for issued
 // chains).
@@ -247,7 +255,14 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		s.mu.Lock()
 		s.revocations = append(s.revocations, string(body))
+		problem := s.revocationProblem
 		s.mu.Unlock()
+		if problem != "" {
+			w.Header().Set("Content-Type", "application/problem+json")
+			w.WriteHeader(http.StatusBadRequest)
+			writeJSON(w, map[string]string{"type": problem, "detail": "configured revocation refusal"})
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 	case strings.HasPrefix(r.URL.Path, "/cert/"):
 		s.mu.Lock()
