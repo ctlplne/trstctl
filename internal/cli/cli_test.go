@@ -57,6 +57,23 @@ func TestCapabilitiesListUsesTheAuthenticatedReadSurface(t *testing.T) {
 	}
 }
 
+func TestIdentityIssuanceResultPreservesExactRequestKey(t *testing.T) {
+	var captured capture
+	srv := mockServer(t, http.StatusOK,
+		`{"identity_id":"identity-1","request_key":"issue + & retry","state":"pending"}`, &captured)
+	env := cli.Env{Server: srv.URL, Token: "issuer-token", HTTPClient: srv.Client()}
+	code, stdout, stderr := run(t, []string{"identities", "issuance-result", "identity-1", "--request_key", "issue + & retry"}, env, "")
+	if code != 0 || stderr != "" || !strings.Contains(stdout, `"state": "pending"`) {
+		t.Fatalf("issuance result = exit %d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if captured.Method != http.MethodGet || captured.Path != "/api/v1/identities/identity-1/issuance-result" ||
+		captured.Query != "request_key=issue+%2B+%26+retry" ||
+		captured.Header.Get("Idempotency-Key") != "" || len(captured.Body) != 0 {
+		t.Fatalf("issuance result request = %s %s query=%q key=%q body=%s", captured.Method, captured.Path,
+			captured.Query, captured.Header.Get("Idempotency-Key"), captured.Body)
+	}
+}
+
 func TestManagedKeyCustodyAndPreviewUseSecretFreeReadSurfaces(t *testing.T) {
 	var custody capture
 	custodyServer := mockServer(t, http.StatusOK,

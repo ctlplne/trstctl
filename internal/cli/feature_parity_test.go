@@ -280,8 +280,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// DP2-057's three `profiles approvals` commands (list, get, approve) raised
 	// it to 451, mapped onto the certificate-profile row F53 beside the rest of
 	// the profile surface whose governed edits they review.
-	if len(out) != 451 {
-		t.Fatalf("CLI commands = %d, want 451", len(out))
+	// F4's issuance-result read completes asynchronous certificate retrieval.
+	if len(out) != 452 {
+		t.Fatalf("CLI commands = %d, want 452", len(out))
 	}
 	return out
 }

@@ -233,8 +233,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// F79's subject-erasure and retention reviews raise it to 435. F6's exact,
 	// effect-free endpoint-binding review raises it to 436, and the served
 	// profile-edit approval review surface (DP2-057) to 439.
-	if len(out) != 439 {
-		t.Fatalf("OpenAPI operationIds = %d, want 439", len(out))
+	// The asynchronous first-certificate result adds one read operation,
+	// mapped to F4 alongside the issuance transition it observes.
+	if len(out) != 440 {
+		t.Fatalf("OpenAPI operationIds = %d, want 440", len(out))
 	}
 	return out
 }

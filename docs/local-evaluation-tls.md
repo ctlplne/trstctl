@@ -99,7 +99,8 @@ certificate, with TLS validation fully on:
 
 ```sh
 # 1. An empty profile directory and the certificate you inspected above.
-mkdir -p ./trstctl-eval-profile && cp control-plane.crt ./trstctl-eval-profile/
+mkdir -p ./trstctl-eval-profile
+cp trstctl-eval-control-plane.crt ./trstctl-eval-profile/control-plane.crt
 
 # 2. Build the profile's certificate database with NSS certutil (here from a
 #    throwaway container, so nothing is installed on the workstation).
@@ -109,11 +110,23 @@ docker run --rm -v "$PWD/trstctl-eval-profile:/profile" alpine:3.20 sh -c \
    certutil -L -d sql:/profile'
 
 # 3. Open Firefox on that profile only.
-firefox --profile "$PWD/trstctl-eval-profile" https://127.0.0.1:9443
+firefox --profile "$PWD/trstctl-eval-profile" https://localhost:8443
 ```
 
-`scripts/dev/isolated-firefox-profile.sh` does the same three steps. Delete the
-directory when you finish; no other profile or store ever learned about the
+The helper imports the certificate and prints the launch command for the blank
+stack:
+
+```sh
+scripts/dev/isolated-firefox-profile.sh ./trstctl-eval-control-plane.crt ./trstctl-eval-profile
+```
+
+For the demo, pass its certificate, a separate profile, and its URL explicitly:
+
+```sh
+scripts/dev/isolated-firefox-profile.sh ./trstctl-demo-control-plane.crt ./trstctl-demo-profile https://127.0.0.1:9443
+```
+
+Delete the directory when you finish; no other profile or store ever learned about the
 certificate. The same profile drives headless Playwright (`launchPersistentContext`)
 for scripted evaluations without `ignoreHTTPSErrors`.
 

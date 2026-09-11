@@ -2718,7 +2718,8 @@ func TestGettingStartedUsesComposeCustodyAndPersistentTrust(t *testing.T) {
 	for _, want := range []string{
 		"docker compose -f deploy/docker/docker-compose.yml exec -T trstctl",
 		"/usr/local/bin/trstctl token create",
-		"--cacert \"$TRSTCTL_CA_FILE\"",
+		`export TRSTCTL_CA_FILE="$PWD/trstctl-eval-ca.pem"`,
+		`--ca-file "$PWD/trstctl-eval-ca.pem"`,
 		"with the same `trstctldata` volume keeps both CA pins valid",
 		"Do not run an unconfigured local binary",
 	} {
@@ -2913,14 +2914,22 @@ func TestDesign001FirstCertificateDocsMatchServedRAGate(t *testing.T) {
 		for _, want := range []string{
 			"TRSTCTL_BOOTSTRAP_TOKEN",
 			"TRSTCTL_ISSUER_TOKEN",
-			"not the bootstrap token",
+			"delegation cannot grant a permission the caller does not hold",
 			"certs:issue",
-			`echo '{"to":"issued"}' | TRSTCTL_TOKEN="$TRSTCTL_ISSUER_TOKEN" trstctl-cli identities transition`,
+			`export TRSTCTL_TOKEN="$TRSTCTL_ISSUER_TOKEN"`,
+			`"$TRSTCTL_CLI" --idempotency-key "$request_key" identities transition "$ident"`,
+			`-f "$certdir/issue-request.json"`,
+			`{to:"issued",subject_csr_pem:$csr}`,
 		} {
 			if !strings.Contains(normalized, want) {
 				t.Errorf("DESIGN-001: %s should name the bootstrap-vs-issuer credential boundary with %q", doc.name, want)
 			}
 		}
+		assertInOrder(t, doc.name+" issuer credential before CSR issuance", normalized, []string{
+			`export TRSTCTL_TOKEN="$TRSTCTL_ISSUER_TOKEN"`,
+			`"$TRSTCTL_CLI" --idempotency-key "$request_key" identities transition "$ident"`,
+			`-f "$certdir/issue-request.json"`,
+		})
 	}
 	if !strings.Contains(bootstrap, "certs:issue is INTENTIONALLY withheld") {
 		t.Error("DESIGN-001: bootstrap token code should still document that certs:issue is withheld")

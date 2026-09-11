@@ -172,6 +172,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"identities", "create"}, Method: "POST", Path: "/api/v1/identities", Body: bodyFile, Summary: "Create an identity"},
 	{Name: []string{"identities", "list"}, Method: "GET", Path: "/api/v1/identities", Query: []string{"limit", "cursor"}, Summary: "List identities"},
 	{Name: []string{"identities", "get"}, Method: "GET", Path: "/api/v1/identities/{id}", Summary: "Get an identity"},
+	{Name: []string{"identities", "issuance-result"}, Method: "GET", Path: "/api/v1/identities/{id}/issuance-result", Query: []string{"request_key"}, Summary: "Read the public certificate result using the original issuance Idempotency-Key"},
 	{Name: []string{"identities", "transition-preview"}, Method: "POST", Path: "/api/v1/identities/{id}/transitions/preview", Body: bodyFile, ReadOnly: true, Summary: "Review the exact lifecycle transition plan without changing state"},
 	{Name: []string{"identities", "transition"}, Method: "POST", Path: "/api/v1/identities/{id}/transitions", Body: bodyFile, Summary: "Apply a lifecycle transition"},
 	{Name: []string{"identities", "approve"}, Method: "POST", Path: "/api/v1/identities/{id}/approvals", Body: bodyApprovalFile, Summary: "Approve an identity action using its exact request ID and intent digest"},

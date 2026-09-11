@@ -162,21 +162,77 @@ configuration.
 
 ### Issue your first cert
 
-Name the service the certificate belongs to and click **Issue**. The action
-uses your signed-in operator credential, which carries certificate-issuance
-authority; setup bootstrap tokens and agent enrollment tokens cannot issue.
-trstctl creates the [owner](glossary.md#owner) and identity and issues the certificate through the
-internal signer-backed CA, then links you to the certificate inventory. From
-here trstctl tracks the certificate and alerts before expiry; renewal is a
-manual, one-click action today.
+The wizard needs an accountable [owner](glossary.md#owner) and a public certificate signing request
+(CSR). The CSR contains the workload's public key and requested DNS name; the
+matching private key stays on that workload. The form never creates or accepts a
+private key.
 
-!!! note "Measured issuance time"
-    In the end-to-end integration test — assembled control plane,
-    out-of-process signer — the transition to *issued* drives the outbox
-    handler to mint and record the certificate in tens of milliseconds
-    (`TestAssembledServerIssuesCertIntoInventory`, ~20 ms). The running
-    server's outbox dispatcher polls about once a second, so the certificate
-    appears within roughly a second of clicking **Issue**.
+For this disposable evaluation, use `payments.svc` as the service name and DNS
+name. On the machine that will hold its private key, run these commands with
+OpenSSL 1.1.1 or newer (use a new directory so an existing key is not overwritten):
+
+```bash
+(
+set -eu
+umask 077
+mkdir trstctl-first-certificate
+cd trstctl-first-certificate
+openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes \
+  -keyout payments.key -out payments.csr \
+  -subj '/CN=payments.svc' -addext 'subjectAltName=DNS:payments.svc'
+openssl req -in payments.csr -noout -verify -subject
+cat payments.csr
+)
+```
+
+The subshell stops if the directory already exists and leaves your terminal in
+the repository root. Files are under `trstctl-first-certificate/`.
+`payments.key` is the private key; `umask 077` makes new files readable only by
+your user. Keep that key on this machine. `payments.csr` is public and is the only
+file to paste into the wizard. A real deployment must request the DNS name its
+clients actually use; this example does not configure DNS or install a certificate
+on a service.
+
+Fill in every field:
+
+| Field | Disposable evaluation value |
+|---|---|
+| Service name | `payments.svc` |
+| Application ID | `payments` |
+| Environment | `evaluation` |
+| Alert contact | `eval-admin@trstctl.local` |
+| Ownership confirmation | Confirm that this application owns the test certificate |
+| Public certificate request (CSR) | The complete `payments.csr`, including its BEGIN/END lines |
+
+The evaluation email is a local fixture, not an alert destination. Production
+ownership must name an accountable application and a monitored contact.
+
+Click **Issue certificate** using the signed-in operator, who has issuance
+authority. Setup bootstrap tokens and agent enrollment tokens cannot issue. The
+wizard creates and attests the owner, creates its identity, and submits issuance
+to the separate signer. Keep the page open until it shows the recorded issuer,
+certificate fingerprint, and **Download leaf certificate**. In this fresh-stack
+walk, the result appeared after approximately four seconds; accepting the request
+is not yet proof that a certificate exists.
+
+Download the public leaf and, if needed, the returned public chain. The private
+key remains `payments.key`; downloading a chain does not install trust or deploy
+the certificate. Use **Open certificate inventory** to confirm the subject, owner,
+and expiry, then **Operations → Change history** to inspect the recorded changes.
+From here trstctl tracks the certificate. Configuring alert delivery, deployment,
+and renewal is separate work; the wizard does not prove those paths.
+
+If a response is interrupted, keep the page open and use its retained retry.
+After a reload or sign-out, inspect identity inventory and change history before
+starting another request; an empty form does not prove the previous request failed.
+See [First-certificate recovery](journeys/first-certificate.md).
+
+!!! note "Measured issuance and visible completion"
+    `TestAssembledServerIssuesCertIntoInventory` measures the assembled issuance
+    path in milliseconds, with a separate signer process. A running deployment
+    also waits for the outbox worker and the browser's result polling. The local
+    walk above measured about four seconds to a visible result; the integration
+    test timing is not a promise about browser latency.
 
 ### Prove served integrations
 
@@ -233,15 +289,17 @@ trstctl-agent --enroll-url https://localhost:8443 \
 ```
 
 When you intentionally replace the control-plane container, use the Compose
-project so its network-namespace companions are replaced with it:
+project and explicitly include the login bridge. Both containers must be
+replaced together because the bridge shares the control plane's network namespace:
 
 ```bash
-docker compose -f deploy/docker/docker-compose.yml up --detach --force-recreate trstctl
+docker compose -f deploy/docker/docker-compose.yml up --detach --force-recreate trstctl oidc-loopback
 ```
 
-Do not replace only the container with `docker rm` plus `docker run`; that
-bypasses Compose's dependency restart wiring and can leave the local login
-bridge in the retired network namespace. Recreating through Compose with the
+Selecting only `trstctl`, or using `docker rm` plus `docker run`, can leave the
+local login bridge in the retired network namespace. Existing sessions may still
+work while a new login fails with `token exchange failed`. Run the command above
+to replace both services, then verify a fresh SSO login. Recreating through Compose with the
 same `trstctldata` volume keeps both CA pins valid. Capture the HTTPS certificate
 again and rebuild `./trstctl-ca.pem` only after you replace/delete that volume
 or intentionally rotate the internal TLS identity. A missing volume is a new
@@ -278,13 +336,14 @@ host-local bootstrap verb. It talks straight to the deployment datastore (no
 existing HTTP token required) and prints a tenant-scoped token once:
 
 ```bash
-# Pick any UUID as your tenant id (a single-tenant deployment uses one well-known id).
+# Use the tenant selected by the blank evaluation profile. If you set
+# COMPOSE_E2E_TENANT before startup, use that same UUID here.
 # Run the server binary inside the Compose custody boundary: its PostgreSQL service
 # is deliberately not exposed to the host.
 umask 077
 docker compose -f deploy/docker/docker-compose.yml exec -T trstctl \
   /usr/local/bin/trstctl token create \
-  --tenant 11111111-1111-1111-1111-111111111111 \
+  --tenant 11111111-1111-4111-8111-111111111111 \
   --subject ci-bot > ./trstctl-api-token
 export TRSTCTL_BOOTSTRAP_TOKEN="$(cat ./trstctl-api-token)"
 # The trst_... token is printed once and the file is mode 0600 because of umask.
@@ -303,56 +362,110 @@ the platform but cannot self-issue a certificate. Use it as
 
 ## Prefer the command line?
 
-Everything the wizard does is scriptable with `trstctl-cli` (see the
-[CLI reference](cli.md)). Install a release binary or run `make build` and use
-`./bin/trstctl-cli`; Compose does not install it on the host. The bootstrap token creates the owner and identity;
-the served issue transition requires a distinct issuer/approver credential
-with `certs:issue` — not the bootstrap token. This registration-authority
-split is described in [Policy & governance](features/policy-and-governance.md).
+The CLI uses the same tenant, owner, CSR, and separate signer as the wizard (see
+the [CLI reference](cli.md)). Install a release binary or run `make build`; the
+commands below use `./bin/trstctl-cli`. For an installed release, set
+`TRSTCTL_CLI=trstctl-cli` first.
+
+First obtain **two distinct credentials**. Keep the bootstrap token from the
+previous section for owner and identity registration. It cannot issue or mint a
+token with issuance authority: delegation cannot grant a permission the caller
+does not hold. In the browser, sign in as the evaluation operator and open
+**Operations → People and roles → Sessions and access keys → Create access key**.
+Use subject `first-cert-issuer` and these comma-separated scopes:
+`identities:read,identities:write,certs:read,certs:issue`. Choose **Create access key**
+and copy the reveal-once value. In production, an authorized administrator must
+delegate these scopes according to your approval policy.
+
+Read that value without placing it in shell history or echoing it:
 
 ```bash
-export TRSTCTL_SERVER=https://localhost:8443
-export TRSTCTL_TOKEN="$TRSTCTL_BOOTSTRAP_TOKEN"
+printf 'Paste the issuer access key: ' >&2
+IFS= read -r -s TRSTCTL_ISSUER_TOKEN
+printf '\n'
+export TRSTCTL_ISSUER_TOKEN
+```
 
-# Copy the same certificate-only file you deliberately trusted for the browser.
-# The pin survives a normal restart with the same trstctldata volume; inspect a
-# new pin after replacing the volume or intentionally rotating TLS.
+Create the private key and public CSR under `trstctl-first-certificate/` using
+[Issue your first cert](#issue-your-first-cert) if you have not already done so.
+Reuse that CSR here; never upload `payments.key`. Then, from the repository root:
+
+```bash
+(
+set -euo pipefail
+umask 077
+TRSTCTL_CLI="${TRSTCTL_CLI:-./bin/trstctl-cli}"
+export TRSTCTL_SERVER=https://localhost:8443
+export TRSTCTL_TOKEN="${TRSTCTL_BOOTSTRAP_TOKEN:?Create the bootstrap token first}"
+: "${TRSTCTL_ISSUER_TOKEN:?Obtain an issuer key from the signed-in administrator}"
+certdir=trstctl-first-certificate
+test -s "$certdir/payments.csr"
+
+# Trust the same inspected public certificate used by the browser.
 docker compose -f deploy/docker/docker-compose.yml cp \
   trstctl:/public-trust/control-plane.crt ./trstctl-eval-ca.pem
 openssl x509 -in trstctl-eval-ca.pem -noout -fingerprint -sha256
 export TRSTCTL_CA_FILE="$PWD/trstctl-eval-ca.pem"
 
-# The blank Compose stack selects PROFILE=eval. Activate the assembled responders
-# for this authenticated tenant before using their public protocol endpoints.
-curl -fsS --cacert "$TRSTCTL_CA_FILE" \
-  -X POST "$TRSTCTL_SERVER/api/v1/setup/protocols/activate" \
-  -H "Authorization: Bearer $TRSTCTL_TOKEN" \
-  -H "Idempotency-Key: first-run-eval-protocols"
+"$TRSTCTL_CLI" --idempotency-key first-run-eval-protocols setup protocols activate
 
-# Create an owner and an identity; each command returns JSON with an id.
-# This creates the request-side records; nothing is issued yet.
-owner=$(echo '{"kind":"workload","name":"payments"}' | trstctl-cli owners create -f - | jq -r .id)
-ident=$(echo "{\"kind\":\"x509_certificate\",\"name\":\"payments.svc\",\"owner_id\":\"$owner\"}" \
-          | trstctl-cli identities create -f - | jq -r .id)
+# Stable keys recover the same first request when these exact commands are retried.
+owner=$(printf '%s' '{"kind":"workload","name":"payments","application_id":"payments","environment":"evaluation","email":"eval-admin@trstctl.local"}' \
+  | "$TRSTCTL_CLI" --idempotency-key first-cli-owner owners create -f - | jq -er .id)
+"$TRSTCTL_CLI" --idempotency-key first-cli-attestation owners attest "$owner"
+ident=$(jq -n --arg owner "$owner" \
+  '{kind:"x509_certificate",name:"payments.svc",owner_id:$owner}' \
+  | "$TRSTCTL_CLI" --idempotency-key first-cli-identity identities create -f - | jq -er .id)
+printf '%s\n' "$ident" > "$certdir/identity-id"
 
-# Mint or provide a separate issuer credential. A real SSO operator/approver
-# session works too; this local-eval example uses the served access-admin route.
-cat > issuer-token.json <<'JSON'
-{"subject":"first-cert-issuer","scopes":["identities:read","identities:write","certs:read","certs:issue"]}
-JSON
-trstctl-cli --idempotency-key first-cert-issuer-token access tokens create -f issuer-token.json > issuer-token-response.json
-export TRSTCTL_ISSUER_TOKEN="$(jq -r .token issuer-token-response.json)"
-rm -f issuer-token.json issuer-token-response.json
+# This body contains only the public CSR. Keep it unchanged for recovery.
+jq -n --rawfile csr "$certdir/payments.csr" \
+  '{to:"issued",subject_csr_pem:$csr}' > "$certdir/issue-request.json"
+request_key=first-cli-certificate-issue
+printf '%s\n' "$request_key" > "$certdir/issuance-request-key"
+export TRSTCTL_TOKEN="$TRSTCTL_ISSUER_TOKEN"
+"$TRSTCTL_CLI" --idempotency-key "$request_key" identities transition "$ident" \
+  -f "$certdir/issue-request.json"
 
-# Transition to "issued" with the issuer token: the running outbox dispatcher
-# mints the certificate through the internal signer-backed CA.
-echo '{"to":"issued"}' | TRSTCTL_TOKEN="$TRSTCTL_ISSUER_TOKEN" trstctl-cli identities transition "$ident" -f -
-sleep 2
-
-# The newly minted certificate is now in inventory: your first certificate,
-# discovered, owned, and tracked.
-TRSTCTL_TOKEN="$TRSTCTL_ISSUER_TOKEN" trstctl-cli certificates list
+# Acceptance is asynchronous. Read the result for this exact request.
+"$TRSTCTL_CLI" identities issuance-result "$ident" --request_key "$request_key" \
+  > "$certdir/issuance-result.json"
+jq '{identity_id,request_key,state,certificate}' "$certdir/issuance-result.json"
+)
 ```
+
+If the result says `pending`, repeat the read below until it says `issued`.
+Keep the identity and request key; do not create another identity to poll:
+
+```bash
+TRSTCTL_TOKEN="$TRSTCTL_ISSUER_TOKEN" "${TRSTCTL_CLI:-./bin/trstctl-cli}" \
+  --server https://localhost:8443 --ca-file "$PWD/trstctl-eval-ca.pem" \
+  identities issuance-result "$(cat trstctl-first-certificate/identity-id)" \
+  --request_key "$(cat trstctl-first-certificate/issuance-request-key)" \
+  > trstctl-first-certificate/issuance-result.json
+jq '{identity_id,request_key,state,certificate}' trstctl-first-certificate/issuance-result.json
+```
+
+Once `issued`, save the returned public chain and inspect its first certificate:
+
+```bash
+jq -er 'select(.state == "issued") | .certificate_pem' \
+  trstctl-first-certificate/issuance-result.json \
+  > trstctl-first-certificate/returned-chain.pem
+openssl x509 -in trstctl-first-certificate/returned-chain.pem \
+  -noout -subject -issuer -dates -fingerprint -sha256
+```
+
+The matching private key remains `trstctl-first-certificate/payments.key`.
+The returned chain is public data; it does not install trust or deploy to a
+listener. Confirm the certificate and its owner in inventory and change history.
+The example contact is a local evaluation fixture, not a working alert route.
+
+If a mutation response is lost, retry the same body with the same idempotency key.
+After a terminal error, inspect the saved identity and change history before
+starting again. These fixed keys name one first CLI request in this disposable
+tenant; use new keys for a deliberately different request. Never change the CSR
+under an existing issuance key. See [First-certificate recovery](journeys/first-certificate.md).
 
 How the API, CLI, and UI fit together is described in
 [Platform & API](features/platform-and-api.md); the single issuance path and
