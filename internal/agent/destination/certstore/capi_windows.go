@@ -108,9 +108,9 @@ func setFriendlyName(ctx *windows.CertContext, name string) error {
 
 // AddCertificate adds a certificate to the store with no associated key.
 func (w *Windows) AddCertificate(ref destination.StoreRef, friendlyName string, certPEM []byte) error {
-	block, _ := pem.Decode(certPEM)
-	if block == nil {
-		return fmt.Errorf("certstore: no PEM certificate block")
+	der, err := certificateDER(certPEM)
+	if err != nil {
+		return err
 	}
 	store, err := openSystemStore(ref)
 	if err != nil {
@@ -122,8 +122,8 @@ func (w *Windows) AddCertificate(ref destination.StoreRef, friendlyName string, 
 	r, _, e := procCertAddEncodedCertificateToStore.Call(
 		uintptr(store),
 		uintptr(x509AndPKCS7Encoding),
-		uintptr(unsafe.Pointer(&block.Bytes[0])),
-		uintptr(len(block.Bytes)),
+		uintptr(unsafe.Pointer(&der[0])),
+		uintptr(len(der)),
 		uintptr(windows.CERT_STORE_ADD_REPLACE_EXISTING),
 		uintptr(unsafe.Pointer(&ctx)),
 	)
