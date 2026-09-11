@@ -95,6 +95,13 @@ need their own durable receipts or independent observations. The proof gate at
 the end of this page names the evidence required before calling the complete loop
 production-ready.
 
+After a temporary CA failure, a successful host-agent retry returns the identity
+from `renewal_failed` to `deployed` with an `identity.renewal_recovered` audit event.
+Current ownership attestation is still required. Recording that recovery does not
+queue another deployment: the host has already installed the certificate. Confirm
+the rotation result and listener fingerprint as well as the lifecycle state.
+Upgrading does not rewrite historical failed rotation results as successful.
+
 ## Steps
 
 ### 1. Record the before baseline

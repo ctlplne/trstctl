@@ -311,7 +311,7 @@ const LifecycleApprovalEventSchemaVersion = 4
 // into side_effect.payload.
 const LifecycleIssuanceEventSchemaVersion = 5
 
-// LifecycleOwnershipReadinessEventSchemaVersion binds a deployed/renewed event
+// LifecycleOwnershipReadinessEventSchemaVersion binds a deployed/renewed/recovered event
 // to the exact current owner attestation or active exception that authorized the
 // steady-state edge. Earlier history remains readable; new served writes never
 // emit a steady-state event without this proof when the cadence gate is enabled.
@@ -6315,8 +6315,17 @@ func validateLifecycleApprovalShape(e events.Event, pl identityTransition) error
 		}
 	case LifecycleOwnershipReadinessEventSchemaVersion:
 		if hasApproval || hasIssuance || pl.OwnershipReadiness == nil || pl.To != "deployed" ||
-			(e.Type != EventIdentityDeployed && e.Type != EventIdentityRenewed) {
+			(e.Type != EventIdentityDeployed && e.Type != EventIdentityRenewed && e.Type != EventIdentityRenewalRecovered) {
 			return fmt.Errorf("projections: %s ownership-readiness payload/schema mismatch", e.Type)
+		}
+		// Recovery accepts the standing or already-restored deployment. It needs
+		// the same current ownership authority, but has no connector side effect:
+		// enqueueing one here could redeploy after the host discarded its key.
+		if e.Type == EventIdentityRenewalRecovered {
+			if pl.From != "renewal_failed" || pl.SideEffect != nil {
+				return fmt.Errorf("projections: %s ownership-readiness recovery mismatch", e.Type)
+			}
+			return nil
 		}
 		if pl.SideEffect == nil || pl.SideEffect.Destination != "connector.deploy" ||
 			pl.SideEffect.IdempotencyKey != lifecycleApprovalOutboxKey(e.ID, pl.IdempotencyKey) {
