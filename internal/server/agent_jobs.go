@@ -485,6 +485,13 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 	if !ok {
 		return &transport.ReportJobResultResponse{Accepted: false}, nil
 	}
+	// Retirement is durable before run completion. If recording is interrupted,
+	// the host rotation recovery worker derives the same result from retained receipts.
+	if claim.Destination == agentJobKindEndpointRenew {
+		if err := a.recordHostRotationResult(ctx, info.TenantID, req.JobID); err != nil && !errors.Is(err, errHostRotationLookupPending) {
+			return nil, status.Errorf(codes.Internal, "record retired host rotation: %v", err)
+		}
+	}
 	destination, idemKey := claim.Destination, claim.IdempotencyKey
 	// The receipt travels WITH the event, not beside it. An event that says
 	// an agent executed a deploy, with the agent's own signature over that
@@ -575,7 +582,7 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 	// is what the control plane itself queued — an agent cannot name a
 	// different target in its result and have that recorded as fact.
 	if destination == "connector.rollback" && a.recordRollback != nil {
-		a.recordRollbackFromJob(ctx, info.TenantID, info.CommonName, req.JobID, idemKey, req.Outcome, "")
+		a.recordRollbackFromJob(ctx, info.TenantID, info.CommonName, req.JobID, req.Attempt, idemKey, req.Outcome, "")
 	}
 	return &transport.ReportJobResultResponse{Accepted: true}, nil
 }
@@ -741,7 +748,7 @@ func (a *agentService) refuseExecutedReportPermanently(ctx context.Context, info
 			slog.String("tenant_id", info.TenantID), slog.Int64("job_id", req.JobID), slog.Any("attempt", req.Attempt),
 			slog.String("outcome", strings.TrimSpace(req.Outcome)), slog.String("reason", reason), slog.String("cause", cause.Error()))
 	}
-	ok, err := a.store.FailAgentJobTerminally(ctx, info.TenantID, agentID, req.JobID, reason, now)
+	ok, err := a.store.FailAgentJobTerminally(ctx, info.TenantID, agentID, req.JobID, req.Attempt, reason, now)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "fail refused host lifecycle job: %v", err)
 	}
@@ -749,6 +756,9 @@ func (a *agentService) refuseExecutedReportPermanently(ctx context.Context, info
 		failed := map[string]any{"agent": info.CommonName, "job_id": req.JobID, "detail": reason, "outcome": strings.TrimSpace(req.Outcome)}
 		a.attachJobReceipt(failed, info, req)
 		a.recordAgentJobEvent(ctx, info.TenantID, "agent.job.failed", failed)
+		if err := a.recordHostRotationResult(ctx, info.TenantID, req.JobID); err != nil && !errors.Is(err, errHostRotationLookupPending) {
+			return nil, status.Errorf(codes.Internal, "record refused host rotation: %v", err)
+		}
 		a.recordVerifiedReceipt(ctx, info, req, "", now)
 	}
 	return &transport.ReportJobResultResponse{Accepted: ok}, nil
@@ -825,7 +835,7 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 	var ok bool
 	var releaseErr error
 	if permanent {
-		ok, releaseErr = a.store.FailAgentJobTerminally(ctx, info.TenantID, agentID, req.JobID, detail, now)
+		ok, releaseErr = a.store.FailAgentJobTerminally(ctx, info.TenantID, agentID, req.JobID, req.Attempt, detail, now)
 	} else {
 		ok, releaseErr = a.store.ReleaseAgentJob(ctx, info.TenantID, agentID, req.JobID, req.Detail)
 	}
@@ -837,7 +847,7 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 			// The agent's reported detail is a closed-set reason for this
 			// kind, so it classifies contact. It is not free text and is
 			// not rendered as the agent's words.
-			a.recordRollbackFromJob(ctx, info.TenantID, info.CommonName, req.JobID, "",
+			a.recordRollbackFromJob(ctx, info.TenantID, info.CommonName, req.JobID, req.Attempt, "",
 				transport.JobOutcomeFailed, strings.TrimSpace(req.Detail))
 		}
 	}
@@ -1016,7 +1026,7 @@ func (a *agentService) attachJobReceipt(payload map[string]any, info mtls.PeerCe
 // control plane queued; a receipt built from what an agent said would let an
 // agent name a target it was never given and have that written into the
 // tenant's evidence chain as fact.
-func (a *agentService) recordRollbackFromJob(ctx context.Context, tenantID, agentName string, jobID int64, idemKey, outcome, reason string) {
+func (a *agentService) recordRollbackFromJob(ctx context.Context, tenantID, agentName string, jobID int64, attempt int, idemKey, outcome, reason string) {
 	if a.store == nil || a.recordRollback == nil {
 		return
 	}
@@ -1027,7 +1037,7 @@ func (a *agentService) recordRollbackFromJob(ctx context.Context, tenantID, agen
 	if idemKey == "" {
 		idemKey = key
 	}
-	a.recordRollback(ctx, tenantID, agentName, jobID, idemKey, string(payload), outcome, reason)
+	a.recordRollback(ctx, tenantID, agentName, jobID, attempt, idemKey, string(payload), outcome, reason)
 }
 
 func (a *agentService) recordVerifiedReceipt(ctx context.Context, info mtls.PeerCertInfo,

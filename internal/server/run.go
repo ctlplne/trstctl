@@ -1261,6 +1261,7 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			startRuntimeWorker(workCtx, srv.RunPAMSessionExpiry),
 			startRuntimeWorker(workCtx, srv.RunCRLScheduler),
 			startRuntimeWorker(workCtx, srv.RunLifecycleScheduler),
+			startRuntimeWorker(workCtx, srv.RunHostRotationRecovery),
 			startRuntimeWorker(workCtx, srv.RunDiscoveryScheduler),
 			// I2: the tenant CMDB reconcile ticker. Without this line a configured
 			// schedule would sit in the table and never fire, and the epic's

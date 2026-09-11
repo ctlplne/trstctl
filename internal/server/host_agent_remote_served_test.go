@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net"
@@ -513,7 +514,7 @@ func TestServedHostRollbackG1AutomaticAndManualAcrossAgentRestartsAUD32(t *testi
 		return raw
 	}
 	target, err := h.srv.orch.UpsertDeploymentTarget(ctx, h.tenant, store.DeploymentTarget{
-		Name: "host/aud32", Type: "nginx", Config: targetConfig(true),
+		Name: "host/aud32", Type: "nginx", Config: targetConfig(true), Enabled: true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -534,11 +535,15 @@ func TestServedHostRollbackG1AutomaticAndManualAcrossAgentRestartsAUD32(t *testi
 		if inspectErr != nil {
 			t.Fatal(inspectErr)
 		}
+		leaf, _ := pem.Decode(certPEM)
+		if leaf == nil || leaf.Type != "CERTIFICATE" {
+			t.Fatal("issued fixture has no exact public leaf DER")
+		}
 		notBefore, notAfter := info.NotBefore, info.NotAfter
 		return store.Certificate{
 			OwnerID: &owner.ID, Subject: identity.Name, SANs: info.DNSNames, Issuer: info.Issuer,
 			Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint, KeyAlgorithm: info.KeyAlgorithm,
-			NotBefore: &notBefore, NotAfter: &notAfter, Source: "issued", CertificatePEM: certPEM,
+			NotBefore: &notBefore, NotAfter: &notAfter, Source: "issued", CertificatePEM: certPEM, CertificateDER: leaf.Bytes,
 		}
 	}
 	first, err := h.srv.orch.RecordCertificate(ctx, h.tenant, recordCertificate(firstCert))
@@ -648,7 +653,7 @@ func TestServedHostRollbackG1AutomaticAndManualAcrossAgentRestartsAUD32(t *testi
 	// Put the wrong-SAN successor back with automation disabled, then drive the
 	// exact same restore from the console mutation.
 	target, err = h.srv.orch.UpsertDeploymentTarget(ctx, h.tenant, store.DeploymentTarget{
-		ID: target.ID, Name: target.Name, Type: target.Type, Config: targetConfig(false),
+		ID: target.ID, Name: target.Name, Type: target.Type, Config: targetConfig(false), Enabled: true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -663,6 +668,7 @@ func TestServedHostRollbackG1AutomaticAndManualAcrossAgentRestartsAUD32(t *testi
 		t.Fatalf("manual rollback: status=%d body=%s", statusCode, body)
 	}
 	var manualReceipt struct {
+		ID          string `json:"id"`
 		RollbackRef string `json:"rollback_ref"`
 		OutboxID    *int64 `json:"outbox_id"`
 	}
@@ -677,8 +683,18 @@ func TestServedHostRollbackG1AutomaticAndManualAcrossAgentRestartsAUD32(t *testi
 	if manualReceipt.OutboxID == nil || *manualReceipt.OutboxID != rollbackJobID {
 		t.Fatalf("manual host rollback lost its queued job correlation: %+v", manualReceipt)
 	}
+	readStatus, readBody := secretsReqKey(t, h.servedHarness, http.MethodGet,
+		"/api/v1/connectors/deliveries/"+manualReceipt.ID, tok, "", nil)
+	if readStatus != http.StatusOK || !jsonContains(t, readBody, servedstatus.ConnectorRollbackQueued) {
+		t.Fatalf("manual restore returned an unreadable canonical receipt: status=%d body=%s", readStatus, readBody)
+	}
 	runColdAgent(transport.JobOutcomeVerified)
 	assertFileEquals(t, certPath, secondCert)
+	readStatus, readBody = secretsReqKey(t, h.servedHarness, http.MethodGet,
+		"/api/v1/connectors/deliveries/"+manualReceipt.ID, tok, "", nil)
+	if readStatus != http.StatusOK || !jsonContains(t, readBody, servedstatus.ConnectorRolledBack) {
+		t.Fatalf("exact restore receipt did not complete: status=%d body=%s", readStatus, readBody)
+	}
 
 	// The signed event binds the whole G1 transcript, while the target timeline
 	// gives the operator the human-readable verified result.

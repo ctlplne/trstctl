@@ -535,7 +535,7 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 				return nil, err
 			}
 			if err := d.enqueueHostRenewal(ctx, m.TenantID, ident, target,
-				ident.Name, []string{ident.Name}, "", binding, "host-issue:"+idemKey); err != nil {
+				ident.Name, []string{ident.Name}, "", "", binding, "host-issue:"+idemKey); err != nil {
 				return nil, err
 			}
 			d.recordAgentRenewalDispatch(ctx, m.TenantID, ident, target, []string{ident.Name})

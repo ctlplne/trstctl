@@ -5267,7 +5267,8 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		receipt := store.ConnectorDeliveryReceipt{
 			ID: pl.ID, TenantID: e.TenantID, OutboxID: pl.OutboxID, IdentityID: pl.IdentityID,
-			Destination: pl.Destination, Connector: pl.Connector, Target: pl.Target,
+			EventSequence: e.Sequence,
+			Destination:   pl.Destination, Connector: pl.Connector, Target: pl.Target,
 			Fingerprint: pl.Fingerprint, Status: pl.Status, Attempts: pl.Attempts,
 			Reason: pl.Reason, Detail: pl.Detail, RollbackRef: pl.RollbackRef,
 			IdempotencyKey: pl.IdempotencyKey, CreatedAt: e.Time, UpdatedAt: e.Time,
@@ -6829,6 +6830,20 @@ func (p *Projector) projectCatchUpWithPrivacyBarrier(ctx context.Context, log *e
 	// extensions rebuild is therefore either in both passes or beyond the saved
 	// checkpoint for the next catch-up/tailer; it can never land in core alone.
 	if err := p.store.WithProjectionLock(ctx, func(ctx context.Context) error {
+		legacyRollback, err := p.store.ConnectorRollbackProjectionNeedsRebuild(ctx)
+		if err != nil {
+			return fmt.Errorf("projections: inspect legacy rollback receipt order: %w", err)
+		}
+		if legacyRollback {
+			// Warm migration rows and older snapshots have no per-receipt sequence.
+			// Rebuild atomically from retained authority before a lagging durable tail
+			// can consume old successes over them. A crash/error leaves the old model
+			// intact, so the next boot still takes this recovery path.
+			if err := p.rebuildWithPrivacyBarrier(ctx, log); err != nil {
+				return fmt.Errorf("projections: rebuild legacy rollback receipt order from retained history: %w", err)
+			}
+			return nil
+		}
 		return log.WithHistoryRead(ctx, func(readCtx context.Context) error {
 			replayHead, err := log.LastSequence(readCtx)
 			if err != nil {

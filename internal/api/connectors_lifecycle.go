@@ -789,10 +789,8 @@ func (a *API) rollbackConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		if a.orch == nil {
 			return 0, nil, errors.New("connector rollback orchestrator is not configured")
 		}
-		status := servedstatus.ConnectorRollbackQueued
 		statusReason := "rollback_queued_for_agent_execution"
 		var requiredAgentID string
-		var queuedOutboxID int64
 		if connector.CanRollbackOnHost(target.Type) {
 			evidence, found, evidenceErr := a.store.LastSuccessfulHostDeployEvidence(ctx, tenantID, target.ID)
 			err = evidenceErr
@@ -817,68 +815,40 @@ func (a *API) rollbackConnectorTarget(w http.ResponseWriter, r *http.Request) {
 				"this target has no predecessor certificate to restore; no rollback receipt was recorded")
 		}
 
-		{
-			// The SAME string a deploy routes on. target.Name is the display
-			// name; the connectors derive their installed object from the
-			// routing attribute, and using the display name here would make
-			// every rollback look for an object that was never created.
-			rollbackTarget := orchestrator.DeploymentRoute(target)
-			if strings.TrimSpace(rollbackTarget) == "" {
-				rollbackTarget = target.Name
-			}
-			queued, qErr := a.orch.RequestConnectorRollback(ctx, tenantID, orchestrator.ConnectorRollbackRequest{
-				Connector: target.Type, Target: rollbackTarget, TargetID: target.ID,
-				IdentityID: strings.TrimSpace(req.IdentityID), TargetConfig: target.Config,
-				PredecessorFingerprint: predecessor.Fingerprint,
-				PredecessorSerial:      predecessor.Serial,
-				SuccessorFingerprint:   fingerprint,
-				RequiredAgentID:        requiredAgentID,
-				Reason:                 reason,
-			})
-			if qErr != nil {
-				return 0, nil, qErr
-			}
-			// Only claim "queued" when a relay can actually pick it up. The
-			// orchestrator re-arms a terminal row rather than silently finding
-			// it, but if it could not, saying so beats telling an operator
-			// mid-incident that a rollback is under way when nothing will run.
-			if !queued.Queued {
-				return 0, nil, errStatus(http.StatusConflict,
-					"a rollback for this target and predecessor exists and could not be re-queued; "+
-						"inspect the connector delivery receipts for its outcome before retrying")
-			}
-			queuedOutboxID = queued.OutboxID
-			if connector.CanRollbackOnHost(target.Type) {
-				rollbackRef = "queued for exact enrolled host-agent execution on " + target.Name +
-					": restore predecessor certificate serial " + predecessor.Serial +
-					" (fingerprint " + predecessor.Fingerprint + ") from that agent's encrypted local ledger, outbox key " +
-					queued.IdempotencyKey + ". The predecessor key never passes through the control plane. " +
-					"The agent reloads the service and reverifies the configured listener; missing or mismatched local state fails closed."
-			} else {
-				// Deliberately does NOT assert the object is on the appliance. All
-				// this side checked is its own replacement chain; whether the
-				// fingerprint-named object is actually installed is something only
-				// the relay can see, and it checks before binding. Stating it as
-				// fact here would be the control plane vouching for a machine it
-				// has never looked at.
-				rollbackRef = "queued for enrolled network-relay execution on " + target.Name +
-					": re-bind to the predecessor certificate serial " + predecessor.Serial +
-					" (fingerprint " + predecessor.Fingerprint + "), outbox key " + queued.IdempotencyKey +
-					". No key is uploaded. Whether that object is still installed on the target is " +
-					"verified by the relay when it runs; if it is gone the rollback fails rather than " +
-					"reporting success."
-			}
+		// Execution uses the configured route; receipt text names the destination.
+		rollbackTarget := orchestrator.DeploymentRoute(target)
+		if strings.TrimSpace(rollbackTarget) == "" {
+			rollbackTarget = target.Name
 		}
-
-		receipt, err := a.orch.RecordConnectorDelivery(ctx, tenantID, store.ConnectorDeliveryReceipt{
-			OutboxID: &queuedOutboxID, IdentityID: identityID,
-			Destination: "connector.rollback", Connector: target.Type, Target: target.Name,
-			Fingerprint: fingerprint, Status: status, Attempts: 1, Reason: statusReason,
-			Detail:      reason,
+		if connector.CanRollbackOnHost(target.Type) {
+			rollbackRef = "queued for exact enrolled host-agent execution on " + target.Name +
+				": restore predecessor certificate serial " + predecessor.Serial +
+				" (fingerprint " + predecessor.Fingerprint + ") from that agent's encrypted local ledger. " +
+				"The predecessor key never passes through the control plane. " +
+				"The agent reloads the service and reverifies the configured listener; missing or mismatched local state fails closed."
+		} else {
+			rollbackRef = "queued for enrolled network-relay execution on " + target.Name +
+				": re-bind to the predecessor certificate serial " + predecessor.Serial +
+				" (fingerprint " + predecessor.Fingerprint + "). No key is uploaded. " +
+				"Whether that object is still installed on the target is verified by the relay when it runs; " +
+				"if it is gone the rollback fails rather than reporting success."
+		}
+		queued, receipt, err := a.orch.RequestConnectorRollbackWithReceipt(ctx, tenantID, orchestrator.ConnectorRollbackRequest{
+			Connector: target.Type, Target: rollbackTarget, TargetID: target.ID,
+			IdentityID: strings.TrimSpace(req.IdentityID), TargetConfig: target.Config,
+			PredecessorFingerprint: predecessor.Fingerprint, PredecessorSerial: predecessor.Serial,
+			SuccessorFingerprint: fingerprint, RequiredAgentID: requiredAgentID, Reason: reason,
+		}, store.ConnectorDeliveryReceipt{
+			IdentityID: identityID, Target: target.Name, Reason: statusReason, Detail: reason,
 			RollbackRef: rollbackRef, IdempotencyKey: idempotencyKey,
 		})
 		if err != nil {
 			return 0, nil, err
+		}
+		if !queued.Queued {
+			return 0, nil, errStatus(http.StatusConflict,
+				"a rollback for this target and predecessor exists and could not be re-queued; "+
+					"inspect the connector delivery receipts for its outcome before retrying")
 		}
 		return http.StatusOK, toConnectorDeliveryResponse(receipt), nil
 	})

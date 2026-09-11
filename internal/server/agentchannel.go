@@ -328,7 +328,7 @@ type agentService struct {
 	recordDeployVerification func(ctx context.Context, tenantID, agent, idempotencyKey, report string, jobPayload []byte)
 	// recordRollback turns a relay's re-bind report into a delivery receipt
 	// (epic D4). Nil means rollback results live only in the event log.
-	recordRollback func(ctx context.Context, tenantID, agent string, jobID int64, idempotencyKey, payload, outcome, reason string)
+	recordRollback func(ctx context.Context, tenantID, agent string, jobID int64, attempt int, idempotencyKey, payload, outcome, reason string)
 }
 
 // bulkheadedAgentService is the served AN-7 guard for the agent steady-state gRPC

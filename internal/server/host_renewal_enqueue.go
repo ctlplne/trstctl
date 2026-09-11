@@ -121,7 +121,7 @@ func (d *issuanceDispatcher) enqueueHostRenewal(
 	target store.DeploymentTarget,
 	commonName string,
 	dnsNames []string,
-	predecessorCertificateID string,
+	predecessorCertificateID, rotationRunID string,
 	issuance *store.OperationApprovalIssuanceBinding,
 	idempotencyKey string,
 ) error {
@@ -150,6 +150,7 @@ func (d *issuanceDispatcher) enqueueHostRenewal(
 		SubjectCommonName:        commonName,
 		SubjectDNSNames:          dnsNames,
 		PredecessorCertificateID: predecessorCertificateID,
+		RotationRunID:            rotationRunID,
 		IssuingAuthoritySource:   selection.Source,
 		IssuingAuthorityID:       selection.ID,
 		Issuance:                 issuance,
@@ -290,12 +291,8 @@ func (s *Server) completeHostRenewal(ctx context.Context, tenantID string, paylo
 // plane already holds one. Refusing later, at deploy time, would be a refusal to
 // SHIP a key it had already made — a different and much weaker claim.
 //
-// The rotation run is recorded as succeeded on the ENQUEUE, not on a
-// certificate, and that is deliberate: what succeeded is the handoff. The
-// certificate does not exist yet and will not until the agent sends its CSR up.
-// Reporting a renewal complete here would be the overclaim this workstream
-// exists to remove, so the run says the work was dispatched and D3's three-state
-// truth reports the rest.
+// The running rotation stays open across this handoff. Only an authenticated
+// terminal host report can record its successor and complete the run.
 func (d *issuanceDispatcher) dispatchHostRenewal(
 	ctx context.Context,
 	tenantID string,
@@ -314,14 +311,11 @@ func (d *issuanceDispatcher) dispatchHostRenewal(
 		return false, nil
 	}
 	if err := d.enqueueHostRenewal(ctx, tenantID, ident, target,
-		dnsNames[0], dnsNames, predecessor.ID, nil, "host-renew:"+idemKey); err != nil {
+		dnsNames[0], dnsNames, predecessor.ID, run.ID, nil, "host-renew:"+idemKey); err != nil {
 		_ = d.recordRotationRun(ctx, tenantID, run, "failed", err.Error())
 		return false, err
 	}
 	d.recordAgentRenewalDispatch(ctx, tenantID, ident, target, dnsNames)
-	if err := d.recordRotationRun(ctx, tenantID, run, "succeeded", ""); err != nil {
-		return false, err
-	}
 	return true, nil
 }
 

@@ -17,6 +17,8 @@ import (
 // ConnectorDeliveryReceipt is the projected evidence for one connector.deploy
 // outbox row. It deliberately contains no certificate or private-key bytes.
 type ConnectorDeliveryReceipt struct {
+	// EventSequence comes from the authoritative envelope, never the event payload.
+	EventSequence  uint64
 	ID             string
 	TenantID       string
 	OutboxID       *int64
@@ -67,12 +69,12 @@ func (s *Store) ApplyConnectorDeliveryRecordedTx(ctx context.Context, tx pgx.Tx,
 		`INSERT INTO connector_delivery_receipts
 		        (id, tenant_id, outbox_id, identity_id, destination, connector, target,
 		         fingerprint, status, attempts, reason, detail, rollback_ref,
-		         idempotency_key, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+		         idempotency_key, created_at, updated_at, latest_event_sequence)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 		 ON CONFLICT DO NOTHING`,
 		r.ID, r.TenantID, r.OutboxID, r.IdentityID, r.Destination, r.Connector, r.Target,
 		r.Fingerprint, r.Status, r.Attempts, r.Reason, r.Detail, r.RollbackRef,
-		r.IdempotencyKey, r.CreatedAt, r.UpdatedAt)
+		r.IdempotencyKey, r.CreatedAt, r.UpdatedAt, r.EventSequence)
 	if err != nil {
 		return err
 	}
@@ -93,18 +95,33 @@ func (s *Store) ApplyConnectorDeliveryRecordedTx(ctx context.Context, tx pgx.Tx,
 		        detail = $12,
 		        rollback_ref = $13,
 		        idempotency_key = $14,
-		        updated_at = $15
+		        updated_at = $15,
+          latest_event_sequence = $16
 		  WHERE tenant_id = $2
 		    AND (($3::bigint IS NOT NULL AND outbox_id = $3)
-		      OR ($3::bigint IS NULL AND id = $1))`,
+		      OR ($3::bigint IS NULL AND id = $1))
+        AND (destination <> 'connector.rollback' OR coalesce(latest_event_sequence, 0) <= $16)`,
 		r.ID, r.TenantID, r.OutboxID, r.IdentityID, r.Destination, r.Connector, r.Target,
 		r.Fingerprint, r.Status, r.Attempts, r.Reason, r.Detail, r.RollbackRef,
-		r.IdempotencyKey, r.UpdatedAt)
+		r.IdempotencyKey, r.UpdatedAt, r.EventSequence)
 	if err != nil {
 		return err
 	}
 	if tag.RowsAffected() > 0 {
 		return nil
+	}
+	// An earlier rollback event can arrive from the durable tail after a newer
+	// inline request/result. Its history remains intact; its read-model write is inert.
+	if r.Destination == "connector.rollback" {
+		var newer bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM connector_delivery_receipts
+   WHERE tenant_id=$1 AND (($2::bigint IS NOT NULL AND outbox_id=$2) OR ($2::bigint IS NULL AND id=$3))
+   AND coalesce(latest_event_sequence,0) > $4)`, r.TenantID, r.OutboxID, r.ID, r.EventSequence).Scan(&newer); err != nil {
+			return err
+		}
+		if newer {
+			return nil
+		}
 	}
 	var existingOutbox sql.NullInt64
 	queryErr := tx.QueryRow(ctx,
@@ -562,6 +579,19 @@ func (s *Store) LatestDeployedCertificateFingerprintForIdentity(ctx context.Cont
 		return "", false, nil
 	}
 	return fingerprint, err == nil, err
+}
+
+// GetConnectorDeliveryReceiptForOutboxTx resolves the canonical projected row
+// while the caller still owns the transaction that queued the command.
+func (s *Store) GetConnectorDeliveryReceiptForOutboxTx(ctx context.Context, tx pgx.Tx, tenantID string, outboxID int64) (ConnectorDeliveryReceipt, error) {
+	var r ConnectorDeliveryReceipt
+	err := scanConnectorDeliveryReceipt(tx.QueryRow(ctx,
+		`SELECT id::text, tenant_id::text, outbox_id, identity_id::text, destination,
+		        connector, target, fingerprint, status, attempts, reason, detail,
+		        rollback_ref, idempotency_key, created_at, updated_at
+		   FROM connector_delivery_receipts
+		  WHERE tenant_id = $1 AND outbox_id = $2`, tenantID, outboxID), &r)
+	return r, err
 }
 
 // GetConnectorDeliveryReceipt loads one receipt in its tenant context.
@@ -1024,4 +1054,15 @@ func (s *Store) SummarizeRenewalSLO(ctx context.Context, tenantID string, window
 	}
 	out.BudgetRemainingPercent = remaining
 	return out, nil
+}
+
+// ConnectorRollbackProjectionNeedsRebuild detects receipts written before their
+// envelope sequence was retained. A global checkpoint cannot order those rows
+// against an existing durable consumer that is still behind that checkpoint.
+func (s *Store) ConnectorRollbackProjectionNeedsRebuild(ctx context.Context) (bool, error) {
+	var missing bool
+	err := s.SystemPool().QueryRow(ctx,
+		//trstctl:system-query — boot recovery must detect legacy rollback receipts across all tenants before serving; returns only a boolean and no tenant data (AN-1 exemption).
+		`SELECT EXISTS(SELECT 1 FROM connector_delivery_receipts WHERE destination='connector.rollback' AND coalesce(latest_event_sequence,0)=0)`).Scan(&missing)
+	return missing, err
 }

@@ -240,6 +240,14 @@ func TestARenewalForAnAgentExecutedTargetQueuesHostWorkAndMintsNothing(t *testin
 			"minted for a target whose key is supposed to be born on the host", before, after)
 	}
 
+	runs, err := h.store.ListRotationRunsPage(ctx, h.tenant, ident.ID, store.ZeroUUID, 10)
+	if err != nil || len(runs) != 1 {
+		t.Fatalf("rotation runs = %+v, error=%v, want one pending host renewal", runs, err)
+	}
+	if runs[0].Status != "running" || runs[0].CompletedAt != nil || runs[0].SuccessorFingerprint != "" {
+		t.Errorf("queued host work must not report a completed rotation: %+v", runs[0])
+	}
+
 	// 4. And no key material rests anywhere in this tenant's tables.
 	for _, f := range assertNoPrivateKeyMaterial(t, ctx, h.store, h.tenant) {
 		t.Errorf("private key material in %s.%s (row %s, marker %q) after a host-generated renewal",

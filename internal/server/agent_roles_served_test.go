@@ -20,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/events"
 
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/tlsprobe"
@@ -65,12 +66,16 @@ func newRoleHarness(t *testing.T, roles []string, claimable ...string) *roleHarn
 // production wiring would enable. Existing role tests use newRoleHarness and
 // therefore retain their exact default dependency set.
 func newRoleHarnessWithDeps(t *testing.T, roles, claimable []string, options ...func(*Deps)) *roleHarness {
+	return newRoleHarnessWithEventOptions(t, roles, claimable, nil, options...)
+}
+
+func newRoleHarnessWithEventOptions(t *testing.T, roles, claimable []string, eventOptions []events.OpenOption, options ...func(*Deps)) *roleHarness {
 	t.Helper()
 	deps := []func(*Deps){withAgentChannel, func(d *Deps) {
 		d.AgentClaimableJobKinds = claimable
 	}}
 	deps = append(deps, options...)
-	h := newServedHarness(t, config.Protocols{}, deps...)
+	h := newServedHarnessWithEventOptions(t, config.Protocols{}, eventOptions, deps...)
 	if !h.srv.AgentChannelServed() {
 		t.Fatal("agent channel is not served")
 	}

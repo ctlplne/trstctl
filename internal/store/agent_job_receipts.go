@@ -187,7 +187,7 @@ func (s *Store) AgentJobPayload(ctx context.Context, tenantID string, jobID int6
 // appends another receipt. A permanently impossible operation would move
 // credential material outside the seal indefinitely, which is the opposite of
 // what the single-use redemption discipline exists to achieve.
-func (s *Store) FailAgentJobTerminally(ctx context.Context, tenantID, agentID string, jobID int64, reason string, at time.Time) (bool, error) {
+func (s *Store) FailAgentJobTerminally(ctx context.Context, tenantID, agentID string, jobID int64, attempt int, reason string, at time.Time) (bool, error) {
 	var failed bool
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx,
@@ -201,8 +201,9 @@ func (s *Store) FailAgentJobTerminally(ctx context.Context, tenantID, agentID st
 			  WHERE tenant_id = $1
 			    AND id = $3
 			    AND claimed_by_agent_id = $2::uuid
+			    AND claim_attempts = $6
 			    AND claim_completed_at IS NULL`,
-			tenantID, agentID, jobID, reason, at.UTC())
+			tenantID, agentID, jobID, reason, at.UTC(), attempt)
 		if err != nil {
 			return err
 		}

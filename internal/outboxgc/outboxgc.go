@@ -83,6 +83,16 @@ func (w *Sweeper) Sweep(ctx context.Context) (int64, error) {
 		    AND queued.delivered_at IS NOT NULL
 		    AND queued.delivered_at < $1
 		    AND (
+		        queued.destination <> 'endpoint.renew'
+		        OR queued.idempotency_key NOT LIKE 'host-renew:renew:%'
+		        OR EXISTS (
+		            SELECT 1 FROM lifecycle_rotation_runs AS rotation
+		             WHERE rotation.tenant_id = queued.tenant_id
+		               AND queued.idempotency_key = 'host-renew:renew:' || rotation.idempotency_key
+		               AND rotation.status IN ('succeeded', 'failed')
+		        )
+		    )
+		    AND (
 		        left(queued.destination, 12) <> 'secret.sync.'
 		        OR (
 		            queued.secret_sync_order_from_event

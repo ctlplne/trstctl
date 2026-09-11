@@ -304,11 +304,14 @@ type RelayDeployIntent struct {
 	//
 	// Empty on a first issuance, which genuinely replaces nothing.
 	PredecessorCertificateID string `json:"predecessor_certificate_id,omitempty"`
-	IssuingAuthoritySource   string `json:"issuing_authority_source,omitempty"`
-	IssuingAuthorityID       string `json:"issuing_authority_id,omitempty"`
-	MigrationRunID           string `json:"migration_run_id,omitempty"`
-	MigrationWaveID          string `json:"migration_wave_id,omitempty"`
-	RequiredAgentID          string `json:"required_agent_id,omitempty"`
+	// RotationRunID binds a renewal result to the server-created run. It is
+	// absent on first issuance and on jobs queued before result-bound runs.
+	RotationRunID          string `json:"rotation_run_id,omitempty"`
+	IssuingAuthoritySource string `json:"issuing_authority_source,omitempty"`
+	IssuingAuthorityID     string `json:"issuing_authority_id,omitempty"`
+	MigrationRunID         string `json:"migration_run_id,omitempty"`
+	MigrationWaveID        string `json:"migration_wave_id,omitempty"`
+	RequiredAgentID        string `json:"required_agent_id,omitempty"`
 	// Issuance is present on an approval-gated first issuance. The agent does
 	// not interpret it; the control plane re-reads this original job payload
 	// when the CSR returns and enforces the exact reviewed profile revision/TTL.

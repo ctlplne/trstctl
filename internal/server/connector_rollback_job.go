@@ -31,7 +31,7 @@ var rollbackReceiptNamespace = uuid.MustParse("6f1d9a52-0f2a-4a5e-9a41-2f9c7f6b0
 // outcome is the relay's own terminal outcome, already verified by the signed
 // receipt gate (epic A1) before this runs — so what is recorded here is a claim
 // the agent signed, not a claim the control plane invented about itself.
-func (s *Server) rollbackReceipt(ctx context.Context, tenantID, agentName string, jobID int64, idempotencyKey, payloadJSON, outcome, reason string) {
+func (s *Server) rollbackReceipt(ctx context.Context, tenantID, agentName string, jobID int64, attempt int, idempotencyKey, payloadJSON, outcome, reason string) {
 	if s.orch == nil {
 		return
 	}
@@ -94,11 +94,11 @@ func (s *Server) rollbackReceipt(ctx context.Context, tenantID, agentName string
 	if value := strings.TrimSpace(req.IdentityID); value != "" {
 		identityID = &value
 	}
-	if _, err := s.orch.RecordConnectorDelivery(ctx, tenantID, store.ConnectorDeliveryReceipt{
+	if err := s.orch.RecordConnectorRollbackResult(ctx, tenantID, idempotencyKey, attempt, store.ConnectorDeliveryReceipt{
 		ID: receiptID, OutboxID: outboxPtr(jobID), IdentityID: identityID,
 		Destination: "connector.rollback", Connector: req.Connector, Target: req.Target,
 		Fingerprint: req.PredecessorFingerprint,
-		Status:      status, Attempts: 1, Reason: receiptReason, Detail: detail,
+		Status:      status, Attempts: attempt, Reason: receiptReason, Detail: detail,
 		// A distinct key from the queueing receipt: "we asked" and "it
 		// happened" are different facts and both belong in the chain.
 		IdempotencyKey: idempotencyKey + ":rollback-result",

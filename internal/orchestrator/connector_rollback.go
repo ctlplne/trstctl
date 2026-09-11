@@ -81,6 +81,10 @@ type ConnectorRollbackQueued struct {
 // rows demand network role; host rows demand host role plus the exact agent ID
 // that retained the predecessor.
 func (o *Orchestrator) RequestConnectorRollback(ctx context.Context, tenantID string, in ConnectorRollbackRequest) (ConnectorRollbackQueued, error) {
+	return o.requestConnectorRollback(ctx, tenantID, in, nil)
+}
+
+func (o *Orchestrator) requestConnectorRollback(ctx context.Context, tenantID string, in ConnectorRollbackRequest, recordQueued func(pgx.Tx, ConnectorRollbackQueued, bool) error) (ConnectorRollbackQueued, error) {
 	req := ConnectorRollbackRequest{
 		Connector:              strings.TrimSpace(in.Connector),
 		Target:                 strings.TrimSpace(in.Target),
@@ -190,7 +194,7 @@ func (o *Orchestrator) RequestConnectorRollback(ctx context.Context, tenantID st
 
 		var status string
 		if err := tx.QueryRow(ctx,
-			`SELECT id, status FROM outbox WHERE tenant_id = $1 AND idempotency_key = $2`,
+			`SELECT id, status FROM outbox WHERE tenant_id = $1 AND idempotency_key = $2 FOR UPDATE`,
 			tenantID, idemKey).Scan(&outboxID, &status); err != nil {
 			return err
 		}
@@ -198,32 +202,37 @@ func (o *Orchestrator) RequestConnectorRollback(ctx context.Context, tenantID st
 			// Either freshly queued, or an honest replay of work still waiting
 			// for the required agent.
 			queuedNow = true
-			return nil
-		}
-		// The row exists in a TERMINAL state — it was delivered, or it
-		// dead-lettered. Without re-arming, every later rollback of the same
-		// target inserts nothing, finds this dead row, and the caller reports
-		// "queued" for work that will never run. During an incident that is the
-		// worst possible lie: the operator is told the rollback is under way and
-		// walks away.
-		//
-		// Re-arming in place rather than inserting a second row keeps the
-		// idempotency key meaning one command, which is what the claim path and
-		// the receipt chain both key on. claim_attempts is deliberately NOT
-		// reset: the signed receipt includes that generation, so reuse would let
-		// a recent receipt from the earlier execution close the re-armed job.
-		tag, err := tx.Exec(ctx,
-			`UPDATE outbox
+		} else {
+			// The row exists in a TERMINAL state — it was delivered, or it
+			// dead-lettered. Without re-arming, every later rollback of the same
+			// target inserts nothing, finds this dead row, and the caller reports
+			// "queued" for work that will never run. During an incident that is the
+			// worst possible lie: the operator is told the rollback is under way and
+			// walks away.
+			//
+			// Re-arming in place rather than inserting a second row keeps the
+			// idempotency key meaning one command, which is what the claim path and
+			// the receipt chain both key on. claim_attempts is deliberately NOT
+			// reset: the signed receipt includes that generation, so reuse would let
+			// a recent receipt from the earlier execution close the re-armed job.
+			tag, err := tx.Exec(ctx,
+				`UPDATE outbox
 			    SET status = 'pending', attempts = 0,
 			        claimed_by_agent_id = NULL, claim_expires_at = NULL,
 			        claim_completed_at = NULL, delivered_at = NULL,
 			        last_error = NULL, next_attempt_at = now()
 			  WHERE tenant_id = $1 AND idempotency_key = $2`,
-			tenantID, idemKey)
-		if err != nil {
-			return err
+				tenantID, idemKey)
+			if err != nil {
+				return err
+			}
+			queuedNow = tag.RowsAffected() > 0
 		}
-		queuedNow = tag.RowsAffected() > 0
+		if queuedNow && recordQueued != nil {
+			return recordQueued(tx, ConnectorRollbackQueued{
+				OutboxID: outboxID, IdempotencyKey: idemKey, Destination: DestinationConnectorRollback, Queued: true,
+			}, inserted || status != "pending")
+		}
 		return nil
 	}); err != nil {
 		return ConnectorRollbackQueued{}, fmt.Errorf("orchestrator: queue connector rollback: %w", err)
