@@ -16,6 +16,16 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
+// The historical connector-only binding did not carry issuer authority. Keep
+// that closed payload distinct from schema 2 during privacy export/import.
+type privacyIdentityConnectorTargetBoundV1 struct {
+	IdentityID string `json:"identity_id"`
+	TargetID   string `json:"target_id"`
+	Connector  string `json:"connector"`
+	Target     string `json:"target"`
+	Route      string `json:"route,omitempty"`
+}
+
 // privacyDiscoveryRunQueued is the closed union carried by
 // discovery.run.queued. The projector reads the embedded common relay fields;
 // AD CS boot reconciliation additionally needs its immutable public connection
@@ -1481,7 +1491,8 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventCBOMAssetObserved, 1}:                                             privacyPayloadShape[CBOMAssetObserved](),
 		{EventDeploymentTargetUpserted, 1}:                                      privacyPayloadShape[DeploymentTargetUpserted](),
 		{EventDeploymentTargetDeleted, 1}:                                       privacyPayloadShape[DeploymentTargetDeleted](),
-		{EventIdentityConnectorTargetBound, 1}:                                  privacyPayloadShape[IdentityConnectorTargetBound](),
+		{EventIdentityConnectorTargetBound, 1}:                                  privacyPayloadShape[privacyIdentityConnectorTargetBoundV1](),
+		{EventIdentityConnectorTargetBound, 2}:                                  privacyPayloadShape[IdentityConnectorTargetBound](),
 		{EventConnectorDeliveryRecorded, 1}:                                     privacyPayloadShape[ConnectorDeliveryRecorded](),
 		{EventLifecycleRotationRecorded, 1}:                                     privacyPayloadShape[LifecycleRotationRecorded](),
 		{EventOutboxReconciliationConflictRecorded, 1}:                          privacyPayloadShape[OutboxReconciliationConflictRecorded](),

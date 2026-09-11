@@ -951,8 +951,14 @@ func (a *API) createEndpointBinding(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
-		identity, err = a.orch.BindIdentityDeploymentTarget(ctx, tenantID, identity.ID, target)
+		identity, err = a.orch.BindIdentityEndpoint(ctx, tenantID, identity.ID, target, store.IdentityEndpointIssuer{
+			OwnerID: req.OwnerID, Source: preview.Issuer.Source, ID: preview.Issuer.ID,
+			Name: preview.Issuer.Name, PreviewFingerprint: preview.RequestFingerprint,
+		})
 		if err != nil {
+			if errors.Is(err, store.ErrIdentityEnrollmentConflict) {
+				return 0, nil, errWithStatus(http.StatusConflict, err)
+			}
 			return 0, nil, err
 		}
 		if err := a.orch.TransitionWithIdempotency(ctx, tenantID, identity.ID, orchestrator.StateIssued, endpointBindingReason(req), idempotencyKey); err != nil {
@@ -1027,22 +1033,27 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 	// id is part of the request fingerprint so a change between preview and create
 	// is caught like any other.
 	var existingResp *identityResponse
-	existingID := ""
+	identityChange := "Create one X.509 identity for " + req.IdentityName + " owned by " + strings.TrimSpace(owner.Name) + " (" + req.OwnerID + ")."
 	if existing, found, err := a.store.FindIdentityByName(ctx, tenantID, req.IdentityName); err != nil {
 		return endpointBindingPreviewResponse{}, err
 	} else if found {
+		if err := store.ValidateIdentityEndpointIssuer(existing, store.IdentityEndpointIssuer{
+			OwnerID: req.OwnerID, Source: issuer.Source, ID: issuer.ID, Name: issuer.Name,
+		}); err != nil {
+			return endpointBindingPreviewResponse{}, errWithStatus(http.StatusConflict, err)
+		}
 		resp := toIdentityResponse(existing)
 		existingResp = &resp
-		existingID = existing.ID
+		identityChange = "Enroll existing X.509 identity " + existing.ID + " for " + req.IdentityName + " owned by " + strings.TrimSpace(owner.Name) + " (" + req.OwnerID + ")."
 	}
 	fingerprintInput := struct {
-		OwnerID            string                       `json:"owner_id"`
-		IdentityName       string                       `json:"identity_name"`
-		Reason             string                       `json:"reason"`
-		Issuer             endpointIssuerSummary        `json:"issuer"`
-		Target             endpointBindingTargetSummary `json:"target"`
-		ExistingIdentityID string                       `json:"existing_identity_id,omitempty"`
-	}{req.OwnerID, req.IdentityName, endpointBindingReason(req), issuer, target, existingID}
+		OwnerID          string                       `json:"owner_id"`
+		IdentityName     string                       `json:"identity_name"`
+		Reason           string                       `json:"reason"`
+		Issuer           endpointIssuerSummary        `json:"issuer"`
+		Target           endpointBindingTargetSummary `json:"target"`
+		ExistingIdentity *identityResponse            `json:"existing_identity,omitempty"`
+	}{req.OwnerID, req.IdentityName, endpointBindingReason(req), issuer, target, existingResp}
 	raw, err := json.Marshal(fingerprintInput)
 	if err != nil {
 		return endpointBindingPreviewResponse{}, err
@@ -1073,7 +1084,7 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 		Target:             target,
 		Custody:            custodySummary,
 		Changes: []string{
-			"Create one X.509 identity for " + req.IdentityName + " owned by " + strings.TrimSpace(owner.Name) + " (" + req.OwnerID + ").",
+			identityChange,
 			"Pin issuance and renewal to " + issuer.Name + " (" + issuer.Source + ":" + issuer.ID + ").",
 			"Bind the identity to " + target.Name + " through the " + target.Connector + " connector.",
 		},

@@ -104,6 +104,13 @@ Upgrading does not rewrite historical failed rotation results as successful.
 
 ## Steps
 
+If discovery already created a requested X.509 identity for this DNS name, the
+preview names that identity and enrollment pins the selected CA on it before
+issuance. The existing owner must match, and any previously pinned CA must agree.
+An issued or deployed identity needs its lifecycle actions or a separate
+replacement identity; endpoint enrollment refuses to repurpose it. Changes to
+the reviewed identity metadata require a fresh preview.
+
 ### 1. Record the before baseline
 
 Query the live listener before changing it. Save the leaf fingerprint, issuer, expiry,

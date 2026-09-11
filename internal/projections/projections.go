@@ -2483,11 +2483,12 @@ type DeploymentTargetDeleted struct {
 
 // IdentityConnectorTargetBound is the payload of identity.connector_target_bound.
 type IdentityConnectorTargetBound struct {
-	IdentityID string `json:"identity_id"`
-	TargetID   string `json:"target_id"`
-	Connector  string `json:"connector"`
-	Target     string `json:"target"`
-	Route      string `json:"route,omitempty"`
+	IdentityID string                        `json:"identity_id"`
+	TargetID   string                        `json:"target_id"`
+	Connector  string                        `json:"connector"`
+	Target     string                        `json:"target"`
+	Route      string                        `json:"route,omitempty"`
+	Issuer     *store.IdentityEndpointIssuer `json:"issuer,omitempty"`
 }
 
 // LifecycleRotationRecorded is the payload of lifecycle.rotation.recorded.
@@ -3407,7 +3408,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCBOMAssetObserved:                        {1: true},
 	EventDeploymentTargetUpserted:                 {1: true},
 	EventDeploymentTargetDeleted:                  {1: true},
-	EventIdentityConnectorTargetBound:             {1: true},
+	EventIdentityConnectorTargetBound:             {1: true, 2: true},
 	EventConnectorDeliveryRecorded:                {1: true},
 	EventLifecycleRotationRecorded:                {1: true},
 	EventOutboxReconciliationConflictRecorded:     {1: true},
@@ -5325,6 +5326,17 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		if pl.IdentityID == "" || pl.TargetID == "" || pl.Connector == "" || pl.Target == "" {
 			return fmt.Errorf("projections: %s requires identity_id, target_id, connector, and target", e.Type)
+		}
+		if (e.SchemaVersion == 2) != (pl.Issuer != nil) {
+			return fmt.Errorf("projections: %s issuer payload/schema mismatch", e.Type)
+		}
+		if pl.Issuer != nil {
+			if len(pl.Issuer.PreviewFingerprint) != 64 {
+				return fmt.Errorf("projections: %s requires a reviewed issuer fingerprint", e.Type)
+			}
+			if err := p.store.BindIdentityEndpointIssuerTx(ctx, tx, e.TenantID, pl.IdentityID, *pl.Issuer); err != nil {
+				return err
+			}
 		}
 		return p.store.BindIdentityDeploymentTargetTx(ctx, tx, e.TenantID, pl.IdentityID, pl.TargetID, pl.Connector, pl.Target, pl.Route)
 	case EventLifecycleRotationRecorded:
