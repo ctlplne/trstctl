@@ -457,7 +457,7 @@ JSON
 trstctl-cli discovery segments create -f segment.json
 
 cat > source.json <<'JSON'
-{"kind":"network","name":"edge-tls","config":{"segment":"edge","targets":["10.0.0.10:443"]}}
+{"kind":"network","name":"edge-tls","config":{"segment":"edge","targets":["10.0.0.10:443"],"allow_rfc1918":true}}
 JSON
 trstctl-cli discovery sources create -f source.json
 trstctl-cli discovery sources list
@@ -467,10 +467,27 @@ cat > run.json <<'JSON'
 {"source_id":"<source-id>"}
 JSON
 trstctl-cli discovery runs start -f run.json
-trstctl-cli discovery runs list
+trstctl-cli discovery runs get <run-id>
+```
+
+Copy the run ID from the start response. Read that exact run until its status is
+`succeeded`. A `queued` or `running` response is still pending work; a `failed` run
+requires inspecting its error and target results before retrying. Then read the
+findings for that completed run:
+
+```sh
 trstctl-cli discovery findings list --run_id <run-id>
 trstctl-cli nhi posture shadow
 ```
+
+This example deliberately permits an owned RFC1918 target inside the declared
+segment. Without `allow_rfc1918`, private IPv4 targets remain blocked. In the
+console, select **Allow approved RFC1918 targets** for that same explicit scope.
+This permission does not allow metadata, link-local, multicast, or other prohibited
+addresses. Hostnames must be declared by their exact name; an IP-only segment does
+not implicitly authorize a hostname that resolves into it. Preflight checks known
+literal-address blockers without dialing; DNS and connectivity are checked by the
+relay during the run.
 
 The segment command maps to `POST /api/v1/discovery/segments`; declare that
 bounded estate scope before creating any network or SSH source. The remaining

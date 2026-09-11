@@ -51,6 +51,8 @@ below. The control-plane operator must:
 4. Configure a notification channel and an owner-scoped route before relying on
    expiry alerts. A row in the notification inbox is not proof that Slack, email, or
    another receiver accepted the message.
+   `notification_receiver_not_configured` means delivery has no receiver. Configure
+   the channel and route; the pending outbox retry keeps the original alert key.
 5. For an ACME authority that validates names with DNS-01 (`upstream_dns01`), make
    sure the tenant has a **DNS-01 provider config** that covers the zone of every
    name you will issue, with `dns-01` in `allowed_methods` and
@@ -110,20 +112,51 @@ listener, a successful API or connector receipt is insufficient.
 
 ### 2. Discover the certificate before managing it
 
-Create a bounded network discovery source for the canary host and start a run. A
+Declare the canary's exact hostname as a bounded segment in `segment.json`:
+
+```json
+{"name":"existing-ca-canary","ranges":["web-canary.example.test"],"staleness_hours":24,"excluded":false}
+```
+
+Create `source.json` for that segment and start a run. A
 network source performs a normal TLS handshake; it does not install software or send
 an exploit to the target.
 
 ```json
-{"kind":"network","name":"existing-ca-canary","config":{"targets":["web-canary.example.test:443"]}}
+{"kind":"network","name":"existing-ca-canary","config":{"segment":"existing-ca-canary","targets":["web-canary.example.test:443"],"allow_rfc1918":true}}
 ```
 
 ```sh
+trstctl-cli discovery segments create -f segment.json
 trstctl-cli discovery sources create -f source.json
+trstctl-cli discovery sources preflight <source-id>
+```
+
+Copy the returned source ID into `run.json` before starting the run:
+
+```json
+{"source_id":"<source-id>"}
+```
+
+```sh
 trstctl-cli discovery runs start -f run.json
+trstctl-cli discovery runs get <run-id>
+```
+
+Starting returns accepted work. Read that exact run until its status is `succeeded`;
+if it is `failed`, inspect its error and target results before retrying. Only then
+inspect the findings and compare their fingerprint with the baseline:
+
+```sh
 trstctl-cli discovery findings list --run_id <run-id>
 trstctl-cli certificates list --limit 50
 ```
+
+The example explicitly permits an owned private IPv4 canary with `allow_rfc1918`.
+Omit that flag for public-only discovery. It never permits metadata, link-local,
+multicast or other prohibited addresses. If using a literal IP instead of a hostname,
+declare that exact IP or its narrow CIDR; an IP-only segment does not authorize a
+hostname automatically. Preflight does not contact the target.
 
 The finding and inventory row should agree with the before baseline. Stop if the
 hostname, listener fingerprint, or owner is wrong.
@@ -208,7 +241,7 @@ the controlled alert:
 
 ```sh
 trstctl-cli notifications routing-preview \
-  --workspace certificate-lifecycle --owner_ref <owner-id> \
+  --workspace certificate-lifecycle --owner_ref owner/<owner-id> \
   --asset_ref <identity-id> --severity high
 trstctl-cli notifications list --status unread
 trstctl-cli --idempotency-key preserve-ca-alert-read-001 \

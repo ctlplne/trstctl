@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	googleuuid "github.com/google/uuid"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -232,6 +233,10 @@ func (a *API) discoveryPlanPreview(ctx context.Context, tenantID string, req dis
 		if !readiness.Ready {
 			preview.BlockedReasons = append(preview.BlockedReasons, readiness.BlockedReason)
 		}
+		if blocker := discoveryLiteralAddressBlocker(intent); blocker != "" {
+			preview.Ready = false
+			preview.BlockedReasons = append(preview.BlockedReasons, blocker)
+		}
 		preview.Segment = intent.Segment
 		preview.NormalizedTargetCount = len(intent.Targets)
 		preview.NormalizedTargets = append([]string(nil), intent.Targets...)
@@ -279,6 +284,44 @@ func (a *API) discoveryPlanPreview(ctx context.Context, tenantID string, req dis
 		}
 	}
 	return preview, nil
+}
+
+// Literal destinations already reveal address-policy failures without a dial.
+// Hostnames remain unresolved here: the relay must check DNS answers at connect
+// time, and a state-free preview must not make outbound DNS requests.
+func discoveryLiteralAddressBlocker(intent segmentscan.Intent) string {
+	blocked := 0
+	first, remedy := "", ""
+	for _, target := range intent.Targets {
+		host, _, err := net.SplitHostPort(target)
+		if err != nil {
+			continue // Resolve has already validated and normalized each target.
+		}
+		ip := net.ParseIP(host)
+		if ip == nil || (intent.AllowLoopback && ip.IsLoopback()) {
+			continue
+		}
+		if !netsec.BlockedIPWithOptions(ip, netsec.BlockedIPOptions{AllowRFC1918: intent.AllowRFC1918}) {
+			continue
+		}
+		blocked++
+		if first != "" {
+			continue
+		}
+		first = target
+		switch {
+		case !netsec.BlockedIPWithOptions(ip, netsec.BlockedIPOptions{AllowRFC1918: true}):
+			remedy = "For an authorized RFC1918 target inside this declared segment, explicitly set allow_rfc1918. Other reserved ranges remain blocked."
+		case ip.IsLoopback():
+			remedy = "Loopback requires explicit allow_loopback for an authorized local diagnostic."
+		default:
+			remedy = "This reserved range cannot be enabled for discovery; remove it from the scan targets."
+		}
+	}
+	if blocked == 0 {
+		return ""
+	}
+	return fmt.Sprintf("The SSRF guard blocks %d scan targets; first blocked target: %s. %s", blocked, first, remedy)
 }
 
 type discoverySegmentRequest struct {
