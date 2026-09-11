@@ -353,6 +353,43 @@ Supported `type` values are `adcs`, `awspca`, `azurekv`, `digicert`, `ejbca`,
 provider's required fields before the server accepts traffic. The exact connector
 target schemas are listed in [Deployment connectors](features/deployment-connectors.md).
 
+### Vault PKI: keep the existing signing authority
+
+Start with [the complete Vault configuration example](examples/vault-external-ca.json).
+Merge its `external_cas` row into the server JSON selected by `TRSTCTL_CONFIG_FILE`;
+keep your other configured authorities and settings. Replace these example values:
+
+- `id`: the stable registry ID that tenant lifecycle plans will select.
+- `endpoint`: the HTTPS address of the real Vault server, without `/v1` or the PKI path.
+- `mount` and `role`: the existing PKI mount and signing role. For the example,
+  trstctl sends CSRs to `/v1/pki/sign/web-certs`.
+- `bearer_token_ref`: an operator-owned file containing only the Vault token. Give
+  that token `update` permission on the selected signing path; add `update` on
+  `pki/revoke` only if this integration should revoke certificates. Keep the file
+  readable only by the service account and mount it read-only into the control plane.
+- `network.root_ca_file`: the public CA certificate that verifies Vault's HTTPS
+  server. This is transport trust; it need not be the CA that signs workload CSRs.
+- `network.private_egress_cidrs`: the exact private address ranges Vault resolves
+  to. The example grants one host, `10.40.0.15/32`; replace it with your inspected
+  address. Keep `allow_private_endpoint: true` for a private Vault endpoint. Neither
+  setting permits plaintext or disables TLS verification.
+
+Run `trstctl -check-config` with the same environment and mounted files used by the
+service. This checks configuration, not live connectivity. Restart the control
+plane, then confirm `trstctl-cli external-cas list` returns your exact ID and
+`type: vaultpki`. With the evaluation Compose stack, recreate `trstctl` and
+`oidc-loopback` together so the sign-in companion joins the replacement network
+namespace; keep the existing data and TLS volumes.
+
+The console's **Configure Vault PKI** action explains these operator steps. It does
+not create a metadata-only issuer row as a substitute for the connection. Never
+paste the Vault token into a tenant form.
+
+Continue with [Keep your existing CA](journeys/preserve-existing-ca.md): use the
+configured registry ID in the lifecycle preview, and verify actual issuance,
+product deployment and the listener separately. A registry row alone proves none
+of those outcomes.
+
 ## Notifications
 
 Notification channels are off until an operator configures them. When enabled, lifecycle

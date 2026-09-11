@@ -236,7 +236,19 @@ confirmation that names the exact destination, identity, and operator reason; no
 restore is queued by opening it. **Queue restore** uses the served rollback route.
 The first response may say only `rollback_queued`: that is waiting state, not
 success. The console reports success only from a later `rolled_back` receipt written
-after the required agent or relay restores the proven predecessor. Connector
+after the required agent or relay restores the proven predecessor. While queued, the
+console rereads that exact receipt every three seconds while the tab is visible.
+It stops polling at an attempt result or read failure; **Check restore result**
+remains available after a failure because the same job may retry. It only reads
+the receipt and never queues another restore. A mismatched or unavailable
+receipt is not shown as a successful recovery. Repeating a pending restore joins
+its existing job and preserves any recorded attempt result. Re-arming a finished
+job keeps its result ID; its next claim uses a new signed agent attempt. A delayed
+result from the prior execution cannot complete the new request, and replaying
+older evidence cannot move the displayed receipt backward. On the first upgrade
+with older rollback receipts, startup rebuilds the read model from retained event
+history before serving; a failed rebuild leaves the existing model intact and
+refuses startup. This also applies when restoring an older snapshot. Connector
 families without an executable restore path show the manual boundary and keep the
 button disabled; the API also fails closed instead of recording a rollback-shaped
 success.

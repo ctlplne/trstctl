@@ -8,6 +8,21 @@ import type { MessageKey } from "@/i18n/messages";
  * error, so every new message key still ships with its translation in the
  * same commit. */
 const esESCatalog = {
+  "caSetup.localBoundary":
+    "Cree una autoridad local mediante el flujo protegido de raíz o intermedia. Requiere la ceremonia de claves y las aprobaciones correspondientes antes de habilitar la firma.",
+  "caSetup.operatorBoundary":
+    "El operador del plano de control configura esta CA externa. Esta consola del inquilino no puede instalar su conexión ni sus credenciales.",
+  "caSetup.configure":
+    "Añada la autoridad en external_cas del archivo JSON del servidor indicado por TRSTCTL_CONFIG_FILE. Use un ID de registro estable y el tipo exacto del proveedor.",
+  "caSetup.trust":
+    "Guarde las credenciales en archivos controlados por el operador y use referencias file:/ruta/absoluta. Fije la raíz de confianza del servidor y permita solo los rangos privados necesarios. Nunca pegue credenciales aquí.",
+  "caSetup.restart":
+    "Ejecute trstctl -check-config, reinicie el plano de control configurado y actualice esta página. La validación de configuración no contacta con la autoridad.",
+  "caSetup.verify":
+    "Confirme el ID exacto en GET /api/v1/external-cas antes de seleccionarlo para emitir. Un registro de inventario o de integración por sí solo no demuestra una solicitud correcta a la CA.",
+  "caSetup.vaultExample":
+    "Ejemplo de Vault: sustituya la URL, el montaje de firma, el rol, las rutas y el CIDR de un solo host por los valores verificados. El token necesita permiso para firmar con ese rol.",
+  "caSetup.reference": "Referencia completa: docs/configuration.md, sección Native connector and external-CA assembly.",
   // Machine-authored correction translations; human language review required before release.
   "wizard.firstLeaf.submitCorrection": "Enviar el CSR corregido para esta identidad",
   "wizard.firstLeaf.correctionDisposition":
@@ -4707,6 +4722,9 @@ const esESCatalog = {
   "connectors.preview.refresh": "Comprobar resultado de la previsualización",
   "connectors.preview.correlationUnavailable":
     "Esta previsualización en cola no tiene una clave de recibo, por lo que la consola no adivinará qué resultado le pertenece. Ejecute una previsualización nueva.",
+  "connectors.recovery.refresh": "Comprobar resultado de restauración",
+  "connectors.recovery.readFailed":
+    "No se pudo confirmar el resultado exacto de la restauración. Comprueba tu acceso y conexión y vuelve a consultar este resultado. No se solicitó otra restauración.",
   "connectors.recovery.review": "Revisar restauración",
   "connectors.recovery.unavailable":
     "Este conector no tiene una ruta de restauración ejecutable. Use el procedimiento manual documentado; trstctl no registrará un éxito que parezca una restauración.",
@@ -6459,7 +6477,6 @@ const esESCatalog = {
   "source.bundle.bytes.842399751d": "Bytes del paquete",
   "source.business.purpose.286d11d720": "Finalidad empresarial",
   "source.by.key.type.7228596a06": "por tipo de clave",
-  "source.ca.chain.pem.add189510a": "Cadena de CA en formato PEM",
   "source.retirement.checklist.h4ret00001": "Retirada de clave",
   "source.retirement.blocked.h4ret00002": "{value1} dependientes deben reprotegerse o liberarse antes de destruir esta clave.",
   "source.retirement.clear.h4ret00003":
@@ -6562,7 +6579,6 @@ const esESCatalog = {
   "source.create.a.profile.6d7beeefb5": "Crear un perfil",
   "source.create.a.signer.backed.successor.before.ac.c0163adb05": "Crear un sucesor respaldado por un firmante antes de activar la rotación.",
   "source.create.first.source.4d63a7434c": "Crear el primer origen",
-  "source.create.issuer.83b848cf15": "Crear emisor",
   "source.create.one.time.share.fd95a197d6": "Crear enlace de un solo uso",
   "source.create.or.activate.a.certificate.profile.b.246493dc15":
     "Crear o activar un perfil de certificado antes de que se puedan aceptar las solicitudes de autoservicio.",
@@ -6775,9 +6791,7 @@ const esESCatalog = {
   "source.issued.ssh.certificate.3775bb2dee": "Certificado SSH emitido",
   "source.issuer.535c6f8eb5": "issuer",
   "source.issuer.catalog.add106b6a5": "Catálogo de emisores",
-  "source.issuer.create.failed.1550974caf": "Error al crear el emisor",
   "source.issuer.filter.32db997051": "Filtro de emisores",
-  "source.issuer.kind.9f06073f8d": "Tipo de emisor",
   "source.issuer.list.477db22fd7": "Lista de emisores",
   "source.issuer.metadata.unavailable.5b4cf4fcb5": "Metadatos del emisor no disponibles",
   "source.issuer.visibility.859e72db07": "Visibilidad del emisor",
@@ -7095,7 +7109,6 @@ const esESCatalog = {
   "source.privilege.label.128cc84317": "Etiqueta de privilegio",
   "source.prod.k8s.42d6181646": "prod-k8s",
   "source.product.evidence.1b4586bcc7": "Evidencia del producto",
-  "source.production.acme.c76ba14398": "ACME de producción",
   "source.professional.services.package.table.60626ecbca": "Tabla de paquetes de servicios profesionales",
   "source.profile.authoring.mode.4bba88d160": "Modo de edición de reglas",
   "source.profile.comparison.unavailable.70eb2b404e": "Comparación de reglas no disponible",
@@ -7507,7 +7520,6 @@ const esESCatalog = {
   "source.copy.id.72ac0d580f": "Copiar ID",
   "source.copy.value1.6dd8303613": "Copiar {value1}",
   "source.copy.value1.value2.command.fbc14f63f6": "Copiar comando {value1} {value2}",
-  "source.default.37a8eec1ce": "predeterminado",
   "source.default.redactor.fa0bdd3f61": "default-redactor",
   "source.delete.dns.01.config.value1.c275f568a2": "Eliminar configuración DNS-01 {value1}",
   "source.delete.scep.policy.value1.62934aa247": "Eliminar política SCEP {value1}",
@@ -7526,7 +7538,6 @@ const esESCatalog = {
   "source.export.fleet.run.value1.evidence.6065920a10": "Exportar evidencia de la ejecución de flota {value1}",
   "source.exporting.639e45361b": "Exportando...",
   "source.external.3c4623849a": "externo",
-  "source.external.ca.integration.c66b92973a": "Integración con CA externa",
   "source.filter.638e249f4a": "Filtrar",
   "source.filtering.5bdc12007f": "Filtrando...",
   "source.fips.module.active.76cb6077b6": "Módulo FIPS activo",
@@ -7561,7 +7572,6 @@ const esESCatalog = {
   "source.loading.next.page.8c0453192f": "Cargando la página siguiente...",
   "source.loading.preview.c02130fa90": "Cargando vista previa...",
   "source.local.preview.session.04a12d6877": "sesión de vista previa local",
-  "source.local.signing.authority.0461c7306a": "Autoridad de firma local",
   "source.mark.managed.value1.ba545156d1": "Marcar {value1} como gestionado",
   "source.mints.a.signer.backed.intermediate.chained.5b33f94914": "Crea una CA intermedia firmada por su autoridad principal.",
   "source.mints.a.signer.backed.root.from.a.quorum.a.592ee04526":

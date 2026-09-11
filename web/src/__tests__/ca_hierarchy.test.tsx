@@ -947,11 +947,10 @@ describe("CA hierarchy and custody surface", () => {
     await user.click(opener);
 
     const dialog = await screen.findByRole("dialog", { name: "Configure ACME issuer" });
-    const issuerName = within(dialog).getByLabelText("Issuer name");
     const close = within(dialog).getByRole("button", { name: "Close issuer form" });
     const cancel = within(dialog).getByRole("button", { name: "Cancel" });
 
-    expect(issuerName).toHaveFocus();
+    expect(close).toHaveFocus();
 
     close.focus();
     await user.tab({ shift: true });

@@ -29,6 +29,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useToast } from "@/components/ToastProvider";
 import { Button } from "@/components/ui/button";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
+import { IssuerSetupDialog } from "./cahierarchy/CAIssuerSetupParts";
 import { CAHorizonBadge, CAHorizonRenewBy, CALineageTree } from "./cahierarchy/CAHierarchyPageParts";
 import { CACeremonyReviewDialog, CARotationReviewDialog, CeremonyDetailDialog, CeremonyPanel } from "./cahierarchy/CAHierarchyCeremonyParts";
 import { ManagedKeyCustodyWorkspace } from "./cahierarchy/CAHierarchyCustodyParts";
@@ -52,10 +53,9 @@ import {
   type Issuer,
   type IssuerCapabilityMatrix,
   type RetirementChecklist,
-  type IssuerRequest,
   type Profile,
 } from "@/lib/api";
-import { defaultIssuerConfigValues, issuerTypes, splitPEMChain, type IssuerConfigField, type IssuerTypeConfig } from "@/lib/issuerCatalog";
+import { issuerTypes, type IssuerTypeConfig } from "@/lib/issuerCatalog";
 import { apiProblemMessage } from "@/lib/apiProblem";
 import { useCapabilityExecution } from "@/lib/capabilities";
 
@@ -362,8 +362,6 @@ export function CAHierarchy() {
   const [ceremonyBusy, setCeremonyBusy] = useState(false);
   const [ceremonyError, setCeremonyError] = useState<string | null>(null);
   const [issuerDialogType, setIssuerDialogType] = useState<IssuerTypeConfig | null>(null);
-  const [issuerBusy, setIssuerBusy] = useState(false);
-  const [issuerError, setIssuerError] = useState<string | null>(null);
   const [probe, setProbe] = useState<ProbeState | null>(null);
   const [offlineRootForm, setOfflineRootForm] = useState<OfflineCAForm>(offlineRootDefaults);
   const [offlineIntermediateForm, setOfflineIntermediateForm] = useState<OfflineIntermediateForm>(offlineIntermediateDefaults);
@@ -569,26 +567,6 @@ export function CAHierarchy() {
       setCeremonyError(errorText(err, "Could not approve ceremony"));
     } finally {
       setCeremonyBusy(false);
-    }
-  }
-
-  async function createIssuerFromCatalog(type: IssuerTypeConfig, name: string, chainPEM: string) {
-    setIssuerBusy(true);
-    setIssuerError(null);
-    try {
-      const req: IssuerRequest = {
-        name,
-        kind: "x509_ca",
-        internal: type.internal,
-        chain: splitPEMChain(chainPEM),
-      };
-      await api.createIssuer(req);
-      setIssuerDialogType(null);
-      await load();
-    } catch (err) {
-      setIssuerError(errorText(err, "Could not create issuer"));
-    } finally {
-      setIssuerBusy(false);
     }
   }
 
@@ -1127,15 +1105,13 @@ export function CAHierarchy() {
       </div>
 
       {issuerDialogType && (
-        <CreateIssuerDialog
+        <IssuerSetupDialog
           type={issuerDialogType}
-          busy={issuerBusy}
-          error={issuerError}
-          onClose={() => {
+          onClose={() => setIssuerDialogType(null)}
+          onCreateLocal={(kind) => {
             setIssuerDialogType(null);
-            setIssuerError(null);
+            setCreateAuthorityKind(kind);
           }}
-          onSubmit={(name, chainPEM) => void createIssuerFromCatalog(issuerDialogType, name, chainPEM)}
         />
       )}
 
@@ -2630,179 +2606,6 @@ function IssuerCatalogCard({ onConfigure, type }: { type: IssuerTypeConfig; onCo
   );
 }
 
-function CreateIssuerDialog({
-  busy,
-  error,
-  onClose,
-  onSubmit,
-  type,
-}: {
-  type: IssuerTypeConfig;
-  busy: boolean;
-  error: string | null;
-  onClose: () => void;
-  onSubmit: (name: string, chainPEM: string) => void;
-}) {
-  const [name, setName] = useState("");
-  const [chainPEM, setChainPEM] = useState("");
-  const [config, setConfig] = useState<Record<string, string>>(() => defaultIssuerConfigValues(type));
-  const nameInputRef = useRef<HTMLInputElement>(null);
-  const titleId = "issuer-create-heading";
-  const descriptionId = "issuer-create-description";
-
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    onSubmit(name.trim(), chainPEM.trim());
-  }
-
-  return (
-    <Dialog
-      open
-      onClose={onClose}
-      titleId={titleId}
-      descriptionId={descriptionId}
-      initialFocusRef={nameInputRef}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      overlayClassName="absolute inset-0 bg-black/55"
-      panelClassName="relative max-h-[min(42rem,calc(100vh-2rem))] w-full max-w-3xl overflow-hidden rounded-panel border border-border bg-card shadow-elevation2"
-    >
-      <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
-        <div className="min-w-0">
-          <h2 id={titleId} className="truncate text-title font-semibold">
-            {translateNow("source.configure.6defafa2ca")} {type.name} {translateNow("source.issuer.535c6f8eb5")}
-          </h2>
-          <p id={descriptionId} className="mt-1 text-sm text-muted-foreground">
-            {type.internal ? translateNow("source.local.signing.authority.0461c7306a") : translateNow("source.external.ca.integration.c66b92973a")}
-          </p>
-        </div>
-        <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label={translateNow("source.close.issuer.form.b40f6c2037")}>
-          <X className="h-4 w-4" aria-hidden="true" />
-        </Button>
-      </header>
-      <form className="grid max-h-[calc(100vh-8rem)] overflow-y-auto" onSubmit={submit}>
-        <div className="grid gap-5 p-5">
-          {error && <ErrorState title={translateNow("source.issuer.create.failed.1550974caf")}>{error}</ErrorState>}
-          <div className="grid gap-4 md:grid-cols-2">
-            <LabeledInput
-              inputRef={nameInputRef}
-              id="issuer-name"
-              label="Issuer name"
-              value={name}
-              required
-              onChange={setName}
-              placeholder={translateNow("source.production.acme.c76ba14398")}
-            />
-            <div className="grid gap-2">
-              <label className="text-sm font-medium" htmlFor="issuer-kind">
-                {translateNow("source.issuer.kind.9f06073f8d")}
-              </label>
-              <input
-                id="issuer-kind"
-                value="x509_ca"
-                readOnly
-                className="h-10 rounded-control border border-border bg-muted/40 px-3 text-sm text-muted-foreground"
-              />
-            </div>
-          </div>
-          <div className="grid gap-2">
-            <label className="text-sm font-medium" htmlFor="issuer-chain">
-              {translateNow("source.ca.chain.pem.add189510a")}
-            </label>
-            <textarea
-              id="issuer-chain"
-              required
-              rows={5}
-              value={chainPEM}
-              onChange={(event) => setChainPEM(event.target.value)}
-              className="min-h-32 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-focus focus:ring-2 focus:ring-focus/20"
-              placeholder={translateNow("source.begin.certificate.ddddb6cbd3")}
-            />
-          </div>
-          <IssuerConfigForm fields={type.configFields} values={config} onChange={(key, value) => setConfig((current) => ({ ...current, [key]: value }))} />
-        </div>
-        <footer className="flex flex-wrap justify-end gap-2 border-t border-border px-5 py-4">
-          <Button type="button" variant="outline" onClick={onClose}>
-            {translateNow("source.cancel.19766ed6cc")}
-          </Button>
-          <Button type="submit" disabled={busy || name.trim() === "" || chainPEM.trim() === ""}>
-            {translateNow("source.create.issuer.83b848cf15")}
-          </Button>
-        </footer>
-      </form>
-    </Dialog>
-  );
-}
-
-function IssuerConfigForm({
-  fields,
-  onChange,
-  values,
-}: {
-  fields: IssuerConfigField[];
-  values: Record<string, string>;
-  onChange: (key: string, value: string) => void;
-}) {
-  return (
-    <div className="grid gap-4 md:grid-cols-2">
-      {fields.map((field) => (
-        <IssuerConfigFieldControl key={field.key} field={field} value={values[field.key] ?? ""} onChange={(value) => onChange(field.key, value)} />
-      ))}
-    </div>
-  );
-}
-
-function IssuerConfigFieldControl({ field, onChange, value }: { field: IssuerConfigField; value: string; onChange: (value: string) => void }) {
-  const id = `issuer-config-${field.key}`;
-  if (field.type === "select") {
-    return (
-      <div className="grid gap-2">
-        <FieldLabel field={field} id={id} />
-        <select
-          id={id}
-          required={field.required}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none transition-colors focus:border-focus focus:ring-2 focus:ring-focus/20"
-        >
-          <option value="">{translateNow("source.select.2a78025de6")}</option>
-          {field.options?.map((option) => (
-            <option key={option} value={option}>
-              {option || translateNow("source.default.37a8eec1ce")}
-            </option>
-          ))}
-        </select>
-      </div>
-    );
-  }
-  if (field.type === "textarea") {
-    return (
-      <div className="grid gap-2 md:col-span-2">
-        <FieldLabel field={field} id={id} />
-        <textarea
-          id={id}
-          required={field.required}
-          value={value}
-          rows={4}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder={field.placeholder}
-          className="rounded-control border border-border bg-background px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-focus focus:ring-2 focus:ring-focus/20"
-        />
-      </div>
-    );
-  }
-  return (
-    <LabeledInput
-      id={id}
-      label={field.label}
-      value={value}
-      required={field.required}
-      type={field.type === "password" ? "password" : field.type === "number" ? "number" : "text"}
-      placeholder={field.placeholder}
-      onChange={onChange}
-    />
-  );
-}
-
 function LabeledInput({
   id,
   label,
@@ -2873,14 +2676,6 @@ function LabeledTextarea({
         className="min-h-32 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-focus focus:ring-2 focus:ring-focus/20"
       />
     </div>
-  );
-}
-
-function FieldLabel({ field, id }: { field: IssuerConfigField; id: string }) {
-  return (
-    <label className="text-sm font-medium" htmlFor={id}>
-      {field.label}
-    </label>
   );
 }
 

@@ -1,0 +1,19 @@
+{
+  "external_cas": [
+    {
+      "id": "vault-prod",
+      "type": "vaultpki",
+      "name": "Production Vault PKI",
+      "endpoint": "https://vault.internal:8200",
+      "mount": "pki",
+      "role": "web-certs",
+      "bearer_token_ref": "file:/run/secrets/vault-token",
+      "network": {
+        "root_ca_file": "/etc/trstctl/vault-server-ca.pem",
+        "allow_private_endpoint": true,
+        "private_egress_cidrs": ["10.40.0.15/32"],
+        "timeout": "15s"
+      }
+    }
+  ]
+}

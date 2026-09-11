@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ToastProvider } from "@/components/ToastProvider";
@@ -102,7 +102,43 @@ describe("C10-1 issuer catalog and connection tests", () => {
     apiMock.zeroizeManagedKey.mockResolvedValue({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 2, state: "zeroized" });
   });
 
-  it("renders the CA catalog, creates from a schema form, masks sensitive fields, and probes upstream status", async () => {
+  it("keeps Vault integration setup operator-owned instead of collecting discarded credentials", async () => {
+    const user = userEvent.setup();
+    apiMock.externalCAs.mockRejectedValue(new ApiError(503, JSON.stringify({ detail: "external CA registry is not enabled" })));
+    renderCAHierarchy();
+    await user.click(await screen.findByRole("button", { name: "Configure Vault PKI" }));
+    const dialog = await screen.findByRole("dialog", { name: "Configure Vault PKI issuer" });
+    expect(within(dialog).queryByLabelText("Vault Token")).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("Vault Address")).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "Create issuer" })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "Record public CA metadata only" })).not.toBeInTheDocument();
+    expect(within(dialog).getByText(/control-plane operator configures/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/TRSTCTL_CONFIG_FILE/)).toBeInTheDocument();
+    const config = JSON.parse(within(dialog).getByTestId("vault-operator-config").textContent ?? "");
+    expect(config.external_cas[0]).toMatchObject({ type: "vaultpki", mount: "pki", role: "web-certs", bearer_token_ref: "file:/run/secrets/vault-token" });
+    expect(config.external_cas[0].network).toMatchObject({
+      root_ca_file: "/etc/trstctl/vault-server-ca.pem",
+      allow_private_endpoint: true,
+      private_egress_cidrs: ["10.40.0.15/32"],
+    });
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(apiMock.createIssuer).not.toHaveBeenCalled();
+  });
+
+  it("routes local setup into the existing protected authority workflow", async () => {
+    const user = userEvent.setup();
+    renderCAHierarchy();
+    await user.click(await screen.findByRole("button", { name: "Configure Local CA" }));
+    const setup = await screen.findByRole("dialog", { name: "Configure Local CA issuer" });
+    expect(within(setup).queryByRole("textbox")).not.toBeInTheDocument();
+    expect(within(setup).getByText(/key ceremony and approvals/)).toBeInTheDocument();
+    await user.click(within(setup).getByRole("button", { name: "Create root CA" }));
+    expect(await screen.findByRole("dialog", { name: "Create root CA" })).toBeInTheDocument();
+    expect(apiMock.createIssuer).not.toHaveBeenCalled();
+    expect(apiMock.createCACeremony).not.toHaveBeenCalled();
+  });
+
+  it("keeps external setup effect-free and retains upstream status probes", async () => {
     const user = userEvent.setup();
     renderCAHierarchy();
 
@@ -114,25 +150,10 @@ describe("C10-1 issuer catalog and connection tests", () => {
     await user.click(within(catalog).getByRole("button", { name: "Configure ACME" }));
 
     const dialog = await screen.findByRole("dialog", { name: "Configure ACME issuer" });
-    await user.type(within(dialog).getByLabelText("Issuer name"), "Created ACME");
-    await user.type(within(dialog).getByLabelText("CA chain PEM"), caChain);
-    await user.type(within(dialog).getByLabelText("Directory URL"), "https://acme.example/directory");
-    await user.type(within(dialog).getByLabelText("Email"), "ops@example.test");
-    const hmacInput = within(dialog).getByLabelText("EAB HMAC Key");
-    expect(hmacInput).toHaveAttribute("type", "password");
-    await user.type(hmacInput, "super-secret-hmac");
-
-    await user.click(within(dialog).getByRole("button", { name: "Create issuer" }));
-
-    await waitFor(() =>
-      expect(apiMock.createIssuer).toHaveBeenCalledWith({
-        name: "Created ACME",
-        kind: "x509_ca",
-        internal: false,
-        chain: [caChain],
-      }),
-    );
-    expect(JSON.stringify(apiMock.createIssuer.mock.calls[0][0])).not.toContain("super-secret-hmac");
+    expect(within(dialog).queryByRole("textbox")).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("EAB HMAC Key")).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(apiMock.createIssuer).not.toHaveBeenCalled();
 
     await user.click(await screen.findByRole("button", { name: "Test connection Production ACME" }));
     expect(await screen.findByText("Production ACME: connection passed")).toBeInTheDocument();

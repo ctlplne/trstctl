@@ -12,6 +12,21 @@ import type { MessageKey } from "@/i18n/messages";
  * clause turns a missing key into a type error, so every new message key
  * ships with an es-ES AND a de-DE entry from the same commit. */
 const deDECatalog = {
+  "caSetup.localBoundary":
+    "Erstellen Sie eine lokale CA über den geschützten Ablauf für Root- oder Zwischenzertifizierungsstellen. Die erforderliche Schlüsselzeremonie und Genehmigungen sind nötig, bevor die Signierung aktiviert wird.",
+  "caSetup.operatorBoundary":
+    "Der Betreiber der Steuerungsebene konfiguriert diese externe CA. Diese Mandantenkonsole kann weder ihre Verbindung noch ihre Zugangsdaten einrichten.",
+  "caSetup.configure":
+    "Fügen Sie die CA unter external_cas in der durch TRSTCTL_CONFIG_FILE gewählten JSON-Serverkonfiguration hinzu. Verwenden Sie eine stabile Registry-ID und den genauen Anbietertyp.",
+  "caSetup.trust":
+    "Speichern Sie Zugangsdaten in Dateien unter Kontrolle des Betreibers und referenzieren Sie diese mit file:/absoluter/pfad. Hinterlegen Sie die Vertrauenswurzel des Servers und erlauben Sie nur die benötigten privaten Adressbereiche. Fügen Sie hier niemals Zugangsdaten ein.",
+  "caSetup.restart":
+    "Führen Sie trstctl -check-config aus, starten Sie die konfigurierte Steuerungsebene neu und aktualisieren Sie diese Seite. Die Konfigurationsprüfung kontaktiert die CA nicht.",
+  "caSetup.verify":
+    "Bestätigen Sie die genaue ID in GET /api/v1/external-cas, bevor Sie sie zur Ausstellung auswählen. Ein Inventar- oder Registry-Eintrag allein belegt keine erfolgreiche Anfrage an die CA.",
+  "caSetup.vaultExample":
+    "Vault-Beispiel: Ersetzen Sie URL, Signatur-Mount, Rolle, Dateipfade und Einzelhost-CIDR durch Ihre geprüften Werte. Das Token benötigt die Berechtigung zum Signieren für diese Rolle.",
+  "caSetup.reference": "Vollständige Konfigurationsreferenz: docs/configuration.md, Abschnitt Native connector and external-CA assembly.",
   // Machine-authored correction translations; human language review required before release.
   "wizard.firstLeaf.submitCorrection": "Korrigierten CSR für diese Identität senden",
   "wizard.firstLeaf.correctionDisposition":
@@ -4756,6 +4771,9 @@ const deDECatalog = {
   "connectors.preview.refresh": "Vorschauergebnis prüfen",
   "connectors.preview.correlationUnavailable":
     "Diese eingereihte Vorschau hat keinen Belegschlüssel. Die Konsole rät deshalb nicht, welches Ergebnis dazugehört. Führen Sie eine neue Vorschau aus.",
+  "connectors.recovery.refresh": "Wiederherstellungsergebnis prüfen",
+  "connectors.recovery.readFailed":
+    "Das genaue Wiederherstellungsergebnis konnte nicht bestätigt werden. Prüfen Sie Ihren Zugriff und Ihre Verbindung und lesen Sie dieses Ergebnis erneut. Es wurde keine neue Wiederherstellung angefordert.",
   "connectors.recovery.review": "Wiederherstellung prüfen",
   "connectors.recovery.unavailable":
     "Dieser Connector hat keinen ausführbaren Wiederherstellungspfad. Nutzen Sie das dokumentierte manuelle Verfahren; trstctl zeichnet keinen irreführenden Wiederherstellungserfolg auf.",
@@ -6508,7 +6526,6 @@ const deDECatalog = {
   "source.bundle.bytes.842399751d": "Bundle-Bytes",
   "source.business.purpose.286d11d720": "Geschäftszweck",
   "source.by.key.type.7228596a06": "nach Schlüsseltyp",
-  "source.ca.chain.pem.add189510a": "CA-Kette im PEM-Format",
   "source.retirement.checklist.h4ret00001": "Schl\u00fcssel-Au\u00dferbetriebnahme",
   "source.retirement.blocked.h4ret00002":
     "{value1} Abh\u00e4ngige m\u00fcssen neu gesch\u00fctzt oder freigegeben werden, bevor dieser Schl\u00fcssel zerst\u00f6rt werden kann.",
@@ -6612,7 +6629,6 @@ const deDECatalog = {
   "source.create.a.signer.backed.successor.before.ac.c0163adb05":
     "Erstellen Sie einen durch einen Signierer unterstützten Nachfolger, bevor Sie die Rotation aktivieren.",
   "source.create.first.source.4d63a7434c": "Erste Quelle erstellen",
-  "source.create.issuer.83b848cf15": "Aussteller erstellen",
   "source.create.one.time.share.fd95a197d6": "Einmaligen Freigabelink erstellen",
   "source.create.or.activate.a.certificate.profile.b.246493dc15":
     "Erstellen oder aktivieren Sie ein Zertifikatprofil, bevor Self-Service-Anfragen akzeptiert werden können.",
@@ -6830,9 +6846,7 @@ const deDECatalog = {
   "source.issued.ssh.certificate.3775bb2dee": "Ausgestelltes SSH-Zertifikat",
   "source.issuer.535c6f8eb5": "issuer",
   "source.issuer.catalog.add106b6a5": "Ausstellerkatalog",
-  "source.issuer.create.failed.1550974caf": "Erstellung des Ausstellers fehlgeschlagen",
   "source.issuer.filter.32db997051": "Ausstellerfilter",
-  "source.issuer.kind.9f06073f8d": "Ausstellertyp",
   "source.issuer.list.477db22fd7": "Ausstellerliste",
   "source.issuer.metadata.unavailable.5b4cf4fcb5": "Ausstellermetadaten nicht verfügbar",
   "source.issuer.visibility.859e72db07": "Sichtbarkeit des Ausstellers",
@@ -7154,7 +7168,6 @@ const deDECatalog = {
   "source.privilege.label.128cc84317": "Bezeichnung der Berechtigung",
   "source.prod.k8s.42d6181646": "prod-k8s",
   "source.product.evidence.1b4586bcc7": "Produktnachweis",
-  "source.production.acme.c76ba14398": "ACME für die Produktion",
   "source.professional.services.package.table.60626ecbca": "Tabelle der Pakete für professionelle Dienstleistungen",
   "source.profile.authoring.mode.4bba88d160": "Regelbearbeitungsmodus",
   "source.profile.comparison.unavailable.70eb2b404e": "Regelvergleich nicht verfügbar",
@@ -7566,7 +7579,6 @@ const deDECatalog = {
   "source.copy.id.72ac0d580f": "ID kopieren",
   "source.copy.value1.6dd8303613": "{value1} kopieren",
   "source.copy.value1.value2.command.fbc14f63f6": "Befehl {value1} {value2} kopieren",
-  "source.default.37a8eec1ce": "Standard",
   "source.default.redactor.fa0bdd3f61": "default-redactor",
   "source.delete.dns.01.config.value1.c275f568a2": "DNS-01-Konfiguration {value1} löschen",
   "source.delete.scep.policy.value1.62934aa247": "SCEP-Richtlinie {value1} löschen",
@@ -7585,7 +7597,6 @@ const deDECatalog = {
   "source.export.fleet.run.value1.evidence.6065920a10": "Nachweis für Flottenlauf {value1} exportieren",
   "source.exporting.639e45361b": "Wird exportiert...",
   "source.external.3c4623849a": "extern",
-  "source.external.ca.integration.c66b92973a": "Externe CA-Integration",
   "source.filter.638e249f4a": "Filtern",
   "source.filtering.5bdc12007f": "Wird gefiltert...",
   "source.fips.module.active.76cb6077b6": "FIPS-Modul aktiv",
@@ -7620,7 +7631,6 @@ const deDECatalog = {
   "source.loading.next.page.8c0453192f": "Nächste Seite wird geladen...",
   "source.loading.preview.c02130fa90": "Vorschau wird geladen...",
   "source.local.preview.session.04a12d6877": "lokale Vorschausitzung",
-  "source.local.signing.authority.0461c7306a": "Lokale Signaturstelle",
   "source.mark.managed.value1.ba545156d1": "{value1} als verwaltet markieren",
   "source.mints.a.signer.backed.intermediate.chained.5b33f94914": "Erstellt eine Intermediate-CA, die von ihrer übergeordneten CA signiert ist.",
   "source.mints.a.signer.backed.root.from.a.quorum.a.592ee04526":

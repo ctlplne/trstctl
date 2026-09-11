@@ -12,6 +12,44 @@ export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
 
 export const messages = {
+  "caSetup.localBoundary": {
+    defaultMessage:
+      "Create a local authority through the protected root or intermediate workflow. It requires the applicable key ceremony and approvals before signing is enabled.",
+    description: "Local CA setup uses the protected authority workflow.",
+  },
+  "caSetup.operatorBoundary": {
+    defaultMessage: "The control-plane operator configures this upstream CA. This tenant console cannot install its connection or credentials.",
+    description: "Existing-CA operator setup and public metadata boundary.",
+  },
+  "caSetup.configure": {
+    defaultMessage:
+      "Add the authority under external_cas in the server JSON configuration selected by TRSTCTL_CONFIG_FILE. Use a stable registry ID and the exact provider type.",
+    description: "Existing-CA operator setup and public metadata boundary.",
+  },
+  "caSetup.trust": {
+    defaultMessage:
+      "Store credentials in operator-owned files and reference them with file:/absolute/path. Pin the server trust root and permit only the required private address ranges. Never paste credentials here.",
+    description: "Existing-CA operator setup and public metadata boundary.",
+  },
+  "caSetup.restart": {
+    defaultMessage:
+      "Run trstctl -check-config, restart the configured control plane, then refresh this page. Configuration validation does not contact the authority.",
+    description: "Existing-CA operator setup and public metadata boundary.",
+  },
+  "caSetup.verify": {
+    defaultMessage:
+      "Confirm the exact ID in GET /api/v1/external-cas before selecting it for issuance. An inventory record or registry entry alone does not prove a successful CA request.",
+    description: "Existing-CA operator setup and public metadata boundary.",
+  },
+  "caSetup.vaultExample": {
+    defaultMessage:
+      "Vault example: replace the URL, signing mount, role, file paths and single-host CIDR with your inspected values. The token needs permission to sign for that role.",
+    description: "Existing-CA operator setup and public metadata boundary.",
+  },
+  "caSetup.reference": {
+    defaultMessage: "Full configuration reference: docs/configuration.md, Native connector and external-CA assembly.",
+    description: "Existing-CA operator setup and public metadata boundary.",
+  },
   "wizard.firstLeaf.submitCorrection": {
     defaultMessage: "Submit the corrected CSR for this identity",
     description: "Submit a deliberate correction after an exact pre-transition CSR refusal.",
@@ -13707,6 +13745,12 @@ export const messages = {
     defaultMessage: "This queued preview has no receipt key, so the console will not guess which result belongs to it. Run a new preview.",
     description: "Fail-closed warning when an asynchronous connector preview cannot be tied to its exact result receipt.",
   },
+  "connectors.recovery.refresh": { defaultMessage: "Check restore result", description: "Read the exact restore receipt without submitting another rollback." },
+  "connectors.recovery.readFailed": {
+    defaultMessage:
+      "The exact restore result could not be confirmed. Check your access and connection, then read this result again. No new restore was submitted.",
+    description: "Fail-closed recovery guidance for an unavailable or mismatched restore receipt.",
+  },
   "connectors.recovery.review": {
     defaultMessage: "Review restore",
     description: "Opens the connector recovery review without changing the target.",
@@ -20784,10 +20828,6 @@ export const messages = {
     defaultMessage: "by key type",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Dashboard.tsx.",
   },
-  "source.ca.chain.pem.add189510a": {
-    defaultMessage: "CA chain PEM",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
-  },
   "source.retirement.checklist.h4ret00001": {
     defaultMessage: "Key retirement",
     description: "H4: heading for the CA-key retirement checklist.",
@@ -21184,10 +21224,6 @@ export const messages = {
   "source.create.first.source.4d63a7434c": {
     defaultMessage: "Create first source",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Discovery.tsx.",
-  },
-  "source.create.issuer.83b848cf15": {
-    defaultMessage: "Create issuer",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
   },
   "source.create.one.time.share.fd95a197d6": {
     defaultMessage: "Create one-time share",
@@ -21996,17 +22032,9 @@ export const messages = {
     defaultMessage: "Issuer catalog",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
   },
-  "source.issuer.create.failed.1550974caf": {
-    defaultMessage: "Issuer create failed",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
-  },
   "source.issuer.filter.32db997051": {
     defaultMessage: "Issuer filter",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Certificates.tsx.",
-  },
-  "source.issuer.kind.9f06073f8d": {
-    defaultMessage: "Issuer kind",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
   },
   "source.issuer.list.477db22fd7": {
     defaultMessage: "Issuer list",
@@ -23653,10 +23681,6 @@ export const messages = {
     defaultMessage: "Product evidence",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Policy.tsx.",
   },
-  "source.production.acme.c76ba14398": {
-    defaultMessage: "Production ACME",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/CAHierarchy.tsx.",
-  },
   "source.professional.services.package.table.60626ecbca": {
     defaultMessage: "Professional services package table",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
@@ -25272,10 +25296,6 @@ export const messages = {
     defaultMessage: "Copy {value1} {value2} command",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Protocols.tsx:676.",
   },
-  "source.default.37a8eec1ce": {
-    defaultMessage: "default",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:2351.",
-  },
   "source.default.redactor.fa0bdd3f61": {
     defaultMessage: "default-redactor",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Assistant.tsx:175.",
@@ -25343,10 +25363,6 @@ export const messages = {
   "source.external.3c4623849a": {
     defaultMessage: "external",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:2194, src/pages/CAHierarchy.tsx:2586.",
-  },
-  "source.external.ca.integration.c66b92973a": {
-    defaultMessage: "External CA integration",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:2256.",
   },
   "source.filter.638e249f4a": {
     defaultMessage: "Filter",
@@ -25484,10 +25500,6 @@ export const messages = {
   "source.local.preview.session.04a12d6877": {
     defaultMessage: "local preview session",
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Platform.tsx:274.",
-  },
-  "source.local.signing.authority.0461c7306a": {
-    defaultMessage: "Local signing authority",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/CAHierarchy.tsx:2256.",
   },
   "source.mark.managed.value1.ba545156d1": {
     defaultMessage: "Mark managed {value1}",

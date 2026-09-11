@@ -21,6 +21,7 @@ import {
 } from "@/lib/api";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { EndpointBindingWorkflow } from "@/pages/connectors/EndpointBindingWorkflow";
+import { RecoveryResult } from "@/pages/connectors/RecoveryResult";
 import { defaultTargetConfig } from "@/lib/connectorTargetTemplates";
 
 // VantageBadge names where a connector's deploy work executes (epic A3), read
@@ -60,7 +61,7 @@ export function Connectors() {
   const [actionResult, setActionResult] = useState<string | null>(null);
   const [previewReceipt, setPreviewReceipt] = useState<ConnectorDelivery | null>(null);
   const [previewRefreshing, setPreviewRefreshing] = useState(false);
-  const [recoveryReceipt, setRecoveryReceipt] = useState<ConnectorDelivery | null>(null);
+  const [recoveryReceipt, setRecoveryReceipt] = useState<{ receipt: ConnectorDelivery; targetId: string; identityId: string } | null>(null);
   const [rollbackReviewOpen, setRollbackReviewOpen] = useState(false);
   const [targetActionBusy, setTargetActionBusy] = useState<"bind" | "test" | "deploy" | "rollback" | null>(null);
   const [targetName, setTargetName] = useState("edge/prod/payments");
@@ -275,7 +276,7 @@ export function Connectors() {
       } else {
         setRecoveryReceipt(null);
         const receipt = await api.rollbackConnectorTarget(selectedTarget, { identity_id: selectedIdentity, reason: reason.trim() });
-        setRecoveryReceipt(receipt);
+        setRecoveryReceipt({ receipt, targetId: selectedTarget, identityId: selectedIdentity });
         setRollbackReviewOpen(false);
         setActionResult(null);
       }
@@ -569,7 +570,15 @@ export function Connectors() {
                 </label>
                 <label className="grid gap-1 text-sm">
                   {translateNow("source.identity.999f23fcd7")}
-                  <select className="ui-input" value={selectedIdentity} onChange={(event) => setSelectedIdentity(event.target.value)}>
+                  <select
+                    className="ui-input"
+                    value={selectedIdentity}
+                    onChange={(event) => {
+                      setSelectedIdentity(event.target.value);
+                      setRecoveryReceipt(null);
+                      setRollbackReviewOpen(false);
+                    }}
+                  >
                     <option value="">{translateNow("source.select.identity.1b8c8195aa")}</option>
                     {identities.map((identity) => (
                       <option key={identity.id} value={identity.id}>
@@ -672,24 +681,8 @@ export function Connectors() {
                     ) : null}
                   </section>
                 ) : null}
-                {recoveryReceipt ? (
-                  <section
-                    aria-labelledby="connector-recovery-result-heading"
-                    className="grid gap-2 rounded-control border border-border bg-muted/30 p-3 md:col-span-3"
-                    role="status"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <h3 id="connector-recovery-result-heading" className="font-semibold">
-                        {recoveryReceipt.status === "rolled_back"
-                          ? t("connectors.recovery.restored")
-                          : recoveryReceipt.status === "rollback_queued"
-                            ? t("connectors.recovery.queued")
-                            : t("connectors.recovery.notExecuted")}
-                      </h3>
-                      <StatusBadge value={recoveryReceipt.status} vocabulary="delivery" tone={deliveryStatusTone(recoveryReceipt.status)} />
-                    </div>
-                    <p className="text-sm text-muted-foreground">{recoveryReceipt.detail || recoveryReceipt.reason || "-"}</p>
-                  </section>
+                {recoveryReceipt && recoveryReceipt.targetId === selectedTarget && recoveryReceipt.identityId === selectedIdentity ? (
+                  <RecoveryResult key={recoveryReceipt.receipt.id} initial={recoveryReceipt.receipt} />
                 ) : null}
               </div>
               {selectedTargetRecord ? (

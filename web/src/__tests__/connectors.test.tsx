@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Connectors } from "@/pages/Connectors";
+import { AppQueryProvider } from "@/lib/query";
 import { ToastProvider } from "@/components/ToastProvider";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -21,6 +22,7 @@ const { apiMock } = vi.hoisted(() => ({
     deployConnectorTarget: vi.fn(),
     rollbackConnectorTarget: vi.fn(),
     connectorDeliveries: vi.fn(),
+    connectorDelivery: vi.fn(),
     outboxCircuits: vi.fn(),
     endpointVerifications: vi.fn(),
     endpointKeyCustody: vi.fn(),
@@ -36,7 +38,9 @@ function renderConnectors() {
   return render(
     <MemoryRouter>
       <ToastProvider>
-        <Connectors />
+        <AppQueryProvider>
+          <Connectors />
+        </AppQueryProvider>
       </ToastProvider>
     </MemoryRouter>,
   );
@@ -232,6 +236,7 @@ describe("connector deployment disclosure surface", () => {
       status: "rollback_queued",
       detail: "the host agent will restore the encrypted predecessor bundle and verify the listener",
     });
+    apiMock.connectorDelivery.mockReset().mockImplementation(() => apiMock.rollbackConnectorTarget.getMockImplementation()?.());
     apiMock.connectorDeliveries.mockReset().mockResolvedValue({
       items: [
         {
@@ -539,6 +544,46 @@ describe("connector deployment disclosure surface", () => {
     await waitFor(() => expect(apiMock.rollbackConnectorTarget).toHaveBeenCalledWith("target-1", expect.objectContaining({ identity_id: "identity-1" })));
     expect(await screen.findByRole("heading", { name: "Restore queued — waiting for agent proof" })).toBeInTheDocument();
     expect(screen.getByText("the host agent will restore the encrypted predecessor bundle and verify the listener")).toBeInTheDocument();
+  });
+
+  it("reads the exact completed restore without submitting another mutation", async () => {
+    const queued = {
+      id: "rollback-exact",
+      tenant_id: "tenant-1",
+      outbox_id: 255,
+      identity_id: "identity-1",
+      destination: "connector.rollback",
+      connector: "nginx",
+      target: "edge/prod/payments",
+      status: "rollback_queued",
+      detail: "Waiting for the enrolled host",
+      idempotency_key: "operator-command",
+    };
+    apiMock.rollbackConnectorTarget.mockResolvedValue(queued);
+    apiMock.connectorDelivery.mockResolvedValue({
+      ...queued,
+      status: "rolled_back",
+      fingerprint: "proven-predecessor",
+      detail: "The exact host restored and verified the predecessor",
+      idempotency_key: "durable-job:rollback-result",
+    });
+    const user = userEvent.setup();
+    renderConnectors();
+    await screen.findByRole("heading", { name: "Where credentials are installed" });
+    await user.click(screen.getByText("Destinations and safe actions", { exact: true }));
+    await screen.findByRole("heading", { name: "Configured destinations" });
+    await user.selectOptions(screen.getByLabelText("Target"), "target-1");
+    await user.selectOptions(screen.getByLabelText("Identity"), "identity-1");
+    await user.type(screen.getByLabelText("Reason"), "Restore the proven predecessor");
+    await user.click(screen.getByRole("button", { name: "Review restore" }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Queue restore" }));
+    expect(await screen.findByRole("heading", { name: "Previous version restored" })).toBeInTheDocument();
+    expect(apiMock.connectorDelivery).toHaveBeenCalledWith("rollback-exact");
+    expect(apiMock.rollbackConnectorTarget).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("The exact host restored and verified the predecessor")).toBeInTheDocument();
+    // A new identity selection must not retain the prior identity's success.
+    await user.selectOptions(screen.getByLabelText("Identity"), "");
+    expect(screen.queryByRole("heading", { name: "Previous version restored" })).not.toBeInTheDocument();
   });
 
   it("does not turn a local schema check into target-readiness proof", async () => {

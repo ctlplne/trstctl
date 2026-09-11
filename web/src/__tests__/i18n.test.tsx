@@ -1511,8 +1511,14 @@ describe("i18n boundary", () => {
       // Live receipt repair: partial/loading/error history, incremental pages,
       // loaded-record labels and historical request acknowledgement reviewed.
       // Machine-authored es/de: HUMAN TRANSLATION REVIEW required before release.
-      "es-ES": "809a0a3a68288731357d17e3424b66269f887505382ba9695c576422e878de4b",
-      "de-DE": "a2e3769dc3c6aec3d32d16b05d87034c79036cabfa227c0bdeda850a399f4df6",
+      // HV2-026: eight operator/local-CA setup messages replace eight orphaned
+      // misleading setup labels. The metadata-only form is removed. Machine-authored text
+      // is FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      // HV2-034: exact restore-result read/retry messages, including the no-new-restore
+      // negation, added in es/de. Machine-authored; HUMAN TRANSLATION REVIEW
+      // remains required before release. No fallback or extraction budget changed.
+      "es-ES": "8885ff46a3bdcb42eb1e51ae0fd52ce4128b3984c614fa0bc9e971f2b8c6b6a7",
+      "de-DE": "cccc860580f55eec67dbb841f588b9e94e5ce733e63899a063788b505de7d297",
     });
   });
 
