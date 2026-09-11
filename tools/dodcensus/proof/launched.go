@@ -1646,10 +1646,18 @@ func validateRuntimeExecDirectory(receiptDir string) (string, error) {
 	if err := unix.Statfs(execRoot, &filesystem); err != nil {
 		return "", fmt.Errorf("DOD-CENSUS: inspect runtime executable tmpfs: %w", err)
 	}
-	if uint64(filesystem.Blocks)*uint64(filesystem.Bsize) != 1<<30 {
+	if !hasRuntimeExecCapacity(uint64(filesystem.Blocks), int64(filesystem.Bsize)) {
 		return "", fmt.Errorf("DOD-CENSUS: runtime executable tmpfs is not the bounded 1 GiB mount")
 	}
 	return execRoot, nil
+}
+
+func hasRuntimeExecCapacity(blocks uint64, blockSize int64) bool {
+	const capacity int64 = 1 << 30
+	// Divide the fixed positive capacity, avoiding both signed conversion and
+	// overflow of the filesystem's potentially inconsistent block count.
+	return blockSize > 0 && blockSize <= capacity && capacity%blockSize == 0 &&
+		blocks == uint64(capacity/blockSize)
 }
 
 func pathInside(root, candidate string) bool {
