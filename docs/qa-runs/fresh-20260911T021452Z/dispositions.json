@@ -1,0 +1,281 @@
+[
+  {
+    "id": "HV2-001",
+    "state": "closed",
+    "reason": "cf4144a89; independently reviewed Compose metadata; real built image --version matched full SHA-dirty and UTC timestamp. Exact documented checkout path only.",
+    "evidence": "closeout/review-local-source-identity-001.md; closeout/local-source-version-001.json"
+  },
+  {
+    "id": "HV2-002",
+    "state": "closed",
+    "reason": "25443dfc1; corrected browser launch URL, independently reviewed and exercised in the empty-volume first-boot replay.",
+    "evidence": "first-boot/review-first-boot-scope-018.md; first-boot/replay-01/"
+  },
+  {
+    "id": "HV2-003",
+    "state": "closed",
+    "reason": "25443dfc1; complete ownership/public-CSR guide, independently reviewed and replayed through actual issuance/download/key match.",
+    "evidence": "first-boot/review-first-boot-scope-018.md; first-boot/replay-01/"
+  },
+  {
+    "id": "HV2-004",
+    "state": "closed",
+    "reason": "25443dfc1; recreate control plane with its loopback companion; trust preserved and independent fresh SSO succeeded.",
+    "evidence": "first-boot/review-first-boot-scope-018.md; first-boot/replay-01/"
+  },
+  {
+    "id": "HV2-005",
+    "state": "deferred",
+    "reason": "The reviewed documentation and generated-register repairs are committed, but the complete docs gate still rejects two files: restored baseline verified_binary_test.go retains the original missing-Stop fixture failure; prepare_database_identifier_test.go triggers new HV2-039 despite actual signal/Wait cleanup. The permitted second candidate is exhausted. Next run must repair the original fixture cleanup, reconcile the precise guard contract without weakening it, independently review both and replay the full documentation gate. Deferred/open at blocker severity.",
+    "evidence": "closeout/review-gate-second-docs-001.log; closeout/review-gate-second-candidate-001.md"
+  },
+  {
+    "id": "HV2-006",
+    "state": "closed",
+    "reason": "25443dfc1; correct evaluation tenant, independently reviewed and exact CLI activation/appendix replayed.",
+    "evidence": "first-boot/review-first-boot-scope-018.md; first-boot/replay-01/"
+  },
+  {
+    "id": "HV2-007",
+    "state": "closed",
+    "reason": "e11a9120c; native npm-v2 receipt fixture repaired without weakening parser; independent actual fixture execution and 25 parser controls pass. This is the observed test-fixture failure, not an npm service qualification.",
+    "evidence": "closeout/review-gate-client-drafts-001.md; closeout/review-gate-client-fixtures-decode-001.log"
+  },
+  {
+    "id": "HV2-008",
+    "state": "closed",
+    "reason": "25443dfc1; separate setup and SSO-granted issuance authority; independently reviewed and exact authorized CLI appendix completed. Delegation refusal remains intact.",
+    "evidence": "first-boot/review-first-boot-scope-018.md; first-boot/replay-01/"
+  },
+  {
+    "id": "HV2-009",
+    "state": "deferred",
+    "reason": "CSR documentation is repaired, but the original CSR-free legacy control-plane custody branch remains. Closing it requires the stopped signer/custody journey: establish the actual private-operation boundary, define compatibility/removal behavior, review it and prove a usable authorized workload handshake. No runtime custody claim follows from the guide fix. Keeps blocker severity.",
+    "evidence": "first-boot/gate-scope-disposition-018.md; original HV2-009 evidence"
+  },
+  {
+    "id": "HV2-010",
+    "state": "deferred",
+    "reason": "Reviewed API/CLI census, source moves, retained-history fixtures and exact runtime identity corrections land as partial repairs. Full test/CI qualification, including previously unreached server, fairness and performance shards, is not established. New HV2-039 and any final-gate failures are record-only under owner limits. Next run must resolve those findings and execute the entire gate/required runtime lanes; blocker remains open.",
+    "evidence": "closeout/review-spine-drafts-001.md; closeout/review-gate-client-drafts-001.md; closeout/final-make-test-001.log"
+  },
+  {
+    "id": "HV2-011",
+    "state": "closed",
+    "reason": "321b3f0b0; version admission precedes metadata decoding. Independent real PostgreSQL/NATS controls return the exact schema sentinel for malformed future ownership metadata. No unauthorized committed-write claim was made.",
+    "evidence": "closeout/review-spine-drafts-001.md"
+  },
+  {
+    "id": "HV2-012",
+    "state": "closed",
+    "reason": "a2508c8f8; exact js-yaml/Redocly lockfile patches and guard independently approved. The actual same-run postrepair scan has zero advisories; saved diff/review/report hashes bind the unchanged inputs. Missing scan-time input digest remains explicit; no new advisory-feed claim.",
+    "evidence": "closeout/review-artifact-drafts-002.md; first-boot/npm-real-004.json"
+  },
+  {
+    "id": "HV2-013",
+    "state": "closed",
+    "reason": "321b3f0b0; reject future metadata before recovery classification or append. Independent real PostgreSQL/NATS tests reject three future-history shapes twice each, with unchanged log head and empty inventory.",
+    "evidence": "closeout/review-spine-drafts-001.md"
+  },
+  {
+    "id": "HV2-014",
+    "state": "closed",
+    "reason": "9e82b0d8c; public Pulumi serialization contract repaired. Independent locked compiler and actual SDK serialize/configure/create controls for all three providers pass. Served apply/read/update/destroy remains unwalked and is not claimed.",
+    "evidence": "closeout/review-gate-client-drafts-001.md; closeout/review-gate-client-pulumi-lifecycle-001.log"
+  },
+  {
+    "id": "HV2-015",
+    "state": "no fix path",
+    "reason": "The exact native notice is module-only GO-2026-5932: no vulnerable OpenPGP package in either inspected Core/EE closure, and no patched upstream x/crypto module exists. Other x/crypto packages are required. Removing unrelated cryptography cannot remediate an absent vulnerable import. Native notice and recorded severity retained; no suppression.",
+    "evidence": "first-boot/govulncheck-openpgp-closure-002.json; original reports"
+  },
+  {
+    "id": "HV2-016",
+    "state": "deferred",
+    "reason": "The source-security gate has unsuppressed rows and initial recursive fixture-loading errors. Selected repairs do not qualify every native finding, build configuration or input-selection boundary. Completion requires the stopped security-abuse/build-closure journey: reproduce/classify each remaining row on complete actual package inventories, independently review repairs and rerun calibrated scanners. Keeps blocker severity; no filter added.",
+    "evidence": "first-boot/gosec-core-001.json; first-boot/gosec-ee-001.json; original follow-up reviews"
+  },
+  {
+    "id": "HV2-017",
+    "state": "no fix path",
+    "reason": "The exact immutable historical match is the refusal fixture AQID (three bytes 01 02 03), not a key. There is no secret to rotate and no code repair for that historical marker. History rewrite is outside scope and would erase evidence. The native one-finding report and recorded severity remain; no ignore added. Current staged changes receive separate scans.",
+    "evidence": "first-boot/gitleaks-history-001.json; first-boot/gitleaks-history-finding-context-001.txt"
+  },
+  {
+    "id": "HV2-018",
+    "state": "deferred",
+    "reason": "e11a9120c lands approved gRPC and the sole narrower PostgreSQL candidate: content-pinned offline package construction, real non-root PG16.15 replay, zero rows in the calibrated exact-image scan. Broader Node/NATS/demo/lab recipes were deliberately discarded after review/integration objections. Closing the original whole-stack blocker requires immutable input closure, independent review and exact-image/live qualification across that unwalked artifact matrix. Counts are not downgraded.",
+    "evidence": "closeout/review-artifact-drafts-001.md; closeout/review-postgres-second-candidate-001.md; closeout/postgres-second-candidate-trivy-002.json; closeout/deliberate-discards-001.json"
+  },
+  {
+    "id": "HV2-019",
+    "state": "deferred",
+    "reason": "All 55 native Semgrep rows and parser/coverage gaps remain visible. Closing this requires the stopped multi-language security journey: complete target census and parsing, actual controls for each relevant finding, independent repairs and an unfiltered rerun. Completed scanner execution alone is insufficient. Keeps blocker severity; no ignore/baseline changes.",
+    "evidence": "first-boot/semgrep-source-001.json; original calibration and rule digest"
+  },
+  {
+    "id": "HV2-020",
+    "state": "deferred",
+    "reason": "The broad extractor draft lacks final approval after parent-publication and native-Windows objections; the closeout control additionally exposed HV2-038. Entire draft deliberately discarded, exact bytes/archives retained. Closing requires the stopped extraction/platform journey, a bounded publication contract, independent review and real Unix/Windows replays. Legacy unsafe path/mode behavior remains open at blocker severity.",
+    "evidence": "first-boot/review-latest-boundaries-016.md; closeout/review-local-extraction-adjacent-001.log; closeout/deliberate-discards-001.json"
+  },
+  {
+    "id": "HV2-021",
+    "state": "closed",
+    "reason": "0de116bf1; bounded division replaces overflow-prone multiplication. Independent review and executed exact/zero/negative/short/large/fractional/wrapped controls pass. This proves the arithmetic predicate, not a live malicious mount or capacity envelope.",
+    "evidence": "first-boot/review-latest-boundaries-016.md; closeout/review-local-portable-001.log"
+  },
+  {
+    "id": "HV2-022",
+    "state": "deferred",
+    "reason": "No authentication repair was drafted. Closing the enabled workload co-sign blocker requires the stopped workload-lifecycle journey: provision pinned caller/server identities, prove mutual-auth rejection before signing and successful legitimate succession, independently review and replay. Default-off is a limit, not a fix or downgrade.",
+    "evidence": "first-boot/review-source-and-docs-013.md; original HV2-022 observation"
+  },
+  {
+    "id": "HV2-023",
+    "state": "deferred",
+    "reason": "be55015dd retains the independently reviewed portable nonempty-certificate admission repair and Windows cross-compile. Native Windows store installation was never executed; closing requires that stopped platform journey and rejection before store mutation. Keeps defect severity and stays open despite partial mitigation.",
+    "evidence": "first-boot/review-latest-boundaries-016.md; closeout/review-local-portable-001.log; closeout/review-local-windows-compile-001.log"
+  },
+  {
+    "id": "HV2-024",
+    "state": "closed",
+    "reason": "58256931e; pgx identifier encoding preserves valid quoted/comment-shaped names. Independent actual PG16.15 helper replay creates exactly all three requested names, no altered row, and cleanly reaps its owned process. Reviewer-named test-signature correction was the sole second candidate. Invalid NUL/overlength names and the new DSN finding are excluded from the original valid-name proof.",
+    "evidence": "closeout/review-database-name-001.md; closeout/review-database-name-002.log"
+  },
+  {
+    "id": "HV2-025",
+    "state": "deferred",
+    "reason": "Production exact-object/action repair was never reached. The stopped new-operator journey is needed to walk same-name identities through state-appropriate selection and renewal without wrong-target action, review and live replay. Known-red test scaffolding (including type errors) was deliberately discarded and preserved as evidence. Blocker remains open.",
+    "evidence": "new-operator/observations.md; closeout/deliberate-discards-001.json"
+  },
+  {
+    "id": "HV2-026",
+    "state": "closed",
+    "reason": "f6c2a8680; independently reviewed operator-owned CA setup removes the misleading metadata mutation. Actual Firefox dialog has no integration credential inputs and emits no issuer mutation; configured exact Vault registry entry was observed. Does not qualify all issuers.",
+    "evidence": "clm-existing-ca/review-setup-003.md; clm-existing-ca/setup-replay-requests-001.json"
+  },
+  {
+    "id": "HV2-027",
+    "state": "closed",
+    "reason": "cebb2c9e2; unchanged forbidden private source now preflights blocked, separately authorized source ready, both without side effects. Independent review and existing scope/SSRF tests pass. Actual relay still owns DNS/connectivity proof.",
+    "evidence": "clm-existing-ca/discovery-preflight-replay-blocked-001.log; clm-existing-ca/discovery-preflight-replay-allowed-001.log"
+  },
+  {
+    "id": "HV2-028",
+    "state": "closed",
+    "reason": "cebb2c9e2; canonical owner/<id> recipe independently reviewed and live route matched the exact saved owner rule. Separate actual expiry message reached owned SMTP receiver and was acknowledged.",
+    "evidence": "clm-existing-ca/review-routing-doc-001.md; clm-existing-ca/mailpit-messages-002.json"
+  },
+  {
+    "id": "HV2-029",
+    "state": "closed",
+    "reason": "5fd5422aa; host completion derives from retired signed receipt and exact listener evidence. Independent review/process controls pass; two consecutive scheduled Vault-to-NGINX leaf transitions independently matched stock OpenSSL. No all-connector or live automatic-compensation claim.",
+    "evidence": "clm-existing-ca/nginx-clm06-scheduled-001.json; clm-existing-ca/nginx-clm06-scheduled-002.json; retained host-result reviews"
+  },
+  {
+    "id": "HV2-030",
+    "state": "closed",
+    "reason": "6ac2d4944; the absent receiver leaves original alerts120/121 pending. After SMTP configuration those same alerts reached owned Mailpit at13:40:53; independently reviewed served controls pass. This proves local SMTP acceptance. Product acknowledgement was separately observed for earlier alert17 at12:35:33; it is not an acknowledgement replay of alerts120/121.",
+    "evidence": "clm-existing-ca/clm04-replay-001.json; clm-existing-ca/mailpit-after-receiver-restored-001.json; clm-existing-ca/review-notification-empty-001.md; clm-existing-ca/expiry-alert-ack-001.log"
+  },
+  {
+    "id": "HV2-031",
+    "state": "closed",
+    "reason": "6ac2d4944; independently reviewed existing-effect retry accounting preserves uncertainty but does not invent a provider failure. Live original command naturally retired at10 attempts, healthy command succeeded, and exact-key replays retained provider counts0/1. Arbitrary unknown outcomes remain unknown.",
+    "evidence": "clm-existing-ca/clm06-final-retry-and-rotations-001.json; retained CA retry review and Vault audit receipts",
+    "severity": "blocker"
+  },
+  {
+    "id": "HV2-032",
+    "state": "closed",
+    "reason": "788a7a8e5; reviewed 512KiB operator JWS bound, actionable413, unchanged generic signer budget. Actual small JWS and full879-record NDJSON/trailer verified offline; console50-record window explicit.",
+    "evidence": "clm-existing-ca/clm06-export-replay-001.json; clm-existing-ca/clm06-export-offline-001.json; audit-size review",
+    "severity": "blocker"
+  },
+  {
+    "id": "HV2-033",
+    "state": "closed",
+    "reason": "4ca8a396c; reviewed bodyless target-test CLI. Actual unreachable then corrected saved destination produced blocked then planned dry runs; deploy/rollback still require a body.",
+    "evidence": "clm-existing-ca/; retained bodyless CLI review and target replay receipts",
+    "severity": "blocker"
+  },
+  {
+    "id": "HV2-034",
+    "state": "closed",
+    "reason": "5fd5422aa and f6c2a8680; final independent backend/UI approval and actual clm10 restore/repeated-command replay. One canonical immediately readable receipt, visible queued then completed states, attempts1/2, exact predecessor verified by stock OpenSSL. Rebuild/race limits remain in the full closure entry above.",
+    "evidence": "clm-existing-ca/review-rollback-receipt-004.md; clm-existing-ca/review-restore-retry-status-002.md; clm-existing-ca/clm10-restore-result-001.json; clm-existing-ca/clm10-restore-result-002.json",
+    "severity": "blocker"
+  },
+  {
+    "id": "HV2-035",
+    "state": "deferred",
+    "reason": "Final aggregate JavaScript remains659.68kB Brotli against645kB; entry75.04/185kB and page27.52/30kB pass. No threshold changed. Reducing shared catalogs/chunks safely requires the stopped bundle-delivery/performance journey across routes and locales, with actual loading and functionality proof. No speculative chunk rewrite or byte-accounting exclusion is attempted in closeout. Original severity remains.",
+    "evidence": "closeout/final-web-size-001.log; original baseline/candidate size evidence",
+    "severity": "blocker"
+  },
+  {
+    "id": "HV2-036",
+    "state": "deferred",
+    "reason": "New observation; recorded only. Proposed NATS recipe discarded. A future immutable-artifact/Compose integration run must repair and replay the exact guard conflict. Blocker retained.",
+    "evidence": "closeout/review-gate-client-docs-002.log"
+  },
+  {
+    "id": "HV2-037",
+    "state": "deferred",
+    "reason": "New observation; recorded only. Next legacy database connection run must fix structured DSN/empty-field handling and independently replay it. Defect retained.",
+    "evidence": "closeout/review-local-database-002.log"
+  },
+  {
+    "id": "HV2-038",
+    "state": "deferred",
+    "reason": "New observation; recorded only. Extractor draft discarded. Next extraction/publication run must reconcile success with requested-path availability and replay parent relocation. Defect retained.",
+    "evidence": "closeout/review-local-extraction-adjacent-001.log"
+  },
+  {
+    "id": "HV2-039",
+    "state": "deferred",
+    "reason": "New observation; recorded only. Next gate run must recognize correct signal/Wait cleanup while continuing to reject missing cleanup, then replay complete docs/tests. Blocker retained.",
+    "evidence": "closeout/review-gate-second-docs-001.log; closeout/review-database-name-002.log"
+  },
+  {
+    "id": "HV2-040",
+    "state": "deferred",
+    "reason": "New closeout G115 gate rows; record-only; bounds/review/full-lint replay required."
+  },
+  {
+    "id": "HV2-041",
+    "state": "deferred",
+    "reason": "New closeout build-argument/runtime-env guard mismatch; record-only; reviewed classification/full-gate replay required."
+  },
+  {
+    "id": "HV2-042",
+    "state": "deferred",
+    "reason": "New final-gate OpenAPI snapshot drift; record-only; actual diff inspection, independent review and complete API/client contract replay required."
+  },
+  {
+    "id": "HV2-043",
+    "state": "deferred",
+    "reason": "New final-gate observation; record-only. Review the actual migration effects; add the required exact content transition proof or justified shape-only classification, and replay the migration suite."
+  },
+  {
+    "id": "HV2-044",
+    "state": "deferred",
+    "reason": "New final-gate observation; record-only. Establish the real lock behavior and permitted migration construction on populated PostgreSQL, independently review it and replay online upgrade/content checks. The diagnostic is not a measured production lock incident."
+  },
+  {
+    "id": "HV2-045",
+    "state": "deferred",
+    "reason": "New final-gate observation; record-only. Independently review the new cross-tenant boot boolean query, reconcile the exact authorized inventory without broadening the bypass, and rerun tenant isolation and boot recovery controls. No tenant data disclosure was observed by this count guard."
+  },
+  {
+    "id": "HV2-046",
+    "state": "deferred",
+    "reason": "New final-gate observation; record-only. Review and document the exact authority/returned-data boundary of both queries, preserve RLS for tenant data, and replay the complete system-query/isolation checks. This source guard failure does not itself demonstrate cross-tenant disclosure."
+  },
+  {
+    "id": "HV2-047",
+    "state": "deferred",
+    "reason": "New final-gate observation; record-only. Independently review a named-stage split that preserves signed receipt acceptance and retirement order, and replay the handler/hotspot tests without increasing the limit."
+  }
+]
