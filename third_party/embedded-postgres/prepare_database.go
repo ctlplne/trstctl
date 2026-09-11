@@ -90,7 +90,7 @@ func defaultCreateDatabase(port uint32, username, password, database string) (er
 		err = connectionClose(db, err)
 	}()
 
-	if _, err := db.Exec(fmt.Sprintf("CREATE DATABASE \"%s\"", database)); err != nil {
+	if _, err := db.Exec("CREATE DATABASE " + pgx.Identifier{database}.Sanitize()); err != nil {
 		return errorCustomDatabase(database, err)
 	}
 
