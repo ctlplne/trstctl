@@ -86,6 +86,9 @@ services:
       context: ../..
       dockerfile: deploy/docker/Dockerfile
       target: release
+      args:
+        COMMIT: "${TRSTCTL_BUILD_COMMIT:-none}"
+        DATE: "${TRSTCTL_BUILD_DATE:-1970-01-01T00:00:00Z}"
     # Local eval image built from this checkout, not a mutable registry tag.
     image: trstctl-eval:local
     # Self-heal a transient first-boot hiccup (e.g. the shared volume not yet
@@ -110,6 +113,9 @@ services:
       context: ../..
       dockerfile: deploy/docker/Dockerfile
       target: release
+      args:
+        COMMIT: "${TRSTCTL_BUILD_COMMIT:-none}"
+        DATE: "${TRSTCTL_BUILD_DATE:-1970-01-01T00:00:00Z}"
     # Local eval image built from this checkout, not a mutable registry tag.
     image: trstctl-eval:local
     # The control plane reads the shared KEK and dials the signer's UDS during boot;

@@ -66,8 +66,21 @@ The detailed commands and recovery notes follow in the same order.
 ## 1. Bring up the control plane (about 2 minutes)
 
 ```bash
+export TRSTCTL_BUILD_COMMIT="$(git rev-parse HEAD)"
+if test -n "$(git status --porcelain --untracked-files=normal)"; then
+  export TRSTCTL_BUILD_COMMIT="${TRSTCTL_BUILD_COMMIT}-dirty"
+fi
+export TRSTCTL_BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 docker compose -f deploy/docker/docker-compose.yml up --build --detach --wait --wait-timeout 180
 ```
+
+These build arguments stamp the control plane and separate signer from the same
+checkout. A `-dirty` suffix means tracked or untracked work was present; it does
+not identify those extra bytes. Recompute the values before each source build.
+Check the running image with
+`docker compose -f deploy/docker/docker-compose.yml exec trstctl /usr/local/bin/trstctl --version`.
+Direct builds without these arguments retain the explicit unknown-source defaults;
+release artifacts use their release pipeline's source identity.
 
 Compose starts PostgreSQL and NATS JetStream, generates a stable local OIDC
 keypair, starts the signing service in its own container, and then starts the
