@@ -301,11 +301,20 @@ status, then use a stock client configured to enforce revocation to prove that t
 old certificate is rejected. Record any authority or client enforcement limit.
 A normal TLS handshake does not usually check revocation by itself.
 
-Current containment limitation: rollback can restore a predecessor that has
-already been revoked for key compromise. Do not use rollback to recover that
-identity; remove the compromised material through your target's operating
-procedure and independently verify the safe replacement. This remains an
-automation gap even when the CA has accepted revocation.
+Rollback refuses a missing or revoked predecessor, and a revoked or retired
+identity bound to the command. These checks run before queueing, when the agent
+claims queued work, and when the updated agent asks for authorization immediately
+before restoration. A host-target action also derives its identity from the last
+successful deployment when the request omits it. Refused work must not report
+that an agent restored the target.
+
+Upgrade both the control plane and agents for the pre-restoration check. An
+updated agent refuses restoration if its server cannot authorize it, including
+an older server that does not support that check. This does not cancel a remote
+operation already in progress or remove a certificate already installed. Replace
+compromised material through the target's operating procedure and independently
+verify the safe replacement; upstream revocation alone does not complete that
+containment work.
 
 Verify that the workload serves the replacement and cannot restore compromised
 key material through rollback. When the identity is no longer needed, retire it
@@ -333,7 +342,7 @@ following evidence:
   client; the workload serves the replacement and cannot restore compromised material;
 - retirement stops future automation and retains the complete lifecycle audit export.
 
-The rollback containment and unsupported-authority limits above leave this
+The running-operation, replacement, and unsupported-authority limits above leave this
 full-lifecycle gate open even when issuance, deployment, renewal, alerts, and
 upstream revocation succeed.
 

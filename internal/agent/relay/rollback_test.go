@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -196,6 +197,9 @@ func TestHostRollbackRestoresReloadsAndReverifiesWithoutRedemption(t *testing.T)
 	if rollback.redeemed != 0 {
 		t.Fatalf("host rollback redeemed %d control-plane credentials, want zero", rollback.redeemed)
 	}
+	if len(rollback.confirmations) != 1 || rollback.confirmations[0].jobID != 12 || rollback.confirmations[0].attempt != 1 {
+		t.Fatalf("host restore did not confirm its exact current attempt: %+v", rollback.confirmations)
+	}
 	if len(rollback.reports) != 1 || rollback.reports[0].outcome != transport.OutcomeVerified || rollback.reports[0].evidence == "" {
 		t.Fatalf("rollback reports = %+v, want signed-evidence-ready verified result", rollback.reports)
 	}
@@ -206,6 +210,45 @@ func TestHostRollbackRestoresReloadsAndReverifiesWithoutRedemption(t *testing.T)
 	want := append(append([]byte(nil), predecessor.LeafPEM...), firstIssuer...)
 	if !bytes.Equal(got, want) {
 		t.Fatal("host certificate file was not restored to the complete predecessor serving chain")
+	}
+}
+
+func TestRollbackNeedsFreshAuthorizationBeforeLocalStateOrCredentials(t *testing.T) {
+	for _, kind := range []string{"nginx", "f5"} {
+		for _, unavailable := range []bool{false, true} {
+			t.Run(kind+map[bool]string{false: "/denied", true: "/unavailable"}[unavailable], func(t *testing.T) {
+				root := t.TempDir()
+				state, err := relay.NewHostRollbackStore(filepath.Join(root, "state"), "tenant-a")
+				if err != nil {
+					t.Fatal(err)
+				}
+				// Missing predecessor state makes ordering visible: opening it
+				// first would report a different failure and bypass authorization.
+				ch := &fakeChannel{confirmationDenied: !unavailable, jobs: []relay.Job{rollbackJob(t, 77, relay.RollbackIntent{
+					Connector: kind, Target: "owned-target", TargetID: "target-a", PredecessorFingerprint: "first",
+				})}}
+				want := transport.RollbackRefusedAuthorization
+				if unavailable {
+					ch.confirmationErr = errors.New("control plane unavailable")
+					want = transport.RollbackRefusedAuthorizationUnavailable
+				}
+				contacted := false
+				client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+					contacted = true
+					return nil, errors.New("unexpected target contact")
+				})}
+				executed, err := relay.RunOnceWithSelfUpgradeAndHostRollback(t.Context(), ch, client, hostProfileForNginx(t, root), nil, nil, state, 1, 30)
+				if err != nil || executed != 0 || contacted || ch.redeemed != 0 {
+					t.Fatalf("authorization failure reached execution: executed=%d contacted=%t redeemed=%d error=%v", executed, contacted, ch.redeemed, err)
+				}
+				if len(ch.confirmations) != 1 || len(ch.reports) != 1 || ch.reports[0].detail != want {
+					t.Fatalf("wrong refusal: confirmations=%+v reports=%+v", ch.confirmations, ch.reports)
+				}
+				if transport.RollbackReasonContactedTarget(want) || transport.RollbackReasonIsPermanent(want) == unavailable {
+					t.Fatal("authorization refusal misclassified contact or retryability")
+				}
+			})
+		}
 	}
 }
 

@@ -30,6 +30,7 @@ func TestRollbackResultCannotOverwriteRearmedCommand(t *testing.T) {
 	s := newStore(t)
 	mustRegisterTenant(t, s, tenantA)
 	o := orchestrator.NewOrchestrator(openLog(t), s, orchestrator.NewOutbox(s))
+	seedRollbackPredecessor(t, o)
 	request := orchestrator.ConnectorRollbackRequest{Connector: "f5", Target: "execution-route", PredecessorFingerprint: "old-leaf", SuccessorFingerprint: "new-leaf"}
 	q, first, err := requestRollbackReceipt(ctx, o, request, "first-restore")
 	if err != nil {
@@ -93,6 +94,7 @@ func TestRollbackPendingRepeatPreservesRecordedFailure(t *testing.T) {
 	s := newStore(t)
 	mustRegisterTenant(t, s, tenantA)
 	o := orchestrator.NewOrchestrator(openLog(t), s, orchestrator.NewOutbox(s))
+	seedRollbackPredecessor(t, o)
 	request := orchestrator.ConnectorRollbackRequest{Connector: "f5", Target: "execution-route", PredecessorFingerprint: "old-leaf", SuccessorFingerprint: "new-leaf"}
 	q, first, err := requestRollbackReceipt(ctx, o, request, "first-restore")
 	if err != nil {
@@ -129,6 +131,7 @@ func TestRollbackResultHoldsJobLockThroughReceiptProjection(t *testing.T) {
 	s := newStore(t)
 	mustRegisterTenant(t, s, tenantA)
 	o := orchestrator.NewOrchestrator(openLog(t), s, orchestrator.NewOutbox(s))
+	seedRollbackPredecessor(t, o)
 	request := orchestrator.ConnectorRollbackRequest{Connector: "f5", Target: "execution-route", PredecessorFingerprint: "old-leaf", SuccessorFingerprint: "new-leaf"}
 	q, receipt, err := requestRollbackReceipt(ctx, o, request, "first-restore")
 	if err != nil {

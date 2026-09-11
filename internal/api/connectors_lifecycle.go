@@ -806,6 +806,10 @@ func (a *API) rollbackConnectorTarget(w http.ResponseWriter, r *http.Request) {
 					"the latest host deploy belongs to a different identity; no rollback was queued or recorded")
 			}
 			requiredAgentID = evidence.AgentID
+			req.IdentityID = evidence.IdentityID
+			if req.IdentityID != "" {
+				identityID = &req.IdentityID
+			}
 			fingerprint = evidence.Fingerprint
 			p := a.store.ResolvePredecessorCertificateForFingerprint(ctx, tenantID, evidence.Fingerprint)
 			predecessor = predecessorCertificate{Serial: p.Serial, Fingerprint: p.Fingerprint}
@@ -842,6 +846,9 @@ func (a *API) rollbackConnectorTarget(w http.ResponseWriter, r *http.Request) {
 			IdentityID: identityID, Target: target.Name, Reason: statusReason, Detail: reason,
 			RollbackRef: rollbackRef, IdempotencyKey: idempotencyKey,
 		})
+		if errors.Is(err, store.ErrUnsafeRollback) {
+			return 0, nil, errStatus(http.StatusConflict, store.ErrUnsafeRollback.Error())
+		}
 		if err != nil {
 			return 0, nil, err
 		}

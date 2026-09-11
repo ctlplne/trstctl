@@ -22,6 +22,7 @@ func TestRollbackLegacyCursorRebuiltBeforeLaggingTail(t *testing.T) {
 			ctx := t.Context()
 			s, log, _ := recordingSpine(t)
 			o := orchestrator.NewOrchestrator(log, s, orchestrator.NewOutbox(s))
+			seedRollbackPredecessor(t, o)
 			request := orchestrator.ConnectorRollbackRequest{Connector: "f5", Target: "execution-route", PredecessorFingerprint: "old-leaf", SuccessorFingerprint: "new-leaf"}
 			q, _, err := requestRollbackReceipt(ctx, o, request, "first-restore")
 			if err != nil {
@@ -126,6 +127,7 @@ func TestRollbackLegacyRebuildFailurePreservesPriorReadModel(t *testing.T) {
 	ctx := t.Context()
 	s, log, _ := recordingSpine(t)
 	o := orchestrator.NewOrchestrator(log, s, orchestrator.NewOutbox(s))
+	seedRollbackPredecessor(t, o)
 	request := orchestrator.ConnectorRollbackRequest{Connector: "f5", Target: "execution-route", PredecessorFingerprint: "old-leaf", SuccessorFingerprint: "new-leaf"}
 	_, prior, err := requestRollbackReceipt(ctx, o, request, "retained-restore")
 	if err != nil {

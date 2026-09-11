@@ -246,6 +246,11 @@ func (a *agentService) ClaimJobs(ctx context.Context, req *transport.ClaimJobsRe
 	}
 	out := &transport.ClaimJobsResponse{NextPollSeconds: agentJobPollSeconds}
 	for _, job := range claimed {
+		if allowed, err := a.checkClaimedRollback(ctx, info.TenantID, agentRowID(info.TenantID, info.CommonName), job); err != nil {
+			return nil, status.Error(codes.Unavailable, "rollback authorization is unavailable")
+		} else if !allowed {
+			continue
+		}
 		// A claimed job carries a REFERENCE, never credential material or the
 		// sealed container holding it (epic A3). The agent cannot open the seal
 		// and must never hold it: shipping ciphertext it has no key for is
@@ -345,7 +350,7 @@ func (a *agentService) ReportJobResult(ctx context.Context, req *transport.Repor
 	// A terminal report is a claim about the world and must be signed. An
 	// "extend" is a lease request that claims nothing, so it is not — see the
 	// note on ReportJobResultRequest.Signature.
-	if outcome != transport.JobOutcomeExtend {
+	if outcome != transport.JobOutcomeExtend && outcome != transport.JobOutcomeAuthorizeRollback {
 		if err := a.verifyJobReceipt(ctx, info, req, now); err != nil {
 			return nil, err
 		}
@@ -363,7 +368,16 @@ func (a *agentService) ReportJobResult(ctx context.Context, req *transport.Repor
 	case transport.JobOutcomeFailed:
 		return a.acceptFailedReport(ctx, info, agentID, req, now)
 
-	case transport.JobOutcomeExtend:
+	case transport.JobOutcomeExtend, transport.JobOutcomeAuthorizeRollback:
+		if outcome == transport.JobOutcomeAuthorizeRollback {
+			job, held, err := a.store.GetAgentJobForRedemption(ctx, info.TenantID, agentID, req.JobID, now)
+			if err != nil {
+				return nil, status.Error(codes.Unavailable, "rollback authorization is unavailable")
+			}
+			if !held || job.ClaimAttempts != req.Attempt || job.Destination != orchestrator.DestinationConnectorRollback {
+				return &transport.ReportJobResultResponse{Accepted: false}, nil
+			}
+		}
 		lease := time.Duration(req.LeaseSeconds) * time.Second
 		if lease <= 0 {
 			lease = agentJobDefaultLease
@@ -372,7 +386,10 @@ func (a *agentService) ReportJobResult(ctx context.Context, req *transport.Repor
 			lease = agentJobMaxLease
 		}
 		until := now.Add(lease)
-		ok, err := a.store.ExtendAgentJobClaim(ctx, info.TenantID, agentID, req.JobID, until)
+		ok, err := a.store.ExtendAgentJobClaim(ctx, info.TenantID, agentID, req.JobID, req.Attempt, now, until)
+		if errors.Is(err, store.ErrUnsafeRollback) {
+			return &transport.ReportJobResultResponse{Accepted: false}, nil
+		}
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "extend agent job claim: %v", err)
 		}

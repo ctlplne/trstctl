@@ -15,6 +15,16 @@ import (
 )
 
 // Use the same atomic command as the served rollback route.
+func seedRollbackPredecessor(t *testing.T, o *orchestrator.Orchestrator) {
+	t.Helper()
+	if _, err := o.CreateOwner(t.Context(), tenantA, "service", "rollback fixture", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := o.RecordCertificate(t.Context(), tenantA, store.Certificate{Fingerprint: "old-leaf", Serial: "01", Source: "import"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func requestRollbackReceipt(ctx context.Context, o *orchestrator.Orchestrator, request orchestrator.ConnectorRollbackRequest, key string) (orchestrator.ConnectorRollbackQueued, store.ConnectorDeliveryReceipt, error) {
 	return o.RequestConnectorRollbackWithReceipt(ctx, tenantA, request, store.ConnectorDeliveryReceipt{
 		Target: "Display name", IdempotencyKey: key,
@@ -27,6 +37,7 @@ func TestRollbackRequestReturnsReadableCanonicalReceiptOnRepeat(t *testing.T) {
 	mustRegisterTenant(t, s, tenantA)
 	mustRegisterTenant(t, s, tenantB)
 	o := orchestrator.NewOrchestrator(openLog(t), s, orchestrator.NewOutbox(s))
+	seedRollbackPredecessor(t, o)
 	request := orchestrator.ConnectorRollbackRequest{Connector: "f5", Target: "execution-route", PredecessorFingerprint: "old-leaf", SuccessorFingerprint: "new-leaf"}
 	q, first, err := requestRollbackReceipt(ctx, o, request, "first-restore")
 	if err != nil {
@@ -67,6 +78,7 @@ func TestRollbackRequestCannotBecomeClaimableBeforeItsQueuedReceipt(t *testing.T
 	s := newStore(t)
 	mustRegisterTenant(t, s, tenantA)
 	o := orchestrator.NewOrchestrator(openLog(t), s, orchestrator.NewOutbox(s))
+	seedRollbackPredecessor(t, o)
 	request := orchestrator.ConnectorRollbackRequest{Connector: "f5", Target: "execution-route", PredecessorFingerprint: "old-leaf", SuccessorFingerprint: "new-leaf"}
 	q, first, err := requestRollbackReceipt(ctx, o, request, "first-restore")
 	if err != nil {

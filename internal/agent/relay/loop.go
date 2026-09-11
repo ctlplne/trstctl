@@ -572,6 +572,9 @@ func runRollback(ctx context.Context, ch Channel, client *http.Client, hostProfi
 			report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedBadPayload)
 			return false
 		}
+		if !confirmRollback(ctx, ch, job) {
+			return false
+		}
 		var outcome, detail, evidence string
 		var denied, restoreStarted bool
 		err := hostRollback.Restore(intent.Connector, intent.TargetID, intent.PredecessorFingerprint,
@@ -621,6 +624,9 @@ func runRollback(ctx context.Context, ch Channel, client *http.Client, hostProfi
 		return outcome != transport.OutcomeVerifyFailed
 	}
 
+	if !confirmRollback(ctx, ch, job) {
+		return false
+	}
 	items, err := ch.RedeemJobCredential(ctx, job.JobID, job.Attempt)
 	if err != nil {
 		report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedNoCredential)
@@ -651,6 +657,22 @@ func runRollback(ctx context.Context, ch Channel, client *http.Client, hostProfi
 		return false
 	}
 	report(ctx, ch, job, OutcomeExecuted, "")
+	return true
+}
+
+// Ask immediately before opening local predecessor material or redeeming an
+// appliance credential. A distinct outcome makes older servers fail closed:
+// their ordinary lease extension did not check revocation.
+func confirmRollback(ctx context.Context, ch Channel, job Job) bool {
+	accepted, err := ch.ReportJobResult(ctx, job.JobID, job.Attempt, transport.JobOutcomeAuthorizeRollback, "", "")
+	if err != nil {
+		report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedAuthorizationUnavailable)
+		return false
+	}
+	if !accepted {
+		report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedAuthorization)
+		return false
+	}
 	return true
 }
 

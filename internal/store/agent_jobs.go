@@ -284,17 +284,39 @@ func (s *Store) ClaimAgentJobs(ctx context.Context, tenantID, agentID string, de
 // ExtendAgentJobClaim pushes a lease out while the agent is still working. It
 // only moves a lease the caller actually holds: an agent cannot extend another
 // agent's claim, which is what keeps "the holder is alive" a real statement.
-func (s *Store) ExtendAgentJobClaim(ctx context.Context, tenantID, agentID string, jobID int64, until time.Time) (bool, error) {
+func (s *Store) ExtendAgentJobClaim(ctx context.Context, tenantID, agentID string, jobID int64, attempt int, now, until time.Time) (bool, error) {
 	var extended bool
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var destination string
+		var payload []byte
+		err := tx.QueryRow(ctx, `SELECT destination, payload FROM outbox
+		 WHERE tenant_id=$1 AND id=$2 AND claimed_by_agent_id=$3::uuid
+		 AND claim_attempts=$4 AND claim_completed_at IS NULL
+		 AND status='pending' AND claim_expires_at>$5`, tenantID, jobID, agentID, attempt, now.UTC()).Scan(&destination, &payload)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if destination == "connector.rollback" {
+			// Lock identity/certificate before the outbox row, matching enqueue.
+			// A successful renewal is the agent's fresh pre-execution check.
+			if err := s.checkConnectorRollbackPayloadTx(ctx, tx, tenantID, payload); err != nil {
+				return err
+			}
+		}
 		tag, err := tx.Exec(ctx,
 			`UPDATE outbox
 			    SET claim_expires_at = $4
 			  WHERE tenant_id = $1
 			    AND id = $3
 			    AND claimed_by_agent_id = $2::uuid
-			    AND claim_completed_at IS NULL`,
-			tenantID, agentID, jobID, until.UTC())
+			    AND claim_completed_at IS NULL
+			    AND status = 'pending'
+			    AND claim_attempts = $5
+			    AND claim_expires_at > $6`,
+			tenantID, agentID, jobID, until.UTC(), attempt, now.UTC())
 		if err != nil {
 			return err
 		}

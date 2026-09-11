@@ -485,6 +485,9 @@ const (
 	JobOutcomeVerifyFailed = "verify_failed"
 	// JobOutcomeExtend means the agent is still working and wants more lease.
 	JobOutcomeExtend = "extend"
+	// JobOutcomeAuthorizeRollback confirms the current attempt and revocation
+	// state before restore, and extends its lease. It claims no target effect.
+	JobOutcomeAuthorizeRollback = "rollback_authorize"
 )
 
 // ReportJobResultRequest is the agent's report on a job it holds.
@@ -505,7 +508,7 @@ type ReportJobResultRequest struct {
 	// unusable as B5 custody evidence.
 	CredentialFingerprint string          `json:"credential_fingerprint,omitempty"`
 	Custody               *custody.Record `json:"custody,omitempty"`
-	// LeaseSeconds is how much more time an "extend" is asking for.
+	// LeaseSeconds is the lease requested by "extend" or "rollback_authorize".
 	LeaseSeconds int `json:"lease_seconds,omitempty"`
 	// Attempt echoes the claim generation this report belongs to. It is part of
 	// the signed statement, so a receipt cannot be replayed against a later
@@ -525,8 +528,8 @@ type ReportJobResultRequest struct {
 	// that sentence. With it, the record is evidence the control plane could not
 	// have produced.
 	//
-	// It is required for terminal outcomes. An "extend" is a lease request, not
-	// a claim about the world, and is left unsigned deliberately: signing a
+	// It is required for terminal outcomes. "extend" and "rollback_authorize"
+	// request permission, make no claim about target effects, and may be unsigned: signing a
 	// keepalive would put the agent's key on the hot path of every heartbeat for
 	// no evidentiary gain.
 	Signature []byte `json:"signature,omitempty"`

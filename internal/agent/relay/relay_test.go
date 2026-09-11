@@ -38,11 +38,14 @@ const (
 
 // fakeChannel records what the relay asked for and what it reported.
 type fakeChannel struct {
-	jobs      []relay.Job
-	redeemed  int
-	redeemErr error
-	material  map[string][]byte
-	reports   []report
+	jobs               []relay.Job
+	redeemed           int
+	redeemErr          error
+	material           map[string][]byte
+	reports            []report
+	confirmations      []report
+	confirmationDenied bool
+	confirmationErr    error
 }
 
 type report struct {
@@ -83,6 +86,10 @@ func (f *fakeChannel) RedeemJobCredential(context.Context, int64, int) (map[stri
 }
 
 func (f *fakeChannel) ReportJobResult(_ context.Context, jobID int64, attempt int, outcome, detail, evidence string) (bool, error) {
+	if outcome == transport.JobOutcomeAuthorizeRollback {
+		f.confirmations = append(f.confirmations, report{jobID: jobID, attempt: attempt, outcome: outcome})
+		return !f.confirmationDenied, f.confirmationErr
+	}
 	f.reports = append(f.reports, report{
 		jobID: jobID, attempt: attempt, outcome: outcome, detail: detail, evidence: evidence,
 	})

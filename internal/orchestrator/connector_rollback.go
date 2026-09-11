@@ -163,6 +163,9 @@ func (o *Orchestrator) requestConnectorRollback(ctx context.Context, tenantID st
 	var outboxID int64
 	var queuedNow bool
 	if err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if err := o.store.CheckConnectorRollbackTx(ctx, tx, tenantID, req.IdentityID, req.PredecessorFingerprint); err != nil {
+			return err
+		}
 		// The request is recorded before it is queued, so the audit trail shows
 		// who asked even when the required agent never gets to it.
 		if _, appendErr := o.log.Append(ctx, events.Event{

@@ -176,10 +176,16 @@ func TestAgentJobExtendAndReleaseOnlyWorkForTheHolder(t *testing.T) {
 	}
 	// Only the holder may extend. Otherwise "the lease is alive" stops meaning
 	// "the agent doing the work is alive", which is the only thing it is for.
-	if ok, err := st.ExtendAgentJobClaim(ctx, tenantID, impostor, first.ID, now.Add(time.Hour)); err != nil || ok {
+	if ok, err := st.ExtendAgentJobClaim(ctx, tenantID, holder, first.ID, first.ClaimAttempts+1, now, now.Add(time.Hour)); err != nil || ok {
+		t.Fatalf("wrong attempt extended its lease: ok=%v err=%v", ok, err)
+	}
+	if ok, err := st.ExtendAgentJobClaim(ctx, tenantID, holder, first.ID, first.ClaimAttempts, now.Add(2*time.Minute), now.Add(time.Hour)); err != nil || ok {
+		t.Fatalf("expired attempt resurrected its lease: ok=%v err=%v", ok, err)
+	}
+	if ok, err := st.ExtendAgentJobClaim(ctx, tenantID, impostor, first.ID, first.ClaimAttempts, now, now.Add(time.Hour)); err != nil || ok {
 		t.Fatalf("an agent extended a lease it does not hold: ok=%v err=%v", ok, err)
 	}
-	if ok, err := st.ExtendAgentJobClaim(ctx, tenantID, holder, first.ID, now.Add(time.Hour)); err != nil || !ok {
+	if ok, err := st.ExtendAgentJobClaim(ctx, tenantID, holder, first.ID, first.ClaimAttempts, now, now.Add(time.Hour)); err != nil || !ok {
 		t.Fatalf("the holder could not extend its own lease: ok=%v err=%v", ok, err)
 	}
 

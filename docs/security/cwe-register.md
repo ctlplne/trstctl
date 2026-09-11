@@ -96,13 +96,13 @@ not this file.
 | `internal/agent/relay/relay_appliance_e2e_test.go:190` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
 | `internal/agent/relay/relay_appliance_e2e_test.go:259` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
 | `internal/agent/relay/relay_appliance_e2e_test.go:297` | credential REFERENCE NAMES, not credentials: the relay looks values up in redeemed material by these keys (CWE-798) |
-| `internal/agent/relay/relay_test.go:140` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
-| `internal/agent/relay/relay_test.go:182` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
-| `internal/agent/relay/relay_test.go:335` | reference NAME, not a credential (CWE-798) |
-| `internal/agent/relay/relay_test.go:393` | reference NAME (CWE-798) |
+| `internal/agent/relay/relay_test.go:147` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
+| `internal/agent/relay/relay_test.go:189` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
+| `internal/agent/relay/relay_test.go:342` | reference NAME, not a credential (CWE-798) |
+| `internal/agent/relay/relay_test.go:400` | reference NAME (CWE-798) |
 | `internal/agent/relay/ticketsync_test.go:66` | TokenRef is a non-secret locator in a deterministic test fixture (CWE-798). |
-| `internal/agent/transport/agentservice.go:742` | an RPC method name, not a credential. The material this |
-| `internal/agent/transport/agentservice.go:749` | an RPC method name. This call carries a CSR up and returns |
+| `internal/agent/transport/agentservice.go:745` | an RPC method name, not a credential. The material this |
+| `internal/agent/transport/agentservice.go:752` | an RPC method name. This call carries a CSR up and returns |
 | `internal/agent/transport/receipt.go:196` | an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/transport/receipt_custody_test.go:15` | the credential fingerprint is public fixture metadata, not a credential (CWE-798). |
 | `internal/aimodel/redactor_test.go:39` | fixture: AWS's documented example key id; the redactor must catch it (CWE-798) |
@@ -1074,9 +1074,9 @@ not this file.
 | `internal/agent/relay/hostrollback_test.go:46` | test-owned temporary directory (CWE-22) |
 | `internal/agent/relay/plugins.go:141` | operator-configured plugin directory (CWE-22) |
 | `internal/agent/relay/plugins.go:145` | sibling of an operator-configured module (CWE-22) |
-| `internal/agent/relay/relay_test.go:672` | certPath is created beneath this test's private t.TempDir, |
-| `internal/agent/relay/relay_test.go:1103` | callers pass paths created inside this test package's t.TempDir fixtures (CWE-22). |
-| `internal/agent/relay/rollback_test.go:202` | test-owned temporary path (CWE-22) |
+| `internal/agent/relay/relay_test.go:679` | certPath is created beneath this test's private t.TempDir, |
+| `internal/agent/relay/relay_test.go:1110` | callers pass paths created inside this test package's t.TempDir fixtures (CWE-22). |
+| `internal/agent/relay/rollback_test.go:206` | test-owned temporary path (CWE-22) |
 | `internal/agent/relay/selfupgrade_test.go:87` | test reads its own tempdir fixture path (CWE-22) |
 | `internal/agent/relay/selfupgrade_test.go:152` | test reads its own tempdir fixture path (CWE-22) |
 | `internal/agent/relay/selfupgrade_test.go:156` | test reads its own tempdir fixture path (CWE-22) |

@@ -189,17 +189,19 @@ func DetailDigest(detail string) string {
 // interprets them cannot be allowed to drift.
 const (
 	// Refusals made locally, before any connection to the target.
-	RollbackRefusedBadPayload             = "job payload is not a rollback intent"
-	RollbackRefusedNotExecutable          = "connector is not executable by this agent"
-	RollbackRefusedCannotRebind           = "this connector cannot roll back by re-binding"
-	RollbackRefusedNoPredecessor          = "no predecessor is recorded for this target"
-	RollbackRefusedNoCredential           = "credential redemption was not granted" // #nosec G101 -- an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798)
-	RollbackRefusedNoLockedMemory         = "redeemed material could not be taken into locked memory"
-	RollbackRefusedNoHostRestore          = "this host connector has no local restore runner"
-	RollbackRefusedNoHostState            = "this agent has no host predecessor store configured"
-	RollbackRefusedNoHostProfile          = "this agent has no host exec profile configured for restore and reload"
-	RollbackRefusedHostPredecessorMissing = "the requested predecessor is not retained on this host agent"
-	RollbackRefusedHostStateUnavailable   = "host predecessor state could not be opened on this agent"
+	RollbackRefusedBadPayload               = "job payload is not a rollback intent"
+	RollbackRefusedNotExecutable            = "connector is not executable by this agent"
+	RollbackRefusedCannotRebind             = "this connector cannot roll back by re-binding"
+	RollbackRefusedNoPredecessor            = "no predecessor is recorded for this target"
+	RollbackRefusedNoCredential             = "credential redemption was not granted" // #nosec G101 -- an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798)
+	RollbackRefusedNoLockedMemory           = "redeemed material could not be taken into locked memory"
+	RollbackRefusedNoHostRestore            = "this host connector has no local restore runner"
+	RollbackRefusedNoHostState              = "this agent has no host predecessor store configured"
+	RollbackRefusedNoHostProfile            = "this agent has no host exec profile configured for restore and reload"
+	RollbackRefusedHostPredecessorMissing   = "the requested predecessor is not retained on this host agent"
+	RollbackRefusedHostStateUnavailable     = "host predecessor state could not be opened on this agent"
+	RollbackRefusedAuthorization            = "control plane no longer authorizes this rollback attempt"
+	RollbackRefusedAuthorizationUnavailable = "current rollback authorization could not be checked"
 	// A denied capability means the sandbox blocked the operation — including,
 	// for a network connector, the dial itself. It is classified as no-contact
 	// because claiming contact on a blocked dial would be the same lie.
@@ -245,6 +247,7 @@ func RollbackReasonIsPermanent(reason string) bool {
 		RollbackRefusedNoPredecessor,
 		RollbackRefusedNoHostRestore,
 		RollbackRefusedNoHostState,
+		RollbackRefusedAuthorization,
 		RollbackRefusedHostPredecessorMissing:
 		return true
 	default:

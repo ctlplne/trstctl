@@ -1690,6 +1690,15 @@ omitted it is `host-rollbacks` beside `--key`. Back up or persist that directory
 with the agent identity. If it is lost, the exact host predecessor cannot be
 reconstructed by the control plane and rollback is refused.
 
+Before restoring a predecessor, the agent requests `rollback_authorize` over its
+existing mTLS job channel. The control plane checks the exact job, agent, live
+claim attempt, predecessor revocation state, and any bound identity's revocation
+or retirement state. The agent opens its saved material only after acceptance.
+Use updated control-plane and agent binaries together: an older server does not
+understand this request, so an updated agent refuses restoration. Ordinary lease
+extension also requires the current claim attempt; an expired or stale attempt
+cannot renew its lease. Host rollback still redeems no control-plane credential.
+
 ## WASM plugins
 
 The WASM plugin surface is off by default. When enabled, the binary admits only signed

@@ -14,6 +14,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/orchestrator"
 )
 
 // RedeemJobCredential hands a claimed job's credential material to the agent
@@ -56,6 +57,11 @@ func (a *agentService) RedeemJobCredential(ctx context.Context, req *transport.R
 	}
 	if !held || job.ClaimAttempts != req.Attempt {
 		return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)
+	}
+	if job.Destination == orchestrator.DestinationConnectorRollback {
+		if err := a.store.CheckConnectorRollbackPayload(ctx, info.TenantID, job.Payload); err != nil {
+			return nil, status.Error(codes.FailedPrecondition, "current rollback authorization was not granted")
+		}
 	}
 
 	material, err := a.relayCredentials.resolveJobCredential(ctx, info.TenantID, job)

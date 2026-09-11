@@ -375,7 +375,7 @@ func TestServedAgentExtendsItsOwnLease(t *testing.T) {
 	first := claimed.Jobs[0]
 
 	extended, err := h.client.ReportJobResult(ctx, &transport.ReportJobResultRequest{
-		JobID: first.JobID, Outcome: transport.JobOutcomeExtend, LeaseSeconds: 120,
+		JobID: first.JobID, Attempt: first.Attempt, Outcome: transport.JobOutcomeExtend, LeaseSeconds: 120,
 	})
 	if err != nil {
 		t.Fatalf("extend: %v", err)

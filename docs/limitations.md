@@ -4553,6 +4553,15 @@ families and all 14 host-local restore families can execute it. Host work is
 pinned to the agent that retained the predecessor; a first deployment still has
 nothing to roll back to.
 
+Manual and automatic rollback share a tenant-scoped inventory check: the
+predecessor must be known and unrevoked, and a bound identity must not be revoked
+or retired. The control plane repeats that check before handing out queued work;
+the updated agent requests fresh authorization before opening its predecessor
+store or redeeming an appliance credential. Upgrade both components to obtain
+all three checks. A control-plane refusal is recorded as `rollback_refused`,
+without claiming agent execution. These checks cannot cancel a remote operation
+already in progress or remove compromised material already installed on a target.
+
 **Configuring it.** Local post-deploy verification runs when a deployment target
 carries `verify_address` (and optionally `verify_server_name`) in its config —
 for example `{"cert_path": "/etc/nginx/server.crt", "verify_address": "api.example.test:443"}`.
