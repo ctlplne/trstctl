@@ -70,7 +70,7 @@ below. The control-plane operator must:
    refuses control-plane key custody for an external CA on a host connector rather
    than risk a certificate whose key no longer exists.
 
-The tenant operator needs `issuers:read`, `certificates:issue`, discovery access, and
+The tenant operator needs `issuers:read`, `certs:issue`, discovery access, and
 the permissions required for the chosen destination and notification route. Use a
 non-production hostname and destination for the first proof.
 
@@ -90,9 +90,10 @@ initial issue and every later renewal route through the selected authority; miss
 or unavailable authority configuration fails closed without platform-CA fallback.
 
 The lifecycle preview proves the plan, not the outcome. Issuance, deployment,
-listener readback, renewal, alert delivery, and recovery still need their own durable
-receipts or independent observations. The proof gate at the end of this page names
-the evidence required before calling the complete loop production-ready.
+listener readback, renewal, alert delivery, recovery, revocation, and retirement
+need their own durable receipts or independent observations. The proof gate at
+the end of this page names the evidence required before calling the complete loop
+production-ready.
 
 ## Steps
 
@@ -242,8 +243,8 @@ the controlled alert:
 ```sh
 trstctl-cli notifications routing-preview \
   --workspace certificate-lifecycle --owner_ref owner/<owner-id> \
-  --asset_ref <identity-id> --severity high
-trstctl-cli notifications list --status unread
+  --asset_ref <identity-id> --severity warning
+trstctl-cli notifications list --status sent
 trstctl-cli --idempotency-key preserve-ca-alert-read-001 \
   notifications read <notification-id>
 ```
@@ -251,6 +252,34 @@ trstctl-cli --idempotency-key preserve-ca-alert-read-001 \
 For an external channel, retain the provider's acceptance receipt as well as the
 trstctl outbox receipt. This is the alert acknowledgement proof that an owner can see
 and work the warning.
+
+### 8. Verify revocation and retirement
+
+Use a disposable certificate for this step. Record its exact inventory ID, serial,
+fingerprint, and issuing authority before changing it. If it is serving traffic,
+first deploy and independently verify a replacement with a new key. Include any
+predecessor restored during rollback in the containment plan: a `superseded`
+inventory row can still be the certificate served by the workload.
+
+Current limitation: the identity revocation workflow does not dispatch revocation
+to the selected external CA. It can mark an external certificate `revoked` and
+publish its serial under trstctl's own CA. That CRL cannot revoke a certificate
+signed by a different authority. The exact-certificate bulk-revoke route instead
+returns a failed item for an unsupported issuer, even when HTTP status is 200.
+Neither result proves external-CA containment. Use the issuing CA's supported
+revocation procedure and record this manual step as an automation gap.
+
+Confirm the issuing authority accepted the exact serial and factual revocation
+reason. Where that authority publishes CRL or OCSP data, verify its signature and
+status, then use a stock client configured to enforce revocation to prove that the
+old certificate is rejected. Record any authority or client enforcement limit.
+A normal TLS handshake does not usually check revocation by itself.
+
+Verify that the workload serves the replacement and cannot restore compromised
+key material through rollback. When the identity is no longer needed, retire it
+through the reviewed lifecycle transition. Confirm retirement stops future
+renewals and deployments while preserving the issuance, replacement, revocation,
+and retirement audit records. Retirement is not a substitute for revocation.
 
 ## Proof gate before you call it automated
 
@@ -266,14 +295,21 @@ following evidence:
   **alert acknowledgement** is visible in the inbox and audit trail;
 - an unreachable authority, invalid CSR, and unreachable destination all fail closed;
 - rollback restores a previously proven certificate and independent listener
-  fingerprint.
+  fingerprint;
+- revocation reaches the exact selected authority, with its acceptance evidence
+  and, where supported, signed CRL/OCSP status and rejection by a revocation-aware
+  client; the workload serves the replacement and cannot restore compromised material;
+- retirement stops future automation and retains the complete lifecycle audit export.
+
+The current external-CA revocation limitation above leaves this full-lifecycle gate
+open even when issuance, deployment, renewal, alerts, and rollback succeed.
 
 Until every item is evidenced, describe the demonstrated boundary precisely: trstctl
 can discover the existing certificate and create one CA-explicit, fingerprint-bound
 lifecycle plan whose worker routes initial issuance and renewal through the same
 external CA. Do not turn accepted work or separate receipts into a claim that the
-listener changed, renewed twice, alerted its owner, or recovered unless those exact
-outcomes were observed.
+listener changed, renewed twice, alerted its owner, recovered, revoked at the
+issuing CA, or retired safely unless those exact outcomes were observed.
 
 ## Where next
 
