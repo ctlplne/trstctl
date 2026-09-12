@@ -45,6 +45,26 @@ func TestHostRotationResultRecordsTheReportedOutcome(t *testing.T) {
 					t.Fatalf("released failure falsely completed the run: %+v", run)
 				}
 				jobs, err := f.h.client.ClaimJobs(t.Context(), &transport.ClaimJobsRequest{Kinds: []string{agentJobKindEndpointRenew}, Limit: 1})
+				if err != nil || len(jobs.Jobs) != 0 {
+					t.Fatalf("failed attempt did not enter backoff: %+v %v", jobs, err)
+				}
+				var retryAt time.Time
+				if err := f.h.store.WithTenant(t.Context(), f.h.tenant, func(tx pgx.Tx) error {
+					return tx.QueryRow(t.Context(), `SELECT agent_next_attempt_at FROM outbox WHERE tenant_id=$1 AND id=$2`, f.h.tenant, f.job.JobID).Scan(&retryAt)
+				}); err != nil {
+					t.Fatal(err)
+				}
+				if wait := time.Until(retryAt); wait < 0 || wait > 5*time.Second {
+					t.Fatalf("unexpected first failure retry deadline: %s", wait)
+				}
+				timer := time.NewTimer(time.Until(retryAt) + 10*time.Millisecond)
+				defer timer.Stop()
+				select {
+				case <-timer.C:
+				case <-t.Context().Done():
+					t.Fatal(t.Context().Err())
+				}
+				jobs, err = f.h.client.ClaimJobs(t.Context(), &transport.ClaimJobsRequest{Kinds: []string{agentJobKindEndpointRenew}, Limit: 1})
 				if err != nil || len(jobs.Jobs) != 1 || jobs.Jobs[0].Attempt != f.job.Attempt+1 {
 					t.Fatalf("released attempt was not retryable: %+v %v", jobs, err)
 				}

@@ -807,6 +807,11 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 		     SELECT o.id
 		       FROM outbox o
 		      WHERE o.status = 'pending'
+		        -- A live agent lease owns this attempt. Taking it into processing
+		        -- here would invalidate signing, lease extension and result reports.
+		        -- Completed legacy rows may still need dispatcher finalization.
+		        AND (o.claimed_by_agent_id IS NULL OR o.claim_completed_at IS NOT NULL
+		             OR o.claim_expires_at < $2)
 		        AND (o.retry_attempt_limit = 0 OR o.attempts < o.retry_attempt_limit)
 		        AND o.next_attempt_at <= $1
 		        -- A row demanding one specific agent (A5: agent.upgrade) can

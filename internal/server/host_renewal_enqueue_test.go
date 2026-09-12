@@ -192,8 +192,8 @@ func TestARenewalForAnAgentExecutedTargetQueuesHostWorkAndMintsNothing(t *testin
 	if before != 1 {
 		t.Fatalf("after initial issue certificates = %d, want 1", before)
 	}
-	if err := h.orch.Transition(ctx, h.tenant, ident.ID, orchestrator.StateDeployed, "deployed"); err != nil {
-		t.Fatalf("transition to deployed: %v", err)
+	if current, err := h.store.GetIdentity(ctx, h.tenant, ident.ID); err != nil || current.Status != string(orchestrator.StateDeployed) {
+		t.Fatalf("initial issuance did not reach deployed: status=%s err=%v", current.Status, err)
 	}
 	dispatchOutbox(t, h, 1)
 
@@ -603,8 +603,8 @@ func TestAHostRenewalNamesTheCertificateItReplaces(t *testing.T) {
 	if err := h.store.UpsertDeploymentTarget(ctx, target); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.orch.Transition(ctx, h.tenant, ident.ID, orchestrator.StateDeployed, "deployed"); err != nil {
-		t.Fatal(err)
+	if current, err := h.store.GetIdentity(ctx, h.tenant, ident.ID); err != nil || current.Status != string(orchestrator.StateDeployed) {
+		t.Fatalf("initial issuance did not reach deployed: status=%s err=%v", current.Status, err)
 	}
 	dispatchOutbox(t, h, 1)
 	if err := h.orch.Transition(ctx, h.tenant, ident.ID, orchestrator.StateRenewing, "renewal"); err != nil {

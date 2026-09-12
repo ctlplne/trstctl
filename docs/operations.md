@@ -69,7 +69,7 @@ them:
 | probe | 2 | `TRSTCTL_POSTGRES_PROBE_CONNS` / `postgres.probe_conns` | the readiness `db` check |
 | reserved | 2 | `TRSTCTL_POSTGRES_RESERVED_CONNS` / `postgres.reserved_conns` | the durable projection tail (apply and checkpoint) |
 | bookkeeping | 4 | `TRSTCTL_POSTGRES_BOOKKEEPING_CONNS` / `postgres.bookkeeping_conns` | idempotency claim, record and release statements |
-| lock | 8 | `TRSTCTL_POSTGRES_LOCK_CONNS` / `postgres.lock_conns` | sessions holding the projection advisory lock |
+| lock | 8 | `TRSTCTL_POSTGRES_LOCK_CONNS` / `postgres.lock_conns` | sessions holding projection, lifecycle issuance/revocation, and host-result advisory locks |
 
 The default budget is **32 connections per replica** (each small pool keeps one
 connection warm, so an idle replica holds about five). Size PostgreSQL so that

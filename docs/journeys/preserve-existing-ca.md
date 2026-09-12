@@ -107,6 +107,22 @@ queue another deployment: the host has already installed the certificate. Confir
 the rotation result and listener fingerprint as well as the lifecycle state.
 Upgrading does not rewrite historical failed rotation results as successful.
 
+A failed host or relay job waits before it can be claimed again. The retry delay
+doubles from a 5-second ceiling to a 60-second ceiling, with each delay randomized
+between half and all of its ceiling. Agent polling can add further delay. This
+deadline is separate from the control-plane dispatcher's deferral timer; a stale
+or expired claim cannot release a newer attempt. Fix permanent policy or
+configuration refusals rather than relying on retries to change the request.
+
+Identity revocation and retirement coordinate with lifecycle issuance, renewal,
+and host CSR signing. If signing is already in progress, the lifecycle API returns
+HTTP 409; retry the same request after that operation finishes. An accepted
+revocation prevents a subsequent signing attempt or cached-certificate replay for
+the identity, and pending host issuance is no longer claimable. It does not cancel
+a request that an external CA has already accepted. Acceptance does not prove
+upstream revocation or removal of an installed certificate: verify the exact
+certificate, issuing CA, workload and relying-party result below.
+
 ## Steps
 
 If discovery already created a requested X.509 identity for this DNS name, the

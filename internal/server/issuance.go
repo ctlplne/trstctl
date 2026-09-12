@@ -502,6 +502,14 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 	if p.IdentityID == "" || p.To != string(orchestrator.StateIssued) {
 		return nil
 	}
+	if !d.store.IdentityIssuanceFenceHeld(ctx, m.TenantID, p.IdentityID) {
+		return d.store.WithIdentityIssuanceFence(ctx, m.TenantID, p.IdentityID, func(fenced context.Context) error {
+			return d.handleIssue(fenced, m)
+		})
+	}
+	if err := d.identityStillPermitsIssuance(ctx, m.TenantID, p.IdentityID); err != nil {
+		return err
+	}
 	idemKey := "issue:" + m.IdempotencyKey
 	// Idempotent on the outbox key: a redelivery returns the recorded result
 	// without minting again (AN-5 ↔ AN-6).
@@ -790,6 +798,14 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 	}
 	if p.IdentityID == "" || p.To != string(orchestrator.StateRenewing) {
 		return nil
+	}
+	if !d.store.IdentityIssuanceFenceHeld(ctx, m.TenantID, p.IdentityID) {
+		return d.store.WithIdentityIssuanceFence(ctx, m.TenantID, p.IdentityID, func(fenced context.Context) error {
+			return d.handleRenew(fenced, m)
+		})
+	}
+	if err := d.identityStillPermitsIssuance(ctx, m.TenantID, p.IdentityID); err != nil {
+		return err
 	}
 	idemKey := "renew:" + m.IdempotencyKey
 	_, err := d.idem.Do(ctx, m.TenantID, idemKey, func(ctx context.Context) ([]byte, error) {

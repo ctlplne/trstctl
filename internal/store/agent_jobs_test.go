@@ -189,25 +189,38 @@ func TestAgentJobExtendAndReleaseOnlyWorkForTheHolder(t *testing.T) {
 		t.Fatalf("the holder could not extend its own lease: ok=%v err=%v", ok, err)
 	}
 
-	// Releasing hands the work back immediately: a failure on one host is not
-	// evidence the work is impossible.
-	if ok, err := st.ReleaseAgentJob(ctx, tenantID, holder, second.ID, "nginx -t failed: /etc/nginx/tls.key is unreadable"); err != nil || !ok {
+	// A late report cannot release a newer claim, including one held by the same
+	// agent. An expired claim also cannot mutate retry scheduling.
+	if ok, err := st.ReleaseAgentJob(ctx, tenantID, holder, second.ID, second.ClaimAttempts+1, "failed", now); err != nil || ok {
+		t.Fatalf("wrong generation released a claim: ok=%v err=%v", ok, err)
+	}
+	if ok, err := st.ReleaseAgentJob(ctx, tenantID, holder, second.ID, second.ClaimAttempts, "failed", now.Add(2*time.Minute)); err != nil || ok {
+		t.Fatalf("expired generation released a claim: ok=%v err=%v", ok, err)
+	}
+	if ok, err := st.ReleaseAgentJob(ctx, tenantID, holder, second.ID, second.ClaimAttempts, "nginx -t failed: /etc/nginx/tls.key is unreadable", now); err != nil || !ok {
 		t.Fatalf("release: ok=%v err=%v", ok, err)
 	}
 	// The agent's own words must not land in the durable row: an agent executes
 	// against systems that echo credentials back in error strings, and an
 	// unbounded string on the queue is exactly where that becomes permanent.
 	var persisted string
+	var retryAt time.Time
 	if err := st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT coalesce(last_error, '') FROM outbox WHERE tenant_id = $1 AND id = $2`,
-			tenantID, second.ID).Scan(&persisted)
+		return tx.QueryRow(ctx, `SELECT coalesce(last_error, ''), agent_next_attempt_at FROM outbox WHERE tenant_id = $1 AND id = $2`,
+			tenantID, second.ID).Scan(&persisted, &retryAt)
 	}); err != nil {
 		t.Fatalf("read persisted failure reason: %v", err)
 	}
 	if persisted != store.AgentFailureReported {
 		t.Fatalf("persisted failure reason = %q, want the closed-set marker %q", persisted, store.AgentFailureReported)
 	}
-	requeued, err := st.ClaimAgentJobs(ctx, tenantID, impostor, []string{jobDeploy}, nil, 5, time.Minute, now)
+	if delay := retryAt.Sub(now); delay < 2500*time.Millisecond || delay > 5*time.Second {
+		t.Fatalf("first retry delay = %s, want 2.5–5 seconds", delay)
+	}
+	if early, err := st.ClaimAgentJobs(ctx, tenantID, impostor, []string{jobDeploy}, nil, 5, time.Minute, now); err != nil || len(early) != 0 {
+		t.Fatalf("failed work immediately reclaimable: jobs=%d err=%v", len(early), err)
+	}
+	requeued, err := st.ClaimAgentJobs(ctx, tenantID, impostor, []string{jobDeploy}, nil, 5, time.Minute, retryAt.Add(time.Millisecond))
 	if err != nil || len(requeued) != 1 || requeued[0].ID != second.ID {
 		t.Fatalf("a released job did not become claimable again: %+v (err %v)", requeued, err)
 	}

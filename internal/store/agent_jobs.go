@@ -210,11 +210,20 @@ func (s *Store) ClaimAgentJobs(ctx context.Context, tenantID, agentID string, de
 			         WHERE c.tenant_id = $1
 			           AND c.destination = ANY($3::text[])
 			           AND c.status = 'pending'
+			           AND c.agent_next_attempt_at <= $5
 			           AND c.delivered_at IS NULL
 			           AND c.claim_completed_at IS NULL
 			           AND (c.claimed_by_agent_id IS NULL OR c.claim_expires_at < $5)
 			           AND (c.required_agent_role = '' OR c.required_agent_role = ANY($7::text[]))
 			           AND (c.required_agent_id IS NULL OR c.required_agent_id = $2::uuid)
+			           AND NOT EXISTS (
+			                 SELECT 1 FROM identities AS i
+			                  WHERE i.tenant_id = c.tenant_id
+			                    AND i.status IN ('revoked', 'retired')
+			                    AND c.destination = 'endpoint.renew'
+			                    AND i.id::text = CASE WHEN c.destination = 'endpoint.renew'
+			                        THEN convert_from(c.payload, 'UTF8')::jsonb ->> 'identity_id' END
+			           )
 			           -- A destination an operator has disabled hands out no work: rows stamped
 			           -- with that target's lane stay pending, never dropped, and are claimable
 			           -- again the moment it is enabled (DP2-028).
@@ -327,15 +336,17 @@ func (s *Store) ExtendAgentJobClaim(ctx context.Context, tenantID, agentID strin
 }
 
 // ReleaseAgentJob hands a job back after a failed attempt, recording why. The
-// entry becomes claimable again immediately — by this agent or another — because
-// a failure on one host is not evidence the work is impossible.
+// entry becomes claimable after a bounded delay, by this agent or another.
+// Retry delay doubles from 5 seconds to a 60-second ceiling, with jitter between
+// half and all of that delay. Transient outages remain recoverable without a
+// tight signing/failure loop. The deadline is independent of dispatcher deferral.
 //
 // The persisted reason is a closed-set marker, never the agent's own words. An
 // agent executes against systems that may echo the credential it was just given
 // back in an error string; persisting arbitrary agent text here would turn that
 // into a durable, unwipeable secret in PostgreSQL (AN-8) — the same reason the
 // dispatcher's own delivery errors are a closed set.
-func (s *Store) ReleaseAgentJob(ctx context.Context, tenantID, agentID string, jobID int64, reason string) (bool, error) {
+func (s *Store) ReleaseAgentJob(ctx context.Context, tenantID, agentID string, jobID int64, attempt int, reason string, now time.Time) (bool, error) {
 	var released bool
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx,
@@ -343,12 +354,17 @@ func (s *Store) ReleaseAgentJob(ctx context.Context, tenantID, agentID string, j
 			    SET claimed_by_agent_id = NULL,
 			        claim_expires_at    = NULL,
 			        attempts            = attempts + 1,
+			        agent_next_attempt_at = $6::timestamptz +
+			            interval '1 second' * LEAST(60, 5 * power(2, LEAST(GREATEST(claim_attempts - 1, 0), 4))) * (0.5 + random() * 0.5),
 			        last_error          = $4
 			  WHERE tenant_id = $1
 			    AND id = $3
 			    AND claimed_by_agent_id = $2::uuid
+			    AND claim_attempts = $5
+			    AND status = 'pending'
+			    AND claim_expires_at > $6
 			    AND claim_completed_at IS NULL`,
-			tenantID, agentID, jobID, agentFailureReason(reason))
+			tenantID, agentID, jobID, agentFailureReason(reason), attempt, now.UTC())
 		if err != nil {
 			return err
 		}
@@ -583,6 +599,7 @@ func (s *Store) GetAgentJobForRedemption(
 			   FROM outbox
 			  WHERE tenant_id = $1 AND id = $2
 			    AND claimed_by_agent_id = $3::uuid
+			    AND status = 'pending'
 			    AND claim_completed_at IS NULL
 			    AND claim_expires_at > $4`,
 			tenantID, jobID, agentID, now.UTC()).

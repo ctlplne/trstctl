@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // ProjectionAdvisoryLockKey is the fixed PostgreSQL advisory-lock key every
@@ -56,17 +57,30 @@ func (s *Store) WithProjectionLock(ctx context.Context, fn func(context.Context)
 	// holder's nested transactions need that pool and a burst of waiters starved
 	// it into the acquire window (DP2-061). The callback still runs its own
 	// transactions on the pool ctx is entitled to.
-	conn, err := s.lockSessionPool(ctx).Acquire(ctx)
-	if err != nil {
-		return fmt.Errorf("store: acquire projection-lock connection: %w", err)
+	var conn *pgxpool.Conn
+	if fence, _ := ctx.Value(identityIssuanceFenceKey{}).(*identityIssuanceFence); fence != nil && fence.store == s {
+		if !fence.active.Load() {
+			return errors.New("store: identity issuance fence has ended")
+		}
+		conn = fence.conn
+	} else {
+		var err error
+		conn, err = s.lockSessionPool(ctx).Acquire(ctx)
+		if err != nil {
+			return fmt.Errorf("store: acquire projection-lock connection: %w", err)
+		}
+		defer conn.Release()
 	}
-	defer conn.Release()
 	if _, err := conn.Exec(ctx, "SELECT pg_advisory_lock($1)", ProjectionAdvisoryLockKey); err != nil {
 		return fmt.Errorf("store: acquire projection lock: %w", err)
 	}
 	defer func() {
 		// Release on a fresh context so the lock drops even if ctx is done.
-		_, _ = conn.Exec(context.Background(), "SELECT pg_advisory_unlock($1)", ProjectionAdvisoryLockKey)
+		unlockCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		if _, err := conn.Exec(unlockCtx, "SELECT pg_advisory_unlock($1)", ProjectionAdvisoryLockKey); err != nil {
+			_ = conn.Conn().Close(unlockCtx)
+		}
 	}()
 	return fn(ctx)
 }

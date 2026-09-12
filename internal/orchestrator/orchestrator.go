@@ -307,6 +307,11 @@ func (o *Orchestrator) TransitionWithSideEffectPayloadTransform(ctx context.Cont
 }
 
 func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID string, to State, reason string, sideEffectPayload []byte, idempotencyKey, subjectCSRPEM string, transform SideEffectPayloadTransform, approval *store.OperationApprovalUse, issuance *store.OperationApprovalIssuanceBinding, expectedVersion *uint64, completedDestination string, reviewed ...*store.Identity) error {
+	if (to == StateRevoked || to == StateRetired) && !o.store.IdentityIssuanceFenceHeld(ctx, tenantID, identityID) {
+		return o.store.WithIdentityIssuanceFence(ctx, tenantID, identityID, func(fenced context.Context) error {
+			return o.transition(fenced, tenantID, identityID, to, reason, sideEffectPayload, idempotencyKey, subjectCSRPEM, transform, approval, issuance, expectedVersion, completedDestination, reviewed...)
+		})
+	}
 	if len(reviewed) > 1 {
 		return errors.New("orchestrator: multiple reviewed identity snapshots")
 	}

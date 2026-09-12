@@ -58,10 +58,9 @@ func (a *agentService) SignJobCSR(ctx context.Context, req *transport.SignJobCSR
 		return nil, status.Error(codes.InvalidArgument, "csr_der is required")
 	}
 
-	// Holding the job is the whole authorization. The lease predicate lives in
-	// the query — an expired claim finds nothing — so a CSR built under a lapsed
-	// lease cannot be signed after the work was reassigned, which would leave
-	// two hosts holding live certificates for one endpoint.
+	// Check the claim before loading its subject binding. The signing dispatcher
+	// rechecks it under the identity's signing/revocation fence, including the
+	// current identity state; holding an old job alone does not permit signing.
 	agentID := agentRowID(info.TenantID, info.CommonName)
 	job, ok, err := a.store.GetAgentJobForRedemption(ctx, info.TenantID, agentID, req.JobID, time.Now().UTC())
 	if err != nil {

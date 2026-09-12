@@ -854,7 +854,7 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 	if permanent {
 		ok, releaseErr = a.store.FailAgentJobTerminally(ctx, info.TenantID, agentID, req.JobID, req.Attempt, detail, now)
 	} else {
-		ok, releaseErr = a.store.ReleaseAgentJob(ctx, info.TenantID, agentID, req.JobID, req.Detail)
+		ok, releaseErr = a.store.ReleaseAgentJob(ctx, info.TenantID, agentID, req.JobID, req.Attempt, req.Detail, now)
 	}
 	if releaseErr != nil {
 		return nil, status.Errorf(codes.Internal, "release agent job: %v", releaseErr)

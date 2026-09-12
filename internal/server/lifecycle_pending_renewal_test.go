@@ -48,8 +48,8 @@ func TestLifecycleSchedulerDoesNotOverlapHostRenewalRetry(t *testing.T) {
 	}
 	dispatchOutbox(t, h, 1)
 	cert := dispatcherCertificates(t, h)[0]
-	if err := h.orch.Transition(ctx, h.tenant, ident.ID, orchestrator.StateDeployed, "initial deploy"); err != nil {
-		t.Fatal(err)
+	if current, err := h.store.GetIdentity(ctx, h.tenant, ident.ID); err != nil || current.Status != string(orchestrator.StateDeployed) {
+		t.Fatalf("initial issuance did not reach deployed: status=%s err=%v", current.Status, err)
 	}
 	dispatchOutbox(t, h, 1)
 	if err := h.store.UpsertDeploymentTarget(ctx, target); err != nil {

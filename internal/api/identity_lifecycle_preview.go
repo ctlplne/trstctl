@@ -42,6 +42,9 @@ type identityLifecyclePreviewResponse struct {
 }
 
 func lifecyclePreviewAPIError(err error) error {
+	if errors.Is(err, store.ErrIdentityIssuanceBusy) {
+		return errWithStatus(http.StatusConflict, err)
+	}
 	if errors.Is(err, store.ErrIdentityEnrollmentConflict) {
 		return errWithStatus(http.StatusConflict, err)
 	}

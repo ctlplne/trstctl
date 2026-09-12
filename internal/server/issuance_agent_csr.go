@@ -3,11 +3,14 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -24,10 +27,9 @@ import (
 // Issuing against an agent-generated CSR (epic B2).
 //
 // The control-plane half of host-generated renewal. By the time this runs the
-// agent channel has already established the only thing that authorizes it — the
-// caller holds this job, and this job names these subjects — so what is left is
-// the narrow question of whether the request stays inside that binding, and then
-// ordinary issuance.
+// agent channel has established the job and subject binding. Signing also
+// rechecks the current claim and identity state while holding the same identity
+// fence used by revocation, so an old job cannot outlive that authority.
 //
 // It deliberately reuses mintServedLeafFromCSR rather than opening a second
 // issuance path. The profile gate, the CA, the certificate record and the
@@ -38,6 +40,48 @@ import (
 
 // signAgentSubjectCSR signs a CSR an agent generated for a renewal job it holds.
 func (d *issuanceDispatcher) signAgentSubjectCSR(
+	ctx context.Context, tenantID, agentName string, job store.AgentJobForRedemption,
+	jobID int64, csrDER []byte, permitted []string, attempt int,
+) (*transport.SignJobCSRResponse, error) {
+	if d == nil || d.store == nil || d.orch == nil {
+		return nil, status.Error(codes.FailedPrecondition, "issuance is not configured")
+	}
+	var intent RelayDeployIntent
+	if json.Unmarshal(job.Payload, &intent) != nil || strings.TrimSpace(intent.IdentityID) == "" {
+		return nil, status.Error(codes.FailedPrecondition, "renewal job has no identity binding")
+	}
+	var response *transport.SignJobCSRResponse
+	err := d.store.WithIdentityIssuanceFence(ctx, tenantID, intent.IdentityID, func(fenced context.Context) error {
+		checkClaim := func() error {
+			current, held, err := d.store.GetAgentJobForRedemption(fenced, tenantID, agentRowID(tenantID, agentName), jobID, time.Now().UTC())
+			if err != nil {
+				return err
+			}
+			if !held || current.ClaimAttempts != attempt || current.Destination != job.Destination || current.IdempotencyKey != job.IdempotencyKey || !bytes.Equal(current.Payload, job.Payload) {
+				return status.Error(codes.PermissionDenied, "this agent no longer holds the exact issuance job")
+			}
+			return nil
+		}
+		if err := checkClaim(); err != nil {
+			return err
+		}
+		var err error
+		response, err = d.signAgentSubjectCSRUnderFence(fenced, tenantID, agentName, job, jobID, csrDER, permitted, attempt)
+		if err != nil {
+			return err
+		}
+		return checkClaim()
+	})
+	if errors.Is(err, store.ErrIdentityIssuanceBusy) {
+		return nil, status.Error(codes.Aborted, err.Error())
+	}
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 	ctx context.Context,
 	tenantID, agentName string,
 	job store.AgentJobForRedemption,
@@ -65,6 +109,9 @@ func (d *issuanceDispatcher) signAgentSubjectCSR(
 	ident, err := d.store.GetIdentity(ctx, tenantID, identityID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "load identity %s: %v", identityID, err)
+	}
+	if ident.Status == string(orchestrator.StateRevoked) || ident.Status == string(orchestrator.StateRetired) {
+		return nil, status.Error(codes.PermissionDenied, "the identity is revoked or retired; this host job no longer authorizes signing")
 	}
 
 	// Idempotency keyed on the CSR'S OWN BYTES, not on the job attempt alone.
@@ -169,6 +216,19 @@ func (d *issuanceDispatcher) signAgentSubjectCSR(
 		ChainPEM:       append([]byte(nil), chainPEM...),
 		Fingerprint:    fingerprint,
 	}, nil
+}
+
+// Call only while holding this identity's issuance fence, before replaying an
+// idempotent result or making a new signing request.
+func (d *issuanceDispatcher) identityStillPermitsIssuance(ctx context.Context, tenantID, identityID string) error {
+	ident, err := d.store.GetIdentity(ctx, tenantID, identityID)
+	if err != nil {
+		return err
+	}
+	if ident.Status == string(orchestrator.StateRevoked) || ident.Status == string(orchestrator.StateRetired) {
+		return errors.New("the identity is revoked or retired; this command no longer authorizes issuance")
+	}
+	return nil
 }
 
 func (d *issuanceDispatcher) bindAgentCSRMigrationSuccessor(

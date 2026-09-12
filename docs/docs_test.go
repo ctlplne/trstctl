@@ -3689,9 +3689,15 @@ func TestABACOverlayIsServedAndDisclosed(t *testing.T) {
 		}
 	}
 	handlers := read(t, "../internal/api/handlers.go")
-	for _, want := range []string{"identityABACResourceAttrs", `"transition.to"`, "flattenABACResource"} {
+	for _, want := range []string{"identityABACResourceAttrs", "executeIdentityTransition", "flattenABACResource"} {
 		if !strings.Contains(handlers, want) {
 			t.Errorf("internal/api/handlers.go should keep lifecycle ABAC resource anchor %q", want)
+		}
+	}
+	transition := read(t, "../internal/api/identity_transition_execution.go")
+	for _, want := range []string{"identityABACResourceAttrs", `"transition.to"`, "gate.checkWithApproval"} {
+		if !strings.Contains(transition, want) {
+			t.Errorf("identity_transition_execution.go should keep shared lifecycle ABAC guard %q", want)
 		}
 	}
 	server := read(t, "../internal/server/server.go")
