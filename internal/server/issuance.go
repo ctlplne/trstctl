@@ -569,7 +569,7 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 	if err != nil {
 		return err
 	}
-	return d.ensureTenantCRL(ctx, m.TenantID)
+	return d.ensureIdentityCRL(ctx, m.TenantID, p.IdentityID)
 }
 
 // shouldRecoverIssuedCertificate distinguishes a new durable outbox claim from
@@ -895,7 +895,7 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 	if err != nil {
 		return err
 	}
-	return d.ensureTenantCRL(ctx, m.TenantID)
+	return d.ensureIdentityCRL(ctx, m.TenantID, p.IdentityID)
 }
 
 // activeRenewalCertificates resolves the predecessor candidates for one
@@ -1070,6 +1070,29 @@ func (d *issuanceDispatcher) ensureTenantCRL(ctx context.Context, tenantID strin
 		return nil
 	}
 	return d.ensureCRL(ctx, tenantID)
+}
+
+// The default CRL belongs to the platform CA. A tenant using only another
+// authority has no platform-issued certificates and therefore no platform CRL
+// to publish. Preserve genuine publication failures and the platform issuer's
+// obligation; never turn another CA's certificates into platform CRL entries.
+func (d *issuanceDispatcher) ensureIdentityCRL(ctx context.Context, tenantID, identityID string) error {
+	err := d.ensureTenantCRL(ctx, tenantID)
+	if !errors.Is(err, errNoCRLSurface) {
+		return err
+	}
+	identity, loadErr := d.store.GetIdentity(ctx, tenantID, identityID)
+	if loadErr != nil {
+		return loadErr
+	}
+	selection, selectionErr := endpointIssuingAuthority(identity.Attributes)
+	if selectionErr != nil {
+		return selectionErr
+	}
+	if selection.Source == "external" || selection.Source == "private" {
+		return nil
+	}
+	return err
 }
 
 func (d *issuanceDispatcher) transitionDeployedWithCredential(ctx context.Context, tenantID string, ident store.Identity, reason string, certPEM, keyPEM []byte, fingerprint string) error {

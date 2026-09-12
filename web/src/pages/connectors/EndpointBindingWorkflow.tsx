@@ -9,7 +9,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { api } from "@/lib/api";
-import type { CAAuthority, DeploymentTarget, EndpointBinding, EndpointBindingPreview, EndpointIssuer, ExternalCA, Owner } from "@/lib/api-types.gen";
+import type { CAAuthority, DeploymentTarget, EndpointBinding, EndpointBindingPreview, EndpointIssuer, ExternalCA, Identity, Owner } from "@/lib/api-types.gen";
 import { useTranslation } from "@/i18n/I18nProvider";
 
 const platformIssuer: EndpointIssuer = {
@@ -21,6 +21,8 @@ const platformIssuer: EndpointIssuer = {
 };
 
 type FormValues = {
+  mode: "enroll" | "replace";
+  replace_identity_id: string;
   target_id: string;
   owner_id: string;
   identity_name: string;
@@ -32,9 +34,11 @@ type IssuerOption = EndpointIssuer & { available: boolean };
 
 export function EndpointBindingWorkflow({
   targets,
+  identities,
   onComplete,
 }: {
   targets: DeploymentTarget[];
+  identities: Identity[];
   onComplete: (binding: EndpointBinding, reason: string) => Promise<void> | void;
 }) {
   const { t } = useTranslation();
@@ -52,13 +56,21 @@ export function EndpointBindingWorkflow({
 
   const schema = useMemo(
     () =>
-      z.object({
-        target_id: z.string().trim().min(1, t("connectors.binding.required")),
-        owner_id: z.string().trim().min(1, t("connectors.binding.required")),
-        identity_name: z.string().trim().min(1, t("connectors.binding.required")),
-        reason: z.string().trim().min(1, t("connectors.binding.required")),
-        issuer_key: z.string().trim().min(1, t("connectors.binding.issuerRequired")),
-      }),
+      z
+        .object({
+          mode: z.enum(["enroll", "replace"]),
+          replace_identity_id: z.string().trim(),
+          target_id: z.string().trim().min(1, t("connectors.binding.required")),
+          owner_id: z.string().trim().min(1, t("connectors.binding.required")),
+          identity_name: z.string().trim().min(1, t("connectors.binding.required")),
+          reason: z.string().trim().min(1, t("connectors.binding.required")),
+          issuer_key: z.string().trim().min(1, t("connectors.binding.issuerRequired")),
+        })
+        .superRefine((values, context) => {
+          if (values.mode === "replace" && !values.replace_identity_id) {
+            context.addIssue({ code: z.ZodIssueCode.custom, path: ["replace_identity_id"], message: t("connectors.binding.originalRequired") });
+          }
+        }),
     [t],
   );
   const {
@@ -71,10 +83,12 @@ export function EndpointBindingWorkflow({
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     mode: "onTouched",
-    defaultValues: { target_id: "", owner_id: "", identity_name: "", reason: "", issuer_key: "" },
+    defaultValues: { mode: "enroll", replace_identity_id: "", target_id: "", owner_id: "", identity_name: "", reason: "", issuer_key: "" },
   });
   const issuerKey = useWatch({ control, name: "issuer_key" });
   const targetID = useWatch({ control, name: "target_id" });
+  const mode = useWatch({ control, name: "mode" });
+  const originalID = useWatch({ control, name: "replace_identity_id" });
 
   useEffect(() => {
     let cancelled = false;
@@ -136,6 +150,25 @@ export function EndpointBindingWorkflow({
   const selectedIssuer = issuerOptions.find((issuer) => issuerKey === encodeIssuer(issuer));
   const selectedTarget = targets.find((target) => target.id === targetID);
   const selectedTargetVerificationName = targetVerificationName(selectedTarget);
+  const replacementCandidates = identities.filter(
+    (identity) =>
+      ["x509_certificate", "x509"].includes(identity.kind) &&
+      ["deployed", "renewal_failed", "revoked"].includes(identity.status) &&
+      identity.attributes?.deployment_target_id === targetID &&
+      (!selectedTargetVerificationName || identity.name === selectedTargetVerificationName),
+  );
+
+  useEffect(() => {
+    setValue("replace_identity_id", "");
+  }, [targetID, mode, setValue]);
+
+  useEffect(() => {
+    if (mode !== "replace" || !originalID) return;
+    const original = identities.find((identity) => identity.id === originalID);
+    if (!original) return;
+    setValue("owner_id", original.owner_id, { shouldDirty: true });
+    setValue("identity_name", original.name, { shouldDirty: true });
+  }, [identities, mode, originalID, setValue]);
 
   useEffect(() => {
     if (!selectedTargetVerificationName) return;
@@ -151,7 +184,7 @@ export function EndpointBindingWorkflow({
   async function advance() {
     setActionError(null);
     if (step === 0) {
-      if (await trigger(["target_id", "owner_id", "identity_name", "reason"])) setStep(1);
+      if (await trigger(["target_id", "owner_id", "identity_name", "reason", "mode", "replace_identity_id"])) setStep(1);
       return;
     }
     if (!(await trigger("issuer_key"))) return;
@@ -161,6 +194,7 @@ export function EndpointBindingWorkflow({
     setBusy("preview");
     try {
       const reviewed = await api.previewEndpointBinding({
+        ...(values.mode === "replace" ? { replace_identity_id: values.replace_identity_id } : {}),
         owner_id: values.owner_id.trim(),
         identity_name: values.identity_name.trim(),
         target_id: values.target_id,
@@ -169,6 +203,9 @@ export function EndpointBindingWorkflow({
       });
       if (!reviewed.ready || !reviewed.effect_free || reviewed.preview_writes.length > 0 || reviewed.preview_external_effects.length > 0) {
         throw new Error(t("connectors.binding.previewUnsafe"));
+      }
+      if (values.mode === "replace" && reviewed.replaced_identity?.id !== values.replace_identity_id) {
+        throw new Error(t("connectors.binding.replacementPreviewMissing"));
       }
       setPreview(reviewed);
       setStep(2);
@@ -188,6 +225,7 @@ export function EndpointBindingWorkflow({
     setBusy("execute");
     try {
       const binding = await api.createEndpointBinding({
+        ...(values.mode === "replace" ? { replace_identity_id: values.replace_identity_id } : {}),
         owner_id: values.owner_id.trim(),
         identity_name: values.identity_name.trim(),
         target_id: values.target_id,
@@ -229,6 +267,14 @@ export function EndpointBindingWorkflow({
       >
         {step === 0 ? (
           <div className="grid gap-4 md:grid-cols-2">
+            <Field label={t("connectors.binding.action")}>
+              {(field) => (
+                <Select {...field} {...register("mode")}>
+                  <option value="enroll">{t("connectors.binding.enrollAction")}</option>
+                  <option value="replace">{t("connectors.binding.replaceAction")}</option>
+                </Select>
+              )}
+            </Field>
             <Field label={t("connectors.binding.destination")} description={t("connectors.binding.destinationHelp")} error={errors.target_id?.message} required>
               {(field) => (
                 <Select {...field} {...register("target_id")}>
@@ -243,6 +289,25 @@ export function EndpointBindingWorkflow({
                 </Select>
               )}
             </Field>
+            {mode === "replace" ? (
+              <Field
+                label={t("connectors.binding.original")}
+                description={t("connectors.binding.originalHelp")}
+                error={errors.replace_identity_id?.message}
+                required
+              >
+                {(field) => (
+                  <Select {...field} {...register("replace_identity_id")}>
+                    <option value="">{t("connectors.binding.selectOriginal")}</option>
+                    {replacementCandidates.map((identity) => (
+                      <option key={identity.id} value={identity.id}>
+                        {identity.name} — {identity.id}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+            ) : null}
             <Field label={t("connectors.binding.owner")} description={t("connectors.binding.ownerHelp")} error={errors.owner_id?.message} required>
               {(field) => (
                 <Select {...field} {...register("owner_id")}>
@@ -318,6 +383,9 @@ export function EndpointBindingWorkflow({
               <Fact label={t("connectors.binding.owner")} value={owners.find((owner) => owner.id === preview.owner_id)?.name ?? preview.owner_id} />
             </dl>
             <p className="text-sm text-muted-foreground">{preview.custody.detail}</p>
+            {preview.replaced_identity ? (
+              <Fact label={t("connectors.binding.original")} value={`${preview.replaced_identity.name} — ${preview.replaced_identity.id}`} />
+            ) : null}
             <ReviewList title={t("connectors.binding.changes")} items={preview.changes} />
             <ReviewList title={t("connectors.binding.queuedEffects")} items={preview.queued_lifecycle_intents} mono />
             <ReviewList title={t("connectors.binding.recovery")} items={preview.recovery_steps} />
@@ -333,7 +401,9 @@ export function EndpointBindingWorkflow({
             </details>
             {completed ? (
               <p role="status" className="rounded-control border border-status-success/30 bg-status-success/10 p-3 text-sm font-medium">
-                {t("connectors.binding.queued", { name: completed.identity.name })}
+                {completed.replaced_identity_id
+                  ? t("connectors.binding.replacementQueued", { name: completed.identity.name, id: completed.replaced_identity_id })
+                  : t("connectors.binding.queued", { name: completed.identity.name })}
               </p>
             ) : (
               <Button type="button" onClick={() => void execute()} disabled={Boolean(busy)}>

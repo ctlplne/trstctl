@@ -13622,6 +13622,35 @@ export const messages = {
   "connectors.binding.chooseIssuer": { defaultMessage: "Choose CA", description: "Advance from endpoint facts to issuer selection." },
   "connectors.binding.preview": { defaultMessage: "Build safe preview", description: "Effect-free endpoint lifecycle preview action." },
   "connectors.binding.previewing": { defaultMessage: "Building preview…", description: "Endpoint lifecycle preview busy label." },
+  "connectors.binding.action": { defaultMessage: "Certificate action", description: "Explicit certificate replacement workflow: action." },
+  "connectors.binding.enrollAction": { defaultMessage: "Enroll an endpoint", description: "Explicit certificate replacement workflow: enrollAction." },
+  "connectors.binding.replaceAction": {
+    defaultMessage: "Replace a managed certificate",
+    description: "Explicit certificate replacement workflow: replaceAction.",
+  },
+  "connectors.binding.original": { defaultMessage: "Original identity", description: "Explicit certificate replacement workflow: original." },
+  "connectors.binding.originalHelp": {
+    defaultMessage:
+      "Choose the exact identity at this destination. The replacement keeps the DNS name. Verify the new certificate before revoking and retiring the original.",
+    description: "Explicit certificate replacement workflow: originalHelp.",
+  },
+  "connectors.binding.selectOriginal": {
+    defaultMessage: "Select the original identity",
+    description: "Explicit certificate replacement workflow: selectOriginal.",
+  },
+  "connectors.binding.originalRequired": {
+    defaultMessage: "Select the identity to replace.",
+    description: "Explicit certificate replacement workflow: originalRequired.",
+  },
+  "connectors.binding.replacementPreviewMissing": {
+    defaultMessage: "The preview did not identify the selected original. Refresh the preview before replacing it.",
+    description: "Explicit certificate replacement workflow: replacementPreviewMissing.",
+  },
+  "connectors.binding.replacementQueued": {
+    defaultMessage:
+      "Replacement for {name} is queued. Verify the new certificate and application response, then revoke and retire original identity {id}. Its renewal is held during the handoff.",
+    description: "Explicit certificate replacement workflow: replacementQueued.",
+  },
   "connectors.binding.destination": { defaultMessage: "Destination", description: "Endpoint lifecycle destination label." },
   "connectors.binding.destinationHelp": {
     defaultMessage: "Only enabled destinations can receive lifecycle work.",

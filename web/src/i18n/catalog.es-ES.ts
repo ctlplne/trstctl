@@ -4662,6 +4662,17 @@ const esESCatalog = {
   "connectors.binding.chooseIssuer": "Elegir CA",
   "connectors.binding.preview": "Crear previsualización segura",
   "connectors.binding.previewing": "Creando previsualización…",
+  "connectors.binding.action": "Acción del certificado",
+  "connectors.binding.enrollAction": "Incorporar un endpoint",
+  "connectors.binding.replaceAction": "Reemplazar un certificado gestionado",
+  "connectors.binding.original": "Identidad original",
+  "connectors.binding.originalHelp":
+    "Elige la identidad exacta en este destino. El reemplazo conserva el nombre DNS. Verifica el nuevo certificado antes de revocar y retirar el original.",
+  "connectors.binding.selectOriginal": "Selecciona la identidad original",
+  "connectors.binding.originalRequired": "Selecciona la identidad que quieres reemplazar.",
+  "connectors.binding.replacementPreviewMissing": "La vista previa no identificó el original seleccionado. Actualiza la vista previa antes de reemplazarlo.",
+  "connectors.binding.replacementQueued":
+    "El reemplazo de {name} está en cola. Verifica el nuevo certificado y la respuesta de la aplicación; después, revoca y retira la identidad original {id}. Su renovación se suspende durante el cambio.",
   "connectors.binding.destination": "Destino",
   "connectors.binding.destinationHelp": "Solo los destinos habilitados pueden recibir trabajo de ciclo de vida.",
   "connectors.binding.selectDestination": "Elija un destino habilitado",

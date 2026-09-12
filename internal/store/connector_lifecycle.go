@@ -675,6 +675,10 @@ func (s *Store) ListRenewableIdentities(ctx context.Context, tenantID string, cu
 			  WHERE i.tenant_id = $1
 			    AND i.kind = 'x509_certificate'
 			    AND i.status IN ('deployed', 'renewal_failed')
+			    AND NOT EXISTS (SELECT 1 FROM identities replacement
+			      WHERE replacement.tenant_id = i.tenant_id
+			        AND replacement.attributes->>'endpoint_replaces_identity_id' = i.id::text
+			        AND replacement.status IN ('issued', 'deployed', 'renewing', 'renewal_failed'))
 			    AND c.source = 'issued'
 			    AND c.status = 'active'
 			    AND c.not_after IS NOT NULL
@@ -738,6 +742,10 @@ func (s *Store) ListRenewalIdentityCandidates(ctx context.Context, tenantID stri
 			  WHERE i.tenant_id = $1
 			    AND i.kind = 'x509_certificate'
 			    AND i.status IN ('deployed', 'renewal_failed')
+			    AND NOT EXISTS (SELECT 1 FROM identities replacement
+			      WHERE replacement.tenant_id = i.tenant_id
+			        AND replacement.attributes->>'endpoint_replaces_identity_id' = i.id::text
+			        AND replacement.status IN ('issued', 'deployed', 'renewing', 'renewal_failed'))
 			    AND c.source = 'issued'
 			    AND c.status = 'active'
 			    AND c.not_after IS NOT NULL

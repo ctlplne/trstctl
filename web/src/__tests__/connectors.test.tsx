@@ -448,6 +448,51 @@ describe("connector deployment disclosure surface", () => {
     expect(screen.getByText("execution remains in the control plane")).toBeInTheDocument();
   });
 
+  it("replaces an exact managed identity while retaining its owner and explicit CA choice", async () => {
+    const user = userEvent.setup();
+    const original = {
+      id: "identity-original",
+      tenant_id: "tenant-1",
+      name: "payments.example.test",
+      kind: "x509_certificate",
+      owner_id: "owner-1",
+      status: "deployed",
+      attributes: { deployment_target_id: "target-1" },
+      created_at: "2026-06-20T00:00:00Z",
+    };
+    apiMock.identities.mockResolvedValue([original]);
+    const defaultPreview = await apiMock.previewEndpointBinding.getMockImplementation()?.();
+    apiMock.previewEndpointBinding.mockResolvedValue({ ...defaultPreview, replaced_identity: original, replaced_identity_version: 10 });
+    const defaultBinding = await apiMock.createEndpointBinding.getMockImplementation()?.();
+    apiMock.createEndpointBinding.mockResolvedValue({ ...defaultBinding, replaced_identity_id: original.id });
+    renderConnectors();
+    await screen.findByRole("heading", { name: "Where credentials are installed" });
+    await user.click(screen.getByText("Destinations and safe actions", { exact: true }));
+    await screen.findByRole("heading", { name: "Name the endpoint" });
+    await user.selectOptions(screen.getByLabelText("Certificate action"), "replace");
+    await user.selectOptions(screen.getByLabelText("Destination"), "target-1");
+    await user.selectOptions(screen.getByLabelText("Original identity"), original.id);
+    expect(screen.getByLabelText("Owner")).toHaveValue("owner-1");
+    expect(screen.getByLabelText("DNS name")).toHaveValue(original.name);
+    await user.type(screen.getByLabelText("Enrollment reason"), "replace before revocation");
+    await user.click(screen.getByRole("button", { name: "Choose CA" }));
+    await user.selectOptions(await screen.findByLabelText("Issuing CA"), "external:corporate-digicert");
+    await user.click(screen.getByRole("button", { name: "Build safe preview" }));
+    await screen.findByRole("heading", { name: "Ready to authorize — nothing changed" });
+    const expected = {
+      owner_id: "owner-1",
+      identity_name: original.name,
+      target_id: "target-1",
+      replace_identity_id: original.id,
+      reason: "replace before revocation",
+      issuer: { source: "external", id: "corporate-digicert" },
+    };
+    expect(apiMock.previewEndpointBinding).toHaveBeenCalledWith(expected);
+    await user.click(screen.getByRole("button", { name: "Authorize issuance and deployment" }));
+    await waitFor(() => expect(apiMock.createEndpointBinding).toHaveBeenCalledWith({ ...expected, preview_fingerprint: "sha256:exact-endpoint-plan" }));
+    expect(await screen.findByText(/then revoke and retire original identity identity-original/)).toBeInTheDocument();
+  });
+
   it("creates and operates a served connector target", async () => {
     const user = userEvent.setup();
     renderConnectors();

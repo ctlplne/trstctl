@@ -93,6 +93,12 @@ func TestEndpointBindingAuthoritySurvivesReplayAndRefusesRepurposing(t *testing.
 		t.Fatal(err)
 	}
 	assertRefused(issuer, tenantA)
+	// Live commands apply inline before the background checkpoint advances.
+	// Catch-up must replay the accepted binding over the advanced lifecycle.
+	if err := projections.New(st).ProjectCatchUp(ctx, log); err != nil {
+		t.Fatalf("catch up issued endpoint binding: %v", err)
+	}
+	assertBinding()
 	if err := projections.New(st).Rebuild(ctx, log); err != nil {
 		t.Fatalf("rebuild endpoint binding: %v", err)
 	}

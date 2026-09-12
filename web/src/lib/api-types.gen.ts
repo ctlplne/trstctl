@@ -3102,6 +3102,7 @@ export interface EndpointBinding {
   preview_fingerprint: string;
   queued_lifecycle_intents: string[];
   renewal_intent: string;
+  replaced_identity_id?: string;
   target: DeploymentTarget;
 }
 
@@ -3116,6 +3117,7 @@ export interface EndpointBindingPlanRequest {
   issuer: EndpointIssuer;
   owner_id: string;
   reason?: string;
+  replace_identity_id?: string;
   target?: DeploymentTargetRequest;
   target_id?: string;
 }
@@ -3134,6 +3136,8 @@ export interface EndpointBindingPreview {
   queued_lifecycle_intents: string[];
   ready: boolean;
   recovery_steps: string[];
+  replaced_identity?: Identity;
+  replaced_identity_version?: number;
   request_fingerprint: string;
   target: EndpointBindingTarget;
   verification_steps: string[];
@@ -3145,6 +3149,7 @@ export interface EndpointBindingRequest {
   owner_id: string;
   preview_fingerprint: string;
   reason?: string;
+  replace_identity_id?: string;
   target?: DeploymentTargetRequest;
   target_id?: string;
 }

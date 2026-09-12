@@ -12784,6 +12784,10 @@
           "renewal_intent": {
             "type": "string"
           },
+          "replaced_identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
           "target": {
             "$ref": "#/components/schemas/DeploymentTarget"
           }
@@ -12830,6 +12834,10 @@
             "type": "string"
           },
           "reason": {
+            "type": "string"
+          },
+          "replace_identity_id": {
+            "format": "uuid",
             "type": "string"
           },
           "target": {
@@ -12904,6 +12912,12 @@
             },
             "type": "array"
           },
+          "replaced_identity": {
+            "$ref": "#/components/schemas/Identity"
+          },
+          "replaced_identity_version": {
+            "type": "integer"
+          },
           "request_fingerprint": {
             "type": "string"
           },
@@ -12952,6 +12966,10 @@
             "type": "string"
           },
           "reason": {
+            "type": "string"
+          },
+          "replace_identity_id": {
+            "format": "uuid",
             "type": "string"
           },
           "target": {
@@ -35820,7 +35838,7 @@
             }
           },
           {
-            "description": "export encoding: jws (default, signed bundle), ndjson, csv, splunk-hec, sentinel",
+            "description": "export encoding: jws (default, signed bundle; 512 KiB serialized payload maximum), ndjson, csv, splunk-hec, sentinel. Oversized JWS downloads return 413 audit_export_too_large; use a record stream or a smaller query.",
             "in": "query",
             "name": "format",
             "schema": {
@@ -35949,7 +35967,7 @@
             }
           },
           {
-            "description": "export encoding: jws (default, signed bundle), ndjson, csv, splunk-hec, sentinel",
+            "description": "export encoding: jws (default, signed bundle; 512 KiB serialized payload maximum), ndjson, csv, splunk-hec, sentinel. Oversized JWS downloads return 413 audit_export_too_large; use a record stream or a smaller query.",
             "in": "query",
             "name": "format",
             "schema": {

@@ -469,12 +469,26 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 	apply := func(ctx context.Context) error {
 		return o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 			eventTime := commandTime
+			if to == StateIssued {
+				if err := o.validateEndpointReplacementIssuanceTx(ctx, tx, tenantID, ident); err != nil {
+					return err
+				}
+			}
 			locked, version, err := o.store.IdentityApprovalTargetTx(ctx, tx, tenantID, identityID, true)
 			if err != nil {
 				return err
 			}
 			if expectedVersion != nil && version != *expectedVersion {
 				return ErrStaleLifecyclePreview
+			}
+			if to == StateRenewing {
+				replacement, err := o.store.ActiveEndpointReplacementTx(ctx, tx, tenantID, identityID)
+				if err != nil {
+					return err
+				}
+				if replacement != "" {
+					return fmt.Errorf("%w: identity has active replacement %s; complete or revoke that replacement before renewing the original", store.ErrIdentityEnrollmentConflict, replacement)
+				}
 			}
 			if State(locked.Status) != from {
 				if approval != nil {

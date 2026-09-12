@@ -1517,8 +1517,11 @@ describe("i18n boundary", () => {
       // HV2-034: exact restore-result read/retry messages, including the no-new-restore
       // negation, added in es/de. Machine-authored; HUMAN TRANSLATION REVIEW
       // remains required before release. No fallback or extraction budget changed.
-      "es-ES": "8885ff46a3bdcb42eb1e51ae0fd52ce4128b3984c614fa0bc9e971f2b8c6b6a7",
-      "de-DE": "cccc860580f55eec67dbb841f588b9e94e5ce733e63899a063788b505de7d297",
+      // Endpoint replacement: reviewed exact-original selection, retained DNS/owner,
+      // explicit CA selection, and verify-before-revoke guidance. Machine-authored
+      // es/de require HUMAN TRANSLATION REVIEW BEFORE RELEASE.
+      "es-ES": "b8da8434705e78703b78d43658f4390c2b4bd4fee594c6ae00dffd0460b171c0",
+      "de-DE": "caf9b7b062a6beacaff2bdb9d4b5c10c3e282341d8b9690bb0c98c79b3a948ee",
     });
   });
 

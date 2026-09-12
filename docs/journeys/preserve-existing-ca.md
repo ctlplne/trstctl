@@ -111,6 +111,24 @@ An issued or deployed identity needs its lifecycle actions or a separate
 replacement identity; endpoint enrollment refuses to repurpose it. Changes to
 the reviewed identity metadata require a fresh preview.
 
+For a managed listener, choose **Replace a managed certificate** in the
+destination workflow. Select the exact original identity; the console carries
+forward its DNS name and owner, and still requires an explicit CA selection.
+The API equivalent adds `"replace_identity_id":"<original-identity-id>"` to
+the endpoint binding plan and uses the original destination's `target_id`.
+The preview names `replaced_identity` and its lifecycle version. Execution
+creates a separate identity; it never revokes the original as a side effect.
+
+Wait for any earlier issuance, renewal, deployment, or rollback work to finish.
+A replacement refuses an original that is renewing or a destination with pending
+work. Once replacement issuance is queued, renewal of the original is held so it
+cannot overwrite the new certificate. Review the new delivery and independent
+listener proof, then revoke and retire the exact original identity. If issuance
+or deployment fails, use its job receipts and retry the same reviewed request;
+the replacement identity is retained rather than duplicated. A policy refusal
+before issuance leaves a requested record and does not pause the original's
+renewal. Changes to the original require a new preview.
+
 ### 1. Record the before baseline
 
 Query the live listener before changing it. Save the leaf fingerprint, issuer, expiry,

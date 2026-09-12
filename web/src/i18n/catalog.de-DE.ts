@@ -4709,6 +4709,17 @@ const deDECatalog = {
   "connectors.binding.chooseIssuer": "CA wählen",
   "connectors.binding.preview": "Sichere Vorschau erstellen",
   "connectors.binding.previewing": "Vorschau wird erstellt…",
+  "connectors.binding.action": "Zertifikatsaktion",
+  "connectors.binding.enrollAction": "Endpunkt aufnehmen",
+  "connectors.binding.replaceAction": "Verwaltetes Zertifikat ersetzen",
+  "connectors.binding.original": "Ursprüngliche Identität",
+  "connectors.binding.originalHelp":
+    "Wähle die genaue Identität an diesem Ziel. Der Ersatz behält den DNS-Namen. Prüfe das neue Zertifikat, bevor du das ursprüngliche widerrufst und außer Betrieb nimmst.",
+  "connectors.binding.selectOriginal": "Ursprüngliche Identität auswählen",
+  "connectors.binding.originalRequired": "Wähle die zu ersetzende Identität aus.",
+  "connectors.binding.replacementPreviewMissing": "Die Vorschau hat das ausgewählte Original nicht identifiziert. Aktualisiere die Vorschau vor dem Ersetzen.",
+  "connectors.binding.replacementQueued":
+    "Der Ersatz für {name} ist eingereiht. Prüfe das neue Zertifikat und die Antwort der Anwendung. Widerrufe danach die ursprüngliche Identität {id} und nimm sie außer Betrieb. Ihre Erneuerung ist während des Wechsels ausgesetzt.",
   "connectors.binding.destination": "Ziel",
   "connectors.binding.destinationHelp": "Nur aktivierte Ziele können Lifecycle-Arbeit empfangen.",
   "connectors.binding.selectDestination": "Aktiviertes Ziel wählen",

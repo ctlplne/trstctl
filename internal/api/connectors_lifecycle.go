@@ -189,6 +189,7 @@ type identityConnectorTargetRequest struct {
 
 type endpointBindingRequest struct {
 	OwnerID            string                   `json:"owner_id"`
+	ReplaceIdentityID  string                   `json:"replace_identity_id,omitempty"`
 	IdentityName       string                   `json:"identity_name"`
 	TargetID           string                   `json:"target_id"`
 	Target             *deploymentTargetRequest `json:"target"`
@@ -199,6 +200,7 @@ type endpointBindingRequest struct {
 
 type endpointBindingResponse struct {
 	Identity               identityResponse         `json:"identity"`
+	ReplacedIdentityID     string                   `json:"replaced_identity_id,omitempty"`
 	Target                 deploymentTargetResponse `json:"target"`
 	Issuer                 endpointIssuerSummary    `json:"issuer"`
 	PreviewFingerprint     string                   `json:"preview_fingerprint"`
@@ -245,22 +247,25 @@ type endpointBindingCustody struct {
 }
 
 type endpointBindingPreviewResponse struct {
-	Capability             string                       `json:"capability"`
-	Ready                  bool                         `json:"ready"`
-	EffectFree             bool                         `json:"effect_free"`
-	RequestFingerprint     string                       `json:"request_fingerprint"`
-	OwnerID                string                       `json:"owner_id"`
-	IdentityName           string                       `json:"identity_name"`
-	ExistingIdentity       *identityResponse            `json:"existing_identity,omitempty"`
-	Issuer                 endpointIssuerSummary        `json:"issuer"`
-	Target                 endpointBindingTargetSummary `json:"target"`
-	Custody                endpointBindingCustody       `json:"custody"`
-	Changes                []string                     `json:"changes"`
-	QueuedLifecycleIntents []string                     `json:"queued_lifecycle_intents"`
-	RecoverySteps          []string                     `json:"recovery_steps"`
-	VerificationSteps      []string                     `json:"verification_steps"`
-	PreviewWrites          []string                     `json:"preview_writes"`
-	PreviewExternalEffects []string                     `json:"preview_external_effects"`
+	Capability              string            `json:"capability"`
+	Ready                   bool              `json:"ready"`
+	EffectFree              bool              `json:"effect_free"`
+	RequestFingerprint      string            `json:"request_fingerprint"`
+	OwnerID                 string            `json:"owner_id"`
+	IdentityName            string            `json:"identity_name"`
+	ExistingIdentity        *identityResponse `json:"existing_identity,omitempty"`
+	ReplacedIdentity        *identityResponse `json:"replaced_identity,omitempty"`
+	ReplacedIdentityVersion uint64            `json:"replaced_identity_version,omitempty"`
+	replacementSource       store.Identity
+	Issuer                  endpointIssuerSummary        `json:"issuer"`
+	Target                  endpointBindingTargetSummary `json:"target"`
+	Custody                 endpointBindingCustody       `json:"custody"`
+	Changes                 []string                     `json:"changes"`
+	QueuedLifecycleIntents  []string                     `json:"queued_lifecycle_intents"`
+	RecoverySteps           []string                     `json:"recovery_steps"`
+	VerificationSteps       []string                     `json:"verification_steps"`
+	PreviewWrites           []string                     `json:"preview_writes"`
+	PreviewExternalEffects  []string                     `json:"preview_external_effects"`
 }
 
 type connectorTargetActionRequest struct {
@@ -936,7 +941,13 @@ func (a *API) createEndpointBinding(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		var identity store.Identity
-		if preview.ExistingIdentity != nil {
+		selectedIssuer := store.IdentityEndpointIssuer{
+			OwnerID: req.OwnerID, Source: preview.Issuer.Source, ID: preview.Issuer.ID,
+			Name: preview.Issuer.Name, PreviewFingerprint: preview.RequestFingerprint,
+		}
+		if preview.ReplacedIdentity != nil {
+			identity, err = a.orch.EnsureEndpointReplacement(ctx, tenantID, preview.replacementSource, preview.ReplacedIdentityVersion, target, selectedIssuer)
+		} else if preview.ExistingIdentity != nil {
 			// DP2-019: the DNS name already has an identity (typically claimed from
 			// discovery); enroll that one rather than creating a duplicate.
 			identity, err = a.store.GetIdentity(ctx, tenantID, preview.ExistingIdentity.ID)
@@ -949,20 +960,27 @@ func (a *API) createEndpointBinding(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 		if err != nil {
+			if errors.Is(err, store.ErrIdentityEnrollmentConflict) {
+				return 0, nil, errWithStatus(http.StatusConflict, err)
+			}
 			return 0, nil, err
 		}
-		identity, err = a.orch.BindIdentityEndpoint(ctx, tenantID, identity.ID, target, store.IdentityEndpointIssuer{
-			OwnerID: req.OwnerID, Source: preview.Issuer.Source, ID: preview.Issuer.ID,
-			Name: preview.Issuer.Name, PreviewFingerprint: preview.RequestFingerprint,
-		})
+		if preview.ReplacedIdentity == nil {
+			identity, err = a.orch.BindIdentityEndpoint(ctx, tenantID, identity.ID, target, selectedIssuer)
+		}
 		if err != nil {
 			if errors.Is(err, store.ErrIdentityEnrollmentConflict) {
 				return 0, nil, errWithStatus(http.StatusConflict, err)
 			}
 			return 0, nil, err
 		}
-		if err := a.orch.TransitionWithIdempotency(ctx, tenantID, identity.ID, orchestrator.StateIssued, endpointBindingReason(req), idempotencyKey); err != nil {
-			return 0, nil, err
+		if identity.Status == string(orchestrator.StateRequested) {
+			if err := a.orch.TransitionWithIdempotency(ctx, tenantID, identity.ID, orchestrator.StateIssued, endpointBindingReason(req), idempotencyKey); err != nil {
+				if errors.Is(err, store.ErrIdentityEnrollmentConflict) {
+					return 0, nil, errWithStatus(http.StatusConflict, err)
+				}
+				return 0, nil, err
+			}
 		}
 		identity, err = a.store.GetIdentity(ctx, tenantID, identity.ID)
 		if err != nil {
@@ -970,6 +988,7 @@ func (a *API) createEndpointBinding(w http.ResponseWriter, r *http.Request) {
 		}
 		return http.StatusCreated, endpointBindingResponse{
 			Identity:               toIdentityResponse(identity),
+			ReplacedIdentityID:     req.ReplaceIdentityID,
 			Target:                 toDeploymentTargetResponse(target),
 			Issuer:                 preview.Issuer,
 			PreviewFingerprint:     preview.RequestFingerprint,
@@ -1033,8 +1052,22 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 	// id is part of the request fingerprint so a change between preview and create
 	// is caught like any other.
 	var existingResp *identityResponse
+	var replacedResp *identityResponse
+	var replaced store.Identity
+	var replacedVersion uint64
 	identityChange := "Create one X.509 identity for " + req.IdentityName + " owned by " + strings.TrimSpace(owner.Name) + " (" + req.OwnerID + ")."
-	if existing, found, err := a.store.FindIdentityByName(ctx, tenantID, req.IdentityName); err != nil {
+	if req.ReplaceIdentityID != "" {
+		replaced, replacedVersion, err = a.store.IdentityApprovalTarget(ctx, tenantID, req.ReplaceIdentityID)
+		if err != nil {
+			return endpointBindingPreviewResponse{}, err
+		}
+		if err := store.ValidateEndpointReplacementSource(replaced, req.IdentityName, req.TargetID); err != nil {
+			return endpointBindingPreviewResponse{}, errWithStatus(http.StatusConflict, err)
+		}
+		resp := toIdentityResponse(replaced)
+		replacedResp = &resp
+		identityChange = "Create a separate replacement for X.509 identity " + replaced.ID + " at " + req.IdentityName + " owned by " + strings.TrimSpace(owner.Name) + " (" + req.OwnerID + "). Keep the original until the replacement is verified, then revoke and retire it. Renewal of the original is held once replacement issuance is queued."
+	} else if existing, found, err := a.store.FindIdentityByName(ctx, tenantID, req.IdentityName); err != nil {
 		return endpointBindingPreviewResponse{}, err
 	} else if found {
 		if err := store.ValidateIdentityEndpointIssuer(existing, store.IdentityEndpointIssuer{
@@ -1053,7 +1086,9 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 		Issuer           endpointIssuerSummary        `json:"issuer"`
 		Target           endpointBindingTargetSummary `json:"target"`
 		ExistingIdentity *identityResponse            `json:"existing_identity,omitempty"`
-	}{req.OwnerID, req.IdentityName, endpointBindingReason(req), issuer, target, existingResp}
+		ReplacedIdentity *identityResponse            `json:"replaced_identity,omitempty"`
+		ReplacedVersion  uint64                       `json:"replaced_identity_version,omitempty"`
+	}{req.OwnerID, req.IdentityName, endpointBindingReason(req), issuer, target, existingResp, replacedResp, replacedVersion}
 	raw, err := json.Marshal(fingerprintInput)
 	if err != nil {
 		return endpointBindingPreviewResponse{}, err
@@ -1073,16 +1108,19 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 		}
 	}
 	return endpointBindingPreviewResponse{
-		ExistingIdentity:   existingResp,
-		Capability:         "endpoint_binding",
-		Ready:              true,
-		EffectFree:         true,
-		RequestFingerprint: fingerprint,
-		OwnerID:            req.OwnerID,
-		IdentityName:       req.IdentityName,
-		Issuer:             issuer,
-		Target:             target,
-		Custody:            custodySummary,
+		ExistingIdentity:        existingResp,
+		ReplacedIdentity:        replacedResp,
+		ReplacedIdentityVersion: replacedVersion,
+		replacementSource:       replaced,
+		Capability:              "endpoint_binding",
+		Ready:                   true,
+		EffectFree:              true,
+		RequestFingerprint:      fingerprint,
+		OwnerID:                 req.OwnerID,
+		IdentityName:            req.IdentityName,
+		Issuer:                  issuer,
+		Target:                  target,
+		Custody:                 custodySummary,
 		Changes: []string{
 			identityChange,
 			"Pin issuance and renewal to " + issuer.Name + " (" + issuer.Source + ":" + issuer.ID + ").",
@@ -1399,6 +1437,7 @@ func decodeEndpointBindingRequest(r *http.Request) (endpointBindingRequest, erro
 		return endpointBindingRequest{}, errStatus(http.StatusBadRequest, "invalid endpoint binding request")
 	}
 	req.OwnerID = strings.TrimSpace(req.OwnerID)
+	req.ReplaceIdentityID = strings.TrimSpace(req.ReplaceIdentityID)
 	req.IdentityName = strings.TrimSpace(req.IdentityName)
 	req.TargetID = strings.TrimSpace(req.TargetID)
 	req.Issuer.Source = strings.ToLower(strings.TrimSpace(req.Issuer.Source))
@@ -1416,6 +1455,9 @@ func decodeEndpointBindingRequest(r *http.Request) (endpointBindingRequest, erro
 	}
 	if req.TargetID != "" && req.Target != nil {
 		return endpointBindingRequest{}, errStatus(http.StatusBadRequest, "provide target_id or target, not both")
+	}
+	if req.ReplaceIdentityID != "" && req.TargetID == "" {
+		return endpointBindingRequest{}, errStatus(http.StatusBadRequest, "replacement requires the original destination's target_id")
 	}
 	if req.TargetID == "" && req.Target == nil {
 		return endpointBindingRequest{}, errStatus(http.StatusBadRequest, "target_id or target is required")

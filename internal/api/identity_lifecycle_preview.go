@@ -12,6 +12,7 @@ import (
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/store"
 )
 
 type identityLifecyclePreviewResponse struct {
@@ -41,6 +42,9 @@ type identityLifecyclePreviewResponse struct {
 }
 
 func lifecyclePreviewAPIError(err error) error {
+	if errors.Is(err, store.ErrIdentityEnrollmentConflict) {
+		return errWithStatus(http.StatusConflict, err)
+	}
 	if errors.Is(err, orchestrator.ErrStaleLifecyclePreview) {
 		return errStatus(http.StatusConflict, "The identity changed after this lifecycle action was previewed. Review the current state and preview the action again.")
 	}
@@ -81,6 +85,18 @@ func (a *API) previewIdentityTransition(w http.ResponseWriter, r *http.Request) 
 	if !valid {
 		a.writeError(w, &orchestrator.TransitionError{IdentityID: id, From: orchestrator.State(identity.Status), To: to})
 		return
+	}
+	if to == orchestrator.StateRenewing {
+		replacement, err := a.store.ActiveEndpointReplacement(r.Context(), tenantID, id)
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
+		if replacement != "" {
+			a.writeError(w, errStatus(http.StatusConflict,
+				"This identity has active replacement "+replacement+". Complete or revoke that replacement before renewing the original."))
+			return
+		}
 	}
 	csrPEM := strings.TrimSpace(req.SubjectCSRPEM)
 	if csrPEM != "" {

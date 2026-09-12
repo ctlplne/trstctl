@@ -24,13 +24,67 @@ type IdentityEndpointIssuer struct {
 
 var ErrIdentityEnrollmentConflict = errors.New("identity cannot be enrolled with this owner and issuer")
 
-// ValidateIdentityEndpointIssuer runs before append and during projection. An
+// ValidateEndpointReplacementSource requires the exact managed listener. A
+// replacement retains the DNS name but is a separate credential lifecycle.
+func ValidateEndpointReplacementSource(identity Identity, name, targetID string) error {
+	if (identity.Kind != KindX509Certificate && identity.Kind != "x509") ||
+		(identity.Status != "deployed" && identity.Status != "renewal_failed" && identity.Status != "revoked") {
+		return fmt.Errorf("%w: replacement requires a deployed, renewal_failed, or revoked X.509 identity", ErrIdentityEnrollmentConflict)
+	}
+	var attrs struct {
+		TargetID string `json:"deployment_target_id"`
+	}
+	if json.Unmarshal(identity.Attributes, &attrs) != nil || targetID == "" || attrs.TargetID != targetID || identity.Name != name {
+		return fmt.Errorf("%w: replacement must name the original identity's exact DNS name and destination", ErrIdentityEnrollmentConflict)
+	}
+	return nil
+}
+
+// ActiveEndpointReplacement reads the current successor for an operator preview.
+// Execution must recheck with ActiveEndpointReplacementTx under the original's lock.
+func (s *Store) ActiveEndpointReplacement(ctx context.Context, tenantID, originalID string) (string, error) {
+	var id string
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var err error
+		id, err = s.ActiveEndpointReplacementTx(ctx, tx, tenantID, originalID)
+		return err
+	})
+	return id, err
+}
+
+// ActiveEndpointReplacementTx is read under the original identity's row lock
+// by replacement creation and renewal. This serializes their decisions about
+// the same original. Revocation of the original is always allowed.
+func (s *Store) ActiveEndpointReplacementTx(ctx context.Context, tx pgx.Tx, tenantID, originalID string) (string, error) {
+	var id string
+	err := tx.QueryRow(ctx, `SELECT id::text FROM identities
+		WHERE tenant_id = $1 AND attributes->>'endpoint_replaces_identity_id' = $2
+		AND status IN ('issued', 'deployed', 'renewing', 'renewal_failed') ORDER BY created_at, id LIMIT 1`, tenantID, originalID).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	return id, err
+}
+
+// EndpointReplacementWorkPendingTx refuses to start while earlier issuance,
+// renewal, deployment, or rollback can still write to the listener. Payload
+// identity_id and target lanes are public routing metadata, outside key seals.
+func (s *Store) EndpointReplacementWorkPendingTx(ctx context.Context, tx pgx.Tx, tenantID, originalID, targetID string) (bool, error) {
+	var pending bool
+	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM outbox
+		WHERE tenant_id = $1 AND status IN ('pending', 'processing')
+		AND (effect_lane = $3 OR CASE WHEN destination IN
+		('ca.issue', 'ca.renew', 'endpoint.renew', 'connector.deploy', 'connector.rollback')
+		THEN convert_from(payload, 'UTF8')::jsonb->>'identity_id' = $2 ELSE false END))`, tenantID, originalID, ConnectorTargetLanePrefix+targetID).Scan(&pending)
+	return pending, err
+}
+
+// ValidateIdentityEndpointIssuer runs on the command before append. An
 // enrollment may pin an unconfigured requested identity, but cannot repurpose an
 // already managed identity or silently replace its owner or authority.
 func ValidateIdentityEndpointIssuer(identity Identity, issuer IdentityEndpointIssuer) error {
-	if issuer.OwnerID == "" || issuer.ID == "" || issuer.Name == "" ||
-		(issuer.Source != "platform" && issuer.Source != "private" && issuer.Source != "external") {
-		return fmt.Errorf("%w: an exact owner and issuer are required", ErrIdentityEnrollmentConflict)
+	if err := validateEndpointIssuerFields(issuer); err != nil {
+		return err
 	}
 	// The served identity API also accepts the historical "x509" spelling.
 	if (identity.Kind != KindX509Certificate && identity.Kind != "x509") || identity.Status != "requested" || identity.OwnerID != issuer.OwnerID {
@@ -53,17 +107,24 @@ func ValidateIdentityEndpointIssuer(identity Identity, issuer IdentityEndpointIs
 	return nil
 }
 
-// BindIdentityEndpointIssuerTx projects only public authority metadata. The
-// caller holds the same identity lock across validation and event application.
+func validateEndpointIssuerFields(issuer IdentityEndpointIssuer) error {
+	if issuer.OwnerID == "" || issuer.ID == "" || issuer.Name == "" ||
+		(issuer.Source != "platform" && issuer.Source != "private" && issuer.Source != "external") {
+		return fmt.Errorf("%w: an exact owner and issuer are required", ErrIdentityEnrollmentConflict)
+	}
+	return nil
+}
+
+// BindIdentityEndpointIssuerTx replays accepted public authority metadata.
+// Validate the immutable payload, not today's lifecycle: inline application may
+// have already issued or revoked the identity before background catch-up reads
+// the original binding event. New commands still validate owner, status, and CA
+// under the identity lock before appending that event.
 func (s *Store) BindIdentityEndpointIssuerTx(ctx context.Context, tx pgx.Tx, tenantID, identityID string, issuer IdentityEndpointIssuer) error {
-	identity, _, err := s.IdentityApprovalTargetTx(ctx, tx, tenantID, identityID, true)
-	if err != nil {
+	if err := validateEndpointIssuerFields(issuer); err != nil {
 		return err
 	}
-	if err := ValidateIdentityEndpointIssuer(identity, issuer); err != nil {
-		return err
-	}
-	_, err = tx.Exec(ctx, `UPDATE identities
+	_, err := tx.Exec(ctx, `UPDATE identities
 		SET attributes = attributes || jsonb_build_object(
 			'issuing_authority_source', $3::text, 'issuing_authority_id', $4::text,
 			'issuing_authority_name', $5::text, 'endpoint_preview_sha256', $6::text)

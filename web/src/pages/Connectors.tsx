@@ -476,6 +476,7 @@ export function Connectors() {
               <p className="max-w-3xl text-sm text-muted-foreground">{t("connectors.design.bindHelp")}</p>
               <EndpointBindingWorkflow
                 targets={targets}
+                identities={identities}
                 onComplete={async (binding, bindingReason) => {
                   setActionResult(`endpoint-binding:${binding.identity.status}:${binding.renewal_intent}`);
                   setSelectedTarget(binding.target.id);

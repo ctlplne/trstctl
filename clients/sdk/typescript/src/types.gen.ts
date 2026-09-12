@@ -9805,6 +9805,8 @@ export interface components {
             preview_fingerprint: string;
             queued_lifecycle_intents: string[];
             renewal_intent: string;
+            /** Format: uuid */
+            replaced_identity_id?: string;
             target: components["schemas"]["DeploymentTarget"];
         };
         EndpointBindingCustody: {
@@ -9818,6 +9820,8 @@ export interface components {
             /** Format: uuid */
             owner_id: string;
             reason?: string;
+            /** Format: uuid */
+            replace_identity_id?: string;
             target?: components["schemas"]["DeploymentTargetRequest"];
             /** Format: uuid */
             target_id?: string;
@@ -9837,6 +9841,8 @@ export interface components {
             queued_lifecycle_intents: string[];
             ready: boolean;
             recovery_steps: string[];
+            replaced_identity?: components["schemas"]["Identity"];
+            replaced_identity_version?: number;
             request_fingerprint: string;
             target: components["schemas"]["EndpointBindingTarget"];
             verification_steps: string[];
@@ -9848,6 +9854,8 @@ export interface components {
             owner_id: string;
             preview_fingerprint: string;
             reason?: string;
+            /** Format: uuid */
+            replace_identity_id?: string;
             target?: components["schemas"]["DeploymentTargetRequest"];
             /** Format: uuid */
             target_id?: string;
@@ -17184,7 +17192,7 @@ export interface operations {
                 q?: string;
                 /** @description maximum records to return */
                 limit?: number;
-                /** @description export encoding: jws (default, signed bundle), ndjson, csv, splunk-hec, sentinel */
+                /** @description export encoding: jws (default, signed bundle; 512 KiB serialized payload maximum), ndjson, csv, splunk-hec, sentinel. Oversized JWS downloads return 413 audit_export_too_large; use a record stream or a smaller query. */
                 format?: string;
             };
             header?: never;
@@ -17243,7 +17251,7 @@ export interface operations {
                 q?: string;
                 /** @description maximum records to return */
                 limit?: number;
-                /** @description export encoding: jws (default, signed bundle), ndjson, csv, splunk-hec, sentinel */
+                /** @description export encoding: jws (default, signed bundle; 512 KiB serialized payload maximum), ndjson, csv, splunk-hec, sentinel. Oversized JWS downloads return 413 audit_export_too_large; use a record stream or a smaller query. */
                 format?: string;
             };
             header?: never;

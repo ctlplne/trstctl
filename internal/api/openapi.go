@@ -2922,15 +2922,17 @@ func componentSchemas() map[string]*Schema {
 		"availability": str(),
 	}, "source", "id")
 	endpointBindingPlanReq := object(map[string]*Schema{
-		"owner_id":      uuid(),
-		"identity_name": str(),
-		"target_id":     uuid(),
-		"target":        ref("DeploymentTargetRequest"),
-		"issuer":        ref("EndpointIssuer"),
-		"reason":        str(),
+		"owner_id":            uuid(),
+		"replace_identity_id": uuid(),
+		"identity_name":       str(),
+		"target_id":           uuid(),
+		"target":              ref("DeploymentTargetRequest"),
+		"issuer":              ref("EndpointIssuer"),
+		"reason":              str(),
 	}, "owner_id", "identity_name", "issuer")
 	endpointBindingReq := object(map[string]*Schema{
 		"owner_id":            uuid(),
+		"replace_identity_id": uuid(),
 		"identity_name":       str(),
 		"target_id":           uuid(),
 		"target":              ref("DeploymentTargetRequest"),
@@ -2948,14 +2950,17 @@ func componentSchemas() map[string]*Schema {
 	endpointBindingPreview := object(map[string]*Schema{
 		"capability": str(), "ready": {Type: "boolean"}, "effect_free": {Type: "boolean"},
 		"request_fingerprint": str(), "owner_id": uuid(), "identity_name": str(),
-		"existing_identity": ref("Identity"),
-		"issuer":            ref("EndpointIssuer"), "target": ref("EndpointBindingTarget"), "custody": ref("EndpointBindingCustody"),
+		"existing_identity":         ref("Identity"),
+		"replaced_identity":         ref("Identity"),
+		"replaced_identity_version": {Type: "integer"},
+		"issuer":                    ref("EndpointIssuer"), "target": ref("EndpointBindingTarget"), "custody": ref("EndpointBindingCustody"),
 		"changes": {Type: "array", Items: str()}, "queued_lifecycle_intents": {Type: "array", Items: str()},
 		"recovery_steps": {Type: "array", Items: str()}, "verification_steps": {Type: "array", Items: str()},
 		"preview_writes": {Type: "array", Items: str()}, "preview_external_effects": {Type: "array", Items: str()},
 	}, "capability", "ready", "effect_free", "request_fingerprint", "owner_id", "identity_name", "issuer", "target", "custody", "changes", "queued_lifecycle_intents", "recovery_steps", "verification_steps", "preview_writes", "preview_external_effects")
 	endpointBinding := object(map[string]*Schema{
 		"identity":                 ref("Identity"),
+		"replaced_identity_id":     uuid(),
 		"target":                   ref("DeploymentTarget"),
 		"issuer":                   ref("EndpointIssuer"),
 		"preview_fingerprint":      str(),
