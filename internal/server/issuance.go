@@ -477,9 +477,21 @@ type issuedLeafMaterial struct {
 	CertPEM     []byte
 	ChainPEM    []byte
 	KeyPEM      []byte
+	keyBuffer   *secret.Buffer
+}
+
+func (m *issuedLeafMaterial) destroyKey() {
+	if m.keyBuffer != nil {
+		m.keyBuffer.Destroy()
+		m.keyBuffer = nil
+	} else {
+		secret.Wipe(m.KeyPEM)
+	}
+	m.KeyPEM = nil
 }
 
 func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Message) error {
+	ctx = withLeafCommand(ctx, d.idem, m.TenantID, m.IdempotencyKey)
 	var p transitionTrigger
 	if err := json.Unmarshal(m.Payload, &p); err != nil {
 		return fmt.Errorf("server: decode ca.issue payload: %w", err)
@@ -546,7 +558,7 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 		if err != nil {
 			return nil, err
 		}
-		defer secret.Wipe(material.KeyPEM)
+		defer material.destroyKey()
 		cert := material.Certificate
 		cert.IssuanceIdempotencyKey = idemKey
 		// Retain exactly the public chain selected at issuance, never a later active CA.
@@ -649,21 +661,21 @@ func (d *issuanceDispatcher) completeRecoveredRenewal(ctx context.Context, tenan
 
 // mintServedLeaf builds a fresh subject key through the crypto boundary, signs the
 // CSR with the served signer-backed issuing CA, and returns the inventory metadata
-// for the public certificate. The private key is destroyed before returning; the
-// control plane never persists or logs it.
+// for the public certificate. Working key material is destroyed before returning.
+// Durable lifecycle callers retain only its tenant-bound encrypted preparation.
 func (d *issuanceDispatcher) mintServedLeaf(ctx context.Context, tenantID, ownerID, commonName string, dnsNames []string) (store.Certificate, error) {
 	material, err := d.mintServedLeafMaterial(ctx, tenantID, ownerID, commonName, dnsNames)
 	if err != nil {
 		return store.Certificate{}, err
 	}
-	secret.Wipe(material.KeyPEM)
+	material.destroyKey()
 	return material.Certificate, nil
 }
 
 // mintServedLeafMaterial returns the same inventory certificate as mintServedLeaf
 // plus a transient PEM credential bundle for a connector outbox payload. Callers
-// must wipe KeyPEM after encoding the deployment intent; the key is never written
-// to the event log or read model.
+// must call destroyKey after encoding the deployment intent so locked memory is
+// both wiped and released. Plaintext keys never enter the event log or read model.
 func (d *issuanceDispatcher) mintServedLeafMaterial(ctx context.Context, tenantID, ownerID, commonName string, dnsNames []string, issuance ...*store.OperationApprovalIssuanceBinding) (issuedLeafMaterial, error) {
 	return d.mintServedLeafMaterialForSelection(ctx, tenantID, ownerID, commonName, dnsNames,
 		endpointAuthoritySelection{Source: "platform", ID: "trstctl-issuing-ca"}, "", issuance...)
@@ -680,25 +692,22 @@ func (d *issuanceDispatcher) mintServedLeafMaterialForSelection(
 	if len(dnsNames) == 0 {
 		dnsNames = []string{commonName}
 	}
-	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	subject, retained, err := d.prepareLeafSubject(ctx, tenantID, ownerID, commonName, dnsNames, selection)
 	if err != nil {
 		return issuedLeafMaterial{}, err
 	}
-	defer key.Destroy()
-	keyPEM, err := key.PrivateKeyPEM()
+	keyBuffer, err := secret.NewFrom(subject.KeyPEM)
+	secret.Wipe(subject.KeyPEM)
 	if err != nil {
 		return issuedLeafMaterial{}, err
 	}
+	keyPEM, csrDER := keyBuffer.Bytes(), subject.CSRDER
 	keepKeyPEM := false
 	defer func() {
 		if !keepKeyPEM {
-			secret.Wipe(keyPEM)
+			keyBuffer.Destroy()
 		}
 	}()
-	csrDER, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: commonName, DNSNames: dnsNames}, key)
-	if err != nil {
-		return issuedLeafMaterial{}, err
-	}
 	// Enforce the certificate-profile model on the served mint (PKIGOV-002):
 	// when a default profile is configured and resolves for the tenant, validate
 	// this request against it BEFORE signing and emit the allow/deny decision as
@@ -730,6 +739,10 @@ func (d *issuanceDispatcher) mintServedLeafMaterialForSelection(
 		ownerPtr = &owner
 	}
 	nb, na := info.NotBefore, info.NotAfter
+	storage := custody.StorageLockedMemory
+	if retained {
+		storage = custody.StorageSealedStore
+	}
 	keepKeyPEM = true
 	return issuedLeafMaterial{
 		Certificate: store.Certificate{
@@ -744,11 +757,12 @@ func (d *issuanceDispatcher) mintServedLeafMaterialForSelection(
 			// plan for what is not written down, so it is written down here
 			// rather than only in a deprecation event nobody queries.
 			KeyOrigin:  string(custody.OriginControlPlane),
-			KeyStorage: string(custody.StorageLockedMemory),
+			KeyStorage: string(storage),
 		},
-		CertPEM:  append([]byte(nil), leafPEM...),
-		ChainPEM: append([]byte(nil), chainPEM...),
-		KeyPEM:   keyPEM,
+		CertPEM:   append([]byte(nil), leafPEM...),
+		ChainPEM:  append([]byte(nil), chainPEM...),
+		KeyPEM:    keyPEM,
+		keyBuffer: keyBuffer,
 	}, nil
 }
 
@@ -760,6 +774,7 @@ func (d *issuanceDispatcher) mintServedLeafMaterialForSelection(
 // moves the identity back to deployed via identity.renewed. It is idempotent on
 // the outbox key (AN-5), so a redelivery cannot mint a second successor.
 func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Message) error {
+	ctx = withLeafCommand(ctx, d.idem, m.TenantID, m.IdempotencyKey)
 	var p transitionTrigger
 	if err := json.Unmarshal(m.Payload, &p); err != nil {
 		return fmt.Errorf("server: decode ca.renew payload: %w", err)
@@ -828,8 +843,9 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 		}
 
 		var deployCertPEM, deployKeyPEM []byte
+		var deployMaterial issuedLeafMaterial
 		deployFingerprint := ""
-		defer func() { secret.Wipe(deployKeyPEM) }()
+		defer func() { deployMaterial.destroyKey() }()
 		for _, old := range certs {
 			dnsNames := old.SANs
 			if len(dnsNames) == 0 {
@@ -851,7 +867,7 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 			// the server-side-keygen deprecation event the issue path emits.
 			// Custody that degrades automatically is worse than custody that
 			// was never claimed, because the claim outlives the property.
-			material, err := d.mintServedLeafForRenewal(ctx, m.TenantID, ident, old, commonName, dnsNames, idemKey)
+			material, err := d.mintServedLeafForRenewal(withLeafSlot(ctx, old.ID), m.TenantID, ident, old, commonName, dnsNames, idemKey)
 			if err != nil {
 				_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
 				return nil, err
@@ -860,11 +876,12 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 			successor.IssuanceIdempotencyKey = idemKey
 			recorded, err := d.orch.RecordSuccessorCertificate(ctx, m.TenantID, successor, old.ID)
 			if err != nil {
-				secret.Wipe(material.KeyPEM)
+				material.destroyKey()
 				_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
 				return nil, fmt.Errorf("server: record renewal successor: %w", err)
 			}
-			secret.Wipe(deployKeyPEM)
+			deployMaterial.destroyKey()
+			deployMaterial = material
 			deployCertPEM = material.CertPEM
 			deployKeyPEM = material.KeyPEM
 			deployFingerprint = recorded.Fingerprint

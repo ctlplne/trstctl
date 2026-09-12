@@ -2413,7 +2413,7 @@ func (s *Server) issueLeafWithValidity(ctx context.Context, csrDER []byte, ttl t
 		// Sign under the served issuing profile (PKIGOV-001/002): the leaf carries
 		// the configured CDP/AIA/policy pointers + an always-present SKI, and any
 		// profile constraints (validity/EKU/DNS-suffix) are enforced before signing.
-		issued, err := crypto.SignLeafFromCSRWithValidity(s.caCertDER, s.caSigner, csrDER, ttl, leafProfile)
+		issued, err := signLifecycleLeaf(ctx, s.caCertDER, s.caSigner, csrDER, ttl, leafProfile)
 		ch <- result{issued, err}
 	}()
 	select {

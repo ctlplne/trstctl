@@ -67,7 +67,7 @@ silently counted as a complete custody record.
 | CMP leaf (RFC 4210) | The CMP client | Wherever the client put it | No |
 | Identity leaf, `subject_csr_pem` supplied | The requester | Wherever the requester put it | No |
 | Identity leaf, no CSR, agent-executed target | The host agent | Installed into the target's connector-specific host store; transient copies stay in locked host memory | No — only the CSR travels up |
-| Identity leaf, no CSR, retained control-plane target | The control plane | Locked memory; when a control-plane connector is configured, then a sealed deploy intent | **Yes — deprecated**, see below |
+| Identity leaf, no CSR, retained control-plane target | The control plane | Tenant-bound encrypted recovery record; sealed deploy intent when a control-plane connector is configured | **Yes — deprecated**, see below |
 | CA root / intermediate | The isolated signer | Inside the signer's key store or an HSM | No — it never leaves the signer |
 | Agent enrollment identity | The agent | The agent's own key store | No |
 | SSH host / user certificate | The requesting host or user | Wherever the requester put it | No |
@@ -77,7 +77,7 @@ silently counted as a complete custody record.
 | PKI-as-a-secret, `common_name` supplied | The control plane | Returned once in the response, not persisted | **Yes — deprecated**, see below |
 | Automated renewal successor, agent-executed target | The host agent | Installed into the target's connector-specific host store; transient copies stay in locked host memory | No — only the CSR travels up |
 | Automated renewal successor, recorded `subject_csr_pem` | The original requester | Wherever the requester kept that matching key; renewal creates no new subject key | No |
-| Automated renewal successor, no CSR and retained control-plane target | The control plane | Locked memory; when a control-plane connector is configured, then a sealed deploy intent | **Yes — deprecated** identity fallback, see below |
+| Automated renewal successor, no CSR and retained control-plane target | The control plane | Tenant-bound encrypted recovery record; sealed deploy intent when a control-plane connector is configured | **Yes — deprecated** identity fallback, see below |
 | Ephemeral workload credential (attested) | The attested workload | Wherever the workload put it | No — it presents its own public key |
 | Direct attested X.509-SVID | The requesting workload | Not established by the attestation request | No — only the public key travels up |
 
@@ -107,11 +107,22 @@ is the shipped B2 path, not future work.
 The retained fallback applies only when there is no CSR and the target is not
 agent-executed. It calls the same control-plane key generator for first issuance
 and renewal, and records `issuance.server_side_keygen`. The key is held in locked
-memory. If a control-plane connector is configured, the bytes are sealed into its
-outbox deploy intent; otherwise no deploy material is emitted. Working copies are
-wiped after the dispatcher finishes. This compatibility path is deprecated, and
+memory. Before signing, a tenant-bound encrypted recovery record retains the key
+and CSR so a retry uses the same subject. Inventory reports `key_storage=sealed_store`;
+this is encrypted, exportable storage, not a hardware custody claim. If a
+control-plane connector is configured, the bytes are also sealed into its outbox
+deploy intent; otherwise no deploy material is emitted. Working copies are wiped
+after the dispatcher finishes. This compatibility path is deprecated, and
 the event identifies the flows that must move to `subject_csr_pem` or an
 agent-executed target.
+
+Lifecycle issuance also retains the exact public certificate template before the
+CA signature. The isolated signer journals that operation and returns the same
+signature on retry. An unfinished outbox command keeps its template and encrypted
+subject preparation beyond the normal idempotency retention window. Once delivery
+completes, normal retention can reclaim these preparation records. Retained
+deployment intents have their own lifetime. Historical commands that signed before
+this mechanism cannot reconstruct a lost certificate or key from a request ID.
 
 **Control-plane compatibility Workload API.** The production host agent now serves
 the SPIFFE Workload API on the workload's machine. Its `FetchX509SVID` generates a

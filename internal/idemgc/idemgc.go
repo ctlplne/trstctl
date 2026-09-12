@@ -61,11 +61,24 @@ func (w *Sweeper) Retention() time.Duration { return w.retention }
 // completed_at partial index (migration 0018) makes the delete touch only the
 // eligible tail, so reclamation stays cheap as the table grows. It is safe to call
 // concurrently and is idempotent: a second call right after reclaims nothing.
+// Leaf preparations survive while their exact tenant/outbox command remains
+// unfinished, including exhausted delivery. Its recovery must keep the original
+// subject and serial even when an operator returns after the normal retry window.
 func (w *Sweeper) Sweep(ctx context.Context) (int64, error) {
 	cutoff := time.Now().UTC().Add(-w.retention)
 	tag, err := w.store.SystemPool().Exec(ctx,
-		`DELETE FROM idempotency_keys
-		  WHERE completed_at IS NOT NULL AND completed_at < $1`, cutoff)
+		`DELETE FROM idempotency_keys AS k
+		  WHERE completed_at IS NOT NULL AND completed_at < $1
+		    AND NOT EXISTS (
+		      SELECT 1 FROM outbox o
+		       WHERE o.tenant_id = k.tenant_id AND o.status <> 'delivered'
+		         AND o.idempotency_key = CASE
+		           WHEN starts_with(k.key, 'leaf-template:v1:')
+		             THEN substring(k.key FROM length('leaf-template:v1:') + 66)
+		           WHEN starts_with(k.key, 'leaf-subject:v1:')
+		             THEN substring(k.key FROM length('leaf-subject:v1:') + 66)
+		           END
+		    )`, cutoff)
 	if err != nil {
 		return 0, fmt.Errorf("idemgc: sweep: %w", err)
 	}

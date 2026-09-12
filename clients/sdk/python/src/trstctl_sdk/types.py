@@ -3354,6 +3354,7 @@ CustodyStorageCounts = TypedDict(
         'locked_memory': int,
         'os_store': int,
         'pkcs11': int,
+        'sealed_store': int,
         'service': int,
     },
     total=False,

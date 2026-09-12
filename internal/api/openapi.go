@@ -1590,7 +1590,7 @@ func componentSchemas() map[string]*Schema {
 		// B5: per-certificate key custody. Empty means UNRECORDED, which is a
 		// distinct answer from any observation.
 		"key_origin":       {Type: "string", Enum: []string{"", "requester", "host_agent", "device", "control_plane", "signer"}},
-		"key_storage":      {Type: "string", Enum: []string{"", "locked_memory", "file", "os_store", "pkcs11", "device_bound", "service"}},
+		"key_storage":      {Type: "string", Enum: []string{"", "locked_memory", "sealed_store", "file", "os_store", "pkcs11", "device_bound", "service"}},
 		"key_exportable":   {Type: "string", Enum: []string{"", "exportable", "non_exportable"}},
 		"key_generated_by": str(),
 		"custody_summary":  str(),
@@ -3615,6 +3615,7 @@ func componentSchemas() map[string]*Schema {
 		"device": {Type: "integer"}, "control_plane": {Type: "integer"}, "signer": {Type: "integer"},
 	}, "requester", "host_agent", "device", "control_plane", "signer")
 	custodyStorageCounts := object(map[string]*Schema{
+		"sealed_store":  {Type: "integer"},
 		"locked_memory": {Type: "integer"}, "file": {Type: "integer"}, "os_store": {Type: "integer"},
 		"pkcs11": {Type: "integer"}, "device_bound": {Type: "integer"}, "service": {Type: "integer"},
 	}, "locked_memory", "file", "os_store", "pkcs11", "device_bound", "service")

@@ -1900,7 +1900,7 @@ export interface Certificate {
   key_exportable?: "" | "exportable" | "non_exportable";
   key_generated_by?: string;
   key_origin?: "" | "requester" | "host_agent" | "device" | "control_plane" | "signer";
-  key_storage?: "" | "locked_memory" | "file" | "os_store" | "pkcs11" | "device_bound" | "service";
+  key_storage?: "" | "locked_memory" | "sealed_store" | "file" | "os_store" | "pkcs11" | "device_bound" | "service";
   not_after?: string;
   not_before?: string;
   owner_id?: string;
@@ -2414,6 +2414,7 @@ export interface CustodyStorageCounts {
   locked_memory: number;
   os_store: number;
   pkcs11: number;
+  sealed_store?: number;
   service: number;
 }
 

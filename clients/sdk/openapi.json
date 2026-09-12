@@ -7762,6 +7762,7 @@
             "enum": [
               "",
               "locked_memory",
+              "sealed_store",
               "file",
               "os_store",
               "pkcs11",
@@ -9911,6 +9912,9 @@
             "type": "integer"
           },
           "pkcs11": {
+            "type": "integer"
+          },
+          "sealed_store": {
             "type": "integer"
           },
           "service": {

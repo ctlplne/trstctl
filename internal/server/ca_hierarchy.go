@@ -216,7 +216,7 @@ func (h *caHierarchyService) issueLeafForExactAuthorityWithValidity(
 	// A migration member is pinned to this exact authority, so it cannot follow a
 	// later rotation. It still must stop when that pinned authority expires.
 	profile.ClampTTLToIssuer = true
-	issued, err := crypto.SignLeafFromCSRWithValidity(caDER, signer, csrDER, ttl, profile)
+	issued, err := signLifecycleLeaf(ctx, caDER, signer, csrDER, ttl, profile)
 	if err != nil {
 		if crypto.IsLeafProfileViolation(err) {
 			return crypto.IssuedLeaf{}, nil, "", fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)

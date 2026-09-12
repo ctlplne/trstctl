@@ -164,6 +164,10 @@ type IssuedLeaf struct {
 // SignLeafFromCSRWithValidity returns the same verified certificate plus its
 // actual validity anchor. No private key material crosses the signing boundary.
 func SignLeafFromCSRWithValidity(caCertDER []byte, caSigner DigestSigner, csrDER []byte, ttl time.Duration, prof LeafProfile) (IssuedLeaf, error) {
+	return signLeafFromCSRWithPreparation(caCertDER, caSigner, csrDER, ttl, prof, nil)
+}
+
+func signLeafFromCSRWithPreparation(caCertDER []byte, caSigner DigestSigner, csrDER []byte, ttl time.Duration, prof LeafProfile, prepared *LeafPreparation) (IssuedLeaf, error) {
 	caCert, err := x509.ParseCertificate(caCertDER)
 	if err != nil {
 		return IssuedLeaf{}, fmt.Errorf("crypto: parse CA cert: %w", err)
@@ -177,6 +181,12 @@ func SignLeafFromCSRWithValidity(caCertDER []byte, caSigner DigestSigner, csrDER
 		if remaining <= 0 {
 			return IssuedLeaf{}, &leafProfileError{fmt.Sprintf("issuing CA expired at %s; it cannot vouch for a new leaf",
 				caCert.NotAfter.UTC().Format(time.RFC3339))}
+		}
+		if prepared != nil {
+			remaining = caCert.NotAfter.Sub(prepared.ValidityAnchor)
+			if remaining <= 0 {
+				return IssuedLeaf{}, &leafProfileError{"retained leaf validity starts after issuer expiry"}
+			}
 		}
 		if ttl <= 0 || ttl > remaining {
 			ttl = remaining
@@ -202,7 +212,12 @@ func SignLeafFromCSRWithValidity(caCertDER []byte, caSigner DigestSigner, csrDER
 	if err != nil {
 		return IssuedLeaf{}, &leafProfileError{err.Error()}
 	}
-	serial, err := randomSerial()
+	var serial *big.Int
+	if prepared != nil {
+		serial, err = prepared.validatedSerial()
+	} else {
+		serial, err = randomSerial()
+	}
 	if err != nil {
 		return IssuedLeaf{}, err
 	}
@@ -213,6 +228,9 @@ func SignLeafFromCSRWithValidity(caCertDER []byte, caSigner DigestSigner, csrDER
 		return IssuedLeaf{}, err
 	}
 	now := time.Now().UTC().Truncate(time.Microsecond)
+	if prepared != nil {
+		now = prepared.ValidityAnchor.UTC()
+	}
 	leaf := &x509.Certificate{
 		SerialNumber:          serial,
 		Subject:               csr.Subject,

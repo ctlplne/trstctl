@@ -23,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/connector/gcpcm"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/pluginhost"
@@ -1315,8 +1316,16 @@ func newIssuanceDispatcherHarness(t *testing.T) *issuanceDispatcherHarness {
 	outbox := orchestrator.NewOutbox(st)
 	idem := orchestrator.NewIdempotency(st)
 	orch := orchestrator.NewOrchestrator(log, st, outbox)
+	// Legacy issuance now retains a tenant-bound encrypted subject before the
+	// first signature. Exercise real sealing even in the software-CA fixture.
+	credentialKEK, err := seal.NewLocalKEK(bytes.Repeat([]byte{0x64}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(credentialKEK.Destroy)
 	handler := &issuanceDispatcher{
-		chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER}),
+		connectorPayloadKey: credentialKEK,
+		chainPEM:            pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER}),
 		issue: func(_ context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) (crypto.IssuedLeaf, error) {
 			return crypto.SignLeafFromCSRWithValidity(caDER, caKey, csrDER, ttl, leafProfile)
 		},

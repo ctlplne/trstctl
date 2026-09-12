@@ -8557,7 +8557,7 @@ export interface components {
             /** @enum {string} */
             key_origin?: "" | "requester" | "host_agent" | "device" | "control_plane" | "signer";
             /** @enum {string} */
-            key_storage?: "" | "locked_memory" | "file" | "os_store" | "pkcs11" | "device_bound" | "service";
+            key_storage?: "" | "locked_memory" | "sealed_store" | "file" | "os_store" | "pkcs11" | "device_bound" | "service";
             /** Format: date-time */
             not_after?: string;
             /** Format: date-time */
@@ -9086,6 +9086,7 @@ export interface components {
             locked_memory: number;
             os_store: number;
             pkcs11: number;
+            sealed_store?: number;
             service: number;
         };
         DRArtifactFailure: {

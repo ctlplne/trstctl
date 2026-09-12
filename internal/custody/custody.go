@@ -66,6 +66,9 @@ type StorageClass string
 const (
 	// StorageLockedMemory: an mlock'd, zeroized buffer, alive for one operation.
 	StorageLockedMemory StorageClass = "locked_memory"
+	// StorageSealedStore: a tenant-bound encrypted record retains an exportable
+	// key for delivery recovery. This does not assert hardware custody.
+	StorageSealedStore StorageClass = "sealed_store"
 	// StorageFile: a file on a host's disk, with the permissions the deployment
 	// gave it.
 	StorageFile StorageClass = "file"
@@ -191,6 +194,8 @@ func (r Record) Summary() string {
 	switch r.Storage {
 	case StorageLockedMemory:
 		parts = append(parts, "held in locked, zeroized memory for the operation only")
+	case StorageSealedStore:
+		parts = append(parts, "retained in a tenant-bound encrypted record for delivery recovery")
 	case StorageFile:
 		parts = append(parts, "stored as a file on the host")
 	case StorageOSStore:
@@ -224,7 +229,7 @@ func ValidOrigin(v KeyOrigin) bool {
 // ValidStorage reports whether v is a value this system records.
 func ValidStorage(v StorageClass) bool {
 	switch v {
-	case StorageLockedMemory, StorageFile, StorageOSStore, StoragePKCS11, StorageDeviceBound, StorageService, StorageUnrecorded:
+	case StorageLockedMemory, StorageSealedStore, StorageFile, StorageOSStore, StoragePKCS11, StorageDeviceBound, StorageService, StorageUnrecorded:
 		return true
 	default:
 		return false
@@ -252,6 +257,7 @@ type OriginCounts struct {
 // StorageCounts is a closed, reviewable count for every non-empty storage class.
 type StorageCounts struct {
 	LockedMemory int `json:"locked_memory"`
+	SealedStore  int `json:"sealed_store"`
 	File         int `json:"file"`
 	OSStore      int `json:"os_store"`
 	PKCS11       int `json:"pkcs11"`
@@ -308,6 +314,8 @@ func SummarizeCertificates(certificates []CertificateEvidence) CertificateSummar
 		switch r.Storage {
 		case StorageLockedMemory:
 			out.Storage.LockedMemory++
+		case StorageSealedStore:
+			out.Storage.SealedStore++
 		case StorageFile:
 			out.Storage.File++
 		case StorageOSStore:
