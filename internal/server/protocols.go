@@ -21,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/profile"
@@ -100,18 +101,24 @@ var errProtocolIssuanceUnavailable = errors.New("server: protocol issuance unava
 // re-encode it to their wire format). It is the shared body behind the ca.CA and
 // Enroller adapters below.
 func (p *protocolIssuer) IssueProtocolLeaf(ctx context.Context, tenantID, protocolName, idempotencyKey string, csrDER []byte, ttl time.Duration) ([]byte, error) {
+	// Generic callers may have constructed the CSR themselves. A protocol name
+	// alone cannot establish who supplied its key.
+	return p.issueProtocolLeafWithOrigin(ctx, tenantID, protocolName, idempotencyKey, csrDER, ttl, custody.OriginUnrecorded)
+}
+
+func (p *protocolIssuer) issueProtocolLeafWithOrigin(ctx context.Context, tenantID, protocolName, idempotencyKey string, csrDER []byte, ttl time.Duration, origin custody.KeyOrigin) ([]byte, error) {
 	if p.tenantCrypto == nil {
-		return p.issueProtocolLeaf(ctx, tenantID, protocolName, idempotencyKey, csrDER, ttl)
+		return p.issueProtocolLeaf(ctx, tenantID, protocolName, idempotencyKey, csrDER, ttl, origin)
 	}
 	var leaf []byte
 	err := withTenantCipher(ctx, p.tenantCrypto, nil, tenantID, func(scoped context.Context, _ tenantseal.Cipher) (err error) {
-		leaf, err = p.issueProtocolLeaf(scoped, tenantID, protocolName, idempotencyKey, csrDER, ttl)
+		leaf, err = p.issueProtocolLeaf(scoped, tenantID, protocolName, idempotencyKey, csrDER, ttl, origin)
 		return err
 	})
 	return leaf, err
 }
 
-func (p *protocolIssuer) issueProtocolLeaf(ctx context.Context, tenantID, protocolName, idempotencyKey string, csrDER []byte, ttl time.Duration) ([]byte, error) {
+func (p *protocolIssuer) issueProtocolLeaf(ctx context.Context, tenantID, protocolName, idempotencyKey string, csrDER []byte, ttl time.Duration, origin custody.KeyOrigin) ([]byte, error) {
 	if p.issue == nil {
 		return nil, errProtocolIssuanceUnavailable
 	}
@@ -202,6 +209,9 @@ func (p *protocolIssuer) issueProtocolLeaf(ctx context.Context, tenantID, protoc
 			KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
 			Source: "protocol:" + protocolName, CertificateDER: append([]byte(nil), blk.Bytes...),
 			IssuanceIdempotencyKey: idemKey,
+			// The enrollment adapter knows whether it received a client CSR.
+			// That establishes neither storage nor exportability nor an actor.
+			KeyOrigin: string(origin),
 		}); err != nil {
 			return nil, err
 		}
@@ -391,7 +401,7 @@ func (a protocolCAAdapter) Issue(ctx context.Context, req ca.IssueRequest) (ca.C
 	if req.ProviderIdempotencyKey != "" {
 		issuanceKey = "acme-order:" + req.ProviderIdempotencyKey
 	}
-	leafDER, err := a.issuer.IssueProtocolLeaf(ctx, tenant, "acme", issuanceKey, req.CSR, req.TTL)
+	leafDER, err := a.issuer.issueProtocolLeafWithOrigin(ctx, tenant, "acme", issuanceKey, req.CSR, req.TTL, custody.OriginRequester)
 	if err != nil {
 		return ca.Certificate{}, err
 	}
@@ -436,7 +446,9 @@ type enrollerAdapter struct {
 // id), so a retried enrollment dedupes (AN-5).
 func (e enrollerAdapter) Enroll(ctx context.Context, csrDER []byte, profileName, protocol, idempotencyKey string) ([]byte, error) {
 	tenant := e.tenantID
-	return e.issuer.IssueProtocolLeaf(ctx, tenant, protocol, idempotencyKey, csrDER, protocolLeafTTL)
+	// This adapter receives the client CSR for simple enrollment. EST server
+	// key generation has a separate interface and does not take this path.
+	return e.issuer.issueProtocolLeafWithOrigin(ctx, tenant, protocol, idempotencyKey, csrDER, protocolLeafTTL, custody.OriginRequester)
 }
 
 // servedEnrollAuth is the EST §3.2.3 HTTP authenticator for the served EST endpoint:

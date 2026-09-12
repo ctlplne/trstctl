@@ -190,7 +190,7 @@ func TestServedAttestedIssuanceRecordsRequesterCustodyWithoutStorageClaims(t *te
 		t.Fatalf("attested custody must record requester origin only: origin=%q storage=%q exportability=%q actor=%q", got.KeyOrigin, got.KeyStorage, got.KeyExportable, got.KeyGeneratedBy)
 	}
 	status, raw := secretsReq(t, h, http.MethodGet, "/api/v1/certificates/"+got.ID, token, nil)
-	if status != http.StatusOK || !strings.Contains(string(raw), `"key_origin":"requester"`) || !strings.Contains(string(raw), "control plane never held it") {
+	if status != http.StatusOK || !strings.Contains(string(raw), `"key_origin":"requester"`) || !strings.Contains(string(raw), "did not receive its private key for this issuance") {
 		t.Fatalf("served custody metadata: status=%d body=%s", status, raw)
 	}
 	if !h.hasEvent(t, "certificate.recorded") {

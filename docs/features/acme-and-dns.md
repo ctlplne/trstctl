@@ -59,6 +59,11 @@ Orders created by older versions without this identity retain their original
 CSR-based retry binding during an upgrade, so recovery cannot duplicate a mint.
 Create a fresh renewal order after upgrading to obtain the new behavior.
 
+Newly issued ACME inventory records also retain `key_origin=requester`: the client
+submitted the public key in its CSR, and this issuance did not receive the private
+key. Its storage, exportability, and named generator remain unrecorded. This does
+not assign an accountable owner or backfill old records with inferred custody.
+
 The advertised account URL accepts signed POST-as-GET, contact updates, and
 `{"status":"deactivated"}`. Registration lookup preserves existing contact details;
 send an update to the account URL to change them, or `{"contact":[]}` to clear them.

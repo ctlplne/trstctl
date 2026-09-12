@@ -36,6 +36,8 @@ func TestServedESTEndToEnd(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{
 		EST: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 	})
+	// A seeded API token alone does not establish the tenant's event history.
+	registerServedTenant(t, h, "EST enrollment tenant")
 	if !protoContains(h.srv.ServedProtocols(), "est") {
 		t.Fatal("EST is not reported as served — wire-in failed")
 	}
@@ -67,6 +69,7 @@ func TestServedESTEndToEnd(t *testing.T) {
 	if err := crypto.VerifyLeafSignedByCA(certs[0], caCertDER(t, h.caPEM)); err != nil {
 		t.Fatalf("EST-issued cert does not verify against the served CA: %v", err)
 	}
+	assertServedRequesterCustody(t, h, certs[0])
 	if !h.hasEvent(t, "certificate.recorded") {
 		t.Error("no certificate.recorded event — the served EST mint was not event-sourced (AN-2)")
 	}
@@ -145,6 +148,7 @@ func TestServedSCEPEndToEnd(t *testing.T) {
 	if err := crypto.VerifyLeafSignedByCA(issued, caCertDER(t, h.caPEM)); err != nil {
 		t.Fatalf("SCEP-issued cert does not verify against the served CA: %v", err)
 	}
+	assertServedRequesterCustody(t, h, issued)
 	if !h.hasEvent(t, "certificate.recorded") {
 		t.Error("no certificate.recorded event — the served SCEP mint was not event-sourced (AN-2)")
 	}
@@ -500,6 +504,7 @@ func TestServedCMPEndToEnd(t *testing.T) {
 		CMP:                      config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 		CMPClientTrustAnchorFile: anchorFile,
 	})
+	registerServedTenant(t, h, "CMP enrollment tenant")
 	if !protoContains(h.srv.ServedProtocols(), "cmp") {
 		t.Fatal("CMP is not reported as served — wire-in failed")
 	}
@@ -523,6 +528,7 @@ func TestServedCMPEndToEnd(t *testing.T) {
 	if err := crypto.VerifyLeafSignedByCA(issued, caCertDER(t, h.caPEM)); err != nil {
 		t.Fatalf("CMP-issued cert does not verify against the served CA: %v", err)
 	}
+	assertServedRequesterCustody(t, h, issued)
 	if !h.hasEvent(t, "certificate.recorded") {
 		t.Error("no certificate.recorded event — the served CMP mint was not event-sourced (AN-2)")
 	}

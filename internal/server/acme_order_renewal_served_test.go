@@ -72,6 +72,7 @@ func TestServedACMERenewalWithIdenticalCSR(t *testing.T) {
 		if err := crypto.VerifyLeafSignedByCA(chain[0], caCertDER(t, h.caPEM)); err != nil {
 			t.Fatal(err)
 		}
+		assertServedRequesterCustody(t, h, chain[0])
 		return order, chain[0]
 	}
 	firstOrder, first := issue()
