@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -184,7 +185,16 @@ func TestHostRotationReceiptLookupResumesAcrossBoundedPasses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if lookup.Next != int64(f.run(t).FirstEventSequence)+hostRotationLookupPage {
+	firstSequence := f.run(t).FirstEventSequence
+	if firstSequence > math.MaxInt64-hostRotationLookupPage {
+		t.Fatal("fixture sequence and one lookup page exceed the database cursor range")
+		return
+	}
+	if lookup.Next < 0 {
+		t.Fatal("lookup returned a negative cursor")
+		return
+	}
+	if uint64(lookup.Next) != firstSequence+hostRotationLookupPage {
 		t.Fatalf("first page cursor: %+v", lookup)
 	}
 	for pass := 0; pass < 5 && f.run(t).Status == "running"; pass++ {

@@ -52,7 +52,7 @@ func (a *agentService) hostRotationEvidence(ctx context.Context, tenantID string
 	if head >= math.MaxInt64 {
 		return out, errors.New("host rotation source sequence exceeds PostgreSQL range")
 	}
-	if lookup.Next < int64(run.FirstEventSequence) || lookup.Next > int64(head)+1 {
+	if lookup.Next <= 0 || lookup.Next < int64(run.FirstEventSequence) || lookup.Next > int64(head)+1 {
 		return out, errors.New("host rotation lookup cursor is outside its retained generation")
 	}
 	// Freeze each pass's high-water mark. Unrelated new traffic cannot keep an
