@@ -244,9 +244,22 @@ func (o *Orchestrator) emitPrepared(ctx context.Context, next events.Event) (eve
 	if next.Type == projections.EventCertificateRecorded || next.Type == projections.EventEdgeIssuanceReconciled {
 		return o.emitCertificateRecording(ctx, next)
 	}
+	certificateMetadata, err := projections.CertificateMetadataEvent(next)
+	if err != nil {
+		return events.Event{}, err
+	}
 
 	var ev events.Event
-	err := o.store.WithTenant(ctx, next.TenantID, func(tx pgx.Tx) error {
+	err = o.store.WithTenant(ctx, next.TenantID, func(tx pgx.Tx) error {
+		if certificateMetadata {
+			// Admission covers the source append, not just SQL projection. A
+			// recording that already owns this fence must finish before we get
+			// an event sequence; otherwise it can project a later sequence and
+			// make this unapplied revocation/ownership event unsafe to replay.
+			if err := o.store.LockCertificateMetadataOrderTx(ctx, tx, next.TenantID); err != nil {
+				return err
+			}
+		}
 		var err error
 		ev, err = o.log.Append(ctx, next)
 		if err != nil {

@@ -35,6 +35,12 @@ Recovery must preserve the order of ownership, verification, revocation and
 certificate recording. Applying an old event to newer rows can change its meaning,
 including when its original SQL predicate now matches no rows.
 
+Certificate metadata commands acquire the tenant's ordering lock before
+appending their event. This prevents concurrent issuance and revocation from
+committing their projections in the opposite order. It does not repair an
+already interrupted event: preserve the retained history and follow the rebuild
+procedure below when the ordering guard refuses incremental recovery.
+
 Migration 0208 adds exact completion receipts for certificate-dependent events.
 Each receipt commits with the whole event transaction and binds its immutable
 envelope. A repeated completed event is inert, including a duplicate retained

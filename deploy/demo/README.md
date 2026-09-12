@@ -19,6 +19,7 @@ its public half. Copy it out and verify the API before opening the browser:
 docker compose -f deploy/demo/docker-compose.yml cp \
   trstctl:/public-trust/control-plane.crt ./trstctl-demo-control-plane.crt
 curl --cacert ./trstctl-demo-control-plane.crt https://127.0.0.1:9443/healthz
+curl --fail --cacert ./trstctl-demo-control-plane.crt https://127.0.0.1:9443/readyz
 ```
 
 Import `trstctl-demo-control-plane.crt` into the trust store used by your local
@@ -55,7 +56,7 @@ audit-producing lifecycle transitions, and notification-facing preview rows.
 The seed is a convergent, versioned migration. It first reads each logical
 resource, refuses duplicate or same-name/different-policy preserved data, and
 advances lifecycle state only when that transition is still needed. Its final
-event-sourced member is the durable `demo-seed-v2` completion checkpoint. A
+event-sourced member is the durable, versioned completion checkpoint. A
 valid v1 checkpoint is migrated in place; malformed or unknown checkpoint
 versions still fail closed instead of guessing. The
 bootstrap bearer needed to inspect preserved state lives in the non-public
