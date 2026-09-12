@@ -5471,30 +5471,64 @@ export const messages = {
     defaultMessage: "Mark as not done",
     description: "Toggle that clears a manual journey-step completion mark.",
   },
+  "journeys.fleet.install.title": { defaultMessage: "Install the client certificate", description: "ACME fleet lifecycle operator guidance." },
+  "journeys.fleet.install.body": {
+    defaultMessage:
+      "Configure NGINX to use this lineage's fullchain.pem and privkey.pem. Test and reload it, then save a deploy hook that repeats the reload after successful renewal. The linked guide includes the exact configuration. Creating an endpoint binding would issue a different certificate.",
+    description: "ACME fleet lifecycle operator guidance.",
+  },
+  "journeys.fleet.verify.title": { defaultMessage: "Verify the actual endpoint", description: "ACME fleet lifecycle operator guidance." },
+  "journeys.fleet.verify.body": {
+    defaultMessage:
+      "Use a trusted client to compare the served leaf fingerprint, hostname and issuer with the issued files, then make an application request. A reload acknowledgement or an inventory row is not endpoint proof.",
+    description: "ACME fleet lifecycle operator guidance.",
+  },
+  "journeys.fleet.renew.title": { defaultMessage: "Schedule and observe renewal", description: "ACME fleet lifecycle operator guidance." },
+  "journeys.fleet.renew.body": {
+    defaultMessage:
+      "Enable one scheduled renewal task using the same client, DNS credentials and HTTPS trust. Follow the guide to test a forced renewal and a DNS failure, then verify two naturally scheduled successors at the endpoint. A manual command or an early no-op is not proof of unattended renewal.",
+    description: "ACME fleet lifecycle operator guidance.",
+  },
+  "journeys.fleet.retire.title": { defaultMessage: "Revoke and retire", description: "ACME fleet lifecycle operator guidance." },
+  "journeys.fleet.retire.body": {
+    defaultMessage:
+      "For a planned retirement, stop serving the leaf, revoke it at the same CA, verify signed revocation status and preserve audit evidence. Delete this client lineage so it cannot renew. Deactivate the account only when no other certificates need it. Account deactivation does not revoke certificates.",
+    description: "ACME fleet lifecycle operator guidance.",
+  },
+  "protocols.acmePlan.activityTerminal": { defaultMessage: "Authorization {status}", description: "ACME fleet lifecycle operator guidance." },
+  "protocols.acmePlan.clientGuide": { defaultMessage: "Install and automate this client", description: "ACME fleet lifecycle operator guidance." },
+  "protocols.acmePlan.clientDNSHelp": {
+    defaultMessage:
+      "This DNS example requires the official RFC2136 plugin and its protected credentials file. certonly saves certificate files; installation, renewal scheduling and retirement are separate steps in the guide.",
+    description: "ACME fleet lifecycle operator guidance.",
+  },
+  "protocols.acmePlan.clientHTTPHelp": {
+    defaultMessage:
+      "The standalone example needs HTTP-01 to be offered and port 80 reachable by the CA. For other challenge methods, choose a compatible client. Follow the guide for installation, scheduled renewal and retirement.",
+    description: "ACME fleet lifecycle operator guidance.",
+  },
   "journeys.fleet.title": { defaultMessage: "Automate fleet TLS", description: "Journey title: ACME fleet automation." },
   "journeys.fleet.description": {
-    defaultMessage: "Machines enroll and renew themselves over ACME with DNS-01 proof — no humans holding certificates.",
-    description: "Journey description: ACME fleet automation.",
+    defaultMessage: "Configure a client, prove DNS control, install and verify its certificate, schedule renewals, then revoke and retire it.",
+    description: "ACME fleet lifecycle operator guidance.",
   },
   "journeys.fleet.protocols.title": { defaultMessage: "Inspect the ACME surface", description: "Fleet journey step title." },
   "journeys.fleet.protocols.body": {
-    defaultMessage: "The Protocols page shows the ACME directory, tenant binding, profile gates, and live responder status.",
-    description: "Fleet journey step body.",
+    defaultMessage:
+      "Check the directory, tenant, issuing policy, HTTPS trust, and account admission. The served ACME path uses the platform issuer; endpoint bindings are a separate way to choose an external CA.",
+    description: "ACME fleet lifecycle operator guidance.",
   },
-  "journeys.fleet.dns.title": { defaultMessage: "Delegate DNS-01 validation", description: "Fleet journey step title." },
+  "journeys.fleet.dns.title": { defaultMessage: "Configure the DNS authenticator", description: "ACME fleet lifecycle operator guidance." },
   "journeys.fleet.dns.body": {
-    defaultMessage: "Point _acme-challenge at the validation zone by CNAME; DNS-01 provider configs and the preflight check live here.",
-    description: "Fleet journey step body.",
+    defaultMessage:
+      "Install the official DNS plugin in the same environment as Certbot. The RFC2136 example needs a mode-0600 credentials file and a TSIG key limited to the intended challenge TXT records. Delegation must also be supported by your chosen client plugin.",
+    description: "ACME fleet lifecycle operator guidance.",
   },
   "journeys.fleet.certbot.title": { defaultMessage: "Point an ACME client at the directory", description: "Fleet journey step title." },
   "journeys.fleet.certbot.body": {
-    defaultMessage: "Any ACME client works; certbot with DNS-01 covers wildcards and hosts with unreachable ports.",
-    description: "Fleet journey step body.",
-  },
-  "journeys.fleet.bindings.title": { defaultMessage: "Bind certificates to their endpoints", description: "Fleet journey step title." },
-  "journeys.fleet.bindings.body": {
-    defaultMessage: "One endpoint-binding call queues issue and deploy together; delivery receipts land under Renewal readiness.",
-    description: "Fleet journey step body.",
+    defaultMessage:
+      "Replace the directory, domain, and credentials path with your reviewed values. Add EAB admission if required. DNS-01 requires an authenticator, not just a preferred challenge. certonly obtains files; it does not install them.",
+    description: "ACME fleet lifecycle operator guidance.",
   },
   "journeys.k8s.title": { defaultMessage: "Kubernetes workload identity", description: "Journey title: Kubernetes workload identity." },
   "journeys.k8s.description": {

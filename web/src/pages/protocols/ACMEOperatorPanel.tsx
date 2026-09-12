@@ -4,6 +4,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Eyebrow } from "@/components/typography";
 import { useCan } from "@/components/rbac";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { api, type ACMEOperatorPlan } from "@/lib/api";
 import { useCapabilityExecution } from "@/lib/capabilities";
@@ -14,9 +15,16 @@ function directoryURL(path: string): string {
   return new URL(path, window.location.origin).toString();
 }
 
-function clientCommand(plan: ACMEOperatorPlan): string {
+function clientCommand(plan: ACMEOperatorPlan): string | null {
+  const authenticator = plan.challenge_methods.includes("dns-01")
+    ? "--dns-rfc2136 --dns-rfc2136-credentials /etc/letsencrypt/rfc2136.ini --preferred-challenges dns"
+    : plan.challenge_methods.includes("http-01")
+      ? "--standalone --preferred-challenges http"
+      : null;
+  if (!authenticator) return null;
   const eab = plan.eab_required ? " --eab-kid '<configured-key-id>' --eab-hmac-key '<retrieve-from-secret-manager>'" : "";
-  return `certbot certonly --standalone --server '${directoryURL(plan.directory_path)}' --domain '<dns-name>'${eab}`;
+  const directory = directoryURL(plan.directory_path).replace(/'/g, "'\\''");
+  return `certbot certonly ${authenticator} --server '${directory}' --domain '<dns-name>'${eab}`;
 }
 
 function isACMEOperatorPlan(value: unknown): value is ACMEOperatorPlan {
@@ -77,16 +85,19 @@ export function ACMEOperatorPanel() {
 
   async function copyCommand() {
     if (!plan) return;
-    await navigator.clipboard?.writeText(clientCommand(plan));
+    const command = clientCommand(plan);
+    if (!command) return;
+    await navigator.clipboard?.writeText(command);
     setCopied(true);
   }
 
   return (
-    <section
+    <Card
+      role="region"
       id="acme-operator-panel"
       aria-labelledby="acme-operator-plan-heading"
       aria-label={t("protocols.acmePlan.region")}
-      className="ui-panel grid scroll-mt-24 gap-4 p-comfortable"
+      className="grid scroll-mt-24 gap-4 p-comfortable"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 max-w-3xl">
@@ -160,13 +171,21 @@ export function ACMEOperatorPanel() {
                   {plan.next_action.label}
                 </Button>
               ) : null}
-              {plan.ready ? (
+              {plan.ready && clientCommand(plan) ? (
                 <Button type="button" variant="outline" onClick={() => void copyCommand()}>
                   {t("protocols.acmePlan.copy")}
                 </Button>
               ) : null}
             </div>
           </div>
+          {plan.ready ? (
+            <div className="grid gap-2 text-sm text-muted-foreground">
+              <p>{t(plan.challenge_methods.includes("dns-01") ? "protocols.acmePlan.clientDNSHelp" : "protocols.acmePlan.clientHTTPHelp")}</p>
+              <a className="text-primary underline" href="https://docs.trstctl.com/journeys/automate-fleet-tls/" target="_blank" rel="noreferrer">
+                {t("protocols.acmePlan.clientGuide")}
+              </a>
+            </div>
+          ) : null}
           {copied ? <p className="text-caption text-status-success">{t("protocols.acmePlan.copied")}</p> : null}
           {actionError ? <ErrorState title={t("protocols.acmePlan.actionFailed")}>{actionError}</ErrorState> : null}
 
@@ -207,11 +226,14 @@ export function ACMEOperatorPanel() {
             ) : (
               <ul className="mt-3 divide-y divide-border border-y border-border">
                 {plan.validation_activity.map((activity) => {
-                  const result = activity.validation_skipped
-                    ? t("protocols.acmePlan.activitySkipped")
-                    : activity.validated_method
-                      ? t("protocols.acmePlan.activityValidated", { method: displayMethod(activity.validated_method) })
-                      : t("protocols.acmePlan.activityWaiting");
+                  const terminal = ["deactivated", "invalid", "expired", "revoked"].includes(activity.authorization_status);
+                  const result = terminal
+                    ? t("protocols.acmePlan.activityTerminal", { status: activity.authorization_status })
+                    : activity.validation_skipped
+                      ? t("protocols.acmePlan.activitySkipped")
+                      : activity.validated_method
+                        ? t("protocols.acmePlan.activityValidated", { method: displayMethod(activity.validated_method) })
+                        : t("protocols.acmePlan.activityWaiting");
                   return (
                     <li key={`${activity.order_id}:${activity.domain}`} className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                       <div className="min-w-0">
@@ -249,6 +271,6 @@ export function ACMEOperatorPanel() {
           </section>
         </>
       )}
-    </section>
+    </Card>
   );
 }

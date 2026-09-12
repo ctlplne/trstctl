@@ -114,7 +114,8 @@ const protocolSurfaces: ProtocolSurface[] = [
     snippets: [
       {
         label: translateNow("source.certbot.2fdd3b0f47"),
-        command: "certbot certonly --server https://trstctl.example.test/directory --manual --preferred-challenges dns -d api.example.test",
+        command:
+          "certbot certonly --server https://trstctl.example.test/directory --dns-rfc2136 --dns-rfc2136-credentials /etc/letsencrypt/rfc2136.ini --preferred-challenges dns -d api.example.test",
       },
       {
         label: translateNow("source.x.crypto.acme.e3bd443082"),

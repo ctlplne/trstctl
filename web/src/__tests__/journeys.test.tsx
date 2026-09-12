@@ -212,7 +212,7 @@ describe("journeys hub", () => {
     await user.click(screen.getByText(`More guided paths (${journeys.length - 3})`));
     expect(morePaths).toHaveAttribute("open");
     const fleet = screen.getByRole("button", { name: /Automate fleet TLS/ });
-    expect(within(fleet).getByText("0 of 4 steps done")).toBeInTheDocument();
+    expect(within(fleet).getByText("0 of 7 steps done")).toBeInTheDocument();
 
     await user.click(fleet);
     expect(screen.getByRole("heading", { name: "Inspect the ACME surface" })).toBeInTheDocument();
@@ -228,8 +228,22 @@ describe("journeys hub", () => {
 
     // Manual completion updates the card's progress and persists locally.
     await user.click(screen.getByRole("button", { name: "Mark step done" }));
-    expect(within(screen.getByRole("button", { name: /Automate fleet TLS/ })).getByText("1 of 4 steps done")).toBeInTheDocument();
+    expect(within(screen.getByRole("button", { name: /Automate fleet TLS/ })).getByText("1 of 7 steps done")).toBeInTheDocument();
     expect(localStorage.getItem("trstctl-journey-progress")).toContain("automate-fleet-tls:certbot");
+
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole("heading", { name: "Install the client certificate" })).toBeInTheDocument();
+    expect(screen.getByText(/sudo nginx -t/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole("heading", { name: "Verify the actual endpoint" })).toBeInTheDocument();
+    expect(screen.getByText(/openssl s_client/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole("heading", { name: "Schedule and observe renewal" })).toBeInTheDocument();
+    expect(screen.getByText(/certbot renew --cert-name/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole("heading", { name: "Revoke and retire" })).toBeInTheDocument();
+    expect(screen.getByText(/--reason cessationofoperation/)).toBeInTheDocument();
+    expect(within(screen.getByRole("button", { name: /Automate fleet TLS/ })).getByText("1 of 7 steps done")).toBeInTheDocument();
 
     // Every journey links to its published walkthrough on the docs site.
     const docLink = screen.getByRole("link", { name: "https://docs.trstctl.com/journeys/automate-fleet-tls/" });

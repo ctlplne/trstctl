@@ -113,22 +113,53 @@ export const journeys: Journey[] = [
     descriptionKey: "journeys.fleet.description",
     doc: "docs/journeys/automate-fleet-tls.md",
     steps: [
-      { id: "protocols", titleKey: "journeys.fleet.protocols.title", bodyKey: "journeys.fleet.protocols.body", to: "/protocols" },
-      { id: "dns", titleKey: "journeys.fleet.dns.title", bodyKey: "journeys.fleet.dns.body", to: "/protocols" },
+      {
+        id: "protocols",
+        titleKey: "journeys.fleet.protocols.title",
+        bodyKey: "journeys.fleet.protocols.body",
+        to: "/protocols",
+      },
+      {
+        id: "dns",
+        titleKey: "journeys.fleet.dns.title",
+        bodyKey: "journeys.fleet.dns.body",
+        to: "/protocols",
+        command: "certbot plugins",
+      },
       {
         id: "certbot",
         titleKey: "journeys.fleet.certbot.title",
         bodyKey: "journeys.fleet.certbot.body",
         command:
-          "certbot certonly \\\n  --server https://trstctl.example.com/directory \\\n  --preferred-challenges dns \\\n  -d 'example.com' -d '*.example.com'",
+          "certbot certonly \\\n  --server https://trstctl.example.com/directory \\\n  --dns-rfc2136 --dns-rfc2136-credentials /etc/letsencrypt/rfc2136.ini \\\n  --preferred-challenges dns --cert-name api.example.com \\\n  -d api.example.com",
       },
       {
-        id: "bindings",
-        titleKey: "journeys.fleet.bindings.title",
-        bodyKey: "journeys.fleet.bindings.body",
-        to: "/certificates?tab=renewal",
+        id: "install",
+        titleKey: "journeys.fleet.install.title",
+        bodyKey: "journeys.fleet.install.body",
+        command: "sudo nginx -t && sudo systemctl reload nginx",
+      },
+      {
+        id: "verify",
+        titleKey: "journeys.fleet.verify.title",
+        bodyKey: "journeys.fleet.verify.body",
+        to: "/certificates",
         command:
-          'curl -sS -X POST "$TRSTCTL_URL/api/v1/lifecycle/endpoint-bindings/preview" \\\n  -H "Authorization: Bearer $TRSTCTL_TOKEN" \\\n  -H "Content-Type: application/json" \\\n  -d @endpoint-binding-plan.json',
+          "openssl s_client -connect api.example.com:443 -servername api.example.com \\\n  -verify_hostname api.example.com -CAfile issuing-trust.pem -verify_return_error </dev/null",
+      },
+      {
+        id: "renew",
+        titleKey: "journeys.fleet.renew.title",
+        bodyKey: "journeys.fleet.renew.body",
+        command: "certbot renew --cert-name api.example.com --server https://trstctl.example.com/directory",
+      },
+      {
+        id: "retire",
+        titleKey: "journeys.fleet.retire.title",
+        bodyKey: "journeys.fleet.retire.body",
+        to: "/audit",
+        command:
+          "certbot revoke --server https://trstctl.example.com/directory \\\n  --cert-path /etc/letsencrypt/live/api.example.com/cert.pem \\\n  --reason cessationofoperation --no-delete-after-revoke",
       },
     ],
   },

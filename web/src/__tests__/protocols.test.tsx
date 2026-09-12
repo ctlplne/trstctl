@@ -759,6 +759,40 @@ describe("protocol surface", () => {
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("/directory"));
   });
 
+  it.each(["deactivated", "invalid", "expired", "revoked"])("does not ask for client proof after authorization is %s", async (status) => {
+    const plan = readyACMEOperatorPlan();
+    plan.validation_activity = [{ ...plan.validation_activity[0], authorization_status: status, order_status: "invalid", validated_method: "" }];
+    apiMock.acmeOperatorPlan.mockResolvedValue(plan);
+    await renderProtocols();
+    const panel = screen.getByRole("region", { name: "ACME readiness and next step" });
+    expect(within(panel).queryByText("Waiting for a client response")).not.toBeInTheDocument();
+    expect(within(panel).getByText(`Authorization ${status}`)).toBeInTheDocument();
+  });
+
+  it.each([
+    [["dns-01"], "--dns-rfc2136", "--standalone"],
+    [["http-01"], "--standalone", "--dns-rfc2136"],
+  ])("copies a client compatible with offered methods %s", async (methods, expected, excluded) => {
+    const writeText = installClipboardSpy();
+    apiMock.acmeOperatorPlan.mockResolvedValue({ ...readyACMEOperatorPlan(), challenge_methods: methods });
+    await renderProtocols();
+    const panel = screen.getByRole("region", { name: "ACME readiness and next step" });
+    await userEvent.click(within(panel).getByRole("button", { name: "Copy ACME client command" }));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining(expected as string));
+    expect(writeText).toHaveBeenCalledWith(expect.not.stringContaining(excluded as string));
+    expect(within(panel).getByRole("link", { name: "Install and automate this client" })).toHaveAttribute(
+      "href",
+      "https://docs.trstctl.com/journeys/automate-fleet-tls/",
+    );
+  });
+
+  it("does not suggest a Certbot authenticator for an unsupported challenge method", async () => {
+    apiMock.acmeOperatorPlan.mockResolvedValue({ ...readyACMEOperatorPlan(), challenge_methods: ["tls-alpn-01"] });
+    await renderProtocols();
+    const panel = screen.getByRole("region", { name: "ACME readiness and next step" });
+    expect(within(panel).queryByRole("button", { name: "Copy ACME client command" })).not.toBeInTheDocument();
+  });
+
   it("activates only when the server offers the tenant-bound eval action, then reloads the plan", async () => {
     apiMock.acmeOperatorPlan
       .mockResolvedValueOnce({

@@ -1549,8 +1549,11 @@ describe("i18n boundary", () => {
       // First-issuance recovery: reviewed bounded-grant wording, required
       // reason, retained request and lost-response behavior against the API.
       // Machine-authored es/de — HUMAN TRANSLATION REVIEW required before release.
-      "es-ES": "0b4ea32756112df8cece02f0644d2b3e0c48c97d8a65478e7f71189d6145af17",
-      "de-DE": "9c8f924a002d3b41e6893296cddb0f9b2b430b28f1636d9b052fcc640f1267f5",
+      // ACME fleet lifecycle: reviewed plugin prerequisites, installation,
+      // independent verification, scheduling, revocation/retirement, and terminal
+      // authorization labels. Machine-authored es/de require human review before release.
+      "es-ES": "e0a1273661cabd7de7c5c7cf8ad240a57f6b82ae6cba3ad75ffefd2c26e51fab",
+      "de-DE": "55954b30b93e546f26738c1e18bdc49f6f5de92fd952f28078978a85da590bb9",
     });
   });
 

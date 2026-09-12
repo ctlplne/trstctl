@@ -2119,18 +2119,37 @@ const deDECatalog = {
   "journeys.copied": "Kopiert",
   "journeys.markDone": "Schritt als erledigt markieren",
   "journeys.undoDone": "Als nicht erledigt markieren",
+  // ACME lifecycle translations: machine-authored; human review required before release.
+  "journeys.fleet.install.title": "Client-Zertifikat installieren",
+  "journeys.fleet.install.body":
+    "NGINX mit fullchain.pem und privkey.pem dieser Zertifikatsreihe konfigurieren. Konfiguration prüfen und neu laden; anschließend einen Deploy-Hook für das Neuladen nach erfolgreicher Erneuerung speichern. Die verlinkte Anleitung enthält die genaue Konfiguration. Eine Endpunktbindung würde ein anderes Zertifikat ausstellen.",
+  "journeys.fleet.verify.title": "Tatsächlichen Endpunkt prüfen",
+  "journeys.fleet.verify.body":
+    "Mit einem vertrauenswürdigen Client Fingerabdruck, Hostnamen und Aussteller des ausgelieferten Zertifikats mit den ausgestellten Dateien vergleichen und eine Anwendungsanfrage senden. Eine Reload-Bestätigung oder ein Inventareintrag beweist den Zustand des Endpunkts nicht.",
+  "journeys.fleet.renew.title": "Erneuerung planen und beobachten",
+  "journeys.fleet.renew.body":
+    "Eine geplante Erneuerungsaufgabe mit demselben Client, denselben DNS-Zugangsdaten und demselben HTTPS-Vertrauen aktivieren. Laut Anleitung eine erzwungene Erneuerung und einen DNS-Ausfall testen, danach zwei regulär geplante Nachfolgezertifikate am Endpunkt prüfen. Ein manueller Befehl oder ein Lauf ohne Änderung belegt keine unbeaufsichtigte Erneuerung.",
+  "journeys.fleet.retire.title": "Widerrufen und außer Betrieb nehmen",
+  "journeys.fleet.retire.body":
+    "Bei einer geplanten Stilllegung das Zertifikat nicht mehr ausliefern, bei derselben CA widerrufen, den signierten Widerrufsstatus prüfen und Auditnachweise aufbewahren. Die Zertifikatsreihe aus Certbot löschen, damit sie nicht erneuert wird. Das Konto erst deaktivieren, wenn kein anderes Zertifikat es benötigt. Eine Kontodeaktivierung widerruft keine Zertifikate.",
+  "protocols.acmePlan.activityTerminal": "Autorisierung {status}",
+  "protocols.acmePlan.clientGuide": "Diesen Client installieren und automatisieren",
+  "protocols.acmePlan.clientDNSHelp":
+    "Dieses DNS-Beispiel benötigt das offizielle RFC2136-Plugin und dessen geschützte Zugangsdaten-Datei. certonly speichert Zertifikatsdateien; Installation, Erneuerungsplanung und Stilllegung sind separate Schritte der Anleitung.",
+  "protocols.acmePlan.clientHTTPHelp":
+    "Das Standalone-Beispiel setzt angebotenes HTTP-01 und einen für die CA erreichbaren Port 80 voraus. Für andere Challenge-Methoden einen kompatiblen Client wählen. Installation, geplante Erneuerung und Stilllegung stehen in der Anleitung.",
   "journeys.fleet.title": "Flotten-TLS automatisieren",
-  "journeys.fleet.description": "Maschinen registrieren und erneuern sich selbst über ACME mit DNS-01-Nachweis — keine Menschen, die Zertifikate halten.",
+  "journeys.fleet.description":
+    "Client konfigurieren, DNS-Kontrolle nachweisen, Zertifikat installieren und prüfen, Erneuerungen planen und anschließend widerrufen und außer Betrieb nehmen.",
   "journeys.fleet.protocols.title": "ACME-Oberfläche inspizieren",
-  "journeys.fleet.protocols.body": "Die Protokollseite zeigt das ACME-Verzeichnis, Tenant-Bindung, Profil-Gates und den Live-Responder-Status.",
-  "journeys.fleet.dns.title": "DNS-01-Validierung delegieren",
+  "journeys.fleet.protocols.body":
+    "Verzeichnis, Mandant, Ausstellungsrichtlinie, HTTPS-Vertrauen und Kontozulassung prüfen. ACME nutzt den Plattform-Aussteller; Endpunktbindungen bieten einen separaten Ablauf zur Auswahl einer externen CA.",
+  "journeys.fleet.dns.title": "DNS-Authentifikator konfigurieren",
   "journeys.fleet.dns.body":
-    "_acme-challenge per CNAME auf die Validierungszone zeigen lassen; DNS-01-Anbieterkonfigurationen und der Preflight-Check liegen hier.",
+    "Das offizielle DNS-Plugin in derselben Umgebung wie Certbot installieren. Das RFC2136-Beispiel benötigt eine Zugangsdaten-Datei mit Modus 0600 und einen auf die vorgesehenen Challenge-TXT-Einträge begrenzten TSIG-Schlüssel. Das gewählte Client-Plugin muss auch die Delegierung unterstützen.",
   "journeys.fleet.certbot.title": "ACME-Client auf das Verzeichnis richten",
-  "journeys.fleet.certbot.body": "Jeder ACME-Client funktioniert; certbot mit DNS-01 deckt Wildcards und Hosts mit unerreichbaren Ports ab.",
-  "journeys.fleet.bindings.title": "Zertifikate an ihre Endpunkte binden",
-  "journeys.fleet.bindings.body":
-    "Ein Endpunkt-Binding-Aufruf reiht Ausstellen und Ausrollen gemeinsam ein; Zustellbelege landen unter Erneuerungsbereitschaft.",
+  "journeys.fleet.certbot.body":
+    "Verzeichnis, Domain und Zugangsdatenpfad durch die geprüften Werte ersetzen. Falls erforderlich EAB hinzufügen. DNS-01 benötigt einen Authentifikator, nicht nur eine Challenge-Präferenz. certonly beschafft Dateien, installiert sie aber nicht.",
   "journeys.k8s.title": "Kubernetes-Workload-Identität",
   "journeys.k8s.description": "Kurzlebige Zertifikate für Workloads mit Attestierung vor Vertrauen — keine statischen Secrets in Pods.",
   "journeys.k8s.trust.title": "Attester des Clusters registrieren",

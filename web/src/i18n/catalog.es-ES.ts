@@ -2086,17 +2086,37 @@ const esESCatalog = {
   "journeys.copied": "Copiado",
   "journeys.markDone": "Marcar paso como hecho",
   "journeys.undoDone": "Marcar como no hecho",
+  // ACME lifecycle translations: machine-authored; human review required before release.
+  "journeys.fleet.install.title": "Instalar el certificado del cliente",
+  "journeys.fleet.install.body":
+    "Configure NGINX para usar fullchain.pem y privkey.pem de este certificado. Compruebe la configuración y recárguela; guarde un hook de despliegue para recargarla tras renovar. La guía incluye la configuración exacta. Crear una vinculación de endpoint emitiría otro certificado.",
+  "journeys.fleet.verify.title": "Verificar el endpoint real",
+  "journeys.fleet.verify.body":
+    "Use un cliente de confianza para comparar la huella, el nombre de host y el emisor del certificado servido con los archivos emitidos; después haga una petición a la aplicación. Una confirmación de recarga o una fila del inventario no demuestran el resultado en el endpoint.",
+  "journeys.fleet.renew.title": "Programar y observar la renovación",
+  "journeys.fleet.renew.body":
+    "Active una tarea programada con el mismo cliente, las credenciales DNS y la confianza HTTPS. Siga la guía para probar una renovación forzada y un fallo DNS; después verifique dos sucesores renovados por el programa en el endpoint. Un comando manual o una ejecución sin cambios no demuestran la renovación desatendida.",
+  "journeys.fleet.retire.title": "Revocar y retirar",
+  "journeys.fleet.retire.body":
+    "Para una retirada planificada, deje de servir el certificado, revóquelo en la misma CA, verifique el estado de revocación firmado y conserve la auditoría. Elimine este certificado de Certbot para impedir su renovación. Desactive la cuenta solo cuando ningún otro certificado la necesite. Desactivar la cuenta no revoca certificados.",
+  "protocols.acmePlan.activityTerminal": "Autorización {status}",
+  "protocols.acmePlan.clientGuide": "Instalar y automatizar este cliente",
+  "protocols.acmePlan.clientDNSHelp":
+    "Este ejemplo DNS requiere el complemento RFC2136 oficial y su archivo de credenciales protegido. certonly guarda archivos de certificado; la instalación, la programación de renovaciones y la retirada son pasos separados de la guía.",
+  "protocols.acmePlan.clientHTTPHelp":
+    "El ejemplo standalone necesita que se ofrezca HTTP-01 y que la CA pueda acceder al puerto 80. Para otros métodos, elija un cliente compatible. Siga la guía para instalar, programar renovaciones y retirar certificados.",
   "journeys.fleet.title": "Automatizar TLS de la flota",
-  "journeys.fleet.description": "Las máquinas se inscriben y renuevan solas mediante ACME con prueba DNS-01: ningún humano custodia certificados.",
+  "journeys.fleet.description":
+    "Configure un cliente, demuestre el control DNS, instale y verifique su certificado, programe las renovaciones y luego revóquelo y retírelo.",
   "journeys.fleet.protocols.title": "Inspeccionar la superficie ACME",
   "journeys.fleet.protocols.body":
-    "La página Protocolos muestra el directorio ACME, la vinculación de tenant, las puertas de perfil y el estado del respondedor.",
-  "journeys.fleet.dns.title": "Delegar la validación DNS-01",
-  "journeys.fleet.dns.body": "Apunte _acme-challenge a la zona de validación mediante CNAME; las configuraciones DNS-01 y la verificación previa viven aquí.",
+    "Compruebe el directorio, el tenant, la política de emisión, la confianza HTTPS y la admisión de cuentas. ACME usa el emisor de la plataforma; las vinculaciones de endpoints permiten elegir una CA externa en otro flujo.",
+  "journeys.fleet.dns.title": "Configurar el autenticador DNS",
+  "journeys.fleet.dns.body":
+    "Instale el complemento DNS oficial en el mismo entorno que Certbot. El ejemplo RFC2136 necesita un archivo de credenciales con permisos 0600 y una clave TSIG limitada a los registros TXT previstos. El complemento elegido también debe admitir la delegación.",
   "journeys.fleet.certbot.title": "Apuntar un cliente ACME al directorio",
-  "journeys.fleet.certbot.body": "Cualquier cliente ACME funciona; certbot con DNS-01 cubre comodines y hosts con puertos inaccesibles.",
-  "journeys.fleet.bindings.title": "Vincular certificados a sus endpoints",
-  "journeys.fleet.bindings.body": "Una sola llamada de vinculación pone en cola emisión y despliegue; los recibos llegan a Preparación de renovación.",
+  "journeys.fleet.certbot.body":
+    "Sustituya el directorio, el dominio y la ruta de credenciales por los valores revisados. Añada EAB si se requiere. DNS-01 necesita un autenticador, no solo una preferencia de desafío. certonly obtiene archivos, pero no los instala.",
   "journeys.k8s.title": "Identidad de cargas en Kubernetes",
   "journeys.k8s.description": "Certificados de corta vida para cargas con atestación previa a la confianza: sin secretos estáticos en los pods.",
   "journeys.k8s.trust.title": "Registrar el atestador del clúster",

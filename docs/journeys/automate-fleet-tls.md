@@ -12,151 +12,316 @@
 
 ## Goal
 
-When you finish this journey, machines across your fleet will get and renew their
-own TLS certificates from trstctl automatically, with no human in the loop — proven
-by a DNS record instead of an open port, so it works for wildcards and hosts without
-a public web server. It is for platform and infrastructure teams who already run an
-ACME client (certbot, acme.sh, Caddy, cert-manager) and want trstctl to be the CA
-those clients enroll against. In plain terms: you turn on trstctl's ACME endpoint,
-point a standard client at it, prove you control a name via DNS, and let renewal and
-deployment happen on their own.
+Enroll an ACME client, install its certificate on a real service, verify what the
+service serves, and keep it renewing without an operator. Finish by revoking and
+retiring the certificate and its unused account. This example uses Certbot, an
+RFC2136 DNS server such as BIND, and NGINX on Linux; adapt the installer and scheduler
+to your actual target.
+
+The client keeps its account key, leaf key, DNS credentials, and renewal settings.
+trstctl validates domain control, issues the leaf, records protocol activity, and
+serves renewal information and revocation. `certonly` saves files; the client host
+still needs installation and scheduling.
 
 ## Before you start
 
-- A running, reachable trstctl control plane with a provisioned issuing CA. Bring
-  one up via [Getting started](../getting-started.md).
-- A standard ACME client. This journey uses **certbot**.
-- Write access to a DNS zone you control — ideally a throwaway validation zone you
-  delegate to (see step 4), so trstctl never holds your production DNS keys.
-- An API token exported as `TRSTCTL_TOKEN` if you want to inspect results from the
-  CLI (from the getting-started CLI path).
+- A reachable trstctl deployment from [Getting started](../getting-started.md), with
+  ACME enabled for the intended tenant and a provisioned platform issuer.
+- Certbot and its official `certbot-dns-rfc2136` plugin installed in the **same
+  environment**, following the [plugin installation instructions](https://certbot-dns-rfc2136.readthedocs.io/en/stable/).
+  Run `certbot plugins` and confirm `dns-rfc2136` appears. For another DNS service,
+  install its matching authenticator and use that plugin's configuration.
+- DNS authority for the requested name. Give the TSIG key permission to update only
+  its `_acme-challenge` TXT records. The CA's resolver must see those records.
+- Independently trusted HTTPS for the directory, and the expected issuing trust
+  bundle for the resulting leaf. For private HTTPS, configure Certbot's trust
+  bundle with `REQUESTS_CA_BUNDLE` and use the same setting in its scheduled task.
+  Do not disable certificate verification. Directory HTTPS trust and leaf-issuer
+  trust may be different bundles.
+- If the directory requires EAB, obtain the configured key ID and HMAC credential
+  through the approved secret channel and supply them during account registration.
+  Keep the credential out of shell history and shared command examples.
 
-## Steps
+The served ACME path currently uses the platform issuer; it does not select a
+configured external CA or an EAB-specific certificate profile. If you need to keep
+an external CA, use the separate
+[existing-CA and connector journey](preserve-existing-ca.md). Do not assume an ACME
+order changes issuer because another CA exists in inventory.
 
-1. Enable the ACME server. trstctl speaks the CA side of ACME. Turn it on and
-   bind it to your tenant in configuration:
+## 1. Inspect the ACME surface
 
-   ```yaml
-   protocols:
-     acme:
-       enabled: true
-       tenant_id: "11111111-1111-1111-1111-111111111111"
-   ```
+Open **How machines request credentials** and read **ACME readiness and next step**.
+Check the directory, tenant binding, issuing policy, offered challenge methods, and
+account admission. In a configured deployment, the ACME toggle is:
 
-   You should see the control plane mount the directory at `/directory` and the
-   order/challenge endpoints under `/acme/...` on startup. It activates only when an
-   issuing CA is provisioned. The whole ACME and DNS-validation toolkit is described
-   in [ACME & DNS](../features/acme-and-dns.md).
+```yaml
+protocols:
+  acme:
+    enabled: true
+    tenant_id: "11111111-1111-4111-8111-111111111111"
+```
 
-2. Point a client at the directory and prove control via DNS-01. With certbot,
-   request a name (and a wildcard) using the DNS challenge:
+Use your own tenant ID. The directory is `/directory`; account and order resources
+are under `/acme/...`. The evaluation profile can offer an activation action in the
+console. Production activation is managed by startup configuration.
 
-   ```sh
-   certbot certonly \
-     --server https://trstctl.example.com/directory \
-     --preferred-challenges dns \
-     -d 'example.com' -d '*.example.com'
-   ```
+## 2. Configure DNS proof
 
-   You should see certbot publish a `_acme-challenge` TXT record, trstctl look it up
-   and confirm it, and certbot report `Successfully received certificate`. The
-   DNS-01 publish side and the propagation/preflight checks are detailed in
-   [ACME & DNS](../features/acme-and-dns.md).
+Create `/etc/letsencrypt/rfc2136.ini` on the client host, owned by the account that
+runs Certbot and readable only by that account (`chmod 600`). Replace these
+placeholders with the DNS server address and the scoped TSIG credential:
 
-3. Let trstctl pick the challenge when you don't want to. It selects the method
-   automatically (wildcards and unreachable port 80 use DNS-01, otherwise
-   HTTP-01), records a human-readable rationale per order in the audit trail,
-   and never silently degrades — the selection rules are detailed in
-   [ACME & DNS](../features/acme-and-dns.md).
+```ini
+dns_rfc2136_server = 192.0.2.53
+dns_rfc2136_port = 53
+dns_rfc2136_name = acme-client.
+dns_rfc2136_secret = <base64-TSIG-secret>
+dns_rfc2136_algorithm = HMAC-SHA512
+```
 
-4. Keep production DNS untouched with CNAME delegation. For the recommended
-   production setup, add a one-time CNAME so trstctl only ever writes in an isolated
-   validation zone:
+Certbot's DNS plugin publishes and removes the TXT proof. A server-side DNS
+provider configuration is not required when the client publishes proof for a zone
+that trstctl does not manage. Matching managed-zone policy still applies; trstctl
+must not silently bypass its CAA, method, or upstream-consent checks.
 
-   ```text
-   _acme-challenge.example.com.  CNAME  <random-subdomain>.auth.acme-dns.example.net.
-   ```
+CNAME delegation is optional. Confirm that **both** the CA validator and your
+chosen client plugin support the intended delegated update path before relying on
+it. Server-side CNAME support does not make an arbitrary client follow delegation.
+See [ACME and DNS validation](../features/acme-and-dns.md) for provider qualification.
 
-   You should see validation succeed while trstctl holds no production DNS
-   credentials. trstctl also checks CAA before signing, so only an authorized issuer
-   can mint for the name — both covered in
-   [ACME & DNS](../features/acme-and-dns.md).
+## 3. Enroll the client
 
-5. Plan renewal so the fleet doesn't stampede. trstctl publishes ACME Renewal
-   Information (ARI) per certificate — a suggested renewal window (the last third of
-   the certificate's life) that each client picks a spread-out point inside, served
-   at `GET /acme/renewal-info/{certid}`. You should see clients renew within their
-   window rather than all at once. The renewal model is described in
-   [Lifecycle & PQC](../features/lifecycle-and-pqc.md).
+Replace the directory and domain. The exact Certbot authenticator is essential;
+`--preferred-challenges dns` alone does not publish proof.
 
-6. Deploy the renewed certificate onto the thing that uses it. Getting the cert
-   is only half the job; it has to land on the server or appliance that serves it. A
-   deployment connector installs the credential on one kind of target (write to
-   nginx and reload, import into AWS Certificate Manager, update PostgreSQL/MySQL
-   TLS files, rotate RabbitMQ, push to an F5/BIG-IP, Citrix ADC/NetScaler, A10,
-   Kemp, or PAN-OS appliance) and verifies it. You should see the new certificate
-   delivered and the target reloaded. The connector set and its capability-scoped
-   sandbox are covered in
-   [Deployment connectors](../features/deployment-connectors.md).
+```sh
+certbot certonly \
+  --server https://trstctl.example.com/directory \
+  --dns-rfc2136 --dns-rfc2136-credentials /etc/letsencrypt/rfc2136.ini \
+  --preferred-challenges dns --cert-name api.example.com \
+  -d api.example.com
+```
 
-   Use the endpoint-binding lifecycle API to review one exact issuer, key-custody
-   path, destination, and effect list before any write. Put this request in
-   `endpoint-binding-plan.json`; replace the issuer with the exact configured
-   external, private, or platform CA you intend to keep using:
+Complete account/contact admission as prompted. For a wildcard, add the required
+DNS names only after checking wildcard policy and DNS-plugin support. The client
+chooses among the methods offered by the server; the server does not install a
+client authenticator for you.
 
-   ```json
-   {
-       "owner_id": "<owner-id>",
-       "identity_name": "payments.example.com",
-       "reason": "automate the reviewed payments endpoint",
-       "issuer": {
-         "source": "external",
-         "id": "corporate-digicert"
-       },
-       "target": {
-         "name": "edge/prod/payments",
-         "connector": "nginx",
-         "config": {
-           "credential_ref": "secret://connectors/nginx/edge",
-           "host": "edge-1.internal"
-         }
-       }
-   }
-   ```
+Confirm Certbot reports success, the challenge TXT record is removed, and
+**Recent domain validation** shows the method actually validated. The client files
+are under `/etc/letsencrypt/live/api.example.com/`. Inspect `cert.pem` for the exact
+subject, SANs, issuer, serial, fingerprint, and validity period. An imported or
+protocol-issued inventory row without an owner is not ownership attestation.
 
-   Preview it. This POST is read-only: the returned `preview_writes` and
-   `preview_external_effects` must both be empty.
+## 4. Install and verify the certificate
 
-   ```sh
-   trstctl-cli lifecycle endpoint-bindings preview \
-     -f endpoint-binding-plan.json > endpoint-binding-preview.json
-   jq '{ready,effect_free,issuer,target,custody,changes,queued_lifecycle_intents,recovery_steps,verification_steps,preview_writes,preview_external_effects,request_fingerprint}' \
-     endpoint-binding-preview.json
-   ```
+In the intended NGINX TLS server block, point to this client's live files:
 
-   After reviewing those exact values, copy the server fingerprint into the
-   execution body and authorize the idempotent mutation:
+```nginx
+ssl_certificate /etc/letsencrypt/live/api.example.com/fullchain.pem;
+ssl_certificate_key /etc/letsencrypt/live/api.example.com/privkey.pem;
+```
 
-   ```sh
-   jq --arg fingerprint "$(jq -r .request_fingerprint endpoint-binding-preview.json)" \
-     '. + {preview_fingerprint:$fingerprint}' \
-     endpoint-binding-plan.json > endpoint-binding-execute.json
-   trstctl-cli --idempotency-key fleet-edge-payments-1 \
-     lifecycle endpoint-bindings create -f endpoint-binding-execute.json
-   ```
+Keep private-key permissions restricted to the actual service account. Certbot's
+live paths are symlinks; do not copy dangling symlinks to another host or container.
+Test the configuration as the service will run it, then reload:
 
-   The same flow is served in the console under **Deployment connectors** and over
-   REST at `/api/v1/lifecycle/endpoint-bindings/preview` and
-   `/api/v1/lifecycle/endpoint-bindings`. The target stores non-secret metadata and
-   credential references only. When a host target declares `verify_server_name`, the
-   requested `identity_name` must be that exact DNS name. The console fills and locks
-   it from the destination; the API preview rejects a mismatch before issuance or a
-   target write. Initial issuance and renewal use the previewed issuer;
-   an unavailable issuer fails closed instead of falling back. Actual target mutation
-   still moves through `connector.deploy` outbox work; if no native registry or signed
-   plugin owns the connector, the binary records a failed worker receipt and leaves
-   the work pending. A queued receipt has zero attempts and is intent evidence only;
-   it never claims that delivery happened.
+```sh
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Use a stock client with the independently acquired issuing trust bundle. Verify
+the hostname, chain, and exact served leaf; also make an application request:
+
+```sh
+openssl s_client -connect api.example.com:443 -servername api.example.com \
+  -verify_hostname api.example.com -CAfile issuing-trust.pem -verify_return_error </dev/null
+curl --cacert issuing-trust.pem https://api.example.com/health
+openssl s_client -connect api.example.com:443 -servername api.example.com \
+  -verify_hostname api.example.com -CAfile issuing-trust.pem -verify_return_error \
+  -showcerts </dev/null > endpoint-chain.pem
+openssl x509 -in endpoint-chain.pem -noout -fingerprint -sha256
+openssl x509 -in /etc/letsencrypt/live/api.example.com/cert.pem \
+  -noout -serial -issuer -dates -fingerprint -sha256
+```
+
+The application request must return the expected result for your service. Compare
+the served certificate's fingerprint with `cert.pem`; a reload acknowledgement
+alone is insufficient.
+
+Save an executable deploy hook at
+`/etc/letsencrypt/renewal-hooks/deploy/30-trstctl-nginx`, owned by the renewal-task
+account and not writable by other users. Set mode `0700`:
+
+```sh
+#!/bin/sh
+set -eu
+# Only this lineage belongs to this NGINX deployment.
+[ "$RENEWED_LINEAGE" = /etc/letsencrypt/live/api.example.com ] || exit 0
+nginx -t
+systemctl reload nginx
+```
+
+Use absolute binary paths if your scheduler has a restricted PATH. Certbot runs a
+deploy hook after successful renewal. For a remote target, implement the target's
+authorized delivery, permission, configuration-test, and readback steps; a local
+NGINX hook does not prove delivery to an appliance.
+
+## 5. Schedule renewal and prove recovery
+
+Check whether the Certbot installation already provides a renewal timer or cron
+job. Keep one scheduler for this client state. If it provides `certbot.timer`,
+inspect its service command, trust settings, and hook environment, then enable it:
+
+```sh
+systemctl cat certbot.service certbot.timer
+sudo systemctl enable --now certbot.timer
+systemctl list-timers --all certbot.timer
+```
+
+If no scheduler is installed, create a task on the client host that runs the exact
+Certbot binary from that installation twice daily with a randomized delay:
+
+```sh
+certbot renew --cert-name api.example.com --server https://trstctl.example.com/directory
+```
+
+For systemd, create `/etc/systemd/system/trstctl-acme-renew.service` with the
+following content. Replace `/usr/bin/certbot` with `command -v certbot` from the
+environment where the DNS plugin is installed, and replace the domain/directory.
+For private directory HTTPS, add an `Environment=REQUESTS_CA_BUNDLE=...` line under
+`[Service]` pointing to the same trusted bundle used during enrollment.
+
+```ini
+[Unit]
+Description=Renew the trstctl ACME client certificate
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/certbot renew --cert-name api.example.com --server https://trstctl.example.com/directory
+```
+
+Create `/etc/systemd/system/trstctl-acme-renew.timer`:
+
+```ini
+[Unit]
+Description=Check trstctl ACME renewal twice daily
+
+[Timer]
+OnCalendar=*-*-* 00,12:00:00
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+Validate and enable these two files only when another scheduler is not already
+managing this client state:
+
+```sh
+sudo systemd-analyze verify /etc/systemd/system/trstctl-acme-renew.service /etc/systemd/system/trstctl-acme-renew.timer
+sudo systemctl daemon-reload
+sudo systemctl enable --now trstctl-acme-renew.timer
+systemctl list-timers --all trstctl-acme-renew.timer
+journalctl -u trstctl-acme-renew.service
+```
+
+Run it as the account with access to the renewal state, DNS credential file, TLS
+trust bundle, and deploy hook. Record the scheduler's next run and capture failures
+in your monitoring. Do not leave this as a command an operator must remember.
+[Certbot's renewal guide](https://eff-certbot.readthedocs.io/en/stable/using.html#automated-renewals)
+explains the installation-specific scheduler options.
+
+For a disposable test name, make one explicit smoke renewal using the same custom
+server and `--force-renewal`. Inspect the hook result and independently read the
+successor from the endpoint. This issues a real leaf; it is not an unattended test.
+Do not assume `--dry-run` against a public staging CA proves your private directory.
+
+Then observe **two naturally scheduled renewals**, including successful endpoint
+activation and application requests. A timer firing early may correctly do nothing
+because renewal is not due. ARI at `/acme/renewal-info/{certid}` supplies a suggested
+window; it does not create a scheduler. Check actual validity and ARI dates rather
+than assuming a requested short lifetime was honored.
+
+In an isolated test, make the client's DNS update unavailable for one renewal
+attempt. Confirm the failure is visible, the previous valid certificate continues
+to serve the application, and no unsuccessful renewal triggers a deploy hook.
+Restore DNS, let the scheduled task retry, and verify the exact successor and TXT
+cleanup. Never inject this fault into unrelated production DNS.
+
+## 6. Revoke and retire
+
+For planned retirement, first remove the certificate from the service or replace
+it and verify the replacement. Revoke the exact old leaf at the same directory:
+
+```sh
+certbot revoke --server https://trstctl.example.com/directory \
+  --cert-path /etc/letsencrypt/live/api.example.com/cert.pem \
+  --reason cessationofoperation --no-delete-after-revoke
+```
+
+For compromise, follow [Respond to compromise](respond-to-compromise.md), use the
+appropriate reason, and replace the compromised key. Confirm the exact serial is
+revoked in inventory and audit. Fetch the issuer's signed CRL or OCSP status and
+verify it independently. For the platform issuer, the tenant CRL is served at
+`/crl/<tenant-id>.crl`; trust its signature against the intended issuer, not merely
+its download URL. A default browser handshake does not prove revocation enforcement.
+Use a stock relying client configured to check revocation, and verify it rejects
+the revoked leaf. Some leaves do not contain a CRL distribution-point URL, so the
+client may need an explicitly supplied CRL.
+
+For a platform-issued leaf, a local rejection check against the downloaded CRL is:
+
+```sh
+curl --fail --cacert directory-trust.pem \
+  https://trstctl.example.com/crl/11111111-1111-4111-8111-111111111111.crl \
+  -o issuer.crl.pem
+openssl crl -in issuer.crl.pem -noout -verify -CAfile issuing-trust.pem
+openssl verify -CAfile issuing-trust.pem -CRLfile issuer.crl.pem -crl_check \
+  /etc/letsencrypt/live/api.example.com/cert.pem
+```
+
+Replace the tenant and trust files with the reviewed values. Require a valid CRL
+signature and a current CRL. The final command should fail with
+`certificate revoked` for the exact retired serial; an unrelated trust or expiry
+error is not revocation proof. Separately verify that the live service presents
+the intended replacement or that the retired listener is closed.
+
+Remove service references before deleting Certbot's lineage:
+
+```sh
+certbot delete --server https://trstctl.example.com/directory --cert-name api.example.com
+```
+
+Revocation alone does not stop the client from renewing. Remove this lineage's
+obsolete hook and dedicated scheduled task; preserve shared renewal tasks needed
+by other lineages. Preserve audit evidence. When no remaining certificates need
+this account, deactivate it:
+
+```sh
+certbot unregister --server https://trstctl.example.com/directory
+```
+
+Deactivation is permanent, cancels unfinished orders, and survives restart. Later
+requests with that account key receive `401 unauthorized`. If a request is still
+in flight, retry the `503` after it finishes. Deactivating an account does not
+revoke its certificates or stop a service from presenting them.
+
+## Alternative: let trstctl own issuance and deployment
+
+An endpoint binding creates a new managed identity and queues its own issuance
+and connector deployment from the explicitly selected CA. It does **not** install
+the certificate/key that Certbot just created. Choose that ownership model through
+[Preserve your existing CA](preserve-existing-ca.md) and review the exact target,
+key custody, issuer, permissions, and deployment effects before execution.
+
+A queued connector receipt has zero attempts and is intent evidence only. If no
+native registry or signed plugin owns the connector, the worker records failure;
+independent endpoint readback is still required. See
+[Deployment connectors](../features/deployment-connectors.md).
 
 ## Where next
 
