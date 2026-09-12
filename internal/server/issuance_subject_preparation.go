@@ -37,8 +37,18 @@ func generateLeafSubject(commonName string, dnsNames []string) (preparedLeafSubj
 // only a tenant-bound sealed envelope, before any CA call. Even a test recorder
 // without an outer result protector must never write plaintext key bytes.
 func (d *issuanceDispatcher) prepareLeafSubject(ctx context.Context, tenantID, ownerID, commonName string, dnsNames []string, selection endpointAuthoritySelection) (preparedLeafSubject, bool, error) {
+	return d.leafSubjectPreparation(ctx, tenantID, ownerID, commonName, dnsNames, selection, true)
+}
+
+// Recovery may open an existing preparation, but must never create a replacement
+// key for an already recorded certificate. A missing or changed binding requires
+// reconciliation, not a new signing attempt.
+func (d *issuanceDispatcher) leafSubjectPreparation(ctx context.Context, tenantID, ownerID, commonName string, dnsNames []string, selection endpointAuthoritySelection, create bool) (preparedLeafSubject, bool, error) {
 	command, durable := ctx.Value(leafCommandContextKey{}).(leafCommand)
 	if !durable {
+		if !create {
+			return preparedLeafSubject{}, false, errors.New("server: certificate deployment recovery requires its original issuance command")
+		}
 		subject, err := generateLeafSubject(commonName, dnsNames)
 		return subject, false, err
 	}
@@ -58,19 +68,28 @@ func (d *issuanceDispatcher) prepareLeafSubject(ctx context.Context, tenantID, o
 	if err != nil {
 		return preparedLeafSubject{}, false, err
 	}
-	sealed, err := command.idem.DoBound(ctx, tenantID, key, crypto.SHA256Hex(binding), func(ctx context.Context) ([]byte, error) {
-		subject, err := generateLeafSubject(commonName, dnsNames)
-		if err != nil {
-			return nil, err
+	var sealed []byte
+	if !create {
+		var found bool
+		sealed, found, err = command.idem.LookupBound(ctx, tenantID, key, crypto.SHA256Hex(binding))
+		if err == nil && !found {
+			err = errors.New("server: original subject preparation is missing or its issuance binding changed; reconcile the recorded certificate before deployment")
 		}
-		defer secret.Wipe(subject.KeyPEM)
-		plain, err := json.Marshal(subject)
-		defer secret.Wipe(plain)
-		if err != nil {
-			return nil, err
-		}
-		return sealTenantValue(ctx, d.tenantCrypto, d.connectorPayloadKey, tenantID, plain, aad)
-	})
+	} else {
+		sealed, err = command.idem.DoBound(ctx, tenantID, key, crypto.SHA256Hex(binding), func(ctx context.Context) ([]byte, error) {
+			generated, err := generateLeafSubject(commonName, dnsNames)
+			if err != nil {
+				return nil, err
+			}
+			defer secret.Wipe(generated.KeyPEM)
+			plain, err := json.Marshal(generated)
+			defer secret.Wipe(plain)
+			if err != nil {
+				return nil, err
+			}
+			return sealTenantValue(ctx, d.tenantCrypto, d.connectorPayloadKey, tenantID, plain, aad)
+		})
+	}
 	defer secret.Wipe(sealed)
 	if err != nil {
 		return preparedLeafSubject{}, false, err

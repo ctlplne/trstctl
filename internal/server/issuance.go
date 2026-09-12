@@ -512,7 +512,13 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 				return nil, err
 			}
 			if len(recovered) > 0 {
-				return []byte(recovered[len(recovered)-1].Fingerprint), nil
+				if len(recovered) != 1 {
+					return nil, errors.New("server: first issuance has multiple recorded certificates; reconcile before deployment")
+				}
+				if err := d.completeRecordedFirstLeaf(ctx, m, p, recovered[0]); err != nil {
+					return nil, err
+				}
+				return []byte(recovered[0].Fingerprint), nil
 			}
 		}
 		ident, err := d.store.GetIdentity(ctx, m.TenantID, p.IdentityID)
@@ -567,7 +573,7 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 		if err != nil {
 			return nil, err
 		}
-		if err := d.transitionDeployedWithCredential(ctx, m.TenantID, ident, p.Reason, material.CertPEM, material.KeyPEM, recorded.Fingerprint); err != nil {
+		if err := d.transitionDeployedWithCredential(ctx, m.TenantID, ident, p.Reason, cert.CertificatePEM, material.KeyPEM, recorded.Fingerprint); err != nil {
 			return nil, err
 		}
 		usage.Record(m.TenantID, usage.MeterCertificatesIssued, 1)
@@ -1113,6 +1119,13 @@ func (d *issuanceDispatcher) ensureIdentityCRL(ctx context.Context, tenantID, id
 }
 
 func (d *issuanceDispatcher) transitionDeployedWithCredential(ctx context.Context, tenantID string, ident store.Identity, reason string, certPEM, keyPEM []byte, fingerprint string) error {
+	return d.deployCredential(ctx, tenantID, ident, reason, certPEM, keyPEM, fingerprint, true)
+}
+
+// First-issuance recovery may finish issued -> deployed only. A later state has
+// already committed its transition and outbox together, or moved past this work;
+// it must not get a new credential-deploy command from the old issuance retry.
+func (d *issuanceDispatcher) deployCredential(ctx context.Context, tenantID string, ident store.Identity, reason string, certPEM, keyPEM []byte, fingerprint string, allowRedeploy bool) error {
 	connName, target := deploymentRoutingAttrs(ident.Attributes)
 	targetID := deploymentTargetID(ident.Attributes)
 	if target == "" {
@@ -1121,6 +1134,9 @@ func (d *issuanceDispatcher) transitionDeployedWithCredential(ctx context.Contex
 	state, err := d.orch.State(ctx, tenantID, ident.ID)
 	if err != nil {
 		return err
+	}
+	if !allowRedeploy && state != orchestrator.StateIssued {
+		return nil
 	}
 	if connName == "" || len(certPEM) == 0 || len(keyPEM) == 0 {
 		if state == orchestrator.StateRenewing {

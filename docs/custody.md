@@ -124,6 +124,13 @@ completes, normal retention can reclaim these preparation records. Retained
 deployment intents have their own lifetime. Historical commands that signed before
 this mechanism cannot reconstruct a lost certificate or key from a request ID.
 
+If first issuance records the certificate but cannot queue its connector deployment,
+redelivery resumes deployment with the original encrypted key and recorded public
+chain. It does not sign another certificate. Recovery refuses missing key
+preparation, changed issuer or subject binding, mismatched material, and an expired
+or revoked certificate. A deployment already queued is not queued again by this
+issuance retry. These checks do not replace verification of the actual endpoint.
+
 **Control-plane compatibility Workload API.** The production host agent now serves
 the SPIFFE Workload API on the workload's machine. Its `FetchX509SVID` generates a
 locked key before calling upward, sends only the public DER plus locally attested

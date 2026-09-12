@@ -3,14 +3,70 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"encoding/pem"
+	"errors"
 	"fmt"
+	"time"
 
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
+
+// A certificate.recorded event proves signing finished, not that the requested
+// deployment was queued. Resume that remaining phase with the original sealed
+// subject and public chain. This path never invokes a CA or generates a key.
+func (d *issuanceDispatcher) completeRecordedFirstLeaf(ctx context.Context, m orchestrator.Message, p transitionTrigger, cert store.Certificate) error {
+	ident, err := d.store.GetIdentity(ctx, m.TenantID, p.IdentityID)
+	if err != nil {
+		return fmt.Errorf("server: load identity for recorded issuance recovery: %w", err)
+	}
+	connName, _ := deploymentRoutingAttrs(ident.Attributes)
+	if ident.Status != string(orchestrator.StateIssued) || connName == "" || cert.KeyOrigin == string(custody.OriginRequester) {
+		return nil
+	}
+	if cert.TenantID != m.TenantID || cert.IssuanceIdempotencyKey != "issue:"+m.IdempotencyKey ||
+		cert.OwnerID == nil || *cert.OwnerID != ident.OwnerID ||
+		cert.Status != "active" || cert.RevokedAt != nil || cert.NotAfter == nil || !cert.NotAfter.After(time.Now()) ||
+		cert.KeyOrigin != string(custody.OriginControlPlane) || cert.KeyStorage != string(custody.StorageSealedStore) {
+		return errors.New("server: recorded certificate is not eligible for retained-key deployment recovery")
+	}
+	if err := d.admitIssuance(ctx, m, p, ident, "issue"); err != nil {
+		return err
+	}
+	selection, err := endpointIssuingAuthority(ident.Attributes)
+	if err != nil {
+		return err
+	}
+	subject, _, err := d.leafSubjectPreparation(ctx, m.TenantID, ident.OwnerID, ident.Name, []string{ident.Name}, selection, false)
+	if err != nil {
+		return err
+	}
+	key, err := secret.NewFrom(subject.KeyPEM)
+	secret.Wipe(subject.KeyPEM)
+	if err != nil {
+		return err
+	}
+	defer key.Destroy()
+	leaf, _ := pem.Decode(cert.CertificatePEM)
+	if leaf == nil || leaf.Type != "CERTIFICATE" || !bytes.Equal(leaf.Bytes, cert.CertificateDER) {
+		return errors.New("server: retained certificate chain does not match its recorded leaf")
+	}
+	if err := validateRequesterRenewalCSR(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: subject.CSRDER}), cert); err != nil {
+		return fmt.Errorf("server: retained subject does not match recorded certificate: %w", err)
+	}
+	if err := crypto.VerifyCertKeyMatchPEM(cert.CertificatePEM, key.Bytes()); err != nil {
+		return fmt.Errorf("server: retained deployment key does not match recorded certificate: %w", err)
+	}
+	return d.deployCredential(ctx, m.TenantID, ident, p.Reason, cert.CertificatePEM, key.Bytes(), cert.Fingerprint, false)
+}
 
 func recoverCertificatesByIssuanceKey(ctx context.Context, st *store.Store, log *events.Log, tenantID, key string) ([]store.Certificate, error) {
 	certs, err := st.ListCertificatesByIssuanceIdempotencyKey(ctx, tenantID, key)
