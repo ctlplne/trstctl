@@ -557,6 +557,23 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 					return err
 				}
 			}
+			if from == StateRenewing && to == StateRenewalFailed {
+				// Bind routing to the identity under the same lock as its state
+				// change. A SQL rollback followed by retry retains this event ID.
+				// Caller-supplied diagnostics are never the alert body.
+				eventID = renewalFailureEventID(tenantID, identityID, version)
+				basePayload.SideEffect.IdempotencyKey = transitionOutboxIdempotencyKey(eventID, idempotencyKey)
+				alertBody, err := renewalFailureNotification(locked, eventID)
+				if err != nil {
+					return err
+				}
+				basePayload.SideEffect.Payload = alertBody
+				basePayload.SideEffect.RequiredAgentRole = ""
+				payload, err = json.Marshal(basePayload)
+				if err != nil {
+					return err
+				}
+			}
 			ev, err := o.log.Append(ctx, events.Event{ID: eventID, Type: evType, TenantID: tenantID, Time: eventTime, SchemaVersion: schemaVersion, Data: payload})
 			if err != nil {
 				return err
@@ -756,7 +773,7 @@ func (o *Orchestrator) rewriteLifecycleOutboxFromCanonicalHistory(ctx context.Co
 		if err := json.Unmarshal(ev.Data, &payload); err != nil {
 			return fmt.Errorf("orchestrator: privacy decode %s (seq %d): %w", ev.Type, ev.Sequence, err)
 		}
-		destination, ok := sideEffectFor(payload.From, payload.To)
+		destination, ok := retainedLifecycleSideEffectFor(payload)
 		if !ok {
 			return nil
 		}
@@ -1364,7 +1381,7 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			// silently skipping (the same stance the projector takes).
 			return fmt.Errorf("orchestrator: reconcile decode %s (seq %d): %w", ev.Type, ev.Sequence, err)
 		}
-		dest, ok := sideEffectFor(pl.From, pl.To)
+		dest, ok := retainedLifecycleSideEffectFor(pl)
 		if !ok {
 			// A transition with no external effect is still reconciled: after this
 			// point the boot pass never needs to inspect it again.

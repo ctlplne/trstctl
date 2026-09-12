@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -50,8 +51,8 @@ var transitionEvents = map[edge]string{
 	{StateDeployed, StateRevoked}:  "identity.revoked",
 	{StateRenewing, StateDeployed}: "identity.renewed",
 	{StateRenewing, StateRevoked}:  "identity.revoked",
-	// A failed renewal is recorded, not papered over. No side effect: the previous
-	// certificate is still deployed and must not be re-pushed.
+	// A failed renewal notifies the operator; it never re-pushes or revokes the
+	// standing certificate.
 	{StateRenewing, StateRenewalFailed}: "identity.renewal_failed",
 	// Retry, or accept the current certificate and clear the flag, or give up.
 	// renewal_failed -> deployed carries no side effect for the same reason:
@@ -66,13 +67,14 @@ var transitionEvents = map[edge]string{
 // destination that call goes to (AN-6). Transitions absent here are purely
 // internal state changes with no side effect.
 var sideEffects = map[edge]string{
-	{StateRequested, StateIssued}:  "ca.issue",
-	{StateIssued, StateDeployed}:   "connector.deploy",
-	{StateDeployed, StateRenewing}: "ca.renew",
-	{StateRenewing, StateDeployed}: "connector.deploy",
-	{StateIssued, StateRevoked}:    "revocation.publish",
-	{StateDeployed, StateRevoked}:  "revocation.publish",
-	{StateRenewing, StateRevoked}:  "revocation.publish",
+	{StateRequested, StateIssued}:       "ca.issue",
+	{StateIssued, StateDeployed}:        "connector.deploy",
+	{StateDeployed, StateRenewing}:      "ca.renew",
+	{StateRenewing, StateDeployed}:      "connector.deploy",
+	{StateIssued, StateRevoked}:         "revocation.publish",
+	{StateDeployed, StateRevoked}:       "revocation.publish",
+	{StateRenewing, StateRevoked}:       "revocation.publish",
+	{StateRenewing, StateRenewalFailed}: notify.DestinationRenewalFailure,
 	// Retrying a renewal re-runs the CA call; the other two exits from
 	// renewal_failed deliberately have none.
 	{StateRenewalFailed, StateRenewing}: "ca.renew",

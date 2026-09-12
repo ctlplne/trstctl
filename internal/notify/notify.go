@@ -18,6 +18,8 @@ import "time"
 const (
 	// DestinationExpiry carries certificate-expiration alerts (F6).
 	DestinationExpiry = "notification.expiry"
+	// DestinationRenewalFailure carries a failed lifecycle renewal attempt.
+	DestinationRenewalFailure = "notification.renewal_failure"
 	// DestinationCTLog carries Certificate Transparency monitoring alerts
 	// (F17) — a sibling destination on the same notification surface, so the
 	// same channel integrations (Slack, Teams, email, ... F29) consume both.
@@ -67,6 +69,7 @@ const (
 	// KindCertificateExpiry marks an alert raised because a certificate is
 	// approaching expiry.
 	KindCertificateExpiry = "certificate.expiry"
+	KindRenewalFailed     = "identity.renewal_failed"
 	// KindUnexpectedIssuance marks an alert raised because a certificate was
 	// found in a CT log for a watched domain that trstctl did not expect —
 	// shadow IT or rogue issuance (F17).
@@ -145,6 +148,7 @@ type Alert struct {
 	RequestBinding       string           `json:"request_binding,omitempty"`
 	CredentialConfigured bool             `json:"credential_configured,omitempty"`
 	CertificateID        string           `json:"certificate_id,omitempty"`
+	IdentityID           string           `json:"identity_id,omitempty"`
 	Subject              string           `json:"subject,omitempty"`
 	Serial               string           `json:"serial,omitempty"`
 	NotAfter             time.Time        `json:"not_after,omitempty"`

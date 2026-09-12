@@ -54,6 +54,11 @@ three signals, tenant-isolated at the database layer:
 - **Alert before expiry.** It finds certificates inside the `alert_before` window,
   enriches the alert with the owner and approver recipients, enqueues a notification,
   stamps `alerted_at` so it doesn't nag, and emits `certificate.expiring`.
+- **Alert when a renewal attempt fails.** A transition into `renewal_failed` queues
+  one warning for the affected identity and owner. It preserves the standing
+  deployment and points the operator to rotation history, retry status, and the
+  listener's certificate and expiry. The warning does not imply the retry job has
+  ended; an existing retry can still recover automatically.
 - **The CA calendar.** CA authorities run on their own clock. A leaf that expires is a
   page; a root that expires is an outage across every leaf beneath it, and the fix — get
   a new anchor into every relying party — takes quarters, not an afternoon. So the same
@@ -88,6 +93,17 @@ tenant-scoped deployed X.509 identities, honoring `lifecycle.renew_before` and
 `ca.renew` and `notification.expiry` outbox intents rather than acting inline. It's
 integration-tested against real PostgreSQL, NATS, the signer process, and a signed
 webhook sink.
+
+Renewal-failure alerts use `notification.renewal_failure`, kind
+`identity.renewal_failed`, and certificate-lifecycle routing with `owner/<id>` and
+`identity/<id>` selectors. The lifecycle event retains the exact alert and receiver
+identity; its state projection and notification intent commit together. Worker and
+restart retries reuse that intent. Repeated failed attempts while already in
+`renewal_failed` do not create another warning; a new failure after recovery does.
+Historical failures without a retained notification are not backfilled. Raw CA and
+agent errors are excluded from the notification. Only failures recorded through
+this lifecycle transition produce this warning; consult job evidence for failures
+that have not reached a lifecycle outcome.
 
 `POST /api/v1/lifecycle/endpoint-bindings/preview` is the effect-free review path.
 The operator must choose one exact built-in, private, or external CA; the response

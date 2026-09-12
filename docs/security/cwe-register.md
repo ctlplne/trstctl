@@ -62,9 +62,9 @@ not this file.
 | `cmd/trstctl-agent/bootstrap_token_test.go:96` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `cmd/trstctl/main_test.go:445` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/demo/demo_test.go:233` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/deploycheck_test.go:1483` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/deploycheck_test.go:1485` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `deploy/deploycheck_test.go:1505` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/deploycheck_test.go:1511` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/deploycheck_test.go:1513` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `deploy/deploycheck_test.go:1533` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/docker/dist_test.go:386` | names are non-secret evaluation OIDC configuration keys (CWE-798) |
 | `deploy/helm/helm_test.go:164` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/helm/helm_test.go:600` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -222,7 +222,7 @@ not this file.
 | `internal/dns/ultradns/ultradns_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/kms/gcpkms/gcpkms_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/mcpserver/mcpserver_test.go:82` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/notify/notify.go:76` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/notify/notify.go:79` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/notify/webhook/webhook_test.go:23` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/operator/client.go:37` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/operator/reconcile_test.go:312` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -645,7 +645,7 @@ not this file.
 | `docs/ai_surface_placement_test.go:27` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/deferred_wipe_guard_test.go:45` | walking the repo's own tree (CWE-22) |
 | `docs/docs_test.go:2568` | test walks the repo's own checkout; no hostile symlink exposure (CWE-367) |
-| `docs/embedded_postgres_teardown_test.go:43` | walks this repository's own test sources (CWE-22) |
+| `docs/embedded_postgres_teardown_test.go:46` | walks this repository's own test sources (CWE-22) |
 | `docs/est_differential_test.go:190` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_completeness_test.go:261` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:876` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
@@ -926,7 +926,7 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:189` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/secret_third_party_scan_served_test.go:154` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_rotation_served_test.go:2556` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2297` | served CA certificate directory; the PEM is public material (CWE-276) |
+| `internal/server/server.go:2300` | served CA certificate directory; the PEM is public material (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:24` | the loose mode IS the attack fixture this test defends against (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:56` | the wide mode IS the precondition this test proves gets narrowed (CWE-276) |
 | `internal/tsa/http_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
@@ -1015,13 +1015,13 @@ not this file.
 | `deploy/deploycheck_test.go:690` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/deploycheck_test.go:759` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/deploycheck_test.go:847` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:977` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:983` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:989` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:1052` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:1142` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:1325` | test reads its own fixture/tempdir path (CWE-22) |
-| `deploy/deploycheck_test.go:1569` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:1005` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:1011` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:1017` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:1080` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:1170` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:1353` | test reads its own fixture/tempdir path (CWE-22) |
+| `deploy/deploycheck_test.go:1597` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/docker/context_size_test.go:28` | fixed filename below this test's private t.TempDir (CWE-22). |
 | `deploy/docker/dist_test.go:25` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/docker/dist_test.go:1124` | test reads its own fixture/tempdir path (CWE-22) |
@@ -1045,7 +1045,7 @@ not this file.
 | `docs/deferred_wipe_guard_test.go:45` | walking the repo's own tree (CWE-22) |
 | `docs/docker_acceptance_deadline_test.go:22` | test reads a fixed repository path (CWE-22) |
 | `docs/doctor_doc_test.go:32` | fixed literal list of the repo's own committed doctor sources; no external input reaches this path (CWE-22) |
-| `docs/embedded_postgres_teardown_test.go:43` | walks this repository's own test sources (CWE-22) |
+| `docs/embedded_postgres_teardown_test.go:46` | walks this repository's own test sources (CWE-22) |
 | `docs/est_differential_test.go:190` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/nolint_gosec_guard_test.go:90` | test reads a path listed by this repository's own git index (CWE-22) |
 | `docs/operational_transfer_test.go:64` | test reads its own fixture/tempdir path (CWE-22) |
@@ -1247,8 +1247,8 @@ not this file.
 | `internal/server/serve_test.go:80` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:81` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:125` | test-owned path under t.TempDir (CWE-22) |
-| `internal/server/server.go:2224` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/server.go:2301` | same operator-configured directory as the target certificate (CWE-22) |
+| `internal/server/server.go:2227` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/server.go:2304` | same operator-configured directory as the target certificate (CWE-22) |
 | `internal/signing/design_test.go:30` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/design_test.go:136` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/gated_destruction_journal.go:226` | exact signer-owned journal path. |
@@ -1427,7 +1427,7 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:574` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_scan_served_test.go:27` | isolated executable test fixture |
 | `internal/server/secrets_scan_served_test.go:157` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2307` | served CA certificate PEM is public material (CWE-276) |
+| `internal/server/server.go:2310` | served CA certificate PEM is public material (CWE-276) |
 | `internal/server/signer_authorization_test.go:132` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/ssh_journey_served_test.go:262` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |

@@ -317,6 +317,34 @@ func TestDispatchResolvesEffectivePolicyWhenAlertDoesNotNameOne(t *testing.T) {
 	}
 }
 
+func TestRenewalFailureRoutesToItsIdentityAndKeepsOneReceiverReceipt(t *testing.T) {
+	channel := &capturingNotifier{name: "pagerduty"}
+	d := notify.NewDispatcher(channel)
+	d.SetDeliveryReceiptLedger(newMemoryDeliveryLedger())
+	resolver := &effectiveRoutingResolver{policy: notify.RoutingPolicy{
+		TenantID: "t1", ID: "renewal-route", ScopeKind: "owner", ScopeRef: "owner/platform",
+		ChannelsBySeverity: map[string][]string{notify.AlertSeverityWarning: {"pagerduty"}},
+	}}
+	d.SetPolicyResolver(resolver)
+	alert := notify.Alert{Kind: notify.KindRenewalFailed, TenantID: "t1", IdentityID: "identity-payments",
+		Subject: "payments.example.test", OwnerID: "platform", OperationID: "renewal-failure:event-a",
+		Severity: notify.AlertSeverityWarning, Detail: "Check retry status."}
+	payload, _ := json.Marshal(alert)
+	message := notify.DeliveryMessage{TenantID: "t1", Destination: notify.DestinationRenewalFailure,
+		IdempotencyKey: "event-a", Payload: payload, OutboxID: 91, Attempts: 1}
+	for range 2 {
+		if err := d.DispatchMessage(context.Background(), message); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if resolver.gotTenantID != "t1" || resolver.gotSelector.Workspace != "certificate-lifecycle" || resolver.gotSelector.OwnerRef != "owner/platform" || resolver.gotSelector.AssetRef != "identity/identity-payments" {
+		t.Fatalf("failure alert routing: tenant=%s selector=%+v", resolver.gotTenantID, resolver.gotSelector)
+	}
+	if len(channel.got) != 1 || !strings.HasPrefix(notify.FormatMessage(alert), "Certificate renewal attempt failed: payments.example.test") {
+		t.Fatalf("expected one clearly named failure alert, received %d", len(channel.got))
+	}
+}
+
 func TestDispatchDedupsThresholdPerSubjectThresholdChannel(t *testing.T) {
 	email := &capturingNotifier{name: "email"}
 	slack := &capturingNotifier{name: "slack"}

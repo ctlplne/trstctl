@@ -2,7 +2,11 @@
 
 package orchestrator
 
-import "testing"
+import (
+	"testing"
+
+	"trstctl.com/trstctl/internal/notify"
+)
 
 // TestFailedRenewalHasANonDestructiveExit is the regression guard for the
 // lifecycle wedge.
@@ -13,17 +17,15 @@ import "testing"
 // no good one — re-deploy a certificate that was never renewed, revoke a
 // perfectly valid credential, or sit in renewing forever.
 //
-// renewal_failed is the fourth: a recorded outcome that touches nothing outside
-// the control plane, because the previous certificate is still deployed and still
-// valid.
+// renewal_failed is the fourth: a recorded outcome that alerts the operator
+// without replacing or revoking the standing certificate.
 func TestFailedRenewalHasANonDestructiveExit(t *testing.T) {
 	if !CanTransition(StateRenewing, StateRenewalFailed) {
 		t.Fatal("a renewal cannot be recorded as failed; the only exits from renewing still " +
 			"re-deploy or revoke")
 	}
-	if dest, ok := sideEffectFor(StateRenewing, StateRenewalFailed); ok {
-		t.Errorf("recording a failed renewal fires the external side effect %q; nothing was "+
-			"issued, so there is nothing to deploy", dest)
+	if dest, ok := sideEffectFor(StateRenewing, StateRenewalFailed); !ok || dest != notify.DestinationRenewalFailure {
+		t.Errorf("recording failure must only notify, got destination %q (present=%v)", dest, ok)
 	}
 	if _, ok := EventTypeFor(StateRenewing, StateRenewalFailed); !ok {
 		t.Error("the transition emits no event, so a failed renewal leaves no audit record")

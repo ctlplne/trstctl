@@ -486,7 +486,7 @@ func (d *Dispatcher) effectiveChannels(ctx context.Context, alert Alert) ([]Noti
 func routingSelectorForAlert(alert Alert) RoutingSelector {
 	selector := RoutingSelector{}
 	switch alert.Kind {
-	case KindCertificateExpiry:
+	case KindCertificateExpiry, KindRenewalFailed:
 		selector.Workspace = "certificate-lifecycle"
 	default:
 		selector.Workspace = "trust-operations"
@@ -496,6 +496,8 @@ func routingSelectorForAlert(alert Alert) RoutingSelector {
 	}
 	if id := strings.TrimSpace(alert.CertificateID); id != "" {
 		selector.AssetRef = "certificate/" + id
+	} else if id := strings.TrimSpace(alert.IdentityID); id != "" {
+		selector.AssetRef = "identity/" + id
 	}
 	return selector
 }
@@ -614,6 +616,8 @@ func FormatMessage(a Alert) string {
 	switch a.Kind {
 	case KindCertificateExpiry:
 		b.WriteString("Certificate expiring")
+	case KindRenewalFailed:
+		b.WriteString("Certificate renewal attempt failed")
 	case KindUnexpectedIssuance:
 		b.WriteString("Unexpected certificate issuance")
 	case KindCredentialDrift:
