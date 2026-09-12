@@ -807,6 +807,29 @@ describe("discovery control-plane surface", () => {
     expect(within(findingsSection as HTMLElement).queryByText("github:user/payments-ci/pat")).not.toBeInTheDocument();
   });
 
+  it.each([
+    [{ subject: "CN=caddy.example.test", sans: ["caddy.example.test"] }, "caddy.example.test"],
+    [{ subject: "CN=caddy.example.test", sans: ["caddy.example.test", "caddy.example.test"] }, "caddy.example.test"],
+    [{ subject: "CN=multi.example.test", sans: ["one.example.test", "two.example.test"] }, "CN=multi.example.test"],
+    [{ subject: "CN=unknown.example.test", sans: [{ name: "untyped.example.test" }] }, "CN=unknown.example.test"],
+  ])("suggests a certificate identity from unambiguous name evidence %j", async (metadata, expected) => {
+    const findings = await apiMock.discoveryFindings.getMockImplementation()?.();
+    apiMock.discoveryFindings.mockResolvedValue({
+      ...findings,
+      items: findings.items.map((f: { id: string }) => (f.id === "finding-1" ? { ...f, metadata } : f)),
+    });
+    const user = userEvent.setup();
+    renderDiscovery();
+    const row = (await screen.findByText("10.0.0.10:443")).closest("tr")!;
+    await user.click(within(row).getByRole("button", { name: "Review finding" }));
+    const panel = screen.getByRole("heading", { name: "Finding detail" }).closest("aside")!;
+    await user.click(within(panel).getByRole("button", { name: "Claim" }));
+    await user.click(screen.getByRole("button", { name: "Create identity from this finding" }));
+    expect(screen.getByLabelText("Identity name")).toHaveValue(expected);
+    await user.click(screen.getByRole("button", { name: "Create and select identity" }));
+    expect(apiMock.createIdentity).toHaveBeenCalledWith(expect.objectContaining({ name: expected, kind: "x509_certificate" }));
+  });
+
   it("creates and selects a managed identity from a finding without exposing a UUID field", async () => {
     const user = userEvent.setup();
     renderDiscovery();

@@ -10,6 +10,7 @@ import { SourceActivityCell, SourceFindingsCell, sourceActivityByID, type Source
 import { ADCSSourceFields, parseADCSEnrollmentEndpoints, parseADCSPrivateEgressCIDRs } from "./discovery/ADCSSourceFields";
 import { DiscoveryRunScopeNotice } from "./discovery/DiscoveryRunScopeNotice";
 import { SourceSetup } from "./discovery/SourceSetup";
+import { suggestedIdentityName } from "./discovery/identityName";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -2891,10 +2892,6 @@ function identityKindForFinding(kind: string): Identity["kind"] {
     default:
       return "workload_identity";
   }
-}
-
-function suggestedIdentityName(finding: DiscoveryFinding): string {
-  return metadataString(finding.metadata, ["principal", "subject", "service", "name"]) || finding.ref;
 }
 
 function identityKindLabel(t: (key: MessageKey) => string, kind: Identity["kind"]): string {

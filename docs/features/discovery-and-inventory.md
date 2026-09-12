@@ -419,6 +419,14 @@ operator's job, not the database feature underneath it. Its default reading orde
 2. **Credentials to review** — one plain-language row action opens the finding.
 3. **Claim** — the main next step turns a reviewed finding into managed inventory.
 
+When creating an identity from a TLS finding with one distinct observed subject
+alternative name, the console suggests that name rather than the certificate's
+full distinguished name such as `CN=web.example.com`. This lets endpoint enrollment
+reuse the requested identity for the same hostname and owner. The name remains
+editable; when a certificate has multiple names, review which endpoint this
+identity represents before creating it. Creation and claiming do not issue or
+deploy a certificate.
+
 Less-common rotate, revoke, decommission, remediate, and dismiss actions are grouped
 under **More actions**. Exact fingerprints, internal finding/source/run IDs,
 provenance, evidence references, raw kinds, the shadow-NHI projection, CT monitoring,
