@@ -4665,6 +4665,12 @@ const esESCatalog = {
   "connectors.binding.preview": "Crear previsualización segura",
   "connectors.binding.previewing": "Creando previsualización…",
   "connectors.binding.action": "Acción del certificado",
+  // Machine-authored translations: human review required before release.
+  "connectors.binding.authorized": "Trabajo autorizado",
+  "connectors.binding.authorizedHelp":
+    "Se solicitaron la emisión y el despliegue. Revisa la nueva identidad y las pruebas de entrega; después, verifica el servicio en vivo. El trabajo en cola no demuestra que se haya completado.",
+  "connectors.binding.reviewNewIdentity": "Revisar nueva identidad",
+  "connectors.binding.reviewOriginalIdentity": "Revisar identidad original",
   "connectors.binding.enrollAction": "Incorporar un endpoint",
   "connectors.binding.replaceAction": "Reemplazar un certificado gestionado",
   "connectors.binding.original": "Identidad original",

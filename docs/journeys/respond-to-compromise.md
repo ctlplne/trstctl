@@ -12,142 +12,156 @@
 
 ## Goal
 
-When you finish this journey you will have contained a compromised credential:
-the leaked certificate revoked and visible as `revoked` on the served surface, a
-replacement issued and deployed, and the whole response captured as a sealed,
-tamper-evident evidence pack. It is for the on-call operator who learned that a
-private key leaked, a certificate was mis-issued, or a CA may be compromised, and
-needs to act safely under pressure. In plain terms: you preserve evidence, find
-everything the bad credential can reach, replace-then-revoke in the right order so
-you do not cause an outage, and — when a second person must sign off — gate the
-action behind an approval.
+Replace a compromised leaf credential, revoke the exact affected certificates at
+their issuing authority, verify the workload and revocation outcome, and retain a
+checkable incident timeline. A compromised CA requires a separate fleet response
+that also replaces trust. Choose the response scope before authorizing work.
 
-> **In the console:** the `/incidents` screen runs this whole response — a served
-> blast-radius preview for the compromised identity, replacement-before-revoke
-> execution with the resulting evidence, and a break-glass reconciliation panel. See
-> [The web console](../web-console.md).
+Replacement-before-revocation keeps a working credential available while the new
+one is installed. It does not guarantee uninterrupted service or contain an active
+attacker during that overlap. The incident lead must decide whether immediate
+revocation and service isolation are necessary.
 
 ## Before you start
 
-- A running control plane and an API token, set up in
-  [Getting started](../getting-started.md). Containment is a privileged action, so
-  your principal needs issuance authority (the bootstrap token deliberately
-  withholds it).
-- The inspected public CA bundle from Getting started exported as
-  `TRSTCTL_CA_FILE`; incident pressure is not permission to disable TLS checks.
-- Know which credential is affected. The blast-radius and revocation surfaces are
-  described in [Incident response & just-in-time access](../features/incident-and-jit.md)
-  and [Issuance & certificate authorities](../features/issuance-and-cas.md).
-- Have the [incident-response runbook](../runbooks/incident-response.md) open — this
-  journey is the happy-path version of it.
+- Use an authenticated operator with the permissions required by each reviewed
+  action. The bootstrap token is deliberately insufficient for issuance.
+- Keep the inspected CA bundle configured as `TRSTCTL_CA_FILE`, as described in
+  [Getting started](../getting-started.md).
+- Record the affected certificate ID, serial, fingerprint, issuing authority,
+  managing identity, owner, and deployment destination. Certificate IDs and
+  identity IDs name different records; a shared DNS name is not an exact binding.
+- For replacement, have an enabled destination, its enrolled agent or supported
+  executor, and an available issuing CA. Preserve your existing CA unless it is
+  itself compromised or your response explicitly requires a different one.
+- Fleet re-issuance additionally requires an active incident-response entitlement,
+  the compromised issuer in the served issuer catalog, an active signer-backed
+  replacement authority, exact enrolled agents and trust paths, and a rollback
+  reference. A license does not create these prerequisites.
 
-## Steps
+## 1. Preserve evidence and identify affected resources
 
-1. Declare the incident and preserve evidence first. Before changing anything,
-   take a full backup — the event log inside it is the immutable forensic record:
+Assign an incident lead and record the exposure window. Follow the
+[incident-response runbook](../runbooks/incident-response.md) to capture safe
+support diagnostics and a full backup without delaying urgent containment. Export
+the incident audit window and retain its independently pinned verification key.
 
-   ```sh
-   trstctl --full-backup-dir=/backups/incident-$(date +%F)
-   ```
+In **Certificates**, find the exact certificate and open its details. **View in
+credential graph** scopes that certificate; **Start incident response** uses its
+exact managing identity when one is recorded. Inspect affected resources and
+owners. If no exact managing identity is available, resolve that binding before
+using identity-wide actions.
 
-   You should see a confirmation that the full backup was written. Keep it; you can
-   restore from it later (see the [disaster-recovery runbook](../disaster-recovery.md)).
+The equivalent certificate graph read uses the actual inventory ID:
 
-2. Scope the blast radius. Find the affected credential and everything that
-   depends on it — read-only, so it changes nothing:
+```sh
+trstctl-cli graph blast-radius "cert:${CERTIFICATE_ID}"
+```
 
-   ```sh
-   trstctl-cli graph blast-radius cert:payments-tls
-   ```
+## 2. Replace one leaf credential
 
-   You should see the affected resources grouped by kind. This is the same
-   [credential graph](../features/incident-and-jit.md) the served incident workflow
-   reads before it acts.
+Use this path when the leaf key or certificate is affected and its issuing CA is
+still trusted:
 
-3. Run the served containment workflow. For a single leaked identity, the served
-   workflow replaces-then-revokes idempotently — it issues and deploys a replacement
-   first, then revokes the compromised credential, so nothing goes dark mid-incident.
-   Put the details in a JSON file:
+1. Open **Operations → Where credentials are installed → Destinations and safe
+   actions**. Choose **Replace a managed certificate**, the enabled destination,
+   and its exact original identity. Confirm the retained DNS name and owner, and
+   enter the incident reason.
+2. Choose the exact issuing CA. The wizard has no implicit CA default. Review the
+   preview's original identity, destination revision, key custody, queued effects,
+   recovery steps, and independent verification requirements.
+3. Authorize issuance and deployment. This creates a separate successor identity;
+   the original's renewal is held during the handoff. Acceptance is not proof of
+   completed delivery. Inspect the successor's lifecycle and connector receipts,
+   including failures and retries.
+4. Open a fresh connection from the workload's client network. Verify the DNS name,
+   chain, new serial and fingerprint, and expected application response. Compare
+   that fingerprint with the successor's exact inventory and delivery evidence.
+   Follow [Deployment connectors](../features/deployment-connectors.md) for the
+   execution and rollback limits of the selected connector.
+5. After that proof, review **Revoke** on the original managing identity. Confirm
+   its exact ID and reason. Identity-wide revocation can include historical and
+   undelivered certificates; the successor must remain a separate identity.
+   Revocation is asynchronous. Follow the authority result as described below.
 
-   ```json
-   {
-     "identity_id": "11111111-1111-1111-1111-111111111111",
-     "reason": "private key export detected",
-     "replacement_name": "payments-api-incident-replacement",
-     "connector": "nginx",
-     "target": "edge/prod/payments",
-     "delivery_rollback_ref": "restore previous fullchain"
-   }
-   ```
+The endpoint replacement workflow authorizes issuance and deployment. It does
+**not** automatically complete the operator's subsequent revocation and retirement
+steps. Keep the incident open until those steps and their evidence are complete.
+The [existing-CA journey](preserve-existing-ca.md#8-verify-revocation-and-retirement)
+contains the equivalent reviewed CLI transitions and external-issuer limits.
 
-   ```sh
-   trstctl-cli incidents executions execute -f incident.json
-   ```
+## 3. Replace a compromised CA across its fleet
 
-   You should get back an execution with a replacement id, a revocation-queue status,
-   a connector delivery receipt, and a sealed audit bundle. The order is deliberate —
-   do not shortcut it.
+Use **Security incidents → Fleet re-issuance** for CA compromise. Select the
+compromised issuer and clean replacement authority, then assign every affected
+active identity to an exact enrolled agent and public trust-anchor path in ordered
+waves. Review the complete scope, canary order, mode and rollback reference before
+starting. A single leaked leaf is not permission to replace an entire issuer fleet.
 
-4. Confirm the revocation is live. Transitioning to revoked marks the certificate
-   `revoked` in inventory and updates the published revocation status. Read it back:
+Each wave installs replacement trust, requires signed host readback, issues from a
+host-generated CSR, deploys the successor, and requires signed live-listener proof
+before revoking the exact predecessor. Revocation receipts must arrive before the
+next wave starts. A failed proof gate restores the current unrevoked wave; completed
+waves with revoked predecessors are not rolled back to those credentials.
 
-   ```sh
-   trstctl-cli certificates get 11111111-1111-1111-1111-111111111111
-   ```
+The served CLI family is `trstctl-cli incidents fleet-reissuance
+start|list|get|pause|resume|rollback|evidence`. For its request fields, game-day
+restrictions, and signed evidence contract, see
+[Fleet re-issuance for CA compromise](../features/incident-and-jit.md#fleet-re-issuance-for-ca-compromise-f32).
 
-   You should see `status` read `"revoked"` with a `revoked_at` timestamp. Relying
-   parties checking the served OCSP responder at `/ocsp/{tenant}` now get `revoked`,
-   and the serial appears on the tenant CRL at `/crl/{tenant}` within the freshness
-   window. The full revocation surface is in
-   [Issuance & certificate authorities](../features/issuance-and-cas.md).
+The former `trstctl-cli incidents executions execute` mutation is retired. Do not
+use it for new containment. Historical execution reads remain available. An
+unconfigured or unlicensed deployment must not be treated as a completed fleet run.
 
-5. Retrieve the sealed evidence pack. Pull the recorded execution for your
-   post-incident review:
+## 4. Prove revocation, then retire the predecessor
 
-   ```sh
-   trstctl-cli incidents executions get 22222222-2222-2222-2222-222222222222
-   ```
+Read the exact original certificate and identity independently:
 
-   You should see the immutable evidence pack — replacement id, revocation status,
-   delivery receipt, failed-target list, rollback references, and the sealed audit
-   bundle.
+```sh
+trstctl-cli certificates get "$CERTIFICATE_ID"
+trstctl-cli identities get "$IDENTITY_ID"
+```
 
-6. If the action needs a second pair of eyes (break-glass / JIT). When dual
-   control is enabled, a privileged issue or revoke is denied until a **distinct**
-   approver signs off — a self-approval is rejected. The requester opens the request;
-   a second operator approves it:
+The identity's `revoked` state acknowledges lifecycle intent. Confirm the exact
+certificate inventory status and the issuing authority's acceptance of its serial
+and reason. For trstctl-issued certificates, check the signed tenant CRL and OCSP
+response. For external certificates, check the external authority; trstctl's own
+CA revocation ledger does not prove an external serial was revoked.
 
-   ```sh
-   curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST \
-     -H "Authorization: Bearer $TRSTCTL_TOKEN" \
-     -H "Content-Type: application/json" \
-     -d '{}' \
-     https://localhost:8443/api/v1/identities/11111111-1111-1111-1111-111111111111/approvals
-   ```
+Where the authority publishes CRL or OCSP data, verify its signature and use a
+client configured to enforce revocation to prove rejection. An ordinary successful
+TLS handshake does not establish revocation status. Record unsupported adapters,
+authority publication limits, client enforcement limits, and any manual CA action
+as gaps in automation.
 
-   You should see the approval recorded; the action proceeds only once a distinct
-   approver has signed off. The four-eyes and just-in-time model is described in
-   [Incident response & just-in-time access](../features/incident-and-jit.md).
+Verify the workload still serves the successor. Review **Retire** on the original
+identity only after revocation is confirmed. Retirement stops its future lifecycle
+work and retains its history; it does not replace revocation. Never restore a
+compromised or revoked predecessor. See the existing-CA journey for rollback
+checks, in-flight operation limits, and required control-plane/agent versions.
 
-7. Use brokered access instead of standing credentials. If the responder needs to
-   inspect a database or host, open a short-lived privileged-access session instead of
-   sharing a long-lived password or SSH key:
+## 5. Close the response with evidence
 
-   ```sh
-   curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST \
-     -H "Authorization: Bearer $TRSTCTL_TOKEN" \
-     -H "Idempotency-Key: incident-2026-06-25-db-readonly" \
-     -H "Content-Type: application/json" \
-     -d '{"target_type":"postgres","target_id":"pg-main","role":"readonly","reason":"production incident 42","method":"k8s_sat","payload_base64":"...","ttl_seconds":900}' \
-     https://localhost:8443/api/v1/access/sessions
-   ```
+Retain the before and after certificates, exact original/successor bindings,
+reviewed plans, issuance and delivery results, independent listener checks,
+authority revocation receipts, retirement event, and the incident audit export.
+Verify the export offline using
+[the audit verification procedure](../cli.md#verify-audit-exports-offline), and
+record whether a timestamp anchor was available. A signed export is not proof
+that an omitted lifecycle step happened. Fleet runs also provide their dedicated
+signed evidence export; an endpoint replacement does not create a legacy incident
+execution pack.
 
-   You should receive a session id, an expiry, and a one-time credential. Audit readers
-   can later filter `pam.session.started` and `pam.session.expired`; after expiry the
-   database role is revoked or the SSH certificate is past its validity window.
+If policy requires another approver, obtain the distinct operator's approval
+before the privileged action. Use the configured break-glass quorum or short-lived
+brokered access when needed; neither removes the need to inspect the actual
+outcome. Follow [Incident response and just-in-time access](../features/incident-and-jit.md)
+for those separate workflows. Confirm delivery failures and outstanding owner
+notifications are resolved before closing the incident.
 
 ## Where next
 
+- [Keep your existing CA](preserve-existing-ca.md)
 - [Run trstctl in production](run-in-production.md)
 - [Getting started](../getting-started.md)
 

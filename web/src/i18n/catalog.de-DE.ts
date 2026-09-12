@@ -4712,6 +4712,12 @@ const deDECatalog = {
   "connectors.binding.preview": "Sichere Vorschau erstellen",
   "connectors.binding.previewing": "Vorschau wird erstellt…",
   "connectors.binding.action": "Zertifikatsaktion",
+  // Machine-authored translations: human review required before release.
+  "connectors.binding.authorized": "Arbeit autorisiert",
+  "connectors.binding.authorizedHelp":
+    "Ausstellung und Bereitstellung wurden angefordert. Prüfen Sie die neue Identität und die Zustellnachweise und danach den laufenden Dienst. Eingereihte Arbeit ist kein Nachweis für den Abschluss.",
+  "connectors.binding.reviewNewIdentity": "Neue Identität prüfen",
+  "connectors.binding.reviewOriginalIdentity": "Ursprüngliche Identität prüfen",
   "connectors.binding.enrollAction": "Endpunkt aufnehmen",
   "connectors.binding.replaceAction": "Verwaltetes Zertifikat ersetzen",
   "connectors.binding.original": "Ursprüngliche Identität",

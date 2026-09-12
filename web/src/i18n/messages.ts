@@ -13707,6 +13707,20 @@ export const messages = {
     description: "Endpoint preview invariant refusal.",
   },
   "connectors.binding.previewReady": { defaultMessage: "Ready to authorize — nothing changed", description: "Successful endpoint lifecycle preview title." },
+  "connectors.binding.authorized": { defaultMessage: "Work authorized", description: "Endpoint lifecycle execution accepted; not a delivery-success claim." },
+  "connectors.binding.authorizedHelp": {
+    defaultMessage:
+      "Issuance and deployment were requested. Review the new identity and delivery evidence, then verify the live endpoint. Queued work is not proof of completion.",
+    description: "Next steps after endpoint lifecycle authorization; queued work is not proof of completion.",
+  },
+  "connectors.binding.reviewNewIdentity": {
+    defaultMessage: "Review new identity",
+    description: "Read-only link to the exact identity returned by endpoint enrollment or replacement.",
+  },
+  "connectors.binding.reviewOriginalIdentity": {
+    defaultMessage: "Review original identity",
+    description: "Read-only link to the exact replaced identity for subsequent reviewed revocation and retirement.",
+  },
   "connectors.binding.zeroEffect": {
     defaultMessage: "The preview wrote no records, called no CA, and contacted no destination. Execute is bound to this exact fingerprint.",
     description: "Endpoint preview zero-effect boundary.",

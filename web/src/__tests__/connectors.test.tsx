@@ -491,6 +491,11 @@ describe("connector deployment disclosure surface", () => {
     await user.click(screen.getByRole("button", { name: "Authorize issuance and deployment" }));
     await waitFor(() => expect(apiMock.createEndpointBinding).toHaveBeenCalledWith({ ...expected, preview_fingerprint: "sha256:exact-endpoint-plan" }));
     expect(await screen.findByText(/then revoke and retire original identity identity-original/)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Ready to authorize — nothing changed" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Work authorized" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Review new identity" })).toHaveAttribute("href", "/identities?identity=identity-bound");
+    expect(screen.getByRole("link", { name: "Review original identity" })).toHaveAttribute("href", "/identities?identity=identity-original");
+    expect(screen.queryByText(/endpoint-binding:/)).not.toBeInTheDocument();
   });
 
   it("creates and operates a served connector target", async () => {

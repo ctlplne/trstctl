@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
@@ -373,8 +374,8 @@ export function EndpointBindingWorkflow({
         {step === 2 && preview ? (
           <div className="grid gap-4">
             <div className="rounded-control border border-status-success/30 bg-status-success/10 p-4">
-              <h3 className="font-semibold">{t("connectors.binding.previewReady")}</h3>
-              <p className="mt-1 text-sm text-muted-foreground">{t("connectors.binding.zeroEffect")}</p>
+              <h3 className="font-semibold">{t(completed ? "connectors.binding.authorized" : "connectors.binding.previewReady")}</h3>
+              <p className="mt-1 text-sm text-muted-foreground">{t(completed ? "connectors.binding.authorizedHelp" : "connectors.binding.zeroEffect")}</p>
             </div>
             <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
               <Fact label={t("connectors.binding.destination")} value={`${preview.target.name} — ${preview.target.connector}`} />
@@ -386,8 +387,8 @@ export function EndpointBindingWorkflow({
             {preview.replaced_identity ? (
               <Fact label={t("connectors.binding.original")} value={`${preview.replaced_identity.name} — ${preview.replaced_identity.id}`} />
             ) : null}
-            <ReviewList title={t("connectors.binding.changes")} items={preview.changes} />
-            <ReviewList title={t("connectors.binding.queuedEffects")} items={preview.queued_lifecycle_intents} mono />
+            {!completed && <ReviewList title={t("connectors.binding.changes")} items={preview.changes} />}
+            {!completed && <ReviewList title={t("connectors.binding.queuedEffects")} items={preview.queued_lifecycle_intents} mono />}
             <ReviewList title={t("connectors.binding.recovery")} items={preview.recovery_steps} />
             <ReviewList title={t("connectors.binding.verification")} items={preview.verification_steps} />
             <details className="rounded-control border border-border p-3 text-sm">
@@ -400,11 +401,23 @@ export function EndpointBindingWorkflow({
               </dl>
             </details>
             {completed ? (
-              <p role="status" className="rounded-control border border-status-success/30 bg-status-success/10 p-3 text-sm font-medium">
-                {completed.replaced_identity_id
-                  ? t("connectors.binding.replacementQueued", { name: completed.identity.name, id: completed.replaced_identity_id })
-                  : t("connectors.binding.queued", { name: completed.identity.name })}
-              </p>
+              <div className="grid gap-3 rounded-control border border-border p-3 text-sm">
+                <p role="status" className="font-medium">
+                  {completed.replaced_identity_id
+                    ? t("connectors.binding.replacementQueued", { name: completed.identity.name, id: completed.replaced_identity_id })
+                    : t("connectors.binding.queued", { name: completed.identity.name })}
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <Link className="font-medium text-primary underline" to={`/identities?identity=${encodeURIComponent(completed.identity.id)}`}>
+                    {t("connectors.binding.reviewNewIdentity")}
+                  </Link>
+                  {completed.replaced_identity_id ? (
+                    <Link className="font-medium text-primary underline" to={`/identities?identity=${encodeURIComponent(completed.replaced_identity_id)}`}>
+                      {t("connectors.binding.reviewOriginalIdentity")}
+                    </Link>
+                  ) : null}
+                </div>
+              </div>
             ) : (
               <Button type="button" onClick={() => void execute()} disabled={Boolean(busy)}>
                 {busy === "execute" ? t("connectors.binding.queueing") : t("connectors.binding.authorize")}

@@ -478,7 +478,7 @@ export function Connectors() {
                 targets={targets}
                 identities={identities}
                 onComplete={async (binding, bindingReason) => {
-                  setActionResult(`endpoint-binding:${binding.identity.status}:${binding.renewal_intent}`);
+                  setActionResult(null);
                   setSelectedTarget(binding.target.id);
                   setSelectedIdentity(binding.identity.id);
                   setReason(bindingReason);

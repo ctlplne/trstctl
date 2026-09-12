@@ -1522,8 +1522,11 @@ describe("i18n boundary", () => {
       // es/de require HUMAN TRANSLATION REVIEW BEFORE RELEASE.
       // Browser lifecycle repair: explicit identity review and revocation labels.
       // Machine-authored es/de require HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "da54936a59584bf57239ba4bafd6761ce4cb925014854b5119131a727bb23736",
-      "de-DE": "834bccd6f31a470d7783812fa4fb0a0f3c6e66d2f57454e166af7c81bb4a7cdf",
+      // Endpoint result repair: reviewed authorization-versus-completion copy
+      // and exact new/original identity links. Machine-authored es/de require
+      // HUMAN TRANSLATION REVIEW before release; extraction budgets unchanged.
+      "es-ES": "a71980191be759020a33be0d98533e1a6bf314de817b2b77636475e303382740",
+      "de-DE": "d9f4595e97928318c5e093402a14c2082e55b3655ab8744f1406c49b5e069ebb",
     });
   });
 
