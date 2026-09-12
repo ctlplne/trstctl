@@ -12117,6 +12117,7 @@
                 "listOutboxCircuits",
                 "listEndpointVerifications",
                 "getEndpointVerification",
+                "getIdentityDeploymentEvidence",
                 "listEndpointKeyCustody",
                 "listEnrollmentDiagnostics",
                 "getEnrollmentDiagnosticsSupportAddendum",

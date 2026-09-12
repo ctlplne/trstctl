@@ -235,8 +235,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// profile-edit approval review surface (DP2-057) to 439.
 	// The asynchronous first-certificate result adds one read operation,
 	// mapped to F4 alongside the issuance transition it observes.
-	if len(out) != 440 {
-		t.Fatalf("OpenAPI operationIds = %d, want 440", len(out))
+	// Exact identity deployment evidence adds getIdentityDeploymentEvidence,
+	// mapped to F7 alongside connector deployment and live verification.
+	if len(out) != 441 {
+		t.Fatalf("OpenAPI operationIds = %d, want 441", len(out))
 	}
 	return out
 }
