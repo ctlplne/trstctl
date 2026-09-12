@@ -897,6 +897,11 @@ var envRefRe = regexp.MustCompile(`TRSTCTL_[A-Z0-9_]+`)
 // from its environment, so it is excluded from the config-key reconciliation.
 var substVarRe = regexp.MustCompile(`\$\((TRSTCTL_[A-Z0-9_]+)\)`)
 
+// Compose expands these references on the host, before starting a container.
+// They may supply build arguments or values of differently named runtime keys.
+// Remove the reference, never the name of an environment entry that contains it.
+var composeSubstVarRe = regexp.MustCompile(`\$\{[^}]*\}`)
+
 // binaryEnvKeysInManifest returns the TRSTCTL_* keys a manifest sets that the
 // control-plane binary is expected to READ from its environment, excluding keys
 // that exist only to be interpolated into a flag via $(VAR) (those feed a flag the
@@ -914,6 +919,7 @@ func binaryEnvKeysInManifest(body string) map[string]bool {
 		if strings.HasPrefix(l, "#") {
 			continue
 		}
+		l = composeSubstVarRe.ReplaceAllString(l, "")
 		for _, k := range envRefRe.FindAllString(l, -1) {
 			// A $(VAR) reference is plumbing; the `name: TRSTCTL_X` that DEFINES it is
 			// the value source for that plumbing — skip both so only keys the binary
@@ -925,6 +931,28 @@ func binaryEnvKeysInManifest(body string) map[string]bool {
 		}
 	}
 	return out
+}
+
+func TestBinaryEnvKeysIgnoreComposeInputReferences(t *testing.T) {
+	manifest := `services:
+  trstctl:
+    build:
+      args:
+        COMMIT: "${TRSTCTL_BUILD_COMMIT:-none}"
+        DATE: "${TRSTCTL_BUILD_DATE:-1970-01-01T00:00:00Z}"
+    environment:
+      TRSTCTL_SERVER_ADDR: "${TRSTCTL_LISTEN_INPUT:-:8443}"
+      TRSTCTL_UNKNOWN_RUNTIME_KEY: "${TRSTCTL_UNKNOWN_RUNTIME_KEY:-still-invalid}"
+  another:
+    environment:
+      - TRSTCTL_LOG_LEVEL=${TRSTCTL_LOG_INPUT:-info}
+      - TRSTCTL_CONFIG_FILE
+`
+	got := binaryEnvKeysInManifest(manifest)
+	want := []string{"TRSTCTL_CONFIG_FILE", "TRSTCTL_LOG_LEVEL", "TRSTCTL_SERVER_ADDR", "TRSTCTL_UNKNOWN_RUNTIME_KEY"}
+	if strings.Join(keys(got), ",") != strings.Join(want, ",") {
+		t.Fatalf("runtime keys = %v, want %v; host inputs must not hide actual runtime keys", keys(got), want)
+	}
 }
 
 // configMapDataKeys returns the TRSTCTL_* keys a Helm configMap template declares
