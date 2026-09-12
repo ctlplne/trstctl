@@ -20,7 +20,7 @@ func validateEnrollmentDiagnosticObserved(diagnostic EnrollmentDiagnosticObserve
 	if !diagnosticOneOf(diagnostic.Cause,
 		"challenge_not_visible", "challenge_wrong_value", "template_acl_denied",
 		"eab_unauthorized", "client_cert_rejected", "responder_unreachable",
-		"chain_incomplete", "name_not_permitted", "rate_limited", "capacity_full", "unknown") {
+		"chain_incomplete", "name_not_permitted", "validity_not_permitted", "rate_limited", "capacity_full", "unknown") {
 		return fmt.Errorf("projections: enrollment diagnostic cause %q is not known", diagnostic.Cause)
 	}
 	if strings.TrimSpace(diagnostic.Summary) == "" {

@@ -4,6 +4,23 @@ package projections
 
 import "testing"
 
+func TestValidityDiagnosticAcceptsOnlyTheRegisteredCause(t *testing.T) {
+	t.Parallel()
+	d := EnrollmentDiagnosticObserved{
+		DiagnosticID: "11111111-1111-4111-8111-111111111111",
+		Protocol:     "acme", Step: "issue", Cause: "validity_not_permitted",
+		Summary:     "The requested validity is not permitted.",
+		Remediation: "Check the bound profile's maximum validity and issuance backdate.",
+	}
+	if err := validateEnrollmentDiagnosticObserved(d); err != nil {
+		t.Fatalf("typed validity diagnosis cannot be projected: %v", err)
+	}
+	d.Cause = "validity looks wrong"
+	if err := validateEnrollmentDiagnosticObserved(d); err == nil {
+		t.Fatal("projection accepted an unregistered cause")
+	}
+}
+
 func TestCMPDiagnosticsAcceptOnlyTheRegisteredProtocolAndCapacityCause(t *testing.T) {
 	t.Parallel()
 	valid := EnrollmentDiagnosticObserved{

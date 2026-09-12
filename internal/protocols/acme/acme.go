@@ -1346,7 +1346,7 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 		ProviderIdempotencyKey: o.issuanceKey,
 	})
 	if err != nil {
-		s.problem(w, r, http.StatusInternalServerError, "serverInternal", "issuance failed: "+err.Error())
+		s.problemWithError(w, r, http.StatusInternalServerError, "serverInternal", "issuance failed: "+err.Error(), err)
 		return
 	}
 
@@ -1802,13 +1802,17 @@ func (s *Server) rateLimitedAfter(w http.ResponseWriter, r *http.Request, retryA
 }
 
 func (s *Server) problem(w http.ResponseWriter, r *http.Request, status int, typ, detail string) {
+	s.problemWithError(w, r, status, typ, detail, nil)
+}
+
+func (s *Server) problemWithError(w http.ResponseWriter, r *http.Request, status int, typ, detail string, err error) {
 	s.mu.Lock()
 	notify := s.onFailure
 	s.mu.Unlock()
 	if notify != nil {
 		// The step comes from the path the client was on, which is the only
 		// evidence available here about where in the flow this happened.
-		diagnosis := enrollmentdiag.ClassifyACME(acmeStepForPath(r), typ, nil).WithEvidence(enrollmentdiag.Evidence{
+		diagnosis := enrollmentdiag.ClassifyACME(acmeStepForPath(r), typ, err).WithEvidence(enrollmentdiag.Evidence{
 			OperationRef: r.Method + " " + r.URL.Path,
 			IdentityRef:  acmeIdentityRef(r), EndpointRef: strings.TrimSpace(r.Host),
 		})
@@ -1837,26 +1841,8 @@ func acmeIdentityRef(r *http.Request) string {
 	if identityRef, _ := r.Context().Value(acmeDiagnosticIdentityContextKey{}).(string); identityRef != "" {
 		return identityRef
 	}
-	path := strings.Trim(r.URL.Path, "/")
-	parts := strings.Split(path, "/")
-	if len(parts) < 2 {
-		return ""
-	}
-	id := parts[len(parts)-1]
-	if id == "" {
-		return ""
-	}
-	switch {
-	case strings.Contains(r.URL.Path, "/challenge/"):
-		return "challenge:" + id
-	case strings.Contains(r.URL.Path, "/authz/"):
-		return "authorization:" + id
-	case strings.Contains(r.URL.Path, "/order/"), strings.Contains(r.URL.Path, "/finalize/"):
-		return "order:" + id
-	case strings.Contains(r.URL.Path, "/certificate/"):
-		return "certificate:" + id
-	}
-	return ""
+	_, identity := acmeDiagnosticRoute(r)
+	return identity
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -1884,25 +1870,52 @@ func (s *Server) SetFailureDiagnosis(fn func(context.Context, enrollmentdiag.Dia
 // unrecognised path yields an empty step and the classifier substitutes its own
 // default, rather than this function guessing at a stage nobody observed.
 func acmeStepForPath(r *http.Request) enrollmentdiag.Step {
-	if r == nil {
-		return ""
+	step, _ := acmeDiagnosticRoute(r)
+	return step
+}
+
+// Match the mounted resource shapes exactly. A resource ID can itself contain
+// a step name, and finalize's last segment is an action, not the order ID.
+func acmeDiagnosticRoute(r *http.Request) (enrollmentdiag.Step, string) {
+	if r == nil || r.URL == nil || !strings.HasPrefix(r.URL.Path, "/acme/") {
+		return "", ""
 	}
-	switch path := r.URL.Path; {
-	case strings.Contains(path, "/new-account"), strings.Contains(path, "/key-change"):
-		return enrollmentdiag.StepAccount
-	case strings.Contains(path, "/new-order"), strings.Contains(path, "/order"):
-		return enrollmentdiag.StepOrder
-	case strings.Contains(path, "/challenge"):
-		return enrollmentdiag.StepValidation
-	case strings.Contains(path, "/authz"):
-		return enrollmentdiag.StepAuthorize
-	case strings.Contains(path, "/finalize"), strings.Contains(path, "/cert"):
-		return enrollmentdiag.StepIssue
-	case strings.Contains(path, "/revoke"):
-		return enrollmentdiag.StepRevocation
-	default:
-		return ""
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/acme/"), "/")
+	if len(parts) == 1 {
+		switch parts[0] {
+		case "new-account", "key-change":
+			return enrollmentdiag.StepAccount, ""
+		case "new-order":
+			return enrollmentdiag.StepOrder, ""
+		case "revoke-cert":
+			return enrollmentdiag.StepRevocation, ""
+		}
 	}
+	if len(parts) >= 2 && parts[1] != "" {
+		if len(parts) == 2 {
+			switch parts[0] {
+			case "acct":
+				return enrollmentdiag.StepAccount, "account:" + parts[1]
+			case "order":
+				return enrollmentdiag.StepOrder, "order:" + parts[1]
+			case "authz":
+				return enrollmentdiag.StepAuthorize, "authorization:" + parts[1]
+			case "chal":
+				return enrollmentdiag.StepValidation, "challenge:" + parts[1]
+			case "cert":
+				return enrollmentdiag.StepIssue, "certificate:" + parts[1]
+			}
+		}
+		if len(parts) == 3 {
+			if parts[0] == "order" && parts[2] == "finalize" {
+				return enrollmentdiag.StepIssue, "order:" + parts[1]
+			}
+			if parts[0] == "acct" && parts[2] == "orders" {
+				return enrollmentdiag.StepOrder, "account:" + parts[1]
+			}
+		}
+	}
+	return "", ""
 }
 
 // csrIdentifiersMatchOrder enforces RFC 8555 §7.4: the finalize CSR must request

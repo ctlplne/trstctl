@@ -60,7 +60,7 @@ func leafValidityBounds(anchor time.Time, ttl, maximum time.Duration) (time.Time
 			notAfter = ceiling
 		}
 		if !notAfter.After(anchor) {
-			return time.Time{}, time.Time{}, &leafProfileError{fmt.Sprintf("profile maximum validity %s leaves no usable lifetime after the %s NotBefore backdate", maximum, IssuanceBackdateSkew())}
+			return time.Time{}, time.Time{}, &leafValidityError{&leafProfileError{fmt.Sprintf("profile maximum validity %s leaves no usable lifetime after the %s NotBefore backdate", maximum, IssuanceBackdateSkew())}}
 		}
 	}
 	return notBefore, notAfter, nil

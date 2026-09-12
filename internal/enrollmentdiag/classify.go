@@ -6,6 +6,8 @@ import (
 	"errors"
 	"net"
 	"strings"
+
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // Turning a real failure into a diagnosis (epic I4).
@@ -31,6 +33,9 @@ import (
 // vocabulary it and we both agreed to, rather than in prose we would be guessing
 // at.
 func ClassifyACME(step Step, problemType string, err error) Diagnosis {
+	if step == StepIssue && crypto.IsLeafValidityViolation(err) {
+		return Diagnose(ProtocolACME, step, CauseValidityNotPermitted)
+	}
 	switch normalizeProblem(problemType) {
 	case "dns", "connection":
 		// The authority could not reach or resolve the challenge. It is NOT

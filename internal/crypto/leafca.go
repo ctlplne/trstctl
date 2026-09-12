@@ -123,6 +123,19 @@ func IsLeafProfileViolation(err error) bool {
 	return asErr(err, &le)
 }
 
+// leafValidityError preserves the broader profile rejection while identifying
+// the exact constraint for callers that must not classify error prose.
+type leafValidityError struct{ *leafProfileError }
+
+func (e *leafValidityError) Unwrap() error { return e.leafProfileError }
+
+// IsLeafValidityViolation reports a typed profile-validity refusal, including
+// one wrapped by the issuance path. Other profile constraints do not match.
+func IsLeafValidityViolation(err error) bool {
+	var le *leafValidityError
+	return asErr(err, &le)
+}
+
 // SignLeafFromCSR validates a CSR and signs an end-entity certificate with the CA
 // key (a DigestSigner). It then VERIFIES the issued certificate against the CA
 // before returning it: a signer that returns a signature which does not verify
@@ -576,7 +589,7 @@ func EnforceLeafProfileInfo(info CSRInfo, ttl time.Duration, prof LeafProfile) e
 		}
 	}
 	if prof.MaxValidity > 0 && ttl > prof.MaxValidity {
-		return &leafProfileError{fmt.Sprintf("validity %s exceeds the profile ceiling %s", ttl, prof.MaxValidity)}
+		return &leafValidityError{&leafProfileError{fmt.Sprintf("validity %s exceeds the profile ceiling %s", ttl, prof.MaxValidity)}}
 	}
 	sanPolicy := leafSANPolicyConfigured(prof)
 	cidrs, err := parseLeafCIDRs(prof.PermittedIPCIDRs)

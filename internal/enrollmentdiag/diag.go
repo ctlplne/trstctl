@@ -100,6 +100,7 @@ const (
 	CauseResponderUnreachable Cause = "responder_unreachable"
 	CauseChainIncomplete      Cause = "chain_incomplete"
 	CauseNameNotPermitted     Cause = "name_not_permitted"
+	CauseValidityNotPermitted Cause = "validity_not_permitted"
 	CauseRateLimited          Cause = "rate_limited"
 	CauseCapacityFull         Cause = "capacity_full"
 	// CauseUnknown is a first-class value, not a fallback nobody meant. A
@@ -185,6 +186,12 @@ var catalog = map[Cause]struct{ summary, remediation string }{
 		"The authority rate-limited this request.",
 		"Back off rather than retrying — a retry loop against a rate limit extends the window. " +
 			"Public CAs count failures as well as successes.",
+	},
+	CauseValidityNotPermitted: {
+		"Issuance was refused because the certificate lifetime cannot fit the bound profile's maximum validity.",
+		"Check the active certificate profile and issuance backdate. Maximum validity covers the full " +
+			"NotBefore-to-NotAfter interval, including backdating; leave usable time for deployment and renewal. " +
+			"Correct the profile or requested lifetime within your policy, then retry enrollment.",
 	},
 	CauseCapacityFull: {
 		"The bounded enrollment worker pool was full, so this attempt was refused before signing.",

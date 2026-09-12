@@ -56,6 +56,11 @@ including its NotBefore backdate. With the default five-minute backdate, a
 ten-minute profile leaves at most five minutes after issuance. A maximum that
 leaves no usable time fails before signing and appears as an ACME readiness
 blocker. Allow time for deployment and automatic renewal when choosing the ceiling.
+If finalization reaches that refusal, the Protocols console records an issuance
+diagnostic with cause `validity_not_permitted`, the exact order reference, and
+profile/backdate guidance. Correct the active profile within your policy and retry
+enrollment. Older unknown diagnostics remain unchanged because their retained
+events do not contain enough evidence to assign this cause retrospectively.
 The normal enrollment command below uses the bound profile; the client need not
 request 30 days.
 Key, name, usage, and protocol restrictions still apply before signing. A missing

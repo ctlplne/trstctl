@@ -4,9 +4,25 @@ package crypto
 
 import (
 	"crypto/x509"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 )
+
+func TestUnusableLeafValidityPreservesTypedProfileRejection(t *testing.T) {
+	_, _, err := leafValidityBounds(time.Now(), time.Minute, time.Minute)
+	if err == nil {
+		t.Fatal("profile shorter than backdating was accepted")
+	}
+	wrapped := fmt.Errorf("issuance failed: %w", err)
+	if !IsLeafValidityViolation(wrapped) || !IsLeafProfileViolation(wrapped) {
+		t.Fatalf("typed validity/profile evidence was lost: %v", wrapped)
+	}
+	if IsLeafValidityViolation(errors.New(err.Error())) {
+		t.Fatal("error prose was treated as typed validity evidence")
+	}
+}
 
 // TestIssuanceNotBeforeSkewDefaultsToFiveMinutes is the OPS-CLOCKSKEW-001
 // acceptance: common CA practice backdates NotBefore by five minutes so a

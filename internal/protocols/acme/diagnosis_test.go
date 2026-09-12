@@ -29,7 +29,7 @@ func TestARefusalOnTheServedPathProducesADiagnosis(t *testing.T) {
 	s.SetFailureDiagnosis(func(_ context.Context, d enrollmentdiag.Diagnosis) { got = append(got, d) })
 
 	// A challenge the authority could not see — the classic broken enrolment.
-	req := httptest.NewRequest(http.MethodPost, "/acme/challenge/abc", nil)
+	req := httptest.NewRequest(http.MethodPost, "/acme/chal/abc", nil)
 	s.problem(httptest.NewRecorder(), req, http.StatusForbidden, "dns",
 		"no TXT record found for _acme-challenge.api.example.test")
 
@@ -51,7 +51,7 @@ func TestARefusalOnTheServedPathProducesADiagnosis(t *testing.T) {
 	if !d.Actionable() {
 		t.Error("a classified failure reported itself as not actionable")
 	}
-	if d.OperationRef != "POST /acme/challenge/abc" {
+	if d.OperationRef != "POST /acme/chal/abc" {
 		t.Errorf("operation ref = %q, want exact refused method and path", d.OperationRef)
 	}
 	if d.IdentityRef != "challenge:abc" {
@@ -71,7 +71,7 @@ func TestChallengeRefusalCarriesTheExactDNSIdentityWithoutGuessingItsDeployment(
 	s := &Server{}
 	var got enrollmentdiag.Diagnosis
 	s.SetFailureDiagnosis(func(_ context.Context, d enrollmentdiag.Diagnosis) { got = d })
-	req := httptest.NewRequest(http.MethodPost, "https://acme.example.test/acme/challenge/abc", nil)
+	req := httptest.NewRequest(http.MethodPost, "https://acme.example.test/acme/chal/abc", nil)
 	req = withACMEDiagnosticIdentity(req, "dns:api.example.test")
 	s.problem(httptest.NewRecorder(), req, http.StatusForbidden, "dns", "TXT record is not visible")
 	if got.IdentityRef != "dns:api.example.test" || got.EndpointRef != "acme.example.test" {
@@ -87,11 +87,11 @@ func TestChallengeRefusalCarriesTheExactDNSIdentityWithoutGuessingItsDeployment(
 func TestTheStepComesFromThePathAndIsNotGuessed(t *testing.T) {
 	t.Parallel()
 	cases := map[string]enrollmentdiag.Step{
-		"/acme/new-account": enrollmentdiag.StepAccount,
-		"/acme/new-order":   enrollmentdiag.StepOrder,
-		"/acme/challenge/x": enrollmentdiag.StepValidation,
-		"/acme/finalize/x":  enrollmentdiag.StepIssue,
-		"/acme/revoke-cert": enrollmentdiag.StepRevocation,
+		"/acme/new-account":      enrollmentdiag.StepAccount,
+		"/acme/new-order":        enrollmentdiag.StepOrder,
+		"/acme/chal/x":           enrollmentdiag.StepValidation,
+		"/acme/order/x/finalize": enrollmentdiag.StepIssue,
+		"/acme/revoke-cert":      enrollmentdiag.StepRevocation,
 	}
 	for path, want := range cases {
 		req := httptest.NewRequest(http.MethodPost, path, nil)
