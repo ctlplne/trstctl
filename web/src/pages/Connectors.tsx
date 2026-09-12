@@ -289,22 +289,23 @@ export function Connectors() {
   };
 
   const refreshPreviewResult = async () => {
-    if (!selectedTargetRecord || !previewReceipt) return;
+    if (!selectedTargetRecord || !previewReceipt?.idempotency_key) return;
     setPreviewRefreshing(true);
     try {
-      const page = await api.connectorDeliveries({ limit: 20 });
+      const resultKey = `${previewReceipt.idempotency_key}:result`;
+      const page = await api.connectorDeliveries({ limit: 2, idempotencyKey: resultKey });
       const rows = page.items ?? [];
-      setDeliveries(rows);
-      setDeliveriesCursor(page.next_cursor);
-      const resultKey = previewReceipt.idempotency_key ? `${previewReceipt.idempotency_key}:result` : "";
-      const terminal = rows.find(
-        (receipt) =>
-          Boolean(resultKey) &&
-          receipt.destination === "connector.test" &&
-          receipt.target === selectedTargetRecord.name &&
-          receipt.status !== "dry_run_queued" &&
-          receipt.idempotency_key === resultKey,
-      );
+      const terminal =
+        rows.length === 1 &&
+        !page.next_cursor &&
+        rows.find(
+          (receipt) =>
+            Boolean(resultKey) &&
+            receipt.destination === "connector.test" &&
+            receipt.target === selectedTargetRecord.name &&
+            receipt.status !== "dry_run_queued" &&
+            receipt.idempotency_key === resultKey,
+        );
       if (terminal) setPreviewReceipt(terminal);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

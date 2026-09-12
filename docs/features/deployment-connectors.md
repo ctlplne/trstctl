@@ -144,7 +144,12 @@ default reading path:
   target not contacted** and explicitly refuses to treat that local check as
   deployment readiness. An asynchronous preview is refreshed through its exact
   idempotency-linked result receipt, so a different target's answer cannot be
-  substituted.
+  substituted. The lookup filters by the exact receipt key on the server; it does
+  not depend on which page of tenant history is loaded. API clients can use
+  `GET /api/v1/connectors/deliveries?idempotency_key=<URL-encoded-key>` with the
+  queued preview's key followed by `:result`. An empty result means no matching
+  result has been projected yet. This read requires `connectors:read` and remains
+  scoped to the authenticated tenant.
 - **Health, retries, and rollback** loads delivery receipts, listener verification,
   key custody, and outbox-circuit evidence only when opened. These are distinct
   observations; a successful outbox attempt does not silently stand in for a listener

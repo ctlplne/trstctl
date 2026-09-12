@@ -1545,7 +1545,12 @@ func (a *API) listConnectorDeliveries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	identityID := r.URL.Query().Get("identity_id")
-	rows, err := a.store.ListConnectorDeliveryReceiptsPage(r.Context(), tenantID, identityID, after, limit)
+	key := r.URL.Query().Get("idempotency_key")
+	if len(key) > 2048 {
+		a.writeError(w, errStatus(http.StatusBadRequest, "idempotency_key must not exceed 2048 bytes"))
+		return
+	}
+	rows, err := a.store.ListConnectorDeliveryReceiptsMatchingPage(r.Context(), tenantID, identityID, key, after, limit)
 	if err != nil {
 		a.writeError(w, err)
 		return

@@ -521,6 +521,12 @@ func scanRotationRun(row pgx.Row, r *RotationRun) error {
 
 // ListConnectorDeliveryReceiptsPage returns delivery receipts for one tenant.
 func (s *Store) ListConnectorDeliveryReceiptsPage(ctx context.Context, tenantID, identityID, afterID string, limit int) ([]ConnectorDeliveryReceipt, error) {
+	return s.ListConnectorDeliveryReceiptsMatchingPage(ctx, tenantID, identityID, "", afterID, limit)
+}
+
+// ListConnectorDeliveryReceiptsMatchingPage optionally filters by the exact
+// receipt key, so an asynchronous result does not depend on a global history page.
+func (s *Store) ListConnectorDeliveryReceiptsMatchingPage(ctx context.Context, tenantID, identityID, key, afterID string, limit int) ([]ConnectorDeliveryReceipt, error) {
 	var out []ConnectorDeliveryReceipt
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
@@ -530,8 +536,9 @@ func (s *Store) ListConnectorDeliveryReceiptsPage(ctx context.Context, tenantID,
 			   FROM connector_delivery_receipts
 			  WHERE tenant_id = $1 AND id > $2
 			    AND ($3 = '' OR identity_id::text = $3)
+			    AND ($5 = '' OR idempotency_key = $5)
 			  ORDER BY id
-			  LIMIT $4`, tenantID, afterID, identityID, limit)
+			  LIMIT $4`, tenantID, afterID, identityID, limit, key)
 		if err != nil {
 			return err
 		}

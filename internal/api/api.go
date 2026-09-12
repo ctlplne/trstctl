@@ -971,6 +971,9 @@ func (a *API) routes() []route {
 		{name: "cursor", typ: "string", desc: "opaque pagination cursor from a prior page"},
 		{name: "identity_id", typ: "string", format: "uuid", desc: "return only records for this identity"},
 	}
+	connectorReceiptPage := append(append([]param{}, identityScopedPage...), param{
+		name: "idempotency_key", typ: "string", desc: "return only receipts with this exact key (maximum 2048 bytes); combine with identity_id to require both filters",
+	})
 	incidentScopedPage := []param{
 		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
 		{name: "cursor", typ: "string", desc: "opaque pagination cursor from a prior page"},
@@ -1227,7 +1230,7 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/notifications/{id}/read", opID: "markNotificationRead", summary: "Mark a notification as read", handler: a.markNotificationRead, pathParams: notificationIDPath, resSchema: "Notification", successCode: "200", mutation: true, perm: authz.NotificationsWrite},
 		{method: "POST", path: "/api/v1/notifications/{id}/requeue", opID: "requeueNotification", summary: "Requeue a dead-lettered notification dispatch", handler: a.requeueNotification, pathParams: notificationIDPath, resSchema: "Notification", successCode: "200", mutation: true, perm: authz.NotificationsWrite},
 		{method: "GET", path: "/api/v1/notifications/{id}", opID: "getNotification", summary: "Get a notification inbox row", handler: a.getNotification, pathParams: notificationIDPath, resSchema: "Notification", successCode: "200", perm: authz.NotificationsRead},
-		{method: "GET", path: "/api/v1/connectors/deliveries", opID: "listConnectorDeliveries", summary: "List connector delivery receipts", handler: a.listConnectorDeliveries, query: identityScopedPage, resSchema: "ConnectorDeliveryList", successCode: "200", perm: authz.ConnectorsRead},
+		{method: "GET", path: "/api/v1/connectors/deliveries", opID: "listConnectorDeliveries", summary: "List connector delivery receipts", handler: a.listConnectorDeliveries, query: connectorReceiptPage, resSchema: "ConnectorDeliveryList", successCode: "200", perm: authz.ConnectorsRead},
 		{method: "GET", path: "/api/v1/connectors/deliveries/{id}", opID: "getConnectorDelivery", summary: "Get a connector delivery receipt", handler: a.getConnectorDelivery, pathParams: idPath, resSchema: "ConnectorDelivery", successCode: "200", perm: authz.ConnectorsRead},
 		{method: "POST", path: "/api/v1/lifecycle/endpoint-bindings/preview", opID: "previewEndpointBinding", summary: "Review the exact issuer, custody, destination, and effects without changing state", handler: a.previewEndpointBinding, reqSchema: "EndpointBindingPlanRequest", resSchema: "EndpointBindingPreview", successCode: "200", perm: authz.ConnectorsWrite},
 		{method: "POST", path: "/api/v1/lifecycle/endpoint-bindings", opID: "createEndpointBinding", summary: "Create a preview-bound automated enrollment-to-endpoint binding", handler: a.createEndpointBinding, reqSchema: "EndpointBindingRequest", resSchema: "EndpointBinding", successCode: "201", mutation: true, perm: authz.ConnectorsWrite},

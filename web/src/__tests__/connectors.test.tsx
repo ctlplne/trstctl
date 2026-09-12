@@ -668,19 +668,23 @@ describe("connector deployment disclosure surface", () => {
       detail: "a dry-run was queued for the host agent",
       idempotency_key: "connector-test:target-1:preview-queued",
     });
-    apiMock.connectorDeliveries.mockResolvedValueOnce({
-      items: [
-        {
-          id: "preview-result",
-          destination: "connector.test",
-          connector: "nginx",
-          target: "edge/prod/payments",
-          status: "dry_run_blocked",
-          detail: "endpoint: connection refused",
-          idempotency_key: "connector-test:target-1:preview-queued:result",
-        },
-      ],
-    });
+    apiMock.connectorDeliveries.mockImplementation(async (options) => ({
+      items:
+        options?.idempotencyKey === "connector-test:target-1:preview-queued:result"
+          ? [
+              {
+                id: "preview-result",
+                destination: "connector.test",
+                connector: "nginx",
+                target: "edge/prod/payments",
+                status: "dry_run_blocked",
+                detail: "endpoint: connection refused",
+                idempotency_key: "connector-test:target-1:preview-queued:result",
+              },
+            ]
+          : [],
+      next_cursor: options?.idempotencyKey ? "" : "later-tenant-page",
+    }));
     const user = userEvent.setup();
     renderConnectors();
     await screen.findByRole("heading", { name: "Where credentials are installed" });
@@ -692,6 +696,7 @@ describe("connector deployment disclosure surface", () => {
     expect(await screen.findByRole("heading", { name: "Preview queued — no result yet" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Check preview result" }));
     expect(await screen.findByRole("heading", { name: "Deploy blocked — no changes made" })).toBeInTheDocument();
+    expect(apiMock.connectorDeliveries).toHaveBeenLastCalledWith({ limit: 2, idempotencyKey: "connector-test:target-1:preview-queued:result" });
     expect(screen.getAllByText("endpoint: connection refused").length).toBeGreaterThan(0);
   });
 

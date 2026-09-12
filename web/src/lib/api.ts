@@ -1624,7 +1624,7 @@ export interface Api {
   testConnectorTarget(id: string): Promise<ConnectorDelivery>;
   deployConnectorTarget(id: string, input: ConnectorTargetActionRequest): Promise<Identity>;
   rollbackConnectorTarget(id: string, input: ConnectorTargetActionRequest): Promise<ConnectorDelivery>;
-  connectorDeliveries(options?: { limit?: number; cursor?: string; identityId?: string }): Promise<ConnectorDeliveryList>;
+  connectorDeliveries(options?: { limit?: number; cursor?: string; identityId?: string; idempotencyKey?: string }): Promise<ConnectorDeliveryList>;
   lifecycleAutomationPlan(): Promise<LifecycleAutomationPlan>;
   rotationRuns(options?: { limit?: number; cursor?: string; identityId?: string }): Promise<RotationRunList>;
   executeIncident(input: IncidentExecutionRequest): Promise<IncidentExecution>;
@@ -2180,7 +2180,11 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   testConnectorTarget: (id) => mutate<ConnectorDelivery>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/test`),
   deployConnectorTarget: (id, input) => mutate<Identity>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/deploy`, input),
   rollbackConnectorTarget: (id, input) => mutate<ConnectorDelivery>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/rollback`, input),
-  connectorDeliveries: (options) => req<ConnectorDeliveryList>(`/api/v1/connectors/deliveries${pageQueryString(options, options?.identityId)}`),
+  connectorDeliveries: (options) => {
+    const query = new URLSearchParams(pageQueryString(options, options?.identityId));
+    if (options?.idempotencyKey) query.set("idempotency_key", options.idempotencyKey);
+    return req<ConnectorDeliveryList>(`/api/v1/connectors/deliveries${query.size ? `?${query}` : ""}`);
+  },
   lifecycleAutomationPlan: () => req<LifecycleAutomationPlan>("/api/v1/lifecycle/automation-plan"),
   rotationRuns: (options) => req<RotationRunList>(`/api/v1/lifecycle/rotation-runs${pageQueryString(options, options?.identityId)}`),
   executeIncident: (input) => mutate<IncidentExecution>("POST", "/api/v1/incidents/executions", input),
