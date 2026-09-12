@@ -579,6 +579,41 @@ func registrationCommand(tenantID, name, key string) orchestrator.TenantRegistra
 	}
 }
 
+func TestInitialTenantRegistrationCannotResurrectErasedTenant(t *testing.T) {
+	st := newStore(t)
+	log := openLog(t)
+	projector := projections.New(st)
+	command := registrationCommand(tenantA, "evaluation", "eval-registration")
+	command.InitialOnly = true
+	execute := func() (events.Event, error) {
+		return orchestrator.ExecuteTenantRegistration(t.Context(), log, st, projector, orchestrator.NewIdempotency(st), command)
+	}
+	first, err := execute()
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := execute()
+	if err != nil || first.ID != again.ID || first.Sequence != again.Sequence {
+		t.Fatalf("initial registration retry changed its event: %+v %v", again, err)
+	}
+	if _, err := st.OffboardTenant(t.Context(), tenantA); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := execute(); !errors.Is(err, store.ErrTenantRegistrationConflict) {
+		t.Fatalf("automatic registration after erasure = %v", err)
+	}
+	if _, err := st.GetTenant(t.Context(), tenantA); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("erased tenant was recreated: %v", err)
+	}
+	if got := countTenantEvents(t, log, tenantA, projections.EventTenantRegistered); got != 1 {
+		t.Fatalf("registration events = %d, want original only", got)
+	}
+	var receipts int
+	if err := st.SystemPool().QueryRow(t.Context(), "SELECT count(*) FROM idempotency_keys WHERE tenant_id = $1", tenantA).Scan(&receipts); err != nil || receipts != 0 {
+		t.Fatalf("refusal retained a new registration intent: count=%d err=%v", receipts, err)
+	}
+}
+
 func countTenantEvents(t *testing.T, log *events.Log, tenantID, eventType string) int {
 	t.Helper()
 	count := 0

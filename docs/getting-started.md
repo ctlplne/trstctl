@@ -85,7 +85,10 @@ release artifacts use their release pipeline's source identity.
 Compose starts PostgreSQL and NATS JetStream, generates a stable local OIDC
 keypair, starts the signing service in its own container, and then starts the
 control plane through the external-datastore path. A loopback-only local identity provider (IdP)
-gives this disposable blank evaluation one first operator. The signer remains a
+gives this disposable blank evaluation one first operator. The evaluation profile
+registers its configured tenant in the event history at startup, so the first
+certificate has the tenant lifecycle needed for later revocation. Restart preserves
+that registration; erasing a tenant does not cause startup to recreate it. The signer remains a
 separate process and service; the control plane reaches it only over the shared
 Unix-domain socket.
 

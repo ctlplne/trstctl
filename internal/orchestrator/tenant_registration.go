@@ -33,6 +33,9 @@ type TenantRegistrationCommand struct {
 	IdempotencyKey  string
 	RequestMaterial []byte
 	PayloadAt       func(time.Time) ([]byte, error)
+	// InitialOnly is for explicitly configured first-run provisioning. It may
+	// recover its own pending registration, but cannot recreate an erased tenant.
+	InitialOnly bool
 }
 
 // TenantRegistrationAuthority is the immutable identity of one currently live
@@ -146,6 +149,11 @@ func ExecuteTenantRegistration(
 					return err
 				}
 				if !snapshot.Exists {
+					if command.InitialOnly {
+						if err := requireInitialTenantHistory(readCtx, log, command.TenantID, claim.EventID); err != nil {
+							return err
+						}
+					}
 					if claim.Completed {
 						return fmt.Errorf("%w: completed registration has no live tenant", ErrIdempotencyConflict)
 					}
@@ -222,6 +230,11 @@ func ExecuteTenantRegistration(
 							return err
 						}
 					} else if !recovered {
+						if command.InitialOnly {
+							if err := requireInitialTenantHistory(readCtx, log, command.TenantID, current.EventID); err != nil {
+								return err
+							}
+						}
 						expected, err := tenantRegistrationExpected(
 							command, actor, current.EventID, current.EventTime)
 						if err != nil {
@@ -280,6 +293,23 @@ func ExecuteTenantRegistration(
 		return events.Event{}, err
 	}
 	return canonical, nil
+}
+
+// Called only for a missing tenant, under privacy -> history -> lifecycle.
+// A retained registration belonging to this exact pending receiver is the only
+// allowed lifecycle history. An offboard or another registration requires an
+// explicit recovery/re-registration decision, never automatic resurrection.
+func requireInitialTenantHistory(ctx context.Context, log *events.Log, tenantID, pendingEventID string) error {
+	return log.Replay(ctx, 0, func(event events.Event) error {
+		if event.TenantID != tenantID {
+			return nil
+		}
+		if event.Type == projections.EventTenantOffboarded ||
+			(event.Type == projections.EventTenantRegistered && event.ID != pendingEventID) {
+			return fmt.Errorf("%w: first-run provisioning cannot recreate a previously registered tenant", store.ErrTenantRegistrationConflict)
+		}
+		return nil
+	})
 }
 
 func tenantRegistrationAtSequence(
@@ -917,6 +947,9 @@ func tenantRegistrationBinding(
 		[]byte("trstctl.tenant-registration.binding.v2"),
 		[]byte(command.TenantID), []byte(command.Name),
 		actorBytes, command.RequestMaterial,
+	}
+	if command.InitialOnly {
+		fields = append(fields, []byte("initial-registration-only"))
 	}
 	length := 0
 	for _, field := range fields {

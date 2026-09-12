@@ -1539,7 +1539,11 @@ and a client CA trust anchor.
 
 For the blank evaluation stack, `TRSTCTL_PROTOCOLS_PROFILE=eval` is a bounded shortcut:
 it assembles ACME, EST, SCEP, CMP, SSH, TSA, and SPIFFE for exactly
-`TRSTCTL_PROTOCOLS_EVAL_TENANT_ID`. Those responders stay behind a closed runtime gate
+`TRSTCTL_PROTOCOLS_EVAL_TENANT_ID`. Startup registers that explicitly configured
+evaluation tenant through the event log before first issuance; a later startup
+verifies its retained registration. It cannot automatically recreate a previously
+registered tenant after erasure or missing projection state. Production settings
+and arbitrary SSO tenant claims do not create tenants. Those responders stay behind a closed runtime gate
 until a tenant-authenticated operator activates them in the first-run wizard or with
 `POST /api/v1/setup/protocols/activate`. Activation appends an immutable tenant event
 before the HTTP routes and SPIFFE socket become reachable, and replay restores the gate

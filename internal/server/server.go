@@ -1840,6 +1840,9 @@ func (s *Server) configureProtocolSurfaces(ctx context.Context, d Deps) error {
 	if err := errors.Join(d.Protocols.ValidateTenantBindings(d.ProtocolTenant)...); err != nil {
 		return fmt.Errorf("server: served protocol tenant binding: %w", err)
 	}
+	if err := ensureEvalTenantRegistration(ctx, d); err != nil {
+		return err
+	}
 	protocols, err := s.buildServedProtocols(ctx, d.Protocols, d.ProtocolTenant, d.KEK, d.ACMEValidators)
 	if err != nil {
 		return fmt.Errorf("server: build served protocols: %w", err)
