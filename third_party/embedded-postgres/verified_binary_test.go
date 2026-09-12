@@ -48,6 +48,14 @@ func verifiedTestDatabase(t *testing.T, config Config, archive []byte) *Embedded
 		}
 	}
 	t.Cleanup(func() {
+		// These cases normally reject before launching PostgreSQL. If a
+		// regression unexpectedly starts our instance, still stop that instance.
+		if ep.started {
+			if err := ep.Stop(); err != nil {
+				t.Error(err)
+			}
+			return
+		}
 		if err := ep.cleanupVerifiedBinary(); err != nil {
 			t.Error(err)
 		}

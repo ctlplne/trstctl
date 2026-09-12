@@ -3,6 +3,9 @@
 package docs
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,14 +48,11 @@ func TestEveryEmbeddedPostgresHarnessStopsWhatItStarts(t *testing.T) {
 			return nil
 		}
 		src := string(body)
-		if !strings.Contains(src, "embeddedpostgres") || !strings.Contains(src, ".Start()") {
+		if !strings.Contains(src, "embeddedpostgres") || !hasPostgresStart(src) {
 			return nil
 		}
 		checked++
-		// Stop may be called directly or captured as a function value first
-		// (ee/federation stores pg.Stop and invokes it from TestMain), so this
-		// looks for the identifier rather than a specific call shape.
-		if !strings.Contains(src, "Stop") {
+		if !hasPostgresCleanup(src) {
 			t.Errorf("%s starts an embedded PostgreSQL and never stops it; every run of that "+
 				"package leaks a server holding a shared-memory segment, and the resulting "+
 				"failure lands on some OTHER package as an unexplained setup error", path)
@@ -66,4 +66,92 @@ func TestEveryEmbeddedPostgresHarnessStopsWhatItStarts(t *testing.T) {
 		t.Fatal("no embedded-postgres harnesses found; this guard is not testing anything")
 	}
 	t.Logf("checked %d embedded-postgres harnesses", checked)
+}
+
+func hasPostgresStart(src string) bool {
+	f, err := parser.ParseFile(token.NewFileSet(), "fixture.go", src, 0)
+	if err != nil {
+		return false
+	}
+	start := false
+	ast.Inspect(f, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok || len(call.Args) != 0 {
+			return true
+		}
+		if method, ok := call.Fun.(*ast.SelectorExpr); ok && method.Sel.Name == "Start" {
+			start = true
+		}
+		return true
+	})
+	return start
+}
+
+// Recognize actual method references, not comments containing "Stop". An
+// owned foreground process is also cleaned up when the same command is
+// signalled, reaped with Wait, and has a Kill fallback for a shutdown timeout.
+// This remains a source guard, not proof that every runtime path reaches cleanup.
+func hasPostgresCleanup(src string) bool {
+	f, err := parser.ParseFile(token.NewFileSet(), "fixture.go", src, 0)
+	if err != nil {
+		return false
+	}
+	stop := false
+	signalled, reaped, killed := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	ast.Inspect(f, func(n ast.Node) bool {
+		selector, ok := n.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		if selector.Sel.Name == "Stop" {
+			stop = true // also accepts a method value saved for TestMain cleanup
+		}
+		if command, ok := selector.X.(*ast.Ident); ok && selector.Sel.Name == "Wait" {
+			reaped[command.Name] = true
+		}
+		process, ok := selector.X.(*ast.SelectorExpr)
+		if !ok || process.Sel.Name != "Process" {
+			return true
+		}
+		command, ok := process.X.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		switch selector.Sel.Name {
+		case "Signal":
+			signalled[command.Name] = true
+		case "Kill":
+			killed[command.Name] = true
+		}
+		return true
+	})
+	for command := range signalled {
+		if reaped[command] && killed[command] {
+			return true
+		}
+	}
+	return stop
+}
+
+func TestPostgresCleanupGuardRecognizesOnlyCleanupCode(t *testing.T) {
+	if hasPostgresStart("package fixture\n// pg.Start()\nvar example = `pg.Start()`") ||
+		!hasPostgresStart("package fixture\nfunc start() { pg.Start() }") {
+		t.Fatal("start detection must inspect calls, not fixture strings or comments")
+	}
+	for _, fixture := range []struct {
+		name, body string
+		want       bool
+	}{
+		{"method value", "cleanup := pg.Stop; _ = cleanup", true},
+		{"foreground", "cmd.Process.Signal(signal); cmd.Wait(); cmd.Process.Kill()", true},
+		{"unreaped", "cmd.Process.Signal(signal); cmd.Process.Kill()", false},
+		{"different process", "cmd.Process.Signal(signal); other.Wait(); cmd.Process.Kill()", false},
+		{"comment", "// remember to call Stop\n", false},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			if got := hasPostgresCleanup("package fixture\nfunc test() {\n" + fixture.body + "\n}"); got != fixture.want {
+				t.Fatalf("cleanup evidence=%v, want %v", got, fixture.want)
+			}
+		})
+	}
 }
