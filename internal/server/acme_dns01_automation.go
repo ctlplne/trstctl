@@ -108,6 +108,16 @@ func (a *servedACMEDNS01Automation) Present(ctx context.Context, tenantID, domai
 	if tenantID == "" || domain == "" {
 		return nil, errors.New("acme: served dns-01 automation requires tenant and domain")
 	}
+	// Standard ACME clients may publish their own proof. Only a zone the tenant
+	// actually configured belongs to this publisher. The caller still runs the
+	// DNS-01 validator; this does not authorize an order or accept a TXT value.
+	_, managed, err := a.AllowedMethods(ctx, tenantID, domain)
+	if err != nil {
+		return nil, err
+	}
+	if !managed {
+		return nil, nil
+	}
 	cfg, err := a.selectProviderConfig(ctx, tenantID, domain)
 	if err != nil {
 		return nil, err

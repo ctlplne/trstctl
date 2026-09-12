@@ -137,9 +137,17 @@ phone-home call. The three existing DV methods remain unchanged and available.
 
 ### Proving control without a web server: DNS-01 (F69)
 
+The client can own DNS publication. Install and configure its DNS authenticator
+(for example, Certbot's `dns-rfc2136` plugin); selecting `--preferred-challenges dns`
+alone does not install or choose a plugin. When no tenant provider config covers
+the requested zone, trstctl validates the client-published TXT through its normal
+resolver without publishing or deleting records. Missing or incorrect proof is
+refused. An existing managed-zone policy still applies; a provider failure does not
+silently switch that zone to client-managed validation.
+
 In the DNS-01 challenge, the CA says "publish this exact value as a TXT record at
-`_acme-challenge.<your-domain>`," then looks it up to confirm. trstctl automates both
-sides: the **solver** publishes the record through a DNS provider, optionally waits for
+`_acme-challenge.<your-domain>`," then looks it up to confirm. For a tenant-configured
+managed zone, trstctl automates both sides: the **solver** publishes the record through a DNS provider, optionally waits for
 it to propagate, and hands back a cleanup function; the **validator** looks it up and
 checks it equals `base64url(SHA-256(keyAuthorization))` — a value computed inside the
 single isolated cryptography path, so the publish side and verify side can never drift.
