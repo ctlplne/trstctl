@@ -299,6 +299,7 @@ func (d *issuanceDispatcher) dispatchHostRenewal(
 	ident store.Identity,
 	predecessor store.Certificate,
 	run rotationRunEvidence,
+	issuance *store.OperationApprovalIssuanceBinding,
 	idemKey string,
 ) (bool, error) {
 	target, hostExecuted, err := d.hostRenewalTargetFor(ctx, tenantID, ident)
@@ -311,7 +312,7 @@ func (d *issuanceDispatcher) dispatchHostRenewal(
 		return false, nil
 	}
 	if err := d.enqueueHostRenewal(ctx, tenantID, ident, target,
-		dnsNames[0], dnsNames, predecessor.ID, run.ID, nil, "host-renew:"+idemKey); err != nil {
+		dnsNames[0], dnsNames, predecessor.ID, run.ID, issuance, "host-renew:"+idemKey); err != nil {
 		_ = d.recordRotationRun(ctx, tenantID, run, "failed", err.Error())
 		return false, err
 	}

@@ -67,6 +67,7 @@ func (d *issuanceDispatcher) mintServedLeafForTrigger(ctx context.Context, tenan
 // can use the existing announced control-plane generation path.
 func (d *issuanceDispatcher) mintServedLeafForRenewal(
 	ctx context.Context, tenantID string, ident store.Identity, predecessor store.Certificate, commonName string, dnsNames []string, issueKey string,
+	issuance ...*store.OperationApprovalIssuanceBinding,
 ) (issuedLeafMaterial, error) {
 	selection, err := endpointIssuingAuthority(ident.Attributes)
 	if err != nil {
@@ -82,13 +83,13 @@ func (d *issuanceDispatcher) mintServedLeafForRenewal(
 		}
 		// The current renewal admission/profile/authority checks still apply.
 		// Retaining public CSR custody does not reuse an old approval vote.
-		return d.mintServedLeafFromCSRForSelection(ctx, tenantID, ident, selection, issueKey, []byte(csr))
+		return d.mintServedLeafFromCSRForSelection(ctx, tenantID, ident, selection, issueKey, []byte(csr), issuance...)
 	}
 	if predecessor.KeyOrigin != string(custody.OriginControlPlane) || subjectCSRFromIdentity(ident) != "" {
 		return issuedLeafMaterial{}, errors.New("server: renewal key custody is unknown or requires its original requester/agent protocol")
 	}
 	d.recordServerSideKeygenDeprecation(ctx, tenantID, ident)
-	return d.mintServedLeafMaterialForSelection(ctx, tenantID, ident.OwnerID, commonName, dnsNames, selection, issueKey)
+	return d.mintServedLeafMaterialForSelection(ctx, tenantID, ident.OwnerID, commonName, dnsNames, selection, issueKey, issuance...)
 }
 
 // Existing crypto-boundary parsers supply both verified request attributes and

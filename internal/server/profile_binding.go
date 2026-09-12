@@ -3,11 +3,36 @@
 package server
 
 import (
+	"context"
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/profile"
+	"trstctl.com/trstctl/internal/store"
 )
+
+// Renewals use the current profile policy when admitted work carries no explicit
+// issuance binding. Resolve once before the host handoff, so delayed CSR signing
+// uses that exact revision and validity instead of requesting an unrelated 30
+// days. This does not reuse the predecessor's approval or change admission rules.
+// Both requester-held and legacy control-plane renewals use the same binding.
+func (d *issuanceDispatcher) renewalIssuanceBinding(ctx context.Context, tenantID, identityID string, trigger transitionTrigger) (*store.OperationApprovalIssuanceBinding, error) {
+	binding, err := issuanceBindingForTrigger(trigger)
+	if err != nil || binding != nil {
+		return binding, err
+	}
+	requirement, err := d.orch.ProfileApprovalRequirement(ctx, tenantID, identityID)
+	if err != nil {
+		return nil, err
+	}
+	if requirement.ProfileName == "" && d.defaultProfile != "" {
+		requirement, err = d.orch.ProfileApprovalRequirementByName(ctx, tenantID, d.defaultProfile)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return requirement.IssuanceBinding(), nil
+}
 
 func intendedProfileEKUs(requested, allowed []string) []string {
 	if len(requested) > 0 {

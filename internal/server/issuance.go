@@ -858,8 +858,13 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
 			return nil, err
 		}
+		binding, err := d.renewalIssuanceBinding(ctx, m.TenantID, ident.ID, p)
+		if err != nil {
+			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
+			return nil, err
+		}
 		// B2: hand the whole renewal to the host, before anything is minted.
-		dispatched, hostErr := d.dispatchHostRenewal(ctx, m.TenantID, ident, certs[0], run, idemKey)
+		dispatched, hostErr := d.dispatchHostRenewal(ctx, m.TenantID, ident, certs[0], run, binding, idemKey)
 		if hostErr != nil {
 			return nil, hostErr
 		}
@@ -892,7 +897,7 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 			// the server-side-keygen deprecation event the issue path emits.
 			// Custody that degrades automatically is worse than custody that
 			// was never claimed, because the claim outlives the property.
-			material, err := d.mintServedLeafForRenewal(withLeafSlot(ctx, old.ID), m.TenantID, ident, old, commonName, dnsNames, idemKey)
+			material, err := d.mintServedLeafForRenewal(withLeafSlot(ctx, old.ID), m.TenantID, ident, old, commonName, dnsNames, idemKey, binding)
 			if err != nil {
 				_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
 				return nil, err

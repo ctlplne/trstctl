@@ -100,6 +100,24 @@ async function confirmReviewedAction(user: ReturnType<typeof userEvent.setup>) {
 
 describe("lifecycle actions from the UI", () => {
   it.each([
+    ["verified", "Delivered successfully."],
+    ["verify_failed", "Delivery needs attention."],
+  ])("uses the latest %s probe receipt in the identity row", async (status, summary) => {
+    apiMock.identities.mockResolvedValue([{ id: "mail-1", name: "mail.example.test", kind: "x509_certificate", status: "deployed" }]);
+    const receipt = { identity_id: "mail-1", connector: "postfix", target: "mail", attempts: 1 };
+    apiMock.connectorDeliveries.mockResolvedValue({
+      items: [
+        { ...receipt, id: "probe", status, updated_at: "2026-09-12T23:11:26.399Z" },
+        { ...receipt, id: "deploy", status: "delivered", updated_at: "2026-09-12T23:11:26.384Z" },
+      ],
+    });
+    renderIdentities();
+    const row = (await screen.findByText("mail.example.test")).closest("tr")!;
+    await waitFor(() => expect(row).toHaveTextContent(summary));
+    expect(row).not.toHaveTextContent("Waiting for delivery.");
+  });
+
+  it.each([
     ["external", "External CA"],
     ["private", "Private CA"],
     ["platform", "trstctl platform CA"],

@@ -13,6 +13,14 @@ under them. A read-model rebuild restores profile versions from the event log. E
 create/update and every profile-gated issuance decision is recorded with the actor who
 made it.
 
+Lifecycle renewal resolves the identity's profile, or the configured default
+when the identity has none, and limits the requested validity to that profile's
+ceiling. An agent renewal job retains the exact profile revision and effective
+validity selected at handoff. Editing the profile does not rewrite queued work;
+the next renewal resolves the new active revision. A missing configured profile
+stops renewal. Permission and approval checks remain separate from these
+certificate constraints; an old certificate is not a reusable approval.
+
 ## The registration-authority (RA) separation
 
 The RA role model separates **who may request** a certificate from **who may

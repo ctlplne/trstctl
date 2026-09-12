@@ -229,11 +229,11 @@ function deliverySummary(identity: Identity, delivery?: ConnectorDelivery, rotat
   if (rotation?.status === "running") return translateNow("identities.delivery.rotating");
   if (rotation?.status === "failed") return translateNow("identities.delivery.rotationFailed");
   if (rotation?.status === "succeeded" && !delivery) return translateNow("identities.delivery.rotationSucceeded");
-  if (delivery?.status === "delivered") return translateNow("identities.delivery.delivered");
+  if (delivery?.status === "delivered" || delivery?.status === "verified") return translateNow("identities.delivery.delivered");
   if (delivery?.status === "failed" && delivery.reason === "plugin_surface_unconfigured") {
     return translateNow("identities.delivery.connectorSetup");
   }
-  if (delivery?.status === "failed") return translateNow("identities.delivery.failed");
+  if (delivery?.status === "failed" || delivery?.status === "verify_failed") return translateNow("identities.delivery.failed");
   if (delivery) return translateNow("identities.delivery.waiting");
   switch (state) {
     case "requested":
