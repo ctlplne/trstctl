@@ -1,0 +1,34 @@
+# syntax=docker/dockerfile:1.7
+
+# External JetStream for the local evaluation/demo stacks. Compile the same
+# NATS server version and patched dependency graph used by embedded mode in
+# go.mod/go.sum, rather than shipping an old upstream Go binary. Only the server
+# executable enters the runtime; the rest of the control-plane module does not.
+FROM --platform=$BUILDPLATFORM golang:1.26.6-bookworm@sha256:116d58cbd88c1297624acc6e967a060012422bacf9930927e23fb719189c6f36 AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+ARG TARGETOS
+ARG TARGETARCH
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
+    -mod=readonly -trimpath -buildvcs=false -ldflags="-s -w -buildid=" \
+    -o /out/nats-server github.com/nats-io/nats-server/v2
+
+FROM scratch AS patches
+ADD --checksum=sha256:161223a16f042b8e469e9441291e071464fd91d4f4bbe6f496ee8d0abd4e0701 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libcrypto3-3.5.8-r0.apk /amd64/libcrypto3-3.5.8-r0.apk
+ADD --checksum=sha256:aca521e5ae4a321322a9d47ed64a1775f5ab1ffd215d1e9fc0433c58f7bfd037 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libssl3-3.5.8-r0.apk /amd64/libssl3-3.5.8-r0.apk
+ADD --checksum=sha256:cd7752154d0fa628a5f7360218e9e8e83edf31f7fa26f58ee42d26b507bd0372 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/ca-certificates-bundle-20260611-r0.apk /amd64/ca-certificates-bundle-20260611-r0.apk
+ADD --checksum=sha256:35b892813c23664a3592e4fc8c12a03538a22c579057655361c7043305272a9a https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libcrypto3-3.5.8-r0.apk /arm64/libcrypto3-3.5.8-r0.apk
+ADD --checksum=sha256:d6ec970cc10e01539e41626f720c4e0ac69016eaa2079a10ef776ffd3243db5b https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libssl3-3.5.8-r0.apk /arm64/libssl3-3.5.8-r0.apk
+ADD --checksum=sha256:bc5d3ae0b602748852e0bc601a4348cabc4f654f12f27578919cbf3c810f1c1e https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/ca-certificates-bundle-20260611-r0.apk /arm64/ca-certificates-bundle-20260611-r0.apk
+
+# Keep Alpine's small HTTP health probe. Package installation is offline and
+# content-pinned on both platforms. /data retains the existing Compose ownership.
+FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
+ARG TARGETARCH
+COPY --from=patches /${TARGETARCH}/ /tmp/trstctl-nats-patches/
+RUN --network=none apk add --no-network /tmp/trstctl-nats-patches/*.apk \
+    && rm -rf /tmp/trstctl-nats-patches
+COPY --from=build /out/nats-server /usr/local/bin/nats-server
+EXPOSE 4222 6222 8222
+ENTRYPOINT ["/usr/local/bin/nats-server"]

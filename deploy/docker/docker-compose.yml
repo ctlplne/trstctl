@@ -51,8 +51,11 @@ services:
       retries: 20
 
   nats:
-    # Digest-pinned (SUPPLY-008); tag for humans: nats:2.10-alpine.
-    image: nats:2.10-alpine@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927
+    # Same NATS version/dependencies as embedded mode; patched runtime inputs.
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.nats
+    image: trstctl-nats-hardened:local
     # JetStream is the event spine (AN-2), file-backed under /data.
     command: ["--jetstream", "--store_dir=/data", "--http_port=8222"]
     volumes:

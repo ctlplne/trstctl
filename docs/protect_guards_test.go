@@ -1156,7 +1156,8 @@ func TestComposeE2EGateStaysRequired(t *testing.T) {
 		"dockerfile: deploy/docker/Dockerfile.postgres",
 		"image: trstctl-postgres-hardened:local",
 		"user: \"postgres\"",
-		"nats:2.10-alpine@sha256:",
+		"dockerfile: deploy/docker/Dockerfile.nats",
+		"image: trstctl-nats-hardened:local",
 		"healthcheck:",
 	} {
 		if !strings.Contains(compose, want) {

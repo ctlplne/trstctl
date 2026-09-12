@@ -48,11 +48,13 @@ BIN="$BIN_DIR/trstctl"
 
 command -v docker >/dev/null 2>&1 || fail "Docker is required for fresh external PostgreSQL/NATS datastores"
 POSTGRES_IMAGE="trstctl-postgres-hardened:local"
-NATS_IMAGE="nats:2.10-alpine@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927"
+NATS_IMAGE="trstctl-nats-hardened:local"
 POSTGRES_PASSWORD="trstctl-dr-rehearsal-password"
 
 say "building digest-pinned hardened PostgreSQL runtime"
 docker build -f "$REPO_ROOT/deploy/docker/Dockerfile.postgres" -t "$POSTGRES_IMAGE" "$REPO_ROOT"
+say "building NATS from the same pinned dependency graph as embedded mode"
+docker build -f "$REPO_ROOT/deploy/docker/Dockerfile.nats" -t "$NATS_IMAGE" "$REPO_ROOT"
 
 wait_postgres() { # $1 = container id
 	local id="$1"

@@ -36,7 +36,10 @@ services:
       retries: 20
 
   nats:
-    image: nats:2.10-alpine@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.nats
+    image: trstctl-nats-hardened:local
     command: ["--jetstream", "--store_dir=/data", "--http_port=8222"]
     volumes:
       - natsdata:/data

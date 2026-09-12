@@ -906,6 +906,9 @@ func TestPatchedGoToolchainPinned(t *testing.T) {
 	mustContainAll(t, "Dockerfile pins patched Go build image", dockerfile,
 		"ARG GO_VERSION="+patched,
 		"ARG BUILD_IMAGE=golang:"+patched+"-bookworm")
+	mustContainAll(t, "external NATS uses the same patched Go toolchain",
+		repoFile(t, "deploy", "docker", "Dockerfile.nats"),
+		"golang:"+patched+"-bookworm@sha256:")
 
 	ci := repoFile(t, ".github", "workflows", "ci.yml")
 	rel := repoFile(t, ".github", "workflows", "release.yml")
