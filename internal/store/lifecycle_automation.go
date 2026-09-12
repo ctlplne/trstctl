@@ -40,6 +40,9 @@ type LifecycleAutomationOutboxSummary struct {
 // ListLifecycleAutomationInventory returns at most limit renewable X.509
 // identities and their newest immutable rotation evidence for one tenant. Every
 // table reference is explicitly tenant-bound in addition to RLS (AN-1).
+// Certificate selection matches LatestDeployedCertificateFingerprintForIdentity:
+// prefer exact successful delivery evidence, with owner/SAN fallback only for
+// legacy identities that have no such receipt. The bounded list stays one query.
 func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID string, limit int) ([]LifecycleAutomationInventory, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 500
@@ -57,13 +60,25 @@ func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID s
 			  FROM identities AS i
 			  JOIN owners AS o
 			    ON o.tenant_id = $1 AND o.tenant_id = i.tenant_id AND o.id = i.owner_id
+			  LEFT JOIN LATERAL (
+			       SELECT receipt.fingerprint
+			         FROM connector_delivery_receipts receipt
+			         JOIN certificates served
+			           ON served.tenant_id = $1 AND served.tenant_id = receipt.tenant_id
+			          AND served.fingerprint = receipt.fingerprint
+			          AND served.source = 'issued' AND served.status = 'active'
+			        WHERE receipt.tenant_id = $1 AND receipt.tenant_id = i.tenant_id
+			          AND receipt.identity_id = i.id AND receipt.destination = 'connector.deploy'
+			          AND receipt.status IN ('delivered', 'verified')
+			        ORDER BY receipt.updated_at DESC, receipt.id DESC LIMIT 1
+			  ) AS deployed ON true
 			  JOIN LATERAL (
 			       SELECT c.id, c.not_before, c.not_after, c.validity_anchor
 			         FROM certificates AS c
 			        WHERE c.tenant_id = $1
 			          AND c.tenant_id = i.tenant_id
-			          AND c.owner_id = i.owner_id
-			          AND i.name = ANY(c.sans)
+			          AND ((deployed.fingerprint IS NOT NULL AND c.fingerprint = deployed.fingerprint)
+			            OR (deployed.fingerprint IS NULL AND c.owner_id = i.owner_id AND i.name = ANY(c.sans)))
 			          AND c.source = 'issued'
 			          AND c.status = 'active'
 			        ORDER BY c.not_after DESC NULLS LAST, c.created_at DESC, c.id
