@@ -19936,6 +19936,8 @@ export interface operations {
                 cursor?: string;
                 /** @description return only records for this identity */
                 identity_id?: string;
+                /** @description return only receipts with this exact key (maximum 2048 bytes); combine with identity_id to require both filters */
+                idempotency_key?: string;
             };
             header?: never;
             path?: never;

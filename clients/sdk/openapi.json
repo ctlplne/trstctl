@@ -39938,6 +39938,14 @@
               "format": "uuid",
               "type": "string"
             }
+          },
+          {
+            "description": "return only receipts with this exact key (maximum 2048 bytes); combine with identity_id to require both filters",
+            "in": "query",
+            "name": "idempotency_key",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
