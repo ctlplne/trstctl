@@ -67,7 +67,10 @@ services:
   # half is mounted only into eval-oidc; trstctl receives the public JWKS. Keeping
   # the pair in a named volume preserves browser-login continuity across restart.
   oidc-keys:
-    image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.node
+    image: trstctl-node-hardened:local
     environment:
       OIDC_PRIVATE_KEY_DIR: /local-oidc-private
       OIDC_JWKS_DIR: /local-oidc-public
@@ -252,7 +255,10 @@ services:
   # short-lived, single-use authorization codes bound to PKCE and this one exact
   # callback; it is not a production identity provider.
   eval-oidc:
-    image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.node
+    image: trstctl-node-hardened:local
     restart: on-failure
     depends_on:
       trstctl:
@@ -284,7 +290,10 @@ services:
   # tiny TCP bridge shares trstctl's network namespace and forwards that exact
   # loopback address to the project-local IdP service.
   oidc-loopback:
-    image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.node
+    image: trstctl-node-hardened:local
     network_mode: "service:trstctl"
     restart: on-failure
     depends_on:

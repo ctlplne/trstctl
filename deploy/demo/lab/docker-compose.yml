@@ -32,7 +32,10 @@ services:
       - labruntime:/lab-runtime:ro
 
   lab-init:
-    image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.node
+    image: trstctl-node-hardened:local
     profiles: ["partner-lab"]
     user: "0:0"
     entrypoint: ["node", "/lab/lab-init.mjs"]
@@ -67,7 +70,10 @@ services:
       PEBBLE_WFE_NONCEREJECT: "0"
 
   pebble-loopback:
-    image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.node
+    image: trstctl-node-hardened:local
     profiles: ["partner-lab"]
     network_mode: "service:trstctl"
     restart: on-failure
@@ -89,7 +95,10 @@ services:
         }).listen(14000, "127.0.0.1", () => console.log("Pebble loopback proxy listening on 127.0.0.1:14000"));
 
   dns-webhook-loopback:
-    image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.node
+    image: trstctl-node-hardened:local
     profiles: ["partner-lab"]
     network_mode: "service:trstctl"
     restart: on-failure
@@ -104,7 +113,10 @@ services:
       - ./lab/dns-webhook.mjs:/lab/dns-webhook.mjs:ro
 
   alert-sink:
-    image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.node
+    image: trstctl-node-hardened:local
     profiles: ["partner-lab"]
     user: "65532:65532"
     network_mode: "service:trstctl"

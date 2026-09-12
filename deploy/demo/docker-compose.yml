@@ -61,7 +61,10 @@ services:
       - ./localstack-init:/etc/localstack/init/ready.d:ro
 
   oidc-keys:
-    image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.node
+    image: trstctl-node-hardened:local
     environment:
       OIDC_KEY_DIR: /demo-oidc
       OIDC_KEY_ID: trstctl-demo-idp
@@ -71,7 +74,10 @@ services:
       - ../local-oidc/oidc-keygen.mjs:/local/oidc-keygen.mjs:ro
 
   managedkeys-config:
-    image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.node
+    image: trstctl-node-hardened:local
     command:
       - "node"
       - "-e"
@@ -311,7 +317,10 @@ services:
       start_period: 25s
 
   demo-oidc:
-    image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.node
+    image: trstctl-node-hardened:local
     restart: on-failure
     depends_on:
       trstctl:
@@ -339,7 +348,10 @@ services:
       - "127.0.0.1:19081:19081"
 
   oidc-loopback:
-    image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.node
+    image: trstctl-node-hardened:local
     network_mode: "service:trstctl"
     restart: on-failure
     depends_on:
@@ -364,7 +376,10 @@ services:
         });
 
   localstack-loopback:
-    image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.node
+    image: trstctl-node-hardened:local
     network_mode: "service:trstctl"
     restart: on-failure
     depends_on:
@@ -389,7 +404,10 @@ services:
         });
 
   localstack-signer-loopback:
-    image: node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.node
+    image: trstctl-node-hardened:local
     network_mode: "service:signer"
     restart: on-failure
     depends_on:

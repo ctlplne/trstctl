@@ -1,0 +1,24 @@
+# syntax=docker/dockerfile:1.7
+
+# Node runtime for evaluation/demo identity providers and local TCP/HTTP helpers.
+# These scripts use only built-in Node modules. npm, Yarn, and Corepack are build
+# tools with their own dependency trees; none belongs in these running services.
+# Node 24.21.0 embeds OpenSSL 3.5.8. Updating Alpine alone does not update Node's
+# statically linked copy. Keep both the binary and system libraries patched.
+# Keep the upstream runtime and Alpine package inputs immutable on both shipped
+# platforms. Installing the patches offline cannot resolve new dependencies.
+FROM scratch AS patches
+ADD --checksum=sha256:161223a16f042b8e469e9441291e071464fd91d4f4bbe6f496ee8d0abd4e0701 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libcrypto3-3.5.8-r0.apk /amd64/libcrypto3-3.5.8-r0.apk
+ADD --checksum=sha256:aca521e5ae4a321322a9d47ed64a1775f5ab1ffd215d1e9fc0433c58f7bfd037 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libssl3-3.5.8-r0.apk /amd64/libssl3-3.5.8-r0.apk
+ADD --checksum=sha256:35b892813c23664a3592e4fc8c12a03538a22c579057655361c7043305272a9a https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libcrypto3-3.5.8-r0.apk /arm64/libcrypto3-3.5.8-r0.apk
+ADD --checksum=sha256:d6ec970cc10e01539e41626f720c4e0ac69016eaa2079a10ef776ffd3243db5b https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libssl3-3.5.8-r0.apk /arm64/libssl3-3.5.8-r0.apk
+
+FROM node:24.21.0-alpine@sha256:50c8e8ca1d27439048670df5883f32d57cf81cff6233222c893fd0d9884cbd81
+ARG TARGETARCH
+COPY --from=patches /${TARGETARCH}/ /tmp/trstctl-node-patches/
+RUN --network=none apk add --no-network /tmp/trstctl-node-patches/*.apk \
+    && rm -rf /tmp/trstctl-node-patches \
+    && rm -rf /usr/local/lib/node_modules /opt/yarn-* \
+    && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+        /usr/local/bin/yarn /usr/local/bin/yarnpkg /usr/local/bin/pnpm /usr/local/bin/pnpx \
+    && node --version
