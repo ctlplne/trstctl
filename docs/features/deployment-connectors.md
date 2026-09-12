@@ -225,6 +225,13 @@ binding. A running renewal is also left alone; its successor will deploy through
 own bound job. This refusal prevents the console from saying **Deployed** when no
 executor received a credential.
 
+When this path generates the key in the control plane, trstctl retains a
+tenant-bound encrypted copy before contacting the CA. A retry can then finish
+deployment using the original certificate and key. Temporary plaintext buffers
+are wiped; successful delivery does not delete the encrypted recovery record.
+The lifecycle preview discloses this custody before authorization. A destination
+with `executor=agent` instead generates its key on the host and submits only a CSR.
+
 `target test` is an effect-free dress rehearsal from the machine or network that
 would perform the real deployment. Enable `connector.test` as a claimable job kind
 in addition to enrolling the required agent role. For all 14 host-vantage families,

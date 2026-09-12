@@ -1098,7 +1098,7 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 	custodySummary := endpointBindingCustody{
 		KeyOrigin:              "control_plane",
 		PrivateKeyControlPlane: true,
-		Detail:                 "trstctl generates the subject key in locked memory, passes it only to the selected connector, then wipes it",
+		Detail:                 "trstctl generates the subject key in locked memory, retains a tenant-bound encrypted copy for delivery recovery, sends the key only to the selected connector, and wipes temporary plaintext buffers",
 	}
 	if agentKeygen {
 		custodySummary = endpointBindingCustody{
