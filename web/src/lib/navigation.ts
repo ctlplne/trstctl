@@ -267,9 +267,12 @@ export const navSpaces: NavSpace[] = [
             labelKey: "platform.tabs.posture",
             icon: "platform",
             mode: "real",
-            featureIds: ["F10", "F11", "F12", "F14", "F15", "F20", "F40"],
+            featureIds: ["F10", "F11", "F12", "F14", "F15", "F20", "F40", "F41"],
           },
-          { to: "/admin/editions", labelKey: "platform.tabs.editions", icon: "platform", mode: "real", featureIds: ["F41"] },
+          // License inspection reports the offline verifier's own read result.
+          // Federation belongs to System health, as the canonical F41 contract
+          // specifies; it is not a prerequisite for reading an active license.
+          { to: "/admin/editions", labelKey: "platform.tabs.editions", icon: "platform", mode: "real", featureIds: [] },
           { to: "/assistant", labelKey: "nav.item.assistant", icon: "bot", mode: "real", featureIds: ["F75", "F76", "F77", "F78"] },
         ],
       },
@@ -799,10 +802,11 @@ export const realGuiSurfaces: RealGuiSurface[] = [
   },
   {
     featureId: "F41",
-    routes: ["/admin/editions"],
+    routes: ["/admin/system"],
     component: "Platform",
     kind: "observe",
-    evidence: "passive cross-cluster federation imports peer event logs and projects replicated read state",
+    evidence:
+      "System health discloses the served federation capability's availability and deployment prerequisites; license inspection does not configure federation",
   },
   {
     featureId: "F42",

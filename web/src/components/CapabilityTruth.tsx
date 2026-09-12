@@ -63,7 +63,7 @@ export function CapabilityActionNotice({ action }: { action: CapabilityExecution
 export function CapabilityNavStatus({ featureIds }: { featureIds: readonly CanonicalCapabilityID[] }) {
   const { view, enabled } = useCapabilities();
   const { t } = useTranslation();
-  if (!enabled || !view) return null;
+  if (!enabled || !view || featureIds.length === 0) return null;
   const summary = summarizeCapabilities(view, featureIds);
   if (summary.state === "ready") return null;
   const label = stateLabel(summary.state, t);

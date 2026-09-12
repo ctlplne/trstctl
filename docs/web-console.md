@@ -728,6 +728,9 @@ offers requeue only for failed delivery. Toasts report real success and failure.
   **Plan and license** (`/admin/editions`) answers which signed features are enabled
   and when the license expires, with one **Add license** operator guide. Signature
   verification, the exact feature table, and entitlement evidence start closed.
+  Federation availability belongs to **System health**; an unavailable federation
+  capability does not prevent license inspection or relabel this page as unavailable.
+  License read failures remain visible on the license page itself.
   Packaging stays nested under entitlement evidence; distribution and active-active
   issuance proof load only when the operator opens the nested architecture section.
   The browser never uploads or stores the license: the guide uses an operator-owned

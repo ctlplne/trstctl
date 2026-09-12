@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { CapabilityRouteNotice } from "@/components/CapabilityTruth";
+import { CapabilityNavStatus, CapabilityRouteNotice } from "@/components/CapabilityTruth";
 import { IntlProvider } from "@/i18n/I18nProvider";
 import { CapabilityFixtureProvider } from "@/lib/capabilities";
 import type { CapabilityView, CapabilityViewItem } from "@/lib/api-types.gen";
+import { featureIdsForPath } from "@/lib/navigation";
 
 function item(overrides: Partial<CapabilityViewItem>): CapabilityViewItem {
   return {
@@ -80,6 +81,29 @@ function renderNotice(view: CapabilityView | null, options?: { error?: boolean; 
 }
 
 describe("capability truth UI", () => {
+  it("keeps unavailable federation on System health without blocking license inspection", async () => {
+    const federation: CapabilityView = {
+      ...runtime,
+      license: { tier: "provider", state: "active" },
+      items: [item({ capability_id: "F41", name: "Cross-cluster / multi-region federation", console_route: "/admin/system", runtime_state: "unavailable" })],
+    };
+    const license = renderNotice(federation, { path: "/admin/editions" });
+    expect(license.container.querySelector("[data-capability-route-state]")).toBeNull();
+    license.unmount();
+    const nav = render(
+      <IntlProvider initialLocale="en-US" initialTimeZone="UTC">
+        <CapabilityFixtureProvider view={federation}>
+          <CapabilityNavStatus featureIds={featureIdsForPath("/admin/editions")} />
+        </CapabilityFixtureProvider>
+      </IntlProvider>,
+    );
+    expect(nav.container.querySelector("[data-capability-nav-state]")).toBeNull();
+    nav.unmount();
+    renderNotice(federation, { path: "/admin/system" });
+    await userEvent.setup().click(screen.getByText(/Review .* limitation/));
+    expect(screen.getByText("Cross-cluster / multi-region federation · Unavailable")).toBeInTheDocument();
+  });
+
   it("shows exact runtime limits without blocking the ready part of a route", async () => {
     const user = userEvent.setup();
     renderNotice(runtime);
