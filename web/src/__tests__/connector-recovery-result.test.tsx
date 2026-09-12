@@ -120,10 +120,19 @@ describe("exact connector restore result", () => {
     expect(screen.queryByRole("heading", { name: "Previous version restored" })).not.toBeInTheDocument();
   });
   it.each(["rollback_queued", "rollback_failed"] as const)("can read a later retry result after %s without another restore", async (initialStatus) => {
-    const failed = { ...queued, status: "rollback_failed", reason: "rollback_failed", detail: "The agent reached the target but the rollback did not succeed: connector rollback failed against the target" } satisfies ConnectorDelivery;
+    const failed = {
+      ...queued,
+      status: "rollback_failed",
+      reason: "rollback_failed",
+      detail: "The agent reached the target but the rollback did not succeed: connector rollback failed against the target",
+    } satisfies ConnectorDelivery;
     vi.mocked(api.connectorDelivery).mockResolvedValueOnce(failed).mockResolvedValue(restored);
     const user = userEvent.setup();
-    render(<AppQueryProvider><RecoveryResult initial={{ ...queued, status: initialStatus }} /></AppQueryProvider>);
+    render(
+      <AppQueryProvider>
+        <RecoveryResult initial={{ ...queued, status: initialStatus }} />
+      </AppQueryProvider>,
+    );
     expect(await screen.findByText(failed.detail)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Restore not proven" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Check restore result" }));
@@ -131,5 +140,4 @@ describe("exact connector restore result", () => {
     expect(api.connectorDelivery).toHaveBeenCalledTimes(2);
     expect(api.connectorDelivery).toHaveBeenNthCalledWith(2, queued.id);
   });
-
 });
