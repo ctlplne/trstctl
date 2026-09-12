@@ -23,7 +23,9 @@ type certificateIngestRequest struct {
 }
 
 type certificateResponse struct {
-	ID                 string     `json:"id"`
+	ID string `json:"id"`
+	// IdentityIDs are exact retained issuance/delivery bindings, never name matches.
+	IdentityIDs        []string   `json:"identity_ids,omitempty"`
 	TenantID           string     `json:"tenant_id"`
 	OwnerID            *string    `json:"owner_id"`
 	Subject            string     `json:"subject"`
@@ -268,7 +270,14 @@ func (a *API) getCertificate(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	a.writeJSON(w, http.StatusOK, toCertificateResponse(c))
+	bindings, err := a.store.CertificateIdentityBindings(r.Context(), tenantID, []string{c.ID})
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	response := toCertificateResponse(c)
+	response.IdentityIDs = bindings[c.ID]
+	a.writeJSON(w, http.StatusOK, response)
 }
 
 func (a *API) listCertificates(w http.ResponseWriter, r *http.Request) {
@@ -314,8 +323,19 @@ func (a *API) listCertificates(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	items := make([]certificateResponse, 0, len(certs))
+	certificateIDs := make([]string, 0, len(certs))
 	for _, c := range certs {
-		items = append(items, toCertificateResponse(c))
+		certificateIDs = append(certificateIDs, c.ID)
+	}
+	bindings, err := a.store.CertificateIdentityBindings(r.Context(), tenantID, certificateIDs)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	for _, c := range certs {
+		response := toCertificateResponse(c)
+		response.IdentityIDs = bindings[c.ID]
+		items = append(items, response)
 	}
 	next := ""
 	if len(certs) == limit {

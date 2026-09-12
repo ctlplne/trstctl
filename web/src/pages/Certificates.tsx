@@ -38,7 +38,13 @@ import { PageHeader } from "@/components/PageHeader";
 import { validityBandForDates } from "@/lib/statusVocab";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { formatNumber as formatNumberPolicy } from "@/i18n/format";
-import { certificateDisplayName, certificateReplacementPath } from "@/lib/certificatePresentation";
+import {
+  certificateDisplayName,
+  certificateReplacementPath,
+  certificateIdentity,
+  certificateCanRenew,
+  certificateIdentityPath,
+} from "@/lib/certificatePresentation";
 import type { MessageKey } from "@/i18n/messages";
 import { ReadinessPanel, ReadinessSimulator, DeploymentReceipts, RenewalHistory, autoRenewingCount } from "@/components/certs";
 import { LifecycleCockpit } from "@/components/certs/LifecycleCockpit";
@@ -680,7 +686,7 @@ function CertificateWorkspace() {
   const [ctError, setCTError] = useState<Notice | null>(null);
   const [ctResult, setCTResult] = useState<CTSubmission | null>(null);
   const [ctDialogOpen, setCTDialogOpen] = useState(false);
-  const [tab, setTab] = useState<CertificatesTab>(() => tabFromSearchParam(searchParams.get("tab")));
+  const tab = tabFromSearchParam(searchParams.get("tab"));
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [bulkRevokeOpen, setBulkRevokeOpen] = useState(false);
   const [bulkReason, setBulkReason] = useState<BulkRevokeRequest["reason"]>("keyCompromise");
@@ -787,7 +793,6 @@ function CertificateWorkspace() {
 
   function selectTab(next: string) {
     const value = tabFromSearchParam(next);
-    setTab(value);
     setSearchParams(
       (current) => {
         const nextParams = new URLSearchParams(current);
@@ -1015,14 +1020,6 @@ function CertificateWorkspace() {
   }
 
   const ownerByID = useMemo(() => new Map(owners.map((owner) => [owner.id, owner])), [owners]);
-  const identityByCN = useMemo(() => {
-    const map = new Map<string, Identity>();
-    for (const identity of identities) {
-      if (identity.kind !== "x509_certificate") continue;
-      map.set(identity.name.trim().toLowerCase(), identity);
-    }
-    return map;
-  }, [identities]);
 
   /** startRenew advances the MANAGING IDENTITY to `renewing` (the same
    * idempotent transition the Identities page uses), so the expiring-certs
@@ -1030,7 +1027,8 @@ function CertificateWorkspace() {
   async function startRenew(certificate: Certificate, identity: Identity) {
     setRenewingIds((current) => new Set(current).add(certificate.id));
     try {
-      await api.transitionIdentity(identity.id, "renewing", `renew requested from certificate inventory (${certificate.subject})`);
+      const updated = await api.transitionIdentity(identity.id, "renewing", `renew requested from certificate inventory (${certificate.subject})`);
+      setIdentities((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       toast({
         title: t("certificates.lifecycle.renewStarted"),
         description: `${identity.name} is now renewing; track progress on Identities.`,
@@ -1080,14 +1078,14 @@ function CertificateWorkspace() {
         ownerByID,
         formatDate,
         lifecycleColumn({
-          identityByCN,
+          identities,
           renewingIds,
           onRenew: (c, i) => void startRenew(c, i),
           replaceLabel: t("certificates.lifecycle.replaceViaRequest"),
         }),
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- startRenew is stable per render semantics used across this page
-    [ownerByID, identityByCN, renewingIds, t, formatDate],
+    [ownerByID, identities, renewingIds, t, formatDate],
   );
 
   const filtered = useMemo(() => {
@@ -1614,12 +1612,23 @@ function CertificateWorkspace() {
                 radius) and the incident form are one click away instead of a
                 copied id and two navigations. */}
             <nav aria-label={translateNow("certificates.detail.relatedViews")} className="mb-3 flex flex-wrap gap-3 text-sm">
-              <Link className="text-brand-accent underline" to={`/graph?node=${encodeURIComponent(detail.id)}`}>
+              <Link className="text-brand-accent underline" to={`/graph?node=${encodeURIComponent(`cert:${detail.id}`)}`}>
                 {translateNow("certificates.detail.viewInGraph")}
               </Link>
-              <Link className="text-brand-accent underline" to={`/incidents?identity=${encodeURIComponent(detail.id)}`}>
-                {translateNow("certificates.detail.respond")}
-              </Link>
+              {certificateIdentity(detail, identities) && (
+                <Link className="text-brand-accent underline" to={`/incidents?identity=${encodeURIComponent(certificateIdentity(detail, identities)!.id)}`}>
+                  {translateNow("certificates.detail.respond")}
+                </Link>
+              )}
+              {detail.status !== "revoked" && (
+                <Link
+                  className="text-brand-accent underline"
+                  to={`/certificates?tab=crlct&certificate_id=${encodeURIComponent(detail.id)}`}
+                  onClick={() => setDetailID(null)}
+                >
+                  {t("certificates.lifecycle.reviewRevocation")}
+                </Link>
+              )}
             </nav>
             <dl className="grid gap-3 text-sm md:grid-cols-2">
               <div>
@@ -1721,8 +1730,8 @@ function CertificateWorkspace() {
                 <dt className="flex items-center justify-between gap-2 font-medium text-muted-foreground">
                   {translateNow("source.renewal.history.771f739290")}
                   {(() => {
-                    const identity = renewableIdentityFor(detail, identityByCN);
-                    if (identity) {
+                    const identity = certificateIdentity(detail, identities);
+                    if (identity && certificateCanRenew(detail, identity)) {
                       const busy = renewingIds.has(detail.id);
                       return (
                         <Button
@@ -1735,6 +1744,13 @@ function CertificateWorkspace() {
                         >
                           {busy ? translateNow("source.renewing.81caaaa0e6") : translateNow("source.renew.now.905758c33c")}
                         </Button>
+                      );
+                    }
+                    if (detail.identity_ids?.length) {
+                      return (
+                        <Link to={certificateIdentityPath(detail)} className="text-caption font-medium text-brand-accent hover:underline">
+                          {t("certificates.lifecycle.reviewIdentity")}
+                        </Link>
                       );
                     }
                     if (detail.status === "active") {
@@ -1767,29 +1783,14 @@ function CertificateWorkspace() {
   );
 }
 
-/** certificateCN pulls the CN attribute out of an X.509 subject string so a
- * certificate can be matched to the non-human identity that holds it (the
- * durable identity record is named by CN in the issuance path). */
+/** Extract a common name for display only. Never use it to select a lifecycle identity. */
 export function certificateCN(subject: string): string {
   const match = /(?:^|[,/]\s*)CN=([^,/]+)/i.exec(subject);
   return (match?.[1] ?? "").trim().toLowerCase();
 }
 
-/** renewableIdentityFor returns the managing identity for a certificate when
- * one exists: an x509 identity whose name matches the certificate CN and that
- * is not already retired/revoked. */
-function renewableIdentityFor(certificate: Certificate, identityByCN: Map<string, Identity>): Identity | undefined {
-  if (certificate.status !== "active" || certificate.source?.startsWith("attested:")) return undefined;
-  const commonName = certificateCN(certificate.subject);
-  if (!commonName) return undefined;
-  const identity = identityByCN.get(commonName);
-  if (!identity) return undefined;
-  if (identity.status === "retired" || identity.status === "revoked") return undefined;
-  return identity;
-}
-
 type LifecycleColumnContext = {
-  identityByCN: Map<string, Identity>;
+  identities: Identity[];
   renewingIds: Set<string>;
   onRenew: (certificate: Certificate, identity: Identity) => void;
   replaceLabel: string;
@@ -1805,8 +1806,8 @@ function lifecycleColumn(context: LifecycleColumnContext): DataGridColumn<Certif
     hiddenByDefault: true,
     className: "whitespace-nowrap align-middle",
     cell: (c) => {
-      const identity = renewableIdentityFor(c, context.identityByCN);
-      if (identity) {
+      const identity = certificateIdentity(c, context.identities);
+      if (identity && certificateCanRenew(c, identity)) {
         const busy = context.renewingIds.has(c.id);
         return (
           <Button
@@ -1819,6 +1820,13 @@ function lifecycleColumn(context: LifecycleColumnContext): DataGridColumn<Certif
           >
             {busy ? translateNow("source.renewing.81caaaa0e6") : translateNow("source.renew.90c1689b0b")}
           </Button>
+        );
+      }
+      if (c.identity_ids?.length) {
+        return (
+          <Link to={certificateIdentityPath(c)} className="text-caption font-medium text-brand-accent hover:underline">
+            {translateNow("certificates.lifecycle.reviewIdentity")}
+          </Link>
         );
       }
       if (c.status === "active") {

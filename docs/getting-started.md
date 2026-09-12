@@ -58,7 +58,7 @@ For a read-only, click-by-click product tour, open the
 3. Verify `/healthz` with that certificate.
 4. Trust the certificate in the evaluation browser; never bypass the warning.
 5. Sign in with the loopback identity provider and complete the wizard.
-6. Confirm the issued certificate appears in **Certificate Lifecycle** and its
+6. Confirm the issued certificate appears in **Certificates** and its
    creation appears in change history.
 
 The detailed commands and recovery notes follow in the same order.

@@ -34,5 +34,5 @@ export function graphNodeIdForIdentity(identity: Identity): string | null {
   const credentialID = stringAttribute(identity, ["credential_id", "certificate_id"]);
   if (credentialID) return credentialID.startsWith("cert:") ? credentialID : `cert:${credentialID}`;
 
-  return identity.kind === "x509_certificate" && identity.id ? `cert:${identity.id}` : null;
+  return identity.kind === "x509_certificate" && identity.id ? `id:${identity.id}` : null;
 }

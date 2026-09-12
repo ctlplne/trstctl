@@ -32,9 +32,9 @@ vi.mock("@/lib/api", async (orig) => {
   return { ...actual, api: apiMock };
 });
 
-function renderIdentities() {
+function renderIdentities(path = "/identities") {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[path]}>
       <AppQueryProvider>
         <Identities />
       </AppQueryProvider>
@@ -98,6 +98,20 @@ async function confirmReviewedAction(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("lifecycle actions from the UI", () => {
+  it("opens and closes the exact identity named by a certificate lifecycle link", async () => {
+    const identity = { id: "linked-identity", name: "same.example", kind: "x509_certificate", owner_id: "own-1", status: "issued" };
+    apiMock.identities.mockResolvedValue([{ ...identity, id: "same-name-other", status: "deployed" }, identity]);
+    apiMock.getIdentity.mockResolvedValue(identity);
+    renderIdentities("/identities?identity=linked-identity");
+    const drawer = await screen.findByRole("dialog", { name: "Identity detail" });
+    expect(await within(drawer).findByText("linked-identity")).toBeInTheDocument();
+    expect(apiMock.getIdentity).toHaveBeenCalledWith("linked-identity");
+    expect(within(drawer).getByRole("button", { name: "Deploy" })).toBeInTheDocument();
+    expect(within(drawer).queryByRole("button", { name: "Renew" })).not.toBeInTheDocument();
+    await userEvent.setup().click(within(drawer).getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog", { name: "Identity detail" })).not.toBeInTheDocument();
+    expect(apiMock.transitionIdentity).not.toHaveBeenCalled();
+  });
   afterEach(() => {
     vi.useRealTimers();
     Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
@@ -264,8 +278,8 @@ describe("lifecycle actions from the UI", () => {
       .closest("tr")!;
     expect(within(row).getByText(outcome === "succeeded" ? "deployed" : "Renewal Failed")).toBeInTheDocument();
     expect(within(drawer).getByText(new RegExp(`${outcome} via manual; successor`))).toBeInTheDocument();
-    if (outcome === "succeeded") expect(within(drawer).getByRole("button", { name: /^renew$/i })).toBeEnabled();
-    else expect(within(drawer).queryByRole("button", { name: /^renew$/i })).not.toBeInTheDocument();
+    // Both successful completion and the served renewal_failed retry edge allow renewal.
+    expect(within(drawer).getByRole("button", { name: /^renew$/i })).toBeEnabled();
     const visibleReads = apiMock.identities.mock.calls.length;
     await act(async () => {
       await vi.advanceTimersByTimeAsync(10_050);
@@ -464,7 +478,7 @@ describe("lifecycle actions from the UI", () => {
         owner_id: "owner-1",
         status: "deployed",
       }),
-    ).toBe("cert:dep-1");
+    ).toBe("id:dep-1");
     expect(
       graphNodeIdForIdentity({
         id: "dep-2",
@@ -847,7 +861,7 @@ describe("lifecycle actions from the UI", () => {
     apiMock.identities.mockResolvedValue([identity]);
     apiMock.getIdentity.mockResolvedValue(identity);
     apiMock.graphBlastRadius.mockResolvedValue({
-      node: { id: "cert:dep-9", kind: "credential", name: "to-revoke certificate" },
+      node: { id: "id:dep-9", kind: "credential", name: "to-revoke certificate" },
       affected: [
         { id: "workload:api", kind: "workload", name: "payments-api" },
         { id: "workload:worker", kind: "workload", name: "payments-worker" },
@@ -861,11 +875,11 @@ describe("lifecycle actions from the UI", () => {
     const detail = await openIdentityDetails(user, "to-revoke");
     await user.click(within(detail).getByRole("button", { name: /^revoke$/i }));
 
-    await waitFor(() => expect(apiMock.graphBlastRadius).toHaveBeenCalledWith("cert:dep-9"));
+    await waitFor(() => expect(apiMock.graphBlastRadius).toHaveBeenCalledWith("id:dep-9"));
     const dialog = await screen.findByRole("alertdialog");
     const impactHeading = await within(dialog).findByRole("heading", { name: "Blast-radius impact" });
     const impact = impactHeading.closest("section")!;
-    expect(within(impact).getByText(/cert:dep-9/)).toBeInTheDocument();
+    expect(within(impact).getByText(/id:dep-9/)).toBeInTheDocument();
     expect(within(impact).getByText(/3 downstream affected nodes/i)).toBeInTheDocument();
     expect(within(impact).getByText("workload")).toBeInTheDocument();
     expect(within(impact).getByText("2")).toBeInTheDocument();
@@ -899,7 +913,7 @@ describe("lifecycle actions from the UI", () => {
     const detail = await openIdentityDetails(user, "missing-graph-node");
     await user.click(within(detail).getByRole("button", { name: /^revoke$/i }));
 
-    await waitFor(() => expect(apiMock.graphBlastRadius).toHaveBeenCalledWith("cert:dep-404"));
+    await waitFor(() => expect(apiMock.graphBlastRadius).toHaveBeenCalledWith("id:dep-404"));
     const dialog = await screen.findByRole("alertdialog");
     expect(await within(dialog).findByText(/Blast-radius impact unavailable: graph node not found/i)).toBeInTheDocument();
   });

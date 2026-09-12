@@ -1566,6 +1566,14 @@ export const messages = {
     defaultMessage: "Destinations",
     description: "Secrets module KPI: link to configured outbound secret destinations.",
   },
+  "certificates.lifecycle.reviewIdentity": {
+    defaultMessage: "Review identity lifecycle",
+    description: "Open the managing identity to review actions allowed by its current lifecycle state.",
+  },
+  "certificates.lifecycle.reviewRevocation": {
+    defaultMessage: "Review revocation",
+    description: "Open an exact certificate revocation preview; this link performs no mutation.",
+  },
   "certificates.lifecycle.notManaged": {
     defaultMessage: "Not identity-managed — replace via request →",
     description: "Certificate detail affordance when no managing identity exists; links to the request flow.",
@@ -1760,7 +1768,7 @@ export const messages = {
     description: "Certificates page tab: health, rogue findings, and KPI panels.",
   },
   "certificates.tabs.crlct": {
-    defaultMessage: "CRL & CT",
+    defaultMessage: "Revocation & CT",
     description: "Certificates page tab: CRL distribution and Certificate Transparency submission.",
   },
   "certificates.tabs.renewal": {

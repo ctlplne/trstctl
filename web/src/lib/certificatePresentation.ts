@@ -1,4 +1,4 @@
-import type { Certificate } from "@/lib/api";
+import type { Certificate, Identity } from "@/lib/api";
 import type { MessageKey } from "@/i18n/messages";
 
 // Display only: never use this fallback to match an identity or authorize a
@@ -33,4 +33,23 @@ export function certificateDeadline(value: string | undefined, now: number, t: (
 
 export function certificateReplacementPath(certificate: Pick<Certificate, "source">): string {
   return certificate.source?.startsWith("attested:") ? "/workloads?workflow=attested" : "/request";
+}
+
+/** Only the server's retained issuance/delivery evidence can select a managing
+ * identity. A shared certificate requires explicit operator selection. */
+export function certificateIdentity(certificate: Certificate, identities: readonly Identity[]): Identity | undefined {
+  if (certificate.identity_ids?.length !== 1) return undefined;
+  return identities.find((identity) => identity.id === certificate.identity_ids![0] && identity.kind === "x509_certificate");
+}
+
+export function certificateIdentityPath(certificate: Certificate): string {
+  return certificate.identity_ids?.length === 1 ? `/identities?identity=${encodeURIComponent(certificate.identity_ids[0]!)}` : "/identities";
+}
+
+export function certificateCanRenew(certificate: Certificate, identity: Identity | undefined): boolean {
+  return (
+    certificate.status === "active" &&
+    !certificate.source?.startsWith("attested:") &&
+    Boolean(identity && ["deployed", "renewal_failed"].includes(identity.status))
+  );
 }

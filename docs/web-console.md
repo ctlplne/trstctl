@@ -95,12 +95,25 @@ cursor-paginated, expiry-filtered table it renders issuer/profile/team/environme
 filters with URL-resident state, a Team column, estate-wide expiry/source health,
 expiry bands, a 47-day renewal-readiness simulator (does each cert renew comfortably
 inside the shrinking CA/Browser-Forum maximum lifetime?), deployment receipts from
-the connectors, and one guided revocation center under **CRL & CT**. That center makes
+the connectors, and one guided revocation center under **Revocation & CT**. That center makes
 an operator choose a managed X.509 identity and RFC 5280 reason, then reads an
 effect-free, version-bound server plan before typed confirmation unlocks execution.
 The review keeps affected systems, queued CRL/OCSP publication, signed endpoint health,
 CRL availability, immutable audit evidence, and recovery guidance in one journey.
 Unknown graph or propagation state is labeled unknown; it is never rendered as healthy.
+
+After first issuance, **Review identity lifecycle** opens that identity's detail
+drawer with the actions its current state permits. An issued certificate must be
+deployed before renewal. A deployed identity, or a failed renewal that can be
+retried, can offer **Renew**. A certificate's details also expose **Review revocation**
+without requiring the operator to find a protocol acronym in navigation.
+
+Certificate list and detail responses include `identity_ids` only when retained
+issuance or successful delivery records establish the relationship. The console
+does not match a certificate to an identity by common name, owner, or row order.
+Missing or multiple bindings cannot authorize an automatic identity selection.
+Graph links use `cert:<certificate-id>` for the leaf and `id:<identity-id>` for
+the lifecycle identity; incident response receives the actual managing identity.
 The same workspace also contains the tenant CRL distribution panel (full CRL, shard
 count, delta base, freshness window), a Certificate Transparency queueing form, and a
 per-certificate renewal-history timeline in the detail drawer. See

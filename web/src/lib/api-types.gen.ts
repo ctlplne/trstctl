@@ -1894,6 +1894,7 @@ export interface Certificate {
   deployment_location?: string;
   fingerprint: string;
   id: string;
+  identity_ids?: string[];
   issuer?: string;
   key_algorithm?: string;
   key_exportable?: "" | "exportable" | "non_exportable";

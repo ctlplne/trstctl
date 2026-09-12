@@ -7722,6 +7722,14 @@
             "format": "uuid",
             "type": "string"
           },
+          "identity_ids": {
+            "description": "Managing identities proved by retained issuance or successful delivery evidence. Returned by certificate inventory list/detail reads. Absent means no resolved binding; multiple values require explicit selection. Never inferred from a name or owner.",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
           "issuer": {
             "type": "string"
           },

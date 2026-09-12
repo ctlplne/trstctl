@@ -1742,7 +1742,7 @@ verified" must never read the same. The signed terminal receipt is accepted only
 for the live lease and exact command. It emits immutable queue and observation
 events, projects tenant-scoped endpoint health, and queues one warning/critical
 notification per unhealthy endpoint. `GET /api/v1/revocation/health` and
-Certificates → CRL & CT show the endpoint, issuer/certificate context, relay,
+Certificates → Revocation & CT show the endpoint, issuer/certificate context, relay,
 evidence digest, status, latency and freshness window. Before a signed
 observation exists, the API says `observed:false` and the console says unknown;
 an empty projection never reads as healthy.

@@ -8530,6 +8530,8 @@ export interface components {
             fingerprint: string;
             /** Format: uuid */
             id: string;
+            /** @description Managing identities proved by retained issuance or successful delivery evidence. Returned by certificate inventory list/detail reads. Absent means no resolved binding; multiple values require explicit selection. Never inferred from a name or owner. */
+            identity_ids?: string[];
             issuer?: string;
             key_algorithm?: string;
             /** @enum {string} */

@@ -85,6 +85,32 @@ func TestServedFirstLeafResultIsExactPendingIdempotentAndReplayable(t *testing.T
 	if err != nil || !bytes.Equal(stored.CertificateDER, first.Bytes) {
 		t.Fatalf("wrong stored leaf: %v", err)
 	}
+	assertInventoryBinding := func() {
+		t.Helper()
+		for _, inventoryPath := range []string{"/api/v1/certificates/" + result.Certificate.ID, "/api/v1/certificates?limit=100"} {
+			code, raw := secretsReq(t, h, http.MethodGet, inventoryPath, token, nil)
+			var record struct {
+				IdentityIDs []string `json:"identity_ids"`
+				Items       []struct {
+					ID          string   `json:"id"`
+					IdentityIDs []string `json:"identity_ids"`
+				} `json:"items"`
+			}
+			if err := json.Unmarshal(raw, &record); err != nil || code != http.StatusOK {
+				t.Fatalf("inventory binding: %d %s %v", code, raw, err)
+			}
+			ids := record.IdentityIDs
+			for _, item := range record.Items {
+				if item.ID == result.Certificate.ID {
+					ids = item.IdentityIDs
+				}
+			}
+			if !reflect.DeepEqual(ids, []string{identity}) {
+				t.Fatalf("inventory bound the wrong identity: %s", raw)
+			}
+		}
+	}
+	assertInventoryBinding()
 	counts := tenantEventTypes(t, h.log, h.tenant)
 	if counts["issuance.server_side_keygen"] != 0 {
 		t.Fatal("caller CSR fell back to server key generation")
@@ -144,6 +170,7 @@ func TestServedFirstLeafResultIsExactPendingIdempotentAndReplayable(t *testing.T
 	if status != http.StatusOK || !bytes.Equal(importedResult, afterImportReplay) {
 		t.Fatalf("rebuild lost imported issuance result: %d %s", status, afterImportReplay)
 	}
+	assertInventoryBinding() // Re-import and full replay preserve exact identity evidence.
 	beforeConflict := tenantEventTypes(t, h.log, h.tenant)
 	stored.CertificatePEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: stored.CertificateDER})
 	if _, err := h.srv.orch.RecordCertificate(t.Context(), h.tenant, stored); !errors.Is(err, store.ErrIdempotencyConflict) {

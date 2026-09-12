@@ -120,8 +120,8 @@ describe("C10-4 certificate inventory filters", () => {
 
     expect(await screen.findByText("CN=payments.example.test")).toBeInTheDocument();
 
-    // CRL distribution lives behind the CRL & CT workspace tab.
-    await user.click(screen.getByRole("tab", { name: "CRL & CT" }));
+    // CRL distribution lives behind the Revocation & CT workspace tab.
+    await user.click(screen.getByRole("tab", { name: "Revocation & CT" }));
     expect(screen.getByRole("heading", { name: "CRL distribution" })).toBeInTheDocument();
     expect(screen.getByText("ca-prod")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "#42" })).toHaveAttribute("href", "/crl/t1");
@@ -169,7 +169,7 @@ describe("C10-4 certificate inventory filters", () => {
     renderCerts();
 
     expect(await screen.findByText("CN=payments.example.test")).toBeInTheDocument();
-    await user.click(screen.getByRole("tab", { name: "CRL & CT" }));
+    await user.click(screen.getByRole("tab", { name: "Revocation & CT" }));
 
     expect(screen.getByRole("heading", { name: "CRL distribution" })).toBeInTheDocument();
     expect(screen.getByText("ca-no-shards")).toBeInTheDocument();

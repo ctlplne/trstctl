@@ -1,7 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { certificateDisplayName, certificateDeadline } from "@/lib/certificatePresentation";
+import { certificateDisplayName, certificateDeadline, certificateIdentity, certificateCanRenew } from "@/lib/certificatePresentation";
+import type { Certificate, Identity } from "@/lib/api";
 
 describe("certificate presentation preserves identity and exact time meaning", () => {
+  const leaf: Certificate = { id: "leaf", tenant_id: "tenant", subject: "CN=same.example", fingerprint: "fp", status: "active", owner_id: "owner" };
+  const first: Identity = { id: "first", kind: "x509_certificate", name: "same.example", owner_id: "owner", status: "deployed" };
+  const second: Identity = { ...first, id: "second" };
+  it("never selects a managing identity by name, owner, or list order", () => {
+    expect(certificateIdentity(leaf, [first, second])).toBeUndefined();
+    expect(certificateIdentity({ ...leaf, identity_ids: ["first", "second"] }, [first, second])).toBeUndefined();
+    expect(certificateIdentity({ ...leaf, identity_ids: ["second"] }, [first, second])).toBe(second);
+    expect(certificateIdentity({ ...leaf, identity_ids: ["second"] }, [second, first])).toBe(second);
+    expect(certificateIdentity({ ...leaf, identity_ids: ["missing"] }, [first, second])).toBeUndefined();
+  });
+  it.each(["requested", "issued", "renewing", "revoked", "retired", "unknown"])("does not offer renewal from %s", (status) => {
+    expect(certificateCanRenew(leaf, { ...first, status })).toBe(false);
+  });
+  it("offers only live certificate renewal from deployed or failed renewal states", () => {
+    expect(certificateCanRenew(leaf, first)).toBe(true);
+    expect(certificateCanRenew(leaf, { ...first, status: "renewal_failed" })).toBe(true);
+    expect(certificateCanRenew({ ...leaf, status: "revoked" }, first)).toBe(false);
+    expect(certificateCanRenew({ ...leaf, status: "superseded" }, first)).toBe(false);
+    expect(certificateCanRenew({ ...leaf, source: "attested:spiffe" }, first)).toBe(false);
+  });
   it("uses subject, then a SPIFFE URI, then another SAN, then the stable id", () => {
     expect(certificateDisplayName({ id: "c1", subject: "CN=api.test", sans: ["spiffe://test/worker"] })).toBe("CN=api.test");
     expect(certificateDisplayName({ id: "c1", subject: "", sans: ["api.test", "spiffe://test/worker"] })).toBe("spiffe://test/worker");

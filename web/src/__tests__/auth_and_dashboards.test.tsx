@@ -927,7 +927,7 @@ describe("auth + dashboards", () => {
     apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1" });
     apiMock.certificatePage.mockResolvedValue({
       items: [
-        { id: "c1", tenant_id: "t1", subject: "CN=payments-api.example.test", issuer: "CN=CA", status: "active", fingerprint: "f1" },
+        { id: "c1", identity_ids: ["id-1"], tenant_id: "t1", subject: "CN=payments-api.example.test", issuer: "CN=CA", status: "active", fingerprint: "f1" },
         { id: "c2", tenant_id: "t1", subject: "CN=orphan.example.test", issuer: "CN=orphan.example.test", status: "active", fingerprint: "f2" },
         { id: "c3", tenant_id: "t1", subject: "CN=gone.example.test", issuer: "CN=CA", status: "revoked", fingerprint: "f3" },
       ],
@@ -937,7 +937,15 @@ describe("auth + dashboards", () => {
     ]);
     apiMock.getCertificate.mockImplementation(async (id: string) => {
       const certificate = {
-        c1: { id: "c1", tenant_id: "t1", subject: "CN=payments-api.example.test", issuer: "CN=CA", status: "active", fingerprint: "f1" },
+        c1: {
+          id: "c1",
+          identity_ids: ["id-1"],
+          tenant_id: "t1",
+          subject: "CN=payments-api.example.test",
+          issuer: "CN=CA",
+          status: "active",
+          fingerprint: "f1",
+        },
         c2: { id: "c2", tenant_id: "t1", subject: "CN=orphan.example.test", issuer: "CN=orphan.example.test", status: "active", fingerprint: "f2" },
         c3: { id: "c3", tenant_id: "t1", subject: "CN=gone.example.test", issuer: "CN=CA", status: "revoked", fingerprint: "f3" },
       }[id];

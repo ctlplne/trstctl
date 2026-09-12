@@ -2654,6 +2654,7 @@ Certificate = TypedDict(
         'deployment_location': str,
         'fingerprint': str,
         'id': str,
+        'identity_ids': list[str],
         'issuer': str,
         'key_algorithm': str,
         'key_exportable': str,

@@ -19,15 +19,38 @@ vi.mock("@/lib/api", async (orig) => {
   return { ...actual, api: { ...actual.api, ...apiMock } };
 });
 
-function renderGraph() {
+function renderGraph(path = "/graph") {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[path]}>
       <Graph />
     </MemoryRouter>,
   );
 }
 
 describe("route 027 impact-first graph design", () => {
+  it("analyzes the exact deep-linked certificate instead of the default credential", async () => {
+    apiMock.graph.mockResolvedValue({
+      nodes: [
+        { id: "cert:other", kind: "credential", name: "Other certificate" },
+        { id: "cert:payments", kind: "credential", name: "Payments certificate" },
+      ],
+      edges: [],
+    });
+    renderGraph("/graph?node=cert%3Apayments");
+    const picker = await screen.findByRole("combobox", { name: "Credential to explore" });
+    await waitFor(() => expect(picker).toHaveValue("cert:payments"));
+    await userEvent.setup().click(screen.getByRole("button", { name: "Explore impact" }));
+    expect(apiMock.graphBlastRadius).toHaveBeenCalledWith("cert:payments");
+    expect(apiMock.graphReachable).toHaveBeenCalledWith("cert:payments");
+    await userEvent.setup().selectOptions(picker, "cert:other");
+    expect(picker).toHaveValue("cert:other");
+  });
+  it("keeps a missing deep link explicit rather than selecting another credential", async () => {
+    renderGraph("/graph?node=cert%3Amissing");
+    const picker = await screen.findByRole("combobox", { name: "Credential to explore" });
+    await waitFor(() => expect(picker).toHaveValue("cert:missing"));
+    expect(apiMock.graphBlastRadius).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     vi.restoreAllMocks();
     for (const mock of Object.values(apiMock)) mock.mockReset();

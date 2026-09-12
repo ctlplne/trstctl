@@ -48,6 +48,39 @@ function renderPage(timeZone = "UTC") {
 }
 
 describe("Certificate Lifecycle cockpit", () => {
+  it("routes a newly issued certificate to its exact identity and exposes revocation without offering renewal", async () => {
+    const certificate = {
+      id: "fresh-leaf",
+      tenant_id: "tenant-1",
+      subject: "CN=fresh.example",
+      owner_id: "team-platform",
+      fingerprint: "fresh-fp",
+      status: "active",
+      not_after: "2026-08-30T12:00:00Z",
+      identity_ids: ["fresh-identity"],
+    };
+    apiMock.certificatePage.mockResolvedValue({ items: [certificate] });
+    apiMock.getCertificate.mockResolvedValue(certificate);
+    apiMock.identities.mockResolvedValue([
+      { id: "wrong-identity", kind: "x509_certificate", name: "fresh.example", owner_id: "team-platform", status: "deployed" },
+      { id: "fresh-identity", kind: "x509_certificate", name: "fresh.example", owner_id: "team-platform", status: "issued" },
+    ]);
+    renderPage();
+    const queue = await screen.findByRole("table", { name: "Certificate action queue" });
+    expect(await within(queue).findByRole("link", { name: "Review identity lifecycle" })).toHaveAttribute("href", "/identities?identity=fresh-identity");
+    expect(within(queue).queryByRole("link", { name: "Start renewal" })).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+    const detail = await screen.findByRole("dialog", { name: "Certificate details" });
+    expect(await within(detail).findByRole("link", { name: "Review identity lifecycle" })).toHaveAttribute("href", "/identities?identity=fresh-identity");
+    expect(within(detail).queryByRole("button", { name: /Renew/ })).not.toBeInTheDocument();
+    expect(within(detail).getByRole("link", { name: "Start incident response" })).toHaveAttribute("href", "/incidents?identity=fresh-identity");
+    expect(within(detail).getByRole("link", { name: "View in credential graph" })).toHaveAttribute("href", "/graph?node=cert%3Afresh-leaf");
+    expect(within(detail).getByRole("link", { name: "Review revocation" })).toHaveAttribute("href", "/certificates?tab=crlct&certificate_id=fresh-leaf");
+    fireEvent.click(within(detail).getByRole("link", { name: "Review revocation" }));
+    const center = await screen.findByRole("region", { name: "Revocation center" });
+    expect(await within(center).findByRole("combobox", { name: "Managed certificate" })).toHaveValue("certificate:fresh-leaf");
+    expect(screen.getByRole("tab", { name: "Revocation & CT" })).toHaveAttribute("aria-selected", "true");
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -69,6 +102,7 @@ describe("Certificate Lifecycle cockpit", () => {
         },
         {
           id: "cert-renewal-failed",
+          identity_ids: ["identity-api"],
           tenant_id: "tenant-1",
           subject: "CN=api.prod.example",
           issuer: "CN=Production CA",
@@ -81,6 +115,7 @@ describe("Certificate Lifecycle cockpit", () => {
         },
         {
           id: "cert-planned",
+          identity_ids: ["identity-jobs"],
           tenant_id: "tenant-1",
           subject: "CN=jobs.stage.example",
           issuer: "CN=Issuing CA",
@@ -118,6 +153,7 @@ describe("Certificate Lifecycle cockpit", () => {
     });
     apiMock.getCertificate.mockResolvedValue({
       id: "cert-renewal-failed",
+      identity_ids: ["identity-api"],
       tenant_id: "tenant-1",
       subject: "CN=api.prod.example",
       issuer: "CN=Production CA",
@@ -231,8 +267,8 @@ describe("Certificate Lifecycle cockpit", () => {
       },
     ]);
     apiMock.identities.mockResolvedValue([
-      { id: "identity-api", kind: "x509_certificate", name: "api.prod.example", owner_id: "team-platform", status: "active" },
-      { id: "identity-jobs", kind: "x509_certificate", name: "jobs.stage.example", owner_id: "team-platform", status: "active" },
+      { id: "identity-api", kind: "x509_certificate", name: "api.prod.example", owner_id: "team-platform", status: "renewal_failed" },
+      { id: "identity-jobs", kind: "x509_certificate", name: "jobs.stage.example", owner_id: "team-platform", status: "deployed" },
     ]);
     apiMock.notifications.mockResolvedValue({
       items: [

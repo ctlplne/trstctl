@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   api,
   ApiError,
@@ -166,6 +166,7 @@ function actionsFor(state: string): Action[] {
         { label: translateNow("source.revoke.87e6d00bbf"), to: "revoked" },
       ];
     case "deployed":
+    case "renewal_failed":
       return [
         { label: translateNow("source.renew.90c1689b0b"), to: "renewing" },
         { label: translateNow("source.revoke.87e6d00bbf"), to: "revoked" },
@@ -310,7 +311,19 @@ export function Identities() {
   const [notice, setNotice] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [deniedTransitions, setDeniedTransitions] = useState<Record<string, string>>({});
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedId = searchParams.get("identity");
+  const setSelectedId = useCallback(
+    (id: string | null) => {
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        if (id) next.set("identity", id);
+        else next.delete("identity");
+        return next;
+      });
+    },
+    [setSearchParams],
+  );
   // Acceptance and outbox completion are different moments. Keep the inventory,
   // open drawer and projected receipts live, using the shared visible-tab gate.
   const inventory = useApiQuery(["identities"], api.identities, { live: { intervalMs: 10_000 } });
@@ -419,7 +432,7 @@ export function Identities() {
       // state. A late response for a previously selected ID stays in its own key.
       void queryClient.invalidateQueries({ queryKey: ["identity", identity.id] });
     },
-    [queryClient],
+    [queryClient, setSelectedId],
   );
 
   const act = useCallback(
@@ -560,7 +573,7 @@ export function Identities() {
         loadBlastRadius(identity);
       }
     },
-    [loadBlastRadius, reviewTransition],
+    [loadBlastRadius, reviewTransition, setSelectedId],
   );
 
   /** runBulkRevoke sends ONE bulk revocation request for the selected

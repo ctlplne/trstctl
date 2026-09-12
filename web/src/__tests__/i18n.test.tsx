@@ -1520,8 +1520,10 @@ describe("i18n boundary", () => {
       // Endpoint replacement: reviewed exact-original selection, retained DNS/owner,
       // explicit CA selection, and verify-before-revoke guidance. Machine-authored
       // es/de require HUMAN TRANSLATION REVIEW BEFORE RELEASE.
-      "es-ES": "b8da8434705e78703b78d43658f4390c2b4bd4fee594c6ae00dffd0460b171c0",
-      "de-DE": "caf9b7b062a6beacaff2bdb9d4b5c10c3e282341d8b9690bb0c98c79b3a948ee",
+      // Browser lifecycle repair: explicit identity review and revocation labels.
+      // Machine-authored es/de require HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "da54936a59584bf57239ba4bafd6761ce4cb925014854b5119131a727bb23736",
+      "de-DE": "834bccd6f31a470d7783812fa4fb0a0f3c6e66d2f57454e166af7c81bb4a7cdf",
     });
   });
 

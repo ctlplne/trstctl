@@ -458,7 +458,7 @@ asynchronous: a committed result is not proof that publication or a relying-part
 check succeeded. Follow the delivery outcome, verify signed CRL/OCSP data, and test
 a client configured to enforce revocation before declaring containment complete.
 
-For one managed certificate, **Certificates → CRL & CT → Revocation center** is the
+For one managed certificate, **Certificates → Revocation & CT → Revocation center** is the
 safe operator path. It is a three-step journey: choose the X.509 identity and factual
 RFC 5280 reason; fetch an effect-free server preview; then type the exact credential
 name to execute. The preview is bound to the identity's current lifecycle version and
@@ -477,7 +477,7 @@ the certificate inventory and queues bounded `revocation.probe` work for a
 network relay, so private PKI endpoints are checked from the network that uses
 them. The relay verifies CRL/OCSP signatures and exact certificate context, then
 returns a signed lease-bound report. `GET /api/v1/revocation/health` and
-Certificates → CRL & CT expose fresh, expiring, stale, unreachable, and invalid
+Certificates → Revocation & CT expose fresh, expiring, stale, unreachable, and invalid
 answers with latency, `nextUpdate`, relay identity, and evidence digest; non-fresh
 answers create notifications. A missing observation is shown as unknown, never healthy.
 This proves the relay's observation, not every relying party's fail-closed or

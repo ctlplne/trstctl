@@ -272,7 +272,7 @@ describe("inventory search", () => {
     const user = userEvent.setup();
     renderCerts();
 
-    await user.click(await screen.findByRole("tab", { name: /CRL & CT/i }));
+    await user.click(await screen.findByRole("tab", { name: /Revocation & CT/i }));
     const panel = await screen.findByRole("region", { name: "Revocation" });
     expect(within(panel).getByText("Stale")).toBeInTheDocument();
     expect(within(panel).getByText("ok")).toBeInTheDocument();
@@ -522,8 +522,8 @@ describe("certificate inventory gap closure", () => {
     const precertPEM = "-----BEGIN CERTIFICATE-----\nMIIC\n-----END CERTIFICATE-----";
     renderCerts();
 
-    // CT submission opens as a dialog from the CRL & CT workspace tab.
-    await user.click(await screen.findByRole("tab", { name: "CRL & CT" }));
+    // CT submission opens as a dialog from the Revocation & CT workspace tab.
+    await user.click(await screen.findByRole("tab", { name: "Revocation & CT" }));
     await user.click(screen.getByRole("button", { name: "Submit to CT" }));
     expect(await screen.findByRole("heading", { name: "Certificate Transparency" })).toBeInTheDocument();
     await user.type(screen.getByLabelText("Certificate PEM"), certPEM);

@@ -18,7 +18,14 @@ import type {
 import { useTranslation } from "@/i18n/I18nProvider";
 import type { Locale, MessageKey } from "@/i18n/messages";
 import { formatShortDate } from "@/i18n/format";
-import { certificateDeadline, certificateDisplayName, certificateReplacementPath } from "@/lib/certificatePresentation";
+import {
+  certificateDeadline,
+  certificateDisplayName,
+  certificateReplacementPath,
+  certificateIdentity,
+  certificateCanRenew,
+  certificateIdentityPath,
+} from "@/lib/certificatePresentation";
 
 const DAY = 86_400_000;
 const WEEK = 7 * DAY;
@@ -103,12 +110,6 @@ function latestByTime<T>(items: T[], time: (item: T) => string | undefined): T |
   }, undefined);
 }
 
-function matchingIdentity(certificate: Certificate, identities: Identity[]): Identity | undefined {
-  const name = commonName(certificate.subject).toLowerCase();
-  if (!name || certificate.source?.startsWith("attested:")) return undefined;
-  return identities.find((identity) => identity.kind === "x509_certificate" && identity.name.trim().toLowerCase() === name);
-}
-
 function matchingRun(certificate: Certificate, identity: Identity | undefined, runs: RotationRun[]): RotationRun | undefined {
   return latestByTime(
     runs.filter(
@@ -160,6 +161,7 @@ function automationState(
   }
   if (run?.status === "succeeded" && run.successor_fingerprint === certificate.fingerprint) return "verified";
   if (identity) return "managed-unverified";
+  if (certificate.identity_ids?.length) return "unknown";
   return "manual";
 }
 
@@ -260,7 +262,7 @@ export function LifecycleCockpit(props: LifecycleCockpitProps) {
   const evidenceObserved = props.identities !== null && props.rotationRuns !== null;
   const certificateFingerprints = new Set(props.certificates.map((certificate) => certificate.fingerprint));
   const certificateIdentityIDs = new Set(
-    props.certificates.map((certificate) => matchingIdentity(certificate, identities)?.id).filter((identityID): identityID is string => Boolean(identityID)),
+    props.certificates.map((certificate) => certificateIdentity(certificate, identities)?.id).filter((identityID): identityID is string => Boolean(identityID)),
   );
   const certificateDestinations = new Set(
     props.certificates.map((certificate) => certificate.deployment_location).filter((destination): destination is string => Boolean(destination)),
@@ -282,7 +284,7 @@ export function LifecycleCockpit(props: LifecycleCockpitProps) {
     .map((certificate): ActionRow | null => {
       if (!isLiveCertificate(certificate)) return null;
       const days = daysUntil(certificate.not_after, now);
-      const identity = matchingIdentity(certificate, identities);
+      const identity = certificateIdentity(certificate, identities);
       const run = matchingRun(certificate, identity, scopedRuns);
       const delivery = matchingDelivery(certificate, identity, scopedDeliveries);
       const automation = automationState(certificate, identity, run, evidenceObserved, now);
@@ -327,8 +329,11 @@ export function LifecycleCockpit(props: LifecycleCockpitProps) {
         actionLabel = t("certificateCockpit.action.repairDeployment");
         actionTo = "/connectors?status=failed";
       } else if (identity) {
-        actionLabel = t("certificateCockpit.action.renew");
+        actionLabel = t(certificateCanRenew(certificate, identity) ? "certificateCockpit.action.renew" : "certificates.lifecycle.reviewIdentity");
         actionTo = `/identities?identity=${encodeURIComponent(identity.id)}`;
+      } else if (certificate.identity_ids?.length) {
+        actionLabel = t("certificates.lifecycle.reviewIdentity");
+        actionTo = certificateIdentityPath(certificate);
       } else {
         actionLabel = t(certificate.source?.startsWith("attested:") ? "certificates.lifecycle.replaceAttested" : "certificateCockpit.action.replace");
         actionTo = certificateReplacementPath(certificate);

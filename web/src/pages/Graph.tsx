@@ -24,7 +24,7 @@ export function Graph() {
     loading: true,
     error: null,
   });
-  const [selected, setSelected] = useState("");
+  const [selected, setSelected] = useState(requestedNode);
   const [inspected, setInspected] = useState(requestedNode);
   const [search, setSearch] = useState("");
   const [kindFilter, setKindFilter] = useState("all");
@@ -91,11 +91,22 @@ export function Graph() {
   }, []);
 
   useEffect(() => {
-    if (!data || credentialNodes.length === 0 || nodeByID.get(selected)?.kind === "credential") return;
+    setSelected(requestedNode);
+    setInspected(requestedNode);
+    setImpact(null);
+    setReachable(null);
+    setBlastError(null);
+    setReachableError(null);
+  }, [requestedNode]);
+
+  useEffect(() => {
+    // A deep link names the object to analyze. Never substitute the default
+    // credential for an unknown link; its exact API read can report absence.
+    if (!data || credentialNodes.length === 0 || (selected && selected === requestedNode) || nodeByID.get(selected)?.kind === "credential") return;
     const outgoing = new Set(data.edges.map((edge) => edge.from));
     const usefulDefault = credentialNodes.find((node) => outgoing.has(node.id)) ?? credentialNodes[0];
     setSelected(usefulDefault.id);
-  }, [credentialNodes, data, nodeByID, selected]);
+  }, [credentialNodes, data, nodeByID, selected, requestedNode]);
 
   useEffect(() => {
     if (!data || data.nodes.length === 0 || (inspected && nodeByID.has(inspected))) return;
@@ -215,6 +226,9 @@ export function Graph() {
                   disabled={credentialNodes.length === 0}
                   onChange={(event) => selectNode(event.target.value)}
                 >
+                  {selected && !credentialNodes.some((node) => node.id === selected) ? (
+                    <option value={selected}>{nodeByID.get(selected)?.name || selected}</option>
+                  ) : null}
                   {credentialNodes.length === 0 ? <option value="">{translateNow("operations.jobs.redemptions.none")}</option> : null}
                   {credentialNodes.map((node) => (
                     <option key={node.id} value={node.id}>

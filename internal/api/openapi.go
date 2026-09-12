@@ -1580,7 +1580,8 @@ func componentSchemas() map[string]*Schema {
 
 	certificate := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "owner_id": uuid(), "subject": str(),
-		"sans": {Type: "array", Items: str()}, "issuer": str(), "serial": str(),
+		"identity_ids": {Type: "array", Items: uuid(), Description: "Managing identities proved by retained issuance or successful delivery evidence. Returned by certificate inventory list/detail reads. Absent means no resolved binding; multiple values require explicit selection. Never inferred from a name or owner."},
+		"sans":         {Type: "array", Items: str()}, "issuer": str(), "serial": str(),
 		"fingerprint": str(), "key_algorithm": str(), "not_before": timestamp(), "not_after": timestamp(),
 		"deployment_location": str(), "source": str(), "created_at": timestamp(),
 		"status":            {Type: "string", Enum: []string{"active", "superseded", "revoked"}},
