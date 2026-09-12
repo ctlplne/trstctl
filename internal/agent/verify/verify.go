@@ -53,6 +53,9 @@ type Request struct {
 	Expect certinfo.Expectation
 	// Timeout bounds the handshake; DefaultTimeout when zero.
 	Timeout time.Duration
+	// PreHandshake performs the configured application's TLS upgrade before
+	// ClientHello. Nil is direct TLS; a refusal never falls back to plaintext.
+	PreHandshake tlsprobe.PreHandshake
 }
 
 // Result pairs the verdict with the transcript that justifies it.
@@ -106,7 +109,7 @@ func Endpoint(ctx context.Context, req Request) (Result, error) {
 	// handshake worked (M1). Measured around the dial itself, so it includes the
 	// key exchange whose size is the whole question for a hybrid group.
 	handshakeStart := time.Now()
-	probe, err := tlsprobe.Probe(ctx, addr, tlsprobe.WithTimeout(timeout), tlsprobe.WithServerName(strings.TrimSpace(req.ServerName)))
+	probe, err := tlsprobe.Probe(ctx, addr, tlsprobe.WithTimeout(timeout), tlsprobe.WithServerName(strings.TrimSpace(req.ServerName)), tlsprobe.WithPreHandshake(req.PreHandshake))
 	tr.HandshakeMillis = time.Since(handshakeStart).Milliseconds()
 	if err != nil {
 		// Unreachable. The transcript says so and claims nothing else: no

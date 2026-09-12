@@ -376,7 +376,7 @@ func DryRunOnHost(
 		reachability = probeEndpoint(ctx, client, plan.Endpoint)
 	} else {
 		plan.Endpoint = strings.TrimSpace(intent.VerifyAddress)
-		reachability = probeHostListener(ctx, plan.Endpoint, strings.TrimSpace(intent.VerifyServerName))
+		reachability = probeHostListener(ctx, plan.Endpoint, strings.TrimSpace(intent.VerifyServerName), connectorTLSNegotiation(intent.Connector))
 	}
 	plan.Steps = append(plan.Steps, reachability)
 	if reachability.Status == StepFailed {
@@ -492,7 +492,7 @@ func hostPreflightActions(name string, target HostTargetConfig) ([]connector.Loc
 	}
 }
 
-func probeHostListener(ctx context.Context, address, serverName string) PlanStep {
+func probeHostListener(ctx context.Context, address, serverName string, negotiate tlsprobe.PreHandshake) PlanStep {
 	if strings.TrimSpace(address) == "" {
 		return PlanStep{Name: "reachability", Status: StepSkipped,
 			Detail: "no verify_address is configured; this deploy can proceed, but trstctl will not claim the certificate is live until a listener address is added and verified"}
@@ -500,7 +500,7 @@ func probeHostListener(ctx context.Context, address, serverName string) PlanStep
 	probeCtx, cancel := context.WithTimeout(ctx, dryRunProbeTimeout)
 	defer cancel()
 	observed, err := tlsprobe.Probe(probeCtx, address,
-		tlsprobe.WithTimeout(dryRunProbeTimeout), tlsprobe.WithServerName(serverName))
+		tlsprobe.WithTimeout(dryRunProbeTimeout), tlsprobe.WithServerName(serverName), tlsprobe.WithPreHandshake(negotiate))
 	if err != nil {
 		return PlanStep{Name: "reachability", Status: StepFailed,
 			Detail: "could not handshake the configured listener: " + transport.SanitizeProbeError(err)}

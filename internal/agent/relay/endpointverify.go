@@ -53,6 +53,9 @@ type EndpointExpectation struct {
 	EndpointID string `json:"endpoint_id"`
 	Address    string `json:"address"`
 	ServerName string `json:"server_name,omitempty"`
+	// Connector selects a known application's TLS negotiation. Empty retains
+	// direct TLS for legacy jobs; PostgreSQL requires its SSLRequest exchange.
+	Connector string `json:"connector,omitempty"`
 	// Fingerprint is the expected leaf SHA-256, hex.
 	Fingerprint string `json:"fingerprint"`
 	// DNSNames and ChainFingerprints are optional. Absent means NOT CHECKED —
@@ -109,10 +112,11 @@ func runEndpointVerify(ctx context.Context, ch Channel, job Job) bool {
 	out := EndpointVerifyReport{Results: make([]EndpointVerifyResult, 0, len(intent.Endpoints))}
 	for _, want := range intent.Endpoints {
 		res, err := verify.Endpoint(ctx, verify.Request{
-			Address:    want.Address,
-			ServerName: want.ServerName,
-			Vantage:    transport.VantageRelay,
-			Timeout:    timeout,
+			Address:      want.Address,
+			ServerName:   want.ServerName,
+			Vantage:      transport.VantageRelay,
+			Timeout:      timeout,
+			PreHandshake: connectorTLSNegotiation(want.Connector),
 			Expect: certinfo.Expectation{
 				SHA256Fingerprint: want.Fingerprint,
 				DNSNames:          want.DNSNames,

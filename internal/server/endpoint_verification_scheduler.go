@@ -5,8 +5,10 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/agent/relay"
@@ -116,7 +118,7 @@ func (s *Server) queueEndpointVerificationSweep(ctx context.Context, tenantID st
 			continue
 		}
 		seen[r.EndpointID] = true
-		intent.Endpoints = append(intent.Endpoints, relay.EndpointExpectation{
+		expectation := relay.EndpointExpectation{
 			EndpointID: r.EndpointID,
 			Address:    r.Address,
 			// The expectation is the control plane's own record of what should
@@ -125,7 +127,11 @@ func (s *Server) queueEndpointVerificationSweep(ctx context.Context, tenantID st
 			// the wrong certificate would be re-verified as correct on the
 			// second sweep, and the alarm would silence itself.
 			Fingerprint: r.ExpectedFingerprint,
-		})
+		}
+		if err := s.addEndpointVerificationTargetContext(ctx, tenantID, &expectation); err != nil {
+			return 0, err
+		}
+		intent.Endpoints = append(intent.Endpoints, expectation)
 		if len(intent.Endpoints) >= endpointVerificationBatch {
 			break
 		}
@@ -157,6 +163,32 @@ func (s *Server) queueEndpointVerificationSweep(ctx context.Context, tenantID st
 		return 0, err
 	}
 	return len(intent.Endpoints), nil
+}
+
+// A retained fingerprint does not describe the connection protocol. Registered
+// connector targets supply that context and the configured SNI, confined to this
+// tenant. Legacy observations without a target retain their direct-TLS contract.
+// The expected fingerprint remains the control plane's expectation, never the
+// last observed certificate. Each sweep is bounded to 50 target lookups.
+func (s *Server) addEndpointVerificationTargetContext(ctx context.Context, tenantID string, want *relay.EndpointExpectation) error {
+	if _, err := uuid.Parse(want.EndpointID); err != nil {
+		return nil
+	}
+	target, err := s.store.GetDeploymentTarget(ctx, tenantID, want.EndpointID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var config struct {
+		ServerName string `json:"verify_server_name"`
+	}
+	if err := json.Unmarshal(target.Config, &config); err != nil {
+		return err
+	}
+	want.Connector, want.ServerName = target.Type, config.ServerName
+	return nil
 }
 
 func (s *Server) effectiveEndpointVerificationInterval() time.Duration {

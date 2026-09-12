@@ -69,11 +69,12 @@ func postDeployVerification(ctx context.Context, intent DeployIntent, material M
 	defer cancel()
 
 	request := verify.Request{
-		Address:    intent.VerifyAddress,
-		ServerName: intent.VerifyServerName,
-		Vantage:    transport.VantageLocal,
-		Expect:     expect,
-		Timeout:    time.Second,
+		Address:      intent.VerifyAddress,
+		ServerName:   intent.VerifyServerName,
+		Vantage:      transport.VantageLocal,
+		Expect:       expect,
+		Timeout:      time.Second,
+		PreHandshake: connectorTLSNegotiation(intent.Connector),
 	}
 	// A graceful service reload can accept a connection on the predecessor
 	// worker for a short handoff window after the reload command succeeds. A

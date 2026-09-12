@@ -236,6 +236,16 @@ missing grant, or other deterministic prerequisite returns terminal
 `dry_run_blocked` rather than retrying forever. Signed plugins that do not declare a
 zero-write testing contract fail closed without being invoked.
 
+For a `postgresql` destination, the agent first sends PostgreSQL's SSLRequest
+and requires the server to accept TLS before starting the handshake. This applies
+to preview, post-deployment checks, and verification after a restore. Scheduled
+network-agent checks also retain the registered target's connector type and
+`verify_server_name`, together with the expected certificate fingerprint. A
+database that refuses TLS fails verification; there is no plaintext fallback.
+These checks establish the served TLS identity, not database login or query
+availability. Other connector types and legacy observations without a registered
+target keep their existing direct-TLS behavior.
+
 The console keeps recovery separate from deployment. **Review restore** opens a
 confirmation that names the exact destination, identity, and operator reason; no
 restore is queued by opening it. Identity choices and the review show the lifecycle
