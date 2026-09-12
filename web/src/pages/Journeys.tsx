@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ArrowUpRight, Check, Copy, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
@@ -90,6 +90,7 @@ export function Journeys() {
   const [marks, setMarks] = useState<Set<string>>(() => readJourneyMarks());
   const [checking, setChecking] = useState(false);
   const [step, setStep] = useState(0);
+  const navigation = useRef({ journeyId: active.id, manual: false });
 
   const refreshStatus = useCallback(async () => {
     if (capabilities.enabled && capabilities.loading) return;
@@ -129,14 +130,24 @@ export function Journeys() {
     void refreshStatus();
   }, [refreshStatus]);
 
-  // Land on the first step that still needs doing.
+  // Initial detection can choose the first incomplete step. Once the operator
+  // interacts, refreshed evidence updates progress without moving their place.
   useEffect(() => {
+    if (navigation.current.journeyId !== active.id) {
+      navigation.current = { journeyId: active.id, manual: false };
+    }
+    if (navigation.current.manual) return;
     const firstOpen = active.steps.findIndex((s) => !stepDone(active, s, detected, marks));
     setStep(firstOpen === -1 ? 0 : firstOpen);
     // Manual marks intentionally omitted: toggling a step should not yank the
     // operator to a different step mid-read.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, detected]);
+
+  function selectStep(index: number) {
+    navigation.current = { journeyId: active.id, manual: true };
+    setStep(Math.max(0, Math.min(index, active.steps.length - 1)));
+  }
 
   function selectJourney(id: string) {
     setSearchParams(
@@ -206,7 +217,15 @@ export function Journeys() {
             <Button type="button" onClick={() => document.getElementById("journey-workspace")?.focus()}>
               {t("journeys.continue")}
             </Button>
-            <Button type="button" variant="outline" loading={checking} onClick={() => void refreshStatus()}>
+            <Button
+              type="button"
+              variant="outline"
+              loading={checking}
+              onClick={() => {
+                selectStep(step);
+                void refreshStatus();
+              }}
+            >
               <RefreshCw className="h-4 w-4" aria-hidden="true" />
               {t("journeys.refresh")}
             </Button>
@@ -236,8 +255,8 @@ export function Journeys() {
             currentIndex={step}
             progressLabel={t("journeys.progressLabel")}
             nextDisabled={step >= active.steps.length - 1}
-            onNext={step < active.steps.length - 1 ? () => setStep((currentStep) => Math.min(currentStep + 1, active.steps.length - 1)) : undefined}
-            onPrevious={() => setStep((currentStep) => Math.max(currentStep - 1, 0))}
+            onNext={step < active.steps.length - 1 ? () => selectStep(step + 1) : undefined}
+            onPrevious={() => selectStep(step - 1)}
           >
             {current && (
               <div className="grid max-w-2xl gap-4">
@@ -281,7 +300,10 @@ export function Journeys() {
                       type="button"
                       variant={currentDone ? "outline" : "secondary"}
                       aria-pressed={currentDone}
-                      onClick={() => setMarks((currentMarks) => toggleJourneyMark(currentMarks, active.id, current.id))}
+                      onClick={() => {
+                        selectStep(step);
+                        setMarks((currentMarks) => toggleJourneyMark(currentMarks, active.id, current.id));
+                      }}
                     >
                       <Check className="h-4 w-4" aria-hidden="true" />
                       {currentDone ? t("journeys.undoDone") : t("journeys.markDone")}

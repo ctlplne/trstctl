@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { axe } from "vitest-axe";
 import { MemoryRouter } from "react-router-dom";
@@ -175,6 +175,56 @@ describe("journeys hub", () => {
       </CapabilityFixtureProvider>,
     );
   }
+
+  it("refreshes evidence without resetting the operator's selected step", async () => {
+    const user = userEvent.setup();
+    renderJourneysWithRuntime("/journeys?j=automate-fleet-tls");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Refresh status" })).toBeEnabled());
+    for (let i = 0; i < 6; i++) await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole("heading", { name: "Revoke and retire" })).toBeInTheDocument();
+    apiMock.certificatePage.mockResolvedValue({ items: [{ id: "new-certificate" }] });
+    await user.click(screen.getByRole("button", { name: "Refresh status" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Refresh status" })).toBeEnabled());
+    expect(screen.getByRole("heading", { name: "Revoke and retire" })).toBeInTheDocument();
+    expect(within(screen.getByRole("button", { name: /First certificate/ })).getByText("3 of 4 steps done")).toBeInTheDocument();
+    expect(within(screen.getByRole("button", { name: /Automate fleet TLS/ })).getByText("0 of 7 steps done")).toBeInTheDocument();
+    // Switching journeys still starts at the first incomplete step, including
+    // when returning to a journey that was navigated earlier.
+    await user.click(screen.getByRole("button", { name: /First certificate/ }));
+    expect(screen.getByRole("link", { name: /Take me there/ })).toHaveAttribute("href", "/request");
+    await user.click(screen.getByRole("button", { name: /Automate fleet TLS/ }));
+    expect(screen.getByRole("heading", { name: "Inspect the ACME surface" })).toBeInTheDocument();
+  });
+
+  it("keeps navigation made before the initial status response arrives", async () => {
+    const user = userEvent.setup();
+    let resolveCertificates!: (page: { items: { id: string }[] }) => void;
+    apiMock.certificatePage.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveCertificates = resolve;
+        }),
+    );
+    renderJourneysWithRuntime("/journeys?j=automate-fleet-tls");
+    await screen.findByRole("heading", { name: "Inspect the ACME surface" });
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await act(async () => {
+      resolveCertificates({ items: [{ id: "late-certificate" }] });
+    });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Refresh status" })).toBeEnabled());
+    expect(screen.getByRole("heading", { name: "Configure the DNS authenticator" })).toBeInTheDocument();
+  });
+
+  it("keeps a manually marked current step open during status refresh", async () => {
+    const user = userEvent.setup();
+    renderJourneysWithRuntime("/journeys?j=automate-fleet-tls");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Refresh status" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "Mark step done" }));
+    await user.click(screen.getByRole("button", { name: "Refresh status" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Refresh status" })).toBeEnabled());
+    expect(screen.getByRole("heading", { name: "Inspect the ACME surface" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Mark as not done" })).toBeInTheDocument();
+  });
 
   it("counts every step, detects served progress, and lets manual steps be marked done", async () => {
     const user = userEvent.setup();
