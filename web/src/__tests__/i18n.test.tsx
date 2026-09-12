@@ -1527,8 +1527,10 @@ describe("i18n boundary", () => {
       // HUMAN TRANSLATION REVIEW before release; extraction budgets unchanged.
       // Identity truth: current CA selection is distinct from historical issuance;
       // retirement preserves evidence. Machine-authored es/de require human review.
-      "es-ES": "b130d615f44414a3089cb67f1241a40c8c5bbac20bca1d7a39ad95dc82c89b9b",
-      "de-DE": "98275b86889017362d17501ae2d6cc2dad7e365b56b22c54fd15d2bcf55156c6",
+      // Revocation truth: queued publication and client enforcement are separate.
+      // Machine-authored es/de require HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "f53c81afb3e111619bfed3872dea25e929d094c80f5e46bd3bb03c07047e67c2",
+      "de-DE": "71743e9e828cd77ec0b4b8224efdac8c61835ef8f28cfec8e1e17b8fc9ab6e51",
     });
   });
 

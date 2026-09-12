@@ -26166,6 +26166,15 @@ export const messages = {
     defaultMessage: "Check the exact prerequisites, durable writes, queued effect, and proof before this action runs.",
     description: "Plain-language introduction to a non-destructive lifecycle review.",
   },
+  "identities.lifecycle.revokeReview": {
+    defaultMessage:
+      "Revoking “{identity}” queues revocation at the issuing system. Verify that it completes and that clients enforce it before retiring this record. This lifecycle change cannot be undone.",
+    description: "Destructive review distinguishes queued revocation from issuing-system completion and client enforcement.",
+  },
+  "identities.lifecycle.revokedState": {
+    defaultMessage: "Revocation requested. Verify completion at the issuing system and client enforcement before retiring this record.",
+    description: "Revoked lifecycle state does not itself prove upstream publication or relying-party rejection.",
+  },
   "identities.lifecycle.reviewLoading": {
     defaultMessage: "Reviewing the exact action with the server…",
     description: "Status while the server builds an effect-free lifecycle plan.",

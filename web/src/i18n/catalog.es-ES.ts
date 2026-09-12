@@ -8135,6 +8135,10 @@ const esESCatalog = {
   "identities.lifecycle.nextDescription": "Estas son las únicas acciones que permite el estado actual de esta identidad.",
   "identities.lifecycle.rulesSummary": "Mostrar todas las reglas del ciclo de vida",
   "identities.lifecycle.reviewTitle": "Revisar {action} para {identity}",
+  "identities.lifecycle.revokeReview":
+    "Revocar «{identity}» pone la revocación en cola en el sistema emisor. Compruebe que se complete y que los clientes la apliquen antes de retirar este registro. Este cambio del ciclo de vida no se puede deshacer.",
+  "identities.lifecycle.revokedState":
+    "Revocación solicitada. Compruebe que se complete en el sistema emisor y que los clientes la apliquen antes de retirar este registro.",
   "identities.lifecycle.reviewIntro":
     "Compruebe los requisitos previos, las escrituras duraderas, el efecto en cola y la prueba exactos antes de ejecutar esta acción.",
   "identities.lifecycle.reviewLoading": "Revisando la acción exacta con el servidor…",

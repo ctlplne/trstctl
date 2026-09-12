@@ -138,9 +138,8 @@ function ownerEnvironment(owner?: Owner): string | null {
   return titleCaseMachineValue(owner?.environment);
 }
 
-/** isDestructive reports whether a target state is a destructive transition that must
- * be confirmed before it runs — revoke permanently invalidates the credential, and
- * retire discards it (SURFACE-007). */
+/** Revocation and retirement both require review and exact-name confirmation.
+ * Publication, client enforcement, and retained history remain separate evidence. */
 function isDestructive(to: TransitionTo): boolean {
   return to === "revoked" || to === "retired";
 }
@@ -190,7 +189,7 @@ function terminalMessage(state: string): string | null {
     return "Terminal state: retired identities have no valid next transition.";
   }
   if (state === "revoked") {
-    return "Terminal trust state: relying parties should no longer accept this identity; only record-retirement cleanup remains.";
+    return translateNow("identities.lifecycle.revokedState");
   }
   return null;
 }
@@ -1028,7 +1027,7 @@ export function Identities() {
             </h2>
             <p id="confirm-desc" className={`mt-1 text-sm ${pending.destructive ? "text-destructive" : "text-muted-foreground"}`}>
               {pending.to === "revoked"
-                ? `Revoking “${pending.name}” permanently invalidates the credential; relying parties will stop trusting it. This cannot be undone.`
+                ? translateNow("identities.lifecycle.revokeReview", { identity: pending.name })
                 : pending.to === "retired"
                   ? translateNow("source.retiring.value1.discards.the.credential.re.7f368527a3", { value1: pending.name })
                   : translateNow("identities.lifecycle.reviewIntro")}

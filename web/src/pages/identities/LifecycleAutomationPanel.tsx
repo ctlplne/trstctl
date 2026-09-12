@@ -12,15 +12,16 @@ type Props = {
   onReviewRenewal: (identity: Identity, label: string, reason: string) => void;
 };
 
-function durationHours(value: string): number | null {
-  const match = /^(\d+(?:\.\d+)?)h/.exec(value);
-  return match ? Number(match[1]) : null;
-}
-
 function durationDays(value: string, seconds?: number): number | null {
-  if (typeof seconds === "number" && Number.isFinite(seconds)) return Math.round(seconds / 86_400);
-  const hours = durationHours(value);
-  return hours == null ? null : Math.round(hours / 24);
+  // Whole-day copy is exact only for positive day multiples. Preserve the
+  // server's duration for short lifetimes and mixed units, including legacy
+  // responses without the seconds field.
+  if (typeof seconds === "number") {
+    return Number.isFinite(seconds) && seconds > 0 && seconds % 86_400 === 0 ? seconds / 86_400 : null;
+  }
+  const match = /^(\d+)h(?:0m)?(?:0s)?$/.exec(value);
+  const hours = match ? Number(match[1]) : 0;
+  return hours > 0 && hours % 24 === 0 ? hours / 24 : null;
 }
 
 function isLifecycleAutomationPlan(value: unknown): value is LifecycleAutomationPlan {

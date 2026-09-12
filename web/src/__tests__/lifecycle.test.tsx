@@ -858,7 +858,7 @@ describe("lifecycle actions from the UI", () => {
 
     const revokedRow = (await screen.findByText("revoked-svc")).closest("tr")!;
     await user.click(within(revokedRow).getByRole("button", { name: /view details/i }));
-    expect(await screen.findByText(/Terminal trust state/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Revocation requested.*client enforcement/)).toBeInTheDocument();
     await user.click(screen.getByText("Show all lifecycle rules"));
     expect(screen.getByRole("button", { name: "Move to issued" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Move to retired" })).toBeEnabled();
@@ -886,6 +886,7 @@ describe("lifecycle actions from the UI", () => {
     await user.click(within(detail).getByRole("button", { name: /^revoke$/i }));
     expect(apiMock.transitionIdentity).not.toHaveBeenCalled();
     const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText(/queues revocation at the issuing system.*clients enforce it/)).toBeInTheDocument();
     // The dialog names the credential (it appears in both the heading and the body).
     expect(within(dialog).getAllByText(/to-revoke/).length).toBeGreaterThan(0);
     expect(within(dialog).getByRole("heading", { level: 2, name: /review revoke for to-revoke/i })).toBeInTheDocument();
@@ -1283,6 +1284,28 @@ describe("lifecycle actions from the UI", () => {
     expect(screen.getAllByText("succeeded").length).toBeGreaterThan(0);
     expect(screen.getAllByText("scheduler").length).toBeGreaterThan(0);
     expect(screen.getByText("restore certificate fingerprint old")).toBeInTheDocument();
+  });
+
+  it.each([
+    ["5m0s", 300],
+    ["36h0m0s", 129_600],
+    ["168h30m0s", undefined],
+    ["24h0m1s", undefined],
+  ])("preserves exact renewal lead %s instead of rounding to days", async (duration, seconds) => {
+    const plan = await apiMock.lifecycleAutomationPlan();
+    apiMock.identities.mockResolvedValue([]);
+    apiMock.lifecycleAutomationPlan.mockResolvedValue({
+      ...plan,
+      scheduler: {
+        ...plan.scheduler,
+        renew_before: duration,
+        renew_before_seconds: seconds,
+        alert_before: "2161h0m0s",
+        alert_before_seconds: 7_779_600,
+      },
+    });
+    renderIdentities();
+    expect(await screen.findByText(`Renewal lead time: ${duration}. Alert lead time: 2161h0m0s.`)).toBeInTheDocument();
   });
 
   it("fails closed instead of crashing when lifecycle automation evidence is malformed", async () => {

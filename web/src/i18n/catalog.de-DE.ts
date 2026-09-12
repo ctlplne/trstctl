@@ -8200,6 +8200,10 @@ const deDECatalog = {
   "identities.lifecycle.nextDescription": "Dies sind die einzigen Aktionen, die der aktuelle Zustand dieser Identität erlaubt.",
   "identities.lifecycle.rulesSummary": "Alle Lebenszyklusregeln anzeigen",
   "identities.lifecycle.reviewTitle": "{action} für {identity} prüfen",
+  "identities.lifecycle.revokeReview":
+    "Der Widerruf von „{identity}“ wird beim ausstellenden System eingereiht. Prüfen Sie vor der Stilllegung dieses Datensatzes, ob er abgeschlossen ist und die Clients ihn durchsetzen. Diese Lebenszyklusänderung kann nicht rückgängig gemacht werden.",
+  "identities.lifecycle.revokedState":
+    "Widerruf angefordert. Prüfen Sie vor der Stilllegung dieses Datensatzes den Abschluss beim ausstellenden System und die Durchsetzung durch die Clients.",
   "identities.lifecycle.reviewIntro":
     "Prüfen Sie die exakten Voraussetzungen, dauerhaften Schreibvorgänge, eingereihten Auswirkungen und Nachweise, bevor diese Aktion ausgeführt wird.",
   "identities.lifecycle.reviewLoading": "Die exakte Aktion wird mit dem Server geprüft…",
