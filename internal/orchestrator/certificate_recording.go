@@ -68,10 +68,11 @@ func (o *Orchestrator) emitCertificateRecording(ctx context.Context, next events
 	return result, err
 }
 
-// Like migration-run recovery, the event-derived cursor is read only after the
-// aggregate lock. A previous append may have won while its SQL transaction lost.
-// Replay its missing records before deciding on a different key or chain. The
-// log cut is finite; caller cancellation and deadlines remain active.
+// The tenant metadata fence covers every certificate, not only this fingerprint.
+// A previous append for another leaf may have won while its SQL transaction lost.
+// Recover those recordings before advancing the shared metadata watermark; the
+// next boot must still be able to replay every retained event in source order.
+// The log cut is finite; caller cancellation and deadlines remain active.
 func (o *Orchestrator) catchUpCertificateRecordingTx(ctx context.Context, tx pgx.Tx, tenantID, fingerprint string) error {
 	head, err := o.store.CertificateRecordingHeadTx(ctx, tx, tenantID, fingerprint)
 	if err != nil {
@@ -114,11 +115,11 @@ func (o *Orchestrator) catchUpCertificateRecordingTx(ctx context.Context, tx pgx
 				}
 			}
 		}
-		material, recording, err := projections.CertificateRecordingMaterial(e)
+		_, recording, err := projections.CertificateRecordingMaterial(e)
 		if err != nil {
 			return err
 		}
-		if !recording || material.Fingerprint != fingerprint {
+		if !recording {
 			return nil
 		}
 		return o.proj.ApplyTx(ctx, tx, e)
