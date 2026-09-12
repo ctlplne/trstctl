@@ -66,11 +66,11 @@ func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID s
 			         JOIN certificates served
 			           ON served.tenant_id = $1 AND served.tenant_id = receipt.tenant_id
 			          AND served.fingerprint = receipt.fingerprint
-			          AND served.source = 'issued' AND served.status = 'active'
+			          AND served.source = 'issued'
 			        WHERE receipt.tenant_id = $1 AND receipt.tenant_id = i.tenant_id
 			          AND receipt.identity_id = i.id
-			          AND ((receipt.destination = 'connector.deploy' AND receipt.status IN ('delivered', 'verified'))
-			            OR (receipt.destination = 'connector.rollback' AND receipt.status = 'rolled_back'))
+			          AND ((receipt.destination = 'connector.deploy' AND receipt.status IN ('delivered', 'verified') AND served.status = 'active')
+			            OR (receipt.destination = 'connector.rollback' AND receipt.status = 'rolled_back' AND served.status IN ('active', 'superseded')))
 			        ORDER BY receipt.updated_at DESC, receipt.id DESC LIMIT 1
 			  ) AS deployed ON true
 			  JOIN LATERAL (
@@ -79,9 +79,9 @@ func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID s
 			        WHERE c.tenant_id = $1
 			          AND c.tenant_id = i.tenant_id
 			          AND ((deployed.fingerprint IS NOT NULL AND c.fingerprint = deployed.fingerprint)
-			            OR (deployed.fingerprint IS NULL AND c.owner_id = i.owner_id AND i.name = ANY(c.sans)))
+			            OR (deployed.fingerprint IS NULL AND c.status = 'active' AND c.owner_id = i.owner_id AND i.name = ANY(c.sans)))
 			          AND c.source = 'issued'
-			          AND c.status = 'active'
+			          AND c.status IN ('active', 'superseded')
 			        ORDER BY c.not_after DESC NULLS LAST, c.created_at DESC, c.id
 			        LIMIT 1
 			  ) AS cert ON true

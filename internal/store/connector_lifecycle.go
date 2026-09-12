@@ -561,10 +561,10 @@ func (s *Store) ListConnectorDeliveryReceiptsMatchingPage(ctx context.Context, t
 // Owner plus DNS name is not an identity key: a retained estate can contain
 // several independent identities for the same service name and owner. Renewal
 // must follow the identity-bound delivery evidence or it can replace a
-// different certificate that merely has the same SAN. Only an issued, active
-// inventory row can be selected; a forged or stale receipt cannot manufacture
-// a renewal candidate. A proved rollback replaces the served leaf just as a
-// deployment does; queued and failed restores do not change this evidence.
+// different certificate that merely has the same SAN. Issued active rows are
+// eligible; a superseded row requires proved rollback evidence, because issuance
+// history does not change when an executor restores it. Revoked rows are never
+// eligible. Queued and failed restores do not change the served evidence.
 func (s *Store) LatestDeployedCertificateFingerprintForIdentity(ctx context.Context, tenantID, identityID string) (string, bool, error) {
 	var fingerprint string
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
@@ -576,10 +576,9 @@ func (s *Store) LatestDeployedCertificateFingerprintForIdentity(ctx context.Cont
 			    AND c.fingerprint = r.fingerprint
 			  WHERE r.tenant_id = $1
 			    AND r.identity_id = $2
-			    AND ((r.destination = 'connector.deploy' AND r.status IN ('delivered', 'verified'))
-			      OR (r.destination = 'connector.rollback' AND r.status = 'rolled_back'))
+			    AND ((r.destination = 'connector.deploy' AND r.status IN ('delivered', 'verified') AND c.status = 'active')
+			      OR (r.destination = 'connector.rollback' AND r.status = 'rolled_back' AND c.status IN ('active', 'superseded')))
 			    AND c.source = 'issued'
-			    AND c.status = 'active'
 			  ORDER BY r.updated_at DESC, r.id DESC
 			  LIMIT 1`, tenantID, identityID).Scan(&fingerprint)
 	})
@@ -716,7 +715,7 @@ func (s *Store) ListRenewableIdentities(ctx context.Context, tenantID string, cu
 }
 
 // RenewalIdentityCandidate is the scheduler input for one deployed X.509
-// identity and the active internally-issued certificate that makes it renewable.
+// identity and the issued active or proved-restored certificate that makes it renewable.
 // The server consumes the certificate validity span through the ARI package, so
 // the renewal decision stays aligned with ACME Renewal Information rather than a
 // fixed expiry cutoff alone.
@@ -725,7 +724,7 @@ type RenewalIdentityCandidate struct {
 	Certificate Certificate
 }
 
-// ListRenewalIdentityCandidates returns deployed X.509 identities whose active
+// ListRenewalIdentityCandidates returns deployed X.509 identities whose active or restored
 // served certificates are eligible for a scheduler decision. Eligibility is a
 // coarse database prefilter: either the old fixed cutoff is already reached, or
 // the normal ARI suggested-window start has reached ariNow. The server still
@@ -755,7 +754,12 @@ func (s *Store) ListRenewalIdentityCandidates(ctx context.Context, tenantID stri
 			        AND replacement.attributes->>'endpoint_replaces_identity_id' = i.id::text
 			        AND replacement.status IN ('issued', 'deployed', 'renewing', 'renewal_failed'))
 			    AND c.source = 'issued'
-			    AND c.status = 'active'
+			    AND (c.status = 'active' OR (c.status = 'superseded' AND EXISTS (
+			      SELECT 1 FROM connector_delivery_receipts restored
+			       WHERE restored.tenant_id = $1 AND restored.tenant_id = i.tenant_id
+			         AND restored.identity_id = i.id AND restored.fingerprint = c.fingerprint
+			         AND restored.destination = 'connector.rollback' AND restored.status = 'rolled_back'
+			    )))
 			    AND c.not_after IS NOT NULL
 			    AND (
 			         c.not_after < $2
@@ -803,7 +807,7 @@ func (s *Store) TenantsWithRenewableIdentities(ctx context.Context, cutoff time.
 }
 
 // TenantsWithRenewalIdentityCandidates returns tenant ids that currently have at
-// least one deployed X.509 identity whose active issued certificate should be
+// least one deployed X.509 identity whose active or proved-restored issued certificate should be
 // evaluated by the scheduler. It is a system enumerator only: each tenant's rows
 // are loaded through ListRenewalIdentityCandidates under tenant-scoped RLS.
 func (s *Store) TenantsWithRenewalIdentityCandidates(ctx context.Context, fixedCutoff, ariNow time.Time) ([]string, error) {
@@ -818,7 +822,12 @@ func (s *Store) TenantsWithRenewalIdentityCandidates(ctx context.Context, fixedC
 		  WHERE i.kind = 'x509_certificate'
 		    AND i.status IN ('deployed', 'renewal_failed')
 		    AND c.source = 'issued'
-		    AND c.status = 'active'
+		    AND (c.status = 'active' OR (c.status = 'superseded' AND EXISTS (
+		      SELECT 1 FROM connector_delivery_receipts restored
+		       WHERE restored.tenant_id = i.tenant_id
+		         AND restored.identity_id = i.id AND restored.fingerprint = c.fingerprint
+		         AND restored.destination = 'connector.rollback' AND restored.status = 'rolled_back'
+		    )))
 		    AND c.not_after IS NOT NULL
 		    AND (
 		         c.not_after < $1

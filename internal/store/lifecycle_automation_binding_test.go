@@ -76,6 +76,12 @@ func TestLifecycleAutomationUsesIdentityBoundServedCertificate(t *testing.T) {
 	}
 	// A restore changes the served leaf only after the executor proves success.
 	// In particular, the older leaf's earlier expiry must become authoritative.
+	// Issuance keeps the predecessor as superseded even when an executor restores it.
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return s.SetCertificateSupersededTx(ctx, tx, tenantA, certs[0].Fingerprint, now)
+	}); err != nil {
+		t.Fatal(err)
+	}
 	for i, step := range []struct {
 		destination, status string
 		certificate, want   int
@@ -85,9 +91,16 @@ func TestLifecycleAutomationUsesIdentityBoundServedCertificate(t *testing.T) {
 		{"connector.rollback", "rolled_back", 0, 0},
 		{"connector.deploy", "verify_failed", 1, 0},
 		{"connector.deploy", "verified", 1, 1},
+		{"connector.rollback", "rolled_back", 0, 1},
 	} {
 		at := now.Add(time.Duration(i+10) * time.Second)
 		if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+			if i == 5 {
+				// Even a newer retained receipt must never revive a revoked leaf.
+				if err := s.SetCertificateRevokedTx(ctx, tx, tenantA, certs[0].Fingerprint, "keyCompromise", at); err != nil {
+					return err
+				}
+			}
 			return s.ApplyConnectorDeliveryRecordedTx(ctx, tx, store.ConnectorDeliveryReceipt{
 				ID: fmt.Sprintf("44444444-4444-4444-8444-%012d", i+1), TenantID: tenantA,
 				IdentityID: &identities[1].ID, Destination: step.destination, Connector: "caddy", Target: "same-target",

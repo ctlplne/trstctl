@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -42,6 +44,11 @@ func TestLifecycleSchedulerUsesTheRestoredCertificateDeadline(t *testing.T) {
 		destination, status := "connector.deploy", "verified"
 		if i == 1 {
 			destination, status, restored = "connector.rollback", "rolled_back", cert
+			if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+				return h.store.SetCertificateSupersededTx(ctx, tx, h.tenant, restored.Fingerprint, now)
+			}); err != nil {
+				t.Fatal(err)
+			}
 		}
 		if _, err := h.orch.RecordConnectorDelivery(ctx, h.tenant, store.ConnectorDeliveryReceipt{
 			IdentityID: &ident.ID, Destination: destination, Status: status, Connector: "caddy", Target: "restore-target",
@@ -49,6 +56,10 @@ func TestLifecycleSchedulerUsesTheRestoredCertificateDeadline(t *testing.T) {
 		}); err != nil {
 			t.Fatal(err)
 		}
+	}
+	predecessors, err := h.handler.activeRenewalCertificates(ctx, h.tenant, ident)
+	if err != nil || len(predecessors) != 1 || predecessors[0].ID != restored.ID || predecessors[0].Status != "superseded" {
+		t.Fatalf("renewal dispatcher lost the restored predecessor: %+v error=%v", predecessors, err)
 	}
 	srv := &Server{store: h.store, orch: h.orch, lifecycleRenewBefore: 5 * time.Minute}
 	plan, err := srv.LifecycleAutomationPlan(ctx, h.tenant, now)
