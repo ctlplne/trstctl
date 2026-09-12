@@ -4,14 +4,14 @@ ARG GO_VERSION=1.26.6
 ARG BUILD_IMAGE=golang:${GO_VERSION}-bookworm
 ARG WEB_BUILD_IMAGE=node:22-bookworm-slim
 
-FROM ${WEB_BUILD_IMAGE} AS web-build
+FROM --platform=$BUILDPLATFORM ${WEB_BUILD_IMAGE} AS web-build
 WORKDIR /src
 COPY web/package.json web/package-lock.json ./web/
 RUN npm --prefix web ci
 COPY . .
 RUN npm --prefix web run build
 
-FROM ${BUILD_IMAGE} AS build
+FROM --platform=$BUILDPLATFORM ${BUILD_IMAGE} AS build
 WORKDIR /src
 
 COPY go.mod go.sum ./
@@ -19,12 +19,31 @@ RUN go mod download
 
 COPY . .
 COPY --from=web-build /src/internal/webui/dist ./internal/webui/dist
-RUN CGO_ENABLED=0 GOFLAGS=-mod=readonly go build -trimpath -buildvcs=false -ldflags "-s -w -buildid=" -o /out/trstctl ./cmd/trstctl
+ARG TARGETOS
+ARG TARGETARCH
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOFLAGS=-mod=readonly go build -trimpath -buildvcs=false -ldflags "-s -w -buildid=" -o /out/trstctl ./cmd/trstctl
 
-# Digest-pinned, not a floating tag, so the seeded demo image is reproducible
-# (SUPPLY-008; enforced by scripts/ci/check-compose-images-pinned.sh).
-FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
-RUN apk add --no-cache ca-certificates openssl
+# The seed and partner-lab bootstrap use Node built-ins plus the OpenSSL CLI.
+# Node 24.21.0 embeds OpenSSL 3.5.8; patch its separate Alpine libraries too.
+# Each package input is content-pinned, and installation has no network access.
+FROM scratch AS runtime-packages
+ADD --checksum=sha256:161223a16f042b8e469e9441291e071464fd91d4f4bbe6f496ee8d0abd4e0701 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libcrypto3-3.5.8-r0.apk /amd64/libcrypto3-3.5.8-r0.apk
+ADD --checksum=sha256:aca521e5ae4a321322a9d47ed64a1775f5ab1ffd215d1e9fc0433c58f7bfd037 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libssl3-3.5.8-r0.apk /amd64/libssl3-3.5.8-r0.apk
+ADD --checksum=sha256:e18c561e6a8fb744b42fe000f4a8cdfcc38e7956e62a6ab44b0a0580db948450 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/openssl-3.5.8-r0.apk /amd64/openssl-3.5.8-r0.apk
+ADD --checksum=sha256:cd7752154d0fa628a5f7360218e9e8e83edf31f7fa26f58ee42d26b507bd0372 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/ca-certificates-bundle-20260611-r0.apk /amd64/ca-certificates-bundle-20260611-r0.apk
+ADD --checksum=sha256:35b892813c23664a3592e4fc8c12a03538a22c579057655361c7043305272a9a https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libcrypto3-3.5.8-r0.apk /arm64/libcrypto3-3.5.8-r0.apk
+ADD --checksum=sha256:d6ec970cc10e01539e41626f720c4e0ac69016eaa2079a10ef776ffd3243db5b https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libssl3-3.5.8-r0.apk /arm64/libssl3-3.5.8-r0.apk
+ADD --checksum=sha256:0d12f4f145ec045dd19e8465bd3cb07b08197f96a3776641511dc2bec53cc0b7 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/openssl-3.5.8-r0.apk /arm64/openssl-3.5.8-r0.apk
+ADD --checksum=sha256:bc5d3ae0b602748852e0bc601a4348cabc4f654f12f27578919cbf3c810f1c1e https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/ca-certificates-bundle-20260611-r0.apk /arm64/ca-certificates-bundle-20260611-r0.apk
+
+FROM node:24.21.0-alpine@sha256:50c8e8ca1d27439048670df5883f32d57cf81cff6233222c893fd0d9884cbd81
+ARG TARGETARCH
+COPY --from=runtime-packages /${TARGETARCH}/ /tmp/trstctl-seed-packages/
+RUN --network=none apk add --no-network /tmp/trstctl-seed-packages/*.apk \
+    && rm -rf /tmp/trstctl-seed-packages \
+    && rm -rf /usr/local/lib/node_modules /opt/yarn-* \
+    && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+        /usr/local/bin/yarn /usr/local/bin/yarnpkg /usr/local/bin/pnpm /usr/local/bin/pnpx
 RUN install -d -o 65532 -g 65532 -m 0700 /seed-state
 COPY --from=build /out/trstctl /usr/local/bin/trstctl
 COPY deploy/demo/seed.mjs /demo/seed.mjs
