@@ -104,6 +104,24 @@ export const TimeBars: Story = {
   ),
 };
 
+// The same localized ranges used by the lifecycle cockpit, at a narrow panel
+// width. Keep this fixture for visual review of tick spacing and full units.
+export const RenewalWindows: Story = {
+  args: { label: "", value: "" },
+  render: () => (
+    <div className="grid max-w-xs gap-4">
+      {["days", "días", "Tage"].map((unit) => (
+        <TimeBarChart
+          key={unit}
+          ariaLabel={`Renewal windows (${unit})`}
+          tone="warning"
+          data={Array.from({ length: 6 }, (_, index) => ({ label: `${index * 15}–${index * 15 + 14} ${unit}`, value: [0, 2, 8, 5, 13, 1][index]! }))}
+        />
+      ))}
+    </div>
+  ),
+};
+
 export const StackedTimeBars: Story = {
   args: { label: "", value: "" },
   render: () => (

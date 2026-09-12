@@ -159,7 +159,11 @@ export function TimeBarChart({
   const width = Math.max(180, data.length * 56);
   const padX = 18;
   const top = 20;
-  const bottom = 28;
+  // Keep a range and its unit readable in narrow panels. SVG text does not
+  // wrap by itself; reserve a line for each word instead of shrinking the font.
+  const labelLines = data.map((datum) => datum.label.trim().split(/\s+/u));
+  const lineHeight = 14;
+  const bottom = 14 + Math.max(1, ...labelLines.map((lines) => lines.length)) * lineHeight;
   const chartHeight = height - top - bottom;
   const step = data.length > 0 ? (width - padX * 2) / data.length : width - padX * 2;
   const barWidth = Math.max(16, Math.min(34, step * 0.62));
@@ -188,8 +192,12 @@ export function TimeBarChart({
             >
               {datum.value}
             </text>
-            <text x={x + barWidth / 2} y={height - 8} textAnchor="middle" fontSize={11} style={{ fill: "hsl(var(--muted-foreground))" }}>
-              {datum.label}
+            <text textAnchor="middle" fontSize={11} aria-label={datum.label} style={{ fill: "hsl(var(--muted-foreground))" }}>
+              {labelLines[index]!.map((line, lineIndex) => (
+                <tspan key={lineIndex} x={x + barWidth / 2} y={height - bottom + lineHeight * (lineIndex + 1)}>
+                  {line}
+                </tspan>
+              ))}
             </text>
           </g>
         );
