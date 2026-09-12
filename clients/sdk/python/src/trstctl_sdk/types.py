@@ -4337,12 +4337,15 @@ EndpointBindingPlanRequest = TypedDict(
 EndpointBindingPreview = TypedDict(
     'EndpointBindingPreview',
     {
+        'approval_required': bool,
         'capability': str,
         'changes': list[str],
         'custody': dict[str, Any],
         'effect_free': bool,
         'existing_identity': dict[str, Any],
+        'existing_identity_version': int,
         'identity_name': str,
+        'issuance': dict[str, Any],
         'issuer': dict[str, Any],
         'owner_id': str,
         'preview_external_effects': list[str],

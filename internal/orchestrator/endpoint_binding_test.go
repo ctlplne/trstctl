@@ -59,9 +59,37 @@ func TestEndpointBindingAuthoritySurvivesReplayAndRefusesRepurposing(t *testing.
 	otherOwner.OwnerID = "another-owner"
 	assertRefused(otherOwner, tenantA)
 	assertRefused(issuer, tenantB)
-	if _, err := orch.BindIdentityEndpoint(ctx, tenantA, identity.ID, target, issuer); err != nil {
+	_, reviewedVersion, err := st.IdentityApprovalTarget(ctx, tenantA, identity.ID)
+	if err != nil {
 		t.Fatal(err)
 	}
+	wrongVersion := reviewedVersion + 1
+	before, err := log.LastSequence(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := orch.BindIdentityEndpointAtVersion(ctx, tenantA, identity.ID, target, issuer, &wrongVersion); !errors.Is(err, store.ErrIdentityEnrollmentConflict) {
+		t.Fatalf("stale review accepted: %v", err)
+	}
+	after, err := log.LastSequence(ctx)
+	if err != nil || before != after {
+		t.Fatalf("stale review appended work: %d -> %d %v", before, after, err)
+	}
+	if _, err := orch.BindIdentityEndpointAtVersion(ctx, tenantA, identity.ID, target, issuer, &reviewedVersion); err != nil {
+		t.Fatal(err)
+	}
+	before, err = log.LastSequence(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := orch.BindIdentityEndpointAtVersion(ctx, tenantA, identity.ID, target, issuer, &reviewedVersion); err != nil {
+		t.Fatalf("lost bind reply cannot resume: %v", err)
+	}
+	after, err = log.LastSequence(ctx)
+	if err != nil || before != after {
+		t.Fatalf("bind replay changed the approval revision: %d -> %d %v", before, after, err)
+	}
+
 	assertBinding := func() {
 		t.Helper()
 		got, err := st.GetIdentity(ctx, tenantA, identity.ID)

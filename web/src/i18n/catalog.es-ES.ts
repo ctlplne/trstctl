@@ -4762,6 +4762,21 @@ const esESCatalog = {
   "connectors.binding.sourcePlatform": "CA de plataforma de trstctl",
   "connectors.binding.statusUnknown": "estado no informado",
   "connectors.binding.previewUnsafe": "El servidor no demostró una previsualización sin escrituras. No se autorizó nada.",
+  // Machine-authored Spanish/German wording requires human review before release.
+  "connectors.binding.profile": "Perfil del certificado",
+  "connectors.binding.profileVersion": "{name} · versión {version}",
+  "connectors.binding.defaultProfile": "Valor predeterminado de la plataforma",
+  "connectors.binding.validity": "Vigencia del certificado",
+  "connectors.binding.validitySeconds": "{seconds} segundos",
+  "connectors.binding.approvalHelp":
+    "La emisión requiere aprobaciones independientes. El primer intento prepara la identidad y abre una revisión. La emisión espera la aprobación.",
+  "connectors.binding.retryHelp":
+    "Mantenga esta revisión abierta mientras los revisores aprueban en otra pestaña y vuelva a intentarlo aquí. Los reintentos usan la misma solicitud.",
+  "connectors.binding.retry": "Reintentar esta solicitud",
+  "connectors.binding.openApprovals": "Abrir aprobaciones en otra pestaña",
+  "connectors.binding.waitingApproval": "Esperando aprobación",
+  "connectors.binding.requestKey": "Clave de solicitud",
+  "connectors.binding.awaitingCompletion": "Solicitud pendiente de finalización",
   "connectors.binding.previewReady": "Listo para autorizar — no cambió nada",
   "connectors.binding.zeroEffect":
     "La previsualización no escribió registros, no llamó a ninguna CA ni contactó ningún destino. La ejecución está vinculada a esta huella exacta.",

@@ -161,7 +161,7 @@ export async function req<T>(path: string, init?: RequestInit): Promise<T> {
 
 /** newIdempotencyKey returns a fresh key so a retried mutation cannot execute
  * twice (AN-5). */
-function newIdempotencyKey(): string {
+export function newIdempotencyKey(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
   return `idem-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }

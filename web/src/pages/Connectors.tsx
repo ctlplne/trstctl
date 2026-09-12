@@ -41,7 +41,10 @@ function VantageBadge({ vantage }: { vantage: string }) {
   return <span className="text-xs font-medium text-muted-foreground">{translateNow("source.vantage.control.plane.a3vant0004")}</span>;
 }
 
+import { newIdempotencyKey } from "@/lib/apiTransport";
+
 export function Connectors() {
+  const deployAttempt = useRef<{ body: string; key: string } | null>(null);
   const { t } = useTranslation();
   const [catalog, setCatalog] = useState<ConnectorCatalogItem[] | null>(null);
   const [relayPlugins, setRelayPlugins] = useState<RelayPluginRuntime[] | null>(null);
@@ -302,7 +305,9 @@ export function Connectors() {
         setActionResult(null);
       } else if (action === "deploy") {
         if (!selectedIdentity) return;
-        const identity = await api.deployConnectorTarget(selectedTarget, { identity_id: selectedIdentity, reason: reason.trim() });
+        const body = JSON.stringify([selectedTarget, selectedIdentity, reason.trim()]);
+        if (deployAttempt.current?.body !== body) deployAttempt.current = { body, key: newIdempotencyKey() };
+        const identity = await api.deployConnectorTarget(selectedTarget, { identity_id: selectedIdentity, reason: reason.trim() }, deployAttempt.current.key);
         setActionResult(`deploy:${identity.status}`);
       } else {
         setRecoveryReceipt(null);

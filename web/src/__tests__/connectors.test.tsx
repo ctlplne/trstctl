@@ -1,3 +1,4 @@
+import { ApiError } from "@/lib/api";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -452,6 +453,52 @@ describe("connector deployment disclosure surface", () => {
     expect(screen.getByText("execution remains in the control plane")).toBeInTheDocument();
   });
 
+  it("keeps the exact endpoint request across pending approval retries and shows its validity", async () => {
+    const user = userEvent.setup();
+    const base = await apiMock.previewEndpointBinding.getMockImplementation()?.();
+    const binding = await apiMock.createEndpointBinding.getMockImplementation()?.();
+    apiMock.getIdentity.mockResolvedValue(binding.identity);
+    apiMock.previewEndpointBinding.mockResolvedValue({
+      ...base,
+      approval_required: true,
+      issuance: { profile_name: "mail-short-life", profile_version: 3, requested_ttl_seconds: 2592000, effective_ttl_seconds: 720 },
+    });
+    apiMock.createEndpointBinding.mockRejectedValueOnce(
+      new ApiError(
+        403,
+        JSON.stringify({
+          detail: "two distinct reviewers must approve",
+          code: "identity_approval_required",
+          approval_status: "pending",
+        }),
+      ),
+    );
+    renderConnectors();
+    await screen.findByRole("heading", { name: "Where credentials are installed" });
+    await user.click(screen.getByText("Destinations and safe actions", { exact: true }));
+    await screen.findByRole("heading", { name: "Name the endpoint" });
+    await user.selectOptions(screen.getByLabelText("Destination"), "target-1");
+    await user.selectOptions(screen.getByLabelText("Owner"), "owner-1");
+    await user.type(screen.getByLabelText("Enrollment reason"), "approve exact mail enrollment");
+    await user.click(screen.getByRole("button", { name: "Choose CA" }));
+    await user.selectOptions(await screen.findByLabelText("Issuing CA"), "external:corporate-digicert");
+    await user.click(screen.getByRole("button", { name: "Build safe preview" }));
+    expect(await screen.findByText("mail-short-life · version 3")).toBeInTheDocument();
+    expect(screen.getByText("720 seconds")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Authorize issuance and deployment" }));
+    const retry = await screen.findByRole("button", { name: "Retry this request" });
+    expect(await screen.findAllByText("Waiting for approval")).not.toHaveLength(0);
+    expect(screen.queryByRole("heading", { name: "Ready to authorize — nothing changed" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open approvals in another tab" })).toHaveAttribute("target", "_blank");
+    const first = apiMock.createEndpointBinding.mock.calls[0];
+    expect(first?.[1]).toEqual(expect.any(String));
+    expect(first?.[1].length).toBeGreaterThan(10);
+    await user.click(retry);
+    await waitFor(() => expect(apiMock.createEndpointBinding).toHaveBeenCalledTimes(2));
+    expect(apiMock.createEndpointBinding.mock.calls[1]).toEqual(first);
+    expect(await screen.findByRole("heading", { name: "Work authorized" })).toBeInTheDocument();
+  });
+
   it("replaces an exact managed identity while retaining its owner and explicit CA choice", async () => {
     const user = userEvent.setup();
     const original = {
@@ -494,7 +541,9 @@ describe("connector deployment disclosure surface", () => {
     };
     expect(apiMock.previewEndpointBinding).toHaveBeenCalledWith(expected);
     await user.click(screen.getByRole("button", { name: "Authorize issuance and deployment" }));
-    await waitFor(() => expect(apiMock.createEndpointBinding).toHaveBeenCalledWith({ ...expected, preview_fingerprint: "sha256:exact-endpoint-plan" }));
+    await waitFor(() =>
+      expect(apiMock.createEndpointBinding).toHaveBeenCalledWith({ ...expected, preview_fingerprint: "sha256:exact-endpoint-plan" }, expect.any(String)),
+    );
     expect(await screen.findByText(/then revoke and retire original identity identity-original/)).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Ready to authorize — nothing changed" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Work authorized" })).toBeInTheDocument();
@@ -556,14 +605,17 @@ describe("connector deployment disclosure surface", () => {
     });
     await user.click(screen.getByRole("button", { name: "Authorize issuance and deployment" }));
     await waitFor(() =>
-      expect(apiMock.createEndpointBinding).toHaveBeenCalledWith({
-        owner_id: "owner-1",
-        identity_name: "payments.example.test",
-        reason: "verified design-partner endpoint",
-        target_id: "target-1",
-        issuer: { source: "external", id: "corporate-digicert" },
-        preview_fingerprint: "sha256:exact-endpoint-plan",
-      }),
+      expect(apiMock.createEndpointBinding).toHaveBeenCalledWith(
+        {
+          owner_id: "owner-1",
+          identity_name: "payments.example.test",
+          reason: "verified design-partner endpoint",
+          target_id: "target-1",
+          issuer: { source: "external", id: "corporate-digicert" },
+          preview_fingerprint: "sha256:exact-endpoint-plan",
+        },
+        expect.any(String),
+      ),
     );
 
     // Refreshes deliberately clear selections whose IDs are not present in the
@@ -585,10 +637,14 @@ describe("connector deployment disclosure surface", () => {
 
     await user.click(screen.getByRole("button", { name: "Deploy" }));
     await waitFor(() =>
-      expect(apiMock.deployConnectorTarget).toHaveBeenCalledWith("target-1", {
-        identity_id: "identity-1",
-        reason: "verified design-partner endpoint",
-      }),
+      expect(apiMock.deployConnectorTarget).toHaveBeenCalledWith(
+        "target-1",
+        {
+          identity_id: "identity-1",
+          reason: "verified design-partner endpoint",
+        },
+        expect.any(String),
+      ),
     );
 
     await user.click(screen.getByRole("button", { name: "Review restore" }));

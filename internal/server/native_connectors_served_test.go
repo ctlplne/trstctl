@@ -573,7 +573,7 @@ func TestServedEndpointBindingPushesCredentialsCAPLIFE05(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.ConnectorRegistry = reg
 	})
-	tok := seedScopedToken(t, h.store, h.tenant, "owners:write", "connectors:read", "connectors:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "owners:write", "connectors:read", "connectors:write", "certs:issue")
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/owners", tok, map[string]any{
 		"kind": "workload",

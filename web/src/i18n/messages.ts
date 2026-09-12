@@ -13817,6 +13817,31 @@ export const messages = {
     defaultMessage: "The server did not prove a zero-write preview. Nothing was authorized.",
     description: "Endpoint preview invariant refusal.",
   },
+  // Machine-authored Spanish/German wording requires human review before release.
+  "connectors.binding.profile": { defaultMessage: "Certificate profile", description: "Endpoint issuance authority and approval continuation." },
+  "connectors.binding.profileVersion": { defaultMessage: "{name} · version {version}", description: "Endpoint issuance authority and approval continuation." },
+  "connectors.binding.defaultProfile": { defaultMessage: "Platform default", description: "Endpoint issuance authority and approval continuation." },
+  "connectors.binding.validity": { defaultMessage: "Certificate validity", description: "Endpoint issuance authority and approval continuation." },
+  "connectors.binding.validitySeconds": { defaultMessage: "{seconds} seconds", description: "Endpoint issuance authority and approval continuation." },
+  "connectors.binding.approvalHelp": {
+    defaultMessage: "Issuance requires independent approvals. The first attempt prepares the identity and opens a review. Issuance waits for approval.",
+    description: "Endpoint issuance authority and approval continuation.",
+  },
+  "connectors.binding.retryHelp": {
+    defaultMessage: "Keep this review open while reviewers approve in another tab, then retry here. Retries use the same request.",
+    description: "Endpoint issuance authority and approval continuation.",
+  },
+  "connectors.binding.retry": { defaultMessage: "Retry this request", description: "Endpoint issuance authority and approval continuation." },
+  "connectors.binding.openApprovals": {
+    defaultMessage: "Open approvals in another tab",
+    description: "Endpoint issuance authority and approval continuation.",
+  },
+  "connectors.binding.waitingApproval": { defaultMessage: "Waiting for approval", description: "Endpoint issuance authority and approval continuation." },
+  "connectors.binding.requestKey": { defaultMessage: "Request key", description: "Endpoint issuance authority and approval continuation." },
+  "connectors.binding.awaitingCompletion": {
+    defaultMessage: "Request awaiting completion",
+    description: "Endpoint issuance authority and approval continuation.",
+  },
   "connectors.binding.previewReady": { defaultMessage: "Ready to authorize — nothing changed", description: "Successful endpoint lifecycle preview title." },
   "connectors.binding.authorized": { defaultMessage: "Work authorized", description: "Endpoint lifecycle execution accepted; not a delivery-success claim." },
   "connectors.binding.authorizedHelp": {

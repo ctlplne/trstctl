@@ -12892,6 +12892,9 @@
       },
       "EndpointBindingPreview": {
         "properties": {
+          "approval_required": {
+            "type": "boolean"
+          },
           "capability": {
             "type": "string"
           },
@@ -12910,8 +12913,39 @@
           "existing_identity": {
             "$ref": "#/components/schemas/Identity"
           },
+          "existing_identity_version": {
+            "type": "integer"
+          },
           "identity_name": {
             "type": "string"
+          },
+          "issuance": {
+            "properties": {
+              "effective_ttl_seconds": {
+                "type": "integer"
+              },
+              "profile_id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "profile_name": {
+                "type": "string"
+              },
+              "profile_spec_digest": {
+                "type": "string"
+              },
+              "profile_version": {
+                "type": "integer"
+              },
+              "requested_ttl_seconds": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "requested_ttl_seconds",
+              "effective_ttl_seconds"
+            ],
+            "type": "object"
           },
           "issuer": {
             "$ref": "#/components/schemas/EndpointIssuer"
@@ -12967,6 +13001,8 @@
           }
         },
         "required": [
+          "issuance",
+          "approval_required",
           "capability",
           "ready",
           "effect_free",

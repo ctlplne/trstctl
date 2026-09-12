@@ -188,8 +188,9 @@ func privilegedActionFor(to orchestrator.State) (action policy.Action, privilege
 // the right problem+json (403 for an authz/policy/approval denial, 503 for a shed
 // policy pool).
 type gateError struct {
-	status int
-	detail string
+	status   int
+	detail   string
+	approval *ApprovalAuthority
 }
 
 func (e *gateError) Error() string { return e.detail }
@@ -298,7 +299,7 @@ func (g MutationGate) checkWithApproval(ctx context.Context, p authz.Principal, 
 			if reason == "" {
 				reason = "a distinct approver must approve this " + string(action) + " (dual control)"
 			}
-			return nil, &gateError{status: http.StatusForbidden, detail: "dual control: " + reason}
+			return nil, &gateError{status: http.StatusForbidden, detail: "dual control: " + reason, approval: &authority}
 		}
 		return &authority, nil
 	}

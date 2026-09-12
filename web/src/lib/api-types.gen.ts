@@ -3129,12 +3129,15 @@ export interface EndpointBindingPlanRequest {
 }
 
 export interface EndpointBindingPreview {
+  approval_required: boolean;
   capability: string;
   changes: string[];
   custody: EndpointBindingCustody;
   effect_free: boolean;
   existing_identity?: Identity;
+  existing_identity_version?: number;
   identity_name: string;
+  issuance: { effective_ttl_seconds: number; profile_id?: string; profile_name?: string; profile_spec_digest?: string; profile_version?: number; requested_ttl_seconds: number };
   issuer: EndpointIssuer;
   owner_id: string;
   preview_external_effects: string[];

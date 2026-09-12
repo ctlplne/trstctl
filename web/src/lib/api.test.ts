@@ -40,6 +40,17 @@ afterEach(() => {
 });
 
 describe("api error handling (SURFACE-007)", () => {
+  it("preserves caller-supplied endpoint and direct-deploy request keys", async () => {
+    mockFetch(201, "{}");
+    await api.createEndpointBinding(
+      { owner_id: "owner", identity_name: "mail.test", target_id: "target", issuer: { source: "platform", id: "ca" }, preview_fingerprint: "review" },
+      "endpoint-review-key",
+    );
+    expect(lastSentHeaders()["Idempotency-Key"]).toBe("endpoint-review-key");
+    await api.deployConnectorTarget("target", { identity_id: "identity", reason: "approved" }, "deploy-review-key");
+    expect(lastSentHeaders()["Idempotency-Key"]).toBe("deploy-review-key");
+  });
+
   it("retains the identity next cursor and encodes the requested page", async () => {
     mockFetch(200, JSON.stringify({ items: [], next_cursor: "next/identity=" }));
     expect(await api.identityPage({ limit: 20, cursor: "previous/identity=" })).toEqual({ items: [], next_cursor: "next/identity=" });

@@ -9878,12 +9878,23 @@ export interface components {
             target_id?: string;
         };
         EndpointBindingPreview: {
+            approval_required: boolean;
             capability: string;
             changes: string[];
             custody: components["schemas"]["EndpointBindingCustody"];
             effect_free: boolean;
             existing_identity?: components["schemas"]["Identity"];
+            existing_identity_version?: number;
             identity_name: string;
+            issuance: {
+                effective_ttl_seconds: number;
+                /** Format: uuid */
+                profile_id?: string;
+                profile_name?: string;
+                profile_spec_digest?: string;
+                profile_version?: number;
+                requested_ttl_seconds: number;
+            };
             issuer: components["schemas"]["EndpointIssuer"];
             /** Format: uuid */
             owner_id: string;

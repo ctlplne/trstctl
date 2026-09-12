@@ -2967,7 +2967,13 @@ func componentSchemas() map[string]*Schema {
 		"key_origin": str(), "private_key_enters_control_plane": {Type: "boolean"}, "detail": str(),
 	}, "key_origin", "private_key_enters_control_plane", "detail")
 	endpointBindingPreview := object(map[string]*Schema{
-		"capability": str(), "ready": {Type: "boolean"}, "effect_free": {Type: "boolean"},
+		"issuance": object(map[string]*Schema{
+			"profile_name": str(), "profile_id": uuid(), "profile_version": {Type: "integer"}, "profile_spec_digest": str(),
+			"requested_ttl_seconds": {Type: "integer"}, "effective_ttl_seconds": {Type: "integer"},
+		}, "requested_ttl_seconds", "effective_ttl_seconds"),
+		"approval_required":         {Type: "boolean"},
+		"existing_identity_version": {Type: "integer"},
+		"capability":                str(), "ready": {Type: "boolean"}, "effect_free": {Type: "boolean"},
 		"request_fingerprint": str(), "owner_id": uuid(), "identity_name": str(),
 		"existing_identity":         ref("Identity"),
 		"replaced_identity":         ref("Identity"),
@@ -2976,7 +2982,7 @@ func componentSchemas() map[string]*Schema {
 		"changes": {Type: "array", Items: str()}, "queued_lifecycle_intents": {Type: "array", Items: str()},
 		"recovery_steps": {Type: "array", Items: str()}, "verification_steps": {Type: "array", Items: str()},
 		"preview_writes": {Type: "array", Items: str()}, "preview_external_effects": {Type: "array", Items: str()},
-	}, "capability", "ready", "effect_free", "request_fingerprint", "owner_id", "identity_name", "issuer", "target", "custody", "changes", "queued_lifecycle_intents", "recovery_steps", "verification_steps", "preview_writes", "preview_external_effects")
+	}, "issuance", "approval_required", "capability", "ready", "effect_free", "request_fingerprint", "owner_id", "identity_name", "issuer", "target", "custody", "changes", "queued_lifecycle_intents", "recovery_steps", "verification_steps", "preview_writes", "preview_external_effects")
 	endpointBinding := object(map[string]*Schema{
 		"identity":                 ref("Identity"),
 		"replaced_identity_id":     uuid(),

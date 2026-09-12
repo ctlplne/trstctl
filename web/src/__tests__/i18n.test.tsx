@@ -338,6 +338,8 @@ describe("i18n boundary", () => {
       return createHash("sha256").update(payload).digest("hex");
     };
 
+    // Endpoint authority: reviewed es/de profile, validity and approval retry copy.
+    // Machine-authored translations require human review before release.
     // Updating either digest is a deliberate translation-review decision. The
     // ratchet catches a long-tail value being reset to its English seed just as
     // it catches any other unreviewed production-catalog edit.
@@ -1554,8 +1556,8 @@ describe("i18n boundary", () => {
       // authorization labels. Machine-authored es/de require human review before release.
       // Certificate inventory: reviewed the server-wide search label against
       // the new API semantics. Machine-authored es/de require human review before release.
-      "es-ES": "a3f8d529e8f7e34829201288d6b24fe93abd402a2295af800a2d8673181613b0",
-      "de-DE": "a33f2629c68c0705e162751aa64b2e3308359c4e30c8776857cc641e58d22015",
+      "es-ES": "d24f246f8d83f7c0b0804ca2540cc8787e41ef96d61923bea42d11f7f1df9bf8",
+      "de-DE": "cd927a2498683e1e78784467063f4c642aef94fcee344d99d7073565a3d9cade",
     });
   });
 

@@ -1623,10 +1623,10 @@ export interface Api {
   connectorTargets(): Promise<DeploymentTargetList>;
   createConnectorTarget(input: DeploymentTargetRequest): Promise<DeploymentTarget>;
   previewEndpointBinding(input: EndpointBindingPlanRequest): Promise<EndpointBindingPreview>;
-  createEndpointBinding(input: EndpointBindingRequest): Promise<EndpointBinding>;
+  createEndpointBinding(input: EndpointBindingRequest, idempotencyKey?: string): Promise<EndpointBinding>;
   bindIdentityConnectorTarget(id: string, input: IdentityConnectorTargetRequest): Promise<Identity>;
   testConnectorTarget(id: string): Promise<ConnectorDelivery>;
-  deployConnectorTarget(id: string, input: ConnectorTargetActionRequest): Promise<Identity>;
+  deployConnectorTarget(id: string, input: ConnectorTargetActionRequest, idempotencyKey?: string): Promise<Identity>;
   rollbackConnectorTarget(id: string, input: ConnectorTargetActionRequest): Promise<ConnectorDelivery>;
   connectorDeliveries(options?: { limit?: number; cursor?: string; identityId?: string; idempotencyKey?: string }): Promise<ConnectorDeliveryList>;
   lifecycleAutomationPlan(): Promise<LifecycleAutomationPlan>;
@@ -2184,10 +2184,10 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   connectorTargets: () => req<DeploymentTargetList>("/api/v1/connectors/targets"),
   createConnectorTarget: (input) => mutate<DeploymentTarget>("POST", "/api/v1/connectors/targets", input),
   previewEndpointBinding: (input) => postRead<EndpointBindingPreview>("/api/v1/lifecycle/endpoint-bindings/preview", input),
-  createEndpointBinding: (input) => mutate<EndpointBinding>("POST", "/api/v1/lifecycle/endpoint-bindings", input),
+  createEndpointBinding: (input, key) => mutate<EndpointBinding>("POST", "/api/v1/lifecycle/endpoint-bindings", input, key),
   bindIdentityConnectorTarget: (id, input) => mutate<Identity>("POST", `/api/v1/identities/${encodeURIComponent(id)}/connector-target`, input),
   testConnectorTarget: (id) => mutate<ConnectorDelivery>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/test`),
-  deployConnectorTarget: (id, input) => mutate<Identity>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/deploy`, input),
+  deployConnectorTarget: (id, input, key) => mutate<Identity>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/deploy`, input, key),
   rollbackConnectorTarget: (id, input) => mutate<ConnectorDelivery>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/rollback`, input),
   connectorDeliveries: (options) => {
     const query = new URLSearchParams(pageQueryString(options, options?.identityId));

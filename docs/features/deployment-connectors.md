@@ -304,7 +304,40 @@ reload, because that deployment is guaranteed to fail its own TLS proof. The pai
 `POST /api/v1/lifecycle/endpoint-bindings` accepts only that unchanged preview: it
 creates or reuses the target, creates the X.509 identity for an existing owner, pins
 the selected built-in, private, or external issuer, binds the route, and queues the
-normal `ca.issue`/`connector.deploy` intents. Scheduled renewal reuses the
+normal `ca.issue`/`connector.deploy` intents after issuance authorization succeeds.
+Both enrollment and the destination's **Deploy** action for a requested identity
+require `certs:issue` as well as `connectors:write`. They apply the same policy,
+attribute-based denial, quota, and independent-approval checks as ordinary identity
+issuance.
+
+The endpoint review includes the active certificate profile's name, immutable
+version and digest, requested validity, effective validity, and approval requirement.
+An identity-specific profile wins; otherwise the configured default applies. The
+implicit request is 30 days, bounded by the profile maximum: a 12-minute profile
+queues a 720-second certificate request. The profile binding stays with the command
+when it is handed to a host agent. A changed profile or destination invalidates an
+unexecuted review; it cannot silently change what was authorized.
+
+When approval is required, the first submission prepares the requested identity
+and destination binding, then returns HTTP 403 with
+`code=identity_approval_required`, `identity_id`, `approval_request_id`, and
+`approval_status`. This is pending review, not a completed issuance. Independent
+reviewers approve that exact request. Retry the original body with the original
+`Idempotency-Key`; the prepared identity and reviewed version are retained so the
+retry does not create another identity or invalidate the approvals. The complete
+identity snapshot is included in approval evidence and checked under its row lock
+before issuance, because metadata edits do not advance the lifecycle version. Self-approval
+is refused. Expired, denied, or changed authority must be reviewed again.
+
+The console shows the profile and exact validity before submission and retains the
+request key while the review stays open. **Open approvals in another tab** preserves
+that review; **Retry this request** resumes it. This retention is limited to the open
+form, not a browser-reload recovery contract. API clients should persist the exact
+request body and key. Acceptance means issuance was authorized and queued; inspect
+the certificate, delivery receipt, and a fresh application connection to prove that
+it was issued and installed.
+
+Scheduled renewal reuses the
 leader-only `ca.renew` path and the same issuer selection, delivering the successor
 to the same binding and producing a second connector receipt. The worker fails
 closed when that issuer is unavailable; it never silently substitutes another CA.

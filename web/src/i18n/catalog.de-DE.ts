@@ -4810,6 +4810,21 @@ const deDECatalog = {
   "connectors.binding.sourcePlatform": "trstctl-Plattform-CA",
   "connectors.binding.statusUnknown": "Status nicht gemeldet",
   "connectors.binding.previewUnsafe": "Der Server hat keine schreibfreie Vorschau nachgewiesen. Nichts wurde autorisiert.",
+  // Machine-authored Spanish/German wording requires human review before release.
+  "connectors.binding.profile": "Zertifikatsprofil",
+  "connectors.binding.profileVersion": "{name} · Version {version}",
+  "connectors.binding.defaultProfile": "Plattformstandard",
+  "connectors.binding.validity": "Zertifikatsgültigkeit",
+  "connectors.binding.validitySeconds": "{seconds} Sekunden",
+  "connectors.binding.approvalHelp":
+    "Die Ausstellung erfordert unabhängige Genehmigungen. Der erste Versuch bereitet die Identität vor und eröffnet eine Prüfung. Die Ausstellung wartet auf die Genehmigung.",
+  "connectors.binding.retryHelp":
+    "Lassen Sie diese Prüfung geöffnet, während Prüfer in einem anderen Tab genehmigen. Wiederholen Sie den Versuch dann hier. Wiederholungen verwenden denselben Antrag.",
+  "connectors.binding.retry": "Diesen Antrag erneut versuchen",
+  "connectors.binding.openApprovals": "Genehmigungen in einem anderen Tab öffnen",
+  "connectors.binding.waitingApproval": "Warten auf Genehmigung",
+  "connectors.binding.requestKey": "Antragsschlüssel",
+  "connectors.binding.awaitingCompletion": "Antrag wartet auf Abschluss",
   "connectors.binding.previewReady": "Bereit zur Autorisierung — nichts geändert",
   "connectors.binding.zeroEffect":
     "Die Vorschau schrieb keine Datensätze, rief keine CA auf und kontaktierte kein Ziel. Die Ausführung ist an diesen exakten Fingerabdruck gebunden.",

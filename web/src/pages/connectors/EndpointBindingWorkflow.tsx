@@ -9,9 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { api } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
 import type { CAAuthority, DeploymentTarget, EndpointBinding, EndpointBindingPreview, EndpointIssuer, ExternalCA, Identity, Owner } from "@/lib/api-types.gen";
 import { useTranslation } from "@/i18n/I18nProvider";
+
+import { newIdempotencyKey } from "@/lib/apiTransport";
 
 const platformIssuer: EndpointIssuer = {
   source: "platform",
@@ -53,6 +55,9 @@ export function EndpointBindingWorkflow({
   const [preview, setPreview] = useState<EndpointBindingPreview | null>(null);
   const [busy, setBusy] = useState<"preview" | "execute" | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [requestKey, setRequestKey] = useState<string | null>(null);
+  const [attempted, setAttempted] = useState(false);
+  const [approvalPending, setApprovalPending] = useState(false);
   const [completed, setCompleted] = useState<EndpointBinding | null>(null);
 
   const schema = useMemo(
@@ -208,6 +213,9 @@ export function EndpointBindingWorkflow({
       if (values.mode === "replace" && reviewed.replaced_identity?.id !== values.replace_identity_id) {
         throw new Error(t("connectors.binding.replacementPreviewMissing"));
       }
+      setRequestKey(newIdempotencyKey());
+      setAttempted(false);
+      setApprovalPending(false);
       setPreview(reviewed);
       setStep(2);
     } catch (error) {
@@ -218,26 +226,39 @@ export function EndpointBindingWorkflow({
   }
 
   async function execute() {
-    if (!preview || busy) return;
+    if (!preview || !requestKey || busy) return;
     const values = getValues();
     const issuer = decodeIssuer(values.issuer_key);
     if (!issuer) return;
     setActionError(null);
     setBusy("execute");
+    setAttempted(true);
     try {
-      const binding = await api.createEndpointBinding({
-        ...(values.mode === "replace" ? { replace_identity_id: values.replace_identity_id } : {}),
-        owner_id: values.owner_id.trim(),
-        identity_name: values.identity_name.trim(),
-        target_id: values.target_id,
-        reason: values.reason.trim(),
-        issuer,
-        preview_fingerprint: preview.request_fingerprint,
-      });
+      const binding = await api.createEndpointBinding(
+        {
+          ...(values.mode === "replace" ? { replace_identity_id: values.replace_identity_id } : {}),
+          owner_id: values.owner_id.trim(),
+          identity_name: values.identity_name.trim(),
+          target_id: values.target_id,
+          reason: values.reason.trim(),
+          issuer,
+          preview_fingerprint: preview.request_fingerprint,
+        },
+        requestKey,
+      );
+      setApprovalPending(false);
       setCompleted(binding);
       await onComplete(binding, values.reason.trim());
     } catch (error) {
       setActionError(error instanceof Error ? error.message : String(error));
+      if (error instanceof ApiError) {
+        try {
+          const problem = JSON.parse(error.body) as { code?: string; approval_status?: string };
+          setApprovalPending(problem.code === "identity_approval_required" && problem.approval_status === "pending");
+        } catch {
+          setApprovalPending(false);
+        }
+      }
     } finally {
       setBusy(null);
     }
@@ -259,7 +280,7 @@ export function EndpointBindingWorkflow({
         steps={steps}
         currentIndex={step}
         progressLabel={t("connectors.binding.progress")}
-        onPrevious={step > 0 && !completed ? previous : undefined}
+        onPrevious={step > 0 && !completed && !approvalPending ? previous : undefined}
         onNext={step < 2 ? () => void advance() : undefined}
         nextDisabled={Boolean(busy) || owners.length === 0 || targets.every((target) => !target.enabled)}
         nextLabel={
@@ -373,9 +394,27 @@ export function EndpointBindingWorkflow({
 
         {step === 2 && preview ? (
           <div className="grid gap-4">
-            <div className="rounded-control border border-status-success/30 bg-status-success/10 p-4">
-              <h3 className="font-semibold">{t(completed ? "connectors.binding.authorized" : "connectors.binding.previewReady")}</h3>
-              <p className="mt-1 text-sm text-muted-foreground">{t(completed ? "connectors.binding.authorizedHelp" : "connectors.binding.zeroEffect")}</p>
+            <div
+              className={
+                attempted && !completed
+                  ? "rounded-control border border-status-warning/30 bg-status-warning/10 p-4"
+                  : "rounded-control border border-status-success/30 bg-status-success/10 p-4"
+              }
+            >
+              <h3 className="font-semibold">
+                {t(
+                  completed
+                    ? "connectors.binding.authorized"
+                    : approvalPending
+                      ? "connectors.binding.waitingApproval"
+                      : attempted
+                        ? "connectors.binding.awaitingCompletion"
+                        : "connectors.binding.previewReady",
+                )}
+              </h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {t(completed ? "connectors.binding.authorizedHelp" : attempted ? "connectors.binding.retryHelp" : "connectors.binding.zeroEffect")}
+              </p>
             </div>
             <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
               <Fact label={t("connectors.binding.destination")} value={`${preview.target.name} — ${preview.target.connector}`} />
@@ -383,11 +422,37 @@ export function EndpointBindingWorkflow({
               <Fact label={t("connectors.binding.keyCustody")} value={preview.custody.key_origin} />
               <Fact label={t("connectors.binding.owner")} value={owners.find((owner) => owner.id === preview.owner_id)?.name ?? preview.owner_id} />
             </dl>
+            {preview.issuance ? (
+              <dl className="grid gap-3 text-sm sm:grid-cols-2">
+                <Fact
+                  label={t("connectors.binding.profile")}
+                  value={
+                    preview.issuance.profile_name
+                      ? t("connectors.binding.profileVersion", { name: preview.issuance.profile_name, version: preview.issuance.profile_version ?? 0 })
+                      : t("connectors.binding.defaultProfile")
+                  }
+                />
+                <Fact
+                  label={t("connectors.binding.validity")}
+                  value={t("connectors.binding.validitySeconds", { seconds: preview.issuance.effective_ttl_seconds })}
+                />
+              </dl>
+            ) : null}
+            {preview.approval_required && !completed ? <p className="text-sm text-muted-foreground">{t("connectors.binding.approvalHelp")}</p> : null}
+            {attempted && !completed ? (
+              <div className="grid gap-2 text-sm">
+                <p>{t("connectors.binding.retryHelp")}</p>
+                <Link className="font-medium text-primary underline" to="/approvals?status=pending" target="_blank" rel="noopener noreferrer">
+                  {t("connectors.binding.openApprovals")}
+                </Link>
+                <Fact label={t("connectors.binding.requestKey")} value={requestKey ?? ""} mono />
+              </div>
+            ) : null}
             <p className="text-sm text-muted-foreground">{preview.custody.detail}</p>
             {preview.replaced_identity ? (
               <Fact label={t("connectors.binding.original")} value={`${preview.replaced_identity.name} — ${preview.replaced_identity.id}`} />
             ) : null}
-            {!completed && <ReviewList title={t("connectors.binding.changes")} items={preview.changes} />}
+            {!completed && !attempted && <ReviewList title={t("connectors.binding.changes")} items={preview.changes} />}
             {!completed && <ReviewList title={t("connectors.binding.queuedEffects")} items={preview.queued_lifecycle_intents} mono />}
             <ReviewList title={t("connectors.binding.recovery")} items={preview.recovery_steps} />
             <ReviewList title={t("connectors.binding.verification")} items={preview.verification_steps} />
@@ -420,13 +485,15 @@ export function EndpointBindingWorkflow({
               </div>
             ) : (
               <Button type="button" onClick={() => void execute()} disabled={Boolean(busy)}>
-                {busy === "execute" ? t("connectors.binding.queueing") : t("connectors.binding.authorize")}
+                {busy === "execute" ? t("connectors.binding.queueing") : t(attempted ? "connectors.binding.retry" : "connectors.binding.authorize")}
               </Button>
             )}
           </div>
         ) : null}
       </StepShell>
-      {actionError ? <ErrorState title={t("connectors.binding.actionFailed")}>{actionError}</ErrorState> : null}
+      {actionError ? (
+        <ErrorState title={t(approvalPending ? "connectors.binding.waitingApproval" : "connectors.binding.actionFailed")}>{actionError}</ErrorState>
+      ) : null}
       {selectedTarget && !selectedTarget.enabled ? <p className="text-sm text-status-warning">{t("connectors.targetReadiness.disabledHelp")}</p> : null}
     </div>
   );

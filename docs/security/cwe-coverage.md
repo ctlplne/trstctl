@@ -27,6 +27,8 @@ coverage ledger applies to assets, applied to weaknesses.
 
 | CWE | Where | Guard |
 |---|---|---|
+| CWE-863 | `internal/api/endpoint_binding_execution.go` | TestEndpointEnrollmentHonorsIssuanceAuthority (internal/server/endpoint_binding_authority_served_test.go) |
+| CWE-367 | `internal/orchestrator/endpoint_binding.go` | TestEndpointEnrollmentHonorsIssuanceAuthority/endpoint_enrollment/identity_changed_during_policy and target_deploy/identity_changed_during_policy (internal/server/endpoint_binding_authority_served_test.go) |
 | CWE-494 | `internal/server/bundled_pg.go` | TestBundledPostgresRejectsUnrelatedExtractedCache and TestBundledPostgresAuthenticatedFixtureReachesInitializerAndCleansUp (internal/server/bundled_pg_start_test.go) + TestVerifiedStartAuthenticatesColdArchiveBeforeInit (third_party/embedded-postgres/verified_binary_test.go) |
 | CWE-22 | `third_party/embedded-postgres/verified_binary.go` | TestVerifiedExtractionRejectsUnsafePathsLinksAndTypes (third_party/embedded-postgres/verified_binary_test.go) |
 | CWE-400 | `third_party/embedded-postgres/verified_binary.go` | TestVerifiedExtractionBoundsHiddenMetadataAndDictionary and TestVerifiedDownloadClosesBodiesAndBoundsResponses (third_party/embedded-postgres/verified_acquisition_test.go) |

@@ -262,6 +262,13 @@ func (o *Orchestrator) TransitionWithSubjectCSRAtVersion(ctx context.Context, te
 	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, csrPEM, nil, nil, binding, expectedVersion, "")
 }
 
+// TransitionWithSubjectCSRAtIdentitySnapshot additionally pins identity metadata.
+// The check occurs in the issuance transaction, after policy evaluation and before
+// append. A lifecycle version alone cannot detect connector/attribute edits.
+func (o *Orchestrator) TransitionWithSubjectCSRAtIdentitySnapshot(ctx context.Context, tenantID, identityID string, to State, reason, idempotencyKey, csrPEM string, expectedVersion *uint64, reviewed *store.Identity, issuance *store.OperationApprovalIssuanceBinding) error {
+	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, strings.TrimSpace(csrPEM), nil, nil, issuance, expectedVersion, "", reviewed)
+}
+
 // TransitionWithSubjectCSRAndApproval is the served dual-control path. The exact
 // request/digest authority is embedded in the lifecycle event; its projection
 // consumes that authority in the same PostgreSQL transaction as the status and
@@ -272,8 +279,8 @@ func (o *Orchestrator) TransitionWithSubjectCSRAndApproval(ctx context.Context, 
 
 // TransitionWithSubjectCSRAndApprovalAtVersion combines dual-control authority
 // with the same atomic reviewed-version fence used by non-approval transitions.
-func (o *Orchestrator) TransitionWithSubjectCSRAndApprovalAtVersion(ctx context.Context, tenantID, identityID string, to State, reason, idempotencyKey, csrPEM string, approval store.OperationApprovalUse, expectedVersion *uint64) error {
-	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, strings.TrimSpace(csrPEM), nil, &approval, nil, expectedVersion, "")
+func (o *Orchestrator) TransitionWithSubjectCSRAndApprovalAtVersion(ctx context.Context, tenantID, identityID string, to State, reason, idempotencyKey, csrPEM string, approval store.OperationApprovalUse, expectedVersion *uint64, reviewed ...*store.Identity) error {
+	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, strings.TrimSpace(csrPEM), nil, &approval, nil, expectedVersion, "", reviewed...)
 }
 
 // TransitionWithSideEffectPayload moves an identity through the normal lifecycle
@@ -299,7 +306,10 @@ func (o *Orchestrator) TransitionWithSideEffectPayloadTransform(ctx context.Cont
 	return o.transition(ctx, tenantID, identityID, to, reason, payload, "", "", transform, nil, nil, nil, "")
 }
 
-func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID string, to State, reason string, sideEffectPayload []byte, idempotencyKey, subjectCSRPEM string, transform SideEffectPayloadTransform, approval *store.OperationApprovalUse, issuance *store.OperationApprovalIssuanceBinding, expectedVersion *uint64, completedDestination string) error {
+func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID string, to State, reason string, sideEffectPayload []byte, idempotencyKey, subjectCSRPEM string, transform SideEffectPayloadTransform, approval *store.OperationApprovalUse, issuance *store.OperationApprovalIssuanceBinding, expectedVersion *uint64, completedDestination string, reviewed ...*store.Identity) error {
+	if len(reviewed) > 1 {
+		return errors.New("orchestrator: multiple reviewed identity snapshots")
+	}
 	idempotencyKey = strings.TrimSpace(idempotencyKey)
 	subjectCSRPEM = strings.TrimSpace(subjectCSRPEM)
 	if approval != nil && issuance != nil {
@@ -480,6 +490,15 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 			}
 			if expectedVersion != nil && version != *expectedVersion {
 				return ErrStaleLifecyclePreview
+			}
+			if len(reviewed) == 1 && reviewed[0] != nil {
+				same, err := sameIdentitySnapshot(locked, *reviewed[0])
+				if err != nil {
+					return err
+				}
+				if !same {
+					return ErrStaleLifecyclePreview
+				}
 			}
 			if to == StateRenewing {
 				pending, err := o.store.IdentityRenewalWorkPendingTx(ctx, tx, tenantID, identityID)

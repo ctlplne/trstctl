@@ -78,6 +78,12 @@ CWE_BY_RULE = {
 # The weaknesses that were FIXED (not waived), each with the guard that fails
 # if the weakness returns. Hand-maintained: a fix lands here in the same change.
 FIXED = [
+    ("CWE-863", "internal/api/endpoint_binding_execution.go",
+     "Endpoint enrollment and direct destination deployment could queue certificate issuance without the ordinary issuance permission, policy, dual-control and profile checks. Both now share the identity issuance gate and retain the exact profile binding through host-agent handoff.",
+     "TestEndpointEnrollmentHonorsIssuanceAuthority (internal/server/endpoint_binding_authority_served_test.go)"),
+    ("CWE-367", "internal/orchestrator/endpoint_binding.go",
+     "Endpoint metadata changes do not increment the lifecycle version. Reviewed identity snapshots now participate in approval evidence and are compared under the identity row lock before issuance, preventing policy-time binding changes from authorizing different work.",
+     "TestEndpointEnrollmentHonorsIssuanceAuthority/endpoint_enrollment/identity_changed_during_policy and target_deploy/identity_changed_during_policy (internal/server/endpoint_binding_authority_served_test.go)"),
     ("CWE-494", "internal/server/bundled_pg.go",
      "Bundled PostgreSQL could execute a cold download before its committed archive checksum was checked, or reuse unrelated extracted binaries. Startup now requires independent archive authentication and fresh private extraction before execution.",
      "TestBundledPostgresRejectsUnrelatedExtractedCache and TestBundledPostgresAuthenticatedFixtureReachesInitializerAndCleansUp (internal/server/bundled_pg_start_test.go) + TestVerifiedStartAuthenticatesColdArchiveBeforeInit (third_party/embedded-postgres/verified_binary_test.go)"),
