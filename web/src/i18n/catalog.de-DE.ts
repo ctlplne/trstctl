@@ -789,6 +789,10 @@ const deDECatalog = {
   "secrets.grant.verify": "Lesezugriff mit Scope prüfen",
   "secrets.grant.verifyFailedTitle": "Lesezugriff mit Scope fehlgeschlagen",
   "secrets.grant.verifyMissingSecret": "Wählen Sie ein Secret aus, bevor Sie die Workload-Credential prüfen.",
+  "secrets.grant.verifyName": "Zu prüfendes Secret",
+  "secrets.grant.verifyScope":
+    "Wählen Sie ein Secret aus oder geben Sie seinen genauen Namen ein. Diese Prüfung liest das Secret mit der Workload-Credential; sie schränkt die Berechtigungen des Tokens nicht ein.",
+  "secrets.grant.verifyMismatch": "Die Antwort nennt ein anderes Secret. Dieser Lesezugriff bestätigt das ausgewählte Secret nicht.",
   "secrets.grant.verifyPassed":
     "Der Lesezugriff mit Scope auf {name}, Version {version}, war erfolgreich. Die Workload-Credential hat den Zugriff authentifiziert; der Secret-Wert wurde nicht angezeigt.",
   "secrets.grant.ledgerCaption": "Gewährte Zugriffstoken",

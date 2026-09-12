@@ -69,6 +69,7 @@ import { MachineAuthWorkflow } from "./secrets/MachineAuthWorkflow";
 import { SecretScanningWorkflow } from "./secrets/SecretScanningWorkflow";
 import { DynamicSecretWorkflow } from "./secrets/DynamicSecretWorkflow";
 import { SecretSyncWorkflow } from "./secrets/SecretSyncWorkflow";
+import { GrantSecretVerification } from "./secrets/GrantSecretVerification";
 
 const SecretSharingWorkflow = lazy(() => import("./secrets/SecretSharingWorkflow"));
 const EphemeralAPIKeyWorkflow = lazy(() => import("./secrets/EphemeralAPIKeyWorkflow"));
@@ -247,10 +248,7 @@ export function Secrets() {
   const [grantTTL, setGrantTTL] = useState("3600");
   const [grantBusy, setGrantBusy] = useState(false);
   const [grantError, setGrantError] = useState<string | null>(null);
-  const [grantResult, setGrantResult] = useState<{ token: string; subject: string; expiresAt?: string } | null>(null);
-  const [grantVerifyBusy, setGrantVerifyBusy] = useState(false);
-  const [grantVerifyError, setGrantVerifyError] = useState<string | null>(null);
-  const [grantVerifyResult, setGrantVerifyResult] = useState<{ name: string; version?: number } | null>(null);
+  const [grantResult, setGrantResult] = useState<{ id: string; token: string; subject: string; expiresAt?: string } | null>(null);
   const [tokenRows, setTokenRows] = useState<APIToken[] | null>(null);
   const [revokingTokenId, setRevokingTokenId] = useState<string | null>(null);
   // C-S4 (DA-02 faithful): auth-method console state over the C-S2/C-S3
@@ -1045,8 +1043,6 @@ export function Secrets() {
     event.preventDefault();
     setGrantError(null);
     setGrantResult(null);
-    setGrantVerifyError(null);
-    setGrantVerifyResult(null);
     setGrantBusy(true);
     try {
       const subject = grantSubject.trim();
@@ -1057,10 +1053,10 @@ export function Secrets() {
       if (grantEphemeral) {
         const ttl = Number(grantTTL.trim());
         const key = await api.issueEphemeralAPIKey({ subject, scopes, ttl_seconds: Number.isFinite(ttl) && ttl > 0 ? Math.floor(ttl) : 3600 });
-        setGrantResult({ token: key.token, subject: key.subject, expiresAt: key.expires_at });
+        setGrantResult({ id: key.id, token: key.token, subject: key.subject, expiresAt: key.expires_at });
       } else {
         const created = await api.createAPIToken({ subject, scopes });
-        setGrantResult({ token: created.token, subject: created.subject, expiresAt: created.expires_at });
+        setGrantResult({ id: created.id, token: created.token, subject: created.subject, expiresAt: created.expires_at });
       }
       setGrantSubject("");
       await refreshTokenLedger();
@@ -1071,34 +1067,12 @@ export function Secrets() {
     }
   }
 
-  async function verifyGrantedSecretAccess() {
-    if (!grantResult) return;
-    const name = accessName.trim() || selectedMeta?.name || "";
-    if (!name) {
-      setGrantVerifyError(t("secrets.grant.verifyMissingSecret"));
-      return;
-    }
-    setGrantVerifyBusy(true);
-    setGrantVerifyError(null);
-    setGrantVerifyResult(null);
-    try {
-      // This request deliberately omits the human session cookie. The raw
-      // reveal-once bearer token must authorize the read; only metadata enters
-      // React state, and the returned secret value is never rendered or stored.
-      const value = await api.getSecretWithToken(name, grantResult.token);
-      setGrantVerifyResult({ name: value.name, version: value.version });
-    } catch (err) {
-      setGrantVerifyError(apiProblemMessage(err, t("secrets.grant.verifyFailedTitle")));
-    } finally {
-      setGrantVerifyBusy(false);
-    }
-  }
-
   async function revokeGrantedToken(id: string) {
     setRevokingTokenId(id);
     setGrantError(null);
     try {
       await api.revokeAPIToken(id);
+      setGrantResult((current) => (current?.id === id ? null : current));
       await refreshTokenLedger();
     } catch (err) {
       setGrantError(apiProblemMessage(err, t("secrets.grant.failedTitle")));
@@ -2037,28 +2011,7 @@ export function Secrets() {
               </form>
               {grantError && <ErrorState title={t("secrets.grant.failedTitle")}>{grantError}</ErrorState>}
               {grantResult && (
-                <div role="status" className="rounded-panel border border-status-warning/40 bg-status-warning/10 p-3 text-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-medium">{t("secrets.grant.revealTitle")}</p>
-                    <div className="flex flex-wrap gap-2">
-                      <Button type="button" size="sm" variant="outline" disabled={grantVerifyBusy} onClick={() => void verifyGrantedSecretAccess()}>
-                        {grantVerifyBusy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-                        {t("secrets.grant.verify")}
-                      </Button>
-                      <Button type="button" size="sm" variant="ghost" onClick={() => setGrantResult(null)}>
-                        {t("secrets.grant.dismiss")}
-                      </Button>
-                    </div>
-                  </div>
-                  <code className="mt-2 block break-all rounded bg-background px-2 py-1 text-xs">{grantResult.token}</code>
-                  <p className="mt-1 text-xs text-muted-foreground">{t("secrets.grant.revealNote")}</p>
-                </div>
-              )}
-              {grantVerifyError && <ErrorState title={t("secrets.grant.verifyFailedTitle")}>{grantVerifyError}</ErrorState>}
-              {grantVerifyResult && (
-                <p role="status" className="rounded-control border border-status-success/30 bg-status-success/10 px-3 py-2 text-sm text-status-success">
-                  {t("secrets.grant.verifyPassed", { name: grantVerifyResult.name, version: String(grantVerifyResult.version ?? "latest") })}
-                </p>
+                <GrantSecretVerification token={grantResult.token} secretNames={items.map((item) => item.name)} onDismiss={() => setGrantResult(null)} />
               )}
               {canReadTokens && tokenRows && (
                 <ScrollableTableRegion label={t("secrets.grant.ledgerCaption")}>

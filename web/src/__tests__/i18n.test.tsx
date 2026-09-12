@@ -1534,8 +1534,11 @@ describe("i18n boundary", () => {
       // Connector identity pagination: loaded count, explicit partial scope,
       // next-page action and loading state. Machine-authored es/de require
       // HUMAN TRANSLATION REVIEW before release; no budgets changed.
-      "es-ES": "c268072b7cee9285fdd7dcb744e8ce703f2e9aa16eefa9db3523e0ceee97096a",
-      "de-DE": "39463f174e154118936a4934c4d7e8b5a1182c5cd7b1d62c8454b56f19146c35",
+      // Exact workload read: explicit secret selection, verification scope,
+      // and response-name mismatch. Machine-authored es/de require HUMAN
+      // TRANSLATION REVIEW before release; no budgets changed.
+      "es-ES": "ac52c71e42a31c913fd0fbc25c054b45ad010651c117198b303f0e540fa65290",
+      "de-DE": "2d31e07154ac17886e56020299cbb3679fee05c50822b8c5d08b49f77a1dae36",
     });
   });
 

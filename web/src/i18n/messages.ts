@@ -1852,6 +1852,19 @@ export const messages = {
     defaultMessage: "Verify scoped read",
     description: "Grant console: use the newly minted bearer credential to read the selected secret without the human session.",
   },
+  "secrets.grant.verifyName": {
+    defaultMessage: "Secret to verify",
+    description: "Exact secret name the operator chooses for the new workload credential's read check.",
+  },
+  "secrets.grant.verifyScope": {
+    defaultMessage:
+      "Choose a secret or enter its exact name. This checks that secret with the workload credential; it does not narrow the token's permissions.",
+    description: "Distinguishes the selected verification target from the credential's granted scopes.",
+  },
+  "secrets.grant.verifyMismatch": {
+    defaultMessage: "The response named a different secret. This read does not verify the selected secret.",
+    description: "Fail closed when the read response does not identify the exact selected verification target.",
+  },
   "secrets.grant.verifyFailedTitle": {
     defaultMessage: "Scoped read failed",
     description: "Grant console: error title when the newly minted workload credential cannot read the selected secret.",

@@ -101,6 +101,12 @@ today (see [Current limitations](../limitations.md) and
    bearer once. Store it directly in the workload; the ledger retains only its
    hash, and revoking that session makes the bearer stop working immediately.
 
+   After granting a workload credential, explicitly choose **Secret to verify** on
+   the Machine access page. The check uses that exact name and the new bearer,
+   without the human session cookie. It never substitutes the first stored secret.
+   This selection chooses the verification target; the token's granted scopes
+   still determine its permissions. Changing the name clears the earlier result.
+
 2. Store a secret. Each value is sealed under envelope encryption (a fresh per-secret
    data key wrapped by the master key), bound to your tenant and path, and held only in
    wipeable memory — never as a copyable string. Every write is an immutable

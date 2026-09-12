@@ -777,6 +777,10 @@ const esESCatalog = {
   "secrets.grant.verify": "Verificar lectura con alcance",
   "secrets.grant.verifyFailedTitle": "Falló la lectura con alcance",
   "secrets.grant.verifyMissingSecret": "Seleccione un secreto antes de verificar la credencial del workload.",
+  "secrets.grant.verifyName": "Secreto que se verificará",
+  "secrets.grant.verifyScope":
+    "Seleccione un secreto o introduzca su nombre exacto. Esta comprobación usa la credencial del workload para leer ese secreto; no limita los permisos del token.",
+  "secrets.grant.verifyMismatch": "La respuesta identifica otro secreto. Esta lectura no verifica el secreto seleccionado.",
   "secrets.grant.verifyPassed":
     "La lectura con alcance de {name}, versión {version}, se completó. La credencial del workload autenticó la lectura y no se mostró el valor del secreto.",
   "secrets.grant.ledgerCaption": "Tokens de acceso concedidos",

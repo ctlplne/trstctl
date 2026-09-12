@@ -2438,12 +2438,36 @@ describe("secrets access grant console (C-S1 / DA-02 interim)", () => {
 
     await user.type(grant.getByLabelText("Workload / subject"), "wl-1111");
     await user.click(grant.getByRole("button", { name: "Grant access" }));
+    await user.type(await screen.findByLabelText("Secret to verify"), "app/db/password");
     await user.click(await screen.findByRole("button", { name: "Verify scoped read" }));
 
     await waitFor(() => expect(apiMock.getSecretWithToken).toHaveBeenCalledWith("app/db/password", "trst_REVEAL_ONCE_abc"));
     expect(await screen.findByText(/Scoped read passed for app\/db\/password; version 3/)).toBeInTheDocument();
     expect(screen.queryByText("WORKLOAD-SECRET")).not.toBeInTheDocument();
     expect(storageSpy).not.toHaveBeenCalled();
+  });
+
+  it("requires an explicit secret choice instead of verifying the first metadata row", async () => {
+    apiMock.getSecretWithToken.mockResolvedValue({ name: "qa/application/password", value: "QA-SECRET", version: 1 });
+    const user = await openAccessTab();
+    const grant = within(await screen.findByRole("form", { name: "Grant workload access" }));
+    await user.type(grant.getByLabelText("Workload / subject"), "qa-reader");
+    await user.click(grant.getByRole("button", { name: "Grant access" }));
+
+    const verify = await screen.findByRole("button", { name: "Verify scoped read" });
+    expect(verify).toBeDisabled();
+    expect(apiMock.getSecretWithToken).not.toHaveBeenCalled();
+    const name = screen.getByLabelText("Secret to verify");
+    expect(name).toHaveValue("");
+    await user.type(name, "qa/application/password");
+    await user.click(verify);
+
+    await waitFor(() => expect(apiMock.getSecretWithToken).toHaveBeenCalledWith("qa/application/password", "trst_REVEAL_ONCE_abc"));
+    expect(await screen.findByText(/Scoped read passed for qa\/application\/password; version 1/)).toBeInTheDocument();
+    expect(screen.queryByText("QA-SECRET")).not.toBeInTheDocument();
+    await user.clear(name);
+    expect(screen.queryByText(/Scoped read passed/)).not.toBeInTheDocument();
+    expect(verify).toBeDisabled();
   });
 
   it("offers the identity roster on the subject picker", async () => {
@@ -2455,6 +2479,21 @@ describe("secrets access grant console (C-S1 / DA-02 interim)", () => {
       const options = Array.from(document.getElementById(listId as string)?.querySelectorAll("option") ?? []);
       expect(options.map((option) => option.getAttribute("value"))).toContain("wl-1111");
     });
+  });
+
+  it("clears the revealed credential and its read evidence when that token is revoked", async () => {
+    apiMock.apiTokens.mockResolvedValue({ items: [{ id: "tok-3", subject: "wl-1111", scopes: ["secrets:read"], created_at: "2026-07-14T00:00:00Z" }] });
+    const user = await openAccessTab();
+    const grant = within(await screen.findByRole("form", { name: "Grant workload access" }));
+    await user.type(grant.getByLabelText("Workload / subject"), "wl-1111");
+    await user.click(grant.getByRole("button", { name: "Grant access" }));
+    await user.type(await screen.findByLabelText("Secret to verify"), "app/db/password");
+    await user.click(screen.getByRole("button", { name: "Verify scoped read" }));
+    expect(await screen.findByText(/Scoped read passed/)).toBeInTheDocument();
+    await user.click(within(screen.getByRole("table", { name: "Granted access tokens" })).getByRole("button", { name: "Revoke" }));
+    await waitFor(() => expect(apiMock.revokeAPIToken).toHaveBeenCalledWith("tok-3"));
+    expect(screen.queryByText("trst_REVEAL_ONCE_abc")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Scoped read passed/)).not.toBeInTheDocument();
   });
 
   it("mints a TTL-bound ephemeral key when time-bound is selected", async () => {
