@@ -54,6 +54,13 @@ describe("connector target templates", () => {
       verify_server_name: "service.example.com",
     });
     expect(defaultTargetConfigObject("haproxy")).toMatchObject({ crt_path: "/etc/haproxy/tls/server.pem", config_path: "/etc/haproxy/haproxy.cfg" });
+    // The real host preview refuses Traefik without the file-provider document:
+    // changing its referenced cert/key files alone does not activate the leaf.
+    expect(defaultTargetConfigObject("traefik")).toMatchObject({
+      cert_path: "/etc/traefik/tls/server.crt",
+      key_path: "/etc/traefik/tls/server.key",
+      config_path: "/etc/traefik/dynamic.yml",
+    });
     expect(defaultTargetConfigObject("iis")).toMatchObject({ binding: "*:443:service.example.com", import_dir: "C:/trstctl/import" });
   });
 

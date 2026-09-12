@@ -339,6 +339,14 @@ key no longer exists. The partner lab's working Apache target is:
  "verify_address":"127.0.0.1:10443","verify_server_name":"apache.partner-lab.example.com"}
 ```
 
+For a host-executed Traefik destination, also set `config_path` to the existing
+file-provider YAML or TOML document that references `cert_path` and `key_path`,
+for example `/etc/traefik/dynamic.yml`. Traefik does not reliably reload when only
+those referenced certificate files change. The connector rewrites the same
+document after installing the files to notify the watcher, preserving its content.
+The document must be inside the agent's allowed roots and readable and writable
+there. Preview refuses a missing `config_path` before any certificate is installed.
+
 Every `*_ref` is a `secret://name` or `secret://name?version=N` reference in the same
 tenant, and every `profile` points to an operator-owned `connectors.local_profiles`
 entry, which maps the connector's logical command (`nginx`, `apachectl`, `caddy`,

@@ -37,6 +37,7 @@ export function defaultTargetConfigObject(connector: string): Record<string, str
       ...hostCustody,
       cert_path: `${filePath}/server.crt`,
       key_path: `${filePath}/server.key`,
+      ...(name === "traefik" ? { config_path: "/etc/traefik/dynamic.yml" } : {}),
       ...hostVerification,
     };
   }
