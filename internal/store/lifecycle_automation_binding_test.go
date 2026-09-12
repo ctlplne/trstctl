@@ -74,4 +74,44 @@ func TestLifecycleAutomationUsesIdentityBoundServedCertificate(t *testing.T) {
 			}
 		}
 	}
+	// A restore changes the served leaf only after the executor proves success.
+	// In particular, the older leaf's earlier expiry must become authoritative.
+	for i, step := range []struct {
+		destination, status string
+		certificate, want   int
+	}{
+		{"connector.rollback", "rollback_queued", 0, 1},
+		{"connector.rollback", "rollback_failed", 0, 1},
+		{"connector.rollback", "rolled_back", 0, 0},
+		{"connector.deploy", "verify_failed", 1, 0},
+		{"connector.deploy", "verified", 1, 1},
+	} {
+		at := now.Add(time.Duration(i+10) * time.Second)
+		if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+			return s.ApplyConnectorDeliveryRecordedTx(ctx, tx, store.ConnectorDeliveryReceipt{
+				ID: fmt.Sprintf("44444444-4444-4444-8444-%012d", i+1), TenantID: tenantA,
+				IdentityID: &identities[1].ID, Destination: step.destination, Connector: "caddy", Target: "same-target",
+				Fingerprint: certs[step.certificate].Fingerprint, Status: step.status,
+				IdempotencyKey: fmt.Sprintf("restore-step-%d", i), CreatedAt: at, UpdatedAt: at,
+			})
+		}); err != nil {
+			t.Fatal(err)
+		}
+		fingerprint, found, err := s.LatestDeployedCertificateFingerprintForIdentity(ctx, tenantA, identities[1].ID)
+		if err != nil || !found || fingerprint != certs[step.want].Fingerprint {
+			t.Fatalf("after %s/%s scheduler selected %q found=%v error=%v; want %q", step.destination, step.status, fingerprint, found, err, certs[step.want].Fingerprint)
+		}
+		rows, err := s.ListLifecycleAutomationInventory(ctx, tenantA, 100)
+		if err != nil || len(rows) != 2 {
+			t.Fatalf("after restore inventory count=%d error=%v", len(rows), err)
+		}
+		for _, row := range rows {
+			if row.IdentityID == identities[1].ID && (row.CertificateID != certs[step.want].ID || !row.CertificateEnd.Equal(*certs[step.want].NotAfter)) {
+				t.Fatalf("after %s/%s plan selected %s expiring %v; want %s expiring %v", step.destination, step.status, row.CertificateID, row.CertificateEnd, certs[step.want].ID, certs[step.want].NotAfter)
+			}
+		}
+	}
+	if fingerprint, found, err := s.LatestDeployedCertificateFingerprintForIdentity(ctx, tenantB, identities[1].ID); err != nil || found || fingerprint != "" {
+		t.Fatalf("foreign tenant resolved certificate=%q found=%v error=%v", fingerprint, found, err)
+	}
 }

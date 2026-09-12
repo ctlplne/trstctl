@@ -563,7 +563,8 @@ func (s *Store) ListConnectorDeliveryReceiptsMatchingPage(ctx context.Context, t
 // must follow the identity-bound delivery evidence or it can replace a
 // different certificate that merely has the same SAN. Only an issued, active
 // inventory row can be selected; a forged or stale receipt cannot manufacture
-// a renewal candidate.
+// a renewal candidate. A proved rollback replaces the served leaf just as a
+// deployment does; queued and failed restores do not change this evidence.
 func (s *Store) LatestDeployedCertificateFingerprintForIdentity(ctx context.Context, tenantID, identityID string) (string, bool, error) {
 	var fingerprint string
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
@@ -575,8 +576,8 @@ func (s *Store) LatestDeployedCertificateFingerprintForIdentity(ctx context.Cont
 			    AND c.fingerprint = r.fingerprint
 			  WHERE r.tenant_id = $1
 			    AND r.identity_id = $2
-			    AND r.destination = 'connector.deploy'
-			    AND r.status IN ('delivered', 'verified')
+			    AND ((r.destination = 'connector.deploy' AND r.status IN ('delivered', 'verified'))
+			      OR (r.destination = 'connector.rollback' AND r.status = 'rolled_back'))
 			    AND c.source = 'issued'
 			    AND c.status = 'active'
 			  ORDER BY r.updated_at DESC, r.id DESC

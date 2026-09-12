@@ -41,7 +41,7 @@ type LifecycleAutomationOutboxSummary struct {
 // identities and their newest immutable rotation evidence for one tenant. Every
 // table reference is explicitly tenant-bound in addition to RLS (AN-1).
 // Certificate selection matches LatestDeployedCertificateFingerprintForIdentity:
-// prefer exact successful delivery evidence, with owner/SAN fallback only for
+// prefer exact successful delivery or restore evidence, with owner/SAN fallback only for
 // legacy identities that have no such receipt. The bounded list stays one query.
 func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID string, limit int) ([]LifecycleAutomationInventory, error) {
 	if limit <= 0 || limit > 500 {
@@ -68,8 +68,9 @@ func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID s
 			          AND served.fingerprint = receipt.fingerprint
 			          AND served.source = 'issued' AND served.status = 'active'
 			        WHERE receipt.tenant_id = $1 AND receipt.tenant_id = i.tenant_id
-			          AND receipt.identity_id = i.id AND receipt.destination = 'connector.deploy'
-			          AND receipt.status IN ('delivered', 'verified')
+			          AND receipt.identity_id = i.id
+			          AND ((receipt.destination = 'connector.deploy' AND receipt.status IN ('delivered', 'verified'))
+			            OR (receipt.destination = 'connector.rollback' AND receipt.status = 'rolled_back'))
 			        ORDER BY receipt.updated_at DESC, receipt.id DESC LIMIT 1
 			  ) AS deployed ON true
 			  JOIN LATERAL (

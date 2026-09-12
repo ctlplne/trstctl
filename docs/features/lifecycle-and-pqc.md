@@ -135,8 +135,10 @@ writes no row or event and contacts no CA, connector, or notification service. I
 tenant-scoped inventory includes public metadata only. Certificate bytes, private keys,
 outbox payloads, and idempotency keys are not returned.
 
-When an identity has successful delivery evidence, the plan uses that exact
-certificate's expiry and renewal window. A replacement with the same owner and
+When an identity has successful delivery or rollback evidence, the scheduler and
+plan use the most recently proved certificate's expiry and renewal window. A
+completed restore moves that deadline back to the predecessor; queued or failed
+restores do not change it. A replacement with the same owner and
 DNS name cannot inherit its predecessor's longer lifetime. Identities without
 delivery evidence retain the legacy owner-and-name inventory match; that match
 alone does not prove which certificate a listener serves.
