@@ -238,7 +238,9 @@ zero-write testing contract fail closed without being invoked.
 
 The console keeps recovery separate from deployment. **Review restore** opens a
 confirmation that names the exact destination, identity, and operator reason; no
-restore is queued by opening it. **Queue restore** uses the served rollback route.
+restore is queued by opening it. Identity choices and the review show the lifecycle
+state and full identity ID so same-name replacements remain distinguishable.
+**Queue restore** uses the served rollback route.
 The first response may say only `rollback_queued`: that is waiting state, not
 success. The console reports success only from a later `rolled_back` receipt written
 after the required agent or relay restores the proven predecessor. While queued, the

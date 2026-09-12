@@ -7,6 +7,8 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { describeStatus, type StatusTone } from "@/lib/statusVocab";
 import { useToast } from "@/components/ToastProvider";
 import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
+import { Select } from "@/components/ui/select";
 import { formatDateTime, formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import {
   api,
@@ -570,28 +572,31 @@ export function Connectors() {
                     ))}
                   </select>
                 </label>
-                <label className="grid gap-1 text-sm">
-                  {translateNow("source.identity.999f23fcd7")}
-                  <select
-                    className="ui-input"
-                    value={selectedIdentity}
-                    onChange={(event) => {
-                      setSelectedIdentity(event.target.value);
-                      setRecoveryReceipt(null);
-                      setRollbackReviewOpen(false);
-                    }}
-                  >
-                    <option value="">{translateNow("source.select.identity.1b8c8195aa")}</option>
-                    {identities.map((identity) => (
-                      <option key={identity.id} value={identity.id}>
-                        {identity.name}
-                        {typeof identity.attributes?.intended_connector === "string"
-                          ? t("connectors.targetReadiness.optionQualifier", { value: identity.attributes.intended_connector })
-                          : ""}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <Field label={translateNow("source.identity.999f23fcd7")}>
+                  {(control) => (
+                    <Select
+                      {...control}
+                      value={selectedIdentity}
+                      onChange={(event) => {
+                        setSelectedIdentity(event.target.value);
+                        setRecoveryReceipt(null);
+                        setRollbackReviewOpen(false);
+                      }}
+                    >
+                      <option value="">{translateNow("source.select.identity.1b8c8195aa")}</option>
+                      {identities.map((identity) => (
+                        <option key={identity.id} value={identity.id}>
+                          {identity.name}
+                          {t("connectors.targetReadiness.optionQualifier", { value: describeStatus("lifecycle", identity.status).label })}
+                          {t("connectors.targetReadiness.optionQualifier", { value: identity.id })}
+                          {typeof identity.attributes?.intended_connector === "string"
+                            ? t("connectors.targetReadiness.optionQualifier", { value: identity.attributes.intended_connector })
+                            : ""}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </Field>
                 <label className="grid gap-1 text-sm">
                   {translateNow("source.reason.f81ab834de")}
                   <input className="ui-input" value={reason} onChange={(event) => setReason(event.target.value)} />
@@ -1530,7 +1535,11 @@ export function Connectors() {
           </header>
           <dl className="grid gap-2 p-5 text-sm">
             <ConnectorDetailRow term={t("connectors.design.destinationName")}>{selectedTargetRecord.name}</ConnectorDetailRow>
-            <ConnectorDetailRow term={translateNow("source.identity.999f23fcd7")}>{selectedIdentityRecord.name}</ConnectorDetailRow>
+            <ConnectorDetailRow term={translateNow("source.identity.999f23fcd7")}>
+              {selectedIdentityRecord.name}
+              {t("connectors.targetReadiness.optionQualifier", { value: describeStatus("lifecycle", selectedIdentityRecord.status).label })}
+              <span className="block break-all font-mono text-xs">{selectedIdentityRecord.id}</span>
+            </ConnectorDetailRow>
             <ConnectorDetailRow term={translateNow("source.reason.f81ab834de")}>{reason}</ConnectorDetailRow>
           </dl>
           <p className="mx-5 rounded-control border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm">

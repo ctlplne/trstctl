@@ -596,6 +596,40 @@ describe("connector deployment disclosure surface", () => {
     expect(screen.getByText("the host agent will restore the encrypted predecessor bundle and verify the listener")).toBeInTheDocument();
   });
 
+  it("distinguishes same-name replacement identities before restoring the exact selection", async () => {
+    const original = apiMock.identities.getMockImplementation()!;
+    const [identity] = await original();
+    const retired = { ...identity, id: "954f89b3-7a8c-516e-8502-000000000001", status: "retired" };
+    const active = { ...identity, id: "954f89b3-7a8c-516e-8502-000000000002", status: "deployed" };
+    apiMock.identities.mockResolvedValue([retired, active]);
+    const user = userEvent.setup();
+    renderConnectors();
+    await screen.findByRole("heading", { name: "Where credentials are installed" });
+    await user.click(screen.getByText("Destinations and safe actions", { exact: true }));
+    await screen.findByRole("heading", { name: "Configured destinations" });
+    await user.selectOptions(screen.getByLabelText("Target"), "target-1");
+    const select = screen.getByLabelText("Identity");
+    expect(select).toHaveValue("");
+    const retiredOption = within(select).getByRole("option", { name: `${identity.name} — retired — ${retired.id}` });
+    const activeOption = within(select).getByRole("option", { name: `${identity.name} — deployed — ${active.id}` });
+    expect(retiredOption).toHaveValue(retired.id);
+    await user.selectOptions(select, activeOption);
+    await user.type(screen.getByLabelText("Reason"), "Restore the active replacement");
+    await user.click(screen.getByRole("button", { name: "Review restore" }));
+    const dialog = screen.getByRole("dialog", { name: "Review restore of the previous version" });
+    expect(dialog).toHaveTextContent(active.id);
+    expect(dialog).toHaveTextContent("deployed");
+    expect(dialog).not.toHaveTextContent(retired.id);
+    expect(apiMock.rollbackConnectorTarget).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole("button", { name: "Queue restore" }));
+    await waitFor(() =>
+      expect(apiMock.rollbackConnectorTarget).toHaveBeenCalledWith("target-1", {
+        identity_id: active.id,
+        reason: "Restore the active replacement",
+      }),
+    );
+  });
+
   it("reads the exact completed restore without submitting another mutation", async () => {
     const queued = {
       id: "rollback-exact",
