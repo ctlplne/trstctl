@@ -1415,8 +1415,10 @@ func (s *Server) appendOperationalReadModels(d Deps, defaults *[]api.Option) {
 	}
 	// B-6: the connector catalog reports each connector's live sandbox grant
 	// and replay contract from the registry, not from a description beside it.
-	if s.connectorRegistry != nil {
-		*defaults = append(*defaults, api.WithConnectorRegistry(s.connectorRegistry))
+	// API construction precedes configureIssuanceSurfaces, which stores the same
+	// registry on s. Use the supplied dependency while assembling this view.
+	if d.ConnectorRegistry != nil {
+		*defaults = append(*defaults, api.WithConnectorRegistry(d.ConnectorRegistry))
 	}
 	// H5: the CA console needs the same reference leaf validity the horizon
 	// scheduler uses, so the "renew/re-key by" date it shows and the alert an
