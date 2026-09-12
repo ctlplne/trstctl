@@ -6876,9 +6876,24 @@ func (p *Projector) projectCatchUpWithPrivacyBarrier(ctx context.Context, log *e
 			return nil
 		}
 		return log.WithHistoryRead(ctx, func(readCtx context.Context) error {
+			// The live tail advances independently of the catch-up advisory lock.
+			// Read its checkpoint BEFORE sampling the log head: a checkpoint read
+			// after replay can legitimately cover events appended after that head.
+			// Keep both reads inside the history-generation fence, and reject actual
+			// missing history before resetting any extension projection.
+			from, err := p.store.ProjectionCheckpoint(readCtx)
+			if err != nil {
+				return fmt.Errorf("projections: read checkpoint: %w", err)
+			}
 			replayHead, err := log.LastSequence(readCtx)
 			if err != nil {
 				return fmt.Errorf("projections: capture catch-up history head: %w", err)
+			}
+			if from > replayHead {
+				return fmt.Errorf(
+					"projections: checkpoint %d is beyond event history head %d",
+					from, replayHead,
+				)
 			}
 			secretAuthority, err := classifySecretSyncLifecycleThrough(readCtx, log, replayHead)
 			if err != nil {
@@ -6890,16 +6905,6 @@ func (p *Projector) projectCatchUpWithPrivacyBarrier(ctx context.Context, log *e
 			}
 			if err := p.rebuildEventProjectionsThrough(readCtx, log, replayHead); err != nil {
 				return err
-			}
-			from, err := p.store.ProjectionCheckpoint(readCtx)
-			if err != nil {
-				return fmt.Errorf("projections: read checkpoint: %w", err)
-			}
-			if from > replayHead {
-				return fmt.Errorf(
-					"projections: checkpoint %d is beyond event history head %d",
-					from, replayHead,
-				)
 			}
 			var last uint64
 			sinceCheckpoint := 0
