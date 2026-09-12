@@ -7639,7 +7639,13 @@ const esESCatalog = {
   "source.restore.view.value1.09c622aea3": "Restaurar vista {value1}",
   "source.resume.fleet.run.value1.82d98d67fc": "Reanudar ejecución de flota {value1}",
   "source.retiring.value1.discards.the.credential.re.7f368527a3":
-    "Al retirar «{value1}», se descarta el registro de credenciales. Esta acción no se puede deshacer.",
+    "Retirar «{value1}» finaliza la automatización de su ciclo de vida y conserva su registro y su historial de auditoría. Esta acción no se puede deshacer. Retirar una identidad no revoca un certificado.",
+  // Machine-authored: human translation review required before release.
+  "identities.issuer.selectedCA": "CA seleccionada para la emisión",
+  "identities.issuer.selection": "{source}: {name}",
+  "identities.issuer.selectionScope":
+    "Se usa para la emisión y la renovación. Consulta las pruebas de emisión de cada certificado para conocer su autoridad emisora real.",
+  "identities.issuer.incomplete": "La selección de CA está incompleta o no es compatible",
   "source.rollback.fleet.run.value1.21446f0a1d": "Revertir ejecución de flota {value1}",
   "source.root.44c4ce0579": "(raíz)",
   "source.root.ca.create.failed.6cab086b1e": "No se pudo crear la CA raíz",

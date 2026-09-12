@@ -89,6 +89,11 @@ effect-free preview. Execution requires that preview's unchanged fingerprint. Th
 initial issue and every later renewal route through the selected authority; missing
 or unavailable authority configuration fails closed without platform-CA fallback.
 
+The identity detail shows **Selected issuance CA** for endpoint automation. This
+is the current issuance and renewal choice, not proof of who issued an older
+certificate. Use each certificate's retained issuance evidence to establish its
+actual authority, including when checking revocation.
+
 The lifecycle preview proves the plan, not the outcome. Issuance, deployment,
 listener readback, renewal, alert delivery, recovery, revocation, and retirement
 need their own durable receipts or independent observations. The proof gate at

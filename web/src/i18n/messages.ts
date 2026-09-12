@@ -25738,8 +25738,22 @@ export const messages = {
     description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Incidents.tsx:1539.",
   },
   "source.retiring.value1.discards.the.credential.re.7f368527a3": {
-    defaultMessage: "Retiring “{value1}” discards the credential record. This cannot be undone.",
-    description: "I18N-ca357ca0: migrated rendered JSX expression copy from src/pages/Identities.tsx:636.",
+    defaultMessage:
+      "Retiring “{value1}” ends its lifecycle automation and retains its record and audit history. This cannot be undone. Retirement does not revoke a certificate.",
+    description: "Retirement ends lifecycle work while preserving evidence; it does not replace certificate revocation.",
+  },
+  "identities.issuer.selectedCA": { defaultMessage: "Selected issuance CA", description: "CA selected for the identity's endpoint lifecycle automation." },
+  "identities.issuer.selection": {
+    defaultMessage: "{source}: {name}",
+    description: "Selected CA source category followed by its configured name or exact ID.",
+  },
+  "identities.issuer.selectionScope": {
+    defaultMessage: "Used for issuance and renewal. Check each certificate's issuance evidence for its actual issuing authority.",
+    description: "A current lifecycle CA selection does not change historical certificate authority evidence.",
+  },
+  "identities.issuer.incomplete": {
+    defaultMessage: "CA selection is incomplete or unsupported",
+    description: "Do not infer a default CA from malformed endpoint attributes.",
   },
   "source.rollback.fleet.run.value1.21446f0a1d": {
     defaultMessage: "Rollback fleet run {value1}",

@@ -98,6 +98,59 @@ async function confirmReviewedAction(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("lifecycle actions from the UI", () => {
+  it.each([
+    ["external", "External CA"],
+    ["private", "Private CA"],
+    ["platform", "trstctl platform CA"],
+  ])("shows the selected %s CA without treating it as historical issuance proof", async (source, label) => {
+    const identity = {
+      id: "endpoint-ca",
+      name: "endpoint.example",
+      kind: "x509_certificate",
+      owner_id: "own-1",
+      status: "deployed",
+      issuer_id: null,
+      attributes: { issuing_authority_source: source, issuing_authority_id: "ca-exact", issuing_authority_name: "Selected authority" },
+    };
+    apiMock.identities.mockResolvedValue([identity]);
+    apiMock.getIdentity.mockResolvedValue(identity);
+    renderIdentities("/identities?identity=endpoint-ca");
+    const drawer = await screen.findByRole("dialog", { name: "Identity detail" });
+    expect(await within(drawer).findByText(`${label}: Selected authority`)).toBeInTheDocument();
+    expect(within(drawer).getByText("Selected issuance CA")).toBeInTheDocument();
+    expect(within(drawer).getByText(/Check each certificate's issuance evidence/)).toBeInTheDocument();
+    expect(within(drawer).queryByText("No issuer bound")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    { issuing_authority_source: "external", issuing_authority_name: "Incomplete" },
+    { issuing_authority_source: "unknown", issuing_authority_id: "not-a-default" },
+  ])("does not infer a CA from an incomplete selection %j", async (attributes) => {
+    const identity = { id: "endpoint-ca", name: "endpoint.example", kind: "x509_certificate", owner_id: "own-1", status: "deployed", attributes };
+    apiMock.identities.mockResolvedValue([identity]);
+    apiMock.getIdentity.mockResolvedValue(identity);
+    renderIdentities("/identities?identity=endpoint-ca");
+    const drawer = await screen.findByRole("dialog", { name: "Identity detail" });
+    expect(await within(drawer).findByText("CA selection is incomplete or unsupported")).toBeInTheDocument();
+    expect(within(drawer).queryByText("No issuer bound")).not.toBeInTheDocument();
+  });
+
+  it("explains that retirement preserves history and does not revoke a certificate", async () => {
+    const identity = { id: "retire-exact", name: "retirement.example", kind: "x509_certificate", owner_id: "own-1", status: "revoked" };
+    apiMock.identities.mockResolvedValue([identity]);
+    apiMock.getIdentity.mockResolvedValue(identity);
+    const user = userEvent.setup();
+    renderIdentities("/identities?identity=retire-exact");
+    const drawer = await screen.findByRole("dialog", { name: "Identity detail" });
+    await user.click(await within(drawer).findByRole("button", { name: "Retire" }));
+    await screen.findByText(/retains its record and audit history/);
+    const review = screen.getByRole("alertdialog", { name: /^Review Retire for retirement.example$/ });
+    expect(within(review).getByText(/retains its record and audit history/)).toBeInTheDocument();
+    expect(within(review).getByText(/Retirement does not revoke a certificate/)).toBeInTheDocument();
+    expect(within(review).queryByText(/discards the credential record/)).not.toBeInTheDocument();
+    expect(apiMock.transitionIdentity).not.toHaveBeenCalled();
+  });
+
   it("opens and closes the exact identity named by a certificate lifecycle link", async () => {
     const identity = { id: "linked-identity", name: "same.example", kind: "x509_certificate", owner_id: "own-1", status: "issued" };
     apiMock.identities.mockResolvedValue([{ ...identity, id: "same-name-other", status: "deployed" }, identity]);

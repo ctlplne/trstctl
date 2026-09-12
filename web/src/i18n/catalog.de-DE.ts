@@ -7698,7 +7698,13 @@ const deDECatalog = {
   "source.restore.view.value1.09c622aea3": "Ansicht {value1} wiederherstellen",
   "source.resume.fleet.run.value1.82d98d67fc": "Flottenlauf {value1} fortsetzen",
   "source.retiring.value1.discards.the.credential.re.7f368527a3":
-    "Durch das Stilllegen von „{value1}“ wird der Zugangsdaten-Datensatz verworfen. Dies kann nicht rückgängig gemacht werden.",
+    "Das Stilllegen von „{value1}“ beendet die Lebenszyklusautomatisierung und bewahrt den Datensatz und den Auditverlauf. Dies kann nicht rückgängig gemacht werden. Die Stilllegung widerruft kein Zertifikat.",
+  // Machine-authored: human translation review required before release.
+  "identities.issuer.selectedCA": "Ausgewählte ausstellende CA",
+  "identities.issuer.selection": "{source}: {name}",
+  "identities.issuer.selectionScope":
+    "Wird für Ausstellung und Erneuerung verwendet. Prüfen Sie den Ausstellungsnachweis jedes Zertifikats auf die tatsächlich ausstellende Behörde.",
+  "identities.issuer.incomplete": "Die CA-Auswahl ist unvollständig oder wird nicht unterstützt",
   "source.rollback.fleet.run.value1.21446f0a1d": "Flottenlauf {value1} zurücksetzen",
   "source.root.44c4ce0579": "(Root)",
   "source.root.ca.create.failed.6cab086b1e": "Erstellen der Root-CA fehlgeschlagen",

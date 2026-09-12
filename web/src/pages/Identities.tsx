@@ -23,6 +23,7 @@ import { IssuancePipeline } from "@/components/issuance";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DetailDrawer } from "@/components/DetailDrawer";
 import { IdentityActivityEvidence } from "@/pages/identities/IdentityActivityEvidence";
+import { IdentityIssuerEvidence } from "@/pages/identities/IdentityIssuerEvidence";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
@@ -1463,18 +1464,7 @@ function IdentityDetailPanel({
                 </details>
               </dd>
             </div>
-            <div>
-              <dt className="font-medium text-muted-foreground">{translateNow("source.issuer.39e02c46a0")}</dt>
-              <dd>
-                {identity.issuer_id ? (
-                  <a className="text-primary underline" href={`/protocols?issuer=${encodeURIComponent(identity.issuer_id)}`}>
-                    {translateNow("source.issuer.39e02c46a0")} {identity.issuer_id}
-                  </a>
-                ) : (
-                  translateNow("source.no.issuer.bound.d1e424a34f")
-                )}
-              </dd>
-            </div>
+            <IdentityIssuerEvidence identity={identity} />
             <div>
               <dt className="font-medium text-muted-foreground">{translateNow("source.identity.id.2f8124d39c")}</dt>
               <dd className="break-all font-mono text-xs">{identity.id}</dd>

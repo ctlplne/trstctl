@@ -1525,8 +1525,10 @@ describe("i18n boundary", () => {
       // Endpoint result repair: reviewed authorization-versus-completion copy
       // and exact new/original identity links. Machine-authored es/de require
       // HUMAN TRANSLATION REVIEW before release; extraction budgets unchanged.
-      "es-ES": "a71980191be759020a33be0d98533e1a6bf314de817b2b77636475e303382740",
-      "de-DE": "d9f4595e97928318c5e093402a14c2082e55b3655ab8744f1406c49b5e069ebb",
+      // Identity truth: current CA selection is distinct from historical issuance;
+      // retirement preserves evidence. Machine-authored es/de require human review.
+      "es-ES": "b130d615f44414a3089cb67f1241a40c8c5bbac20bca1d7a39ad95dc82c89b9b",
+      "de-DE": "98275b86889017362d17501ae2d6cc2dad7e365b56b22c54fd15d2bcf55156c6",
     });
   });
 
