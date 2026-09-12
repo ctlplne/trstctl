@@ -50,12 +50,12 @@ func TestProtocolIssuerSelectsLifetimeWithinBoundProfile(t *testing.T) {
 		name, protocol           string
 		maximum, requested, want time.Duration
 	}{
-		{"acme-short", "acme", 2 * time.Minute, 90 * 24 * time.Hour, 2 * time.Minute},
-		{"est-short", "est", 2 * time.Minute, protocolLeafTTL, 2 * time.Minute},
-		{"scep-short", "scep", 2 * time.Minute, protocolLeafTTL, 2 * time.Minute},
-		{"cmp-short", "cmp", 2 * time.Minute, protocolLeafTTL, 2 * time.Minute},
-		{"shorter-request", "acme", 2 * time.Minute, 30 * time.Second, 30 * time.Second},
-		{"zero-default", "est", 2 * time.Minute, 0, 2 * time.Minute},
+		{"acme-short", "acme", 10 * time.Minute, 90 * 24 * time.Hour, 10 * time.Minute},
+		{"est-short", "est", 10 * time.Minute, protocolLeafTTL, 10 * time.Minute},
+		{"scep-short", "scep", 10 * time.Minute, protocolLeafTTL, 10 * time.Minute},
+		{"cmp-short", "cmp", 10 * time.Minute, protocolLeafTTL, 10 * time.Minute},
+		{"shorter-request", "acme", 10 * time.Minute, 30 * time.Second, 30 * time.Second},
+		{"zero-default", "est", 10 * time.Minute, 0, 10 * time.Minute},
 		{"platform-ceiling", "acme", 60 * 24 * time.Hour, 90 * 24 * time.Hour, protocolLeafTTL},
 		{"unlimited-profile", "acme", 0, 90 * 24 * time.Hour, protocolLeafTTL},
 	} {
@@ -78,7 +78,14 @@ func TestProtocolIssuerSelectsLifetimeWithinBoundProfile(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if info.NotAfter.Before(before.Add(tc.want-time.Second)) || info.NotAfter.After(time.Now().Add(tc.want)) {
+			forward := tc.want
+			if tc.maximum > 0 && forward+crypto.IssuanceBackdateSkew() > tc.maximum {
+				forward = tc.maximum - crypto.IssuanceBackdateSkew()
+			}
+			if tc.maximum > 0 && info.NotAfter.Sub(info.NotBefore) > tc.maximum {
+				t.Fatalf("full signed validity exceeds the bound profile: %s", info.NotAfter.Sub(info.NotBefore))
+			}
+			if info.NotAfter.Before(before.Add(forward-time.Second)) || info.NotAfter.After(time.Now().Add(forward)) {
 				t.Fatalf("signed expiry %s does not reflect selected lifetime %s", info.NotAfter, tc.want)
 			}
 			// A changed/missing profile cannot prevent returning an already issued

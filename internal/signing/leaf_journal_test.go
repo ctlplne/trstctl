@@ -5,6 +5,7 @@ package signing
 import (
 	"bytes"
 	"context"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -92,6 +93,17 @@ func TestPreparedLeafJournalPreservesCertificateAcrossRestart(t *testing.T) {
 	}
 	if operations.Load() != 1 {
 		t.Fatalf("private operations=%d, want one", operations.Load())
+	}
+	// A corrected maximum can shorten the encoded validity of an older
+	// template. Its original signing operation must refuse the new bytes,
+	// including after restart; it must never quietly mint a replacement.
+	bounded := profile
+	bounded.MaxValidity = time.Hour
+	if leaf, err := crypto.SignLeafFromCSRWithPreparation(ca, signer, csr, 2*time.Hour, bounded, prepared); err == nil || !strings.Contains(err.Error(), "different signing tuple") || len(leaf.DER) != 0 {
+		t.Fatalf("changed validity did not refuse the retained operation: %v", err)
+	}
+	if operations.Load() != 1 {
+		t.Fatalf("changed validity repeated the private operation: %d", operations.Load())
 	}
 	changed := prepared
 	changed.Serial = append([]byte(nil), prepared.Serial...)

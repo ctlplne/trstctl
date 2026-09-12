@@ -220,12 +220,16 @@ func SignOpaqueLeafFromVerifiedRequestWithProfile(caCertDER []byte, caSigner Dig
 	}
 	ski := sha1.Sum(spki.PublicKey.Bytes) // #nosec G401 -- RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328)
 	now := time.Now().UTC()
+	notBefore, notAfter, err := leafValidityBounds(now, ttl, prof.MaxValidity)
+	if err != nil {
+		return nil, err
+	}
 	leaf := &x509.Certificate{
 		SerialNumber: serial,
 		Subject:      pkix.Name{CommonName: req.Info.CommonName},
 		DNSNames:     append([]string(nil), req.Info.DNSNames...), IPAddresses: ips,
 		EmailAddresses: append([]string(nil), req.Info.EmailAddresses...), URIs: uniqueURIs,
-		NotBefore: IssuanceNotBefore(now), NotAfter: now.Add(ttl),
+		NotBefore: notBefore, NotAfter: notAfter,
 		KeyUsage: leafKeyUsageForProfile(prof), ExtKeyUsage: knownEKUs, UnknownExtKeyUsage: customEKUs,
 		BasicConstraintsValid: true, SubjectKeyId: ski[:],
 		CRLDistributionPoints: append([]string(nil), prof.CRLDistributionPoints...),

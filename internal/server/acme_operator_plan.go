@@ -4,9 +4,13 @@ package server
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/profile"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -93,14 +97,24 @@ func (s *Server) acmeOperatorPlan(ctx context.Context, tenantID string) (api.ACM
 	if s.defaultProfile != "" {
 		if s.store == nil {
 			plan.Blockers = append(plan.Blockers, "The named issuing profile cannot be checked because the profile store is unavailable.")
-		} else if _, err := s.store.GetActiveProfile(ctx, tenantID, s.defaultProfile); err != nil {
+		} else if rec, err := s.store.GetActiveProfile(ctx, tenantID, s.defaultProfile); err != nil {
 			if !store.IsNotFound(err) {
 				return api.ACMEOperatorPlan{}, err
 			}
 			plan.Blockers = append(plan.Blockers, "The configured default issuing profile is not active for this tenant.")
 			plan.RecoverySteps = append(plan.RecoverySteps, "Create or reactivate the named issuing profile, then retry the same ACME order. The responder fails closed while the profile is missing.")
 		} else {
-			plan.IssuingProfileReady = true
+			var spec profile.CertificateProfile
+			if err := json.Unmarshal(rec.Spec, &spec); err != nil {
+				return api.ACMEOperatorPlan{}, fmt.Errorf("decode issuing profile %q: %w", s.defaultProfile, err)
+			}
+			maximum := time.Duration(spec.MaxValidity)
+			if maximum > 0 && maximum <= crypto.IssuanceBackdateSkew() {
+				plan.Blockers = append(plan.Blockers, fmt.Sprintf("The issuing profile's maximum validity %s leaves no usable lifetime after the %s NotBefore backdate.", maximum, crypto.IssuanceBackdateSkew()))
+				plan.RecoverySteps = append(plan.RecoverySteps, "Choose an issuing profile whose maximum validity includes the clock-skew backdate and leaves enough time for deployment and automatic renewal. Then retry enrollment.")
+			} else {
+				plan.IssuingProfileReady = true
+			}
 		}
 	}
 

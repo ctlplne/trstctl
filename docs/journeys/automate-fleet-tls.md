@@ -50,10 +50,14 @@ order changes issuer because another CA exists in inventory.
 
 To bind a certificate profile, set `ca.default_profile` in the control plane's
 configuration file to an active profile name for the ACME tenant. Its
-`allowed_protocols` must include `acme`. The served issuer selects an
-issuance-to-expiry interval of at most 30 days, shortened to the profile's
-`max_validity` when that ceiling is smaller. A short profile therefore works with
-the normal enrollment command below; the client need not request 30 days.
+`allowed_protocols` must include `acme`. The served adapter starts with a 30-day
+default; the profile's `max_validity` caps the full signed certificate interval,
+including its NotBefore backdate. With the default five-minute backdate, a
+ten-minute profile leaves at most five minutes after issuance. A maximum that
+leaves no usable time fails before signing and appears as an ACME readiness
+blocker. Allow time for deployment and automatic renewal when choosing the ceiling.
+The normal enrollment command below uses the bound profile; the client need not
+request 30 days.
 Key, name, usage, and protocol restrictions still apply before signing. A missing
 bound profile rejects issuance. Check the returned certificate's actual dates and
 renewal window before enabling its scheduler.

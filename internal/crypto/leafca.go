@@ -81,7 +81,7 @@ type LeafProfile struct {
 	// is rejected with ErrLeafProfileViolation rather than signed. A completely
 	// empty SAN policy keeps the legacy signer unconstrained; once any SAN policy is
 	// present, each requested SAN type needs its own explicit allow-list.
-	MaxValidity           time.Duration // validity ceiling; 0 = no ceiling
+	MaxValidity           time.Duration // full signed validity ceiling, including backdating; 0 = no ceiling
 	AllowedKeyUsages      *KeyUsages    // when set, the leaf's key usages; nil keeps the default
 	AllowedExtKeyUsage    []string      // EKU allow-list ("serverAuth","clientAuth",...); empty = default pair
 	PermittedDNSSuffixes  []string      // DNS SAN suffixes; set to permit DNS SANs under a SAN policy
@@ -231,6 +231,10 @@ func signLeafFromCSRWithPreparation(caCertDER []byte, caSigner DigestSigner, csr
 	if prepared != nil {
 		now = prepared.ValidityAnchor.UTC()
 	}
+	notBefore, notAfter, err := leafValidityBounds(now, ttl, prof.MaxValidity)
+	if err != nil {
+		return IssuedLeaf{}, err
+	}
 	leaf := &x509.Certificate{
 		SerialNumber:          serial,
 		Subject:               csr.Subject,
@@ -238,8 +242,8 @@ func signLeafFromCSRWithPreparation(caCertDER []byte, caSigner DigestSigner, csr
 		IPAddresses:           csr.IPAddresses,
 		EmailAddresses:        csr.EmailAddresses,
 		URIs:                  csr.URIs,
-		NotBefore:             IssuanceNotBefore(now),
-		NotAfter:              now.Add(ttl),
+		NotBefore:             notBefore,
+		NotAfter:              notAfter,
 		KeyUsage:              leafKeyUsageForProfile(prof),
 		ExtKeyUsage:           knownEKUs,
 		UnknownExtKeyUsage:    customEKUs,

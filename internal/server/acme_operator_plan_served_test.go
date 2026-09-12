@@ -7,14 +7,53 @@ import (
 	"encoding/json"
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
+	"time"
 
 	xacme "golang.org/x/crypto/acme"
 
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/acmekey"
+	"trstctl.com/trstctl/internal/profile"
 )
+
+func TestServedACMEPlanRejectsProfileWithoutUsableValidity(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}})
+	token := seedScopedToken(t, h.store, h.tenant, string(authz.IssuersRead))
+	for _, tc := range []struct {
+		name    string
+		maximum time.Duration
+		ready   bool
+	}{
+		{"too-short", 2 * time.Minute, false},
+		{"equals-backdate", 5 * time.Minute, false},
+		{"usable-short", 10 * time.Minute, true},
+		{"unlimited", 0, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			storeServerTestProfile(t, h.store, h.tenant, tc.name, profile.CertificateProfile{Name: tc.name, MaxValidity: profile.Duration(tc.maximum), AllowedProtocols: []string{"acme"}})
+			h.srv.defaultProfile = tc.name
+			status, body := secretsReq(t, h, http.MethodGet, "/api/v1/acme/operator-plan", token, nil)
+			var plan struct {
+				Ready        bool     `json:"ready"`
+				ProfileReady bool     `json:"issuing_profile_ready"`
+				Blockers     []string `json:"blockers"`
+				Recovery     []string `json:"recovery_steps"`
+			}
+			if err := json.Unmarshal(body, &plan); err != nil {
+				t.Fatal(err)
+			}
+			if status != http.StatusOK || plan.Ready != tc.ready || plan.ProfileReady != tc.ready {
+				t.Fatalf("readiness status=%d body=%s", status, body)
+			}
+			if !tc.ready && (!strings.Contains(strings.Join(plan.Blockers, " "), "backdate") || len(plan.Recovery) == 0) {
+				t.Fatalf("missing actionable profile failure: %s", body)
+			}
+		})
+	}
+}
 
 // F5 needs one server-owned answer to the operator's simple question: "Can an
 // ACME client get a certificate from this tenant right now?" Browser probes can

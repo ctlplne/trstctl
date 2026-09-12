@@ -44,7 +44,7 @@ type CertificateProfile struct {
 	MinRSABits            int                         `json:"min_rsa_bits"`                      // floor for RSA keys; 0 = no floor
 	MinECDSABits          int                         `json:"min_ecdsa_bits"`                    // floor for ECDSA curve size
 	AllowedEKUs           []string                    `json:"allowed_ekus"`                      // e.g. ["serverAuth","clientAuth"]; empty = any
-	MaxValidity           Duration                    `json:"max_validity"`                      // validity ceiling; 0 = no ceiling
+	MaxValidity           Duration                    `json:"max_validity"`                      // full signed validity ceiling, including backdating; 0 = no ceiling
 	AllowedProtocols      []string                    `json:"allowed_protocols"`                 // enrollment protocols permitted; empty = any
 	ACMEAuthMode          ACMEAuthMode                `json:"acme_auth_mode,omitempty"`          // public_trust (default) or trust_authenticated
 	AllowedDNSSuffixes    []string                    `json:"allowed_dns_suffixes"`              // name constraint; empty = unconstrained
