@@ -30,12 +30,9 @@ import (
 	"trstctl.com/trstctl/internal/tenantseal"
 )
 
-// protocolLeafTTL is the validity of a certificate minted through one of the
-// served issuance protocols (ACME/EST/SCEP/CMP). It is comfortably within the
-// issuing CA's own validity so a protocol-issued leaf never outlives its issuer.
-// ACME clients ask for 90d, but the served path caps to this so a protocol caller
-// cannot mint a leaf that outlives the CA; the per-request TTL is honored only up
-// to this ceiling.
+// protocolLeafTTL is the platform ceiling for the lifetime selected by the served
+// issuance adapters (ACME/EST/SCEP/CMP). The bound certificate profile may shorten
+// it further. The signer separately clamps expiry to the issuing CA's lifetime.
 const protocolLeafTTL = 30 * 24 * time.Hour
 
 // protocolIssuer is the single seam every served HTTP/gRPC issuance protocol
@@ -162,7 +159,7 @@ func (p *protocolIssuer) issueProtocolLeaf(ctx context.Context, tenantID, protoc
 		}
 		// PKIGOV-002 served profile gate: validate before signing, fail closed, and
 		// record the decision (AN-2). A no-op when no default profile is configured.
-		leafProfile, err := p.enforceProfile(ctx, tenantID, protocolName, csrDER, csrInfo, dnsNames, ttl)
+		leafProfile, selectedTTL, err := p.enforceProfile(ctx, tenantID, protocolName, csrInfo, dnsNames, ttl)
 		if err != nil {
 			return nil, err
 		}
@@ -183,7 +180,7 @@ func (p *protocolIssuer) issueProtocolLeaf(ctx context.Context, tenantID, protoc
 			}
 			issue = p.issueLicensed
 		}
-		leafPEM, err := issue(ctx, csrDER, ttl, leafProfile)
+		leafPEM, err := issue(ctx, csrDER, selectedTTL, leafProfile)
 		if err != nil {
 			return nil, err
 		}
@@ -336,22 +333,29 @@ func (p *protocolIssuer) ensureTenantCRL(ctx context.Context, tenantID string) e
 // (PKIGOV-002), mirroring the API mint's gate (internal/server/issuance.go) and the
 // IssuanceService gate so all three produce the same audit shape. A no-op when no
 // default profile is configured; a configured-but-unresolved profile fails closed.
-func (p *protocolIssuer) enforceProfile(ctx context.Context, tenantID, protocolName string, csrDER []byte, csrInfo crypto.CSRInfo, dnsNames []string, ttl time.Duration) (crypto.LeafProfile, error) {
+// Protocol adapters select a lifetime internally, so shorten it to the bound
+// profile's ceiling before validation. Resolve the profile once, inside the
+// issuance's idempotency callback, so validation, audit and signing use one version
+// and a replay still returns its original certificate after policy changes.
+func (p *protocolIssuer) enforceProfile(ctx context.Context, tenantID, protocolName string, csrInfo crypto.CSRInfo, dnsNames []string, ttl time.Duration) (crypto.LeafProfile, time.Duration, error) {
 	if p.defaultProfile == "" {
-		return p.leafProfile, nil
+		return p.leafProfile, ttl, nil
 	}
 	rec, err := p.store.GetActiveProfile(ctx, tenantID, p.defaultProfile)
 	if err != nil {
 		if store.IsNotFound(err) {
 			msg := fmt.Sprintf("served default profile %q not found", p.defaultProfile)
 			p.auditProfileDecision(ctx, tenantID, protocolName, 0, "deny", msg)
-			return crypto.LeafProfile{}, fmt.Errorf("server: %s (fail closed)", msg)
+			return crypto.LeafProfile{}, 0, fmt.Errorf("server: %s (fail closed)", msg)
 		}
-		return crypto.LeafProfile{}, err
+		return crypto.LeafProfile{}, 0, err
 	}
 	var prof profile.CertificateProfile
 	if err := json.Unmarshal(rec.Spec, &prof); err != nil {
-		return crypto.LeafProfile{}, fmt.Errorf("server: decode profile %q: %w", p.defaultProfile, err)
+		return crypto.LeafProfile{}, 0, fmt.Errorf("server: decode profile %q: %w", p.defaultProfile, err)
+	}
+	if maximum := time.Duration(prof.MaxValidity); maximum > 0 && ttl > maximum {
+		ttl = maximum
 	}
 	requestedEKUs := intendedProfileEKUs(csrInfo.RequestedEKUs, prof.AllowedEKUs)
 	preq := profile.Request{
@@ -367,10 +371,10 @@ func (p *protocolIssuer) enforceProfile(ctx context.Context, tenantID, protocolN
 	}
 	if verr := prof.Validate(preq); verr != nil {
 		p.auditProfileDecision(ctx, tenantID, protocolName, rec.Version, "deny", verr.Error())
-		return crypto.LeafProfile{}, verr
+		return crypto.LeafProfile{}, 0, verr
 	}
 	p.auditProfileDecision(ctx, tenantID, protocolName, rec.Version, "allow", "")
-	return leafProfileForCertificateProfile(p.leafProfile, prof, requestedEKUs), nil
+	return leafProfileForCertificateProfile(p.leafProfile, prof, requestedEKUs), ttl, nil
 }
 
 // caCA adapts the protocol issuer to the ca.CA interface so the built-in ACME

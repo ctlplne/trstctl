@@ -48,6 +48,16 @@ an external CA, use the separate
 [existing-CA and connector journey](preserve-existing-ca.md). Do not assume an ACME
 order changes issuer because another CA exists in inventory.
 
+To bind a certificate profile, set `ca.default_profile` in the control plane's
+configuration file to an active profile name for the ACME tenant. Its
+`allowed_protocols` must include `acme`. The served issuer selects an
+issuance-to-expiry interval of at most 30 days, shortened to the profile's
+`max_validity` when that ceiling is smaller. A short profile therefore works with
+the normal enrollment command below; the client need not request 30 days.
+Key, name, usage, and protocol restrictions still apply before signing. A missing
+bound profile rejects issuance. Check the returned certificate's actual dates and
+renewal window before enabling its scheduler.
+
 ## 1. Inspect the ACME surface
 
 Open **How machines request credentials** and read **ACME readiness and next step**.
