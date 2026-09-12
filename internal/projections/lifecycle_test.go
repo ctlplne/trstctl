@@ -277,6 +277,18 @@ func TestHistoryIsTenantScopedAndBounded(t *testing.T) {
 			if err := orch.Transition(ctx, tenantB, bid, to, "noise"); err != nil {
 				t.Fatalf("B transition: %v", err)
 			}
+			if to == orchestrator.StateDeployed {
+				// This history fixture has no worker. Model completed renewal
+				// delivery before starting the next one; production now correctly
+				// refuses to overlap a still-pending renewal for this identity.
+				if err := s.WithTenant(ctx, tenantB, func(tx pgx.Tx) error {
+					_, err := tx.Exec(ctx, `UPDATE outbox SET status='delivered'
+						WHERE tenant_id=$1 AND destination='ca.renew' AND convert_from(payload,'UTF8')::jsonb->>'identity_id'=$2`, tenantB, bid)
+					return err
+				}); err != nil {
+					t.Fatal(err)
+				}
+			}
 		}
 	}
 
