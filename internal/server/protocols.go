@@ -384,9 +384,14 @@ func (a protocolCAAdapter) Issue(ctx context.Context, req ca.IssueRequest) (ca.C
 	if tenant == "" {
 		tenant = a.tenantID
 	}
-	// The ACME order carries no idempotency key of its own, so derive one from the
-	// CSR (a re-finalize of the same order presents the same CSR → same key → AN-5).
-	leafDER, err := a.issuer.IssueProtocolLeaf(ctx, tenant, "acme", "", req.CSR, req.TTL)
+	// New orders carry a durable identity independent of the CSR. Keep the
+	// legacy CSR fallback for old in-flight orders, whose mint may already be
+	// recorded under that key. Changing their key could duplicate an issuance.
+	var issuanceKey string
+	if req.ProviderIdempotencyKey != "" {
+		issuanceKey = "acme-order:" + req.ProviderIdempotencyKey
+	}
+	leafDER, err := a.issuer.IssueProtocolLeaf(ctx, tenant, "acme", issuanceKey, req.CSR, req.TTL)
 	if err != nil {
 		return ca.Certificate{}, err
 	}

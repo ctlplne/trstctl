@@ -50,6 +50,7 @@ type acmeAccountEvent struct {
 type acmeOrderState struct {
 	ID                string    `json:"id"`
 	AccountURL        string    `json:"account_url"`
+	IssuanceKey       string    `json:"issuance_key,omitempty"`
 	Domains           []string  `json:"domains"`
 	AuthzIDs          []string  `json:"authz_ids"`
 	Status            string    `json:"status"`
@@ -256,8 +257,11 @@ func (s *Server) applyOrderCreatedEventLocked(payload acmeOrderCreatedEvent) err
 		return errors.New("acme: malformed order event")
 	}
 	o := &order{
-		id:                payload.Order.ID,
-		accountURL:        payload.Order.AccountURL,
+		id:         payload.Order.ID,
+		accountURL: payload.Order.AccountURL,
+		// Preserve the empty key of pre-upgrade orders: they may already have a
+		// CSR-bound issuance committed before their certificate event was saved.
+		issuanceKey:       payload.Order.IssuanceKey,
 		domains:           append([]string(nil), payload.Order.Domains...),
 		authzIDs:          append([]string(nil), payload.Order.AuthzIDs...),
 		status:            payload.Order.Status,
@@ -399,6 +403,7 @@ func orderCreatedEventFrom(o *order, authzs []*authorization, seq int) acmeOrder
 		Order: acmeOrderState{
 			ID:                o.id,
 			AccountURL:        o.accountURL,
+			IssuanceKey:       o.issuanceKey,
 			Domains:           append([]string(nil), o.domains...),
 			AuthzIDs:          append([]string(nil), o.authzIDs...),
 			Status:            o.status,

@@ -220,6 +220,7 @@ type authorization struct {
 type order struct {
 	id                string
 	accountURL        string
+	issuanceKey       string
 	domains           []string
 	authzIDs          []string
 	status            string
@@ -1022,6 +1023,9 @@ func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 		challengeStatus = statusValid
 	}
 	o := &order{id: s.nextID(), accountURL: acct.url, status: orderStatus, authMode: authMode, replaces: req.Replaces, createdAt: now}
+	// Persist this identity before issuance. A new order must renew even when
+	// the client reuses identical CSR bytes; retries must recover the same mint.
+	o.issuanceKey = ca.ProviderIdempotencyKey(strings.Join([]string{"acme-order-v1", s.stateTenantID, acct.url, o.id}, "\x00"))
 	var authzURLs []string
 	var authzs []*authorization
 	for _, id := range req.Identifiers {
@@ -1337,7 +1341,10 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 		return
 	}
 
-	cert, err := s.ca.Issue(r.Context(), ca.IssueRequest{CSR: csr, DNSNames: o.domains, TTL: 90 * 24 * time.Hour})
+	cert, err := s.ca.Issue(r.Context(), ca.IssueRequest{
+		CSR: csr, DNSNames: o.domains, TTL: 90 * 24 * time.Hour,
+		ProviderIdempotencyKey: o.issuanceKey,
+	})
 	if err != nil {
 		s.problem(w, r, http.StatusInternalServerError, "serverInternal", "issuance failed: "+err.Error())
 		return

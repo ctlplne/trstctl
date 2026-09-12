@@ -51,6 +51,14 @@ signer-issued leaf first and the exact public issuing certificate second. The sa
 ordered bytes survive ACME state replay, so strict clients such as Certbot can build
 their `cert.pem` and `fullchain.pem` artifacts after either issuance or restart.
 
+Each new order has a durable issuance identity. A renewal order issues a new
+certificate even when the client reuses its key and sends identical CSR bytes;
+retrying the same order returns its original certificate. The identity survives
+restart, including an interruption after signing but before the order completes.
+Orders created by older versions without this identity retain their original
+CSR-based retry binding during an upgrade, so recovery cannot duplicate a mint.
+Create a fresh renewal order after upgrading to obtain the new behavior.
+
 The advertised account URL accepts signed POST-as-GET, contact updates, and
 `{"status":"deactivated"}`. Registration lookup preserves existing contact details;
 send an update to the account URL to change them, or `{"contact":[]}` to clear them.

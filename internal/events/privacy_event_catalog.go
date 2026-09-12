@@ -104,6 +104,7 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 		entry("acme.order.created",
 			catalogPrivacyRule("/seq", opaque),
 			catalogPrivacyRule("/order/id", opaque), catalogPrivacyRule("/order/account_url", opaque),
+			catalogPrivacyRule("/order/issuance_key", opaque),
 			catalogPrivacyRule("/order/domains/*", token), catalogPrivacyRule("/order/authz_ids/*", opaque),
 			catalogPrivacyRule("/order/status", opaque), catalogPrivacyRule("/order/auth_mode", opaque),
 			catalogPrivacyRule("/order/cert_id", opaque), catalogPrivacyRule("/order/replaces", opaque),

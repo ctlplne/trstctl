@@ -185,9 +185,9 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 		return shape(`{"account_url":"","eab_key_id":"","identifiers":[""],"reason":""}`,
 			catalogPrivacyShapeOptions{Optional: []string{"/identifiers"}}), true
 	case "acme.order.created":
-		return shape(`{"seq":1,"order":{"id":"","account_url":"","domains":[""],"authz_ids":[""],"status":"","auth_mode":"","cert_id":"","replaces":"","attested_key_sha256":"","created_at":""},"authorizations":[{"id":"","order_id":"","domain":"","status":"","created_at":"","challenges":[{"id":"","type":"","token":"","status":"","authz_id":""}]}]}`,
+		return shape(`{"seq":1,"order":{"id":"","account_url":"","issuance_key":"","domains":[""],"authz_ids":[""],"status":"","auth_mode":"","cert_id":"","replaces":"","attested_key_sha256":"","created_at":""},"authorizations":[{"id":"","order_id":"","domain":"","status":"","created_at":"","challenges":[{"id":"","type":"","token":"","status":"","authz_id":""}]}]}`,
 			catalogPrivacyShapeOptions{Optional: []string{
-				"/seq", "/order/auth_mode", "/order/cert_id", "/order/replaces", "/order/attested_key_sha256",
+				"/seq", "/order/issuance_key", "/order/auth_mode", "/order/cert_id", "/order/replaces", "/order/attested_key_sha256",
 			}}), true
 	case "agent.identity.issued":
 		return shape(`{"agent_id":"","credential_id":"","subject":""}`), true
