@@ -587,6 +587,8 @@ const deDECatalog = {
     "Beim Start wird zuerst der unveränderliche H1-Plan erfasst und danach nur der Canary eingereiht. Kein Vorgänger wird widerrufen, bevor die signierten Vertrauens- und Live-Prüfungen bestanden sind.",
   "incidents.fleet.exactRequest": "Exakte Anfrage anzeigen",
   "certificates.tabs.inventory": "Inventar",
+  // Machine-authored inventory-search label; human translation review required before release.
+  "certificates.inventory.search": "Zertifikate suchen",
   "certificates.inventory.loadedOne": "1 Zertifikat geladen",
   "certificates.inventory.loadedMany": "{count} Zertifikate geladen",
   "certificates.inventory.filterOne": "1 aktiver Filter",

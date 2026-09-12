@@ -49,12 +49,14 @@ describe("inventory search", () => {
   });
 
   it("filters the certificate inventory as you type", async () => {
-    apiMock.certificatePage.mockResolvedValue({
-      items: [
-        { id: "c1", subject: "CN=payments.example.com", issuer: "CN=CA", status: "active", fingerprint: "fp1" },
-        { id: "c2", subject: "CN=web.example.com", issuer: "CN=CA", status: "active", fingerprint: "fp2" },
-      ],
-    });
+    apiMock.certificatePage.mockImplementation(({ query }: { query?: string }) =>
+      Promise.resolve({
+        items: [
+          { id: "c1", subject: "CN=payments.example.com", issuer: "CN=CA", status: "active", fingerprint: "fp1" },
+          { id: "c2", subject: "CN=web.example.com", issuer: "CN=CA", status: "active", fingerprint: "fp2" },
+        ].filter((row) => !query || row.subject.includes(query)),
+      }),
+    );
     const user = userEvent.setup();
     renderCerts();
 
@@ -64,13 +66,16 @@ describe("inventory search", () => {
     await user.type(screen.getByRole("searchbox", { name: /search/i }), "payments");
 
     await waitFor(() => expect(screen.queryByText("CN=web.example.com")).not.toBeInTheDocument());
-    expect(screen.getByText("CN=payments.example.com")).toBeInTheDocument();
+    expect(await screen.findByText("CN=payments.example.com")).toBeInTheDocument();
+    expect(apiMock.certificatePage).toHaveBeenLastCalledWith(expect.objectContaining({ query: "payments" }));
   });
 
   it("reports when a search matches nothing", async () => {
-    apiMock.certificatePage.mockResolvedValue({
-      items: [{ id: "c1", subject: "CN=payments.example.com", status: "active", fingerprint: "fp1" }],
-    });
+    apiMock.certificatePage.mockImplementation(({ query }: { query?: string }) =>
+      Promise.resolve({
+        items: query ? [] : [{ id: "c1", subject: "CN=payments.example.com", status: "active", fingerprint: "fp1" }],
+      }),
+    );
     const user = userEvent.setup();
     renderCerts();
 
@@ -350,11 +355,19 @@ describe("certificate inventory gap closure", () => {
     renderCerts();
 
     expect(await screen.findByText("CN=page-one")).toBeInTheDocument();
-    expect(apiMock.certificatePage).toHaveBeenCalledWith({ limit: 20, expiringBefore: undefined });
+    expect(apiMock.certificatePage).toHaveBeenCalledWith({
+      limit: 20,
+      cursor: undefined,
+      query: undefined,
+      signal: expect.any(AbortSignal),
+      expiringBefore: undefined,
+    });
 
     await user.click(screen.getByRole("button", { name: /load next page/i }));
     await waitFor(() =>
       expect(apiMock.certificatePage).toHaveBeenCalledWith({
+        query: undefined,
+        signal: expect.any(AbortSignal),
         limit: 20,
         cursor: "cursor-two",
         expiringBefore: undefined,
@@ -367,6 +380,9 @@ describe("certificate inventory gap closure", () => {
     await user.click(screen.getByRole("button", { name: "<7d" }));
     await waitFor(() =>
       expect(apiMock.certificatePage).toHaveBeenLastCalledWith({
+        query: undefined,
+        signal: expect.any(AbortSignal),
+        cursor: undefined,
         limit: 20,
         expiringBefore: expect.any(String),
       }),
@@ -466,15 +482,19 @@ describe("certificate inventory gap closure", () => {
     expect(dialog).toHaveTextContent("no lifecycle rotation run yet");
   });
 
-  it("ingests a PEM through the served mutation and prepends the returned row", async () => {
+  it("ingests a PEM through the served mutation and refreshes the server-filtered inventory", async () => {
     apiMock.certificatePage.mockResolvedValue({ items: [] });
-    apiMock.ingestCertificate.mockResolvedValue({
+    const ingested = {
       id: "c-new",
       tenant_id: "tenant-1",
       subject: "CN=new.example.com",
       issuer: "CN=CA",
       fingerprint: "fp-new",
       status: "active",
+    };
+    apiMock.ingestCertificate.mockImplementation(async () => {
+      apiMock.certificatePage.mockResolvedValue({ items: [ingested] });
+      return ingested;
     });
     const user = userEvent.setup();
     renderCerts();

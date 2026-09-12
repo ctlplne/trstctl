@@ -578,6 +578,8 @@ const esESCatalog = {
     "Al iniciar se registra primero el plan H1 inmutable y después se pone en cola solo el canario. Ningún predecesor se revoca hasta que pasen las puertas firmadas de confianza y servicio en vivo.",
   "incidents.fleet.exactRequest": "Mostrar solicitud exacta",
   "certificates.tabs.inventory": "Inventario",
+  // Machine-authored inventory-search label; human translation review required before release.
+  "certificates.inventory.search": "Buscar certificados",
   "certificates.inventory.loadedOne": "1 certificado cargado",
   "certificates.inventory.loadedMany": "{count} certificados cargados",
   "certificates.inventory.filterOne": "1 filtro activo",

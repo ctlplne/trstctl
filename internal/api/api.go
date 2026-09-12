@@ -956,6 +956,7 @@ func (a *API) routes() []route {
 		{name: "status", typ: "string", desc: "filter by pending, sent, dead, or read"},
 	}
 	certQuery := []param{
+		{name: "q", typ: "string", desc: "Case-insensitive literal substring of subject, SAN, issuer, serial, fingerprint, status or deployment location; also matches an exact certificate UUID. At most 256 characters, valid UTF-8 without NUL. Applied within the authenticated tenant before pagination; keep the same search and expiry filter on subsequent pages."},
 		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
 		{name: "cursor", typ: "string", desc: "opaque pagination cursor from a prior page"},
 		{name: "expiring_before", typ: "string", desc: "RFC3339; return only certificates expiring before this time"},

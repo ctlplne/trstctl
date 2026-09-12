@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/custody"
@@ -286,6 +287,11 @@ func (a *API) listCertificates(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if !utf8.ValidString(query) || utf8.RuneCountInString(query) > 256 || strings.ContainsRune(query, 0) {
+		a.writeError(w, errStatus(http.StatusBadRequest, "q must be valid UTF-8, at most 256 characters, without NUL"))
+		return
+	}
 	var expiringBefore *time.Time
 	if s := r.URL.Query().Get("expiring_before"); s != "" {
 		ts, perr := time.Parse(time.RFC3339, s)
@@ -317,7 +323,7 @@ func (a *API) listCertificates(w http.ResponseWriter, r *http.Request) {
 		afterNotAfter = na
 	}
 
-	certs, err := a.store.ListCertificatesPage(r.Context(), tenantID, afterID, afterNotAfter, limit, expiringBefore)
+	certs, err := a.store.SearchCertificatesPage(r.Context(), tenantID, afterID, afterNotAfter, limit, expiringBefore, query)
 	if err != nil {
 		a.writeError(w, err)
 		return

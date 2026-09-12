@@ -58,6 +58,8 @@ describe("pagination virtualization", () => {
 
     await waitFor(() =>
       expect(apiMock.certificatePage).toHaveBeenNthCalledWith(2, {
+        query: undefined,
+        signal: expect.any(AbortSignal),
         limit: 20,
         cursor: "cursor-2",
         expiringBefore: undefined,

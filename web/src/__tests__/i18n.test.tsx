@@ -1552,8 +1552,10 @@ describe("i18n boundary", () => {
       // ACME fleet lifecycle: reviewed plugin prerequisites, installation,
       // independent verification, scheduling, revocation/retirement, and terminal
       // authorization labels. Machine-authored es/de require human review before release.
-      "es-ES": "e0a1273661cabd7de7c5c7cf8ad240a57f6b82ae6cba3ad75ffefd2c26e51fab",
-      "de-DE": "55954b30b93e546f26738c1e18bdc49f6f5de92fd952f28078978a85da590bb9",
+      // Certificate inventory: reviewed the server-wide search label against
+      // the new API semantics. Machine-authored es/de require human review before release.
+      "es-ES": "a3f8d529e8f7e34829201288d6b24fe93abd402a2295af800a2d8673181613b0",
+      "de-DE": "a33f2629c68c0705e162751aa64b2e3308359c4e30c8776857cc641e58d22015",
     });
   });
 

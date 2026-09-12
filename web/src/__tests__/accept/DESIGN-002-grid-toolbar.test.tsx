@@ -78,7 +78,7 @@ describe("DESIGN-002 dense grid and toolbar consistency", () => {
 
     expect(await screen.findByText("CN=payments.example.test")).toBeInTheDocument();
     const grid = screen.getByLabelText("Inventoried certificates");
-    expect(within(grid).getByRole("searchbox", { name: "Search loaded rows" })).toBeInTheDocument();
+    expect(within(grid).getByRole("searchbox", { name: "Search certificates" })).toBeInTheDocument();
     await user.click(within(grid).getByRole("button", { name: "View options" }));
     expect(within(grid).getByRole("button", { name: "Columns" })).toBeInTheDocument();
     expect(within(grid).getByRole("button", { name: "Save view" })).toBeDisabled();

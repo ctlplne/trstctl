@@ -62,6 +62,7 @@ import {
 } from "@/pages/certificates/certificateInventory";
 import { AppQueryProvider, useApiQuery, useHasAppQueryProvider } from "@/lib/query";
 import { useAuth } from "@/auth/AuthProvider";
+import { useCertificateInventory } from "@/pages/certificates/useCertificateInventory";
 
 type ExpiryFilter = "all" | "7d" | "30d" | "90d";
 
@@ -631,11 +632,6 @@ function CertificateWorkspace() {
   const { t, formatDate, formatDateTime } = useTranslation();
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [certificates, setCertificates] = useState<Certificate[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | undefined>();
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<Notice | null>(null);
   const [query, setQuery] = useState("");
   const [expiry, setExpiry] = useState<ExpiryFilter>(() => expiryFromSearchParam(searchParams.get("expiry")));
   const [issuerFilter, setIssuerFilter] = useState<FacetFilter>(() => searchParams.get("issuer") ?? "all");
@@ -643,6 +639,10 @@ function CertificateWorkspace() {
   const [teamFilter, setTeamFilter] = useState<FacetFilter>(() => searchParams.get("team") ?? "all");
   const [environmentFilter, setEnvironmentFilter] = useState<FacetFilter>(() => searchParams.get("environment") ?? "all");
   const [limit, setLimit] = useState(20);
+  const expiryCutoff = useMemo(() => expiringBefore(expiry), [expiry]);
+  const inventory = useCertificateInventory([user?.tenant_id ?? null, user?.subject ?? null, (user?.permissions ?? []).join("|")], query, limit, expiryCutoff);
+  const { certificates, loading, loadingMore, hasNextPage, loadNextPage } = inventory;
+  const error = inventory.error ? noticeForError(inventory.error, "read certificate inventory") : null;
   const [detailID, setDetailID] = useState<string | null>(null);
   const [detail, setDetail] = useState<Certificate | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -688,6 +688,9 @@ function CertificateWorkspace() {
   const [ctDialogOpen, setCTDialogOpen] = useState(false);
   const tab = tabFromSearchParam(searchParams.get("tab"));
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [query, expiry, limit, issuerFilter, profileFilter, teamFilter, environmentFilter, user?.tenant_id, user?.subject]);
   const [bulkRevokeOpen, setBulkRevokeOpen] = useState(false);
   const [bulkReason, setBulkReason] = useState<BulkRevokeRequest["reason"]>("keyCompromise");
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -749,47 +752,6 @@ function CertificateWorkspace() {
       cancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    api
-      .certificatePage({ limit, expiringBefore: expiringBefore(expiry) })
-      .then((page) => {
-        if (cancelled) return;
-        setCertificates(page.items ?? []);
-        setNextCursor(page.next_cursor || undefined);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setError(noticeForError(err, "read certificate inventory"));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [expiry, limit]);
-
-  async function loadNextPage() {
-    if (!nextCursor) return;
-    setLoadingMore(true);
-    setError(null);
-    try {
-      const page = await api.certificatePage({
-        limit,
-        cursor: nextCursor,
-        expiringBefore: expiringBefore(expiry),
-      });
-      setCertificates((current) => [...current, ...(page.items ?? [])]);
-      setNextCursor(page.next_cursor || undefined);
-    } catch (err) {
-      setError(noticeForError(err, "page certificate inventory"));
-    } finally {
-      setLoadingMore(false);
-    }
-  }
 
   function selectTab(next: string) {
     const value = tabFromSearchParam(next);
@@ -900,7 +862,7 @@ function CertificateWorkspace() {
         source: source.trim() || undefined,
         deployment_location: deploymentLocation.trim() || undefined,
       });
-      setCertificates((current) => [cert, ...current.filter((c) => c.id !== cert.id)]);
+      void inventory.refresh();
       setPem("");
       setOwnerID("");
       setDeploymentLocation("");
@@ -963,11 +925,7 @@ function CertificateWorkspace() {
         title: `Revoked ${result.total_revoked} of ${result.total_matched}`,
         description: `Skipped ${result.total_skipped}, failed ${result.total_failed}.`,
       });
-      const page = await settleOptional(() => api.certificatePage({ limit, expiringBefore: expiringBefore(expiry) }));
-      if (page) {
-        setCertificates(page.items ?? []);
-        setNextCursor(page.next_cursor || undefined);
-      }
+      await inventory.refresh();
     } catch (err) {
       setBulkError(noticeForError(err, "bulk revoke certificates").message);
     } finally {
@@ -983,37 +941,22 @@ function CertificateWorkspace() {
       description: t("certificates.revocation.description"),
     });
     healthQuery.refetch();
-    void Promise.all([
-      settleOptional(() => api.certificatePage({ limit, expiringBefore: expiringBefore(expiry) })),
-      settleOptional(() => api.crlDistributions()),
-      settleOptional(() => api.revocationHealth()),
-    ]).then(([page, nextCRLs, nextRevocationHealth]) => {
-      if (page) {
-        setCertificates(page.items ?? []);
-        setNextCursor(page.next_cursor || undefined);
-      }
+    void inventory.refresh();
+    void Promise.all([settleOptional(() => api.crlDistributions()), settleOptional(() => api.revocationHealth())]).then(([nextCRLs, nextRevocationHealth]) => {
       if (nextCRLs) setCRLDistributions(nextCRLs.items ?? []);
       if (nextRevocationHealth) setRevocationHealth(nextRevocationHealth);
     });
   }
 
   function recordExactCertificateRevocation(updated: Certificate) {
-    setCertificates((current) => current.map((certificate) => (certificate.id === updated.id ? updated : certificate)));
     toast({
       kind: "success",
       title: t("certificates.revocation.certificateAccepted"),
       description: t("certificates.revocation.description"),
     });
     healthQuery.refetch();
-    void Promise.all([
-      settleOptional(() => api.certificatePage({ limit, expiringBefore: expiringBefore(expiry) })),
-      settleOptional(() => api.crlDistributions()),
-      settleOptional(() => api.revocationHealth()),
-    ]).then(([page, nextCRLs, nextRevocationHealth]) => {
-      if (page) {
-        setCertificates(page.items ?? []);
-        setNextCursor(page.next_cursor || undefined);
-      }
+    void inventory.refresh(updated);
+    void Promise.all([settleOptional(() => api.crlDistributions()), settleOptional(() => api.revocationHealth())]).then(([nextCRLs, nextRevocationHealth]) => {
       if (nextCRLs) setCRLDistributions(nextCRLs.items ?? []);
       if (nextRevocationHealth) setRevocationHealth(nextRevocationHealth);
     });
@@ -1090,29 +1033,14 @@ function CertificateWorkspace() {
 
   const filtered = useMemo(() => {
     const all = certificates;
-    const q = query.trim().toLowerCase();
     return all.filter((c) => {
       if (issuerFilter !== "all" && c.issuer !== issuerFilter) return false;
       if (profileFilter !== "all" && certificateProfile(c) !== profileFilter) return false;
       if (teamFilter !== "all" && certificateTeamID(c, ownerByID) !== teamFilter) return false;
       if (environmentFilter !== "all" && certificateEnvironment(c) !== environmentFilter) return false;
-      if (!q) return true;
-      return [
-        certificateDisplayName(c),
-        ...(c.sans ?? []),
-        c.issuer,
-        c.status,
-        c.fingerprint,
-        c.serial,
-        c.deployment_location,
-        certificateProfile(c),
-        certificateEnvironment(c),
-        certificateTeamLabel(c, ownerByID),
-      ]
-        .filter(Boolean)
-        .some((v) => v!.toLowerCase().includes(q));
+      return true;
     });
-  }, [certificates, environmentFilter, issuerFilter, ownerByID, profileFilter, query, teamFilter]);
+  }, [certificates, environmentFilter, issuerFilter, ownerByID, profileFilter, teamFilter]);
 
   return (
     <section aria-labelledby="certs-heading" className="min-w-0 max-w-full">
@@ -1237,11 +1165,10 @@ function CertificateWorkspace() {
         </form>
       )}
 
-      {loading && <LoadingState>{translateNow("source.loading.certificates.3ed54a94d8")}</LoadingState>}
       {error?.kind === "permission" && <PermissionDeniedState>{error.message}</PermissionDeniedState>}
       {error?.kind === "error" && <ErrorState title={translateNow("source.could.not.load.certificates.21ae8e6e19")}>{error.message}</ErrorState>}
 
-      {!loading && certificates.length === 0 && !error && (
+      {!loading && certificates.length === 0 && !query.trim() && !error && (
         <EmptyState
           icon={<FilePlus2 className="h-5 w-5" aria-hidden="true" />}
           title={translateNow("source.no.certificates.yet.f1e2ab559a")}
@@ -1252,7 +1179,7 @@ function CertificateWorkspace() {
         </EmptyState>
       )}
 
-      {certificates.length > 0 && (
+      {
         <>
           <PageTabs
             idPrefix="certs"
@@ -1361,8 +1288,9 @@ function CertificateWorkspace() {
                   onSelectedIdsChange: setSelectedIds,
                   getRowLabel: certificateDisplayName,
                 }}
-                state={filtered.length === 0 ? "empty" : "ready"}
+                state={loading ? "loading" : !error && filtered.length === 0 && (certificates.length > 0 || query.trim()) ? "empty" : "ready"}
                 stateTitle="No certificates match your search."
+                stateMessage={loading ? t("source.loading.certificates.3ed54a94d8") : undefined}
                 showColumnChooser
                 viewStorageKey="certificates-inventory"
                 viewMetadata={{
@@ -1378,7 +1306,7 @@ function CertificateWorkspace() {
                 virtualization={{ rowHeight: 52, viewportHeight: 520, overscan: 6, threshold: 80 }}
                 toolbar={({ columnChooser, savedViews }) => (
                   <DataGridToolbar
-                    searchLabel="Search loaded rows"
+                    searchLabel={t("certificates.inventory.search")}
                     searchPlaceholder="Subject, issuer, serial, fingerprint..."
                     searchValue={query}
                     onSearchChange={setQuery}
@@ -1495,24 +1423,26 @@ function CertificateWorkspace() {
                 rowActionLabel={certificateRowActionLabel}
               />
 
-              <div className="mt-4 flex items-center gap-3">
-                {nextCursor ? (
-                  <button
-                    type="button"
-                    onClick={() => void loadNextPage()}
-                    disabled={loadingMore}
-                    className="inline-flex min-h-10 items-center rounded-md border border-border px-3 py-2 text-sm disabled:opacity-60"
-                  >
-                    {loadingMore ? translateNow("source.loading.next.page.8c0453192f") : translateNow("source.load.next.page.d31b4bf690")}
-                  </button>
-                ) : (
-                  <p className="text-sm text-muted-foreground">{translateNow("source.no.more.certificate.pages.e8cec79bea")}</p>
-                )}
-              </div>
+              {!loading && !error && (
+                <div className="mt-4 flex items-center gap-3">
+                  {hasNextPage ? (
+                    <button
+                      type="button"
+                      onClick={() => void loadNextPage()}
+                      disabled={inventory.fetching}
+                      className="inline-flex min-h-10 items-center rounded-md border border-border px-3 py-2 text-sm disabled:opacity-60"
+                    >
+                      {loadingMore ? translateNow("source.loading.next.page.8c0453192f") : translateNow("source.load.next.page.d31b4bf690")}
+                    </button>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">{translateNow("source.no.more.certificate.pages.e8cec79bea")}</p>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </>
-      )}
+      }
 
       <Dialog
         open={bulkRevokeOpen}

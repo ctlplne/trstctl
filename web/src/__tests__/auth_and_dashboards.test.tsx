@@ -487,7 +487,13 @@ describe("auth + dashboards", () => {
     await waitFor(() => expect(screen.getByText("CN=payments.example.com")).toBeInTheDocument());
     expect(screen.getByText("CN=web.example.com")).toBeInTheDocument();
     expect(screen.getByRole("table")).toBeInTheDocument();
-    expect(apiMock.certificatePage).toHaveBeenCalledWith({ limit: 20, expiringBefore: undefined });
+    expect(apiMock.certificatePage).toHaveBeenCalledWith({
+      limit: 20,
+      cursor: undefined,
+      query: undefined,
+      signal: expect.any(AbortSignal),
+      expiringBefore: undefined,
+    });
   });
 
   it("shapes navigation for viewer sessions without advertising privileged actions", async () => {
@@ -993,7 +999,15 @@ describe("auth + dashboards", () => {
 
     renderAt("/certificates?expiry=30d");
 
-    await waitFor(() => expect(apiMock.certificatePage).toHaveBeenCalledWith({ limit: 20, expiringBefore: expect.any(String) }));
+    await waitFor(() =>
+      expect(apiMock.certificatePage).toHaveBeenCalledWith({
+        limit: 20,
+        cursor: undefined,
+        query: undefined,
+        signal: expect.any(AbortSignal),
+        expiringBefore: expect.any(String),
+      }),
+    );
     expect(await screen.findByText("CN=soon.example.com")).toBeInTheDocument();
   });
 

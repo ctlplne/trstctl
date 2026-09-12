@@ -1143,6 +1143,10 @@ export const messages = {
     defaultMessage: "Inventory",
     description: "Certificates page tab: the primary certificate table.",
   },
+  "certificates.inventory.search": {
+    defaultMessage: "Search certificates",
+    description: "Search across the tenant certificate inventory, including rows not yet loaded.",
+  },
   "certificates.inventory.loadedOne": {
     defaultMessage: "1 certificate loaded",
     description: "Certificate inventory result count when one row is loaded.",

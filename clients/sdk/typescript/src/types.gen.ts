@@ -19212,6 +19212,8 @@ export interface operations {
     listCertificates: {
         parameters: {
             query?: {
+                /** @description Case-insensitive literal substring of subject, SAN, issuer, serial, fingerprint, status or deployment location; also matches an exact certificate UUID. At most 256 characters, valid UTF-8 without NUL. Applied within the authenticated tenant before pagination; keep the same search and expiry filter on subsequent pages. */
+                q?: string;
                 /** @description maximum items per page (1-100, default 20) */
                 limit?: number;
                 /** @description opaque pagination cursor from a prior page */

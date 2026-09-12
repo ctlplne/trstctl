@@ -534,6 +534,37 @@ func (s *Store) GetIssuedCertificateRecovery(ctx context.Context, tenantID, key 
 // returns all certificates ordered by id, keyset on id alone (the plain page rides
 // the primary key). Tenant-scoped under RLS (AN-1).
 func (s *Store) ListCertificatesPage(ctx context.Context, tenantID, afterID string, afterNotAfter *time.Time, limit int, expiringBefore *time.Time) ([]Certificate, error) {
+	return s.SearchCertificatesPage(ctx, tenantID, afterID, afterNotAfter, limit, expiringBefore, "")
+}
+
+// SearchCertificatesPage applies a case-insensitive literal metadata search
+// before keyset pagination, within the same tenant/RLS boundary. Empty search
+// preserves the existing unfiltered and expiry-index query plans. Public
+// certificate material, custody receipts and issuance responses are not searched.
+func (s *Store) SearchCertificatesPage(ctx context.Context, tenantID, afterID string, afterNotAfter *time.Time, limit int, expiringBefore *time.Time, query string) ([]Certificate, error) {
+	query = strings.TrimSpace(query)
+	searchClause := func(position int) string {
+		if query == "" {
+			return ""
+		}
+		// The only formatted value is a parameter position, never operator input.
+		// strpos treats percent, underscore, quotes and backslashes literally.
+		return fmt.Sprintf(` AND (
+   strpos(lower(subject), lower($%[1]d)) > 0 OR
+   EXISTS (SELECT 1 FROM unnest(sans) AS name WHERE strpos(lower(name), lower($%[1]d)) > 0) OR
+   strpos(lower(issuer), lower($%[1]d)) > 0 OR
+   strpos(lower(serial), lower($%[1]d)) > 0 OR
+   strpos(lower(fingerprint), lower($%[1]d)) > 0 OR
+   strpos(lower(status), lower($%[1]d)) > 0 OR
+   strpos(lower(deployment_location), lower($%[1]d)) > 0 OR
+   id::text = lower($%[1]d))`, position)
+	}
+	searchArgs := func(args ...any) []any {
+		if query != "" {
+			return append(args, query)
+		}
+		return args
+	}
 	var out []Certificate
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		var rows pgx.Rows
@@ -550,26 +581,26 @@ func (s *Store) ListCertificatesPage(ctx context.Context, tenantID, afterID stri
 				`SELECT `+certificateColumns+`
 				   FROM certificates
 				  WHERE tenant_id = $1 AND not_after < $2
-				    AND (not_after, id) > ($3, $4)
+				    AND (not_after, id) > ($3, $4)`+searchClause(6)+`
 				  ORDER BY not_after, id LIMIT $5`,
-				tenantID, *expiringBefore, *afterNotAfter, afterID, limit)
+				searchArgs(tenantID, *expiringBefore, *afterNotAfter, afterID, limit)...)
 		case expiringBefore != nil:
 			// Expiry-ordered first page: no keyset lower bound yet, just the filter,
 			// ordered by (not_after, id) so it rides the same composite index.
 			rows, qerr = tx.Query(ctx,
 				`SELECT `+certificateColumns+`
 				   FROM certificates
-				  WHERE tenant_id = $1 AND not_after < $2
+				  WHERE tenant_id = $1 AND not_after < $2`+searchClause(4)+`
 				  ORDER BY not_after, id LIMIT $3`,
-				tenantID, *expiringBefore, limit)
+				searchArgs(tenantID, *expiringBefore, limit)...)
 		default:
 			// Plain page: keyset on id alone, riding the primary key.
 			rows, qerr = tx.Query(ctx,
 				`SELECT `+certificateColumns+`
 				   FROM certificates
-				  WHERE tenant_id = $1 AND id > $2
+				  WHERE tenant_id = $1 AND id > $2`+searchClause(4)+`
 				  ORDER BY id LIMIT $3`,
-				tenantID, afterID, limit)
+				searchArgs(tenantID, afterID, limit)...)
 		}
 		if qerr != nil {
 			return qerr

@@ -146,7 +146,15 @@ describe("C10-4 certificate inventory filters", () => {
     expect(params.get("profile")).toBe("prod-web");
     expect(params.get("team")).toBe("team-platform");
     expect(params.get("environment")).toBe("prod");
-    await waitFor(() => expect(apiMock.certificatePage).toHaveBeenCalledWith({ limit: 20, expiringBefore: undefined }));
+    await waitFor(() =>
+      expect(apiMock.certificatePage).toHaveBeenCalledWith({
+        limit: 20,
+        cursor: undefined,
+        query: undefined,
+        signal: expect.any(AbortSignal),
+        expiringBefore: undefined,
+      }),
+    );
   });
 
   it("keeps the CRL workspace usable when an older server returns null shards", async () => {

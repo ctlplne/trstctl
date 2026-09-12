@@ -62,6 +62,29 @@ breakdown, and the soonest-expiring certificates. It counts trstctl-issued rows,
 manually imported rows, and discovery-fed rows together, so a certificate issued by a
 different CA but found on a load balancer still shows up in the same health posture.
 
+### Find a certificate across the inventory
+
+Open **Certificates** and use **Search certificates** to find a known credential
+without loading unrelated pages first. Search checks the authenticated tenant's
+subject, SANs, issuer, serial, fingerprint, lifecycle status, and deployment location.
+The list stays paginated; its loaded count is not a total search-result count.
+
+The console waits briefly after typing, cancels obsolete reads, and keeps the search
+field available while a request runs or returns no matches. Changing the search,
+page size, or expiry window starts a new page sequence. The issuer, profile, team,
+and environment controls still filter the matching rows loaded in the console.
+
+API clients use `GET /api/v1/certificates?q=<text>&limit=20`. Matching is a
+case-insensitive literal substring; a complete certificate UUID also matches.
+Percent signs and underscores are literal characters, not wildcards. The trimmed
+query must be valid UTF-8, contain no NUL, and have at most 256 characters; invalid
+queries return 400. Omit `q` or pass whitespace to use the ordinary inventory query.
+For subsequent pages, send `next_cursor` as `cursor` with the same `q` and
+`expiring_before`. The existing page-size limit is 1–100. Search runs before both
+pagination and the expiry filter's result limit; it does not retrieve private keys,
+issuance responses, or custody receipts. Broad substring searches can scan the
+tenant's metadata; this endpoint does not establish a large-estate latency guarantee.
+
 ### Network discovery (F2) — scanning from an enrolled [network relay](../glossary.md#network-relay)
 
 Network discovery connects from an explicitly enrolled agent with the `network`

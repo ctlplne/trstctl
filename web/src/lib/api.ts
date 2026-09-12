@@ -1476,7 +1476,7 @@ export interface Api {
   activeActiveIssuance(): Promise<ActiveActiveIssuancePlan>;
   provisionManagedTenant(input: ManagedTenantProvisionRequest): Promise<ManagedTenant>;
   certificates(): Promise<Certificate[]>;
-  certificatePage(options?: { limit?: number; cursor?: string; expiringBefore?: string }): Promise<CertificatePage>;
+  certificatePage(options?: { limit?: number; cursor?: string; expiringBefore?: string; query?: string; signal?: AbortSignal }): Promise<CertificatePage>;
   certificateHealth(signal?: AbortSignal): Promise<CertificateHealthDashboard>;
   crlDistributions(): Promise<CRLDistributionList>;
   revocationCaches(): Promise<RevocationCachePosture>;
@@ -2021,8 +2021,11 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     if (options?.limit != null) qs.set("limit", String(options.limit));
     if (options?.cursor) qs.set("cursor", options.cursor);
     if (options?.expiringBefore) qs.set("expiring_before", options.expiringBefore);
+    if (options?.query) qs.set("q", options.query);
     const suffix = qs.toString();
-    return req<CertificatePage>(`/api/v1/certificates${suffix ? `?${suffix}` : ""}`);
+    return req<CertificatePage>(`/api/v1/certificates${suffix ? `?${suffix}` : ""}`, {
+      signal: options?.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000),
+    });
   },
   certificates: () => api.certificatePage().then((r) => r.items ?? []),
   certificateHealth: (signal) =>
