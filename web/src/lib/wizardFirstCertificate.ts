@@ -43,6 +43,12 @@ export type WizardCertificateAttempt = Readonly<{
   replacesRejectedIssueKey?: string;
 }>;
 export type WizardPublicResult = IdentityIssuanceResult;
+export class WizardIssuanceStopped extends Error {
+  constructor(readonly state: "failed" | "unavailable") {
+    super(`issuance_${state}`);
+    this.name = "WizardIssuanceStopped";
+  }
+}
 export type WizardRecordedCertificate = {
   result: WizardPublicResult & { certificate: NonNullable<WizardPublicResult["certificate"]>; certificate_pem: string };
   identity: Identity;
@@ -295,8 +301,23 @@ export function publicCertificateBlocks(pem: string): string[] {
 }
 export function checkWizardPublicResult(raw: WizardPublicResult, attempt: WizardCertificateAttempt): WizardPublicResult {
   if (!raw || raw.identity_id !== attempt.issuance?.identityId || raw.request_key !== attempt.issuance?.issueKey) throw new Error("result_mismatch");
-  if (raw.state === "pending") {
+  const delivery = raw.delivery;
+  if (
+    delivery !== undefined &&
+    (!delivery ||
+      !["pending", "processing", "delivered", "failed"].includes(delivery.status) ||
+      !Number.isSafeInteger(delivery.attempts) ||
+      delivery.attempts < 0)
+  )
+    throw new Error("public_result_invalid");
+  if (raw.state === "pending" || raw.state === "failed" || raw.state === "unavailable") {
     if (raw.certificate !== undefined || raw.certificate_pem !== undefined) throw new Error("public_result_invalid");
+    if (
+      (raw.state === "failed" && delivery?.status !== "failed") ||
+      (raw.state === "pending" && delivery?.status === "failed") ||
+      (raw.state === "unavailable" && delivery !== undefined)
+    )
+      throw new Error("public_result_invalid");
     return raw;
   }
   if (raw.state !== "issued" || !raw.certificate || typeof raw.certificate_pem !== "string") throw new Error("public_result_invalid");
@@ -331,6 +352,7 @@ export async function readWizardCertificateResult(
     );
     await op.authenticate();
     if (result.state === "pending") return null;
+    if (result.state === "failed" || result.state === "unavailable") throw new WizardIssuanceStopped(result.state);
     const identity = await op.read<Identity>(path);
     await op.authenticate();
     if (identity.id !== result.identity_id || identity.tenant_id !== attempt.principal.tenantId || identity.kind !== "x509_certificate")

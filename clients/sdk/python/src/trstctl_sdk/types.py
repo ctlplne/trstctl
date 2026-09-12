@@ -5205,6 +5205,7 @@ IdentityIssuanceResult = TypedDict(
     {
         'certificate': dict[str, Any],
         'certificate_pem': str,
+        'delivery': dict[str, Any],
         'identity_id': str,
         'request_key': str,
         'state': str,

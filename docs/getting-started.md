@@ -446,12 +446,23 @@ export TRSTCTL_TOKEN="$TRSTCTL_ISSUER_TOKEN"
 # Acceptance is asynchronous. Read the result for this exact request.
 "$TRSTCTL_CLI" identities issuance-result "$ident" --request_key "$request_key" \
   > "$certdir/issuance-result.json"
-jq '{identity_id,request_key,state,certificate}' "$certdir/issuance-result.json"
+jq '{identity_id,request_key,state,delivery,certificate}' "$certdir/issuance-result.json"
 )
 ```
 
-If the result says `pending`, repeat the read below until it says `issued`.
-Keep the identity and request key; do not create another identity to poll:
+If the result says `pending`, repeat the read below to check progress.
+`failed` means the original delivery exhausted its automatic retries; it does
+not prove the CA never signed a certificate. `unavailable` means neither a
+delivery record nor its exact public certificate is retained. In either case,
+preserve the identity, request key, and original CSR, and have an administrator
+reconcile the original request with its issuer before recovery. A new request
+could mint a duplicate. Reading this endpoint never retries delivery.
+
+`delivery.status` and `delivery.attempts` describe the original CA command,
+when retained. An exact recorded public certificate takes precedence and returns
+`issued` even if later delivery bookkeeping failed. That result alone does not
+prove deployment to a listener. Keep the identity and request key; do not create
+another identity to poll:
 
 ```bash
 TRSTCTL_TOKEN="$TRSTCTL_ISSUER_TOKEN" "${TRSTCTL_CLI:-./bin/trstctl-cli}" \
@@ -459,7 +470,7 @@ TRSTCTL_TOKEN="$TRSTCTL_ISSUER_TOKEN" "${TRSTCTL_CLI:-./bin/trstctl-cli}" \
   identities issuance-result "$(cat trstctl-first-certificate/identity-id)" \
   --request_key "$(cat trstctl-first-certificate/issuance-request-key)" \
   > trstctl-first-certificate/issuance-result.json
-jq '{identity_id,request_key,state,certificate}' trstctl-first-certificate/issuance-result.json
+jq '{identity_id,request_key,state,delivery,certificate}' trstctl-first-certificate/issuance-result.json
 ```
 
 Once `issued`, save the returned public chain and inspect its first certificate:

@@ -77,6 +77,41 @@ describe("first-leaf wizard result admission", () => {
     expect(onRecorded.mock.calls.filter(([record]) => record !== null)).toEqual([]);
     expect(screen.queryByRole("button", { name: "Download leaf certificate" })).not.toBeInTheDocument();
   });
+  it.each(["failed", "unavailable"] as const)("explains %s without a new issuance, and rereads the original key", async (state) => {
+    overrideResults(
+      (body) =>
+        new Response(
+          JSON.stringify({
+            identity_id: body.identity_id,
+            request_key: body.request_key,
+            state,
+            ...(state === "failed" ? { delivery: { status: "failed", attempts: 10 } } : {}),
+          }),
+          { status: 200 },
+        ),
+    );
+    mount();
+    const user = await fill();
+    const expected = state === "failed" ? /exhausted its retries/ : /original delivery record and public certificate are unavailable/;
+    expect(await screen.findByRole("alert")).toHaveTextContent(expected);
+    expect(screen.queryByRole("button", { name: "Download leaf certificate" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry the same issuance attempt" })).not.toBeInTheDocument();
+    const reads = () => vi.mocked(fetch).mock.calls.filter(([path]) => String(path).includes("issuance-result?"));
+    const original = String(reads()[0][0]);
+    const before = reads().length;
+    if (state === "failed") {
+      // Wait beyond the actual four-second live cadence: terminal evidence
+      // must stop polling instead of repeatedly reading an exhausted job.
+      await new Promise((resolve) => setTimeout(resolve, 4250));
+      expect(reads()).toHaveLength(before);
+    }
+    await user.click(screen.getByRole("button", { name: "Read the same result again" }));
+    await waitFor(() => expect(reads().length).toBeGreaterThan(before));
+    expect(await screen.findByRole("alert")).toHaveTextContent(expected);
+    expect(reads().every(([path]) => String(path) === original)).toBe(true);
+    expect(callbacks.transitionIdentity).toHaveBeenCalledTimes(1);
+    expect(onRecorded.mock.calls.filter(([record]) => record !== null)).toEqual([]);
+  });
   it("locks edits and reuses the same CSR/transition keys after a lost response", async () => {
     callbacks.transitionIdentity.mockRejectedValueOnce(new TypeError("lost response"));
     mount();

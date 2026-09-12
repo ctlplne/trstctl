@@ -1597,9 +1597,14 @@ func componentSchemas() map[string]*Schema {
 	}, "id", "tenant_id", "subject", "fingerprint", "status")
 	identityIssuanceResult := object(map[string]*Schema{
 		"identity_id": uuid(), "request_key": str(),
-		"state":       {Type: "string", Enum: []string{"pending", "issued"}},
+		"state":       {Type: "string", Enum: []string{"pending", "issued", "failed", "unavailable"}},
 		"certificate": ref("Certificate"), "certificate_pem": str(),
+		"delivery": object(map[string]*Schema{
+			"status":   {Type: "string", Enum: []string{"pending", "processing", "delivered", "failed"}},
+			"attempts": {Type: "integer"},
+		}, "status", "attempts"),
 	}, "identity_id", "request_key", "state")
+	identityIssuanceResult.Description = "Exact accepted issuance and its recorded public certificate. Failed means the original receiver command exhausted delivery and will not retry automatically; it does not prove no upstream certificate was signed. Unavailable means neither a recorded leaf nor its delivery bookkeeping is retained. Pending also covers delivery handed to an asynchronous host agent. A recorded certificate takes precedence over receiver status; it is not proof of deployment or listener verification. Reads never retry issuance."
 	identityDeploymentEvidence := object(map[string]*Schema{
 		"identity_id": uuid(), "read_at": timestamp(),
 		"receipt": ref("ConnectorDelivery"), "certificate": ref("Certificate"),

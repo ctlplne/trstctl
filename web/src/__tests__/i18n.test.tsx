@@ -1543,8 +1543,11 @@ describe("i18n boundary", () => {
       // F041/F042: distinguish the lease deadline and queued provider removal
       // from confirmed completion; exact original renewal limit and failed reads.
       // Machine-authored es/de — HUMAN TRANSLATION REVIEW required before release.
-      "es-ES": "564a190b813b48663b262e9f076eb3a0e2978cc6c3b697a7a44cf4b20bdf7ae8",
-      "de-DE": "1803e4d4b2701cb3fe1b4db25f13a719a09a90a1049e0c29323821ab2d370343",
+      // First-issuance status: exhausted retries and missing records retain the
+      // original key and require issuer reconciliation. Machine-authored es/de;
+      // FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "39c0cea12e2fc56a44d87eda15263f3a46a3173669858817a4c54e01adb26f3a",
+      "de-DE": "95300b38c17bbc48357d3f198c2cd63f34675abaa8a4c1f2afd467bbbe6e4dec",
     });
   });
 

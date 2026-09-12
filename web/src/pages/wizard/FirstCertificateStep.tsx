@@ -19,6 +19,7 @@ import {
   readWizardCertificateResult,
   downloadWizardPublicCertificate,
   wizardFailureKind,
+  WizardIssuanceStopped,
   WIZARD_POLL_MS,
   PUBLIC_CSR_LIMIT,
   type WizardCertificateAttempt,
@@ -91,6 +92,11 @@ export function FirstCertificateStep({ onRecorded }: { onRecorded: (record: Wiza
     },
     { retry: false, enabled: shouldRead, live: shouldRead ? { intervalMs: 4000 } : undefined },
   );
+  const stopped = result.errorValue instanceof WizardIssuanceStopped ? result.errorValue.state : null;
+
+  useEffect(() => {
+    if (stopped && !result.fetching) setPaused(true);
+  }, [stopped, result.fetching]);
 
   useEffect(() => {
     if (!readUntil || paused) return;
@@ -220,7 +226,7 @@ export function FirstCertificateStep({ onRecorded }: { onRecorded: (record: Wiza
         <div className="grid justify-items-start gap-2">
           <p className="text-sm">{t("wizard.firstLeaf.retained")}</p>
           {attempt.issuance && <CredentialChip value={attempt.issuance.issueKey} label={t("wizard.firstLeaf.requestKey")} />}
-          {attempt.issuance?.phase !== "accepted" && !correcting && (
+          {attempt.issuance?.phase !== "accepted" && !correcting && !stopped && (
             <Button type="button" onClick={() => void submit()} disabled={busy}>
               {t("wizard.firstLeaf.retry")}
             </Button>
@@ -244,7 +250,7 @@ export function FirstCertificateStep({ onRecorded }: { onRecorded: (record: Wiza
         </div>
       )}
       {busy && <p role="status">{t("wizard.firstLeaf.submitting")}</p>}
-      {failure && !record && (
+      {failure && !record && !stopped && (
         <p role="alert">
           {t(failure === "approval" ? "wizard.firstLeaf.approval" : failure === "refused" ? "wizard.firstLeaf.refused" : "wizard.firstLeaf.uncertain")}
         </p>
@@ -252,7 +258,19 @@ export function FirstCertificateStep({ onRecorded }: { onRecorded: (record: Wiza
       {failure === "approval" && !record && <Link to="/approvals">{t("wizard.firstLeaf.approvals")}</Link>}
       {attempt?.transitionDispatched && !attempt.csrRejection && !busy && !record && (
         <div className="grid justify-items-start gap-2">
-          <p role="status">{t(result.error ? "wizard.firstLeaf.readFailed" : paused ? "wizard.firstLeaf.paused" : "wizard.firstLeaf.pending")}</p>
+          <p role={stopped ? "alert" : "status"}>
+            {t(
+              stopped === "failed"
+                ? "wizard.firstLeaf.deliveryFailed"
+                : stopped === "unavailable"
+                  ? "wizard.firstLeaf.unavailable"
+                  : result.error
+                    ? "wizard.firstLeaf.readFailed"
+                    : paused
+                      ? "wizard.firstLeaf.paused"
+                      : "wizard.firstLeaf.pending",
+            )}
+          </p>
           <Button type="button" variant="outline" onClick={readAgain} disabled={result.fetching}>
             {t("wizard.firstLeaf.refresh")}
           </Button>

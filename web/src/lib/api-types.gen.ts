@@ -3761,9 +3761,10 @@ export interface IdentityDeploymentEvidence {
 export interface IdentityIssuanceResult {
   certificate?: Certificate;
   certificate_pem?: string;
+  delivery?: { attempts: number; status: "pending" | "processing" | "delivered" | "failed" };
   identity_id: string;
   request_key: string;
-  state: "pending" | "issued";
+  state: "pending" | "issued" | "failed" | "unavailable";
 }
 
 export interface IdentityList {

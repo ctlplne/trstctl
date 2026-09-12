@@ -4,6 +4,8 @@ package store
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -11,15 +13,24 @@ import (
 )
 
 // IdentityIssuanceResult is a read of the exact accepted transition and its
-// asynchronous certificate. Nil Certificate means pending, never completed.
+// asynchronous certificate. Missing public material is not proof that its
+// receiver command is still pending, or that the CA never signed anything.
 type IdentityIssuanceResult struct {
 	IdentityID  string
 	RequestKey  string
 	Certificate *Certificate
+	Delivery    *IdentityIssuanceDelivery
+}
+
+// IdentityIssuanceDelivery exposes only safe bookkeeping from the exact
+// accepted command. Receiver payloads and diagnostics remain private.
+type IdentityIssuanceDelivery struct {
+	Status   string
+	Attempts int
 }
 
 // GetIdentityIssuanceResult never signs, drains work or replays the global log.
-// Both bounded reads use the same tenant/RLS transaction. A certificate key is
+// The bounded reads use the same tenant/RLS transaction. A certificate key is
 // derived only after the identity's own immutable transition proves that key.
 func (s *Store) GetIdentityIssuanceResult(ctx context.Context, tenantID, identityID, requestKey string) (IdentityIssuanceResult, error) {
 	requestKey = strings.TrimSpace(requestKey)
@@ -56,6 +67,32 @@ func (s *Store) GetIdentityIssuanceResult(ctx context.Context, tenantID, identit
 		if count != 1 {
 			return ErrIdempotencyConflict
 		}
+		var delivery IdentityIssuanceDelivery
+		var destination string
+		var payload []byte
+		err = tx.QueryRow(ctx, `SELECT status,attempts,destination,payload
+			FROM outbox WHERE tenant_id=$1 AND idempotency_key=$2`,
+			tenantID, "transition:"+requestKey).Scan(&delivery.Status, &delivery.Attempts, &destination, &payload)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		if err == nil {
+			var command struct {
+				IdentityID string `json:"identity_id"`
+				To         string `json:"to"`
+			}
+			if json.Unmarshal(payload, &command) != nil || destination != "ca.issue" || command.IdentityID != identityID || command.To != "issued" || delivery.Attempts < 0 {
+				return ErrIdempotencyConflict
+			}
+			switch delivery.Status {
+			case "pending", "processing", "delivered", "failed":
+			default:
+				return fmt.Errorf("store: unknown issuance delivery state")
+			}
+			result.Delivery = &delivery
+		}
+		// Read the certificate after delivery bookkeeping. A receiver that
+		// records its public result before failing must still expose that leaf.
 		rows, err = tx.Query(ctx, `SELECT `+certificateColumns+` FROM certificates
 			WHERE tenant_id = $1 AND issuance_idempotency_key = $2 ORDER BY id LIMIT 2`,
 			tenantID, "issue:transition:"+requestKey)

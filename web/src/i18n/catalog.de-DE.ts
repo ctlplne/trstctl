@@ -66,6 +66,11 @@ const deDECatalog = {
   "wizard.firstLeaf.readFailed":
     "Das genaue Ergebnis konnte nicht bestätigt werden. Eine fehlende, verbotene oder widersprüchliche Antwort ist kein ausstehendes oder fertiges Zertifikat. Prüfen Sie Berechtigungen und Serverzustand, dann aktualisieren Sie.",
   "wizard.firstLeaf.refresh": "Dasselbe Ergebnis erneut lesen",
+  // Machine-authored: human translation review required before release.
+  "wizard.firstLeaf.deliveryFailed":
+    "Die Zertifikatsbereitstellung hat alle Wiederholungsversuche ausgeschöpft und wird nicht automatisch wiederholt. Bewahren Sie diesen Anfrageschlüssel auf. Bitten Sie einen Administrator, die ursprüngliche Anfrage vor der Wiederherstellung mit dem Aussteller abzugleichen; dieser könnte bereits ein Zertifikat signiert haben.",
+  "wizard.firstLeaf.unavailable":
+    "Der ursprüngliche Bereitstellungsdatensatz und das öffentliche Zertifikat sind nicht verfügbar. Bewahren Sie diesen Anfrageschlüssel auf und bitten Sie einen Administrator, die Anfrage vor der Wiederherstellung abzugleichen. Eine neue Anfrage könnte ein doppeltes Zertifikat ausstellen.",
   "wizard.firstLeaf.recorded": "Das genaue öffentliche Zertifikatsergebnis ist gespeichert und kann heruntergeladen werden.",
   "wizard.firstLeaf.authority": "Im Zertifikat verzeichneter Aussteller: {issuer}",
   "wizard.firstLeaf.unknownAuthority": "Im Zertifikatsergebnis nicht angegeben",

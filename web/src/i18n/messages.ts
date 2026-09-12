@@ -130,6 +130,16 @@ export const messages = {
       "Result polling paused after four minutes. This does not mean the issuance failed. Refresh this same result without submitting another mutation.",
     description: "First-certificate wizard: paused",
   },
+  "wizard.firstLeaf.deliveryFailed": {
+    defaultMessage:
+      "Certificate delivery exhausted its retries and will not retry automatically. Keep this request key. Ask an administrator to reconcile the original request with its issuer before recovery; the issuer may already have signed a certificate.",
+    description: "First-certificate wizard: confirmed terminal delivery, with uncertain issuer outcome",
+  },
+  "wizard.firstLeaf.unavailable": {
+    defaultMessage:
+      "The original delivery record and public certificate are unavailable. Keep this request key and ask an administrator to reconcile the request before recovery. Starting a new request could issue a duplicate certificate.",
+    description: "First-certificate wizard: missing retained delivery evidence",
+  },
   "wizard.firstLeaf.readFailed": {
     defaultMessage:
       "The exact result could not be confirmed. A missing, forbidden or inconsistent response is not a pending or completed certificate. Check permissions and server state, then refresh.",

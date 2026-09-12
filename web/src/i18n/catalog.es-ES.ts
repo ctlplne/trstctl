@@ -62,6 +62,11 @@ const esESCatalog = {
   "wizard.firstLeaf.readFailed":
     "No se pudo confirmar el resultado exacto. Una respuesta ausente, prohibida o incoherente no es un certificado pendiente ni completado. Revise permisos y estado del servidor y actualice.",
   "wizard.firstLeaf.refresh": "Volver a leer el mismo resultado",
+  // Machine-authored: human translation review required before release.
+  "wizard.firstLeaf.deliveryFailed":
+    "La entrega del certificado agotó sus reintentos y no se reintentará automáticamente. Conserve esta clave de solicitud. Pida a un administrador que compruebe la solicitud original con su emisor antes de recuperarla; el emisor puede haber firmado ya un certificado.",
+  "wizard.firstLeaf.unavailable":
+    "El registro de entrega original y el certificado público no están disponibles. Conserve esta clave de solicitud y pida a un administrador que compruebe la solicitud antes de recuperarla. Una nueva solicitud podría emitir un certificado duplicado.",
   "wizard.firstLeaf.recorded": "El resultado público exacto del certificado está registrado y disponible para descargar.",
   "wizard.firstLeaf.authority": "Emisor registrado en el certificado: {issuer}",
   "wizard.firstLeaf.unknownAuthority": "No informado por el resultado del certificado",

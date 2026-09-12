@@ -14,6 +14,7 @@ import {
   submitWizardCertificateAttempt,
   wizardCertificateForm,
   wizardFailureKind,
+  WizardIssuanceStopped,
   type WizardCertificateAttempt,
   type WizardPublicResult,
 } from "@/lib/wizardFirstCertificate";
@@ -125,6 +126,26 @@ afterEach(() => {
 });
 
 describe("first-certificate client custody and exact attempt", () => {
+  it.each(["failed", "unavailable"] as const)("stops an exact %s result without fetching an identity or mutating", async (state) => {
+    await submitWizardCertificateAttempt(saved, new AbortController().signal, keep);
+    const value: WizardPublicResult = { ...result("pending"), state, ...(state === "failed" ? { delivery: { status: "failed", attempts: 10 } } : {}) };
+    installRead(value);
+    calls.length = 0;
+    await expect(readWizardCertificateResult(saved, new AbortController().signal)).rejects.toEqual(new WizardIssuanceStopped(state));
+    expect(calls.every((call) => call.path === "/auth/me" && call.method === "GET")).toBe(true);
+    expect(() => checkWizardPublicResult({ ...value, request_key: "another-request" }, saved)).toThrow("result_mismatch");
+    expect(() => checkWizardPublicResult({ ...value, certificate_pem: pem }, saved)).toThrow("public_result_invalid");
+  });
+  it("rejects contradictory terminal metadata while retaining a recorded public result after delivery failure", async () => {
+    await submitWizardCertificateAttempt(saved, new AbortController().signal, keep);
+    const failedDelivery = { status: "failed" as const, attempts: 10 };
+    expect(() => checkWizardPublicResult({ ...result("pending"), delivery: failedDelivery }, saved)).toThrow("public_result_invalid");
+    expect(() => checkWizardPublicResult({ ...result("pending"), state: "failed" }, saved)).toThrow("public_result_invalid");
+    expect(() => checkWizardPublicResult({ ...result("pending"), state: "unavailable", delivery: failedDelivery }, saved)).toThrow("public_result_invalid");
+    expect(() => checkWizardPublicResult({ ...result(), delivery: { ...failedDelivery, attempts: -1 } }, saved)).toThrow("public_result_invalid");
+    const recorded = { ...result(), delivery: failedDelivery };
+    expect(checkWizardPublicResult(recorded, saved)).toEqual(recorded);
+  });
   it.each(["/api/v1/owners", "/api/v1/owners/owner-a/attest", "/api/v1/identities", "/api/v1/identities/identity-a/transitions"])(
     "retries a lost %s response with exactly its original body and key",
     async (path) => {

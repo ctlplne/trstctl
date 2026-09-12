@@ -15466,12 +15466,34 @@
         "type": "object"
       },
       "IdentityIssuanceResult": {
+        "description": "Exact accepted issuance and its recorded public certificate. Failed means the original receiver command exhausted delivery and will not retry automatically; it does not prove no upstream certificate was signed. Unavailable means neither a recorded leaf nor its delivery bookkeeping is retained. Pending also covers delivery handed to an asynchronous host agent. A recorded certificate takes precedence over receiver status; it is not proof of deployment or listener verification. Reads never retry issuance.",
         "properties": {
           "certificate": {
             "$ref": "#/components/schemas/Certificate"
           },
           "certificate_pem": {
             "type": "string"
+          },
+          "delivery": {
+            "properties": {
+              "attempts": {
+                "type": "integer"
+              },
+              "status": {
+                "enum": [
+                  "pending",
+                  "processing",
+                  "delivered",
+                  "failed"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "status",
+              "attempts"
+            ],
+            "type": "object"
           },
           "identity_id": {
             "format": "uuid",
@@ -15483,7 +15505,9 @@
           "state": {
             "enum": [
               "pending",
-              "issued"
+              "issued",
+              "failed",
+              "unavailable"
             ],
             "type": "string"
           }

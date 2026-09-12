@@ -12,11 +12,17 @@ import (
 )
 
 type identityIssuanceResultResponse struct {
-	IdentityID     string               `json:"identity_id"`
-	RequestKey     string               `json:"request_key"`
-	State          string               `json:"state"`
-	Certificate    *certificateResponse `json:"certificate,omitempty"`
-	CertificatePEM string               `json:"certificate_pem,omitempty"` // Public certificates only.
+	IdentityID     string                            `json:"identity_id"`
+	RequestKey     string                            `json:"request_key"`
+	State          string                            `json:"state"`
+	Certificate    *certificateResponse              `json:"certificate,omitempty"`
+	CertificatePEM string                            `json:"certificate_pem,omitempty"` // Public certificates only.
+	Delivery       *identityIssuanceDeliveryResponse `json:"delivery,omitempty"`
+}
+
+type identityIssuanceDeliveryResponse struct {
+	Status   string `json:"status"`
+	Attempts int    `json:"attempts"`
 }
 
 func (a *API) getIdentityIssuanceResult(w http.ResponseWriter, r *http.Request) {
@@ -39,7 +45,14 @@ func (a *API) getIdentityIssuanceResult(w http.ResponseWriter, r *http.Request) 
 		a.writeError(w, err)
 		return
 	}
-	out := identityIssuanceResultResponse{IdentityID: result.IdentityID, RequestKey: result.RequestKey, State: "pending"}
+	out := identityIssuanceResultResponse{IdentityID: result.IdentityID, RequestKey: result.RequestKey, State: "unavailable"}
+	if delivery := result.Delivery; delivery != nil {
+		out.Delivery = &identityIssuanceDeliveryResponse{Status: delivery.Status, Attempts: delivery.Attempts}
+		out.State = "pending"
+		if delivery.Status == "failed" {
+			out.State = "failed"
+		}
+	}
 	if cert := result.Certificate; cert != nil {
 		if cert.IssuanceEventID == "" || len(cert.CertificateDER) == 0 || len(cert.CertificatePEM) == 0 {
 			a.writeError(w, errStatus(http.StatusConflict, "the exact issuance has no retained public certificate result"))
