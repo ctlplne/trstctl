@@ -262,6 +262,7 @@ import type {
   GraphReachable,
   GraphResponse,
   Identity as GenIdentity,
+  IdentityList,
   IdentityDeploymentEvidence,
   IdentityTransitionPreview as GenIdentityTransitionPreview,
   IdentityConnectorTargetRequest,
@@ -1555,6 +1556,7 @@ export interface Api {
   issueExternalCA(id: string, input: ExternalCAIssueRequest): Promise<ExternalCAIssuedCertificate>;
   caDiscoveryInventory(): Promise<CADiscovery>;
   identities(): Promise<Identity[]>;
+  identityPage(options?: { limit?: number; cursor?: string }): Promise<IdentityList>;
   /** AUD-77: real pending intents only; lifecycle inventory is not an approval queue. */
   approvalRequests(): Promise<PendingApprovalRequest[]>;
   /** AUD-77: bind the vote to both the immutable request id and its intent digest. */
@@ -2080,6 +2082,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   issueExternalCA: (id, input) => mutate<ExternalCAIssuedCertificate>("POST", `/api/v1/external-cas/${encodeURIComponent(id)}/issue`, input),
   caDiscoveryInventory: () => req<CADiscovery>("/api/v1/ca/discovery"),
   identities: () => req<{ items: Identity[] }>("/api/v1/identities").then((r) => r.items ?? []),
+  identityPage: (options) => req<IdentityList>(`/api/v1/identities${pageQueryString(options)}`),
   approvalRequests: allPendingApprovalRequests,
   approveApprovalRequest: (id, intentDigest) =>
     mutate<ApprovalRequestDecision>("POST", `/api/v1/approval-requests/${encodeURIComponent(id)}/approvals`, { intent_digest: intentDigest }),

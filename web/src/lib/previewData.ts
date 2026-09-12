@@ -320,6 +320,7 @@ const previewReaders: Record<string, () => unknown> = {
     { id: "owner-platform", tenant_id: tenantID, kind: "team", name: "Core Platform", email: "platform@example.invalid" },
   ],
   identities: () => identities,
+  identityPage: () => ({ items: identities, next_cursor: "" }),
   nhiInventory: () => ({
     generated_at: generatedAt,
     items: inventoryItems,

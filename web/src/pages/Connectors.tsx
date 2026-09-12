@@ -49,6 +49,9 @@ export function Connectors() {
   const [relayPluginsLoadingMore, setRelayPluginsLoadingMore] = useState(false);
   const [targets, setTargets] = useState<DeploymentTarget[] | null>(null);
   const [identities, setIdentities] = useState<Identity[]>([]);
+  const [identitiesCursor, setIdentitiesCursor] = useState<string | undefined>();
+  const [identitiesLoadingMore, setIdentitiesLoadingMore] = useState(false);
+  const identitiesReadVersion = useRef(0);
   const [deliveries, setDeliveries] = useState<ConnectorDelivery[] | null>(null);
   // D2: observed endpoint identity. Loaded separately from the connector data
   // so a deployment without the verification surface still renders everything
@@ -125,17 +128,43 @@ export function Connectors() {
     setError(null);
   };
 
-  const loadDestinationEvidence = async () => {
+  const loadDestinationEvidence = async (identityID = selectedIdentity) => {
+    const version = ++identitiesReadVersion.current;
     setDestinationsLoading(true);
     setDestinationsError(null);
     try {
-      const loadedIdentities = await api.identities();
-      setIdentities(loadedIdentities ?? []);
-      setSelectedIdentity((current) => (loadedIdentities?.some((identity) => identity.id === current) ? current : ""));
+      const page = await api.identityPage({ limit: 20 });
+      const loadedIdentities = [...(page.items ?? [])];
+      // An action can select an identity outside page one. Refresh that exact
+      // record from the server instead of silently clearing the selection.
+      if (identityID && !loadedIdentities.some((identity) => identity.id === identityID)) {
+        loadedIdentities.push(await api.getIdentity(identityID));
+      }
+      if (version !== identitiesReadVersion.current) return;
+      setIdentities(loadedIdentities);
+      setIdentitiesCursor(page.next_cursor);
+      setSelectedIdentity((current) => (current === identityID && !loadedIdentities.some((identity) => identity.id === current) ? "" : current));
     } catch (err) {
-      setDestinationsError(err instanceof Error ? err.message : String(err));
+      if (version === identitiesReadVersion.current) setDestinationsError(err instanceof Error ? err.message : String(err));
     } finally {
-      setDestinationsLoading(false);
+      if (version === identitiesReadVersion.current) setDestinationsLoading(false);
+    }
+  };
+
+  const loadMoreIdentities = async () => {
+    if (!identitiesCursor || identitiesLoadingMore || destinationsLoading) return;
+    const version = identitiesReadVersion.current;
+    setIdentitiesLoadingMore(true);
+    setDestinationsError(null);
+    try {
+      const page = await api.identityPage({ limit: 20, cursor: identitiesCursor });
+      if (version !== identitiesReadVersion.current) return;
+      setIdentities((current) => [...new Map([...current, ...(page.items ?? [])].map((identity) => [identity.id, identity])).values()]);
+      setIdentitiesCursor(page.next_cursor);
+    } catch (err) {
+      if (version === identitiesReadVersion.current) setDestinationsError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIdentitiesLoadingMore(false);
     }
   };
 
@@ -162,9 +191,9 @@ export function Connectors() {
     setHealthLoading(false);
   };
 
-  const refresh = async () => {
+  const refresh = async (identityID = selectedIdentity) => {
     await loadSummary();
-    if (open.destinations) await loadDestinationEvidence();
+    if (open.destinations) await loadDestinationEvidence(identityID);
     if (open.health) await loadHealthEvidence();
   };
 
@@ -477,6 +506,22 @@ export function Connectors() {
                 </h2>
               </div>
               <p className="max-w-3xl text-sm text-muted-foreground">{t("connectors.design.bindHelp")}</p>
+              <div className="flex flex-wrap items-center gap-3" aria-live="polite">
+                <p className="text-sm text-muted-foreground">{t("connectors.identities.loaded", { count: String(identities.length) })}</p>
+                {identitiesCursor && (
+                  <>
+                    <p className="text-sm text-muted-foreground">{t("connectors.identities.moreAvailable")}</p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={identitiesLoadingMore || destinationsLoading || targetActionBusy !== null}
+                      onClick={() => void loadMoreIdentities()}
+                    >
+                      {t(identitiesLoadingMore ? "connectors.identities.loadingMore" : "connectors.identities.loadMore")}
+                    </Button>
+                  </>
+                )}
+              </div>
               <EndpointBindingWorkflow
                 targets={targets}
                 identities={identities}
@@ -485,7 +530,7 @@ export function Connectors() {
                   setSelectedTarget(binding.target.id);
                   setSelectedIdentity(binding.identity.id);
                   setReason(bindingReason);
-                  await refresh();
+                  await refresh(binding.identity.id);
                 }}
               />
 

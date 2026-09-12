@@ -11,6 +11,8 @@ const { apiMock } = vi.hoisted(() => ({
     connectorCatalog: vi.fn(),
     connectorTargets: vi.fn(),
     identities: vi.fn(),
+    identityPage: vi.fn(),
+    getIdentity: vi.fn(),
     owners: vi.fn(),
     externalCAs: vi.fn(),
     caAuthorities: vi.fn(),
@@ -48,6 +50,8 @@ function renderConnectors() {
 
 describe("connector deployment disclosure surface", () => {
   beforeEach(() => {
+    apiMock.identityPage.mockReset().mockImplementation(async () => ({ items: await apiMock.identities() }));
+    apiMock.getIdentity.mockReset().mockImplementation(async (id: string) => (await apiMock.identities()).find((item: { id: string }) => item.id === id));
     apiMock.connectorCatalog.mockReset().mockResolvedValue({
       items: [
         {
@@ -464,6 +468,7 @@ describe("connector deployment disclosure surface", () => {
     const defaultPreview = await apiMock.previewEndpointBinding.getMockImplementation()?.();
     apiMock.previewEndpointBinding.mockResolvedValue({ ...defaultPreview, replaced_identity: original, replaced_identity_version: 10 });
     const defaultBinding = await apiMock.createEndpointBinding.getMockImplementation()?.();
+    apiMock.getIdentity.mockResolvedValue(defaultBinding.identity);
     apiMock.createEndpointBinding.mockResolvedValue({ ...defaultBinding, replaced_identity_id: original.id });
     renderConnectors();
     await screen.findByRole("heading", { name: "Where credentials are installed" });
@@ -499,6 +504,8 @@ describe("connector deployment disclosure surface", () => {
   });
 
   it("creates and operates a served connector target", async () => {
+    const binding = await apiMock.createEndpointBinding.getMockImplementation()?.();
+    apiMock.getIdentity.mockResolvedValue(binding.identity);
     const user = userEvent.setup();
     renderConnectors();
 
@@ -594,6 +601,42 @@ describe("connector deployment disclosure surface", () => {
     await waitFor(() => expect(apiMock.rollbackConnectorTarget).toHaveBeenCalledWith("target-1", expect.objectContaining({ identity_id: "identity-1" })));
     expect(await screen.findByRole("heading", { name: "Restore queued — waiting for agent proof" })).toBeInTheDocument();
     expect(screen.getByText("the host agent will restore the encrypted predecessor bundle and verify the listener")).toBeInTheDocument();
+  });
+
+  it("loads later identity pages, retries a failed page, and retains the selected identity after restore", async () => {
+    const first = (await apiMock.identities())[0];
+    const late = { ...first, id: "late-page-identity", status: "deployed", attributes: { deployment_target_id: "target-1" } };
+    apiMock.identityPage
+      .mockResolvedValueOnce({ items: [first], next_cursor: "later-page" })
+      .mockRejectedValueOnce(new Error("next page temporarily unavailable"))
+      .mockResolvedValueOnce({ items: [first, late], next_cursor: "" })
+      .mockResolvedValue({ items: [first], next_cursor: "later-page" });
+    apiMock.getIdentity.mockResolvedValue(late);
+    const user = userEvent.setup();
+    renderConnectors();
+    await screen.findByRole("heading", { name: "Where credentials are installed" });
+    await user.click(screen.getByText("Destinations and safe actions", { selector: "summary" }));
+    await user.click(await screen.findByRole("button", { name: "Load more identities" }));
+    expect(await screen.findByText("next page temporarily unavailable")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Load more identities" }));
+    const select = screen.getByLabelText("Identity");
+    await waitFor(() => expect(within(select).getAllByRole("option")).toHaveLength(3));
+    expect(apiMock.identityPage).toHaveBeenNthCalledWith(3, { limit: 20, cursor: "later-page" });
+    expect(screen.queryByRole("button", { name: "Load more identities" })).not.toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Certificate action"), "replace");
+    await user.selectOptions(screen.getByLabelText("Destination"), "target-1");
+    expect(within(await screen.findByLabelText("Original identity")).getByRole("option", { name: new RegExp(late.id) })).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Target"), "target-1");
+    await user.selectOptions(select, late.id);
+    await user.type(screen.getByLabelText("Reason"), "restore the identity on a later page");
+    await user.click(screen.getByRole("button", { name: "Review restore" }));
+    const dialog = screen.getByRole("dialog", { name: "Review restore of the previous version" });
+    expect(dialog).toHaveTextContent(late.id);
+    await user.click(within(dialog).getByRole("button", { name: "Queue restore" }));
+    await waitFor(() => expect(apiMock.rollbackConnectorTarget).toHaveBeenCalledWith("target-1", expect.objectContaining({ identity_id: late.id })));
+    await waitFor(() => expect(apiMock.getIdentity).toHaveBeenCalledWith(late.id));
+    expect(screen.getByLabelText("Identity")).toHaveValue(late.id);
+    expect(within(screen.getByLabelText("Identity")).getAllByRole("option")).toHaveLength(3);
   });
 
   it("distinguishes same-name replacement identities before restoring the exact selection", async () => {

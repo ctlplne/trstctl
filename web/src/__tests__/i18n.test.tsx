@@ -1531,8 +1531,11 @@ describe("i18n boundary", () => {
       // Machine-authored es/de require HUMAN TRANSLATION REVIEW before release.
       // Exact certificate evidence: validity, historical receipt limits, missing
       // metadata and retry copy. Machine-authored es/de require HUMAN REVIEW.
-      "es-ES": "37351a2799304e0da78ef4df348bd432f796205a27aa0d698816f3d694010764",
-      "de-DE": "589a5c020941fb5c0493daa4e6032d34cbc56f8507a8de7ab084a4f5b46eada9",
+      // Connector identity pagination: loaded count, explicit partial scope,
+      // next-page action and loading state. Machine-authored es/de require
+      // HUMAN TRANSLATION REVIEW before release; no budgets changed.
+      "es-ES": "c268072b7cee9285fdd7dcb744e8ce703f2e9aa16eefa9db3523e0ceee97096a",
+      "de-DE": "39463f174e154118936a4934c4d7e8b5a1182c5cd7b1d62c8454b56f19146c35",
     });
   });
 

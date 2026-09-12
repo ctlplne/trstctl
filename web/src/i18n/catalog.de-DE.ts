@@ -4691,6 +4691,10 @@ const deDECatalog = {
   "connectors.design.destinationsLoading": "Identitäten für Zielaktionen werden geladen…",
   "connectors.design.destinationsError": "Zielaktionen konnten nicht geladen werden",
   "connectors.design.configuredDestinations": "Konfigurierte Ziele",
+  "connectors.identities.loaded": "{count} Identitäten für Registrierung und Wiederherstellung geladen.",
+  "connectors.identities.moreAvailable": "Weitere Identitäten sind auf der nächsten Seite verfügbar.",
+  "connectors.identities.loadMore": "Weitere Identitäten laden",
+  "connectors.identities.loadingMore": "Weitere Identitäten werden geladen…",
   "connectors.design.bindHelp":
     "Wählen Sie ein aktiviertes, unabhängig geprüftes Ziel. Diese geprüfte Aktion erstellt die Identität und stellt Ausstellung und Bereitstellung in die Warteschlange; sie erstellt oder aktiviert kein Ziel.",
   // QA-G221 machine-authored translations; human review required before release.

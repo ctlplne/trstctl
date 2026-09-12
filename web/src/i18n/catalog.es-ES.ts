@@ -4645,6 +4645,10 @@ const esESCatalog = {
   "connectors.design.destinationsLoading": "Cargando identidades para las acciones del destino…",
   "connectors.design.destinationsError": "No se pudieron cargar las acciones del destino",
   "connectors.design.configuredDestinations": "Destinos configurados",
+  "connectors.identities.loaded": "{count} identidades cargadas para el registro y la recuperación.",
+  "connectors.identities.moreAvailable": "Hay más identidades disponibles en la página siguiente.",
+  "connectors.identities.loadMore": "Cargar más identidades",
+  "connectors.identities.loadingMore": "Cargando más identidades…",
   "connectors.design.bindHelp":
     "Elija un destino habilitado y verificado de forma independiente. Esta acción revisada crea la identidad y pone en cola la emisión y el despliegue; no crea ni habilita un destino.",
   // QA-G221 machine-authored translations; human review required before release.

@@ -162,6 +162,13 @@ The closed sections reduce first-view noise only. They do not remove APIs, evide
 or state-changing controls, and they do not prefetch the larger expert datasets until
 an operator asks to inspect them.
 
+Enrollment, replacement, and recovery share paged identity choices. The console
+shows how many identities are loaded and offers **Load more identities** whenever
+the server returns another page. A failed page can be retried without discarding
+the existing choices. After an action, the selected identity is reloaded by its
+exact ID even when it falls outside the first page; its absence from that page
+does not clear the operator's selection.
+
 Tenant operators create non-secret deployment targets through the served API, CLI, or
 console. A target names the connector, the route name, and references to credentials
 or operator-managed endpoint config; it never stores passwords, tokens, private keys,

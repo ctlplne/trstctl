@@ -40,6 +40,12 @@ afterEach(() => {
 });
 
 describe("api error handling (SURFACE-007)", () => {
+  it("retains the identity next cursor and encodes the requested page", async () => {
+    mockFetch(200, JSON.stringify({ items: [], next_cursor: "next/identity=" }));
+    expect(await api.identityPage({ limit: 20, cursor: "previous/identity=" })).toEqual({ items: [], next_cursor: "next/identity=" });
+    expect(vi.mocked(fetch).mock.calls[0]?.[0]).toBe("/api/v1/identities?limit=20&cursor=previous%2Fidentity%3D");
+  });
+
   it("refuses a browser machine credential before fetch when /auth/me has not supplied a tenant", async () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);

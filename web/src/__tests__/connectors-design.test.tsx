@@ -10,6 +10,8 @@ const { apiMock } = vi.hoisted(() => ({
     connectorCatalog: vi.fn(),
     connectorTargets: vi.fn(),
     identities: vi.fn(),
+    identityPage: vi.fn(),
+    getIdentity: vi.fn(),
     connectorDeliveries: vi.fn(),
     outboxCircuits: vi.fn(),
     endpointVerifications: vi.fn(),
@@ -43,6 +45,8 @@ function renderConnectors() {
 describe("route 031 decision-first deployment destination design", () => {
   beforeEach(() => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
+    apiMock.identityPage.mockImplementation(async () => ({ items: await apiMock.identities() }));
+    apiMock.getIdentity.mockImplementation(async (id: string) => (await apiMock.identities()).find((item: { id: string }) => item.id === id));
     apiMock.connectorCatalog.mockResolvedValue({
       items: [
         {

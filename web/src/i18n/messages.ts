@@ -13594,6 +13594,16 @@ export const messages = {
   },
   "connectors.design.destinationsError": { defaultMessage: "Could not load destination actions", description: "Lazy destination-action error title." },
   "connectors.design.configuredDestinations": { defaultMessage: "Configured destinations", description: "Heading for saved deployment destinations." },
+  "connectors.identities.loaded": {
+    defaultMessage: "{count} identities loaded for enrollment and recovery.",
+    description: "Bounded identity choices shared by connector workflows.",
+  },
+  "connectors.identities.moreAvailable": {
+    defaultMessage: "More identities are available on the next page.",
+    description: "Never imply a partial identity list is complete.",
+  },
+  "connectors.identities.loadMore": { defaultMessage: "Load more identities", description: "Request the next bounded identity page." },
+  "connectors.identities.loadingMore": { defaultMessage: "Loading more identities…", description: "Next identity page is loading." },
   "connectors.design.bindHelp": {
     defaultMessage:
       "Choose an enabled, independently verified destination. This reviewed action creates the identity and queues issuance and deployment together; it does not create or enable a destination.",
