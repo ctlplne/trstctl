@@ -100,7 +100,7 @@ func dynamicSecretCommonRequirements() []dynamicSecretProviderRequirement {
 		dynamicSecretRequirement("tenant_id", "Tenant ID", "tenant", "Tenant that exclusively owns this provider attachment.", true),
 		dynamicSecretRequirement("id", "Provider ID", "identifier", "Stable name operators and automation use when requesting a lease.", true),
 		dynamicSecretRequirement("allowed_roles", "Allowed roles", "role_allowlist", "One or more operator-selectable roles; undeclared roles fail before provider contact.", true),
-		dynamicSecretRequirement("max_ttl", "Maximum TTL", "duration", "Hard lifetime ceiling for credentials issued by this attachment. Defaults to 24h.", false),
+		dynamicSecretRequirement("max_ttl", "Maximum TTL", "duration", "Original renewal ceiling for leases issued by this attachment. Expiry queues provider revocation; completion is tracked separately. Defaults to 24h.", false),
 		dynamicSecretRequirement("username_prefix", "Username prefix", "value", "Optional prefix for generated backend identities.", false),
 		dynamicSecretRequirement("allow_private_endpoint", "Private endpoint opt-in", "network_policy", "Must be explicit before private-network egress is allowed.", false),
 		dynamicSecretRequirement("private_egress_cidrs", "Private egress CIDRs", "network_policy", "Narrow allowlist used only with the private-endpoint opt-in.", false),

@@ -1540,8 +1540,11 @@ describe("i18n boundary", () => {
       // One-time sharing: authenticated recipient instructions, accurate expiry
       // and cancellation boundary, and same-request redemption recovery.
       // Machine-authored es/de require HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "94191b763be65379bfeceba0b997e27aca805c5f150ff3586b1464a25b66f3f3",
-      "de-DE": "705e2bbf81d470abec636743af4d8ae5f0afceb9dcf3512b43f4c11dd118909b",
+      // F041/F042: distinguish the lease deadline and queued provider removal
+      // from confirmed completion; exact original renewal limit and failed reads.
+      // Machine-authored es/de — HUMAN TRANSLATION REVIEW required before release.
+      "es-ES": "564a190b813b48663b262e9f076eb3a0e2978cc6c3b697a7a44cf4b20bdf7ae8",
+      "de-DE": "1803e4d4b2701cb3fe1b4db25f13a719a09a90a1049e0c29323821ab2d370343",
     });
   });
 

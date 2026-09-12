@@ -3971,9 +3971,13 @@ DynamicLease = TypedDict(
     {
         'credential': str,
         'expires_at': str,
+        'hard_expires_at': str,
         'id': str,
         'issued_at': str,
         'provider': str,
+        'revocation_completed_at': str,
+        'revocation_status': str,
+        'revoked_at': str,
         'role': str,
         'state': str,
     },

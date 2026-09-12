@@ -9582,10 +9582,24 @@ export interface components {
             credential?: string;
             /** Format: date-time */
             expires_at: string;
+            /**
+             * Format: date-time
+             * @description Original lease renewal ceiling. Not proof of native credential expiry.
+             */
+            hard_expires_at?: string;
             id: string;
             /** Format: date-time */
             issued_at: string;
             provider: string;
+            /** Format: date-time */
+            revocation_completed_at?: string;
+            /**
+             * @description Provider revocation progress. Revoked lease state alone acknowledges queuing, not provider removal.
+             * @enum {string}
+             */
+            revocation_status?: "none" | "pending" | "completed" | "failed";
+            /** Format: date-time */
+            revoked_at?: string;
             role: string;
             state: string;
         };

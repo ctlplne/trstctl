@@ -30,13 +30,17 @@ type dynamicLeaseRenewRequest struct {
 }
 
 type dynamicLeaseResponse struct {
-	ID         string          `json:"id"`
-	Provider   string          `json:"provider"`
-	Role       string          `json:"role"`
-	State      string          `json:"state"`
-	Credential secretJSONBytes `json:"credential,omitempty"`
-	IssuedAt   time.Time       `json:"issued_at"`
-	ExpiresAt  time.Time       `json:"expires_at"`
+	ID                    string          `json:"id"`
+	Provider              string          `json:"provider"`
+	Role                  string          `json:"role"`
+	State                 string          `json:"state"`
+	Credential            secretJSONBytes `json:"credential,omitempty"`
+	IssuedAt              time.Time       `json:"issued_at"`
+	ExpiresAt             time.Time       `json:"expires_at"`
+	HardExpiresAt         *time.Time      `json:"hard_expires_at,omitempty"`
+	RevocationStatus      string          `json:"revocation_status,omitempty"`
+	RevokedAt             *time.Time      `json:"revoked_at,omitempty"`
+	RevocationCompletedAt *time.Time      `json:"revocation_completed_at,omitempty"`
 }
 
 // ---- dynamic secret leases (dynsecret, F65) --------------------------------
@@ -356,9 +360,15 @@ func getDynamicLeaseContext(ctx context.Context, lifecycle dynsecret.Lifecycle, 
 }
 
 func toDynamicLeaseResponse(l dynsecret.Lease, credential []byte) dynamicLeaseResponse {
+	var hardExpiresAt *time.Time
+	if !l.HardExpiresAt.IsZero() {
+		hardExpiresAt = &l.HardExpiresAt
+	}
 	return dynamicLeaseResponse{
 		ID: l.ID, Provider: l.Provider, Role: l.Role, State: string(l.State),
 		Credential: secretJSONBytes(credential), IssuedAt: l.IssuedAt, ExpiresAt: l.ExpiresAt,
+		HardExpiresAt: hardExpiresAt, RevocationStatus: l.RevocationStatus,
+		RevokedAt: l.RevokedAt, RevocationCompletedAt: l.RevocationCompletedAt,
 	}
 }
 

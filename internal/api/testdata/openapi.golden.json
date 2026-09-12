@@ -11786,6 +11786,11 @@
             "format": "date-time",
             "type": "string"
           },
+          "hard_expires_at": {
+            "description": "Original lease renewal ceiling. Not proof of native credential expiry.",
+            "format": "date-time",
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },
@@ -11794,6 +11799,24 @@
             "type": "string"
           },
           "provider": {
+            "type": "string"
+          },
+          "revocation_completed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "revocation_status": {
+            "description": "Provider revocation progress. Revoked lease state alone acknowledges queuing, not provider removal.",
+            "enum": [
+              "none",
+              "pending",
+              "completed",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "revoked_at": {
+            "format": "date-time",
             "type": "string"
           },
           "role": {

@@ -84,6 +84,12 @@ type Lease struct {
 	State      LeaseState
 	IssuedAt   time.Time
 	ExpiresAt  time.Time
+	// HardExpiresAt is the original renewal ceiling, not proof of native
+	// credential expiry. Provider removal is confirmed separately below.
+	HardExpiresAt         time.Time
+	RevocationStatus      string
+	RevokedAt             *time.Time
+	RevocationCompletedAt *time.Time
 }
 
 // RevokeItem is a queued backend revocation.

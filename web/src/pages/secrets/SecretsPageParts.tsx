@@ -686,8 +686,16 @@ export function DynamicLeaseMetadata({ lease }: { lease: DynamicLease }) {
         <dd>{formatDate(lease.issued_at)}</dd>
       </div>
       <div>
-        <dt className="font-medium text-muted-foreground">{translateNow("source.expires.f6725f3af0")}</dt>
+        <dt className="font-medium text-muted-foreground">{translateNow("secrets.dynamic.revocationDeadline")}</dt>
         <dd>{formatDate(lease.expires_at)}</dd>
+      </div>
+      <div>
+        <dt className="font-medium text-muted-foreground">{translateNow("secrets.dynamic.renewalCeiling")}</dt>
+        <dd>{formatDate(lease.hard_expires_at)}</dd>
+      </div>
+      <div>
+        <dt className="font-medium text-muted-foreground">{translateNow("secrets.dynamic.providerRevokedAt")}</dt>
+        <dd>{formatDate(lease.revocation_completed_at)}</dd>
       </div>
     </dl>
   );
@@ -943,9 +951,18 @@ export function mergeMeta(current: SecretMeta[], incoming: SecretMeta[]): Secret
 }
 
 export function leaseMetadataOnly(lease: DynamicLease): DynamicLease {
-  const metadata = { ...lease };
-  delete metadata.credential;
-  return metadata;
+  return {
+    id: lease.id,
+    provider: lease.provider,
+    role: lease.role,
+    state: lease.state,
+    issued_at: lease.issued_at,
+    expires_at: lease.expires_at,
+    hard_expires_at: lease.hard_expires_at,
+    revocation_status: lease.revocation_status,
+    revoked_at: lease.revoked_at,
+    revocation_completed_at: lease.revocation_completed_at,
+  };
 }
 
 function formatDate(value?: string): string {

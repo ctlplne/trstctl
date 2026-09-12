@@ -3906,8 +3906,7 @@ export const messages = {
   },
   "secrets.dynamic.title": { defaultMessage: "Temporary backend credentials", description: "F65 dynamic-secret workflow heading." },
   "secrets.dynamic.answer": {
-    defaultMessage:
-      "Pick a connection already approved for this tenant. trstctl creates one short-lived login, shows it once, and reliably removes it when you revoke it or its lease ends.",
+    defaultMessage: "Choose an approved connection to create a temporary login. Its lease controls renewal and queues removal through the provider.",
     description: "ELI5 explanation of the dynamic-secret outcome.",
   },
   "secrets.dynamic.loading": {
@@ -3959,7 +3958,7 @@ export const messages = {
   "secrets.dynamic.chooseRole": { defaultMessage: "Choose an allowed role", description: "Empty dynamic provider role choice." },
   "secrets.dynamic.ttl": { defaultMessage: "Lifetime in seconds", description: "Dynamic lease TTL field label." },
   "secrets.dynamic.ttlHelp": {
-    defaultMessage: "The credential stops being valid at this time; the configured provider maximum still wins.",
+    defaultMessage: "When this lease ends, a worker queues provider revocation. Removal may finish later; check the receipt for confirmation.",
     description: "Dynamic lease TTL help.",
   },
   "secrets.dynamic.required": { defaultMessage: "This field is required.", description: "Dynamic lease form required error." },
@@ -4025,11 +4024,11 @@ export const messages = {
     description: "Dynamic lease renewal bound help.",
   },
   "secrets.dynamic.extendAvailable": {
-    defaultMessage: "{seconds}s remain before the provider's hard expiry.",
+    defaultMessage: "You can extend this lease by up to {seconds}s within its original renewal limit.",
     description: "Dynamic lease remaining renewal headroom.",
   },
   "secrets.dynamic.extendUnavailable": {
-    defaultMessage: "No renewal time remains. Revoke this lease and create a new credential.",
+    defaultMessage: "No confirmed renewal time is available. Revoke this lease and create a new credential.",
     description: "Dynamic lease hard-expiry recovery guidance.",
   },
   "secrets.dynamic.extendError": {
@@ -4041,6 +4040,30 @@ export const messages = {
   "secrets.dynamic.renewFailed": { defaultMessage: "Could not renew this lease", description: "Dynamic lease renewal error title." },
   "secrets.dynamic.revokeFailed": { defaultMessage: "Could not confirm lease revocation", description: "Dynamic lease revocation error title." },
   "secrets.dynamic.needsAttention": { defaultMessage: "Temporary credential needs attention", description: "Dynamic workflow error wrapper title." },
+  "secrets.dynamic.revocationDeadline": { defaultMessage: "Revocation deadline", description: "Dynamic lease revocation evidence." },
+  "secrets.dynamic.renewalCeiling": { defaultMessage: "Original renewal limit", description: "Dynamic lease revocation evidence." },
+  "secrets.dynamic.providerRevokedAt": { defaultMessage: "Provider removal confirmed at", description: "Dynamic lease revocation evidence." },
+  "secrets.dynamic.metadataMismatch": {
+    defaultMessage: "The response does not match this lease, provider, and role. Its status is unconfirmed.",
+    description: "Dynamic lease revocation evidence.",
+  },
+  "secrets.dynamic.statusUnavailable": { defaultMessage: "Current lease status unavailable", description: "Dynamic lease revocation evidence." },
+  "secrets.dynamic.providerRemoved": { defaultMessage: "Provider confirmed credential removal", description: "Dynamic lease revocation evidence." },
+  "secrets.dynamic.providerRevokeFailed": {
+    defaultMessage: "Provider revocation failed; access removal unconfirmed",
+    description: "Dynamic lease revocation evidence.",
+  },
+  "secrets.dynamic.providerRevokePending": { defaultMessage: "Revocation queued; provider removal pending", description: "Dynamic lease revocation evidence." },
+  "secrets.dynamic.providerRemovalUnconfirmed": {
+    defaultMessage: "Lease ended; provider removal unconfirmed",
+    description: "Dynamic lease revocation evidence.",
+  },
+  "secrets.dynamic.revocationTiming": {
+    defaultMessage:
+      "At the lease deadline, a worker queues revocation. Provider access may continue until removal completes. Confirm the same login is rejected by the provider.",
+    description: "Dynamic lease revocation evidence.",
+  },
+  "secrets.dynamic.refreshStatus": { defaultMessage: "Refresh lease status", description: "Dynamic lease revocation evidence." },
   "secrets.dynamic.startAgain": { defaultMessage: "Create another credential", description: "Reset completed dynamic lease workflow action." },
   "secrets.dynamic.cancel": { defaultMessage: "Clear this plan", description: "Reset unexecuted dynamic lease workflow action." },
   "secrets.pki.custodyLabel": {

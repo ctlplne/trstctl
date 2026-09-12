@@ -223,7 +223,14 @@ same-host-emulator exception limited to `localhost`, `127.0.0.0/8`, or `::1`.
   provider return `409` before a provider call. API clients may omit the fingerprint
   for backward compatibility.
 - `GET /api/v1/secrets/leases/{lease_id}` returns lease metadata only, never replaying
-  the credential after first issue.
+  the credential after first issue. `expires_at` is the lease deadline: the expiry
+  worker queues revocation on its next pass (normally every 30 seconds), and provider
+  access can continue during delivery or retries. `hard_expires_at` is the original
+  renewal ceiling, not proof of native credential expiry. `revocation_status` is
+  `none`, `pending`, `completed`, or `failed`; only `completed` with
+  `revocation_completed_at` confirms the provider removal operation. `revoked_at`
+  records when the control plane queued the request. Older immutable operation
+  receipts may omit these additional fields; GET returns current durable evidence.
 - `POST /api/v1/secrets/leases/{lease_id}/renew` extends a lease without returning the
   credential again.
 - `POST /api/v1/secrets/leases/{lease_id}/revoke` closes the lease and queues backend
@@ -235,8 +242,13 @@ and an allowlisted role; the old free-text provider/role form is gone. The first
 shows the selected backend's safe prerequisites and a disclosure containing all eight
 built-in recipes. Review must prove zero writes and zero calls before **Create reviewed
 credential** appears. The issued credential lives only in the reveal-once panel;
-dismissing it, navigating away, or revoking the lease removes the browser copy, while
-durable metadata remains available for renewal, revocation, and verification.
+dismissing it, navigating away, reaching the lease deadline, losing the metadata read,
+or revoking the lease removes the browser copy, while
+durable metadata remains available for renewal, revocation, and verification. The
+visible receipt refreshes every five seconds and on return to the tab. A revoke
+response acknowledges queuing; its idempotent replay retains that original result
+even after the provider finishes. Read current metadata and test the same login
+against the provider to confirm that access has ended.
 
 **PKI-as-a-secrets-engine** plugs certificate issuance into the same operator
 workspace. The recommended `csr_pem` mode accepts one self-signed PKCS#10 request,

@@ -5732,6 +5732,9 @@ func componentSchemas() map[string]*Schema {
 	dynamicLease := object(map[string]*Schema{
 		"id": str(), "provider": str(), "role": str(), "state": str(),
 		"credential": str(), "issued_at": timestamp(), "expires_at": timestamp(),
+		"hard_expires_at":   {Type: "string", Format: "date-time", Description: "Original lease renewal ceiling. Not proof of native credential expiry."},
+		"revocation_status": {Type: "string", Enum: []string{"none", "pending", "completed", "failed"}, Description: "Provider revocation progress. Revoked lease state alone acknowledges queuing, not provider removal."},
+		"revoked_at":        timestamp(), "revocation_completed_at": timestamp(),
 	}, "id", "provider", "role", "state", "issued_at", "expires_at")
 	transitKeyReq := object(map[string]*Schema{
 		"name": str(), "kind": str(),

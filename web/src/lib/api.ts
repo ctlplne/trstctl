@@ -1893,7 +1893,7 @@ export interface Api {
   dynamicSecretProviders(): Promise<DynamicSecretProviderCatalog>;
   previewDynamicLease(input: DynamicLeaseRequest): Promise<DynamicLeasePreview>;
   issueDynamicLease(input: DynamicLeaseRequest, idempotencyKey?: string): Promise<DynamicLease>;
-  getDynamicLease(leaseId: string): Promise<DynamicLease>;
+  getDynamicLease(leaseId: string, signal?: AbortSignal): Promise<DynamicLease>;
   renewDynamicLease(leaseId: string, input: DynamicLeaseRenewRequest): Promise<DynamicLease>;
   revokeDynamicLease(leaseId: string): Promise<DynamicLease>;
   previewEphemeralAPIKey(input: EphemeralAPIKeyRequest): Promise<EphemeralAPIKeyPreview>;
@@ -2487,7 +2487,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   dynamicSecretProviders: () => req<DynamicSecretProviderCatalog>("/api/v1/secrets/leases/providers"),
   previewDynamicLease: (input) => postRead<DynamicLeasePreview>("/api/v1/secrets/leases/preview", input),
   issueDynamicLease: (input, idempotencyKey) => mutate<DynamicLease>("POST", "/api/v1/secrets/leases", input, idempotencyKey),
-  getDynamicLease: (leaseId) => req<DynamicLease>(`/api/v1/secrets/leases/${encodeURIComponent(leaseId)}`),
+  getDynamicLease: (leaseId, signal) => req<DynamicLease>(`/api/v1/secrets/leases/${encodeURIComponent(leaseId)}`, { signal }),
   renewDynamicLease: (leaseId, input) => mutate<DynamicLease>("POST", `/api/v1/secrets/leases/${encodeURIComponent(leaseId)}/renew`, input),
   revokeDynamicLease: (leaseId) => mutate<DynamicLease>("POST", `/api/v1/secrets/leases/${encodeURIComponent(leaseId)}/revoke`),
   previewEphemeralAPIKey: (input) => postRead<EphemeralAPIKeyPreview>("/api/v1/ephemeral/api-keys/preview", input),

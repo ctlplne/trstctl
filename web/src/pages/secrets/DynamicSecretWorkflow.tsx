@@ -16,7 +16,9 @@ import { ApiError, api, type DynamicLease, type DynamicLeasePreview, type Dynami
 import { apiProblemMessage } from "@/lib/apiProblem";
 import { useCapabilities, useCapabilityAction } from "@/lib/capabilities";
 import { useApiQuery } from "@/lib/query";
-import { DynamicLeaseMetadata, formatCommandArgv, leaseMetadataOnly, RevealPanel } from "./SecretsPageParts";
+import { formatCommandArgv, leaseMetadataOnly } from "./SecretsPageParts";
+import { DynamicLeaseEvidence } from "./DynamicLeaseEvidence";
+import { useDynamicLeaseMetadata } from "./useDynamicLeaseMetadata";
 
 type DynamicLeaseForm = {
   provider: string;
@@ -32,14 +34,6 @@ function defaultLeaseTiming(maximumTTLSeconds: number): { ttl: number; renewal: 
   if (maximum === 1) return { ttl: 1, renewal: 1 };
   const renewal = Math.min(preferredRenewalSeconds, Math.max(1, Math.floor(maximum / 3)));
   return { ttl: Math.max(1, Math.min(preferredLeaseTTLSeconds, maximum - renewal)), renewal };
-}
-
-function renewalHeadroomSeconds(lease: DynamicLease | null, maximumTTLSeconds: number | undefined): number {
-  if (!lease || !maximumTTLSeconds) return 0;
-  const issued = Date.parse(lease.issued_at);
-  const expires = Date.parse(lease.expires_at);
-  if (!Number.isFinite(issued) || !Number.isFinite(expires)) return 0;
-  return Math.max(0, Math.floor((issued + maximumTTLSeconds * 1000 - expires) / 1000));
 }
 
 function newDynamicLeaseIdempotencyKey(): string {
@@ -72,9 +66,14 @@ export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean })
   const [error, setError] = useState<string | null>(null);
   const [retryable, setRetryable] = useState(false);
   const [issueKey, setIssueKey] = useState<string | null>(null);
-  const [lease, setLease] = useState<DynamicLease | null>(null);
+  const [receipt, setReceipt] = useState<DynamicLease | null>(null);
+  const metadata = useDynamicLeaseMetadata(receipt);
+  const lease = metadata.lease;
   const [credential, setCredential] = useState<{ leaseID: string; value: string } | null>(null);
   const [extendSeconds, setExtendSeconds] = useState("300");
+  useEffect(() => {
+    if (receipt && !metadata.active) setCredential(null);
+  }, [receipt, metadata.active]);
 
   const schema = useMemo(
     () =>
@@ -119,7 +118,7 @@ export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean })
     setReview(null);
     setIssueKey(null);
     setRetryable(false);
-    setLease(null);
+    setReceipt(null);
     setCredential(null);
     setError(null);
     setStep(0);
@@ -141,7 +140,7 @@ export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean })
     setReviewBusy(true);
     setError(null);
     setRetryable(false);
-    setLease(null);
+    setReceipt(null);
     setCredential(null);
     const request: DynamicLeaseRequest = {
       provider: values.provider.trim(),
@@ -184,7 +183,7 @@ export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean })
         },
         issueKey,
       );
-      setLease(leaseMetadataOnly(issued));
+      setReceipt(leaseMetadataOnly(issued));
       setCredential(issued.credential ? { leaseID: issued.id, value: issued.credential } : null);
       setRetryable(false);
       setStep(2);
@@ -205,9 +204,9 @@ export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean })
   }
 
   async function renewLease() {
-    if (!lease) return;
+    if (!lease || !metadata.active) return;
     const extend = Number(extendSeconds);
-    const headroom = renewalHeadroomSeconds(lease, selectedProvider?.maximum_ttl_seconds);
+    const headroom = metadata.headroom;
     if (!Number.isSafeInteger(extend) || extend <= 0 || extend > headroom) {
       setError(t("secrets.dynamic.extendError"));
       return;
@@ -215,7 +214,7 @@ export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean })
     setLifecycleBusy("renew");
     setError(null);
     try {
-      setLease(leaseMetadataOnly(await api.renewDynamicLease(lease.id, { extend_seconds: extend })));
+      await metadata.acceptMutation(await api.renewDynamicLease(lease.id, { extend_seconds: extend }));
     } catch (failure) {
       setError(apiProblemMessage(failure, t("secrets.dynamic.renewFailed")));
     } finally {
@@ -229,7 +228,7 @@ export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean })
     setError(null);
     setCredential(null);
     try {
-      setLease(leaseMetadataOnly(await api.revokeDynamicLease(lease.id)));
+      await metadata.acceptMutation(await api.revokeDynamicLease(lease.id));
     } catch (failure) {
       setError(apiProblemMessage(failure, t("secrets.dynamic.revokeFailed")));
     } finally {
@@ -248,7 +247,7 @@ export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean })
     setReview(null);
     setIssueKey(null);
     setRetryable(false);
-    setLease(null);
+    setReceipt(null);
     setCredential(null);
     setError(null);
     setExtendSeconds(String(timing.renewal));
@@ -264,7 +263,7 @@ export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean })
   const currentRequest: DynamicLeaseRequest = { provider: providerID ?? "", role: role ?? "", ttl_seconds: Number(ttlSeconds) || 0 };
   const currentReview = review?.requestKey === requestKey(currentRequest) ? review.plan : null;
   const configureReady = Boolean(selectedProvider?.ready && role && Number(ttlSeconds) > 0 && previewRunnable && !loadBlocked);
-  const renewalHeadroom = renewalHeadroomSeconds(lease, selectedProvider?.maximum_ttl_seconds);
+  const renewalHeadroom = metadata.headroom;
   const renewalSeconds = Number(extendSeconds);
   const renewalReady = Number.isSafeInteger(renewalSeconds) && renewalSeconds > 0 && renewalSeconds <= renewalHeadroom;
   const steps = [
@@ -452,61 +451,56 @@ export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean })
 
         {step === 2 && lease ? (
           <div className="grid gap-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="font-semibold">{lease.state === "revoked" ? t("secrets.dynamic.revokedTitle") : t("secrets.dynamic.issuedTitle")}</h3>
-                <p className="mt-1 text-sm text-muted-foreground">{t("secrets.dynamic.verifyHelp")}</p>
+            <DynamicLeaseEvidence
+              lease={lease}
+              active={metadata.active}
+              error={metadata.error}
+              refresh={metadata.refresh}
+              credential={metadata.active ? credential : null}
+              dismiss={() => setCredential(null)}
+            />
+            {lease.state === "active" ? (
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
+                <Field
+                  label={t("secrets.dynamic.extend")}
+                  description={
+                    renewalHeadroom > 0 ? t("secrets.dynamic.extendAvailable", { seconds: renewalHeadroom }) : t("secrets.dynamic.extendUnavailable")
+                  }
+                >
+                  {(field) => (
+                    <Input
+                      {...field}
+                      type="number"
+                      min="1"
+                      max={renewalHeadroom || undefined}
+                      step="1"
+                      value={extendSeconds}
+                      onChange={(event) => setExtendSeconds(event.target.value)}
+                    />
+                  )}
+                </Field>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void renewLease()}
+                  disabled={lifecycleBusy !== null || !metadata.active || !renewalReady}
+                  loading={lifecycleBusy === "renew"}
+                >
+                  <RotateCw className="h-4 w-4" aria-hidden="true" />
+                  {t("secrets.dynamic.renew")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive-outline"
+                  onClick={() => void revokeLease()}
+                  disabled={lifecycleBusy !== null || lease.revocation_status === "completed" || lease.revocation_status === "pending"}
+                  loading={lifecycleBusy === "revoke"}
+                >
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  {t("secrets.dynamic.revoke")}
+                </Button>
               </div>
-              <StatusBadge value={lease.state} label={lease.state} tone={lease.state === "revoked" ? "neutral" : "success"} />
-            </div>
-            <DynamicLeaseMetadata lease={lease} />
-            {credential ? (
-              <RevealPanel
-                title={t("secrets.dynamic.credentialTitle", { id: credential.leaseID })}
-                onDismiss={() => setCredential(null)}
-                value={credential.value}
-              >
-                {t("secrets.dynamic.credentialHelp")}
-              </RevealPanel>
             ) : null}
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
-              <Field
-                label={t("secrets.dynamic.extend")}
-                description={renewalHeadroom > 0 ? t("secrets.dynamic.extendAvailable", { seconds: renewalHeadroom }) : t("secrets.dynamic.extendUnavailable")}
-              >
-                {(field) => (
-                  <Input
-                    {...field}
-                    type="number"
-                    min="1"
-                    max={renewalHeadroom || undefined}
-                    step="1"
-                    value={extendSeconds}
-                    onChange={(event) => setExtendSeconds(event.target.value)}
-                  />
-                )}
-              </Field>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => void renewLease()}
-                disabled={lifecycleBusy !== null || lease.state === "revoked" || !renewalReady}
-                loading={lifecycleBusy === "renew"}
-              >
-                <RotateCw className="h-4 w-4" aria-hidden="true" />
-                {t("secrets.dynamic.renew")}
-              </Button>
-              <Button
-                type="button"
-                variant="destructive-outline"
-                onClick={() => void revokeLease()}
-                disabled={lifecycleBusy !== null || lease.state === "revoked"}
-                loading={lifecycleBusy === "revoke"}
-              >
-                <Trash2 className="h-4 w-4" aria-hidden="true" />
-                {t("secrets.dynamic.revoke")}
-              </Button>
-            </div>
             <PlanList title={t("secrets.dynamic.verification")} items={currentReview?.verification_steps ?? []} />
           </div>
         ) : null}

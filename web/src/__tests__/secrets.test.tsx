@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { ApiError } from "@/lib/api";
+import { ApiError, type DynamicLease } from "@/lib/api";
 import type { CapabilityView, CapabilityViewItem } from "@/lib/api-types.gen";
 import { CapabilityFixtureProvider } from "@/lib/capabilities";
 import { AppQueryProvider } from "@/lib/query";
@@ -38,6 +38,7 @@ const { apiMock } = vi.hoisted(() => ({
     dynamicSecretProviders: vi.fn(),
     previewDynamicLease: vi.fn(),
     issueDynamicLease: vi.fn(),
+    getDynamicLease: vi.fn(),
     renewDynamicLease: vi.fn(),
     revokeDynamicLease: vi.fn(),
     transitKeys: vi.fn(),
@@ -598,30 +599,25 @@ function primeSecretsMocks() {
     cli_argv: ["trstctl", "secrets", "leases", "issue", "-f", "dynamic-secret-lease.json"],
     secret_data_handling: "Execution returns the credential once; metadata reads cannot replay it.",
   });
-  apiMock.issueDynamicLease.mockResolvedValue({
+  let currentDynamicLease: DynamicLease = {
     id: "lease-postgres-1",
     provider: "payments-db",
     role: "readonly-reporting",
     state: "active",
-    issued_at: "2026-06-19T13:00:00Z",
-    expires_at: "2026-06-19T13:20:00Z",
-    credential: "postgres://lease-secret",
+    issued_at: new Date().toISOString(),
+    expires_at: new Date(Date.now() + 1200000).toISOString(),
+    hard_expires_at: new Date(Date.now() + 3600000).toISOString(),
+    revocation_status: "none",
+  };
+  apiMock.issueDynamicLease.mockImplementation(async () => ({ ...currentDynamicLease, credential: "postgres://lease-secret" }));
+  apiMock.getDynamicLease.mockImplementation(async () => currentDynamicLease);
+  apiMock.renewDynamicLease.mockImplementation(async () => {
+    currentDynamicLease = { ...currentDynamicLease, expires_at: new Date(Date.parse(currentDynamicLease.expires_at) + 300000).toISOString() };
+    return currentDynamicLease;
   });
-  apiMock.renewDynamicLease.mockResolvedValue({
-    id: "lease-postgres-1",
-    provider: "payments-db",
-    role: "readonly-reporting",
-    state: "active",
-    issued_at: "2026-06-19T13:00:00Z",
-    expires_at: "2026-06-19T13:25:00Z",
-  });
-  apiMock.revokeDynamicLease.mockResolvedValue({
-    id: "lease-postgres-1",
-    provider: "payments-db",
-    role: "readonly-reporting",
-    state: "revoked",
-    issued_at: "2026-06-19T13:00:00Z",
-    expires_at: "2026-06-19T13:25:00Z",
+  apiMock.revokeDynamicLease.mockImplementation(async () => {
+    currentDynamicLease = { ...currentDynamicLease, state: "revoked", revocation_status: "pending" };
+    return currentDynamicLease;
   });
   apiMock.transitKeys.mockResolvedValue({ items: [] });
   apiMock.transitKeyVersions.mockImplementation(async (name: string) => ({
@@ -1848,7 +1844,9 @@ describe("secrets surface", () => {
     await waitFor(() => expect(apiMock.renewDynamicLease).toHaveBeenCalledWith("lease-postgres-1", { extend_seconds: 300 }));
     await user.click(screen.getByRole("button", { name: /revoke lease/i }));
     await waitFor(() => expect(apiMock.revokeDynamicLease).toHaveBeenCalledWith("lease-postgres-1"));
-    expect(await screen.findByRole("heading", { name: "Lease revoked; prove the login is dead" })).toBeInTheDocument();
+    expect(await screen.findByText("Revocation queued; provider removal pending")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Renew lease" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Revoke lease" })).not.toBeInTheDocument();
     expect(screen.getByText("State")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /mint key|triage leak|rotate leaked/i })).not.toBeInTheDocument();
     expect(storageSpy).not.toHaveBeenCalled();

@@ -744,6 +744,13 @@ func TestDurableDynamicSecretRenewRevokeReplayAndWorkerCrashFence(t *testing.T) 
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
+	metadata, err := restarted.GetLeaseContext(ctx, lease.ID)
+	if err != nil || metadata.RevocationStatus != "completed" || metadata.RevocationCompletedAt == nil || metadata.RevokedAt == nil || !metadata.HardExpiresAt.Equal(record.HardExpiresAt) {
+		t.Fatalf("metadata hides actual provider completion or original renewal limit: %+v err=%v", metadata, err)
+	}
+	if revoked.RevocationStatus != "pending" || revoked.RevocationCompletedAt != nil || !renewed.HardExpiresAt.Equal(record.HardExpiresAt) {
+		t.Fatalf("immutable mutation receipts misrepresent progress: renewed=%+v revoked=%+v", renewed, revoked)
+	}
 	if len(provider.Revocations()) != 1 || record.RevokeOutboxID == nil {
 		t.Fatalf("provider revocations=%v outbox=%v", provider.Revocations(), record.RevokeOutboxID)
 	}
@@ -764,6 +771,9 @@ func TestDurableDynamicSecretRenewRevokeReplayAndWorkerCrashFence(t *testing.T) 
 	replayedRevoke, err := restarted.RevokeBound(ctx, lease.ID, "lifecycle-revoke", "sha256:caller-a-revoke")
 	if err != nil || replayedRevoke.State != dynsecret.LeaseRevoked || !replayedRevoke.ExpiresAt.Equal(revoked.ExpiresAt) {
 		t.Fatalf("restart revoke replay=%+v err=%v", replayedRevoke, err)
+	}
+	if replayedRevoke.RevocationStatus != "pending" || replayedRevoke.RevocationCompletedAt != nil {
+		t.Fatalf("replay replaced immutable pending receipt with later completion: %+v", replayedRevoke)
 	}
 	if _, err := restarted.RevokeBound(ctx, lease.ID, "lifecycle-revoke", "sha256:caller-b-revoke"); !errors.Is(err, store.ErrIdempotencyConflict) {
 		t.Fatalf("changed revoke caller error=%v, want idempotency conflict", err)

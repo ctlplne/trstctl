@@ -55,3 +55,18 @@ func dynamicSecretContractContains(value any, want string) bool {
 	}
 	return false
 }
+
+func TestDynamicLeaseContractDistinguishesRevocationFromProviderCompletion(t *testing.T) {
+	doc := fetchSpec(t)
+	schemas := doc["components"].(map[string]any)["schemas"].(map[string]any)
+	lease := schemas["DynamicLease"].(map[string]any)
+	properties := lease["properties"].(map[string]any)
+	for _, field := range []string{"hard_expires_at", "revocation_status", "revoked_at", "revocation_completed_at"} {
+		if properties[field] == nil {
+			t.Errorf("lease metadata hides durable %s", field)
+		}
+		if dynamicSecretContractContains(lease["required"], field) {
+			t.Errorf("%s must remain optional for older immutable operation receipts", field)
+		}
+	}
+}

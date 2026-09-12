@@ -630,18 +630,35 @@ func (l *durableDynamicSecretLifecycle) appendAndProjectID(ctx context.Context, 
 }
 
 type dynamicSecretOperationResponse struct {
-	LeaseID   string               `json:"lease_id"`
-	Provider  string               `json:"provider"`
-	Role      string               `json:"role"`
-	State     dynsecret.LeaseState `json:"state"`
-	IssuedAt  time.Time            `json:"issued_at"`
-	ExpiresAt time.Time            `json:"expires_at"`
+	LeaseID               string               `json:"lease_id"`
+	Provider              string               `json:"provider"`
+	Role                  string               `json:"role"`
+	State                 dynsecret.LeaseState `json:"state"`
+	IssuedAt              time.Time            `json:"issued_at"`
+	ExpiresAt             time.Time            `json:"expires_at"`
+	HardExpiresAt         *time.Time           `json:"hard_expires_at,omitempty"`
+	RevocationStatus      string               `json:"revocation_status,omitempty"`
+	RevokedAt             *time.Time           `json:"revoked_at,omitempty"`
+	RevocationCompletedAt *time.Time           `json:"revocation_completed_at,omitempty"`
 }
 
 func dynamicSecretOperationResponseFromLease(lease dynsecret.Lease, state dynsecret.LeaseState, expiresAt time.Time) dynamicSecretOperationResponse {
+	var hardExpiresAt *time.Time
+	if !lease.HardExpiresAt.IsZero() {
+		hardExpiresAt = &lease.HardExpiresAt
+	}
+	// The immutable revoke receipt acknowledges the queued request. A later
+	// metadata GET confirms completion; replay must never invent that proof.
+	if state == dynsecret.LeaseRevoked && lease.State != dynsecret.LeaseRevoked {
+		lease.RevocationStatus = string(store.DynamicSecretRevocationPending)
+		lease.RevokedAt = nil
+		lease.RevocationCompletedAt = nil
+	}
 	return dynamicSecretOperationResponse{
 		LeaseID: lease.ID, Provider: lease.Provider, Role: lease.Role,
 		State: state, IssuedAt: lease.IssuedAt, ExpiresAt: expiresAt,
+		HardExpiresAt: hardExpiresAt, RevocationStatus: lease.RevocationStatus,
+		RevokedAt: lease.RevokedAt, RevocationCompletedAt: lease.RevocationCompletedAt,
 	}
 }
 
@@ -653,11 +670,17 @@ func decodeDynamicSecretOperationResponse(raw []byte, tenantID string) (dynsecre
 	if response.LeaseID == "" || response.Provider == "" || response.Role == "" || response.IssuedAt.IsZero() || response.ExpiresAt.IsZero() || (response.State != dynsecret.LeaseActive && response.State != dynsecret.LeaseRevoked) {
 		return dynsecret.Lease{}, errors.New("dynsecret: durable operation response is incomplete")
 	}
-	return dynsecret.Lease{
+	lease := dynsecret.Lease{
 		ID: response.LeaseID, TenantID: tenantID, Provider: response.Provider,
 		Role: response.Role, State: response.State, IssuedAt: response.IssuedAt,
-		ExpiresAt: response.ExpiresAt,
-	}, nil
+		ExpiresAt:        response.ExpiresAt,
+		RevocationStatus: response.RevocationStatus,
+		RevokedAt:        response.RevokedAt, RevocationCompletedAt: response.RevocationCompletedAt,
+	}
+	if response.HardExpiresAt != nil {
+		lease.HardExpiresAt = *response.HardExpiresAt
+	}
+	return lease, nil
 }
 
 func dynamicSecretOperationID(tenantID, idempotencyKey string) string {
@@ -694,6 +717,8 @@ func dynamicLeaseFromStore(record store.DynamicSecretLease) dynsecret.Lease {
 		ID: record.ID, TenantID: record.TenantID, Provider: record.Provider, Role: record.Role,
 		BackendRef: record.BackendRef, State: dynsecret.LeaseState(record.State),
 		IssuedAt: record.IssuedAt, ExpiresAt: record.ExpiresAt,
+		HardExpiresAt: record.HardExpiresAt, RevocationStatus: string(record.RevocationStatus),
+		RevokedAt: record.RevokedAt, RevocationCompletedAt: record.RevocationCompletedAt,
 	}
 }
 

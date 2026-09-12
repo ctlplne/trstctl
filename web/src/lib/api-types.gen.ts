@@ -2867,9 +2867,13 @@ export interface DriftRemediationSummary {
 export interface DynamicLease {
   credential?: string;
   expires_at: string;
+  hard_expires_at?: string;
   id: string;
   issued_at: string;
   provider: string;
+  revocation_completed_at?: string;
+  revocation_status?: "none" | "pending" | "completed" | "failed";
+  revoked_at?: string;
   role: string;
   state: string;
 }
