@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/server"
 )
 
@@ -29,7 +30,7 @@ func TestAssembledServerIssuesCertIntoInventory(t *testing.T) {
 	prov, stop := startSignerChild(t)
 	defer stop()
 
-	asm, err := server.Build(context.Background(), server.Deps{Store: st, Log: log, Signer: prov})
+	asm, err := server.Build(context.Background(), server.Deps{Store: st, Log: log, Signer: prov, KEK: issuanceTestKEK(t)})
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -70,6 +71,13 @@ func TestAssembledServerIssuesCertIntoInventory(t *testing.T) {
 	// the assembled CA, for the identity's subject.
 	items := list(t, ts, token, "/api/v1/certificates")
 	if len(items) != 1 {
+		pending, err := orchestrator.NewOutbox(st).Pending(context.Background(), tenantA)
+		if err != nil {
+			t.Fatalf("read issuance failure: %v", err)
+		}
+		for _, entry := range pending {
+			t.Logf("outbox destination=%s status=%s attempts=%d error=%s", entry.Destination, entry.Status, entry.Attempts, entry.LastError)
+		}
 		t.Fatalf("after issuance, inventory has %d certificates, want 1 (the flagship flow must mint one)", len(items))
 	}
 	cert := items[0]

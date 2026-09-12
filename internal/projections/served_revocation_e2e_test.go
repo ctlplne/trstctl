@@ -38,7 +38,7 @@ func TestServedRevocationOCSPAndCRLReflectsRevocation(t *testing.T) {
 	prov, stop := startSignerChild(t)
 	defer stop()
 
-	asm, err := server.Build(context.Background(), server.Deps{Store: st, Log: log, Signer: prov})
+	asm, err := server.Build(context.Background(), server.Deps{Store: st, Log: log, Signer: prov, KEK: issuanceTestKEK(t)})
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestServedRevocationOCSPAndCRLReflectsRevocation(t *testing.T) {
 	if err := asm.Drain(context.Background()); err != nil {
 		t.Fatalf("Drain (issue): %v", err)
 	}
-	serial, _ := list(t, ts, token, "/api/v1/certificates")[0]["serial"].(string)
+	serial, _ := oneIssuedCertificate(t, ts, token)["serial"].(string)
 	if serial == "" {
 		t.Fatal("issued certificate has no serial; it was not really minted")
 	}
@@ -168,7 +168,7 @@ func TestServedOCSPAndCRLOverHTTP(t *testing.T) {
 	prov, stop := startSignerChild(t)
 	defer stop()
 
-	asm, err := server.Build(context.Background(), server.Deps{Store: st, Log: log, Signer: prov})
+	asm, err := server.Build(context.Background(), server.Deps{Store: st, Log: log, Signer: prov, KEK: issuanceTestKEK(t)})
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -188,7 +188,7 @@ func TestServedOCSPAndCRLOverHTTP(t *testing.T) {
 	if err := asm.Drain(context.Background()); err != nil {
 		t.Fatalf("Drain (issue): %v", err)
 	}
-	serial, _ := list(t, ts, token, "/api/v1/certificates")[0]["serial"].(string)
+	serial, _ := oneIssuedCertificate(t, ts, token)["serial"].(string)
 	transition(t, ts, token, identityID, "revoked")
 	if err := asm.Drain(context.Background()); err != nil {
 		t.Fatalf("Drain (revoke): %v", err)

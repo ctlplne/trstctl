@@ -47,7 +47,7 @@ func TestDocsFirstCertFlowReallyIssues(t *testing.T) {
 	prov, stop := startSignerChild(t)
 	defer stop()
 
-	asm, err := server.Build(context.Background(), server.Deps{Store: st, Log: log, Signer: prov})
+	asm, err := server.Build(context.Background(), server.Deps{Store: st, Log: log, Signer: prov, KEK: issuanceTestKEK(t)})
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}

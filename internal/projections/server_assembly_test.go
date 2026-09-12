@@ -60,7 +60,8 @@ func startSignerChild(t *testing.T) (server.SignerProvider, func()) {
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	socket := filepath.Join(dir, "s.sock")
 	authSecret := filepath.Join(dir, "sign-auth.bin")
-	args := []string{"--auth-secret", authSecret}
+	args := []string{"--auth-secret", authSecret,
+		"--keystore", filepath.Join(dir, "keys"), "--kek", filepath.Join(dir, "signer.kek")}
 	if runtime.GOOS != "linux" {
 		args = append([]string{"--allow-insecure-dev-nonlinux"}, args...)
 	}

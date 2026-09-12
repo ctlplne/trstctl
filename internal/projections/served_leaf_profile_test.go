@@ -189,7 +189,7 @@ func TestServedMintRejectsOutOfProfileRequest(t *testing.T) {
 		})
 
 		asm, err := server.Build(context.Background(), server.Deps{
-			Store: st, Log: log, Signer: prov,
+			Store: st, Log: log, Signer: prov, KEK: issuanceTestKEK(t),
 			LeafProfile: servedLeafProfile, DefaultProfile: "served-default",
 		})
 		if err != nil {
@@ -237,7 +237,7 @@ func TestServedMintRejectsOutOfProfileRequest(t *testing.T) {
 		})
 
 		asm, err := server.Build(context.Background(), server.Deps{
-			Store: st, Log: log, Signer: prov,
+			Store: st, Log: log, Signer: prov, KEK: issuanceTestKEK(t),
 			LeafProfile: servedLeafProfile, DefaultProfile: "served-default",
 		})
 		if err != nil {
