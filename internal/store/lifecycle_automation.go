@@ -26,6 +26,7 @@ type LifecycleAutomationInventory struct {
 	LatestRunID               string
 	LatestRunStatus           string
 	RollbackRef               string
+	PendingRenewal            bool
 }
 
 // LifecycleAutomationOutboxSummary reports only aggregate command state for the
@@ -48,7 +49,11 @@ func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID s
 		rows, err := tx.Query(ctx, `
 			SELECT i.id::text, i.name, i.status, i.owner_id::text, o.name,
 			       cert.id::text, cert.not_before, cert.not_after, cert.validity_anchor,
-			       coalesce(run.id::text, ''), coalesce(run.status, ''), coalesce(run.rollback_ref, '')
+			       coalesce(run.id::text, ''), coalesce(run.status, ''), coalesce(run.rollback_ref, ''),
+			       EXISTS (SELECT 1 FROM outbox job WHERE job.tenant_id = $1 AND job.tenant_id = i.tenant_id
+			         AND job.status IN ('pending', 'processing')
+			         AND CASE WHEN job.destination IN ('ca.renew', 'endpoint.renew')
+			         THEN convert_from(job.payload, 'UTF8')::jsonb->>'identity_id' = i.id::text ELSE false END)
 			  FROM identities AS i
 			  JOIN owners AS o
 			    ON o.tenant_id = $1 AND o.tenant_id = i.tenant_id AND o.id = i.owner_id
@@ -89,6 +94,7 @@ func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID s
 				&item.OwnerID, &item.OwnerName, &item.CertificateID,
 				&item.CertificateStart, &item.CertificateEnd, &item.CertificateValidityAnchor,
 				&item.LatestRunID, &item.LatestRunStatus, &item.RollbackRef,
+				&item.PendingRenewal,
 			); err != nil {
 				return err
 			}
@@ -111,7 +117,7 @@ func (s *Store) GetLifecycleAutomationOutboxSummary(ctx context.Context, tenantI
 			  FROM outbox
 			 WHERE tenant_id = $1
 			   AND destination = ANY($2::text[])`, tenantID,
-			[]string{"ca.renew", "connector.deploy", "notification.expiry"}).Scan(
+			[]string{"ca.renew", "endpoint.renew", "connector.deploy", "notification.expiry"}).Scan(
 			&summary.Pending, &summary.Processing, &summary.Failed)
 	})
 	return summary, err

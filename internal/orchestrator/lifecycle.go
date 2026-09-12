@@ -125,6 +125,10 @@ var ErrInvalidTransition = errors.New("orchestrator: invalid lifecycle transitio
 // applying an old plan would make review theatre rather than authority.
 var ErrStaleLifecyclePreview = errors.New("orchestrator: stale lifecycle preview")
 
+// ErrRenewalWorkPending prevents manual and scheduled renewals from overlapping
+// an earlier attempt that can still run, including a retry after an agent error.
+var ErrRenewalWorkPending = errors.New("identity already has a renewal queued or running; follow its existing job and retry evidence before starting another renewal")
+
 // TransitionError is the structured error returned when a transition is not
 // permitted by the state machine.
 type TransitionError struct {

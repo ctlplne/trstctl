@@ -4,7 +4,10 @@ package orchestrator_test
 
 import (
 	"context"
+	"errors"
 	"testing"
+
+	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
@@ -77,7 +80,19 @@ func TestRenewalFailureProjectsIntoTheReadModel(t *testing.T) {
 		t.Fatalf("a failed renewal enqueued connector.deploy (%d -> %d); the previous certificate must not be re-pushed", deploysBefore, n)
 	}
 
-	// The RETRY edge exists only if the projected status really moved.
+	// A failed attempt is not a terminal job. The existing retry owns renewal
+	// until its outbox row is exhausted; a new command must not overlap it.
+	if err := orch.Transition(ctx, tenantA, identity.ID, orchestrator.StateRenewing, "overlapping retry"); !errors.Is(err, orchestrator.ErrRenewalWorkPending) {
+		t.Fatalf("pending renewal was not fenced: %v", err)
+	}
+	if err := st.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE outbox SET status='failed'
+			WHERE tenant_id=$1 AND destination='ca.renew'`, tenantA)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// The RETRY edge exists once the earlier renewal has terminally failed.
 	renewsBefore := countOutboxDestination(t, st, tenantA, "ca.renew")
 	if err := orch.Transition(ctx, tenantA, identity.ID, orchestrator.StateRenewing, "retry"); err != nil {
 		t.Fatalf("renewal_failed -> renewing retry edge: %v", err)

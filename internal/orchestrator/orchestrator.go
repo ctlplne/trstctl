@@ -482,6 +482,13 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 				return ErrStaleLifecyclePreview
 			}
 			if to == StateRenewing {
+				pending, err := o.store.IdentityRenewalWorkPendingTx(ctx, tx, tenantID, identityID)
+				if err != nil {
+					return err
+				}
+				if pending {
+					return ErrRenewalWorkPending
+				}
 				replacement, err := o.store.ActiveEndpointReplacementTx(ctx, tx, tenantID, identityID)
 				if err != nil {
 					return err

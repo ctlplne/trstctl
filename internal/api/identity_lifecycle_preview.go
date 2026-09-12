@@ -87,6 +87,15 @@ func (a *API) previewIdentityTransition(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if to == orchestrator.StateRenewing {
+		pending, err := a.store.IdentityRenewalWorkPending(r.Context(), tenantID, id)
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
+		if pending {
+			a.writeError(w, orchestrator.ErrRenewalWorkPending)
+			return
+		}
 		replacement, err := a.store.ActiveEndpointReplacement(r.Context(), tenantID, id)
 		if err != nil {
 			a.writeError(w, err)

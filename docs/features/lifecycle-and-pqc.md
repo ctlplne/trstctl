@@ -125,6 +125,13 @@ appends the lifecycle event and the `ca.renew` outbox intent through the existin
 idempotent mutation path. Verification comes from the resulting rotation run and
 connector receipt, not from a green button state.
 
+A failed agent attempt can leave the identity in `renewal_failed` while its
+existing renewal job retries. Scheduled sweeps do not start another renewal while
+that identity has pending or processing `ca.renew` or `endpoint.renew` work.
+Manual renewal previews and execution return HTTP 409 with guidance to follow the
+existing job. Once that work is terminal, a still-due identity can be renewed again.
+Revocation remains available during recovery.
+
 The control limits are intentional and visible:
 
 - **Pause** is a maintenance-window configuration action. The current web request does

@@ -50,7 +50,7 @@ func (s *Server) LifecycleAutomationPlan(ctx context.Context, tenantID string, a
 			{Action: "start", State: "available", Detail: "Review and queue one due renewal through the normal identity transition."},
 			{Action: "pause", State: "configuration_only", Detail: "Maintenance windows pause new scheduler starts; changing them is an operator configuration action."},
 			{Action: "resume", State: "automatic", Detail: "Deferred starts resume automatically when the next maintenance window opens."},
-			{Action: "retry", State: "conditional", Detail: "A failed renewal can be reviewed and queued as a new idempotent attempt."},
+			{Action: "retry", State: "conditional", Detail: "A failed renewal can be reviewed as a new attempt once its earlier renewal job is terminal."},
 			{Action: "cancel", State: "unavailable_after_enqueue", Detail: "Queued work may already be leased, so trstctl does not claim it can be safely cancelled."},
 			{Action: "rollback", State: "conditional", Detail: "Use connector rollback only when a deployed predecessor and a connector-backed rollback procedure exist."},
 		},
@@ -99,11 +99,11 @@ func (s *Server) LifecycleAutomationPlan(ctx context.Context, tenantID string, a
 			explanation = "The configured renewal deadline has arrived."
 		}
 		blockers := []string{}
-		if row.IdentityStatus == "renewing" {
+		if row.IdentityStatus == "renewing" || row.PendingRenewal {
 			due = false
 			source = "in_flight"
 			explanation = "Renewal is already queued or running."
-			blockers = append(blockers, "A queued renewal may already be leased and cannot be safely cancelled.")
+			blockers = append(blockers, "The existing renewal is still queued or running; follow its retry evidence before starting another renewal.")
 		}
 		if deferral != "" && due {
 			blockers = append(blockers, deferral)

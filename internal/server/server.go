@@ -3316,7 +3316,7 @@ func (s *Server) runLifecycleOnceAt(ctx context.Context, renewalAt time.Time) (i
 						return queued, err
 					}
 					if err := s.orch.TransitionWithSideEffectPayload(ctx, tenant, ident.ID, orchestrator.StateRenewing, reason, payload); err != nil {
-						if errors.Is(err, orchestrator.ErrInvalidTransition) {
+						if errors.Is(err, orchestrator.ErrInvalidTransition) || errors.Is(err, orchestrator.ErrRenewalWorkPending) {
 							continue
 						}
 						s.observeLifecycleSweep(queued, 0, err)
