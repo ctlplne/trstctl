@@ -4,6 +4,8 @@ package server
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -93,6 +95,20 @@ func TestServedACMEClientPublishedDNSProof(t *testing.T) {
 				}
 				if err := crypto.VerifyLeafSignedByCA(chain[0], caCertDER(t, h.caPEM)); err != nil {
 					t.Fatal(err)
+				}
+				if _, err := client.UpdateReg(ctx, &xacme.Account{Contact: []string{"mailto:client-dns@example.test"}}); err != nil {
+					t.Fatal(err)
+				}
+				if err := client.DeactivateReg(ctx); err != nil {
+					t.Fatalf("served account deactivation: %v", err)
+				}
+				_, err = client.AuthorizeOrder(ctx, xacme.DomainIDs(domain))
+				var problem *xacme.Error
+				if !errors.As(err, &problem) || problem.StatusCode != http.StatusUnauthorized {
+					t.Fatalf("served inactive account admitted: %v", err)
+				}
+				if h.hasEvent(t, "certificate.revoked") {
+					t.Fatal("account deactivation revoked the leaf")
 				}
 			}
 			dns.assertNeverRequested(t, acmesrv.DNS01RecordName(domain))

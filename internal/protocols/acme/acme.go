@@ -42,9 +42,10 @@ import (
 const (
 	maxJWSBody = 1 << 20
 
-	statusPending = "pending"
-	statusReady   = "ready"
-	statusValid   = "valid"
+	statusPending     = "pending"
+	statusReady       = "ready"
+	statusValid       = "valid"
+	statusDeactivated = "deactivated"
 	// statusProcessing is RFC 8555's state for an order whose finalize is in
 	// flight. It exists here to CLAIM an order atomically, so two concurrent
 	// finalize requests cannot both observe "ready" and both mint.
@@ -140,12 +141,15 @@ func normalizeQuota(q QuotaConfig) QuotaConfig {
 }
 
 type account struct {
-	id      string // thumbprint
-	url     string
-	key     *jose.ACMEKey
-	jwk     json.RawMessage // public JWK needed to rebuild account verification after restart
-	contact []string        // RFC 8555 §7.1.2 account contact URLs (e.g. mailto:)
-	status  string          // "valid" (the only state this server tracks)
+	// lifecycle serializes retirement/key rollover against admitted requests.
+	// Take it before s.mu; no account waits while holding the tenant state lock.
+	lifecycle *sync.RWMutex
+	id        string // thumbprint
+	url       string
+	key       *jose.ACMEKey
+	jwk       json.RawMessage // public JWK needed to rebuild account verification after restart
+	contact   []string        // RFC 8555 §7.1.2 account contact URLs (e.g. mailto:)
+	status    string          // valid or deactivated; persisted in the account event
 	// eabKeyID is the external account credential that authorized this account
 	// (RFC 8555 §7.3.4, epic B4). Empty when the deployment does not use EAB.
 	// It is what every order under this account is then scoped against, so it
@@ -332,6 +336,8 @@ func New(ca ca.CA, validator Validator) *Server {
 	mux.HandleFunc("GET /acme/new-nonce", s.newNonce)
 	mux.HandleFunc("HEAD /acme/new-nonce", s.newNonce)
 	mux.HandleFunc("POST /acme/new-account", s.jws(s.newAccount))
+	mux.HandleFunc("POST /acme/acct/{id}", s.jwsWithAccountLock(s.updateAccount, true))
+	mux.HandleFunc("POST /acme/acct/{id}/orders", s.jws(s.accountOrders))
 	mux.HandleFunc("POST /acme/new-order", s.jws(s.newOrder))
 	mux.HandleFunc("POST /acme/authz/{id}", s.jws(s.getAuthz))
 	mux.HandleFunc("POST /acme/chal/{id}", s.jws(s.acceptChallenge))
@@ -339,7 +345,7 @@ func New(ca ca.CA, validator Validator) *Server {
 	mux.HandleFunc("POST /acme/order/{id}/finalize", s.jws(s.finalize))
 	mux.HandleFunc("POST /acme/cert/{id}", s.jws(s.getCert))
 	// RFC 8555 §7.3.5 (account key rollover) and §7.6 (certificate revocation).
-	mux.HandleFunc("POST /acme/key-change", s.jws(s.keyChange))
+	mux.HandleFunc("POST /acme/key-change", s.jwsWithAccountLock(s.keyChange, true))
 	mux.HandleFunc("POST /acme/revoke-cert", s.jws(s.revokeCert))
 	s.mux = mux
 	return s
@@ -660,6 +666,10 @@ type jwsHandler func(w http.ResponseWriter, r *http.Request, msg *jose.ACMEMessa
 // jws wraps a handler with JWS verification and single-use nonce enforcement,
 // always returning a fresh Replay-Nonce.
 func (s *Server) jws(h jwsHandler) http.HandlerFunc {
+	return s.jwsWithAccountLock(h, false)
+}
+
+func (s *Server) jwsWithAccountLock(h jwsHandler, exclusive bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		body, err := bodylimit.ReadAll(r.Body, maxJWSBody)
 		if errors.Is(err, bodylimit.ErrTooLarge) {
@@ -723,6 +733,43 @@ func (s *Server) jws(h jwsHandler) http.HandlerFunc {
 			s.problem(w, r, http.StatusUnauthorized, "unauthorized", "JWS verification failed")
 			return
 		}
+		// A valid signature is necessary but an inactive or superseded account
+		// key no longer authorizes a request. Also cover JWK-signed lookups: they
+		// must not create a replacement account with the deactivated key.
+		s.mu.Lock()
+		known := acct
+		if known == nil {
+			known = s.byKey[key.Thumbprint()]
+		}
+		s.mu.Unlock()
+		if known != nil {
+			// Do not fill the protocol worker pool with requests waiting on one
+			// account's slow CA or validation operation. The client can retry.
+			locked := false
+			if exclusive {
+				locked = known.lifecycle.TryLock()
+				if locked {
+					defer known.lifecycle.Unlock()
+				}
+			} else {
+				locked = known.lifecycle.TryRLock()
+				if locked {
+					defer known.lifecycle.RUnlock()
+				}
+			}
+			if !locked {
+				w.Header().Set("Retry-After", "1")
+				s.problem(w, r, http.StatusServiceUnavailable, "serverInternal", "account has an operation in progress; retry")
+				return
+			}
+			s.mu.Lock()
+			active := known.status == statusValid && known.key.Thumbprint() == key.Thumbprint()
+			s.mu.Unlock()
+			if !active {
+				s.problem(w, r, http.StatusUnauthorized, "unauthorized", "account is inactive or its key has changed")
+				return
+			}
+		}
 
 		// Every ACME response carries a fresh nonce.
 		s.mu.Lock()
@@ -772,6 +819,11 @@ func (s *Server) newAccount(w http.ResponseWriter, r *http.Request, msg *jose.AC
 	s.pruneExpiredLocked(now)
 	acct := s.byKey[thumb]
 	existed := acct != nil
+	if existed && acct.status != statusValid {
+		s.mu.Unlock()
+		s.problem(w, r, http.StatusUnauthorized, "unauthorized", "account is inactive")
+		return
+	}
 
 	// RFC 8555 §7.3.1: onlyReturnExisting asks the server to look up an existing
 	// account WITHOUT creating one; if none exists it MUST return 400
@@ -842,7 +894,8 @@ func (s *Server) newAccount(w http.ResponseWriter, r *http.Request, msg *jose.AC
 			boundEABKeyID, boundEABCredential = keyID, cred
 		}
 		acct = &account{
-			id: thumb, url: baseURL(r) + "/acme/acct/" + s.nextID(), key: key,
+			lifecycle: &sync.RWMutex{},
+			id:        thumb, url: baseURL(r) + "/acme/acct/" + s.nextID(), key: key,
 			jwk: copyRawMessage(msg.Protected.JWK), contact: req.Contact, status: statusValid,
 			eabKeyID: boundEABKeyID,
 		}
@@ -856,20 +909,6 @@ func (s *Server) newAccount(w http.ResponseWriter, r *http.Request, msg *jose.AC
 		if boundEABCredential != nil {
 			boundEABCredential.recordAccountBound(time.Now())
 		}
-	} else if len(req.Contact) > 0 {
-		// Update contact on a returning registration (§7.3.2 allows contact update).
-		updated := *acct
-		updated.contact = append([]string(nil), req.Contact...)
-		if len(updated.jwk) == 0 {
-			updated.jwk = copyRawMessage(msg.Protected.JWK)
-		}
-		if err := s.appendStateEventLocked(r.Context(), acmeEventAccountUpserted, accountEventFrom(&updated, 0)); err != nil {
-			s.mu.Unlock()
-			s.problem(w, r, http.StatusInternalServerError, "serverInternal", err.Error())
-			return
-		}
-		acct.contact = updated.contact
-		acct.jwk = updated.jwk
 	}
 	url := acct.url
 	contact := append([]string(nil), acct.contact...)

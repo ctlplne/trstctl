@@ -51,6 +51,25 @@ signer-issued leaf first and the exact public issuing certificate second. The sa
 ordered bytes survive ACME state replay, so strict clients such as Certbot can build
 their `cert.pem` and `fullchain.pem` artifacts after either issuance or restart.
 
+The advertised account URL accepts signed POST-as-GET, contact updates, and
+`{"status":"deactivated"}`. Registration lookup preserves existing contact details;
+send an update to the account URL to change them, or `{"contact":[]}` to clear them.
+The account's `orders` URL lists its non-invalid orders in pages of 100, with a
+`Link: rel="next"` header when another page exists. These resources require the
+owning account's signature.
+
+Account deactivation is permanent and survives restart. It cancels unfinished
+orders and authorizations; later requests signed by that account key return
+`401 unauthorized`, including registration lookup. An operation already in flight
+must finish first: deactivation returns `503` with `Retry-After: 1` while the account
+is busy, without changing its status. Retry after that operation completes.
+Deactivation does not revoke issued certificates or uninstall them from servers.
+Revoke and replace or remove the affected leaves separately, remove obsolete client
+renewal jobs/lineages, then deactivate the account with, for example,
+`certbot unregister --server https://trstctl.example.com/directory`.
+Account changes and canceled validation state rebuild from the tenant's
+`acme.account.upserted` events; completed certificate evidence is preserved.
+
 The **Protocols** page is the operator's starting point. Its **ACME readiness and
 next step** panel asks the running server for one tenant-bound plan instead of trying
 to guess readiness in the browser. That plan joins the mounted `/directory`,

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto/certinfo"
@@ -223,7 +224,7 @@ func (s *Server) applyAccountEventLocked(payload acmeAccountEvent) error {
 	}
 	acct := s.accounts[payload.URL]
 	if acct == nil {
-		acct = &account{url: payload.URL}
+		acct = &account{url: payload.URL, lifecycle: &sync.RWMutex{}}
 	}
 	oldID := acct.id
 	acct.id = payload.ID
@@ -243,6 +244,9 @@ func (s *Server) applyAccountEventLocked(payload acmeAccountEvent) error {
 		delete(s.byKey, oldID)
 	}
 	s.byKey[acct.id] = acct
+	if acct.status == statusDeactivated {
+		s.cancelAccountOrdersLocked(acct.url)
+	}
 	s.rememberSeq(payload.Seq)
 	return nil
 }

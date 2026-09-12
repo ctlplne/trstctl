@@ -3,10 +3,36 @@
 package clusterfuzz
 
 import (
+	"encoding/json"
 	"testing"
 
 	acmesrv "trstctl.com/trstctl/internal/protocols/acme"
 )
+
+func FuzzParseAccountUpdateRequest(f *testing.F) {
+	for _, seed := range []string{`{}`, `{"contact":[]}`, `{"contact":["mailto:owner@example.test"]}`, `{"status":"deactivated"}`, `null`, `{"contact":[null]}`, `{"status":17}`, `not json`} {
+		f.Add([]byte(seed))
+	}
+	f.Fuzz(func(t *testing.T, data []byte) {
+		req, err := acmesrv.ParseAccountUpdateRequest(data)
+		if err != nil {
+			return
+		}
+		var raw map[string]json.RawMessage
+		if json.Unmarshal(data, &raw) != nil || raw == nil {
+			t.Fatal("accepted non-object account update")
+		}
+		if req.Contact != nil && *req.Contact == nil {
+			t.Fatal("accepted null contact list")
+		}
+		if req.Deactivate {
+			var status string
+			if json.Unmarshal(raw["status"], &status) != nil || status != "deactivated" {
+				t.Fatal("deactivated without explicit status")
+			}
+		}
+	})
+}
 
 // On success every identifier must be a non-empty dns identifier.
 

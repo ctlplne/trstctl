@@ -3,12 +3,58 @@
 package acme
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 
 	"trstctl.com/trstctl/internal/protocols/ari"
 )
+
+// AccountUpdateRequest distinguishes omitted contact information from an explicit
+// empty list. Only deactivation may change account status (RFC 8555 §7.3.2).
+type AccountUpdateRequest struct {
+	Contact    *[]string
+	Deactivate bool
+}
+
+// ParseAccountUpdateRequest parses the exact account-resource mutation payload.
+// Unknown/server-owned fields are ignored. Null is not an empty contact list;
+// malformed input must never accidentally clear an operator's contacts.
+func ParseAccountUpdateRequest(payload []byte) (AccountUpdateRequest, error) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &raw); err != nil || raw == nil {
+		return AccountUpdateRequest{}, fmt.Errorf("acme: account update must be a JSON object")
+	}
+	var out AccountUpdateRequest
+	if contact, present := raw["contact"]; present {
+		var contacts []string
+		if err := json.Unmarshal(contact, &contacts); err != nil || contacts == nil {
+			return AccountUpdateRequest{}, fmt.Errorf("acme: contact must be an array of strings")
+		}
+		// encoding/json otherwise accepts null elements as empty strings.
+		var elements []json.RawMessage
+		if err := json.Unmarshal(contact, &elements); err != nil {
+			return AccountUpdateRequest{}, err
+		}
+		for _, element := range elements {
+			if bytes.Equal(bytes.TrimSpace(element), []byte("null")) {
+				return AccountUpdateRequest{}, fmt.Errorf("acme: contact cannot contain null")
+			}
+		}
+		out.Contact = &contacts
+	}
+	// RFC 8555 requires ignoring updates to other status values. They cannot
+	// reactivate an account: authentication rejects an inactive account first.
+	var status string
+	if value, present := raw["status"]; present {
+		if err := json.Unmarshal(value, &status); err != nil {
+			return AccountUpdateRequest{}, fmt.Errorf("acme: status must be a string")
+		}
+		out.Deactivate = status == statusDeactivated
+	}
+	return out, nil
+}
 
 // Identifier is a single ACME order identifier (RFC 8555 §7.1.4). This server
 // issues for DNS identifiers only.
