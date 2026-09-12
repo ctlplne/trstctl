@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ApiError, req, previewTransportIsIsolated, type Identity, type Me, type Owner } from "@/lib/api";
-import type { IdentityIssuanceResult, OwnerRequest } from "@/lib/api-types.gen";
+import type { FirstIssuanceRetry, IdentityIssuanceResult, OwnerRequest } from "@/lib/api-types.gen";
 import {
   newFirstCertificateAttempt,
   submitFirstCertificateAttempt,
@@ -41,10 +41,14 @@ export type WizardCertificateAttempt = Readonly<{
   transitionDispatched: boolean;
   csrRejection?: Readonly<{ requestKey: string; subjectCSRPEM: string }> | null;
   replacesRejectedIssueKey?: string;
+  retryRequest?: Readonly<{ key: string; reason: string; attempts: number }>;
 }>;
 export type WizardPublicResult = IdentityIssuanceResult;
 export class WizardIssuanceStopped extends Error {
-  constructor(readonly state: "failed" | "unavailable") {
+  constructor(
+    readonly state: "failed" | "unavailable",
+    readonly result?: WizardPublicResult,
+  ) {
     super(`issuance_${state}`);
     this.name = "WizardIssuanceStopped";
   }
@@ -310,6 +314,16 @@ export function checkWizardPublicResult(raw: WizardPublicResult, attempt: Wizard
       delivery.attempts < 0)
   )
     throw new Error("public_result_invalid");
+  if (
+    raw.retry !== undefined &&
+    (!raw.retry ||
+      delivery?.status !== "failed" ||
+      typeof raw.retry.allowed !== "boolean" ||
+      typeof raw.retry.reason !== "string" ||
+      !raw.retry.reason ||
+      raw.retry.reason.length > 4096)
+  )
+    throw new Error("public_result_invalid");
   if (raw.state === "pending" || raw.state === "failed" || raw.state === "unavailable") {
     if (raw.certificate !== undefined || raw.certificate_pem !== undefined) throw new Error("public_result_invalid");
     if (
@@ -352,13 +366,71 @@ export async function readWizardCertificateResult(
     );
     await op.authenticate();
     if (result.state === "pending") return null;
-    if (result.state === "failed" || result.state === "unavailable") throw new WizardIssuanceStopped(result.state);
+    if (result.state === "failed" || result.state === "unavailable") throw new WizardIssuanceStopped(result.state, result);
     const identity = await op.read<Identity>(path);
     await op.authenticate();
     if (identity.id !== result.identity_id || identity.tenant_id !== attempt.principal.tenantId || identity.kind !== "x509_certificate")
       throw new Error("identity_mismatch");
     // checkWizardPublicResult established these fields from the actual envelope.
     return { result: result as WizardRecordedCertificate["result"], identity };
+  } finally {
+    op.close();
+  }
+}
+
+export const wizardIssuanceRetryForm = z
+  .object({
+    reason: z
+      .string()
+      .trim()
+      .min(1)
+      .refine((value) => new TextEncoder().encode(value).length <= 1024),
+  })
+  .strict();
+export type WizardIssuanceRetryForm = z.infer<typeof wizardIssuanceRetryForm>;
+
+// A separate, bounded grant resumes the original receiver command. Retaining
+// its body and key before dispatch makes a lost acknowledgement safe to repeat.
+// It never repeats identity creation or creates a different issuance request.
+export async function retryWizardFirstIssuance(
+  attempt: WizardCertificateAttempt,
+  result: WizardPublicResult,
+  reason: string,
+  signal: AbortSignal,
+  retain: (next: WizardCertificateAttempt) => void,
+): Promise<FirstIssuanceRetry> {
+  const checked = checkWizardPublicResult(result, attempt);
+  const input = wizardIssuanceRetryForm.parse({ reason });
+  if (!attempt.transitionDispatched || !attempt.issuance?.identityId || checked.delivery?.status !== "failed" || checked.retry?.allowed !== true)
+    throw new Error("retry_not_available");
+  const op = operation(attempt.principal, signal, WIZARD_SUBMISSION_MS);
+  try {
+    op.check();
+    const previous = attempt.retryRequest;
+    if (previous && previous.attempts > checked.delivery.attempts) throw new Error("stale_retry_result");
+    const request =
+      previous?.attempts === checked.delivery.attempts
+        ? previous
+        : Object.freeze({ key: crypto.randomUUID(), reason: input.reason, attempts: checked.delivery.attempts });
+    if (request.reason !== input.reason) throw new Error("retry_body_changed");
+    retain(Object.freeze({ ...attempt, retryRequest: request }));
+    const receipt = await op.mutation<FirstIssuanceRetry>(
+      `/api/v1/identities/${encodeURIComponent(attempt.issuance.identityId)}/issuance-retry`,
+      { request_key: attempt.issuance.issueKey, reason: request.reason },
+      request.key,
+    );
+    if (
+      !receipt ||
+      receipt.identity_id !== result.identity_id ||
+      receipt.request_key !== result.request_key ||
+      receipt.state !== "pending" ||
+      receipt.attempt_grant !== 1 ||
+      receipt.attempts !== request.attempts ||
+      typeof receipt.retry_event_id !== "string" ||
+      !receipt.retry_event_id
+    )
+      throw new Error("retry_receipt_mismatch");
+    return receipt;
   } finally {
     op.close();
   }

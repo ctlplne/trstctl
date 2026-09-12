@@ -132,8 +132,25 @@ export const messages = {
   },
   "wizard.firstLeaf.deliveryFailed": {
     defaultMessage:
-      "Certificate delivery exhausted its retries and will not retry automatically. Keep this request key. Ask an administrator to reconcile the original request with its issuer before recovery; the issuer may already have signed a certificate.",
+      "Certificate delivery exhausted its retries and will not retry automatically. Keep this request key. Review the recovery evidence below, if available. If recovery is unavailable, reconcile the original request with its issuer before creating another certificate.",
     description: "First-certificate wizard: confirmed terminal delivery, with uncertain issuer outcome",
+  },
+  "wizard.firstLeaf.recoveryHelp": {
+    defaultMessage:
+      "One audited attempt resumes this original request. Correct the failure first. It keeps the original issuer, certificate request, and cumulative attempt count.",
+    description: "First-certificate wizard: audited bounded recovery",
+  },
+  "wizard.firstLeaf.recoveryReason": { defaultMessage: "Reason for recovery", description: "First-certificate wizard: audited bounded recovery" },
+  "wizard.firstLeaf.recoveryReasonError": {
+    defaultMessage: "Explain what was corrected, using at most 1,024 UTF-8 bytes.",
+    description: "First-certificate wizard: audited bounded recovery",
+  },
+  "wizard.firstLeaf.recoverySubmit": { defaultMessage: "Request one recovery attempt", description: "First-certificate wizard: audited bounded recovery" },
+  "wizard.firstLeaf.recoveryRepeat": { defaultMessage: "Repeat the same recovery request", description: "First-certificate wizard: audited bounded recovery" },
+  "wizard.firstLeaf.recoveryUncertain": {
+    defaultMessage:
+      "The recovery response could not be confirmed. Read the same result again. If you repeat recovery, its saved reason and request key are reused; another attempt is not granted for that same request.",
+    description: "First-certificate wizard: audited bounded recovery",
   },
   "wizard.firstLeaf.unavailable": {
     defaultMessage:

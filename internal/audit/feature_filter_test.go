@@ -9,6 +9,27 @@ import (
 	"trstctl.com/trstctl/internal/audit"
 )
 
+// The grant must be discoverable through the ordinary certificate history,
+// without requiring the operator to know a raw event name. An unknown feature
+// or another tenant must never widen that filtered history.
+func TestAuditFirstIssuanceRetryAppearsUnderItsToolAndAction(t *testing.T) {
+	log := openLog(t)
+	appendEvent(t, log, tenantA, "issuance.retry_requested")
+	appendEvent(t, log, tenantA, "identity.issued")
+	appendEvent(t, log, tenantB, "issuance.retry_requested")
+	svc := newService(t, log)
+	for _, query := range []audit.Query{
+		{TenantID: tenantA, Tool: "certificates", Types: []string{"issuance.retry_requested"}},
+		{TenantID: tenantA, FeatureID: "F4", Action: "retry_issuance"},
+		{TenantID: tenantA, Tool: "certificates", FeatureID: "F4", Action: "retry_issuance"},
+	} {
+		rows, err := svc.Search(t.Context(), query)
+		if err != nil || len(rows) != 1 || rows[0].Type != "issuance.retry_requested" || rows[0].TenantID != tenantA {
+			t.Fatalf("recovery missing from ordinary history: %+v %v", rows, err)
+		}
+	}
+}
+
 // TestAuditFeatureActionFilter is the COVER-008 acceptance for audit filtering by
 // feature_id/action: an operator filters the trail by the catalog feature and action
 // that produced a mutation, without naming raw event-type strings. It fails before

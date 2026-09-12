@@ -237,8 +237,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// mapped to F4 alongside the issuance transition it observes.
 	// Exact identity deployment evidence adds getIdentityDeploymentEvidence,
 	// mapped to F7 alongside connector deployment and live verification.
-	if len(out) != 441 {
-		t.Fatalf("OpenAPI operationIds = %d, want 441", len(out))
+	// Includes the bounded, audited recovery of an exhausted first issuance.
+	if len(out) != 442 {
+		t.Fatalf("OpenAPI operationIds = %d, want 442", len(out))
 	}
 	return out
 }

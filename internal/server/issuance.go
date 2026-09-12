@@ -525,6 +525,9 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 		if err != nil {
 			return nil, fmt.Errorf("server: load identity %s: %w", p.IdentityID, err)
 		}
+		if ident.Status != string(orchestrator.StateIssued) {
+			return nil, errors.New("server: original issuance is no longer current for this identity; no certificate was signed")
+		}
 		if err := d.admitIssuance(ctx, m, p, ident, "issue"); err != nil {
 			return nil, err
 		}

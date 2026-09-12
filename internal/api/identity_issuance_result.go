@@ -18,6 +18,7 @@ type identityIssuanceResultResponse struct {
 	Certificate    *certificateResponse              `json:"certificate,omitempty"`
 	CertificatePEM string                            `json:"certificate_pem,omitempty"` // Public certificates only.
 	Delivery       *identityIssuanceDeliveryResponse `json:"delivery,omitempty"`
+	Retry          *FirstIssuanceRetryReadiness      `json:"retry,omitempty"`
 }
 
 type identityIssuanceDeliveryResponse struct {
@@ -70,6 +71,13 @@ func (a *API) getIdentityIssuanceResult(w http.ResponseWriter, r *http.Request) 
 		}
 		metadata := toCertificateResponse(*cert)
 		out.State, out.Certificate, out.CertificatePEM = "issued", &metadata, string(chain)
+	}
+	if result.Delivery != nil && result.Delivery.Status == "failed" && a.firstIssuanceRetry != nil {
+		readiness, err := a.firstIssuanceRetry.FirstIssuanceRetryReadiness(r.Context(), tenantID, result.IdentityID, result.RequestKey)
+		if err != nil {
+			readiness = FirstIssuanceRetryReadiness{Reason: "Recovery evidence could not be checked. Refresh after restoring service health."}
+		}
+		out.Retry = &readiness
 	}
 	// Issued means a recorded public result; certificate.status still reports
 	// revocation/supersession. This never claims deployment or TLS verification.

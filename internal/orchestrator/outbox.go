@@ -104,9 +104,17 @@ type Record struct {
 }
 
 type claimedOutboxEntry struct {
-	id       int64
-	msg      Message
-	attempts int
+	id                int64
+	msg               Message
+	attempts          int
+	retryAttemptLimit int
+}
+
+func (c claimedOutboxEntry) attemptLimit(automaticLimit int) int {
+	if c.retryAttemptLimit > 0 {
+		return c.retryAttemptLimit
+	}
+	return automaticLimit
 }
 
 // CircuitState is the worker-side circuit breaker state for one tenant/destination.
@@ -715,7 +723,7 @@ func (o *Outbox) DispatchOneScoped(ctx context.Context, h Handler, scope Destina
 
 func (o *Outbox) dispatchClaim(ctx context.Context, h Handler, claim claimedOutboxEntry) error {
 	deliverErr := o.deliver(ctx, h, claim)
-	if deliverErr != nil && !IsDeliveryDeferred(deliverErr) && claim.attempts >= o.maxAttempts {
+	if deliverErr != nil && !IsDeliveryDeferred(deliverErr) && claim.attempts >= claim.attemptLimit(o.maxAttempts) {
 		if terminal, ok := h.(TerminalFailureHandler); ok {
 			if err := terminal.DeliverTerminalFailure(ctx, claim.msg, deliverErr); IsDeliveryDeferred(err) {
 				// The domain knows this failure is ambiguous. Keep the durable
@@ -757,7 +765,8 @@ func (o *Outbox) deliver(ctx context.Context, h Handler, claim claimedOutboxEntr
 // claimOne recovers expired leases, then marks one fair due row processing in a
 // short transaction. The external call happens after this transaction commits, so
 // slow destinations do not hold row locks, database transactions, or pool
-// connections while the network is blocked.
+// connections while the network is blocked. An explicit recovery grant consumed
+// before a worker crash is failed, not refunded through lease reclamation.
 func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, seenTenantLanes map[string]bool, scope DestinationScope) (claimedOutboxEntry, bool, error) {
 	tx, err := o.store.SystemPool().Begin(ctx)
 	if err != nil {
@@ -768,10 +777,13 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 	now := o.clockNow()
 	blockedCircuitKeys, reservedHalfOpen := o.reserveHalfOpenProbes(now, scope)
 	if _, err := tx.Exec(ctx,
-		//trstctl:system-query — lease recovery is a cross-tenant system worker path; expired processing rows are returned to their family's pending queue.
+		//trstctl:system-query — lease recovery is a cross-tenant system worker path; expired rows return to their family queue unless their explicit recovery grant was consumed.
 		`UPDATE outbox o
-		    SET status = 'pending', worker_id = NULL, lease_until = NULL
-		  WHERE o.status = 'processing' AND o.lease_until <= $1
+		    SET status = CASE WHEN o.retry_attempt_limit > 0 AND o.attempts >= o.retry_attempt_limit THEN 'failed' ELSE 'pending' END,
+		        last_error = CASE WHEN o.retry_attempt_limit > 0 AND o.attempts >= o.retry_attempt_limit THEN 'explicit_recovery_attempt_exhausted' ELSE o.last_error END,
+		        worker_id = NULL, lease_until = NULL
+		  WHERE ((o.status = 'processing' AND o.lease_until <= $1)
+		         OR (o.status = 'pending' AND o.retry_attempt_limit > 0 AND o.attempts >= o.retry_attempt_limit))
 		    AND (
 		        COALESCE(cardinality($2::text[]), 0) = 0
 		        OR EXISTS (
@@ -795,6 +807,7 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 		     SELECT o.id
 		       FROM outbox o
 		      WHERE o.status = 'pending'
+		        AND (o.retry_attempt_limit = 0 OR o.attempts < o.retry_attempt_limit)
 		        AND o.next_attempt_at <= $1
 		        -- A row demanding one specific agent (A5: agent.upgrade) can
 		        -- never be delivered by the control plane; only ClaimAgentJobs
@@ -934,11 +947,11 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 		 WHERE o.id = candidate.id
 		 RETURNING o.id, o.tenant_id::text, o.destination, o.payload, o.idempotency_key, o.attempts,
 		           COALESCE(NULLIF(o.effect_lane, ''), o.destination),
-		           COALESCE(o.required_agent_role, '')`,
+		           COALESCE(o.required_agent_role, ''),o.retry_attempt_limit`,
 		cutoff, now, o.maxInFlightPerDestination, o.maxInFlightPerTenant,
 		o.workerID, leaseUntil, mapKeys(seenTenants), mapKeys(seenTenantLanes), blockedCircuitKeys,
 		scope.IncludePrefixes, scope.ExcludePrefixes).
-		Scan(&claim.id, &claim.msg.TenantID, &claim.msg.Destination, &claim.msg.Payload, &claim.msg.IdempotencyKey, &claim.attempts, &claim.msg.EffectLane, &claim.msg.RequiredAgentRole)
+		Scan(&claim.id, &claim.msg.TenantID, &claim.msg.Destination, &claim.msg.Payload, &claim.msg.IdempotencyKey, &claim.attempts, &claim.msg.EffectLane, &claim.msg.RequiredAgentRole, &claim.retryAttemptLimit)
 	if errors.Is(err, pgx.ErrNoRows) {
 		o.releaseUnclaimedHalfOpenProbes(reservedHalfOpen, circuitKey{}, now)
 		return claimedOutboxEntry{}, false, tx.Commit(ctx)
@@ -978,7 +991,7 @@ func (o *Outbox) finalizeClaim(ctx context.Context, claim claimedOutboxEntry, de
 	if deliverErr != nil {
 		deferred := IsDeliveryDeferred(deliverErr)
 		status := "pending"
-		if !deferred && claim.attempts >= o.maxAttempts {
+		if !deferred && claim.attempts >= claim.attemptLimit(o.maxAttempts) {
 			status = "failed"
 		}
 		now := o.clockNow()

@@ -68,7 +68,15 @@ const deDECatalog = {
   "wizard.firstLeaf.refresh": "Dasselbe Ergebnis erneut lesen",
   // Machine-authored: human translation review required before release.
   "wizard.firstLeaf.deliveryFailed":
-    "Die Zertifikatsbereitstellung hat alle Wiederholungsversuche ausgeschöpft und wird nicht automatisch wiederholt. Bewahren Sie diesen Anfrageschlüssel auf. Bitten Sie einen Administrator, die ursprüngliche Anfrage vor der Wiederherstellung mit dem Aussteller abzugleichen; dieser könnte bereits ein Zertifikat signiert haben.",
+    "Die Zertifikatsbereitstellung hat ihre Wiederholungsversuche ausgeschöpft und wird nicht automatisch erneut versucht. Bewahren Sie diesen Anfrageschlüssel auf. Prüfen Sie die verfügbaren Nachweise zur Wiederaufnahme unten. Ist keine Wiederaufnahme möglich, klären Sie die ursprüngliche Anfrage mit ihrem Aussteller, bevor Sie ein weiteres Zertifikat erstellen.",
+  "wizard.firstLeaf.recoveryHelp":
+    "Ein protokollierter Versuch setzt diese ursprüngliche Anfrage fort. Beheben Sie zuerst den Fehler. Aussteller, Zertifikatsanfrage und Gesamtzahl der Versuche bleiben erhalten.",
+  "wizard.firstLeaf.recoveryReason": "Grund für die Wiederaufnahme",
+  "wizard.firstLeaf.recoveryReasonError": "Beschreiben Sie die Korrektur mit höchstens 1.024 UTF-8-Bytes.",
+  "wizard.firstLeaf.recoverySubmit": "Einen Wiederaufnahmeversuch anfordern",
+  "wizard.firstLeaf.recoveryRepeat": "Dieselbe Wiederaufnahmeanfrage wiederholen",
+  "wizard.firstLeaf.recoveryUncertain":
+    "Die Antwort zur Wiederaufnahme konnte nicht bestätigt werden. Lesen Sie dasselbe Ergebnis erneut. Bei Wiederholung werden der gespeicherte Grund und Anfrageschlüssel wiederverwendet; für dieselbe Anfrage wird kein weiterer Versuch gewährt.",
   "wizard.firstLeaf.unavailable":
     "Der ursprüngliche Bereitstellungsdatensatz und das öffentliche Zertifikat sind nicht verfügbar. Bewahren Sie diesen Anfrageschlüssel auf und bitten Sie einen Administrator, die Anfrage vor der Wiederherstellung abzugleichen. Eine neue Anfrage könnte ein doppeltes Zertifikat ausstellen.",
   "wizard.firstLeaf.recorded": "Das genaue öffentliche Zertifikatsergebnis ist gespeichert und kann heruntergeladen werden.",

@@ -5,6 +5,9 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { AppQueryProvider } from "@/lib/query";
 import { FirstCertificateStep } from "@/pages/wizard/FirstCertificateStep";
+import { FirstIssuanceRetryForm } from "@/pages/wizard/FirstIssuanceRetryForm";
+import { CapabilityFixtureProvider } from "@/lib/capabilities";
+import type { CapabilityView } from "@/lib/api-types.gen";
 import { bindFirstCertificatePrincipal } from "@/lib/firstCertificateMemory";
 import { installWizardWireFixture, wizardFixtureCSR, wizardFixturePrincipal } from "@/test/wizardWireFixture";
 
@@ -51,6 +54,117 @@ beforeEach(() => {
 });
 
 describe("first-leaf wizard result admission", () => {
+  it.each(["unknown", "denied", "unavailable"] as const)("blocks a %s recovery capability even with retained signing evidence", async (posture) => {
+    const onRetry = vi.fn();
+    const view: CapabilityView | null =
+      posture === "unknown"
+        ? null
+        : {
+            schema_version: 2,
+            contract_schema_version: 3,
+            enforcement_note: "Server checks every request",
+            license: { tier: "community", state: "community" },
+            operations: [],
+            items: [
+              {
+                capability_id: "F4",
+                name: "Certificate issuance",
+                purpose: "Recovery",
+                tool: "certificates",
+                classification: "primary",
+                console_route: "/wizard",
+                maturity: "partial_workflow",
+                release_blocking: true,
+                edition: "core",
+                runtime_state: "available",
+                authorization_state: "none",
+                dependency_state: "none",
+                dependencies: [],
+                stages: [],
+                actions: {
+                  allowed: [],
+                  scoped: [],
+                  denied: posture === "denied" ? ["retryFirstIssuance"] : [],
+                  unavailable:
+                    posture === "unavailable"
+                      ? [{ operation_id: "retryFirstIssuance", code: "dependency_not_configured", detail: "Recovery service unavailable" }]
+                      : [],
+                },
+              },
+            ],
+          };
+    render(
+      <MemoryRouter>
+        <CapabilityFixtureProvider view={view}>
+          <FirstIssuanceRetryForm
+            result={{
+              identity_id: "id-1",
+              request_key: "original-key",
+              state: "failed",
+              delivery: { status: "failed", attempts: 10 },
+              retry: { allowed: true, reason: "Signing operation retained" },
+            }}
+            busy={false}
+            onRetry={onRetry}
+          />
+        </CapabilityFixtureProvider>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByRole("button", { name: "Request one recovery attempt" })).toBeDisabled();
+    expect(screen.getByLabelText("Reason for recovery")).toBeDisabled();
+    expect(onRetry).not.toHaveBeenCalled();
+  });
+  it.each([false, true])("recovers the original failed delivery with recorded certificate=%s, including a lost grant reply", async (alreadyRecorded) => {
+    let recovered = false;
+    const original = fetch;
+    const grants: Array<{ key: string | null; body: { request_key: string; reason: string } }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (path: RequestInfo | URL, init?: RequestInit) => {
+        if (String(path).endsWith("/issuance-retry")) {
+          const body = JSON.parse(init!.body as string) as { request_key: string; reason: string };
+          grants.push({ key: new Headers(init?.headers).get("Idempotency-Key"), body });
+          if (grants.length === 1) throw new TypeError("lost grant reply");
+          recovered = true;
+          return new Response(
+            JSON.stringify({ identity_id: "id-1", request_key: body.request_key, retry_event_id: "grant-1", state: "pending", attempts: 10, attempt_grant: 1 }),
+            { status: 202 },
+          );
+        }
+        const response = await original(path, init);
+        if (String(path).includes("issuance-result?")) {
+          const body = (await response.json()) as Record<string, unknown>;
+          if (recovered) return new Response(JSON.stringify({ ...body, delivery: { status: "delivered", attempts: 11 } }), { status: 200 });
+          return new Response(
+            JSON.stringify({
+              ...(alreadyRecorded ? body : { identity_id: body.identity_id, request_key: body.request_key, state: "failed" }),
+              delivery: { status: "failed", attempts: 10 },
+              retry: { allowed: true, reason: "The original signing operation is retained." },
+            }),
+            { status: 200 },
+          );
+        }
+        return response;
+      }),
+    );
+    mount();
+    const user = await fill();
+    const submit = await screen.findByRole("button", { name: "Request one recovery attempt" });
+    await user.click(submit);
+    expect(await screen.findByText(/Explain what was corrected/)).toBeInTheDocument();
+    expect(grants).toHaveLength(0);
+    await user.type(screen.getByLabelText("Reason for recovery"), "recording dependency restored");
+    await user.click(submit);
+    expect(await screen.findByText(/The recovery response could not be confirmed/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Reason for recovery")).toHaveAttribute("readonly");
+    await user.click(screen.getByRole("button", { name: "Repeat the same recovery request" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Repeat the same recovery request" })).not.toBeInTheDocument());
+    expect(await screen.findByRole("button", { name: "Download leaf certificate" })).toBeInTheDocument();
+    expect(grants).toHaveLength(2);
+    expect(grants[1]).toEqual(grants[0]);
+    expect(callbacks.transitionIdentity).toHaveBeenCalledTimes(1);
+    expect(callbacks.createOwner).toHaveBeenCalledTimes(1);
+  });
   it("requires the public CSR before creating even an owner", async () => {
     mount();
     await fill(false);

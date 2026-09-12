@@ -14696,6 +14696,57 @@
         ],
         "type": "object"
       },
+      "FirstIssuanceRetry": {
+        "description": "One audited additional attempt for the original failed ca.issue command. Attempts is its cumulative count before this grant, which always permits one additional claim. The original command, issuer binding and idempotency key are preserved. Retained source replay never refunds a consumed grant. Historical requests without a recorded certificate or recoverable signing operation require issuer reconciliation.",
+        "properties": {
+          "attempt_grant": {
+            "type": "integer"
+          },
+          "attempts": {
+            "type": "integer"
+          },
+          "identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "request_key": {
+            "type": "string"
+          },
+          "retry_event_id": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "pending"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity_id",
+          "request_key",
+          "retry_event_id",
+          "state",
+          "attempts",
+          "attempt_grant"
+        ],
+        "type": "object"
+      },
+      "FirstIssuanceRetryRequest": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "request_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_key",
+          "reason"
+        ],
+        "type": "object"
+      },
       "FleetReissuanceActionRequest": {
         "properties": {
           "reason": {
@@ -15505,6 +15556,21 @@
           },
           "request_key": {
             "type": "string"
+          },
+          "retry": {
+            "properties": {
+              "allowed": {
+                "type": "boolean"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "allowed",
+              "reason"
+            ],
+            "type": "object"
           },
           "state": {
             "enum": [
@@ -44238,6 +44304,83 @@
         ],
         "summary": "Read the exact asynchronous public certificate result of one accepted identity issuance",
         "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/identities/{id}/issuance-retry": {
+      "post": {
+        "operationId": "retryFirstIssuance",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FirstIssuanceRetryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FirstIssuanceRetry"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Grant one audited retry of the exact failed issuance when retained recovery evidence is available",
+        "x-trstctl-permission": "certs:issue"
       }
     },
     "/api/v1/identities/{id}/ownership-exceptions": {

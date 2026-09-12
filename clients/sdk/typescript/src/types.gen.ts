@@ -2830,6 +2830,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/identities/{id}/issuance-retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Grant one audited retry of the exact failed issuance when retained recovery evidence is available */
+        post: operations["retryFirstIssuance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/identities/{id}/ownership-exceptions": {
         parameters: {
             query?: never;
@@ -10313,6 +10330,21 @@ export interface components {
             standard?: string;
             validated_module_path?: boolean;
         };
+        /** @description One audited additional attempt for the original failed ca.issue command. Attempts is its cumulative count before this grant, which always permits one additional claim. The original command, issuer binding and idempotency key are preserved. Retained source replay never refunds a consumed grant. Historical requests without a recorded certificate or recoverable signing operation require issuer reconciliation. */
+        FirstIssuanceRetry: {
+            attempt_grant: number;
+            attempts: number;
+            /** Format: uuid */
+            identity_id: string;
+            request_key: string;
+            retry_event_id: string;
+            /** @enum {string} */
+            state: "pending";
+        };
+        FirstIssuanceRetryRequest: {
+            reason: string;
+            request_key: string;
+        };
         FleetReissuanceActionRequest: {
             reason?: string;
             rollback_ref?: string;
@@ -10522,6 +10554,10 @@ export interface components {
             /** Format: uuid */
             identity_id: string;
             request_key: string;
+            retry?: {
+                allowed: boolean;
+                reason: string;
+            };
             /** @enum {string} */
             state: "pending" | "issued" | "failed" | "unavailable";
         };
@@ -22885,6 +22921,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IdentityIssuanceResult"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    retryFirstIssuance: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FirstIssuanceRetryRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FirstIssuanceRetry"];
                 };
             };
             /** @description client error */

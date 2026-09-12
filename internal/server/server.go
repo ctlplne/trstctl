@@ -1305,6 +1305,7 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	// through the public auth bootstrap so the browser can fail closed without
 	// probing the intentionally dark /provider/v1 namespace.
 	defaults = append(defaults, api.WithProviderPlaneAvailable(d.ProviderHandler != nil))
+	defaults = append(defaults, api.WithFirstIssuanceRetry(s))
 	a := api.New(d.Store, idem, orch, append(defaults, d.APIOptions...)...)
 	s.api = a
 	return a, auditSvc, nil

@@ -68,6 +68,7 @@ var projectionEventConstants = map[string]string{
 	projections.EventLicensedCryptoMigrationRollbackCompleted: "EventLicensedCryptoMigrationRollbackCompleted",
 	projections.EventIdentityCreated:                          "EventIdentityCreated",
 	projections.EventIdentityIssued:                           "EventIdentityIssued",
+	projections.EventFirstIssuanceRetryRequested:              "EventFirstIssuanceRetryRequested",
 	projections.EventIdentityDeployed:                         "EventIdentityDeployed",
 	projections.EventIdentityRenewing:                         "EventIdentityRenewing",
 	projections.EventIdentityRenewed:                          "EventIdentityRenewed",

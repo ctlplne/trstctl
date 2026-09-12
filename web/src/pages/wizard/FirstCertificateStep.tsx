@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { CredentialChip } from "@/components/CredentialChip";
+import { FirstIssuanceRetryForm } from "./FirstIssuanceRetryForm";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 import { retainedFirstCertificateAttempt, retainFirstCertificateAttempt, firstCertificatePrincipalMatches } from "@/lib/firstCertificateMemory";
 import {
@@ -17,6 +18,7 @@ import {
   submitWizardCertificateAttempt,
   correctWizardCertificateCSR,
   readWizardCertificateResult,
+  retryWizardFirstIssuance,
   downloadWizardPublicCertificate,
   wizardFailureKind,
   WizardIssuanceStopped,
@@ -41,6 +43,7 @@ export function FirstCertificateStep({ onRecorded }: { onRecorded: (record: Wiza
   const [correcting, setCorrecting] = useState(false);
   const active = useRef<AbortController | null>(null);
   const [failure, setFailure] = useState<WizardFailureKind | null>(null);
+  const [retryFailure, setRetryFailure] = useState(false);
   const [readUntil, setReadUntil] = useState(() => (attempt?.transitionDispatched ? performance.now() + WIZARD_POLL_MS : 0));
   const [paused, setPaused] = useState(false);
   const queryClient = useQueryClient();
@@ -92,7 +95,8 @@ export function FirstCertificateStep({ onRecorded }: { onRecorded: (record: Wiza
     },
     { retry: false, enabled: shouldRead, live: shouldRead ? { intervalMs: 4000 } : undefined },
   );
-  const stopped = result.errorValue instanceof WizardIssuanceStopped ? result.errorValue.state : null;
+  const stoppedError = result.errorValue instanceof WizardIssuanceStopped ? result.errorValue : null;
+  const stopped = stoppedError?.state ?? null;
 
   useEffect(() => {
     if (stopped && !result.fetching) setPaused(true);
@@ -115,7 +119,7 @@ export function FirstCertificateStep({ onRecorded }: { onRecorded: (record: Wiza
   useEffect(() => {
     if (!principal || !firstCertificatePrincipalMatches(principal)) return;
     if (result.data) {
-      setPaused(true);
+      if (!["pending", "processing"].includes(result.data.result.delivery?.status ?? "")) setPaused(true);
       onRecorded(result.data);
     }
   }, [result.data, principal, onRecorded]);
@@ -164,6 +168,30 @@ export function FirstCertificateStep({ onRecorded }: { onRecorded: (record: Wiza
     if (!paused) result.refetch();
   }
   const record = principal && firstCertificatePrincipalMatches(principal) ? result.data : null;
+  const recoveryResult = stoppedError?.result ?? record?.result;
+  async function requestRecovery(reason: string) {
+    if (!principal || !attempt || !recoveryResult || active.current || !firstCertificatePrincipalMatches(principal)) return;
+    const controller = new AbortController();
+    active.current = controller;
+    setBusy(true);
+    setRetryFailure(false);
+    try {
+      await queryClient.cancelQueries({ queryKey: resultKey });
+      const receipt = await retryWizardFirstIssuance(attempt, recoveryResult, reason, controller.signal, retain);
+      const next = record
+        ? { ...record, result: { ...record.result, retry: undefined, delivery: { status: "pending" as const, attempts: receipt.attempts } } }
+        : null;
+      queryClient.setQueryData(resultKey, next);
+      setPaused(false);
+      setReadUntil(performance.now() + WIZARD_POLL_MS);
+      void queryClient.invalidateQueries({ queryKey: resultKey });
+    } catch {
+      if (!controller.signal.aborted && firstCertificatePrincipalMatches(principal)) setRetryFailure(true);
+    } finally {
+      if (active.current === controller) active.current = null;
+      if (!controller.signal.aborted && firstCertificatePrincipalMatches(principal)) setBusy(false);
+    }
+  }
   const errorText = t("wizard.firstLeaf.fieldError");
   if (!principal) return <p role="alert">{t("wizard.firstLeaf.authRequired")}</p>;
 
@@ -294,6 +322,16 @@ export function FirstCertificateStep({ onRecorded }: { onRecorded: (record: Wiza
           <Link to="/certificates">{t("wizard.certificate.openInventory")}</Link>
         </div>
       )}
+      {attempt && recoveryResult?.delivery?.status === "failed" && (
+        <FirstIssuanceRetryForm
+          key={recoveryResult.delivery.attempts}
+          result={recoveryResult}
+          savedReason={attempt.retryRequest?.attempts === recoveryResult.delivery.attempts ? attempt.retryRequest.reason : undefined}
+          busy={busy}
+          onRetry={requestRecovery}
+        />
+      )}
+      {retryFailure && <p role="alert">{t("wizard.firstLeaf.recoveryUncertain")}</p>}
       <Link to="/identities">{t("wizard.firstLeaf.inventory")}</Link>
     </section>
   );

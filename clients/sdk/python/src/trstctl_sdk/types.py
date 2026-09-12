@@ -4934,6 +4934,28 @@ FIPSStatus = TypedDict(
     total=False,
 )
 
+FirstIssuanceRetry = TypedDict(
+    'FirstIssuanceRetry',
+    {
+        'attempt_grant': int,
+        'attempts': int,
+        'identity_id': str,
+        'request_key': str,
+        'retry_event_id': str,
+        'state': str,
+    },
+    total=False,
+)
+
+FirstIssuanceRetryRequest = TypedDict(
+    'FirstIssuanceRetryRequest',
+    {
+        'reason': str,
+        'request_key': str,
+    },
+    total=False,
+)
+
 FleetReissuanceActionRequest = TypedDict(
     'FleetReissuanceActionRequest',
     {
@@ -5209,6 +5231,7 @@ IdentityIssuanceResult = TypedDict(
         'delivery': dict[str, Any],
         'identity_id': str,
         'request_key': str,
+        'retry': dict[str, Any],
         'state': str,
     },
     total=False,

@@ -1599,6 +1599,7 @@ func componentSchemas() map[string]*Schema {
 		"identity_id": uuid(), "request_key": str(),
 		"state":       {Type: "string", Enum: []string{"pending", "issued", "failed", "unavailable"}},
 		"certificate": ref("Certificate"), "certificate_pem": str(),
+		"retry": object(map[string]*Schema{"allowed": {Type: "boolean"}, "reason": str()}, "allowed", "reason"),
 		"delivery": object(map[string]*Schema{
 			"status":   {Type: "string", Enum: []string{"pending", "processing", "delivered", "failed"}},
 			"attempts": {Type: "integer"},
@@ -1609,6 +1610,13 @@ func componentSchemas() map[string]*Schema {
 		"identity_id": uuid(), "read_at": timestamp(),
 		"receipt": ref("ConnectorDelivery"), "certificate": ref("Certificate"),
 	}, "identity_id", "read_at")
+	firstIssuanceRetryRequest := object(map[string]*Schema{"request_key": str(), "reason": str()}, "request_key", "reason")
+	firstIssuanceRetry := object(map[string]*Schema{
+		"identity_id": uuid(), "request_key": str(), "retry_event_id": str(),
+		"state":    {Type: "string", Enum: []string{"pending"}},
+		"attempts": {Type: "integer"}, "attempt_grant": {Type: "integer"},
+	}, "identity_id", "request_key", "retry_event_id", "state", "attempts", "attempt_grant")
+	firstIssuanceRetry.Description = "One audited additional attempt for the original failed ca.issue command. Attempts is its cumulative count before this grant, which always permits one additional claim. The original command, issuer binding and idempotency key are preserved. Retained source replay never refunds a consumed grant. Historical requests without a recorded certificate or recoverable signing operation require issuer reconciliation."
 	identityDeploymentEvidence.Description = "Last completed deployment or rollback for this exact tenant and identity, ordered by receipt update time and ID. Historical evidence, not a fresh listener probe or a claim about other destinations. A later replacement may serve another certificate. No receipt means no retained completion; a receipt without certificate means inventory metadata is unavailable. Revoked and superseded certificate status is preserved."
 	certificateIngest := object(map[string]*Schema{
 		"pem": str(), "owner_id": uuid(), "deployment_location": str(), "source": str(),
@@ -6142,6 +6150,8 @@ func componentSchemas() map[string]*Schema {
 		"CBOMInventory":                            cbomInventory,
 		"CBOMScan":                                 cbomScan,
 		"IdentityIssuanceResult":                   identityIssuanceResult,
+		"FirstIssuanceRetryRequest":                firstIssuanceRetryRequest,
+		"FirstIssuanceRetry":                       firstIssuanceRetry,
 		"IdentityDeploymentEvidence":               identityDeploymentEvidence,
 		"Certificate":                              certificate,
 		"CertificateIngest":                        certificateIngest,

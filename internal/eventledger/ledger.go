@@ -89,6 +89,7 @@ const (
 	EventLicensedCryptoMigrationRollbackCompleted = "licensed_crypto.migration.rollback_completed"
 	EventIdentityCreated                          = "identity.created"
 	EventIdentityIssued                           = "identity.issued"
+	EventFirstIssuanceRetryRequested              = "issuance.retry_requested"
 	EventIdentityDeployed                         = "identity.deployed"
 	EventIdentityRenewing                         = "identity.renewing"
 	EventIdentityRenewed                          = "identity.renewed"
@@ -229,6 +230,7 @@ var ledger = []FeatureEvent{
 	// state machine (internal/orchestrator/lifecycle.go). Each transition emits one
 	// identity.* event; the ledger lists them under their owning feature.
 	{"F4", "CA-agnostic outbound issuance", "issue", "transitionIdentity", []string{EventIdentityIssued}},
+	{"F4", "CA-agnostic outbound issuance", "retry_issuance", "retryFirstIssuance", []string{EventFirstIssuanceRetryRequested}},
 	{"F6", "Lifecycle automation", "create_identity", "createIdentity", []string{EventIdentityCreated}},
 	{"F6", "Lifecycle automation", "deploy", "transitionIdentity", []string{EventIdentityDeployed}},
 	{"F6", "Lifecycle automation", "renew", "transitionIdentity", []string{

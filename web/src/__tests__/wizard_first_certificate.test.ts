@@ -11,6 +11,8 @@ import {
   newWizardCertificateAttempt,
   publicCertificateBlocks,
   readWizardCertificateResult,
+  retryWizardFirstIssuance,
+  wizardIssuanceRetryForm,
   submitWizardCertificateAttempt,
   wizardCertificateForm,
   wizardFailureKind,
@@ -126,12 +128,80 @@ afterEach(() => {
 });
 
 describe("first-certificate client custody and exact attempt", () => {
+  it("retains one recovery key and reason through a lost reply without repeating issuance", async () => {
+    await submitWizardCertificateAttempt(saved, new AbortController().signal, keep);
+    const failed: WizardPublicResult = {
+      ...result("pending"),
+      state: "failed",
+      delivery: { status: "failed", attempts: 10 },
+      retry: { allowed: true, reason: "Original signing operation retained" },
+    };
+    const original = fetch;
+    const retries: Array<{ body: unknown; key: string | null }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (path: RequestInfo | URL, init?: RequestInit) => {
+        if (!String(path).endsWith("/issuance-retry")) return original(path, init);
+        const body = JSON.parse(init!.body as string) as { request_key: string; reason: string };
+        retries.push({ body, key: new Headers(init?.headers).get("Idempotency-Key") });
+        if (retries.length === 1) throw new TypeError("lost retry response");
+        return new Response(
+          JSON.stringify({
+            identity_id: failed.identity_id,
+            request_key: body.request_key,
+            retry_event_id: "grant-a",
+            state: "pending",
+            attempts: retries.length < 4 ? 10 : 11,
+            attempt_grant: 1,
+          }),
+          { status: 202 },
+        );
+      }),
+    );
+    calls.length = 0;
+    await expect(retryWizardFirstIssuance(saved, failed, "  database restored  ", new AbortController().signal, keep)).rejects.toThrow("lost retry response");
+    expect(saved.retryRequest?.reason).toBe("database restored");
+    await expect(retryWizardFirstIssuance(saved, failed, "different reason", new AbortController().signal, keep)).rejects.toThrow("retry_body_changed");
+    expect(retries).toHaveLength(1);
+    await retryWizardFirstIssuance(saved, failed, "database restored", new AbortController().signal, keep);
+    expect(retries[1]).toEqual(retries[0]);
+    expect(retries[0].key).not.toBe(saved.issuance!.issueKey);
+    expect((retries[0].body as { request_key: string }).request_key).toBe(saved.issuance!.issueKey);
+    expect(calls.every((call) => call.path === "/auth/me" && call.method === "GET")).toBe(true);
+    // Even repeating after a known receipt retains its key. A larger cumulative
+    // failure counter permits a distinct explicit grant only after a new read.
+    await retryWizardFirstIssuance(saved, failed, "database restored", new AbortController().signal, keep);
+    expect(retries[2]).toEqual(retries[0]);
+    const later = { ...failed, delivery: { status: "failed" as const, attempts: 11 } };
+    await retryWizardFirstIssuance(saved, later, "second dependency repaired", new AbortController().signal, keep);
+    expect(retries[3].key).not.toBe(retries[0].key);
+    await expect(retryWizardFirstIssuance(saved, failed, "database restored", new AbortController().signal, keep)).rejects.toThrow("stale_retry_result");
+  });
+  it("refuses unqualified recovery, invalid reasons and another principal before dispatch", async () => {
+    await submitWizardCertificateAttempt(saved, new AbortController().signal, keep);
+    const failed: WizardPublicResult = {
+      ...result("pending"),
+      state: "failed",
+      delivery: { status: "failed", attempts: 10 },
+      retry: { allowed: false, reason: "Reconcile original issuer" },
+    };
+    calls.length = 0;
+    await expect(retryWizardFirstIssuance(saved, failed, "restored", new AbortController().signal, keep)).rejects.toThrow("retry_not_available");
+    expect(wizardIssuanceRetryForm.safeParse({ reason: " " }).success).toBe(false);
+    expect(wizardIssuanceRetryForm.safeParse({ reason: "é".repeat(513) }).success).toBe(false);
+    expect(() => checkWizardPublicResult({ ...result("pending"), retry: { allowed: true, reason: "wrong state" } }, saved)).toThrow("public_result_invalid");
+    bindFirstCertificatePrincipal({ tenantId: principal.tenantId, subject: "another-operator" });
+    await expect(
+      retryWizardFirstIssuance(saved, { ...failed, retry: { allowed: true, reason: "retained" } }, "restored", new AbortController().signal, keep),
+    ).rejects.toThrow("operation_interrupted");
+    expect(calls).toHaveLength(0);
+  });
   it.each(["failed", "unavailable"] as const)("stops an exact %s result without fetching an identity or mutating", async (state) => {
     await submitWizardCertificateAttempt(saved, new AbortController().signal, keep);
     const value: WizardPublicResult = { ...result("pending"), state, ...(state === "failed" ? { delivery: { status: "failed", attempts: 10 } } : {}) };
     installRead(value);
     calls.length = 0;
-    await expect(readWizardCertificateResult(saved, new AbortController().signal)).rejects.toEqual(new WizardIssuanceStopped(state));
+    await expect(readWizardCertificateResult(saved, new AbortController().signal)).rejects.toEqual(new WizardIssuanceStopped(state, value));
     expect(calls.every((call) => call.path === "/auth/me" && call.method === "GET")).toBe(true);
     expect(() => checkWizardPublicResult({ ...value, request_key: "another-request" }, saved)).toThrow("result_mismatch");
     expect(() => checkWizardPublicResult({ ...value, certificate_pem: pem }, saved)).toThrow("public_result_invalid");

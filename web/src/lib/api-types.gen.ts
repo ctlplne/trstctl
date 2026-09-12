@@ -3572,6 +3572,20 @@ export interface FIPSStatus {
   validated_module_path?: boolean;
 }
 
+export interface FirstIssuanceRetry {
+  attempt_grant: number;
+  attempts: number;
+  identity_id: string;
+  request_key: string;
+  retry_event_id: string;
+  state: "pending";
+}
+
+export interface FirstIssuanceRetryRequest {
+  reason: string;
+  request_key: string;
+}
+
 export interface FleetReissuanceActionRequest {
   reason?: string;
   rollback_ref?: string;
@@ -3765,6 +3779,7 @@ export interface IdentityIssuanceResult {
   delivery?: { attempts: number; status: "pending" | "processing" | "delivered" | "failed" };
   identity_id: string;
   request_key: string;
+  retry?: { allowed: boolean; reason: string };
   state: "pending" | "issued" | "failed" | "unavailable";
 }
 

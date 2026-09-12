@@ -238,6 +238,14 @@ and expiry, then **Operations → Change history** to inspect the recorded chang
 From here trstctl tracks the certificate. Configuring alert delivery, deployment,
 and renewal is separate work; the wizard does not prove those paths.
 
+If automatic delivery retries are exhausted, the wizard shows the retained
+recovery evidence. When the original certificate or signing operation is
+recoverable, correct the reported failure, enter a reason, and choose
+**Request one recovery attempt**. This grants one additional attempt for the
+same issuer and certificate request. If its response is lost, repeating the
+same recovery request returns the original receipt. Requests without enough
+retained evidence require reconciliation with the issuer before new issuance.
+
 If a response is interrupted, keep the page open and use its retained retry.
 After a reload or sign-out, inspect identity inventory and change history before
 starting another request; an empty form does not prove the previous request failed.
@@ -454,9 +462,29 @@ If the result says `pending`, repeat the read below to check progress.
 `failed` means the original delivery exhausted its automatic retries; it does
 not prove the CA never signed a certificate. `unavailable` means neither a
 delivery record nor its exact public certificate is retained. In either case,
-preserve the identity, request key, and original CSR, and have an administrator
-reconcile the original request with its issuer before recovery. A new request
-could mint a duplicate. Reading this endpoint never retries delivery.
+preserve the identity, request key, and original CSR. When a failed result
+includes `retry.allowed=true`, correct the failure and request bounded recovery
+as described below. Otherwise reconcile the original request with its issuer
+before new issuance. A new request could mint a duplicate. Reading this endpoint
+never retries delivery.
+
+Recovery uses `POST /api/v1/identities/{id}/issuance-retry`, with a separate
+`Idempotency-Key` and JSON containing the original `request_key` and a required
+`reason` (at most 1,024 UTF-8 bytes). The operator needs `certs:issue` permission
+in the identity's tenant. A `202` receipt means one attempt was granted; read the
+original issuance result to observe completion. Reuse the same recovery key and
+body after a lost response. A `409` means recovery cannot proceed under that
+request; refresh the original result and follow its explanation.
+
+The grant is an immutable `issuance.retry_requested` event. It preserves the
+original outbox payload, CA command key, and cumulative attempt count; neither
+receipt replay nor projection rebuild refunds a consumed attempt. Recovery
+requires a retained usable certificate, a prepared signing operation with the
+original subject key or CSR, or an exact retained external-CA result. Historical
+requests without this evidence are refused. A new grant does not bypass current
+policy, key custody, issuer binding, or lifecycle state checks.
+The certificate audit history includes the grant; API readers can select it
+with `feature_id=F4&action=retry_issuance` on `/api/v1/audit/events`.
 
 `delivery.status` and `delivery.attempts` describe the original CA command,
 when retained. An exact recorded public certificate takes precedence and returns

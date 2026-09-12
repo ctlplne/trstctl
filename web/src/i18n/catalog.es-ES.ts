@@ -64,7 +64,15 @@ const esESCatalog = {
   "wizard.firstLeaf.refresh": "Volver a leer el mismo resultado",
   // Machine-authored: human translation review required before release.
   "wizard.firstLeaf.deliveryFailed":
-    "La entrega del certificado agotó sus reintentos y no se reintentará automáticamente. Conserve esta clave de solicitud. Pida a un administrador que compruebe la solicitud original con su emisor antes de recuperarla; el emisor puede haber firmado ya un certificado.",
+    "La entrega del certificado agotó sus reintentos y no se repetirá automáticamente. Conserve esta clave de solicitud. Revise la evidencia de recuperación que aparece abajo, si está disponible. Si la recuperación no está disponible, concilie la solicitud original con su emisor antes de crear otro certificado.",
+  "wizard.firstLeaf.recoveryHelp":
+    "Un intento auditado reanuda esta solicitud original. Corrija primero el fallo. Se conservan el emisor, la solicitud de certificado y el total de intentos originales.",
+  "wizard.firstLeaf.recoveryReason": "Motivo de la recuperación",
+  "wizard.firstLeaf.recoveryReasonError": "Explique qué se corrigió en un máximo de 1024 bytes UTF-8.",
+  "wizard.firstLeaf.recoverySubmit": "Solicitar un intento de recuperación",
+  "wizard.firstLeaf.recoveryRepeat": "Repetir la misma solicitud de recuperación",
+  "wizard.firstLeaf.recoveryUncertain":
+    "No se pudo confirmar la respuesta de recuperación. Consulte de nuevo el mismo resultado. Si repite la recuperación, se reutilizan el motivo y la clave guardados; no se concede otro intento para esa misma solicitud.",
   "wizard.firstLeaf.unavailable":
     "El registro de entrega original y el certificado público no están disponibles. Conserve esta clave de solicitud y pida a un administrador que compruebe la solicitud antes de recuperarla. Una nueva solicitud podría emitir un certificado duplicado.",
   "wizard.firstLeaf.recorded": "El resultado público exacto del certificado está registrado y disponible para descargar.",

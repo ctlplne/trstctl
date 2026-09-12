@@ -3306,6 +3306,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventIssuanceRequestDecided:                   {1: true},
 	EventIssuanceRequestPrepared:                  {1: true},
 	EventIssuanceRequestIssued:                    {1: true},
+	EventFirstIssuanceRetryRequested:              {1: true},
 	EventApprovalRequested:                        {1: true},
 	EventApprovalDecisionRecorded:                 {1: true},
 	EventApprovalStatusChanged:                    {1: true},
@@ -3936,6 +3937,15 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return err
 		}
 		return p.store.ApplyIssuanceRequestPreparedTx(ctx, tx, e.TenantID, pl.ID, pl.IdentityID)
+	case EventFirstIssuanceRetryRequested:
+		var pl store.FirstIssuanceRetryReceipt
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.EventID != e.ID {
+			return store.ErrIdempotencyConflict
+		}
+		return p.store.ApplyFirstIssuanceRetryRequestedTx(ctx, tx, e.TenantID, pl)
 	case EventIssuanceRequestIssued:
 		var pl IssuanceRequestIssued
 		if err := decode(e, &pl); err != nil {

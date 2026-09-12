@@ -1546,8 +1546,11 @@ describe("i18n boundary", () => {
       // First-issuance status: exhausted retries and missing records retain the
       // original key and require issuer reconciliation. Machine-authored es/de;
       // FLAGGED FOR HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "39c0cea12e2fc56a44d87eda15263f3a46a3173669858817a4c54e01adb26f3a",
-      "de-DE": "95300b38c17bbc48357d3f198c2cd63f34675abaa8a4c1f2afd467bbbe6e4dec",
+      // First-issuance recovery: reviewed bounded-grant wording, required
+      // reason, retained request and lost-response behavior against the API.
+      // Machine-authored es/de — HUMAN TRANSLATION REVIEW required before release.
+      "es-ES": "0b4ea32756112df8cece02f0644d2b3e0c48c97d8a65478e7f71189d6145af17",
+      "de-DE": "9c8f924a002d3b41e6893296cddb0f9b2b430b28f1636d9b052fcc640f1267f5",
     });
   });
 

@@ -11,6 +11,9 @@ package api
 // to stop a declared route from being mistaken for a configured service.
 func (a *API) runtimeRouteAvailability(r route) (bool, string) {
 	switch r.opID {
+	case "retryFirstIssuance":
+		return runtimeDependency(a.firstIssuanceRetry != nil,
+			"The first-certificate recovery service is not configured in this deployment.")
 	case "executeIncident", "listIncidentExecutions", "getIncidentExecution",
 		"startFleetReissuance", "listFleetReissuanceRuns", "getFleetReissuanceRun",
 		"pauseFleetReissuance", "resumeFleetReissuance", "rollbackFleetReissuance", "exportFleetReissuanceEvidence",

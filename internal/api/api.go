@@ -157,6 +157,7 @@ type API struct {
 	acmeEAB                            ACMEEABProvider
 	acmeOperatorPlan                   ACMEOperatorPlanProvider
 	lifecycleAutomationPlan            LifecycleAutomationPlanProvider
+	firstIssuanceRetry                 FirstIssuanceRetryService
 	agentJobPosture                    AgentJobPostureProvider
 	enqueueConnectorTest               ConnectorTestEnqueuer
 	adcsPosture                        ADCSPostureProvider
@@ -268,6 +269,7 @@ type config struct {
 	acmeEAB                     ACMEEABProvider
 	acmeOperatorPlan            ACMEOperatorPlanProvider
 	lifecycleAutomationPlan     LifecycleAutomationPlanProvider
+	firstIssuanceRetry          FirstIssuanceRetryService
 	agentJobPosture             AgentJobPostureProvider
 	enqueueConnectorTest        ConnectorTestEnqueuer
 	adcsPosture                 ADCSPostureProvider
@@ -570,6 +572,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		acmeEAB:                     cfg.acmeEAB,
 		acmeOperatorPlan:            cfg.acmeOperatorPlan,
 		lifecycleAutomationPlan:     cfg.lifecycleAutomationPlan,
+		firstIssuanceRetry:          cfg.firstIssuanceRetry,
 		agentJobPosture:             cfg.agentJobPosture,
 		enqueueConnectorTest:        cfg.enqueueConnectorTest,
 		adcsPosture:                 cfg.adcsPosture,
@@ -1169,6 +1172,7 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/revocation/rogue-certificates", opID: "listRogueCertificates", summary: "List rogue and non-compliant certificate detection findings", handler: a.listRogueCertificates, resSchema: "RogueCertificatePosture", successCode: "200", perm: authz.CertsRead},
 		{method: "POST", path: "/api/v1/revocation/ct-submissions", opID: "submitCertificateTransparency", summary: "Queue precertificate and certificate submission to Certificate Transparency logs", handler: a.submitCertificateTransparency, reqSchema: "CTLogSubmissionRequest", resSchema: "CTLogSubmission", successCode: "202", mutation: true, perm: authz.CertsWrite},
 		{method: "GET", path: "/api/v1/identities/{id}/issuance-result", opID: "getIdentityIssuanceResult", summary: "Read the exact asynchronous public certificate result of one accepted identity issuance", handler: a.getIdentityIssuanceResult, pathParams: idPath, query: []param{{name: "request_key", typ: "string", desc: "Exact original transition Idempotency-Key", required: true}}, resSchema: "IdentityIssuanceResult", successCode: "200", perm: authz.CertsRead},
+		{method: "POST", path: "/api/v1/identities/{id}/issuance-retry", opID: "retryFirstIssuance", summary: "Grant one audited retry of the exact failed issuance when retained recovery evidence is available", handler: a.retryFirstIssuance, pathParams: idPath, reqSchema: "FirstIssuanceRetryRequest", resSchema: "FirstIssuanceRetry", successCode: "202", mutation: true, perm: authz.CertsIssue},
 		{method: "GET", path: "/api/v1/identities/{id}/deployment-evidence", opID: "getIdentityDeploymentEvidence", summary: "Read the exact certificate and historical receipt of an identity's last completed deployment or rollback", handler: a.getIdentityDeploymentEvidence, pathParams: idPath, resSchema: "IdentityDeploymentEvidence", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/certificates/{id}", opID: "getCertificate", summary: "Get an inventoried certificate", handler: a.getCertificate, pathParams: idPath, resSchema: "Certificate", successCode: "200", perm: authz.CertsRead},
 
