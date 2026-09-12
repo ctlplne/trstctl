@@ -1088,7 +1088,7 @@ const esESCatalog = {
   "secrets.route.store": "Secretos y acceso",
   "secrets.route.access": "Acceso de máquinas",
   "secrets.route.developer": "Usar secretos en aplicaciones",
-  "secrets.route.sharing": "Enlaces de secretos de un solo uso",
+  "secrets.route.sharing": "Compartir secretos de un solo uso",
   "secrets.route.sync": "Enviar secretos a sistemas",
   "secrets.route.storeAnswer": "Vea filtraciones, rotaciones vencidas, entregas fallidas, responsables y acceso de máquinas antes de abrir un valor secreto.",
   "secrets.route.storeDetails":
@@ -1191,8 +1191,8 @@ const esESCatalog = {
   "secrets.route.developerAction": "Planificar acceso",
   "secrets.route.sharingAnswer": "Qué se puede ver una vez, quién puede verlo y hasta cuándo.",
   "secrets.route.sharingDetails":
-    "El vencimiento, el manejo del token portador, el canje único, los eventos de acceso, la revocación y las credenciales efímeras de máquinas siguen disponibles abajo.",
-  "secrets.route.sharingAction": "Crear enlace de un solo uso",
+    "Para canjear un secreto se requieren el token y acceso secrets:read en el mismo tenant. Caduca al canjearlo o al vencer el plazo; no se puede cancelar una entrega individual. Las credenciales temporales de máquinas tienen controles de revocación separados.",
+  "secrets.route.sharingAction": "Crear secreto compartido de un solo uso",
   "secrets.route.enginesAnswer": "Qué sistemas pueden crear credenciales de corta duración bajo demanda.",
   "secrets.route.enginesDetails":
     "La configuración del proveedor, la custodia de claves de certificados, la duración del permiso, la renovación, la revocación, el cifrado de tránsito, HMAC y la firma siguen disponibles abajo.",
@@ -5398,7 +5398,7 @@ const esESCatalog = {
   "secrets.approvals.retry": "Reintentar",
   "secrets.share.review": "Revisar sin crear",
   "secrets.share.description":
-    "Crear devuelve un token al portador una sola vez. Canjear devuelve el valor una sola vez; un canje posterior se bloquea de forma segura.",
+    "Cree un token para un destinatario que pueda iniciar sesión en este tenant con acceso secrets:read. El destinatario abre esta página y lo canjea una vez antes de que caduque.",
   "secrets.share.previewFailedTitle": "Falló la revisión del recurso compartido",
   "secrets.share.previewFailed": "No se pudo revisar el recurso compartido de un solo uso",
   "secrets.share.previewNotEffectFree": "El servidor no demostró que esta revisión no produce efectos.",
@@ -5417,9 +5417,12 @@ const esESCatalog = {
   "secrets.share.createReviewed": "Crear recurso compartido revisado",
   "secrets.share.retrySame": "Reintentar el mismo recurso compartido revisado",
   "secrets.share.createFailed": "No se pudo crear el recurso compartido de un solo uso",
+  "secrets.share.retryRedeem": "Reintentar el mismo canje",
+  "secrets.share.redeemAmbiguous":
+    "Es posible que el servidor haya consumido el secreto compartido, pero la respuesta se interrumpió. Mantenga esta página abierta y reintente el mismo canje para recuperar el valor original. Cambiar el token o salir de esta página descarta la clave de recuperación.",
   "secrets.share.redeemFailed": "No se pudo canjear el recurso compartido de un solo uso",
   "secrets.share.tokenGuidance":
-    "Caduca el {expiresAt}. El token es material al portador: quien lo tenga puede canjear el valor. Cópialo ahora y luego descártalo.",
+    "Caduca el {expiresAt}. Entregue este token de forma segura. El destinatario debe iniciar sesión en el mismo tenant con acceso secrets:read y pegarlo en Token de recurso compartido en esta página. Cópielo ahora y después ocúltelo.",
   "secrets.share.ambiguousFailure":
     "Es posible que el servidor haya creado el recurso compartido, pero la respuesta se interrumpió. Reintenta el mismo recurso compartido revisado para recuperar el token original sin crear un duplicado.",
   "secrets.approvals.approveAction": "Aprobar {action} para {name}",
@@ -7459,7 +7462,7 @@ const esESCatalog = {
   "certificates.readiness.100DayModel": "Modelo de 100 días",
   "certificates.readiness.47DayTarget": "Objetivo de 47 días",
   "source.this.value.is.the.exact.once.redeem.result.ed19b63953":
-    "Este valor es el resultado de un canje permitido exactamente una vez. Un segundo canje debe fallar.",
+    "Este secreto compartido ya se ha consumido. Un nuevo canje falla; repetir la misma solicitud autenticada a la API con su Idempotency-Key original devuelve este resultado original.",
   "source.this.view.shows.issuer.name.kind.public.ke.5166a2828e":
     "Esta vista muestra el nombre y el tipo del emisor, la clave pública, el límite de custodia y los metadatos de la cadena. Los paneles de ceremonia y clave gestionada que aparecen debajo controlan los flujos de trabajo protegidos correspondientes.",
   "source.ticket.description.a277a242bf": "Descripción del ticket",
@@ -8348,7 +8351,7 @@ const esESCatalog = {
   "progressiveTasks.description": "Solo se abre la tarea que elijas. Nada cambia hasta que la revises y la envíes.",
   "progressiveTasks.close": "Cerrar",
   "secrets.tasks.share.title": "Compartir un valor una sola vez",
-  "secrets.tasks.share.description": "Crea un enlace que deja de funcionar tras la primera vista correcta o cuando vence su tiempo.",
+  "secrets.tasks.share.description": "Entregue a un destinatario autorizado de su tenant un token para canjear un valor antes de que caduque.",
   "secrets.tasks.share.action": "Abrir uso compartido único",
   "secrets.tasks.machineCredential.title": "Dar acceso temporal a una máquina",
   "secrets.tasks.machineCredential.description":

@@ -873,10 +873,17 @@ token nor plaintext. If the response is interrupted, retry the identical request
 the same `Idempotency-Key`: trstctl returns the exact original token instead of
 creating a duplicate. Reusing that key for changed input fails closed.
 
-`POST /api/v1/secrets/shares/redeem` atomically deletes the row and returns the value
-exactly once; a second redeem, expired token, or wrong tenant gets a normal `404`.
+`POST /api/v1/secrets/shares/redeem` requires the share token plus an authenticated
+principal with `secrets:read` in the same tenant. It atomically deletes the row and
+returns the value for one redemption; another new request, expired token, or wrong
+tenant gets a normal `404`. A retry of the identical authenticated request with its
+original `Idempotency-Key` recovers the original response. The console retains that
+key only in memory after an ambiguous network/server error and offers **Retry same
+redemption**. Changing the token or leaving the page discards this recovery key.
+This is authenticated token delivery, not an anonymous share URL. Individual share
+cancellation before consumption or expiry is not currently served.
 The `/secrets/sharing` console exposes the same configure → review → create → reveal →
-redeem/verify path, keeps the value out of the preview, and preserves its recovery key
+redeem/verify path, keeps the value out of the preview, and preserves each recovery key
 only in memory while an ambiguous request is retried. Neither value nor token is
 written to browser storage or product evidence.
 

@@ -1129,7 +1129,7 @@ describe("secrets surface", () => {
         "Choose one secret, review exactly how an app will read it, then test access without showing the value.",
         "Plan access",
       ],
-      ["/secrets/sharing", "One-time secret links", "What can be viewed once, by whom, and until when.", "Create one-time link"],
+      ["/secrets/sharing", "One-time secret sharing", "What can be viewed once, by whom, and until when.", "Create one-time share"],
       ["/secrets/engines", "Automatic secret sources", "Which systems can create short-lived credentials on demand.", "Add source"],
       ["/secrets/scanning", "Find leaked secrets in code", "Which repositories were checked and what needs removal.", "Connect repository"],
       ["/secrets/sync", "Send secrets to systems", "Where secrets are copied and whether each destination is current.", "Add destination"],
@@ -1198,7 +1198,7 @@ describe("secrets surface", () => {
 
     cleanup();
     renderSecrets("/secrets/sharing");
-    await user.click(within(await screen.findByRole("group", { name: "Do next" })).getByRole("button", { name: "Create one-time link" }));
+    await user.click(within(await screen.findByRole("group", { name: "Do next" })).getByRole("button", { name: "Create one-time share" }));
     expect(await screen.findByLabelText("Value to share")).toHaveFocus();
   });
 
@@ -2229,7 +2229,7 @@ describe("secrets surface", () => {
     const redeemForm = within(screen.getByRole("form", { name: "Redeem one-time share" }));
     await user.type(redeemForm.getByLabelText("Share token"), "SHARE-TOKEN-1");
     await user.click(redeemForm.getByRole("button", { name: /redeem share/i }));
-    await waitFor(() => expect(apiMock.redeemShare).toHaveBeenCalledWith({ token: "SHARE-TOKEN-1" }));
+    await waitFor(() => expect(apiMock.redeemShare).toHaveBeenCalledWith({ token: "SHARE-TOKEN-1" }, expect.any(String)));
     expect(await screen.findByText("redeemed-secret")).toBeInTheDocument();
 
     await user.click(redeemForm.getByRole("button", { name: /redeem share/i }));

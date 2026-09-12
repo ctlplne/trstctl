@@ -1915,7 +1915,7 @@ export interface Api {
   enableMachineAuthMethod(name: string): Promise<MachineAuthMethodOverride>;
   previewShare(input: SharePreviewRequest): Promise<SharePreview>;
   createShare(input: ShareRequest, idempotencyKey?: string): Promise<ShareToken>;
-  redeemShare(input: ShareRedeemRequest): Promise<ShareValue>;
+  redeemShare(input: ShareRedeemRequest, idempotencyKey?: string): Promise<ShareValue>;
   transitKeys(): Promise<TransitKeyList>;
   transitKeyVersions(name: string): Promise<TransitKeyVersionList>;
   transitPosture(): Promise<TransitPosture>;
@@ -2515,7 +2515,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   enableMachineAuthMethod: (name) => mutate<MachineAuthMethodOverride>("POST", `/api/v1/secrets/auth-methods/${encodeURIComponent(name)}/enable`),
   previewShare: (input) => postRead<SharePreview>("/api/v1/secrets/shares/preview", input),
   createShare: (input, idempotencyKey) => mutate<ShareToken>("POST", "/api/v1/secrets/shares", input, idempotencyKey),
-  redeemShare: (input) => mutate<ShareValue>("POST", "/api/v1/secrets/shares/redeem", input),
+  redeemShare: (input, idempotencyKey) => mutate<ShareValue>("POST", "/api/v1/secrets/shares/redeem", input, idempotencyKey),
   transitKeys: () => req<TransitKeyList>("/api/v1/transit/keys"),
   transitKeyVersions: (name) => req<TransitKeyVersionList>(`/api/v1/transit/keys/${encodeURIComponent(name)}/versions`),
   transitPosture: () => req<TransitPosture>("/api/v1/transit/status"),

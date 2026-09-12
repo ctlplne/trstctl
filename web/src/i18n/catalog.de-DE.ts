@@ -1106,7 +1106,7 @@ const deDECatalog = {
   "secrets.route.store": "Secrets & Zugriff",
   "secrets.route.access": "Maschinenzugriff",
   "secrets.route.developer": "Secrets in Anwendungen verwenden",
-  "secrets.route.sharing": "Einmalige Secret-Links",
+  "secrets.route.sharing": "Einmalige Secret-Freigabe",
   "secrets.route.sync": "Secrets an Systeme senden",
   "secrets.route.storeAnswer":
     "Sehen Sie Leaks, überfällige Rotation, fehlgeschlagene Zustellung, Verantwortliche und Maschinenzugriff, bevor Sie einen Secret-Wert öffnen.",
@@ -1212,8 +1212,8 @@ const deDECatalog = {
   "secrets.route.developerAction": "Zugriff planen",
   "secrets.route.sharingAnswer": "Was einmal angesehen werden kann, von wem und bis wann.",
   "secrets.route.sharingDetails":
-    "Ablaufzeit, Bearer-Token-Verarbeitung, einmaliges Einlösen, Zugriffsereignisse, Widerruf und kurzlebige Maschinenzugänge bleiben unten verfügbar.",
-  "secrets.route.sharingAction": "Einmal-Link erstellen",
+    "Freigaben erfordern das Token und secrets:read-Zugriff im selben Mandanten. Sie enden beim Einlösen oder Ablauf; einzelne Freigaben können nicht vorzeitig widerrufen werden. Temporäre Maschinen-Credentials haben eigene Widerrufsfunktionen.",
+  "secrets.route.sharingAction": "Einmalige Freigabe erstellen",
   "secrets.route.enginesAnswer": "Welche Systeme bei Bedarf kurzlebige Zugangsdaten erstellen können.",
   "secrets.route.enginesDetails":
     "Anbieterkonfiguration, Schlüsselverwahrung für Zertifikate, Gültigkeitsdauer, Erneuerung, Widerruf, Transitverschlüsselung, HMAC und Signatur bleiben unten verfügbar.",
@@ -5450,7 +5450,7 @@ const deDECatalog = {
   "secrets.approvals.retry": "Erneut versuchen",
   "secrets.share.review": "Prüfen, ohne zu erstellen",
   "secrets.share.description":
-    "Beim Erstellen wird das Bearer-Token genau einmal zurückgegeben. Beim Einlösen wird der Wert genau einmal zurückgegeben; ein weiterer Versuch schlägt sicher fehl.",
+    "Erstellen Sie ein Token für einen Empfänger, der sich in diesem Mandanten mit secrets:read-Zugriff anmelden kann. Der Empfänger öffnet diese Seite und löst es vor Ablauf einmal ein.",
   "secrets.share.previewFailedTitle": "Freigabeprüfung fehlgeschlagen",
   "secrets.share.previewFailed": "Die einmalige Freigabe konnte nicht geprüft werden",
   "secrets.share.previewNotEffectFree": "Der Server hat nicht nachgewiesen, dass diese Prüfung keine Auswirkungen hat.",
@@ -5469,9 +5469,12 @@ const deDECatalog = {
   "secrets.share.createReviewed": "Geprüfte Freigabe erstellen",
   "secrets.share.retrySame": "Dieselbe geprüfte Freigabe erneut versuchen",
   "secrets.share.createFailed": "Die einmalige Freigabe konnte nicht erstellt werden",
+  "secrets.share.retryRedeem": "Denselben Einlösevorgang wiederholen",
+  "secrets.share.redeemAmbiguous":
+    "Der Server hat die Freigabe möglicherweise verbraucht, aber seine Antwort wurde unterbrochen. Lassen Sie diese Seite geöffnet und wiederholen Sie denselben Einlösevorgang, um den ursprünglichen Wert abzurufen. Beim Ändern des Tokens oder Verlassen der Seite geht der Wiederherstellungsschlüssel verloren.",
   "secrets.share.redeemFailed": "Die einmalige Freigabe konnte nicht eingelöst werden",
   "secrets.share.tokenGuidance":
-    "Läuft am {expiresAt} ab. Das Token ist Bearer-Material: Wer es besitzt, kann den Wert einlösen. Kopieren Sie es jetzt und verwerfen Sie es danach.",
+    "Läuft am {expiresAt} ab. Übermitteln Sie dieses Token sicher. Der Empfänger muss sich im selben Mandanten mit secrets:read-Zugriff anmelden und es auf dieser Seite in Freigabe-Token einfügen. Kopieren Sie es jetzt und blenden Sie es anschließend aus.",
   "secrets.share.ambiguousFailure":
     "Der Server hat die Freigabe möglicherweise erstellt, aber die Antwort wurde unterbrochen. Versuchen Sie dieselbe geprüfte Freigabe erneut, um das ursprüngliche Token abzurufen, ohne ein Duplikat zu erstellen.",
   "secrets.approvals.approveAction": "{action} für {name} freigeben",
@@ -7518,7 +7521,7 @@ const deDECatalog = {
   "certificates.readiness.100DayModel": "100-Tage-Modell",
   "certificates.readiness.47DayTarget": "47-Tage-Ziel",
   "source.this.value.is.the.exact.once.redeem.result.ed19b63953":
-    "Dieser Wert ist das Ergebnis der genau einmal erlaubten Einlösung. Eine zweite Einlösung muss fehlschlagen.",
+    "Diese Freigabe wurde verbraucht. Ein neuer Einlösevorgang schlägt fehl; dieselbe authentifizierte API-Anfrage mit ihrem ursprünglichen Idempotency-Key liefert dieses ursprüngliche Ergebnis zurück.",
   "source.this.view.shows.issuer.name.kind.public.ke.5166a2828e":
     "Diese Ansicht zeigt Name und Art des Ausstellers, den öffentlichen Schlüssel, die Verwahrungsgrenze und die Kettenmetadaten. Die darunterliegenden Bereiche für Zeremonie und verwaltete Schlüssel steuern die zugehörigen geschützten Workflows.",
   "source.ticket.description.a277a242bf": "Ticketbeschreibung",
@@ -8414,7 +8417,7 @@ const deDECatalog = {
   "progressiveTasks.description": "Nur die gewählte Aufgabe wird geöffnet. Nichts ändert sich, bis du sie prüfst und absendest.",
   "progressiveTasks.close": "Schließen",
   "secrets.tasks.share.title": "Einen Wert einmal teilen",
-  "secrets.tasks.share.description": "Erstellt einen Link, der nach der ersten erfolgreichen Ansicht oder nach Ablauf der Frist nicht mehr funktioniert.",
+  "secrets.tasks.share.description": "Geben Sie einem berechtigten Empfänger in Ihrem Mandanten ein Token, um einen Wert vor Ablauf einzulösen.",
   "secrets.tasks.share.action": "Einmaliges Teilen öffnen",
   "secrets.tasks.machineCredential.title": "Einer Maschine vorübergehend Zugriff geben",
   "secrets.tasks.machineCredential.description":

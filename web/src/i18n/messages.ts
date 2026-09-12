@@ -2574,8 +2574,8 @@ export const messages = {
     description: "Secrets space route: review and test one value-free application secret access plan. Nav label, H1, and title.",
   },
   "secrets.route.sharing": {
-    defaultMessage: "One-time secret links",
-    description: "Secrets route: links that reveal one value once before expiry. Nav label, H1, and title.",
+    defaultMessage: "One-time secret sharing",
+    description: "Secrets route: authenticated one-time delivery within the tenant. Nav label, H1, and title.",
   },
   "secrets.route.sync": {
     defaultMessage: "Send secrets to systems",
@@ -2838,14 +2838,14 @@ export const messages = {
   "secrets.route.developerAction": { defaultMessage: "Plan access", description: "Developer secret access primary action." },
   "secrets.route.sharingAnswer": {
     defaultMessage: "What can be viewed once, by whom, and until when.",
-    description: "One-time secret links opening answer.",
+    description: "One-time secret sharing opening answer.",
   },
   "secrets.route.sharingDetails": {
     defaultMessage:
-      "Expiry, bearer-token handling, one-time redemption, access events, revocation behavior, and ephemeral machine credentials remain available below.",
-    description: "One-time secret links technical-details summary.",
+      "Shares require the token and secrets:read access in the same tenant. They end at redemption or expiry; individual share cancellation is not available. Temporary machine credentials have separate revocation controls.",
+    description: "One-time secret sharing technical-details summary.",
   },
-  "secrets.route.sharingAction": { defaultMessage: "Create one-time link", description: "One-time secret link primary action." },
+  "secrets.route.sharingAction": { defaultMessage: "Create one-time share", description: "One-time secret sharing primary action." },
   "secrets.route.enginesAnswer": {
     defaultMessage: "Which systems can create short-lived credentials on demand.",
     description: "Automatic secret sources opening answer.",
@@ -2858,10 +2858,10 @@ export const messages = {
   "secrets.route.enginesAction": { defaultMessage: "Add source", description: "Automatic secret sources primary action." },
   "secrets.tasks.share.title": {
     defaultMessage: "Share one value once",
-    description: "Plain task name for creating or redeeming a one-time secret link.",
+    description: "Plain task name for creating or redeeming a one-time secret share.",
   },
   "secrets.tasks.share.description": {
-    defaultMessage: "Create a link that stops working after its first successful view or when its time limit ends.",
+    defaultMessage: "Give an authorized recipient in your tenant a token to redeem one value before it expires.",
     description: "Outcome and safety summary for one-time secret sharing.",
   },
   "secrets.tasks.share.action": {
@@ -16426,7 +16426,8 @@ export const messages = {
     description: "Button label for the effect-free one-time-share review.",
   },
   "secrets.share.description": {
-    defaultMessage: "Create returns a bearer token once. Redeem returns the value once; a later redeem fails closed.",
+    defaultMessage:
+      "Create a token for a recipient who can sign in to this tenant with secrets:read access. They open this page and redeem it once before expiry.",
     description: "Plain-language explanation of the one-time-share security boundary.",
   },
   "secrets.share.previewFailedTitle": {
@@ -16497,12 +16498,22 @@ export const messages = {
     defaultMessage: "Could not create the one-time share",
     description: "Fallback for a definitive one-time-share creation error.",
   },
+  "secrets.share.retryRedeem": {
+    defaultMessage: "Retry same redemption",
+    description: "One-time share response-loss recovery using the original authenticated request.",
+  },
+  "secrets.share.redeemAmbiguous": {
+    defaultMessage:
+      "The server may have consumed the share, but its response was interrupted. Keep this page open and retry the same redemption to recover the original value. Changing the token or leaving this page discards its recovery key.",
+    description: "One-time share response-loss recovery using the original authenticated request.",
+  },
   "secrets.share.redeemFailed": {
     defaultMessage: "Could not redeem the one-time share",
     description: "Fallback for a definitive one-time-share redemption error.",
   },
   "secrets.share.tokenGuidance": {
-    defaultMessage: "Expires {expiresAt}. The token is bearer material: whoever has it can redeem the value. Copy it now, then dismiss it.",
+    defaultMessage:
+      "Expires {expiresAt}. Deliver this token securely. The recipient must sign in to the same tenant with secrets:read access, then paste it into Share token on this page. Copy it now, then dismiss it.",
     description: "Expiry and custody guidance shown beside a newly created one-time-share token.",
   },
   "secrets.share.ambiguousFailure": {
@@ -25029,7 +25040,8 @@ export const messages = {
     description: "Target endpoint of the certificate lifetime-readiness planning scale.",
   },
   "source.this.value.is.the.exact.once.redeem.result.ed19b63953": {
-    defaultMessage: "This value is the exact-once redeem result. A second redeem should fail.",
+    defaultMessage:
+      "This share has been consumed. A new redemption fails; retrying the identical authenticated API request with its original Idempotency-Key returns this original result.",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
   },
   "source.this.view.shows.issuer.name.kind.public.ke.5166a2828e": {

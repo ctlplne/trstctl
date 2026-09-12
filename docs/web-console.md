@@ -361,12 +361,15 @@ Transit console for safe key-metadata readback, typed key creation/selection/rot
 and encrypt/decrypt/rewrap/HMAC/sign operations (`/api/v1/transit/*`). Key material
 never enters the browser; a decrypted value appears only in the dismissible reveal
 panel.
-**One-time secret links** (`/secrets/sharing`) covers self-destructing shares and
+**One-time secret sharing** (`/secrets/sharing`) covers authenticated token delivery and
 separate ephemeral API keys. A share is configured, reviewed without sending its
 value, created from the server-keyed plan, revealed once, and then redeemed/verified.
 If creation has an ambiguous network result, the page retains one in-memory recovery
 key and offers **Retry same reviewed share**; it does not create a new request. The
-same workspace shows the secret-change dual-control queue and keeps values/tokens out
+recipient needs the token and `secrets:read` access in the same tenant. A lost
+redemption response can be recovered with **Retry same redemption** while the page
+remains open and the token unchanged. Shares expire or are consumed once; individual
+cancellation is not available. The same workspace shows the secret-change dual-control queue and keeps values/tokens out
 of browser storage. **Find leaked secrets in code** (`/secrets/scanning`)
 covers repository and pipeline checks through a three-step **choose → review →
 prove** workflow. Review is server-owned and effect-free: it validates the confined
@@ -811,7 +814,7 @@ remain fail-closed when the surface is disabled. The route is backed by
 | `/secrets/engines`  | Automatic secret sources        |
 | `/secrets/access`   | Machine access                  |
 | `/secrets/developer`| Use secrets in apps             |
-| `/secrets/sharing`  | One-time secret links           |
+| `/secrets/sharing`  | One-time secret sharing           |
 | `/secrets/scanning` | Find leaked secrets in code     |
 | `/secrets/sync`     | Send secrets to systems         |
 | `/agents`           | Agents                          |

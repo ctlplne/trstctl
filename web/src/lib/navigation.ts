@@ -191,6 +191,7 @@ export const navSpaces: NavSpace[] = [
         items: [
           { to: "/secrets/access", labelKey: "secrets.route.access", icon: "identity", mode: "real", featureIds: ["F58"] },
           { to: "/secrets/developer", labelKey: "secrets.route.developer", icon: "key", mode: "real", featureIds: ["F64"] },
+          // Shares return tokens for authenticated tenant recipients; they do not create public links.
           { to: "/secrets/sharing", labelKey: "secrets.route.sharing", icon: "secret", mode: "real", featureIds: ["F38", "F60"] },
         ],
       },

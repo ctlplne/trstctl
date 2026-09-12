@@ -1027,6 +1027,14 @@ describe("api CSRF contract (SEC-001)", () => {
     expect(sentHeaders()["Idempotency-Key"]).toMatch(/^(?:idem-.+|[0-9a-f-]{36})$/);
   });
 
+  it("preserves the one-time share redemption key for response-loss recovery", async () => {
+    mockFetch(200, JSON.stringify({ value: "recovered-once" }));
+    await api.redeemShare({ token: "share-token" }, "share-redeem-recovery-1");
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/shares/redeem");
+    expect(sentHeaders()["Idempotency-Key"]).toBe("share-redeem-recovery-1");
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toEqual({ token: "share-token" });
+  });
+
   it("echoes the CSRF cookie on session read POST requests", async () => {
     document.cookie = "trstctl_csrf=csrf-token-2; path=/";
     mockFetch(200, JSON.stringify({ text: "answer", sufficient: true }));

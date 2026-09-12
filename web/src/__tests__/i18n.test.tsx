@@ -1537,8 +1537,11 @@ describe("i18n boundary", () => {
       // Exact workload read: explicit secret selection, verification scope,
       // and response-name mismatch. Machine-authored es/de require HUMAN
       // TRANSLATION REVIEW before release; no budgets changed.
-      "es-ES": "ac52c71e42a31c913fd0fbc25c054b45ad010651c117198b303f0e540fa65290",
-      "de-DE": "2d31e07154ac17886e56020299cbb3679fee05c50822b8c5d08b49f77a1dae36",
+      // One-time sharing: authenticated recipient instructions, accurate expiry
+      // and cancellation boundary, and same-request redemption recovery.
+      // Machine-authored es/de require HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "94191b763be65379bfeceba0b997e27aca805c5f150ff3586b1464a25b66f3f3",
+      "de-DE": "705e2bbf81d470abec636743af4d8ae5f0afceb9dcf3512b43f4c11dd118909b",
     });
   });
 

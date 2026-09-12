@@ -44,6 +44,8 @@ export default function SecretSharingWorkflow({
   const [redeemBusy, setRedeemBusy] = useState(false);
   const [redeemError, setRedeemError] = useState<string | null>(null);
   const [redeemed, setRedeemed] = useState<ShareValue | null>(null);
+  const [redeemAmbiguous, setRedeemAmbiguous] = useState(false);
+  const redeemRequest = useRef<{ token: string; key: string } | null>(null);
   const shareValueRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -130,13 +132,26 @@ export default function SecretSharingWorkflow({
 
   async function submitRedeem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    // Consumption may have committed before a response was lost. Retain the
+    // exact request only in memory so a retry can recover that original result.
+    const request = redeemRequest.current ?? { token: redeemToken, key: newShareIdempotencyKey() };
+    redeemRequest.current = request;
     setRedeemError(null);
     setRedeemed(null);
     setRedeemBusy(true);
     try {
-      setRedeemed(await api.redeemShare({ token: redeemToken }));
+      setRedeemed(await api.redeemShare({ token: request.token }, request.key));
+      redeemRequest.current = null;
+      setRedeemAmbiguous(false);
     } catch (err) {
-      setRedeemError(apiProblemMessage(err, t("secrets.share.redeemFailed")));
+      if (err instanceof ApiError && err.status < 500) {
+        redeemRequest.current = null;
+        setRedeemAmbiguous(false);
+        setRedeemError(apiProblemMessage(err, t("secrets.share.redeemFailed")));
+      } else {
+        setRedeemAmbiguous(true);
+        setRedeemError(t("secrets.share.redeemAmbiguous"));
+      }
     } finally {
       setRedeemBusy(false);
     }
@@ -230,13 +245,21 @@ export default function SecretSharingWorkflow({
             <input
               className="rounded-md border border-border bg-background px-3 py-2"
               value={redeemToken}
-              onChange={(event) => setRedeemToken(event.target.value)}
+              onChange={(event) => {
+                setRedeemToken(event.target.value);
+                redeemRequest.current = null;
+                setRedeemAmbiguous(false);
+                setRedeemError(null);
+                setRedeemed(null);
+              }}
+              autoComplete="off"
+              disabled={redeemBusy}
               required
             />
           </label>
           <Button type="submit" variant="outline" disabled={redeemBusy || blocked}>
             {redeemBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
-            {translateNow("source.redeem.share.1b54732322")}
+            {redeemAmbiguous ? t("secrets.share.retryRedeem") : translateNow("source.redeem.share.1b54732322")}
           </Button>
           {redeemError && <ErrorState title={translateNow("source.share.redeem.failed.674fa95c57")}>{redeemError}</ErrorState>}
         </form>

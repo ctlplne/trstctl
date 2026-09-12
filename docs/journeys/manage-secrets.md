@@ -14,8 +14,8 @@
 
 You will give your applications a safer way to hold the sensitive values they need —
 database passwords, API tokens, encryption keys — by storing them encrypted, handing
-out short-lived ones that expire on their own, and sharing one-off secrets through
-links that self-destruct after a single view. The outcome is fewer long-lived secrets
+out short-lived ones that expire on their own, and sharing one-off secrets with
+authorized recipients in the same tenant. The outcome is fewer long-lived secrets
 copied into config files and CI, each one encrypted at rest and recorded in a
 tamper-evident log. This is for a developer or platform engineer who wants their
 services to stop hard-coding secrets.
@@ -398,7 +398,13 @@ today (see [Current limitations](../limitations.md) and
    `preview_fingerprint` in the issue request so any changed CA, custody input,
    profile, principal, tenant, or TTL fails closed and requires a new review.
 
-10. Share a one-off secret that destroys itself after a single read.
+10. Share a one-off secret with an authorized recipient in your tenant.
+
+   The recipient needs the share token and an authenticated session or API token
+   with `secrets:read` in the same tenant. This workflow returns a token, not a public
+   URL. Deliver it through a secure channel; the recipient opens **Secrets → One-time
+   secret sharing** and pastes it into **Share token**. A share ends at consumption
+   or expiry; individual cancellation before expiry is not currently available.
 
    First review the lifetime. This request deliberately contains no secret value and
    has no side effects:
@@ -431,22 +437,27 @@ today (see [Current limitations](../limitations.md) and
    with `share-one-off-1`; the idempotency ledger returns the same original response.
    Never switch to a new key until the old request has a definite outcome.
 
-   In the console, open **Secrets → One-time secret links**, enter the value and
+   In the console, open **Secrets → One-time secret sharing**, enter the value and
    lifetime, and choose **Review without creating**. The review says what will happen
    and explicitly confirms nothing has been stored or sent. **Create reviewed share**
    sends the value for the first time. If the connection breaks, **Retry same reviewed
    share** keeps the same recovery key and cannot mint a duplicate.
 
    ```sh
+   SHARE_REDEEM_KEY="$(uuidgen)" # retain for retries of this exact request
    curl -fsS --cacert "$TRSTCTL_CA_FILE" -X POST https://localhost:8443/api/v1/secrets/shares/redeem \
      -H "Authorization: Bearer $TRSTCTL_TOKEN" \
-     -H "Idempotency-Key: $(uuidgen)" \
+     -H "Idempotency-Key: $SHARE_REDEEM_KEY" \
      -H 'Content-Type: application/json' \
      -d '{"token":"<returned-token>"}'
    ```
 
-   -> the share redeems exactly once; a second redeem fails, and the bearer token and
-   value are never written to the audit/event log. The nearby **Secret-change
+   -> a new redemption consumes the share once; another new request fails. If the
+   response is interrupted, retry the identical authenticated request with its
+   original `Idempotency-Key` to recover the original value. The console offers
+   **Retry same redemption** and keeps that key only in memory: keep the page open
+   and the token unchanged until the result is known. The bearer token and value
+   are never written to the audit/event log. The nearby **Secret-change
    approvals** panel shows the separate dual-control queue for rotate, recover, and
    delete actions.
 
