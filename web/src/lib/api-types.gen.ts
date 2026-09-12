@@ -3747,6 +3747,13 @@ export interface IdentityConnectorTargetRequest {
   target_id: string;
 }
 
+export interface IdentityDeploymentEvidence {
+  certificate?: Certificate;
+  identity_id: string;
+  read_at: string;
+  receipt?: ConnectorDelivery;
+}
+
 export interface IdentityIssuanceResult {
   certificate?: Certificate;
   certificate_pem?: string;

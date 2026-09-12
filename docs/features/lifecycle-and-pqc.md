@@ -27,6 +27,22 @@ first commit, so this migration is a contained change, not a rewrite.
 
 ### Lifecycle automation (F6)
 
+Open an X.509 identity's detail to see the certificate from its last completed
+deployment or restore, including validity dates, certificate status, destination,
+and receipt time. The certificate link opens that exact leaf's revocation view.
+This is retained evidence, not a fresh connection to the listener: a subsequent
+replacement or an out-of-band change may serve a different certificate.
+
+`GET /api/v1/identities/{id}/deployment-evidence` requires `certs:read` and reads
+only the caller's tenant. It selects one completed deployment (`delivered` or
+`verified`) or restore (`rolled_back`), ordered by receipt update time and ID.
+Queued and failed attempts do not displace that evidence. Certificate metadata
+is resolved by the receipt's exact fingerprint, including superseded and revoked
+leaves. An absent receipt means no retained completion; a receipt without a
+certificate means inventory metadata is unavailable. Neither case substitutes a
+certificate with a matching name or owner. The response records its read time;
+it does not represent an atomic history snapshot or proof for every destination.
+
 The lifecycle manager watches the [inventory](discovery-and-inventory.md) and acts on
 three signals, tenant-isolated at the database layer:
 

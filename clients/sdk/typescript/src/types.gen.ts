@@ -2796,6 +2796,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/identities/{id}/deployment-evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the exact certificate and historical receipt of an identity's last completed deployment or rollback */
+        get: operations["getIdentityDeploymentEvidence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/identities/{id}/issuance-result": {
         parameters: {
             query?: never;
@@ -10468,6 +10485,15 @@ export interface components {
         IdentityConnectorTargetRequest: {
             /** Format: uuid */
             target_id: string;
+        };
+        /** @description Last completed deployment or rollback for this exact tenant and identity, ordered by receipt update time and ID. Historical evidence, not a fresh listener probe or a claim about other destinations. A later replacement may serve another certificate. No receipt means no retained completion; a receipt without certificate means inventory metadata is unavailable. Revoked and superseded certificate status is preserved. */
+        IdentityDeploymentEvidence: {
+            certificate?: components["schemas"]["Certificate"];
+            /** Format: uuid */
+            identity_id: string;
+            /** Format: date-time */
+            read_at: string;
+            receipt?: components["schemas"]["ConnectorDelivery"];
         };
         IdentityIssuanceResult: {
             certificate?: components["schemas"]["Certificate"];
@@ -22755,6 +22781,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Identity"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getIdentityDeploymentEvidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityDeploymentEvidence"];
                 };
             };
             /** @description client error */

@@ -25742,6 +25742,51 @@ export const messages = {
       "Retiring “{value1}” ends its lifecycle automation and retains its record and audit history. This cannot be undone. Retirement does not revoke a certificate.",
     description: "Retirement ends lifecycle work while preserving evidence; it does not replace certificate revocation.",
   },
+  "identities.certificate.title": {
+    defaultMessage: "Last completed certificate deployment",
+    description: "Exact historical certificate deployment evidence in identity detail.",
+  },
+  "identities.certificate.scope": {
+    defaultMessage:
+      "Last completed deployment or restore for this identity. This is historical evidence; a replacement or target change may serve another certificate.",
+    description: "Exact historical certificate deployment evidence in identity detail.",
+  },
+  "identities.certificate.empty": {
+    defaultMessage: "No completed certificate deployment is recorded for this identity.",
+    description: "Exact historical certificate deployment evidence in identity detail.",
+  },
+  "identities.certificate.failed": {
+    defaultMessage: "Certificate deployment evidence could not be loaded.",
+    description: "Exact historical certificate deployment evidence in identity detail.",
+  },
+  "identities.certificate.missing": {
+    defaultMessage: "The completed receipt has no matching certificate metadata.",
+    description: "Exact historical certificate deployment evidence in identity detail.",
+  },
+  "identities.certificate.mismatch": {
+    defaultMessage: "Certificate evidence does not match this identity and deployment receipt.",
+    description: "Exact historical certificate deployment evidence in identity detail.",
+  },
+  "identities.certificate.retry": {
+    defaultMessage: "Reload certificate evidence",
+    description: "Exact historical certificate deployment evidence in identity detail.",
+  },
+  "identities.certificate.receipt": {
+    defaultMessage: "Recorded {at} · {connector}/{target}",
+    description: "Exact historical certificate deployment evidence in identity detail.",
+  },
+  "identities.certificate.expires": {
+    defaultMessage: "Certificate expires",
+    description: "Exact historical certificate deployment evidence in identity detail.",
+  },
+  "identities.certificate.validFrom": {
+    defaultMessage: "Certificate valid from",
+    description: "Exact historical certificate deployment evidence in identity detail.",
+  },
+  "identities.certificate.review": {
+    defaultMessage: "Review this certificate and revocation",
+    description: "Exact historical certificate deployment evidence in identity detail.",
+  },
   "identities.issuer.selectedCA": { defaultMessage: "Selected issuance CA", description: "CA selected for the identity's endpoint lifecycle automation." },
   "identities.issuer.selection": {
     defaultMessage: "{source}: {name}",

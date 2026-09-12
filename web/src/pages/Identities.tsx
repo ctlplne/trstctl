@@ -23,6 +23,7 @@ import { IssuancePipeline } from "@/components/issuance";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DetailDrawer } from "@/components/DetailDrawer";
 import { IdentityActivityEvidence } from "@/pages/identities/IdentityActivityEvidence";
+import { IdentityCertificateEvidence } from "@/pages/identities/IdentityCertificateEvidence";
 import { IdentityIssuerEvidence } from "@/pages/identities/IdentityIssuerEvidence";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
@@ -1442,14 +1443,18 @@ function IdentityDetailPanel({
                 </details>
               </dd>
             </div>
-            <div>
-              <dt className="font-medium text-muted-foreground">{translateNow("source.not.after.577c1c7930")}</dt>
-              <dd>{formatDate(identity.not_after)}</dd>
-            </div>
-            <div>
-              <dt className="font-medium text-muted-foreground">{translateNow("source.not.before.69bf0cd3a1")}</dt>
-              <dd>{formatDate(identity.not_before)}</dd>
-            </div>
+            {(!["x509_certificate", "x509"].includes(identity.kind) || identity.not_after || identity.not_before) && (
+              <>
+                <div>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.not.after.577c1c7930")}</dt>
+                  <dd>{formatDate(identity.not_after)}</dd>
+                </div>
+                <div>
+                  <dt className="font-medium text-muted-foreground">{translateNow("source.not.before.69bf0cd3a1")}</dt>
+                  <dd>{formatDate(identity.not_before)}</dd>
+                </div>
+              </>
+            )}
             <div>
               <dt className="font-medium text-muted-foreground">{translateNow("source.owner.4b1b8aa360")}</dt>
               <dd>
@@ -1469,6 +1474,8 @@ function IdentityDetailPanel({
               <dd className="break-all font-mono text-xs">{identity.id}</dd>
             </div>
           </dl>
+
+          {["x509_certificate", "x509"].includes(identity.kind) && <IdentityCertificateEvidence key={identity.id} identityId={identity.id} />}
 
           <section aria-labelledby="identity-attributes-heading" className="mt-4">
             <h3 id="identity-attributes-heading" className="font-semibold">

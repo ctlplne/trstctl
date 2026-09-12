@@ -5185,6 +5185,17 @@ IdentityConnectorTargetRequest = TypedDict(
     total=False,
 )
 
+IdentityDeploymentEvidence = TypedDict(
+    'IdentityDeploymentEvidence',
+    {
+        'certificate': dict[str, Any],
+        'identity_id': str,
+        'read_at': str,
+        'receipt': dict[str, Any],
+    },
+    total=False,
+)
+
 IdentityIssuanceResult = TypedDict(
     'IdentityIssuanceResult',
     {

@@ -7641,6 +7641,18 @@ const esESCatalog = {
   "source.retiring.value1.discards.the.credential.re.7f368527a3":
     "Retirar «{value1}» finaliza la automatización de su ciclo de vida y conserva su registro y su historial de auditoría. Esta acción no se puede deshacer. Retirar una identidad no revoca un certificado.",
   // Machine-authored: human translation review required before release.
+  "identities.certificate.title": "Último despliegue de certificado completado",
+  "identities.certificate.scope":
+    "Último despliegue o restauración completados para esta identidad. Son pruebas históricas; un reemplazo o un cambio en el destino puede presentar otro certificado.",
+  "identities.certificate.empty": "No hay ningún despliegue de certificado completado registrado para esta identidad.",
+  "identities.certificate.failed": "No se pudieron cargar las pruebas del despliegue del certificado.",
+  "identities.certificate.missing": "El registro completado no tiene metadatos de certificado coincidentes.",
+  "identities.certificate.mismatch": "Las pruebas del certificado no coinciden con esta identidad y el registro del despliegue.",
+  "identities.certificate.retry": "Volver a cargar las pruebas del certificado",
+  "identities.certificate.receipt": "Registrado el {at} · {connector}/{target}",
+  "identities.certificate.expires": "El certificado caduca",
+  "identities.certificate.validFrom": "Certificado válido desde",
+  "identities.certificate.review": "Revisar este certificado y su revocación",
   "identities.issuer.selectedCA": "CA seleccionada para la emisión",
   "identities.issuer.selection": "{source}: {name}",
   "identities.issuer.selectionScope":

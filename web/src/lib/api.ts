@@ -262,6 +262,7 @@ import type {
   GraphReachable,
   GraphResponse,
   Identity as GenIdentity,
+  IdentityDeploymentEvidence,
   IdentityTransitionPreview as GenIdentityTransitionPreview,
   IdentityConnectorTargetRequest,
   IdentityRequest,
@@ -1570,6 +1571,7 @@ export interface Api {
   decommissionNHI(input: NHIDecommissionRequest): Promise<NHIDecommissionResponse>;
   ownershipAttribution(): Promise<OwnershipAttribution>;
   getIdentity(id: string): Promise<Identity>;
+  identityDeploymentEvidence(id: string): Promise<IdentityDeploymentEvidence>;
   createIdentity(input: IdentityRequest, idempotencyKey?: string): Promise<Identity>;
   previewIdentityTransition(id: string, to: TransitionRequest["to"], reason?: string, subjectCSRPEM?: string): Promise<IdentityTransitionPreview>;
   transitionIdentity(
@@ -2096,6 +2098,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   decommissionNHI: (input) => mutate<NHIDecommissionResponse>("POST", "/api/v1/nhi/decommission", input),
   ownershipAttribution: () => req<OwnershipAttribution>("/api/v1/ownership/attribution"),
   getIdentity: (id) => req<Identity>(`/api/v1/identities/${encodeURIComponent(id)}`),
+  identityDeploymentEvidence: (id) => req<IdentityDeploymentEvidence>(`/api/v1/identities/${encodeURIComponent(id)}/deployment-evidence`),
   createIdentity: (input, idempotencyKey) => mutate<Identity>("POST", "/api/v1/identities", input, idempotencyKey),
   previewIdentityTransition: (id, to, reason, subjectCSRPEM) =>
     postRead<IdentityTransitionPreview>(`/api/v1/identities/${encodeURIComponent(id)}/transitions/preview`, {

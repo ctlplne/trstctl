@@ -1529,8 +1529,10 @@ describe("i18n boundary", () => {
       // retirement preserves evidence. Machine-authored es/de require human review.
       // Revocation truth: queued publication and client enforcement are separate.
       // Machine-authored es/de require HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "f53c81afb3e111619bfed3872dea25e929d094c80f5e46bd3bb03c07047e67c2",
-      "de-DE": "71743e9e828cd77ec0b4b8224efdac8c61835ef8f28cfec8e1e17b8fc9ab6e51",
+      // Exact certificate evidence: validity, historical receipt limits, missing
+      // metadata and retry copy. Machine-authored es/de require HUMAN REVIEW.
+      "es-ES": "37351a2799304e0da78ef4df348bd432f796205a27aa0d698816f3d694010764",
+      "de-DE": "589a5c020941fb5c0493daa4e6032d34cbc56f8507a8de7ab084a4f5b46eada9",
     });
   });
 

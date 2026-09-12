@@ -11,6 +11,15 @@ export interface ApiWorkflowCoverage {
 
 export const apiWorkflowCoverage = [
   {
+    path: "/api/v1/identities/{id}/deployment-evidence",
+    route: "/identities",
+    owner: "SURFACE/identities",
+    kind: "console-flow",
+    workflow: "Exact certificate validity from completed deployment evidence",
+    rationale:
+      "Identity detail shows the last completed deployment or restore, its exact certificate dates and status, and the historical proof boundary with a link to the exact certificate's revocation view.",
+  },
+  {
     path: "/api/v1/access/sessions",
     route: "/admin/access",
     owner: "SURFACE/access",

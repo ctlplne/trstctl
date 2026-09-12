@@ -7700,6 +7700,18 @@ const deDECatalog = {
   "source.retiring.value1.discards.the.credential.re.7f368527a3":
     "Das Stilllegen von „{value1}“ beendet die Lebenszyklusautomatisierung und bewahrt den Datensatz und den Auditverlauf. Dies kann nicht rückgängig gemacht werden. Die Stilllegung widerruft kein Zertifikat.",
   // Machine-authored: human translation review required before release.
+  "identities.certificate.title": "Letzte abgeschlossene Zertifikatsbereitstellung",
+  "identities.certificate.scope":
+    "Letzte abgeschlossene Bereitstellung oder Wiederherstellung für diese Identität. Dies ist ein historischer Nachweis; nach einem Austausch oder einer Zieländerung kann ein anderes Zertifikat bereitgestellt werden.",
+  "identities.certificate.empty": "Für diese Identität ist keine abgeschlossene Zertifikatsbereitstellung verzeichnet.",
+  "identities.certificate.failed": "Der Nachweis der Zertifikatsbereitstellung konnte nicht geladen werden.",
+  "identities.certificate.missing": "Für den abgeschlossenen Beleg sind keine passenden Zertifikatsmetadaten vorhanden.",
+  "identities.certificate.mismatch": "Der Zertifikatsnachweis stimmt nicht mit dieser Identität und dem Bereitstellungsbeleg überein.",
+  "identities.certificate.retry": "Zertifikatsnachweis neu laden",
+  "identities.certificate.receipt": "Erfasst am {at} · {connector}/{target}",
+  "identities.certificate.expires": "Zertifikat läuft ab",
+  "identities.certificate.validFrom": "Zertifikat gültig ab",
+  "identities.certificate.review": "Dieses Zertifikat und seinen Widerruf prüfen",
   "identities.issuer.selectedCA": "Ausgewählte ausstellende CA",
   "identities.issuer.selection": "{source}: {name}",
   "identities.issuer.selectionScope":

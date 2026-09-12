@@ -1600,6 +1600,11 @@ func componentSchemas() map[string]*Schema {
 		"state":       {Type: "string", Enum: []string{"pending", "issued"}},
 		"certificate": ref("Certificate"), "certificate_pem": str(),
 	}, "identity_id", "request_key", "state")
+	identityDeploymentEvidence := object(map[string]*Schema{
+		"identity_id": uuid(), "read_at": timestamp(),
+		"receipt": ref("ConnectorDelivery"), "certificate": ref("Certificate"),
+	}, "identity_id", "read_at")
+	identityDeploymentEvidence.Description = "Last completed deployment or rollback for this exact tenant and identity, ordered by receipt update time and ID. Historical evidence, not a fresh listener probe or a claim about other destinations. A later replacement may serve another certificate. No receipt means no retained completion; a receipt without certificate means inventory metadata is unavailable. Revoked and superseded certificate status is preserved."
 	certificateIngest := object(map[string]*Schema{
 		"pem": str(), "owner_id": uuid(), "deployment_location": str(), "source": str(),
 	}, "pem")
@@ -6128,6 +6133,7 @@ func componentSchemas() map[string]*Schema {
 		"CBOMInventory":                            cbomInventory,
 		"CBOMScan":                                 cbomScan,
 		"IdentityIssuanceResult":                   identityIssuanceResult,
+		"IdentityDeploymentEvidence":               identityDeploymentEvidence,
 		"Certificate":                              certificate,
 		"CertificateIngest":                        certificateIngest,
 		"CertificateList":                          list("Certificate"),

@@ -14,6 +14,7 @@ const { apiMock } = vi.hoisted(() => ({
     issuers: vi.fn(),
     owners: vi.fn(),
     getIdentity: vi.fn(),
+    identityDeploymentEvidence: vi.fn(),
     issueCertificate: vi.fn(),
     previewIdentityTransition: vi.fn(),
     transitionIdentity: vi.fn(),
@@ -464,6 +465,7 @@ describe("lifecycle actions from the UI", () => {
       by_kind: {},
     });
     apiMock.connectorDeliveries.mockReset().mockResolvedValue({ items: [] });
+    apiMock.identityDeploymentEvidence.mockReset().mockImplementation(async (identity_id) => ({ identity_id, read_at: "2030-01-01T00:00:00Z" }));
     apiMock.rotationRuns.mockReset().mockResolvedValue({ items: [] });
     apiMock.lifecycleAutomationPlan.mockReset().mockResolvedValue({
       capability: "lifecycle_automation",

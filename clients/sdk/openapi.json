@@ -15418,6 +15418,30 @@
         ],
         "type": "object"
       },
+      "IdentityDeploymentEvidence": {
+        "description": "Last completed deployment or rollback for this exact tenant and identity, ordered by receipt update time and ID. Historical evidence, not a fresh listener probe or a claim about other destinations. A later replacement may serve another certificate. No receipt means no retained completion; a receipt without certificate means inventory metadata is unavailable. Revoked and superseded certificate status is preserved.",
+        "properties": {
+          "certificate": {
+            "$ref": "#/components/schemas/Certificate"
+          },
+          "identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "read_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "receipt": {
+            "$ref": "#/components/schemas/ConnectorDelivery"
+          }
+        },
+        "required": [
+          "identity_id",
+          "read_at"
+        ],
+        "type": "object"
+      },
       "IdentityIssuanceResult": {
         "properties": {
           "certificate": {
@@ -44038,6 +44062,64 @@
         ],
         "summary": "Bind an identity to a deployment connector target",
         "x-trstctl-permission": "connectors:write"
+      }
+    },
+    "/api/v1/identities/{id}/deployment-evidence": {
+      "get": {
+        "operationId": "getIdentityDeploymentEvidence",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityDeploymentEvidence"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read the exact certificate and historical receipt of an identity's last completed deployment or rollback",
+        "x-trstctl-permission": "certs:read"
       }
     },
     "/api/v1/identities/{id}/issuance-result": {
