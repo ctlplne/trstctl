@@ -157,8 +157,8 @@ func (o *Orchestrator) guardCertificateRecordingAppendTx(ctx context.Context, tx
 	if err != nil {
 		return err
 	}
-	if through == 0 {
-		return errors.New("orchestrator: certificate append requires retained tenant history")
-	}
+	// A first recording may be the first event after tenant bootstrap. Zero
+	// still goes through the metadata fence: unknown writes and SQL state
+	// ahead of the retained source are rejected before any append.
 	return o.store.GuardCertificateRecordingMetadataTx(ctx, tx, tenantID, material.Fingerprint, material.ReplacesID, through)
 }
