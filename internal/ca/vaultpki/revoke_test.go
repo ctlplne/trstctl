@@ -4,6 +4,8 @@ package vaultpki_test
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -87,5 +89,42 @@ func TestRevokeFormatsInventorySerialForVault(t *testing.T) {
 		if got := stub.LastRequest().serial; got != tc.want {
 			t.Errorf("serial %q sent as %q, want Vault lookup key %q", tc.input, got, tc.want)
 		}
+	}
+}
+
+// Stock Vault returns HTTP 200 with data:null and an expiry warning instead of
+// revoking an expired leaf. Transport acceptance is not issuer confirmation.
+func TestRevokeRequiresVaultConfirmation(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		confirmed  bool
+	}{
+		{"expired_warning", `{"data":null,"warnings":["certificate already expired; refusing to add to CRL"]}`, false},
+		{"empty_data", `{"data":{}}`, false},
+		{"zero_time", `{"data":{"revocation_time":0}}`, false},
+		{"negative_time", `{"data":{"revocation_time":-1}}`, false},
+		{"queued", `{"data":{"state":"pending"}}`, false},
+		{"application_error", `{"data":{"revocation_time":1433269787},"errors":["secret-provider-error"]}`, false},
+		{"confirmed", `{"data":{"revocation_time":1433269787}}`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != "/v1/pki/revoke" {
+					t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer server.Close()
+			plugin := vaultpki.New(vaultpki.Config{BaseURL: server.URL, Token: []byte("local-qa-token"), Mount: "pki", Role: "web"}, vaultpki.WithHTTPClient(server.Client()))
+			defer plugin.Destroy()
+			err := plugin.Revoke(t.Context(), ca.RevokeRequest{TenantID: "tenant-a", Serial: "3f2a11"})
+			if (err == nil) != tc.confirmed {
+				t.Fatalf("confirmed=%t, revoke error=%v", tc.confirmed, err)
+			}
+			if err != nil && (strings.Contains(err.Error(), "secret-provider-error") || strings.Contains(err.Error(), "local-qa-token")) {
+				t.Fatal("provider response or credentials escaped in error")
+			}
+		})
 	}
 }

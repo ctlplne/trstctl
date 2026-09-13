@@ -1570,8 +1570,11 @@ describe("i18n boundary", () => {
       // Exact external revocation: reviewed queued versus issuer-confirmed
       // status, independent CRL/OCSP limits, refresh and failed-read wording.
       // Machine-authored es/de require HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "8dbe7c272c1e7ad6a1585e01edba338f1d7fb0f7b8b3d79ea09c43b6f3f51830",
-      "de-DE": "a0e36bd7404a15c0b5aaa7c63e269c2b938e5a8cba0d3c5759f1e68d1e0bd227",
+      // Real Vault recovery: accepted-request replay cannot restart exhausted retries.
+      // Issuer-specific reason publication is distinguished from the recorded audit reason.
+      // Reviewed both distinctions in all locales; machine-authored es/de need human review before release.
+      "es-ES": "8f182a435f165fb5d063a7b285f67c31ba1a2221849a670e5a9ba47f5fc2d39f",
+      "de-DE": "14d119cdb3cad44d81179c8e304d2fc502a0915bb6bb6a3f333c453f3b59bc5d",
     });
   });
 

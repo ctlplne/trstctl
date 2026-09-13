@@ -6360,7 +6360,8 @@ export const messages = {
     description: "First revocation-center step title.",
   },
   "certificates.revocation.configureDescription": {
-    defaultMessage: "Choose a managed lifecycle identity or an exact certificate record, then choose the RFC 5280 reason relying parties will receive.",
+    defaultMessage:
+      "Choose a managed lifecycle identity or an exact certificate record, then record the factual RFC 5280 reason. The issuing CA determines which reason details it publishes.",
     description: "First revocation-center step description.",
   },
   "certificates.revocation.reviewTitle": { defaultMessage: "Review exact plan", description: "Second revocation-center step title." },
@@ -6534,7 +6535,7 @@ export const messages = {
   },
   "certificates.revocation.certificateQueuedHelp": {
     defaultMessage:
-      "This page checks the exact certificate automatically. If it stays pending, inspect Jobs and queues for issuer failures; the original command remains available for retry.",
+      "This page checks the exact certificate automatically. If confirmation does not arrive, inspect Jobs and queues. Repeating an accepted request does not restart exhausted retries. Resolve the issuer failure and review this exact certificate again before submitting another revocation.",
     description: "How to observe and recover asynchronous exact revocation.",
   },
   "certificates.revocation.certificateReadUnavailable": {

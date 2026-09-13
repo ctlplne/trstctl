@@ -2437,7 +2437,7 @@ const deDECatalog = {
   "certificates.revocation.progress": "Widerrufsfortschritt",
   "certificates.revocation.configureTitle": "Zugangsdaten und Grund auswählen",
   "certificates.revocation.configureDescription":
-    "Wählen Sie eine verwaltete Lebenszyklusidentität oder einen exakten Zertifikatsdatensatz und dann den RFC-5280-Grund, den vertrauende Systeme erhalten.",
+    "Wählen Sie eine verwaltete Identität oder einen genauen Zertifikatsdatensatz und erfassen Sie den zutreffenden RFC-5280-Grund. Die ausstellende CA bestimmt, welche Angaben zum Grund sie veröffentlicht.",
   "certificates.revocation.reviewTitle": "Exakten Plan prüfen",
   "certificates.revocation.reviewDescription":
     "Prüfen Sie serverbestimmte Schreibvorgänge, asynchrone Veröffentlichung, Auswirkungsradius und Verifizierungsschritte, bevor Sie etwas autorisieren.",
@@ -2505,7 +2505,7 @@ const deDECatalog = {
   "certificates.revocation.accepted": "Widerruf angenommen; die Identität wird jetzt als widerrufen angezeigt.",
   "certificates.revocation.certificateQueued": "Widerruf eingereiht — die ausstellende CA hat ihn noch nicht bestätigt.",
   "certificates.revocation.certificateQueuedHelp":
-    "Diese Seite prüft das genaue Zertifikat automatisch. Bleibt der Vorgang ausstehend, prüfen Sie Aufträge und Warteschlangen auf Fehler beim Aussteller; der ursprüngliche Auftrag kann erneut versucht werden.",
+    "Diese Seite prüft das genaue Zertifikat automatisch. Bleibt die Bestätigung aus, prüfen Sie Aufträge und Warteschlangen. Eine angenommene Anfrage erneut zu senden startet ausgeschöpfte Wiederholungen nicht neu. Beheben Sie den Fehler beim Aussteller und prüfen Sie dieses genaue Zertifikat erneut, bevor Sie einen weiteren Widerruf anfordern.",
   "certificates.revocation.certificateReadUnavailable": "Das aktuelle Ergebnis konnte nicht verifiziert werden. Der Widerruf bleibt unbestätigt.",
   "certificates.revocation.refreshResult": "Widerrufsergebnis aktualisieren",
   "certificates.revocation.certificateAccepted": "Widerruf angenommen; das exakte Zertifikat wird jetzt als widerrufen angezeigt.",

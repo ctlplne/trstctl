@@ -318,10 +318,25 @@ func (b *backend) Revoke(ctx context.Context, req ca.RevokeRequest) error {
 	if err := b.validateEndpoint(); err != nil {
 		return err
 	}
-	var env vaultEnvelope
-	defer env.destroy()
+	var env struct {
+		Data struct {
+			RevocationTime int64 `json:"revocation_time"`
+		} `json:"data"`
+		Errors []secretjson.StringBytes `json:"errors,omitempty"`
+	}
+	defer func() {
+		for _, value := range env.Errors {
+			secret.Wipe(value)
+		}
+	}()
 	if err := b.postJSON(ctx, b.revokeURL(), map[string]string{"serial_number": serial}, &env); err != nil {
 		return fmt.Errorf("vaultpki: revoke %s: %w", serial, err)
+	}
+	// Vault can answer 200 with data:null and an expiry warning without
+	// revoking anything. Only its documented positive timestamp confirms
+	// revocation; missing/pending/error responses must not create a receipt.
+	if len(env.Errors) != 0 || env.Data.RevocationTime <= 0 {
+		return errors.New("vaultpki: issuing authority did not confirm revocation")
 	}
 	return nil
 }

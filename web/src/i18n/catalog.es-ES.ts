@@ -2405,7 +2405,7 @@ const esESCatalog = {
   "certificates.revocation.progress": "Progreso de revocación",
   "certificates.revocation.configureTitle": "Elegir credencial y motivo",
   "certificates.revocation.configureDescription":
-    "Elija una identidad de ciclo de vida administrada o un registro de certificado exacto y, después, el motivo RFC 5280 que recibirán las partes que confían.",
+    "Elija una identidad gestionada o un registro de certificado exacto y registre el motivo factual de RFC 5280. La CA emisora determina qué detalles del motivo publica.",
   "certificates.revocation.reviewTitle": "Revisar el plan exacto",
   "certificates.revocation.reviewDescription":
     "Revise las escrituras controladas por el servidor, la publicación asíncrona, el radio de impacto y los pasos de verificación antes de autorizar nada.",
@@ -2471,7 +2471,7 @@ const esESCatalog = {
   "certificates.revocation.accepted": "Revocación aceptada y la identidad ahora aparece como revocada.",
   "certificates.revocation.certificateQueued": "Revocación en cola: la CA emisora aún no la ha confirmado.",
   "certificates.revocation.certificateQueuedHelp":
-    "Esta página comprueba automáticamente el certificado exacto. Si sigue pendiente, revise Trabajos y colas para detectar fallos del emisor; el comando original sigue disponible para reintentar.",
+    "Esta página comprueba automáticamente el certificado exacto. Si no llega la confirmación, revise Trabajos y colas. Repetir una solicitud aceptada no reinicia los reintentos agotados. Resuelva el fallo del emisor y vuelva a revisar este certificado exacto antes de enviar otra revocación.",
   "certificates.revocation.certificateReadUnavailable": "No se pudo verificar el resultado actual. La revocación sigue sin confirmar.",
   "certificates.revocation.refreshResult": "Actualizar resultado de revocación",
   "certificates.revocation.certificateAccepted": "Revocación aceptada y el certificado exacto ahora aparece como revocado.",
