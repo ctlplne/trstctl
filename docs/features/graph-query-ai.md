@@ -29,7 +29,7 @@ model invent facts or leak across tenants.
 
 The graph models your inventory as nodes (workloads, credentials, issuers, resources,
 crypto assets, attestations) and impact-oriented edges (`ISSUED`, `OWNS`, `DEPLOYED_TO`,
-`GRANTS_ACCESS`, `CONNECTS_TO`, `EXHIBITS`), where edge `A→B` means "compromising A puts B
+`GRANTS_ACCESS`, `CONNECTS_TO`, `EXHIBITS`, `BOUND_TO_IDENTITY`), where edge `A→B` means "compromising A puts B
 at risk." It's built on demand, and every read is isolated to the caller's tenant at the
 database layer, so a traversal can never escape the tenant boundary. On top: `Reachable`
 (breadth-first reach), `BlastRadius` (compromise impact by kind), and a minimal
@@ -43,6 +43,14 @@ object to risk, lifecycle, and audit evidence without reconstructing security-se
 impact in the browser. Subject-only trust candidates stay visible as explicitly
 unverified graph evidence but are excluded from these authoritative paths unless a
 specialized caller asks for that relationship type.
+
+`BOUND_TO_IDENTITY` links a certificate to each lifecycle identity named in its
+retained issuance or successful delivery evidence. This lets a certificate impact
+preview reach the identity's declared destinations. Matching names, owners, or SANs
+do not establish a binding. Shared certificates retain every exact identity link,
+and the evidence path keeps each relationship's source and confidence. The binding
+is historical evidence; it does not prove that a listener currently serves that
+certificate. Use the deployment verification result for that observation.
 
 `CONNECTS_TO` is not guessed from a test fixture. A host/network agent reports an exact
 metadata-only `service_dependency` observation over its mTLS inventory channel. The

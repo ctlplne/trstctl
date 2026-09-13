@@ -106,10 +106,17 @@ describe("RevocationCenter", () => {
     apiMock.graphBlastRadius.mockReset().mockResolvedValue({
       node: { id: "cert:certificate-payments", kind: "certificate", name: "payments.example.test" },
       affected: [
-        { id: "svc:checkout", kind: "service", name: "Checkout" },
-        { id: "target:edge", kind: "deployment_target", name: "Edge load balancer" },
+        { id: "id:payments", kind: "credential", name: "Payments lifecycle identity" },
+        { id: "res:checkout", kind: "resource", name: "Checkout" },
+        { id: "res:edge", kind: "resource", name: "Edge load balancer" },
       ],
-      by_kind: { service: 1, deployment_target: 1 },
+      by_kind: {
+        credential: [{ id: "id:payments", kind: "credential", name: "Payments lifecycle identity" }],
+        resource: [
+          { id: "res:checkout", kind: "resource", name: "Checkout" },
+          { id: "res:edge", kind: "resource", name: "Edge load balancer" },
+        ],
+      },
       paths: [],
     });
     apiMock.transitionIdentity.mockReset().mockResolvedValue({ ...identities[0], status: "revoked" });
@@ -130,6 +137,10 @@ describe("RevocationCenter", () => {
     expect(apiMock.transitionIdentity).not.toHaveBeenCalled();
     expect(await screen.findByText("No changes were made")).toBeInTheDocument();
     expect(screen.getByText("2 downstream systems are linked to this credential.")).toBeInTheDocument();
+    expect(screen.getByText("Payments lifecycle identity")).toBeInTheDocument();
+    expect(screen.getByText("Checkout")).toBeInTheDocument();
+    expect(screen.getByText("Edge load balancer")).toBeInTheDocument();
+    expect(screen.queryByText(/\[object Object\]/)).not.toBeInTheDocument();
     expect(screen.getByText("sha256:reviewed-revocation")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Continue to confirmation" }));

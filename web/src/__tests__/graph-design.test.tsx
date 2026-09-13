@@ -28,6 +28,22 @@ function renderGraph(path = "/graph") {
 }
 
 describe("route 027 impact-first graph design", () => {
+  it("counts endpoint resources separately from bound lifecycle identities", async () => {
+    apiMock.graphBlastRadius.mockResolvedValue({
+      node: { id: "cert:payments", kind: "credential", name: "payments-cert" },
+      affected: [
+        { id: "id:payments", kind: "credential", name: "Bound service identity" },
+        { id: "res:db", kind: "resource", name: "payments-db" },
+      ],
+      by_kind: {},
+      paths: [],
+    });
+    renderGraph();
+    await screen.findByRole("combobox", { name: "Credential to explore" });
+    await userEvent.setup().click(screen.getByRole("button", { name: "Explore impact" }));
+    expect(await screen.findByRole("heading", { name: "1 known system could be affected" })).toBeInTheDocument();
+    expect(screen.getByText("Bound service identity")).toBeInTheDocument();
+  });
   it("analyzes the exact deep-linked certificate instead of the default credential", async () => {
     apiMock.graph.mockResolvedValue({
       nodes: [

@@ -149,6 +149,10 @@ func Build(ctx context.Context, st *store.Store, tenantID string) (*Graph, error
 		}
 	}
 
+	if err := addCertificateIdentityBindings(ctx, st, tenantID, g, certs); err != nil {
+		return nil, err
+	}
+
 	keys, err := allSSHKeys(ctx, st, tenantID)
 	if err != nil {
 		return nil, err
@@ -434,4 +438,31 @@ func allDiscoveryFindings(ctx context.Context, st *store.Store, tenantID string)
 		}
 		after = page[len(page)-1].ID
 	}
+}
+
+// Link exact issuance/delivery authority in bounded pages. Certificate and
+// identity nodes stay distinct; deployment attributes retain their own evidence
+// confidence downstream of this binding, rather than becoming leaf readback.
+func addCertificateIdentityBindings(ctx context.Context, st *store.Store, tenantID string, g *Graph, certs []store.Certificate) error {
+	for start := 0; start < len(certs); start += pageSize {
+		end := min(start+pageSize, len(certs))
+		ids := make([]string, 0, end-start)
+		for _, certificate := range certs[start:end] {
+			ids = append(ids, certificate.ID)
+		}
+		bindings, err := st.CertificateIdentityBindings(ctx, tenantID, ids)
+		if err != nil {
+			return fmt.Errorf("graph: resolve certificate identity bindings: %w", err)
+		}
+		for certificate, identities := range bindings {
+			for _, identity := range identities {
+				target := credentialID("id", identity)
+				if _, ok := g.Node(target); !ok {
+					return fmt.Errorf("graph: identity inventory changed while resolving certificate bindings; reload the graph")
+				}
+				g.AddEdge(Edge{From: credentialID("cert", certificate), To: target, Type: EdgeBoundToIdentity, Source: "retained certificate issuance or delivery identity binding", Confidence: "authoritative"})
+			}
+		}
+	}
+	return nil
 }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ShieldAlert } from "lucide-react";
+import { graphNodeKindLabel } from "@/components/GraphView";
 import {
   api,
   type BulkRevokeRequest,
@@ -72,7 +73,7 @@ function reviewKey(targetKey: string, reason: string): string {
 function affectedCopy(impact: GraphImpact | null, error: string | null, t: (key: MessageKey, values?: Record<string, number | string>) => string): string {
   if (error) return t("certificates.revocation.impactUnknown", { error });
   if (!impact) return t("certificates.revocation.impactLoading");
-  const count = impact.affected.length;
+  const count = impact.affected.filter((node) => node.kind === "resource").length;
   return t(count === 1 ? "certificates.revocation.impactOne" : "certificates.revocation.impactMany", { count });
 }
 
@@ -459,11 +460,12 @@ export function RevocationCenter({
             <div className="rounded-control border border-border p-3">
               <h3 className="font-semibold">{t("certificates.revocation.impactTitle")}</h3>
               <p className="mt-1 text-muted-foreground">{affectedCopy(review.impact, review.impactError, t)}</p>
-              {review.impact && Object.keys(review.impact.by_kind ?? {}).length > 0 ? (
+              {review.impact && review.impact.affected.length > 0 ? (
                 <ul className="mt-2 flex flex-wrap gap-2 text-xs">
-                  {Object.entries(review.impact.by_kind).map(([kind, count]) => (
-                    <li key={kind} className="rounded-control border border-border px-2 py-1">
-                      {kind}: {String(count)}
+                  {review.impact.affected.map((node) => (
+                    <li key={node.id} className="rounded-control border border-border px-2 py-1">
+                      <span className="font-medium">{node.name || node.id}</span>
+                      <span className="ml-2 text-muted-foreground">{graphNodeKindLabel(node.kind)}</span>
                     </li>
                   ))}
                 </ul>

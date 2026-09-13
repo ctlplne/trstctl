@@ -368,13 +368,13 @@ function DecisionDisclosure({ title, open, onToggle, children }: { title: string
 }
 
 function ImpactAnswer({ impact }: { impact: GraphImpact }) {
-  const count = impact.affected.length;
+  const count = impact.affected.filter((node) => node.kind === "resource").length;
   return (
     <>
       <h2 className="text-title font-semibold">
         {count === 1 ? translateNow("graph.design.resultOne") : translateNow("graph.design.resultMany", { count: String(count) })}
       </h2>
-      {count === 0 ? null : (
+      {impact.affected.length === 0 ? null : (
         <ul className="mt-3 grid gap-2 sm:grid-cols-2">
           {impact.affected.map((node) => (
             <li key={node.id} className="rounded-md border border-border bg-background px-3 py-2">

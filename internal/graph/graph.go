@@ -38,7 +38,10 @@ const (
 	EdgeDeployedTo   EdgeType = "DEPLOYED_TO"   // credential → resource it is installed on
 	EdgeGrantsAccess EdgeType = "GRANTS_ACCESS" // credential → resource it can authenticate to
 	EdgeConnectsTo   EdgeType = "CONNECTS_TO"   // workload/resource → resource/workload it talks to
-	EdgeExhibits     EdgeType = "EXHIBITS"      // resource → crypto asset it exhibits (CBOM, F52)
+	// A retained certificate fact belongs to an exact lifecycle identity.
+	// This historical binding does not assert what a listener is serving now.
+	EdgeBoundToIdentity EdgeType = "BOUND_TO_IDENTITY"
+	EdgeExhibits        EdgeType = "EXHIBITS" // resource → crypto asset it exhibits (CBOM, F52)
 	// EdgeTrusts is trust-store → issuer whose anchor it contains (epic H1).
 	//
 	// Oriented store → issuer, matching the direction convention: an edge points

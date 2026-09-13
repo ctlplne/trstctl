@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"trstctl.com/trstctl/internal/graph"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -27,7 +28,7 @@ func TestCertificateIdentityBindingsRequireExactTenantEvidence(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, id := range []string{firstID, secondID} {
-			if err := s.UpsertIdentity(ctx, store.Identity{ID: id, TenantID: tenant, OwnerID: ownerID, Name: "same.example", Kind: store.KindX509Certificate, Status: "deployed"}); err != nil {
+			if err := s.UpsertIdentity(ctx, store.Identity{ID: id, TenantID: tenant, OwnerID: ownerID, Name: "same.example", Kind: store.KindX509Certificate, Status: "deployed", Attributes: []byte(fmt.Sprintf(`{"deployment_target":%q}`, "target-"+id))}); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -90,6 +91,8 @@ func TestCertificateIdentityBindingsRequireExactTenantEvidence(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("bindings=%v, want %v", got, want)
 	}
+	assertCertificateImpactBindings(t, s, tenantA, want, []string{unbound.ID})
+	assertCertificateImpactBindings(t, s, tenantB, nil, ids)
 	other, err := s.CertificateIdentityBindings(ctx, tenantB, ids)
 	if err != nil || len(other) != 0 {
 		t.Fatalf("cross-tenant bindings=%v, err=%v", other, err)
@@ -105,7 +108,48 @@ func TestCertificateIdentityBindingsRequireExactTenantEvidence(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(got[delivered.ID], []string{firstID, secondID}) {
 		t.Fatalf("shared bindings=%v, err=%v", got, err)
 	}
+	// Exercise both inventory paging and the binding reader's 1000-ID cap.
+	// These same-owner records have no binding and must stay unrelated.
+	for n := 0; n < 1001; n++ {
+		makeCert(fmt.Sprintf("unbound-page-%04d", n))
+	}
+	want[delivered.ID] = []string{firstID, secondID}
+	assertCertificateImpactBindings(t, s, tenantA, want, []string{unbound.ID})
 	if _, err := s.CertificateIdentityBindings(context.Background(), tenantA, make([]string, 1001)); err == nil {
 		t.Fatal("unbounded page accepted")
+	}
+}
+
+// A certificate reaches only its exact retained identities and their declared
+// destinations. Shared names/owners and another tenant cannot manufacture links.
+func assertCertificateImpactBindings(t *testing.T, s *store.Store, tenant string, bindings map[string][]string, unbound []string) {
+	t.Helper()
+	g, err := graph.Build(t.Context(), s, tenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for certificate, identities := range bindings {
+		got := map[string]bool{}
+		for _, node := range g.BlastRadius("cert:" + certificate).Affected {
+			got[node.ID] = true
+		}
+		expected := map[string]bool{}
+		for _, identity := range identities {
+			expected["id:"+identity] = true
+			expected["res:target-"+identity] = true
+		}
+		if !reflect.DeepEqual(got, expected) {
+			t.Fatalf("certificate %s impact = %v, want exact identity and target %v", certificate, got, expected)
+		}
+		for _, edge := range g.Edges() {
+			if edge.From == "cert:"+certificate && edge.Type == graph.EdgeType("BOUND_TO_IDENTITY") && (edge.Confidence != "authoritative" || edge.Source == "") {
+				t.Fatalf("binding lacks its authority: %+v", edge)
+			}
+		}
+	}
+	for _, certificate := range unbound {
+		if got := g.BlastRadius("cert:" + certificate); len(got.Affected) != 0 {
+			t.Fatalf("unbound or foreign certificate gained impact: %+v", got)
+		}
 	}
 }
