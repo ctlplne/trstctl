@@ -133,6 +133,7 @@ type vaultRequest struct {
 	commonName string
 	altNames   string
 	ttl        string
+	serial     string
 }
 
 type vaultStub struct {
@@ -191,6 +192,7 @@ func (v *vaultStub) handle(w http.ResponseWriter, r *http.Request) {
 	v.last = vaultRequest{
 		method: r.Method, path: r.URL.Path, token: r.Header.Get("X-Vault-Token"),
 		commonName: body.CommonName, altNames: body.AltNames, ttl: body.TTL,
+		serial: body.Serial,
 	}
 	failWith := v.failWith
 	v.mu.Unlock()

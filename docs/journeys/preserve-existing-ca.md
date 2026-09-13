@@ -341,15 +341,21 @@ trstctl-cli --idempotency-key preserve-ca-revoke-001 \
 This is asynchronous: the identity's `revoked` status acknowledges the intent,
 not the external outcome. Missing issuance evidence, unavailable credentials, or
 an unsupported revocation adapter leave the worker unsuccessful; no different CA
-is substituted. The exact-certificate bulk-revoke route still rejects unsupported
-external issuers in individual result items, even when HTTP status is 200. For
-those integrations, use the issuing CA's supported revocation procedure and
-record the manual step as an automation gap. Certificates incorrectly marked
+is substituted. To revoke one specific leaf, use the exact certificate record in
+**Certificates → Revocation & CT** or submit `certificate_ids` to the certificate
+bulk-revoke route. Supported external issuers return `queued` and `total_queued`,
+then update that certificate to `revoked` only after issuer acceptance. The console
+checks the result automatically. Inspect Jobs and queues if it remains pending.
+Unsupported issuers still produce failed items even when HTTP status is 200; use
+their supported revocation procedure and record the manual automation gap.
+Certificates incorrectly marked
 revoked by older versions require separate reconciliation with their issuer;
 upgrading does not establish that those earlier revocations actually happened.
 
-Confirm the issuing authority accepted the exact serial and factual revocation
-reason. Where that authority publishes CRL or OCSP data, verify its signature and
+Confirm the issuing authority accepted the exact serial. The local audit records
+the requested reason; upstream reason support depends on the adapter (Vault's
+serial-revocation API does not accept an RFC 5280 reason parameter).
+Where that authority publishes CRL or OCSP data, verify its signature and
 status, then use a stock client configured to enforce revocation to prove that the
 old certificate is rejected. Record any authority or client enforcement limit.
 A normal TLS handshake does not usually check revocation by itself.

@@ -2452,7 +2452,8 @@ const esESCatalog = {
   "certificates.revocation.certificateBefore":
     "El certificado exacto aún aparece como {status}. trstctl lo comprueba de nuevo inmediatamente antes de la ejecución.",
   "certificates.revocation.certificateWrite": "Anexar un evento de revocación limitado al tenant que seleccione solo el certificado {id}.",
-  "certificates.revocation.certificatePublish": "Actualizar la CRL firmada y el estado OCSP del emisor mediante la autoridad de revocación configurada.",
+  "certificates.revocation.certificatePublish":
+    "Solicitar la revocación a la autoridad emisora registrada. Las solicitudes externas son asíncronas; verifique la aceptación y las pruebas CRL u OCSP que admita esa autoridad.",
   "certificates.revocation.certificateProof": "Volver a leer el certificado {id} y exigir que su estado actual sea revocado.",
   "certificates.revocation.certificateAudit": "Abrir el evento de auditoría inmutable del tenant y la evidencia de propagación.",
   "certificates.revocation.fingerprint": "Huella exacta de la solicitud",
@@ -2468,6 +2469,11 @@ const esESCatalog = {
   "certificates.revocation.reviewStale": "El certificado cambió después de la revisión. Vuelva y revise el registro actual antes de revocarlo.",
   "certificates.revocation.certificateVerifyFailed": "No se verificó que el certificado exacto estuviera revocado después de la ejecución.",
   "certificates.revocation.accepted": "Revocación aceptada y la identidad ahora aparece como revocada.",
+  "certificates.revocation.certificateQueued": "Revocación en cola: la CA emisora aún no la ha confirmado.",
+  "certificates.revocation.certificateQueuedHelp":
+    "Esta página comprueba automáticamente el certificado exacto. Si sigue pendiente, revise Trabajos y colas para detectar fallos del emisor; el comando original sigue disponible para reintentar.",
+  "certificates.revocation.certificateReadUnavailable": "No se pudo verificar el resultado actual. La revocación sigue sin confirmar.",
+  "certificates.revocation.refreshResult": "Actualizar resultado de revocación",
   "certificates.revocation.certificateAccepted": "Revocación aceptada y el certificado exacto ahora aparece como revocado.",
   "certificates.revocation.auditLink": "Abrir evidencia de auditoría inmutable",
   "certificates.revocation.graphLink": "Abrir sistemas afectados",

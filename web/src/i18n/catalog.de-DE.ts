@@ -2486,7 +2486,7 @@ const deDECatalog = {
     "Das exakte Zertifikat wird weiterhin als {status} angezeigt. trstctl prüft es unmittelbar vor der Ausführung erneut.",
   "certificates.revocation.certificateWrite": "Ein mandantenbezogenes Widerrufsereignis anhängen, das nur Zertifikat {id} auswählt.",
   "certificates.revocation.certificatePublish":
-    "Die signierte CRL und den OCSP-Zustand des Ausstellers über die konfigurierte Widerrufsautorität aktualisieren.",
+    "Widerruf bei der aufgezeichneten ausstellenden Zertifizierungsstelle anfordern. Externe Anfragen laufen asynchron; prüfen Sie die Annahme sowie die von dieser Stelle unterstützten CRL- oder OCSP-Nachweise.",
   "certificates.revocation.certificateProof": "Zertifikat {id} erneut lesen und für den aktuellen Status widerrufen verlangen.",
   "certificates.revocation.certificateAudit": "Das unveränderliche Mandanten-Auditereignis und die Verbreitungsnachweise öffnen.",
   "certificates.revocation.fingerprint": "Exakter Anfrage-Fingerabdruck",
@@ -2503,6 +2503,11 @@ const deDECatalog = {
     "Das Zertifikat hat sich nach der Prüfung geändert. Gehen Sie zurück und prüfen Sie den aktuellen Datensatz vor dem Widerruf.",
   "certificates.revocation.certificateVerifyFailed": "Das exakte Zertifikat wurde nach der Ausführung nicht als widerrufen bestätigt.",
   "certificates.revocation.accepted": "Widerruf angenommen; die Identität wird jetzt als widerrufen angezeigt.",
+  "certificates.revocation.certificateQueued": "Widerruf eingereiht — die ausstellende CA hat ihn noch nicht bestätigt.",
+  "certificates.revocation.certificateQueuedHelp":
+    "Diese Seite prüft das genaue Zertifikat automatisch. Bleibt der Vorgang ausstehend, prüfen Sie Aufträge und Warteschlangen auf Fehler beim Aussteller; der ursprüngliche Auftrag kann erneut versucht werden.",
+  "certificates.revocation.certificateReadUnavailable": "Das aktuelle Ergebnis konnte nicht verifiziert werden. Der Widerruf bleibt unbestätigt.",
+  "certificates.revocation.refreshResult": "Widerrufsergebnis aktualisieren",
   "certificates.revocation.certificateAccepted": "Widerruf angenommen; das exakte Zertifikat wird jetzt als widerrufen angezeigt.",
   "certificates.revocation.auditLink": "Unveränderlichen Auditnachweis öffnen",
   "certificates.revocation.graphLink": "Betroffene Systeme öffnen",

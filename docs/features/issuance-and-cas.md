@@ -437,10 +437,13 @@ reason for this exact-certificate revocation command.
 The exact path verifies the public certificate's signature against the served
 issuing CA and requires an existing tenant-scoped issuer record. It does not guess
 from an issuer name or serial, revoke same-owner siblings, or substitute the
-internal CA for an external issuer. This path currently handles leaves issued by
-the running server's issuing authority. Other authorities return an explicit
-per-item unsupported result; use their documented revocation path. HTTP 200 can
-contain failed items, so always inspect the returned counts and items.
+internal CA for an external issuer. For external leaves, immutable issuance
+evidence binds the exact public certificate to its configured CA adapter. The
+request queues that authority's revocation command through the outbox. Its item
+status is `queued`, counted in `total_queued`; it is not counted in `total_revoked`.
+Missing verified authority or an unavailable adapter returns an explicit per-item
+unsupported result. HTTP 200 can contain queued or failed items, so always inspect
+the returned counts and items.
 
 One retained `certificate.revocation.batch.applied` command records the exact
 selection and outcome. Its projection updates certificate inventory, the CA's
@@ -449,6 +452,12 @@ transaction. If inventory and issuer disagree, it reconciles them while preservi
 the issuer's first revocation time and reason. `revoked` therefore includes a
 reconciled record; it is not a count of newly revoked serials at the CA. `skipped`
 means inventory and the issuer already agree that the certificate is revoked.
+External items use event schema version 2 and a `revocation.publish` outbox intent.
+They change certificate status only after their recorded issuer accepts revocation;
+their serials never enter the platform CA ledger or CRL. Issuer errors retain the
+command for retry and leave revocation unconfirmed. The console automatically
+checks the selected certificate; `GET /api/v1/certificates/{id}` provides the same
+current result. An idempotent replay still returns the original queued receipt.
 
 Reuse the same `Idempotency-Key` for the same authenticated route and request.
 Retries recover the original result from retained events even after the HTTP

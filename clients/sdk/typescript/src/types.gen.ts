@@ -7946,7 +7946,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            status: "revoked" | "skipped" | "failed";
+            status: "revoked" | "queued" | "skipped" | "failed";
         };
         BulkRevokeRequest: {
             /** @description Exact certificate inventory IDs, not lifecycle identity IDs. Do not combine with ids, identity_ids or identity criteria. Requires a verified served issuing authority; unsupported issuers fail per item without switching CA. removeFromCRL is not a revocation action. */
@@ -7968,6 +7968,8 @@ export interface components {
             items: components["schemas"]["BulkRevokeItem"][];
             total_failed: number;
             total_matched: number;
+            /** @description External revocation intents accepted. These certificates are not confirmed revoked until their recorded issuing CA accepts the request. */
+            total_queued?: number;
             total_revoked: number;
             total_skipped: number;
         };

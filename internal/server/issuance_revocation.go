@@ -29,6 +29,13 @@ type certificateRevocationOrigin struct{ ExternalID, CAID string }
 // only after its own authority accepts it. External serials never enter the
 // platform CA's ledger or CRL. Each worker pass handles at most 100 certificates.
 func (d *issuanceDispatcher) handleRevoke(ctx context.Context, m orchestrator.Message) error {
+	var exact store.ExternalCertificateRevocation
+	if err := json.Unmarshal(m.Payload, &exact); err != nil {
+		return err
+	}
+	if exact.CertificateID != "" || exact.EventID != "" || exact.ExternalCAID != "" {
+		return d.handleExternalCertificateRevocation(ctx, m, exact)
+	}
 	var trigger transitionTrigger
 	if err := json.Unmarshal(m.Payload, &trigger); err != nil {
 		return fmt.Errorf("server: decode revocation intent: %w", err)

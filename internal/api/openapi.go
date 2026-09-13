@@ -870,12 +870,13 @@ func componentSchemas() map[string]*Schema {
 	}, "reason")
 	bulkRevokeItem := object(map[string]*Schema{
 		"id":     uuid(),
-		"status": {Type: "string", Enum: []string{"revoked", "skipped", "failed"}},
+		"status": {Type: "string", Enum: []string{"revoked", "queued", "skipped", "failed"}},
 		"error":  str(),
 	}, "id", "status")
 	bulkRevokeResult := object(map[string]*Schema{
 		"total_matched": {Type: "integer"},
 		"total_revoked": {Type: "integer"},
+		"total_queued":  {Type: "integer", Description: "External revocation intents accepted. These certificates are not confirmed revoked until their recorded issuing CA accepts the request."},
 		"total_skipped": {Type: "integer"},
 		"total_failed":  {Type: "integer"},
 		"items":         {Type: "array", Items: ref("BulkRevokeItem")},

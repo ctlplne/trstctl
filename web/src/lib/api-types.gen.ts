@@ -1296,7 +1296,7 @@ export interface BrokerIssuanceFacts {
 export interface BulkRevokeItem {
   error?: string;
   id: string;
-  status: "revoked" | "skipped" | "failed";
+  status: "revoked" | "queued" | "skipped" | "failed";
 }
 
 export interface BulkRevokeRequest {
@@ -1314,6 +1314,7 @@ export interface BulkRevokeResult {
   items: BulkRevokeItem[];
   total_failed: number;
   total_matched: number;
+  total_queued?: number;
   total_revoked: number;
   total_skipped: number;
 }

@@ -29,6 +29,7 @@ type BulkRevokeRequest struct {
 type BulkRevokeResult struct {
 	TotalMatched int              `json:"total_matched"`
 	TotalRevoked int              `json:"total_revoked"`
+	TotalQueued  int              `json:"total_queued,omitempty"`
 	TotalSkipped int              `json:"total_skipped"`
 	TotalFailed  int              `json:"total_failed"`
 	Items        []BulkRevokeItem `json:"items"`

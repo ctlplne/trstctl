@@ -63,3 +63,33 @@ func TestValidateCertificateRevocationBatchHasClosedOutcomes(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateCertificateRevocationBatchPinsExternalAuthority(t *testing.T) {
+	valid := CertificateRevocationBatchApplied{
+		RequestBinding: strings.Repeat("a", 64), Reason: "superseded",
+		Items: []CertificateRevocationItem{{ID: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", Matched: true,
+			Status: "queued", Fingerprint: strings.Repeat("b", 64), Serial: "a1", ExternalCAID: "selected-vault"}},
+	}
+	if err := ValidateCertificateRevocationBatch(valid); err != nil {
+		t.Fatal(err)
+	}
+	for name, corrupt := range map[string]func(*CertificateRevocationItem){
+		"missing_issuer":      func(item *CertificateRevocationItem) { item.ExternalCAID = "" },
+		"ambiguous_issuer":    func(item *CertificateRevocationItem) { item.CAID = "11111111-1111-4111-8111-111111111111" },
+		"unbounded_issuer":    func(item *CertificateRevocationItem) { item.ExternalCAID = strings.Repeat("a", 257) },
+		"untrimmed_issuer":    func(item *CertificateRevocationItem) { item.ExternalCAID = " selected-vault" },
+		"unmatched_leaf":      func(item *CertificateRevocationItem) { item.Matched = false },
+		"missing_fingerprint": func(item *CertificateRevocationItem) { item.Fingerprint = "" },
+		"noncanonical_serial": func(item *CertificateRevocationItem) { item.Serial = "A1" },
+		"false_completion":    func(item *CertificateRevocationItem) { item.Status = "revoked" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			batch := valid
+			batch.Items = append([]CertificateRevocationItem(nil), valid.Items...)
+			corrupt(&batch.Items[0])
+			if err := ValidateCertificateRevocationBatch(batch); err == nil {
+				t.Fatal("invalid external authority accepted")
+			}
+		})
+	}
+}

@@ -13,6 +13,10 @@ import {
 } from "@/lib/api";
 import { apiProblemContext } from "@/lib/apiProblem";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Field } from "@/components/ui/field";
+import { QueuedCertificateRevocation } from "./QueuedCertificateRevocation";
 import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
 import { useTranslation } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
@@ -35,7 +39,7 @@ type CertificateReview = ReviewBase & {
 };
 
 type ReviewState = CertificateReview | IdentityReview;
-type CompletedState = { certificate: Certificate; kind: "certificate" } | { identity: Identity; kind: "identity" };
+type CompletedState = { certificate: Certificate; kind: "certificate"; queued?: boolean } | { identity: Identity; kind: "identity" };
 type RevocationTarget =
   | { identity: Identity; key: string; kind: "identity"; name: string }
   | { certificate: Certificate; key: string; kind: "certificate"; name: string };
@@ -210,7 +214,7 @@ export function RevocationCenter({
         id: "confirm",
         label: t("certificates.revocation.confirmTitle"),
         description: t("certificates.revocation.confirmDescription"),
-        progressState: completed ? "done" : "pending",
+        progressState: completed && !(completed.kind === "certificate" && completed.queued) ? "done" : "pending",
       },
     ],
     [completed, reviewCurrent, t],
@@ -274,6 +278,10 @@ export function RevocationCenter({
         }
         const result = await api.bulkRevokeCertificates({ certificate_ids: [current.id], reason });
         const item = result.items.find((candidate) => candidate.id === current.id);
+        if (item?.status === "queued") {
+          setCompleted({ kind: "certificate", certificate: current, queued: true });
+          return;
+        }
         if (!item || (item.status !== "revoked" && !(item.status === "skipped" && item.error === "already revoked"))) {
           throw new Error(item?.error || t("certificates.revocation.certificateVerifyFailed"));
         }
@@ -334,61 +342,59 @@ export function RevocationCenter({
       >
         {step === 0 && (
           <div className="grid max-w-2xl gap-4">
-            <label className="grid gap-1 text-sm font-medium" htmlFor="revocation-center-identity">
-              {t("certificates.revocation.identityLabel")}
-              <select
-                id="revocation-center-identity"
-                value={targetKey}
-                onChange={(event) => {
-                  setTargetKey(event.target.value);
-                  invalidateReview();
-                }}
-                className="min-h-10 rounded-control border border-border bg-background px-3 py-2 text-sm"
-              >
-                <option value="">{t("certificates.revocation.identityPlaceholder")}</option>
-                {linkedLoading && targetCertificateID ? (
-                  <option value={certificateTargetKey(targetCertificateID)}>{t("certificates.revocation.linkedLoading")}</option>
-                ) : null}
-                {eligibleIdentities.length > 0 ? (
-                  <optgroup label={t("certificates.revocation.lifecycleGroup")}>
-                    {eligibleIdentities.map((identity) => (
-                      <option key={identity.id} value={identity.id}>
-                        {identity.name} · {identity.status}
-                      </option>
-                    ))}
-                  </optgroup>
-                ) : null}
-                {certificateRecords.length > 0 ? (
-                  <optgroup label={t("certificates.revocation.recordsGroup")}>
-                    {certificateRecords.map((certificate) => (
-                      <option key={certificate.id} value={certificateTargetKey(certificate.id)}>
-                        {certificateTargetName(certificate)} · {certificate.status} · {t("certificates.revocation.recordOption")}
-                      </option>
-                    ))}
-                  </optgroup>
-                ) : null}
-              </select>
-            </label>
-            <label className="grid gap-1 text-sm font-medium" htmlFor="revocation-center-reason">
-              {t("certificates.revocation.reasonLabel")}
-              <select
-                id="revocation-center-reason"
-                aria-label={t("certificates.revocation.reasonLabel")}
-                value={reason}
-                onChange={(event) => {
-                  setReason(event.target.value as BulkRevokeRequest["reason"]);
-                  invalidateReview();
-                }}
-                className="min-h-10 rounded-control border border-border bg-background px-3 py-2 text-sm"
-              >
-                {revocationReasons.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
-              <span className="text-xs text-muted-foreground">{t("certificates.revocation.reasonHelp")}</span>
-            </label>
+            <Field label={t("certificates.revocation.identityLabel")} controlId="revocation-center-identity">
+              {(control) => (
+                <Select
+                  {...control}
+                  value={targetKey}
+                  onChange={(event) => {
+                    setTargetKey(event.target.value);
+                    invalidateReview();
+                  }}
+                >
+                  <option value="">{t("certificates.revocation.identityPlaceholder")}</option>
+                  {linkedLoading && targetCertificateID ? (
+                    <option value={certificateTargetKey(targetCertificateID)}>{t("certificates.revocation.linkedLoading")}</option>
+                  ) : null}
+                  {eligibleIdentities.length > 0 ? (
+                    <optgroup label={t("certificates.revocation.lifecycleGroup")}>
+                      {eligibleIdentities.map((identity) => (
+                        <option key={identity.id} value={identity.id}>
+                          {identity.name} · {identity.status}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ) : null}
+                  {certificateRecords.length > 0 ? (
+                    <optgroup label={t("certificates.revocation.recordsGroup")}>
+                      {certificateRecords.map((certificate) => (
+                        <option key={certificate.id} value={certificateTargetKey(certificate.id)}>
+                          {certificateTargetName(certificate)} · {certificate.status} · {t("certificates.revocation.recordOption")}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ) : null}
+                </Select>
+              )}
+            </Field>
+            <Field label={t("certificates.revocation.reasonLabel")} description={t("certificates.revocation.reasonHelp")} controlId="revocation-center-reason">
+              {(control) => (
+                <Select
+                  {...control}
+                  value={reason}
+                  onChange={(event) => {
+                    setReason(event.target.value as BulkRevokeRequest["reason"]);
+                    invalidateReview();
+                  }}
+                >
+                  {revocationReasons.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
             {!linkedLoading && targets.length === 0 && !linkedError ? (
               <p className="rounded-control border border-border bg-muted/30 p-3 text-sm text-muted-foreground">{t("certificates.revocation.empty")}</p>
             ) : null}
@@ -504,26 +510,30 @@ export function RevocationCenter({
               <p className="font-semibold">{t("certificates.revocation.irreversibleTitle")}</p>
               <p className="mt-1">{t("certificates.revocation.irreversibleBody", { identity: selected.name, reason })}</p>
             </div>
-            <label className="grid gap-1 text-sm font-medium" htmlFor="revocation-center-confirm-name">
-              {t("certificates.revocation.confirmName")}
-              <input
-                id="revocation-center-confirm-name"
-                value={confirmName}
-                onChange={(event) => setConfirmName(event.target.value)}
-                placeholder={selected.name}
-                className="min-h-10 rounded-control border border-destructive/40 bg-background px-3 py-2 text-sm"
-              />
-            </label>
+            <Field label={t("certificates.revocation.confirmName")} controlId="revocation-center-confirm-name">
+              {(control) => <Input {...control} value={confirmName} onChange={(event) => setConfirmName(event.target.value)} placeholder={selected.name} />}
+            </Field>
             {executeError ? (
               <p role="alert" className="rounded-control border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
                 {executeError}
               </p>
             ) : null}
             {completed ? (
-              <div className="rounded-control border border-status-success/30 bg-status-success/5 p-3 text-sm">
-                <p role="status" className="font-semibold text-status-success">
-                  {t(completed.kind === "identity" ? "certificates.revocation.accepted" : "certificates.revocation.certificateAccepted")}
-                </p>
+              <div className="rounded-control border border-border bg-muted/30 p-3 text-sm">
+                {completed.kind === "certificate" && completed.queued ? (
+                  <QueuedCertificateRevocation
+                    certificate={completed.certificate}
+                    onConfirmed={(certificate) => {
+                      setLinkedCertificate(certificate);
+                      setCompleted({ kind: "certificate", certificate });
+                      onCertificateRevoked?.(certificate);
+                    }}
+                  />
+                ) : (
+                  <p role="status" className="font-semibold text-status-success">
+                    {t(completed.kind === "identity" ? "certificates.revocation.accepted" : "certificates.revocation.certificateAccepted")}
+                  </p>
+                )}
                 <div className="mt-2 flex flex-wrap gap-3">
                   <Link
                     className="text-primary underline"

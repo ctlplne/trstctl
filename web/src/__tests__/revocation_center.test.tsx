@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { RevocationCenter } from "@/pages/certificates/RevocationCenter";
+import { AppQueryProvider } from "@/lib/query";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -355,5 +356,59 @@ describe("RevocationCenter", () => {
 
     expect(await within(confirmation).findByRole("alert")).toHaveTextContent("The certificate changed after review");
     expect(apiMock.bulkRevokeCertificates).not.toHaveBeenCalled();
+  });
+  it("keeps an external command pending through a failed read and confirms only the selected leaf without resubmitting", async () => {
+    apiMock.getCertificate.mockReset().mockResolvedValue(brokerCertificate);
+    apiMock.graphBlastRadius.mockReset().mockResolvedValue({ node: null, affected: [], by_kind: {}, paths: [] });
+    apiMock.bulkRevokeCertificates.mockReset().mockResolvedValue({
+      items: [{ id: brokerCertificate.id, status: "queued" }],
+      total_matched: 1,
+      total_queued: 1,
+      total_revoked: 0,
+      total_skipped: 0,
+      total_failed: 0,
+    });
+    const onCertificateRevoked = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <AppQueryProvider>
+          <RevocationCenter
+            certificates={[brokerCertificate]}
+            targetCertificateID={brokerCertificate.id}
+            identities={[]}
+            health={null}
+            distributions={[]}
+            onCertificateRevoked={onCertificateRevoked}
+          />
+        </AppQueryProvider>
+      </MemoryRouter>,
+    );
+    await screen.findByRole("option", { name: `${brokerCertificate.subject} · active · exact certificate record` });
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    await user.click(await screen.findByRole("button", { name: "Continue to confirmation" }));
+    await user.type(screen.getByLabelText("Type the exact credential label"), brokerCertificate.subject);
+    await user.click(screen.getByRole("button", { name: "Revoke reviewed credential" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("the issuing CA has not yet confirmed it");
+    expect(onCertificateRevoked).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Revoke reviewed credential" })).not.toBeInTheDocument();
+
+    apiMock.getCertificate.mockRejectedValue(new Error("unavailable"));
+    await user.click(screen.getByRole("button", { name: "Refresh revocation result" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Revocation remains unconfirmed");
+    expect(onCertificateRevoked).not.toHaveBeenCalled();
+
+    apiMock.getCertificate.mockResolvedValue({ ...brokerCertificate, status: "revoked", fingerprint: "c".repeat(64) });
+    await user.click(screen.getByRole("button", { name: "Refresh revocation result" }));
+    await waitFor(() => expect(apiMock.getCertificate).toHaveBeenCalled());
+    expect(onCertificateRevoked).not.toHaveBeenCalled();
+    expect(screen.getByRole("status")).toHaveTextContent("the issuing CA has not yet confirmed it");
+
+    const revoked = { ...brokerCertificate, status: "revoked", revocation_reason: "keyCompromise" };
+    apiMock.getCertificate.mockResolvedValue(revoked);
+    // The visibility-aware live query detects the issuer result without another mutation.
+    expect(await screen.findByText("Revocation accepted and the exact certificate now reads revoked.", {}, { timeout: 4000 })).toBeInTheDocument();
+    expect(onCertificateRevoked).toHaveBeenCalledExactlyOnceWith(revoked);
+    expect(apiMock.bulkRevokeCertificates).toHaveBeenCalledTimes(1);
   });
 });

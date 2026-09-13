@@ -15,6 +15,7 @@ package vaultpki
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -310,9 +311,9 @@ var _ catemplate.RevokingBackend = (*backend)(nil)
 // with an error the operator would have to interpret, and "trstctl had nothing
 // to revoke with" is the more useful sentence.
 func (b *backend) Revoke(ctx context.Context, req ca.RevokeRequest) error {
-	serial := strings.TrimSpace(req.Serial)
-	if serial == "" {
-		return fmt.Errorf("vaultpki: revocation needs a serial number; none supplied")
+	serial, err := vaultSerial(req.Serial)
+	if err != nil {
+		return err
 	}
 	if err := b.validateEndpoint(); err != nil {
 		return err
@@ -323,6 +324,39 @@ func (b *backend) Revoke(ctx context.Context, req ca.RevokeRequest) error {
 		return fmt.Errorf("vaultpki: revoke %s: %w", serial, err)
 	}
 	return nil
+}
+
+// Inventory stores an integer's hexadecimal digits. Vault's certificate lookup
+// uses lowercase, colon-separated bytes, including a padded first nibble.
+func vaultSerial(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", errors.New("vaultpki: revocation needs a serial number; none supplied")
+	}
+	if strings.ContainsAny(value, ":-") {
+		separator := ":"
+		if strings.Contains(value, "-") {
+			separator = "-"
+		}
+		parts := strings.Split(value, separator)
+		for _, part := range parts {
+			if len(part) != 2 {
+				return "", errors.New("vaultpki: invalid certificate serial byte format")
+			}
+		}
+		value = strings.Join(parts, "")
+	}
+	if len(value)%2 != 0 {
+		value = "0" + value
+	}
+	if _, err := hex.DecodeString(value); err != nil {
+		return "", errors.New("vaultpki: invalid hexadecimal certificate serial")
+	}
+	parts := make([]string, 0, len(value)/2)
+	for i := 0; i < len(value); i += 2 {
+		parts = append(parts, strings.ToLower(value[i:i+2]))
+	}
+	return strings.Join(parts, ":"), nil
 }
 
 func (b *backend) revokeURL() string {

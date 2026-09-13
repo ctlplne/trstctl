@@ -5319,6 +5319,7 @@
           "status": {
             "enum": [
               "revoked",
+              "queued",
               "skipped",
               "failed"
             ],
@@ -5421,6 +5422,10 @@
             "type": "integer"
           },
           "total_matched": {
+            "type": "integer"
+          },
+          "total_queued": {
+            "description": "External revocation intents accepted. These certificates are not confirmed revoked until their recorded issuing CA accepts the request.",
             "type": "integer"
           },
           "total_revoked": {

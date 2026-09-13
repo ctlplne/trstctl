@@ -1822,6 +1822,7 @@ BulkRevokeResult = TypedDict(
         'items': list[dict[str, Any]],
         'total_failed': int,
         'total_matched': int,
+        'total_queued': int,
         'total_revoked': int,
         'total_skipped': int,
     },

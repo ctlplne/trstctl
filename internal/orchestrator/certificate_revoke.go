@@ -23,6 +23,10 @@ import (
 var ErrCertificateRevocationInvalid = errors.New("orchestrator: invalid certificate revocation request")
 var ErrCertificateRevocationUnsupported = errors.New(projections.CertificateRevocationUnsupportedReason)
 
+// ExternalCertificateAuthorityPrefix distinguishes a verified external registry
+// binding from the UUID of a locally served CA ledger. It is never tenant input.
+const ExternalCertificateAuthorityPrefix = "external:"
+
 // CertificateRevocationChecks are separate: denied policy aborts the entire
 // batch, while an unsupported issuer produces an explicit per-certificate error.
 // Authority must verify actual certificate bytes/signature and issuer ledger;
@@ -135,7 +139,13 @@ func (o *Orchestrator) BulkRevokeCertificates(ctx context.Context, tenantID, com
 				if err != nil {
 					return err
 				}
-				event, err := o.log.Append(ctx, events.Event{ID: eventID, Type: projections.EventCertificateRevocationBatchApplied, TenantID: tenantID, Data: payload})
+				version := 1
+				for _, item := range batch.Items {
+					if item.Status == "queued" {
+						version = projections.CertificateExternalRevocationSchemaVersion
+					}
+				}
+				event, err := o.log.Append(ctx, events.Event{ID: eventID, Type: projections.EventCertificateRevocationBatchApplied, TenantID: tenantID, Data: payload, SchemaVersion: version})
 				if err != nil {
 					return err
 				}
@@ -155,6 +165,8 @@ func (o *Orchestrator) BulkRevokeCertificates(ctx context.Context, tenantID, com
 			result.TotalMatched++
 		}
 		switch item.Status {
+		case "queued":
+			result.TotalQueued++
 		case "revoked":
 			result.TotalRevoked++
 		case "skipped":
@@ -179,6 +191,11 @@ func (o *Orchestrator) exactCertificateRevocationItem(ctx context.Context, tx pg
 	}
 	if caID == "" {
 		return item, errors.New("orchestrator: certificate revocation resolved an empty authority")
+	}
+	if externalID, external := strings.CutPrefix(caID, ExternalCertificateAuthorityPrefix); external {
+		item.Status, item.ExternalCAID = "queued", externalID
+		item.Fingerprint, item.Serial = certificate.Fingerprint, certificate.Serial
+		return item, nil
 	}
 	issuer, err := o.store.IssuedCertificateForRevocationTx(ctx, tx, certificate.TenantID, caID, certificate.Serial)
 	if err != nil {

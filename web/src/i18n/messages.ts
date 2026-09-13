@@ -6479,7 +6479,8 @@ export const messages = {
     description: "Durable write description for exact certificate revocation.",
   },
   "certificates.revocation.certificatePublish": {
-    defaultMessage: "Update the issuer's signed CRL and OCSP status through the configured revocation authority.",
+    defaultMessage:
+      "Request revocation from the recorded issuing authority. External requests run asynchronously; verify acceptance and the CRL or OCSP evidence that authority supports.",
     description: "Publication effect for exact certificate revocation.",
   },
   "certificates.revocation.certificateProof": {
@@ -6526,6 +6527,23 @@ export const messages = {
   "certificates.revocation.accepted": {
     defaultMessage: "Revocation accepted and the identity now reads revoked.",
     description: "Success state after the response verifies the revoked identity projection.",
+  },
+  "certificates.revocation.certificateQueued": {
+    defaultMessage: "Revocation queued — the issuing CA has not yet confirmed it.",
+    description: "Accepted external request is not a revoked certificate.",
+  },
+  "certificates.revocation.certificateQueuedHelp": {
+    defaultMessage:
+      "This page checks the exact certificate automatically. If it stays pending, inspect Jobs and queues for issuer failures; the original command remains available for retry.",
+    description: "How to observe and recover asynchronous exact revocation.",
+  },
+  "certificates.revocation.certificateReadUnavailable": {
+    defaultMessage: "The current result could not be verified. Revocation remains unconfirmed.",
+    description: "Fail-closed external revocation observation.",
+  },
+  "certificates.revocation.refreshResult": {
+    defaultMessage: "Refresh revocation result",
+    description: "Refresh the exact certificate after an accepted external revocation.",
   },
   "certificates.revocation.certificateAccepted": {
     defaultMessage: "Revocation accepted and the exact certificate now reads revoked.",

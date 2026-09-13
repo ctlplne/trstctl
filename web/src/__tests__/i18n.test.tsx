@@ -1567,8 +1567,11 @@ describe("i18n boundary", () => {
       // es/de require HUMAN TRANSLATION REVIEW before release.
       // Alert pagination: reviewed newest/older navigation and page-scoped counts.
       // Machine-authored es/de require HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "feb6e95c12bcbe97134b032b0e2fad84705eda6f3d081f1c383d1585dff0f7e5",
-      "de-DE": "e0ad343e0552ea247fe8b536b6d5990cac94f536bc3923577ad1ba4ef9ddfb50",
+      // Exact external revocation: reviewed queued versus issuer-confirmed
+      // status, independent CRL/OCSP limits, refresh and failed-read wording.
+      // Machine-authored es/de require HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "8dbe7c272c1e7ad6a1585e01edba338f1d7fb0f7b8b3d79ea09c43b6f3f51830",
+      "de-DE": "a0e36bd7404a15c0b5aaa7c63e269c2b938e5a8cba0d3c5759f1e68d1e0bd227",
     });
   });
 

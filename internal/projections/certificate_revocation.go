@@ -14,9 +14,14 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/store"
 )
 
 const EventCertificateRevocationBatchApplied = "certificate.revocation.batch.applied"
+
+// Version 2 adds queued external authority intents. Version 1 remains the
+// immediate local-ledger contract and must never acquire new remote effects.
+const CertificateExternalRevocationSchemaVersion = 2
 
 // MaxCertificateRevocationBatch bounds row locks, policy evaluations and event
 // size. Large incident plans submit explicit, independently tracked batches.
@@ -34,13 +39,14 @@ type CertificateRevocationBatchApplied struct {
 }
 
 type CertificateRevocationItem struct {
-	ID          string `json:"id"`
-	Matched     bool   `json:"matched"`
-	Status      string `json:"status"`
-	Error       string `json:"error,omitempty"`
-	Fingerprint string `json:"fingerprint,omitempty"`
-	Serial      string `json:"serial,omitempty"`
-	CAID        string `json:"ca_id,omitempty"`
+	ID           string `json:"id"`
+	Matched      bool   `json:"matched"`
+	Status       string `json:"status"`
+	Error        string `json:"error,omitempty"`
+	Fingerprint  string `json:"fingerprint,omitempty"`
+	Serial       string `json:"serial,omitempty"`
+	CAID         string `json:"ca_id,omitempty"`
+	ExternalCAID string `json:"external_ca_id,omitempty"`
 }
 
 func ValidateCertificateRevocationBatch(batch CertificateRevocationBatchApplied) error {
@@ -54,13 +60,19 @@ func ValidateCertificateRevocationBatch(batch CertificateRevocationBatchApplied)
 			return errors.New("projections: certificate revocation selection has an empty or duplicate id")
 		}
 		seen[item.ID] = true
-		if item.Status != "revoked" && (item.CAID != "" || item.Fingerprint != "" || item.Serial != "") {
+		if item.Status != "revoked" && item.Status != "queued" && (item.CAID != "" || item.ExternalCAID != "" || item.Fingerprint != "" || item.Serial != "") {
 			return errors.New("projections: inactive certificate outcome carries unexpected authority fields")
 		}
 		switch item.Status {
+		case "queued":
+			if !item.Matched || item.CAID != "" || item.ExternalCAID == "" || len(item.ExternalCAID) > 256 ||
+				strings.TrimSpace(item.ExternalCAID) != item.ExternalCAID || item.Serial == "" ||
+				strings.Trim(item.Serial, "0123456789abcdef") != "" || !revocationDigest(item.Fingerprint) || item.Error != "" {
+				return errors.New("projections: queued external revocation has no exact authority binding")
+			}
 		case "revoked":
 			caID, caErr := uuid.Parse(item.CAID)
-			if !item.Matched || caErr != nil || caID.String() != item.CAID || item.Serial == "" ||
+			if !item.Matched || item.ExternalCAID != "" || caErr != nil || caID.String() != item.CAID || item.Serial == "" ||
 				strings.Trim(item.Serial, "0123456789abcdef") != "" || !revocationDigest(item.Fingerprint) || item.Error != "" {
 				return errors.New("projections: certificate revocation has no exact authority binding")
 			}
@@ -96,6 +108,18 @@ func (p *Projector) applyCertificateRevocationBatchTx(ctx context.Context, tx pg
 		return errors.New("projections: revocation requires the canonical event identity and time")
 	}
 	for _, item := range batch.Items {
+		if item.Status == "queued" {
+			if event.SchemaVersion != CertificateExternalRevocationSchemaVersion {
+				return errors.New("projections: legacy revocation cannot authorize an external effect")
+			}
+			if err := p.store.EnsureExternalCertificateRevocationTx(ctx, tx, event.TenantID, store.ExternalCertificateRevocation{
+				EventID: event.ID, CertificateID: item.ID, Fingerprint: item.Fingerprint, Serial: item.Serial,
+				ExternalCAID: item.ExternalCAID, Reason: batch.Reason,
+			}); err != nil {
+				return err
+			}
+			continue
+		}
 		if item.Status != "revoked" {
 			continue
 		}

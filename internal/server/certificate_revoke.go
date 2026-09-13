@@ -39,6 +39,22 @@ func (s *Server) ensureIssuedCredentialCRL(ctx context.Context, tenantID string)
 // to revoke an unrelated local leaf with the same serial. Other authority paths
 // must supply their own verified adapter; there is no internal-CA fallback.
 func (s *Server) certificateRevocationAuthority(ctx context.Context, certificate store.Certificate) (string, error) {
+	// Host recording can change source to "issued". The original immutable
+	// upstream certificate event, never a mutable name or current identity CA,
+	// binds this exact public leaf to its external revocation authority.
+	if dispatcher, ok := s.obHandler.(*issuanceDispatcher); ok && dispatcher.externalCAs != nil {
+		origins, err := dispatcher.certificateRevocationOrigins(ctx, certificate.TenantID, []store.Certificate{certificate})
+		if err == nil {
+			origin := origins[certificate.Fingerprint]
+			if origin.ExternalID != "" {
+				entry, found := dispatcher.externalCAs.byID[origin.ExternalID]
+				if !found || entry.revocationCA == nil || (entry.tenantID != "" && entry.tenantID != certificate.TenantID) {
+					return "", orchestrator.ErrCertificateRevocationUnsupported
+				}
+				return orchestrator.ExternalCertificateAuthorityPrefix + origin.ExternalID, nil
+			}
+		}
+	}
 	if s.revoc == nil {
 		return "", errors.New("server: certificate revocation publication is unavailable")
 	}

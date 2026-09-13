@@ -69,3 +69,23 @@ func TestVaultIsInTheRevokeMatrix(t *testing.T) {
 		t.Error("vaultpki implements revocation but the capability matrix says it cannot")
 	}
 }
+
+func TestRevokeFormatsInventorySerialForVault(t *testing.T) {
+	stub := newVaultStub(t, "vault-token-sensitive")
+	defer stub.Close()
+	p := vaultpki.New(vaultpki.Config{Name: "vault-pki", BaseURL: stub.URL(),
+		Token: []byte("vault-token-sensitive"), Mount: "pki", Role: "web"}, vaultpki.WithHTTPClient(stub.Client()))
+	for _, tc := range []struct{ input, want string }{
+		{"3f2a11", "3f:2a:11"},
+		{"f2a11", "0f:2a:11"},
+		{"3F:2A:11", "3f:2a:11"},
+		{"3f-2a-11", "3f:2a:11"},
+	} {
+		if err := p.Revoke(t.Context(), ca.RevokeRequest{TenantID: "tenant-a", Serial: tc.input}); err != nil {
+			t.Fatal(err)
+		}
+		if got := stub.LastRequest().serial; got != tc.want {
+			t.Errorf("serial %q sent as %q, want Vault lookup key %q", tc.input, got, tc.want)
+		}
+	}
+}

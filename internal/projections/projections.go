@@ -3350,7 +3350,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCertificateRecorded:                      {1: true, CertificateApprovalEventSchemaVersion: true, CertificateValidityEventSchemaVersion: true},
 	EventCertificateCustodyAttested:               {1: true},
 	EventCertificateRevoked:                       {1: true},
-	EventCertificateRevocationBatchApplied:        {1: true},
+	EventCertificateRevocationBatchApplied:        {1: true, CertificateExternalRevocationSchemaVersion: true},
 	EventCertificateSuperseded:                    {1: true},
 	EventCAIssuedCertificate:                      {1: true},
 	EventCACertificateRevoked:                     {1: true},
