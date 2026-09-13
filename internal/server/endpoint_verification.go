@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -12,7 +13,6 @@ import (
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
 
-	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
@@ -69,7 +69,10 @@ func (s *Server) recordDeployVerification(ctx context.Context, tenantID, agentNa
 		if id == "" {
 			continue
 		}
-		s.appendEndpointVerification(ctx, tenantID, agentName, id, res.Transcript, res.Detail)
+		if err := s.appendEndpointVerification(ctx, tenantID, agentName, id, res.Transcript, res.Detail); err != nil {
+			s.logger.Warn("endpoint verification recording failed", "tenant_id", tenantID, "error", err)
+			continue
+		}
 		if !rollback {
 			s.recordVerificationReceipt(ctx, tenantID, idempotencyKey, intent, res.Transcript, res.Detail)
 		}
@@ -142,7 +145,10 @@ func (s *Server) recordEndpointVerificationSweep(ctx context.Context, tenantID, 
 		if id == "" {
 			continue
 		}
-		s.appendEndpointVerification(ctx, tenantID, agentName, id, res.Transcript, res.Detail)
+		if err := s.appendEndpointVerification(ctx, tenantID, agentName, id, res.Transcript, res.Detail); err != nil {
+			s.logger.Warn("endpoint verification recording failed", "tenant_id", tenantID, "error", err)
+			continue
+		}
 		// A divergence or an unreachable endpoint raises an operator alert. A
 		// clean observation raises nothing — an alert per healthy sweep would
 		// bury the one that matters.
@@ -163,22 +169,26 @@ func (s *Server) recordEndpointVerificationSweep(ctx context.Context, tenantID, 
 	}
 }
 
-// appendEndpointVerification writes one observation to the log.
+// appendEndpointVerification records and projects one observation while holding
+// the same metadata admission fence as certificate issuance and revocation.
 func (s *Server) appendEndpointVerification(
 	ctx context.Context, tenantID, agentName, endpointID string,
 	tr transport.ProbeTranscript, detail string,
-) {
+) error {
 	if err := tr.Validate(); err != nil {
 		// A transcript that does not canonicalize cannot have been signed over
 		// coherently, and an unsigned observation is not evidence. Dropping it
 		// is better than storing a verdict with nothing behind it.
-		return
+		return err
+	}
+	if s.orch == nil {
+		return errors.New("server: endpoint verification recorder is unavailable")
 	}
 	observedAt := time.Unix(tr.ObservedAtUnix, 0).UTC()
 	if tr.ObservedAtUnix == 0 {
 		observedAt = time.Now().UTC()
 	}
-	payload, err := json.Marshal(projections.EndpointVerificationObserved{
+	return s.orch.RecordEndpointVerification(ctx, tenantID, projections.EndpointVerificationObserved{
 		EndpointID:          endpointID,
 		Address:             tr.Address,
 		Vantage:             string(tr.Vantage),
@@ -194,12 +204,6 @@ func (s *Server) appendEndpointVerification(
 		EvidenceDigest:      tr.Digest(),
 		AgentCommonName:     agentName,
 		ObservedAt:          observedAt,
-	})
-	if err != nil {
-		return
-	}
-	_, _ = s.log.Append(ctx, events.Event{
-		Type: projections.EventEndpointVerified, TenantID: tenantID, Data: payload,
 	})
 }
 

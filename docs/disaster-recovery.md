@@ -41,6 +41,14 @@ committing their projections in the opposite order. It does not repair an
 already interrupted event: preserve the retained history and follow the rebuild
 procedure below when the ordering guard refuses incremental recovery.
 
+Agent endpoint-verification reports use the same admission path. A successful
+report can supersede a discovered certificate, so ingestion records and projects
+the observation under the metadata lock before returning. This prevents a
+concurrent renewal from advancing certificate state ahead of an unprojected
+listener observation. A failed observation write does not create a verified
+delivery receipt. Existing ordering gaps still require the retained-event
+rebuild described below.
+
 Migration 0208 adds exact completion receipts for certificate-dependent events.
 Each receipt commits with the whole event transaction and binds its immutable
 envelope. A repeated completed event is inert, including a duplicate retained
