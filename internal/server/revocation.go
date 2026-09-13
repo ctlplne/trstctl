@@ -273,9 +273,10 @@ func (s *revocationService) generateCRL(ctx context.Context, tenantID string) ([
 }
 
 // generateCRLFromCurrentProjection signs the read model the caller has already
-// made current. Issuance projects its certificate event synchronously before it
-// asks for the initial CRL, so replaying the entire retained event history here
-// would turn every new certificate into an increasingly expensive global scan.
+// made current. Issuance and authorized revocation commit their certificate event
+// and CA ledger synchronously before publication. Replaying retained history here
+// would turn each certificate action into an increasingly expensive global scan
+// and let unrelated projection work exhaust a revocation's delivery deadline.
 // Recovery, manual, and scheduler entry points continue to use generateCRL,
 // which performs the catch-up before entering this helper.
 func (s *revocationService) generateCRLFromCurrentProjection(ctx context.Context, tenantID string) ([]byte, error) {

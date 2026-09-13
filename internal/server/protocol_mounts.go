@@ -236,7 +236,9 @@ func (s *Server) newProtocolIssuer() *protocolIssuer {
 			if s.revoc == nil {
 				return nil
 			}
-			_, err := s.revoc.generateCRL(ctx, tenantID)
+			// RevokeProtocolLeaf has already committed the exact revocation and
+			// CA ledger. Publishing must not wait for a global read-model rebuild.
+			_, err := s.revoc.generateCRLFromCurrentProjection(ctx, tenantID)
 			return err
 		},
 		tenantCrypto: s.tenantCrypto,

@@ -1701,7 +1701,10 @@ func (s *Server) configureRevocationSurface(ctx context.Context, d Deps) (func(c
 	}
 	ensureCRL := func(ctx context.Context, tenantID string) error { return s.revoc.ensureCRL(ctx, tenantID) }
 	publishCRL := func(ctx context.Context, tenantID string) error {
-		_, err := s.revoc.generateCRL(ctx, tenantID)
+		// These trusted writers commit certificate.revoked and its CA ledger
+		// before publication. Rebuilding unrelated projections here can consume
+		// every outbox attempt while the public CRL still omits that revocation.
+		_, err := s.revoc.generateCRLFromCurrentProjection(ctx, tenantID)
 		return err
 	}
 	return ensureCRL, publishCRL, nil
