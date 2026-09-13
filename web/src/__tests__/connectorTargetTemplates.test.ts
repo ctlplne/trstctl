@@ -62,6 +62,13 @@ describe("connector target templates", () => {
       config_path: "/etc/traefik/dynamic.yml",
     });
     expect(defaultTargetConfigObject("iis")).toMatchObject({ binding: "*:443:service.example.com", import_dir: "C:/trstctl/import" });
+    expect(defaultTargetConfigObject("java-keystore")).toMatchObject({
+      alias: "server",
+      format: "pkcs12",
+      reload_action: "java-tls-reload",
+      verify_address: "service.example.com:443",
+      verify_server_name: "service.example.com",
+    });
   });
 
   it("never seeds a secret value, only references", () => {

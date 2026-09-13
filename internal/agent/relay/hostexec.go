@@ -179,6 +179,7 @@ type HostTargetConfig struct {
 	KeystorePasswordRef string `json:"keystore_password_ref,omitempty"`
 	Alias               string `json:"alias,omitempty"`
 	Format              string `json:"format,omitempty"`
+	ReloadAction        string `json:"reload_action,omitempty"`
 }
 
 // ExecuteOnHost deploys a credential to a service on the machine this agent runs
@@ -471,6 +472,12 @@ func hostPreflightActions(name string, target HostTargetConfig) ([]connector.Loc
 		if err := require(field("keystore_path", target.KeystorePath), field("keystore_password_ref", target.KeystorePasswordRef)); err != nil {
 			return nil, err
 		}
+		if err := javakeystore.ValidateReloadAction(target.ReloadAction); err != nil {
+			return nil, err
+		}
+		if target.ReloadAction != "" {
+			return []connector.LocalActionInvocation{action(target.ReloadAction)}, nil
+		}
 		return nil, nil
 	case "elasticsearch":
 		if err := require(field("cert_path", target.CertPath), field("key_path", target.KeyPath)); err != nil {
@@ -636,7 +643,13 @@ func buildHostConnector(name string, target HostTargetConfig, material Material)
 		if target.Format != "" {
 			options = append(options, javakeystore.WithFormat(javakeystore.Format(target.Format)))
 		}
-		return javakeystore.New(target.KeystorePath, password, target.Alias, options...), nil
+		options = append(options, javakeystore.WithReloadAction(target.ReloadAction))
+		built := javakeystore.New(target.KeystorePath, password, target.Alias, options...)
+		if err := built.Validate(); err != nil {
+			built.Close()
+			return nil, err
+		}
+		return built, nil
 	default:
 		return nil, fmt.Errorf("relay: connector %q is not host-executable", name)
 	}
@@ -656,4 +669,21 @@ func validateCoResidentEnvoyEndpoint(raw string) error {
 		return errors.New("relay: host Envoy endpoint must name localhost or a literal loopback address")
 	}
 	return nil
+}
+
+func preflightJavaRenewal(profile connector.LocalOpsConfig, intent DeployIntent, material Material) error {
+	var target HostTargetConfig
+	if err := json.Unmarshal(intent.TargetConfig, &target); err != nil {
+		return errors.New("java target configuration did not decode")
+	}
+	actions, err := hostPreflightActions("java-keystore", target)
+	if err != nil {
+		return err
+	}
+	built, err := buildHostConnector("java-keystore", target, material)
+	if err != nil {
+		return err
+	}
+	defer built.(interface{ Close() }).Close()
+	return connector.PreflightLocalOps(profile, built.Capabilities(), actions)
 }

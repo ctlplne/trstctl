@@ -231,6 +231,7 @@ type nativeTargetConfig struct {
 	KeystorePasswordRef string `json:"keystore_password_ref,omitempty"`
 	Alias               string `json:"alias,omitempty"`
 	Format              string `json:"format,omitempty"`
+	ReloadAction        string `json:"reload_action,omitempty"`
 
 	Endpoint         string `json:"endpoint,omitempty"`
 	SecretName       string `json:"secret_name,omitempty"`
@@ -317,7 +318,14 @@ func buildLocalConnector(r nativeConnectorRuntime, ctx context.Context, name str
 		if target.Format != "" {
 			options = append(options, javakeystore.WithFormat(javakeystore.Format(target.Format)))
 		}
-		built = javakeystore.New(target.KeystorePath, password, target.Alias, options...)
+		options = append(options, javakeystore.WithReloadAction(target.ReloadAction))
+		java := javakeystore.New(target.KeystorePath, password, target.Alias, options...)
+		if err := java.Validate(); err != nil {
+			java.Close()
+			lease.Close()
+			return nil, nil, nil, err
+		}
+		built = java
 	case "postgresql":
 		built = postgresql.New(target.CertPath, target.KeyPath)
 	case "mysql":
@@ -657,7 +665,7 @@ var nativeTargetFields = map[string]map[string]bool{
 	"haproxy":                 fields("profile", "crt_path", "config_path"),
 	"postfix":                 fields("profile", "postfix_cert_path", "postfix_key_path", "dovecot_cert_path", "dovecot_key_path"),
 	"traefik":                 fields("profile", "cert_path", "key_path"),
-	"java-keystore":           fields("profile", "keystore_path", "keystore_password_ref", "alias", "format"),
+	"java-keystore":           fields("profile", "keystore_path", "keystore_password_ref", "alias", "format", "reload_action"),
 	"postgresql":              fields("profile", "cert_path", "key_path"),
 	"mysql":                   fields("profile", "cert_path", "key_path"),
 	"rabbitmq":                fields("profile", "cert_path", "key_path"),
@@ -705,6 +713,9 @@ func validateNativeTarget(name string, target nativeTargetConfig) error {
 	case "java-keystore":
 		if !require(target.Profile, target.KeystorePath, target.KeystorePasswordRef, target.Alias) || (target.Format != "" && target.Format != "jks" && target.Format != "pkcs12") {
 			return fmt.Errorf("connector: java-keystore requires profile/path/password_ref/alias and a valid format")
+		}
+		if err := javakeystore.ValidateReloadAction(target.ReloadAction); err != nil {
+			return err
 		}
 	case "envoy":
 		if !require(target.Endpoint, target.SecretName) {

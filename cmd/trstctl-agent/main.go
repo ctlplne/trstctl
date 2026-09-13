@@ -46,6 +46,10 @@ import (
 
 func main() {
 	showVersion := flag.Bool("version", false, "print version information and exit")
+	tomcatReloadURL := flag.String("tomcat-reload-url", "", "one-shot: reload TLS through the stock Tomcat Manager /manager/text/sslReload on a literal loopback address, then exit")
+	tomcatReloadUser := flag.String("tomcat-reload-user", "", "Tomcat Manager username with manager-script permission (one-shot TLS reload)")
+	tomcatReloadPasswordFile := flag.String("tomcat-reload-password-file", "", "private file containing the Tomcat Manager password; never pass it in argv")
+	tomcatReloadTLSHost := flag.String("tomcat-reload-tls-host", "_default_", "exact Tomcat SSLHostConfig name to reload; defaults to _default_, never all hosts")
 	service := flag.String("service", "", "Windows service control: install | uninstall | run")
 	enrollURL := flag.String("enroll-url", "", "control-plane enrollment base URL")
 	token := flag.String("bootstrap-token", "", "development-only inline bootstrap token; use --bootstrap-token-file")
@@ -200,6 +204,16 @@ func main() {
 
 	if *showVersion {
 		fmt.Println(buildinfo.String("trstctl-agent"))
+		return
+	}
+	if handled, err := runTomcatReload(context.Background(), tomcatReloadOptions{
+		url: *tomcatReloadURL, user: *tomcatReloadUser, passwordFile: *tomcatReloadPasswordFile, tlsHost: *tomcatReloadTLSHost,
+	}); handled {
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
+			os.Exit(1)
+		}
+		fmt.Println("Tomcat acknowledged TLS reload; the connector must verify the served certificate")
 		return
 	}
 

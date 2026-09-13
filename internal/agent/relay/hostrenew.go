@@ -98,6 +98,14 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 		return false
 	}
 	defer destroyManagement()
+	if intent.Connector == "java-keystore" {
+		// Prove the password format and local reload authority before minting
+		// another certificate. A changed host profile must fail before signing.
+		if err := preflightJavaRenewal(profile, intent, management); err != nil {
+			report(ctx, ch, job, OutcomeFailed, "Java keystore preparation failed before signing: "+err.Error())
+			return false
+		}
+	}
 
 	key, err := crypto.GenerateHostSubjectKey(intent.SubjectCommonName, intent.SubjectDNSNames)
 	if err != nil {

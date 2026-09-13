@@ -90,6 +90,26 @@ func EncodeDeterministicBytes(keyPEM, certChainPEM, password []byte) ([]byte, er
 	return pkcs12.Modern.WithRand(r).Encode(key, leaf, cas, string(password))
 }
 
+// EncodeDeterministicAliasBytes encodes a Java key entry with an explicit alias.
+// Empty aliases retain the encoder's legacy unnamed entry. Nonempty aliases
+// must be valid UTF-8 in the Unicode Basic Multilingual Plane, without NUL,
+// and at most 1024 UTF-8 bytes (the PKCS#12 friendlyName is a BMPString).
+func EncodeDeterministicAliasBytes(keyPEM, certChainPEM, password []byte, alias string) ([]byte, error) {
+	if alias == "" {
+		return EncodeDeterministicBytes(keyPEM, certChainPEM, password)
+	}
+	name, err := javaAliasAttribute(alias)
+	if err != nil {
+		return nil, err
+	}
+	blob, err := EncodeDeterministicBytes(keyPEM, certChainPEM, password)
+	if err != nil {
+		return nil, err
+	}
+	defer secret.Wipe(blob)
+	return nameGeneratedKeyEntry(blob, password, name)
+}
+
 // Decode parses a PKCS#12 blob with password and returns the private key and
 // certificate chain (leaf first) as PEM. It is the inverse of Encode, used to
 // verify a written keystore.

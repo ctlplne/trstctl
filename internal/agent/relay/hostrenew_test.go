@@ -181,6 +181,48 @@ func TestUnavailableHostManagementCredentialRefusesBeforeSigningOrWriting(t *tes
 	}
 }
 
+func TestJavaRenewalChecksReloadAuthorityAndPasswordBeforeSigning(t *testing.T) {
+	for _, mode := range []string{"missing-action", "wrong-arguments", "unsafe-password", "approved"} {
+		t.Run(mode, func(t *testing.T) {
+			dir := t.TempDir()
+			password := []byte("qa-only-password")
+			if mode == "unsafe-password" {
+				password = []byte("pássword")
+			}
+			ch := &renewChannel{signErr: errors.New("stop after proving public CSR reached signer")}
+			ch.material = map[string][]byte{"secret://store-password": password}
+			config, err := json.Marshal(map[string]string{"keystore_path": filepath.Join(dir, "server.p12"), "keystore_password_ref": "secret://store-password", "alias": "payments", "format": "pkcs12", "reload_action": "tomcat-payments"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			ch.jobs = []relay.Job{renewJob(t, relay.DeployIntent{Connector: "java-keystore", Target: "java", SubjectCommonName: "java.example.test", CredentialRefs: []string{"secret://store-password"}, TargetConfig: config})}
+			profile := connector.LocalOpsConfig{AllowedRoots: []string{dir}}
+			if mode != "missing-action" {
+				executable, err := os.Executable()
+				if err != nil {
+					t.Fatal(err)
+				}
+				profile.Actions = []connector.LocalAction{{LogicalName: "tomcat-payments", LogicalArgs: []string{}, Command: executable}}
+				if mode == "wrong-arguments" {
+					profile.Actions[0].LogicalArgs = []string{"unexpected"}
+				}
+			}
+			_, err = relay.RunOnceWithHost(t.Context(), ch, http.DefaultClient, profile, 1, 60)
+			wantCalls := 0
+			if mode == "approved" {
+				wantCalls = 1
+			}
+			if err != nil || ch.signCalls != wantCalls || ch.redeemed != 1 {
+				t.Fatalf("signCalls=%d redeemed=%d err=%v", ch.signCalls, ch.redeemed, err)
+			}
+			entries, err := os.ReadDir(dir)
+			if err != nil || len(entries) != 0 {
+				t.Fatal("pre-signing validation changed the host directory")
+			}
+		})
+	}
+}
+
 // A channel that cannot sign refuses BEFORE generating a key.
 //
 // A key generated for a certificate that can never be requested is pure

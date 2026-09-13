@@ -383,7 +383,7 @@ instead of being ignored:
 | `haproxy` | `profile`, `crt_path`, `config_path` |
 | `iis` | `profile`, `binding`, `import_dir`; optional `store`, `app_id` |
 | `postfix` | `profile`, `postfix_cert_path`, `postfix_key_path`, `dovecot_cert_path`, `dovecot_key_path` |
-| `java-keystore` | `profile`, `keystore_path`, `keystore_password_ref`, `alias`; optional `format` (`jks` or `pkcs12`) |
+| `java-keystore` | `profile`, `keystore_path`, `keystore_password_ref`, `alias`; optional `format` (`jks` or `pkcs12`) and `reload_action` |
 | `envoy` | `endpoint`, `secret_name` |
 | `f5` | `endpoint`, `client_ssl_profile`, `username`, `password_ref`; optional `object_name` |
 | `netscaler` | `endpoint`, `username`, `password_ref`; optional `file_location` |
@@ -432,6 +432,67 @@ replayed. Older queued renewal jobs derive their reference names from their save
 target configuration without changing the queued policy or target revision.
 Both the control plane and host agent need this capability to complete
 password-protected host issuance and restore.
+
+### Reload a Java application
+
+Writing a keystore does not make an application use it. Set `reload_action` to a
+named action in the host's exec profile, and configure `verify_address` and
+`verify_server_name` so the agent checks the certificate served after that action.
+The console's Java destination example includes these fields. Omit `reload_action`
+only when file delivery is the intended outcome or the application itself watches
+the keystore; a file write alone is never proof of a successful TLS switch.
+
+Both JKS and PKCS#12 preserve `alias`; it must match the application's configured
+key alias. PKCS#12 aliases use BMP characters without NUL, up to 1024 UTF-8 bytes.
+Use a randomly generated printable ASCII store password for stock Java PKCS#12
+compatibility. A wrong format or incompatible password fails before the host
+requests signing. The store password reference and the application's management
+password serve different purposes.
+
+For stock Tomcat, use the shipped agent's one-shot Manager client. Tomcat's
+`catalina.sh` has no native TLS reload command. The
+[Manager TLS reload API](https://tomcat.apache.org/tomcat-11.0-doc/manager-howto.html#Reload_TLS_configuration)
+reloads certificate files for one existing `SSLHostConfig`; it does not reparse
+`server.xml`. Install the Manager application and a dedicated `manager-script`
+account, restrict its access to loopback, and place its password in an owner-only
+file with safe parent-directory permissions. This setup is performed once by the
+host administrator.
+
+For a destination with `"reload_action":"java-tls-reload"`, the corresponding
+host profile action can be:
+
+```json
+{
+  "logical_name": "java-tls-reload",
+  "command": "/usr/local/bin/trstctl-agent",
+  "logical_args": [],
+  "args": [
+    "--tomcat-reload-url", "http://127.0.0.1:8080/manager/text/sslReload",
+    "--tomcat-reload-user", "trstctl-manager",
+    "--tomcat-reload-password-file", "/etc/trstctl/tomcat-manager.password",
+    "--tomcat-reload-tls-host", "_default_"
+  ],
+  "pass_args": false,
+  "timeout_seconds": 20
+}
+```
+
+The host profile also needs the keystore directory in `allowed_roots`. The target
+selects only the action's name, never executable arguments or a password. The
+helper accepts literal loopback HTTP(S) addresses at `/manager/text/sslReload`,
+refuses redirects, and requires Tomcat's acknowledgement for the exact TLS host.
+HTTPS uses normal certificate validation. The password file contains one line
+(up to 4096 bytes); errors do not include credentials or Manager response bodies.
+Other Java applications can use their own fixed, operator-approved reload action.
+
+The Java connector preserves the previous file before a reload. On failure it
+restores that file and runs the same action again, while reporting the original
+deployment as failed. A missing predecessor, failed restore, or failed recovery
+reload is reported explicitly. Replaying a deployment repeats the activation even
+when the encoded keystore bytes are unchanged, because an earlier attempt may
+have stopped between writing and reloading. The host validates its action profile
+before requesting another certificate; the final listener check remains required
+to prove which certificate the application actually serves.
 
 `verify_address` plus `verify_server_name` tell the agent which listener to
 re-handshake after the reload, so a receipt is backed by an independent TLS check.

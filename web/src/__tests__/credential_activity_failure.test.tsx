@@ -7,6 +7,9 @@ afterEach(cleanup);
 
 const failure = {
   id: "delivery-1",
+  tenant_id: "tenant-1",
+  created_at: "2026-09-13T08:00:00Z",
+  updated_at: "2026-09-13T08:01:00Z",
   identity_id: "identity-1",
   outbox_id: 418,
   destination: "connector.deploy",
@@ -18,7 +21,7 @@ const failure = {
   reason: "agent_reported_failure",
   detail: "Signing refused by the approved DNS profile. <script>untrusted</script>",
   rollback_ref: "",
-} as ConnectorDelivery;
+} satisfies ConnectorDelivery;
 
 describe("identity deployment attempt evidence", () => {
   it("shows the safe failure detail and exact job while escaping agent-supplied markup", () => {

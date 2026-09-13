@@ -61,6 +61,8 @@ export function defaultTargetConfigObject(connector: string): Record<string, str
         keystore_password_ref: "secret://connectors/keystore-password",
         alias: "server",
         format: "pkcs12",
+        reload_action: "java-tls-reload",
+        ...hostVerification,
       };
     case "envoy":
       return { endpoint: "http://127.0.0.1:9901", secret_name: "server_cert" };
