@@ -3471,7 +3471,7 @@ func lifecycleRenewalReason(cert store.Certificate, now, fixedCutoff time.Time) 
 		}
 	}
 	if notAfter.Before(fixedCutoff) {
-		return lifecycleFixedRenewalReasonPrefix + fixedCutoff.Format(time.RFC3339), true
+		return lifecycleFixedRenewalReasonPrefix + notAfter.Format(time.RFC3339), true
 	}
 	return "", false
 }

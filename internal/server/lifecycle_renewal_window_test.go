@@ -10,6 +10,20 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
+func TestLifecycleRenewalReasonNamesTheCertificateExpiry(t *testing.T) {
+	// Actual mail journey: the one-minute sweep ran 58 seconds after the
+	// five-minute renewal window opened. Its cutoff is not the leaf's expiry.
+	nb := time.Date(2026, 9, 13, 2, 21, 21, 0, time.UTC)
+	na := time.Date(2026, 9, 13, 2, 33, 21, 0, time.UTC)
+	anchor := nb.Add(5 * time.Minute)
+	now := time.Date(2026, 9, 13, 2, 29, 19, 0, time.UTC)
+	cert := store.Certificate{NotBefore: &nb, NotAfter: &na, ValidityAnchor: &anchor}
+	reason, due := lifecycleRenewalReason(cert, now, now.Add(5*time.Minute))
+	if !due || reason != "scheduled renewal before 2026-09-13T02:33:21Z" {
+		t.Fatalf("renewal reason must retain actual leaf expiry, not the moving sweep cutoff: due=%v reason=%q", due, reason)
+	}
+}
+
 // The live owned journey minted nine unnecessary successors: its 30-day
 // fallback window was already open when each 30-day leaf was first recorded.
 // These source regressions preserve the configured lead and certificate life.
