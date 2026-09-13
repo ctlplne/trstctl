@@ -252,7 +252,7 @@ export function FirstCertificateStep({ onRecorded }: { onRecorded: (record: Wiza
       </form>
       {attempt && !record && (
         <div className="grid justify-items-start gap-2">
-          <p className="text-sm">{t("wizard.firstLeaf.retained")}</p>
+          {stopped !== "cancelled" && <p className="text-sm">{t("wizard.firstLeaf.retained")}</p>}
           {attempt.issuance && <CredentialChip value={attempt.issuance.issueKey} label={t("wizard.firstLeaf.requestKey")} />}
           {attempt.issuance?.phase !== "accepted" && !correcting && !stopped && (
             <Button type="button" onClick={() => void submit()} disabled={busy}>
@@ -288,17 +288,20 @@ export function FirstCertificateStep({ onRecorded }: { onRecorded: (record: Wiza
         <div className="grid justify-items-start gap-2">
           <p role={stopped ? "alert" : "status"}>
             {t(
-              stopped === "failed"
-                ? "wizard.firstLeaf.deliveryFailed"
-                : stopped === "unavailable"
-                  ? "wizard.firstLeaf.unavailable"
-                  : result.error
-                    ? "wizard.firstLeaf.readFailed"
-                    : paused
-                      ? "wizard.firstLeaf.paused"
-                      : "wizard.firstLeaf.pending",
+              stopped === "cancelled"
+                ? "lifecycle.status.cancelled"
+                : stopped === "failed"
+                  ? "wizard.firstLeaf.deliveryFailed"
+                  : stopped === "unavailable"
+                    ? "wizard.firstLeaf.unavailable"
+                    : result.error
+                      ? "wizard.firstLeaf.readFailed"
+                      : paused
+                        ? "wizard.firstLeaf.paused"
+                        : "wizard.firstLeaf.pending",
             )}
           </p>
+          {stopped === "cancelled" && recoveryResult?.retry?.reason && <p>{recoveryResult.retry.reason}</p>}
           <Button type="button" variant="outline" onClick={readAgain} disabled={result.fetching}>
             {t("wizard.firstLeaf.refresh")}
           </Button>

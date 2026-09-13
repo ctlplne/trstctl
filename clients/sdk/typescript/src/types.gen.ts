@@ -10559,14 +10559,14 @@ export interface components {
             read_at: string;
             receipt?: components["schemas"]["ConnectorDelivery"];
         };
-        /** @description Exact accepted issuance and its recorded public certificate. Failed means the original receiver command exhausted delivery and will not retry automatically; it does not prove no upstream certificate was signed. Unavailable means neither a recorded leaf nor its delivery bookkeeping is retained. Pending also covers delivery handed to an asynchronous host agent. A recorded certificate takes precedence over receiver status; it is not proof of deployment or listener verification. Reads never retry issuance. */
+        /** @description Exact accepted issuance and its recorded public certificate. Failed means the original receiver command exhausted delivery and will not retry automatically; it does not prove no upstream certificate was signed. Unavailable means neither a recorded leaf nor its delivery bookkeeping is retained. Cancelled means the original command was stopped after revocation or retirement; no more attempts may run and it cannot be retried. Pending also covers delivery handed to an asynchronous host agent. A recorded certificate takes precedence over receiver status; it is not proof of deployment or listener verification. Reads never retry issuance. */
         IdentityIssuanceResult: {
             certificate?: components["schemas"]["Certificate"];
             certificate_pem?: string;
             delivery?: {
                 attempts: number;
                 /** @enum {string} */
-                status: "pending" | "processing" | "delivered" | "failed";
+                status: "pending" | "processing" | "delivered" | "failed" | "cancelled";
             };
             /** Format: uuid */
             identity_id: string;
@@ -10576,7 +10576,7 @@ export interface components {
                 reason: string;
             };
             /** @enum {string} */
-            state: "pending" | "issued" | "failed" | "unavailable";
+            state: "pending" | "issued" | "failed" | "unavailable" | "cancelled";
         };
         IdentityList: {
             items: components["schemas"]["Identity"][];

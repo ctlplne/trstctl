@@ -36,3 +36,24 @@ func TestOpenAPIIdentityIssuanceResultRequiresOriginalRequestKey(t *testing.T) {
 		}
 	}
 }
+
+// Clients must be able to read a legitimately stopped command without treating
+// its terminal state as an unknown response or offering another signing attempt.
+func TestOpenAPIIdentityIssuanceResultIncludesCancelledDelivery(t *testing.T) {
+	doc := fetchSpec(t)
+	schemas := doc["components"].(map[string]any)["schemas"].(map[string]any)
+	properties := schemas["IdentityIssuanceResult"].(map[string]any)["properties"].(map[string]any)
+	delivery := properties["delivery"].(map[string]any)["properties"].(map[string]any)
+	for name, property := range map[string]any{"state": properties["state"], "delivery.status": delivery["status"]} {
+		values := property.(map[string]any)["enum"].([]any)
+		found := false
+		for _, value := range values {
+			if value == "cancelled" {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s cannot represent a cancelled issuance: %v", name, values)
+		}
+	}
+}

@@ -85,7 +85,7 @@ func (s *Store) GetIdentityIssuanceResult(ctx context.Context, tenantID, identit
 				return ErrIdempotencyConflict
 			}
 			switch delivery.Status {
-			case "pending", "processing", "delivered", "failed":
+			case "pending", "processing", "delivered", "failed", "cancelled":
 			default:
 				return fmt.Errorf("store: unknown issuance delivery state")
 			}

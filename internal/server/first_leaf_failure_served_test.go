@@ -132,4 +132,49 @@ func TestServedFirstLeafRecordedCertificateSurvivesLateDeliveryFailure(t *testin
 	if err := json.Unmarshal(body, &result); err != nil || status != http.StatusOK || result.State != "issued" || !strings.HasPrefix(result.PEM, "-----BEGIN CERTIFICATE-----") || result.Delivery.Status != "failed" || result.Delivery.Attempts != 1 {
 		t.Fatalf("late failure hid the actual public certificate: %d %s, %v", status, body, err)
 	}
+	originalPEM := result.PEM
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/identities/"+id+"/issuance-retry", token, "late-failure-recovery", map[string]any{
+		"request_key": requestKey, "reason": "recover the retained certificate without signing another",
+	})
+	if status != http.StatusAccepted {
+		t.Fatalf("grant retained-result recovery: %d %s", status, body)
+	}
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/identities/"+id+"/transitions", token, "late-failure-stop", map[string]any{"to": "revoked", "reason": "keyCompromise"})
+	if status != http.StatusOK {
+		t.Fatalf("stop retained-result recovery: %d %s", status, body)
+	}
+	did, err := box.DispatchOneScoped(t.Context(), h.srv.obHandler, orchestrator.DestinationScope{IncludePrefixes: []string{"ca.issue"}})
+	if err != nil || did {
+		t.Fatalf("cancelled retained-result work was claimable: %t %v", did, err)
+	}
+	assertPublicResult := func(wantCertificateStatus string) {
+		t.Helper()
+		status, body = secretsReq(t, h, http.MethodGet, "/api/v1/identities/"+id+"/issuance-result?request_key="+requestKey, token, nil)
+		var cancelled struct {
+			State       string `json:"state"`
+			PEM         string `json:"certificate_pem"`
+			Certificate struct {
+				Status string `json:"status"`
+			} `json:"certificate"`
+			Delivery struct {
+				Status   string `json:"status"`
+				Attempts int    `json:"attempts"`
+			} `json:"delivery"`
+			Retry *struct {
+				Allowed bool   `json:"allowed"`
+				Reason  string `json:"reason"`
+			} `json:"retry"`
+		}
+		if err := json.Unmarshal(body, &cancelled); err != nil || status != http.StatusOK || cancelled.State != "issued" || cancelled.PEM != originalPEM || cancelled.Certificate.Status != wantCertificateStatus || cancelled.Delivery.Status != "cancelled" || cancelled.Delivery.Attempts != 1 || cancelled.Retry == nil || cancelled.Retry.Allowed || cancelled.Retry.Reason == "" {
+			t.Fatalf("cancellation hid the current public result or allowed retry: %d %s err=%v", status, body, err)
+		}
+	}
+	// Stopping identity work does not invent CA acceptance. Publication records
+	// certificate revocation asynchronously, while the public result stays readable.
+	assertPublicResult("active")
+	did, err = box.DispatchOneScoped(t.Context(), h.srv.obHandler, orchestrator.DestinationScope{IncludePrefixes: []string{"revocation.publish"}})
+	if err != nil || !did {
+		t.Fatalf("publish retained-result revocation: %t %v", did, err)
+	}
+	assertPublicResult("revoked")
 }

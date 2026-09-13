@@ -15570,7 +15570,7 @@
         "type": "object"
       },
       "IdentityIssuanceResult": {
-        "description": "Exact accepted issuance and its recorded public certificate. Failed means the original receiver command exhausted delivery and will not retry automatically; it does not prove no upstream certificate was signed. Unavailable means neither a recorded leaf nor its delivery bookkeeping is retained. Pending also covers delivery handed to an asynchronous host agent. A recorded certificate takes precedence over receiver status; it is not proof of deployment or listener verification. Reads never retry issuance.",
+        "description": "Exact accepted issuance and its recorded public certificate. Failed means the original receiver command exhausted delivery and will not retry automatically; it does not prove no upstream certificate was signed. Unavailable means neither a recorded leaf nor its delivery bookkeeping is retained. Cancelled means the original command was stopped after revocation or retirement; no more attempts may run and it cannot be retried. Pending also covers delivery handed to an asynchronous host agent. A recorded certificate takes precedence over receiver status; it is not proof of deployment or listener verification. Reads never retry issuance.",
         "properties": {
           "certificate": {
             "$ref": "#/components/schemas/Certificate"
@@ -15588,7 +15588,8 @@
                   "pending",
                   "processing",
                   "delivered",
-                  "failed"
+                  "failed",
+                  "cancelled"
                 ],
                 "type": "string"
               }
@@ -15626,7 +15627,8 @@
               "pending",
               "issued",
               "failed",
-              "unavailable"
+              "unavailable",
+              "cancelled"
             ],
             "type": "string"
           }

@@ -1598,15 +1598,15 @@ func componentSchemas() map[string]*Schema {
 	}, "id", "tenant_id", "subject", "fingerprint", "status")
 	identityIssuanceResult := object(map[string]*Schema{
 		"identity_id": uuid(), "request_key": str(),
-		"state":       {Type: "string", Enum: []string{"pending", "issued", "failed", "unavailable"}},
+		"state":       {Type: "string", Enum: []string{"pending", "issued", "failed", "unavailable", "cancelled"}},
 		"certificate": ref("Certificate"), "certificate_pem": str(),
 		"retry": object(map[string]*Schema{"allowed": {Type: "boolean"}, "reason": str()}, "allowed", "reason"),
 		"delivery": object(map[string]*Schema{
-			"status":   {Type: "string", Enum: []string{"pending", "processing", "delivered", "failed"}},
+			"status":   {Type: "string", Enum: []string{"pending", "processing", "delivered", "failed", "cancelled"}},
 			"attempts": {Type: "integer"},
 		}, "status", "attempts"),
 	}, "identity_id", "request_key", "state")
-	identityIssuanceResult.Description = "Exact accepted issuance and its recorded public certificate. Failed means the original receiver command exhausted delivery and will not retry automatically; it does not prove no upstream certificate was signed. Unavailable means neither a recorded leaf nor its delivery bookkeeping is retained. Pending also covers delivery handed to an asynchronous host agent. A recorded certificate takes precedence over receiver status; it is not proof of deployment or listener verification. Reads never retry issuance."
+	identityIssuanceResult.Description = "Exact accepted issuance and its recorded public certificate. Failed means the original receiver command exhausted delivery and will not retry automatically; it does not prove no upstream certificate was signed. Unavailable means neither a recorded leaf nor its delivery bookkeeping is retained. Cancelled means the original command was stopped after revocation or retirement; no more attempts may run and it cannot be retried. Pending also covers delivery handed to an asynchronous host agent. A recorded certificate takes precedence over receiver status; it is not proof of deployment or listener verification. Reads never retry issuance."
 	identityDeploymentEvidence := object(map[string]*Schema{
 		"identity_id": uuid(), "read_at": timestamp(),
 		"receipt": ref("ConnectorDelivery"), "certificate": ref("Certificate"),

@@ -46,7 +46,7 @@ export type WizardCertificateAttempt = Readonly<{
 export type WizardPublicResult = IdentityIssuanceResult;
 export class WizardIssuanceStopped extends Error {
   constructor(
-    readonly state: "failed" | "unavailable",
+    readonly state: "failed" | "unavailable" | "cancelled",
     readonly result?: WizardPublicResult,
   ) {
     super(`issuance_${state}`);
@@ -309,7 +309,7 @@ export function checkWizardPublicResult(raw: WizardPublicResult, attempt: Wizard
   if (
     delivery !== undefined &&
     (!delivery ||
-      !["pending", "processing", "delivered", "failed"].includes(delivery.status) ||
+      !["pending", "processing", "delivered", "failed", "cancelled"].includes(delivery.status) ||
       !Number.isSafeInteger(delivery.attempts) ||
       delivery.attempts < 0)
   )
@@ -317,18 +317,20 @@ export function checkWizardPublicResult(raw: WizardPublicResult, attempt: Wizard
   if (
     raw.retry !== undefined &&
     (!raw.retry ||
-      delivery?.status !== "failed" ||
+      (delivery?.status !== "failed" && delivery?.status !== "cancelled") ||
+      (delivery?.status === "cancelled" && raw.retry.allowed !== false) ||
       typeof raw.retry.allowed !== "boolean" ||
       typeof raw.retry.reason !== "string" ||
       !raw.retry.reason ||
       raw.retry.reason.length > 4096)
   )
     throw new Error("public_result_invalid");
-  if (raw.state === "pending" || raw.state === "failed" || raw.state === "unavailable") {
+  if (raw.state === "pending" || raw.state === "failed" || raw.state === "unavailable" || raw.state === "cancelled") {
     if (raw.certificate !== undefined || raw.certificate_pem !== undefined) throw new Error("public_result_invalid");
     if (
       (raw.state === "failed" && delivery?.status !== "failed") ||
-      (raw.state === "pending" && delivery?.status === "failed") ||
+      (raw.state === "cancelled" && delivery?.status !== "cancelled") ||
+      (raw.state === "pending" && (delivery?.status === "failed" || delivery?.status === "cancelled")) ||
       (raw.state === "unavailable" && delivery !== undefined)
     )
       throw new Error("public_result_invalid");
@@ -366,7 +368,7 @@ export async function readWizardCertificateResult(
     );
     await op.authenticate();
     if (result.state === "pending") return null;
-    if (result.state === "failed" || result.state === "unavailable") throw new WizardIssuanceStopped(result.state, result);
+    if (result.state === "failed" || result.state === "unavailable" || result.state === "cancelled") throw new WizardIssuanceStopped(result.state, result);
     const identity = await op.read<Identity>(path);
     await op.authenticate();
     if (identity.id !== result.identity_id || identity.tenant_id !== attempt.principal.tenantId || identity.kind !== "x509_certificate")

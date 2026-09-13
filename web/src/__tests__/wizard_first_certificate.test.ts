@@ -196,15 +196,30 @@ describe("first-certificate client custody and exact attempt", () => {
     ).rejects.toThrow("operation_interrupted");
     expect(calls).toHaveLength(0);
   });
-  it.each(["failed", "unavailable"] as const)("stops an exact %s result without fetching an identity or mutating", async (state) => {
+  it.each(["failed", "unavailable", "cancelled"] as const)("stops an exact %s result without fetching an identity or mutating", async (state) => {
     await submitWizardCertificateAttempt(saved, new AbortController().signal, keep);
-    const value: WizardPublicResult = { ...result("pending"), state, ...(state === "failed" ? { delivery: { status: "failed", attempts: 10 } } : {}) };
+    const value: WizardPublicResult = { ...result("pending"), state, ...(state !== "unavailable" ? { delivery: { status: state, attempts: 10 } } : {}) };
     installRead(value);
     calls.length = 0;
     await expect(readWizardCertificateResult(saved, new AbortController().signal)).rejects.toEqual(new WizardIssuanceStopped(state, value));
     expect(calls.every((call) => call.path === "/auth/me" && call.method === "GET")).toBe(true);
     expect(() => checkWizardPublicResult({ ...value, request_key: "another-request" }, saved)).toThrow("result_mismatch");
     expect(() => checkWizardPublicResult({ ...value, certificate_pem: pem }, saved)).toThrow("public_result_invalid");
+  });
+  it("refuses a retry grant or pending state for cancelled delivery", async () => {
+    await submitWizardCertificateAttempt(saved, new AbortController().signal, keep);
+    const cancelled: WizardPublicResult = {
+      ...result("pending"),
+      state: "cancelled",
+      delivery: { status: "cancelled", attempts: 1 },
+      retry: { allowed: false, reason: "The identity stopped." },
+    };
+    expect(checkWizardPublicResult(cancelled, saved)).toEqual(cancelled);
+    expect(() => checkWizardPublicResult({ ...cancelled, retry: { allowed: true, reason: "Do not trust a contradictory grant." } }, saved)).toThrow(
+      "public_result_invalid",
+    );
+    expect(() => checkWizardPublicResult({ ...cancelled, state: "pending", retry: undefined }, saved)).toThrow("public_result_invalid");
+    expect(() => checkWizardPublicResult({ ...cancelled, delivery: { status: "failed", attempts: 1 } }, saved)).toThrow("public_result_invalid");
   });
   it("rejects contradictory terminal metadata while retaining a recorded public result after delivery failure", async () => {
     await submitWizardCertificateAttempt(saved, new AbortController().signal, keep);

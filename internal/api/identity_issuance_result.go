@@ -50,8 +50,11 @@ func (a *API) getIdentityIssuanceResult(w http.ResponseWriter, r *http.Request) 
 	if delivery := result.Delivery; delivery != nil {
 		out.Delivery = &identityIssuanceDeliveryResponse{Status: delivery.Status, Attempts: delivery.Attempts}
 		out.State = "pending"
-		if delivery.Status == "failed" {
-			out.State = "failed"
+		if delivery.Status == "failed" || delivery.Status == "cancelled" {
+			out.State = delivery.Status
+		}
+		if delivery.Status == "cancelled" {
+			out.Retry = &FirstIssuanceRetryReadiness{Reason: "This issuance was cancelled after the identity was revoked or retired. It cannot be retried."}
 		}
 	}
 	if cert := result.Certificate; cert != nil {

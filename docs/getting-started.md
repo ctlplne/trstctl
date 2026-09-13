@@ -468,6 +468,12 @@ as described below. Otherwise reconcile the original request with its issuer
 before new issuance. A new request could mint a duplicate. Reading this endpoint
 never retries delivery.
 
+`cancelled` means revocation or retirement stopped the original issuance. The
+result retains its attempt count and explains why retry is unavailable. Do not
+try to restart that request. If a public certificate was already recorded, the
+result remains `issued` and includes that certificate's current status; issuance
+is still not proof of deployment or validity.
+
 Recovery uses `POST /api/v1/identities/{id}/issuance-retry`, with a separate
 `Idempotency-Key` and JSON containing the original `request_key` and a required
 `reason` (at most 1,024 UTF-8 bytes). The operator needs `certs:issue` permission

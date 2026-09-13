@@ -274,12 +274,40 @@ func TestServedFirstLeafRetryRefusesUnsafeRequestsAndNeverRefundsAnAttempt(t *te
 			signed++
 			return crypto.IssuedLeaf{}, errors.New("must not sign a revoked identity")
 		}
-		dispatch(10)
+		// Revocation cancels the queued retry before a signer can claim it.
+		// The granted allowance is not a consumed attempt and must not be
+		// rewritten as a signing failure after the lifecycle has stopped.
+		assertDelivery(identity, key, "cancelled", 1)
+		did, err := orchestrator.NewOutbox(h.store, orchestrator.WithMaxAttempts(10)).DispatchOneScoped(ctx, d, scope)
+		if err != nil || did {
+			t.Fatalf("revoked retry remained dispatchable: did=%t err=%v", did, err)
+		}
 		d.issue = issue
 		if signed != 0 {
 			t.Fatal("queued retry called signer after identity was revoked")
 		}
-		assertDelivery(identity, key, "failed", 2)
+		assertDelivery(identity, key, "cancelled", 1)
+		readiness(identity, key, false)
+		status, cancelledBody := secretsReq(t, h, http.MethodGet, "/api/v1/identities/"+identity+"/issuance-result?request_key="+key, token, nil)
+		var cancelled struct {
+			State       string           `json:"state"`
+			Certificate *json.RawMessage `json:"certificate"`
+			Delivery    struct {
+				Status   string `json:"status"`
+				Attempts int    `json:"attempts"`
+			} `json:"delivery"`
+		}
+		if err := json.Unmarshal(cancelledBody, &cancelled); err != nil || status != http.StatusOK || cancelled.State != "cancelled" || cancelled.Delivery.Status != "cancelled" || cancelled.Delivery.Attempts != 1 || cancelled.Certificate != nil {
+			t.Fatalf("cancelled issuance was not a terminal public result: %d %s err=%v", status, cancelledBody, err)
+		}
+		status, retryBody := secretsReqKey(t, h, http.MethodPost, path, token, "cancelled-new-grant", map[string]any{"request_key": key, "reason": "must not restart revoked work"})
+		if status != http.StatusConflict {
+			t.Fatalf("cancelled issuance accepted a retry: %d %s", status, retryBody)
+		}
+		if err := projections.New(h.store).Rebuild(ctx, h.log); err != nil {
+			t.Fatal(err)
+		}
+		assertDelivery(identity, key, "cancelled", 1)
 		readiness(identity, key, false)
 	})
 

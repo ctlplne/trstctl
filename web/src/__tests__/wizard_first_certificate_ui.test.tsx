@@ -191,7 +191,7 @@ describe("first-leaf wizard result admission", () => {
     expect(onRecorded.mock.calls.filter(([record]) => record !== null)).toEqual([]);
     expect(screen.queryByRole("button", { name: "Download leaf certificate" })).not.toBeInTheDocument();
   });
-  it.each(["failed", "unavailable"] as const)("explains %s without a new issuance, and rereads the original key", async (state) => {
+  it.each(["failed", "unavailable", "cancelled"] as const)("explains %s without a new issuance, and rereads the original key", async (state) => {
     overrideResults(
       (body) =>
         new Response(
@@ -199,15 +199,21 @@ describe("first-leaf wizard result admission", () => {
             identity_id: body.identity_id,
             request_key: body.request_key,
             state,
-            ...(state === "failed" ? { delivery: { status: "failed", attempts: 10 } } : {}),
+            ...(state !== "unavailable" ? { delivery: { status: state, attempts: 10 } } : {}),
+            ...(state === "cancelled" ? { retry: { allowed: false, reason: "The identity was revoked; this issuance cannot be retried." } } : {}),
           }),
           { status: 200 },
         ),
     );
     mount();
     const user = await fill();
-    const expected = state === "failed" ? /exhausted its retries/ : /original delivery record and public certificate are unavailable/;
+    const expected =
+      state === "cancelled" ? /Cancelled/ : state === "failed" ? /exhausted its retries/ : /original delivery record and public certificate are unavailable/;
     expect(await screen.findByRole("alert")).toHaveTextContent(expected);
+    if (state === "cancelled") {
+      expect(screen.getByText("The identity was revoked; this issuance cannot be retried.")).toBeInTheDocument();
+      expect(screen.queryByText(/This request is locked for retry/)).not.toBeInTheDocument();
+    }
     expect(screen.queryByRole("button", { name: "Download leaf certificate" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Retry the same issuance attempt" })).not.toBeInTheDocument();
     const reads = () => vi.mocked(fetch).mock.calls.filter(([path]) => String(path).includes("issuance-result?"));
