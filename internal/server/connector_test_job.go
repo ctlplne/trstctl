@@ -68,6 +68,10 @@ func (s *Server) connectorTestEnqueuer(claimable map[string]bool) func(context.C
 		}
 		idemKey := "connector-test:" + target.ID + ":" + idempotencyKey
 		requiredRole := agentRoleForVantage(vantage)
+		requiredAgentID, err := s.store.ValidateHostTargetAssignment(ctx, tenantID, target.Type, target.Config)
+		if err != nil {
+			return nil, err
+		}
 
 		if err := s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 			_, err := s.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
@@ -77,6 +81,7 @@ func (s *Server) connectorTestEnqueuer(claimable map[string]bool) func(context.C
 				Payload:           payload,
 				EffectLane:        "connector.test:target:" + target.ID,
 				RequiredAgentRole: requiredRole,
+				RequiredAgentID:   requiredAgentID,
 			})
 			return err
 		}); err != nil {

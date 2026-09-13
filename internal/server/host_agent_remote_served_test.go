@@ -307,20 +307,19 @@ func TestServedHostAgentOwnsDeployAndReloadsRemoteListenerAUD30(t *testing.T) {
 	var jobID int64
 	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
-			`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, required_agent_role)
-			 VALUES ($1, 'connector.deploy', $2, $3, 'host') RETURNING id`,
-			h.tenant, sealed, idemKey).Scan(&jobID)
+			`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, required_agent_role, required_agent_id)
+			 VALUES ($1, 'connector.deploy', $2, $3, 'host', $4) RETURNING id`,
+			h.tenant, sealed, idemKey, agentRowID(h.tenant, h.agent)).Scan(&jobID)
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	// Let the control-plane connector pool get there first. It must refund the
-	// attempt and leave the exact row pending for the host rather than touching
-	// the local registry or burning retry budget.
+	// Exact host assignment keeps this row out of the control-plane pool.
+	// A sweep must leave it pending without spending any retry budget.
 	processed, err := h.srv.outbox.DispatchScoped(ctx, h.srv.obHandler,
 		orchestrator.DestinationScope{IncludePrefixes: []string{"connector."}})
-	if err != nil || processed != 1 {
-		t.Fatalf("control-plane sweep = (%d, %v), want one deferred row", processed, err)
+	if err != nil || processed != 0 {
+		t.Fatalf("control-plane sweep = (%d, %v), want no host rows reserved", processed, err)
 	}
 	var status string
 	var attempts int
@@ -617,9 +616,9 @@ func TestServedHostRollbackG1AutomaticAndManualAcrossAgentRestartsAUD32(t *testi
 		if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
 			return tx.QueryRow(ctx,
 				`INSERT INTO outbox
-				        (tenant_id, destination, payload, idempotency_key, effect_lane, required_agent_role)
-				 VALUES ($1, 'connector.deploy', $2, $3, $4, 'host') RETURNING id`,
-				h.tenant, sealed, idem, orchestrator.ConnectorTargetEffectLane(target.ID)).Scan(&jobID)
+				        (tenant_id, destination, payload, idempotency_key, effect_lane, required_agent_role, required_agent_id)
+				 VALUES ($1, 'connector.deploy', $2, $3, $4, 'host', $5) RETURNING id`,
+				h.tenant, sealed, idem, orchestrator.ConnectorTargetEffectLane(target.ID), agentRowID(h.tenant, h.agent)).Scan(&jobID)
 		}); err != nil {
 			t.Fatal(err)
 		}

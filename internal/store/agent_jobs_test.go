@@ -317,8 +317,8 @@ func TestClaimHonorsPerRowRoleDemand(t *testing.T) {
 		t.Helper()
 		if err := st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 			_, err := tx.Exec(ctx,
-				`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, required_agent_role)
-				 VALUES ($1, $2, $3, $4, $5)`,
+				`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, required_agent_role, required_agent_id)
+				 VALUES ($1, $2, $3, $4, $5, CASE WHEN $5 = 'host' THEN 'aaaaaaaa-0000-0000-0000-000000000001'::uuid END)`,
 				tenantID, jobDeploy, []byte(`{}`), idem, role)
 			return err
 		}); err != nil {
@@ -531,9 +531,9 @@ func TestAgentJobClaimSerializesOneEffectiveLaneAcrossAgents(t *testing.T) {
 		for i, destination := range []string{"connector.deploy", "connector.rollback"} {
 			if _, err := tx.Exec(ctx,
 				`INSERT INTO outbox
-				        (tenant_id, destination, payload, idempotency_key, effect_lane, required_agent_role)
-				 VALUES ($1, $2, $3, $4, $5, 'host')`,
-				tenantID, destination, []byte(`{"target_id":"target-a"}`), "aud32-lane-"+itoa(i), lane); err != nil {
+				        (tenant_id, destination, payload, idempotency_key, effect_lane, required_agent_role, required_agent_id)
+				 VALUES ($1, $2, $3, $4, $5, 'host', $6)`,
+				tenantID, destination, []byte(`{"target_id":"target-a"}`), "aud32-lane-"+itoa(i), lane, []string{firstAgent, secondAgent}[i]); err != nil {
 				return err
 			}
 		}

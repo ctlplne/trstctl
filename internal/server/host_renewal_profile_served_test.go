@@ -57,7 +57,7 @@ func TestServedHostRenewalsRetainShortProfile(t *testing.T) {
 	owner := str(post("/api/v1/owners", map[string]any{"kind": "workload", "name": "Mail renewal QA"}, http.StatusCreated)["id"])
 	target := str(post("/api/v1/connectors/targets", map[string]any{
 		"name": "renewal-mail", "connector": "postfix", "enabled": true,
-		"config": map[string]any{"executor": "agent", "required_agent_role": "host",
+		"config": map[string]any{"executor": "agent", "required_agent_role": "host", "required_agent_id": registeredRoleAgentID(t, h),
 			"postfix_cert_path": "/mail/smtp.crt", "postfix_key_path": "/mail/smtp.key",
 			"dovecot_cert_path": "/mail/imap.crt", "dovecot_key_path": "/mail/imap.key",
 			"verify_address": "127.0.0.1:1465", "verify_server_name": "mail.renewal.test"},

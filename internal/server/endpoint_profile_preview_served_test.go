@@ -47,7 +47,7 @@ func TestEndpointPreviewValidatesCertificateProfileMetadata(t *testing.T) {
 			// Use a file destination so this test needs no credential fixture.
 			target := create("/api/v1/connectors/targets", map[string]any{
 				"name": "Application TLS", "connector": "nginx", "enabled": true,
-				"config": map[string]any{"executor": "agent", "required_agent_role": "host",
+				"config": map[string]any{"executor": "agent", "required_agent_role": "host", "required_agent_id": seedDestinationHost(t, h.store, h.tenant),
 					"cert_path": "/app/tls/server.crt", "key_path": "/app/tls/server.key",
 					"verify_address": "127.0.0.1:8443", "verify_server_name": "java.partner-lab.example.com"},
 			})

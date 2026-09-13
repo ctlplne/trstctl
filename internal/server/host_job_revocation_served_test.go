@@ -87,7 +87,7 @@ func servedHostRevocationFixture(t *testing.T) (*roleHarness, string, string) {
 	owner := str(post("/api/v1/owners", map[string]any{"kind": "workload", "name": "Host revocation QA"}, http.StatusCreated)["id"])
 	target := str(post("/api/v1/connectors/targets", map[string]any{
 		"name": "revocation-mail", "connector": "postfix", "enabled": true,
-		"config": map[string]any{"executor": "agent", "required_agent_role": "host",
+		"config": map[string]any{"executor": "agent", "required_agent_role": "host", "required_agent_id": registeredRoleAgentID(t, h),
 			"postfix_cert_path": "/mail/tls/smtp.crt", "postfix_key_path": "/mail/tls/smtp.key",
 			"dovecot_cert_path": "/mail/tls/imap.crt", "dovecot_key_path": "/mail/tls/imap.key",
 			"verify_address": "127.0.0.1:1465", "verify_server_name": "mail.revocation.test"},

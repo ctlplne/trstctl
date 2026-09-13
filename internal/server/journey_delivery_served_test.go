@@ -210,7 +210,7 @@ func TestEndpointBindingPreviewRejectsTargetHostnameMismatchBeforeMutation(t *te
 	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets", tok, map[string]any{
 		"name": "hostname-bound-apache", "connector": "apache", "enabled": true,
 		"config": map[string]any{
-			"cert_path": "/srv/tls/site.crt", "key_path": "/srv/tls/site.key",
+			"cert_path": "/srv/tls/site.crt", "key_path": "/srv/tls/site.key", "required_agent_id": seedDestinationHost(t, h.store, h.tenant),
 			"verify_address": "127.0.0.1:443", "verify_server_name": "payments.served.test",
 		},
 	})

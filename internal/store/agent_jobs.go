@@ -216,6 +216,10 @@ func (s *Store) ClaimAgentJobs(ctx context.Context, tenantID, agentID string, de
 			           AND (c.claimed_by_agent_id IS NULL OR c.claim_expires_at < $5)
 			           AND (c.required_agent_role = '' OR c.required_agent_role = ANY($7::text[]))
 			           AND (c.required_agent_id IS NULL OR c.required_agent_id = $2::uuid)
+			           -- Unassigned host work must never be won by an arbitrary machine.
+			           -- Retained legacy rows stay pending until explicitly recovered.
+			           AND (c.required_agent_id IS NOT NULL OR
+			                (c.required_agent_role <> 'host' AND c.destination <> 'endpoint.renew'))
 			           AND NOT EXISTS (
 			                 SELECT 1 FROM identities AS i
 			                  WHERE i.tenant_id = c.tenant_id
@@ -575,10 +579,11 @@ const (
 // resolve a claimed job's credential references: never handed to the agent —
 // the payload here is still sealed.
 type AgentJobForRedemption struct {
-	Destination    string
-	IdempotencyKey string
-	Payload        []byte
-	ClaimAttempts  int
+	RequiredAgentID string
+	Destination     string
+	IdempotencyKey  string
+	Payload         []byte
+	ClaimAttempts   int
 }
 
 // GetAgentJobForRedemption loads a job's sealed payload if — at this instant —
@@ -595,7 +600,7 @@ func (s *Store) GetAgentJobForRedemption(
 	found := false
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		scanErr := tx.QueryRow(ctx,
-			`SELECT destination, idempotency_key, payload, claim_attempts
+			`SELECT destination, idempotency_key, payload, claim_attempts, COALESCE(required_agent_id::text, '')
 			   FROM outbox
 			  WHERE tenant_id = $1 AND id = $2
 			    AND claimed_by_agent_id = $3::uuid
@@ -603,7 +608,7 @@ func (s *Store) GetAgentJobForRedemption(
 			    AND claim_completed_at IS NULL
 			    AND claim_expires_at > $4`,
 			tenantID, jobID, agentID, now.UTC()).
-			Scan(&out.Destination, &out.IdempotencyKey, &out.Payload, &out.ClaimAttempts)
+			Scan(&out.Destination, &out.IdempotencyKey, &out.Payload, &out.ClaimAttempts, &out.RequiredAgentID)
 		if errors.Is(scanErr, pgx.ErrNoRows) {
 			return nil
 		}

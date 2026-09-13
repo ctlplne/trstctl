@@ -178,6 +178,9 @@ func (a *API) endpointEnrollmentSnapshot(ctx context.Context, tenantID, keyDiges
 }
 
 func (a *API) validateEndpointEnrollmentSnapshot(ctx context.Context, tenantID string, req endpointBindingRequest, snapshot endpointEnrollmentSnapshot) error {
+	if _, err := a.store.ValidateHostTargetAssignment(ctx, tenantID, snapshot.Preview.Target.Connector, snapshot.Preview.Target.Config); err != nil {
+		return errWithStatus(http.StatusConflict, err)
+	}
 	owner, err := a.store.GetOwner(ctx, tenantID, req.OwnerID)
 	if err != nil {
 		return err

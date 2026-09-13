@@ -3,10 +3,12 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Connectors } from "@/pages/Connectors";
+import { AppQueryProvider } from "@/lib/query";
 import { ToastProvider } from "@/components/ToastProvider";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
+    agentPage: vi.fn(),
     connectorCatalog: vi.fn(),
     connectorTargets: vi.fn(),
     identities: vi.fn(),
@@ -36,7 +38,9 @@ function renderConnectors() {
   return render(
     <MemoryRouter>
       <ToastProvider>
-        <Connectors />
+        <AppQueryProvider>
+          <Connectors />
+        </AppQueryProvider>
       </ToastProvider>
     </MemoryRouter>,
   );
@@ -45,6 +49,7 @@ function renderConnectors() {
 describe("route 031 decision-first deployment destination design", () => {
   beforeEach(() => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
+    apiMock.agentPage.mockResolvedValue({ agents: [] });
     apiMock.identityPage.mockImplementation(async () => ({ items: await apiMock.identities() }));
     apiMock.getIdentity.mockImplementation(async (id: string) => (await apiMock.identities()).find((item: { id: string }) => item.id === id));
     apiMock.connectorCatalog.mockResolvedValue({

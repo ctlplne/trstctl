@@ -9,6 +9,7 @@ import { ToastProvider } from "@/components/ToastProvider";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
+    agentPage: vi.fn(),
     connectorCatalog: vi.fn(),
     connectorTargets: vi.fn(),
     identities: vi.fn(),
@@ -51,6 +52,7 @@ function renderConnectors() {
 
 describe("connector deployment disclosure surface", () => {
   beforeEach(() => {
+    apiMock.agentPage.mockReset().mockResolvedValue({ agents: [] });
     apiMock.identityPage.mockReset().mockImplementation(async () => ({ items: await apiMock.identities() }));
     apiMock.getIdentity.mockReset().mockImplementation(async (id: string) => (await apiMock.identities()).find((item: { id: string }) => item.id === id));
     apiMock.connectorCatalog.mockReset().mockResolvedValue({

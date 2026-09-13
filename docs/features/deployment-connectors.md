@@ -390,7 +390,20 @@ instead of being ignored:
 Host-executed targets (the file-and-reload families above) also accept the custody
 and verification keys the enrolled host agent honours: `"executor": "agent"` makes
 the agent generate the private key on the host and submit only a CSR;
-`required_agent_role` (`host`) names the enrolment role that may claim the work; and
+`required_agent_role` (`host`) names the enrolment role that may claim the work.
+Choose **Host agent** when adding or editing the destination; the console loads
+enrolled agents, with pagination for larger fleets. The selection is saved as
+`required_agent_id`, the UUID shown on the Agents page. An enabled host destination
+requires an enrolled, same-tenant agent with the host role.
+
+Preview, deployment, and renewal keep this exact assignment through retries and
+control-plane restart. An offline host leaves its work pending; another host never
+takes over. Changing the destination affects newly reviewed work, not jobs already
+queued against an older revision. Existing unassigned host jobs remain held; review
+the destination assignment and recover those jobs explicitly before relying on
+unattended renewal. Rollback stays with the host holding the verified predecessor.
+
+
 `verify_address` plus `verify_server_name` tell the agent which listener to
 re-handshake after the reload, so a receipt is backed by an independent TLS check.
 Use `executor: agent` whenever the identity's CA is external: an external CA
@@ -400,6 +413,7 @@ key no longer exists. The partner lab's working Apache target is:
 
 ```json
 {"executor":"agent","required_agent_role":"host",
+ "required_agent_id":"<enrolled-host-agent-UUID>",
  "cert_path":"/lab/tls/apache.crt","key_path":"/lab/tls/apache.key",
  "verify_address":"127.0.0.1:10443","verify_server_name":"apache.partner-lab.example.com"}
 ```

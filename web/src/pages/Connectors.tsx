@@ -24,6 +24,7 @@ import {
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { EndpointBindingWorkflow } from "@/pages/connectors/EndpointBindingWorkflow";
 import { RecoveryResult } from "@/pages/connectors/RecoveryResult";
+import { DestinationHostField } from "@/pages/connectors/DestinationHostField";
 import { defaultTargetConfig } from "@/lib/connectorTargetTemplates";
 
 // VantageBadge names where a connector's deploy work executes (epic A3), read
@@ -1359,6 +1360,9 @@ export function Connectors() {
               <span className="mt-1 block text-muted-foreground">{t("connectors.targetReadiness.enableNowHelp")}</span>
             </span>
           </label>
+          {catalog?.find((item) => item.name === connectorName)?.target_vantage === "host_agent" && (
+            <DestinationHostField config={targetConfig} onChange={setTargetConfig} required={targetEnabled} />
+          )}
           <p className="text-sm text-muted-foreground">{t("connectors.design.configurationHelp")}</p>
           <div className="flex flex-wrap justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setDestinationOpen(false)}>
@@ -1437,6 +1441,9 @@ export function Connectors() {
                 <span className="mt-1 block text-muted-foreground">{t("connectors.targetReadiness.enableNowHelp")}</span>
               </span>
             </label>
+            {catalog?.find((item) => item.name === editConnector)?.target_vantage === "host_agent" && (
+              <DestinationHostField config={editConfig} onChange={setEditConfig} required={editEnabled} />
+            )}
             {editError && (
               <p role="alert" className="text-sm text-destructive">
                 {editError}

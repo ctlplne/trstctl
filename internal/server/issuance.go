@@ -1216,6 +1216,18 @@ func (d *issuanceDispatcher) enqueueCredentialDeploy(ctx context.Context, tenant
 	if d.connectorRegistry != nil {
 		requiredAgentRole = connectorSideEffectRoleClassifier(d.connectorRegistry)("connector.deploy", payload)
 	}
+	requiredAgentID := ""
+	if requiredAgentRole == "host" {
+		var route connector.DeployPayload
+		if err := json.Unmarshal(payload, &route); err != nil {
+			return err
+		}
+		var err error
+		requiredAgentID, err = d.store.ValidateHostTargetAssignment(ctx, tenantID, route.Connector, route.TargetConfig)
+		if err != nil {
+			return err
+		}
+	}
 	idemKey := "credential-deploy:" + identityID + ":" + fingerprint
 	sealedPayload, err := d.sealConnectorDeployBytes(ctx, tenantID, "connector.deploy", idemKey, payload)
 	if err != nil {
@@ -1229,6 +1241,7 @@ func (d *issuanceDispatcher) enqueueCredentialDeploy(ctx context.Context, tenant
 			Payload:           sealedPayload,
 			EffectLane:        orchestrator.ConnectorDeployEffectLane(identityID, sealedPayload),
 			RequiredAgentRole: requiredAgentRole,
+			RequiredAgentID:   requiredAgentID,
 		})
 		return err
 	})

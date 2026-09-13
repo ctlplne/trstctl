@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"strconv"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/agent/transport"
+	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -57,6 +59,22 @@ func (a *agentService) RedeemJobCredential(ctx context.Context, req *transport.R
 	}
 	if !held || job.ClaimAttempts != req.Attempt {
 		return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)
+	}
+	if job.Destination == "connector.deploy" || job.Destination == "connector.test" {
+		// Legacy rows may predate the role column. Decode only public routing
+		// metadata, and refuse host credentials before resolving any secrets.
+		var route struct {
+			Connector string          `json:"connector"`
+			Config    json.RawMessage `json:"target_config"`
+		}
+		if json.Unmarshal(job.Payload, &route) == nil {
+			if vantage, known := connector.ShippedTargetVantage(route.Connector); known && vantage == connector.VantageHostAgent {
+				configuredID, configErr := connector.TargetHostAgentID(route.Config)
+				if job.RequiredAgentID != agentID || !agentHasRole(info.Roles, "host") || configErr != nil || (configuredID != "" && configuredID != agentID) {
+					return nil, status.Error(codes.FailedPrecondition, "host work requires an exact destination assignment; review and requeue this job")
+				}
+			}
+		}
 	}
 	if job.Destination == orchestrator.DestinationConnectorRollback {
 		if err := a.store.CheckConnectorRollbackPayload(ctx, info.TenantID, job.Payload); err != nil {

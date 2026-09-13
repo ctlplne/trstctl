@@ -37,7 +37,7 @@ func agentExecutedTarget(t *testing.T) store.DeploymentTarget {
 	return store.DeploymentTarget{
 		ID: "44444444-4444-4444-4444-44444444c001", Name: "edge-1", Type: "nginx",
 		Enabled: true,
-		Config:  json.RawMessage(`{"executor":"agent","cert_path":"/etc/nginx/tls.crt","key_path":"/etc/nginx/tls.key"}`),
+		Config:  json.RawMessage(`{"executor":"agent","required_agent_id":"44444444-4444-4444-8444-44444444a001","cert_path":"/etc/nginx/tls.crt","key_path":"/etc/nginx/tls.key"}`),
 	}
 }
 
@@ -160,6 +160,7 @@ func TestARenewalForAnAgentExecutedTargetQueuesHostWorkAndMintsNothing(t *testin
 	// Marking it before first issuance would exercise the first-issuance divert
 	// instead, which has its own test.
 	target := agentExecutedTarget(t)
+	seedDestinationHost(t, h.store, h.tenant)
 	target.TenantID = h.tenant
 	legacy := target
 	legacy.Config = json.RawMessage(`{"cert_path":"/etc/nginx/tls.crt"}`)
@@ -513,6 +514,7 @@ func TestFirstIssuanceToAnAgentTargetIsDivertedNotRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	target := agentExecutedTarget(t)
+	seedDestinationHost(t, h.store, h.tenant)
 	target.TenantID = h.tenant
 	if err := h.store.UpsertDeploymentTarget(ctx, target); err != nil {
 		t.Fatal(err)
@@ -568,6 +570,7 @@ func TestAHostRenewalNamesTheCertificateItReplaces(t *testing.T) {
 		TenantID: h.tenant, Kind: store.OwnerTeam, Name: "P", Email: "p4@example.test",
 	})
 	target := agentExecutedTarget(t)
+	seedDestinationHost(t, h.store, h.tenant)
 	target.TenantID = h.tenant
 	if err := h.store.UpsertDeploymentTarget(ctx, target); err != nil {
 		t.Fatal(err)
@@ -643,6 +646,7 @@ func TestHostRenewalUsesTheIdentityBoundDeployedCertificate(t *testing.T) {
 		t.Fatal(err)
 	}
 	target := agentExecutedTarget(t)
+	seedDestinationHost(t, h.store, h.tenant)
 	target.ID = "44444444-4444-4444-4444-44444444d001"
 	target.TenantID = h.tenant
 	if err := h.store.UpsertDeploymentTarget(ctx, target); err != nil {
@@ -735,6 +739,7 @@ func TestARefusedHostReportFailsTheJobInsteadOfReofferingIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	target := agentExecutedTarget(t)
+	seedDestinationHost(t, h.store, h.tenant)
 	target.TenantID = h.tenant
 	if err := h.store.UpsertDeploymentTarget(ctx, target); err != nil {
 		t.Fatal(err)

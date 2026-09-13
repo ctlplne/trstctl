@@ -4930,6 +4930,14 @@ const deDECatalog = {
   "connectors.design.destinationName": "Zielname",
   "connectors.design.connectorType": "Connector-Typ",
   "connectors.design.configuration": "Konfiguration (JSON)",
+  "connectors.host.label": "Host-Agent",
+  "connectors.host.help":
+    "Wählen Sie den Rechner, auf dem diese Anwendung läuft. Vorschau, Bereitstellung und Erneuerung bleiben auf diesem Host. Ist er offline, wartet der Auftrag; ein anderer Host übernimmt ihn nicht.",
+  "connectors.host.invalidConfig": "Korrigieren Sie das Konfigurations-JSON, bevor Sie einen Host auswählen.",
+  "connectors.host.loading": "Registrierte Hosts werden geladen…",
+  "connectors.host.choose": "Registrierten Host auswählen",
+  "connectors.host.more": "Weitere Agents laden",
+  "connectors.host.retry": "Agents erneut laden",
   "connectors.design.configurationHelp":
     "Speichern Sie Credential-Referenzen, niemals Geheimwerte. Der Server validiert vor dem Speichern das Schema des ausgewählten Connectors.",
   "connectors.targetReadiness.state": "Ausführungszustand",

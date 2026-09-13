@@ -128,6 +128,10 @@ func (d *issuanceDispatcher) enqueueHostRenewal(
 	if d.outbox == nil {
 		return fmt.Errorf("server: cannot queue host-generated renewal for %s: the outbox is not configured", ident.ID)
 	}
+	requiredAgentID, err := d.store.ValidateHostTargetAssignment(ctx, tenantID, target.Type, target.Config)
+	if err != nil {
+		return err
+	}
 	_, routed := deploymentRoutingAttrs(ident.Attributes)
 	if routed == "" {
 		routed = target.Name
@@ -176,6 +180,7 @@ func (d *issuanceDispatcher) enqueueHostRenewal(
 			Payload:           payload,
 			EffectLane:        agentJobKindEndpointRenew + ":identity:" + ident.ID,
 			RequiredAgentRole: mtls.AgentRoleHost,
+			RequiredAgentID:   requiredAgentID,
 		})
 		return err
 	})

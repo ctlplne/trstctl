@@ -287,9 +287,9 @@ func seedRoleJobWithDemand(t *testing.T, ctx context.Context, h *roleHarness, de
 	t.Helper()
 	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx,
-			`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, required_agent_role)
-			 VALUES ($1, $2, $3, $4, $5)`,
-			h.tenant, destination, []byte(`{"target":"edge-1"}`), idemKey, demand)
+			`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, required_agent_role, required_agent_id)
+			 VALUES ($1, $2, $3, $4, $5, $6)`,
+			h.tenant, destination, []byte(`{"target":"edge-1"}`), idemKey, demand, agentRowID(h.tenant, h.agent))
 		return err
 	}); err != nil {
 		t.Fatalf("seed claimable job: %v", err)
@@ -445,9 +445,9 @@ func TestServedHostDryRunReachesTheTargetAndChangesNothing(t *testing.T) {
 	}
 	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
 		_, execErr := tx.Exec(ctx,
-			`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, required_agent_role)
-			 VALUES ($1, $2, $3, $4, $5)`,
-			h.tenant, agentrelay.KindConnectorTest, payload, "preview:apache:served", mtls.AgentRoleHost)
+			`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, required_agent_role, required_agent_id)
+			 VALUES ($1, $2, $3, $4, $5, $6)`,
+			h.tenant, agentrelay.KindConnectorTest, payload, "preview:apache:served", mtls.AgentRoleHost, agentRowID(h.tenant, h.agent))
 		return execErr
 	}); err != nil {
 		t.Fatalf("seed host preview: %v", err)

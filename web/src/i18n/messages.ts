@@ -14069,6 +14069,20 @@ export const messages = {
   "connectors.design.destinationName": { defaultMessage: "Destination name", description: "Label for a human-readable deployment destination name." },
   "connectors.design.connectorType": { defaultMessage: "Connector type", description: "Label for the connector implementation used by a destination." },
   "connectors.design.configuration": { defaultMessage: "Configuration (JSON)", description: "Label for exact advanced connector target configuration." },
+  "connectors.host.label": { defaultMessage: "Host agent", description: "Explicit destination host assignment." },
+  "connectors.host.help": {
+    defaultMessage:
+      "Select the machine serving this application. Preview, deployment, and renewal stay on this host. If it is offline, work waits; another host cannot take over.",
+    description: "Explicit destination host assignment.",
+  },
+  "connectors.host.invalidConfig": {
+    defaultMessage: "Correct the configuration JSON before selecting a host.",
+    description: "Explicit destination host assignment.",
+  },
+  "connectors.host.loading": { defaultMessage: "Loading enrolled hosts…", description: "Explicit destination host assignment." },
+  "connectors.host.choose": { defaultMessage: "Select an enrolled host", description: "Explicit destination host assignment." },
+  "connectors.host.more": { defaultMessage: "Load more agents", description: "Explicit destination host assignment." },
+  "connectors.host.retry": { defaultMessage: "Reload agents", description: "Explicit destination host assignment." },
   "connectors.design.configurationHelp": {
     defaultMessage: "Store credential references, never secret values. The server validates the selected connector's schema before saving.",
     description: "Security guidance for connector configuration JSON.",

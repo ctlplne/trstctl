@@ -338,7 +338,7 @@ describe("i18n boundary", () => {
       return createHash("sha256").update(payload).digest("hex");
     };
 
-    // Reviewed es/de cancellation label, stop limits and cancelled renewal outcome.
+    // Reviewed es/de host selection, pagination, and offline assignment guidance.
     // Machine-authored translations require human review before release.
     // Updating either digest is a deliberate translation-review decision. The
     // ratchet catches a long-tail value being reset to its English seed just as
@@ -1567,8 +1567,8 @@ describe("i18n boundary", () => {
       // es/de require HUMAN TRANSLATION REVIEW before release.
       // Alert pagination: reviewed newest/older navigation and page-scoped counts.
       // Machine-authored es/de require HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "8aef379b5d2dadb81ad691d349427c22555ed3a8259b93b448c8f6599fe17fab",
-      "de-DE": "5454f040df2821f36ad1f4cf386d3a18deea4b4d3beeca187d6428e17a3031dd",
+      "es-ES": "feb6e95c12bcbe97134b032b0e2fad84705eda6f3d081f1c383d1585dff0f7e5",
+      "de-DE": "e0ad343e0552ea247fe8b536b6d5990cac94f536bc3923577ad1ba4ef9ddfb50",
     });
   });
 

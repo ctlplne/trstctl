@@ -66,9 +66,9 @@ func seedRenewalJob(t *testing.T, ctx context.Context, h *roleHarness, idemKey s
 	}
 	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx,
-			`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key)
-			 VALUES ($1, $2, $3, $4)`,
-			h.tenant, agentJobKindEndpointRenew, payload, idemKey)
+			`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, required_agent_id)
+			 VALUES ($1, $2, $3, $4, $5)`,
+			h.tenant, agentJobKindEndpointRenew, payload, idemKey, agentRowID(h.tenant, h.agent))
 		return err
 	}); err != nil {
 		t.Fatalf("seed renewal job: %v", err)

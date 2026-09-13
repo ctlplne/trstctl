@@ -4880,6 +4880,14 @@ const esESCatalog = {
   "connectors.design.destinationName": "Nombre del destino",
   "connectors.design.connectorType": "Tipo de conector",
   "connectors.design.configuration": "Configuración (JSON)",
+  "connectors.host.label": "Agente del host",
+  "connectors.host.help":
+    "Seleccione la máquina que sirve esta aplicación. La vista previa, el despliegue y la renovación permanecen en este host. Si está desconectado, el trabajo espera; otro host no puede asumirlo.",
+  "connectors.host.invalidConfig": "Corrija el JSON de configuración antes de seleccionar un host.",
+  "connectors.host.loading": "Cargando hosts registrados…",
+  "connectors.host.choose": "Seleccionar un host registrado",
+  "connectors.host.more": "Cargar más agentes",
+  "connectors.host.retry": "Volver a cargar agentes",
   "connectors.design.configurationHelp":
     "Guarde referencias de credenciales, nunca valores secretos. El servidor valida el esquema del conector seleccionado antes de guardar.",
   "connectors.targetReadiness.state": "Estado de ejecución",

@@ -512,6 +512,11 @@ func (a *API) createConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
+		if deploymentTargetRequestEnabled(req.Enabled) {
+			if _, err := a.store.ValidateHostTargetAssignment(ctx, tenantID, req.Connector, req.Config); err != nil {
+				return 0, nil, errWithStatus(http.StatusUnprocessableEntity, err)
+			}
+		}
 		target, err := a.orch.UpsertDeploymentTarget(ctx, tenantID, store.DeploymentTarget{
 			Name: req.Name, Type: req.Connector, Config: req.Config,
 			Enabled: deploymentTargetRequestEnabled(req.Enabled), EnabledSet: true,
@@ -571,6 +576,11 @@ func (a *API) updateConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		enabled := current.Enabled
 		if req.Enabled != nil {
 			enabled = *req.Enabled
+		}
+		if enabled {
+			if _, err := a.store.ValidateHostTargetAssignment(ctx, tenantID, req.Connector, req.Config); err != nil {
+				return 0, nil, errWithStatus(http.StatusUnprocessableEntity, err)
+			}
 		}
 		target, err := a.orch.UpsertDeploymentTarget(ctx, tenantID, store.DeploymentTarget{
 			ID: id, Name: req.Name, Type: req.Connector, Config: req.Config,
@@ -643,6 +653,9 @@ func (a *API) testConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := requireDeploymentTargetEnabled(target); err != nil {
 			return 0, nil, err
+		}
+		if _, err := a.store.ValidateHostTargetAssignment(ctx, tenantID, target.Type, target.Config); err != nil {
+			return 0, nil, errWithStatus(http.StatusUnprocessableEntity, err)
 		}
 		// D5: when a relay can take the work, this enqueues a real dry-run that
 		// reaches the target and returns a mutation plan. When it cannot — no
@@ -962,6 +975,9 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 		return endpointBindingPreviewResponse{}, err
 	}
 	target.Config = cfg
+	if _, err := a.store.ValidateHostTargetAssignment(ctx, tenantID, target.Connector, target.Config); err != nil {
+		return endpointBindingPreviewResponse{}, errWithStatus(http.StatusUnprocessableEntity, err)
+	}
 	if err := validateEndpointBindingVerificationName(req.IdentityName, target.Config); err != nil {
 		return endpointBindingPreviewResponse{}, err
 	}

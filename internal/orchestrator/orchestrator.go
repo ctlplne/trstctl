@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/connector"
 	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/ownership"
@@ -455,6 +456,29 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 	if hasSideEffect && !sideEffectCompleted && o.effectRole != nil {
 		requiredAgentRole = o.effectRole(sideEffectDest, sideEffectPayload)
 	}
+	requiredAgentID := ""
+	if requiredAgentRole == "host" {
+		var route struct {
+			Connector string          `json:"connector"`
+			Config    json.RawMessage `json:"target_config"`
+		}
+		if err := json.Unmarshal(sideEffectPayload, &route); err != nil {
+			return err
+		}
+		var err error
+		requiredAgentID, err = o.store.ValidateHostTargetAssignment(ctx, tenantID, route.Connector, route.Config)
+		if err != nil {
+			return err
+		}
+		// Unknown extension families still need an exact host when their census
+		// declares host execution; a missing ID remains unclaimable.
+		if requiredAgentID == "" {
+			requiredAgentID, err = connector.TargetHostAgentID(route.Config)
+			if err != nil {
+				return err
+			}
+		}
+	}
 	payload, err := json.Marshal(basePayload)
 	if err != nil {
 		return err
@@ -491,6 +515,7 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 			IdempotencyKey:    sideEffectKey,
 			Payload:           replayPayload,
 			RequiredAgentRole: requiredAgentRole,
+			RequiredAgentID:   requiredAgentID,
 			Completed:         sideEffectCompleted,
 		}
 		payload, err = json.Marshal(basePayload)
@@ -625,6 +650,7 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 				}
 				basePayload.SideEffect.Payload = alertBody
 				basePayload.SideEffect.RequiredAgentRole = ""
+				basePayload.SideEffect.RequiredAgentID = ""
 				payload, err = json.Marshal(basePayload)
 				if err != nil {
 					return err
@@ -672,6 +698,7 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 					Payload:           canonicalPayload,
 					EffectLane:        lifecycleEffectLane(sideEffectDest, identityID, canonicalPayload),
 					RequiredAgentRole: canonical.SideEffect.RequiredAgentRole,
+					RequiredAgentID:   canonical.SideEffect.RequiredAgentID,
 				}); err != nil {
 					return err
 				}
@@ -841,14 +868,16 @@ func (o *Orchestrator) rewriteLifecycleOutboxFromCanonicalHistory(ctx context.Co
 		if err != nil {
 			return err
 		}
-		requiredAgentRole := ""
+		requiredAgentRole, requiredAgentID := "", ""
 		if payload.SideEffect != nil {
 			requiredAgentRole = payload.SideEffect.RequiredAgentRole
+			requiredAgentID = payload.SideEffect.RequiredAgentID
 		}
 		candidate := Entry{
 			TenantID: tenantID, Destination: destination, IdempotencyKey: key,
 			Payload: command, EffectLane: lifecycleEffectLane(destination, payload.IdentityID, command),
 			RequiredAgentRole: requiredAgentRole,
+			RequiredAgentID:   requiredAgentID,
 		}
 		return addEntry(key, candidate)
 	})
@@ -1462,9 +1491,10 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			// The claim demand is COPIED from the durable side-effect record,
 			// never re-derived: a census change between enqueue and replay must
 			// not silently relocate work that was already committed (epic A3).
-			requiredAgentRole := ""
+			requiredAgentRole, requiredAgentID := "", ""
 			if pl.SideEffect != nil {
 				requiredAgentRole = pl.SideEffect.RequiredAgentRole
+				requiredAgentID = pl.SideEffect.RequiredAgentID
 			}
 			inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
 				TenantID:          ev.TenantID,
@@ -1473,6 +1503,7 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 				Payload:           outboxPayload,
 				EffectLane:        lifecycleEffectLane(dest, pl.IdentityID, outboxPayload),
 				RequiredAgentRole: requiredAgentRole,
+				RequiredAgentID:   requiredAgentID,
 			})
 			if err != nil {
 				return err
