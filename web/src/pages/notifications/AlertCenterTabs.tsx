@@ -1,5 +1,6 @@
 import { BellRing, History, RadioTower, RotateCcw, Route, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 import type { Notification } from "@/lib/api";
 import { meaningfulAttention } from "@/lib/notificationAttention";
 export { meaningfulAttention } from "@/lib/notificationAttention";
@@ -111,7 +112,10 @@ export function NeedsAttention({
                 </p>
               </div>
               <div className="grid min-w-0 gap-4 sm:grid-cols-3">
-                <Fact label={t("notifications.center.deadline")} value={deadlineLabel(notification, t)} />
+                <Fact
+                  label={t(notification.deployment_recorded_at ? "notifications.context.historicalDeadline" : "notifications.center.deadline")}
+                  value={deadlineLabel(notification, t)}
+                />
                 <Fact
                   label={t("notifications.center.owner")}
                   value={notification.owner_name || notification.owner_email || notification.owner_id || t("notifications.center.ownerMissing")}
@@ -119,6 +123,14 @@ export function NeedsAttention({
                 <Fact label={t("notifications.center.automation")} value={automationLabel(notification, t)} />
               </div>
               <div className="flex flex-wrap gap-2">
+                {notification.identity_id ? (
+                  <Link
+                    className="inline-flex items-center rounded-md px-3 py-2 text-sm font-medium text-primary underline underline-offset-4"
+                    to={`/identities?identity=${encodeURIComponent(notification.identity_id)}`}
+                  >
+                    {t("notifications.context.openIdentity")}
+                  </Link>
+                ) : null}
                 <Button type="button" size="sm" variant="outline" onClick={() => onDetails(notification)}>
                   {t("notifications.center.review")}
                 </Button>

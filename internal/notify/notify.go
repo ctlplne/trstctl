@@ -144,23 +144,28 @@ type Alert struct {
 	// commands with identical human-readable text do not collapse at PagerDuty or
 	// OpsGenie. RequestBinding is a non-secret digest of the authenticated caller
 	// and canonical command retained in the outbox payload after response-cache GC.
-	OperationID          string           `json:"operation_id,omitempty"`
-	RequestBinding       string           `json:"request_binding,omitempty"`
-	CredentialConfigured bool             `json:"credential_configured,omitempty"`
-	CertificateID        string           `json:"certificate_id,omitempty"`
-	IdentityID           string           `json:"identity_id,omitempty"`
-	Subject              string           `json:"subject,omitempty"`
-	Serial               string           `json:"serial,omitempty"`
-	NotAfter             time.Time        `json:"not_after,omitempty"`
-	Detail               string           `json:"detail,omitempty"`
-	Severity             string           `json:"severity,omitempty"`
-	RoutingPolicyID      string           `json:"routing_policy_id,omitempty"`
-	TargetChannel        string           `json:"target_channel,omitempty"`
-	ThresholdDays        *int             `json:"threshold_days,omitempty"`
-	OwnerID              string           `json:"owner_id,omitempty"`
-	OwnerName            string           `json:"owner_name,omitempty"`
-	OwnerEmail           string           `json:"owner_email,omitempty"`
-	EscalationRecipients []AlertRecipient `json:"escalation_recipients,omitempty"`
+	OperationID          string `json:"operation_id,omitempty"`
+	RequestBinding       string `json:"request_binding,omitempty"`
+	CredentialConfigured bool   `json:"credential_configured,omitempty"`
+	CertificateID        string `json:"certificate_id,omitempty"`
+	IdentityID           string `json:"identity_id,omitempty"`
+	// These fields identify historical completed deployment evidence captured
+	// with a renewal failure. NotAfter refers to that certificate, not a probe.
+	CertificateFingerprint string           `json:"certificate_fingerprint,omitempty"`
+	DeploymentReceiptID    string           `json:"deployment_receipt_id,omitempty"`
+	DeploymentRecordedAt   *time.Time       `json:"deployment_recorded_at,omitempty"`
+	Subject                string           `json:"subject,omitempty"`
+	Serial                 string           `json:"serial,omitempty"`
+	NotAfter               time.Time        `json:"not_after,omitempty"`
+	Detail                 string           `json:"detail,omitempty"`
+	Severity               string           `json:"severity,omitempty"`
+	RoutingPolicyID        string           `json:"routing_policy_id,omitempty"`
+	TargetChannel          string           `json:"target_channel,omitempty"`
+	ThresholdDays          *int             `json:"threshold_days,omitempty"`
+	OwnerID                string           `json:"owner_id,omitempty"`
+	OwnerName              string           `json:"owner_name,omitempty"`
+	OwnerEmail             string           `json:"owner_email,omitempty"`
+	EscalationRecipients   []AlertRecipient `json:"escalation_recipients,omitempty"`
 
 	// CA calendar fields (H5), set only on KindCAHorizon and
 	// KindCAValidityCompression. AuthorityID names the CA rather than a

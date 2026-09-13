@@ -4,6 +4,7 @@ package api
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,6 +15,27 @@ import (
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
+
+func TestNotificationResponseRetainsLifecycleEvidence(t *testing.T) {
+	at := time.Now().UTC().Truncate(time.Second)
+	alert := notify.Alert{Kind: notify.KindRenewalFailed, IdentityID: "identity-a", OperationID: "renewal-failure:event-a", CertificateID: "cert-a", CertificateFingerprint: "exact-fingerprint", DeploymentReceiptID: "receipt-a", DeploymentRecordedAt: &at, NotAfter: at.Add(time.Hour), OwnerName: "Platform SRE", OwnerEmail: "sre@example.test", RequestBinding: "private-command-binding"}
+	body, err := json.Marshal(alert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := toNotificationResponse(store.NotificationOutboxRecord{ID: 42, TenantID: "tenant-a", Payload: body})
+	if response.IdentityID != alert.IdentityID || response.OperationID != alert.OperationID || response.DeploymentReceiptID != alert.DeploymentReceiptID || response.DeploymentRecordedAt == nil || !response.DeploymentRecordedAt.Equal(at) || response.CertificateFingerprint != alert.CertificateFingerprint || response.NotAfter == nil || !response.NotAfter.Equal(alert.NotAfter) {
+		t.Fatalf("notification response lost lifecycle context: %+v", response)
+	}
+	public, _ := json.Marshal(response)
+	if bytes.Contains(public, []byte(alert.RequestBinding)) {
+		t.Fatal("private request binding exposed")
+	}
+	legacy := toNotificationResponse(store.NotificationOutboxRecord{Payload: []byte(`{"kind":"identity.renewal_failed","identity_id":"identity-a"}`)})
+	if legacy.NotAfter != nil || legacy.DeploymentRecordedAt != nil || legacy.CertificateID != "" {
+		t.Fatal("legacy alert acquired invented deployment evidence")
+	}
+}
 
 func TestNotificationPaginationAndRoutingNormalization(t *testing.T) {
 	cursor := encodeNotificationCursor(42)

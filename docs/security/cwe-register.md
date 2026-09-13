@@ -132,9 +132,9 @@ not this file.
 | `internal/api/itsm_test.go:41` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/managedkeys_test.go:182` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/nhi_inventory.go:199` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/notifications.go:857` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/notifications.go:1212` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/api/notifications_helpers_test.go:68` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/api/notifications.go:862` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/notifications.go:1217` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/notifications_helpers_test.go:90` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/openapi.go:172` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_posture.go:951` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_posture.go:1099` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -408,7 +408,7 @@ not this file.
 | `internal/agent/relay/adcsscan_wire_test.go:229` | this fixed fixture is below MaxUint16 (CWE-190). |
 | `internal/api/application_secret_approval.go:412` | ApplicationSecretApprovalBinding just proved the version is positive (CWE-190). |
 | `internal/api/machine_sessions_served_test.go:63` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/api/notifications_helpers_test.go:187` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `internal/api/notifications_helpers_test.go:209` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/api/secretjson.go:173` | rune already range-checked below 0x20 before hex packing (CWE-190) |
 | `internal/api/vault_compat_complete.go:714` | DER length of a public key, far under the uint32 bound (CWE-190) |
 | `internal/audit/audit.go:163` | event sequence/count fits int64 by construction; bounded by the log (CWE-190) |

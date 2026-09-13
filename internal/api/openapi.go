@@ -3010,7 +3010,10 @@ func componentSchemas() map[string]*Schema {
 	}, "kind", "subject")
 	notification := object(map[string]*Schema{
 		"id": str(), "tenant_id": uuid(), "destination": str(), "kind": str(),
-		"certificate_id": str(), "subject": str(), "serial": str(), "not_after": timestamp(),
+		"identity_id": uuid(), "operation_id": str(),
+		"certificate_fingerprint": str(), "deployment_receipt_id": uuid(),
+		"deployment_recorded_at": {Type: "string", Format: "date-time", Description: "Historical completion receipt captured with the alert. Certificate expiry describes this deployment or rollback, not a fresh listener probe."},
+		"certificate_id":         str(), "subject": str(), "serial": str(), "not_after": timestamp(),
 		"detail": str(), "severity": {Type: "string", Enum: []string{"low", "informational", "warning", "critical"}},
 		"routing_policy_id": str(), "threshold_days": {Type: "integer"},
 		"owner_id": uuid(), "owner_name": str(), "owner_email": str(),

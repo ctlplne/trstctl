@@ -21542,6 +21542,9 @@
           "attempts": {
             "type": "integer"
           },
+          "certificate_fingerprint": {
+            "type": "string"
+          },
           "certificate_id": {
             "type": "string"
           },
@@ -21550,6 +21553,15 @@
             "type": "string"
           },
           "delivered_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "deployment_receipt_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "deployment_recorded_at": {
+            "description": "Historical completion receipt captured with the alert. Certificate expiry describes this deployment or rollback, not a fresh listener probe.",
             "format": "date-time",
             "type": "string"
           },
@@ -21571,6 +21583,10 @@
           "idempotency_key": {
             "type": "string"
           },
+          "identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
           "kind": {
             "type": "string"
           },
@@ -21579,6 +21595,9 @@
           },
           "not_after": {
             "format": "date-time",
+            "type": "string"
+          },
+          "operation_id": {
             "type": "string"
           },
           "owner_email": {

@@ -9,11 +9,14 @@ export function meaningfulAttention(notifications: Notification[]): Notification
     if (!meaningful) continue;
     // A display name cannot identify a risk: a replacement identity can reuse
     // the same hostname, and one certificate can have different kinds of alert.
-    // Only collapse repeated alerts for the same tenant, certificate and kind.
+    // Distinct operations remain distinct even when they refer to one leaf.
+    // Otherwise collapse repeated alerts for the same tenant, certificate and kind.
     // Without that stable identity, preserve the individual notification.
-    const key = notification.certificate_id
-      ? JSON.stringify([notification.tenant_id, notification.certificate_id, notification.kind || notification.destination])
-      : `notification:${notification.id}`;
+    const key = notification.operation_id
+      ? JSON.stringify([notification.tenant_id, "operation", notification.operation_id])
+      : notification.certificate_id
+        ? JSON.stringify([notification.tenant_id, notification.certificate_id, notification.kind || notification.destination])
+        : `notification:${notification.id}`;
     const current = byRisk.get(key);
     if (!current || priority(notification) > priority(current)) byRisk.set(key, notification);
   }

@@ -4,8 +4,11 @@ package orchestrator_test
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -13,7 +16,107 @@ import (
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/store"
 )
+
+func TestRenewalFailureUsesCompletedDeploymentAndRetainsOwnerSnapshot(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	ctx := t.Context()
+	identityID := "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	seedLifecycleIdentity(t, s, tenantA, identityID, orchestrator.StateRenewing)
+	seedLifecycleIdentity(t, s, tenantB, identityID, orchestrator.StateRenewing)
+	const ownerID = "99999999-9999-9999-9999-999999999999"
+	if err := s.UpsertOwner(ctx, store.Owner{ID: ownerID, TenantID: tenantA, Kind: store.OwnerService, Name: "Platform SRE", Email: "sre@example.test"}); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	deadline := now.Add(5 * time.Minute)
+	installed, err := s.UpsertCertificate(ctx, store.Certificate{TenantID: tenantA, Fingerprint: "installed", Serial: "1234", Subject: "svc.example.test", Source: "issued", NotAfter: &deadline})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, row := range []struct{ tenant, status, fingerprint string }{
+		{tenantA, "rolled_back", "installed"},
+		{tenantA, "verify_failed", "uninstalled-candidate"},
+		{tenantB, "rolled_back", "other-tenant"},
+	} {
+		err := s.WithTenant(ctx, row.tenant, func(tx pgx.Tx) error {
+			return s.ApplyConnectorDeliveryRecordedTx(ctx, tx, store.ConnectorDeliveryReceipt{
+				ID: fmt.Sprintf("03500000-0000-4000-8000-%012d", i+1), TenantID: row.tenant,
+				IdentityID: &identityID, Destination: "connector.rollback", Connector: "nginx", Target: "qa/nginx",
+				Fingerprint: row.fingerprint, Status: row.status, IdempotencyKey: fmt.Sprintf("receipt-%d", i), CreatedAt: now, UpdatedAt: now.Add(time.Duration(i) * time.Second),
+			})
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	orch := orchestrator.NewOrchestrator(log, s, orchestrator.NewOutbox(s))
+	if err := orch.Transition(ctx, tenantA, identityID, orchestrator.StateRenewalFailed, "private failure diagnostics"); err != nil {
+		t.Fatal(err)
+	}
+	var body []byte
+	if err := s.SystemPool().QueryRow(ctx, `SELECT payload FROM outbox WHERE tenant_id=$1 AND destination=$2`, tenantA, notify.DestinationRenewalFailure).Scan(&body); err != nil {
+		t.Fatal(err)
+	}
+	var alert notify.Alert
+	if err := json.Unmarshal(body, &alert); err != nil {
+		t.Fatal(err)
+	}
+	if alert.CertificateID != installed.ID || alert.Serial != "1234" || !alert.NotAfter.Equal(deadline) || alert.OwnerName != "Platform SRE" || alert.OwnerEmail != "sre@example.test" {
+		t.Fatalf("failure warning lacks exact deployment and owner context: %+v", alert)
+	}
+	if !strings.Contains(alert.Detail, "Last completed deployment") || !strings.Contains(alert.Detail, deadline.Format(time.RFC3339)) || strings.Contains(alert.Detail, "private failure") {
+		t.Fatalf("warning must explain the historical deadline without raw diagnostics: %s", alert.Detail)
+	}
+	if err := log.Replay(ctx, 0, func(event events.Event) error {
+		if event.Type != projections.EventIdentityRenewalFailed {
+			return nil
+		}
+		data, changed, err := events.PseudonymizeEventDataForSubject(event.Data, tenantA, "sre@example.test", event.Type, event.SchemaVersion)
+		if err != nil || !changed {
+			t.Fatalf("owner snapshot privacy: changed=%v err=%v", changed, err)
+		}
+		var retained struct {
+			SideEffect replayableTransitionSideEffect `json:"side_effect"`
+		}
+		if err := json.Unmarshal(data, &retained); err != nil {
+			return err
+		}
+		var rewritten notify.Alert
+		if err := json.Unmarshal(retained.SideEffect.Payload, &rewritten); err != nil {
+			return err
+		}
+		if strings.Contains(string(retained.SideEffect.Payload), "sre@example.test") || rewritten.IdentityID != identityID || rewritten.DeploymentReceiptID != alert.DeploymentReceiptID || rewritten.CertificateFingerprint != "installed" || !rewritten.NotAfter.Equal(deadline) {
+			t.Fatal("privacy rewrite lost evidence or retained owner email")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// A later completed receipt with missing metadata must not inherit an old
+	// deadline or find the same fingerprint in a different tenant.
+	if _, err := s.UpsertCertificate(ctx, store.Certificate{TenantID: tenantB, Fingerprint: "missing-locally", Source: "issued", NotAfter: &deadline}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		if err := s.ApplyConnectorDeliveryRecordedTx(ctx, tx, store.ConnectorDeliveryReceipt{
+			ID: "03500000-0000-4000-8000-000000000004", TenantID: tenantA,
+			IdentityID: &identityID, Destination: "connector.deploy", Connector: "nginx", Target: "qa/nginx",
+			Fingerprint: "missing-locally", Status: "verified", IdempotencyKey: "missing-metadata", CreatedAt: now.Add(time.Minute), UpdatedAt: now.Add(time.Minute),
+		}); err != nil {
+			return err
+		}
+		evidence, err := s.RenewalFailureContextTx(ctx, tx, store.Identity{TenantID: tenantA, ID: identityID, OwnerID: ownerID})
+		if err == nil && (evidence.Fingerprint != "missing-locally" || evidence.NotAfter != nil || evidence.CertificateID != "") {
+			t.Fatalf("missing metadata inherited another certificate: %+v", evidence)
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestRenewalFailureNotificationIsDurableAndTenantBound(t *testing.T) {
 	s := newStore(t)
@@ -45,6 +148,9 @@ func TestRenewalFailureNotificationIsDurableAndTenantBound(t *testing.T) {
 	}
 	if alert.Kind != notify.KindRenewalFailed || alert.TenantID != tenantA || alert.IdentityID != identityID || alert.OwnerID != "99999999-9999-9999-9999-999999999999" || alert.Subject != "svc.example.test" || alert.OperationID == "" || alert.Severity != notify.AlertSeverityWarning {
 		t.Fatalf("failure alert lost its routing or receiver identity: %+v", alert)
+	}
+	if !alert.NotAfter.IsZero() || alert.CertificateID != "" || alert.DeploymentRecordedAt != nil {
+		t.Fatal("alert invented missing deployment evidence")
 	}
 	if strings.Contains(string(body), "private upstream") || !strings.Contains(alert.Detail, "retry") {
 		t.Fatalf("notification must carry safe next steps, not raw failure detail: %s", body)
@@ -130,8 +236,27 @@ func TestRenewalFailureNotificationSharesTheStateTransaction(t *testing.T) {
 	if _, err := s.SystemPool().Exec(ctx, `DROP TRIGGER qa_reject_renewal_alert ON outbox`); err != nil {
 		t.Fatal(err)
 	}
+	// Owner edits after a failed SQL commit must not rewrite the first event's
+	// snapshot or prevent its repair. Command collisions must still be rejected.
+	if err := s.UpsertOwner(ctx, store.Owner{ID: "99999999-9999-9999-9999-999999999999", TenantID: tenantA, Kind: store.OwnerService, Name: "Changed after append", Email: "changed@example.test"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := orch.Transition(ctx, tenantA, identityID, orchestrator.StateRenewalFailed, "different command"); !errors.Is(err, store.ErrIdempotencyConflict) {
+		t.Fatalf("changed command reused retained failure: %v", err)
+	}
 	if err := orch.Transition(ctx, tenantA, identityID, orchestrator.StateRenewalFailed, "attempt failed"); err != nil {
 		t.Fatal(err)
+	}
+	var retainedBody []byte
+	if err := s.SystemPool().QueryRow(ctx, `SELECT payload FROM outbox WHERE tenant_id=$1 AND destination=$2`, tenantA, notify.DestinationRenewalFailure).Scan(&retainedBody); err != nil {
+		t.Fatal(err)
+	}
+	var retainedAlert notify.Alert
+	if err := json.Unmarshal(retainedBody, &retainedAlert); err != nil {
+		t.Fatal(err)
+	}
+	if retainedAlert.OwnerName != "svc" || retainedAlert.OwnerEmail != "" {
+		t.Fatalf("SQL retry rebuilt the alert from mutable owner data: %+v", retainedAlert)
 	}
 	var failures int
 	if err := log.Replay(ctx, 0, func(event events.Event) error {

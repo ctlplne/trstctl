@@ -4288,6 +4288,13 @@ const esESCatalog = {
   "notifications.center.channelsHelp":
     "Un canal es un destino externo. Una prueba segura primero escribe trabajo duradero en la bandeja de salida; el navegador nunca llama directamente al destino.",
   "notifications.center.defaultImpact": "Esta credencial o ruta de entrega puede dejar de funcionar si nadie actúa.",
+  "notifications.context.openIdentity": "Abrir identidad e historial de renovaciones",
+  "notifications.context.historicalDeadline": "Vencimiento del último despliegue registrado",
+  "notifications.context.recordedAt": "Despliegue registrado el",
+  "notifications.context.receipt": "Comprobante de despliegue",
+  "notifications.context.fingerprint": "Huella del certificado",
+  "notifications.context.historicalHelp": "Registrado cuando falló la renovación. No verifica lo que sirve el servidor ahora.",
+  "notifications.context.routingNotRetained": "No se registró ninguna política en esta alerta. El enrutamiento automático se resuelve al entregar.",
   "notifications.center.deadline": "Fecha límite",
   "notifications.center.owner": "Responsable",
   "notifications.center.ownerMissing": "No se devolvió responsable",

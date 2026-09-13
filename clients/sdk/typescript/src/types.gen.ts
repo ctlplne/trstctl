@@ -12085,20 +12085,31 @@ export interface components {
         };
         Notification: {
             attempts: number;
+            certificate_fingerprint?: string;
             certificate_id?: string;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
             delivered_at?: string;
+            /** Format: uuid */
+            deployment_receipt_id?: string;
+            /**
+             * Format: date-time
+             * @description Historical completion receipt captured with the alert. Certificate expiry describes this deployment or rollback, not a fresh listener probe.
+             */
+            deployment_recorded_at?: string;
             destination: string;
             detail?: string;
             escalation_recipients?: components["schemas"]["AlertRecipient"][];
             id: string;
             idempotency_key?: string;
+            /** Format: uuid */
+            identity_id?: string;
             kind?: string;
             last_error?: string;
             /** Format: date-time */
             not_after?: string;
+            operation_id?: string;
             owner_email?: string;
             /** Format: uuid */
             owner_id?: string;
@@ -13540,8 +13551,11 @@ export interface components {
             predecessor_fingerprint?: string;
             reason?: string;
             rollback_ref?: string;
-            /** @enum {string} */
-            status: "running" | "succeeded" | "failed";
+            /**
+             * @description Cancelled means retained identity revocation or retirement stopped queued issuance work; it does not undo an external effect.
+             * @enum {string}
+             */
+            status: "running" | "succeeded" | "failed" | "cancelled";
             successor_fingerprint?: string;
             /** Format: uuid */
             tenant_id: string;

@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { RefreshCw, Save, Send } from "lucide-react";
+import { Link } from "react-router-dom";
 import type { QueryClient } from "@tanstack/react-query";
 import { Dialog } from "@/components/Dialog";
 import { EmptyState } from "@/components/EmptyState";
@@ -556,6 +557,14 @@ export function Notifications() {
             </p>
           </header>
           <div className="grid gap-4 p-5">
+            {detail.identity_id ? (
+              <Link
+                className="text-sm font-medium text-primary underline underline-offset-4"
+                to={`/identities?identity=${encodeURIComponent(detail.identity_id)}`}
+              >
+                {t("notifications.context.openIdentity")}
+              </Link>
+            ) : null}
             <section aria-label={translateNow("source.delivery.52bfe584a5")}>
               <h3 className="text-sm font-semibold">{translateNow("source.delivery.52bfe584a5")}</h3>
               <dl className="mt-2 grid gap-2 text-sm">
@@ -591,9 +600,24 @@ export function Notifications() {
                 <NotificationDetailRow term="Serial" mono>
                   {detail.serial || "-"}
                 </NotificationDetailRow>
-                <NotificationDetailRow term="Not after">
+                <NotificationDetailRow term={detail.deployment_recorded_at ? t("notifications.context.historicalDeadline") : "Not after"}>
                   {detail.not_after ? formatDateTime(detail.not_after) : t("notifications.center.noDeadline")}
                 </NotificationDetailRow>
+                {detail.deployment_recorded_at ? (
+                  <>
+                    <NotificationDetailRow term={t("notifications.context.recordedAt")}>{formatDateTime(detail.deployment_recorded_at)}</NotificationDetailRow>
+                    <NotificationDetailRow term={t("notifications.context.receipt")} mono>
+                      {detail.deployment_receipt_id || "-"}
+                    </NotificationDetailRow>
+                    <NotificationDetailRow term={t("notifications.context.fingerprint")} mono>
+                      {detail.certificate_fingerprint || "-"}
+                    </NotificationDetailRow>
+                    <div className="min-w-0 text-sm text-muted-foreground">
+                      <dt className="sr-only">{t("notifications.context.recordedAt")}</dt>
+                      <dd>{t("notifications.context.historicalHelp")}</dd>
+                    </div>
+                  </>
+                ) : null}
                 <NotificationDetailRow term="Threshold days">{detail.threshold_days != null ? String(detail.threshold_days) : "-"}</NotificationDetailRow>
               </dl>
             </section>
@@ -611,7 +635,7 @@ export function Notifications() {
               <h3 className="text-sm font-semibold">{t("parity.routing_7d15dd")}</h3>
               <dl className="mt-2 grid gap-2 text-sm">
                 <NotificationDetailRow term="Routing policy" mono>
-                  {detail.routing_policy_id || "-"}
+                  {detail.routing_policy_id || t("notifications.context.routingNotRetained")}
                 </NotificationDetailRow>
                 <NotificationDetailRow term="Kind">{detail.kind || "-"}</NotificationDetailRow>
                 <NotificationDetailRow term="Severity">
@@ -1439,9 +1463,9 @@ function severityTone(severity: NonNullable<Notification["severity"]>): StatusTo
 
 function NotificationDetailRow({ term, children, mono = false }: { term: string; children: ReactNode; mono?: boolean }) {
   return (
-    <div className="grid gap-1 sm:grid-cols-[11rem_1fr] sm:gap-2">
+    <div className="grid min-w-0 gap-1 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-2">
       <dt className="font-medium text-muted-foreground">{term}</dt>
-      <dd className={mono ? "break-all font-mono text-xs" : "break-words"}>{children}</dd>
+      <dd className={mono ? "min-w-0 break-all font-mono text-xs" : "min-w-0 [overflow-wrap:anywhere]"}>{children}</dd>
     </div>
   );
 }

@@ -5215,17 +5215,22 @@ export interface NHIStaticThresholds {
 
 export interface Notification {
   attempts: number;
+  certificate_fingerprint?: string;
   certificate_id?: string;
   created_at: string;
   delivered_at?: string;
+  deployment_receipt_id?: string;
+  deployment_recorded_at?: string;
   destination: string;
   detail?: string;
   escalation_recipients?: AlertRecipient[];
   id: string;
   idempotency_key?: string;
+  identity_id?: string;
   kind?: string;
   last_error?: string;
   not_after?: string;
+  operation_id?: string;
   owner_email?: string;
   owner_id?: string;
   owner_name?: string;

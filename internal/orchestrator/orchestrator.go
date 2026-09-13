@@ -587,7 +587,11 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 				// Caller-supplied diagnostics are never the alert body.
 				eventID = renewalFailureEventID(tenantID, identityID, version)
 				basePayload.SideEffect.IdempotencyKey = transitionOutboxIdempotencyKey(eventID, idempotencyKey)
-				alertBody, err := renewalFailureNotification(locked, eventID)
+				evidence, err := o.store.RenewalFailureContextTx(ctx, tx, locked)
+				if err != nil {
+					return err
+				}
+				alertBody, err := renewalFailureNotification(locked, eventID, evidence)
 				if err != nil {
 					return err
 				}
@@ -606,8 +610,12 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 			if expectedSchemaVersion == 0 {
 				expectedSchemaVersion = events.DefaultSchemaVersion
 			}
+			payloadMatches := bytes.Equal(ev.Data, payload)
+			if !payloadMatches && from == StateRenewing && to == StateRenewalFailed {
+				payloadMatches = sameRenewalFailureWithRetainedAlert(payload, ev.Data, tenantID, identityID, eventID)
+			}
 			if (eventID != "" && ev.ID != eventID) || ev.Type != evType || ev.TenantID != tenantID ||
-				ev.SchemaVersion != expectedSchemaVersion || !bytes.Equal(ev.Data, payload) {
+				ev.SchemaVersion != expectedSchemaVersion || !payloadMatches {
 				return fmt.Errorf("%w: canonical lifecycle event differs", store.ErrIdempotencyConflict)
 			}
 			var canonical transitionPayload

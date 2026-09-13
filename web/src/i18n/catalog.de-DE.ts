@@ -4329,6 +4329,13 @@ const deDECatalog = {
   "notifications.center.channelsHelp":
     "Ein Kanal ist ein externes Ziel. Ein sicherer Test schreibt zuerst dauerhafte Outbox-Arbeit; der Browser ruft das Ziel nie direkt auf.",
   "notifications.center.defaultImpact": "Diese Anmeldeinformation oder der Zustellpfad kann ausfallen, wenn niemand handelt.",
+  "notifications.context.openIdentity": "Identität und Verlängerungsverlauf öffnen",
+  "notifications.context.historicalDeadline": "Ablauf der zuletzt erfassten Bereitstellung",
+  "notifications.context.recordedAt": "Bereitstellung erfasst am",
+  "notifications.context.receipt": "Bereitstellungsbeleg",
+  "notifications.context.fingerprint": "Zertifikat-Fingerabdruck",
+  "notifications.context.historicalHelp": "Beim Fehlschlag der Verlängerung erfasst. Dies bestätigt nicht, was der Endpunkt jetzt ausliefert.",
+  "notifications.context.routingNotRetained": "In dieser Warnung wurde keine Richtlinie erfasst. Das automatische Routing wird bei der Zustellung bestimmt.",
   "notifications.center.deadline": "Frist",
   "notifications.center.owner": "Verantwortlicher",
   "notifications.center.ownerMissing": "Kein Verantwortlicher zurückgegeben",

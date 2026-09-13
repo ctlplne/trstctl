@@ -28,29 +28,34 @@ import (
 )
 
 type notificationResponse struct {
-	ID                   string                  `json:"id"`
-	TenantID             string                  `json:"tenant_id"`
-	Destination          string                  `json:"destination"`
-	Kind                 string                  `json:"kind,omitempty"`
-	CertificateID        string                  `json:"certificate_id,omitempty"`
-	Subject              string                  `json:"subject,omitempty"`
-	Serial               string                  `json:"serial,omitempty"`
-	NotAfter             *time.Time              `json:"not_after,omitempty"`
-	Detail               string                  `json:"detail,omitempty"`
-	Severity             string                  `json:"severity,omitempty"`
-	RoutingPolicyID      string                  `json:"routing_policy_id,omitempty"`
-	ThresholdDays        *int                    `json:"threshold_days,omitempty"`
-	OwnerID              string                  `json:"owner_id,omitempty"`
-	OwnerName            string                  `json:"owner_name,omitempty"`
-	OwnerEmail           string                  `json:"owner_email,omitempty"`
-	EscalationRecipients []notify.AlertRecipient `json:"escalation_recipients,omitempty"`
-	Status               string                  `json:"status"`
-	Attempts             int                     `json:"attempts"`
-	LastError            string                  `json:"last_error,omitempty"`
-	IdempotencyKey       string                  `json:"idempotency_key,omitempty"`
-	CreatedAt            time.Time               `json:"created_at"`
-	DeliveredAt          *time.Time              `json:"delivered_at,omitempty"`
-	ReadAt               *time.Time              `json:"read_at,omitempty"`
+	ID                     string                  `json:"id"`
+	TenantID               string                  `json:"tenant_id"`
+	Destination            string                  `json:"destination"`
+	Kind                   string                  `json:"kind,omitempty"`
+	IdentityID             string                  `json:"identity_id,omitempty"`
+	OperationID            string                  `json:"operation_id,omitempty"`
+	CertificateFingerprint string                  `json:"certificate_fingerprint,omitempty"`
+	DeploymentReceiptID    string                  `json:"deployment_receipt_id,omitempty"`
+	DeploymentRecordedAt   *time.Time              `json:"deployment_recorded_at,omitempty"`
+	CertificateID          string                  `json:"certificate_id,omitempty"`
+	Subject                string                  `json:"subject,omitempty"`
+	Serial                 string                  `json:"serial,omitempty"`
+	NotAfter               *time.Time              `json:"not_after,omitempty"`
+	Detail                 string                  `json:"detail,omitempty"`
+	Severity               string                  `json:"severity,omitempty"`
+	RoutingPolicyID        string                  `json:"routing_policy_id,omitempty"`
+	ThresholdDays          *int                    `json:"threshold_days,omitempty"`
+	OwnerID                string                  `json:"owner_id,omitempty"`
+	OwnerName              string                  `json:"owner_name,omitempty"`
+	OwnerEmail             string                  `json:"owner_email,omitempty"`
+	EscalationRecipients   []notify.AlertRecipient `json:"escalation_recipients,omitempty"`
+	Status                 string                  `json:"status"`
+	Attempts               int                     `json:"attempts"`
+	LastError              string                  `json:"last_error,omitempty"`
+	IdempotencyKey         string                  `json:"idempotency_key,omitempty"`
+	CreatedAt              time.Time               `json:"created_at"`
+	DeliveredAt            *time.Time              `json:"delivered_at,omitempty"`
+	ReadAt                 *time.Time              `json:"read_at,omitempty"`
 }
 
 type notificationChannelResponse struct {
@@ -1401,29 +1406,34 @@ func toNotificationResponse(row store.NotificationOutboxRecord) notificationResp
 		notAfter = &t
 	}
 	return notificationResponse{
-		ID:                   strconv.FormatInt(row.ID, 10),
-		TenantID:             row.TenantID,
-		Destination:          row.Destination,
-		Kind:                 alert.Kind,
-		CertificateID:        alert.CertificateID,
-		Subject:              alert.Subject,
-		Serial:               alert.Serial,
-		NotAfter:             notAfter,
-		Detail:               alert.Detail,
-		Severity:             alert.Severity,
-		RoutingPolicyID:      alert.RoutingPolicyID,
-		ThresholdDays:        alert.ThresholdDays,
-		OwnerID:              alert.OwnerID,
-		OwnerName:            alert.OwnerName,
-		OwnerEmail:           alert.OwnerEmail,
-		EscalationRecipients: append([]notify.AlertRecipient(nil), alert.EscalationRecipients...),
-		Status:               row.Status,
-		Attempts:             row.Attempts,
-		LastError:            row.LastError,
-		IdempotencyKey:       row.IdempotencyKey,
-		CreatedAt:            row.CreatedAt,
-		DeliveredAt:          row.DeliveredAt,
-		ReadAt:               row.ReadAt,
+		ID:                     strconv.FormatInt(row.ID, 10),
+		TenantID:               row.TenantID,
+		Destination:            row.Destination,
+		Kind:                   alert.Kind,
+		IdentityID:             alert.IdentityID,
+		OperationID:            alert.OperationID,
+		CertificateFingerprint: alert.CertificateFingerprint,
+		DeploymentReceiptID:    alert.DeploymentReceiptID,
+		DeploymentRecordedAt:   alert.DeploymentRecordedAt,
+		CertificateID:          alert.CertificateID,
+		Subject:                alert.Subject,
+		Serial:                 alert.Serial,
+		NotAfter:               notAfter,
+		Detail:                 alert.Detail,
+		Severity:               alert.Severity,
+		RoutingPolicyID:        alert.RoutingPolicyID,
+		ThresholdDays:          alert.ThresholdDays,
+		OwnerID:                alert.OwnerID,
+		OwnerName:              alert.OwnerName,
+		OwnerEmail:             alert.OwnerEmail,
+		EscalationRecipients:   append([]notify.AlertRecipient(nil), alert.EscalationRecipients...),
+		Status:                 row.Status,
+		Attempts:               row.Attempts,
+		LastError:              row.LastError,
+		IdempotencyKey:         row.IdempotencyKey,
+		CreatedAt:              row.CreatedAt,
+		DeliveredAt:            row.DeliveredAt,
+		ReadAt:                 row.ReadAt,
 	}
 }
 

@@ -1556,8 +1556,11 @@ describe("i18n boundary", () => {
       // authorization labels. Machine-authored es/de require human review before release.
       // Certificate inventory: reviewed the server-wide search label against
       // the new API semantics. Machine-authored es/de require human review before release.
-      "es-ES": "adea2d7f70e2ff95ee6793cb6b796abcf3e101dce32f0e6d85b9a267baf0664e",
-      "de-DE": "6f6f92e4622cdb90ff3d2dcd03a773b0483350e6fa0831f08d889aa703fa8a5d",
+      // Renewal alerts: reviewed historical expiry, exact identity navigation,
+      // and unretained routing semantics. Machine-authored es/de require HUMAN
+      // TRANSLATION REVIEW before release; no extraction budget changed.
+      "es-ES": "8cb619cffe3bdc68c62304bfcd4e5a73d09bb9722ac70ec4a00e6f7a6b590983",
+      "de-DE": "ef57cb4a112a4cf6fd3890cc13ad50ee5bb2c34a7c2f2b197f139bf7e88d7a54",
     });
   });
 

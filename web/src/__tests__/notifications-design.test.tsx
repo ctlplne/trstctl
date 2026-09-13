@@ -116,6 +116,48 @@ describe("Global Alert Center", () => {
     expect(screen.getByRole("button", { name: "Queue test" })).toBeDisabled();
   });
 
+  it("links renewal failures to the exact identity and labels captured deployment expiry", async () => {
+    const alert = {
+      id: "179",
+      tenant_id: "t1",
+      destination: "notification.renewal_failure",
+      kind: "identity.renewal_failed",
+      identity_id: "identity-active",
+      operation_id: "renewal-failure:179",
+      certificate_id: "cert-live",
+      certificate_fingerprint: "exact-live-fingerprint",
+      deployment_receipt_id: "receipt-installed",
+      deployment_recorded_at: "2026-08-21T00:00:00Z",
+      not_after: "2026-08-21T00:07:00Z",
+      subject: "mail.example.test",
+      owner_name: "Platform SRE",
+      severity: "warning",
+      status: "sent",
+      attempts: 1,
+      created_at: "2026-08-21T00:03:00Z",
+    };
+    apiMock.notifications.mockResolvedValue({ items: [alert, { ...alert, id: "178", operation_id: "renewal-failure:178", status: "dead" }] });
+    apiMock.notification.mockResolvedValue(alert);
+    const user = userEvent.setup();
+    renderNotifications();
+    expect(await screen.findByRole("heading", { name: "2 alert chains need attention" })).toBeInTheDocument();
+    for (const link of screen.getAllByRole("link", { name: "Open identity and renewal history" })) {
+      expect(link).toHaveAttribute("href", "/identities?identity=identity-active");
+    }
+    expect(screen.getAllByText("Expiry of last recorded deployment")).toHaveLength(2);
+    await user.click(screen.getAllByRole("button", { name: "Review details" })[1]);
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("link", { name: "Open identity and renewal history" })).toHaveAttribute("href", "/identities?identity=identity-active");
+    expect(within(dialog).getByText("receipt-installed")).toBeInTheDocument();
+    expect(within(dialog).getByText("exact-live-fingerprint")).toBeInTheDocument();
+    expect(within(dialog).getByText("exact-live-fingerprint")).toHaveClass("min-w-0", "break-all");
+    expect(within(dialog).getByText("Deployment receipt").parentElement).toHaveClass("sm:grid-cols-[11rem_minmax(0,1fr)]");
+    expect(within(dialog).getByText("Captured when the renewal failed. This does not verify what the listener serves now.").parentElement).not.toHaveClass(
+      "sm:col-span-2",
+    );
+    expect(within(dialog).getByText("Captured when the renewal failed. This does not verify what the listener serves now.")).toBeInTheDocument();
+  });
+
   it("groups meaningful risk while informational unread events remain history-only", async () => {
     apiMock.notificationChannels.mockResolvedValue({
       items: catalog.map((channel) => (channel.id === "slack" ? { ...channel, configured: true, enabled: true } : channel)),

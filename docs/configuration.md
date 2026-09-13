@@ -398,6 +398,19 @@ registered channel workers. Tenant-scoped routing policy authoring and channel-t
 delivery are served from the console; channel secrets remain in operator-managed secret
 references or files.
 
+Renewal-failure alerts link to the exact identity and retain its owner name and
+contact at the failure. When a completed deployment or rollback receipt exists,
+the alert also captures that certificate's fingerprint, serial, expiry, receipt
+ID and receipt time. The console labels this as the last recorded deployment:
+it does not prove what a listener serves now. An issued but uninstalled successor
+cannot supply that deadline. Missing receipt or certificate metadata remains
+unknown, and older alerts are not backfilled from today's inventory.
+
+Retries after a rolled-back database transaction retain the original alert
+snapshot. Automatic routing is resolved when delivery runs; an absent policy ID
+in the alert is not proof that no routing policy was used. Owner contact metadata
+does not change the configured channel's recipient list.
+
 Native SMTP delivery bounds the entire connection and protocol exchange to ten
 seconds, including the greeting, STARTTLS, authentication, message acceptance and
 QUIT. A shorter caller deadline takes precedence; normal notification fanout gives
