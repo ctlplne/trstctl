@@ -5137,6 +5137,10 @@ export const messages = {
   },
   "operations.summary.rotationRunning": { defaultMessage: "Credential rotation is in progress.", description: "Running rotation summary." },
   "operations.summary.rotationCompleted": { defaultMessage: "Credential rotation completed.", description: "Completed rotation summary." },
+  "operations.summary.rotationCancelled": {
+    defaultMessage: "Renewal stopped after identity revocation or retirement.",
+    description: "Cancelled rotation outcome; does not imply successful renewal or remote compensation.",
+  },
   "operations.summary.approval": {
     defaultMessage: "{count} of {required} required approvals recorded.",
     description: "Pending approval progress summary.",
@@ -26243,9 +26247,11 @@ export const messages = {
   },
   "identities.automation.nextOpen": { defaultMessage: " Next opening: {time}.", description: "Next lifecycle maintenance opening." },
   "identities.automation.cancelLimit": {
-    defaultMessage: "Queued work cannot be safely cancelled after a worker may have leased it. Retry creates a separately reviewed, idempotent attempt.",
+    defaultMessage:
+      "Revocation or retirement cancels queued issuance and renewal retries once any current worker attempt ends or times out. Work already performed on a target is not undone. Cancelling renewal while keeping the identity active is not yet available.",
     description: "Honest lifecycle cancellation limit.",
   },
+  "lifecycle.status.cancelled": { defaultMessage: "Cancelled", description: "Queued lifecycle work stopped by identity revocation or retirement." },
   "identities.automation.pendingHeading": { defaultMessage: "Renewals to review", description: "Heading above due renewal actions." },
   "identities.automation.expires": { defaultMessage: " · expires {time}", description: "Certificate expiry in lifecycle plan." },
   "identities.automation.startAction": { defaultMessage: "Review renewal now", description: "Open effect-free review for a due renewal." },

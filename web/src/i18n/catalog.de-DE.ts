@@ -8470,6 +8470,7 @@ const deDECatalog = {
   "operations.summary.rotationFailed": "Die Credential-Rotation ist fehlgeschlagen und muss geprüft werden.",
   "operations.summary.rotationRunning": "Die Credential-Rotation läuft.",
   "operations.summary.rotationCompleted": "Die Credential-Rotation ist abgeschlossen.",
+  "operations.summary.rotationCancelled": "Die Erneuerung wurde nach Widerruf oder Stilllegung der Identität beendet.",
   "operations.summary.approval": "{count} von {required} erforderlichen Genehmigungen wurden erfasst.",
   "operations.status.awaitingApproval": "Wartet auf Genehmigung",
   "operations.status.verificationFailed": "Verifizierung fehlgeschlagen",
@@ -8890,7 +8891,8 @@ const deDECatalog = {
   "identities.automation.maintenanceDeferral": " Grund: {reason}.",
   "identities.automation.nextOpen": " Nächste Öffnung: {time}.",
   "identities.automation.cancelLimit":
-    "Eingereihte Arbeit kann nicht sicher abgebrochen werden, nachdem ein Prozess sie übernommen haben könnte. Ein Wiederholungsversuch wird separat geprüft und idempotent ausgeführt.",
+    "Widerruf oder Stilllegung bricht eingereihte Ausstellungs- und Erneuerungsversuche ab, sobald ein laufender Versuch endet oder sein Zeitlimit erreicht. Bereits am Ziel ausgeführte Arbeit wird nicht rückgängig gemacht. Eine Erneuerung abzubrechen und die Identität aktiv zu lassen, ist noch nicht möglich.",
+  "lifecycle.status.cancelled": "Abgebrochen",
   "identities.automation.pendingHeading": "Zu prüfende Erneuerungen",
   "identities.automation.expires": " · läuft {time} ab",
   "identities.automation.startAction": "Erneuerung jetzt prüfen",

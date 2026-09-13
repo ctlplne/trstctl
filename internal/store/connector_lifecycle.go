@@ -377,7 +377,7 @@ func sameOptionalTime(left, right *time.Time) bool {
 }
 
 func rotationRunStatusTerminal(status string) bool {
-	return status == "succeeded" || status == "failed"
+	return status == "succeeded" || status == "failed" || status == "cancelled"
 }
 
 func applyLaterRotationRunObservation(destination *RotationRun, source RotationRun) error {
@@ -385,8 +385,13 @@ func applyLaterRotationRunObservation(destination *RotationRun, source RotationR
 	if len(differences) == 0 {
 		return nil
 	}
-	if destination.Status == "succeeded" {
-		return fmt.Errorf("succeeded evidence is final; differing_fields=%s", strings.Join(differences, ","))
+	if destination.Status == "cancelled" && (source.Status == "running" || source.Status == "failed") {
+		// An already-issued failure callback can trail the stop event. Preserve
+		// that event in the audit log without re-arming cancelled work.
+		return nil
+	}
+	if destination.Status == "succeeded" || destination.Status == "cancelled" {
+		return fmt.Errorf("completed evidence is final; differing_fields=%s", strings.Join(differences, ","))
 	}
 	if destination.Status == "running" && source.Status == "running" {
 		return fmt.Errorf("a later running observation changed outcome fields=%s", strings.Join(differences, ","))

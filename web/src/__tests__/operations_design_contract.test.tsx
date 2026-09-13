@@ -74,6 +74,23 @@ const succeededRotation = {
 };
 
 describe("Jobs and queues design contract", () => {
+  it("keeps a cancelled rotation out of failures and exposes its stopped outcome in filters and review", async () => {
+    apiMock.rotationRuns.mockResolvedValue({ items: [{ ...succeededRotation, status: "cancelled" }] });
+    apiMock.connectorDeliveries.mockResolvedValue({ items: [] });
+    const user = userEvent.setup();
+    renderOperations();
+    await screen.findByRole("heading", { level: 1, name: "Jobs and queues" });
+    await user.click(screen.getByText("All jobs and filters"));
+    const allWork = screen.getByLabelText("All jobs");
+    expect(await within(allWork).findByText("Cancelled")).toBeInTheDocument();
+    expect(within(allWork).getByText("Renewal stopped after identity revocation or retirement.")).toBeInTheDocument();
+    expect(within(allWork).queryByText("Credential rotation completed.")).not.toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Status filter"), "cancelled");
+    await user.click(within(allWork).getByRole("button", { name: "Review Rotate an identity" }));
+    const dialog = await screen.findByRole("dialog", { name: "Job: Rotate an identity" });
+    expect(within(dialog).getByText("Renewal stopped after identity revocation or retirement.")).toBeInTheDocument();
+  });
+
   beforeEach(() => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
     apiMock.authMethods.mockResolvedValue({ oidc: true, saml: false, ldap: false });

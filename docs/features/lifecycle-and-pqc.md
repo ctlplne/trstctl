@@ -27,6 +27,20 @@ first commit, so this migration is a contained change, not a rewrite.
 
 ### Lifecycle automation (F6)
 
+Revoking or retiring an identity stops future issuance and renewal attempts for
+that identity. Idle queued jobs become `cancelled`; a running rotation becomes
+`cancelled` once its related queued work has stopped. Completed deliveries and
+revocation publication are preserved. This does not remove a certificate from a
+listener or undo an external action already performed.
+
+Cancellation derives from the retained identity transition event. Live worker
+and agent leases keep their result path until completion or expiry. A bounded
+maintenance sweep, agent claim, or startup reconciliation then cancels remaining
+idle work, even when scheduled renewal is disabled or a maintenance window is
+closed. Attempts, errors, issuance bindings, and audit history remain intact;
+replaying the event log does not re-arm cancelled work. Cancelling a renewal
+while keeping its identity active is not yet available.
+
 Open an X.509 identity's detail to see the certificate from its last completed
 deployment or restore, including validity dates, certificate status, destination,
 and receipt time. The certificate link opens that exact leaf's revocation view.

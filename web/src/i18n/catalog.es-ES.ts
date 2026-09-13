@@ -8405,6 +8405,7 @@ const esESCatalog = {
   "operations.summary.rotationFailed": "La rotación de credenciales falló y necesita revisión.",
   "operations.summary.rotationRunning": "La rotación de credenciales está en curso.",
   "operations.summary.rotationCompleted": "La rotación de credenciales terminó.",
+  "operations.summary.rotationCancelled": "La renovación se detuvo tras revocar o retirar la identidad.",
   "operations.summary.approval": "Se registraron {count} de {required} aprobaciones necesarias.",
   "operations.status.awaitingApproval": "Esperando aprobación",
   "operations.status.verificationFailed": "La verificación falló",
@@ -8821,7 +8822,8 @@ const esESCatalog = {
   "identities.automation.maintenanceDeferral": " Motivo: {reason}.",
   "identities.automation.nextOpen": " Próxima apertura: {time}.",
   "identities.automation.cancelLimit":
-    "El trabajo en cola no se puede cancelar de forma segura cuando un proceso puede haberlo tomado. Reintentar crea un intento separado, revisado e idempotente.",
+    "La revocación o retirada cancela los reintentos de emisión y renovación en cola cuando el intento en curso termina o agota su tiempo. El trabajo ya realizado en un destino no se deshace. Aún no se puede cancelar la renovación y mantener la identidad activa.",
+  "lifecycle.status.cancelled": "Cancelado",
   "identities.automation.pendingHeading": "Renovaciones para revisar",
   "identities.automation.expires": " · vence {time}",
   "identities.automation.startAction": "Revisar renovación ahora",

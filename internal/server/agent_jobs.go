@@ -236,6 +236,12 @@ func (a *agentService) ClaimJobs(ctx context.Context, req *transport.ClaimJobsRe
 		lease = agentJobMaxLease
 	}
 
+	if a.orch != nil {
+		if _, err := a.orch.ReconcileStoppedIdentityWork(ctx, info.TenantID, time.Now().UTC()); err != nil {
+			return nil, status.Error(codes.Unavailable, "stopped issuance work could not be reconciled")
+		}
+	}
+
 	// The certificate's roles reach the row predicate too (epic A3): kind-level
 	// vantage said "connector.deploy may go to either role", and the per-row
 	// demand stamped at enqueue says which role THIS deploy needs. Both gates

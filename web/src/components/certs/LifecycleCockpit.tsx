@@ -211,7 +211,7 @@ function outcomeData(
     else buckets[index]!.failure += 1;
   };
   for (const run of runs) {
-    if (run.status === "running") continue;
+    if (run.status !== "succeeded" && run.status !== "failed") continue;
     add(run.completed_at || run.updated_at || run.created_at, run.status === "succeeded");
   }
   for (const delivery of deliveries) {

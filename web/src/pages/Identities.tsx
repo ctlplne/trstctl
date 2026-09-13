@@ -1308,7 +1308,9 @@ function DeliveryEvidencePanel({
                   loadedRotations.map((run) => (
                     <tr key={run.id} className="align-top">
                       <td className="break-all font-medium">{identityByID.get(run.identity_id)?.name || run.identity_id}</td>
-                      <td className="font-mono text-xs">{run.status}</td>
+                      <td>
+                        <StatusBadge value={run.status} />
+                      </td>
                       <td>{run.trigger}</td>
                       <td className="break-all font-mono text-xs">{shortFingerprint(run.successor_fingerprint)}</td>
                       <td>{run.rollback_ref || run.error || "-"}</td>

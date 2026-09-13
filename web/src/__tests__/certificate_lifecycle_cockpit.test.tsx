@@ -202,6 +202,16 @@ describe("Certificate Lifecycle cockpit", () => {
           created_at: "2026-08-24T10:00:00Z",
           updated_at: "2026-08-24T10:05:00Z",
         },
+        {
+          id: "cancelled-certificate-rotation",
+          tenant_id: "tenant-1",
+          identity_id: "identity-jobs",
+          status: "cancelled",
+          trigger: "scheduled",
+          created_at: "2026-08-18T10:00:00Z",
+          updated_at: "2026-08-18T10:05:00Z",
+          completed_at: "2026-08-18T10:05:00Z",
+        },
       ],
     });
     apiMock.connectorDeliveries.mockResolvedValue({
@@ -360,6 +370,7 @@ describe("Certificate Lifecycle cockpit", () => {
         },
         { succeeded: 0, failed: 0 },
       );
+    // An intentional stop is neither a successful renewal nor a failure.
     expect(outcomeTotals).toEqual({ succeeded: 2, failed: 2 });
 
     const queue = within(cockpit).getByRole("table", { name: "Certificate action queue" });

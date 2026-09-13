@@ -1453,6 +1453,18 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 	if err != nil {
 		return healed, fmt.Errorf("orchestrator: reconcile outbox: %w", err)
 	}
+	// Reconciliation can recreate an old issue/renew intent after its terminal
+	// identity was already projected. Apply that retained stop authority before
+	// startup exposes the recovered queue to dispatchers.
+	tenants, err := o.store.TenantsWithStoppedIdentityWork(ctx, time.Now().UTC())
+	if err != nil {
+		return healed, err
+	}
+	for _, tenant := range tenants {
+		if _, err := o.proj.ReconcileStoppedIdentityWork(ctx, tenant, time.Now().UTC()); err != nil {
+			return healed, err
+		}
+	}
 	return healed, nil
 }
 

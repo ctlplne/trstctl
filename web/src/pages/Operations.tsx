@@ -59,6 +59,7 @@ function statusOptions(queuedLabel: string) {
     { value: "running", label: translateNow("source.running.f4ccae29e1") },
     { value: "succeeded", label: translateNow("source.succeeded.6d9a6f97a5") },
     { value: "failed", label: translateNow("source.failed.031a8f0f65") },
+    { value: "cancelled", label: translateNow("lifecycle.status.cancelled") },
     { value: "delivered", label: translateNow("source.delivered.9061156573") },
     { value: "queued", label: queuedLabel },
     { value: "awaiting_approval", label: translateNow("source.awaiting.approval.ae25c9b1d3") },
@@ -552,6 +553,7 @@ function operationDetailFields(row: OperationRow): Array<{ label: string; value:
   if (row.type === "rotation") {
     return [
       ...common,
+      { label: translateNow("operations.detail.outcome"), value: operationSummary(row), wide: true },
       { label: translateNow("operations.detail.identityId"), value: row.rotation.identity_id, technical: true },
       { label: translateNow("operations.detail.trigger"), value: row.rotation.trigger },
       ...(row.rotation.reason ? [{ label: translateNow("operations.detail.reason"), value: row.rotation.reason, wide: true }] : []),
@@ -737,6 +739,7 @@ function operationSummary(row: OperationRow): string {
   if (row.type === "rotation") {
     if (row.statusKey === "failed") return translateNow("operations.summary.rotationFailed");
     if (row.statusKey === "running") return translateNow("operations.summary.rotationRunning");
+    if (row.statusKey === "cancelled") return translateNow("operations.summary.rotationCancelled");
     return translateNow("operations.summary.rotationCompleted");
   }
   return translateNow("operations.summary.approval", {
@@ -746,6 +749,7 @@ function operationSummary(row: OperationRow): string {
 }
 
 function humanStatus(row: OperationRow): string {
+  if (row.statusKey === "cancelled") return translateNow("lifecycle.status.cancelled");
   if (row.statusKey === "awaiting_approval") return translateNow("operations.status.awaitingApproval");
   if (row.statusKey === "verify_failed") return translateNow("operations.status.verificationFailed");
   if (row.statusKey === "delivered") return translateNow("operations.status.delivered");
@@ -863,7 +867,7 @@ function RotationRunsSection() {
       ),
     },
     { id: "trigger", header: "Trigger", cell: (row) => row.trigger },
-    { id: "status", header: "Status", cell: (row) => <StatusBadge value={row.status} label={row.status} tone={rotationRunTone(row.status)} /> },
+    { id: "status", header: "Status", cell: (row) => <StatusBadge value={row.status} tone={rotationRunTone(row.status)} /> },
     { id: "completed", header: "Completed", cell: (row) => (row.completed_at ? formatDateTime(row.completed_at) : "-") },
   ];
 
@@ -946,7 +950,7 @@ function RotationRunDetailDialog({ onClose, run }: { run: RotationRun; onClose: 
           {run.identity_id}
         </RotationRunDetailRow>
         <RotationRunDetailRow term="Status">
-          <StatusBadge value={run.status} label={run.status} tone={rotationRunTone(run.status)} />
+          <StatusBadge value={run.status} tone={rotationRunTone(run.status)} />
         </RotationRunDetailRow>
         <RotationRunDetailRow term="Trigger">{run.trigger}</RotationRunDetailRow>
         <RotationRunDetailRow term="Reason">{run.reason || "-"}</RotationRunDetailRow>
@@ -994,6 +998,7 @@ function RotationRunDetailRow({ children, mono = false, term }: { term: string; 
 function rotationRunTone(status: RotationRun["status"]) {
   if (status === "succeeded") return "success";
   if (status === "failed") return "critical";
+  if (status === "cancelled") return "neutral";
   return "info";
 }
 

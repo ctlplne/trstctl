@@ -3292,7 +3292,7 @@ func componentSchemas() map[string]*Schema {
 	}, "served", "pools")
 	rotationRun := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "identity_id": uuid(), "outbox_id": {Type: "integer"},
-		"status":  {Type: "string", Enum: []string{"running", "succeeded", "failed"}},
+		"status":  {Type: "string", Enum: []string{"running", "succeeded", "failed", "cancelled"}, Description: "Cancelled means retained identity revocation or retirement stopped queued issuance work; it does not undo an external effect."},
 		"trigger": str(), "reason": str(), "predecessor_fingerprint": str(),
 		"successor_fingerprint": str(), "rollback_ref": str(), "error": str(),
 		"idempotency_key": str(), "created_at": timestamp(), "updated_at": timestamp(),

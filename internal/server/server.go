@@ -3214,9 +3214,11 @@ const (
 // deployed->renewing lifecycle transition; the outbox then mints the successor
 // through ca.renew. It also scans active certificates inside the alert window and
 // queues notification.expiry rows; the outbox then fans them to configured notify
-// channels. A sweep error is logged and the next tick retries.
+// channels. Retained revocation/retirement authority also stops idle issuance
+// work, including when new renewal starts are disabled. A sweep error is logged
+// and the next tick retries.
 func (s *Server) RunLifecycleScheduler(ctx context.Context) {
-	if (s.lifecycleRenewBefore <= 0 && s.lifecycleAlertBefore <= 0 && s.ownershipAttestationCadence <= 0) || s.orch == nil || s.store == nil {
+	if s.orch == nil || s.store == nil {
 		return
 	}
 	_, _ = s.RunLifecycleOnce(ctx)
@@ -3249,10 +3251,24 @@ func (s *Server) RunLifecycleOnce(ctx context.Context) (int, error) {
 // rewriting signed validity or changing the host clock. Alert workers retain
 // their own clocks, as they do in an ordinary sweep.
 func (s *Server) runLifecycleOnceAt(ctx context.Context, renewalAt time.Time) (int, error) {
-	if (s.lifecycleRenewBefore <= 0 && s.lifecycleAlertBefore <= 0 && s.ownershipAttestationCadence <= 0) || s.orch == nil || s.store == nil {
+	if s.orch == nil || s.store == nil {
 		return 0, nil
 	}
 	now := renewalAt.UTC()
+	// Stopping issuance remains active during maintenance windows and when
+	// automatic renewal is disabled. Only idle work is cancelled; live leases
+	// retain their original completion/report path until they finish or expire.
+	stoppedTenants, err := s.store.TenantsWithStoppedIdentityWork(ctx, now)
+	if err != nil {
+		s.observeLifecycleSweep(0, 0, err)
+		return 0, err
+	}
+	for _, tenant := range stoppedTenants {
+		if _, err := s.orch.ReconcileStoppedIdentityWork(ctx, tenant, now); err != nil {
+			s.observeLifecycleSweep(0, 0, err)
+			return 0, err
+		}
+	}
 	queued := 0
 	if s.lifecycleRenewBefore > 0 {
 		// D6: a closed maintenance window DEFERS renewals, it never drops them.

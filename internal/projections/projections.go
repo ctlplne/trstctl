@@ -6106,11 +6106,18 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			if err := p.store.SetIdentityStatusTx(ctx, tx, e.TenantID, pl.IdentityID, pl.To); err != nil {
 				return err
 			}
-			return p.store.AppendIdentityTransitionTx(ctx, tx, e.TenantID, store.IdentityTransition{
+			if err := p.store.AppendIdentityTransitionTx(ctx, tx, e.TenantID, store.IdentityTransition{
 				IdentityID: pl.IdentityID, Seq: e.Sequence, FromState: pl.From, ToState: pl.To,
 				EventType: e.Type, Reason: pl.Reason, OccurredAt: e.Time,
 				IdempotencyKey: pl.IdempotencyKey, SubjectCSRPEM: pl.SubjectCSRPEM,
-			})
+			}); err != nil {
+				return err
+			}
+			if pl.To == "revoked" || pl.To == "retired" {
+				_, err := p.stopIdentityWorkTx(ctx, tx, e.TenantID, pl.IdentityID, time.Now().UTC())
+				return err
+			}
+			return nil
 		}
 		return nil
 	}

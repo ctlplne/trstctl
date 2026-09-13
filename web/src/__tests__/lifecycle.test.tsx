@@ -100,12 +100,14 @@ async function confirmReviewedAction(user: ReturnType<typeof userEvent.setup>) {
 
 describe("lifecycle actions from the UI", () => {
   it.each([
-    ["revoked", "Revoked; evidence is retained."],
-    ["retired", "Retired; no further action is available."],
-  ])("keeps a %s identity terminal despite retained running rotation evidence", async (status, summary) => {
+    ["revoked", "Revoked; evidence is retained.", "running"],
+    ["retired", "Retired; no further action is available.", "running"],
+    ["revoked", "Revoked; evidence is retained.", "cancelled"],
+    ["retired", "Retired; no further action is available.", "cancelled"],
+  ])("keeps a %s identity terminal with summary %s and %s rotation evidence", async (status, summary, runStatus) => {
     apiMock.identities.mockResolvedValue([{ id: "stopped-mail", name: "stopped-mail.example.test", kind: "x509_certificate", status }]);
     apiMock.rotationRuns.mockResolvedValue({
-      items: [{ id: "unfinished-renewal", identity_id: "stopped-mail", status: "running", trigger: "scheduler", updated_at: "2026-09-12T23:14:00Z" }],
+      items: [{ id: "unfinished-renewal", identity_id: "stopped-mail", status: runStatus, trigger: "scheduler", updated_at: "2026-09-12T23:14:00Z" }],
     });
     apiMock.connectorDeliveries.mockResolvedValue({
       items: [{ id: "prior-delivery", identity_id: "stopped-mail", status: "verified", updated_at: "2026-09-12T23:11:00Z" }],
@@ -115,6 +117,11 @@ describe("lifecycle actions from the UI", () => {
     await userEvent.setup().click(screen.getByText("Delivery and rotation evidence", { selector: "summary" }));
     const history = await screen.findByRole("table", { name: "Loaded lifecycle rotation runs" });
     expect(await within(history).findByText("scheduler")).toBeInTheDocument();
+    if (runStatus === "cancelled") {
+      const badge = await within(history).findByText("Cancelled");
+      expect(badge).toHaveAttribute("data-status-value", "cancelled");
+      expect(badge.querySelector("[data-status-dot]")).toHaveAttribute("data-status-dot", "neutral");
+    }
     await waitFor(() => expect(row).toHaveTextContent(summary));
     expect(row).not.toHaveTextContent("Rotation is in progress.");
     expect(row).not.toHaveTextContent("Delivered successfully.");
@@ -1317,12 +1324,12 @@ describe("lifecycle actions from the UI", () => {
     expect(screen.getByText(/Renew 30 days before expiry/)).toBeInTheDocument();
     expect(screen.getByText(/ARI window opens first/)).toBeInTheDocument();
     expect(screen.getByText(/Maintenance windows pause new starts/)).toBeInTheDocument();
-    expect(screen.getByText(/Queued work cannot be safely cancelled/)).toBeInTheDocument();
+    expect(screen.getByText(/Revocation or retirement cancels queued issuance and renewal retries/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Review renewal now" })).toBeInTheDocument();
     expect(apiMock.lifecycleAutomationPlan).toHaveBeenCalled();
 
     await user.click((await screen.findAllByText("Delivery and rotation evidence"))[0]);
-    expect(screen.getAllByText("succeeded").length).toBeGreaterThan(0);
+    expect(screen.getByText("Succeeded", { selector: "[data-status-value='succeeded']" })).toBeInTheDocument();
     expect(screen.getAllByText("scheduler").length).toBeGreaterThan(0);
     expect(screen.getByText("restore certificate fingerprint old")).toBeInTheDocument();
   });

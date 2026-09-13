@@ -6611,7 +6611,7 @@ export interface RotationRun {
   predecessor_fingerprint?: string;
   reason?: string;
   rollback_ref?: string;
-  status: "running" | "succeeded" | "failed";
+  status: "running" | "succeeded" | "failed" | "cancelled";
   successor_fingerprint?: string;
   tenant_id: string;
   trigger: string;
