@@ -198,6 +198,78 @@ describe("Global Alert Center", () => {
     expect(await screen.findByText("inventory complete")).toBeInTheDocument();
   });
 
+  it("keeps separate renewal failures visible when identities share a hostname", async () => {
+    apiMock.notifications.mockResolvedValue({
+      items: [
+        {
+          id: "37",
+          tenant_id: "t1",
+          destination: "notification.renewal_failure",
+          kind: "identity.renewal_failed",
+          subject: "mail.partner-lab.example.com",
+          detail: "The retired mail identity failed before replacement.",
+          severity: "warning",
+          status: "dead",
+          attempts: 10,
+          created_at: "2026-09-12T23:14:01Z",
+        },
+        {
+          id: "179",
+          tenant_id: "t1",
+          destination: "notification.renewal_failure",
+          kind: "identity.renewal_failed",
+          subject: "mail.partner-lab.example.com",
+          detail: "The current mail identity failed during the signer outage.",
+          severity: "warning",
+          status: "sent",
+          attempts: 1,
+          created_at: "2026-09-13T01:44:49Z",
+        },
+      ],
+    });
+    renderNotifications();
+    expect(await screen.findByText("The current mail identity failed during the signer outage.")).toBeInTheDocument();
+    expect(screen.getByText("The retired mail identity failed before replacement.")).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { level: 3, name: "mail.partner-lab.example.com" })).toHaveLength(2);
+    expect(screen.getByRole("heading", { name: "2 alert chains need attention" })).toBeInTheDocument();
+  });
+
+  it("does not collapse different risks for the same certificate", async () => {
+    apiMock.notifications.mockResolvedValue({
+      items: [
+        {
+          id: "expiry",
+          tenant_id: "t1",
+          destination: "notification.expiry",
+          kind: "certificate.expiring",
+          certificate_id: "mail-cert",
+          subject: "mail.partner-lab.example.com",
+          detail: "The mail certificate expires soon.",
+          severity: "critical",
+          status: "sent",
+          attempts: 1,
+          created_at: "2026-09-13T01:40:00Z",
+        },
+        {
+          id: "wrong-leaf",
+          tenant_id: "t1",
+          destination: "notification.verification",
+          kind: "endpoint.verification_failed",
+          certificate_id: "mail-cert",
+          subject: "mail.partner-lab.example.com",
+          detail: "The listener is serving the wrong leaf.",
+          severity: "critical",
+          status: "sent",
+          attempts: 1,
+          created_at: "2026-09-13T01:41:00Z",
+        },
+      ],
+    });
+    renderNotifications();
+    expect(await screen.findByText("The listener is serving the wrong leaf.")).toBeInTheDocument();
+    expect(screen.getByText("The mail certificate expires soon.")).toBeInTheDocument();
+  });
+
   it("does not call a route ready when it points only to a missing channel", async () => {
     apiMock.notificationChannels.mockResolvedValue({
       items: catalog.map((channel) => (channel.id === "email" ? { ...channel, configured: true, enabled: true } : channel)),

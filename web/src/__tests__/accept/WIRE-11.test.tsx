@@ -131,7 +131,8 @@ describe("WIRE-11 identity delivery and rotation evidence", () => {
     expect(screen.getAllByText("prod/payments-tls").length).toBeGreaterThan(0);
     await user.click(screen.getByText("Show exact reason"));
     expect(screen.getByText("outbox_delivered")).toBeInTheDocument();
-    expect(screen.getAllByText("succeeded").length).toBeGreaterThan(0);
+    // The badge displays a readable label and retains the exact served status.
+    expect(screen.getByText("Succeeded")).toHaveAttribute("data-status-value", "succeeded");
     expect(screen.getAllByText("scheduler").length).toBeGreaterThan(0);
     expect(screen.getByText("restore sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")).toBeInTheDocument();
 

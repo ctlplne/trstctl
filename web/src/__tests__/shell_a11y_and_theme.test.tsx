@@ -906,6 +906,7 @@ describe("app shell accessibility and theme", () => {
           id: "critical",
           tenant_id: "t1",
           destination: "notification.email",
+          kind: "certificate.expiring",
           certificate_id: "cert-1",
           subject: "payments-api",
           severity: "critical",
@@ -917,6 +918,9 @@ describe("app shell accessibility and theme", () => {
           id: "duplicate",
           tenant_id: "t1",
           destination: "notification.slack",
+          // Two channels describe the same certificate risk; a shared display
+          // name alone must never make unrelated alerts count as duplicates.
+          kind: "certificate.expiring",
           certificate_id: "cert-1",
           subject: "payments-api",
           severity: "warning",

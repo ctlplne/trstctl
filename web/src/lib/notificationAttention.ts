@@ -1,17 +1,23 @@
 import type { Notification } from "@/lib/api";
 
 export function meaningfulAttention(notifications: Notification[]): Notification[] {
-  const bySubject = new Map<string, Notification>();
+  const byRisk = new Map<string, Notification>();
   for (const notification of notifications) {
     const meaningful =
       notification.status === "dead" ||
       ((notification.severity === "critical" || notification.severity === "warning") && notification.status !== "read" && !notification.read_at);
     if (!meaningful) continue;
-    const key = notification.certificate_id || notification.subject || notification.id;
-    const current = bySubject.get(key);
-    if (!current || priority(notification) > priority(current)) bySubject.set(key, notification);
+    // A display name cannot identify a risk: a replacement identity can reuse
+    // the same hostname, and one certificate can have different kinds of alert.
+    // Only collapse repeated alerts for the same tenant, certificate and kind.
+    // Without that stable identity, preserve the individual notification.
+    const key = notification.certificate_id
+      ? JSON.stringify([notification.tenant_id, notification.certificate_id, notification.kind || notification.destination])
+      : `notification:${notification.id}`;
+    const current = byRisk.get(key);
+    if (!current || priority(notification) > priority(current)) byRisk.set(key, notification);
   }
-  return [...bySubject.values()].sort(
+  return [...byRisk.values()].sort(
     (left, right) => priority(right) - priority(left) || String(left.not_after || left.created_at).localeCompare(String(right.not_after || right.created_at)),
   );
 }
