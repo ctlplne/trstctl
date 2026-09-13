@@ -5,11 +5,14 @@ package relay
 import "trstctl.com/trstctl/internal/crypto/tlsprobe"
 
 // connectorTLSNegotiation follows the explicit connector, never a guessed
-// port. PostgreSQL needs SSLRequest even on a nondefault port. Other existing
-// connectors retain their direct-TLS behavior.
+// port. PostgreSQL and MySQL need their own SSLRequest even on nondefault ports.
+// Other existing connectors retain their direct-TLS behavior.
 func connectorTLSNegotiation(name string) tlsprobe.PreHandshake {
-	if name == "postgresql" {
+	switch name {
+	case "postgresql":
 		return tlsprobe.PostgresSSLRequest
+	case "mysql":
+		return tlsprobe.MySQLSSLRequest
 	}
 	return nil
 }

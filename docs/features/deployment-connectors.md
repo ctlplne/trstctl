@@ -520,6 +520,12 @@ to prove which certificate the application actually serves.
 
 `verify_address` plus `verify_server_name` tell the agent which listener to
 re-handshake after the reload, so a receipt is backed by an independent TLS check.
+For MySQL, preview, post-deployment checks, and endpoint verification first read
+the server greeting and send MySQL's SSLRequest. Select the `mysql` connector even
+when the listener uses a nondefault port; the agent does not guess the protocol
+from the port number. A server that declines TLS fails verification. This check
+observes the certificate without sending a database username, password, or query;
+application availability still needs a separate authenticated SQL check.
 Use `executor: agent` whenever the identity's CA is external: an external CA
 answers asynchronously, and the endpoint lifecycle preview refuses control-plane key
 custody for an external CA on a host connector rather than risk a certificate whose
