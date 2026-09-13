@@ -327,7 +327,8 @@ func TestRenewalFailureRoutesToItsIdentityAndKeepsOneReceiverReceipt(t *testing.
 	}}
 	d.SetPolicyResolver(resolver)
 	alert := notify.Alert{Kind: notify.KindRenewalFailed, TenantID: "t1", IdentityID: "identity-payments",
-		Subject: "payments.example.test", OwnerID: "platform", OperationID: "renewal-failure:event-a",
+		CertificateID: "historical-installed-leaf",
+		Subject:       "payments.example.test", OwnerID: "platform", OperationID: "renewal-failure:event-a",
 		Severity: notify.AlertSeverityWarning, Detail: "Check retry status."}
 	payload, _ := json.Marshal(alert)
 	message := notify.DeliveryMessage{TenantID: "t1", Destination: notify.DestinationRenewalFailure,
@@ -342,6 +343,56 @@ func TestRenewalFailureRoutesToItsIdentityAndKeepsOneReceiverReceipt(t *testing.
 	}
 	if len(channel.got) != 1 || !strings.HasPrefix(notify.FormatMessage(alert), "Certificate renewal attempt failed: payments.example.test") {
 		t.Fatalf("expected one clearly named failure alert, received %d", len(channel.got))
+	}
+}
+
+func TestDeliveryReceiptRetainsTheRouteThatActuallySentEachChannel(t *testing.T) {
+	email := &capturingNotifier{name: "email"}
+	pager := &capturingNotifier{name: "pagerduty", err: errors.New("receiver temporarily unavailable")}
+	ledger := newMemoryDeliveryLedger()
+	d := notify.NewDispatcher(email, pager)
+	d.SetDeliveryReceiptLedger(ledger)
+	resolver := &effectiveRoutingResolver{policy: notify.RoutingPolicy{
+		TenantID: "t1", ID: "original-policy", ScopeKind: "asset", ScopeRef: "identity/payments",
+		DefaultChannels: []string{"email", "pagerduty"},
+	}}
+	d.SetPolicyResolver(resolver)
+	payload, _ := json.Marshal(notify.Alert{Kind: notify.KindRenewalFailed, TenantID: "t1", IdentityID: "payments"})
+	message := notify.DeliveryMessage{TenantID: "t1", Destination: notify.DestinationRenewalFailure,
+		IdempotencyKey: "failure-a", Payload: payload, OutboxID: 91, Attempts: 1}
+	if err := d.DispatchMessage(context.Background(), message); err == nil {
+		t.Fatal("expected the failed pager delivery to retain the outbox retry")
+	}
+	if len(ledger.receipts) != 1 {
+		t.Fatalf("receipts = %d, want only the successful email", len(ledger.receipts))
+	}
+	var first notify.NotificationDeliveryReceipt
+	for _, rec := range ledger.receipts {
+		first = rec
+	}
+	if first.Channel != "email" || first.RoutingSource != "inherited_policy" || first.RoutingPolicyID != "original-policy" || first.RoutingPolicyScope != "asset" || len(first.RoutingPolicyDigest) != 64 {
+		t.Fatalf("successful channel lacks its dispatch-time routing evidence: %+v", first)
+	}
+	// Configuration may change while a failed peer retries. Keep the successful
+	// receipt unchanged and record the route used by the newly successful peer.
+	resolver.policy.ID = "replacement-policy"
+	resolver.policy.ScopeKind = "owner"
+	resolver.policy.ScopeRef = "owner/platform"
+	pager.err = nil
+	message.Attempts = 2
+	if err := d.DispatchMessage(context.Background(), message); err != nil {
+		t.Fatal(err)
+	}
+	if len(email.got) != 1 || len(pager.got) != 2 || len(ledger.receipts) != 2 {
+		t.Fatalf("retry sent email=%d pager=%d receipts=%d", len(email.got), len(pager.got), len(ledger.receipts))
+	}
+	for _, rec := range ledger.receipts {
+		if rec.Channel == "email" && rec != first {
+			t.Fatalf("retry rewrote successful route: before=%+v after=%+v", first, rec)
+		}
+		if rec.Channel == "pagerduty" && (rec.RoutingPolicyID != "replacement-policy" || rec.RoutingPolicyScope != "owner" || rec.RoutingPolicyDigest == first.RoutingPolicyDigest || rec.Attempts != 2) {
+			t.Fatalf("retried receiver has incorrect route: %+v", rec)
+		}
 	}
 }
 

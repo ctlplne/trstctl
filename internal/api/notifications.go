@@ -28,34 +28,48 @@ import (
 )
 
 type notificationResponse struct {
-	ID                     string                  `json:"id"`
-	TenantID               string                  `json:"tenant_id"`
-	Destination            string                  `json:"destination"`
-	Kind                   string                  `json:"kind,omitempty"`
-	IdentityID             string                  `json:"identity_id,omitempty"`
-	OperationID            string                  `json:"operation_id,omitempty"`
-	CertificateFingerprint string                  `json:"certificate_fingerprint,omitempty"`
-	DeploymentReceiptID    string                  `json:"deployment_receipt_id,omitempty"`
-	DeploymentRecordedAt   *time.Time              `json:"deployment_recorded_at,omitempty"`
-	CertificateID          string                  `json:"certificate_id,omitempty"`
-	Subject                string                  `json:"subject,omitempty"`
-	Serial                 string                  `json:"serial,omitempty"`
-	NotAfter               *time.Time              `json:"not_after,omitempty"`
-	Detail                 string                  `json:"detail,omitempty"`
-	Severity               string                  `json:"severity,omitempty"`
-	RoutingPolicyID        string                  `json:"routing_policy_id,omitempty"`
-	ThresholdDays          *int                    `json:"threshold_days,omitempty"`
-	OwnerID                string                  `json:"owner_id,omitempty"`
-	OwnerName              string                  `json:"owner_name,omitempty"`
-	OwnerEmail             string                  `json:"owner_email,omitempty"`
-	EscalationRecipients   []notify.AlertRecipient `json:"escalation_recipients,omitempty"`
-	Status                 string                  `json:"status"`
-	Attempts               int                     `json:"attempts"`
-	LastError              string                  `json:"last_error,omitempty"`
-	IdempotencyKey         string                  `json:"idempotency_key,omitempty"`
-	CreatedAt              time.Time               `json:"created_at"`
-	DeliveredAt            *time.Time              `json:"delivered_at,omitempty"`
-	ReadAt                 *time.Time              `json:"read_at,omitempty"`
+	ID                     string                         `json:"id"`
+	TenantID               string                         `json:"tenant_id"`
+	Destination            string                         `json:"destination"`
+	Kind                   string                         `json:"kind,omitempty"`
+	IdentityID             string                         `json:"identity_id,omitempty"`
+	OperationID            string                         `json:"operation_id,omitempty"`
+	CertificateFingerprint string                         `json:"certificate_fingerprint,omitempty"`
+	DeploymentReceiptID    string                         `json:"deployment_receipt_id,omitempty"`
+	DeploymentRecordedAt   *time.Time                     `json:"deployment_recorded_at,omitempty"`
+	CertificateID          string                         `json:"certificate_id,omitempty"`
+	Subject                string                         `json:"subject,omitempty"`
+	Serial                 string                         `json:"serial,omitempty"`
+	NotAfter               *time.Time                     `json:"not_after,omitempty"`
+	Detail                 string                         `json:"detail,omitempty"`
+	Severity               string                         `json:"severity,omitempty"`
+	RoutingPolicyID        string                         `json:"routing_policy_id,omitempty"`
+	ThresholdDays          *int                           `json:"threshold_days,omitempty"`
+	OwnerID                string                         `json:"owner_id,omitempty"`
+	OwnerName              string                         `json:"owner_name,omitempty"`
+	OwnerEmail             string                         `json:"owner_email,omitempty"`
+	EscalationRecipients   []notify.AlertRecipient        `json:"escalation_recipients,omitempty"`
+	Status                 string                         `json:"status"`
+	Attempts               int                            `json:"attempts"`
+	LastError              string                         `json:"last_error,omitempty"`
+	IdempotencyKey         string                         `json:"idempotency_key,omitempty"`
+	CreatedAt              time.Time                      `json:"created_at"`
+	DeliveredAt            *time.Time                     `json:"delivered_at,omitempty"`
+	ReadAt                 *time.Time                     `json:"read_at,omitempty"`
+	Deliveries             []notificationDeliveryResponse `json:"deliveries,omitempty"`
+}
+
+// Delivery receipts report historical successful channel effects. A missing
+// routing source on an older receipt means unknown, never today's policy.
+type notificationDeliveryResponse struct {
+	ID                  string    `json:"id"`
+	Channel             string    `json:"channel"`
+	Attempts            int       `json:"attempts"`
+	DeliveredAt         time.Time `json:"delivered_at"`
+	RoutingSource       string    `json:"routing_source,omitempty"`
+	RoutingPolicyID     string    `json:"routing_policy_id,omitempty"`
+	RoutingPolicyScope  string    `json:"routing_policy_scope,omitempty"`
+	RoutingPolicyDigest string    `json:"routing_policy_digest,omitempty"`
 }
 
 type notificationChannelResponse struct {
@@ -945,7 +959,21 @@ func (a *API) getNotification(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	a.writeJSON(w, http.StatusOK, toNotificationResponse(row))
+	receipts, err := a.store.ListNotificationDeliveryReceipts(r.Context(), tenantID, row.Destination,
+		crypto.SHA256Hex([]byte(row.IdempotencyKey)), crypto.SHA256Hex(row.Payload))
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	response := toNotificationResponse(row)
+	for _, receipt := range receipts {
+		response.Deliveries = append(response.Deliveries, notificationDeliveryResponse{
+			ID: receipt.ID, Channel: receipt.Channel, Attempts: receipt.Attempts, DeliveredAt: receipt.DeliveredAt,
+			RoutingSource: receipt.RoutingSource, RoutingPolicyID: receipt.RoutingPolicyID,
+			RoutingPolicyScope: receipt.RoutingPolicyScope, RoutingPolicyDigest: receipt.RoutingPolicyDigest,
+		})
+	}
+	a.writeJSON(w, http.StatusOK, response)
 }
 
 //trstctl:mutation

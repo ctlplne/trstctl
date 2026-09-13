@@ -12091,6 +12091,8 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             delivered_at?: string;
+            /** @description Successful channel receipts for this exact command, included on notification detail reads. Current policy changes do not rewrite historical receipts. */
+            deliveries?: components["schemas"]["NotificationDelivery"][];
             /** Format: uuid */
             deployment_receipt_id?: string;
             /**
@@ -12174,6 +12176,21 @@ export interface components {
             /** @enum {string} */
             severity?: "low" | "informational" | "warning" | "critical";
             subject?: string;
+        };
+        NotificationDelivery: {
+            attempts: number;
+            channel: string;
+            /** Format: date-time */
+            delivered_at: string;
+            id: string;
+            routing_policy_digest?: string;
+            routing_policy_id?: string;
+            routing_policy_scope?: string;
+            /**
+             * @description Selection used by this successful channel. Absent on historical receipts that did not retain routing evidence.
+             * @enum {string}
+             */
+            routing_source?: "explicit_policy" | "inherited_policy" | "default_policy" | "all_channels" | "channel_test";
         };
         NotificationDigestPreview: {
             interval_seconds: number;

@@ -2264,7 +2264,15 @@ type NotificationDeliveryRecorded struct {
 	OutboxID              *int64    `json:"outbox_id,omitempty"`
 	Attempts              int       `json:"attempts,omitempty"`
 	DeliveredAt           time.Time `json:"delivered_at,omitempty"`
+	RoutingSource         string    `json:"routing_source,omitempty"`
+	RoutingPolicyID       string    `json:"routing_policy_id,omitempty"`
+	RoutingPolicyScope    string    `json:"routing_policy_scope,omitempty"`
+	RoutingPolicyDigest   string    `json:"routing_policy_digest,omitempty"`
 }
+
+// NotificationDeliveryRoutingSchemaVersion adds dispatch-time routing evidence.
+// Version 1 receipts have no evidence about the policy selected by the sender.
+const NotificationDeliveryRoutingSchemaVersion = 2
 
 // NotificationChannelUpserted is the payload of notification.channel.upserted.
 // It stores delivery metadata plus a credential reference, never credential
@@ -3405,7 +3413,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventNotificationRoutingPolicyDeleted:         {1: true},
 	EventNotificationThresholdDelivered:           {1: true},
 	EventNotificationTestQueued:                   {1: true},
-	EventNotificationDeliveryRecorded:             {1: true},
+	EventNotificationDeliveryRecorded:             {1: true, NotificationDeliveryRoutingSchemaVersion: true},
 	EventCBOMAssetObserved:                        {1: true},
 	EventDeploymentTargetUpserted:                 {1: true},
 	EventDeploymentTargetDeleted:                  {1: true},
@@ -5133,6 +5141,12 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
+		if e.SchemaVersion == NotificationDeliveryRoutingSchemaVersion && pl.RoutingSource == "" {
+			return fmt.Errorf("projections: notification delivery schema 2 requires routing source")
+		}
+		if e.SchemaVersion < NotificationDeliveryRoutingSchemaVersion && (pl.RoutingSource != "" || pl.RoutingPolicyID != "" || pl.RoutingPolicyScope != "" || pl.RoutingPolicyDigest != "") {
+			return fmt.Errorf("projections: notification delivery schema 1 cannot carry routing evidence")
+		}
 		deliveredAt := pl.DeliveredAt
 		if deliveredAt.IsZero() {
 			deliveredAt = e.Time
@@ -5141,7 +5155,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			TenantID: e.TenantID, ID: pl.ID, Destination: pl.Destination,
 			NotificationKeyDigest: pl.NotificationKeyDigest, PayloadDigest: pl.PayloadDigest,
 			Channel: pl.Channel, OutboxID: pl.OutboxID, Attempts: pl.Attempts,
-			DeliveredAt: deliveredAt,
+			DeliveredAt: deliveredAt, RoutingSource: pl.RoutingSource,
+			RoutingPolicyID: pl.RoutingPolicyID, RoutingPolicyScope: pl.RoutingPolicyScope,
+			RoutingPolicyDigest: pl.RoutingPolicyDigest,
 		})
 	case EventNotificationThresholdDelivered:
 		var pl NotificationThresholdDelivered

@@ -142,6 +142,10 @@ type NotificationDeliveryReceipt struct {
 	OutboxID              *int64
 	Attempts              int
 	DeliveredAt           time.Time
+	RoutingSource         string
+	RoutingPolicyID       string
+	RoutingPolicyScope    string
+	RoutingPolicyDigest   string
 }
 
 // DeliveryReceiptLedger is the event-sourced per-channel delivery authority.
@@ -243,7 +247,7 @@ func (d *Dispatcher) DispatchMessage(ctx context.Context, message DeliveryMessag
 }
 
 func (d *Dispatcher) dispatchAlert(ctx context.Context, message DeliveryMessage, alert Alert) error {
-	channels, err := d.effectiveChannels(ctx, alert)
+	channels, route, err := d.effectiveChannels(ctx, alert)
 	if err != nil {
 		return err
 	}
@@ -264,6 +268,10 @@ func (d *Dispatcher) dispatchAlert(ctx context.Context, message DeliveryMessage,
 		}
 		seenChannels[channel] = true
 		receipt := notificationDeliveryReceipt(message, channel)
+		receipt.RoutingSource = route.source
+		receipt.RoutingPolicyID = route.policyID
+		receipt.RoutingPolicyScope = route.policyScope
+		receipt.RoutingPolicyDigest = route.policyDigest
 		delivered, err := d.deliveryAlreadyRecorded(ctx, receipt)
 		if err != nil {
 			failed = append(failed, ch.Name()+": delivery receipt check: "+err.Error())
@@ -426,9 +434,25 @@ func (a Alert) thresholdDedupSubject() (string, bool) {
 	return subject, true
 }
 
-func (d *Dispatcher) effectiveChannels(ctx context.Context, alert Alert) ([]Notifier, error) {
+// routingEvidence describes the selection that produced this dispatch's channel
+// set. It is retained only after a channel succeeds, without copying receiver
+// endpoints, credentials, owner contacts, or mutable policy labels.
+type routingEvidence struct {
+	source, policyID, policyScope, policyDigest string
+}
+
+func policyRoutingEvidence(source string, p RoutingPolicy) routingEvidence {
+	// RoutingPolicy contains only the routing matrix and its tenant/scope binding.
+	// JSON sorts map keys, so the digest does not depend on Go map iteration.
+	payload, _ := json.Marshal(p)
+	return routingEvidence{source: source, policyID: p.ID, policyScope: p.ScopeKind,
+		policyDigest: crypto.SHA256Hex(payload)}
+}
+
+func (d *Dispatcher) effectiveChannels(ctx context.Context, alert Alert) ([]Notifier, routingEvidence, error) {
+	route := routingEvidence{source: "all_channels"}
 	if len(d.channels) == 0 && d.channelSource == nil {
-		return nil, nil
+		return nil, route, nil
 	}
 	if alert.Kind == KindNotificationChannelTest && strings.TrimSpace(alert.TargetChannel) != "" {
 		requested := []string{alert.TargetChannel}
@@ -436,51 +460,60 @@ func (d *Dispatcher) effectiveChannels(ctx context.Context, alert Alert) ([]Noti
 		if len(channels) == 0 && d.channelSource != nil {
 			dynamic, err := d.channelSource.ResolveNotificationChannels(ctx, alert.TenantID, requested)
 			if err != nil {
-				return nil, fmt.Errorf("notify: resolve channel %q: %w", alert.TargetChannel, err)
+				return nil, route, fmt.Errorf("notify: resolve channel %q: %w", alert.TargetChannel, err)
 			}
 			channels = append(channels, dynamic...)
 		}
 		if len(missingChannelNames(requested, channels)) != 0 {
-			return nil, fmt.Errorf("notify: channel %q is not configured", alert.TargetChannel)
+			return nil, route, fmt.Errorf("notify: channel %q is not configured", alert.TargetChannel)
 		}
-		return channels, nil
+		return channels, routingEvidence{source: "channel_test"}, nil
 	}
 	var names []string
 	if alert.RoutingPolicyID != "" && d.resolver != nil {
 		policy, ok, err := d.resolver.ResolveNotificationPolicy(ctx, alert.TenantID, alert.RoutingPolicyID)
 		if err != nil {
-			return nil, fmt.Errorf("notify: resolve routing policy: %w", err)
+			return nil, route, fmt.Errorf("notify: resolve routing policy: %w", err)
 		}
 		if ok {
 			names = policy.EffectiveAlertChannels(alert.Severity)
+			if len(names) > 0 {
+				route = policyRoutingEvidence("explicit_policy", policy)
+			}
 		}
 	}
 	if len(names) == 0 && strings.TrimSpace(alert.RoutingPolicyID) == "" {
 		if resolver, ok := d.resolver.(EffectivePolicyResolver); ok {
 			policy, found, err := resolver.ResolveEffectiveNotificationPolicy(ctx, alert.TenantID, routingSelectorForAlert(alert))
 			if err != nil {
-				return nil, fmt.Errorf("notify: resolve effective routing policy: %w", err)
+				return nil, route, fmt.Errorf("notify: resolve effective routing policy: %w", err)
 			}
 			if found {
 				names = policy.EffectiveAlertChannels(alert.Severity)
+				if len(names) > 0 {
+					route = policyRoutingEvidence("inherited_policy", policy)
+				}
 			}
 		}
 	}
 	if len(names) == 0 && d.defaultPolicy.hasRoutes() {
 		names = d.defaultPolicy.EffectiveAlertChannels(alert.Severity)
+		if len(names) > 0 {
+			route = policyRoutingEvidence("default_policy", d.defaultPolicy)
+		}
 	}
 	channels := d.channelsByName(names)
 	if d.channelSource != nil {
 		dynamic, err := d.channelSource.ResolveNotificationChannels(ctx, alert.TenantID, names)
 		if err != nil {
-			return nil, fmt.Errorf("notify: resolve tenant channels: %w", err)
+			return nil, route, fmt.Errorf("notify: resolve tenant channels: %w", err)
 		}
 		channels = append(channels, dynamic...)
 	}
 	if missing := missingChannelNames(names, channels); len(missing) > 0 {
-		return nil, fmt.Errorf("notify: requested channel(s) are not configured: %s", strings.Join(missing, ", "))
+		return nil, route, fmt.Errorf("notify: requested channel(s) are not configured: %s", strings.Join(missing, ", "))
 	}
-	return channels, nil
+	return channels, route, nil
 }
 
 func routingSelectorForAlert(alert Alert) RoutingSelector {
@@ -493,6 +526,12 @@ func routingSelectorForAlert(alert Alert) RoutingSelector {
 	}
 	if id := strings.TrimSpace(alert.OwnerID); id != "" {
 		selector.OwnerRef = "owner/" + id
+	}
+	// A renewal failure belongs to the lifecycle identity. Its certificate
+	// fields are historical evidence and must not displace an identity route.
+	if alert.Kind == KindRenewalFailed && strings.TrimSpace(alert.IdentityID) != "" {
+		selector.AssetRef = "identity/" + strings.TrimSpace(alert.IdentityID)
+		return selector
 	}
 	if id := strings.TrimSpace(alert.CertificateID); id != "" {
 		selector.AssetRef = "certificate/" + id

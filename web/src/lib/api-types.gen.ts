@@ -5219,6 +5219,7 @@ export interface Notification {
   certificate_id?: string;
   created_at: string;
   delivered_at?: string;
+  deliveries?: NotificationDelivery[];
   deployment_receipt_id?: string;
   deployment_recorded_at?: string;
   destination: string;
@@ -5291,6 +5292,17 @@ export interface NotificationChannelTestRequest {
   routing_policy_id?: string;
   severity?: "low" | "informational" | "warning" | "critical";
   subject?: string;
+}
+
+export interface NotificationDelivery {
+  attempts: number;
+  channel: string;
+  delivered_at: string;
+  id: string;
+  routing_policy_digest?: string;
+  routing_policy_id?: string;
+  routing_policy_scope?: string;
+  routing_source?: "explicit_policy" | "inherited_policy" | "default_policy" | "all_channels" | "channel_test";
 }
 
 export interface NotificationDigestPreview {

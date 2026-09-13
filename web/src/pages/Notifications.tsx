@@ -36,6 +36,7 @@ import {
   ViewIntroduction,
   type AlertCenterView,
 } from "@/pages/notifications/AlertCenterTabs";
+import { DeliveryReceipts } from "@/pages/notifications/DeliveryReceipts";
 
 type NotificationStatus = Notification["status"];
 type TestSeverity = "low" | "informational" | "warning" | "critical";
@@ -137,13 +138,19 @@ export function Notifications() {
   const [testResult, setTestResult] = useState<NotificationChannelTest | null>(null);
   const [routePreview, setRoutePreview] = useState<NotificationRoutingPolicyPreview | null>(null);
   const [previewBusy, setPreviewBusy] = useState(false);
-  const [detail, setDetail] = useState<Notification | null>(null);
+  const [selectedDetail, setDetail] = useState<Notification | null>(null);
   const [channelDialogOpen, setChannelDialogOpen] = useState(false);
   const channelDialogHeadingRef = useRef<HTMLHeadingElement>(null);
 
   const notificationQuery = useApiQuery(notificationQueryKey, () => api.notifications({ limit: 100 }), { live: { intervalMs: 30_000 } });
   const channelQuery = useApiQuery(channelQueryKey, () => api.notificationChannels(), { live: { intervalMs: 60_000 } });
   const policyQuery = useApiQuery(policyQueryKey, () => api.notificationRoutingPolicies(), { live: { intervalMs: 60_000 } });
+  const detailQuery = useApiQuery(["alert-center", "detail", selectedDetail?.id], () => api.notification(selectedDetail!.id), {
+    enabled: selectedDetail !== null,
+    live: { intervalMs: 10_000 },
+    retry: false,
+  });
+  const detail = selectedDetail ? (detailQuery.data ?? selectedDetail) : null;
   const notifications = useMemo(() => notificationQuery.data?.items ?? [], [notificationQuery.data]);
   const channels = channelQuery.data?.items ?? [];
   const policies = policyQuery.data?.items ?? [];
@@ -199,14 +206,8 @@ export function Notifications() {
     }
   }
 
-  async function openDetails(notification: Notification) {
+  function openDetails(notification: Notification) {
     setDetail(notification);
-    try {
-      const fresh = await api.notification(notification.id);
-      setDetail((current) => (current && current.id === notification.id ? fresh : current));
-    } catch {
-      // Keep the row snapshot when the fresh fetch fails.
-    }
   }
 
   async function requeue(notification: Notification) {
@@ -557,6 +558,13 @@ export function Notifications() {
             </p>
           </header>
           <div className="grid gap-4 p-5">
+            {detailQuery.error ? (
+              <ErrorState title={t("notifications.receipts.loadError")}>
+                <Button variant="ghost" onClick={detailQuery.refetch}>
+                  {t("notifications.receipts.retry")}
+                </Button>
+              </ErrorState>
+            ) : null}
             {detail.identity_id ? (
               <Link
                 className="text-sm font-medium text-primary underline underline-offset-4"
@@ -621,6 +629,11 @@ export function Notifications() {
                 <NotificationDetailRow term="Threshold days">{detail.threshold_days != null ? String(detail.threshold_days) : "-"}</NotificationDetailRow>
               </dl>
             </section>
+            {detailQuery.loading ? (
+              <LoadingState>{t("notifications.receipts.loading")}</LoadingState>
+            ) : detailQuery.data ? (
+              <DeliveryReceipts deliveries={detailQuery.data.deliveries} />
+            ) : null}
             <section aria-label={t("parity.ownership_3e90e4")}>
               <h3 className="text-sm font-semibold">{t("parity.ownership_3e90e4")}</h3>
               <dl className="mt-2 grid gap-2 text-sm">
@@ -634,7 +647,7 @@ export function Notifications() {
             <section aria-label={t("parity.routing_7d15dd")}>
               <h3 className="text-sm font-semibold">{t("parity.routing_7d15dd")}</h3>
               <dl className="mt-2 grid gap-2 text-sm">
-                <NotificationDetailRow term="Routing policy" mono>
+                <NotificationDetailRow term={t("notifications.receipts.requestedPolicy")} mono>
                   {detail.routing_policy_id || t("notifications.context.routingNotRetained")}
                 </NotificationDetailRow>
                 <NotificationDetailRow term="Kind">{detail.kind || "-"}</NotificationDetailRow>

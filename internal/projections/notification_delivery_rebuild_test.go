@@ -44,7 +44,8 @@ func TestNotificationOperationAndDeliveryReceiptRebuildFromEvents(t *testing.T) 
 		ID: "notification.delivery:rebuild", Destination: "notification.test",
 		NotificationKeyDigest: "key-digest", PayloadDigest: "payload-digest",
 		Channel: "slack", OutboxID: &outboxID, Attempts: 1,
-		DeliveredAt: queuedAt.Add(time.Second),
+		DeliveredAt:   queuedAt.Add(time.Second),
+		RoutingSource: "channel_test",
 	})
 	if err != nil {
 		t.Fatalf("marshal receipt event: %v", err)
@@ -52,6 +53,7 @@ func TestNotificationOperationAndDeliveryReceiptRebuildFromEvents(t *testing.T) 
 	receipt, err := log.Append(ctx, events.Event{
 		ID: "notification.delivery.recorded:rebuild", Type: projections.EventNotificationDeliveryRecorded,
 		TenantID: tenantA, Time: queuedAt.Add(time.Second), Data: receiptPayload,
+		SchemaVersion: projections.NotificationDeliveryRoutingSchemaVersion,
 	})
 	if err != nil {
 		t.Fatalf("append receipt event: %v", err)
@@ -79,7 +81,36 @@ func TestNotificationOperationAndDeliveryReceiptRebuildFromEvents(t *testing.T) 
 	if err != nil {
 		t.Fatalf("get rebuilt receipt: %v", err)
 	}
-	if got.Channel != "slack" || got.PayloadDigest != "payload-digest" {
+	if got.Channel != "slack" || got.PayloadDigest != "payload-digest" || got.RoutingSource != "channel_test" {
 		t.Fatalf("rebuilt receipt = %+v", got)
+	}
+}
+
+func TestNotificationDeliveryLegacyReceiptDoesNotInventRoutingEvidence(t *testing.T) {
+	ctx := context.Background()
+	st := newStore(t)
+	log := openLog(t)
+	projector := projections.New(st)
+	at := time.Now().UTC()
+	payload, _ := json.Marshal(projections.NotificationDeliveryRecorded{
+		ID: "notification.delivery:legacy", Destination: "notification.renewal_failure",
+		NotificationKeyDigest: "key", PayloadDigest: "payload", Channel: "email", DeliveredAt: at,
+	})
+	ev, err := log.Append(ctx, events.Event{ID: "notification.delivery.recorded:legacy", Type: projections.EventNotificationDeliveryRecorded, TenantID: tenantA, Time: at, Data: payload, SchemaVersion: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projector.Apply(ctx, ev); err != nil {
+		t.Fatal(err)
+	}
+	if err := projector.Rebuild(ctx, log); err != nil {
+		t.Fatal(err)
+	}
+	got, err := st.GetNotificationDeliveryReceipt(ctx, tenantA, "notification.delivery:legacy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.RoutingSource != "" || got.RoutingPolicyID != "" || got.RoutingPolicyScope != "" || got.RoutingPolicyDigest != "" {
+		t.Fatalf("legacy receipt acquired invented routing evidence: %+v", got)
 	}
 }

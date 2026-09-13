@@ -1559,8 +1559,11 @@ describe("i18n boundary", () => {
       // Renewal alerts: reviewed historical expiry, exact identity navigation,
       // and unretained routing semantics. Machine-authored es/de require HUMAN
       // TRANSLATION REVIEW before release; no extraction budget changed.
-      "es-ES": "8cb619cffe3bdc68c62304bfcd4e5a73d09bb9722ac70ec4a00e6f7a6b590983",
-      "de-DE": "ef57cb4a112a4cf6fd3890cc13ad50ee5bb2c34a7c2f2b197f139bf7e88d7a54",
+      // Delivery receipts: reviewed acceptance versus human-read proof, immutable
+      // policy history, legacy unknowns and refresh failure copy. Machine-authored
+      // es/de require HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "690aa5b597f952e96c9919d7522e8c90847c5a58da3ce0bf7041b6ad74f5dbd8",
+      "de-DE": "330030ee51dfb72c6163d66f5f594a6ab5355c5e274ea363deb7af7f82d4d2e6",
     });
   });
 

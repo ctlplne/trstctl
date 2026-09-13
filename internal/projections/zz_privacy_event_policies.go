@@ -26,6 +26,19 @@ type privacyIdentityConnectorTargetBoundV1 struct {
 	Route      string `json:"route,omitempty"`
 }
 
+// Keep historical delivery receipts closed: newly retained routing evidence
+// belongs only to schema 2, including during privacy export/import.
+type privacyNotificationDeliveryRecordedV1 struct {
+	ID                    string    `json:"id"`
+	Destination           string    `json:"destination"`
+	NotificationKeyDigest string    `json:"notification_key_digest"`
+	PayloadDigest         string    `json:"payload_digest"`
+	Channel               string    `json:"channel"`
+	OutboxID              *int64    `json:"outbox_id,omitempty"`
+	Attempts              int       `json:"attempts,omitempty"`
+	DeliveredAt           time.Time `json:"delivered_at,omitempty"`
+}
+
 // privacyDiscoveryRunQueued is the closed union carried by
 // discovery.run.queued. The projector reads the embedded common relay fields;
 // AD CS boot reconciliation additionally needs its immutable public connection
@@ -1495,7 +1508,8 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventNotificationChannelDeleted, 1}:                                    privacyPayloadShape[NotificationChannelDeleted](),
 		{EventNotificationRoutingPolicyDeleted, 1}:                              privacyPayloadShape[NotificationRoutingPolicyDeleted](),
 		{EventNotificationTestQueued, 1}:                                        privacyPayloadShape[NotificationTestQueued](),
-		{EventNotificationDeliveryRecorded, 1}:                                  privacyPayloadShape[NotificationDeliveryRecorded](),
+		{EventNotificationDeliveryRecorded, 1}:                                  privacyPayloadShape[privacyNotificationDeliveryRecordedV1](),
+		{EventNotificationDeliveryRecorded, 2}:                                  privacyPayloadShape[NotificationDeliveryRecorded](),
 		{EventCBOMAssetObserved, 1}:                                             privacyPayloadShape[CBOMAssetObserved](),
 		{EventDeploymentTargetUpserted, 1}:                                      privacyPayloadShape[DeploymentTargetUpserted](),
 		{EventDeploymentTargetDeleted, 1}:                                       privacyPayloadShape[DeploymentTargetDeleted](),

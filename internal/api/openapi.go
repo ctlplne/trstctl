@@ -3008,6 +3008,11 @@ func componentSchemas() map[string]*Schema {
 		"kind": str(), "subject": str(), "display_name": str(), "email": str(),
 		"roles": {Type: "array", Items: str()},
 	}, "kind", "subject")
+	notificationDelivery := object(map[string]*Schema{
+		"id": str(), "channel": str(), "attempts": {Type: "integer"}, "delivered_at": timestamp(),
+		"routing_source":    {Type: "string", Enum: []string{"explicit_policy", "inherited_policy", "default_policy", "all_channels", "channel_test"}, Description: "Selection used by this successful channel. Absent on historical receipts that did not retain routing evidence."},
+		"routing_policy_id": str(), "routing_policy_scope": str(), "routing_policy_digest": str(),
+	}, "id", "channel", "attempts", "delivered_at")
 	notification := object(map[string]*Schema{
 		"id": str(), "tenant_id": uuid(), "destination": str(), "kind": str(),
 		"identity_id": uuid(), "operation_id": str(),
@@ -3021,6 +3026,7 @@ func componentSchemas() map[string]*Schema {
 		"status":                {Type: "string", Enum: []string{"pending", "sent", "dead", "read"}},
 		"attempts":              {Type: "integer"}, "last_error": str(), "idempotency_key": str(),
 		"created_at": timestamp(), "delivered_at": timestamp(), "read_at": timestamp(),
+		"deliveries": {Type: "array", Items: ref("NotificationDelivery"), Description: "Successful channel receipts for this exact command, included on notification detail reads. Current policy changes do not rewrite historical receipts."},
 	}, "id", "tenant_id", "destination", "status", "attempts", "created_at")
 	notificationChannel := object(map[string]*Schema{
 		"id":                  str(),
@@ -6334,6 +6340,7 @@ func componentSchemas() map[string]*Schema {
 		"NotificationRoutingPolicyPreview":         notificationRoutingPolicyPreview,
 		"NotificationRoutingPreview":               notificationRoutingPreview,
 		"Notification":                             notification,
+		"NotificationDelivery":                     notificationDelivery,
 		"NotificationList":                         list("Notification"),
 		"PolicyDryRunRequest":                      policyDryRunReq,
 		"PolicyDryRunTrace":                        policyDryRunTrace,

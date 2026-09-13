@@ -7183,6 +7183,7 @@ Notification = TypedDict(
         'certificate_id': str,
         'created_at': str,
         'delivered_at': str,
+        'deliveries': list[dict[str, Any]],
         'deployment_receipt_id': str,
         'deployment_recorded_at': str,
         'destination': str,
@@ -7275,6 +7276,21 @@ NotificationChannelTestRequest = TypedDict(
         'routing_policy_id': str,
         'severity': str,
         'subject': str,
+    },
+    total=False,
+)
+
+NotificationDelivery = TypedDict(
+    'NotificationDelivery',
+    {
+        'attempts': int,
+        'channel': str,
+        'delivered_at': str,
+        'id': str,
+        'routing_policy_digest': str,
+        'routing_policy_id': str,
+        'routing_policy_scope': str,
+        'routing_source': str,
     },
     total=False,
 )

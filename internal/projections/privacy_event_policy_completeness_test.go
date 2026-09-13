@@ -147,6 +147,12 @@ func TestRejectProjectorPrivacyShapesDoNotCrossSchemaVersionLabels(t *testing.T)
 	assertRejectsSubject(t, legacyManagedKeyRequested, EventManagedKeyCommandRequested, 1)
 	assertRejectsSubject(t, legacyManagedKeyCompleted, EventManagedKeyCommandCompleted, 1)
 	assertWrongVersionShape(t, currentOnlyManagedKey, EventManagedKeyCommandRequested, 1)
+
+	legacyDelivery := []byte(`{"id":"delivery-a","destination":"notification.renewal_failure","notification_key_digest":"key","payload_digest":"payload","channel":"privacy-policy-subject","delivered_at":"2026-09-13T03:00:00Z"}`)
+	currentDelivery := []byte(`{"id":"delivery-a","destination":"notification.renewal_failure","notification_key_digest":"key","payload_digest":"payload","channel":"email","delivered_at":"2026-09-13T03:00:00Z","routing_source":"inherited_policy","routing_policy_id":"privacy-policy-subject","routing_policy_scope":"asset","routing_policy_digest":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}`)
+	assertRejectsSubject(t, legacyDelivery, EventNotificationDeliveryRecorded, 1)
+	assertRejectsSubject(t, currentDelivery, EventNotificationDeliveryRecorded, NotificationDeliveryRoutingSchemaVersion)
+	assertWrongVersionShape(t, currentDelivery, EventNotificationDeliveryRecorded, 1)
 }
 
 func TestEveryProjectorSubjectBearingPolicyPathHasMechanicalFixture(t *testing.T) {

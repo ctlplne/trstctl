@@ -21556,6 +21556,13 @@
             "format": "date-time",
             "type": "string"
           },
+          "deliveries": {
+            "description": "Successful channel receipts for this exact command, included on notification detail reads. Current policy changes do not rewrite historical receipts.",
+            "items": {
+              "$ref": "#/components/schemas/NotificationDelivery"
+            },
+            "type": "array"
+          },
           "deployment_receipt_id": {
             "format": "uuid",
             "type": "string"
@@ -21818,6 +21825,50 @@
             "type": "string"
           }
         },
+        "type": "object"
+      },
+      "NotificationDelivery": {
+        "properties": {
+          "attempts": {
+            "type": "integer"
+          },
+          "channel": {
+            "type": "string"
+          },
+          "delivered_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "routing_policy_digest": {
+            "type": "string"
+          },
+          "routing_policy_id": {
+            "type": "string"
+          },
+          "routing_policy_scope": {
+            "type": "string"
+          },
+          "routing_source": {
+            "description": "Selection used by this successful channel. Absent on historical receipts that did not retain routing evidence.",
+            "enum": [
+              "explicit_policy",
+              "inherited_policy",
+              "default_policy",
+              "all_channels",
+              "channel_test"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "channel",
+          "attempts",
+          "delivered_at"
+        ],
         "type": "object"
       },
       "NotificationDigestPreview": {

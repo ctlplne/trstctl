@@ -137,7 +137,31 @@ describe("Global Alert Center", () => {
       created_at: "2026-08-21T00:03:00Z",
     };
     apiMock.notifications.mockResolvedValue({ items: [alert, { ...alert, id: "178", operation_id: "renewal-failure:178", status: "dead" }] });
-    apiMock.notification.mockResolvedValue(alert);
+    apiMock.notification.mockResolvedValue({
+      ...alert,
+      deliveries: [
+        {
+          id: "receipt-email",
+          channel: "email",
+          attempts: 1,
+          delivered_at: "2026-08-21T00:03:02Z",
+          routing_source: "inherited_policy",
+          routing_policy_id: "historical-route",
+          routing_policy_scope: "asset",
+          routing_policy_digest: "historical-policy-digest",
+        },
+        {
+          id: "receipt-pager",
+          channel: "pagerduty",
+          attempts: 2,
+          delivered_at: "2026-08-21T00:03:10Z",
+          routing_source: "inherited_policy",
+          routing_policy_id: "later-route",
+          routing_policy_scope: "owner",
+          routing_policy_digest: "later-policy-digest",
+        },
+      ],
+    });
     const user = userEvent.setup();
     renderNotifications();
     expect(await screen.findByRole("heading", { name: "2 alert chains need attention" })).toBeInTheDocument();
@@ -156,6 +180,42 @@ describe("Global Alert Center", () => {
       "sm:col-span-2",
     );
     expect(within(dialog).getByText("Captured when the renewal failed. This does not verify what the listener serves now.")).toBeInTheDocument();
+    const receipts = await within(dialog).findByRole("region", { name: "Successful channel deliveries" });
+    expect(within(receipts).getByText("historical-route")).toBeInTheDocument();
+    expect(within(receipts).getByText("later-route")).toBeInTheDocument();
+    expect(within(receipts).getAllByText("Automatic routing policy")).toHaveLength(2);
+    await user.click(within(receipts).getAllByText("Show receipt and policy digest")[0]);
+    expect(within(receipts).getByText("historical-policy-digest")).toBeVisible();
+    expect(within(receipts).getByText(/does not prove that a person read it/)).toBeInTheDocument();
+  });
+
+  it("shows failed detail refresh and retries without inventing legacy routing evidence", async () => {
+    const alert = {
+      id: "90",
+      tenant_id: "t1",
+      destination: "notification.renewal_failure",
+      kind: "identity.renewal_failed",
+      identity_id: "payments",
+      subject: "payments.example.test",
+      severity: "warning",
+      status: "sent",
+      attempts: 1,
+      created_at: "2026-08-21T00:03:00Z",
+    };
+    apiMock.notifications.mockResolvedValue({ items: [alert] });
+    apiMock.notification
+      .mockRejectedValueOnce(new Error("temporary read failure"))
+      .mockResolvedValue({ ...alert, deliveries: [{ id: "legacy-receipt", channel: "email", attempts: 1, delivered_at: "2026-08-21T00:03:02Z" }] });
+    const user = userEvent.setup();
+    renderNotifications();
+    await user.click(await screen.findByRole("button", { name: "Review details" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText("Alert details could not be refreshed. Displayed information may be stale.")).toBeInTheDocument();
+    expect(within(dialog).queryByText("No successful channel receipt is available.")).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Retry details" }));
+    expect(await within(dialog).findByText("Routing evidence was not retained for this delivery.")).toBeInTheDocument();
+    expect(within(dialog).queryByText("Automatic routing policy")).not.toBeInTheDocument();
+    expect(apiMock.notification).toHaveBeenCalledTimes(2);
   });
 
   it("groups meaningful risk while informational unread events remain history-only", async () => {

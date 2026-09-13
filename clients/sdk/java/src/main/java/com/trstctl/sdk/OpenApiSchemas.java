@@ -509,6 +509,7 @@ public final class OpenApiSchemas {
       "NotificationChannelRequest",
       "NotificationChannelTest",
       "NotificationChannelTestRequest",
+      "NotificationDelivery",
       "NotificationDigestPreview",
       "NotificationList",
       "NotificationRoutingPolicy",

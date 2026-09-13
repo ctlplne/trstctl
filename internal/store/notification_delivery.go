@@ -42,6 +42,10 @@ type NotificationDeliveryReceipt struct {
 	OutboxID              *int64
 	Attempts              int
 	DeliveredAt           time.Time
+	RoutingSource         string
+	RoutingPolicyID       string
+	RoutingPolicyScope    string
+	RoutingPolicyDigest   string
 }
 
 // GetNotificationTestOperation loads the durable operation for a deterministic
@@ -166,7 +170,8 @@ func (s *Store) GetNotificationDeliveryReceipt(ctx context.Context, tenantID, id
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return scanNotificationDeliveryReceipt(tx.QueryRow(ctx,
 			`SELECT tenant_id::text, id, destination, notification_key_digest,
-			        payload_digest, channel, outbox_id, attempts, delivered_at
+			        payload_digest, channel, outbox_id, attempts, delivered_at,
+			        routing_source, routing_policy_id, routing_policy_scope, routing_policy_digest
 			   FROM notification_delivery_receipts
 			  WHERE tenant_id = $1 AND id = $2`, tenantID, id), &rec)
 	})
@@ -176,7 +181,36 @@ func (s *Store) GetNotificationDeliveryReceipt(ctx context.Context, tenantID, id
 func scanNotificationDeliveryReceipt(row pgx.Row, rec *NotificationDeliveryReceipt) error {
 	return row.Scan(&rec.TenantID, &rec.ID, &rec.Destination,
 		&rec.NotificationKeyDigest, &rec.PayloadDigest, &rec.Channel,
-		&rec.OutboxID, &rec.Attempts, &rec.DeliveredAt)
+		&rec.OutboxID, &rec.Attempts, &rec.DeliveredAt, &rec.RoutingSource,
+		&rec.RoutingPolicyID, &rec.RoutingPolicyScope, &rec.RoutingPolicyDigest)
+}
+
+// ListNotificationDeliveryReceipts loads the exact command's successful channel
+// receipts. The binding survives outbox retention/rebuild and never joins a new
+// command that happens to reuse a database sequence number.
+func (s *Store) ListNotificationDeliveryReceipts(ctx context.Context, tenantID, destination, keyDigest, payloadDigest string) ([]NotificationDeliveryReceipt, error) {
+	out := make([]NotificationDeliveryReceipt, 0)
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT tenant_id::text, id, destination, notification_key_digest,
+			payload_digest, channel, outbox_id, attempts, delivered_at,
+			routing_source, routing_policy_id, routing_policy_scope, routing_policy_digest
+			FROM notification_delivery_receipts
+			WHERE tenant_id = $1 AND destination = $2 AND notification_key_digest = $3 AND payload_digest = $4
+			ORDER BY delivered_at, channel, id`, tenantID, destination, keyDigest, payloadDigest)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var rec NotificationDeliveryReceipt
+			if err := scanNotificationDeliveryReceipt(rows, &rec); err != nil {
+				return err
+			}
+			out = append(out, rec)
+		}
+		return rows.Err()
+	})
+	return out, err
 }
 
 // ApplyNotificationDeliveryRecordedTx projects a successful receiver effect.
@@ -189,14 +223,19 @@ func (s *Store) ApplyNotificationDeliveryRecordedTx(ctx context.Context, tx pgx.
 		rec.Channel == "" || rec.DeliveredAt.IsZero() {
 		return errors.New("store: notification delivery receipt is incomplete")
 	}
+	if err := validateNotificationDeliveryRouting(rec); err != nil {
+		return err
+	}
 	tag, err := tx.Exec(ctx,
 		`INSERT INTO notification_delivery_receipts
 		        (tenant_id, id, destination, notification_key_digest, payload_digest,
-		         channel, outbox_id, attempts, delivered_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		         channel, outbox_id, attempts, delivered_at,
+		         routing_source, routing_policy_id, routing_policy_scope, routing_policy_digest)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		 ON CONFLICT (tenant_id, id) DO NOTHING`,
 		rec.TenantID, rec.ID, rec.Destination, rec.NotificationKeyDigest,
-		rec.PayloadDigest, rec.Channel, rec.OutboxID, rec.Attempts, rec.DeliveredAt.UTC())
+		rec.PayloadDigest, rec.Channel, rec.OutboxID, rec.Attempts, rec.DeliveredAt.UTC(),
+		rec.RoutingSource, rec.RoutingPolicyID, rec.RoutingPolicyScope, rec.RoutingPolicyDigest)
 	if err != nil {
 		return err
 	}
@@ -206,15 +245,35 @@ func (s *Store) ApplyNotificationDeliveryRecordedTx(ctx context.Context, tx pgx.
 	var existing NotificationDeliveryReceipt
 	if err := scanNotificationDeliveryReceipt(tx.QueryRow(ctx,
 		`SELECT tenant_id::text, id, destination, notification_key_digest,
-		        payload_digest, channel, outbox_id, attempts, delivered_at
+		        payload_digest, channel, outbox_id, attempts, delivered_at,
+		        routing_source, routing_policy_id, routing_policy_scope, routing_policy_digest
 		   FROM notification_delivery_receipts
 		  WHERE tenant_id = $1 AND id = $2`, rec.TenantID, rec.ID), &existing); err != nil {
 		return err
 	}
 	if existing.Destination != rec.Destination ||
 		existing.NotificationKeyDigest != rec.NotificationKeyDigest ||
-		existing.PayloadDigest != rec.PayloadDigest || existing.Channel != rec.Channel {
+		existing.PayloadDigest != rec.PayloadDigest || existing.Channel != rec.Channel ||
+		existing.RoutingSource != rec.RoutingSource || existing.RoutingPolicyID != rec.RoutingPolicyID ||
+		existing.RoutingPolicyScope != rec.RoutingPolicyScope || existing.RoutingPolicyDigest != rec.RoutingPolicyDigest {
 		return fmt.Errorf("%w: notification delivery receipt belongs to another receiver command", ErrIdempotencyConflict)
 	}
 	return nil
+}
+
+func validateNotificationDeliveryRouting(rec NotificationDeliveryReceipt) error {
+	switch rec.RoutingSource {
+	case "", "all_channels", "channel_test":
+		if rec.RoutingPolicyID == "" && rec.RoutingPolicyScope == "" && rec.RoutingPolicyDigest == "" {
+			return nil
+		}
+	case "explicit_policy", "inherited_policy", "default_policy":
+		if rec.RoutingSource != "default_policy" && rec.RoutingPolicyID == "" {
+			break
+		}
+		if len(rec.RoutingPolicyDigest) == 64 && strings.Trim(rec.RoutingPolicyDigest, "0123456789abcdef") == "" {
+			return nil
+		}
+	}
+	return errors.New("store: notification delivery routing evidence is invalid")
 }

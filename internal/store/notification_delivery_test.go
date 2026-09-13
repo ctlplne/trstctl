@@ -85,6 +85,8 @@ func TestNotificationDeliveryReceiptProjectionIsTenantScopedAndImmutable(t *test
 		Destination: "notification.ct", NotificationKeyDigest: "key-digest",
 		PayloadDigest: "payload-digest", Channel: "Slack", OutboxID: &outboxID,
 		Attempts: 1, DeliveredAt: time.Date(2026, 7, 11, 12, 1, 0, 0, time.UTC),
+		RoutingSource: "inherited_policy", RoutingPolicyID: "policy-a", RoutingPolicyScope: "asset",
+		RoutingPolicyDigest: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 	}
 	apply := func(candidate store.NotificationDeliveryReceipt) error {
 		return s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
@@ -98,7 +100,7 @@ func TestNotificationDeliveryReceiptProjectionIsTenantScopedAndImmutable(t *test
 	if err != nil {
 		t.Fatalf("get delivery receipt: %v", err)
 	}
-	if got.Channel != "slack" || got.PayloadDigest != rec.PayloadDigest {
+	if got.Channel != "slack" || got.PayloadDigest != rec.PayloadDigest || got.RoutingPolicyID != rec.RoutingPolicyID || got.RoutingPolicyDigest != rec.RoutingPolicyDigest || got.RoutingSource != rec.RoutingSource || got.RoutingPolicyScope != rec.RoutingPolicyScope {
 		t.Fatalf("projected receipt = %+v", got)
 	}
 	if _, err := s.GetNotificationDeliveryReceipt(ctx, tenantB, rec.ID); !store.IsNotFound(err) {
@@ -108,5 +110,25 @@ func TestNotificationDeliveryReceiptProjectionIsTenantScopedAndImmutable(t *test
 	changed.PayloadDigest = "changed-payload"
 	if err := apply(changed); !errors.Is(err, store.ErrIdempotencyConflict) {
 		t.Fatalf("changed receipt binding error = %v, want ErrIdempotencyConflict", err)
+	}
+	changed = rec
+	changed.RoutingPolicyID = "later-policy"
+	if err := apply(changed); !errors.Is(err, store.ErrIdempotencyConflict) {
+		t.Fatalf("rewritten historical policy error = %v, want conflict", err)
+	}
+	for _, query := range []struct {
+		tenant, destination, key, payload string
+		count                             int
+	}{
+		{tenantA, rec.Destination, rec.NotificationKeyDigest, rec.PayloadDigest, 1},
+		{tenantB, rec.Destination, rec.NotificationKeyDigest, rec.PayloadDigest, 0},
+		{tenantA, "notification.renewal_failed", rec.NotificationKeyDigest, rec.PayloadDigest, 0},
+		{tenantA, rec.Destination, "other-command", rec.PayloadDigest, 0},
+		{tenantA, rec.Destination, rec.NotificationKeyDigest, "other-payload", 0},
+	} {
+		rows, err := s.ListNotificationDeliveryReceipts(ctx, query.tenant, query.destination, query.key, query.payload)
+		if err != nil || len(rows) != query.count {
+			t.Fatalf("bound receipt lookup %+v returned %d: %v", query, len(rows), err)
+		}
 	}
 }

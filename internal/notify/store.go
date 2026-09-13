@@ -308,15 +308,21 @@ func (l *StoreDeliveryReceiptLedger) RecordNotificationDelivery(ctx context.Cont
 		ID: rec.ID, Destination: rec.Destination,
 		NotificationKeyDigest: rec.NotificationKeyDigest, PayloadDigest: rec.PayloadDigest,
 		Channel: rec.Channel, OutboxID: rec.OutboxID, Attempts: rec.Attempts,
-		DeliveredAt: rec.DeliveredAt,
+		DeliveredAt: rec.DeliveredAt, RoutingSource: rec.RoutingSource,
+		RoutingPolicyID: rec.RoutingPolicyID, RoutingPolicyScope: rec.RoutingPolicyScope,
+		RoutingPolicyDigest: rec.RoutingPolicyDigest,
 	})
 	if err != nil {
 		return err
 	}
+	version := 1
+	if rec.RoutingSource != "" {
+		version = projections.NotificationDeliveryRoutingSchemaVersion
+	}
 	ev, err := l.log.Append(ctx, events.Event{
 		ID:   "notification.delivery.recorded:" + strings.TrimPrefix(rec.ID, "notification.delivery:"),
 		Type: projections.EventNotificationDeliveryRecorded, TenantID: rec.TenantID,
-		Time: rec.DeliveredAt, Data: payload,
+		Time: rec.DeliveredAt, Data: payload, SchemaVersion: version,
 	})
 	if err != nil {
 		return err

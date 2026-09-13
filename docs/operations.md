@@ -12,6 +12,29 @@ down the rest: each subsystem runs in its own bounded lane and rejects fast when
 full. This page covers the resilience controls in the live path: bulkheads, the
 per-tenant rate limiter, graceful drain, and the fail-closed signer timeout.
 
+## Notification delivery evidence
+
+Open an alert in **Alerts and delivery** to see which channels accepted it and
+which routing policy selected each successful channel. These receipts describe
+transport acceptance; they do not prove that a person read the alert.
+
+The dispatcher records each successful channel separately. A failed channel can
+retry without sending again to channels whose receipts already exist. The receipt
+keeps the policy ID, policy level and a SHA-256 digest of the routing settings used
+for that delivery. Later policy changes or deletion do not rewrite that history.
+Renewal failures follow the affected identity's route, even when the alert also
+carries the certificate from its last completed deployment.
+
+`GET /api/v1/notifications/{id}` includes `deliveries` for the exact tenant,
+notification destination, idempotency-key digest and payload digest. A receipt's
+`routing_source` distinguishes an explicitly requested policy, an automatically
+selected policy, configured defaults, all-channel fallback and a direct channel
+test. Historical receipts without that field have unknown routing history; the
+console never fills it from today's configuration. Only successful effects have
+receipts. Pending or failed delivery still needs investigation. If the detail read
+fails, the console labels the displayed snapshot as potentially stale and offers
+a retry.
+
 ## Bulkheads (isolation + backpressure)
 
 Each subsystem runs on its own **bounded worker pool with a bounded queue**: the
