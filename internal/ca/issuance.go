@@ -652,13 +652,13 @@ func (s *IssuanceService) record(ctx context.Context, tenantID, key, requestBind
 			return err
 		}
 		eventID := uuid.NewSHA1(uuid.NameSpaceOID, []byte(tenantID+"\x00certificate.recorded\x00"+key)).String()
-		event, err := s.log.Append(ctx, events.Event{
+		// The metadata fence must cover the source append itself. Appending
+		// first lets a concurrent local issuance project a later sequence and
+		// strands this retained external leaf behind the shared watermark.
+		err = orchestrator.NewOrchestrator(s.log, s.store, s.outbox).RecordCertificateEvent(ctx, events.Event{
 			ID: eventID, Type: projections.EventCertificateRecorded, TenantID: tenantID, Data: payload,
 		})
 		if err != nil {
-			return err
-		}
-		if err := projections.New(s.store).Apply(ctx, event); err != nil {
 			return err
 		}
 	}

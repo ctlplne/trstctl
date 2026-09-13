@@ -16,6 +16,17 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
+// RecordCertificateEvent preserves an issuer's existing stable event identity
+// while using the same append-order fence, immutable binding and recovery path
+// as ordinary certificate recording. Callers must supply a complete public fact.
+func (o *Orchestrator) RecordCertificateEvent(ctx context.Context, event events.Event) error {
+	if event.ID == "" || event.Type != projections.EventCertificateRecorded {
+		return errors.New("orchestrator: a stable certificate recording event is required")
+	}
+	_, err := o.emitCertificateRecording(ctx, event)
+	return err
+}
+
 func (o *Orchestrator) emitCertificateRecording(ctx context.Context, next events.Event) (events.Event, error) {
 	material, recording, err := projections.CertificateRecordingMaterial(next)
 	if err != nil {
