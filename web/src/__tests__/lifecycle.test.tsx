@@ -100,6 +100,27 @@ async function confirmReviewedAction(user: ReturnType<typeof userEvent.setup>) {
 
 describe("lifecycle actions from the UI", () => {
   it.each([
+    ["revoked", "Revoked; evidence is retained."],
+    ["retired", "Retired; no further action is available."],
+  ])("keeps a %s identity terminal despite retained running rotation evidence", async (status, summary) => {
+    apiMock.identities.mockResolvedValue([{ id: "stopped-mail", name: "stopped-mail.example.test", kind: "x509_certificate", status }]);
+    apiMock.rotationRuns.mockResolvedValue({
+      items: [{ id: "unfinished-renewal", identity_id: "stopped-mail", status: "running", trigger: "scheduler", updated_at: "2026-09-12T23:14:00Z" }],
+    });
+    apiMock.connectorDeliveries.mockResolvedValue({
+      items: [{ id: "prior-delivery", identity_id: "stopped-mail", status: "verified", updated_at: "2026-09-12T23:11:00Z" }],
+    });
+    renderIdentities();
+    const row = (await screen.findByText("stopped-mail.example.test", { selector: "span" })).closest("tr")!;
+    await userEvent.setup().click(screen.getByText("Delivery and rotation evidence", { selector: "summary" }));
+    const history = await screen.findByRole("table", { name: "Loaded lifecycle rotation runs" });
+    expect(await within(history).findByText("scheduler")).toBeInTheDocument();
+    await waitFor(() => expect(row).toHaveTextContent(summary));
+    expect(row).not.toHaveTextContent("Rotation is in progress.");
+    expect(row).not.toHaveTextContent("Delivered successfully.");
+  });
+
+  it.each([
     ["verified", "Delivered successfully."],
     ["verify_failed", "Delivery needs attention."],
   ])("uses the latest %s probe receipt in the identity row", async (status, summary) => {

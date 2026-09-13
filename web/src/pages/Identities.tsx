@@ -226,6 +226,10 @@ function shortFingerprint(value?: string): string {
 
 function deliverySummary(identity: Identity, delivery?: ConnectorDelivery, rotation?: RotationRun): string {
   const state = identityState(identity);
+  // Historical work can remain pending after issuance has been stopped. Keep
+  // that evidence available, but never describe a terminal identity as active.
+  if (state === "revoked") return translateNow("identities.delivery.revoked");
+  if (state === "retired") return translateNow("identities.delivery.retired");
   if (rotation?.status === "running") return translateNow("identities.delivery.rotating");
   if (rotation?.status === "failed") return translateNow("identities.delivery.rotationFailed");
   if (rotation?.status === "succeeded" && !delivery) return translateNow("identities.delivery.rotationSucceeded");
@@ -244,10 +248,6 @@ function deliverySummary(identity: Identity, delivery?: ConnectorDelivery, rotat
       return translateNow("identities.delivery.noReceipt");
     case "renewing":
       return translateNow("identities.delivery.rotating");
-    case "revoked":
-      return translateNow("identities.delivery.revoked");
-    case "retired":
-      return translateNow("identities.delivery.retired");
     default:
       return translateNow("identities.delivery.noReceipt");
   }
