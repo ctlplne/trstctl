@@ -65,14 +65,17 @@ func TestCustodyReachesTheDatabaseAndNotJustTheStruct(t *testing.T) {
 		if r.origin != string(custody.OriginControlPlane) {
 			t.Errorf("key_origin = %q, want %q", r.origin, custody.OriginControlPlane)
 		}
-		// The storage class is the field that stayed empty after key_origin was
-		// fixed: the issuing code sets StorageLockedMemory and the projection
-		// dropped it.
-		if r.storage != string(custody.StorageLockedMemory) {
-			t.Errorf("key_storage = %q, want %q. The issuing path sets this and a comment beside "+
-				"it says it is 'written down here rather than only in a deprecation event nobody "+
-				"queries' — which was not true while the projection had no field for it",
-				r.storage, custody.StorageLockedMemory)
+		// First-issuance recovery retains the control-plane-generated key in
+		// a tenant-bound encrypted record. Reporting only temporary memory
+		// storage would hide that retained copy from the operator.
+		if r.storage != string(custody.StorageSealedStore) {
+			t.Errorf("key_storage = %q, want %q", r.storage, custody.StorageSealedStore)
+		}
+		// The generator returns and seals the private key for delivery. Its
+		// exportability is known, so it must survive the event and projection
+		// instead of appearing as an unanswered custody question.
+		if c.KeyExportable != string(custody.Exportable) {
+			t.Errorf("key_exportable = %q, want %q", c.KeyExportable, custody.Exportable)
 		}
 	}
 }

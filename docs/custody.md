@@ -112,8 +112,11 @@ The retained fallback applies only when there is no CSR and the target is not
 agent-executed. It calls the same control-plane key generator for first issuance
 and renewal, and records `issuance.server_side_keygen`. The key is held in locked
 memory. Before signing, a tenant-bound encrypted recovery record retains the key
-and CSR so a retry uses the same subject. Inventory reports `key_storage=sealed_store`;
-this is encrypted, exportable storage, not a hardware custody claim. If a
+and CSR so a retry uses the same subject. Inventory records
+`key_origin=control_plane`, `key_storage=sealed_store`, and
+`key_exportable=exportable`. These describe the encrypted recovery material;
+they do not assert hardware protection. Older records with missing exportability
+remain unrecorded because no new issuance evidence establishes their history. If a
 control-plane connector is configured, the bytes are also sealed into its outbox
 deploy intent; otherwise no deploy material is emitted. Working copies are wiped
 after the dispatcher finishes. This compatibility path is deprecated, and

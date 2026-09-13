@@ -773,8 +773,9 @@ func (d *issuanceDispatcher) mintServedLeafMaterialForSelection(
 			// this path is one an operator should plan to replace. They cannot
 			// plan for what is not written down, so it is written down here
 			// rather than only in a deprecation event nobody queries.
-			KeyOrigin:  string(custody.OriginControlPlane),
-			KeyStorage: string(storage),
+			KeyOrigin:     string(custody.OriginControlPlane),
+			KeyStorage:    string(storage),
+			KeyExportable: string(custody.Exportable),
 		},
 		CertPEM:   append([]byte(nil), leafPEM...),
 		ChainPEM:  append([]byte(nil), chainPEM...),
