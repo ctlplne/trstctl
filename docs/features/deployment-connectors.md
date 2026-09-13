@@ -526,6 +526,48 @@ when the listener uses a nondefault port; the agent does not guess the protocol
 from the port number. A server that declines TLS fails verification. This check
 observes the certificate without sending a database username, password, or query;
 application availability still needs a separate authenticated SQL check.
+
+MySQL requires a `mysql-tls-reload` action in the operator's host profile. Map it
+to the stock `mysql` client running `ALTER INSTANCE RELOAD TLS`, which activates
+the server's current certificate and key files. `mysqladmin reload` refreshes
+grant tables and does not activate new TLS files. Existing profiles must replace
+that old action before enabling MySQL deployments with an updated agent.
+
+For example, this host action connects through the local Unix socket and keeps
+the reload account's password in a private client option file:
+
+```json
+{
+  "logical_name": "mysql-tls-reload",
+  "logical_args": [],
+  "command": "/usr/bin/mysql",
+  "args": [
+    "--defaults-file=/etc/trstctl/mysql-reload.cnf",
+    "--protocol=SOCKET",
+    "--socket=/run/mysqld/mysqld.sock",
+    "--execute=ALTER INSTANCE RELOAD TLS"
+  ],
+  "pass_args": false,
+  "timeout_seconds": 15
+}
+```
+
+The client file supplies the user and password and must be readable only by the
+agent's service account. The MySQL account needs `CONNECTION_ADMIN`; the SQL
+statement and connection arguments belong to the operator profile, never target
+JSON. Mirror this action in `connectors.local_profiles`, using `timeout: "15s"`
+there. Use a MySQL version supporting `ALTER INSTANCE RELOAD TLS`; preserve its
+default rollback-on-error behavior. Do not add `NO ROLLBACK ON ERROR`, which can
+disable encryption after a failed TLS reload.
+
+The connector repeats TLS activation even when the file bytes are unchanged.
+If activation fails, it restores the previous certificate/key pair and attempts
+to activate that pair, while reporting the original deployment failure. Missing
+predecessors, failed file restoration, and failed recovery activation are reported
+separately. The listener check still must match the intended certificate before
+the deployment can be called verified. See MySQL's
+[TLS reload contract](https://dev.mysql.com/doc/refman/8.4/en/alter-instance.html).
+
 Use `executor: agent` whenever the identity's CA is external: an external CA
 answers asynchronously, and the endpoint lifecycle preview refuses control-plane key
 custody for an external CA on a host connector rather than risk a certificate whose
@@ -550,7 +592,7 @@ Every `*_ref` is a `secret://name` or `secret://name?version=N` reference in the
 tenant, and every `profile` points to an operator-owned `connectors.local_profiles`
 entry, which maps the connector's logical command (`nginx`, `apachectl`, `caddy`,
 `powershell`, `netsh`, `haproxy`, `systemctl`, `postfix`, `doveconf`, `doveadm`,
-`pg_ctl`, `mysqladmin`, `rabbitmqctl`, or `catalina.sh`) to one absolute executable;
+`pg_ctl`, `mysql-tls-reload`, `rabbitmqctl`, or `catalina.sh`) to one absolute executable;
 general shells and symlinked executables are rejected. IIS's `powershell` action
 additionally requires an exact `logical_args` allowlist and a separate `args` list
 with `pass_args: false`, so the requested argv is only ever compared, never forwarded

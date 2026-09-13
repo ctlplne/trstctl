@@ -472,7 +472,7 @@ func dodRunAllNativeConnectorsProductionAssembly(t *testing.T) {
 		"traefik":       {traefikExternal, nil},
 		"java-keystore": {javaExternal, nil},
 		"postgresql":    {postgresExternal, []string{"pg_ctl"}},
-		"mysql":         {mysqlExternal, []string{"mysqladmin"}},
+		"mysql":         {mysqlExternal, []string{"mysql-tls-reload"}},
 		"rabbitmq":      {rabbitExternal, []string{"rabbitmqctl"}},
 		"elasticsearch": {elasticExternal, nil},
 		"tomcat":        {tomcatExternal, []string{"catalina.sh"}},
@@ -654,7 +654,7 @@ func dodRunFocusedNativeConnector(t *testing.T, entryID, connectorName string, e
 		root := local("postgresql", []string{"pg_ctl"})
 		targetConfig, readbackPath = dodPairConfig(t, "postgresql", root), filepath.Join(root, "server.crt")
 	case "connector.mysql":
-		root := local("mysql", []string{"mysqladmin"})
+		root := local("mysql", []string{"mysql-tls-reload"})
 		targetConfig, readbackPath = dodPairConfig(t, "mysql", root), filepath.Join(root, "server.crt")
 	case "connector.rabbitmq":
 		root := local("rabbitmq", []string{"rabbitmqctl"})

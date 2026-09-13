@@ -28,7 +28,7 @@ func TestDeployWritesTLSFilesAndReloads(t *testing.T) {
 	if got, ok := ops.File("/etc/mysql/tls/server-key.pem"); !ok || !bytes.Equal(got, mysqlKey) {
 		t.Fatal("key was not written")
 	}
-	if got := ops.Execs(); len(got) != 1 || got[0][0] != "mysqladmin" {
+	if got := ops.Execs(); len(got) != 1 || got[0][0] != "mysql-tls-reload" {
 		t.Fatalf("reload not recorded: %+v", got)
 	}
 }

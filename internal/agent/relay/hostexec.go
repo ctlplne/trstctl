@@ -430,7 +430,7 @@ func hostPreflightActions(name string, target HostTargetConfig) ([]connector.Loc
 		if err := require(field("cert_path", target.CertPath), field("key_path", target.KeyPath)); err != nil {
 			return nil, err
 		}
-		return []connector.LocalActionInvocation{action("mysqladmin", "reload")}, nil
+		return []connector.LocalActionInvocation{action(mysql.TLSReloadAction)}, nil
 	case "postgresql":
 		if err := require(field("cert_path", target.CertPath), field("key_path", target.KeyPath)); err != nil {
 			return nil, err

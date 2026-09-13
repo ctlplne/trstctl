@@ -165,7 +165,11 @@ func TestMySQLHostPreviewAndPostDeployNegotiateSSLRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	intent := DeployIntent{Connector: "mysql", Target: "database", TargetID: "database-target", TargetConfig: config, VerifyAddress: address, VerifyServerName: "database.example.test"}
-	plan, err := DryRunOnHost(t.Context(), http.DefaultClient, connector.LocalOpsConfig{AllowedRoots: []string{root}, Actions: []connector.LocalAction{{LogicalName: "mysqladmin", Command: command, PassArgs: true}}}, intent, nil)
+	legacyPlan, legacyErr := DryRunOnHost(t.Context(), http.DefaultClient, connector.LocalOpsConfig{AllowedRoots: []string{root}, Actions: []connector.LocalAction{{LogicalName: "mysqladmin", Command: command, PassArgs: true}}}, intent, nil)
+	if legacyErr != nil || legacyPlan.Ready {
+		t.Fatalf("legacy grant-table reload profile admitted: ready=%v err=%v", legacyPlan.Ready, legacyErr)
+	}
+	plan, err := DryRunOnHost(t.Context(), http.DefaultClient, connector.LocalOpsConfig{AllowedRoots: []string{root}, Actions: []connector.LocalAction{{LogicalName: "mysql-tls-reload", Command: command, PassArgs: true}}}, intent, nil)
 	if err != nil || !plan.Ready {
 		t.Fatalf("MySQL preview: ready=%v steps=%+v err=%v", plan.Ready, plan.Steps, err)
 	}

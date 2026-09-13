@@ -399,8 +399,32 @@ func TestExecutedEndpointRenewRecordsIdentityBoundConnectorDelivery(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(after) != 1 {
-		t.Fatalf("failed endpoint renewal manufactured a delivery receipt: %+v", after)
+	if len(after) != 2 {
+		t.Fatalf("failed endpoint renewal must retain the earlier delivery and its own failure evidence: %+v", after)
+	}
+	var delivered, failed int
+	for _, receipt := range after {
+		if receipt.OutboxID == nil || receipt.IdentityID == nil || *receipt.IdentityID != identityID {
+			t.Fatalf("receipt lost identity/job correlation: %+v", receipt)
+		}
+		switch *receipt.OutboxID {
+		case 901:
+			delivered++
+			if receipt.Status != servedstatus.ConnectorDelivered || receipt.Fingerprint != credentialFingerprint {
+				t.Fatalf("later failure changed the prior delivery: %+v", receipt)
+			}
+		case 902:
+			failed++
+			if receipt.Status != "failed" || receipt.Fingerprint != "" || receipt.RollbackRef != "" ||
+				receipt.IdempotencyKey != claim.IdempotencyKey || receipt.Reason != "agent_reported_failure" {
+				t.Fatalf("failed endpoint renewal claimed delivery or recovery: %+v", receipt)
+			}
+		default:
+			t.Fatalf("receipt belongs to an unrelated job: %+v", receipt)
+		}
+	}
+	if delivered != 1 || failed != 1 {
+		t.Fatalf("receipt history duplicated or lost a job: delivered=%d failed=%d", delivered, failed)
 	}
 }
 

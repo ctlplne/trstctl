@@ -174,7 +174,7 @@ var supportMatrix = []SupportRow{
 	},
 	{
 		Family:      "mysql",
-		APIContract: "host-local MySQL TLS files plus allowlisted mysqladmin reload",
+		APIContract: "host-local MySQL TLS files plus a fixed mysql-tls-reload action for ALTER INSTANCE RELOAD TLS",
 		ProvenOperations: []string{
 			"deploy: replace the configured certificate and key files and run the exact allowlisted reload",
 			"rollback: restore the encrypted predecessor bundle on the exact host agent, reload, and reverify",

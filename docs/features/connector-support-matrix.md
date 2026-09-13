@@ -29,7 +29,7 @@ that we implement the named contract and exercise the listed calls. Run a dry-ru
 | `fortigate` | FortiOS CMDB REST (vpn.certificate/local) | `architecture_exception` | no | no |
 | `gcp-certificate-manager` | Google Cloud Certificate Manager certificates.patch REST API | `unimplemented` | no | no |
 | `kemp` | Kemp LoadMaster RESTful API | `migrated` | yes (re-bind) | no |
-| `mysql` | host-local MySQL TLS files plus allowlisted mysqladmin reload | `unimplemented` | yes (host restore) | no |
+| `mysql` | host-local MySQL TLS files plus a fixed mysql-tls-reload action for ALTER INSTANCE RELOAD TLS | `unimplemented` | yes (host restore) | no |
 | `netscaler` | Citrix NetScaler NITRO REST | `migrated` | yes (re-bind) | no |
 | `paloalto` | PAN-OS XML API (certificate import) | `architecture_exception` | no | no |
 | `postgresql` | host-local PostgreSQL TLS files plus allowlisted pg_ctl reload | `unimplemented` | yes (host restore) | no |
@@ -178,7 +178,7 @@ that we implement the named contract and exercise the listed calls. Run a dry-ru
 
 ## mysql
 
-**API/local contract:** host-local MySQL TLS files plus allowlisted mysqladmin reload
+**API/local contract:** host-local MySQL TLS files plus a fixed mysql-tls-reload action for ALTER INSTANCE RELOAD TLS
 
 **E1 disposition:** `unimplemented`
 
