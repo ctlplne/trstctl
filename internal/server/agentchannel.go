@@ -48,7 +48,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
@@ -79,8 +78,8 @@ const agentCAHandle = "agent-ca"
 const agentClientCertTTL = mtls.ClientCertTTL
 
 // agentServerCertTTL bounds the control plane's own agent-channel server certificate.
-// It is reissued on each boot from the stable agent CA, so the agent — which pins the
-// agent CA, not this leaf — keeps trusting the channel across restarts.
+// It is reissued before expiry and on each boot from the stable agent CA, so the
+// agent keeps trusting the channel across renewals and restarts.
 const agentServerCertTTL = 24 * time.Hour
 
 // agentMaxConcurrentStreams bounds in-flight RPCs on a single agent-channel
@@ -913,30 +912,31 @@ func inlineAgentInventorySecretKey(key string) bool {
 	}
 }
 
-// agentChannelServerCreds mints the agent-channel server's mTLS credentials: it
-// generates a LOCAL server key (never a CA key — AN-4), has the AGENT CA (whose key is
-// in the signer) sign its CSR into a server certificate over the crypto boundary
-// (AN-3), and assembles gRPC server credentials that REQUIRE + VERIFY the agent's
-// client certificate against the agent CA. The agent CA private key never enters this
-// path; only digests cross to the signer.
-func (s *Server) agentChannelServerCreds(hosts []string) (credentials.TransportCredentials, error) {
-	key, err := mtls.NewLocalServerKey()
-	if err != nil {
-		return nil, err
+// agentChannelServerCertificate uses the isolated agent CA to renew the listener's
+// public certificate. The transport key and TLS verification stay in the crypto
+// boundary; the agent CA private key stays in the signer process.
+func (s *Server) agentChannelServerCertificate(hosts []string, lifetime time.Duration) (*mtls.RenewingServerCertificate, error) {
+	return mtls.NewRenewingServerCertificate(s.AgentCACertPEM(), hosts, func(csr []byte) ([]byte, error) {
+		return crypto.SignServerCertFromCSR(s.agentCACertDER, s.agentCASigner, csr, hosts, lifetime)
+	})
+}
+
+// startAgentServerRenewal owns one bounded renewal worker for one listener. A
+// stopped listener cancels the worker and destroys its locked transport key.
+func (s *Server) startAgentServerRenewal(ctx context.Context, cert *mtls.RenewingServerCertificate, listener string) func() {
+	workerCtx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	observe := func(expiry time.Time, err error) {
+		s.agentMetrics.observeServerCertificate(listener, expiry, err)
+		if err != nil {
+			s.logger.Warn("agent listener server certificate renewal failed", "listener", listener, "expires_at", expiry, "error", err.Error())
+		} else {
+			s.logger.Info("agent listener server certificate ready", "listener", listener, "expires_at", expiry)
+		}
 	}
-	cn := "trstctl-agent-channel"
-	if len(hosts) > 0 {
-		cn = hosts[0]
-	}
-	csrDER, err := key.CSR(cn, dnsHostsOnly(hosts))
-	if err != nil {
-		return nil, err
-	}
-	chainPEM, err := crypto.SignServerCertFromCSR(s.agentCACertDER, s.agentCASigner, csrDER, hosts, agentServerCertTTL)
-	if err != nil {
-		return nil, err
-	}
-	return key.Credentials(chainPEM, s.AgentCACertPEM())
+	observe(cert.NotAfter(), nil)
+	go func() { defer close(done); cert.Run(workerCtx, observe) }()
+	return func() { cancel(); <-done; cert.Close() }
 }
 
 // agentChannelHosts are the SANs the agent-channel server certificate covers. They are
@@ -974,17 +974,27 @@ func (s *Server) RunAgentChannel(ctx context.Context) {
 // cancelled. It is the seam the acceptance test drives with its own ephemeral
 // listener; RunAgentChannel wraps it with the configured listener.
 func (s *Server) serveAgentChannel(ctx context.Context, ln net.Listener) {
+	s.serveAgentChannelWithLifetime(ctx, ln, agentServerCertTTL)
+}
+
+// The internal lifetime seam lets real short-lived certificate tests exercise the
+// same served path. Production always supplies the 24-hour lifetime above.
+func (s *Server) serveAgentChannelWithLifetime(ctx context.Context, ln net.Listener, lifetime time.Duration) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	if !s.AgentChannelServed() {
 		_ = ln.Close()
 		return
 	}
-	creds, err := s.agentChannelServerCreds(s.agentChannelHosts())
+	cert, err := s.agentChannelServerCertificate(s.agentChannelHosts(), lifetime)
 	if err != nil {
 		s.logger.Error("agent channel credentials failed", "error", err.Error())
 		_ = ln.Close()
 		return
 	}
-	srv := transport.NewServer(creds, s.agentSvc, grpc.MaxConcurrentStreams(agentMaxConcurrentStreams))
+	stopRenewal := s.startAgentServerRenewal(ctx, cert, "grpc")
+	defer stopRenewal()
+	srv := transport.NewServer(cert.Credentials(), s.agentSvc, grpc.MaxConcurrentStreams(agentMaxConcurrentStreams))
 	go func() {
 		<-ctx.Done()
 		srv.GracefulStop()
@@ -1001,18 +1011,6 @@ func (s *Server) AgentChannelAddr() string {
 		return ""
 	}
 	return s.agentChannelAddr
-}
-
-// dnsHostsOnly returns only the DNS (non-IP) hosts, for the CSR's dNSNames (the IPs are
-// re-derived from the same host list by the signer when it stamps IPAddresses).
-func dnsHostsOnly(hosts []string) []string {
-	var out []string
-	for _, h := range hosts {
-		if net.ParseIP(h) == nil {
-			out = append(out, h)
-		}
-	}
-	return out
 }
 
 // agentNamespace is the fixed UUIDv5 namespace under which an agent's stable

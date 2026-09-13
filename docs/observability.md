@@ -80,6 +80,13 @@ The control plane emits, at minimum:
 - `trstctl_agent_enrollments_total{result}` and `trstctl_agent_heartbeats_total{result}`
   — bootstrap enrollment and served agent-channel heartbeat RPC outcomes (`success`
   / `failed`).
+- `trstctl_agent_server_certificate_expiry_timestamp_seconds{listener}` — current
+  verified server-leaf expiry for the `grpc` and `https` agent listeners. Subtract
+  `time()` to read remaining validity in seconds.
+- `trstctl_agent_server_certificate_issuances_total{listener,result}` — initial
+  and renewal issuance outcomes (`success` or `failed`). Failed renewal retains
+  the previous leaf until its actual expiry; a new success publishes a verified
+  replacement without changing the CA or transport key.
 - `trstctl_agent_bulkhead_rejections_total{method}` — heartbeat or renewal RPCs
   shed by the agent-channel bulkhead.
 - `trstctl_agents_total` and `trstctl_agents_stale_total` — fleet-wide aggregate

@@ -142,6 +142,15 @@ trstctl-agent.exe --service=install --enroll-url https://cp:8443 ^
   below `0.02`; stale means the control plane has not seen an agent for two
   heartbeat intervals.
 - `sum(increase(trstctl_agent_bulkhead_rejections_total[5m]))` stays `0`.
+- Each `trstctl_agent_server_certificate_expiry_timestamp_seconds` value advances
+  before its current expiry. The gRPC and HTTPS listeners renew their own leaves
+  automatically, separately from the agent's client certificate. On a server-leaf
+  renewal failure, inspect the control-plane log's listener and expiry fields and
+  restore signer availability; do not disable CA or hostname verification.
+- `TrstctlAgentServerCertificateRenewalFailures` reports recent failed issuance.
+  `TrstctlAgentServerCertificateExpiring` means a listener has under one hour of
+  verified certificate validity left; unresolved expiry blocks fresh connections
+  and can prevent application renewals from reaching their targets.
 - Kubernetes pod logs contain `trstctl-agent: heartbeat ok`.
 - Certificate rotation logs contain `renewed identity adopted; reconnecting the
   agent channel with the new certificate`, followed by a new `connected` line.

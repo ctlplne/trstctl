@@ -695,6 +695,24 @@ groups:
           summary: "trstctl agent heartbeat failure ratio above 2%"
           description: "More than 2% of served heartbeat RPCs failed over 10 minutes. During rollout or upgrade, follow docs/runbooks/fleet-rollout.md and docs/runbooks/upgrade-rollback.md."
 
+      - alert: TrstctlAgentServerCertificateRenewalFailures
+        expr: increase(trstctl_agent_server_certificate_issuances_total{result="failed"}[15m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "trstctl could not renew an agent listener server certificate"
+          description: "The listener's server-certificate issuer has failed. Check signer availability and the current listener expiry. Follow docs/runbooks/fleet-rollout.md; do not weaken certificate verification."
+
+      - alert: TrstctlAgentServerCertificateExpiring
+        expr: trstctl_agent_server_certificate_expiry_timestamp_seconds - time() < 3600
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "trstctl agent listener server certificate has under one hour remaining"
+          description: "Automatic server-leaf renewal has not preserved one hour of validity. Expiry blocks fresh agent connections and can stop application renewals. Restore signer availability and verify the expiry metric advances; see docs/runbooks/fleet-rollout.md."
+
       - alert: TrstctlAgentBulkheadSaturated
         expr: sum(increase(trstctl_agent_bulkhead_rejections_total[5m])) > 0
         for: 1m

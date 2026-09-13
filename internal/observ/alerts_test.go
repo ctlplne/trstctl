@@ -64,6 +64,10 @@ func TestAlertRulesReferenceRealMetrics(t *testing.T) {
 	reg.CounterVec("trstctl_agent_enrollments_total", "Agent bootstrap enrollment attempts by result.", []string{"result"}).WithLabelValues("failed").Inc()
 	reg.CounterVec("trstctl_agent_heartbeats_total", "Agent steady-state heartbeat RPCs by result.", []string{"result"}).WithLabelValues("failed").Inc()
 	reg.CounterVec("trstctl_agent_bulkhead_rejections_total", "Agent-channel RPCs rejected by the agent bulkhead.", []string{"method"}).WithLabelValues("heartbeat").Inc()
+	// The real listener renewal path is covered by the served mTLS tests. Model
+	// its failure and near-expiry series here alongside the other alert inputs.
+	reg.CounterVec("trstctl_agent_server_certificate_issuances_total", "Initial and renewal server certificate issuance results by agent listener.", []string{"listener", "result"}).WithLabelValues("grpc", "failed").Inc()
+	reg.GaugeVec("trstctl_agent_server_certificate_expiry_timestamp_seconds", "Current verified server certificate expiry for an agent listener.", []string{"listener"}).WithLabelValues("grpc").Set(123)
 	// A6 job-ledger telemetry. These are induced here for the same reason as
 	// everything above: the alert file must reference metrics the code actually
 	// emits, and a rule watching a series nobody publishes is a rule that never

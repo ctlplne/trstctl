@@ -1638,6 +1638,20 @@ separate from the one-shot bootstrap enrollment path, which always works. It is
 **off by default**; enabling it without a configured signer (the agent CA is
 custodied there) is a startup error.
 
+Both the gRPC and HTTPS renewal listeners request a 24-hour server certificate
+from the existing agent CA. Each listener renews when half of its current leaf's
+remaining validity has elapsed. Certificate renewal retains the same local
+transport key and CA trust; connected agents do not need new trust bundles.
+The transport key is held in locked memory and destroyed when the listener stops.
+
+A failed signer request keeps the previous certificate until its actual expiry.
+One worker per listener retries between once a second and once every 30 seconds;
+TLS handshakes do not wait for those requests. Expiry still blocks fresh verified
+connections. Restoring the signer lets the worker recover without a control-plane
+restart. This renews the listener leaf, not the agent CA itself. Monitor the
+[listener expiry and issuance metrics](observability.md#metrics) before expiry
+interrupts agent claims and application-certificate delivery.
+
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `TRSTCTL_AGENT_CHANNEL_ENABLED` | `false` | Mounts the served agent mTLS gRPC channel on `TRSTCTL_AGENT_CHANNEL_ADDR`. Requires a configured signer. |

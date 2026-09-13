@@ -3,13 +3,16 @@
 package server
 
 import (
+	"time"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/observ"
 )
 
 type agentChannelMetrics struct {
-	heartbeats         *observ.CounterVec
-	bulkheadRejections *observ.CounterVec
+	serverCertificateExpiry   *observ.GaugeVec
+	serverCertificateRenewals *observ.CounterVec
+	heartbeats                *observ.CounterVec
+	bulkheadRejections        *observ.CounterVec
 	// Job-ledger telemetry (epic A6). Gauges rather than counters, because the
 	// operationally interesting facts are levels — how deep is the queue, how
 	// long has the oldest job waited, how much credential material is live —
@@ -29,6 +32,8 @@ func newAgentChannelMetrics(reg *observ.Registry) *agentChannelMetrics {
 		return nil
 	}
 	m := &agentChannelMetrics{
+		serverCertificateExpiry:   reg.GaugeVec("trstctl_agent_server_certificate_expiry_timestamp_seconds", "Current verified server certificate expiry for an agent listener.", []string{"listener"}),
+		serverCertificateRenewals: reg.CounterVec("trstctl_agent_server_certificate_issuances_total", "Initial and renewal server certificate issuance results by agent listener.", []string{"listener", "result"}),
 		heartbeats: reg.CounterVec("trstctl_agent_heartbeats_total",
 			"Agent steady-state heartbeat RPCs by result.", []string{"result"}),
 		bulkheadRejections: reg.CounterVec("trstctl_agent_bulkhead_rejections_total",
@@ -50,6 +55,9 @@ func newAgentChannelMetrics(reg *observ.Registry) *agentChannelMetrics {
 	}
 	for _, result := range []string{"success", "failed"} {
 		m.heartbeats.WithLabelValues(result)
+		for _, listener := range []string{"grpc", "https"} {
+			m.serverCertificateRenewals.WithLabelValues(listener, result)
+		}
 	}
 	for _, method := range []string{"heartbeat", "renew"} {
 		m.bulkheadRejections.WithLabelValues(method)
@@ -113,4 +121,21 @@ func (m *agentChannelMetrics) observeRedemptionRefusal(reason string) {
 		return
 	}
 	m.redemptionRefusals.WithLabelValues(reason).Inc()
+}
+
+// Both labels are closed sets supplied by the listener assembly, never tenants.
+func (m *agentChannelMetrics) observeServerCertificate(listener string, expiry time.Time, err error) {
+	if m == nil {
+		return
+	}
+	if m.serverCertificateExpiry != nil {
+		m.serverCertificateExpiry.WithLabelValues(listener).Set(float64(expiry.Unix()))
+	}
+	result := "success"
+	if err != nil {
+		result = "failed"
+	}
+	if m.serverCertificateRenewals != nil {
+		m.serverCertificateRenewals.WithLabelValues(listener, result).Inc()
+	}
 }

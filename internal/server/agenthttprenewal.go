@@ -8,9 +8,6 @@ import (
 	"net"
 	"net/http"
 	"time"
-
-	"trstctl.com/trstctl/internal/crypto"
-	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
 // AgentHTTPRenewalServed reports whether the embedded-agent HTTP renewal listener
@@ -48,6 +45,12 @@ func (s *Server) RunAgentHTTPRenewal(ctx context.Context) {
 }
 
 func (s *Server) serveAgentHTTPRenewal(ctx context.Context, ln net.Listener) {
+	s.serveAgentHTTPRenewalWithLifetime(ctx, ln, agentServerCertTTL)
+}
+
+func (s *Server) serveAgentHTTPRenewalWithLifetime(ctx context.Context, ln net.Listener, lifetime time.Duration) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	if !s.AgentHTTPRenewalServed() {
 		_ = ln.Close()
 		return
@@ -56,11 +59,15 @@ func (s *Server) serveAgentHTTPRenewal(ctx context.Context, ln net.Listener) {
 		Handler:           s.agentHTTPRenewalHandler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	if err := s.configureAgentHTTPRenewalTLS(httpSrv, s.agentChannelHosts()); err != nil {
+	cert, err := s.agentChannelServerCertificate(s.agentChannelHosts(), lifetime)
+	if err != nil {
 		s.logger.Error("agent HTTP renewal credentials failed", "error", err.Error())
 		_ = ln.Close()
 		return
 	}
+	httpSrv.TLSConfig = cert.TLSConfig()
+	stopRenewal := s.startAgentServerRenewal(ctx, cert, "https")
+	defer stopRenewal()
 	go func() { // #nosec G118 -- shutdown grace period must outlive the already-canceled parent context (CWE-664)
 		<-ctx.Done()
 		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -72,29 +79,4 @@ func (s *Server) serveAgentHTTPRenewal(ctx context.Context, ln net.Listener) {
 		ctx.Err() == nil {
 		s.logger.Warn("agent HTTP renewal server stopped", "error", serr.Error())
 	}
-}
-
-func (s *Server) configureAgentHTTPRenewalTLS(httpSrv *http.Server, hosts []string) error {
-	key, err := mtls.NewLocalServerKey()
-	if err != nil {
-		return err
-	}
-	cn := "trstctl-agent-http-renewal"
-	if len(hosts) > 0 {
-		cn = hosts[0]
-	}
-	csrDER, err := key.CSR(cn, dnsHostsOnly(hosts))
-	if err != nil {
-		return err
-	}
-	chainPEM, err := crypto.SignServerCertFromCSR(s.agentCACertDER, s.agentCASigner, csrDER, hosts, agentServerCertTTL)
-	if err != nil {
-		return err
-	}
-	tlsConfig, err := key.HTTPServerTLSConfig(chainPEM, s.AgentCACertPEM())
-	if err != nil {
-		return err
-	}
-	httpSrv.TLSConfig = tlsConfig
-	return nil
 }
