@@ -57,6 +57,16 @@ certificate means inventory metadata is unavailable. Neither case substitutes a
 certificate with a matching name or owner. The response records its read time;
 it does not represent an atomic history snapshot or proof for every destination.
 
+The same read is available to scripts, including after identity retirement:
+
+```bash
+trstctl-cli identities deployment-evidence "$identity_id"
+```
+
+Check the returned `receipt` and `certificate` before treating a deployment as
+complete. To prove current application access, also connect to the destination
+with a native client using its normal authentication and certificate checks.
+
 The lifecycle manager watches the [inventory](discovery-and-inventory.md) and acts on
 three signals, tenant-isolated at the database layer:
 

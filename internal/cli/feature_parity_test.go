@@ -281,8 +281,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// it to 451, mapped onto the certificate-profile row F53 beside the rest of
 	// the profile surface whose governed edits they review.
 	// F4's issuance-result read completes asynchronous certificate retrieval.
-	if len(out) != 452 {
-		t.Fatalf("CLI commands = %d, want 452", len(out))
+	// F4's bounded issuance retry and F6's historical deployment evidence
+	// complete the headless recovery and post-retirement inspection paths.
+	if len(out) != 454 {
+		t.Fatalf("CLI commands = %d, want 454", len(out))
 	}
 	return out
 }

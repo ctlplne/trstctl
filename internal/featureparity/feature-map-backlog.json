@@ -3498,6 +3498,7 @@
             ],
             "api_na": "",
             "cli_surface": [
+                "identities issuance-retry",
                 "issuers create",
                 "issuers capabilities",
                 "issuers list",
@@ -11183,6 +11184,7 @@
             ],
             "api_na": "",
             "cli_surface": [
+                "identities deployment-evidence",
                 "identities list",
                 "identities transition",
                 "audit events",

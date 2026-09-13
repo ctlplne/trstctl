@@ -476,6 +476,32 @@ original issuance result to observe completion. Reuse the same recovery key and
 body after a lost response. A `409` means recovery cannot proceed under that
 request; refresh the original result and follow its explanation.
 
+Use the CLI with the identity and original request key saved above. Choose one
+recovery key for this grant and keep it unchanged if the response is lost:
+
+```bash
+(
+set -euo pipefail
+umask 077
+TRSTCTL_CLI="${TRSTCTL_CLI:-./bin/trstctl-cli}"
+certdir=trstctl-first-certificate
+export TRSTCTL_SERVER=https://localhost:8443
+export TRSTCTL_CA_FILE="$PWD/trstctl-eval-ca.pem"
+export TRSTCTL_TOKEN="${TRSTCTL_ISSUER_TOKEN:?Obtain the issuer key first}"
+jq -n --arg request_key "$(cat "$certdir/issuance-request-key")" \
+  '{request_key:$request_key,reason:"Restored the configured CA connection"}' \
+  > "$certdir/issuance-retry.json"
+"$TRSTCTL_CLI" --idempotency-key first-cli-issuance-recovery \
+  identities issuance-retry "$(cat "$certdir/identity-id")" \
+  -f "$certdir/issuance-retry.json"
+"$TRSTCTL_CLI" identities issuance-result "$(cat "$certdir/identity-id")" \
+  --request_key "$(cat "$certdir/issuance-request-key")"
+)
+```
+
+Set `reason` to the repair you actually made before submitting the grant. Run
+these commands from the same repository root as the first request.
+
 The grant is an immutable `issuance.retry_requested` event. It preserves the
 original outbox payload, CA command key, and cumulative attempt count; neither
 receipt replay nor projection rebuild refunds a consumed attempt. Recovery
