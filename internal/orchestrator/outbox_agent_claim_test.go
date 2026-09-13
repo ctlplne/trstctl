@@ -15,9 +15,9 @@ func TestOutboxDispatcherPreservesLiveAgentClaims(t *testing.T) {
 	s := newStore(t)
 	mustRegisterTenant(t, s, tenantA)
 	ob := orchestrator.NewOutbox(s)
-	enqueue(t, s, ob, orchestrator.Entry{TenantID: tenantA, Destination: "endpoint.renew", IdempotencyKey: "held-host-issuance", Payload: []byte(`{}`), RequiredAgentRole: "host"})
-	ctx := t.Context()
 	const agentID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+	enqueue(t, s, ob, orchestrator.Entry{TenantID: tenantA, Destination: "endpoint.renew", IdempotencyKey: "held-host-issuance", Payload: []byte(`{}`), RequiredAgentRole: "host", RequiredAgentID: agentID})
+	ctx := t.Context()
 	jobs, err := s.ClaimAgentJobs(ctx, tenantA, agentID, []string{"endpoint.renew"}, []string{"host"}, 1, time.Minute, time.Now().UTC())
 	if err != nil || len(jobs) != 1 {
 		t.Fatalf("host claim: jobs=%d err=%v", len(jobs), err)

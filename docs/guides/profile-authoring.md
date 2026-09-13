@@ -13,13 +13,21 @@ under them. A read-model rebuild restores profile versions from the event log. E
 create/update and every profile-gated issuance decision is recorded with the actor who
 made it.
 
-Lifecycle renewal resolves the identity's profile, or the configured default
-when the identity has none, and limits the requested validity to that profile's
-ceiling. An agent renewal job retains the exact profile revision and effective
-validity selected at handoff. Editing the profile does not rewrite queued work;
-the next renewal resolves the new active revision. A missing configured profile
-stops renewal. Permission and approval checks remain separate from these
-certificate constraints; an old certificate is not a reusable approval.
+Lifecycle renewal uses the identity's explicit `profile_name` (or `profile`)
+attribute. Without that attribute, it recovers the named profile from the identity's
+first accepted issuance event. This also covers existing endpoint enrollments: a
+mail identity issued under a mail profile keeps that profile when an operator
+changes the default to a Java profile. The configured default applies only when
+the identity has neither an explicit nor a retained named profile. Older issuance
+events without a profile binding remain unassigned.
+
+The next renewal uses the active revision of the selected profile and limits the
+requested validity to its ceiling. An agent renewal job retains the exact revision
+and effective validity selected at handoff; editing the profile or changing the
+default does not rewrite queued work. A missing profile or missing, mismatched, or
+ambiguous retained issuance evidence stops renewal instead of choosing another
+default. Permission and approval checks remain separate from these certificate
+constraints; the original issuance approval cannot authorize a new operation.
 
 ## The registration-authority (RA) separation
 

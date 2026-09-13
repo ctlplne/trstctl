@@ -484,6 +484,12 @@ func (o *Orchestrator) ProfileApprovalRequirement(ctx context.Context, tenantID,
 		return ProfileApprovalRequirement{}, err
 	}
 	if profileName == "" {
+		profileName, err = o.retainedIdentityProfile(ctx, tenantID, identityID)
+		if err != nil {
+			return ProfileApprovalRequirement{}, err
+		}
+	}
+	if profileName == "" {
 		return defaultProfileApprovalRequirement(""), nil
 	}
 	return o.ProfileApprovalRequirementByName(ctx, tenantID, profileName)

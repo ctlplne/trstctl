@@ -11,8 +11,8 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
-// Renewals use the current profile policy when admitted work carries no explicit
-// issuance binding. Resolve once before the host handoff, so delayed CSR signing
+// Renewals use the identity's selected policy when admitted work carries no
+// explicit issuance binding. Resolve its current revision before host handoff, so delayed CSR signing
 // uses that exact revision and validity instead of requesting an unrelated 30
 // days. This does not reuse the predecessor's approval or change admission rules.
 // Both requester-held and legacy control-plane renewals use the same binding.

@@ -22,6 +22,15 @@ import (
 // RPCs must compose across renewals. Separate listener tests prove deployment;
 // these signed fixture reports only exercise the control-plane receiver.
 func TestServedHostRenewalsRetainShortProfile(t *testing.T) {
+	testServedHostRenewalProfile(t, false)
+}
+
+func TestServedHostRenewalsKeepPolicyWhenDefaultChanges(t *testing.T) {
+	testServedHostRenewalProfile(t, true)
+}
+
+func testServedHostRenewalProfile(t *testing.T, changeDefault bool) {
+	t.Helper()
 	h := newRoleHarnessWithDeps(t, []string{mtls.AgentRoleHost}, []string{agentJobKindEndpointRenew}, func(d *Deps) {
 		d.DefaultProfile = "mail-short-life"
 	})
@@ -54,6 +63,11 @@ func TestServedHostRenewalsRetainShortProfile(t *testing.T) {
 	profileID := str(post("/api/v1/profiles", map[string]any{"name": "mail-short-life", "spec": map[string]any{
 		"max_validity": "12m", "allowed_protocols": []string{"api"}, "allowed_dns_suffixes": []string{"renewal.test"},
 	}}, http.StatusCreated)["id"])
+	if changeDefault {
+		post("/api/v1/profiles", map[string]any{"name": "java-short-life", "spec": map[string]any{
+			"max_validity": "12m", "allowed_protocols": []string{"api"}, "allowed_dns_suffixes": []string{"java.other.test"},
+		}}, http.StatusCreated)
+	}
 	owner := str(post("/api/v1/owners", map[string]any{"kind": "workload", "name": "Mail renewal QA"}, http.StatusCreated)["id"])
 	target := str(post("/api/v1/connectors/targets", map[string]any{
 		"name": "renewal-mail", "connector": "postfix", "enabled": true,
@@ -73,6 +87,12 @@ func TestServedHostRenewalsRetainShortProfile(t *testing.T) {
 	previous := ""
 	wantVersion, wantTTL := 1, 12*time.Minute
 	for generation := 0; generation < 3; generation++ {
+		if generation == 1 && changeDefault {
+			// Model the runtime default changing after the first installation.
+			// Public renew transitions carry no new issuance binding: the
+			// dispatcher must resolve this identity's policy, not this default.
+			h.srv.obHandler.(*issuanceDispatcher).defaultProfile = "java-short-life"
+		}
 		if generation == 2 {
 			wantVersion, wantTTL = 2, 10*time.Minute
 		}

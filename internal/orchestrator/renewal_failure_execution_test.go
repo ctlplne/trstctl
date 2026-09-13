@@ -45,7 +45,7 @@ func TestRenewalFailureRetainsExactExecutionAcrossSQLRecovery(t *testing.T) {
 			return err
 		}
 		var err error
-		jobID, err = outbox.Enqueue(ctx, tx, orchestrator.Entry{TenantID: tenantA, Destination: "endpoint.renew", IdempotencyKey: "host-renew:renew:exact-renewal", Payload: payload})
+		jobID, err = outbox.Enqueue(ctx, tx, orchestrator.Entry{TenantID: tenantA, Destination: "endpoint.renew", IdempotencyKey: "host-renew:renew:exact-renewal", Payload: payload, RequiredAgentRole: "host", RequiredAgentID: agentID})
 		return err
 	}); err != nil {
 		t.Fatal(err)
