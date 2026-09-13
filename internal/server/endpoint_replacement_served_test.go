@@ -51,7 +51,7 @@ func TestEndpointReplacementServedPreservesSameOwnerAndExternalCA(t *testing.T) 
 		return err
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, "owners:read", "owners:write", "identities:read", "identities:write",
-		"certs:read", "certs:issue", "connectors:read", "connectors:write", "lifecycle:read")
+		"certs:read", "certs:issue", "connectors:read", "connectors:write", "lifecycle:read", "profiles:write")
 	create := func(path string, request any) map[string]json.RawMessage {
 		t.Helper()
 		status, body := secretsReq(t, h, http.MethodPost, path, tok, request)
@@ -129,7 +129,11 @@ func TestEndpointReplacementServedPreservesSameOwnerAndExternalCA(t *testing.T) 
 		t.Fatalf("original not deployed: %+v %v", originalState, err)
 	}
 	before := eventCount(t, h.log, h.tenant, projections.EventIdentityCreated)
+	create("/api/v1/profiles", map[string]any{"name": "replacement-web", "spec": map[string]any{
+		"max_validity": "24h", "allowed_protocols": []string{"api"}, "allowed_dns_suffixes": []string{"replace.served.test"},
+	}})
 	request["replace_identity_id"] = original.ID
+	request["profile_name"] = "replacement-web"
 	request["reason"] = "replace then independently verify before revoking original"
 	planned := preview()
 	var source struct {
@@ -182,6 +186,17 @@ func TestEndpointReplacementServedPreservesSameOwnerAndExternalCA(t *testing.T) 
 	replacement, err := h.store.GetIdentity(t.Context(), h.tenant, created.Identity.ID)
 	if err != nil || replacement.Status != "deployed" || replacement.OwnerID != owner {
 		t.Fatalf("replacement not deployed with same owner: %+v %v", replacement, err)
+	}
+	var replacementAttrs map[string]any
+	if err := json.Unmarshal(replacement.Attributes, &replacementAttrs); err != nil {
+		t.Fatal(err)
+	}
+	if replacementAttrs["profile_name"] != "replacement-web" {
+		t.Fatalf("replacement lost selected profile: %s", replacement.Attributes)
+	}
+	retained, err := h.srv.orch.ProfileApprovalRequirement(t.Context(), h.tenant, replacement.ID)
+	if err != nil || retained.ProfileName != "replacement-web" || retained.EffectiveTTLSeconds != 86400 {
+		t.Fatalf("replacement renewal policy: %+v %v", retained, err)
 	}
 	_, version, err := h.store.IdentityApprovalTarget(t.Context(), h.tenant, original.ID)
 	if err != nil {

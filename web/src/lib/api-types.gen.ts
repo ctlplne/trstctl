@@ -3123,6 +3123,7 @@ export interface EndpointBindingPlanRequest {
   identity_name: string;
   issuer: EndpointIssuer;
   owner_id: string;
+  profile_name?: string;
   reason?: string;
   replace_identity_id?: string;
   target?: DeploymentTargetRequest;
@@ -3158,6 +3159,7 @@ export interface EndpointBindingRequest {
   issuer: EndpointIssuer;
   owner_id: string;
   preview_fingerprint: string;
+  profile_name?: string;
   reason?: string;
   replace_identity_id?: string;
   target?: DeploymentTargetRequest;

@@ -4813,6 +4813,16 @@ const esESCatalog = {
   "connectors.binding.previewUnsafe": "El servidor no demostró una previsualización sin escrituras. No se autorizó nada.",
   // Machine-authored Spanish/German wording requires human review before release.
   "connectors.binding.profile": "Perfil del certificado",
+  // Endpoint profile selection: machine-authored es/de require human review before release.
+  "connectors.binding.profileChoiceHelp":
+    "Elija un perfil activo para una identidad nueva o de reemplazo. Define los nombres DNS, la validez y las aprobaciones. Al reutilizar una identidad se conserva su política actual. Revise la versión exacta en el siguiente paso.",
+  "connectors.binding.keepProfile": "Conservar la política existente / usar la predeterminada",
+  "connectors.binding.profilesLoading": "Cargando perfiles de certificados…",
+  "connectors.binding.profilesUnavailable": "No se pudieron cargar los perfiles de certificados",
+  "connectors.binding.profileFallbackHelp":
+    "Reintente para elegir un perfil. También puede previsualizar la política actual; el servidor mostrará y validará su versión exacta antes de autorizar.",
+  "connectors.binding.reloadProfiles": "Actualizar perfiles disponibles",
+  "connectors.binding.manageProfiles": "Revisar o crear perfiles en otra pestaña",
   "connectors.binding.profileVersion": "{name} · versión {version}",
   "connectors.binding.defaultProfile": "Valor predeterminado de la plataforma",
   "connectors.binding.validity": "Vigencia del certificado",

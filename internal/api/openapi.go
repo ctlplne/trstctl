@@ -2942,6 +2942,7 @@ func componentSchemas() map[string]*Schema {
 		"availability": str(),
 	}, "source", "id")
 	endpointBindingPlanReq := object(map[string]*Schema{
+		"profile_name":        {Type: "string", Description: "Optional active certificate profile name in this tenant. Omit to keep an existing identity's policy or use the configured default for a new identity. An explicit choice is retained on a new or replacement identity; it cannot override a reused identity's policy. Preview binds the exact revision and approval requirement."},
 		"owner_id":            uuid(),
 		"replace_identity_id": uuid(),
 		"identity_name":       str(),
@@ -2951,6 +2952,7 @@ func componentSchemas() map[string]*Schema {
 		"reason":              str(),
 	}, "owner_id", "identity_name", "issuer")
 	endpointBindingReq := object(map[string]*Schema{
+		"profile_name":        {Type: "string", Description: "The same optional certificate profile name used for preview. Changing the choice or active revision requires a fresh preview and request key."},
 		"owner_id":            uuid(),
 		"replace_identity_id": uuid(),
 		"identity_name":       str(),

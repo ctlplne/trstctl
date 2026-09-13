@@ -18,6 +18,7 @@ const { apiMock } = vi.hoisted(() => ({
     owners: vi.fn(),
     externalCAs: vi.fn(),
     caAuthorities: vi.fn(),
+    profiles: vi.fn(),
     createConnectorTarget: vi.fn(),
     previewEndpointBinding: vi.fn(),
     createEndpointBinding: vi.fn(),
@@ -179,6 +180,10 @@ describe("connector deployment disclosure surface", () => {
     ]);
     apiMock.externalCAs.mockReset().mockResolvedValue([{ id: "corporate-digicert", name: "Corporate DigiCert", type: "digicert", status: "available" }]);
     apiMock.caAuthorities.mockReset().mockResolvedValue({ items: [] });
+    apiMock.profiles.mockReset().mockResolvedValue([
+      { id: "profile-1", name: "payments-tls", version: 3, active: true },
+      { id: "profile-old", name: "payments-tls", version: 2, active: false },
+    ]);
     apiMock.createConnectorTarget.mockReset().mockResolvedValue({
       id: "target-created",
       tenant_id: "tenant-1",
@@ -554,6 +559,46 @@ describe("connector deployment disclosure surface", () => {
     expect(screen.queryByText(/endpoint-binding:/)).not.toBeInTheDocument();
   });
 
+  it("recovers unavailable profile choices without discarding the endpoint or CA", async () => {
+    apiMock.profiles.mockRejectedValueOnce(new Error("profile roster unavailable"));
+    const user = userEvent.setup();
+    renderConnectors();
+    await user.click(await screen.findByText("Destinations and safe actions", { exact: true }));
+    await user.selectOptions(await screen.findByLabelText("Destination"), "target-1");
+    await user.selectOptions(screen.getByLabelText("Owner"), "owner-1");
+    await user.type(screen.getByLabelText("Enrollment reason"), "retain reviewed endpoint choices");
+    await user.click(screen.getByRole("button", { name: "Choose CA" }));
+    await user.selectOptions(await screen.findByLabelText("Issuing CA"), "external:corporate-digicert");
+    expect(await screen.findByText("Certificate profiles could not be loaded")).toBeInTheDocument();
+    expect(screen.getByLabelText("Certificate profile")).toBeDisabled();
+    expect(screen.getByRole("link", { name: "Review or create profiles in another tab" })).toHaveAttribute("href", "/profiles");
+    let resolveProfiles!: (value: unknown[]) => void;
+    apiMock.profiles.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveProfiles = resolve;
+        }),
+    );
+    await user.click(screen.getByRole("button", { name: "Refresh profile choices" }));
+    await waitFor(() => expect(apiMock.profiles).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole("button", { name: "Refresh profile choices" })).toBeDisabled();
+    resolveProfiles([{ id: "new-profile", name: "new-endpoint-policy", version: 1, active: true }]);
+    await screen.findByRole("option", { name: "new-endpoint-policy · version 1" });
+    await user.selectOptions(screen.getByLabelText("Certificate profile"), "new-endpoint-policy");
+    expect(screen.getByLabelText("Issuing CA")).toHaveValue("external:corporate-digicert");
+    await user.click(screen.getByRole("button", { name: "Build safe preview" }));
+    await screen.findByRole("heading", { name: "Ready to authorize — nothing changed" });
+    expect(apiMock.previewEndpointBinding).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target_id: "target-1",
+        owner_id: "owner-1",
+        reason: "retain reviewed endpoint choices",
+        profile_name: "new-endpoint-policy",
+        issuer: { source: "external", id: "corporate-digicert" },
+      }),
+    );
+  });
+
   it("creates and operates a served connector target", async () => {
     const binding = await apiMock.createEndpointBinding.getMockImplementation()?.();
     apiMock.getIdentity.mockResolvedValue(binding.identity);
@@ -593,6 +638,8 @@ describe("connector deployment disclosure surface", () => {
     expect(await screen.findByRole("heading", { name: "Choose the CA" })).toBeInTheDocument();
     expect(screen.getByText(/Nothing is preselected/)).toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText("Issuing CA"), "external:corporate-digicert");
+    await user.selectOptions(await screen.findByLabelText("Certificate profile"), "payments-tls");
+    expect(screen.queryByRole("option", { name: "payments-tls · version 2" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Build safe preview" }));
     expect(await screen.findByRole("heading", { name: "Ready to authorize — nothing changed" })).toBeInTheDocument();
     expect(screen.getByText("External CA: Corporate DigiCert")).toBeInTheDocument();
@@ -604,6 +651,7 @@ describe("connector deployment disclosure surface", () => {
       reason: "verified design-partner endpoint",
       target_id: "target-1",
       issuer: { source: "external", id: "corporate-digicert" },
+      profile_name: "payments-tls",
     });
     await user.click(screen.getByRole("button", { name: "Authorize issuance and deployment" }));
     await waitFor(() =>
@@ -614,6 +662,7 @@ describe("connector deployment disclosure surface", () => {
           reason: "verified design-partner endpoint",
           target_id: "target-1",
           issuer: { source: "external", id: "corporate-digicert" },
+          profile_name: "payments-tls",
           preview_fingerprint: "sha256:exact-endpoint-plan",
         },
         expect.any(String),

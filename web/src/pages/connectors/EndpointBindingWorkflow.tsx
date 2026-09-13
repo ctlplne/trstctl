@@ -10,6 +10,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { ApiError, api } from "@/lib/api";
+import { useApiQuery } from "@/lib/query";
 import type { CAAuthority, DeploymentTarget, EndpointBinding, EndpointBindingPreview, EndpointIssuer, ExternalCA, Identity, Owner } from "@/lib/api-types.gen";
 import { useTranslation } from "@/i18n/I18nProvider";
 
@@ -31,6 +32,7 @@ type FormValues = {
   identity_name: string;
   reason: string;
   issuer_key: string;
+  profile_name: string;
 };
 
 type IssuerOption = EndpointIssuer & { available: boolean };
@@ -45,6 +47,7 @@ export function EndpointBindingWorkflow({
   onComplete: (binding: EndpointBinding, reason: string) => Promise<void> | void;
 }) {
   const { t } = useTranslation();
+  const profiles = useApiQuery(["endpoint-binding-profiles"], () => api.profiles(), { retry: false });
   const [step, setStep] = useState(0);
   const [owners, setOwners] = useState<Owner[]>([]);
   const [externalCAs, setExternalCAs] = useState<ExternalCA[]>([]);
@@ -71,6 +74,7 @@ export function EndpointBindingWorkflow({
           identity_name: z.string().trim().min(1, t("connectors.binding.required")),
           reason: z.string().trim().min(1, t("connectors.binding.required")),
           issuer_key: z.string().trim().min(1, t("connectors.binding.issuerRequired")),
+          profile_name: z.string().trim(),
         })
         .superRefine((values, context) => {
           if (values.mode === "replace" && !values.replace_identity_id) {
@@ -89,7 +93,7 @@ export function EndpointBindingWorkflow({
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     mode: "onTouched",
-    defaultValues: { mode: "enroll", replace_identity_id: "", target_id: "", owner_id: "", identity_name: "", reason: "", issuer_key: "" },
+    defaultValues: { mode: "enroll", replace_identity_id: "", target_id: "", owner_id: "", identity_name: "", reason: "", issuer_key: "", profile_name: "" },
   });
   const issuerKey = useWatch({ control, name: "issuer_key" });
   const targetID = useWatch({ control, name: "target_id" });
@@ -193,7 +197,7 @@ export function EndpointBindingWorkflow({
       if (await trigger(["target_id", "owner_id", "identity_name", "reason", "mode", "replace_identity_id"])) setStep(1);
       return;
     }
-    if (!(await trigger("issuer_key"))) return;
+    if (!(await trigger(["issuer_key", "profile_name"]))) return;
     const values = getValues();
     const issuer = decodeIssuer(values.issuer_key);
     if (!issuer) return;
@@ -206,6 +210,7 @@ export function EndpointBindingWorkflow({
         target_id: values.target_id,
         reason: values.reason.trim(),
         issuer,
+        ...(values.profile_name ? { profile_name: values.profile_name.trim() } : {}),
       });
       if (!reviewed.ready || !reviewed.effect_free || reviewed.preview_writes.length > 0 || reviewed.preview_external_effects.length > 0) {
         throw new Error(t("connectors.binding.previewUnsafe"));
@@ -242,6 +247,7 @@ export function EndpointBindingWorkflow({
           target_id: values.target_id,
           reason: values.reason.trim(),
           issuer,
+          ...(values.profile_name ? { profile_name: values.profile_name.trim() } : {}),
           preview_fingerprint: preview.request_fingerprint,
         },
         requestKey,
@@ -367,6 +373,35 @@ export function EndpointBindingWorkflow({
 
         {step === 1 ? (
           <div className="grid gap-4">
+            <Field label={t("connectors.binding.profile")} description={t("connectors.binding.profileChoiceHelp")} error={errors.profile_name?.message}>
+              {(field) => (
+                <Select {...field} {...register("profile_name")} disabled={profiles.loading || Boolean(profiles.error)}>
+                  <option value="">{t("connectors.binding.keepProfile")}</option>
+                  {(profiles.data ?? [])
+                    .filter((profile) => profile.active)
+                    .map((profile) => (
+                      <option key={profile.id} value={profile.name}>
+                        {t("connectors.binding.profileVersion", { name: profile.name, version: profile.version })}
+                      </option>
+                    ))}
+                </Select>
+              )}
+            </Field>
+            {profiles.loading ? <LoadingState>{t("connectors.binding.profilesLoading")}</LoadingState> : null}
+            {profiles.error ? (
+              <ErrorState title={t("connectors.binding.profilesUnavailable")}>
+                <p>{profiles.error}</p>
+                <p>{t("connectors.binding.profileFallbackHelp")}</p>
+              </ErrorState>
+            ) : null}
+            <div className="flex flex-wrap items-center gap-3">
+              <Button type="button" variant="outline" onClick={profiles.refetch} disabled={profiles.fetching}>
+                {t("connectors.binding.reloadProfiles")}
+              </Button>
+              <Link className="text-sm font-medium text-primary underline" to="/profiles" target="_blank" rel="noopener noreferrer">
+                {t("connectors.binding.manageProfiles")}
+              </Link>
+            </div>
             <p className="max-w-3xl text-sm text-muted-foreground">{t("connectors.binding.caAgnostic")}</p>
             <Field label={t("connectors.binding.issuer")} description={t("connectors.binding.issuerHelp")} error={errors.issuer_key?.message} required>
               {(field) => (

@@ -1573,8 +1573,11 @@ describe("i18n boundary", () => {
       // Real Vault recovery: accepted-request replay cannot restart exhausted retries.
       // Issuer-specific reason publication is distinguished from the recorded audit reason.
       // Reviewed both distinctions in all locales; machine-authored es/de need human review before release.
-      "es-ES": "8f182a435f165fb5d063a7b285f67c31ba1a2221849a670e5a9ba47f5fc2d39f",
-      "de-DE": "14d119cdb3cad44d81179c8e304d2fc502a0915bb6bb6a3f333c453f3b59bc5d",
+      // Endpoint profile selection: reviewed policy precedence, exact revision,
+      // failed roster recovery and refresh without losing endpoint inputs.
+      // Machine-authored es/de require HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "e47fef9b059893769e5842d4cbf2cdcbbc3ce62c7af41d8589f3998cd8a3458d",
+      "de-DE": "5a59f27c95f3adf81ceaa4f31ecad77270d4cf68bf284689ed00024a3360d80c",
     });
   });
 

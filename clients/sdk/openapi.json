@@ -12873,6 +12873,10 @@
             "format": "uuid",
             "type": "string"
           },
+          "profile_name": {
+            "description": "Optional active certificate profile name in this tenant. Omit to keep an existing identity's policy or use the configured default for a new identity. An explicit choice is retained on a new or replacement identity; it cannot override a reused identity's policy. Preview binds the exact revision and approval requirement.",
+            "type": "string"
+          },
           "reason": {
             "type": "string"
           },
@@ -13039,6 +13043,10 @@
             "type": "string"
           },
           "preview_fingerprint": {
+            "type": "string"
+          },
+          "profile_name": {
+            "description": "The same optional certificate profile name used for preview. Changing the choice or active revision requires a fresh preview and request key.",
             "type": "string"
           },
           "reason": {

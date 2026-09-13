@@ -4862,6 +4862,16 @@ const deDECatalog = {
   "connectors.binding.previewUnsafe": "Der Server hat keine schreibfreie Vorschau nachgewiesen. Nichts wurde autorisiert.",
   // Machine-authored Spanish/German wording requires human review before release.
   "connectors.binding.profile": "Zertifikatsprofil",
+  // Endpoint profile selection: machine-authored es/de require human review before release.
+  "connectors.binding.profileChoiceHelp":
+    "Wählen Sie ein aktives Profil für eine neue oder ersetzende Identität. Es regelt DNS-Namen, Gültigkeit und Genehmigungen. Bei Wiederverwendung bleibt die bisherige Richtlinie erhalten. Prüfen Sie im nächsten Schritt die genaue Version.",
+  "connectors.binding.keepProfile": "Bisherige Richtlinie / konfigurierten Standard verwenden",
+  "connectors.binding.profilesLoading": "Zertifikatsprofile werden geladen…",
+  "connectors.binding.profilesUnavailable": "Zertifikatsprofile konnten nicht geladen werden",
+  "connectors.binding.profileFallbackHelp":
+    "Versuchen Sie es erneut, um ein Profil auszuwählen. Sie können die bisherige Richtlinie weiterhin vorprüfen; der Server zeigt und prüft ihre genaue Version vor der Autorisierung.",
+  "connectors.binding.reloadProfiles": "Profilauswahl aktualisieren",
+  "connectors.binding.manageProfiles": "Profile in einem neuen Tab prüfen oder erstellen",
   "connectors.binding.profileVersion": "{name} · Version {version}",
   "connectors.binding.defaultProfile": "Plattformstandard",
   "connectors.binding.validity": "Zertifikatsgültigkeit",

@@ -9872,6 +9872,8 @@ export interface components {
             issuer: components["schemas"]["EndpointIssuer"];
             /** Format: uuid */
             owner_id: string;
+            /** @description Optional active certificate profile name in this tenant. Omit to keep an existing identity's policy or use the configured default for a new identity. An explicit choice is retained on a new or replacement identity; it cannot override a reused identity's policy. Preview binds the exact revision and approval requirement. */
+            profile_name?: string;
             reason?: string;
             /** Format: uuid */
             replace_identity_id?: string;
@@ -9917,6 +9919,8 @@ export interface components {
             /** Format: uuid */
             owner_id: string;
             preview_fingerprint: string;
+            /** @description The same optional certificate profile name used for preview. Changing the choice or active revision requires a fresh preview and request key. */
+            profile_name?: string;
             reason?: string;
             /** Format: uuid */
             replace_identity_id?: string;

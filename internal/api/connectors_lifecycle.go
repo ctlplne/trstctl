@@ -192,6 +192,7 @@ type endpointBindingRequest struct {
 	OwnerID            string                   `json:"owner_id"`
 	ReplaceIdentityID  string                   `json:"replace_identity_id,omitempty"`
 	IdentityName       string                   `json:"identity_name"`
+	ProfileName        string                   `json:"profile_name,omitempty"`
 	TargetID           string                   `json:"target_id"`
 	Target             *deploymentTargetRequest `json:"target"`
 	Issuer             endpointIssuerRequest    `json:"issuer"`
@@ -1033,7 +1034,7 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 		existingResp = &resp
 		identityChange = "Enroll existing X.509 identity " + existing.ID + " for " + req.IdentityName + " owned by " + strings.TrimSpace(owner.Name) + " (" + req.OwnerID + ")."
 	}
-	profileRequirement, err := a.endpointIssuanceRequirement(ctx, tenantID, existingResp)
+	profileRequirement, err := a.endpointIssuanceRequirement(ctx, tenantID, existingResp, req.ProfileName)
 	if err != nil {
 		return endpointBindingPreviewResponse{}, err
 	}
@@ -1416,6 +1417,7 @@ func decodeEndpointBindingRequest(r *http.Request) (endpointBindingRequest, erro
 	req.OwnerID = strings.TrimSpace(req.OwnerID)
 	req.ReplaceIdentityID = strings.TrimSpace(req.ReplaceIdentityID)
 	req.IdentityName = strings.TrimSpace(req.IdentityName)
+	req.ProfileName = strings.TrimSpace(req.ProfileName)
 	req.TargetID = strings.TrimSpace(req.TargetID)
 	req.Issuer.Source = strings.ToLower(strings.TrimSpace(req.Issuer.Source))
 	req.Issuer.ID = strings.TrimSpace(req.Issuer.ID)

@@ -31,6 +31,13 @@ func EndpointReplacementIdentityID(tenantID, originalID, previewFingerprint stri
 // safe even when the HTTP response was never cached. Issuance still goes through
 // the normal policy, approval, lifecycle event, and outbox path afterwards.
 func (o *Orchestrator) EnsureEndpointReplacement(ctx context.Context, tenantID string, reviewed store.Identity, version uint64, target store.DeploymentTarget, issuer store.IdentityEndpointIssuer) (store.Identity, error) {
+	return o.EnsureEndpointReplacementWithProfile(ctx, tenantID, reviewed, version, target, issuer, "")
+}
+
+// EnsureEndpointReplacementWithProfile retains the explicitly selected policy
+// on the new identity. Its revision is authorized by the normal issuance gate;
+// the original identity's policy is never changed by replacement preparation.
+func (o *Orchestrator) EnsureEndpointReplacementWithProfile(ctx context.Context, tenantID string, reviewed store.Identity, version uint64, target store.DeploymentTarget, issuer store.IdentityEndpointIssuer, profileName string) (store.Identity, error) {
 	if reviewed.TenantID != tenantID || len(issuer.PreviewFingerprint) != 64 || target.ID == "" || target.Type == "" || target.Name == "" {
 		return store.Identity{}, fmt.Errorf("%w: exact tenant, original, destination, and preview are required", store.ErrIdentityEnrollmentConflict)
 	}
@@ -47,6 +54,9 @@ func (o *Orchestrator) EnsureEndpointReplacement(ctx context.Context, tenantID s
 		"issuing_authority_name": issuer.Name, "endpoint_preview_sha256": issuer.PreviewFingerprint,
 		"connector": target.Type, "deployment_connector": target.Type,
 		"target": target.Name, "deployment_target": target.Name, "deployment_target_id": target.ID,
+	}
+	if profileName != "" {
+		attrs["profile_name"] = profileName
 	}
 	if route := deploymentRoute(target); route != "" {
 		attrs["deployment_route"] = route
@@ -96,6 +106,9 @@ func (o *Orchestrator) EnsureEndpointReplacement(ctx context.Context, tenantID s
 				if existingAttrs[key] != want {
 					return fmt.Errorf("%w: replacement binding changed", store.ErrIdentityEnrollmentConflict)
 				}
+			}
+			if existingAttrs["profile_name"] != profileName || existingAttrs["profile"] != "" {
+				return fmt.Errorf("%w: replacement certificate profile changed", store.ErrIdentityEnrollmentConflict)
 			}
 			if existing.Status == "revoked" || existing.Status == "retired" {
 				return fmt.Errorf("%w: this replacement was closed; preview a new request with a new reason", store.ErrIdentityEnrollmentConflict)

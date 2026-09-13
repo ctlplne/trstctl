@@ -39,12 +39,25 @@ type endpointEnrollmentPrepared struct {
 	Target   store.DeploymentTarget
 }
 
-func (a *API) endpointIssuanceRequirement(ctx context.Context, tenantID string, existing *identityResponse) (orchestrator.ProfileApprovalRequirement, error) {
+func (a *API) endpointIssuanceRequirement(ctx context.Context, tenantID string, existing *identityResponse, selectedProfile string) (orchestrator.ProfileApprovalRequirement, error) {
 	if existing != nil {
 		req, err := a.orch.ProfileApprovalRequirement(ctx, tenantID, existing.ID)
-		if err != nil || req.ProfileName != "" {
+		if err != nil {
 			return req, err
 		}
+		if req.ProfileName == "" {
+			req, err = a.orch.ProfileApprovalRequirementByName(ctx, tenantID, a.gate.Profile)
+			if err != nil {
+				return req, err
+			}
+		}
+		if selectedProfile != "" && selectedProfile != req.ProfileName {
+			return orchestrator.ProfileApprovalRequirement{}, errStatus(http.StatusConflict, "the existing identity uses a different certificate profile; review its policy on the identity before enrolling it, or keep its current profile")
+		}
+		return req, nil
+	}
+	if selectedProfile != "" {
+		return a.orch.ProfileApprovalRequirementByName(ctx, tenantID, selectedProfile)
 	}
 	return a.orch.ProfileApprovalRequirementByName(ctx, tenantID, a.gate.Profile)
 }
@@ -200,7 +213,7 @@ func (a *API) validateEndpointEnrollmentSnapshot(ctx context.Context, tenantID s
 	if !reflect.DeepEqual(issuer, snapshot.Preview.Issuer) {
 		return errStatus(http.StatusConflict, "endpoint issuer changed after review; preview again")
 	}
-	profile, err := a.endpointIssuanceRequirement(ctx, tenantID, snapshot.Preview.ExistingIdentity)
+	profile, err := a.endpointIssuanceRequirement(ctx, tenantID, snapshot.Preview.ExistingIdentity, req.ProfileName)
 	if err != nil {
 		return err
 	}
@@ -238,10 +251,14 @@ func (a *API) prepareEndpointEnrollment(ctx context.Context, tenantID, keyDigest
 			ID: snapshot.Preview.Issuer.ID, Name: snapshot.Preview.Issuer.Name, PreviewFingerprint: snapshot.Preview.RequestFingerprint}
 		var identity store.Identity
 		if snapshot.Preview.ReplacedIdentity != nil {
-			identity, err = a.orch.EnsureEndpointReplacement(ctx, tenantID, snapshot.Replaced, snapshot.Preview.ReplacedIdentityVersion, target, issuer)
+			identity, err = a.orch.EnsureEndpointReplacementWithProfile(ctx, tenantID, snapshot.Replaced, snapshot.Preview.ReplacedIdentityVersion, target, issuer, req.ProfileName)
 		} else {
-			attributes, marshalErr := json.Marshal(map[string]string{"issuing_authority_source": issuer.Source,
-				"issuing_authority_id": issuer.ID, "issuing_authority_name": issuer.Name, "endpoint_preview_sha256": issuer.PreviewFingerprint})
+			attrs := map[string]string{"issuing_authority_source": issuer.Source,
+				"issuing_authority_id": issuer.ID, "issuing_authority_name": issuer.Name, "endpoint_preview_sha256": issuer.PreviewFingerprint}
+			if req.ProfileName != "" {
+				attrs["profile_name"] = req.ProfileName
+			}
+			attributes, marshalErr := json.Marshal(attrs)
 			if marshalErr != nil {
 				return nil, marshalErr
 			}
@@ -255,7 +272,7 @@ func (a *API) prepareEndpointEnrollment(ctx context.Context, tenantID, keyDigest
 				var expectedVersion *uint64
 				if snapshot.Preview.ExistingIdentity != nil {
 					expectedVersion = &snapshot.Preview.ExistingIdentityVersion
-				} else if identity.Name != req.IdentityName || identity.Kind != store.KindX509Certificate || !endpointCreatedIdentityMatches(identity, issuer) {
+				} else if identity.Name != req.IdentityName || identity.Kind != store.KindX509Certificate || !endpointCreatedIdentityMatches(identity, issuer, req.ProfileName) {
 					return nil, errStatus(http.StatusConflict, "prepared endpoint identity changed; review its current state before continuing")
 				}
 				var reviewed []store.Identity
@@ -305,7 +322,7 @@ func (a *API) endpointEnrollmentTarget(ctx context.Context, tenantID string, req
 		Name: req.Target.Name, Type: req.Target.Connector, Config: req.Target.Config, Enabled: true})
 }
 
-func endpointCreatedIdentityMatches(identity store.Identity, issuer store.IdentityEndpointIssuer) bool {
+func endpointCreatedIdentityMatches(identity store.Identity, issuer store.IdentityEndpointIssuer, profileName string) bool {
 	var attrs map[string]json.RawMessage
 	if json.Unmarshal(identity.Attributes, &attrs) != nil {
 		return false
@@ -316,6 +333,17 @@ func endpointCreatedIdentityMatches(identity store.Identity, issuer store.Identi
 		if json.Unmarshal(attrs[key], &got) != nil || got != want {
 			return false
 		}
+	}
+	// A recovered preparation cannot adopt a newly edited identity policy.
+	var retainedProfile, legacyProfile string
+	if raw, ok := attrs["profile_name"]; ok && json.Unmarshal(raw, &retainedProfile) != nil {
+		return false
+	}
+	if raw, ok := attrs["profile"]; ok && json.Unmarshal(raw, &legacyProfile) != nil {
+		return false
+	}
+	if retainedProfile != profileName || legacyProfile != "" {
+		return false
 	}
 	return true
 }

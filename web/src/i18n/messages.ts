@@ -13912,6 +13912,31 @@ export const messages = {
   },
   // Machine-authored Spanish/German wording requires human review before release.
   "connectors.binding.profile": { defaultMessage: "Certificate profile", description: "Endpoint issuance authority and approval continuation." },
+  // Endpoint profile selection: machine-authored es/de require human review before release.
+  "connectors.binding.profileChoiceHelp": {
+    defaultMessage:
+      "Choose an active profile for a new or replacement identity. It governs DNS names, validity and approvals. Reusing an identity preserves its current policy. Review the exact revision next.",
+    description: "Endpoint profile selection and policy review.",
+  },
+  "connectors.binding.keepProfile": {
+    defaultMessage: "Keep existing policy / use configured default",
+    description: "Endpoint profile selection and policy review.",
+  },
+  "connectors.binding.profilesLoading": { defaultMessage: "Loading certificate profiles…", description: "Endpoint profile selection and policy review." },
+  "connectors.binding.profilesUnavailable": {
+    defaultMessage: "Certificate profiles could not be loaded",
+    description: "Endpoint profile selection and policy review.",
+  },
+  "connectors.binding.profileFallbackHelp": {
+    defaultMessage:
+      "Retry to choose a profile. You can still preview the current policy; the server will show and validate its exact revision before authorization.",
+    description: "Endpoint profile selection and policy review.",
+  },
+  "connectors.binding.reloadProfiles": { defaultMessage: "Refresh profile choices", description: "Endpoint profile selection and policy review." },
+  "connectors.binding.manageProfiles": {
+    defaultMessage: "Review or create profiles in another tab",
+    description: "Endpoint profile selection and policy review.",
+  },
   "connectors.binding.profileVersion": { defaultMessage: "{name} · version {version}", description: "Endpoint issuance authority and approval continuation." },
   "connectors.binding.defaultProfile": { defaultMessage: "Platform default", description: "Endpoint issuance authority and approval continuation." },
   "connectors.binding.validity": { defaultMessage: "Certificate validity", description: "Endpoint issuance authority and approval continuation." },

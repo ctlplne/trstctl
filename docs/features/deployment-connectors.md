@@ -136,8 +136,11 @@ testing, deploying, and rolling back remain separate reviewed actions.
 Endpoint enrollment preview checks the DNS name, API enrollment protocol, and
 effective validity against the exact certificate-profile revision shown in the
 review. A mismatch is refused before an identity is created or issuance is queued.
-Correct the endpoint's identity profile (`profile_name` or `profile`) or the
-operator's `ca.default_profile`, then preview again. The signer still validates the
+For a new or replacement identity, choose a matching **Certificate profile** in
+the CA step. Open profiles in another tab to create or review one, then refresh
+the choices without losing the endpoint inputs. A reused identity keeps its
+existing policy; review its identity profile (`profile_name` or `profile`) before
+trying a different policy. The signer still validates the
 actual CSR, key strength, and requested key usages when issuance runs; a metadata
 preview does not replace those checks.
 
@@ -335,7 +338,14 @@ issuance.
 
 The endpoint review includes the active certificate profile's name, immutable
 version and digest, requested validity, effective validity, and approval requirement.
-An identity-specific profile wins; otherwise the configured default applies. The
+Preview and execution accept an optional `profile_name`, the active profile name
+in the caller's tenant. The console lists active revisions; the server resolves
+and validates the exact revision. An explicit choice is retained on a new or
+replacement identity for later issuance and renewal. It cannot override a reused
+identity's current policy: a different choice returns HTTP 409 before mutation.
+Omitting the field preserves the existing identity policy or uses the configured
+default for a new identity. This certificate policy is separate from the target's
+host execution `profile`, which limits file paths and reload commands. The
 implicit request is 30 days, bounded by the profile maximum: a 12-minute profile
 queues a 720-second certificate request. The profile binding stays with the command
 when it is handed to a host agent. A changed profile or destination invalidates an
