@@ -34,7 +34,7 @@ describe("identity deployment attempt evidence", () => {
 
   it("does not show stale failure detail when the identity evidence is unavailable", () => {
     render(<CredentialActivityTimeline deliveryReceipt={failure} deliveryNotice="Evidence unavailable" />);
-    expect(screen.getByText("Evidence unavailable")).toBeInTheDocument();
+    expect(screen.getAllByText("Evidence unavailable")).toHaveLength(2);
     expect(screen.queryByText(failure.detail)).not.toBeInTheDocument();
     expect(screen.queryByText("418")).not.toBeInTheDocument();
   });

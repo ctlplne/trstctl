@@ -2,7 +2,7 @@ import { useState } from "react";
 import { CredentialActivityTimeline } from "@/components/CredentialActivityTimeline";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n/I18nProvider";
-import { api, type Identity } from "@/lib/api";
+import { api, type ConnectorDelivery, type Identity } from "@/lib/api";
 import { useApiQuery, type ApiQueryResult } from "@/lib/query";
 
 type Receipt = { id: string; identity_id?: string; created_at?: string; updated_at?: string };
@@ -35,10 +35,18 @@ export async function readIdentityReceiptPages<T extends Receipt>(
   return { items: [...items.values()], next_cursor: cursor ?? "" };
 }
 
-function mostRecentlyUpdated<T extends Receipt>(result: ApiQueryResult<ReceiptPage<T>>): T | undefined {
+function mostRecentlyUpdated<T extends Receipt>(result: ApiQueryResult<ReceiptPage<T>>, matches: (item: T) => boolean = () => true): T | undefined {
   if (!result.data || result.error || result.data.next_cursor) return undefined;
   const time = (item: T) => Date.parse(item.updated_at || item.created_at || "") || 0;
-  return result.data.items.reduce<T | undefined>((latest, item) => (!latest || time(item) > time(latest) ? item : latest), undefined);
+  return result.data.items.filter(matches).reduce<T | undefined>((latest, item) => (!latest || time(item) > time(latest) ? item : latest), undefined);
+}
+
+// Post-deployment observations have their own receipt and one probe attempt.
+// They must not replace the outbox delivery's retry count or rollback evidence.
+// This also recognizes retained observations written before this distinction
+// was visible in the console; no event history needs to be rewritten.
+function isVerificationObservation(receipt: ConnectorDelivery): boolean {
+  return receipt.outbox_id == null && (receipt.status === "verified" || receipt.status === "verify_failed");
 }
 
 export function IdentityActivityEvidence({ identity }: { identity: Identity }) {
@@ -63,11 +71,25 @@ export function IdentityActivityEvidence({ identity }: { identity: Identity }) {
   }
   const deliveryNotice = notice(deliveries);
   const rotationNotice = notice(rotations);
+  const delivery = mostRecentlyUpdated(deliveries, (receipt) => !isVerificationObservation(receipt));
+  const verification = mostRecentlyUpdated(
+    deliveries,
+    (receipt) =>
+      isVerificationObservation(receipt) &&
+      Boolean(delivery?.idempotency_key) &&
+      receipt.idempotency_key === `${delivery?.idempotency_key}:verified` &&
+      receipt.identity_id === delivery?.identity_id &&
+      receipt.connector === delivery?.connector &&
+      receipt.target === delivery?.target &&
+      Boolean(delivery?.fingerprint) &&
+      receipt.fingerprint === delivery?.fingerprint,
+  );
   return (
     <>
       <CredentialActivityTimeline
         credentialLabel={identity.name}
-        deliveryReceipt={mostRecentlyUpdated(deliveries)}
+        deliveryReceipt={delivery}
+        verificationReceipt={verification}
         rotationRun={mostRecentlyUpdated(rotations)}
         deliveryNotice={deliveryNotice}
         rotationNotice={rotationNotice}

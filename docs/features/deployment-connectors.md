@@ -258,6 +258,14 @@ destination settings, or host transcript to resolve the reported cause. If the
 job has redeemed secret material, its free-text error is withheld from permanent
 history; use the redemption audit reference and that host's local transcript.
 
+Delivery and endpoint verification appear separately in the activity timeline.
+Delivery keeps the actual retry count, job ID, and restore reference. Verification
+shows the observed result and time for that exact delivery; its single probe does
+not reset the delivery's attempt count. The console matches the recorded operation
+key, identity, connector, target, and certificate fingerprint before associating
+those receipts. A missing match stays unverified. These are historical observations,
+not a promise that the listener still serves the same certificate now.
+
 `target test` is an effect-free dress rehearsal from the machine or network that
 would perform the real deployment. Enable `connector.test` as a claimable job kind
 in addition to enrolling the required agent role. For all 14 host-vantage families,

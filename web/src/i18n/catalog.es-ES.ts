@@ -8922,6 +8922,9 @@ const esESCatalog = {
   "identities.evidence.partialSummary": "El historial es parcial. Abre los detalles.",
   "identities.evidence.partialHistory": "Se cargaron {count} registros. Puede haber más historial; el resultado más reciente no está confirmado.",
   "identities.evidence.incompleteRollback": "El historial de reversión está incompleto o no está disponible.",
+  "identities.evidence.verificationLabel": "Verificación del punto de conexión",
+  "identities.evidence.verificationObservation": "{status} {connector}/{target} a las {time}. Observación histórica.",
+  "identities.evidence.verificationMissing": "No hay una verificación del punto de conexión que corresponda a esta entrega.",
   "identities.evidence.scanMeaning":
     "Se muestran los registros actualizados más recientemente que devolvió esta consulta. El historial puede cambiar mientras se cargan las páginas.",
   "identities.evidence.moreDeliveries": "Cargar más registros de entrega",

@@ -26548,6 +26548,18 @@ export const messages = {
     defaultMessage: "Rollback history is incomplete or unavailable.",
     description: "Identity-scoped receipt pagination and evidence limitations.",
   },
+  "identities.evidence.verificationLabel": {
+    defaultMessage: "Endpoint verification",
+    description: "Separate historical observation of the exact delivery; not its retry count.",
+  },
+  "identities.evidence.verificationObservation": {
+    defaultMessage: "{status} {connector}/{target} at {time}. Historical observation.",
+    description: "Endpoint result linked to this exact delivery by its idempotency key, identity, target and certificate fingerprint.",
+  },
+  "identities.evidence.verificationMissing": {
+    defaultMessage: "No matching endpoint verification is recorded for this delivery.",
+    description: "Do not substitute an unrelated or orphan verification receipt for delivery evidence.",
+  },
   "identities.evidence.scanMeaning": {
     defaultMessage: "This shows the most recently updated records returned by this read. History can change while pages load.",
     description: "Identity-scoped receipt pagination and evidence limitations.",

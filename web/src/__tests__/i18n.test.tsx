@@ -1576,8 +1576,10 @@ describe("i18n boundary", () => {
       // Endpoint profile selection: reviewed policy precedence, exact revision,
       // failed roster recovery and refresh without losing endpoint inputs.
       // Machine-authored es/de require HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "e47fef9b059893769e5842d4cbf2cdcbbc3ce62c7af41d8589f3998cd8a3458d",
-      "de-DE": "5a59f27c95f3adf81ceaa4f31ecad77270d4cf68bf284689ed00024a3360d80c",
+      // Delivery evidence: reviewed three keys separating exact historical verification
+      // from deployment retry counts. Machine-authored es/de need HUMAN REVIEW before release.
+      "es-ES": "d975827c92a999df4fe7376461f8c0af8b6e81c61085592a176522b11f3701c6",
+      "de-DE": "32f378d230c13c230549c294515a8037a6766186a856e43e8bd457779277b75c",
     });
   });
 

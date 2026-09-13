@@ -1,6 +1,7 @@
 import type { ConnectorDelivery, RotationRun } from "@/lib/api";
 import { translateNow } from "@/i18n/I18nProvider";
 import { Num } from "@/components/typography";
+import { formatDateTime } from "@/i18n/format";
 
 function shortFingerprint(value?: string): string {
   if (!value) return "-";
@@ -10,6 +11,7 @@ function shortFingerprint(value?: string): string {
 export function CredentialActivityTimeline({
   credentialLabel,
   deliveryReceipt,
+  verificationReceipt,
   rotationRun,
   deliveryNotice,
   rotationNotice,
@@ -17,6 +19,7 @@ export function CredentialActivityTimeline({
 }: {
   credentialLabel?: string;
   deliveryReceipt?: ConnectorDelivery;
+  verificationReceipt?: ConnectorDelivery;
   rotationRun?: RotationRun;
   deliveryNotice?: string;
   rotationNotice?: string;
@@ -33,6 +36,20 @@ export function CredentialActivityTimeline({
         (deliveryReceipt
           ? `${deliveryReceipt.status} ${deliveryReceipt.connector}/${deliveryReceipt.target} after ${deliveryReceipt.attempts} attempt${deliveryReceipt.attempts === 1 ? "" : "s"}`
           : "no connector delivery receipt yet"),
+    },
+    {
+      label: translateNow("identities.evidence.verificationLabel"),
+      detail: deliveryNotice ? undefined : verificationReceipt?.detail,
+      value:
+        deliveryNotice ??
+        (verificationReceipt
+          ? translateNow("identities.evidence.verificationObservation", {
+              status: translateNow(verificationReceipt.status === "verified" ? "source.verified.4f7838402f" : "operations.status.verificationFailed"),
+              connector: verificationReceipt.connector,
+              target: verificationReceipt.target,
+              time: formatDateTime(verificationReceipt.updated_at || verificationReceipt.created_at),
+            })
+          : translateNow("identities.evidence.verificationMissing")),
     },
     {
       label: translateNow("source.rotation.run.a813bc1537"),

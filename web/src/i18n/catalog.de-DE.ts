@@ -8993,6 +8993,9 @@ const deDECatalog = {
   "identities.evidence.partialHistory":
     "{count} Datensätze geladen. Weiterer Verlauf ist möglicherweise verfügbar; das neueste Ergebnis steht noch nicht fest.",
   "identities.evidence.incompleteRollback": "Der Rollback-Verlauf ist unvollständig oder nicht verfügbar.",
+  "identities.evidence.verificationLabel": "Endpunktprüfung",
+  "identities.evidence.verificationObservation": "{status} {connector}/{target} um {time}. Historische Beobachtung.",
+  "identities.evidence.verificationMissing": "Für diese Auslieferung ist keine passende Endpunktprüfung aufgezeichnet.",
   "identities.evidence.scanMeaning":
     "Diese Ansicht zeigt die zuletzt aktualisierten Datensätze dieses Abrufs. Der Verlauf kann sich ändern, während die Seiten geladen werden.",
   "identities.evidence.moreDeliveries": "Weitere Auslieferungsdatensätze laden",
