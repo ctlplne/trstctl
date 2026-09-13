@@ -1,5 +1,6 @@
 import type { ConnectorDelivery, RotationRun } from "@/lib/api";
 import { translateNow } from "@/i18n/I18nProvider";
+import { Num } from "@/components/typography";
 
 function shortFingerprint(value?: string): string {
   if (!value) return "-";
@@ -25,6 +26,8 @@ export function CredentialActivityTimeline({
     { label: translateNow("source.lifecycle.accepted.436d4137b8"), value: "state is projected from the event log" },
     {
       label: translateNow("source.connector.delivery.670c8c3d02"),
+      detail: deliveryNotice ? undefined : deliveryReceipt?.detail,
+      jobId: deliveryNotice ? undefined : deliveryReceipt?.outbox_id,
       value:
         deliveryNotice ??
         (deliveryReceipt
@@ -59,6 +62,12 @@ export function CredentialActivityTimeline({
           <li key={row.label} className="min-w-0 rounded-md border border-border p-2">
             <p className="font-medium">{row.label}</p>
             <p className="mt-1 break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">{row.value}</p>
+            {row.detail && <p className="mt-2 break-words text-xs [overflow-wrap:anywhere]">{row.detail}</p>}
+            {row.jobId != null && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                {translateNow("operations.detail.jobId")}: <Num>{row.jobId}</Num>
+              </p>
+            )}
           </li>
         ))}
       </ol>

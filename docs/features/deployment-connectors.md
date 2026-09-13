@@ -240,6 +240,15 @@ are wiped; successful delivery does not delete the encrypted recovery record.
 The lifecycle preview discloses this custody before authorization. A destination
 with `executor=agent` instead generates its key on the host and submits only a CSR.
 
+The identity's activity timeline includes failed host attempts even when signing
+stops before any certificate exists. It shows the assigned agent's safe error,
+attempt count, and exact background job ID. A failed attempt does not confirm
+delivery or offer a restore reference. Later recovery updates the same delivery
+record; the event history retains the earlier failure. Inspect the named profile,
+destination settings, or host transcript to resolve the reported cause. If the
+job has redeemed secret material, its free-text error is withheld from permanent
+history; use the redemption audit reference and that host's local transcript.
+
 `target test` is an effect-free dress rehearsal from the machine or network that
 would perform the real deployment. Enable `connector.test` as a claimable job kind
 in addition to enrolling the required agent role. For all 14 host-vantage families,

@@ -120,6 +120,16 @@ func TestServedRelayRedeemsOnceAndTheCredentialNeverLeaks(t *testing.T) {
 	// Acceptance #1: sweep every sink.
 	assertNoCanaryInJobRows(t, ctx, h)
 	assertNoCanaryInEvents(t, ctx, h)
+	receipts, err := h.store.ListConnectorDeliveryReceiptsPage(ctx, h.tenant, "", "00000000-0000-0000-0000-000000000000", 10)
+	if err != nil || len(receipts) != 1 || receipts[0].Status != "failed" ||
+		!bytes.Contains([]byte(receipts[0].Detail), []byte(agentDetailCredentialBearing)) || receipts[0].Fingerprint != "" {
+		t.Fatalf("credential-bearing failure has no safe receipt: %+v err=%v", receipts, err)
+	}
+	encoded, err := json.Marshal(receipts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertNoCanary(t, "identity delivery receipt", encoded)
 }
 
 // TestServedRedemptionRequiresTheLease: an agent that never claimed the job

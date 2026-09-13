@@ -610,7 +610,7 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 	return &transport.ReportJobResultResponse{Accepted: true}, nil
 }
 
-// recordAgentConnectorDelivery turns a successful agent claim into the same
+// recordAgentConnectorDelivery turns an accepted agent attempt into the same
 // tenant-scoped delivery timeline fact the control-plane connector worker
 // emits. The connector, target, identity, fingerprint, outbox row, and key all
 // come from the server-owned sealed job. The agent contributes only a signed
@@ -628,11 +628,11 @@ func (a *agentService) recordAgentConnectorDelivery(
 		return nil
 	}
 	switch strings.TrimSpace(req.Outcome) {
-	case transport.JobOutcomeExecuted, transport.JobOutcomeVerified, transport.JobOutcomeVerifyFailed:
+	case transport.JobOutcomeExecuted, transport.JobOutcomeVerified, transport.JobOutcomeVerifyFailed, transport.JobOutcomeFailed:
 		// Executed proves delivery. A verification failure still proves the
 		// write/reload happened; it says the listener did not serve the expected
-		// identity afterward. Refused and failed jobs prove neither and must not
-		// manufacture a successful delivery receipt.
+		// identity afterward. Failed attempts are visible too, but never claim
+		// delivery or offer a rollback reference for a write that is unproven.
 	default:
 		return nil
 	}
@@ -652,7 +652,8 @@ func (a *agentService) recordAgentConnectorDelivery(
 		// authoritative public identifier for this delivery.
 		fingerprint = strings.TrimSpace(req.CredentialFingerprint)
 	}
-	if fingerprint == "" {
+	failed := strings.TrimSpace(req.Outcome) == transport.JobOutcomeFailed
+	if fingerprint == "" && !failed {
 		return errors.New("agent connector delivery has no signed credential fingerprint")
 	}
 	var identityID *string
@@ -660,11 +661,23 @@ func (a *agentService) recordAgentConnectorDelivery(
 		identityID = &value
 	}
 	reason := "agent_delivered"
+	receiptStatus := servedstatus.ConnectorDelivered
+	detail := "delivered by enrolled agent " + info.CommonName
+	rollbackRef := "restore previous certificate for " + intent.Target
 	switch strings.TrimSpace(req.Outcome) {
 	case transport.JobOutcomeVerified:
 		reason = "agent_delivered_and_verified"
 	case transport.JobOutcomeVerifyFailed:
 		reason = "agent_delivered_verification_failed"
+	case transport.JobOutcomeFailed:
+		reason, receiptStatus, rollbackRef = store.AgentFailureReported, servedstatus.ConnectorFailed, ""
+		// A failed report can precede signing entirely. Neither an unbound
+		// agent-supplied fingerprint nor a planned leaf proves it was delivered.
+		fingerprint = ""
+		detail = "attempt failed on enrolled agent " + info.CommonName + "; delivery is not confirmed"
+		if safe := a.agentDetailForHistory(ctx, info.TenantID, agentRowID(info.TenantID, info.CommonName), req); safe != "" {
+			detail += ": " + safe
+		}
 	}
 	receiptID := evidenceID("connector-delivery", info.TenantID, claim.IdempotencyKey, req.JobID)
 	eventKey := fmt.Sprintf("%s:attempt:%d", claim.IdempotencyKey, req.Attempt)
@@ -676,10 +689,10 @@ func (a *agentService) recordAgentConnectorDelivery(
 		// deliveries and belong to the same identity-bound connector.deploy
 		// timeline the lifecycle selector consumes.
 		Destination: "connector.deploy", Connector: intent.Connector, Target: intent.Target,
-		Fingerprint: fingerprint, Status: servedstatus.ConnectorDelivered,
+		Fingerprint: fingerprint, Status: receiptStatus,
 		Attempts: req.Attempt, Reason: reason,
-		Detail:         "delivered by enrolled agent " + info.CommonName,
-		RollbackRef:    "restore previous certificate for " + intent.Target,
+		Detail:         detail,
+		RollbackRef:    rollbackRef,
 		IdempotencyKey: claim.IdempotencyKey,
 	})
 	return err
@@ -812,6 +825,12 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 	}
 
 	detail := strings.TrimSpace(req.Detail)
+	// Keep the exact failed attempt in the identity timeline before releasing
+	// its lease. A projection failure leaves the signed result retryable;
+	// response loss reuses the same event ID instead of duplicating history.
+	if err := a.recordAgentConnectorDelivery(ctx, info, claim, req); err != nil {
+		return nil, status.Errorf(codes.Internal, "record failed agent connector delivery: %v", err)
+	}
 	if claim.Destination == agentJobKindEndpointRenew && a.completeHostRenewal != nil {
 		if err := a.completeHostRenewal(ctx, info.TenantID, claim.Payload, req.Outcome, &store.RenewalAttempt{JobID: req.JobID, Attempt: req.Attempt}); err != nil {
 			return nil, status.Errorf(codes.Internal, "record failed host-managed lifecycle: %v", err)

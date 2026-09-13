@@ -353,7 +353,7 @@ func newHostRotationResultFixtureWithVerify(t *testing.T, verifyAddress string, 
 		t.Fatal(err)
 	}
 	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
-		_, err := h.srv.outbox.Enqueue(ctx, tx, orchestrator.Entry{TenantID: h.tenant, Destination: agentJobKindEndpointRenew, IdempotencyKey: "host-renew:renew:" + run.IdempotencyKey, Payload: payload, RequiredAgentRole: mtls.AgentRoleHost})
+		_, err := h.srv.outbox.Enqueue(ctx, tx, orchestrator.Entry{TenantID: h.tenant, Destination: agentJobKindEndpointRenew, IdempotencyKey: "host-renew:renew:" + run.IdempotencyKey, Payload: payload, RequiredAgentRole: mtls.AgentRoleHost, RequiredAgentID: agentRowID(h.tenant, h.agent)})
 		return err
 	}); err != nil {
 		t.Fatal(err)

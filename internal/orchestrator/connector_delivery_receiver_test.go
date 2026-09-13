@@ -63,3 +63,49 @@ func TestConnectorDeliveryReceiverDeduplicatesExactAgentResult(t *testing.T) {
 		t.Fatalf("projected connector delivery after replay/conflict = %+v, err=%v", rows, err)
 	}
 }
+
+// Failed-attempt history remains immutable, but a lagging projection must not
+// turn a later recovered delivery back into a failure.
+func TestConnectorDeliveryFailureReplayCannotHideRecovery(t *testing.T) {
+	ctx := t.Context()
+	st, log, projector := recordingSpine(t)
+	orch := orchestrator.NewOrchestrator(log, st, orchestrator.NewOutbox(st))
+	outboxID := int64(81)
+	r := store.ConnectorDeliveryReceipt{
+		ID: "44444444-4444-4444-8444-444444444480", OutboxID: &outboxID,
+		Destination: "connector.deploy", Connector: "postfix", Target: "mail",
+		Status: "failed", Attempts: 1, Reason: "agent_reported_failure", IdempotencyKey: "mail-first",
+	}
+	const failureEventID = "55555555-5555-4555-8555-555555555580"
+	if _, err := orch.RecordConnectorDeliveryWithEventID(ctx, tenantA, failureEventID, r); err != nil {
+		t.Fatal(err)
+	}
+	var failure events.Event
+	if err := log.Replay(ctx, 0, func(event events.Event) error {
+		if event.ID == failureEventID {
+			failure = event
+		}
+		return nil
+	}); err != nil || failure.ID == "" {
+		t.Fatalf("find failed event: %v", err)
+	}
+	r.Status, r.Attempts, r.Fingerprint, r.Reason = "delivered", 2, "public-successor", "agent_delivered_and_verified"
+	if _, err := orch.RecordConnectorDeliveryWithEventID(ctx, tenantA, "55555555-5555-4555-8555-555555555581", r); err != nil {
+		t.Fatal(err)
+	}
+	check := func() {
+		t.Helper()
+		if err := projections.New(st).Apply(ctx, failure); err != nil {
+			t.Fatal(err)
+		}
+		got, err := st.GetConnectorDeliveryReceipt(ctx, tenantA, r.ID)
+		if err != nil || got.Status != "delivered" || got.Attempts != 2 || got.Fingerprint != r.Fingerprint {
+			t.Fatalf("old failure hid recovery: receipt=%+v err=%v", got, err)
+		}
+	}
+	check()
+	if err := projector.Rebuild(ctx, log); err != nil {
+		t.Fatal(err)
+	}
+	check()
+}

@@ -386,8 +386,7 @@ func TestServedAgentExtendsItsOwnLease(t *testing.T) {
 }
 
 // TestServedAgentFailureReturnsTheJob: a failure on one host is not evidence the
-// work is impossible, so the job goes straight back to the queue with the reason
-// recorded.
+// work is impossible, so the job returns to the queue after its retry delay.
 func TestServedAgentFailureReturnsTheJob(t *testing.T) {
 	ctx := context.Background()
 	h := agentJobHarness(t, "connector.deploy")
@@ -402,8 +401,23 @@ func TestServedAgentFailureReturnsTheJob(t *testing.T) {
 	if err != nil || !reported.Accepted {
 		t.Fatalf("failure report = %+v (err %v)", reported, err)
 	}
+	immediate, err := h.client.ClaimJobs(ctx, &transport.ClaimJobsRequest{Kinds: []string{"connector.deploy"}, Limit: 1})
+	if err != nil || len(immediate.Jobs) != 0 {
+		t.Fatalf("failed job bypassed retry delay: jobs=%v err=%v", immediate, err)
+	}
+	// Move only this fixture's deadline to exercise the due retry without sleep.
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE outbox SET agent_next_attempt_at=$3 WHERE tenant_id=$1 AND id=$2`,
+			h.tenant, claimed.Jobs[0].JobID, time.Now().Add(-time.Second))
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
 	requeued, err := h.client.ClaimJobs(ctx, &transport.ClaimJobsRequest{Kinds: []string{"connector.deploy"}, Limit: 1})
 	if err != nil || len(requeued.Jobs) != 1 {
 		t.Fatalf("a failed job did not return to the queue: %d (err %v)", len(requeued.Jobs), err)
+	}
+	if requeued.Jobs[0].JobID != claimed.Jobs[0].JobID || requeued.Jobs[0].Attempt != claimed.Jobs[0].Attempt+1 {
+		t.Fatalf("retry lost command/generation: %+v", requeued.Jobs[0])
 	}
 }

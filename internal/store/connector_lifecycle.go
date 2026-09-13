@@ -100,7 +100,7 @@ func (s *Store) ApplyConnectorDeliveryRecordedTx(ctx context.Context, tx pgx.Tx,
 		  WHERE tenant_id = $2
 		    AND (($3::bigint IS NOT NULL AND outbox_id = $3)
 		      OR ($3::bigint IS NULL AND id = $1))
-        AND (destination <> 'connector.rollback' OR coalesce(latest_event_sequence, 0) <= $16)`,
+        AND coalesce(latest_event_sequence, 0) <= $16`,
 		r.ID, r.TenantID, r.OutboxID, r.IdentityID, r.Destination, r.Connector, r.Target,
 		r.Fingerprint, r.Status, r.Attempts, r.Reason, r.Detail, r.RollbackRef,
 		r.IdempotencyKey, r.UpdatedAt, r.EventSequence)
@@ -110,18 +110,16 @@ func (s *Store) ApplyConnectorDeliveryRecordedTx(ctx context.Context, tx pgx.Tx,
 	if tag.RowsAffected() > 0 {
 		return nil
 	}
-	// An earlier rollback event can arrive from the durable tail after a newer
-	// inline request/result. Its history remains intact; its read-model write is inert.
-	if r.Destination == "connector.rollback" {
-		var newer bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM connector_delivery_receipts
+	// An earlier attempt can arrive from the durable tail after a newer inline
+	// result. Preserve its history without hiding a recovered delivery or rearm.
+	var newer bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM connector_delivery_receipts
    WHERE tenant_id=$1 AND (($2::bigint IS NOT NULL AND outbox_id=$2) OR ($2::bigint IS NULL AND id=$3))
    AND coalesce(latest_event_sequence,0) > $4)`, r.TenantID, r.OutboxID, r.ID, r.EventSequence).Scan(&newer); err != nil {
-			return err
-		}
-		if newer {
-			return nil
-		}
+		return err
+	}
+	if newer {
+		return nil
 	}
 	var existingOutbox sql.NullInt64
 	queryErr := tx.QueryRow(ctx,
