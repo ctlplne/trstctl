@@ -8,8 +8,8 @@
 //
 // SMTP is not HTTP, so the outbound seam is a Sender (deliver a message to recipients)
 // rather than the HTTPDoer the chat/webhook channels use: production dials the relay over
-// net/smtp, and tests inject a fake Sender — no live SMTP server is needed and no socket
-// is opened in a unit test. This is the same least-privilege seam pattern the connector
+// net/smtp. Rendering tests inject a fake Sender; transport tests use loopback sockets
+// to verify delivery and cancellation. This is the same least-privilege seam pattern the connector
 // SDK and the other channels follow: the channel does exactly one thing — render and send
 // one message.
 //
@@ -19,8 +19,8 @@
 // errors describe the protocol exchange and do not echo the password, so they are wrapped
 // without further sanitisation; the password is set on the auth value and nowhere else.
 //
-// No cryptographic operation happens here, so this package imports no crypto/* (AN-3);
-// there is nothing to route through the crypto boundary. When the channel is driven from
+// STARTTLS configuration comes from internal/crypto/mtls; this package imports no
+// crypto/* (AN-3). When the channel is driven from
 // the notification dispatcher, the outbox provides at-least-once delivery (AN-6) and
 // Notify is safe to call more than once for the same alert (re-sending a notification mail
 // is acceptable), and never panics on a sparse alert. The message body is the alert detail
@@ -31,9 +31,12 @@ package email
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/smtp"
 	"strings"
+	"time"
 
+	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/notify"
 )
 
@@ -138,15 +141,16 @@ func headerSafe(s string) string {
 }
 
 // hostOf returns the host portion of a host:port relay address, used as the PLAIN auth
-// host. If addr has no port it is returned unchanged.
+// host. If addr has no port it is returned unchanged. SplitHostPort also removes
+// IPv6 brackets before the hostname is handed to SMTP authentication and TLS.
 func hostOf(addr string) string {
-	if i := strings.LastIndex(addr, ":"); i >= 0 {
-		return addr[:i]
+	if host, _, err := net.SplitHostPort(addr); err == nil {
+		return host
 	}
 	return addr
 }
 
-// realSender is the production Sender: it delivers via net/smtp.SendMail, dialing the
+// realSender is the production Sender: it delivers via net/smtp, dialing the
 // relay at addr. When auth is non-nil the message is sent with SMTP PLAIN authentication.
 // The auth value holds the password opaquely; it is never logged (AN-8).
 type realSender struct {
@@ -155,14 +159,73 @@ type realSender struct {
 	auth smtp.Auth // nil unless WithAuth was set; carries the password opaquely (AN-8)
 }
 
-// Send delivers msg to to through the relay. context cancellation is checked before the
-// call; net/smtp.SendMail itself is not context-aware, so this is best-effort cancellation.
-func (s *realSender) Send(ctx context.Context, from string, to []string, msg []byte) error {
+// Send bounds the whole SMTP exchange, including greeting, STARTTLS, auth, DATA
+// and QUIT. Cancellation closes the socket so a stalled relay cannot pin a
+// notification worker. The dispatcher's shorter deadline takes precedence.
+func (s *realSender) Send(ctx context.Context, from string, to []string, msg []byte) (err error) {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	// net/smtp.SendMail dials addr, optionally STARTTLS-upgrades, authenticates with
-	// s.auth when non-nil, and sends. Its errors describe the SMTP exchange and never
-	// contain the auth password (AN-8).
-	return smtp.SendMail(s.addr, s.auth, from, to, msg)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	deadline, _ := ctx.Deadline()
+	defer func() {
+		if err != nil && ctx.Err() != nil {
+			err = ctx.Err()
+		} else if err != nil && !time.Now().Before(deadline) {
+			// The socket deadline can fire just before the context timer runs.
+			// Preserve one cancellation result regardless of timer ordering.
+			err = context.DeadlineExceeded
+		}
+	}()
+	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", s.addr)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
+	if err := conn.SetDeadline(deadline); err != nil {
+		return err
+	}
+	client, err := smtp.NewClient(conn, hostOf(s.addr))
+	if err != nil {
+		return err
+	}
+	defer func() { _ = client.Close() }()
+	if err := client.Hello("localhost"); err != nil {
+		return err
+	}
+	if ok, _ := client.Extension("STARTTLS"); ok {
+		if err := client.StartTLS(mtls.SMTPClientTLSConfig(hostOf(s.addr))); err != nil {
+			return err
+		}
+	}
+	if s.auth != nil {
+		if ok, _ := client.Extension("AUTH"); !ok {
+			return fmt.Errorf("SMTP relay does not support AUTH")
+		}
+		if err := client.Auth(s.auth); err != nil {
+			return err
+		}
+	}
+	if err := client.Mail(from); err != nil {
+		return err
+	}
+	for _, recipient := range to {
+		if err := client.Rcpt(recipient); err != nil {
+			return err
+		}
+	}
+	body, err := client.Data()
+	if err != nil {
+		return err
+	}
+	if _, err := body.Write(msg); err != nil {
+		return err
+	}
+	if err := body.Close(); err != nil {
+		return err
+	}
+	return client.Quit()
 }

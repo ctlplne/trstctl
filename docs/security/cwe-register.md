@@ -34,6 +34,7 @@ golangci-lint results do not replace that evidence.
 
 | CWE | Where | What was fixed | Guard that fails if it returns |
 |---|---|---|---|
+| CWE-400 | `internal/notify/email/email.go` | Native SMTP delivery could remain blocked after the notification dispatch deadline. The complete exchange now shares a bounded socket deadline, and context cancellation closes the connection, releasing the worker even when a relay withholds its greeting or DATA acknowledgement. | TestSMTPGreetingHonorsCancellation and TestSMTPProductionExchangeAndDataDeadline (internal/notify/email/smtp_deadline_test.go) |
 | CWE-863 | `internal/api/endpoint_binding_execution.go` | Endpoint enrollment and direct destination deployment could queue certificate issuance without the ordinary issuance permission, policy, dual-control and profile checks. Both now share the identity issuance gate and retain the exact profile binding through host-agent handoff. | TestEndpointEnrollmentHonorsIssuanceAuthority (internal/server/endpoint_binding_authority_served_test.go) |
 | CWE-367 | `internal/orchestrator/endpoint_binding.go` | Endpoint metadata changes do not increment the lifecycle version. Reviewed identity snapshots now participate in approval evidence and are compared under the identity row lock before issuance, preventing policy-time binding changes from authorizing different work. | TestEndpointEnrollmentHonorsIssuanceAuthority/endpoint_enrollment/identity_changed_during_policy and target_deploy/identity_changed_during_policy (internal/server/endpoint_binding_authority_served_test.go) |
 | CWE-494 | `internal/server/bundled_pg.go` | Bundled PostgreSQL could execute a cold download before its committed archive checksum was checked, or reuse unrelated extracted binaries. Startup now requires independent archive authentication and fresh private extraction before execution. | TestBundledPostgresRejectsUnrelatedExtractedCache and TestBundledPostgresAuthenticatedFixtureReachesInitializerAndCleansUp (internal/server/bundled_pg_start_test.go) + TestVerifiedStartAuthenticatesColdArchiveBeforeInit (third_party/embedded-postgres/verified_binary_test.go) |
@@ -540,9 +541,9 @@ not this file.
 | `internal/store/audit_feed.go:420` | positive PostgreSQL bigint by schema (CWE-190) |
 | `internal/store/ca.go:463` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/ca.go:533` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/connector_lifecycle.go:460` | JetStream sequence fits PostgreSQL bigint by construction (CWE-190) |
-| `internal/store/connector_lifecycle.go:514` | constrained positive PostgreSQL bigint (CWE-190) |
-| `internal/store/connector_lifecycle.go:517` | constrained positive PostgreSQL bigint (CWE-190) |
+| `internal/store/connector_lifecycle.go:465` | JetStream sequence fits PostgreSQL bigint by construction (CWE-190) |
+| `internal/store/connector_lifecycle.go:519` | constrained positive PostgreSQL bigint (CWE-190) |
+| `internal/store/connector_lifecycle.go:522` | constrained positive PostgreSQL bigint (CWE-190) |
 | `internal/store/cryptoasset_migration_test.go:38` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/store/discovery.go:190` | JetStream event sequences are stored in PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/store/discovery.go:240` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |

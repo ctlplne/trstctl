@@ -398,6 +398,14 @@ registered channel workers. Tenant-scoped routing policy authoring and channel-t
 delivery are served from the console; channel secrets remain in operator-managed secret
 references or files.
 
+Native SMTP delivery bounds the entire connection and protocol exchange to ten
+seconds, including the greeting, STARTTLS, authentication, message acceptance and
+QUIT. A shorter caller deadline takes precedence; normal notification fanout gives
+each channel five seconds. Cancellation closes the connection. If the relay offers
+STARTTLS, its certificate must pass system-root and exact-hostname verification.
+An acknowledgement lost after message submission can cause a duplicate on retry;
+email delivery is at least once.
+
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `TRSTCTL_NOTIFICATIONS_EMAIL_ENABLED` | `false` | Enable SMTP email delivery. |
