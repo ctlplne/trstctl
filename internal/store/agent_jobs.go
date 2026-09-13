@@ -4,6 +4,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -236,7 +237,10 @@ func (s *Store) ClaimAgentJobs(ctx context.Context, tenantID, agentID string, de
 			                   FROM deployment_targets AS dt
 			                  WHERE dt.tenant_id = c.tenant_id
 			                    AND NOT dt.enabled
-			                    AND c.effect_lane = '`+ConnectorTargetLanePrefix+`' || dt.id::text
+			                    AND (c.effect_lane = '`+ConnectorTargetLanePrefix+`' || dt.id::text
+			                         OR (c.destination = 'endpoint.renew' AND dt.id::text =
+			                             CASE WHEN c.destination = 'endpoint.renew'
+			                                  THEN convert_from(c.payload, 'UTF8')::jsonb->>'target_id' END))
 			           )
 			           AND NOT EXISTS (
 			                 SELECT 1
@@ -481,22 +485,61 @@ func (s *Store) RedeemAgentJobCredential(
 	tenantID, agentID string,
 	jobID int64,
 	attempt int,
+	expected AgentJobForRedemption,
 	binding []byte,
 	now time.Time,
 ) (AgentJobRedemption, bool, error) {
 	var out AgentJobRedemption
 	ok := false
+	var host struct {
+		TargetID   string `json:"target_id"`
+		IdentityID string `json:"identity_id"`
+		Connector  string `json:"connector"`
+	}
+	if expected.Destination == "endpoint.renew" || (expected.Destination == "connector.rollback" && expected.RequiredAgentID != "") {
+		if json.Unmarshal(expected.Payload, &host) != nil || host.TargetID == "" || expected.RequiredAgentID != agentID {
+			return out, false, nil
+		}
+	}
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if expected.Destination == "connector.rollback" {
+			if err := s.checkConnectorRollbackPayloadTx(ctx, tx, tenantID, expected.Payload); err != nil {
+				if errors.Is(err, ErrUnsafeRollback) {
+					return nil
+				}
+				return err
+			}
+		}
 		scanErr := tx.QueryRow(ctx,
 			`WITH held AS (
 			        SELECT o.id, o.claim_attempts, o.claim_expires_at
 			          FROM outbox AS o
 			         WHERE o.tenant_id = $1
 			           AND o.id = $2
+			           AND o.status = 'pending'
+			           AND o.destination = $7
+			           AND o.idempotency_key = $8
+			           AND o.payload = $9
+			           AND COALESCE(o.required_agent_id::text, '') = $10
 			           AND o.claimed_by_agent_id = $3::uuid
 			           AND o.claim_completed_at IS NULL
 			           AND o.claim_expires_at > $6
 			           AND o.claim_attempts = $4
+			           AND ($11::text = '' OR EXISTS (
+			               SELECT 1 FROM deployment_targets dt
+			                WHERE dt.tenant_id = $1 AND dt.id::text = $11
+			                  AND dt.enabled AND dt.type = $12
+			                  AND dt.config->>'executor' = 'agent'
+			                  AND dt.config->>'required_agent_id' = o.claimed_by_agent_id::text
+			                  AND ($7 <> 'connector.rollback' OR
+			                       dt.config - 'auto_rollback_on_verify_failure' =
+			                       (convert_from($9, 'UTF8')::jsonb->'target_config') - 'auto_rollback_on_verify_failure')
+			           ))
+			           AND NOT EXISTS (
+			               SELECT 1 FROM identities i
+			                WHERE i.tenant_id = $1 AND i.id::text = $13
+			                  AND i.status IN ('revoked', 'retired')
+			           )
 			 ), ins AS (
 			    INSERT INTO agent_job_credential_redemptions
 			           (tenant_id, job_id, attempt, agent_id, binding, expires_at)
@@ -506,7 +549,8 @@ func (s *Store) RedeemAgentJobCredential(
 			    RETURNING audit_ref::text, expires_at
 			 )
 			 SELECT audit_ref, expires_at FROM ins`,
-			tenantID, jobID, agentID, attempt, binding, now.UTC()).
+			tenantID, jobID, agentID, attempt, binding, now.UTC(), expected.Destination,
+			expected.IdempotencyKey, expected.Payload, expected.RequiredAgentID, host.TargetID, host.Connector, host.IdentityID).
 			Scan(&out.AuditRef, &out.ExpiresAt)
 		if errors.Is(scanErr, pgx.ErrNoRows) {
 			return nil

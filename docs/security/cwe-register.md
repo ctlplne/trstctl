@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1406 annotated sites across 26 rules. Each row is
+1408 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -979,7 +979,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (378 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (380 sites)
 
 | Location | Reason |
 |---|---|
@@ -1219,6 +1219,8 @@ not this file.
 | `internal/server/host_agent_remote_served_test.go:194` | parent-created public fixture (CWE-22) |
 | `internal/server/host_agent_remote_served_test.go:380` | test reads its own remote-host fixture (CWE-22) |
 | `internal/server/host_agent_remote_served_test.go:765` | test-owned target fixture (CWE-22) |
+| `internal/server/host_keystore_credentials_served_test.go:121` | fixed filename inside this test's private TempDir (CWE-22). |
+| `internal/server/host_keystore_credentials_served_test.go:170` | fixed filename inside this test's private TempDir (CWE-22). |
 | `internal/server/idempotency_protection_wiring_test.go:61` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/migration_run_served_test.go:249` | test-owned fixture path (CWE-22) |
 | `internal/server/migration_run_served_test.go:258` | test-owned fixture path (CWE-22) |

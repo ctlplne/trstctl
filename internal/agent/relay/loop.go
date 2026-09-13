@@ -575,14 +575,23 @@ func runRollback(ctx context.Context, ch Channel, client *http.Client, hostProfi
 		if !confirmRollback(ctx, ch, job) {
 			return false
 		}
+		management, destroyManagement, err := redeemHostManagement(ctx, ch, job, intent.CredentialRefs)
+		if err != nil {
+			report(ctx, ch, job, OutcomeFailed, transport.RollbackRefusedNoCredential)
+			return false
+		}
+		defer destroyManagement()
 		var outcome, detail, evidence string
 		var denied, restoreStarted bool
-		err := hostRollback.Restore(intent.Connector, intent.TargetID, intent.PredecessorFingerprint,
+		err = hostRollback.Restore(intent.Connector, intent.TargetID, intent.PredecessorFingerprint,
 			func(certPEM, keyPEM []byte) (bool, error) {
 				restoreStarted = true
 				material := Material{
 					"credential.cert_pem": certPEM,
 					"credential.key_pem":  keyPEM,
+				}
+				for ref, value := range management {
+					material[ref] = value
 				}
 				stats, execErr := ExecuteOnHost(ctx, hostProfile, DeployIntent{
 					Connector: intent.Connector, Target: intent.Target, TargetID: intent.TargetID,

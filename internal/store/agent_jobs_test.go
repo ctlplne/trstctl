@@ -393,7 +393,7 @@ func TestRedeemAgentJobCredentialIsSingleUsePerAttempt(t *testing.T) {
 	binding := []byte("test-binding-digest")
 
 	// First redemption by the lease holder at the current attempt: granted.
-	first, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, holder, job.ID, job.ClaimAttempts, binding, now)
+	first, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, holder, job.ID, job.ClaimAttempts, redemptionSnapshot(job), binding, now)
 	if err != nil || !ok {
 		t.Fatalf("first redemption refused: ok=%v err=%v", ok, err)
 	}
@@ -405,7 +405,7 @@ func TestRedeemAgentJobCredentialIsSingleUsePerAttempt(t *testing.T) {
 	}
 
 	// Replay by the same holder: refused, and classified as replayed.
-	if _, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, holder, job.ID, job.ClaimAttempts, binding, now); err != nil || ok {
+	if _, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, holder, job.ID, job.ClaimAttempts, redemptionSnapshot(job), binding, now); err != nil || ok {
 		t.Fatalf("replayed redemption was granted: ok=%v err=%v", ok, err)
 	}
 	if reason, err := st.AgentJobRedemptionRefusalReason(ctx, tenantID, holder, job.ID, job.ClaimAttempts, now); err != nil || reason != store.AgentRedemptionRefusedReplayed {
@@ -413,12 +413,12 @@ func TestRedeemAgentJobCredentialIsSingleUsePerAttempt(t *testing.T) {
 	}
 
 	// A second agent that does not hold the lease: refused, lease-not-held.
-	if _, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, impostor, job.ID, job.ClaimAttempts, binding, now); err != nil || ok {
+	if _, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, impostor, job.ID, job.ClaimAttempts, redemptionSnapshot(job), binding, now); err != nil || ok {
 		t.Fatalf("impostor redemption was granted: ok=%v err=%v", ok, err)
 	}
 
 	// A stale attempt from the holder: refused, attempt-stale.
-	if _, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, holder, job.ID, job.ClaimAttempts+7, binding, now); err != nil || ok {
+	if _, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, holder, job.ID, job.ClaimAttempts+7, redemptionSnapshot(job), binding, now); err != nil || ok {
 		t.Fatalf("stale-attempt redemption was granted: ok=%v err=%v", ok, err)
 	}
 	if reason, err := st.AgentJobRedemptionRefusalReason(ctx, tenantID, holder, job.ID, job.ClaimAttempts+7, now); err != nil || reason != store.AgentRedemptionRefusedAttemptStale {
@@ -461,11 +461,11 @@ func TestRedemptionAfterLeaseLapseGoesToTheNewHolder(t *testing.T) {
 	}
 
 	// The dead agent's redemption at its old attempt: refused.
-	if _, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, dead, fresh.ID, firstClaim[0].ClaimAttempts, []byte("b"), after); err != nil || ok {
+	if _, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, dead, fresh.ID, firstClaim[0].ClaimAttempts, redemptionSnapshot(firstClaim[0]), []byte("b"), after); err != nil || ok {
 		t.Fatalf("dead agent redeemed after losing the lease: ok=%v err=%v", ok, err)
 	}
 	// The live holder's redemption at the fresh attempt: granted.
-	if _, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, alive, fresh.ID, fresh.ClaimAttempts, []byte("b"), after); err != nil || !ok {
+	if _, ok, err := st.RedeemAgentJobCredential(ctx, tenantID, alive, fresh.ID, fresh.ClaimAttempts, redemptionSnapshot(fresh), []byte("b"), after); err != nil || !ok {
 		t.Fatalf("new holder's redemption refused: ok=%v err=%v", ok, err)
 	}
 }
@@ -635,4 +635,8 @@ func TestLastSuccessfulHostDeployAgentIDIsExactRecentAndTenantScoped(t *testing.
 	if _, found, err := st.LastSuccessfulHostDeployAgentID(ctx, tenantA, "missing"); err != nil || found {
 		t.Fatalf("missing target found=%v err=%v", found, err)
 	}
+}
+
+func redemptionSnapshot(job store.AgentJob) store.AgentJobForRedemption {
+	return store.AgentJobForRedemption{Destination: job.Destination, IdempotencyKey: job.IdempotencyKey, Payload: job.Payload, ClaimAttempts: job.ClaimAttempts}
 }

@@ -94,7 +94,7 @@ func TestTheRenewalRequestThatLeavesTheHostCarriesNoPrivateKey(t *testing.T) {
 	}
 	if ch.redeemed != 0 {
 		t.Errorf("the agent redeemed %d credentials for a renewal; a host-generated renewal has "+
-			"nothing to redeem, and redeeming would burn the attempt's one redemption on material "+
+			"no management reference in this file-based target, and redeeming would request material "+
 			"the control plane deliberately does not hold", ch.redeemed)
 	}
 	for _, csr := range ch.signed {
@@ -148,6 +148,36 @@ func TestARefusedSignatureInstallsNothing(t *testing.T) {
 	}
 	if len(ch.reports) != 1 || ch.reports[0].outcome != relay.OutcomeFailed {
 		t.Fatalf("reports = %+v, want one failed report", ch.reports)
+	}
+}
+
+func TestUnavailableHostManagementCredentialRefusesBeforeSigningOrWriting(t *testing.T) {
+	for _, mode := range []string{"unavailable", "missing", "subject-key-in-response"} {
+		t.Run(mode, func(t *testing.T) {
+			dir := t.TempDir()
+			ch := &renewChannel{}
+			if mode == "unavailable" {
+				ch.redeemErr = errors.New("custody unavailable")
+			}
+			if mode == "subject-key-in-response" {
+				ch.material = map[string][]byte{"credential.key_pem": []byte("unexpected key")}
+			}
+			ch.jobs = []relay.Job{renewJob(t, relay.DeployIntent{
+				Connector: "java-keystore", Target: "java", SubjectCommonName: "java.example.test",
+				CredentialRefs: []string{"secret://store-password"},
+			})}
+			executed, err := relay.RunOnceWithHost(t.Context(), ch, http.DefaultClient, connector.LocalOpsConfig{AllowedRoots: []string{dir}}, 1, 60)
+			if err != nil || executed != 0 || ch.signCalls != 0 || ch.redeemed != 1 {
+				t.Fatalf("executed=%d signCalls=%d redeemed=%d err=%v", executed, ch.signCalls, ch.redeemed, err)
+			}
+			entries, err := os.ReadDir(dir)
+			if err != nil || len(entries) != 0 {
+				t.Fatal("credential refusal changed the host directory")
+			}
+			if len(ch.reports) != 1 || ch.reports[0].outcome != relay.OutcomeFailed {
+				t.Fatal("credential refusal was not reported")
+			}
+		})
 	}
 }
 

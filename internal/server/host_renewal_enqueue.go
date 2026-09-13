@@ -149,6 +149,7 @@ func (d *issuanceDispatcher) enqueueHostRenewal(
 		Revision:                 target.RevisionID,
 		IdentityID:               ident.ID,
 		TargetConfig:             target.Config,
+		CredentialRefs:           collectSecretRefs(target.Config),
 		VerifyAddress:            verifyAddress,
 		VerifyServerName:         verifyServerName,
 		SubjectCommonName:        commonName,

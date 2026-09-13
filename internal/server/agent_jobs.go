@@ -1231,6 +1231,21 @@ func (s *Server) agentJobPosture(ctx context.Context) (api.AgentJobPosture, erro
 // carries credential material, and rewriting their payloads would break A1's
 // contract for no gain.
 func (a *agentService) projectClaimedJobPayload(job store.AgentJob) ([]byte, error) {
+	if job.Destination == agentJobKindEndpointRenew {
+		// Older host jobs already pinned the target's reference-only config but
+		// did not enumerate its management credentials. Project the names from
+		// that immutable snapshot without changing the queued job or its policy.
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(job.Payload, &fields); err != nil || fields == nil {
+			return nil, fmt.Errorf("decode host renewal intent")
+		}
+		refs, err := json.Marshal(collectSecretRefs(fields["target_config"]))
+		if err != nil {
+			return nil, err
+		}
+		fields["credential_refs"] = refs
+		return json.Marshal(fields)
+	}
 	// D4: a rollback payload is a different shape and carries no key material by
 	// construction — that is the whole reason it is executable. It is projected
 	// separately so the predecessor fingerprint, which is the ONE thing a

@@ -92,6 +92,12 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 		report(ctx, ch, job, OutcomeFailed, "renewal intent names no subject to certify")
 		return false
 	}
+	management, destroyManagement, err := redeemHostManagement(ctx, ch, job, intent.CredentialRefs)
+	if err != nil {
+		report(ctx, ch, job, OutcomeFailed, "host management credentials were not available for this attempt")
+		return false
+	}
+	defer destroyManagement()
 
 	key, err := crypto.GenerateHostSubjectKey(intent.SubjectCommonName, intent.SubjectDNSNames)
 	if err != nil {
@@ -145,6 +151,9 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 	material := Material{
 		"credential.cert_pem": certPEM,
 		"credential.key_pem":  keyPEM,
+	}
+	for ref, value := range management {
+		material[ref] = value
 	}
 	if len(chainPEM) > 0 {
 		material["credential.chain_pem"] = chainPEM

@@ -91,7 +91,7 @@ func newStore(t *testing.T) *store.Store {
 		          audit_feed_deliveries, audit_feed_destinations,
 		          owners, issuers, identities, identity_transitions, deployment_targets,
 		          acme_upstream_authorizations,
-		          agents, agent_bootstrap_tokens, agent_job_receipts, kubernetes_controller_posture, policy_bindings, tenant_members, attestations, api_tokens, certificates, certificate_metadata_watermarks, certificate_metadata_receipts,
+		          agents, agent_bootstrap_tokens, agent_job_receipts, agent_job_credential_redemptions, kubernetes_controller_posture, policy_bindings, tenant_members, attestations, api_tokens, certificates, certificate_metadata_watermarks, certificate_metadata_receipts,
 		          ca_authorities, ca_key_ceremonies, ca_ceremony_approvals,
 		          ca_issued_certs, ca_crls, ca_ocsp_responders, ssh_keys, ct_watched_domains, ct_log_checkpoints,
 		          discovery_findings, notification_channels, notification_reads, notification_threshold_deliveries,

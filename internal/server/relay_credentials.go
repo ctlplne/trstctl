@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
+	"slices"
 	"sort"
 	"strings"
 
@@ -61,6 +63,13 @@ func (r *relayCredentialResolver) resolveJobCredential(
 	job store.AgentJobForRedemption,
 ) (redeemedMaterial, error) {
 	switch job.Destination {
+	case agentJobKindEndpointRenew:
+		return r.resolveHostRenewalReferences(ctx, tenantID, job)
+	case "connector.rollback":
+		var intent RelayRollbackIntent
+		if json.Unmarshal(job.Payload, &intent) == nil && connector.CanRollbackOnHost(intent.Connector) {
+			return r.resolveHostRollbackReferences(ctx, tenantID, job, intent)
+		}
 	case "adcs.inventory":
 		// F1: an AD CS inventory redeems a directory bind credential. Its
 		// payload is not a sealed connector deploy, so it resolves the
@@ -82,7 +91,7 @@ func (r *relayCredentialResolver) resolveJobCredential(
 		// has to prove the appliance/keystore credential a deploy would use, so
 		// resolve only the secret references in its exact target revision.
 		return r.resolveJobReferences(ctx, tenantID, job)
-	case "connector.deploy", "connector.rollback":
+	case "connector.deploy":
 	default:
 		return redeemedMaterial{}, fmt.Errorf("job kind %q carries no redeemable credential", job.Destination)
 	}
@@ -134,7 +143,13 @@ func (r *relayCredentialResolver) resolveJobReferences(
 	tenantID string,
 	job store.AgentJobForRedemption,
 ) (redeemedMaterial, error) {
-	refs := collectSecretRefs(job.Payload)
+	return r.resolveReferenceNames(ctx, tenantID, collectSecretRefs(job.Payload))
+}
+
+func (r *relayCredentialResolver) resolveReferenceNames(ctx context.Context, tenantID string, refs []string) (redeemedMaterial, error) {
+	if r == nil || r.store == nil {
+		return redeemedMaterial{}, errors.New("credential reference resolver is not configured")
+	}
 	if len(refs) == 0 {
 		return redeemedMaterial{}, errors.New("job names no credential references to redeem")
 	}
@@ -151,6 +166,77 @@ func (r *relayCredentialResolver) resolveJobReferences(
 		refNames = append(refNames, ref)
 	}
 	return redeemedMaterial{items: items, refNames: refNames, wipe: lease.Close}, nil
+}
+
+// A host creates its own subject key but may still need a keystore password.
+// Only the reviewed target revision can name that management credential. An
+// arbitrary string elsewhere in the job is never authority to read a secret.
+func (r *relayCredentialResolver) resolveHostRenewalReferences(ctx context.Context, tenantID string, job store.AgentJobForRedemption) (redeemedMaterial, error) {
+	if r == nil || r.store == nil {
+		return redeemedMaterial{}, errors.New("host credential resolver is not configured")
+	}
+	var intent RelayDeployIntent
+	if err := json.Unmarshal(job.Payload, &intent); err != nil || intent.TargetID == "" || intent.Revision == "" {
+		return redeemedMaterial{}, errors.New("host management credentials require a reviewed target revision")
+	}
+	vantage, known := connector.ShippedTargetVantage(intent.Connector)
+	if !known || vantage != connector.VantageHostAgent || job.RequiredAgentID == "" {
+		return redeemedMaterial{}, errors.New("management credential job has no exact host target")
+	}
+	target, err := r.store.GetDeploymentTargetRevision(ctx, tenantID, intent.TargetID, intent.Revision)
+	if err != nil {
+		return redeemedMaterial{}, fmt.Errorf("load reviewed host target: %w", err)
+	}
+	var savedConfig, jobConfig any
+	if json.Unmarshal(target.Config, &savedConfig) != nil || json.Unmarshal(intent.TargetConfig, &jobConfig) != nil ||
+		!reflect.DeepEqual(savedConfig, jobConfig) || target.Type != intent.Connector || !target.Enabled {
+		return redeemedMaterial{}, errors.New("host management credential target does not match its reviewed revision")
+	}
+	assigned, err := connector.TargetHostAgentID(target.Config)
+	if err != nil || assigned != job.RequiredAgentID || !targetExecutorIsAgent(target.Config) {
+		return redeemedMaterial{}, errors.New("host management credential assignment differs from its reviewed revision")
+	}
+	current, err := r.store.GetDeploymentTarget(ctx, tenantID, intent.TargetID)
+	if err != nil || !current.Enabled {
+		return redeemedMaterial{}, errors.New("host management credential target is unavailable or disabled")
+	}
+	currentAgent, err := connector.TargetHostAgentID(current.Config)
+	if err != nil || currentAgent != assigned || current.Type != target.Type || !targetExecutorIsAgent(current.Config) {
+		return redeemedMaterial{}, errors.New("host management credential target was reassigned")
+	}
+	refs := collectSecretRefs(target.Config)
+	if len(intent.CredentialRefs) > 0 && !slices.Equal(intent.CredentialRefs, refs) {
+		return redeemedMaterial{}, errors.New("host management credential names differ from their target revision")
+	}
+	return r.resolveReferenceNames(ctx, tenantID, refs)
+}
+
+// Rollback commands retain their reviewed target config. Require the current
+// target to still match it before releasing management material; changing the
+// local restore destination or its credential needs a newly reviewed command.
+func (r *relayCredentialResolver) resolveHostRollbackReferences(ctx context.Context, tenantID string, job store.AgentJobForRedemption, intent RelayRollbackIntent) (redeemedMaterial, error) {
+	if r == nil || r.store == nil || intent.TargetID == "" || job.RequiredAgentID == "" {
+		return redeemedMaterial{}, errors.New("host rollback requires an exact saved target")
+	}
+	target, err := r.store.GetDeploymentTarget(ctx, tenantID, intent.TargetID)
+	if err != nil || !target.Enabled || target.Type != intent.Connector || !targetExecutorIsAgent(target.Config) {
+		return redeemedMaterial{}, errors.New("host rollback target is unavailable")
+	}
+	assigned, err := connector.TargetHostAgentID(target.Config)
+	if err != nil || assigned != job.RequiredAgentID {
+		return redeemedMaterial{}, errors.New("host rollback target was reassigned")
+	}
+	var saved, queued map[string]any
+	if json.Unmarshal(target.Config, &saved) != nil || json.Unmarshal(intent.TargetConfig, &queued) != nil || saved == nil || queued == nil {
+		return redeemedMaterial{}, errors.New("host rollback target configuration is invalid")
+	}
+	// The orchestrator omits this control-plane flag from the restore command.
+	delete(saved, "auto_rollback_on_verify_failure")
+	delete(queued, "auto_rollback_on_verify_failure")
+	if !reflect.DeepEqual(saved, queued) {
+		return redeemedMaterial{}, errors.New("host rollback configuration changed after review")
+	}
+	return r.resolveReferenceNames(ctx, tenantID, collectSecretRefs(target.Config))
 }
 
 // openSealedDeploy opens the sealed container the dispatcher wrote at enqueue,

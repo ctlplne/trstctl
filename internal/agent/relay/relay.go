@@ -208,6 +208,8 @@ type RollbackIntent struct {
 	TargetID     string          `json:"target_id,omitempty"`
 	IdentityID   string          `json:"identity_id,omitempty"`
 	TargetConfig json.RawMessage `json:"target_config,omitempty"`
+	// Management credentials only; the predecessor key stays in local custody.
+	CredentialRefs []string `json:"credential_refs,omitempty"`
 	// PredecessorFingerprint identifies the installed object to bind back to.
 	PredecessorFingerprint string `json:"predecessor_fingerprint"`
 	SuccessorFingerprint   string `json:"successor_fingerprint,omitempty"`

@@ -43,7 +43,7 @@ func (a *agentService) RedeemJobCredential(ctx context.Context, req *transport.R
 	if a.relayCredentials == nil {
 		return nil, status.Error(codes.FailedPrecondition, "relay credential redemption is not configured")
 	}
-	if req.JobID <= 0 || req.Attempt <= 0 {
+	if req == nil || req.JobID <= 0 || req.Attempt <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "job_id and attempt are required")
 	}
 	agentID := agentRowID(info.TenantID, info.CommonName)
@@ -60,7 +60,7 @@ func (a *agentService) RedeemJobCredential(ctx context.Context, req *transport.R
 	if !held || job.ClaimAttempts != req.Attempt {
 		return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)
 	}
-	if job.Destination == "connector.deploy" || job.Destination == "connector.test" {
+	if job.Destination == "connector.deploy" || job.Destination == "connector.test" || job.Destination == agentJobKindEndpointRenew || job.Destination == orchestrator.DestinationConnectorRollback {
 		// Legacy rows may predate the role column. Decode only public routing
 		// metadata, and refuse host credentials before resolving any secrets.
 		var route struct {
@@ -91,7 +91,10 @@ func (a *agentService) RedeemJobCredential(ctx context.Context, req *transport.R
 	}
 
 	binding := redemptionBinding(info.TenantID, agentID, job.Destination, job.IdempotencyKey, req.JobID, req.Attempt)
-	redemption, granted, err := a.store.RedeemAgentJobCredential(ctx, info.TenantID, agentID, req.JobID, req.Attempt, binding, now)
+	// Secret resolution may take long enough for the lease or authorization to
+	// change. Grant against the same snapshot using the time after resolution.
+	now = time.Now().UTC()
+	redemption, granted, err := a.store.RedeemAgentJobCredential(ctx, info.TenantID, agentID, req.JobID, req.Attempt, job, binding, now)
 	if err != nil {
 		material.wipe()
 		return nil, status.Errorf(codes.Internal, "record redemption: %v", err)

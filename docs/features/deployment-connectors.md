@@ -412,6 +412,26 @@ queued against an older revision. Existing unassigned host jobs remain held; rev
 the destination assignment and recover those jobs explicitly before relying on
 unattended renewal. Rollback stays with the host holding the verified predecessor.
 
+Disabling lifecycle actions pauses queued host issuance and renewal as well as
+deployment jobs. This also covers older host jobs grouped by identity. Re-enabling
+the destination resumes the same queued intent; it does not replace its saved
+configuration or reset its attempt history.
+
+Host-generated keys can still require a management secret. For `java-keystore`,
+save the store password in the tenant's secret store and set
+`keystore_password_ref` to its `secret://` reference. Issuance, renewal, and
+rollback borrow that password over the authenticated agent channel for one job
+attempt; the certificate's private key stays on the host. Password values never
+travel in the queued intent or audit event.
+
+The reference must belong to the reviewed destination configuration. Missing
+secrets stop a renewal before signing or writing; disabled or reassigned targets
+cannot release their management credentials. Retrying secret resolution does not
+consume an attempt's single redemption, but a successful redemption cannot be
+replayed. Older queued renewal jobs derive their reference names from their saved
+target configuration without changing the queued policy or target revision.
+Both the control plane and host agent need this capability to complete
+password-protected host issuance and restore.
 
 `verify_address` plus `verify_server_name` tell the agent which listener to
 re-handshake after the reload, so a receipt is backed by an independent TLS check.
