@@ -31,6 +31,15 @@ type Notifier interface {
 	Notify(ctx context.Context, alert Alert) error
 }
 
+// DeliveryNotifier optionally receives the dispatcher's exact command binding.
+// It lets a transport retain a receiver identity across retries without trusting
+// IDs from alert text or changing the stored alert/plugin contract. DeliveredAt
+// is not set yet: this is an attempted delivery, not a successful receipt.
+type DeliveryNotifier interface {
+	Notifier
+	NotifyDelivery(context.Context, Alert, NotificationDeliveryReceipt) error
+}
+
 // noReceiverError carries a fixed public class; receiver URLs, credentials and
 // raw transport errors must never enter the outbox's operator-visible error.
 type noReceiverError struct{}
@@ -329,7 +338,13 @@ func (d *Dispatcher) dispatchAlert(ctx context.Context, message DeliveryMessage,
 			defer workers.Done()
 			for index := range jobs {
 				channelCtx, cancel := context.WithTimeout(ctx, perChannelTimeout)
-				err := ready[index].notifier.Notify(channelCtx, alert)
+				attempt := ready[index]
+				var err error
+				if channel, ok := attempt.notifier.(DeliveryNotifier); ok {
+					err = channel.NotifyDelivery(channelCtx, alert, attempt.receipt)
+				} else {
+					err = attempt.notifier.Notify(channelCtx, alert)
+				}
 				cancel()
 				results <- channelResult{index: index, err: err}
 			}

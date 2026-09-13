@@ -23,25 +23,27 @@
 // crypto/* (AN-3). When the channel is driven from
 // the notification dispatcher, the outbox provides at-least-once delivery (AN-6) and
 // Notify is safe to call more than once for the same alert (re-sending a notification mail
-// is acceptable), and never panics on a sparse alert. The message body is the alert detail
-// and the subject is notify.FormatMessage(alert) — the same plain-text line every channel
-// reuses.
+// is acceptable), and never panics on a sparse alert. Subjects name the condition
+// and affected subject; the complete formatted alert remains in the UTF-8 body.
 package email
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/smtp"
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/notify"
 )
 
 // Channel satisfies the notification template.
 var _ notify.Notifier = (*Channel)(nil)
+var _ notify.DeliveryNotifier = (*Channel)(nil)
 
 // Sender is the minimal outbound seam: deliver a fully-rendered RFC 5322 message from
 // from to the recipients in to. Production uses a net/smtp-backed sender; tests inject a
@@ -98,40 +100,48 @@ func New(addr, from string, to []string, opts ...Option) *Channel {
 // Name identifies the channel.
 func (c *Channel) Name() string { return "email" }
 
-// Notify renders the alert as an RFC 5322 message and sends it through the Sender. The
-// subject is notify.FormatMessage(alert) (the shared plain-text summary line) and the body
-// is the alert detail. A Sender error is returned wrapped; net/smtp errors describe the
-// protocol exchange and never echo a configured password (AN-8). Delivery is at-least-once
-// (the outbox may retry, AN-6), so this is safe to call more than once for the same alert
-// and never panics on a sparse alert.
+// Notify supports direct/compatibility callers without an outbox envelope. Its
+// Message-ID derives from the entire alert and configured sender/recipients.
+// Identical direct alerts are indistinguishable; the served dispatcher uses
+// NotifyDelivery to distinguish separate commands with identical alert text.
 func (c *Channel) Notify(ctx context.Context, alert notify.Alert) error {
-	msg := buildMessage(c.from, c.to, notify.FormatMessage(alert), alert.Detail)
+	payload, err := json.Marshal(alert)
+	if err != nil {
+		return fmt.Errorf("email: encode alert: %w", err)
+	}
+	digest := crypto.SHA256Hex(payload)
+	return c.NotifyDelivery(ctx, alert, notify.NotificationDeliveryReceipt{
+		ID: "notification.direct:" + digest, PayloadDigest: digest,
+	})
+}
+
+// NotifyDelivery uses the trusted tenant/command/channel receipt identity and
+// payload digest, never the physical outbox row or attempt number. A lost SMTP
+// acknowledgement may cause another copy, but retries retain the Message-ID.
+// Date describes rendering time, not event time or proof of receiver acceptance.
+func (c *Channel) NotifyDelivery(ctx context.Context, alert notify.Alert, delivery notify.NotificationDeliveryReceipt) error {
+	if delivery.ID == "" || delivery.PayloadDigest == "" {
+		return fmt.Errorf("email: missing delivery binding")
+	}
+	binding, err := json.Marshal(struct {
+		Version, Delivery, Payload, From string
+		To                               []string
+	}{"trstctl.email.v1", delivery.ID, delivery.PayloadDigest, c.from, c.to})
+	if err != nil {
+		return fmt.Errorf("email: encode delivery binding: %w", err)
+	}
+	// The reserved domain is an identifier namespace, not a delivery address.
+	messageID := "<" + crypto.SHA256Base64URL(binding) + "@trstctl.invalid>"
+	msg, err := buildMessage(c.from, c.to, messageSubject(alert), notify.FormatMessage(alert), messageID, time.Now().UTC())
+	if err != nil {
+		return fmt.Errorf("email: render alert: %w", err)
+	}
 	if err := c.sender.Send(ctx, c.from, c.to, msg); err != nil {
 		// net/smtp's error text describes the SMTP exchange and does not contain the
 		// auth password, so it is wrapped as-is; the password is never part of it (AN-8).
 		return fmt.Errorf("email: send alert: %w", err)
 	}
 	return nil
-}
-
-// buildMessage renders a minimal RFC 5322 message: From/To/Subject headers, a blank line,
-// then the body. Headers are CRLF-terminated as the SMTP DATA payload expects. Newlines in
-// the single-line subject and header fields are stripped so the alert text cannot inject
-// extra headers.
-func buildMessage(from string, to []string, subject, body string) []byte {
-	var b strings.Builder
-	b.WriteString("From: ")
-	b.WriteString(headerSafe(from))
-	b.WriteString("\r\n")
-	b.WriteString("To: ")
-	b.WriteString(headerSafe(strings.Join(to, ", ")))
-	b.WriteString("\r\n")
-	b.WriteString("Subject: ")
-	b.WriteString(headerSafe(subject))
-	b.WriteString("\r\n")
-	b.WriteString("\r\n")
-	b.WriteString(body)
-	return []byte(b.String())
 }
 
 // headerSafe strips CR and LF from a header value so alert-derived text (subject,

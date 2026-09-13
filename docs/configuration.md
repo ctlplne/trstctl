@@ -419,6 +419,19 @@ STARTTLS, its certificate must pass system-root and exact-hostname verification.
 An acknowledgement lost after message submission can cause a duplicate on retry;
 email delivery is at least once.
 
+Email subjects name the alert condition and affected subject, capped at 160
+Unicode characters. The full alert, including certificate, owner, deadline and
+diagnostic detail, remains in the plain-text UTF-8 body. Long or non-ASCII subjects
+use folded MIME encoded words; the body uses quoted-printable encoding.
+
+Each message includes a UTC `Date` recording when that attempt was rendered and
+a `Message-ID` bound to the exact outbox command, payload, sender and recipients.
+Retries retain that ID across process restarts; separate commands with identical
+text receive different IDs. A stable ID helps receivers recognize duplicate
+copies but does not guarantee that they suppress them. Direct notification SDK
+calls without an outbox envelope use the full alert as their identity, so callers
+must provide distinct operation IDs to distinguish otherwise identical alerts.
+
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `TRSTCTL_NOTIFICATIONS_EMAIL_ENABLED` | `false` | Enable SMTP email delivery. |

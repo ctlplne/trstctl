@@ -67,8 +67,7 @@ func TestEmailConforms(t *testing.T) {
 }
 
 // TestDeliversSubjectAndBody proves Notify renders the alert into the message: the captured
-// message carries the Subject header built from FormatMessage and the body carries the
-// alert detail, so the alert reaches the recipient intact.
+// message carries a concise subject and the complete alert in its decoded body.
 func TestDeliversSubjectAndBody(t *testing.T) {
 	fake := &fakeSender{}
 	ch := email.New("smtp.example:587", "alerts@trstctl.example", []string{"oncall@example.com"}, email.WithSender(fake))
@@ -86,16 +85,15 @@ func TestDeliversSubjectAndBody(t *testing.T) {
 	}
 
 	msg := fake.Message()
-	wantSubject := "Subject: " + notify.FormatMessage(alert)
-	if !strings.Contains(msg, wantSubject) {
-		t.Errorf("message does not contain the formatted Subject line.\n got: %q\nwant substring: %q", msg, wantSubject)
+	m, subject, body := readNotificationMail(t, msg)
+	if subject != "Certificate expiring: cn=web.example.com" {
+		t.Errorf("subject = %q", subject)
 	}
-	// The body is the alert detail, separated from the headers by a blank line.
-	if !strings.Contains(msg, "\r\n\r\n"+detail) {
-		t.Errorf("message body does not carry the alert detail.\n got: %q\nwant detail: %q", msg, detail)
+	if body != notify.FormatMessage(alert) {
+		t.Errorf("body lost alert context: %q", body)
 	}
 	// Sanity: the recipient address reaches the To header.
-	if !strings.Contains(msg, "To: oncall@example.com") {
+	if m.Header.Get("To") != "oncall@example.com" {
 		t.Errorf("message does not address the recipient.\n got: %q", msg)
 	}
 }
