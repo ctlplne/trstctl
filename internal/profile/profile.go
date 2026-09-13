@@ -209,8 +209,8 @@ type Request struct {
 func (p CertificateProfile) Validate(r Request) error {
 	id := fmt.Sprintf("profile %q v%d", p.Name, p.Version)
 
-	if len(p.AllowedProtocols) > 0 && r.Protocol != "" && !contains(p.AllowedProtocols, r.Protocol) {
-		return fmt.Errorf("%s does not permit enrollment protocol %q", id, r.Protocol)
+	if err := p.ValidateRequestMetadata(r); err != nil {
+		return err
 	}
 	if len(p.AllowedKeyAlgorithms) > 0 && !contains(p.AllowedKeyAlgorithms, r.KeyAlgorithm) {
 		return fmt.Errorf("%s does not allow key algorithm %q (allowed: %s)", id, r.KeyAlgorithm, strings.Join(p.AllowedKeyAlgorithms, ", "))
@@ -229,6 +229,17 @@ func (p CertificateProfile) Validate(r Request) error {
 		if len(p.AllowedEKUs) > 0 && !contains(p.AllowedEKUs, eku) {
 			return fmt.Errorf("%s does not allow extended key usage %q (allowed: %s)", id, eku, strings.Join(p.AllowedEKUs, ", "))
 		}
+	}
+	return nil
+}
+
+// ValidateRequestMetadata checks the protocol, validity and subject names before
+// a key or CSR exists. It performs no I/O. Issuance must still call Validate with
+// the actual CSR to enforce key strength and requested extended key usages.
+func (p CertificateProfile) ValidateRequestMetadata(r Request) error {
+	id := fmt.Sprintf("profile %q v%d", p.Name, p.Version)
+	if len(p.AllowedProtocols) > 0 && r.Protocol != "" && !contains(p.AllowedProtocols, r.Protocol) {
+		return fmt.Errorf("%s does not permit enrollment protocol %q", id, r.Protocol)
 	}
 	if p.MaxValidity > 0 && r.TTL > time.Duration(p.MaxValidity) {
 		return fmt.Errorf("%s caps validity at %s, requested %s", id, time.Duration(p.MaxValidity), r.TTL)

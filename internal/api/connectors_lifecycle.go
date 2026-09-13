@@ -1021,6 +1021,9 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 	if err != nil {
 		return endpointBindingPreviewResponse{}, err
 	}
+	if err := a.validateEndpointProfileMetadata(ctx, tenantID, req.IdentityName, profileRequirement); err != nil {
+		return endpointBindingPreviewResponse{}, err
+	}
 	fingerprintInput := struct {
 		ExistingIdentityVersion uint64                                  `json:"existing_identity_version,omitempty"`
 		Issuance                *store.OperationApprovalIssuanceBinding `json:"issuance"`

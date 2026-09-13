@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"reflect"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/profile"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -45,6 +47,31 @@ func (a *API) endpointIssuanceRequirement(ctx context.Context, tenantID string, 
 		}
 	}
 	return a.orch.ProfileApprovalRequirementByName(ctx, tenantID, a.gate.Profile)
+}
+
+func (a *API) validateEndpointProfileMetadata(ctx context.Context, tenantID, dnsName string, requirement orchestrator.ProfileApprovalRequirement) error {
+	if requirement.ProfileName == "" {
+		return nil
+	}
+	record, err := a.store.GetProfileVersion(ctx, tenantID, requirement.ProfileName, requirement.ProfileVersion)
+	if err != nil {
+		return err
+	}
+	if record.ID != requirement.ProfileID || store.ProfileSpecDigest(record.Spec) != requirement.ProfileSpecDigest {
+		return errStatus(http.StatusConflict, "endpoint certificate profile changed during preview; preview again")
+	}
+	var policy profile.CertificateProfile
+	if err := json.Unmarshal(record.Spec, &policy); err != nil {
+		return fmt.Errorf("decode endpoint certificate profile: %w", err)
+	}
+	policy.Name, policy.Version = record.Name, record.Version
+	if err := policy.ValidateRequestMetadata(profile.Request{
+		Protocol: "api", DNSNames: []string{dnsName},
+		TTL: time.Duration(requirement.EffectiveTTLSeconds) * time.Second,
+	}); err != nil {
+		return errStatus(http.StatusUnprocessableEntity, err.Error()+"; choose a certificate profile that permits this endpoint before authorizing issuance; nothing was queued")
+	}
+	return nil
 }
 
 func requireEndpointIssuancePermission(ctx context.Context, tenantID string) error {

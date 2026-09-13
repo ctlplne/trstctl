@@ -33,6 +33,23 @@ func TestProfileAcceptsCompliantRequest(t *testing.T) {
 	}
 }
 
+func TestProfileMetadataPreviewDoesNotReplaceCSRValidation(t *testing.T) {
+	p := webProfile()
+	r := profile.Request{Protocol: "api", DNSNames: []string{"api.example.com"}, TTL: time.Hour}
+	if err := p.ValidateRequestMetadata(r); err != nil {
+		t.Fatalf("metadata can be checked before key generation: %v", err)
+	}
+	if err := p.Validate(r); err == nil || !strings.Contains(err.Error(), "key algorithm") {
+		t.Fatalf("issuance still requires an allowed actual key: %v", err)
+	}
+	r.KeyAlgorithm, r.KeyBits = "ECDSA", 256
+	r.DNSNames = []string{"api.other.test"}
+	metadataErr, issuanceErr := p.ValidateRequestMetadata(r), p.Validate(r)
+	if metadataErr == nil || issuanceErr == nil || metadataErr.Error() != issuanceErr.Error() {
+		t.Fatalf("preview and issuance must share the same name refusal: preview=%v issuance=%v", metadataErr, issuanceErr)
+	}
+}
+
 func TestProfileRejectsDisallowedKeyAlgorithm(t *testing.T) {
 	err := webProfile().Validate(profile.Request{KeyAlgorithm: "Ed25519", KeyBits: 256, Protocol: "api"})
 	if err == nil || !strings.Contains(err.Error(), "key algorithm") {

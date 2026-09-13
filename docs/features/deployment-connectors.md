@@ -133,6 +133,14 @@ type, and the connector's exact JSON configuration; credential fields must be
 `secret://` references. Cancel closes the dialog without an API mutation. Binding,
 testing, deploying, and rolling back remain separate reviewed actions.
 
+Endpoint enrollment preview checks the DNS name, API enrollment protocol, and
+effective validity against the exact certificate-profile revision shown in the
+review. A mismatch is refused before an identity is created or issuance is queued.
+Correct the endpoint's identity profile (`profile_name` or `profile`) or the
+operator's `ca.default_profile`, then preview again. The signer still validates the
+actual CSR, key strength, and requested key usages when issuance runs; a metadata
+preview does not replace those checks.
+
 Three closed sections keep implementation machinery available without making it the
 default reading path:
 
