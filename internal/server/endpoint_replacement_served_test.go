@@ -214,6 +214,20 @@ func TestEndpointReplacementServedPreservesSameOwnerAndExternalCA(t *testing.T) 
 	if got := eventCount(t, h.log, h.tenant, projections.EventIdentityCreated); got != before+1 {
 		t.Fatal("receiver retry created a twin")
 	}
+	// Reviewing the same immutable request must remain recoverable, including
+	// a receiver retry with a fresh HTTP key. A different request cannot create
+	// another successor, and must explain that conflict before authorization.
+	acceptedReason := request["reason"]
+	preview()
+	request["reason"] = "a separate replacement while the accepted successor is active"
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/lifecycle/endpoint-bindings/preview", tok, request)
+	if status != http.StatusConflict || !strings.Contains(string(body), replacement.ID) {
+		t.Fatalf("conflicting replacement preview did not identify active successor: %d %s", status, body)
+	}
+	if got := eventCount(t, h.log, h.tenant, projections.EventIdentityCreated); got != before+1 {
+		t.Fatal("conflicting preview changed identities")
+	}
+	request["reason"] = acceptedReason
 	got, err := h.store.GetIdentity(t.Context(), h.tenant, original.ID)
 	if err != nil || got.Status != "deployed" {
 		t.Fatalf("original revoked before operator verification: %+v %v", got, err)

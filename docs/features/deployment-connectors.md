@@ -177,6 +177,12 @@ the existing choices. After an action, the selected identity is reloaded by its
 exact ID even when it falls outside the first page; its absence from that page
 does not clear the operator's selection.
 
+Replacement preview refuses a different request when the original already has an
+active successor, and identifies that successor for recovery. Complete or revoke
+that successor before starting another replacement. Reviewing or retrying the same
+unchanged request remains safe and recovers its existing identity; execution still
+rechecks the original and successor while holding the original's database lock.
+
 Tenant operators create non-secret deployment targets through the served API, CLI, or
 console. A target names the connector, the route name, and references to credentials
 or operator-managed endpoint config; it never stores passwords, tokens, private keys,

@@ -19,6 +19,13 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
+// EndpointReplacementIdentityID binds a successor to one exact reviewed request.
+// Preview and execution share this derivation so preview can refuse a different
+// active successor without breaking recovery of the already accepted request.
+func EndpointReplacementIdentityID(tenantID, originalID, previewFingerprint string) string {
+	return uuid.NewSHA1(uuid.NameSpaceOID, []byte("endpoint-replacement\x00"+tenantID+"\x00"+originalID+"\x00"+previewFingerprint)).String()
+}
+
 // EnsureEndpointReplacement prepares one successor for an exact reviewed
 // original. Its deterministic identity and event make a retry after creation
 // safe even when the HTTP response was never cached. Issuance still goes through
@@ -27,7 +34,7 @@ func (o *Orchestrator) EnsureEndpointReplacement(ctx context.Context, tenantID s
 	if reviewed.TenantID != tenantID || len(issuer.PreviewFingerprint) != 64 || target.ID == "" || target.Type == "" || target.Name == "" {
 		return store.Identity{}, fmt.Errorf("%w: exact tenant, original, destination, and preview are required", store.ErrIdentityEnrollmentConflict)
 	}
-	id := uuid.NewSHA1(uuid.NameSpaceOID, []byte("endpoint-replacement\x00"+tenantID+"\x00"+reviewed.ID+"\x00"+issuer.PreviewFingerprint)).String()
+	id := EndpointReplacementIdentityID(tenantID, reviewed.ID, issuer.PreviewFingerprint)
 	reviewedJSON, err := json.Marshal(reviewed)
 	if err != nil {
 		return store.Identity{}, err

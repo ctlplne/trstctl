@@ -1058,6 +1058,16 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 		return endpointBindingPreviewResponse{}, err
 	}
 	fingerprint := crypto.SHA256Hex(raw)
+	if replacedResp != nil {
+		active, err := a.store.ActiveEndpointReplacement(ctx, tenantID, replaced.ID)
+		if err != nil {
+			return endpointBindingPreviewResponse{}, err
+		}
+		if active != "" && active != orchestrator.EndpointReplacementIdentityID(tenantID, replaced.ID, fingerprint) {
+			return endpointBindingPreviewResponse{}, errStatus(http.StatusConflict,
+				"original already has active replacement "+active+"; complete or revoke it before starting another; nothing was queued or changed")
+		}
+	}
 	agentKeygen := custody.TargetExecutorIsAgent(target.Config)
 	custodySummary := endpointBindingCustody{
 		KeyOrigin:              "control_plane",
