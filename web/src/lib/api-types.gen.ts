@@ -5236,6 +5236,9 @@ export interface Notification {
   owner_id?: string;
   owner_name?: string;
   read_at?: string;
+  renewal_attempt?: number;
+  renewal_job_id?: number;
+  rotation_run_id?: string;
   routing_policy_id?: string;
   serial?: string;
   severity?: "low" | "informational" | "warning" | "critical";
@@ -6621,6 +6624,7 @@ export interface RotationRun {
   completed_at?: string;
   created_at: string;
   error?: string;
+  host_job?: { attempts: number; completed_at?: string; id: number; status: string };
   id: string;
   idempotency_key?: string;
   identity_id: string;

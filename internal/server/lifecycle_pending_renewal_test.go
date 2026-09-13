@@ -62,7 +62,7 @@ func TestLifecycleSchedulerDoesNotOverlapHostRenewalRetry(t *testing.T) {
 	}
 	dispatchOutbox(t, h, 1)
 	payload, _ := queuedHostRenewal(t, ctx, h)
-	if err := srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeFailed); err != nil {
+	if err := srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeFailed, nil); err != nil {
 		t.Fatal(err)
 	}
 	for _, status := range []string{"pending", "processing"} {

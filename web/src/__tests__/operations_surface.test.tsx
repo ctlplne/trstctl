@@ -30,6 +30,7 @@ const { apiMock } = vi.hoisted(() => ({
     nhiStaticPosture: vi.fn(),
     nhiExposurePosture: vi.fn(),
     rotationRuns: vi.fn(),
+    rotationRun: vi.fn(),
     connectorDeliveries: vi.fn(),
     identities: vi.fn(),
     approvalRequests: vi.fn(),
@@ -95,6 +96,51 @@ describe("operational console surface", () => {
     apiMock.contextualRiskPriorities.mockResolvedValue(emptyContextualRiskPriorities());
     apiMock.approveIdentityAction.mockResolvedValue({ resource: "req-1", action: "issue", approver: "ra", approvals: 1 });
     apiMock.transitionIdentity.mockResolvedValue({ id: "req-1", name: "requested-svc", status: "retired" });
+  });
+
+  it("opens the exact linked run outside the loaded page and retains current host retry evidence", async () => {
+    apiMock.rotationRuns.mockResolvedValue({ items: [] });
+    apiMock.rotationRun.mockResolvedValue({
+      id: "exact-run",
+      tenant_id: "t1",
+      identity_id: "mail-identity",
+      status: "succeeded",
+      trigger: "scheduled",
+      created_at: "2026-09-13T03:21:00Z",
+      updated_at: "2026-09-13T03:22:00Z",
+      host_job: { id: 281, status: "delivered", attempts: 5, completed_at: "2026-09-13T03:22:00Z" },
+    });
+    const user = userEvent.setup();
+    renderAt("/operations?run=exact-run");
+    const dialog = await screen.findByRole("dialog", { name: "Rotation run exact-run" });
+    expect(await within(dialog).findByText("mail-identity")).toBeInTheDocument();
+    expect(apiMock.rotationRun).toHaveBeenCalledWith("exact-run");
+    expect(within(dialog).getByText("Current host job").nextElementSibling).toHaveTextContent("281");
+    expect(within(dialog).getByText("Host attempts started").nextElementSibling).toHaveTextContent("5");
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("shows a missing exact run as unavailable and permits recovery without a latest-run fallback", async () => {
+    apiMock.rotationRun.mockRejectedValueOnce(new ApiError(404, "missing run")).mockResolvedValue({
+      id: "missing-run",
+      tenant_id: "t1",
+      identity_id: "recovered-identity",
+      status: "running",
+      trigger: "scheduled",
+      created_at: "2026-09-13T03:21:00Z",
+      updated_at: "2026-09-13T03:21:00Z",
+    });
+    const user = userEvent.setup();
+    renderAt("/operations?run=missing-run");
+    const dialog = await screen.findByRole("dialog", { name: "Rotation run missing-run" });
+    expect(await within(dialog).findByText("Rotation run unavailable")).toBeInTheDocument();
+    expect(within(dialog).queryByText("succeeded")).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Refresh run" }));
+    expect(await within(dialog).findByText("recovered-identity")).toBeInTheDocument();
+    expect(within(dialog).getByText("No host job is bound to this run.")).toBeInTheDocument();
+    expect(apiMock.rotationRun).toHaveBeenCalledTimes(2);
+    expect(apiMock.rotationRun.mock.calls.every(([id]) => id === "missing-run")).toBe(true);
   });
 
   it("AUD-77 keeps issued and deployed identities out of operations without served approval requests", async () => {

@@ -1562,8 +1562,13 @@ describe("i18n boundary", () => {
       // Delivery receipts: reviewed acceptance versus human-read proof, immutable
       // policy history, legacy unknowns and refresh failure copy. Machine-authored
       // es/de require HUMAN TRANSLATION REVIEW before release.
-      "es-ES": "690aa5b597f952e96c9919d7522e8c90847c5a58da3ce0bf7041b6ad74f5dbd8",
-      "de-DE": "330030ee51dfb72c6163d66f5f594a6ab5355c5e274ea363deb7af7f82d4d2e6",
+      // Exact renewal execution: reviewed historical-attempt labels, current
+      // host-job state, missing bindings and failed refresh wording. Machine-authored
+      // es/de require HUMAN TRANSLATION REVIEW before release.
+      // Alert pagination: reviewed newest/older navigation and page-scoped counts.
+      // Machine-authored es/de require HUMAN TRANSLATION REVIEW before release.
+      "es-ES": "8aef379b5d2dadb81ad691d349427c22555ed3a8259b93b448c8f6599fe17fab",
+      "de-DE": "5454f040df2821f36ad1f4cf386d3a18deea4b4d3beeca187d6428e17a3031dd",
     });
   });
 

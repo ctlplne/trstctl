@@ -21621,6 +21621,18 @@
             "format": "date-time",
             "type": "string"
           },
+          "renewal_attempt": {
+            "description": "Historical failed host-job attempt; separate from notification delivery attempts.",
+            "type": "integer"
+          },
+          "renewal_job_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "rotation_run_id": {
+            "format": "uuid",
+            "type": "string"
+          },
           "routing_policy_id": {
             "type": "string"
           },
@@ -27080,6 +27092,30 @@
           },
           "error": {
             "type": "string"
+          },
+          "host_job": {
+            "properties": {
+              "attempts": {
+                "type": "integer"
+              },
+              "completed_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "id": {
+                "format": "int64",
+                "type": "integer"
+              },
+              "status": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "status",
+              "attempts"
+            ],
+            "type": "object"
           },
           "id": {
             "format": "uuid",
@@ -50186,6 +50222,14 @@
       "get": {
         "operationId": "listNotifications",
         "parameters": [
+          {
+            "description": "asc (default) or desc by notification ID; retain the same order with each cursor",
+            "in": "query",
+            "name": "order",
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "description": "maximum items per page (1-100, default 20)",
             "in": "query",

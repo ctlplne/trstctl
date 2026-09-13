@@ -55,6 +55,7 @@ func TestNotificationPaginationAndRoutingNormalization(t *testing.T) {
 	}
 	for _, target := range []string{
 		"/api/v1/notifications?cursor=bad!",
+		"/api/v1/notifications?order=invalid",
 		"/api/v1/notifications?status=processing",
 		"/api/v1/notifications?limit=1000000",
 	} {

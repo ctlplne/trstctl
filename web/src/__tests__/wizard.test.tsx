@@ -281,7 +281,7 @@ describe("first-run wizard", () => {
     await user.click(screen.getByRole("button", { name: /next: optional agent/i }));
 
     await user.click(await screen.findByRole("button", { name: /skip agent for now/i }));
-    expect(screen.getByText(/no agent was enrolled/i)).toBeInTheDocument();
+    expect(await screen.findByText(/no agent was enrolled/i)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /next: review setup/i }));
 
     expect(await screen.findByText(/optional step deferred/i)).toBeInTheDocument();

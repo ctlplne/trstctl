@@ -3016,6 +3016,7 @@ func componentSchemas() map[string]*Schema {
 	notification := object(map[string]*Schema{
 		"id": str(), "tenant_id": uuid(), "destination": str(), "kind": str(),
 		"identity_id": uuid(), "operation_id": str(),
+		"rotation_run_id": uuid(), "renewal_job_id": {Type: "integer", Format: "int64"}, "renewal_attempt": {Type: "integer", Description: "Historical failed host-job attempt; separate from notification delivery attempts."},
 		"certificate_fingerprint": str(), "deployment_receipt_id": uuid(),
 		"deployment_recorded_at": {Type: "string", Format: "date-time", Description: "Historical completion receipt captured with the alert. Certificate expiry describes this deployment or rollback, not a fresh listener probe."},
 		"certificate_id":         str(), "subject": str(), "serial": str(), "not_after": timestamp(),
@@ -3306,6 +3307,9 @@ func componentSchemas() map[string]*Schema {
 		"successor_fingerprint": str(), "rollback_ref": str(), "error": str(),
 		"idempotency_key": str(), "created_at": timestamp(), "updated_at": timestamp(),
 		"completed_at": timestamp(),
+		"host_job": object(map[string]*Schema{
+			"id": {Type: "integer", Format: "int64"}, "status": str(), "attempts": {Type: "integer"}, "completed_at": timestamp(),
+		}, "id", "status", "attempts"),
 	}, "id", "tenant_id", "identity_id", "status", "trigger", "created_at", "updated_at")
 	lifecycleAutomationScheduler := object(map[string]*Schema{
 		"status":       {Type: "string", Enum: []string{"running", "deferred", "disabled"}},

@@ -41,7 +41,7 @@ describe("startup and lazy route transport", () => {
       { method: "POST", credentials: "include", headers: { Accept: "application/json", "X-CSRF-Token": "shared csrf" } },
     ]);
     await bootstrapApi.notifications({ limit: 50, cursor: "a/b?", status: "read" });
-    expect(fetchSpy.mock.calls[1][0]).toBe("/api/v1/notifications?limit=50&cursor=a%2Fb%3F&status=read");
+    expect(fetchSpy.mock.calls[1][0]).toBe("/api/v1/notifications?limit=50&cursor=a%2Fb%3F&status=read&order=desc");
     const error = await bootstrapApi.capabilities().catch((error: unknown) => error);
     expect(error).toBeInstanceOf(ApiError);
     expect(error).toMatchObject({ status: 429, retryAfterSeconds: 7 });

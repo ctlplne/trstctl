@@ -17,11 +17,12 @@ export const bootstrapApi: BootstrapApi = createPreviewAwareApi<BootstrapApi>({
 /** loginURL is where the browser is sent to begin the OIDC flow. */
 export const loginURL = "/auth/login";
 
-function notificationQueryString(options?: { limit?: number; cursor?: string; status?: Notification["status"] }): string {
+function notificationQueryString(options?: { limit?: number; cursor?: string; status?: Notification["status"]; order?: "asc" | "desc" }): string {
   const qs = new URLSearchParams();
   if (options?.limit != null) qs.set("limit", String(options.limit));
   if (options?.cursor) qs.set("cursor", options.cursor);
   if (options?.status) qs.set("status", options.status);
+  qs.set("order", options?.order ?? "desc");
   const suffix = qs.toString();
   return suffix ? `?${suffix}` : "";
 }

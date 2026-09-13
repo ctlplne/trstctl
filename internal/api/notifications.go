@@ -37,6 +37,9 @@ type notificationResponse struct {
 	CertificateFingerprint string                         `json:"certificate_fingerprint,omitempty"`
 	DeploymentReceiptID    string                         `json:"deployment_receipt_id,omitempty"`
 	DeploymentRecordedAt   *time.Time                     `json:"deployment_recorded_at,omitempty"`
+	RotationRunID          string                         `json:"rotation_run_id,omitempty"`
+	RenewalJobID           int64                          `json:"renewal_job_id,omitempty"`
+	RenewalAttempt         int                            `json:"renewal_attempt,omitempty"`
 	CertificateID          string                         `json:"certificate_id,omitempty"`
 	Subject                string                         `json:"subject,omitempty"`
 	Serial                 string                         `json:"serial,omitempty"`
@@ -923,7 +926,7 @@ func (a *API) listNotifications(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	rows, err := a.store.ListNotificationOutboxPage(r.Context(), tenantID, after, limit, status)
+	rows, err := a.store.ListNotificationOutboxPageWithOrder(r.Context(), tenantID, after, limit, status, r.URL.Query().Get("order") == "desc")
 	if err != nil {
 		a.writeError(w, err)
 		return
@@ -1374,6 +1377,9 @@ func redactCredentialRef(raw string) string {
 }
 
 func notificationPageParams(r *http.Request) (limit int, after int64, status string, err error) {
+	if order := r.URL.Query().Get("order"); order != "" && order != "asc" && order != "desc" {
+		return 0, 0, "", errStatus(http.StatusBadRequest, "order must be asc or desc")
+	}
 	limit, err = pageLimit(r)
 	if err != nil {
 		return 0, 0, "", errStatus(http.StatusBadRequest, err.Error())
@@ -1443,6 +1449,9 @@ func toNotificationResponse(row store.NotificationOutboxRecord) notificationResp
 		CertificateFingerprint: alert.CertificateFingerprint,
 		DeploymentReceiptID:    alert.DeploymentReceiptID,
 		DeploymentRecordedAt:   alert.DeploymentRecordedAt,
+		RotationRunID:          alert.RotationRunID,
+		RenewalJobID:           alert.RenewalJobID,
+		RenewalAttempt:         alert.RenewalAttempt,
 		CertificateID:          alert.CertificateID,
 		Subject:                alert.Subject,
 		Serial:                 alert.Serial,

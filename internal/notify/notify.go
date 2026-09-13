@@ -154,6 +154,9 @@ type Alert struct {
 	CertificateFingerprint string           `json:"certificate_fingerprint,omitempty"`
 	DeploymentReceiptID    string           `json:"deployment_receipt_id,omitempty"`
 	DeploymentRecordedAt   *time.Time       `json:"deployment_recorded_at,omitempty"`
+	RotationRunID          string           `json:"rotation_run_id,omitempty"`
+	RenewalJobID           int64            `json:"renewal_job_id,omitempty"`
+	RenewalAttempt         int              `json:"renewal_attempt,omitempty"`
 	Subject                string           `json:"subject,omitempty"`
 	Serial                 string           `json:"serial,omitempty"`
 	NotAfter               time.Time        `json:"not_after,omitempty"`

@@ -35,6 +35,35 @@ receipts. Pending or failed delivery still needs investigation. If the detail re
 fails, the console labels the displayed snapshot as potentially stale and offers
 a retry.
 
+## Investigating a failed renewal attempt
+
+A failed renewal warning records the host job and attempt that failed. Open
+**Open exact run and current retry status** to see whether that same run is still
+working, recovered, failed, or was cancelled. The historical warning does not
+change when a later attempt succeeds.
+
+The link uses `/operations?run=<run-id>` and reads the exact run, including runs
+outside the currently loaded history page. For a bound host job, the detail shows
+its current status, number of attempts started, and terminal completion time.
+An attempt failure can coexist with an ongoing retry; notification delivery
+attempts count a different operation.
+
+`GET /api/v1/notifications/{id}` returns `rotation_run_id`, `renewal_job_id`, and
+`renewal_attempt` when retained. The server resolves these from the authenticated
+job claim and checks the tenant, identity, run key, and predecessor certificate.
+`GET /api/v1/lifecycle/rotation-runs/{id}` includes optional `host_job` metadata
+for that exact retained child command. Missing historical bindings remain unknown;
+the console does not choose the latest run as a substitute. The run detail refreshes
+every ten seconds while visible. A failed read displays an error and labels any
+previous result as the last successful read, rather than proof of current status.
+
+Alerts opens with the newest 100 notifications. Use **Older alerts** and
+**Newer alerts** to page through history, or **Latest alerts** to return to the
+current page. Counts and filters describe the displayed page, not the entire
+notification history. List readers can request `order=desc`; retain that order
+with every cursor. The API default remains `order=asc` for existing clients.
+New notifications do not shift an older page's ID cursor.
+
 ## Bulkheads (isolation + backpressure)
 
 Each subsystem runs on its own **bounded worker pool with a bounded queue**: the

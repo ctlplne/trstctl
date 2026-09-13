@@ -116,6 +116,37 @@ describe("Global Alert Center", () => {
     expect(screen.getByRole("button", { name: "Queue test" })).toBeDisabled();
   });
 
+  it("starts with newest alerts and navigates older pages without hiding the page scope", async () => {
+    const alert = {
+      id: "329",
+      tenant_id: "t1",
+      destination: "notification.renewal_failure",
+      kind: "identity.renewal_failed",
+      identity_id: "current-identity",
+      subject: "latest.example.test",
+      severity: "warning",
+      status: "sent",
+      attempts: 1,
+      created_at: "2026-09-13T04:04:00Z",
+    };
+    apiMock.notifications.mockImplementation((options) =>
+      Promise.resolve(options?.cursor ? { items: [{ ...alert, id: "1", subject: "oldest.example.test" }] } : { items: [alert], next_cursor: "older-cursor" }),
+    );
+    const user = userEvent.setup();
+    renderNotifications();
+    expect(await screen.findByText("latest.example.test")).toBeInTheDocument();
+    expect(apiMock.notifications).toHaveBeenCalledWith({ limit: 100, cursor: undefined, order: "desc" });
+    expect(screen.getByText("Alerts on this page: 1. Counts and filters apply to this page.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Older alerts" }));
+    expect(await screen.findByText("oldest.example.test")).toBeInTheDocument();
+    expect(screen.queryByText("latest.example.test")).not.toBeInTheDocument();
+    expect(apiMock.notifications).toHaveBeenCalledWith({ limit: 100, cursor: "older-cursor", order: "desc" });
+    expect(screen.getByRole("button", { name: "Older alerts" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Latest alerts" }));
+    expect(await screen.findByText("latest.example.test")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Newer alerts" })).toBeDisabled();
+  });
+
   it("links renewal failures to the exact identity and labels captured deployment expiry", async () => {
     const alert = {
       id: "179",
@@ -124,6 +155,9 @@ describe("Global Alert Center", () => {
       kind: "identity.renewal_failed",
       identity_id: "identity-active",
       operation_id: "renewal-failure:179",
+      rotation_run_id: "exact-renewal-run",
+      renewal_job_id: 281,
+      renewal_attempt: 1,
       certificate_id: "cert-live",
       certificate_fingerprint: "exact-live-fingerprint",
       deployment_receipt_id: "receipt-installed",
@@ -172,6 +206,12 @@ describe("Global Alert Center", () => {
     await user.click(screen.getAllByRole("button", { name: "Review details" })[1]);
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByRole("link", { name: "Open identity and renewal history" })).toHaveAttribute("href", "/identities?identity=identity-active");
+    expect(await within(dialog).findByRole("link", { name: "Open exact run and current retry status" })).toHaveAttribute(
+      "href",
+      "/operations?run=exact-renewal-run",
+    );
+    expect(within(dialog).getByText("Failed host job").nextElementSibling).toHaveTextContent("281");
+    expect(within(dialog).getByText("Failed host attempt").nextElementSibling).toHaveTextContent("1");
     expect(within(dialog).getByText("receipt-installed")).toBeInTheDocument();
     expect(within(dialog).getByText("exact-live-fingerprint")).toBeInTheDocument();
     expect(within(dialog).getByText("exact-live-fingerprint")).toHaveClass("min-w-0", "break-all");
@@ -215,6 +255,8 @@ describe("Global Alert Center", () => {
     await user.click(within(dialog).getByRole("button", { name: "Retry details" }));
     expect(await within(dialog).findByText("Routing evidence was not retained for this delivery.")).toBeInTheDocument();
     expect(within(dialog).queryByText("Automatic routing policy")).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("link", { name: "Open exact run and current retry status" })).not.toBeInTheDocument();
+    expect(within(dialog).getAllByText("Execution binding was not retained.")).toHaveLength(3);
     expect(apiMock.notification).toHaveBeenCalledTimes(2);
   });
 

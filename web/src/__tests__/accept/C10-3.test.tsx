@@ -122,7 +122,7 @@ describe("C10-3 notifications inbox", () => {
     renderNotifications();
 
     expect(await screen.findByRole("heading", { name: "Alerts and delivery" })).toBeInTheDocument();
-    await waitFor(() => expect(apiMock.notifications).toHaveBeenCalledWith({ limit: 100 }));
+    await waitFor(() => expect(apiMock.notifications).toHaveBeenCalledWith({ limit: 100, cursor: undefined, order: "desc" }));
     await waitFor(() => expect(apiMock.notificationChannels).toHaveBeenCalled());
     await user.click(screen.getByRole("tab", { name: "Channels & test" }));
     expect(screen.getByText("Channel coverage")).toBeInTheDocument();

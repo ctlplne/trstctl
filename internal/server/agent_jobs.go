@@ -490,7 +490,7 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 		return nil, status.Errorf(codes.Internal, "record signed agent connector delivery: %v", receiptErr)
 	}
 	if claim.Destination == agentJobKindEndpointRenew && a.completeHostRenewal != nil {
-		if err := a.completeHostRenewal(ctx, info.TenantID, claim.Payload, req.Outcome); err != nil {
+		if err := a.completeHostRenewal(ctx, info.TenantID, claim.Payload, req.Outcome, &store.RenewalAttempt{JobID: req.JobID, Attempt: req.Attempt}); err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return nil, status.Errorf(codes.Unavailable, "complete host-managed lifecycle: %v", err)
 			}
@@ -813,7 +813,7 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 
 	detail := strings.TrimSpace(req.Detail)
 	if claim.Destination == agentJobKindEndpointRenew && a.completeHostRenewal != nil {
-		if err := a.completeHostRenewal(ctx, info.TenantID, claim.Payload, req.Outcome); err != nil {
+		if err := a.completeHostRenewal(ctx, info.TenantID, claim.Payload, req.Outcome, &store.RenewalAttempt{JobID: req.JobID, Attempt: req.Attempt}); err != nil {
 			return nil, status.Errorf(codes.Internal, "record failed host-managed lifecycle: %v", err)
 		}
 	}

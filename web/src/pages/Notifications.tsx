@@ -138,11 +138,18 @@ export function Notifications() {
   const [testResult, setTestResult] = useState<NotificationChannelTest | null>(null);
   const [routePreview, setRoutePreview] = useState<NotificationRoutingPolicyPreview | null>(null);
   const [previewBusy, setPreviewBusy] = useState(false);
+  const [notificationCursor, setNotificationCursor] = useState("");
+  const [notificationPrevious, setNotificationPrevious] = useState<string[]>([]);
+  const notificationPageQueryKey = [...notificationQueryKey, { cursor: notificationCursor, order: "desc" }] as const;
   const [selectedDetail, setDetail] = useState<Notification | null>(null);
   const [channelDialogOpen, setChannelDialogOpen] = useState(false);
   const channelDialogHeadingRef = useRef<HTMLHeadingElement>(null);
 
-  const notificationQuery = useApiQuery(notificationQueryKey, () => api.notifications({ limit: 100 }), { live: { intervalMs: 30_000 } });
+  const notificationQuery = useApiQuery(
+    notificationPageQueryKey,
+    () => api.notifications({ limit: 100, cursor: notificationCursor || undefined, order: "desc" }),
+    { live: { intervalMs: 30_000 } },
+  );
   const channelQuery = useApiQuery(channelQueryKey, () => api.notificationChannels(), { live: { intervalMs: 60_000 } });
   const policyQuery = useApiQuery(policyQueryKey, () => api.notificationRoutingPolicies(), { live: { intervalMs: 60_000 } });
   const detailQuery = useApiQuery(["alert-center", "detail", selectedDetail?.id], () => api.notification(selectedDetail!.id), {
@@ -188,17 +195,17 @@ export function Notifications() {
     const snapshot = notificationQuery.data;
     setBusyId(notification.id);
     setError(null);
-    updateNotificationCache(queryClient, (candidate) =>
+    updateNotificationCache(queryClient, notificationPageQueryKey, (candidate) =>
       candidate.id === notification.id ? { ...candidate, status: "read", read_at: new Date().toISOString() } : candidate,
     );
     try {
       const updated = await api.markNotificationRead(notification.id);
-      updateNotificationCache(queryClient, (candidate) => (candidate.id === notification.id ? updated : candidate));
+      updateNotificationCache(queryClient, notificationPageQueryKey, (candidate) => (candidate.id === notification.id ? updated : candidate));
       void queryClient.invalidateQueries({ queryKey: notificationQueryKey, refetchType: "none" });
       void queryClient.invalidateQueries({ queryKey: ["header-alerts"], refetchType: "none" });
       toast({ kind: "success", title: t("notifications.action.markedRead"), description: notificationSubject(notification) });
     } catch (err) {
-      queryClient.setQueryData(notificationQueryKey, snapshot);
+      queryClient.setQueryData(notificationPageQueryKey, snapshot);
       setError({ title: markReadFailed, detail: errorText(err, markReadLoadFailed) });
       toast({ kind: "error", title: markReadFailed, description: errorText(err, markReadLoadFailed) });
     } finally {
@@ -215,7 +222,7 @@ export function Notifications() {
     setError(null);
     try {
       const updated = await api.requeueNotification(notification.id);
-      updateNotificationCache(queryClient, (candidate) => (candidate.id === notification.id ? updated : candidate));
+      updateNotificationCache(queryClient, notificationPageQueryKey, (candidate) => (candidate.id === notification.id ? updated : candidate));
       void queryClient.invalidateQueries({ queryKey: notificationQueryKey, refetchType: "none" });
       void queryClient.invalidateQueries({ queryKey: ["header-alerts"], refetchType: "none" });
       toast({ kind: "success", title: t("notifications.action.requeued"), description: notificationSubject(notification) });
@@ -367,6 +374,9 @@ export function Notifications() {
             {summaryTitle}
           </h2>
           <p className="max-w-3xl text-body">{summaryBody}</p>
+          {!loading && !loadFailed ? (
+            <p className="text-caption text-muted-foreground">{t("notifications.pagination.scope", { count: notifications.length })}</p>
+          ) : null}
           <p id="add-channel-action-help" className="max-w-3xl text-caption text-muted-foreground">
             {actionHelp}
           </p>
@@ -392,6 +402,49 @@ export function Notifications() {
           failureCount={deadDeliveries.length}
           attentionCount={meaningfulAttention(notifications).length}
         />
+
+        {activeView === "attention" || activeView === "failures" || activeView === "history" ? (
+          <nav aria-label={t("notifications.pagination.label")} className="my-3 flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={loading || Boolean(busyId)}
+              onClick={() => {
+                setNotificationPrevious([]);
+                setNotificationCursor("");
+                if (!notificationCursor) notificationQuery.refetch();
+              }}
+            >
+              {t("notifications.pagination.latest")}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={loading || Boolean(busyId) || notificationPrevious.length === 0}
+              onClick={() => {
+                setNotificationCursor(notificationPrevious[notificationPrevious.length - 1]);
+                setNotificationPrevious(notificationPrevious.slice(0, -1));
+              }}
+            >
+              {t("notifications.pagination.newer")}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={loading || Boolean(busyId) || Boolean(notificationQuery.error) || !notificationQuery.data?.next_cursor}
+              onClick={() => {
+                if (!notificationQuery.data?.next_cursor) return;
+                setNotificationPrevious([...notificationPrevious, notificationCursor]);
+                setNotificationCursor(notificationQuery.data.next_cursor);
+              }}
+            >
+              {t("notifications.pagination.older")}
+            </Button>
+          </nav>
+        ) : null}
 
         {activeView === "attention" ? (
           <AlertCenterPanel view="attention">
@@ -624,6 +677,28 @@ export function Notifications() {
                       <dt className="sr-only">{t("notifications.context.recordedAt")}</dt>
                       <dd>{t("notifications.context.historicalHelp")}</dd>
                     </div>
+                  </>
+                ) : null}
+                {detail.kind === "identity.renewal_failed" ? (
+                  <>
+                    <NotificationDetailRow term={t("notifications.context.failedJob")}>
+                      {detail.renewal_job_id ? String(detail.renewal_job_id) : t("notifications.context.executionUnknown")}
+                    </NotificationDetailRow>
+                    <NotificationDetailRow term={t("notifications.context.failedAttempt")}>
+                      {detail.renewal_attempt ? String(detail.renewal_attempt) : t("notifications.context.executionUnknown")}
+                    </NotificationDetailRow>
+                    <NotificationDetailRow term={t("notifications.context.run")}>
+                      {detail.rotation_run_id ? (
+                        <Link
+                          className="font-medium text-primary underline underline-offset-4"
+                          to={`/operations?run=${encodeURIComponent(detail.rotation_run_id)}`}
+                        >
+                          {t("notifications.context.openRun")}
+                        </Link>
+                      ) : (
+                        t("notifications.context.executionUnknown")
+                      )}
+                    </NotificationDetailRow>
                   </>
                 ) : null}
                 <NotificationDetailRow term="Threshold days">{detail.threshold_days != null ? String(detail.threshold_days) : "-"}</NotificationDetailRow>
@@ -1430,8 +1505,8 @@ function upsertChannel(current: NotificationChannel[], next: NotificationChannel
   return current.map((channel) => (channel.id === next.id ? next : channel)).sort((a, b) => a.label.localeCompare(b.label));
 }
 
-function updateNotificationCache(queryClient: QueryClient, update: (notification: Notification) => Notification) {
-  queryClient.setQueryData<{ items: Notification[] }>(notificationQueryKey, (current) => ({
+function updateNotificationCache(queryClient: QueryClient, pageKey: readonly unknown[], update: (notification: Notification) => Notification) {
+  queryClient.setQueryData<{ items: Notification[] }>(pageKey, (current) => ({
     ...current,
     items: (current?.items ?? []).map(update),
   }));

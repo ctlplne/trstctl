@@ -307,21 +307,29 @@ type outboxCircuitResponse struct {
 }
 
 type rotationRunResponse struct {
-	ID                     string     `json:"id"`
-	TenantID               string     `json:"tenant_id"`
-	IdentityID             string     `json:"identity_id"`
-	OutboxID               *int64     `json:"outbox_id,omitempty"`
-	Status                 string     `json:"status"`
-	Trigger                string     `json:"trigger"`
-	Reason                 string     `json:"reason"`
-	PredecessorFingerprint string     `json:"predecessor_fingerprint"`
-	SuccessorFingerprint   string     `json:"successor_fingerprint"`
-	RollbackRef            string     `json:"rollback_ref"`
-	Error                  string     `json:"error"`
-	IdempotencyKey         string     `json:"idempotency_key"`
-	CreatedAt              time.Time  `json:"created_at"`
-	UpdatedAt              time.Time  `json:"updated_at"`
-	CompletedAt            *time.Time `json:"completed_at,omitempty"`
+	ID                     string                   `json:"id"`
+	TenantID               string                   `json:"tenant_id"`
+	IdentityID             string                   `json:"identity_id"`
+	OutboxID               *int64                   `json:"outbox_id,omitempty"`
+	Status                 string                   `json:"status"`
+	Trigger                string                   `json:"trigger"`
+	Reason                 string                   `json:"reason"`
+	PredecessorFingerprint string                   `json:"predecessor_fingerprint"`
+	SuccessorFingerprint   string                   `json:"successor_fingerprint"`
+	RollbackRef            string                   `json:"rollback_ref"`
+	Error                  string                   `json:"error"`
+	IdempotencyKey         string                   `json:"idempotency_key"`
+	CreatedAt              time.Time                `json:"created_at"`
+	UpdatedAt              time.Time                `json:"updated_at"`
+	CompletedAt            *time.Time               `json:"completed_at,omitempty"`
+	HostJob                *rotationHostJobResponse `json:"host_job,omitempty"`
+}
+
+type rotationHostJobResponse struct {
+	ID          int64      `json:"id"`
+	Status      string     `json:"status"`
+	Attempts    int        `json:"attempts"`
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
 }
 
 func toOutboxCircuitResponse(s orchestrator.CircuitSnapshot) outboxCircuitResponse {
@@ -1549,7 +1557,16 @@ func (a *API) getRotationRun(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	a.writeJSON(w, http.StatusOK, toRotationRunResponse(row))
+	response := toRotationRunResponse(row)
+	job, err := a.store.RotationRunHostJob(r.Context(), tenantID, row)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	if job != nil {
+		response.HostJob = &rotationHostJobResponse{ID: job.ID, Status: job.Status, Attempts: job.Attempt, CompletedAt: job.CompletedAt}
+	}
+	a.writeJSON(w, http.StatusOK, response)
 }
 
 // connectorCatalogWithSandbox annotates the static descriptions with the live

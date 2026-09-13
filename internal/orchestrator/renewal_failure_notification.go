@@ -37,6 +37,15 @@ func renewalFailureNotification(identity store.Identity, eventID string, evidenc
 		CertificateID: evidence.CertificateID, Serial: evidence.Serial,
 		CertificateFingerprint: evidence.Fingerprint, DeploymentReceiptID: evidence.ReceiptID,
 		DeploymentRecordedAt: evidence.RecordedAt,
+		RotationRunID:        evidence.RotationRunID,
+		RenewalJobID:         evidence.RenewalJobID,
+		RenewalAttempt:       evidence.RenewalAttempt,
+	}
+	if evidence.RenewalJobID != 0 {
+		alert.Detail += fmt.Sprintf(" Failed host job %d, attempt %d.", evidence.RenewalJobID, evidence.RenewalAttempt)
+	}
+	if evidence.RotationRunID != "" {
+		alert.Detail += " Open the exact run at /operations?run=" + evidence.RotationRunID + "."
 	}
 	if evidence.RecordedAt != nil {
 		alert.Detail += " Last completed deployment or rollback recorded at " + evidence.RecordedAt.UTC().Format(time.RFC3339) + ", fingerprint " + evidence.Fingerprint + "."
@@ -79,6 +88,14 @@ func sameRenewalFailureWithRetainedAlert(expected, retained []byte, tenantID, id
 	var alert notify.Alert
 	if json.Unmarshal(payload, &alert) != nil || alert.TenantID != tenantID || alert.IdentityID != identityID ||
 		alert.Kind != notify.KindRenewalFailed || alert.OperationID != "renewal-failure:"+eventID {
+		return false
+	}
+	var expectedTransition transitionPayload
+	var expectedAlert notify.Alert
+	if json.Unmarshal(expected, &expectedTransition) != nil || expectedTransition.SideEffect == nil ||
+		json.Unmarshal(expectedTransition.SideEffect.Payload, &expectedAlert) != nil ||
+		expectedAlert.RotationRunID != alert.RotationRunID ||
+		expectedAlert.RenewalJobID != alert.RenewalJobID || expectedAlert.RenewalAttempt != alert.RenewalAttempt {
 		return false
 	}
 	ax["payload"] = bx["payload"]

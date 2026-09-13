@@ -266,7 +266,7 @@ func (o *Orchestrator) TransitionWithSubjectCSRAtVersion(ctx context.Context, te
 // The check occurs in the issuance transaction, after policy evaluation and before
 // append. A lifecycle version alone cannot detect connector/attribute edits.
 func (o *Orchestrator) TransitionWithSubjectCSRAtIdentitySnapshot(ctx context.Context, tenantID, identityID string, to State, reason, idempotencyKey, csrPEM string, expectedVersion *uint64, reviewed *store.Identity, issuance *store.OperationApprovalIssuanceBinding) error {
-	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, strings.TrimSpace(csrPEM), nil, nil, issuance, expectedVersion, "", reviewed)
+	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, strings.TrimSpace(csrPEM), nil, nil, issuance, expectedVersion, "", transitionOptions{reviewed: []*store.Identity{reviewed}})
 }
 
 // TransitionWithSubjectCSRAndApproval is the served dual-control path. The exact
@@ -280,7 +280,7 @@ func (o *Orchestrator) TransitionWithSubjectCSRAndApproval(ctx context.Context, 
 // TransitionWithSubjectCSRAndApprovalAtVersion combines dual-control authority
 // with the same atomic reviewed-version fence used by non-approval transitions.
 func (o *Orchestrator) TransitionWithSubjectCSRAndApprovalAtVersion(ctx context.Context, tenantID, identityID string, to State, reason, idempotencyKey, csrPEM string, approval store.OperationApprovalUse, expectedVersion *uint64, reviewed ...*store.Identity) error {
-	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, strings.TrimSpace(csrPEM), nil, &approval, nil, expectedVersion, "", reviewed...)
+	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, strings.TrimSpace(csrPEM), nil, &approval, nil, expectedVersion, "", transitionOptions{reviewed: reviewed})
 }
 
 // TransitionWithSideEffectPayload moves an identity through the normal lifecycle
@@ -306,12 +306,31 @@ func (o *Orchestrator) TransitionWithSideEffectPayloadTransform(ctx context.Cont
 	return o.transition(ctx, tenantID, identityID, to, reason, payload, "", "", transform, nil, nil, nil, "")
 }
 
-func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID string, to State, reason string, sideEffectPayload []byte, idempotencyKey, subjectCSRPEM string, transform SideEffectPayloadTransform, approval *store.OperationApprovalUse, issuance *store.OperationApprovalIssuanceBinding, expectedVersion *uint64, completedDestination string, reviewed ...*store.Identity) error {
+type transitionOptions struct {
+	reviewed       []*store.Identity
+	renewalAttempt *store.RenewalAttempt
+}
+
+// FailRenewalAttempt records the exact authenticated job attempt in the durable
+// failure warning. SQL recovery must preserve this binding and its first snapshot.
+func (o *Orchestrator) FailRenewalAttempt(ctx context.Context, tenantID, identityID, reason string, attempt store.RenewalAttempt) error {
+	return o.transition(ctx, tenantID, identityID, StateRenewalFailed, reason, nil, "", "", nil, nil, nil, nil, "", transitionOptions{renewalAttempt: &attempt})
+}
+
+func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID string, to State, reason string, sideEffectPayload []byte, idempotencyKey, subjectCSRPEM string, transform SideEffectPayloadTransform, approval *store.OperationApprovalUse, issuance *store.OperationApprovalIssuanceBinding, expectedVersion *uint64, completedDestination string, options ...transitionOptions) error {
 	if (to == StateRevoked || to == StateRetired) && !o.store.IdentityIssuanceFenceHeld(ctx, tenantID, identityID) {
 		return o.store.WithIdentityIssuanceFence(ctx, tenantID, identityID, func(fenced context.Context) error {
-			return o.transition(fenced, tenantID, identityID, to, reason, sideEffectPayload, idempotencyKey, subjectCSRPEM, transform, approval, issuance, expectedVersion, completedDestination, reviewed...)
+			return o.transition(fenced, tenantID, identityID, to, reason, sideEffectPayload, idempotencyKey, subjectCSRPEM, transform, approval, issuance, expectedVersion, completedDestination, options...)
 		})
 	}
+	var option transitionOptions
+	if len(options) > 1 {
+		return errors.New("orchestrator: multiple transition options")
+	}
+	if len(options) == 1 {
+		option = options[0]
+	}
+	reviewed := option.reviewed
 	if len(reviewed) > 1 {
 		return errors.New("orchestrator: multiple reviewed identity snapshots")
 	}
@@ -590,6 +609,15 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 				evidence, err := o.store.RenewalFailureContextTx(ctx, tx, locked)
 				if err != nil {
 					return err
+				}
+				if option.renewalAttempt != nil {
+					execution, err := o.store.RenewalFailureExecutionTx(ctx, tx, locked, *option.renewalAttempt)
+					if err != nil {
+						return err
+					}
+					evidence.RotationRunID = execution.RotationRunID
+					evidence.RenewalJobID = execution.RenewalJobID
+					evidence.RenewalAttempt = execution.RenewalAttempt
 				}
 				alertBody, err := renewalFailureNotification(locked, eventID, evidence)
 				if err != nil {

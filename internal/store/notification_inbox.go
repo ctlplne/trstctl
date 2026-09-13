@@ -47,15 +47,25 @@ type NotificationReadReceipt struct {
 // decorated with their read receipt projection. status is the REST status
 // vocabulary: pending, sent, dead, read, or empty for all.
 func (s *Store) ListNotificationOutboxPage(ctx context.Context, tenantID string, afterID int64, limit int, status string) ([]NotificationOutboxRecord, error) {
+	return s.ListNotificationOutboxPageWithOrder(ctx, tenantID, afterID, limit, status, false)
+}
+
+// ListNotificationOutboxPageWithOrder uses the same stable ID cursor in either
+// direction. Newest-first starts at zero and continues strictly below the last ID.
+func (s *Store) ListNotificationOutboxPageWithOrder(ctx context.Context, tenantID string, afterID int64, limit int, status string, newestFirst bool) ([]NotificationOutboxRecord, error) {
+	comparison, direction := "o.id > $2", "ASC"
+	if newestFirst {
+		comparison, direction = "($2 = 0 OR o.id < $2)", "DESC"
+	}
 	var out []NotificationOutboxRecord
 	status = normalizeNotificationInboxStatus(status)
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, notificationOutboxSelectSQL(`
 			  WHERE o.tenant_id = $1
 			    AND o.destination LIKE 'notification.%'
-			    AND o.id > $2
+			    AND `+comparison+`
 			    AND ($3 = '' OR `+notificationStatusExpr()+` = $3)
-			  ORDER BY o.id
+			  ORDER BY o.id `+direction+`
 			  LIMIT $4`),
 			tenantID, afterID, status, limit)
 		if err != nil {

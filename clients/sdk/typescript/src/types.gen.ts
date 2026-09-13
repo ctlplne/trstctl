@@ -12118,6 +12118,12 @@ export interface components {
             owner_name?: string;
             /** Format: date-time */
             read_at?: string;
+            /** @description Historical failed host-job attempt; separate from notification delivery attempts. */
+            renewal_attempt?: number;
+            /** Format: int64 */
+            renewal_job_id?: number;
+            /** Format: uuid */
+            rotation_run_id?: string;
             routing_policy_id?: string;
             serial?: string;
             /** @enum {string} */
@@ -13559,6 +13565,14 @@ export interface components {
             /** Format: date-time */
             created_at: string;
             error?: string;
+            host_job?: {
+                attempts: number;
+                /** Format: date-time */
+                completed_at?: string;
+                /** Format: int64 */
+                id: number;
+                status: string;
+            };
             /** Format: uuid */
             id: string;
             idempotency_key?: string;
@@ -26946,6 +26960,8 @@ export interface operations {
     listNotifications: {
         parameters: {
             query?: {
+                /** @description asc (default) or desc by notification ID; retain the same order with each cursor */
+                order?: string;
                 /** @description maximum items per page (1-100, default 20) */
                 limit?: number;
                 /** @description opaque notification id cursor from a prior page */

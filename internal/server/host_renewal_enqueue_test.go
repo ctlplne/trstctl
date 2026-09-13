@@ -320,7 +320,7 @@ func TestAHostRenewalReportReturnsTheIdentityToDeployed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeVerified); err != nil {
+	if err := srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeVerified, nil); err != nil {
 		t.Fatalf("complete host renewal: %v", err)
 	}
 
@@ -335,7 +335,7 @@ func TestAHostRenewalReportReturnsTheIdentityToDeployed(t *testing.T) {
 	}
 
 	// A duplicate report must be a no-op rather than forcing another transition.
-	if err := srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeVerified); err != nil {
+	if err := srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeVerified, nil); err != nil {
 		t.Fatalf("repeat completed host renewal: %v", err)
 	}
 	if again, _ := h.orch.State(ctx, h.tenant, ident.ID); again != orchestrator.StateDeployed {
@@ -427,7 +427,7 @@ func TestAFailedHostRenewalMovesToRetryableFailure(t *testing.T) {
 		}
 	}
 	payload, _ := json.Marshal(RelayDeployIntent{IdentityID: ident.ID})
-	if err := srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeFailed); err != nil {
+	if err := srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeFailed, nil); err != nil {
 		t.Fatalf("record failed host renewal: %v", err)
 	}
 
@@ -456,7 +456,7 @@ func TestACompletedHostFirstIssuanceAdvancesWithoutQueuingASecondDeploy(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeVerified); err != nil {
+	if err := srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeVerified, nil); err != nil {
 		t.Fatal(err)
 	}
 	if state, _ := h.orch.State(ctx, h.tenant, ident.ID); state != orchestrator.StateDeployed {
@@ -487,7 +487,7 @@ func TestAnUnverifiedHostFirstIssuanceRemainsIssued(t *testing.T) {
 	}
 	dispatchOutbox(t, h, 1)
 	payload, _ := json.Marshal(RelayDeployIntent{IdentityID: ident.ID})
-	if err := srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeVerifyFailed); err != nil {
+	if err := srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeVerifyFailed, nil); err != nil {
 		t.Fatal(err)
 	}
 	if state, _ := h.orch.State(ctx, h.tenant, ident.ID); state != orchestrator.StateIssued {
@@ -784,7 +784,7 @@ func TestARefusedHostReportFailsTheJobInsteadOfReofferingIt(t *testing.T) {
 	refusals := 0
 	service := &agentService{
 		store: h.store, outbox: h.outbox, orch: h.orch,
-		completeHostRenewal: func(context.Context, string, []byte, string) error {
+		completeHostRenewal: func(context.Context, string, []byte, string, *store.RenewalAttempt) error {
 			refusals++
 			return errors.New("transition issued->deployed: ownership readiness: owner has no current attestation")
 		},

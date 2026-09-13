@@ -951,6 +951,7 @@ func (a *API) routes() []route {
 		{name: "cursor", typ: "string", desc: "opaque pagination cursor from a prior page"},
 	}
 	notificationQuery := []param{
+		{name: "order", typ: "string", desc: "asc (default) or desc by notification ID; retain the same order with each cursor"},
 		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
 		{name: "cursor", typ: "string", desc: "opaque notification id cursor from a prior page"},
 		{name: "status", typ: "string", desc: "filter by pending, sent, dead, or read"},

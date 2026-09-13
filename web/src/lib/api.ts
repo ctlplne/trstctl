@@ -1927,7 +1927,7 @@ export interface Api {
   rewrapTransit(input: TransitRewrapRequest): Promise<TransitCiphertext>;
   signTransit(input: TransitSignRequest): Promise<TransitSignature>;
   verifyTransit(input: TransitVerifyRequest): Promise<TransitVerify>;
-  notifications(options?: { limit?: number; cursor?: string; status?: Notification["status"] }): Promise<NotificationList>;
+  notifications(options?: { limit?: number; cursor?: string; status?: Notification["status"]; order?: "asc" | "desc" }): Promise<NotificationList>;
   notificationChannels(): Promise<NotificationChannelList>;
   createNotificationChannel(input: NotificationChannelRequest): Promise<NotificationChannel>;
   getNotificationChannel(id: string): Promise<NotificationChannel>;

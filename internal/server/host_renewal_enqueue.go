@@ -236,7 +236,7 @@ func (d *issuanceDispatcher) recordAgentRenewalDispatch(
 // known deployed credential. The transition records that the signed agent
 // result already completed the connector effect, so it must not enqueue a
 // duplicate connector.deploy after the private material was destroyed.
-func (s *Server) completeHostRenewal(ctx context.Context, tenantID string, payload []byte, outcome string) error {
+func (s *Server) completeHostRenewal(ctx context.Context, tenantID string, payload []byte, outcome string, attempt *store.RenewalAttempt) error {
 	if s.orch == nil || len(payload) == 0 {
 		return nil
 	}
@@ -264,6 +264,10 @@ func (s *Server) completeHostRenewal(ctx context.Context, tenantID string, paylo
 			orchestrator.StateDeployed, "host-generated first issuance deployed", "connector.deploy")
 	case orchestrator.StateRenewing:
 		if outcome == transport.JobOutcomeFailed || outcome == transport.JobOutcomeVerifyFailed {
+			if attempt != nil {
+				return s.orch.FailRenewalAttempt(ctx, tenantID, identityID,
+					"host-generated renewal finished without a verified endpoint: "+outcome, *attempt)
+			}
 			return s.orch.Transition(ctx, tenantID, identityID, orchestrator.StateRenewalFailed,
 				"host-generated renewal finished without a verified endpoint: "+outcome)
 		}

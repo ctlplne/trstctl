@@ -4,6 +4,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -29,6 +30,51 @@ func (s *Store) GetHostRotationJob(ctx context.Context, tenantID string, jobID i
 			Scan(&job.ID, &job.Destination, &job.IdempotencyKey, &job.Status, &job.Payload, &job.Attempt, &job.CompletedAt)
 	})
 	return job, err
+}
+
+// RotationRunHostJob returns only the child command explicitly bound to this
+// run. Absence is valid for control-plane and legacy runs; malformed bindings
+// are errors. The returned payload stays internal and must not enter the API.
+func (s *Store) RotationRunHostJob(ctx context.Context, tenantID string, run RotationRun) (*HostRotationJob, error) {
+	if run.TenantID != tenantID {
+		return nil, errors.New("host rotation run tenant mismatch")
+	}
+	var job HostRotationJob
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, `SELECT id, destination, idempotency_key, status, payload,
+			claim_attempts, claim_completed_at FROM outbox
+			WHERE tenant_id=$1 AND destination='endpoint.renew' AND idempotency_key=$2`,
+			tenantID, "host-renew:renew:"+run.IdempotencyKey).
+			Scan(&job.ID, &job.Destination, &job.IdempotencyKey, &job.Status, &job.Payload, &job.Attempt, &job.CompletedAt)
+		if err != nil {
+			return err
+		}
+		var intent struct {
+			IdentityID               string `json:"identity_id"`
+			RotationRunID            string `json:"rotation_run_id"`
+			PredecessorCertificateID string `json:"predecessor_certificate_id"`
+		}
+		if json.Unmarshal(job.Payload, &intent) != nil || intent.RotationRunID != run.ID || intent.IdentityID != run.IdentityID {
+			return errors.New("host rotation job differs from its run binding")
+		}
+		var bound bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM certificates
+			WHERE tenant_id=$1 AND id=$2 AND fingerprint=$3)`,
+			tenantID, intent.PredecessorCertificateID, run.PredecessorFingerprint).Scan(&bound); err != nil {
+			return err
+		}
+		if !bound {
+			return errors.New("host rotation job differs from its predecessor")
+		}
+		return nil
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &job, nil
 }
 
 // PendingHostRotationResults returns a bounded page of retired host jobs whose

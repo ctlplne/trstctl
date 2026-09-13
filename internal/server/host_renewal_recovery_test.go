@@ -54,7 +54,7 @@ func TestHostRenewalRecoveryPreservesOwnershipAuthority(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeFailed); err != nil {
+			if err := srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeFailed, nil); err != nil {
 				t.Fatal(err)
 			}
 			if !current {
@@ -67,7 +67,7 @@ func TestHostRenewalRecoveryPreservesOwnershipAuthority(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeVerified)
+			err = srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeVerified, nil)
 			if !current {
 				if err == nil {
 					t.Fatal("retry bypassed changed ownership authority")
@@ -83,7 +83,7 @@ func TestHostRenewalRecoveryPreservesOwnershipAuthority(t *testing.T) {
 			if state, err := orch.State(ctx, h.tenant, identity.ID); err != nil || state != orchestrator.StateDeployed {
 				t.Fatalf("verified retry state=%s, error=%v", state, err)
 			}
-			if err := srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeVerified); err != nil {
+			if err := srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeVerified, nil); err != nil {
 				t.Fatal(err)
 			}
 			after, err := h.outbox.Pending(ctx, h.tenant)

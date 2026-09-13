@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
 import { AlertTriangle, CheckCircle2, ExternalLink, RefreshCw, XCircle } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { Num } from "@/components/typography";
 import { approvalRequestsQueryKey, approvalRows, type ApprovalQueueRow } from "@/lib/approvalQueue";
 import { api, ApiError, type BulkheadStats, type ConnectorDelivery, type PendingApprovalRequest, type RotationRun } from "@/lib/api";
 import { useApiQuery, useQueryClient } from "@/lib/query";
@@ -74,6 +75,14 @@ const typeOptions: Array<{ value: "" | OperationType; label: string }> = [
 ];
 
 export function Operations() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const runId = searchParams.get("run");
+  function openRun(id: string | null) {
+    const next = new URLSearchParams(searchParams);
+    if (id) next.set("run", id);
+    else next.delete("run");
+    setSearchParams(next);
+  }
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const rotations = useApiQuery(["rotation-runs", { limit: 50 }], () => api.rotationRuns({ limit: 50 }), { live: { intervalMs: 10_000 } });
@@ -322,7 +331,7 @@ export function Operations() {
       </TechnicalDisclosure>
 
       <TechnicalDisclosure title={t("operations.disclosure.rotations")}>
-        <RotationRunsSection />
+        <RotationRunsSection onOpenRun={openRun} />
       </TechnicalDisclosure>
 
       {rejectTarget && (
@@ -333,6 +342,7 @@ export function Operations() {
           onSubmit={(reason) => void reject(rejectTarget, reason)}
         />
       )}
+      {runId && <RotationRunDetailDialog id={runId} onClose={() => openRun(null)} />}
       {detailTarget && <OperationDetailDialog row={detailTarget} onClose={() => setDetailTarget(null)} />}
     </div>
   );
@@ -796,7 +806,7 @@ function isActiveStatus(status: string): boolean {
   return ["queued", "running", "rollback_queued", "dry_run_queued"].includes(status);
 }
 
-function RotationRunsSection() {
+function RotationRunsSection({ onOpenRun }: { onOpenRun: (id: string) => void }) {
   const { t } = useTranslation();
   const [runs, setRuns] = useState<RotationRun[]>([]);
   const [nextCursor, setNextCursor] = useState<string | undefined>(undefined);
@@ -805,7 +815,6 @@ function RotationRunsSection() {
   const [identityDraft, setIdentityDraft] = useState("");
   const [identityFilter, setIdentityFilter] = useState("");
   const [loadingMore, setLoadingMore] = useState(false);
-  const [detail, setDetail] = useState<RotationRun | null>(null);
 
   const loadRuns = useCallback(async (identityId: string) => {
     setGridState("loading");
@@ -904,7 +913,7 @@ function RotationRunsSection() {
         state={gridState}
         stateTitle={gridState === "error" ? "Rotation runs unavailable" : gridState === "empty" ? "No rotation runs" : undefined}
         stateMessage={gridState === "error" ? loadError : gridState === "empty" ? "No lifecycle rotation run has been recorded for this scope yet." : undefined}
-        onRowOpen={(row) => setDetail(row)}
+        onRowOpen={(row) => onOpenRun(row.id)}
         pagination={
           nextCursor ? (
             <div>
@@ -915,12 +924,13 @@ function RotationRunsSection() {
           ) : undefined
         }
       />
-      {detail && <RotationRunDetailDialog run={detail} onClose={() => setDetail(null)} />}
     </div>
   );
 }
 
-function RotationRunDetailDialog({ onClose, run }: { run: RotationRun; onClose: () => void }) {
+function RotationRunDetailDialog({ onClose, id }: { id: string; onClose: () => void }) {
+  const query = useApiQuery(["rotation-run", id], () => api.rotationRun(id), { live: { intervalMs: 10_000 }, retry: false });
+  const run = query.data;
   const { t } = useTranslation();
   const titleId = "rotation-run-detail-heading";
   const descriptionId = "rotation-run-detail-description";
@@ -935,48 +945,83 @@ function RotationRunDetailDialog({ onClose, run }: { run: RotationRun; onClose: 
       panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-panel border border-border bg-card shadow-elevation2"
     >
       <header className="border-b border-border px-5 py-4">
-        <h2 id={titleId} className="text-title font-semibold">
-          {translateNow("source.rotation.run.value1.e6b35404aa", { value1: run.id })}
+        <h2 id={titleId} className="break-all text-title font-semibold">
+          {translateNow("source.rotation.run.value1.e6b35404aa", { value1: id })}
         </h2>
         <p id={descriptionId} className="mt-1 text-sm text-muted-foreground">
           {t("parity.fullLifecycleRotationRunRecordIncluding_02687f")}
         </p>
       </header>
-      <dl className="grid gap-2 p-5 text-sm">
-        <RotationRunDetailRow term="Run ID" mono>
-          {run.id}
-        </RotationRunDetailRow>
-        <RotationRunDetailRow term="Identity" mono>
-          {run.identity_id}
-        </RotationRunDetailRow>
-        <RotationRunDetailRow term="Status">
-          <StatusBadge value={run.status} tone={rotationRunTone(run.status)} />
-        </RotationRunDetailRow>
-        <RotationRunDetailRow term="Trigger">{run.trigger}</RotationRunDetailRow>
-        <RotationRunDetailRow term="Reason">{run.reason || "-"}</RotationRunDetailRow>
-        <RotationRunDetailRow term="Predecessor fingerprint" mono>
-          {run.predecessor_fingerprint || "-"}
-        </RotationRunDetailRow>
-        <RotationRunDetailRow term="Successor fingerprint" mono>
-          {run.successor_fingerprint || "-"}
-        </RotationRunDetailRow>
-        <RotationRunDetailRow term="Rollback ref" mono>
-          {run.rollback_ref || "-"}
-        </RotationRunDetailRow>
-        <RotationRunDetailRow term="Error">
-          {run.error ? <span className={run.status === "failed" ? "text-risk-critical" : undefined}>{run.error}</span> : "-"}
-        </RotationRunDetailRow>
-        <RotationRunDetailRow term="Idempotency key" mono>
-          {run.idempotency_key || "-"}
-        </RotationRunDetailRow>
-        <RotationRunDetailRow term="Outbox ID">{run.outbox_id != null ? String(run.outbox_id) : "-"}</RotationRunDetailRow>
-        <RotationRunDetailRow term="Tenant" mono>
-          {run.tenant_id}
-        </RotationRunDetailRow>
-        <RotationRunDetailRow term="Created">{formatDateTime(run.created_at)}</RotationRunDetailRow>
-        <RotationRunDetailRow term="Completed">{run.completed_at ? formatDateTime(run.completed_at) : "-"}</RotationRunDetailRow>
-        <RotationRunDetailRow term="Updated">{formatDateTime(run.updated_at)}</RotationRunDetailRow>
-      </dl>
+      {query.loading ? (
+        <div className="p-5">
+          <LoadingState>{t("operations.run.loading")}</LoadingState>
+        </div>
+      ) : null}
+      {query.error ? (
+        <div className="p-5">
+          <ErrorState title={t("operations.run.unavailable")}>
+            {t("operations.run.unavailableHelp")}
+            <Button type="button" variant="outline" onClick={query.refetch}>
+              {t("operations.run.refresh")}
+            </Button>
+          </ErrorState>
+        </div>
+      ) : null}
+      {run ? (
+        <dl className="grid gap-2 p-5 text-sm">
+          <RotationRunDetailRow term="Run ID" mono>
+            {run.id}
+          </RotationRunDetailRow>
+          <RotationRunDetailRow term="Identity" mono>
+            {run.identity_id}
+          </RotationRunDetailRow>
+          <RotationRunDetailRow term="Status">
+            <StatusBadge value={run.status} tone={rotationRunTone(run.status)} />
+          </RotationRunDetailRow>
+          {run.host_job ? (
+            <>
+              <RotationRunDetailRow term={t("operations.run.hostJob")}>
+                <Num>{run.host_job.id}</Num>
+              </RotationRunDetailRow>
+              <RotationRunDetailRow term={t("operations.run.hostStatus")}>
+                <StatusBadge value={run.host_job.status} />
+              </RotationRunDetailRow>
+              <RotationRunDetailRow term={t("operations.run.hostAttempts")}>
+                <Num>{run.host_job.attempts}</Num>
+              </RotationRunDetailRow>
+              <RotationRunDetailRow term={t("operations.run.hostCompleted")}>
+                {run.host_job.completed_at ? formatDateTime(run.host_job.completed_at) : "-"}
+              </RotationRunDetailRow>
+            </>
+          ) : (
+            <RotationRunDetailRow term={t("operations.run.hostJob")}>{t("operations.run.noHostJob")}</RotationRunDetailRow>
+          )}
+          <RotationRunDetailRow term="Trigger">{run.trigger}</RotationRunDetailRow>
+          <RotationRunDetailRow term="Reason">{run.reason || "-"}</RotationRunDetailRow>
+          <RotationRunDetailRow term="Predecessor fingerprint" mono>
+            {run.predecessor_fingerprint || "-"}
+          </RotationRunDetailRow>
+          <RotationRunDetailRow term="Successor fingerprint" mono>
+            {run.successor_fingerprint || "-"}
+          </RotationRunDetailRow>
+          <RotationRunDetailRow term="Rollback ref" mono>
+            {run.rollback_ref || "-"}
+          </RotationRunDetailRow>
+          <RotationRunDetailRow term="Error">
+            {run.error ? <span className={run.status === "failed" ? "text-risk-critical" : undefined}>{run.error}</span> : "-"}
+          </RotationRunDetailRow>
+          <RotationRunDetailRow term="Idempotency key" mono>
+            {run.idempotency_key || "-"}
+          </RotationRunDetailRow>
+          <RotationRunDetailRow term="Outbox ID">{run.outbox_id != null ? String(run.outbox_id) : "-"}</RotationRunDetailRow>
+          <RotationRunDetailRow term="Tenant" mono>
+            {run.tenant_id}
+          </RotationRunDetailRow>
+          <RotationRunDetailRow term="Created">{formatDateTime(run.created_at)}</RotationRunDetailRow>
+          <RotationRunDetailRow term="Completed">{run.completed_at ? formatDateTime(run.completed_at) : "-"}</RotationRunDetailRow>
+          <RotationRunDetailRow term="Updated">{formatDateTime(run.updated_at)}</RotationRunDetailRow>
+        </dl>
+      ) : null}
       <div className="flex justify-end border-t border-border px-5 py-4">
         <Button type="button" variant="outline" onClick={onClose}>
           {translateNow("source.close.7d9eb7acb1")}
