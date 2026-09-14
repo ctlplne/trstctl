@@ -494,13 +494,13 @@ const (
 type ReportJobResultRequest struct {
 	JobID   int64  `json:"job_id"`
 	Outcome string `json:"outcome"`
-	// Detail is operator-facing text explaining a failure. It must never carry
-	// credential material; the server treats it as opaque and stores it as the
-	// entry's last error.
+	// Detail explains an attempt failure and must never carry credential material.
+	// Its digest is signed. The server withholds free text after credential use;
+	// only an exact known host-signing marker can become fixed public stage text.
 	Detail string `json:"detail,omitempty"`
-	// EvidenceDigest is a digest of whatever transcript the agent produced. The
-	// transcript itself stays on the agent until the verification work (WS-D)
-	// defines its shape; the digest is what binds this report to it.
+	// EvidenceDigest optionally binds agent-provided execution evidence. The
+	// digest alone does not prove that a local transcript or downloadable
+	// artifact exists; the report does not transfer such an artifact.
 	EvidenceDigest string `json:"evidence_digest,omitempty"`
 	// CredentialFingerprint and Custody are present only when an agent has
 	// installed a certificate whose key it generated locally. Both are inside

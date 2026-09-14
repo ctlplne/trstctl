@@ -650,14 +650,7 @@ func (l *Log) preflightLegacySchedulerHistory(
 	stream jetstream.Stream,
 	through uint64,
 ) error {
-	for sequence := uint64(1); sequence <= through; sequence++ {
-		raw, err := stream.GetMsg(ctx, sequence)
-		if errors.Is(err, jetstream.ErrMsgNotFound) {
-			continue
-		}
-		if err != nil {
-			return fmt.Errorf("events: inspect scheduler history seq %d: %w", sequence, err)
-		}
+	return readRetainedThrough(ctx, stream, 1, through, func(raw *jetstream.RawStreamMsg) error {
 		event, err := decodeStored(raw.Data, raw.Sequence)
 		if err != nil {
 			return err
@@ -668,8 +661,8 @@ func (l *Log) preflightLegacySchedulerHistory(
 		if inspectErr != nil || unsafe {
 			return schedulerhistory.ErrSanitationRequired
 		}
-	}
-	return nil
+		return nil
+	})
 }
 
 func (l *Log) replayActive(ctx context.Context, from uint64, fn func(Event) error) error {
@@ -707,21 +700,14 @@ func (l *Log) replayResolved(
 	if from == 0 {
 		from = 1
 	}
-	for seq := from; seq <= through; seq++ {
-		raw, err := stream.GetMsg(ctx, seq)
-		if err != nil {
-			if errors.Is(err, jetstream.ErrMsgNotFound) {
-				continue // a purged sequence; append-only so this is unexpected but safe
-			}
-			return fmt.Errorf("events: get seq %d: %w", seq, err)
-		}
+	if err := readRetainedThrough(ctx, stream, from, through, func(raw *jetstream.RawStreamMsg) error {
 		event, err := decodeStored(raw.Data, raw.Sequence)
 		if err != nil {
 			return err
 		}
-		if err := fn(event); err != nil {
-			return err
-		}
+		return fn(event)
+	}); err != nil {
+		return err
 	}
 	current, err := l.activeStreamName(ctx)
 	if err != nil {

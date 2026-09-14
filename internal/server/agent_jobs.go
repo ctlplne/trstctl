@@ -1280,15 +1280,26 @@ func (a *agentService) projectClaimedJobPayload(job store.AgentJob) ([]byte, err
 // entropy floor catches "hunter2-lab", and pretending otherwise would be the
 // kind of control that reads as protection while providing none.
 //
-// So a credential-bearing attempt records a closed-set marker instead. The
-// operator is not left blind: the failure reason, the redemption's audit ref,
-// and the evidence digest all remain, and the agent's transcript stays on the
-// agent where an operator with access to that host can read it.
+// A credential-bearing attempt records a closed-set marker instead. A known
+// host-signing failure can retain its stage because its output is a fixed public
+// string, not copied free text. Unknown text stays withheld. The redemption
+// audit ref and evidence digest remain; a local transcript is not guaranteed.
 //
 // An attempt that redeemed nothing never held a secret to echo, so its detail
 // flows through redaction as before.
 func (a *agentService) agentDetailForHistory(ctx context.Context, tenantID, agentID string, req *transport.ReportJobResultRequest) string {
 	if a.store != nil {
+		// Old and current host agents send this exact static phrase when the
+		// signing RPC returns no usable result. The CA may already have issued
+		// a leaf, so do not claim that no certificate was minted. Require the
+		// stored job kind and failed outcome; never trim, match a prefix or
+		// append agent-supplied bytes to this public classification.
+		if req.Outcome == transport.JobOutcomeFailed && req.Detail == "the control plane did not sign this host's request" {
+			kind, err := a.store.AgentJobDestination(ctx, tenantID, req.JobID)
+			if err == nil && kind == agentJobKindEndpointRenew {
+				return "signing: this host did not receive a signed certificate from the control plane; inspect this attempt's issuance job before retrying"
+			}
+		}
 		redeemed, err := a.store.AgentJobAttemptRedeemedCredential(ctx, tenantID, req.JobID)
 		if err != nil || redeemed {
 			// A classification error fails closed: unknown custody is treated as
@@ -1333,5 +1344,5 @@ const (
 	agentDetailWithheld = "withheld: agent detail still contained secret-like material after redaction"
 	// agentDetailCredentialBearing replaces the detail of an attempt that
 	// redeemed a credential. See agentDetailForHistory.
-	agentDetailCredentialBearing = "withheld: this attempt held redeemed credential material; see the redemption audit ref and the agent's local transcript"
+	agentDetailCredentialBearing = "withheld: this job redeemed credentials, so free-text failure details are not retained; inspect its failure reason, redemption audit record and attached evidence"
 )

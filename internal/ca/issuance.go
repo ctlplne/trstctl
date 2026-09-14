@@ -226,9 +226,6 @@ func (s *IssuanceService) Issue(ctx context.Context, req IssueRequest, idempoten
 			return nil, err
 		}
 		s.observeLifetime(req.TenantID, cert)
-		if err := s.record(ctx, req.TenantID, idempotencyKey, req.RequestBinding, cert); err != nil {
-			return nil, err
-		}
 		return json.Marshal(cert)
 	})
 	if err != nil {
@@ -236,6 +233,11 @@ func (s *IssuanceService) Issue(ctx context.Context, req IssueRequest, idempoten
 	}
 	var cert Certificate
 	if err := json.Unmarshal(raw, &cert); err != nil {
+		return Certificate{}, err
+	}
+	// Cache the returned provider result before local recording. A projection
+	// failure can then replay this exact certificate without signing again.
+	if err := s.record(ctx, req.TenantID, idempotencyKey, req.RequestBinding, cert); err != nil {
 		return Certificate{}, err
 	}
 	if err := s.recordDependentOnce(ctx, req, idempotencyKey, cert); err != nil {
@@ -301,19 +303,23 @@ func (s *IssuanceService) waitForExternalIssue(ctx context.Context, tenantID, id
 		} else {
 			raw, err = s.idem.Result(waitCtx, tenantID, externalIssueResultKey(idempotencyKey))
 		}
+		var cert Certificate
 		if err == nil {
-			var cert Certificate
 			if err := json.Unmarshal(raw, &cert); err != nil {
 				return Certificate{}, err
 			}
-			return cert, nil
 		}
-		if !errors.Is(err, orchestrator.ErrIdempotencyNotFound) && !errors.Is(err, orchestrator.ErrInProgress) {
+		if err != nil && !errors.Is(err, orchestrator.ErrIdempotencyNotFound) && !errors.Is(err, orchestrator.ErrInProgress) {
 			return Certificate{}, err
 		}
 		record, recordErr := s.outbox.Get(waitCtx, tenantID, outboxID)
 		if recordErr != nil {
 			return Certificate{}, recordErr
+		}
+		// A cached provider response precedes local projection/notification.
+		// Only a completed worker (or durable recovery above) makes it usable.
+		if err == nil && record.Status == "delivered" {
+			return cert, nil
 		}
 		// A retryable worker failure belongs to this exact issuance. Return a
 		// sanitized upstream failure now; a replay wakes the worker and recovers
@@ -388,9 +394,6 @@ func (s *IssuanceService) DeliverExternalIssue(ctx context.Context, m orchestrat
 			return nil, preserveOrClassifyExternalIssueError("external_ca_provider_failed", "external CA provider issuance failed", err)
 		}
 		s.observeLifetime(m.TenantID, cert)
-		if err := s.record(ctx, m.TenantID, m.IdempotencyKey, req.RequestBinding, cert); err != nil {
-			return nil, safeExternalIssueError("external_ca_record_failed", "external CA certificate recording failed", err)
-		}
 		raw, err := json.Marshal(cert)
 		if err != nil {
 			return nil, safeExternalIssueError("external_ca_result_encode_failed", "external CA result encoding failed", err)
@@ -413,6 +416,12 @@ func (s *IssuanceService) DeliverExternalIssue(ctx context.Context, m orchestrat
 	var cert Certificate
 	if err := json.Unmarshal(raw, &cert); err != nil {
 		return safeExternalIssueError("external_ca_result_decode_failed", "external CA result decoding failed", err)
+	}
+	// The upstream effect is complete once its exact response is durably
+	// cached. Recording can now retry locally without calling the CA again.
+	// No served response is successful until recording/notification commits.
+	if err := s.record(ctx, m.TenantID, m.IdempotencyKey, req.RequestBinding, cert); err != nil {
+		return safeExternalIssueError("external_ca_record_failed", "external CA certificate recording failed", err)
 	}
 	if err := s.recordDependentOnce(ctx, req, m.IdempotencyKey, cert); err != nil {
 		return safeExternalIssueError("external_ca_observation_failed", "external CA issuance observation failed", err)

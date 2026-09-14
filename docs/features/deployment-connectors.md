@@ -254,9 +254,20 @@ stops before any certificate exists. It shows the assigned agent's safe error,
 attempt count, and exact background job ID. A failed attempt does not confirm
 delivery or offer a restore reference. Later recovery updates the same delivery
 record; the event history retains the earlier failure. Inspect the named profile,
-destination settings, or host transcript to resolve the reported cause. If the
-job has redeemed secret material, its free-text error is withheld from permanent
-history; use the redemption audit reference and that host's local transcript.
+destination settings and issuance job to resolve the reported cause. A fixed
+signing-stage message means the host did not receive a usable certificate; the CA
+may still have issued one, so inspect the retained issuance result before retrying.
+If any attempt of the job redeemed credentials, arbitrary free-text errors stay
+withheld from permanent history. Only the exact known host-signing marker is
+classified into fixed public text. The redemption audit reference and attached
+evidence remain available; a local agent transcript is not guaranteed.
+
+When an external CA returns a certificate, trstctl saves that response before
+recording the issuance locally. A recording failure can then retry with the same
+request key and recover the same certificate without another CA call. Success
+still requires the issuance record and notification intent to commit. If the CA
+call failed without returning a certificate, trstctl keeps its existing replay
+restrictions; an ambiguous result does not authorize another issuance.
 
 Delivery and endpoint verification appear separately in the activity timeline.
 Delivery keeps the actual retry count, job ID, and restore reference. Verification
