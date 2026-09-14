@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"trstctl.com/trstctl/internal/store"
 )
 
 // onlineSafeBaseline grandfathers the migrations that shipped BEFORE the
@@ -33,12 +35,12 @@ const onlineSafeBaseline = 25
 // the playbook in docs/migrations.md as an enforced precedent so the first
 // lock-heavy change to a live table cannot silently ship.
 //
-// Today every migration creates each index in the SAME migration as its (empty)
-// table, so this guard passes; it exists to catch the FUTURE migration that adds an
-// index/column to a populated table or rewrites a live column.
+// The guard inspects the actual checksum-bound execution plan for the two
+// historical online repairs, and original SQL for every other migration. This is
+// not an exemption: non-concurrent index work in either path still fails.
 //
 // What it flags (against a table NOT created in the same migration):
-//   - CREATE INDEX without CONCURRENTLY (an ACCESS EXCLUSIVE-equivalent build lock);
+//   - CREATE INDEX without CONCURRENTLY (a SHARE lock that blocks writers);
 //   - ALTER COLUMN ... TYPE (a full table rewrite);
 //   - ADD COLUMN ... NOT NULL without a DEFAULT (a full table rewrite on older PG);
 //   - DROP COLUMN / DROP TABLE / RENAME (destructive / query-breaking on live data).
@@ -90,6 +92,13 @@ func TestMigrationsAreOnlineSafe(t *testing.T) {
 			continue
 		}
 		text := string(raw)
+		execution, err := store.OnlineMigrationExecutionSQLForTest(name, raw)
+		if err != nil {
+			t.Fatalf("online execution for %s: %v", name, err)
+		}
+		if execution != "" {
+			text = execution
+		}
 		// Tables this migration creates itself are empty, so any DDL against them is
 		// not a lock-on-live-data concern.
 		created := map[string]bool{}
@@ -111,7 +120,7 @@ func TestMigrationsAreOnlineSafe(t *testing.T) {
 			if m := createIndexRe.FindStringSubmatch(body); m != nil && !concurrentlyRe.MatchString(body) {
 				tbl := strings.ToLower(m[1])
 				if !created[tbl] && !exempt {
-					t.Errorf("%s: CREATE INDEX on existing table %q is not CONCURRENTLY — it locks a populated table (ACCESS EXCLUSIVE). Use CREATE INDEX CONCURRENTLY in a no-tx migration, or justify with `-- online-safe:` (SCHEMA-006)", name, tbl)
+					t.Errorf("%s: CREATE INDEX on existing table %q is not CONCURRENTLY — it locks a populated table (SHARE lock). Use CREATE INDEX CONCURRENTLY in a no-tx migration, or justify with `-- online-safe:` (SCHEMA-006)", name, tbl)
 				}
 			}
 			// ALTER COLUMN ... TYPE rewrites the table.

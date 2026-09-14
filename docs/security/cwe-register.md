@@ -1275,7 +1275,7 @@ not this file.
 | `internal/spireupstream/plugin.go:239` | operator-configured public CA bundle path (CWE-22) |
 | `internal/spireupstream/plugin.go:318` | operator-configured upstream-authority plugin config path (CWE-22) |
 | `internal/store/dynamic_secret_lock_order_test.go:124` | fixed sibling path inside this package's own directory (CWE-22) |
-| `internal/store/migration_safety_test.go:85` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/store/migration_safety_test.go:87` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/store/store_isolation_test.go:310` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/store/store_isolation_test.go:356` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/supportbundle/supportbundle.go:438` | operator-invoked support bundle collecting its configured files (CWE-22) |

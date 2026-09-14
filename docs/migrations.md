@@ -30,6 +30,8 @@ The ledger records **what** ran, not merely that something ran. Alongside
 | `name` | the migration filename applied under this version |
 | `checksum` | `sha256:<hex>` of that file's content |
 | `checksum_adopted_at` | non-NULL if the digest was *adopted* rather than *observed at apply time* |
+| `execution_plan` | non-NULL when a checksum-bound compatibility plan ran instead of the original transactional SQL |
+| `execution_checksum` | digest of that plan’s ordered DDL, including conditional recovery steps |
 
 On every run, before applying anything, the runner re-hashes each embedded file
 whose version is already in the ledger and compares:
@@ -89,6 +91,39 @@ intent, not a failure of the upgrade. Do not reach for the override first:
 
 There is deliberately no environment variable or flag for this: re-adoption is a
 per-version, audited write to the ledger, not a switch that can be left on.
+
+## Online execution of historical index migrations
+
+Pending migrations `0211_connector_rollback_projection_order.sql` and
+`0219_notification_delivery_routing.sql` build their indexes concurrently so a
+populated control plane can continue database writes during index construction.
+Their shipped SQL files and original checksums remain unchanged. A database that
+already applied either file keeps its ledger row; startup does not re-run it.
+
+For a pending version, the runner first matches the immutable file digest. It
+commits the additive column expansion in a short transaction, then builds the
+index outside a transaction with `CREATE INDEX CONCURRENTLY`. Migration 0211
+adds its nonnegative-sequence check as `NOT VALID` and validates existing rows
+after the index is ready. Existing tenant evidence and conservative defaults
+are preserved. The five-second lock-wait limit still applies: column expansion
+can briefly require an exclusive table lock, and long-running writers can make
+a concurrent build wait. This is not a promise of a lock-free upgrade.
+
+An interruption before the ledger insert is safe to retry. The runner checks
+column types, defaults and constraints before using a completed expansion, and
+checks the index’s table, columns, predicate, method and validity. It reuses an
+exact valid index or drops and rebuilds an exact invalid index concurrently.
+A same-name object with a different definition, partial column expansion, or
+changed migration file causes startup to refuse the upgrade. Do not clear the
+ledger or replace a conflicting object blindly; inspect the reported schema
+and restore the expected definition before retrying the normal migration step.
+
+Only after the columns, ready index and validated constraint are verified does
+the runner record the original filename/checksum with
+`execution_plan='historical-online-v1'` and the separate plan digest. That digest
+identifies the DDL strategy, including conditional retry steps; it does not claim
+that every statement was executed on every retry. Older transactional installs
+retain NULL execution provenance rather than receiving invented history.
 
 ## Concurrent instances are safe (advisory lock)
 

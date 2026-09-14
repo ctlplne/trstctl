@@ -73,7 +73,9 @@ func configureMigrationSession(ctx context.Context, conn *pgxpool.Conn) error {
 // for idempotent online DDL that PostgreSQL forbids inside a transaction, such as
 // CREATE INDEX CONCURRENTLY; the advisory lock still serializes the run, and the
 // file must be safe to retry before the ledger row is recorded. Migrations are
-// forward-only by policy (see docs/migrations.md); recovery from a bad migration is
+// forward-only by policy. The two immutable historical index migrations have
+// checksum-bound online execution plans; their original file identity and the
+// separate plan digest are both retained (see docs/migrations.md). Recovery from a bad migration is
 // a restore from the pre-migration backup.
 //
 // The ledger records WHAT ran, not merely that something ran (OPS-MIG-CKSUM-001):
@@ -110,7 +112,7 @@ func (s *Store) Migrate(ctx context.Context) error {
 
 	// The ledger is runner-owned rather than a numbered migration: it must exist
 	// before any migration can be recorded, so its own shape is upgraded here. The
-	// three identity columns are ADDITIVE and NULLABLE on purpose — a deployment
+	// identity and execution-provenance columns are ADDITIVE and NULLABLE on purpose — a deployment
 	// installed by an older binary gets them empty (adopted below, not rejected),
 	// and a rollback to a pre-checksum binary keeps writing rows this runner can
 	// still read. This runs under the advisory lock and the bounded lock_timeout.
@@ -119,6 +121,8 @@ func (s *Store) Migrate(ctx context.Context) error {
 		"ALTER TABLE schema_migrations ADD COLUMN IF NOT EXISTS name text",
 		"ALTER TABLE schema_migrations ADD COLUMN IF NOT EXISTS checksum text",
 		"ALTER TABLE schema_migrations ADD COLUMN IF NOT EXISTS checksum_adopted_at timestamptz",
+		"ALTER TABLE schema_migrations ADD COLUMN IF NOT EXISTS execution_plan text",
+		"ALTER TABLE schema_migrations ADD COLUMN IF NOT EXISTS execution_checksum text",
 	} {
 		if _, err := conn.Exec(ctx, ddl); err != nil {
 			return fmt.Errorf("store: create migrations ledger: %w", err)
@@ -413,6 +417,22 @@ func applyMigrationSet(ctx context.Context, conn *pgxpool.Conn, led *migrationLe
 			if err := led.reconcile(ctx, conn, version, name, checksum); err != nil {
 				return err
 			}
+			continue
+		}
+		plan, err := historicalOnlinePlan(name, body)
+		if err != nil {
+			return err
+		}
+		if plan != nil {
+			if err := plan.apply(ctx, conn); err != nil {
+				return fmt.Errorf("store: apply online migration %s: %w", name, err)
+			}
+			if _, err := conn.Exec(ctx, `INSERT INTO schema_migrations
+			 (version,name,checksum,execution_plan,execution_checksum) VALUES ($1,$2,$3,$4,$5)`,
+				version, name, checksum, "historical-online-v1", migrationChecksum([]byte(plan.executionSQL()))); err != nil {
+				return fmt.Errorf("store: record online migration %s: %w", name, err)
+			}
+			led.record(version, name, checksum)
 			continue
 		}
 		if migrationNoTransaction(body) {

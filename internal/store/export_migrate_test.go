@@ -13,3 +13,13 @@ import (
 func ConfigureMigrationSessionForTest(ctx context.Context, conn *pgxpool.Conn) error {
 	return configureMigrationSession(ctx, conn)
 }
+
+// OnlineMigrationExecutionSQLForTest exposes the exact runtime plan to the
+// external online-safety guard. Empty means the original SQL executes unchanged.
+func OnlineMigrationExecutionSQLForTest(name string, body []byte) (string, error) {
+	p, err := historicalOnlinePlan(name, body)
+	if err != nil || p == nil {
+		return "", err
+	}
+	return p.executionSQL(), nil
+}
