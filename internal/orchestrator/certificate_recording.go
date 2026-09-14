@@ -116,14 +116,18 @@ func (o *Orchestrator) catchUpCertificateRecordingTx(ctx context.Context, tx pgx
 			if err != nil {
 				return err
 			}
+			// The caller already holds the tenant metadata and privacy fences.
+			// An exact completed receipt makes this event inert; avoid installing
+			// projection context and retaking that fence just to check it again.
+			done, err := o.store.CertificateMetadataEventAppliedTx(ctx, tx, e)
+			if err != nil {
+				return err
+			}
+			if done {
+				return nil
+			}
 			if !recording {
-				done, err := o.store.CertificateMetadataEventAppliedTx(ctx, tx, e)
-				if err != nil {
-					return err
-				}
-				if !done {
-					return fmt.Errorf("%w: pending metadata event %d must project in order before a new recording", store.ErrCertificateRecordingRebuildRequired, e.Sequence)
-				}
+				return fmt.Errorf("%w: pending metadata event %d must project in order before a new recording", store.ErrCertificateRecordingRebuildRequired, e.Sequence)
 			}
 		}
 		_, recording, err := projections.CertificateRecordingMaterial(e)

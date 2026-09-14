@@ -78,6 +78,14 @@ not turn tokenless or unreconciled upstream adapters into exactly-once receivers
 the active [profile](#profiles-and-the-registration-authority-split-f53) is enforced
 *before* signing, with an `issuance.profile_evaluated` event recorded either way.
 
+If the CA returns a certificate but local recording fails, retries retain that
+result instead of asking the CA to sign again. Recording recovery checks each
+retained certificate event's complete receipt before doing projection work again.
+A receipt must match the original event; a sequence watermark alone is not proof.
+Missing recordings still recover in order, under the tenant and privacy barriers.
+Recovery still reads retained history, so its cost grows with that history; this
+does not establish a fixed recording-latency guarantee.
+
 Upstream CA credentials are configured by the control-plane operator, not tenant
 JSON: file references load into locked byte buffers for one outbox attempt and are
 wiped afterward. Azure CA private-key operations and Let's Encrypt account JWS
