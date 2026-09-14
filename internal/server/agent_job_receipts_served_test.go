@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/agent/transport"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/events"
 )
@@ -515,8 +516,25 @@ func seedRelayExecutedJob(t *testing.T, ctx context.Context, h *agentChannelHarn
 	t.Helper()
 	payload := []byte(`{"connector":"f5","target":"edge-1","target_config":{"endpoint":"https://f5.example.internal"}}`)
 	if destination == "connector.rollback" {
-		payload = []byte(`{"connector":"f5","target":"edge-1","predecessor_fingerprint":"abcdef0123456789",` +
-			`"predecessor_serial":"01","target_config":{"endpoint":"https://f5.example.internal"}}`)
+		// Claim-time revocation authorization needs the exact predecessor in
+		// inventory. Import a real signed fixture; do not bypass that safety gate.
+		pem := servedHealthLeafPEM(t, h.servedHarness, "rollback.dispatcher.test", 24*time.Hour)
+		token := seedScopedToken(t, h.store, h.tenant, "certs:write")
+		ingestServedHealthCertificate(t, h.servedHarness, token, idemKey+":predecessor", pem, "import", "f5:/Common/edge-1")
+		info, err := certinfo.Inspect([]byte(pem))
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, err = json.Marshal(map[string]any{
+			"connector": "f5", "target": "edge-1", "predecessor_fingerprint": info.SHA256Fingerprint,
+			"predecessor_serial": info.SerialNumber, "target_config": map[string]string{"endpoint": "https://f5.example.internal"},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := h.store.CheckConnectorRollbackPayload(ctx, h.tenant, payload); err != nil {
+			t.Fatalf("rollback prerequisite is not authorized: %v", err)
+		}
 	}
 	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx,

@@ -749,33 +749,7 @@ func TestServedExpiryEscalatesToOwnerAndApproversCAPLIFE04(t *testing.T) {
 		t.Fatalf("decode identity: %v", err)
 	}
 
-	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/identities/"+ident.ID+"/transitions", tok, map[string]any{
-		"to":     "issued",
-		"reason": "CAP-LIFE-04 initial issue",
-	})
-	if status != http.StatusOK {
-		t.Fatalf("issue transition: status %d body %s", status, body)
-	}
-	if err := h.srv.Drain(t.Context()); err != nil {
-		t.Fatalf("drain issue: %v", err)
-	}
-
-	certs, err := h.store.ListActiveIssuedCertificatesForIdentity(t.Context(), h.tenant, owner.ID, name)
-	if err != nil {
-		t.Fatalf("load issued cert: %v", err)
-	}
-	if len(certs) != 1 {
-		t.Fatalf("issued certs = %d, want 1", len(certs))
-	}
-	cert := certs[0]
-	now := time.Now().UTC()
-	notBefore := now.Add(-24 * time.Hour)
-	notAfter := now.Add(5 * 24 * time.Hour)
-	cert.NotBefore = &notBefore
-	cert.NotAfter = &notAfter
-	if _, err := h.srv.orch.RecordCertificate(t.Context(), h.tenant, cert); err != nil {
-		t.Fatalf("record near-expiry certificate: %v", err)
-	}
+	cert := signedNotificationCertificate(t, h, owner.ID, name, 5*24*time.Hour)
 
 	if _, err := h.srv.RunLifecycleOnce(t.Context()); err != nil {
 		t.Fatalf("run lifecycle scheduler: %v", err)
@@ -785,6 +759,9 @@ func TestServedExpiryEscalatesToOwnerAndApproversCAPLIFE04(t *testing.T) {
 	}
 
 	alert := sink.LastAlert()
+	if alert.CertificateID != cert.ID || !alert.NotAfter.Equal(*cert.NotAfter) {
+		t.Fatalf("expiry escalation does not identify the exact signed leaf: %+v", alert)
+	}
 	if alert.OwnerID != owner.ID || alert.OwnerName != owner.Name || alert.OwnerEmail != owner.Email {
 		t.Fatalf("alert owner fields = id:%q name:%q email:%q, want %+v", alert.OwnerID, alert.OwnerName, alert.OwnerEmail, owner)
 	}
@@ -1070,33 +1047,8 @@ func seedNearExpiryNotificationCertificate(t *testing.T, h *servedHarness, tok, 
 		t.Fatalf("decode identity: %v", err)
 	}
 
-	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/identities/"+ident.ID+"/transitions", tok, map[string]any{
-		"to":     "issued",
-		"reason": "CAP-OBS-05 initial issue",
-	})
-	if status != http.StatusOK {
-		t.Fatalf("issue transition: status %d body %s", status, body)
-	}
-	if err := h.srv.Drain(t.Context()); err != nil {
-		t.Fatalf("drain issue: %v", err)
-	}
+	cert := signedNotificationCertificate(t, h, owner.ID, name, 72*time.Hour)
 
-	certs, err := h.store.ListActiveIssuedCertificatesForIdentity(t.Context(), h.tenant, owner.ID, name)
-	if err != nil {
-		t.Fatalf("load issued cert: %v", err)
-	}
-	if len(certs) != 1 {
-		t.Fatalf("issued certs = %d, want 1", len(certs))
-	}
-	cert := certs[0]
-	now := time.Now().UTC()
-	notBefore := now.Add(-24 * time.Hour)
-	notAfter := now.Add(72 * time.Hour)
-	cert.NotBefore = &notBefore
-	cert.NotAfter = &notAfter
-	if _, err := h.srv.orch.RecordCertificate(t.Context(), h.tenant, cert); err != nil {
-		t.Fatalf("record near-expiry certificate: %v", err)
-	}
 	return cert
 }
 
@@ -1149,4 +1101,38 @@ func (s *servedWebhookSink) handle(w http.ResponseWriter, r *http.Request) {
 	s.last = alert
 	s.mu.Unlock()
 	w.WriteHeader(http.StatusOK)
+}
+
+// Expiry fixtures use an actual short-lived UDS-signed leaf and its original
+// validity anchor. Editing a previously signed certificate's dates would test
+// refusal of contradictory inventory, not notification delivery. The public
+// owner/identity setup remains; this helper is not an API TTL-control claim.
+func signedNotificationCertificate(t *testing.T, h *servedHarness, ownerID, name string, ttl time.Duration) store.Certificate {
+	t.Helper()
+	key, err := crypto.GenerateHostSubjectKey(name, []string{name})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer key.Destroy()
+	issued, err := h.srv.issueLeafWithValidity(t.Context(), key.CSRDER, ttl, crypto.LeafProfile{ClampTTLToIssuer: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := certinfo.Inspect(issued.DER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cert, err := h.srv.orch.RecordCertificate(t.Context(), h.tenant, store.Certificate{
+		OwnerID: &ownerID, Subject: info.Subject, SANs: info.DNSNames, Issuer: info.Issuer,
+		Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint, KeyAlgorithm: info.KeyAlgorithm,
+		Source: "issued", CertificateDER: issued.DER, NotBefore: &info.NotBefore, NotAfter: &info.NotAfter,
+		ValidityAnchor: &issued.ValidityAnchor,
+	})
+	if err != nil {
+		t.Fatalf("record signed near-expiry certificate: %v", err)
+	}
+	if !cert.NotBefore.Equal(info.NotBefore) || !cert.NotAfter.Equal(info.NotAfter) || !bytes.Equal(cert.CertificateDER, issued.DER) {
+		t.Fatal("notification fixture lost exact signed certificate validity")
+	}
+	return cert
 }

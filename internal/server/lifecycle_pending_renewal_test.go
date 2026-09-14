@@ -28,6 +28,7 @@ func TestLifecycleSchedulerDoesNotOverlapHostRenewalRetry(t *testing.T) {
 	}
 	target := agentExecutedTarget(t)
 	target.TenantID = h.tenant
+	hostID := seedDestinationHost(t, h.store, h.tenant)
 	legacy := target
 	legacy.Config = json.RawMessage(`{"cert_path":"/etc/nginx/tls.crt"}`)
 	if err := h.store.UpsertDeploymentTarget(ctx, legacy); err != nil {
@@ -61,9 +62,17 @@ func TestLifecycleSchedulerDoesNotOverlapHostRenewalRetry(t *testing.T) {
 		t.Fatalf("first renewal queued=%d error=%v", n, err)
 	}
 	dispatchOutbox(t, h, 1)
-	payload, _ := queuedHostRenewal(t, ctx, h)
-	if err := srv.completeHostRenewal(ctx, h.tenant, payload, transport.JobOutcomeFailed, nil); err != nil {
+	// Bind failure to the real held attempt, as the signed report receiver does.
+	jobs, err := h.store.ClaimAgentJobs(ctx, h.tenant, hostID, []string{"endpoint.renew"}, []string{"host"}, 1, time.Minute, time.Now().UTC())
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("claim assigned renewal: jobs=%d err=%v", len(jobs), err)
+	}
+	job := jobs[0]
+	if err := srv.completeHostRenewal(ctx, h.tenant, job.Payload, transport.JobOutcomeFailed, &store.RenewalAttempt{JobID: job.ID, Attempt: job.ClaimAttempts}); err != nil {
 		t.Fatal(err)
+	}
+	if current, err := h.store.GetIdentity(ctx, h.tenant, ident.ID); err != nil || current.Status != string(orchestrator.StateRenewalFailed) {
+		t.Fatalf("held failure did not reach renewal_failed: status=%s err=%v", current.Status, err)
 	}
 	for _, status := range []string{"pending", "processing"} {
 		if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {

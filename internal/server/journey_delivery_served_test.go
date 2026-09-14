@@ -18,6 +18,7 @@ import (
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/connector/acm"
 	"trstctl.com/trstctl/internal/connector/acm/acmtest"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/protocols/ari"
 	"trstctl.com/trstctl/internal/servedstatus"
@@ -1019,11 +1020,12 @@ func TestServedEndpointBindingAutomationCAPLIFE01(t *testing.T) {
 // must be inert until an operator explicitly enables it. Refusal happens before
 // an identity is bound or created and before any external-call intent exists.
 func TestDisabledConnectorTargetRefusesEveryLifecycleMutation(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(*Deps) {})
+	role := newRoleHarness(t, []string{mtls.AgentRoleHost}, agentJobKindEndpointRenew)
+	h := role.servedHarness
 	tok := seedScopedToken(t, h.store, h.tenant,
 		"owners:read", "owners:write",
 		"identities:read", "identities:write",
-		"connectors:read", "connectors:write",
+		"connectors:read", "connectors:write", "certs:issue",
 	)
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/owners", tok, map[string]any{
@@ -1156,6 +1158,10 @@ func TestDisabledConnectorTargetRefusesEveryLifecycleMutation(t *testing.T) {
 
 	// The readiness transition is deliberate and auditable. Once enabled, the
 	// same server route can bind the identity normally.
+	targetConfig := targetRequest["config"].(map[string]any)
+	targetConfig["required_agent_id"] = registeredRoleAgentID(t, role)
+	targetConfig["required_agent_role"] = mtls.AgentRoleHost
+	targetConfig["executor"] = "agent"
 	targetRequest["enabled"] = true
 	status, body = secretsReq(t, h, http.MethodPut, "/api/v1/connectors/targets/"+target.ID, tok, targetRequest)
 	if status != http.StatusOK || !jsonContains(t, body, `"enabled":true`) {
@@ -1254,7 +1260,8 @@ func previewPlatformEndpointBinding(t *testing.T, h *servedHarness, token string
 // An already-issued record cannot be pushed later by inventing a keyless
 // lifecycle transition and claiming that "deployed" means external success.
 func TestIssuedConnectorTargetDeployFailsClosedWithoutCredentialMaterial(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(*Deps) {})
+	role := newRoleHarness(t, []string{mtls.AgentRoleHost}, agentJobKindEndpointRenew)
+	h := role.servedHarness
 	tok := seedScopedToken(t, h.store, h.tenant,
 		"owners:read", "owners:write", "identities:read", "identities:write", "certs:issue", "connectors:read", "connectors:write")
 
@@ -1284,7 +1291,8 @@ func TestIssuedConnectorTargetDeployFailsClosedWithoutCredentialMaterial(t *test
 	}
 	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets", tok, map[string]any{
 		"name": "issued-deploy-refusal-target", "connector": "apache", "enabled": true,
-		"config": map[string]any{"profile": "apache", "cert_path": "/srv/tls/site.crt", "key_path": "/srv/tls/site.key"},
+		"config": map[string]any{"profile": "apache", "cert_path": "/srv/tls/site.crt", "key_path": "/srv/tls/site.key",
+			"executor": "agent", "required_agent_role": mtls.AgentRoleHost, "required_agent_id": registeredRoleAgentID(t, role)},
 	})
 	if status != http.StatusCreated {
 		t.Fatalf("create target: status %d body %s", status, body)

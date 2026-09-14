@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	agentrelay "trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/connector"
@@ -22,8 +23,8 @@ import (
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/custody"
-	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/migration"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -44,8 +45,9 @@ func (c *servedHostRelayChannel) SignJobCSR(ctx context.Context, jobID int64, at
 // TestServedMigrationTrustBeforeLeafAndRollbackAUD40 is H2's assembled proof.
 // The run is started through the authenticated API, survives a projection-loss
 // replay, and is then executed by an enrolled host agent over the real mTLS
-// channel. The signer is the harness's separate UDS process, PostgreSQL and NATS
-// are real, and the listener is handshaked after both deploy and rollback.
+// channel. The signer uses real UDS transport in the fixture; separate address
+// spaces are qualified independently. PostgreSQL and NATS are real, and the
+// listener is handshaked after both deploy and rollback.
 func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
 	ctx := context.Background()
 	h := newRoleHarness(t, []string{mtls.AgentRoleHost},
@@ -57,6 +59,11 @@ func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
 	}
 
 	root := t.TempDir()
+	fixture, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = fixture.Close() })
 	certPath := filepath.Join(root, "listener.crt")
 	keyPath := filepath.Join(root, "listener.key")
 	trustPath := filepath.Join(root, "next-root.pem")
@@ -66,10 +73,10 @@ func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
 	oldCert, oldKey := issueHostPair(t, h, dnsName)
 	defer secret.Wipe(oldCert)
 	defer secret.Wipe(oldKey)
-	if err := os.WriteFile(certPath, oldCert, 0o600); err != nil {
+	if err := fixture.WriteFile("listener.crt", oldCert, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(keyPath, oldKey, 0o600); err != nil {
+	if err := fixture.WriteFile("listener.key", oldKey, 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -96,6 +103,7 @@ func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
 
 	targetConfig, err := json.Marshal(map[string]any{
 		"executor": "agent", "cert_path": certPath, "key_path": keyPath,
+		"required_agent_id": agentRowID(h.tenant, h.agent), "required_agent_role": mtls.AgentRoleHost,
 		"verify_address": listener.Addr().String(), "verify_server_name": dnsName,
 	})
 	if err != nil {
@@ -118,40 +126,54 @@ func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
 		t.Fatal(err)
 	}
 	identityID := "40400000-0000-4000-8000-000000000040"
-	// Test-fixture setup only: the run itself remains event-sourced. This avoids
-	// queueing an unrelated first issuance/deploy whose agent job could mask the
-	// trust-before-leaf ordering this test is isolating.
-	if err := h.store.UpsertIdentity(ctx, store.Identity{
-		ID: identityID, TenantID: h.tenant, Kind: store.KindX509Certificate,
-		Name: dnsName, OwnerID: owner.ID, Status: "deployed", Attributes: attrs,
+	// The already-installed source fixture has retained identity history, so a
+	// real complete rebuild must reconstruct it together with the migration.
+	if _, err := h.srv.orch.EnsureIdentity(ctx, h.tenant, identityID, store.Identity{
+		Kind: store.KindX509Certificate, Name: dnsName, OwnerID: owner.ID, Attributes: attrs,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	oldInfo, err := certinfo.Inspect(oldCert)
-	if err != nil {
-		t.Fatal(err)
-	}
-	oldDER, err := mtls.FirstCertDER(oldCert)
-	if err != nil {
-		t.Fatal(err)
-	}
-	notBefore, notAfter := oldInfo.NotBefore, oldInfo.NotAfter
-	predecessor, err := h.srv.orch.RecordCertificate(ctx, h.tenant, store.Certificate{
-		OwnerID: &owner.ID, Subject: dnsName, SANs: oldInfo.DNSNames, Issuer: oldInfo.Issuer,
-		Serial: oldInfo.SerialNumber, Fingerprint: oldInfo.SHA256Fingerprint,
-		KeyAlgorithm: oldInfo.KeyAlgorithm, NotBefore: &notBefore, NotAfter: &notAfter,
-		Source: "issued", CertificateDER: oldDER, CertificatePEM: oldCert,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
 
+	// Establish the predecessor through actual queued issuance and the enrolled
+	// host executor. This supplies complete retained history for a cold rebuild.
 	state, err := agentrelay.NewHostRollbackStore(rollbackDir, h.tenant)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := state.RecordDeploy(target.Type, target.ID, predecessor.Fingerprint, oldCert, oldKey); err != nil {
+	profile := connector.LocalOpsConfig{
+		AllowedRoots: []string{root},
+		Actions:      []connector.LocalAction{{LogicalName: "nginx", Command: "/usr/bin/true", Timeout: 5 * time.Second}},
+	}
+	channel := &servedHostRelayChannel{client: h.client, identity: h.identity}
+	if err := h.srv.orch.Transition(ctx, h.tenant, identityID, orchestrator.StateIssued, "issue migration predecessor"); err != nil {
 		t.Fatal(err)
+	}
+	if dispatched, err := h.srv.DispatchIssuanceOnce(ctx); err != nil || !dispatched {
+		t.Fatalf("dispatch migration predecessor: dispatched=%v err=%v", dispatched, err)
+	}
+	runAgentPassAUD40(t, channel, profile, state, transport.JobOutcomeVerified)
+	secret.Wipe(oldCert)
+	secret.Wipe(oldKey)
+	oldCert, err = fixture.ReadFile("listener.crt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer secret.Wipe(oldCert)
+	oldKey, err = fixture.ReadFile("listener.key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer secret.Wipe(oldKey)
+	oldInfo, err := certinfo.Inspect(oldCert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	predecessor, err := h.store.GetCertificateByFingerprint(ctx, h.tenant, oldInfo.SHA256Fingerprint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if identity, err := h.store.GetIdentity(ctx, h.tenant, identityID); err != nil || identity.Status != "deployed" {
+		t.Fatalf("predecessor was not deployed through the host path: identity=%+v err=%v", identity, err)
 	}
 
 	caOperator := seedScopedTokenSubject(t, h.store, h.tenant, "aud40-ca-operator", "issuers:read", "issuers:write")
@@ -217,20 +239,21 @@ func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
 	}
 	assertMigrationOutboxCountAUD40(t, h, started.ID, "distribute_trust", 1)
 
-	// Model projection loss at restart, then rebuild only this aggregate from
-	// the retained event log. The already-published outbox work is untouched.
+	// Confirm the migration projection is missing, then use the supported
+	// complete rebuild. Incremental Apply must not ignore retained completion
+	// receipts just because one table was manually truncated. Outbox survives.
 	if _, err := h.store.SystemPool().Exec(ctx, `TRUNCATE migration_runs`); err != nil {
 		t.Fatal(err)
 	}
-	projector := projections.New(h.store)
-	if err := h.log.Replay(ctx, 0, func(event events.Event) error {
-		if event.Type == projections.EventMigrationRunRecorded {
-			return projector.Apply(ctx, event)
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
+	if _, err := h.store.GetMigrationRun(ctx, h.tenant, started.ID); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("migration projection was not absent before rebuild: %v", err)
 	}
+	if err := projections.New(h.store).Rebuild(ctx, h.log); err != nil {
+		t.Fatalf("complete migration rebuild: %v", err)
+	}
+	assertMigrationStatusAUD40(t, h, started.ID, migration.RunRunning, migration.PhaseVerifyingTrust)
+	assertMigrationOutboxCountAUD40(t, h, started.ID, "distribute_trust", 1)
+	assertMigrationOutboxCountAUD40(t, h, started.ID, "issue_successor", 0)
 
 	const tenantB = "22222222-2222-2222-2222-222222222222"
 	tokenB := seedScopedToken(t, h.store, tenantB, "keys:read")
@@ -240,13 +263,8 @@ func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
 		t.Fatalf("tenant B read tenant A migration = %d, want 404", statusCode)
 	}
 
-	profile := connector.LocalOpsConfig{
-		AllowedRoots: []string{root},
-		Actions:      []connector.LocalAction{{LogicalName: "nginx", Command: "/usr/bin/true", Timeout: 5 * time.Second}},
-	}
-	channel := &servedHostRelayChannel{client: h.client, identity: h.identity}
 	runAgentPassAUD40(t, channel, profile, state, transport.JobOutcomeExecuted) // trust readback
-	installedTrust, err := os.ReadFile(trustPath)                               // #nosec G304 -- test-owned fixture path (CWE-22)
+	installedTrust, err := fixture.ReadFile("next-root.pem")
 	if err != nil || !bytes.Equal(bytes.TrimSpace(installedTrust), bytes.TrimSpace([]byte(successorAuthority.CertificatePEM))) {
 		t.Fatalf("installed trust is not the manifest authority certificate: err=%v", err)
 	}
@@ -255,7 +273,7 @@ func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
 	runAgentPassAUD40(t, channel, profile, state, transport.JobOutcomeVerified) // signer + deploy + live probe
 	assertHostRenewCustodyReceiptAUD25(t, channel)
 	assertMigrationStatusAUD40(t, h, started.ID, migration.RunComplete, migration.PhaseComplete)
-	successorPEM, err := os.ReadFile(certPath) // #nosec G304 -- test-owned fixture path (CWE-22)
+	successorPEM, err := fixture.ReadFile("listener.crt")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,7 +304,7 @@ func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
 	if _, err := os.Stat(trustPath); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("successor trust remains after rollback: %v", err)
 	}
-	servedCert, err := os.ReadFile(certPath) // #nosec G304 -- test-owned fixture path (CWE-22)
+	servedCert, err := fixture.ReadFile("listener.crt")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -310,10 +328,10 @@ func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
 	// remove successor trust.
 	staticCertPath := filepath.Join(root, "static-predecessor.crt")
 	staticKeyPath := filepath.Join(root, "static-predecessor.key")
-	if err := os.WriteFile(staticCertPath, oldCert, 0o600); err != nil {
+	if err := fixture.WriteFile("static-predecessor.crt", oldCert, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(staticKeyPath, oldKey, 0o600); err != nil {
+	if err := fixture.WriteFile("static-predecessor.key", oldKey, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	staticListener, err := net.Listen("tcp", "127.0.0.1:0")

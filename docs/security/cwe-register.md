@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1413 annotated sites across 26 rules. Each row is
+1410 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -308,16 +308,16 @@ not this file.
 | `internal/server/itsm_served_test.go:192` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/itsm_served_test.go:211` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/itsm_served_test.go:219` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/journey_delivery_served_test.go:675` | fabricated test-only credential (CWE-798) |
+| `internal/server/journey_delivery_served_test.go:676` | fabricated test-only credential (CWE-798) |
 | `internal/server/managedkeys_cloudkms_served_test.go:30` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/mdm_poller_served_test.go:33` | credential reference (env: pointer), no credential value present (CWE-798) |
 | `internal/server/mdm_poller_served_test.go:36` | credential reference (secret store pointer), no credential value present (CWE-798) |
-| `internal/server/native_connectors_served_test.go:45` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/native_connectors_served_test.go:47` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/native_connectors_served_test.go:129` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798). |
-| `internal/server/native_connectors_served_test.go:533` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/native_connectors_served_test.go:535` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/native_connectors_served_test.go:46` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/native_connectors_served_test.go:48` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/native_connectors_served_test.go:130` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798). |
 | `internal/server/native_connectors_served_test.go:537` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/native_connectors_served_test.go:539` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/native_connectors_served_test.go:541` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/nhi_posture_served_test.go:56` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/nhi_posture_served_test.go:162` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/nhi_posture_served_test.go:195` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -393,8 +393,8 @@ not this file.
 | `internal/server/host_agent_remote_served_test.go:276` | loopback fixture is closed below (CWE-400) |
 | `internal/server/host_agent_remote_served_test.go:494` | loopback fixture closed below (CWE-400) |
 | `internal/server/incident_fleet_reissuance_served_test.go:352` | loopback test fixture is explicitly closed (CWE-400) |
-| `internal/server/migration_run_served_test.go:87` | loopback fixture is closed below (CWE-400) |
-| `internal/server/migration_run_served_test.go:329` | loopback fixture is closed below (CWE-400) |
+| `internal/server/migration_run_served_test.go:94` | loopback fixture is closed below (CWE-400) |
+| `internal/server/migration_run_served_test.go:347` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
 ### G115 — CWE-190 Integer overflow or wraparound (224 sites)
@@ -982,7 +982,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (382 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (379 sites)
 
 | Location | Reason |
 |---|---|
@@ -1227,9 +1227,6 @@ not this file.
 | `internal/server/host_keystore_credentials_served_test.go:121` | fixed filename inside this test's private TempDir (CWE-22). |
 | `internal/server/host_keystore_credentials_served_test.go:170` | fixed filename inside this test's private TempDir (CWE-22). |
 | `internal/server/idempotency_protection_wiring_test.go:61` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/server/migration_run_served_test.go:249` | test-owned fixture path (CWE-22) |
-| `internal/server/migration_run_served_test.go:258` | test-owned fixture path (CWE-22) |
-| `internal/server/migration_run_served_test.go:289` | test-owned fixture path (CWE-22) |
 | `internal/server/pam_served_test.go:367` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/plugins.go:199` | operator-configured plugin dir; WASM and signature are verified after the read (CWE-22) |
 | `internal/server/plugins.go:203` | operator-configured plugin dir; WASM and signature are verified after the read (CWE-22) |

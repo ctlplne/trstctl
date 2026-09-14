@@ -32,6 +32,7 @@ import (
 	"trstctl.com/trstctl/internal/connector/rabbitmq"
 	"trstctl.com/trstctl/internal/connector/tomcat"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -449,9 +450,11 @@ func TestServedPublishedConnectorCatalogCAPDEP09(t *testing.T) {
 		}
 	}
 
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	role := newRoleHarnessWithDeps(t, []string{mtls.AgentRoleHost}, []string{agentJobKindEndpointRenew}, func(d *Deps) {
 		d.ConnectorRegistry = reg
 	})
+	h := role.servedHarness
+	hostID := registeredRoleAgentID(t, role)
 	tok := seedScopedToken(t, h.store, h.tenant, "connectors:read", "connectors:write")
 
 	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/connectors/catalog", tok, nil)
@@ -479,8 +482,9 @@ func TestServedPublishedConnectorCatalogCAPDEP09(t *testing.T) {
 			"connector": spec.name,
 			"config": map[string]any{
 				"credential_ref": "secret://connectors/" + spec.name + "/prod",
-				"cert_path":      spec.certPath,
-				"key_path":       spec.keyPath,
+				"executor":       "agent", "required_agent_role": mtls.AgentRoleHost, "required_agent_id": hostID,
+				"cert_path": spec.certPath,
+				"key_path":  spec.keyPath,
 			},
 		})
 		if status != http.StatusCreated {

@@ -46,15 +46,16 @@ func TestServedPrivacyRetentionWorkerPseudonymizesStalePII(t *testing.T) {
 		string(authz.PrivacyRead), string(authz.PrivacyWrite), string(authz.AuditRead),
 	})
 
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()})
-	if err != nil {
-		t.Fatalf("open event log: %v", err)
-	}
 	auditKey, err := jose.GenerateRSASigningKey("privacy-003-audit")
 	if err != nil {
-		_ = log.Close()
 		t.Fatalf("generate audit key: %v", err)
 	}
+	log, err := openHistoryAwareEventLog(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, st, auditKey)
+	if err != nil {
+		t.Fatalf("open history-aware event log: %v", err)
+	}
+	// Historical certificate metadata needs retained events and ordered receipts.
+	seedRetainedPrivacyCertificate(t, ctx, st, log, tenantID, rawSubject)
 	srv, err := Build(ctx, Deps{
 		Store: st, Log: log, AuditSigningKey: auditKey,
 		PrivacyRetentionEnabled: true,
@@ -157,6 +158,32 @@ func TestServedPrivacyRetentionWorkerPseudonymizesStalePII(t *testing.T) {
 		t.Fatal("privacy.retention.enforced event was not recorded")
 	}
 
+	// Non-audit retention must not silently rewrite retained audit evidence.
+	// Verify that boundary, then explicitly erase the subject before asserting
+	// the signed export contains no raw subject. Retention and erasure differ.
+	var historicalFacts int
+	if err := log.Replay(ctx, 0, func(event events.Event) error {
+		if event.TenantID == tenantID && event.Type == projections.EventCertificateRecorded {
+			var fact projections.CertificateRecorded
+			if err := json.Unmarshal(event.Data, &fact); err != nil {
+				return err
+			}
+			if fact.ID == "55555555-5555-5555-5555-555555555555" && fact.Subject == rawSubject &&
+				len(fact.SANs) == 1 && fact.SANs[0] == rawSubject && fact.Source == rawSubject && fact.DeploymentLocation == rawSubject {
+				historicalFacts++
+			}
+		}
+		return nil
+	}); err != nil || historicalFacts != 1 {
+		t.Fatalf("non-audit retention changed its retained certificate facts: count=%d err=%v", historicalFacts, err)
+	}
+	code, body = doBearer(t, ts, http.MethodPost, "/api/v1/privacy/subject-erasures", adminToken, "retention-audit-subject-erasure", map[string]string{
+		"subject": rawSubject, "reason": "explicit removal from retained evidence after operational retention",
+	})
+	if code != http.StatusCreated || bytes.Contains(body, []byte(rawSubject)) {
+		t.Fatalf("explicit audit subject erasure: status=%d body=%s", code, body)
+	}
+
 	code, body = doBearer(t, ts, http.MethodGet, "/api/v1/audit/export", adminToken, "", nil)
 	if code != http.StatusOK {
 		t.Fatalf("audit export = %d body=%s", code, body)
@@ -203,15 +230,6 @@ func seedStalePIIRows(t *testing.T, ctx context.Context, st *store.Store, tenant
 			`INSERT INTO identities (id, tenant_id, kind, name, owner_id, status, not_after, attributes, created_at)
 			 VALUES ($1, $2, 'x509_certificate', $3, $4, 'revoked', $5, $6::jsonb, $5)`,
 			identityID, tenantID, raw, activeOwner, old, `{"contact":"`+raw+`"}`); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx,
-			`INSERT INTO certificates
-			        (id, tenant_id, owner_id, subject, sans, issuer, serial, fingerprint, key_algorithm,
-			         not_after, deployment_location, source, created_at, status, revoked_at)
-			 VALUES ('55555555-5555-5555-5555-555555555555', $1, $2, $3, $4, 'ca', '01',
-			         'fp-retention-alice', 'rsa', $5, $3, $3, $5, 'revoked', $5)`,
-			tenantID, activeOwner, raw, []string{raw}, old); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx,
@@ -453,5 +471,42 @@ func assertNoRawRetentionPII(t *testing.T, ctx context.Context, st *store.Store,
 	}
 	if !found {
 		t.Fatalf("no retained/erased placeholder found after retention")
+	}
+}
+
+// Model an imported historical inventory record, not a newly signed leaf or a
+// real upstream revocation. Other surfaces remain direct stale-data fixtures.
+func seedRetainedPrivacyCertificate(t *testing.T, ctx context.Context, st *store.Store, log *events.Log, tenantID, raw string) {
+	t.Helper()
+	old := time.Now().UTC().Add(-900 * 24 * time.Hour)
+	ownerID := "22222222-2222-2222-2222-222222222222"
+	for _, item := range []struct {
+		typeName string
+		payload  any
+	}{
+		{projections.EventCertificateRecorded, projections.CertificateRecorded{
+			ID: "55555555-5555-5555-5555-555555555555", OwnerID: &ownerID,
+			Subject: raw, SANs: []string{raw}, Issuer: "ca", Serial: "01", Fingerprint: "fp-retention-alice",
+			KeyAlgorithm: "rsa", NotAfter: &old, DeploymentLocation: raw, Source: raw,
+		}},
+		{projections.EventCertificateRevoked, projections.CertificateRevoked{
+			Fingerprint: "fp-retention-alice", Serial: "01", Reason: "historical fixture", RevokedAt: old,
+		}},
+	} {
+		body, err := json.Marshal(item.payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		event, err := log.Append(ctx, events.Event{TenantID: tenantID, Type: item.typeName, Time: old, Data: body})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := projections.New(st).Apply(ctx, event); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cert, err := st.GetCertificate(ctx, tenantID, "55555555-5555-5555-5555-555555555555")
+	if err != nil || cert.Status != "revoked" || cert.RevokedAt == nil || !cert.RevokedAt.Equal(old) || cert.Subject != raw {
+		t.Fatalf("retained historical certificate fixture is incomplete: status=%s err=%v", cert.Status, err)
 	}
 }

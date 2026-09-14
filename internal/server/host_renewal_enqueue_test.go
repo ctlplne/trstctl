@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -753,84 +754,35 @@ func TestHostRenewalUsesTheIdentityBoundDeployedCertificate(t *testing.T) {
 // certificate from the customer's CA — one per minute, forever, with nothing
 // in the console to explain it.
 func TestARefusedHostReportFailsTheJobInsteadOfReofferingIt(t *testing.T) {
-	ctx := context.Background()
-	h := newIssuanceDispatcherHarness(t)
-
-	owner, err := h.store.CreateOwner(ctx, store.Owner{
-		TenantID: h.tenant, Kind: store.OwnerTeam, Name: "P", Email: "p4@example.test",
-	})
+	ctx := t.Context()
+	h, _, _ := servedHostRevocationFixture(t)
+	job := claimOneRenewal(t, ctx, h)
+	key, err := crypto.GenerateHostSubjectKey("mail.revocation.test", []string{"mail.revocation.test"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	target := agentExecutedTarget(t)
-	seedDestinationHost(t, h.store, h.tenant)
-	target.TenantID = h.tenant
-	if err := h.store.UpsertDeploymentTarget(ctx, target); err != nil {
-		t.Fatal(err)
-	}
-	attrs, _ := json.Marshal(map[string]any{
-		"deployment_target_id": target.ID, "connector": target.Type, "target": target.Name,
-	})
-	ident, err := h.orch.CreateIdentity(ctx, h.tenant, store.Identity{
-		Kind: store.KindX509Certificate, Name: "loop.example.test", OwnerID: owner.ID,
-		Attributes: attrs,
-	})
+	defer key.Destroy()
+	issued, err := h.client.SignJobCSR(ctx, &transport.SignJobCSRRequest{JobID: job.JobID, Attempt: job.Attempt, CSRDER: key.CSRDER})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("sign the exact held host issuance: %v", err)
 	}
-	if err := h.orch.Transition(ctx, h.tenant, ident.ID, orchestrator.StateIssued, "initial issue"); err != nil {
-		t.Fatal(err)
+	// Inject only the final lifecycle refusal. Enrollment, claim, CSR signing,
+	// custody, receipt signature and mTLS report acceptance are production paths.
+	bulkhead, ok := h.srv.agentSvc.(*bulkheadedAgentService)
+	if !ok {
+		t.Fatal("served agent bulkhead is absent")
 	}
-	dispatchOutbox(t, h, 1)
-
-	now := time.Now().UTC()
-	agentID := agentRowID(h.tenant, "edge-host")
-	claimHost := func(at time.Time) []store.AgentJob {
-		t.Helper()
-		jobs, err := h.store.ClaimAgentJobs(ctx, h.tenant, agentID,
-			[]string{agentJobKindEndpointRenew}, []string{mtls.AgentRoleHost}, 1, time.Minute, at)
-		if err != nil {
-			t.Fatalf("claim host jobs: %v", err)
-		}
-		return jobs
+	service, ok := bulkhead.next.(*agentService)
+	if !ok {
+		t.Fatal("served agent receiver is absent")
 	}
-	jobs := claimHost(now)
-	if len(jobs) != 1 {
-		t.Fatalf("claimed %d host jobs, want the queued first issuance", len(jobs))
+	var refusals atomic.Int32
+	service.completeHostRenewal = func(context.Context, string, []byte, string, *store.RenewalAttempt) error {
+		refusals.Add(1)
+		return errors.New("transition issued->deployed: ownership readiness: owner has no current attestation")
 	}
-	job := jobs[0]
-
-	// The host signed a CSR through the control plane before reporting, so the
-	// certificate the report names exists; the report attests its key custody.
-	installedFingerprint := strings.Repeat("a", 64)
-	if _, err := h.orch.RecordCertificate(ctx, h.tenant, store.Certificate{
-		Subject: "CN=loop.example.test", Issuer: "CN=Partner Lab Issuing CA", Serial: "0a",
-		Fingerprint: installedFingerprint, Source: "issued",
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	refusals := 0
-	service := &agentService{
-		store: h.store, outbox: h.outbox, orch: h.orch,
-		completeHostRenewal: func(context.Context, string, []byte, string, *store.RenewalAttempt) error {
-			refusals++
-			return errors.New("transition issued->deployed: ownership readiness: owner has no current attestation")
-		},
-	}
-	peer := mtls.PeerCertInfo{TenantID: h.tenant, CommonName: "edge-host", FingerprintSHA256: strings.Repeat("b", 64)}
-	// The report carries what a real host report carries: the installed
-	// certificate's fingerprint, the custody of the key born on the host and
-	// the agent's signature over the statement (verified before this point).
-	resp, err := service.acceptExecutedReport(ctx, peer, agentID, &transport.ReportJobResultRequest{
-		JobID: job.ID, Attempt: job.ClaimAttempts, Outcome: transport.JobOutcomeVerified,
-		Signature:             []byte("verified-upstream-in-ReportJobResult"),
-		CredentialFingerprint: installedFingerprint,
-		Custody: &custody.Record{
-			Origin: custody.OriginHostAgent, Storage: custody.StorageFile,
-			Exportable: custody.NonExportable, GeneratedBy: "edge-host",
-		},
-	}, now)
+	f := hostRotationResultFixture{h: h, job: job, fingerprint: issued.Fingerprint}
+	resp, err := h.client.ReportJobResult(ctx, f.report(t, transport.JobOutcomeVerified))
 	if err != nil {
 		t.Fatalf("a refused lifecycle transition became a transport error the agent discards: %v", err)
 	}
@@ -838,20 +790,22 @@ func TestARefusedHostReportFailsTheJobInsteadOfReofferingIt(t *testing.T) {
 		t.Fatal("the refused report was not accepted, so the agent cannot tell it from a lost claim")
 	}
 
-	// The next poll — after the lease would have lapsed — must offer nothing.
-	if again := claimHost(now.Add(2 * time.Minute)); len(again) != 0 {
-		t.Fatalf("the refused job was re-offered (%+v); every re-execution mints another certificate", again)
+	// Poll the exact assigned agent after its original lease would have lapsed.
+	jobs, err := h.store.ClaimAgentJobs(ctx, h.tenant, agentRowID(h.tenant, h.agent),
+		[]string{agentJobKindEndpointRenew}, []string{mtls.AgentRoleHost}, 1, time.Minute, time.Now().UTC().Add(2*time.Minute))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if refusals != 1 {
-		t.Fatalf("lifecycle completion ran %d times, want exactly once", refusals)
+	if len(jobs) != 0 {
+		t.Fatalf("the refused job was re-offered (%+v); every re-execution mints another certificate", jobs)
 	}
-
-	// And the row says why, in a closed-set reason an operator can search for.
+	if refusals.Load() != 1 {
+		t.Fatalf("lifecycle completion ran %d times, want exactly once", refusals.Load())
+	}
 	var rowStatus, lastError string
 	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
-		//trstctl:system-query — test-only read of this tenant's own outbox row.
 		return tx.QueryRow(ctx, `SELECT status, coalesce(last_error, '') FROM outbox WHERE tenant_id = $1 AND id = $2`,
-			h.tenant, job.ID).Scan(&rowStatus, &lastError)
+			h.tenant, job.JobID).Scan(&rowStatus, &lastError)
 	}); err != nil {
 		t.Fatal(err)
 	}
