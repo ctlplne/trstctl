@@ -69,6 +69,15 @@ receipts from complete retained events. Do not clear a checkpoint, manufacture
 a receipt, or change lifecycle rows to get past the refusal. A warm restart does
 not automatically perform this full rebuild.
 
+If a recorded issuance event remains but its certificate read row is missing,
+issuance refuses to sign again. HTTP callers receive `503` with
+`recovery_required: "read_model_rebuild"` and `retryable: false`; this requires
+operator recovery, rather than immediate automatic retries. After the ordered
+rebuild completes, retry the unchanged request with the same `Idempotency-Key`
+to recover its original certificate. A lost SQL transaction that left no completed
+projection receipt can still recover incrementally from the retained issuance
+without another signature.
+
 The served privacy-erasure path rebinds existing receipts inside its verified
 generation preparation transaction. Generic tenant-key-domain rewrapping has a
 different limit: it refuses a changed certificate-dependent envelope until a

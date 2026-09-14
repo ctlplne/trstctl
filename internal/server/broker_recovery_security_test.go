@@ -4,14 +4,17 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 )
@@ -157,13 +160,58 @@ func TestServedBrokerRecoversMissingProjectionButNeverRecreatesErasedFacts(t *te
 	const key = "broker-event-only-recovery"
 	body := map[string]any{"agent_id": "agent-7", "method": "stub_broker", "payload_base64": "Z2VudWluZQ==",
 		"public_key_pem": servedAttestedPublicKeyPEM(t), "scopes": []string{"tool:inventory.read"}, "ttl_seconds": 120}
-	original := servedBrokerIssue(t, h, token, key, body, http.StatusCreated)
+	// First model append succeeding but its SQL projection rolling back. Unlike
+	// deleting a committed row, this leaves no completed receipt or unknown write.
+	if _, err := h.store.SystemPool().Exec(t.Context(), `CREATE FUNCTION qa_broker_projection_gap() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.source='broker:stub_broker' THEN RAISE EXCEPTION 'owned broker projection gap'; END IF; RETURN NEW; END $$;
+CREATE TRIGGER qa_broker_projection_gap BEFORE INSERT ON certificates FOR EACH ROW EXECUTE FUNCTION qa_broker_projection_gap()`); err != nil {
+		t.Fatal(err)
+	}
+	removeFault := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if _, err := h.store.SystemPool().Exec(ctx, `DROP TRIGGER IF EXISTS qa_broker_projection_gap ON certificates; DROP FUNCTION IF EXISTS qa_broker_projection_gap()`); err != nil {
+			t.Error(err)
+		}
+	}
+	t.Cleanup(removeFault)
+	servedBrokerIssue(t, h, token, key, body, http.StatusInternalServerError)
+	rows, err := h.store.ListCertificatesByIssuanceIdempotencyKey(t.Context(), h.tenant, "broker-issue:"+key)
+	if err != nil || len(rows) != 0 || signer.calls.Load() != 1 {
+		t.Fatalf("projection fault did not retain exactly one signing and zero SQL rows: rows=%d calls=%d err=%v", len(rows), signer.calls.Load(), err)
+	}
+	var retained projections.CertificateRecorded
+	var count int
+	if err := h.log.Replay(t.Context(), 0, func(e events.Event) error {
+		if e.TenantID != h.tenant || e.Type != projections.EventCertificateRecorded {
+			return nil
+		}
+		var certificate projections.CertificateRecorded
+		if err := json.Unmarshal(e.Data, &certificate); err != nil {
+			return err
+		}
+		if certificate.IssuanceIdempotencyKey == "broker-issue:"+key {
+			retained = certificate
+			count++
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 || retained.ID == "" || len(retained.CertificateDER) == 0 || retained.BrokerIssuance == nil || retained.NotAfter == nil {
+		t.Fatalf("missing exact retained broker certificate: events=%d", count)
+	}
+	removeFault()
+	recovered := servedBrokerIssue(t, h, token, key, body, http.StatusCreated)
+	der, err := mtls.FirstCertDER([]byte(recovered.CertificatePEM))
+	if err != nil || recovered.CertificateID != retained.ID || !bytes.Equal(der, retained.CertificateDER) ||
+		recovered.AgentID != retained.BrokerIssuance.AgentID || !recovered.NotAfter.Equal(*retained.NotAfter) || signer.calls.Load() != 1 {
+		t.Fatal("event-only retry did not recover the exact certificate without signing")
+	}
+	// A later out-of-band deletion is a different boundary: fail closed while
+	// ordering is unknown, then recover through the supported complete rebuild.
 	expireBrokerTestCache(t, h, key)
-	// Deliberately remove only this fixture's derived row. The immutable signed
-	// certificate event remains, as it would after append succeeded but the
-	// certificate projection was lost. No live application data is touched.
 	if err := h.store.WithTenant(t.Context(), h.tenant, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(t.Context(), `DELETE FROM certificates WHERE tenant_id = $1 AND id = $2`, h.tenant, original.CertificateID)
+		tag, err := tx.Exec(t.Context(), `DELETE FROM certificates WHERE tenant_id = $1 AND id = $2`, h.tenant, retained.ID)
 		if err == nil && tag.RowsAffected() != 1 {
 			t.Fatal("missing-projection fixture did not remove exactly one row")
 		}
@@ -171,9 +219,20 @@ func TestServedBrokerRecoversMissingProjectionButNeverRecreatesErasedFacts(t *te
 	}); err != nil {
 		t.Fatal(err)
 	}
-	recovered := servedBrokerIssue(t, h, token, key, body, http.StatusCreated)
-	if recovered.CertificateID != original.CertificateID || recovered.CertificatePEM != original.CertificatePEM || signer.calls.Load() != 1 {
-		t.Fatal("event-only retry did not recover the exact certificate without signing")
+	status, refusal := secretsReqKey(t, h, http.MethodPost, "/api/v1/broker/agent-identities", token, key, body)
+	if status != http.StatusServiceUnavailable || !bytes.Contains(refusal, []byte(`"recovery_required":"read_model_rebuild"`)) ||
+		!bytes.Contains(refusal, []byte(`"retryable":false`)) || !bytes.Contains(refusal, []byte("same Idempotency-Key")) {
+		t.Fatalf("missing certificate recovery is not actionable: status=%d body=%s", status, refusal)
+	}
+	if signer.calls.Load() != 1 {
+		t.Fatal("unknown projection state reached the signer")
+	}
+	if err := projections.New(h.store).Rebuild(t.Context(), h.log); err != nil {
+		t.Fatal(err)
+	}
+	rebuilt := servedBrokerIssue(t, h, token, key, body, http.StatusCreated)
+	if rebuilt.CertificateID != recovered.CertificateID || rebuilt.CertificatePEM != recovered.CertificatePEM || signer.calls.Load() != 1 {
+		t.Fatal("complete rebuild did not preserve the exact broker certificate")
 	}
 	expireBrokerTestCache(t, h, key)
 	selected, err := h.store.SelectPrivacySubjectErasure(t.Context(), h.tenant, "agent-7")
@@ -186,7 +245,7 @@ func TestServedBrokerRecoversMissingProjectionButNeverRecreatesErasedFacts(t *te
 		t.Fatal(err)
 	}
 	servedBrokerIssue(t, h, token, key, body, http.StatusConflict)
-	cert, err := h.store.GetCertificate(t.Context(), h.tenant, original.CertificateID)
+	cert, err := h.store.GetCertificate(t.Context(), h.tenant, retained.ID)
 	if err != nil || cert.BrokerIssuance != nil || signer.calls.Load() != 1 {
 		t.Fatal("retry reconstructed privacy-erased facts or signed a replacement")
 	}

@@ -25,6 +25,11 @@ func (a *API) writeBackpressureError(w http.ResponseWriter, err error) bool {
 		a.writeProblem(w, problem.New(http.StatusConflict, "an identical request with this Idempotency-Key is still in progress; retry shortly to receive its result"))
 	case errors.Is(err, orchestrator.ErrEffectIndeterminate):
 		a.writeProblem(w, problem.New(http.StatusConflict, "the original request's effect is indeterminate: inspect the resource before retrying with a new Idempotency-Key"))
+	case errors.Is(err, store.ErrCertificateRecordingRebuildRequired):
+		// Repeating issuance cannot repair unknown history ordering. Keep the
+		// original command identity and require operator recovery before retry.
+		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "certificate history requires an ordered read-model rebuild; ask the operator to stop mutating control-plane replicas and run trstctl --rebuild with the existing deployment configuration, then retry with the same Idempotency-Key").
+			WithExtension("recovery_required", "read_model_rebuild").WithExtension("retryable", false))
 	case store.IsTransactionRollback(err):
 		// PostgreSQL rolled the current transaction back because of a concurrent
 		// transaction (serialization failure 40001 or deadlock 40P01, e.g. the

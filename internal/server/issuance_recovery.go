@@ -104,5 +104,15 @@ func recoverCertificatesByIssuanceKey(ctx context.Context, st *store.Store, log 
 			return nil, fmt.Errorf("server: recover issued certificate projection: %w", err)
 		}
 	}
-	return st.ListCertificatesByIssuanceIdempotencyKey(ctx, tenantID, key)
+	certs, err = st.ListCertificatesByIssuanceIdempotencyKey(ctx, tenantID, key)
+	if err != nil {
+		return nil, err
+	}
+	if len(retained) > 0 && len(certs) == 0 {
+		// A completed receipt may intentionally prevent incremental replay from
+		// recreating a missing row. Retained signing evidence must never become
+		// permission to sign again; restore the read model before retrying.
+		return nil, fmt.Errorf("%w: retained issuance has no recoverable certificate row", store.ErrCertificateRecordingRebuildRequired)
+	}
+	return certs, nil
 }
