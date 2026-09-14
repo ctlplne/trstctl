@@ -412,6 +412,13 @@ trstctl --version
 trstctl -check-config        # prints the effective configuration; non-zero on a bad config
 ```
 
+Use `--version` to inspect a daemon's build and `--help` to see its flags.
+The control plane, agent and signer reject unexpected positional arguments
+before loading runtime configuration or starting services. For example,
+`trstctl version` fails with usage guidance; `trstctl --version` prints the build
+and exits. Supported administration commands such as `trstctl token create`
+keep their own command syntax.
+
 Next: [Configuration](configuration.md) to point trstctl at your datastores, then
 [Getting started](getting-started.md) to issue a certificate. To remove trstctl,
 see [Uninstall](uninstall.md).

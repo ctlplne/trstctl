@@ -178,6 +178,10 @@ func main() {
 	edgeLeafKeyOut := flag.String("edge-leaf-key-out", "edge-leaf.key", "where edge-issue writes the leaf private key (0600)")
 	edgeJournalPath := flag.String("edge-journal", "edge-journal.json", "issuance journal, maintained in the exact shape `trstctl edge delegations reconcile -f` posts")
 	flag.Parse()
+	if flag.NArg() != 0 {
+		fmt.Fprintln(os.Stderr, "trstctl-agent: unexpected command or argument; use --help for usage")
+		os.Exit(2)
+	}
 	tpmPersistentHandleBase, err := checkedTPMPersistentHandleBase(*edgeTPMHandleBase)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "trstctl-agent:", err)

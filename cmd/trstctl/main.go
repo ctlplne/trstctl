@@ -158,6 +158,9 @@ func parseRootFlags(args []string, stderr io.Writer) (rootFlags, bool, error) {
 		}
 		return flags, false, err
 	}
+	if fs.NArg() != 0 {
+		return flags, false, errors.New("unexpected command or argument; use --help for usage")
+	}
 	return flags, false, nil
 }
 

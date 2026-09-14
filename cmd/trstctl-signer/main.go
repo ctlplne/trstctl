@@ -60,6 +60,10 @@ func main() {
 	licenseDeploymentID := flag.String("license-deployment-id", "", "stable deployment ID bound by a version 2 license")
 	licenseEnvironment := flag.String("license-environment", "", "licensed deployment environment: production or non_production")
 	flag.Parse()
+	if flag.NArg() != 0 {
+		fmt.Fprintln(os.Stderr, "trstctl-signer: unexpected command or argument; use --help for usage")
+		os.Exit(2)
+	}
 
 	if *showVersion {
 		fmt.Println(buildinfo.String("trstctl-signer"))
