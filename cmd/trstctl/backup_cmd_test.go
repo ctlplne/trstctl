@@ -70,7 +70,8 @@ func TestRestoreRehearsalUsesFreshExternalDatastores(t *testing.T) {
 		`POSTGRES_IMAGE="trstctl-postgres-hardened:local"`,
 		`docker build -f "$REPO_ROOT/deploy/docker/Dockerfile.postgres" -t "$POSTGRES_IMAGE" "$REPO_ROOT"`,
 		`--user postgres`,
-		`NATS_IMAGE="nats:2.10-alpine@sha256:`,
+		`NATS_IMAGE="trstctl-nats-hardened:local"`,
+		`docker build -f "$REPO_ROOT/deploy/docker/Dockerfile.nats" -t "$NATS_IMAGE" "$REPO_ROOT"`,
 		`"postgres": {"mode": "external", "dsn":`,
 		`"nats": {"mode": "external", "url":`,
 		`start_infra "$A_PG" "$A_NATS"`,
@@ -81,6 +82,30 @@ func TestRestoreRehearsalUsesFreshExternalDatastores(t *testing.T) {
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("restore rehearsal no longer requires %q", want)
+		}
+	}
+	dockerRoot, err := os.OpenRoot(filepath.Join("..", "..", "deploy", "docker"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := dockerRoot.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	natsDockerfile, err := dockerRoot.ReadFile("Dockerfile.nats")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`COPY go.mod go.sum ./`,
+		`-mod=readonly -trimpath -buildvcs=false`,
+		`-o /out/nats-server github.com/nats-io/nats-server/v2`,
+		`COPY --from=build /out/nats-server /usr/local/bin/nats-server`,
+		`ENTRYPOINT ["/usr/local/bin/nats-server"]`,
+	} {
+		if !strings.Contains(string(natsDockerfile), want) {
+			t.Errorf("restore rehearsal NATS must use the shipped dependency graph: missing %q", want)
 		}
 	}
 	postgresDockerfile, err := os.ReadFile(filepath.Join("..", "..", "deploy", "docker", "Dockerfile.postgres")) // #nosec G304 -- test reads a fixed repository artifact (CWE-22)
