@@ -461,6 +461,23 @@ queued against an older revision. Existing unassigned host jobs remain held; rev
 the destination assignment and recover those jobs explicitly before relying on
 unattended renewal. Rollback stays with the host holding the verified predecessor.
 
+If the external CA is still processing a host request, the agent keeps its locked
+key and repeats the identical CSR on the same job attempt. It extends that claim
+while waiting and confirms it again before installation. A lost claim or operator
+cancellation stops the attempt; an explicit signing refusal is not retried.
+Temporary transport failures can retry the same request while the claim remains
+valid. No new key is generated for a pending response.
+
+The agent executes one claimed job at a time while continuing to heartbeat.
+Host renewal is bounded to ten minutes, and a job may use at most half the agent
+certificate's remaining life. The agent finishes or cancels that job before
+rotating its own channel identity, so its result receipt uses the same identity
+as the authenticated connection. Individual signing calls wait at most 45 seconds;
+pending responses request a one-second retry. Both the control plane and agent
+must support this pending-response contract. A process restart cannot recover a
+subject key that existed only in locked memory; check the certificate inventory
+and revoke any unused issued leaf before recovering an abandoned attempt.
+
 Disabling lifecycle actions pauses queued host issuance and renewal as well as
 deployment jobs. This also covers older host jobs grouped by identity. Re-enabling
 the destination resumes the same queued intent; it does not replace its saved

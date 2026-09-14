@@ -19,10 +19,9 @@ import (
 )
 
 const (
-	// relayClaimBatch caps one relay claim. Small on purpose: each job in a batch
-	// redeems its own credential, so a large batch means more live material on
-	// this host at once for no throughput a relay actually needs.
-	relayClaimBatch = 4
+	// One worker executes one job at a time. Do not pre-claim jobs whose leases
+	// would expire while an earlier job waits for its external CA.
+	relayClaimBatch = 1
 	// relayMinLease floors the lease a relay asks for, so a very short poll
 	// interval cannot request a lease too brief to finish a deploy in.
 	relayMinLease = 60 * time.Second
@@ -48,7 +47,7 @@ func relayLoopFor(o agentOptions, a *agent.Agent, conn *grpc.ClientConn) (*time.
 		// attempts discovering it cannot do any of it.
 		fmt.Printf("trstctl-agent: self-upgrade claiming enabled every %s\n", o.relayPollEvery)
 		return time.NewTimer(o.relayPollEvery),
-			relayChannel{c: transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version())), id: a.Identity},
+			relayChannel{c: transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version())), id: a.Identity, leaseSeconds: int(relayLeaseFor(o.relayPollEvery).Seconds())},
 			hostProfile
 	}
 	// The host exec profile is loaded and VALIDATED at startup, not at first
@@ -81,7 +80,7 @@ func relayLoopFor(o agentOptions, a *agent.Agent, conn *grpc.ClientConn) (*time.
 	if hasHost && len(hostProfile.AllowedRoots) > 0 {
 		fmt.Printf("trstctl-agent: host connector execution enabled for %v\n", relay.HostConnectorKinds())
 		return time.NewTimer(o.relayPollEvery),
-			relayChannel{c: transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version())), id: a.Identity},
+			relayChannel{c: transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version())), id: a.Identity, leaseSeconds: int(relayLeaseFor(o.relayPollEvery).Seconds())},
 			hostProfile
 	}
 	if !hasNetwork {
@@ -93,7 +92,7 @@ func relayLoopFor(o agentOptions, a *agent.Agent, conn *grpc.ClientConn) (*time.
 			// The relay grant is missing but the self-upgrade opt-in stands on
 			// its own: upgrades are per-agent work either role may do.
 			return time.NewTimer(o.relayPollEvery),
-				relayChannel{c: transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version())), id: a.Identity},
+				relayChannel{c: transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version())), id: a.Identity, leaseSeconds: int(relayLeaseFor(o.relayPollEvery).Seconds())},
 				hostProfile
 		}
 		return nil, nil, hostProfile
@@ -101,7 +100,7 @@ func relayLoopFor(o agentOptions, a *agent.Agent, conn *grpc.ClientConn) (*time.
 	fmt.Printf("trstctl-agent: relay claiming enabled for %v every %s\n",
 		relay.ClaimableKinds(), o.relayPollEvery)
 	return time.NewTimer(o.relayPollEvery),
-		relayChannel{c: transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version())), id: a.Identity},
+		relayChannel{c: transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version())), id: a.Identity, leaseSeconds: int(relayLeaseFor(o.relayPollEvery).Seconds())},
 		hostProfile
 }
 

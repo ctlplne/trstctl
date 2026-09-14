@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/agent/transport"
+	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/migration"
@@ -73,7 +74,9 @@ func (d *issuanceDispatcher) signAgentSubjectCSR(
 		return checkClaim()
 	})
 	if errors.Is(err, store.ErrIdentityIssuanceBusy) {
-		return nil, status.Error(codes.Aborted, err.Error())
+		// A previous call or lifecycle decision still holds this identity's
+		// fence. Preserve the request until it finishes, then recheck authority.
+		return nil, transport.CSRPendingError()
 	}
 	if err != nil {
 		return nil, err
@@ -197,6 +200,9 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 		usage.Record(tenantID, usage.MeterCertificatesIssued, 1)
 		return marshalAgentCSRResult(recorded.Fingerprint, material)
 	})
+	if errors.Is(err, ca.ErrExternalIssuePending) || errors.Is(err, orchestrator.ErrInProgress) {
+		return nil, transport.CSRPendingError()
+	}
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "issue against agent csr: %v", err)
 	}

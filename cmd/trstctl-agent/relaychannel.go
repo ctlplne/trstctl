@@ -28,8 +28,28 @@ type relayChannel struct {
 	// identity mid-flight, which is why this is a function and not a value.
 	id func() *mtls.AgentIdentity
 	// now is injectable so the receipt's issued-at can be exercised.
-	now func() time.Time
+	now          func() time.Time
+	leaseSeconds int
 }
+
+func (r relayChannel) ExtendJobClaim(ctx context.Context, jobID int64, attempt int) (time.Time, error) {
+	lease := r.leaseSeconds
+	if lease <= 0 {
+		lease = int(relayMinLease.Seconds())
+	}
+	resp, err := r.c.ReportJobResult(ctx, &transport.ReportJobResultRequest{
+		JobID: jobID, Attempt: attempt, Outcome: transport.JobOutcomeExtend, LeaseSeconds: lease,
+	})
+	if err != nil {
+		return time.Time{}, err
+	}
+	if !resp.Accepted || resp.LeaseExpiresUnix <= r.clock().Unix() {
+		return time.Time{}, relay.ErrJobClaimLost
+	}
+	return time.Unix(resp.LeaseExpiresUnix, 0), nil
+}
+
+var _ relay.JobLeaseMaintainer = relayChannel{}
 
 func (r relayChannel) ClaimJobs(ctx context.Context, kinds []string, limit, leaseSeconds int) ([]relay.Job, error) {
 	resp, err := r.c.ClaimJobs(ctx, &transport.ClaimJobsRequest{

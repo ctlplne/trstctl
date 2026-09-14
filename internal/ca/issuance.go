@@ -122,6 +122,11 @@ const DestinationExternalCAIssue = "external-ca.issue"
 // the idempotent result before the served request needed to return.
 var ErrExternalIssueIncomplete = errors.New("ca: external CA issue result is not complete")
 
+// ErrExternalIssuePending means the bounded result wait ended while the durable
+// request can still finish. A caller may poll with the exact same CSR and key;
+// this does not authorize a new request or bypass the current job claim.
+var ErrExternalIssuePending = errors.New("ca: external CA issuance is still pending")
+
 const (
 	externalIssueResultPollInterval = 10 * time.Millisecond
 	externalIssueResultWaitTimeout  = 30 * time.Second
@@ -285,9 +290,16 @@ func (s *IssuanceService) issueViaOutbox(ctx context.Context, req IssueRequest, 
 	return s.waitForExternalIssue(ctx, req.TenantID, idempotencyKey, req.RequestBinding, outboxID, initialAttempts)
 }
 
-func (s *IssuanceService) waitForExternalIssue(ctx context.Context, tenantID, idempotencyKey, requestBinding string, outboxID int64, initialAttempts int) (Certificate, error) {
+func (s *IssuanceService) waitForExternalIssue(ctx context.Context, tenantID, idempotencyKey, requestBinding string, outboxID int64, initialAttempts int) (result Certificate, resultErr error) {
 	waitCtx, cancel := context.WithTimeout(ctx, externalIssueResultWaitTimeout)
 	defer cancel()
+	defer func() {
+		// Only our result-wait deadline is pending. Preserve caller cancellation
+		// and worker/provider failures as their own outcomes.
+		if ctx.Err() == nil && errors.Is(waitCtx.Err(), context.DeadlineExceeded) && errors.Is(resultErr, context.DeadlineExceeded) {
+			resultErr = ErrExternalIssuePending
+		}
+	}()
 	ticker := time.NewTicker(externalIssueResultPollInterval)
 	defer ticker.Stop()
 	for {
@@ -321,12 +333,14 @@ func (s *IssuanceService) waitForExternalIssue(ctx context.Context, tenantID, id
 		if err == nil && record.Status == "delivered" {
 			return cert, nil
 		}
-		// A retryable worker failure belongs to this exact issuance. Return a
-		// sanitized upstream failure now; a replay wakes the worker and recovers
-		// using the same provider idempotency key. Never inspect or dispatch any
-		// unrelated tenant/destination row from this request path.
-		if record.Status == "failed" || (record.Status == "pending" && record.Attempts > initialAttempts && record.LastError != "") {
+		// A retryable worker failure still belongs to this exact issuance.
+		// Keep its request binding and provider idempotency key while the
+		// dispatcher retries; only exhausted delivery is terminal.
+		if record.Status == "failed" {
 			return Certificate{}, fmt.Errorf("%w: worker attempt failed", ErrExternalIssueIncomplete)
+		}
+		if record.Status == "pending" && record.Attempts > initialAttempts && record.LastError != "" {
+			return Certificate{}, ErrExternalIssuePending
 		}
 		select {
 		case <-waitCtx.Done():

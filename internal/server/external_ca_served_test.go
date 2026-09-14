@@ -609,8 +609,20 @@ func TestExternalCASanitizeUpstreamErrors(t *testing.T) {
 			t.Fatalf("external CA problem leaked %q: %s", leak, got)
 		}
 	}
-	if !strings.Contains(got, "external CA upstream request failed") {
-		t.Fatalf("external CA problem body = %s, want sanitized upstream detail", got)
+	// The dispatcher still owns a retryable intent after this attempt. Report
+	// that pending state without exposing the provider's URL, token or body.
+	if !strings.Contains(got, ca.ErrExternalIssuePending.Error()) {
+		t.Fatalf("external CA problem body = %s, want sanitized pending detail", got)
+	}
+	intentID := externalCAIntentOutboxID(t, h, "sanitize-001:external-ca:"+caID)
+	queued, err := h.srv.outbox.Get(t.Context(), h.tenant, intentID)
+	if err != nil || queued.Status != "pending" || queued.Attempts < 1 {
+		t.Fatalf("pending response has no retryable intent: status=%s attempts=%d err=%v", queued.Status, queued.Attempts, err)
+	}
+	for _, leak := range []string{"127.0.0.1", "8200", "secret-token", "secret-upstream-body", "https://"} {
+		if strings.Contains(queued.LastError, leak) {
+			t.Fatalf("external CA stored error leaked %q", leak)
+		}
 	}
 }
 

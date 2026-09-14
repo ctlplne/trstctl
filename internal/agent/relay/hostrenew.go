@@ -92,6 +92,17 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 		report(ctx, ch, job, OutcomeFailed, "renewal intent names no subject to certify")
 		return false
 	}
+	var claim *hostRenewClaim
+	if maintainer, ok := ch.(JobLeaseMaintainer); ok {
+		var err error
+		claim, err = maintainHostRenewClaim(ctx, maintainer, job)
+		if err != nil {
+			report(ctx, ch, job, OutcomeFailed, "the host renewal job claim could not be maintained")
+			return false
+		}
+		defer claim.stop()
+		ctx = claim.ctx
+	}
 	management, destroyManagement, err := redeemHostManagement(ctx, ch, job, intent.CredentialRefs)
 	if err != nil {
 		report(ctx, ch, job, OutcomeFailed, "host management credentials were not available for this attempt")
@@ -118,7 +129,7 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 	// rather than a claim in a document.
 	defer key.Destroy()
 
-	certPEM, chainPEM, fingerprint, err := signer.SignJobCSR(ctx, job.JobID, job.Attempt, key.CSRDER)
+	certPEM, chainPEM, fingerprint, err := signHostCSR(ctx, signer, job, key.CSRDER, claim != nil)
 	if err != nil {
 		// The control plane holds the reason — a name outside the binding, a
 		// profile refusal, a lapsed lease — and has already recorded it.
@@ -129,6 +140,15 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 	}
 	if len(certPEM) == 0 {
 		report(ctx, ch, job, OutcomeFailed, "signing returned no certificate")
+		return false
+	}
+	if claim != nil {
+		if err := claim.confirm(); err != nil {
+			report(ctx, ch, job, OutcomeFailed, "the host renewal job claim was lost before installation")
+			return false
+		}
+	}
+	if ctx.Err() != nil {
 		return false
 	}
 

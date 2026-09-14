@@ -707,6 +707,21 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 	// answering before they do.
 	stopWorkloadAPI := startWorkloadAPI(ctx, o, conn)
 	defer stopWorkloadAPI()
+	// Jobs run on one bounded worker so a slow CA or connector cannot suppress
+	// heartbeats. Keep the current mTLS identity until its receipts finish.
+	type relayResult struct {
+		executed int
+		err      error
+	}
+	var relayDone chan relayResult
+	var cancelRelay context.CancelFunc
+	rotationPending := false
+	defer func() {
+		if relayDone != nil {
+			cancelRelay()
+			<-relayDone
+		}
+	}()
 	for {
 		select {
 		case <-ctx.Done():
@@ -726,26 +741,51 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 				resetTimer(heartbeatTimer, heartbeatDelaySeconds(resp.NextHeartbeatSeconds, defaultHeartbeatInterval, rng))
 			}
 		case <-relayTimerChan(relayTimer):
-			// Claim, redeem, deploy, wipe, report — one pass. Failures are the
-			// job's business, not the loop's: every path inside reports, so work
-			// returns to the queue rather than waiting out its lease.
-			lease := int(relayLeaseFor(o.relayPollEvery).Seconds())
-			var executed int
-			var rerr error
-			if o.relayClaim {
-				executed, rerr = relay.RunOnceWithSelfUpgradeAndHostRollback(ctx, relayCh, relayHTTPClient(), hostProfile, pluginRuntime, selfUp, hostRollback, relayClaimBatch, lease)
+			// Leave half the channel certificate's remaining life for agent
+			// renewal. Shutdown and claim loss also cancel the worker.
+			remaining := time.Until(a.CertificateNotAfter())
+			if remaining <= 0 {
+				resetTimer(rotateTimer, 0)
+				continue
+			}
+			workCtx, cancel := context.WithTimeout(ctx, remaining/2)
+			cancelRelay = cancel
+			relayDone = make(chan relayResult, 1)
+			go func(done chan<- relayResult) {
+				lease := int(relayLeaseFor(o.relayPollEvery).Seconds())
+				var result relayResult
+				if o.relayClaim {
+					result.executed, result.err = relay.RunOnceWithSelfUpgradeAndHostRollback(workCtx, relayCh, relayHTTPClient(), hostProfile, pluginRuntime, selfUp, hostRollback, relayClaimBatch, lease)
+				} else {
+					result.executed, result.err = relay.RunOnceSelfUpgradeOnly(workCtx, relayCh, selfUp, relayClaimBatch, lease)
+				}
+				done <- result
+			}(relayDone)
+		case result := <-relayDone:
+			cancelRelay()
+			relayDone = nil
+			if result.err != nil {
+				fmt.Fprintln(os.Stderr, "trstctl-agent: relay claim failed:", result.err)
+			} else if result.executed > 0 {
+				fmt.Printf("trstctl-agent: relay executed %d job(s)\n", result.executed)
+			}
+			if rotationPending {
+				rotationPending = false
+				resetTimer(rotateTimer, 0)
 			} else {
-				// Self-upgrade only: ask for nothing but this agent's own
-				// upgrade jobs (A5).
-				executed, rerr = relay.RunOnceSelfUpgradeOnly(ctx, relayCh, selfUp, relayClaimBatch, lease)
+				delay := o.relayPollEvery
+				if result.executed > 0 {
+					// Drain ready work without pre-claiming a batch or adding one
+					// polling interval between each successful deployment.
+					delay = 0
+				}
+				resetTimer(relayTimer, delay)
 			}
-			if rerr != nil {
-				fmt.Fprintln(os.Stderr, "trstctl-agent: relay claim failed:", rerr)
-			} else if executed > 0 {
-				fmt.Printf("trstctl-agent: relay executed %d job(s)\n", executed)
-			}
-			resetTimer(relayTimer, o.relayPollEvery)
 		case <-rotateTimer.C:
+			if relayDone != nil {
+				rotationPending = true
+				continue
+			}
 			// Renew with jittered exponential backoff on failure (RESIL-006): a
 			// control-plane outage during the refresh window must not be a single missed
 			// attempt that then waits a full rotate-every interval. The existing
@@ -758,6 +798,9 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 			// configured cadence alone, so a renewal that failed through an
 			// outage comes back before expiry rather than one interval later.
 			resetTimer(rotateTimer, nextRotationDelay(o.rotateEvery, a.CertificateNotAfter(), time.Now(), rng))
+			if relayTimer != nil {
+				resetTimer(relayTimer, o.relayPollEvery)
+			}
 		}
 	}
 }
