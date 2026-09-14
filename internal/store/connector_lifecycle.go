@@ -558,6 +558,39 @@ func (s *Store) ListConnectorDeliveryReceiptsMatchingPage(ctx context.Context, t
 	return out, err
 }
 
+// ListConnectorDeliveryReceiptsNewestPage returns the newest receipt activity
+// first. The composite cursor stays fixed if its receipt changes or is erased;
+// fresh activity appears when the operator refreshes the first page.
+func (s *Store) ListConnectorDeliveryReceiptsNewestPage(ctx context.Context, tenantID, identityID, key, afterID string, afterUpdatedAt *time.Time, limit int) ([]ConnectorDeliveryReceipt, error) {
+	var out []ConnectorDeliveryReceipt
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT id::text, tenant_id::text, outbox_id, identity_id::text, destination,
+			        connector, target, fingerprint, status, attempts, reason, detail,
+			        rollback_ref, idempotency_key, created_at, updated_at
+			   FROM connector_delivery_receipts
+			  WHERE tenant_id = $1
+			    AND ($6::timestamptz IS NULL OR (updated_at, id) < ($6, $2::uuid))
+			    AND ($3 = '' OR identity_id::text = $3)
+			    AND ($5 = '' OR idempotency_key = $5)
+			  ORDER BY updated_at DESC, connector_delivery_receipts.id DESC
+			  LIMIT $4`, tenantID, afterID, identityID, limit, key, afterUpdatedAt)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var r ConnectorDeliveryReceipt
+			if err := scanConnectorDeliveryReceipt(rows, &r); err != nil {
+				return err
+			}
+			out = append(out, r)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
 // LatestDeployedCertificateFingerprintForIdentity returns the exact public
 // certificate fingerprint most recently proved on the wire for one identity.
 //

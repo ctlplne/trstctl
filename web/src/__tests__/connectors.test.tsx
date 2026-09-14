@@ -291,6 +291,37 @@ describe("connector deployment disclosure surface", () => {
     });
   });
 
+  it("shows receipt activity timestamps beside each delivery", async () => {
+    const user = userEvent.setup();
+    renderConnectors();
+    expect(await screen.findByRole("heading", { name: "Where credentials are installed" })).toBeInTheDocument();
+    await user.click(screen.getByText("Health, retries, and rollback", { exact: true }));
+    const table = await screen.findByRole("table", { name: "Loaded connector delivery receipts" });
+    expect(within(table).getByRole("columnheader", { name: "Updated" })).toBeInTheDocument();
+    const time = table.querySelector("tbody time");
+    expect(time).toHaveAttribute("dateTime", "2026-06-20T00:00:00Z");
+    expect(time).not.toHaveTextContent(/^$/);
+    expect(within(table).getByRole("button", { name: "Details" })).toBeInTheDocument();
+  });
+
+  it("opens receipt evidence at its heading and keeps keyboard focus in the dialog", async () => {
+    const user = userEvent.setup();
+    renderConnectors();
+    await user.click(await screen.findByText("Health, retries, and rollback", { exact: true }));
+    const table = await screen.findByRole("table", { name: "Loaded connector delivery receipts" });
+    const opener = within(table).getByRole("button", { name: "Details" });
+    await user.click(opener);
+    const dialog = screen.getByRole("dialog", { name: "Delivery receipt receipt-1" });
+    expect(within(dialog).getByRole("heading", { name: "Delivery receipt receipt-1" })).toHaveFocus();
+    await user.keyboard("{Shift>}{Tab}{/Shift}");
+    expect(within(dialog).getByRole("button", { name: "Close" })).toHaveFocus();
+    await user.keyboard("{Tab}");
+    expect(within(dialog).getByRole("button", { name: "Close" })).toHaveFocus();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(opener).toHaveFocus();
+  });
+
   it("renders connector registry and receipt evidence from served data only", async () => {
     const user = userEvent.setup();
     renderConnectors();
@@ -323,7 +354,8 @@ describe("connector deployment disclosure surface", () => {
     expect(screen.getByText("Signed by the relay certificate")).toBeInTheDocument();
     expect(screen.getByText("Metadata only")).toBeInTheDocument();
     expect(screen.getAllByText("delivered").length).toBeGreaterThan(0);
-    expect(screen.getByText("sha256:served-receipt")).toBeInTheDocument();
+    // The shared fingerprint chip keeps the complete value in its tooltip.
+    expect(screen.getByTitle("sha256:served-receipt")).toBeInTheDocument();
     expect(screen.getAllByText(/connector\.deploy/).length).toBeGreaterThan(0);
     expect(screen.getAllByText("receipt:rollback-nginx-2026-06-26").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Deploy" })).toBeInTheDocument();

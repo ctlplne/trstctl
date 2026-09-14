@@ -189,7 +189,9 @@ describe("route 031 decision-first deployment destination design", () => {
     const deliveryTable = screen.getByRole("table", { name: "Loaded connector delivery receipts" });
     expect(within(deliveryTable).getByText("rollback:delivery-31")).toBeInTheDocument();
     expect(deliveryTable.parentElement).toHaveAttribute("tabindex", "0");
-    expect(deliveryTable.parentElement).toHaveClass("min-w-0", "max-w-full", "w-full");
+    // DataGrid bounds its focusable viewport and sizes the table within it.
+    expect(deliveryTable.parentElement).toHaveClass("min-w-0", "max-w-full");
+    expect(deliveryTable).toHaveClass("w-full");
     expect(deliveryTable.closest("section")).toHaveClass("min-w-0", "grid-cols-[minmax(0,1fr)]");
     expect(deliveryTable.closest("section")?.parentElement).toHaveClass("min-w-0", "grid-cols-[minmax(0,1fr)]");
 

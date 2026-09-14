@@ -1,5 +1,8 @@
 import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Dialog } from "@/components/Dialog";
+import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
+import { CredentialChip } from "@/components/CredentialChip";
+import { Num } from "@/components/typography";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
@@ -84,6 +87,7 @@ export function Connectors() {
   const [deliveriesCursor, setDeliveriesCursor] = useState<string | undefined>(undefined);
   const [deliveriesLoadingMore, setDeliveriesLoadingMore] = useState(false);
   const [deliveryDetail, setDeliveryDetail] = useState<ConnectorDelivery | null>(null);
+  const deliveryDetailHeadingRef = useRef<HTMLHeadingElement>(null);
   const [editTarget, setEditTarget] = useState<DeploymentTarget | null>(null);
   const [editName, setEditName] = useState("");
   const [editConnector, setEditConnector] = useState("");
@@ -1192,45 +1196,7 @@ export function Connectors() {
                 </EmptyState>
               ) : (
                 <>
-                  <ScrollableTableRegion label={translateNow("source.recent.connector.delivery.receipts.3a2bf7db18")}>
-                    <table className="ui-table min-w-[80rem]">
-                      <caption className="sr-only">{translateNow("source.recent.connector.delivery.receipts.3a2bf7db18")}</caption>
-                      <thead>
-                        <tr>
-                          <th scope="col">{translateNow("source.status.920e413c7d")}</th>
-                          <th scope="col">{translateNow("source.connector.8f0d706fff")}</th>
-                          <th scope="col">{translateNow("source.destination.293d404a50")}</th>
-                          <th scope="col">{translateNow("source.target.978354db0c")}</th>
-                          <th scope="col">{translateNow("source.attempts.06e70139fc")}</th>
-                          <th scope="col">{translateNow("source.fingerprint.ba7af0b704")}</th>
-                          <th scope="col">{translateNow("source.reason.f81ab834de")}</th>
-                          <th scope="col">{translateNow("source.rollback.c591f55749")}</th>
-                          <th scope="col">{translateNow("source.actions.ff8059dc67")}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {deliveries.map((receipt) => (
-                          <tr key={receipt.id} className="align-top">
-                            <td>
-                              <StatusBadge value={receipt.status} vocabulary="delivery" tone={deliveryStatusTone(receipt.status)} />
-                            </td>
-                            <td>{receipt.connector}</td>
-                            <td className="font-mono text-xs">{receipt.destination}</td>
-                            <td>{receipt.target}</td>
-                            <td>{receipt.attempts}</td>
-                            <td className="break-all font-mono text-xs">{receipt.fingerprint || "-"}</td>
-                            <td>{receipt.reason || receipt.detail || "-"}</td>
-                            <td>{receipt.rollback_ref || "-"}</td>
-                            <td>
-                              <Button type="button" size="sm" variant="outline" onClick={() => setDeliveryDetail(receipt)}>
-                                {t("parity.details_dc3dec")}
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </ScrollableTableRegion>
+                  <ConnectorDeliveryReceiptTable receipts={deliveries} onDetails={setDeliveryDetail} />
                   {deliveriesCursor && (
                     <div>
                       <Button type="button" size="sm" variant="outline" disabled={deliveriesLoadingMore} onClick={() => void loadMoreDeliveries()}>
@@ -1517,13 +1483,14 @@ export function Connectors() {
           open
           onClose={() => setDeliveryDetail(null)}
           titleId="delivery-detail-heading"
+          initialFocusRef={deliveryDetailHeadingRef}
           descriptionId="delivery-detail-description"
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           overlayClassName="absolute inset-0 bg-black/55"
           panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-panel border border-border bg-card shadow-elevation2"
         >
           <header className="border-b border-border px-5 py-4">
-            <h2 id="delivery-detail-heading" className="text-title font-semibold">
+            <h2 ref={deliveryDetailHeadingRef} tabIndex={-1} id="delivery-detail-heading" className="text-title font-semibold">
               {translateNow("source.delivery.receipt.value1.0b61c0292f", { value1: deliveryDetail.id })}
             </h2>
             <p id="delivery-detail-description" className="mt-1 text-sm text-muted-foreground">
@@ -1654,6 +1621,62 @@ function ConnectorDetailRow({ children, mono = false, term }: { term: string; ch
       <dt className="font-medium text-muted-foreground">{term}</dt>
       <dd className={mono ? "break-all font-mono text-xs" : "break-words"}>{children}</dd>
     </div>
+  );
+}
+
+function ConnectorDeliveryReceiptTable({ receipts, onDetails }: { receipts: ConnectorDelivery[]; onDetails: (receipt: ConnectorDelivery) => void }) {
+  const { t } = useTranslation();
+  const columns = useMemo<DataGridColumn<ConnectorDelivery>[]>(
+    () => [
+      {
+        id: "status",
+        header: t("source.status.920e413c7d"),
+        cell: (receipt) => <StatusBadge value={receipt.status} vocabulary="delivery" tone={deliveryStatusTone(receipt.status)} />,
+      },
+      {
+        id: "updated",
+        header: t("source.updated.3a5ecca188"),
+        className: "whitespace-nowrap",
+        cell: (receipt) =>
+          receipt.updated_at ? (
+            <time dateTime={receipt.updated_at} title={receipt.updated_at}>
+              <Num>{formatDateTime(receipt.updated_at)}</Num>
+            </time>
+          ) : (
+            "-"
+          ),
+      },
+      { id: "connector", header: t("source.connector.8f0d706fff"), cell: (receipt) => receipt.connector },
+      { id: "destination", header: t("source.destination.293d404a50"), cell: (receipt) => <Num>{receipt.destination}</Num> },
+      { id: "target", header: t("source.target.978354db0c"), cell: (receipt) => receipt.target },
+      { id: "attempts", header: t("source.attempts.06e70139fc"), cell: (receipt) => <Num>{receipt.attempts}</Num> },
+      {
+        id: "fingerprint",
+        header: t("source.fingerprint.ba7af0b704"),
+        cell: (receipt) => (receipt.fingerprint ? <CredentialChip value={receipt.fingerprint} label={t("source.fingerprint.ba7af0b704")} /> : "-"),
+      },
+      { id: "reason", header: t("source.reason.f81ab834de"), cell: (receipt) => receipt.reason || receipt.detail || "-" },
+      { id: "rollback", header: t("source.rollback.c591f55749"), cell: (receipt) => receipt.rollback_ref || "-" },
+      {
+        id: "actions",
+        header: t("source.actions.ff8059dc67"),
+        cell: (receipt) => (
+          <Button type="button" size="sm" variant="outline" onClick={() => onDetails(receipt)}>
+            {t("parity.details_dc3dec")}
+          </Button>
+        ),
+      },
+    ],
+    [onDetails, t],
+  );
+  return (
+    <DataGrid
+      className="grid-cols-[minmax(0,1fr)]"
+      ariaLabel={t("source.recent.connector.delivery.receipts.3a2bf7db18")}
+      rows={receipts}
+      columns={columns}
+      getRowId={(receipt) => receipt.id}
+    />
   );
 }
 

@@ -173,6 +173,20 @@ The closed sections reduce first-view noise only. They do not remove APIs, evide
 or state-changing controls, and they do not prefetch the larger expert datasets until
 an operator asks to inspect them.
 
+Delivery receipts appear by most recent update, with the update time beside each
+status. A retry can therefore bring an older receipt back to the top. The API uses
+`updated_at` descending, then receipt ID descending to break timestamp ties.
+Continuation cursors retain both values, so updating or removing the last row of
+a page does not shift its older-page boundary. Refresh the first page to see new
+activity; paginated history is not a frozen snapshot. Older UUID-only cursors are
+accepted while their receipt still exists in the caller's tenant. An expired or
+invalid cursor returns HTTP 400; restart from the first page. Tenant, identity and
+exact receipt-key filters apply to every page.
+
+Receipt details open at the heading so the receipt identity remains visible on
+small screens. Tab and Shift+Tab stay within the dialog; Escape closes it and
+returns focus to the Details button that opened it.
+
 Enrollment, replacement, and recovery share paged identity choices. The console
 shows how many identities are loaded and offers **Load more identities** whenever
 the server returns another page. A failed page can be retried without discarding

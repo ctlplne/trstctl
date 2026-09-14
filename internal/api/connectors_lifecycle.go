@@ -1508,9 +1508,9 @@ func (a *API) listConnectorDeliveries(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
-	limit, after, err := a.pageParams(r)
+	limit, afterUpdatedAt, after, err := a.connectorReceiptPageParams(r, tenantID)
 	if err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, err)
 		return
 	}
 	identityID := r.URL.Query().Get("identity_id")
@@ -1519,7 +1519,7 @@ func (a *API) listConnectorDeliveries(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusBadRequest, "idempotency_key must not exceed 2048 bytes"))
 		return
 	}
-	rows, err := a.store.ListConnectorDeliveryReceiptsMatchingPage(r.Context(), tenantID, identityID, key, after, limit)
+	rows, err := a.store.ListConnectorDeliveryReceiptsNewestPage(r.Context(), tenantID, identityID, key, after, afterUpdatedAt, limit)
 	if err != nil {
 		a.writeError(w, err)
 		return
@@ -1530,7 +1530,7 @@ func (a *API) listConnectorDeliveries(w http.ResponseWriter, r *http.Request) {
 	}
 	next := ""
 	if len(rows) == limit {
-		next = encodeCursor(rows[len(rows)-1].ID)
+		next = encodeConnectorReceiptCursor(rows[len(rows)-1])
 	}
 	a.writeJSON(w, http.StatusOK, listResponse{Items: items, NextCursor: next})
 }

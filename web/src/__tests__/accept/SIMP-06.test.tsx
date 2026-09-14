@@ -85,7 +85,8 @@ describe("SIMP-06 connector evidence de-fixturing", () => {
     expect(screen.getByText("aws-acm-importer")).toBeInTheDocument();
     expect(screen.getByText("signed plugin")).toBeInTheDocument();
     expect(screen.getByText("native registry")).toBeInTheDocument();
-    expect(screen.getByText("sha256:served-receipt")).toBeInTheDocument();
+    // The standard fingerprint chip keeps the exact server value on hover.
+    expect(screen.getByTitle("sha256:served-receipt")).toBeInTheDocument();
     expect(screen.getByText("edge-1")).toBeInTheDocument();
     expect(screen.getAllByText("receipt:rollback-nginx-2026-06-26").length).toBeGreaterThan(0);
 

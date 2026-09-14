@@ -99,7 +99,12 @@ export function Dialog({
       }
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
+      if (!focusable.some((element) => element === document.activeElement)) {
+        // A heading or panel may own initial focus without being a Tab stop.
+        // Enter the modal's tab order instead of escaping behind the overlay.
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && document.activeElement === first) {
         event.preventDefault();
         last.focus();
       } else if (!event.shiftKey && document.activeElement === last) {
