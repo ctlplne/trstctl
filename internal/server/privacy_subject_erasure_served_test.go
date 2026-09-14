@@ -359,9 +359,10 @@ func TestBuildAutonomouslyCompletesPreparedPrivacyErasureBeforeRestore(t *testin
 		t.Fatalf("server remained unready after autonomous privacy completion: %+v", checks)
 	}
 
-	// Model a zero-state receiver replay: remove both projected rows, then apply
-	// only the retained v3 event. The closed fence evidence stays canonical while
-	// the same privacy operation/read model is reconstructed without preparation.
+	// Model a receiver missing from the PostgreSQL restore cut. This independent
+	// operation row is deliberately deleted: a full read-model rebuild preserves
+	// it when present, so merely calling Rebuild would not prove reconstruction.
+	// Replay retained history without the already-retired preparation.
 	if err := st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `DELETE FROM privacy_subject_erasure_operations
 			WHERE tenant_id = $1 AND event_id = $2`, tenantID, prepared.EventID); err != nil {
@@ -373,8 +374,13 @@ func TestBuildAutonomouslyCompletesPreparedPrivacyErasureBeforeRestore(t *testin
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := projections.New(st).Apply(ctx, canonical); err != nil {
-		t.Fatalf("cold replay prepared privacy completion: %v", err)
+	if _, err := st.GetPrivacySubjectErasureOperationByEventID(ctx, tenantID, prepared.EventID); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("receiver was not absent before rebuild: %v", err)
+	}
+	// Rebuild resets derived event receipts and ordering state together; an
+	// incremental Apply still correctly treats this event as already completed.
+	if err := projections.New(st).Rebuild(ctx, reopened); err != nil {
+		t.Fatalf("complete prepared privacy rebuild: %v", err)
 	}
 	rebuilt, err := st.GetPrivacySubjectErasureOperationByEventID(ctx, tenantID, prepared.EventID)
 	if err != nil {

@@ -367,28 +367,13 @@ func TestServedEnrollmentDiagnosticProveFixedQueuesAndLinksSignedResult(t *testi
 		t.Fatalf("foreign tenant prove-fixed = %d %s, want tenant-scoped 404", status, body)
 	}
 
-	// Destroy every derived row and replay only immutable evidence. The exact
-	// failure, queued action, and signed green result must all return.
-	if _, err := h.store.SystemPool().Exec(ctx,
-		"TRUNCATE enrollment_diagnostic_observations, enrollment_diagnostics, endpoint_verifications"); err != nil {
-		t.Fatal(err)
-	}
+	// Exercise the supported complete rebuild, which also resets the derived
+	// event receipts and metadata ordering state before replaying retained history.
 	projector = projections.New(h.store)
-	if err := h.log.Replay(ctx, 0, func(event events.Event) error {
-		if event.TenantID != h.tenant {
-			return nil
-		}
-		switch event.Type {
-		case projections.EventEnrollmentDiagnosticObserved,
-			projections.EventEnrollmentDiagnosticVerificationQueued,
-			projections.EventEndpointVerified:
-			return projector.Apply(ctx, event)
-		default:
-			return nil
-		}
-	}); err != nil {
-		t.Fatal(err)
+	if err := projector.Rebuild(ctx, h.log); err != nil {
+		t.Fatalf("complete diagnostic rebuild: %v", err)
 	}
+
 	rebuilt := assertServedDiagnosticTenant(t, h.servedHarness, readToken, "template_acl_denied", 1).Items[0]
 	if rebuilt.VerificationStatus != "verified" || rebuilt.VerificationEvidenceDigest != proved.VerificationEvidenceDigest ||
 		rebuilt.VerificationResultPath != proved.VerificationResultPath {

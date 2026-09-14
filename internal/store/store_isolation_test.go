@@ -223,8 +223,15 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		"internal/outboxgc/outboxgc.go":     2,
 		// The readiness "db" check moved to the store's dedicated probe pool
 		// (ProbePing, DP2-054), so server.go no longer touches SystemPool.
-		"internal/store/connector_lifecycle.go": 1,
-		"internal/store/lifecycle.go":           1,
+		// The leader enumerates tenant IDs for renewal, then reads rows under RLS.
+		// Startup separately asks one deployment-wide boolean about legacy
+		// rollback ordering; that query exposes no tenant IDs or receipt data.
+		"internal/store/connector_lifecycle.go": 2,
+		// Event-derived stop maintenance enumerates at most 100 tenant IDs.
+		// The scheduler then re-enters each tenant's RLS context to validate
+		// immutable transitions and cancel only that tenant's idle work.
+		"internal/store/identity_work_stop.go": 1,
+		"internal/store/lifecycle.go":          1,
 		// AUD-109: startup/rebuild must compare every tenant's terminal
 		// secret-sync SQL receipt with retained event history before any worker
 		// can run, so that inventory is deliberately deployment-wide and exposes

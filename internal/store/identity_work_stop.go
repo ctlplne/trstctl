@@ -112,7 +112,7 @@ func (s *Store) ApplyIdentityWorkStopTx(ctx context.Context, tx pgx.Tx, tenantID
 // actual cancellation re-enters the tenant's RLS context and checks its events.
 func (s *Store) TenantsWithStoppedIdentityWork(ctx context.Context, now time.Time) ([]string, error) {
 	rows, err := s.SystemPool().Query(ctx,
-		//trstctl:system-query — bounded tenant enumeration for event-derived issuance cancellation; mutation uses tenant-scoped RLS transactions.
+		//trstctl:system-query — cross-tenant system maintenance returns at most 100 tenant_id values with event-derived stopped work; no command payload leaves PostgreSQL, and cancellation re-enters each tenant's RLS context.
 		`SELECT DISTINCT i.tenant_id::text FROM identities i JOIN outbox job
 		 ON job.tenant_id=i.tenant_id
 		 AND CASE WHEN job.destination IN ('ca.issue','ca.renew','endpoint.renew')

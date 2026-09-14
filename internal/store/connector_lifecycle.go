@@ -1123,7 +1123,7 @@ func (s *Store) SummarizeRenewalSLO(ctx context.Context, tenantID string, window
 func (s *Store) ConnectorRollbackProjectionNeedsRebuild(ctx context.Context) (bool, error) {
 	var missing bool
 	err := s.SystemPool().QueryRow(ctx,
-		//trstctl:system-query — boot recovery must detect legacy rollback receipts across all tenants before serving; returns only a boolean and no tenant data (AN-1 exemption).
+		//trstctl:system-query — cross-tenant system startup checks whether any rollback receipt lacks event order; only a boolean leaves PostgreSQL, never tenant_id, receipt IDs or payloads (AN-1 exemption).
 		`SELECT EXISTS(SELECT 1 FROM connector_delivery_receipts WHERE destination='connector.rollback' AND coalesce(latest_event_sequence,0)=0)`).Scan(&missing)
 	return missing, err
 }

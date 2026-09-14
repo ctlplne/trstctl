@@ -109,7 +109,7 @@ func (s *Store) PendingHostRotationResults(ctx context.Context, tenantID string,
 func (s *Store) NextHostRotationRecoveryTenant(ctx context.Context, after string) (string, error) {
 	var id string
 	err := s.pool.QueryRow(ctx,
-		//trstctl:system-query — bounded tenant-registry enumeration, same authority as ListTenants; no tenant payloads.
+		//trstctl:system-query — cross-tenant system recovery reads at most one public-registry tenant_id per cursor step; job payloads and mutations remain inside the owning tenant's RLS context.
 		`SELECT tenant_id::text FROM tenants WHERE tenant_id > COALESCE(NULLIF($1,'')::uuid,'00000000-0000-0000-0000-000000000000'::uuid) ORDER BY tenant_id LIMIT 1`, after).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", nil
