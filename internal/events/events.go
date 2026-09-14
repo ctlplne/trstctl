@@ -512,36 +512,67 @@ func (l *Log) EventByID(ctx context.Context, eventID string) (Event, bool, error
 		canonical Event
 		found     bool
 		unsafe    bool
+		conflict  error
 	)
-	err := l.Replay(ctx, 0, func(event Event) error {
-		if event.ID != eventID {
+	err := l.withHistoryRead(ctx, func(ctx context.Context) error {
+		name, stream, head, err := l.resolveReplayStream(ctx)
+		if err != nil {
+			return err
+		}
+		enforceFloor := l.rejectLegacySchedulerRuns.Load()
+		// This lookup has no caller callback. Inspect the full retained cut
+		// once, withholding its result until the legacy floor and generation
+		// are verified. Public Replay still preflights before any callback.
+		err = l.replayResolved(ctx, name, stream, 1, head, func(event Event) error {
+			if enforceFloor {
+				requiresSanitation, inspectErr := schedulerhistory.RequiresSanitation(event.Type, event.SchemaVersion, event.Data)
+				if inspectErr != nil || requiresSanitation {
+					return schedulerhistory.ErrSanitationRequired
+				}
+			}
+			if event.ID != eventID {
+				return nil
+			}
+			if !enforceFloor {
+				requiresSanitation, inspectErr := schedulerhistory.RequiresSanitation(event.Type, event.SchemaVersion, event.Data)
+				if inspectErr != nil || requiresSanitation {
+					unsafe = true
+				}
+			}
+			if !found {
+				canonical = event
+				found = true
+				return nil
+			}
+			if canonical.Type != event.Type || canonical.TenantID != event.TenantID ||
+				!canonical.Time.Equal(event.Time) || canonical.SchemaVersion != event.SchemaVersion ||
+				!bytes.Equal(canonical.Data, event.Data) || !reflect.DeepEqual(canonical.Actor, event.Actor) {
+				if conflict == nil {
+					conflict = fmt.Errorf("%w: event id %q has conflicting retained envelopes at sequences %d and %d",
+						ErrConflictingEventIdentity, eventID, canonical.Sequence, event.Sequence)
+				}
+				if !enforceFloor {
+					return conflict
+				}
+				// A later unsafe envelope must still take precedence, just
+				// as the public replay preflight did before lookup began.
+			}
 			return nil
+		})
+		if err != nil && enforceFloor {
+			canonical = Event{}
+			found = false
 		}
-		requiresSanitation, inspectErr := schedulerhistory.RequiresSanitation(
-			event.Type, event.SchemaVersion, event.Data,
-		)
-		if inspectErr != nil || requiresSanitation {
-			unsafe = true
-		}
-		if !found {
-			canonical = event
-			found = true
-			return nil
-		}
-		if canonical.Type != event.Type || canonical.TenantID != event.TenantID ||
-			!canonical.Time.Equal(event.Time) || canonical.SchemaVersion != event.SchemaVersion ||
-			!bytes.Equal(canonical.Data, event.Data) || !reflect.DeepEqual(canonical.Actor, event.Actor) {
-			return fmt.Errorf("%w: event id %q has conflicting retained envelopes at sequences %d and %d",
-				ErrConflictingEventIdentity,
-				eventID, canonical.Sequence, event.Sequence)
-		}
-		return nil
+		return err
 	})
 	if unsafe {
 		if err != nil {
 			return Event{}, false, errors.Join(schedulerhistory.ErrSanitationRequired, err)
 		}
 		return Event{}, false, schedulerhistory.ErrSanitationRequired
+	}
+	if err == nil {
+		err = conflict
 	}
 	return canonical, found, err
 }
