@@ -252,11 +252,23 @@ func (d *Driver) Destroy() {
 	boundary.WipeECDSAPrivateKey(key)
 }
 
+// ErrIssuanceNotSubmitted proves this invocation stopped before calling the
+// ACME finalize operation. Account/order/DNS preparation may have performed I/O,
+// but no CSR was submitted for certificate signing. Never infer this from a
+// timeout or an upstream error string after entering finalization (RFC8555 7.4).
+var ErrIssuanceNotSubmitted = errors.New("acmekey: certificate finalization was not submitted")
+
 // IssueChain registers the account, authorizes an order for dnsNames (solving any
 // pending HTTP-01 challenges via the solver), finalizes it with csr, and returns
 // the issued certificate chain as DER blocks (leaf first). The caller PEM-encodes
 // the result; no acme.* type crosses this boundary.
-func (d *Driver) IssueChain(ctx context.Context, req OrderRequest) ([][]byte, error) {
+func (d *Driver) IssueChain(ctx context.Context, req OrderRequest) (chain [][]byte, resultErr error) {
+	finalizationStarted := false
+	defer func() {
+		if resultErr != nil && !finalizationStarted {
+			resultErr = fmt.Errorf("%w: %w", ErrIssuanceNotSubmitted, resultErr)
+		}
+	}()
 	if d == nil || d.client == nil {
 		return nil, fmt.Errorf("acmekey: driver is destroyed")
 	}
@@ -306,6 +318,7 @@ func (d *Driver) IssueChain(ctx context.Context, req OrderRequest) ([][]byte, er
 		// as "no problems" and is the opposite of the truth.
 		d.observeReusedOrder(ctx, req.TenantID, order)
 	}
+	finalizationStarted = true
 	der, _, err := d.client.CreateOrderCert(ctx, order.FinalizeURL, csr, true)
 	if err == nil {
 		return der, nil

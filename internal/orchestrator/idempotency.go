@@ -1585,9 +1585,11 @@ func (i *Idempotency) DoPreparedDurableEffectBound(
 // token or lookup-by-operation API. It commits a pending claim in a short tenant
 // transaction before fn begins, releases the database connection for the call,
 // and records the result afterward. A crash/error after the claim leaves the key
-// pending; every replay then returns ErrEffectIndeterminate without calling fn.
-// This trades automatic retry for the only safe no-duplicate behavior available
-// when the upstream cannot participate in exactly-once delivery.
+// pending; replay returns ErrEffectIndeterminate without calling fn. The sole
+// exception is empty output with ConfirmedNoMutation: a protocol adapter has
+// positively proved the protected mutation was never submitted. Only that live
+// attempt may release its claim for retry; an uncertain release stays fenced.
+// Generic errors, partial output and process crashes never grant this exception.
 func (i *Idempotency) DoAtMostOnceEffect(ctx context.Context, tenantID, key string, fn func(context.Context) ([]byte, error)) ([]byte, error) {
 	if i == nil {
 		return nil, errors.New("orchestrator: idempotency store is not configured")
@@ -1613,6 +1615,14 @@ func (i *Idempotency) DoAtMostOnceEffect(ctx context.Context, tenantID, key stri
 		i.memoryMu.Unlock()
 		out, err := fn(ctx)
 		if err != nil {
+			if len(out) == 0 && isConfirmedNoMutation(err) {
+				safe := noMutationSafeResult(err)
+				destroyDeliveryError(err)
+				i.memoryMu.Lock()
+				delete(i.atMostOnceMemory, memoryKey)
+				i.memoryMu.Unlock()
+				return nil, safe
+			}
 			secret.Wipe(out)
 			classified := classifiedEffectIndeterminate(err)
 			destroyDeliveryError(err)
@@ -1684,6 +1694,14 @@ func (i *Idempotency) DoAtMostOnceEffect(ctx context.Context, tenantID, key stri
 
 	out, err := fn(ctx)
 	if err != nil {
+		if len(out) == 0 && isConfirmedNoMutation(err) {
+			safe := noMutationSafeResult(err)
+			destroyDeliveryError(err)
+			if releaseErr := i.releaseClaim(ctx, tenantID, key, ""); releaseErr != nil {
+				return nil, classifiedEffectIndeterminate(releaseErr)
+			}
+			return nil, safe
+		}
 		secret.Wipe(out)
 		// Deliberately retain the pending claim: without a provider-native lookup,
 		// the process cannot prove whether the receiver committed before erroring.

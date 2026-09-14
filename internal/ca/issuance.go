@@ -206,6 +206,12 @@ func ProviderIdempotencyKey(idempotencyKey string) string {
 	return sum[:tokenBytes]
 }
 
+// ErrIssuanceNotSubmitted is an adapter's positive proof that its certificate
+// signing operation was not entered. It is not an HTTP status or generic timeout.
+// Preparation may have performed receiver I/O; this is deliberately distinct from
+// orchestrator.DefiniteNoEffect, which proves that no receiver I/O began.
+var ErrIssuanceNotSubmitted = errors.New("ca: certificate signing was not submitted")
+
 // Issue signs the request under idempotencyKey: the first call mints the
 // certificate and records the issuance in the outbox; a replay with the same key
 // returns the original certificate without minting again.
@@ -228,6 +234,9 @@ func (s *IssuanceService) Issue(ctx context.Context, req IssueRequest, idempoten
 	raw, err := s.idem.DoAtMostOnceEffect(ctx, req.TenantID, idempotencyKey, func(ctx context.Context) ([]byte, error) {
 		cert, err := s.ca.Issue(ctx, req)
 		if err != nil {
+			if errors.Is(err, ErrIssuanceNotSubmitted) {
+				return nil, orchestrator.ConfirmedNoMutation(err)
+			}
 			return nil, err
 		}
 		s.observeLifetime(req.TenantID, cert)
@@ -405,7 +414,11 @@ func (s *IssuanceService) DeliverExternalIssue(ctx context.Context, m orchestrat
 		}
 		cert, err := s.ca.Issue(ctx, req)
 		if err != nil {
-			return nil, preserveOrClassifyExternalIssueError("external_ca_provider_failed", "external CA provider issuance failed", err)
+			safe := preserveOrClassifyExternalIssueError("external_ca_provider_failed", "external CA provider issuance failed", err)
+			if errors.Is(err, ErrIssuanceNotSubmitted) {
+				return nil, orchestrator.ConfirmedNoMutation(safe)
+			}
+			return nil, safe
 		}
 		s.observeLifetime(m.TenantID, cert)
 		raw, err := json.Marshal(cert)

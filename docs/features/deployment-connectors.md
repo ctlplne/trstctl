@@ -280,8 +280,11 @@ When an external CA returns a certificate, trstctl saves that response before
 recording the issuance locally. A recording failure can then retry with the same
 request key and recover the same certificate without another CA call. Success
 still requires the issuance record and notification intent to commit. If the CA
-call failed without returning a certificate, trstctl keeps its existing replay
-restrictions; an ambiguous result does not authorize another issuance.
+call failed without returning a certificate, an ACME adapter may permit retry only
+when that live attempt proves it stopped before submitting the CSR for finalization.
+An ambiguous result, a process crash after claiming the provider call, or an
+unverified claim-release failure does not authorize another issuance. See the
+[external issuance recovery contract](issuance-and-cas.md#how-it-works).
 
 Delivery and endpoint verification appear separately in the activity timeline.
 Delivery keeps the actual retry count, job ID, and restore reference. Verification

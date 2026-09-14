@@ -112,8 +112,13 @@ func (p *Plugin) Issue(ctx context.Context, req ca.IssueRequest) (ca.Certificate
 		TenantID: req.TenantID, DNSNames: req.DNSNames, CSR: req.CSR,
 	})
 	if err != nil {
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return ca.Certificate{}, err
+		notSubmitted := errors.Is(err, acmekey.ErrIssuanceNotSubmitted)
+		resultErr := err
+		if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+			resultErr = dvFailureOrGeneric(err)
+		}
+		if notSubmitted {
+			resultErr = fmt.Errorf("%w: %w", ca.ErrIssuanceNotSubmitted, resultErr)
 		}
 		// ACME problem documents carry free-form detail and some gateways echo
 		// account authorization, so the upstream error never reaches a caller.
@@ -121,7 +126,7 @@ func (p *Plugin) Issue(ctx context.Context, req ca.IssueRequest) (ca.Certificate
 		// no idea whether to fix DNS, fix CAA, or wait — so the classified
 		// domain-validation failures are distinguished by a closed set of
 		// phrases that name no provider, no record and no problem detail.
-		return ca.Certificate{}, dvFailureOrGeneric(err)
+		return ca.Certificate{}, resultErr
 	}
 
 	chain := make([]byte, 0)

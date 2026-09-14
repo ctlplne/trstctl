@@ -58,6 +58,14 @@ retry lane, while every unproven adapter stays at-most-once. A completed result
 replays byte-for-byte from the `certificate.recorded` projection, so a changed command
 gets 409 before provider I/O, and an interrupted tokenless submission is never
 resent — it stays explicitly indeterminate rather than guessing the CA did nothing.
+For ACME, a live attempt that stops before submitting the CSR for finalization can
+prove that signing never began. The worker may then retry the same issuance request
+after the directory, account, order, or domain-validation service recovers. Account
+or order preparation may repeat, within the existing bounded outbox retry policy.
+Once finalization starts, a lost response remains uncertain: trstctl tries to read
+the original order's result, and refuses a new issuance if that cannot be verified.
+A process crash supplies no proof of which step ran; an already-pending uncertain
+claim stays blocked. Do not delete that claim to force another certificate.
 After a definite result the worker emits `certificate.recorded`, rebuilds the
 certificate inventory, and records the separate `ca.issue` evidence row. The
 identity-transition issuance retry path (`POST /api/v1/identities/{id}/transitions` to
@@ -75,10 +83,11 @@ JSON: file references load into locked byte buffers for one outbox attempt and a
 wiped afterward. Azure CA private-key operations and Let's Encrypt account JWS
 signatures stay in the isolated signer, and the API exposes only the non-secret
 registry row (`id`, `type`, `name`, `status`). A reused idempotency key after completion returns
-the original certificate without re-signing, even after garbage collection; a crash
-before submission is resumed by the outbox worker, and a crash mid-submission with no
-way to query the result fails closed as indeterminate rather than blind-repeating the
-mint. The production `external_cas` JSON shape, `file:/absolute/path` credentials,
+the original certificate without re-signing, even after garbage collection. A crash
+before the provider claim resumes through the outbox. After a tokenless provider
+claim commits, recovery needs the original result or a live protocol proof that
+signing was not submitted; an uncertain crash stays blocked. The production
+`external_cas` JSON shape, `file:/absolute/path` credentials,
 private-endpoint allowlist, custom trust-root, and mTLS fields are documented in
 [Configuration](../configuration.md#native-connector-and-external-ca-assembly).
 
