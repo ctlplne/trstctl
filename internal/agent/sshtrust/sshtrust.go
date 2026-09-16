@@ -69,9 +69,15 @@ func (a *Applier) AddCATrust(ctx context.Context, caPublicKey []byte) (changed b
 	}
 	newCfg := string(cfgBak)
 	directive := "TrustedUserCAKeys " + a.cfg.TrustedUserCAKeysPath
-	cfgReferencesTrustFile := a.sshdConfigReferencesTrustedKeys(a.cfg.SSHDConfigPath, newCfg, a.cfg.TrustedUserCAKeysPath, map[string]bool{})
+	cfgReferencesTrustFile, err := a.sshdConfigReferencesTrustedKeys(a.cfg.SSHDConfigPath, newCfg, a.cfg.TrustedUserCAKeysPath, map[string]bool{})
+	if err != nil {
+		return false, err
+	}
 	if trustHasCA && cfgReferencesTrustFile {
-		return false, nil // already trusted and enabled — idempotent no-op
+		// A killed process can leave both files written before sshd is
+		// reloaded. Preserve file idempotency, but verify the running daemon
+		// before reporting success on every retry.
+		return false, a.verifyExistingTrust(ctx)
 	}
 	if !cfgReferencesTrustFile {
 		newCfg = appendLine(newCfg, directive)
@@ -92,6 +98,29 @@ func (a *Applier) AddCATrust(ctx context.Context, caPublicKey []byte) (changed b
 	}
 	a.auditEv(ctx, "ssh.trust.added", caLine)
 	return true, nil
+}
+
+// verifyExistingTrust completes runtime checks even when the files already
+// contain the requested trust. Their current bytes may be an interrupted rollout,
+// so they are not a known-good rollback snapshot. On failure leave them untouched
+// and report the failed stage; never reload rejected bytes as a fake rollback.
+func (a *Applier) verifyExistingTrust(ctx context.Context) error {
+	for _, step := range []struct {
+		name string
+		run  func(context.Context) error
+	}{
+		{"validate", a.cfg.Reloader.Validate},
+		{"reload", a.cfg.Reloader.Reload},
+		{"health-check", a.cfg.Reloader.HealthCheck},
+	} {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := step.run(ctx); err != nil {
+			return fmt.Errorf("sshtrust: %s failed for existing trust; files unchanged, no verified rollback backup available: %w", step.name, err)
+		}
+	}
+	return nil
 }
 
 // RemoveCATrust removes a CA trust line, but only with explicit confirmation: the
@@ -246,12 +275,17 @@ func containsLine(content, line string) bool {
 	return false
 }
 
-func (a *Applier) sshdConfigReferencesTrustedKeys(path, content, trustedKeysPath string, seen map[string]bool) bool {
+// Resolve the first global directive, in Include order. Finding the requested
+// path somewhere in the file is insufficient: an earlier directive can shadow
+// it, and a Match block can apply only to other users. Refuse those ambiguous
+// rewrites before writing files; never replace an operator's existing CA path.
+func (a *Applier) sshdConfigReferencesTrustedKeys(path, content, trustedKeysPath string, seen map[string]bool) (bool, error) {
 	cleanPath := cleanSSHDPath(path)
 	if seen[cleanPath] {
-		return false
+		return false, fmt.Errorf("sshtrust: cyclic sshd_config Include at %s; resolve it before changing trust", path)
 	}
 	seen[cleanPath] = true
+	defer delete(seen, cleanPath)
 
 	for _, line := range strings.Split(content, "\n") {
 		fields := sshdConfigFields(line)
@@ -259,25 +293,31 @@ func (a *Applier) sshdConfigReferencesTrustedKeys(path, content, trustedKeysPath
 			continue
 		}
 		switch {
+		case strings.EqualFold(fields[0], "Match"):
+			return false, fmt.Errorf("sshtrust: Match block in %s precedes global TrustedUserCAKeys; configure and verify the intended global trust file before using --ssh-trust-add-ca", path)
 		case strings.EqualFold(fields[0], "TrustedUserCAKeys") && len(fields) >= 2:
 			if sameSSHDPath(path, fields[1], trustedKeysPath) {
-				return true
+				return true, nil
 			}
+			return false, fmt.Errorf("sshtrust: %s already selects TrustedUserCAKeys %q; inspect that file and set --ssh-trust-keys-file to its path; refusing to append an ignored directive", path, fields[1])
 		case strings.EqualFold(fields[0], "Include"):
 			for _, include := range fields[1:] {
 				for _, includePath := range a.expandInclude(path, include) {
 					includeContent, err := a.cfg.FS.ReadFile(includePath)
 					if err != nil {
+						if !errors.Is(err, os.ErrNotExist) {
+							return false, fmt.Errorf("sshtrust: inspect sshd_config Include %s: %w", includePath, err)
+						}
 						continue
 					}
-					if a.sshdConfigReferencesTrustedKeys(includePath, string(includeContent), trustedKeysPath, seen) {
-						return true
+					if found, err := a.sshdConfigReferencesTrustedKeys(includePath, string(includeContent), trustedKeysPath, seen); found || err != nil {
+						return found, err
 					}
 				}
 			}
 		}
 	}
-	return false
+	return false, nil
 }
 
 func (a *Applier) expandInclude(configPath, pattern string) []string {

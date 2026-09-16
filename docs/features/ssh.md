@@ -70,17 +70,35 @@ live fleet is exactly where people lock themselves out, so trstctl's agent follo
 rule: **additive-only, validated before it takes effect, and rolled back automatically on
 any failure.**
 
-The agent backs up both files, is idempotent (a CA line already present is a no-op),
-writes changes atomically (write-temp-then-rename), then runs a three-step gauntlet:
-validate (`sshd -t`), reload, and health-check that `sshd` still accepts connections. On
-any failure it restores both files from backup and reloads the known-good config; reload
+The agent saves the current file contents in memory, adds a missing CA line once,
+and writes changes atomically (write-temp-then-rename). It then validates
+(`sshd -t`), reloads, and health-checks that `sshd` still accepts connections.
+An apply failure restores the saved contents and reloads the prior config; reload
 and health commands are operator-supplied, required, and run as validated argv lines with
 shell metacharacters rejected (`--ssh-trust-reload-cmd`, `--ssh-trust-health-cmd`) —
 reload success alone isn't proof of health. Removing trust is never implicit:
-`RemoveCATrust` needs an explicit confirmation flag. Every action is audited
-(`ssh.trust.added`, `ssh.trust.removed`, `ssh.trust.rolled_back`, and
-`ssh.trust.rollback_failed` on a failed restoration), leaving an unclear host state that
-needs operator attention.
+`RemoveCATrust` needs an explicit confirmation flag. A failed restoration leaves
+an unclear host state that needs operator attention. The library emits
+`ssh.trust.added`, `ssh.trust.removed`, `ssh.trust.rolled_back`, and
+`ssh.trust.rollback_failed` when an audit sink is connected. The current one-shot
+agent command does not connect that sink or deliver these events to the control
+plane; record its observed result through the rollout handoff below. That record
+is an operator assertion, not automatic proof of the host change.
+
+When both files already contain the requested trust, rerunning the command
+leaves their contents unchanged but repeats validation, reload, and the health
+check. A previous process may have stopped after writing files and before
+reloading SSH. A failed retry reports its failed stage and leaves the files
+untouched; it cannot restore an earlier process's memory-only backup. Keep an
+independent recovery session and backup until both existing and certificate-based
+access have been verified. Durable crash rollback and automatic audit delivery
+are not provided by this one-shot command.
+
+The one-shot requires `--ssh-trust-ca-key` and `--ssh-trust-tenant`; enrollment
+flags do not enroll this operation. Set `--ssh-trust-keys-file` to the first
+global `TrustedUserCAKeys` path, including directives loaded through `Include`.
+A conflicting path or a `Match` block before global CA trust is refused before
+any file changes. See the [complete rollout example](../journeys/ssh-at-scale.md).
 
 The control plane also has a served handoff for this high-blast-radius path:
 `POST /api/v1/ssh/trust-rollouts` records the source, target hosts, CA fingerprint,

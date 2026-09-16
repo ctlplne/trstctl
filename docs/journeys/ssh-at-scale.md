@@ -90,17 +90,44 @@ mutation stays in the operator-confirmed agent path.
    is **off by default** and requires an explicit opt-in plus confirmation. See
    [SSH](../features/ssh.md).
 
+   Fetch the public SSH CA key through the authenticated, TLS-verified CLI and
+   check its fingerprint against the authority you intend to trust:
+
    ```sh
-   trstctl-agent --enroll-url https://localhost:8443 \
-     --bootstrap-token-file ./trstctl-bootstrap-token \
-     --server localhost:9443 \
-     --name edge-agent-1 \
-     --ca-bundle ./trstctl-ca.pem \
+   trstctl ssh status > ssh-ca-status.json
+   jq -er '.authority_key' ssh-ca-status.json > trstctl-ssh-ca.pub
+   ssh-keygen -lf trstctl-ssh-ca.pub
+   ```
+
+   Run the next command on the target with permission to update its SSH files
+   and reload its daemon. First inspect `sshd -T -f /etc/ssh/sshd_config` and
+   use its active `trustedusercakeys` path for `--ssh-trust-keys-file`. The
+   example uses `/etc/ssh/trusted_user_ca_keys`. An earlier directive, including
+   one in an `Include` file, wins over an appended directive; the agent refuses
+   a conflicting path before writing. A `Match` block before global CA trust
+   also needs explicit configuration review.
+
+   ```sh
+   trstctl-agent \
      --ssh-trust-add-ca \
      --ssh-trust-confirm \
+     --ssh-trust-ca-key ./trstctl-ssh-ca.pub \
+     --ssh-trust-tenant "$TRSTCTL_TENANT" \
+     --ssh-trust-sshd-config /etc/ssh/sshd_config \
+     --ssh-trust-keys-file /etc/ssh/trusted_user_ca_keys \
      --ssh-trust-reload-cmd 'systemctl reload sshd' \
-     --ssh-trust-health-cmd 'ssh -o BatchMode=yes localhost true'
+     --ssh-trust-health-cmd 'ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectionAttempts=3 -o ConnectTimeout=5 rollout-probe@localhost true'
    ```
+   This is a one-shot operation; it exits without enrolling or starting the
+   steady-state agent. Replace `rollout-probe` with an existing authorized
+   account whose key and pinned host trust are available to the invoking
+   account. Prove this command succeeds before rollout. The bounded connection
+   retries allow the listener to return after reload. After rollout, verify
+   both existing access and access with the new CA's certificate. A retry repeats
+   validation, reload and the health command even when both files already contain
+   the requested trust. Keep an independent session and backup until these checks
+   pass: an interrupted process loses its in-memory rollback copy.
+
    The reload and health commands are parsed as argv and executed without a
    shell; shell metacharacters and shell interpreters are rejected.
 
@@ -113,7 +140,7 @@ mutation stays in the operator-confirmed agent path.
 
    -> the agent backs up the files, validates the new config (`sshd -t`), reloads, runs
    your post-reload health command, and auto-rolls-back to the last-known-good on any
-   failure — so a bad rewrite cannot lock you out. It never removes existing trust
+   failure. Verify restored access if rollback is reported. It never removes existing trust
    without an explicit confirmation. Record the served rollout evidence after the agent
    reports the result:
 
@@ -202,12 +229,30 @@ mutation stays in the operator-confirmed agent path.
    ```sh
    trstctl ssh status
    trstctl ssh revoke --serial <serial> --reason 'operator requested revocation'
-   curl -fsS "$TRSTCTL_URL/ssh/krl" -o trstctl.krl
+   curl -fsS --cacert "$TRSTCTL_CA_FILE" "$TRSTCTL_URL/ssh/krl" -o trstctl.krl
    trstctl ssh retire-host --host edge-1.internal --source <source-id> --run <run-id> --reason 'standing SSH access replaced'
    ```
 
-   -> a revoked certificate is reported as revoked by stock `ssh-keygen`; budget for
-   pushing the updated KRL to hosts, since distribution is push-based.
+   In **SSH access → Remove access**, choose the revocation scope and review it
+   before publishing. A serial revokes that serial; a key ID revokes every
+   certificate with that name, including future replacements. Selecting both
+   applies both rules independently. The KRL uses a wildcard CA, so matching
+   certificates from any issuer are affected wherever this list is consumed.
+   The displayed count measures distinct serial and key-ID entries, not affected
+   certificates. A newly issued certificate defaults to serial-only revocation.
+
+   Publishing updates the KRL; it does not distribute it or terminate existing
+   SSH sessions. Install the current list on every relying host (`RevokedKeys`)
+   and client (`RevokedHostKeys`). Before expiry, verify the original public
+   certificate with `ssh-keygen -Q -f trstctl.krl original-cert.pub`: it must
+   explicitly report `REVOKED` and exit 1. Prove a new connection is refused,
+   then prove replacement access works. After key-ID revocation, use a different
+   certificate name for the replacement. There is no un-revoke operation here.
+
+   If publication returns an uncertain response, the console's retry sends the
+   same reviewed request with the same idempotency key. Check the audit history
+   before changing scope. A successful publication alone does not prove that a
+   relying host has loaded or enforced the new list.
 
 ## Where next
 

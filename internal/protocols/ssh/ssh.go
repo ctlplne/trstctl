@@ -288,7 +288,7 @@ const (
 	krlSectionCertificates = 1 // top-level section: revocations by issuing CA
 
 	krlSectionCertSerialList = 0x20 // cert sub-section: explicit uint64 serial list
-	krlSectionCertKeyID      = 3    // cert sub-section: list of revoked key-id strings
+	krlSectionCertKeyID      = 0x23 // cert sub-section: list of revoked key-id strings
 )
 
 // DistributeKRL returns the KRL in the OpenSSH binary KRL format (PROTOCOL.krl), the

@@ -77,7 +77,7 @@ func runSSHTrustAddCA(ctx context.Context, o sshTrustOptions) (handled bool, err
 	if changed {
 		fmt.Printf("trstctl-agent: SSH CA trust added to %s (sshd validated, reloaded, health-checked; auto-rollback armed)\n", o.trustedKeys)
 	} else {
-		fmt.Printf("trstctl-agent: SSH CA already trusted in %s (no change)\n", o.trustedKeys)
+		fmt.Printf("trstctl-agent: SSH CA entry already present in %s (files unchanged; sshd validated, reloaded, health-checked)\n", o.trustedKeys)
 	}
 	return true, nil
 }

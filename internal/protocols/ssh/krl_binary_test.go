@@ -6,6 +6,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -131,61 +133,78 @@ func TestDistributeKRLBinaryStructure(t *testing.T) {
 	}
 }
 
-// TestDistributeKRLLoadsInOpenSSH is the INTEROP-009 end-to-end acceptance: stock
-// `ssh-keygen -Q -f <krl> <cert>` must report a certificate as revoked using
-// trstctl's distributed KRL. Pre-fix Distribute() returned JSON that sshd/ssh-keygen
-// cannot parse, so revocation never reached hosts. Skips when ssh-keygen is absent
-// (the structural test above still runs).
+// TestDistributeKRLLoadsInOpenSSH checks revocation and non-revocation with the
+// stock consumer. Test key IDs as well as serials: a correctly framed KRL can
+// still contain an unsupported subsection type and deny every certificate.
 func TestDistributeKRLLoadsInOpenSSH(t *testing.T) {
 	if _, err := exec.LookPath("ssh-keygen"); err != nil {
+		if os.Getenv("TRSTCTL_REQUIRE_OPENSSH") != "" {
+			t.Fatal("TRSTCTL_REQUIRE_OPENSSH is set but ssh-keygen is unavailable")
+		}
 		t.Skip("ssh-keygen not available; OpenSSH KRL load checked on the CI backstop")
 	}
-
-	ca, _ := newCA(t, nil)
-	prof := Profile{Name: "user", MaxTTL: time.Hour, AllowUserCerts: true}
-	iss, err := ca.IssueUserCert(context.Background(), prof, IssueRequest{
-		SubjectPublicKey: subjectKey(t), KeyID: "revoke-me@corp", Principals: []string{"alice"}, TTL: 30 * time.Minute,
-	})
-	if err != nil {
-		t.Fatalf("IssueUserCert: %v", err)
-	}
-
-	dir := t.TempDir()
-	certPath := filepath.Join(dir, "id-cert.pub")
-	if err := os.WriteFile(certPath, iss.Certificate, 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
-		t.Fatal(err)
-	}
-
-	// Build a KRL that revokes this cert's serial and write the binary artifact.
-	krl := NewKRL()
-	krl.RevokeSerial(iss.Serial)
-	krlPath := filepath.Join(dir, "revoked.krl")
-	if err := os.WriteFile(krlPath, krl.DistributeKRL(1), 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
-		t.Fatal(err)
-	}
-
-	// ssh-keygen -Q -f <krl> <cert>: exit status is non-zero when the cert is revoked.
-	out, err := exec.Command("ssh-keygen", "-Q", "-f", krlPath, certPath).CombinedOutput() // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
-	if err == nil {
-		t.Fatalf("ssh-keygen did not report the revoked certificate as revoked using trstctl's KRL:\n%s", out)
-	}
-	if !bytes.Contains(bytes.ToLower(out), []byte("revoked")) {
-		t.Errorf("ssh-keygen output does not mention revocation:\n%s", out)
-	}
-
-	// Sanity: a DIFFERENT, non-revoked cert is NOT reported revoked against the same KRL.
-	iss2, err := ca.IssueUserCert(context.Background(), prof, IssueRequest{
-		SubjectPublicKey: subjectKey(t), KeyID: "keep-me@corp", Principals: []string{"bob"}, TTL: 30 * time.Minute,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	cert2Path := filepath.Join(dir, "id2-cert.pub")
-	if err := os.WriteFile(cert2Path, iss2.Certificate, 0o644); err != nil { // #nosec G306 -- fixture file in a test tempdir; the mode is part of the fixture (CWE-276)
-		t.Fatal(err)
-	}
-	if out, err := exec.Command("ssh-keygen", "-Q", "-f", krlPath, cert2Path).CombinedOutput(); err != nil { // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
-		t.Errorf("ssh-keygen wrongly reported a non-revoked cert as revoked:\n%s\n%v", out, err)
+	for _, kind := range []string{"host", "user"} {
+		t.Run(kind, func(t *testing.T) {
+			ca, _ := newCA(t, nil)
+			profile := Profile{Name: kind, MaxTTL: time.Hour, AllowHostCerts: true, AllowUserCerts: true}
+			issue := ca.IssueUserCert
+			if kind == "host" {
+				issue = ca.IssueHostCert
+			}
+			dir := t.TempDir()
+			paths := make([]string, 3)
+			serials := make([]uint64, 3)
+			for i, keyID := range []string{"revoke-me@corp", "revoke-me@corp", "keep-me@corp"} {
+				issued, err := issue(context.Background(), profile, IssueRequest{
+					SubjectPublicKey: subjectKey(t), KeyID: keyID, Principals: []string{"qa.example.test"}, TTL: 30 * time.Minute,
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				serials[i] = issued.Serial
+				paths[i] = filepath.Join(dir, fmt.Sprintf("certificate-%d.pub", i))
+				if err := os.WriteFile(paths[i], issued.Certificate, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, tc := range []struct {
+				name          string
+				serial, keyID bool
+			}{
+				{name: "empty"},
+				{name: "serial", serial: true},
+				{name: "key-id", keyID: true},
+				{name: "serial-and-key-id", serial: true, keyID: true},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					krl := NewKRL()
+					if tc.serial {
+						krl.RevokeSerial(serials[0])
+					}
+					if tc.keyID {
+						krl.RevokeKeyID("revoke-me@corp")
+					}
+					krlPath := filepath.Join(t.TempDir(), "list.krl")
+					if err := os.WriteFile(krlPath, krl.DistributeKRL(1), 0o600); err != nil {
+						t.Fatal(err)
+					}
+					for i, certPath := range paths {
+						ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+						out, err := exec.CommandContext(ctx, "ssh-keygen", "-Q", "-f", krlPath, certPath).CombinedOutput() // #nosec G204 -- fixed reference tool and task-owned test files (CWE-78)
+						cancel()
+						wantRevoked := (tc.serial && i == 0) || (tc.keyID && i < 2)
+						if wantRevoked {
+							var exitErr *exec.ExitError
+							if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 || !bytes.HasSuffix(bytes.TrimSpace(out), []byte(": REVOKED")) {
+								t.Errorf("certificate %d: want explicit OpenSSH revocation (exit 1), got %v: %s", i, err, out)
+							}
+						} else if err != nil || !bytes.HasSuffix(bytes.TrimSpace(out), []byte(": ok")) {
+							t.Errorf("certificate %d: want accepted non-revoked certificate, got %v: %s", i, err, out)
+						}
+					}
+				})
+			}
+		})
 	}
 }
 
