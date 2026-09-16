@@ -44,6 +44,13 @@ type providerDelegationAuthorityPayload struct {
 	Audit          provider.AuditEvent           `json:"audit"`
 }
 
+type providerOperatorAuthorityPayload struct {
+	Operator       *provider.OperatorIdentity `json:"operator,omitempty"`
+	EffectiveAt    time.Time                  `json:"effective_at,omitempty"`
+	RequestBinding string                     `json:"request_binding,omitempty"`
+	Audit          provider.AuditEvent        `json:"audit"`
+}
+
 type providerQuotaAuthorityPayload struct {
 	Quota          *billing.Quota      `json:"quota,omitempty"`
 	EffectiveAt    time.Time           `json:"effective_at,omitempty"`
@@ -206,6 +213,16 @@ var licensedProductionPrivacyEventCatalog = func() []licensedPrivacyEventPolicy 
 		licensedPrivacyRule("/delegations/*/operator_id", events.PrivacyFieldIdentityExact),
 		licensedPrivacyRule("/delegations/*/granted_by", events.PrivacyFieldIdentityExact),
 	)
+	operatorRules := []events.PrivacyFieldRule{
+		licensedPrivacyRule("/operator/id", events.PrivacyFieldIdentityExact),
+		licensedPrivacyRule("/operator/external_id", events.PrivacyFieldIdentityExact),
+		licensedPrivacyRule("/operator/user_name", events.PrivacyFieldIdentityExact),
+		licensedPrivacyRule("/operator/email", events.PrivacyFieldIdentityExact),
+		licensedPrivacyRule("/operator/display_name", events.PrivacyFieldFreeTextClear),
+		licensedPrivacyRule("/operator/source", events.PrivacyFieldSubjectToken),
+	}
+	operatorRules = append(operatorRules, providerAuditPrivacyRules()...)
+	operatorPolicy := typedLicensedPrivacyPolicy[providerOperatorAuthorityPayload](operatorRules...)
 	breakGlassPolicy := providerPolicy[providerBreakGlassAuthorityPayload](
 		licensedPrivacyRule("/break_glass_grant/operator_id", events.PrivacyFieldIdentityExact),
 		licensedPrivacyRule("/break_glass_grant/operator_email", events.PrivacyFieldIdentityExact),
@@ -225,9 +242,12 @@ var licensedProductionPrivacyEventCatalog = func() []licensedPrivacyEventPolicy 
 	catalog := []licensedPrivacyEventPolicy{
 		entry(provider.AuditTenantProvisioned, 1, tenantPolicy),
 		entry(provider.AuditTenantSuspended, 1, tenantPolicy),
+		entry(provider.AuditTenantResumed, 1, tenantPolicy),
 		entry(provider.AuditTenantOffboarded, 1, tenantPolicy),
 		entry(provider.EventDelegationGranted, 1, delegationPolicy),
 		entry(provider.EventDelegationRevoked, 1, delegationPolicy),
+		entry(provider.EventOperatorUpserted, 1, operatorPolicy),
+		entry(provider.EventOperatorOffboarded, 1, operatorPolicy),
 		entry(provider.EventTenantQuotaSet, 1, providerPolicy[providerQuotaAuthorityPayload](
 			licensedPrivacyRule("/quota/updated_by", events.PrivacyFieldIdentityExact),
 		)),

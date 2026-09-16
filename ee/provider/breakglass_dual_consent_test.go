@@ -20,12 +20,14 @@ func breakGlassService(t *testing.T) *Service {
 	}
 	audit := &captureAudit{}
 	return NewService(Config{
-		License:     providerLicense(t, 10),
-		Store:       store,
-		Audit:       audit,
-		Telemetry:   &auditCheckingTelemetry{audit: audit},
-		Clock:       fixedClock(),
-		Delegations: fullyDelegated("op-1", "tenant-x"),
+		License:   providerLicense(t, 10),
+		Store:     store,
+		Audit:     audit,
+		Telemetry: &auditCheckingTelemetry{audit: audit},
+		Clock:     fixedClock(),
+		Delegations: append(fullyDelegated("op-1", "tenant-x"),
+			Delegation{OperatorID: "approver-a", CustomerID: "tenant-x", Operations: []Operation{OpBreakGlass}},
+			Delegation{OperatorID: "approver-b", CustomerID: "tenant-x", Operations: []Operation{OpBreakGlass}}),
 	})
 }
 
@@ -47,7 +49,7 @@ func TestBreakGlassRequiresTwoDistinctApprovers(t *testing.T) {
 	op := providerOperator("op-1")
 	grant := requestGrant(t, svc)
 
-	g, err := svc.ConsentBreakGlass(ctx, "tenant-x", grant.ID, "approver-a", true)
+	g, err := svc.ConsentBreakGlass(ctx, providerOperator("approver-a"), "tenant-x", grant.ID, true)
 	if err != nil {
 		t.Fatalf("first consent: %v", err)
 	}
@@ -58,7 +60,7 @@ func TestBreakGlassRequiresTwoDistinctApprovers(t *testing.T) {
 		t.Fatalf("access after one consent = %v, want refused", err)
 	}
 
-	g, err = svc.ConsentBreakGlass(ctx, "tenant-x", grant.ID, "approver-b", true)
+	g, err = svc.ConsentBreakGlass(ctx, providerOperator("approver-b"), "tenant-x", grant.ID, true)
 	if err != nil {
 		t.Fatalf("second consent: %v", err)
 	}
@@ -77,7 +79,7 @@ func TestBreakGlassRequesterCannotApprove(t *testing.T) {
 	svc := breakGlassService(t)
 	grant := requestGrant(t, svc) // requester is op-1
 
-	if _, err := svc.ConsentBreakGlass(ctx, "tenant-x", grant.ID, "op-1", true); !errors.Is(err, ErrBreakGlassConsentByRequester) {
+	if _, err := svc.ConsentBreakGlass(ctx, providerOperator("op-1"), "tenant-x", grant.ID, true); !errors.Is(err, ErrBreakGlassConsentByRequester) {
 		t.Fatalf("requester self-approval = %v, want ErrBreakGlassConsentByRequester", err)
 	}
 }
@@ -91,10 +93,10 @@ func TestBreakGlassCoConsentMustBeDistinct(t *testing.T) {
 	op := providerOperator("op-1")
 	grant := requestGrant(t, svc)
 
-	if _, err := svc.ConsentBreakGlass(ctx, "tenant-x", grant.ID, "approver-a", true); err != nil {
+	if _, err := svc.ConsentBreakGlass(ctx, providerOperator("approver-a"), "tenant-x", grant.ID, true); err != nil {
 		t.Fatalf("first consent: %v", err)
 	}
-	if _, err := svc.ConsentBreakGlass(ctx, "tenant-x", grant.ID, "approver-a", true); !errors.Is(err, ErrBreakGlassConsentNotDistinct) {
+	if _, err := svc.ConsentBreakGlass(ctx, providerOperator("approver-a"), "tenant-x", grant.ID, true); !errors.Is(err, ErrBreakGlassConsentNotDistinct) {
 		t.Fatalf("same approver twice = %v, want ErrBreakGlassConsentNotDistinct", err)
 	}
 	// The grant is still only singly-consented, so access stays refused.
@@ -111,10 +113,10 @@ func TestBreakGlassSecondApproverCanDeny(t *testing.T) {
 	op := providerOperator("op-1")
 	grant := requestGrant(t, svc)
 
-	if _, err := svc.ConsentBreakGlass(ctx, "tenant-x", grant.ID, "approver-a", true); err != nil {
+	if _, err := svc.ConsentBreakGlass(ctx, providerOperator("approver-a"), "tenant-x", grant.ID, true); err != nil {
 		t.Fatalf("first consent: %v", err)
 	}
-	g, err := svc.ConsentBreakGlass(ctx, "tenant-x", grant.ID, "approver-b", false)
+	g, err := svc.ConsentBreakGlass(ctx, providerOperator("approver-b"), "tenant-x", grant.ID, false)
 	if err != nil {
 		t.Fatalf("second-approver denial: %v", err)
 	}

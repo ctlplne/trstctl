@@ -609,10 +609,12 @@ func TestEveryProviderMutationConvergesAcrossPostAppendFailure(t *testing.T) {
 		Activity:      NewEventLogActivitySource(log),
 		Idempotency:   orchestrator.NewIdempotency(st),
 		Authenticator: authorityAuthenticator{},
-		Delegations:   fullyDelegated("op-1", tenantID),
-		Quotas:        billing.NewPGStore(st),
-		Brands:        authorityBrandCache{},
-		Telemetry:     NewPGStore(st),
+		Delegations: append(fullyDelegated("op-1", tenantID),
+			Delegation{OperatorID: "approver-a", CustomerID: tenantID, Operations: []Operation{OpBreakGlass}},
+			Delegation{OperatorID: "approver-b", CustomerID: tenantID, Operations: []Operation{OpBreakGlass}}),
+		Quotas:    billing.NewPGStore(st),
+		Brands:    authorityBrandCache{},
+		Telemetry: NewPGStore(st),
 		Drills: &stubDriller{report: IsolationDrillReport{
 			Passed: true, Checks: []IsolationDrillCheck{{Name: "cross_tenant_read_denied", Passed: true}},
 		}},
@@ -672,6 +674,8 @@ func TestEveryProviderMutationConvergesAcrossPostAppendFailure(t *testing.T) {
 		`{"product_name":"Crash Trust","custom_domain":"trust.crash.test"}`, EventTenantBrandSet, http.StatusNoContent)
 	crashAndHeal(http.MethodPost, "/provider/v1/tenants/"+tenantID+"/suspend", "Bearer requester", "crash-suspend-1",
 		`{}`, AuditTenantSuspended, http.StatusNoContent)
+	crashAndHeal(http.MethodPost, "/provider/v1/tenants/"+tenantID+"/resume", "Bearer requester", "crash-resume-1",
+		`{}`, AuditTenantResumed, http.StatusNoContent)
 	grantResponse := crashAndHeal(http.MethodPost, "/provider/v1/breakglass", "Bearer requester", "crash-breakglass-request-1",
 		fmt.Sprintf(`{"tenant_id":%q,"reason":"incident","ttl":"15m"}`, tenantID), AuditBreakGlassRequested, http.StatusCreated)
 	var grant BreakGlassGrant
@@ -703,8 +707,8 @@ func TestEveryProviderMutationConvergesAcrossPostAppendFailure(t *testing.T) {
 	if err := json.Unmarshal(activityResponse.Body.Bytes(), &activity); err != nil {
 		t.Fatalf("decode provider activity: %v", err)
 	}
-	if len(activity.Items) != 10 {
-		t.Fatalf("provider activity items = %d, want all 10 immutable mutations: %#v", len(activity.Items), activity.Items)
+	if len(activity.Items) != 11 {
+		t.Fatalf("provider activity items = %d, want all 11 immutable mutations: %#v", len(activity.Items), activity.Items)
 	}
 	if activity.Items[0].Type != AuditTenantOffboarded || activity.Items[0].TenantID != tenantID {
 		t.Fatalf("newest provider activity = %#v, want offboard for %s", activity.Items[0], tenantID)

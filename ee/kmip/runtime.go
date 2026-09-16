@@ -80,6 +80,7 @@ func NewFactory() server.KMIPFactory {
 		if err != nil {
 			return nil, fmt.Errorf("restore KMIP managed-object state: %w", err)
 		}
+		service.tenantServiceCheck = d.TenantServiceCheck
 		return &Runtime{
 			addr:         addr,
 			certFile:     cfg.CertFile,

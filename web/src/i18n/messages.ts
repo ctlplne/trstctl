@@ -15149,6 +15149,14 @@ export const messages = {
     defaultMessage: "Suspend",
     description: "L3: suspend action.",
   },
+  "source.provider.resume.confirm.qa1850001": {
+    defaultMessage: "Resume this suspended customer? Their provider status will return to active.",
+    description: "Provider customer resume confirmation.",
+  },
+  "source.provider.resume.action.qa1850002": {
+    defaultMessage: "Resume",
+    description: "Provider customer resume action.",
+  },
   "source.provider.offboard.confirm.l3prov0020": {
     defaultMessage: "Offboard this customer? This begins deleting their tenancy and cannot be undone.",
     description: "L3: offboard confirmation.",

@@ -116,7 +116,9 @@ func TestBreakGlassRequiresConsentAndAuditsBeforeTenantData(t *testing.T) {
 		Clock:     fixedClock(),
 		// Delegated everything, so what this test observes is the break-glass
 		// consent gate rather than a missing grant refusing first.
-		Delegations: fullyDelegated("op-1", CustomerID("alpha")),
+		Delegations: append(fullyDelegated("op-1", CustomerID("alpha")),
+			Delegation{OperatorID: "tenant-admin@example.test", CustomerID: CustomerID("alpha"), Operations: []Operation{OpBreakGlass}},
+			Delegation{OperatorID: "tenant-admin-2@example.test", CustomerID: CustomerID("alpha"), Operations: []Operation{OpBreakGlass}}),
 	})
 	op := providerOperator("op-1")
 	tenant, err := svc.Provision(ctx, op, ProvisionRequest{Slug: "alpha", Name: "Alpha"})
@@ -138,7 +140,7 @@ func TestBreakGlassRequiresConsentAndAuditsBeforeTenantData(t *testing.T) {
 	if _, err := svc.BreakGlassResults(ctx, op, grant.ID); !errors.Is(err, ErrBreakGlassNotConsented) {
 		t.Fatalf("unconsented break-glass error = %v, want ErrBreakGlassNotConsented", err)
 	}
-	if _, err := svc.ConsentBreakGlass(ctx, tenant.ID, grant.ID, "tenant-admin@example.test", true); err != nil {
+	if _, err := svc.ConsentBreakGlass(ctx, providerOperator("tenant-admin@example.test"), tenant.ID, grant.ID, true); err != nil {
 		t.Fatalf("tenant consent: %v", err)
 	}
 	// L4 dual consent: one approval leaves the grant awaiting a co-approver, so
@@ -146,7 +148,7 @@ func TestBreakGlassRequiresConsentAndAuditsBeforeTenantData(t *testing.T) {
 	if _, err := svc.BreakGlassResults(ctx, op, grant.ID); !errors.Is(err, ErrBreakGlassNotConsented) {
 		t.Fatalf("singly-consented break-glass error = %v, want ErrBreakGlassNotConsented", err)
 	}
-	if _, err := svc.ConsentBreakGlass(ctx, tenant.ID, grant.ID, "tenant-admin-2@example.test", true); err != nil {
+	if _, err := svc.ConsentBreakGlass(ctx, providerOperator("tenant-admin-2@example.test"), tenant.ID, grant.ID, true); err != nil {
 		t.Fatalf("co-consent: %v", err)
 	}
 	if _, err := svc.BreakGlassResults(ctx, providerOperator("op-2"), grant.ID); !errors.Is(err, ErrBreakGlassWrongOperator) {

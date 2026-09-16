@@ -17,6 +17,7 @@ import (
 
 	trstcrypto "trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenancy"
 )
 
 // Message is one external call to perform, as recorded in the outbox. The
@@ -302,6 +303,7 @@ func IsDefiniteNoEffect(err error) bool {
 // outside this repository package because it is a deliberate cross-tenant system
 // operation, like the idempotency-key GC.
 type Outbox struct {
+	tenantServiceCheck        tenancy.ServiceCheck
 	store                     *store.Store
 	backoff                   func(attempts int) time.Duration
 	jitter                    func(time.Duration) time.Duration
@@ -323,6 +325,12 @@ type Outbox struct {
 
 // Option configures an Outbox.
 type Option func(*Outbox)
+
+// WithTenantServiceCheck refuses new deliveries for a paused tenant without
+// spending its retry budget. Resume makes the same pending intent eligible.
+func WithTenantServiceCheck(check tenancy.ServiceCheck) Option {
+	return func(o *Outbox) { o.tenantServiceCheck = check }
+}
 
 // WithBackoff sets the delay before a failed entry becomes eligible for retry,
 // as a function of the new attempt count.
@@ -757,6 +765,9 @@ func (o *Outbox) dispatchClaim(ctx context.Context, h Handler, claim claimedOutb
 }
 
 func (o *Outbox) deliver(ctx context.Context, h Handler, claim claimedOutboxEntry) error {
+	if err := o.tenantServiceCheck.Check(ctx, claim.msg.TenantID); err != nil {
+		return DeferDelivery(err)
+	}
 	deliverCtx := ctx
 	cancel := func() {}
 	if o.deliveryTimeout > 0 {

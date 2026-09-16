@@ -26,8 +26,9 @@ service to business units, or an evaluator checking those claims.
 - An Enterprise Provider license from the vendor, installed the way
   [Plan and license](../editions.md) describes: a `0600` file supplied to both
   the control plane and the isolated signer with its bound deployment ID and
-  environment. The provider plane is absent from an unlicensed build and stays
-  read-only under a grace or expired posture.
+  environment. The provider plane is absent from an unlicensed build. After
+  license expiry, a 30-day grace period preserves full functionality; afterward commercial
+  features become read-only.
 - A provider-operator identity source pinned offline
   ([configuration](../configuration.md), `TRSTCTL_PROVIDER_OIDC_*` or the SAML
   service provider). Operators are identified by your identity provider; the
@@ -44,8 +45,10 @@ service to business units, or an evaluator checking those claims.
 Open **Plan and license** (`/admin/editions`). The opening card must read
 *Provider* with an *Active* state, and **Signature verification** must show the
 offline signature verified against the vendor key and the deployment binding your
-operator configured. If it reads Community, the binaries do not trust the key that
-signed your license; if it reads Grace or Read-only, the plane refuses mutations.
+operator configured. Community means no Provider entitlement is active; check
+the license configuration on both processes. An invalid signature or deployment
+binding fails startup. Grace retains full functionality for 30 days after expiry.
+Read-only refuses mutations while retaining delegated reads.
 
 ### 2. Sign in as a provider operator
 
@@ -109,6 +112,45 @@ Changing the invoice customer or period clears the displayed health and evidence
 Pull the newly selected period before downloading it; a response from an earlier
 selection cannot populate the new customer or mark its signature as verified.
 
+### Pause and resume a customer
+
+An administrator with that customer's `suspend` grant can choose **Suspend** in
+Customers. To restore a suspended customer, an administrator needs the separate
+`resume` grant and chooses **Resume**, then confirms. Refreshing the customer row
+shows the resulting state; Recent activity records `provider.tenant_resume` with
+the customer and operator. A suspend grant alone cannot reactivate a customer,
+and an offboarded customer cannot be resumed.
+
+Automation uses `POST /provider/v1/tenants/{id}/resume` with its own
+`Idempotency-Key`. A successful request returns204; its identical retry replays
+that result without another state change. A new request for a customer that is
+not suspended returns409 `customer_state_conflict` after authorization.
+
+### Request and approve emergency access
+
+Emergency access requires a requester and two distinct approvers. All three
+must authenticate with MFA and hold the customer's `break-glass` operation;
+ordinary `read` authority is insufficient. The requester cannot approve their
+own request. The Provider console does not yet offer this workflow; use the
+Provider API with each person's own short-lived operator credential.
+
+The requester sends `POST /provider/v1/breakglass` with
+`{"tenant_id":"CUSTOMER_ID","reason":"Incident diagnosis","ttl":"15m"}`.
+Each approver sends `POST /provider/v1/breakglass/{grant_id}/consent` with
+`{"tenant_id":"CUSTOMER_ID","approve":true}`. Do not supply a `subject`:
+the server derives the approver from the verified identity. Each mutation needs
+its own `Idempotency-Key`. Approval and denial both require current MFA,
+customer delegation, and a writable license. `approve:false` denies the request
+and stops it from being used, even after the first approval.
+
+After both approvals, only the requester can send
+`POST /provider/v1/breakglass/{grant_id}/results` to obtain the customer snapshot.
+The server rechecks the requester's delegation and grant expiry, records the
+access, then reads the customer data. A single approval opens no access. An
+identical retry replays its original outcome; after fixing a refused request,
+use a new idempotency key. These emergency approvals do not grant lifecycle
+operations such as suspend or offboard.
+
 ### 6. Prove the refusals
 
 - Revoke or let a delegation expire, then repeat a read or mutation for that
@@ -119,9 +161,9 @@ selection cannot populate the new customer or mark its signature as verified.
 - An operator whose grant lacks `offboard` cannot offboard; offboarding is
   preview-only until a break-glass grant is used, and that grant is re-checked at
   use, not only at request time.
-- A license bound to a different deployment ID, or an expired license, fails
-  startup or drops the plane to read-only with sanitized language; it never widens
-  access.
+- A license bound to a different deployment ID fails startup. An expired license
+  retains its existing authority during the 30-day grace period and drops the plane to read-only afterward; neither state
+  widens access.
 
 ## What you have now
 

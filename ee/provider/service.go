@@ -22,6 +22,7 @@ import (
 const (
 	AuditTenantProvisioned   = "provider.tenant_provision"
 	AuditTenantSuspended     = "provider.tenant_suspend"
+	AuditTenantResumed       = "provider.tenant_resume"
 	AuditTenantOffboarded    = "provider.tenant_offboard"
 	AuditBreakGlassRequested = "provider.breakglass_request"
 	AuditBreakGlassConsented = "provider.breakglass_consent"
@@ -438,6 +439,11 @@ func (s *Service) Suspend(ctx context.Context, actor Operator, tenantID string) 
 	return s.setTenantStatus(ctx, actor, tenantID, TenantSuspended, AuditTenantSuspended)
 }
 
+// Resume reactivates a suspended customer under its own explicit delegation.
+func (s *Service) Resume(ctx context.Context, actor Operator, tenantID string) error {
+	return s.setTenantStatus(ctx, actor, tenantID, TenantActive, AuditTenantResumed)
+}
+
 func (s *Service) Offboard(ctx context.Context, actor Operator, tenantID string) error {
 	return s.setTenantStatus(ctx, actor, tenantID, TenantOffboarded, AuditTenantOffboarded)
 }
@@ -525,11 +531,17 @@ func (s *Service) RequestBreakGlass(ctx context.Context, actor Operator, req Bre
 	return grant, nil
 }
 
-func (s *Service) ConsentBreakGlass(ctx context.Context, tenantID, grantID, subject string, approve bool) (BreakGlassGrant, error) {
-	if s.license.Mode(license.FeatureProviderPlane) == license.ModeOff {
-		return BreakGlassGrant{}, ErrUnlicensed
+// ConsentBreakGlass applies the same live customer authority to approvals and
+// denials. An authenticated name alone cannot approve or veto another
+// customer's emergency request.
+func (s *Service) ConsentBreakGlass(ctx context.Context, actor Operator, tenantID, grantID string, approve bool) (BreakGlassGrant, error) {
+	if err := s.requireMutation(actor, false); err != nil {
+		return BreakGlassGrant{}, err
 	}
-	subject = strings.TrimSpace(subject)
+	if err := s.authorize(ctx, actor, tenantID, OpBreakGlass); err != nil {
+		return BreakGlassGrant{}, err
+	}
+	subject := strings.TrimSpace(actor.ID)
 	grant, err := s.store.BreakGlassGrant(ctx, grantID)
 	if err != nil {
 		return BreakGlassGrant{}, err
@@ -699,6 +711,17 @@ func (s *Service) BreakGlassResults(ctx context.Context, actor Operator, grantID
 }
 
 func (s *Service) setTenantStatus(ctx context.Context, actor Operator, tenantID string, status TenantStatus, auditType string) error {
+	if locker, ok := s.store.(interface {
+		WithLifecycleMutation(context.Context, func(context.Context) error) error
+	}); ok {
+		return locker.WithLifecycleMutation(ctx, func(locked context.Context) error {
+			return s.setTenantStatusLocked(locked, actor, tenantID, status, auditType)
+		})
+	}
+	return s.setTenantStatusLocked(ctx, actor, tenantID, status, auditType)
+}
+
+func (s *Service) setTenantStatusLocked(ctx context.Context, actor Operator, tenantID string, status TenantStatus, auditType string) error {
 	if err := s.requireMutation(actor, true); err != nil {
 		return err
 	}
@@ -707,11 +730,7 @@ func (s *Service) setTenantStatus(ctx context.Context, actor Operator, tenantID 
 	// trusted with the second, so the operation is derived from the status
 	// rather than folded into one "may change status" permission.
 	//
-	// The mapping is TOTAL rather than "offboard, else suspend". There is no
-	// resume route today, so OpResume is granted and never checked — but the
-	// day one is added, a defaulting map would authorise resuming a customer
-	// with a suspend grant, and "may pause" would silently become "may
-	// un-pause" for every operator who already had it.
+	// Every status uses its exact grant; permission to pause is not permission to resume.
 	var op Operation
 	switch status {
 	case TenantOffboarded:
@@ -731,6 +750,12 @@ func (s *Service) setTenantStatus(ctx context.Context, actor Operator, tenantID 
 	tenant, err := s.store.Tenant(ctx, tenantID)
 	if err != nil {
 		return err
+	}
+	if tenant.Status == TenantOffboarded && status != TenantOffboarded {
+		return ErrTenantStateConflict
+	}
+	if status == TenantActive && tenant.Status != TenantSuspended {
+		return ErrTenantStateConflict
 	}
 	now := s.clock()
 	tenant.Status, tenant.UpdatedAt = status, now

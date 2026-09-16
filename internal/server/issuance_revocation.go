@@ -72,16 +72,24 @@ func (d *issuanceDispatcher) handleRevoke(ctx context.Context, m orchestrator.Me
 		if err != nil {
 			return nil, err
 		}
+		var memberErrors []error
 		for _, cert := range certs {
 			origin := origins[cert.Fingerprint]
 			if origin.ExternalID != "" {
 				if err := d.revokeExternalCertificate(ctx, m.TenantID, origin.ExternalID, cert, reason); err != nil {
-					return nil, err
+					// A refused predecessor must not prevent the live successor
+					// from reaching its own issuer. Keep the failure retryable;
+					// only confirmed members receive revocation events.
+					memberErrors = append(memberErrors, err)
+					continue
 				}
 			}
 			if err := d.orch.RevokeCertificateForCA(ctx, m.TenantID, cert.Fingerprint, cert.Serial, origin.CAID, reason, crypto.CRLReasonCode(crypto.RevocationReason(reason)), time.Now().UTC()); err != nil {
-				return nil, err
+				memberErrors = append(memberErrors, err)
 			}
+		}
+		if err := errors.Join(memberErrors...); err != nil {
+			return nil, err
 		}
 		if more {
 			return nil, orchestrator.DeferDelivery(errors.New("server: confirmed one revocation page; further exact certificates remain"))

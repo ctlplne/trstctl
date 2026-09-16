@@ -526,6 +526,8 @@ func (h *providerSCIMHandler) writeMutationError(w http.ResponseWriter, err erro
 		writeProviderSCIMError(w, http.StatusNotFound, "", "user not found")
 	case errors.Is(err, ErrMutationConflict):
 		writeProviderSCIMError(w, http.StatusConflict, "uniqueness", "idempotency key was reused for a different SCIM command")
+	case errors.Is(err, ErrMutationPersistence):
+		writeProviderSCIMError(w, http.StatusInternalServerError, "", "provider workforce change could not be recorded; retry the same command")
 	default:
 		writeProviderSCIMError(w, http.StatusBadRequest, "invalidValue", err.Error())
 	}

@@ -200,7 +200,9 @@ func TestBreakGlassIsRecheckedAtUseNotOnlyAtRequest(t *testing.T) {
 	}
 	audit := &captureAudit{}
 	// A source whose answer can be revoked between request and use.
-	revocable := &mutableDelegations{set: fullyDelegated("op-1", "tenant-alpha")}
+	revocable := &mutableDelegations{set: append(fullyDelegated("op-1", "tenant-alpha"),
+		Delegation{OperatorID: "customer-admin", CustomerID: "tenant-alpha", Operations: []Operation{OpBreakGlass}},
+		Delegation{OperatorID: "customer-admin-2", CustomerID: "tenant-alpha", Operations: []Operation{OpBreakGlass}})}
 	svc := NewService(Config{
 		License:     providerLicense(t, 10),
 		Store:       store,
@@ -218,12 +220,12 @@ func TestBreakGlassIsRecheckedAtUseNotOnlyAtRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request break-glass while delegated: %v", err)
 	}
-	if _, err := svc.ConsentBreakGlass(ctx, "tenant-alpha", grant.ID, "customer-admin", true); err != nil {
+	if _, err := svc.ConsentBreakGlass(ctx, providerOperator("customer-admin"), "tenant-alpha", grant.ID, true); err != nil {
 		t.Fatalf("consent: %v", err)
 	}
 	// L4 dual consent: a second distinct approver is required before the grant
 	// is active and this revocation test is meaningful.
-	if _, err := svc.ConsentBreakGlass(ctx, "tenant-alpha", grant.ID, "customer-admin-2", true); err != nil {
+	if _, err := svc.ConsentBreakGlass(ctx, providerOperator("customer-admin-2"), "tenant-alpha", grant.ID, true); err != nil {
 		t.Fatalf("co-consent: %v", err)
 	}
 

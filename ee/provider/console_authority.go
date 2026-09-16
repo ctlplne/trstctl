@@ -25,6 +25,7 @@ type ConsoleCustomerAuthority struct {
 	WriteQuota bool `json:"write_quota"`
 	WriteBrand bool `json:"write_brand"`
 	Suspend    bool `json:"suspend"`
+	Resume     bool `json:"resume"`
 	Offboard   bool `json:"offboard"`
 }
 
@@ -58,6 +59,7 @@ func (s *Service) consoleAuthority(ctx context.Context, actor Operator) ConsoleA
 			WriteQuota: provision && s.quotas != nil,
 			WriteBrand: provision && s.brands != nil,
 			Suspend:    canWrite && set.Authorize(actor, customer, OpSuspend) == nil,
+			Resume:     canWrite && set.Authorize(actor, customer, OpResume) == nil,
 			Offboard:   canWrite && set.Authorize(actor, customer, OpOffboard) == nil,
 		}
 	}

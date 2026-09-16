@@ -33,6 +33,7 @@ import (
 	"trstctl.com/trstctl/internal/privacy"
 	acmesrv "trstctl.com/trstctl/internal/protocols/acme"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenancy"
 	"trstctl.com/trstctl/internal/tenantseal"
 )
 
@@ -45,8 +46,9 @@ const (
 // (AN-5), and the lifecycle orchestrator, resolves the tenant and principal per
 // request, and enforces RBAC (F8) on every guarded route.
 type API struct {
-	store *store.Store
-	log   *events.Log
+	tenantServiceCheck tenancy.ServiceCheck
+	store              *store.Store
+	log                *events.Log
 	// policyVersionMemo memoizes the policy-version projection against the
 	// event-log head so GET /api/v1/policy/versions stops replaying the whole
 	// log per request.
@@ -181,6 +183,7 @@ type API struct {
 type Option func(*config)
 
 type config struct {
+	tenantServiceCheck tenancy.ServiceCheck
 	// backupDir is the full-backup directory this API reports DR posture on
 	// (J2). Empty means none is configured.
 	backupDir string
@@ -488,6 +491,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	}
 	specialAbuseLimits := cfg.specialAbuseLimits.withDefaults()
 	a := &API{
+		tenantServiceCheck:          cfg.tenantServiceCheck,
 		store:                       st,
 		log:                         cfg.eventLog,
 		idem:                        idem,
@@ -1702,6 +1706,9 @@ func (a *API) guard(perm authz.Permission, scope routeScope, h http.HandlerFunc)
 			a.writeProblem(w, problem.New(http.StatusForbidden, "authenticated tenant does not match X-Tenant-ID"))
 			return
 		}
+		if !a.allowTenantService(w, r, principal.TenantID) {
+			return
+		}
 		// CSRF defense for the cookie-session path (SEC-007): a session-authenticated
 		// mutating request must carry a matching double-submit token. enforceCSRF is a
 		// no-op for bearer-token callers (CSRF-immune), safe methods, and non-session
@@ -1758,6 +1765,9 @@ func (a *API) guard(perm authz.Permission, scope routeScope, h http.HandlerFunc)
 }
 
 func (a *API) allowTenantRequest(w http.ResponseWriter, r *http.Request, tenantID string) bool {
+	if !a.allowTenantService(w, r, tenantID) {
+		return false
+	}
 	if a.rateLimiter == nil {
 		return true
 	}

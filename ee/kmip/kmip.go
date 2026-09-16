@@ -21,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/tenancy"
 	"trstctl.com/trstctl/internal/tenantseal"
 )
 
@@ -80,15 +81,16 @@ type ManagedObjectView struct {
 
 // Server is the KMIP server.
 type Server struct {
-	tenantID string
-	auth     Authenticator
-	audit    auditsink.Auditor
-	log      *events.Log
-	wrapper  seal.KeyWrapper
-	crypto   tenantseal.Access
-	mu       sync.Mutex
-	objects  map[string]*ManagedObject
-	n        int
+	tenantServiceCheck tenancy.ServiceCheck
+	tenantID           string
+	auth               Authenticator
+	audit              auditsink.Auditor
+	log                *events.Log
+	wrapper            seal.KeyWrapper
+	crypto             tenantseal.Access
+	mu                 sync.Mutex
+	objects            map[string]*ManagedObject
+	n                  int
 }
 
 // New constructs a KMIP Server.
@@ -162,6 +164,9 @@ func (s *Server) authClient(ctx context.Context, op string, clientCertDER []byte
 	if !ok {
 		_ = auditsink.Emit(ctx, s.audit, nil, "kmip.unauthenticated", s.tenantID, []byte(fmt.Sprintf(`{"op":%q}`, op)))
 		return "", fmt.Errorf("kmip: client certificate not authenticated")
+	}
+	if err := s.tenantServiceCheck.Check(ctx, s.tenantID); err != nil {
+		return "", err
 	}
 	return id, nil
 }

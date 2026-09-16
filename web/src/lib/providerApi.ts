@@ -105,13 +105,14 @@ export interface ProviderTenantSnapshot {
 }
 
 export type ProviderOperatorRole = "admin" | "operator";
-export type ProviderOperation = "read" | "provision" | "suspend" | "offboard" | "break_glass";
+export type ProviderOperation = "read" | "provision" | "suspend" | "resume" | "offboard" | "break-glass";
 
 export interface ProviderConsoleCustomerAuthority {
   read_quota: boolean;
   write_quota: boolean;
   write_brand: boolean;
   suspend: boolean;
+  resume: boolean;
   offboard: boolean;
 }
 
@@ -411,6 +412,8 @@ export const providerApi = {
     providerReq<ProviderTenant>("/provider/v1/tenants", { method: "POST", body: JSON.stringify(input) }),
   suspendTenant: (id: string): Promise<void> =>
     providerReq<void>(`/provider/v1/tenants/${encodeURIComponent(id)}/suspend`, { method: "POST", body: JSON.stringify({}) }),
+  resumeTenant: (id: string): Promise<void> =>
+    providerReq<void>(`/provider/v1/tenants/${encodeURIComponent(id)}/resume`, { method: "POST", body: JSON.stringify({}) }),
   offboardTenant: (id: string): Promise<void> =>
     providerReq<void>(`/provider/v1/tenants/${encodeURIComponent(id)}/offboard`, { method: "POST", body: JSON.stringify({}) }),
   getQuota: (id: string): Promise<ProviderQuota> => providerReq<ProviderQuota>(`/provider/v1/tenants/${encodeURIComponent(id)}/quota`),

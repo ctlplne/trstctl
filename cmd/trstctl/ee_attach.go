@@ -407,6 +407,7 @@ func attachEEProviderAPI(
 	// One event-projected directory is the request-time leaver gate for BOTH
 	// cryptographic identity methods. Without SCIM, legacy OIDC remains usable;
 	// when SCIM is enabled an absent/inactive row refuses even a valid token.
+	deps.TenantServiceCheck = eeprovider.NewPGStore(deps.Store).RequireCustomerService
 	access := eeprovider.NewPGAccessStore(deps.Store)
 	operatorAuthenticators := eeprovider.AnyAuthenticator{}
 	oidc, err := providerOIDCAuthenticator(cfg, access)

@@ -21,7 +21,6 @@ import {
   type ProviderQuota,
   type ProviderBrand,
   type ProviderDrillReport,
-  type ProviderActivity,
 } from "@/lib/providerApi";
 
 /**
@@ -70,7 +69,18 @@ export function Provider() {
 // the tenant shell's longer-lived cache. Public attachment checks stay outside.
 function ProviderSessionQueries({ children }: { children: ReactNode }) {
   const [client] = useState(createAppQueryClient);
-  useEffect(() => () => client.clear(), [client]);
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === "visible") {
+        void client.invalidateQueries({ predicate: (query) => query.meta?.live === true }, { cancelRefetch: false });
+      }
+    };
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      document.removeEventListener("visibilitychange", refresh);
+      client.clear();
+    };
+  }, [client]);
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
@@ -302,8 +312,26 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
       onSignOut();
     }
   }, [session.errorValue, onSignOut]);
-  const [tenants, setTenants] = useState<ProviderTenant[] | null>(null);
-  const [activity, setActivity] = useState<ProviderActivity[] | null>(null);
+  // A change in effective authority gets a separate read. A late response
+  // for an old grant cannot repopulate the current customer or billing view.
+  const customers = useApiQuery(["provider", "customers", session.data?.id, authority ?? null], providerApi.listTenants, {
+    enabled: !!authority,
+    retry: false,
+    live: { intervalMs: 15_000 },
+  });
+  const activityQuery = useApiQuery(["provider", "activity", session.data?.id, authority ?? null], providerApi.listActivity, {
+    enabled: !!authority,
+    retry: false,
+    live: { intervalMs: 15_000 },
+  });
+  const tenants = authority ? (customers.data?.filter((tenant) => authority.customers[tenant.id]) ?? null) : null;
+  const activity = authority ? activityQuery.data : null;
+  useEffect(() => {
+    if (customers.errorValue instanceof ProviderAuthError || activityQuery.errorValue instanceof ProviderAuthError) {
+      clearProviderToken();
+      onSignOut();
+    }
+  }, [customers.errorValue, activityQuery.errorValue, onSignOut]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [slug, setSlug] = useState("");
@@ -324,7 +352,7 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
     setError(null);
     try {
       setDrill(await providerApi.runIsolationDrill());
-      setActivity(await providerApi.listActivity());
+      await queryClient.invalidateQueries({ queryKey: ["provider", "activity"] });
     } catch (err) {
       if (err instanceof ProviderAuthError) {
         clearProviderToken();
@@ -334,7 +362,7 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
       setDrill(null);
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [onSignOut]);
+  }, [onSignOut, queryClient]);
 
   const viewQuota = useCallback(
     async (id: string) => {
@@ -358,26 +386,11 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
   );
 
   const load = useCallback(async () => {
-    setError(null);
-    try {
-      const [customerTenants, authorityActivity] = await Promise.all([providerApi.listTenants(), providerApi.listActivity()]);
-      setTenants(customerTenants);
-      setActivity(authorityActivity);
-    } catch (err) {
-      if (err instanceof ProviderAuthError) {
-        // The token expired or was refused. Drop it and send the operator back
-        // to the gate rather than showing a red error over a stale session.
-        clearProviderToken();
-        onSignOut();
-        return;
-      }
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }, [onSignOut]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["provider", "customers"] }),
+      queryClient.invalidateQueries({ queryKey: ["provider", "activity"] }),
+    ]);
+  }, [queryClient]);
 
   const act = useCallback(
     async (fn: () => Promise<void>) => {
@@ -428,7 +441,9 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
         </Button>
       </header>
 
-      {error ? <p className="mt-3 text-caption text-status-danger">{error}</p> : null}
+      {error || customers.error || activityQuery.error ? (
+        <p className="mt-3 text-caption text-status-danger">{error || customers.error || activityQuery.error}</p>
+      ) : null}
 
       {session.loading ? (
         <p className="mt-3 text-caption text-muted-foreground">{translateNow("capabilities.loading")}</p>
@@ -550,7 +565,9 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
         {!tenants ? (
           <p className="mt-2 text-caption text-muted-foreground">{translateNow("source.loading.4f9d1e0e3a")}</p>
         ) : tenants.length === 0 ? (
-          <p className="mt-2 text-caption text-muted-foreground">{translateNow("source.provider.none.l3prov0012")}</p>
+          <p className="mt-2 text-caption text-muted-foreground">
+            {translateNow(authority?.provision ? "source.provider.none.l3prov0012" : "source.provider.access.none.aud580015")}
+          </p>
         ) : (
           <div className="mt-2 overflow-x-auto">
             <table className="w-full text-caption">
@@ -584,6 +601,21 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
                             }}
                           >
                             {translateNow("source.provider.suspend.l3prov0019")}
+                          </Button>
+                        ) : null}
+                        {tenant.status === "suspended" && authority?.customers[tenant.id]?.resume ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={busy}
+                            onClick={() => {
+                              if (window.confirm(translateNow("source.provider.resume.confirm.qa1850001"))) {
+                                void act(() => providerApi.resumeTenant(tenant.id));
+                              }
+                            }}
+                          >
+                            {translateNow("source.provider.resume.action.qa1850002")}
                           </Button>
                         ) : null}
                         {tenant.status !== "offboarded" && authority?.customers[tenant.id]?.offboard ? (

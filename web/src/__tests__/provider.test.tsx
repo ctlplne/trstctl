@@ -12,6 +12,7 @@ const { providerMock } = vi.hoisted(() => ({
     listActivity: vi.fn(),
     provisionTenant: vi.fn(),
     suspendTenant: vi.fn(),
+    resumeTenant: vi.fn(),
     offboardTenant: vi.fn(),
     getQuota: vi.fn(),
     setQuota: vi.fn(),
@@ -74,7 +75,12 @@ describe("provider console (L3)", () => {
           access_write: true,
           provision: true,
           isolation_drill: true,
-          customers: { "t-1": { read_quota: true, write_quota: true, write_brand: true, suspend: true, offboard: true } },
+          customers: Object.fromEntries(
+            ["t-1", "t-2", "tenant-alpha", "tenant-bravo", "tenant-acme"].map((id) => [
+              id,
+              { read_quota: true, write_quota: true, write_brand: true, suspend: true, resume: true, offboard: true },
+            ]),
+          ),
         },
       };
     });
@@ -152,6 +158,23 @@ describe("provider console (L3)", () => {
     await waitFor(() => expect(providerMock.suspendTenant).toHaveBeenCalledWith("t-1"));
     // The list reloads and reflects the new status.
     expect(await screen.findByText("suspended")).toBeInTheDocument();
+  });
+
+  it("resumes a suspended customer through its own confirmed action", async () => {
+    const tenant = { id: "t-1", slug: "acme", name: "Acme Corp", status: "suspended", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-03T00:00:00Z" };
+    providerMock.listTenants.mockResolvedValueOnce([tenant]).mockResolvedValue([{ ...tenant, status: "active" }]);
+    providerMock.resumeTenant.mockResolvedValue(undefined);
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    setProviderToken("operator-bearer");
+    renderProvider();
+    const row = (await screen.findByText("Acme Corp")).closest("tr")!;
+    fireEvent.click(within(row).getByRole("button", { name: "Resume" }));
+    expect(providerMock.resumeTenant).not.toHaveBeenCalled();
+    vi.mocked(window.confirm).mockReturnValue(true);
+    fireEvent.click(within(row).getByRole("button", { name: "Resume" }));
+    await waitFor(() => expect(providerMock.resumeTenant).toHaveBeenCalledWith("t-1"));
+    expect(await screen.findByText("active")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Resume" })).not.toBeInTheDocument();
   });
 
   it("shows a customer's quota, rendering an unset limit as unlimited", async () => {
@@ -261,7 +284,7 @@ describe("provider console (L3)", () => {
     renderProvider();
 
     expect(await screen.findByRole("heading", { name: "Recent activity" })).toBeInTheDocument();
-    expect(screen.getByText("provider.tenant.quota.set")).toBeInTheDocument();
+    expect(await screen.findByText("provider.tenant.quota.set")).toBeInTheDocument();
     expect(screen.getByText("operator@example.test")).toBeInTheDocument();
     expect(screen.getByText("tenant-acme")).toBeInTheDocument();
     expect(screen.getByText("#42")).toBeInTheDocument();
@@ -334,6 +357,45 @@ describe("provider console (L3)", () => {
     );
   });
 
+  // These are the exact delegation wire values from ee/provider/delegation.go.
+  // The console previously sent break_glass, which the served API rejects.
+  it.each(["read", "provision", "suspend", "resume", "offboard", "break-glass"])(
+    "grants the server's %s operation through the access form",
+    async (operation) => {
+      const operator = {
+        identity: {
+          id: "op-2",
+          user_name: "casey",
+          display_name: "Casey",
+          email: "casey@example.test",
+          role: "operator",
+          active: true,
+          source: "scim:test",
+          created_at: "2026-09-16T00:00:00Z",
+          updated_at: "2026-09-16T00:00:00Z",
+        },
+        delegations: [],
+      };
+      providerMock.listTenants.mockResolvedValue([]);
+      providerMock.listOperatorAccess.mockResolvedValue([operator]);
+      providerMock.listAccessCustomers.mockResolvedValue([{ id: "tenant-acme", name: "Acme Corp", slug: "acme", status: "active" }]);
+      providerMock.grantOperatorAccess.mockResolvedValue(operator);
+      setProviderToken("admin-mfa");
+      renderProvider();
+      await screen.findByRole("option", { name: "Casey — casey" });
+      await screen.findByRole("option", { name: "Acme Corp — acme" });
+      fireEvent.change(screen.getByRole("combobox", { name: "Operator" }), { target: { value: "op-2" } });
+      fireEvent.change(screen.getByRole("combobox", { name: "Customer" }), { target: { value: "tenant-acme" } });
+      const operationSelect = screen.getByRole("combobox", { name: "Operation" });
+      expect(within(operationSelect).getByRole("option", { name: operation })).toHaveValue(operation);
+      fireEvent.change(operationSelect, { target: { value: operation } });
+      fireEvent.click(screen.getByRole("button", { name: "Grant access" }));
+      await waitFor(() =>
+        expect(providerMock.grantOperatorAccess).toHaveBeenCalledWith("op-2", { customer_id: "tenant-acme", operations: [operation], expires_at: undefined }),
+      );
+    },
+  );
+
   it("pulls, verifies, and downloads a selected customer's invoice evidence", async () => {
     providerMock.listTenants.mockResolvedValue([
       { id: "tenant-alpha", slug: "alpha", name: "Alpha Bank", status: "active", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" },
@@ -355,7 +417,8 @@ describe("provider console (L3)", () => {
     setProviderToken("operator-bearer");
     renderProvider();
 
-    const customer = await screen.findByLabelText("Billing customer");
+    await screen.findByRole("option", { name: "Bravo Health · bravo" });
+    const customer = screen.getByLabelText("Billing customer");
     fireEvent.change(customer, { target: { value: "tenant-bravo" } });
     fireEvent.change(screen.getByLabelText("Billing period start"), { target: { value: "2026-07-01" } });
     fireEvent.change(screen.getByLabelText("Billing period end"), { target: { value: "2026-08-01" } });
@@ -393,7 +456,8 @@ describe("provider console (L3)", () => {
     renderProvider();
 
     expect(await screen.findByText("Health unknown")).toBeInTheDocument();
-    fireEvent.change(await screen.findByLabelText("Billing customer"), { target: { value: "tenant-bravo" } });
+    await screen.findByRole("option", { name: "Bravo Health · bravo" });
+    fireEvent.change(screen.getByLabelText("Billing customer"), { target: { value: "tenant-bravo" } });
     fireEvent.click(screen.getByRole("button", { name: "Pull invoice evidence" }));
 
     await waitFor(() => expect(providerMock.customerHealth).toHaveBeenCalledWith("tenant-bravo"));
@@ -422,7 +486,9 @@ describe("provider console (L3)", () => {
     setProviderToken("operator-bearer");
     renderProvider();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Pull invoice evidence" }));
+    await screen.findByRole("option", { name: "Alpha Bank · alpha" });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Pull invoice evidence" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Pull invoice evidence" }));
 
     expect(await screen.findByText(/Health unavailable: customer health is unavailable/)).toBeInTheDocument();
     expect(screen.getByText("Not billable")).toBeInTheDocument();

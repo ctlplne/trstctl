@@ -190,6 +190,8 @@ func (h *handler) serve(w http.ResponseWriter, r *http.Request) {
 		h.logout(w, r)
 	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/suspend"):
 		h.updateTenant(w, r, TenantSuspended, "/suspend")
+	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/resume"):
+		h.updateTenant(w, r, TenantActive, "/resume")
 	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/offboard"):
 		h.updateTenant(w, r, TenantOffboarded, "/offboard")
 	case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/quota"):
@@ -613,6 +615,8 @@ func (h *handler) updateTenant(w http.ResponseWriter, r *http.Request, status Te
 	tenantID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/provider/v1/tenants/"), suffix)
 	var err error
 	switch status {
+	case TenantActive:
+		err = h.svc.Resume(r.Context(), op, tenantID)
 	case TenantSuspended:
 		err = h.svc.Suspend(r.Context(), op, tenantID)
 	case TenantOffboarded:
@@ -871,7 +875,7 @@ func (h *handler) consentBreakGlass(w http.ResponseWriter, r *http.Request) {
 	if body.Approve != nil {
 		approve = *body.Approve
 	}
-	grant, err := h.svc.ConsentBreakGlass(r.Context(), body.TenantID, grantID, op.ID, approve)
+	grant, err := h.svc.ConsentBreakGlass(r.Context(), op, body.TenantID, grantID, approve)
 	if err != nil {
 		writeProviderError(w, err)
 		return
@@ -977,6 +981,8 @@ func writeProviderError(w http.ResponseWriter, err error) {
 		status, code = http.StatusForbidden, "read_only"
 	case errors.Is(err, ErrTenantSnapshotUnavailable):
 		status, code = http.StatusServiceUnavailable, "customer_health_unavailable"
+	case errors.Is(err, ErrTenantStateConflict):
+		status, code = http.StatusConflict, "customer_state_conflict"
 	case errors.Is(err, ErrMutationConflict), errors.Is(err, orchestrator.ErrIdempotencyConflict):
 		status, code = http.StatusConflict, "idempotency_conflict"
 	case errors.Is(err, orchestrator.ErrInProgress), errors.Is(err, orchestrator.ErrEffectIndeterminate):

@@ -41,6 +41,15 @@ func NewPGStore(s *corestore.Store) *PGStore {
 
 var _ Store = (*PGStore)(nil)
 
+// WithLifecycleMutation serializes rare Provider status commands with each
+// other and boot catch-up across replicas. The existing dedicated lock
+// pool keeps waiting commands from consuming projection/query connections.
+// The caller rechecks authority and current status while holding the fence,
+// then appends and projects the event before releasing it.
+func (p *PGStore) WithLifecycleMutation(ctx context.Context, fn func(context.Context) error) error {
+	return p.store.WithProjectionLock(ctx, fn)
+}
+
 func (p *PGStore) CountBillableTenants(ctx context.Context) (int, error) {
 	var n int
 	err := p.store.SystemPool().QueryRow(ctx,

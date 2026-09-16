@@ -21,6 +21,7 @@ const readOnlyAuthority = {
 let authority: typeof readOnlyAuthority;
 let delayedSession: Promise<Response> | undefined;
 let requests: string[];
+let delayedRoster: Promise<Response> | undefined;
 
 function renderProvider() {
   return render(
@@ -39,6 +40,7 @@ describe("Provider controls follow effective server authority", () => {
     setProviderToken("limited");
     requests = [];
     delayedSession = undefined;
+    delayedRoster = undefined;
     authority = structuredClone(readOnlyAuthority);
     vi.stubGlobal(
       "fetch",
@@ -46,7 +48,7 @@ describe("Provider controls follow effective server authority", () => {
         requests.push(url);
         if (url === "/auth/methods") return json({ provider_plane: true });
         if (url === "/provider/v1/auth/session") return delayedSession ?? json({ id: "op-1", role: "operator", mfa: true, authority });
-        if (url === "/provider/v1/tenants") return json({ tenants: [alpha] });
+        if (url === "/provider/v1/tenants") return delayedRoster ?? json({ tenants: [alpha] });
         if (url.startsWith("/provider/v1/activity")) return json({ items: [] });
         if (url === "/provider/v1/tenants/alpha/quota") return json({ tenant_id: "alpha", max_agents: 3 });
         if (url === "/provider/v1/operators" || url === "/provider/v1/access/customers")
@@ -58,6 +60,7 @@ describe("Provider controls follow effective server authority", () => {
   afterEach(() => {
     clearProviderToken();
     vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
   it("shows a delegated read-only customer without administrative calls or write controls", async () => {
@@ -101,5 +104,47 @@ describe("Provider controls follow effective server authority", () => {
     expect(screen.queryByRole("button", { name: "Offboard" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Brand" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Provision" })).not.toBeInTheDocument();
+  });
+  it("drops an expired customer's roster and billing choice while keeping the valid login", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    renderProvider();
+    await screen.findByRole("cell", { name: "Alpha customer" });
+    expect(screen.getByRole("option", { name: "Alpha customer · alpha" })).toBeInTheDocument();
+    authority = { ...readOnlyAuthority, customers: {} } as typeof readOnlyAuthority;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_001);
+    });
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Quota" })).not.toBeInTheDocument());
+    expect(screen.queryByRole("cell", { name: "Alpha customer" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Alpha customer · alpha" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pull invoice evidence" })).toBeDisabled();
+    expect(providerToken()).toBe("limited");
+  });
+
+  it("discards a roster request that finishes after its customer authority expires", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    renderProvider();
+    await screen.findByRole("cell", { name: "Alpha customer" });
+    let release!: (response: Response) => void;
+    const oldRead = new Promise<Response>((resolve) => {
+      release = resolve;
+    });
+    delayedRoster = oldRead;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_001);
+    });
+    await waitFor(() => expect(requests.filter((path) => path === "/provider/v1/tenants").length).toBeGreaterThan(1));
+    delayedRoster = undefined;
+    authority = { ...readOnlyAuthority, customers: {} } as typeof readOnlyAuthority;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_001);
+    });
+    await waitFor(() => expect(screen.queryByRole("cell", { name: "Alpha customer" })).not.toBeInTheDocument());
+    await act(async () => {
+      release(json({ tenants: [alpha] }));
+      await oldRead;
+    });
+    expect(screen.queryByRole("cell", { name: "Alpha customer" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Alpha customer · alpha" })).not.toBeInTheDocument();
   });
 });

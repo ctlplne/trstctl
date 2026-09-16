@@ -39,6 +39,7 @@ import (
 	"trstctl.com/trstctl/internal/protocols/ssh"
 	"trstctl.com/trstctl/internal/ratelimit"
 	"trstctl.com/trstctl/internal/signing"
+	"trstctl.com/trstctl/internal/tenancy"
 	"trstctl.com/trstctl/internal/tsa"
 )
 
@@ -66,13 +67,14 @@ const (
 // SPIFFE Workload API is a gRPC service on a UDS, so it is run by RunSPIFFE rather
 // than mounted on the HTTP mux.
 type servedProtocols struct {
-	acme   *acme.Server
-	est    http.Handler
-	scep   http.Handler
-	cmp    *cmp.Server
-	tsa    *tsa.Authority
-	ssh    *sshProtocol
-	spiffe *spiffeProtocol
+	tenantServiceCheck tenancy.ServiceCheck
+	acme               *acme.Server
+	est                http.Handler
+	scep               http.Handler
+	cmp                *cmp.Server
+	tsa                *tsa.Authority
+	ssh                *sshProtocol
+	spiffe             *spiffeProtocol
 
 	estTenant                 string
 	acmeTenant                string
@@ -109,7 +111,7 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 		return nil, nil // no issuing CA → protocols not served (fail closed)
 	}
 	issuer := s.newProtocolIssuer()
-	sp := &servedProtocols{}
+	sp := &servedProtocols{tenantServiceCheck: s.tenantServiceCheck}
 
 	// Protocols run on their own bounded pool (AN-7) so an enrollment burst sheds
 	// rather than starving the API/liveness pools; fall back to the API pool when a
@@ -133,7 +135,7 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 		sp.estTenant = firstNonEmpty(cfg.EST.TenantID, tenantFallback)
 		estSrv := est.New(est.Config{
 			Enroller:     enrollerAdapter{tenantID: sp.estTenant, issuer: issuer},
-			Auth:         servedEnrollAuth{store: s.store, tenantID: sp.estTenant},
+			Auth:         servedEnrollAuth{store: s.store, tenantID: sp.estTenant, tenantServiceCheck: s.tenantServiceCheck},
 			CAChainDER:   [][]byte{s.caCertDER},
 			Pool:         pool,
 			Log:          s.log,
@@ -215,6 +217,7 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 
 func (s *Server) newProtocolIssuer() *protocolIssuer {
 	return &protocolIssuer{
+		tenantServiceCheck: s.tenantServiceCheck,
 		issue:              s.IssueLeafWithProfile,
 		issueLicensed:      s.IssueLicensedLeafWithProfile,
 		inspectLicensedCSR: s.licensedCSRInspector,
@@ -428,7 +431,7 @@ func (sp *servedProtocols) routes(mux *http.ServeMux, bulk *bulkhead.Set) {
 	}
 	if sp.tsa != nil {
 		for _, pattern := range protocolHTTPMountPatterns("tsa") {
-			mux.Handle(pattern, wrap(sp.tsa.Handler()))
+			mux.Handle(pattern, wrap(tenantProtocolAdmission(sp.tenantServiceCheck, sp.tsaTenant, sp.tsa.Handler())))
 		}
 	}
 	if sp.ssh != nil {
@@ -948,9 +951,10 @@ func (s *Server) buildSSHCA(ctx context.Context, tenantID string, pool *bulkhead
 	// certificate names its own principals, so minting one is an issuance
 	// decision, not a request for someone else to approve.
 	protocol, err := newSSHProtocol(ca, tenantID, servedEnrollAuth{
-		store:    s.store,
-		tenantID: tenantID,
-		perm:     authz.CertsIssue,
+		tenantServiceCheck: s.tenantServiceCheck,
+		store:              s.store,
+		tenantID:           tenantID,
+		perm:               authz.CertsIssue,
 	})
 	if err != nil {
 		return nil, err
@@ -1001,7 +1005,7 @@ func (s *Server) buildSPIFFE(ctx context.Context, cfg config.SPIFFEProtocol, ten
 		Selectors: []string{"unix"},
 	}}
 	wl, err := spiffe.New(spiffe.Config{
-		Issuer: issuer, TenantID: tenant, TrustDomain: td, Entries: entries, Pool: pool,
+		Issuer: tenantSPIFFEIssuer{Issuer: issuer, tenantID: tenant, check: s.tenantServiceCheck}, TenantID: tenant, TrustDomain: td, Entries: entries, Pool: pool,
 		// AN-2: SVID issuance is audited into the event log (the source of truth),
 		// the same adapter the rest of the spine uses.
 		Audit: audit.NewAuditor(s.log),

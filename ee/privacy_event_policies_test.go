@@ -51,9 +51,12 @@ func fullBinaryProducerPrivacyCoordinates() []events.ProductionPrivacyEventSchem
 	return []events.ProductionPrivacyEventSchema{
 		{EventType: provider.AuditTenantProvisioned, SchemaVersion: 1},
 		{EventType: provider.AuditTenantSuspended, SchemaVersion: 1},
+		{EventType: provider.AuditTenantResumed, SchemaVersion: 1},
 		{EventType: provider.AuditTenantOffboarded, SchemaVersion: 1},
 		{EventType: provider.EventDelegationGranted, SchemaVersion: 1},
 		{EventType: provider.EventDelegationRevoked, SchemaVersion: 1},
+		{EventType: provider.EventOperatorUpserted, SchemaVersion: 1},
+		{EventType: provider.EventOperatorOffboarded, SchemaVersion: 1},
 		{EventType: provider.EventTenantQuotaSet, SchemaVersion: 1},
 		{EventType: provider.EventTenantBrandSet, SchemaVersion: 1},
 		{EventType: provider.AuditBreakGlassRequested, SchemaVersion: 1},

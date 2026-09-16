@@ -28,6 +28,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/tenancy"
 )
 
 // ErrBadToken is returned when a bootstrap token is unknown, expired, or already
@@ -102,9 +103,20 @@ type CAIssuer interface {
 // signs CSRs through its CA issuer — stamping the redeemed tenant into the issued
 // certificate.
 type Authority struct {
-	ca    CAIssuer
-	store TokenStore
-	ttl   time.Duration
+	tenantServiceCheck tenancy.ServiceCheck
+	ca                 CAIssuer
+	store              TokenStore
+	ttl                time.Duration
+}
+
+// Option configures admission before the authority is served.
+type Option func(*Authority)
+
+// WithTenantServiceCheck gates both bootstrap and renewal signing against live
+// tenant authority. A rejected bootstrap token remains consumed, like a CSR
+// identity mismatch: the operator must mint a fresh token after recovery.
+func WithTenantServiceCheck(check tenancy.ServiceCheck) Option {
+	return func(a *Authority) { a.tenantServiceCheck = check }
 }
 
 // NewAuthority creates an enrollment authority with a fresh IN-PROCESS mTLS CA and a
@@ -112,7 +124,7 @@ type Authority struct {
 // multi-instance-safe, and tenant-attributed (WIRE-003). The in-process CA key is
 // regenerated per process; for a CA whose key is custodied in the signer and stable
 // across restarts (WIRE-004), use NewAuthorityWithIssuer with the agent-channel CA.
-func NewAuthority(commonName string, store TokenStore) (*Authority, error) {
+func NewAuthority(commonName string, store TokenStore, options ...Option) (*Authority, error) {
 	if store == nil {
 		return nil, errors.New("enroll: a TokenStore is required")
 	}
@@ -120,21 +132,33 @@ func NewAuthority(commonName string, store TokenStore) (*Authority, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Authority{ca: ca, store: store, ttl: DefaultTokenTTL}, nil
+	a := &Authority{ca: ca, store: store, ttl: DefaultTokenTTL}
+	for _, option := range options {
+		if option != nil {
+			option(a)
+		}
+	}
+	return a, nil
 }
 
 // NewAuthorityWithIssuer creates an enrollment authority that signs through the given
 // CAIssuer — used by the served control plane to bootstrap-enroll agents through the
 // SAME signer-custodied agent CA the steady-state channel trusts (WIRE-004), so an
 // agent's bootstrap certificate is accepted on the channel and survives a restart.
-func NewAuthorityWithIssuer(ca CAIssuer, store TokenStore) (*Authority, error) {
+func NewAuthorityWithIssuer(ca CAIssuer, store TokenStore, options ...Option) (*Authority, error) {
 	if store == nil {
 		return nil, errors.New("enroll: a TokenStore is required")
 	}
 	if ca == nil {
 		return nil, errors.New("enroll: a CA issuer is required")
 	}
-	return &Authority{ca: ca, store: store, ttl: DefaultTokenTTL}, nil
+	a := &Authority{ca: ca, store: store, ttl: DefaultTokenTTL}
+	for _, option := range options {
+		if option != nil {
+			option(a)
+		}
+	}
+	return a, nil
 }
 
 // IssueBootstrapToken mints a one-time bootstrap token bound to tenantID (and,
@@ -207,6 +231,9 @@ func (a *Authority) EnrollBootstrap(ctx context.Context, token []byte, csrDER []
 		}
 		return nil, err
 	}
+	if err := a.tenantServiceCheck.Check(ctx, redeemed.TenantID); err != nil {
+		return nil, err
+	}
 	if redeemed.AllowedIdentity != "" {
 		matches, err := mtls.CSRMatchesAllowedIdentity(csrDER, redeemed.AllowedIdentity)
 		if err != nil {
@@ -238,7 +265,7 @@ var ErrUnauthenticatedRenewal = errors.New("enroll: renewal requires a verified 
 // that "the deployment's mutual-TLS server" gated it — a control that did not exist
 // in code (WIRE-006). A renewal with no verified peer certificate is now rejected
 // with ErrUnauthenticatedRenewal regardless of how the handler is mounted.
-func (a *Authority) EnrollRenewal(_ context.Context, peerCertsDER [][]byte, csrDER []byte) ([]byte, error) {
+func (a *Authority) EnrollRenewal(ctx context.Context, peerCertsDER [][]byte, csrDER []byte) ([]byte, error) {
 	if len(peerCertsDER) == 0 || len(peerCertsDER[0]) == 0 {
 		return nil, ErrUnauthenticatedRenewal
 	}
@@ -247,6 +274,9 @@ func (a *Authority) EnrollRenewal(_ context.Context, peerCertsDER [][]byte, csrD
 		// A verified client cert that carries no tenant SPIFFE SAN is not an agent
 		// identity this CA issued; refuse rather than mint an unattributed cert.
 		return nil, fmt.Errorf("%w: %v", ErrUnauthenticatedRenewal, err)
+	}
+	if err := a.tenantServiceCheck.Check(ctx, tenantID); err != nil {
+		return nil, err
 	}
 	// Roles are carried over from the certificate being renewed, never re-derived
 	// and never taken from the CSR (epic A2). A renewal is a rotation of the same

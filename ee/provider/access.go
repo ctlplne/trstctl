@@ -33,7 +33,7 @@ type OperatorIdentity struct {
 	Source          string       `json:"source"`
 	CreatedAt       time.Time    `json:"created_at"`
 	UpdatedAt       time.Time    `json:"updated_at"`
-	DeprovisionedAt time.Time    `json:"deprovisioned_at,omitempty"`
+	DeprovisionedAt time.Time    `json:"deprovisioned_at,omitzero"`
 }
 
 // DelegationRecord is the inventory form of one exact authority row. Revoked
@@ -45,9 +45,9 @@ type DelegationRecord struct {
 	Source     string    `json:"source"`
 	GrantedBy  string    `json:"granted_by,omitempty"`
 	GrantedAt  time.Time `json:"granted_at"`
-	ExpiresAt  time.Time `json:"expires_at,omitempty"`
-	LastUsedAt time.Time `json:"last_used_at,omitempty"`
-	RevokedAt  time.Time `json:"revoked_at,omitempty"`
+	ExpiresAt  time.Time `json:"expires_at,omitzero"`
+	LastUsedAt time.Time `json:"last_used_at,omitzero"`
+	RevokedAt  time.Time `json:"revoked_at,omitzero"`
 	RevokedBy  string    `json:"revoked_by,omitempty"`
 }
 

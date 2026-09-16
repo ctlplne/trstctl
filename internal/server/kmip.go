@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/tenancy"
 	"trstctl.com/trstctl/internal/tenantseal"
 )
 
@@ -30,11 +31,12 @@ type KMIPFactory func(KMIPFactoryDeps) (KMIPRuntime, error)
 // KMIPFactoryDeps are the core spine dependencies the licensed KMIP runtime
 // consumes without importing server internals.
 type KMIPFactoryDeps struct {
-	Protocols      config.Protocols
-	ProtocolTenant string
-	Bulkhead       *bulkhead.Set
-	Log            *slog.Logger
-	EventLog       *events.Log
+	TenantServiceCheck tenancy.ServiceCheck
+	Protocols          config.Protocols
+	ProtocolTenant     string
+	Bulkhead           *bulkhead.Set
+	Log                *slog.Logger
+	EventLog           *events.Log
 	// KeyWrapper envelope-seals KMIP object material before immutable state
 	// events are appended. The licensed factory fails closed when it is absent.
 	KeyWrapper seal.KeyWrapper
@@ -49,13 +51,14 @@ func (s *Server) configureKMIPSurface(d Deps) error {
 		return nil
 	}
 	runtime, err := d.KMIPFactory(KMIPFactoryDeps{
-		Protocols:      d.Protocols,
-		ProtocolTenant: d.ProtocolTenant,
-		Bulkhead:       s.bulk,
-		Log:            s.logger,
-		EventLog:       d.Log,
-		KeyWrapper:     d.KEK,
-		TenantCrypto:   d.TenantCrypto,
+		TenantServiceCheck: d.TenantServiceCheck,
+		Protocols:          d.Protocols,
+		ProtocolTenant:     d.ProtocolTenant,
+		Bulkhead:           s.bulk,
+		Log:                s.logger,
+		EventLog:           d.Log,
+		KeyWrapper:         d.KEK,
+		TenantCrypto:       d.TenantCrypto,
 	})
 	if err != nil {
 		return fmt.Errorf("server: configure KMIP: %w", err)

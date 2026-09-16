@@ -360,7 +360,7 @@ func nullTime(t time.Time) any {
 
 func providerAuthorityEvent(typ string) bool {
 	switch typ {
-	case AuditTenantProvisioned, AuditTenantSuspended, AuditTenantOffboarded,
+	case AuditTenantProvisioned, AuditTenantSuspended, AuditTenantResumed, AuditTenantOffboarded,
 		EventOperatorUpserted, EventOperatorOffboarded,
 		EventDelegationGranted, EventDelegationRevoked, EventTenantQuotaSet, EventTenantBrandSet,
 		AuditBreakGlassRequested, AuditBreakGlassConsented, AuditBreakGlassDenied, AuditBreakGlassAccessed:
@@ -463,7 +463,7 @@ func applyAuthorityEventTx(ctx context.Context, tx pgx.Tx, event eventspec.Event
 				return err
 			}
 		}
-	case AuditTenantProvisioned, AuditTenantSuspended, AuditTenantOffboarded:
+	case AuditTenantProvisioned, AuditTenantSuspended, AuditTenantResumed, AuditTenantOffboarded:
 		if payload.Tenant == nil {
 			return fmt.Errorf("provider: %s needs tenant state", event.Type)
 		}
@@ -602,6 +602,8 @@ func delegationOperationForEvent(eventType string) (Operation, bool) {
 		return OpProvision, true
 	case AuditTenantSuspended:
 		return OpSuspend, true
+	case AuditTenantResumed:
+		return OpResume, true
 	case AuditTenantOffboarded:
 		return OpOffboard, true
 	case AuditBreakGlassRequested, AuditBreakGlassAccessed:

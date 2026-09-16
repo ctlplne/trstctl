@@ -61,6 +61,7 @@ import (
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/telemetry"
+	"trstctl.com/trstctl/internal/tenancy"
 	"trstctl.com/trstctl/internal/tenantseal"
 	transitpkg "trstctl.com/trstctl/internal/transit"
 	"trstctl.com/trstctl/internal/webui"
@@ -199,6 +200,8 @@ type Deps struct {
 	// plane is licensed. Nil keeps /provider/* dark with 404 instead of falling
 	// through to the web UI.
 	ProviderHandler http.Handler
+	// TenantServiceCheck admits current tenant work across API, agent, protocol and outbox entry points.
+	TenantServiceCheck tenancy.ServiceCheck
 	// TelemetryReporter is the opt-in usage reporter (COMP-04). Nil means telemetry
 	// is off; Run only wires it when telemetry.enabled is explicitly true, and the
 	// reporter payload is fixed to anonymized, bucketed, non-PII fields.
@@ -607,20 +610,21 @@ type Deps struct {
 
 // Server is the assembled control plane.
 type Server struct {
-	store             *store.Store
-	log               *events.Log
-	audit             *audit.Service
-	outbox            *orchestrator.Outbox
-	outboxWake        chan struct{}
-	idemGC            *idemgc.Sweeper   // bounds idempotency_keys via the background retention sweep (SPINE-002)
-	outboxGC          *outboxgc.Sweeper // bounds the outbox via the background delivered-row purge (SPINE-003)
-	obHandler         orchestrator.Handler
-	handler           http.Handler
-	acmeDNS01         *servedACMEDNS01Automation
-	transit           *transitpkg.Service
-	transitStore      *transitpkg.Store
-	transitStateMu    sync.RWMutex
-	transitStateFound bool
+	tenantServiceCheck tenancy.ServiceCheck
+	store              *store.Store
+	log                *events.Log
+	audit              *audit.Service
+	outbox             *orchestrator.Outbox
+	outboxWake         chan struct{}
+	idemGC             *idemgc.Sweeper   // bounds idempotency_keys via the background retention sweep (SPINE-002)
+	outboxGC           *outboxgc.Sweeper // bounds the outbox via the background delivered-row purge (SPINE-003)
+	obHandler          orchestrator.Handler
+	handler            http.Handler
+	acmeDNS01          *servedACMEDNS01Automation
+	transit            *transitpkg.Service
+	transitStore       *transitpkg.Store
+	transitStateMu     sync.RWMutex
+	transitStateFound  bool
 	// codeSignGate is the production adapter over the live OPA evaluator and
 	// distinct-approver store assembled by configurePolicyGate.
 	codeSignGate  codesign.Gate
@@ -936,6 +940,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 	}
 	signProvider := resolveSignTokenProvider(d)
 	s = &Server{
+		tenantServiceCheck:        d.TenantServiceCheck,
 		store:                     d.Store,
 		log:                       d.Log,
 		outboxWake:                make(chan struct{}, 1),
@@ -1097,6 +1102,7 @@ func (s *Server) configureMutationSpine(
 		[]string{"tenant_id", "destination", "from", "to"},
 	)
 	s.outbox = orchestrator.NewOutbox(d.Store,
+		orchestrator.WithTenantServiceCheck(d.TenantServiceCheck),
 		orchestrator.WithDeliveryTimeout(d.OutboxDeliveryTimeout),
 		orchestrator.WithDeliveryTimeoutObserver(func(m orchestrator.Message) {
 			s.mOutboxDeliveryTimeouts.WithLabelValues(m.TenantID, m.Destination).Inc()
@@ -1169,9 +1175,9 @@ func (s *Server) configureAgentEnrollment(ctx context.Context, d Deps) error {
 	var authority *enroll.Authority
 	var err error
 	if s.agentCASigner != nil && len(s.agentCACertDER) > 0 {
-		authority, err = enroll.NewAuthorityWithIssuer(agentCAIssuer{caSigner: s.agentCASigner, caCertDER: s.agentCACertDER}, storeTokenStore{st: d.Store})
+		authority, err = enroll.NewAuthorityWithIssuer(agentCAIssuer{caSigner: s.agentCASigner, caCertDER: s.agentCACertDER}, storeTokenStore{st: d.Store}, enroll.WithTenantServiceCheck(d.TenantServiceCheck))
 	} else {
-		authority, err = enroll.NewAuthority("trstctl Agent Enrollment CA", storeTokenStore{st: d.Store})
+		authority, err = enroll.NewAuthority("trstctl Agent Enrollment CA", storeTokenStore{st: d.Store}, enroll.WithTenantServiceCheck(d.TenantServiceCheck))
 	}
 	if err != nil {
 		return fmt.Errorf("server: create enrollment authority: %w", err)
@@ -1362,6 +1368,7 @@ func (s *Server) appendProtocolQualificationOptions(d Deps, options *[]api.Optio
 // Named stage of configureAPI (startup-hotspot ratchet).
 func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 	return []api.Option{
+		api.WithTenantServiceCheck(d.TenantServiceCheck),
 		// J2: the DR posture surface reports on this directory. An empty value
 		// is meaningful — the API then serves "not configured" rather than
 		// reporting a path nobody chose as a missing backup.
@@ -1952,8 +1959,9 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 	s.agentChannelServerName = d.AgentChannelServerName
 	s.agentHeartbeatInterval = d.AgentHeartbeatInterval
 	agentSvc := &agentService{
-		logger: s.logger,
-		store:  d.Store, log: d.Log, orch: s.orch, idem: idem, caSigner: s.agentCASigner,
+		tenantServiceCheck: d.TenantServiceCheck,
+		logger:             s.logger,
+		store:              d.Store, log: d.Log, orch: s.orch, idem: idem, caSigner: s.agentCASigner,
 		caCertDER: s.agentCACertDER, beatInterval: d.AgentHeartbeatInterval,
 		metrics: s.agentMetrics,
 		// A1: nothing is claimable until an operator enables a kind AND an

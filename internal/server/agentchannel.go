@@ -64,6 +64,7 @@ import (
 	"trstctl.com/trstctl/internal/revcacheposture"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenancy"
 )
 
 // agentCAHandle is the stable signer handle for the AGENT CA key (distinct from the
@@ -241,6 +242,7 @@ func (s *Server) OutOfProcessAgentCA() bool {
 // the signer-held agent CA. All access is tenant-scoped by the agent's verified
 // certificate (AN-1).
 type agentService struct {
+	tenantServiceCheck tenancy.ServiceCheck
 	// logger receives operator-facing refusals with routing metadata only.
 	logger       *slog.Logger
 	store        *store.Store
@@ -471,6 +473,12 @@ func (a *agentService) peerInfo(ctx context.Context) (mtls.PeerCertInfo, error) 
 	}
 	if a.store == nil {
 		return mtls.PeerCertInfo{}, status.Error(codes.FailedPrecondition, "agent revocation store is not configured")
+	}
+	if err := a.tenantServiceCheck.Check(ctx, info.TenantID); err != nil {
+		if errors.Is(err, tenancy.ErrServiceUnavailable) {
+			return mtls.PeerCertInfo{}, status.Error(codes.PermissionDenied, err.Error())
+		}
+		return mtls.PeerCertInfo{}, status.Error(codes.Unavailable, "tenant service authority is unavailable")
 	}
 	agentID := agentRowID(info.TenantID, info.CommonName)
 	revoked, err := a.store.AgentCertRevoked(ctx, info.TenantID, agentID, info.Serial, info.FingerprintSHA256)

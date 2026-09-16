@@ -21,6 +21,7 @@ const (
 
 var (
 	ErrTenantBandExhausted = errors.New("provider: tenant_band_exhausted")
+	ErrTenantStateConflict = errors.New("provider: customer status does not allow this transition; refresh the customer list")
 	ErrForbidden           = errors.New("provider: forbidden")
 	// ErrProviderUnauthenticated is returned when no configured authenticator
 	// positively identified the caller. A nil authenticator produces it for

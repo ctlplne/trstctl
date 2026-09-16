@@ -11,7 +11,7 @@ import { formatDateTime } from "@/i18n/format";
 import { ProviderAuthError, providerApi, type ProviderOperation, type ProviderOperatorAccess, type ProviderOperatorRole } from "@/lib/providerApi";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 
-const operations = ["read", "provision", "suspend", "offboard", "break_glass"] as const satisfies readonly ProviderOperation[];
+const operations = ["read", "provision", "suspend", "resume", "offboard", "break-glass"] as const satisfies readonly ProviderOperation[];
 
 const grantSchema = z.object({
   operatorId: z.string().trim().min(1, translateNow("source.provider.access.operator.aud580003")),
@@ -22,8 +22,8 @@ const grantSchema = z.object({
 type GrantForm = z.infer<typeof grantSchema>;
 
 export function ProviderAccessPanel({ onAuthError, canWrite }: { onAuthError: () => void; canWrite: boolean }) {
-  const access = useApiQuery(["provider", "operator-access"], providerApi.listOperatorAccess);
-  const customers = useApiQuery(["provider", "access-customers"], providerApi.listAccessCustomers);
+  const access = useApiQuery(["provider", "operator-access"], providerApi.listOperatorAccess, { live: { intervalMs: 15_000 } });
+  const customers = useApiQuery(["provider", "access-customers"], providerApi.listAccessCustomers, { live: { intervalMs: 15_000 } });
   const queryClient = useQueryClient();
   const form = useForm<GrantForm>({
     resolver: zodResolver(grantSchema),

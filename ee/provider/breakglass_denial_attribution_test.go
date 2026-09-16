@@ -23,7 +23,7 @@ func TestBreakGlassDenialRequiresAnAttributableSubject(t *testing.T) {
 	grant := requestGrant(t, svc)
 
 	for _, subject := range []string{"", "   "} {
-		if _, err := svc.ConsentBreakGlass(ctx, "tenant-x", grant.ID, subject, false); !errors.Is(err, ErrForbidden) {
+		if _, err := svc.ConsentBreakGlass(ctx, providerOperator(subject), "tenant-x", grant.ID, false); !errors.Is(err, ErrForbidden) {
 			t.Fatalf("denial with subject %q returned %v, want ErrForbidden; "+
 				"emergency access can be vetoed by nobody in particular", subject, err)
 		}
@@ -41,7 +41,7 @@ func TestBreakGlassDenialRequiresAnAttributableSubject(t *testing.T) {
 
 	// A named approver must still be able to deny — the fix must not break the
 	// property that one refusal stops emergency access.
-	denied, err := svc.ConsentBreakGlass(ctx, "tenant-x", grant.ID, "approver-a", false)
+	denied, err := svc.ConsentBreakGlass(ctx, providerOperator("approver-a"), "tenant-x", grant.ID, false)
 	if err != nil {
 		t.Fatalf("a named approver could not deny: %v", err)
 	}

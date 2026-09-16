@@ -27,6 +27,7 @@ import (
 	"trstctl.com/trstctl/internal/profile"
 	"trstctl.com/trstctl/internal/protocols/est"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenancy"
 	"trstctl.com/trstctl/internal/tenantseal"
 )
 
@@ -65,6 +66,7 @@ const protocolLeafTTL = 30 * 24 * time.Hour
 // ca_issued_certs for served OCSP/CRL (EXC-REVOKE-01) from the same log fact the
 // inventory uses.
 type protocolIssuer struct {
+	tenantServiceCheck tenancy.ServiceCheck
 	issue              issueFunc                  // Server.IssueLeafWithProfile — signs through the signer (AN-3/AN-4)
 	issueLicensed      issueFunc                  // proprietary edition signer path; nil in MPL core builds
 	inspectLicensedCSR LicensedCSRInspector       // proprietary CSR detector; nil in MPL core builds
@@ -104,6 +106,9 @@ func (p *protocolIssuer) IssueProtocolLeaf(ctx context.Context, tenantID, protoc
 }
 
 func (p *protocolIssuer) issueProtocolLeafWithOrigin(ctx context.Context, tenantID, protocolName, idempotencyKey string, csrDER []byte, ttl time.Duration, origin custody.KeyOrigin) ([]byte, error) {
+	if err := p.tenantServiceCheck.Check(ctx, tenantID); err != nil {
+		return nil, err
+	}
 	if p.tenantCrypto == nil {
 		return p.issueProtocolLeaf(ctx, tenantID, protocolName, idempotencyKey, csrDER, ttl, origin)
 	}
@@ -464,9 +469,10 @@ func (e enrollerAdapter) Enroll(ctx context.Context, csrDER []byte, profileName,
 // authz.CertsRequest, the EST enrollment authority this type was written for;
 // the served SSH CA reuses the same audited token path with authz.CertsIssue.
 type servedEnrollAuth struct {
-	store    *store.Store
-	tenantID string
-	perm     authz.Permission
+	tenantServiceCheck tenancy.ServiceCheck
+	store              *store.Store
+	tenantID           string
+	perm               authz.Permission
 }
 
 // requiredPermission returns the authority this endpoint demands, defaulting to
@@ -525,6 +531,13 @@ func (a servedEnrollAuth) Authenticate(r *http.Request) est.AuthenticationResult
 	principal := auth.APIToken{TenantID: rec.TenantID, Subject: rec.Subject, Scopes: rec.Scopes}.Principal()
 	if !principal.Can(a.requiredPermission(), authz.Scope{TenantID: tenantID}) {
 		return servedESTBearerDenial(http.StatusForbidden, "insufficient_scope")
+	}
+	if err := a.tenantServiceCheck.Check(r.Context(), tenantID); err != nil {
+		code := http.StatusServiceUnavailable
+		if errors.Is(err, tenancy.ErrServiceUnavailable) {
+			code = http.StatusForbidden
+		}
+		return est.AuthenticationResult{StatusCode: code}
 	}
 	return est.AuthenticationResult{Allowed: true}
 }
