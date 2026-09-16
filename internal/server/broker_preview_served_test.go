@@ -82,12 +82,7 @@ func TestServedBrokerPreviewIsExactEffectFreeAndNeverVerifiesTaskOrProof(t *test
 			t.Fatal("preview returned the public key body instead of its fingerprint")
 		}
 	}
-	for token, want := range map[string]int{reader: http.StatusForbidden, "": http.StatusUnauthorized} {
-		status, _ := secretsReqKey(t, h, http.MethodPost, "/api/v1/broker/agent-identities/preview", token, "", body)
-		if status != want {
-			t.Fatalf("preview permission status=%d want=%d", status, want)
-		}
-	}
+
 	delete(body, "task_envelope_base64")
 	body["method"] = "aws_iid"
 	status, raw := secretsReqKey(t, h, http.MethodPost, "/api/v1/broker/agent-identities/preview", owner, "", body)
@@ -118,6 +113,18 @@ func TestServedBrokerPreviewIsExactEffectFreeAndNeverVerifiesTaskOrProof(t *test
 	}
 	if ephemeralPreviewMutationState(t, h) != stateBefore {
 		t.Fatal("preview mutated durable state")
+	}
+	// Actual previews above remain effect-free. Authentication/permission
+	// refusals below never enter the preview and produce only the expected audit.
+	for token, want := range map[string]int{reader: http.StatusForbidden, "": http.StatusUnauthorized} {
+		status, _ := secretsReqKey(t, h, http.MethodPost, "/api/v1/broker/agent-identities/preview", token, "", body)
+		if status != want {
+			t.Fatalf("preview permission status=%d want=%d", status, want)
+		}
+	}
+	assertBrokerDenialAuditOnly(t, h, headBefore, "certs:issue", "POST /api/v1/broker/agent-identities/preview")
+	if ephemeralPreviewMutationState(t, h) != stateBefore || signer.calls.Load() != 0 || attestor.calls.Load() != 0 || gateCalls.Load() != 0 {
+		t.Fatal("permission refusal had preview, proof or signer effects")
 	}
 	body["method"] = "k8s_sat"
 	status, _ = secretsReqKey(t, h, http.MethodPost, "/api/v1/broker/agent-identities", owner, "broker-invalid-proof", body)

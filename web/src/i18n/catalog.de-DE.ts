@@ -226,6 +226,10 @@ const deDECatalog = {
   "auth.login.eyebrow": "Zugangsdaten für Maschinen und Anwendungen",
   "auth.login.title": "Bei trstctl anmelden",
   "auth.login.body": "Fahren Sie mit dem konfigurierten Anmeldeanbieter fort. Danach verwalten Sie Maschinenidentitäten und deren Zugangsdaten.",
+  // F150: machine-authored recovery copy; human translation review required before release.
+  "auth.login.tenantAccessTitle": "Ihr Konto benötigt Zugriff auf einen Mandanten",
+  "auth.login.tenantAccessBody":
+    "Ihr Anmeldeanbieter hat Ihr Konto verifiziert, aber es ist keinem trstctl-Mandanten zugeordnet. Bitten Sie Ihre Administration, die Mandantenzuordnung und Mitgliedschaft zu prüfen. Melden Sie sich anschließend erneut an.",
   "auth.login.action": "Sicher mit SSO fortfahren",
   "admin.access.pamUnavailableTitle": "Sitzungen mit privilegiertem Zugriff sind nicht verfügbar",
   "admin.access.pamUnavailableBody":
@@ -751,6 +755,10 @@ const deDECatalog = {
   "certificates.lifecycle.notManaged": "Nicht identitätsverwaltet — über Anforderung ersetzen →",
   "certificates.lifecycle.renewStarted": "Erneuerung gestartet",
   "certificates.lifecycle.renewFailed": "Erneuerung konnte nicht starten",
+  // Machine-authored Home access-recovery translations; human review required before release.
+  "dashboard.evidence.retry": "Erneut prüfen",
+  "dashboard.evidence.accessHelp":
+    "Bitten Sie Ihre Administration, die Berechtigungen Ihres Kontos zu prüfen. Prüfen Sie erneut, nachdem der Zugriff wiederhergestellt wurde, oder melden Sie sich mit einem berechtigten Konto an.",
   "dashboard.recentActivity.empty": "Noch keine Audit-Ereignisse.",
   // Quiet-confidence dashboard — Machine-authored, FLAG FOR HUMAN REVIEW.
   "dashboard.homeDescription": "Sehen Sie, was jetzt Aufmerksamkeit braucht und was in Ordnung ist.",
@@ -8411,6 +8419,11 @@ const deDECatalog = {
   "identities.lifecycle.reviewChanged": "Der Grund wurde nach der Vorschau geändert. Prüfen Sie die aktualisierte Aktion vor der Ausführung erneut.",
   "identities.lifecycle.reviewRun": "Geprüfte Aktion ausführen",
   "identities.lifecycle.reviewUpdated": "Aktualisierte Aktion prüfen",
+  "identities.lifecycle.approvalPending": "Diese Aktion wartet auf unabhängige Genehmigung. Wiederholen Sie danach dieselbe geprüfte Aktion.",
+  "identities.lifecycle.approvalClosed":
+    "Diese Genehmigungsanfrage ist abgeschlossen. Prüfen Sie eine neue Anfrage, um erneut anzufragen; frühere Entscheidungen bleiben im Auditverlauf erhalten.",
+  "identities.lifecycle.openApprovals": "Genehmigungsanfragen öffnen",
+  "identities.lifecycle.reviewNewRequest": "Neue Anfrage prüfen",
   "identities.lifecycle.previewFailed": "Lebenszyklusaktion konnte nicht vorab geprüft werden",
   "identities.lifecycle.verificationFailed": "Verifizierung fehlgeschlagen: Der Server gab {actual} statt {expected} zurück.",
   "identities.lifecycle.verified": "Anfrage für {identity} angenommen: {state}. {detail}",

@@ -87,6 +87,9 @@ func TestServedSCIMProvisioningReflectsRBAC(t *testing.T) {
 		t.Fatalf("SCIM content-type = %q, want application/scim+json", ct)
 	}
 	aliceID := scimID(t, createUser.Body.Bytes())
+	if aliceID != "alice@example.com" || !bytes.Contains(createUser.Body.Bytes(), []byte(`"externalId":"okta-alice"`)) {
+		t.Fatal("default subject binding changed or externalId was dropped")
+	}
 
 	group := map[string]any{
 		"schemas":     []string{"urn:ietf:params:scim:schemas:core:2.0:Group"},
@@ -120,6 +123,23 @@ func TestServedSCIMProvisioningReflectsRBAC(t *testing.T) {
 	}
 	if code, body := doSession(t, ts, http.MethodGet, "/api/v1/access/roles", aliceSession); code != http.StatusForbidden {
 		t.Fatalf("deprovisioned session role read = %d body=%s; want 403 after SCIM offboard removes RBAC grants", code, body)
+	}
+
+	// IdPs often remove groups after disabling an account. Both late removal
+	// and a delayed addition must leave the account offboarded.
+	for _, op := range []string{"remove", "add"} {
+		want := http.StatusOK
+		if op == "add" {
+			want = http.StatusConflict
+		}
+		change := map[string]any{"schemas": []string{"urn:ietf:params:scim:api:messages:2.0:PatchOp"}, "Operations": []map[string]any{{"op": op, "path": "members", "value": []map[string]string{{"value": aliceID}}}}}
+		got := doSCIM(t, ts, http.MethodPatch, "/scim/v2/Groups/viewer", scimToken, "late-group-"+op, change)
+		if got.Code != want {
+			t.Fatalf("late %s status=%d body=%s", op, got.Code, got.Body)
+		}
+		if code, _ := doSession(t, ts, http.MethodGet, "/api/v1/access/roles", aliceSession); code != http.StatusForbidden {
+			t.Fatalf("late group %s restored session status=%d", op, code)
+		}
 	}
 
 	var sawUpsert, sawOffboard bool

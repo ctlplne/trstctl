@@ -1,8 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { IssuanceRequestsPanel } from "@/components/IssuanceRequestsPanel";
-import { AppQueryProvider } from "@/lib/query";
+import { AppQueryProvider, useApiQuery } from "@/lib/query";
+import { approvalRequestsQueryKey } from "@/lib/approvalQueue";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -154,13 +155,20 @@ describe("ticket-intake relay visibility", () => {
       issued_at: "2026-08-20T01:00:00Z",
     });
     const user = userEvent.setup();
+    const readQueue = vi.fn().mockResolvedValueOnce(["pending-command"]).mockResolvedValue([]);
+    function QueueCount() {
+      const queue = useApiQuery<string[]>(approvalRequestsQueryKey, readQueue);
+      return <span aria-label="Pending operation approvals">{queue.data?.length ?? "loading"}</span>;
+    }
 
     render(
       <AppQueryProvider>
+        <QueueCount />
         <IssuanceRequestsPanel currentPrincipal={{ subject: "se-demo-operator", permissions: ["certs:issue", "identities:write"] }} />
       </AppQueryProvider>,
     );
 
+    await waitFor(() => expect(screen.getByLabelText("Pending operation approvals")).toHaveTextContent("1"));
     await user.click(await screen.findByRole("button", { name: "Issue certificate for qa-design-partner-mtls" }));
 
     expect(apiMock.prepareIssuanceRequest).toHaveBeenCalledWith("request-issued");
@@ -174,6 +182,8 @@ describe("ticket-intake relay visibility", () => {
     expect(apiMock.completeIssuanceRequest).toHaveBeenCalledWith("request-issued");
     expect(await screen.findByRole("status")).toHaveTextContent("Certificate issued for qa-design-partner-mtls");
     expect(screen.getByText(/Issued by se-demo-operator/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText("Pending operation approvals")).toHaveTextContent("0"));
+    expect(readQueue).toHaveBeenCalledTimes(2);
   });
 
   it("keeps a failed approved request recoverable and retries with the same issuance identity", async () => {

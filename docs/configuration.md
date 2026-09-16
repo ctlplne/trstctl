@@ -840,6 +840,39 @@ group with display name `viewer` grants the built-in `viewer` role to its member
 | `TRSTCTL_AUTH_SCIM_TOKEN_NAME` | `scim` | Human label used in audit actor metadata for the single env-configured token. |
 | `TRSTCTL_AUTH_SCIM_TOKEN_TENANT_ID` | unset | Tenant this SCIM token may provision. Required when SCIM is enabled through env. |
 | `TRSTCTL_AUTH_SCIM_TOKEN_FILE` | unset | File containing the raw bearer token. Required when SCIM is enabled through env. |
+| `TRSTCTL_AUTH_SCIM_SUBJECT_ATTRIBUTE` | `userName` | Attribute containing the exact login subject: `userName` or explicit `externalId`. Part of the complete single-token env configuration. |
+
+Choose the login-subject mapping before provisioning. By default, `userName`
+must equal the exact authenticated principal (for OIDC, its `sub` claim), not
+merely its email address. If your IdP sends a readable `userName` and an opaque
+login subject separately, set `auth.scim.tokens[].subject_attribute: externalId`
+and configure that IdP's SCIM attribute mapping to put the exact login subject
+in `externalId`. SCIM defines `externalId` as a client-issued identifier; it is
+**not automatically an OIDC subject**. trstctl never infers this binding from an
+email address. Only a trusted deployment configuration selects the attribute.
+
+Both `userName` and `externalId` are retained and returned. The selected attribute
+becomes the stable SCIM resource `id` and tenant-member subject. It cannot change
+through PUT or PATCH. With the explicit `externalId` mapping, the readable
+`userName` can change without moving permissions to a new login. User names are
+unique ignoring case within the tenant, including inactive resources. Provision
+the user first, then send the returned resource `id` as each group's member
+`value`. An inactive user must be explicitly activated before a group grant;
+a delayed group removal never activates an offboarded user.
+
+Changing a token's mapping does not relink existing accounts. Legacy members
+without a stored binding are hidden from the `externalId`-mapped user list until
+explicitly provisioned with the correct subject. Review existing email-named
+members, create the correctly bound resource, reapply intended groups, and
+retire mistaken memberships. Existing bound resources reject a different mapping.
+Verify a real existing browser session and API token lose access after `active:false`
+or DELETE; a successful provisioning response alone is insufficient evidence.
+Use a new idempotency key for each deliberate lifecycle change. Retry the same
+operation with its original key and body.
+
+The environment variables replace the token list as one complete single-token
+configuration. A mapping-only environment override fails validation when enabled;
+use the per-token config field for a multi-token deployment. Example:
 
 Example multi-token SCIM config:
 
@@ -851,6 +884,7 @@ auth:
       - name: okta-payments
         tenant_id: 22222222-2222-2222-2222-222222222222
         token_file: /etc/trstctl/scim/okta-payments.token
+        subject_attribute: externalId # IdP mapping must supply the exact login subject
       - name: entra-platform
         tenant_id: 33333333-3333-3333-3333-333333333333
         token_file: /etc/trstctl/scim/entra-platform.token

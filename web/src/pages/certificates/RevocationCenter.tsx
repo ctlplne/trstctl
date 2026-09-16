@@ -22,6 +22,8 @@ import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
 import { useTranslation } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 import { graphNodeIdForIdentity, revocationReasons } from "@/lib/revocation";
+import { LifecycleApprovalRecovery } from "@/components/LifecycleApprovalRecovery";
+import { lifecycleApproval, lifecycleCommandKey, type LifecycleApproval } from "@/lib/lifecycleCommand";
 
 type ReviewBase = {
   impact: GraphImpact | null;
@@ -109,6 +111,8 @@ export function RevocationCenter({
   const [confirmName, setConfirmName] = useState("");
   const [executeLoading, setExecuteLoading] = useState(false);
   const [executeError, setExecuteError] = useState<string | null>(null);
+  const [approvalNotice, setApprovalNotice] = useState<LifecycleApproval | null>(null);
+  const [approvalRestart, setApprovalRestart] = useState<{ fingerprint: string; requestId: string } | null>(null);
   const [completed, setCompleted] = useState<CompletedState | null>(null);
 
   useEffect(() => {
@@ -117,6 +121,8 @@ export function RevocationCenter({
     setReviewError(null);
     setConfirmName("");
     setExecuteError(null);
+    setApprovalNotice(null);
+    setApprovalRestart(null);
     setCompleted(null);
     setLinkedCertificate(null);
     setLinkedError(null);
@@ -234,6 +240,7 @@ export function RevocationCenter({
     setReviewLoading(true);
     setReviewError(null);
     setExecuteError(null);
+    setApprovalNotice(null);
     try {
       if (selected.kind === "identity") {
         const plan = await api.previewIdentityTransition(selected.identity.id, "revoked", reason);
@@ -261,9 +268,18 @@ export function RevocationCenter({
     if (!selected || selected.name.length === 0 || !reviewCurrent || !reviewReady || confirmName.trim() !== selected.name) return;
     setExecuteLoading(true);
     setExecuteError(null);
+    setApprovalNotice(null);
     try {
       if (selected.kind === "identity" && review.kind === "identity") {
-        const updated = await api.transitionIdentity(selected.identity.id, "revoked", reason, undefined, undefined, review.plan.expected_version);
+        const closedRequestId = approvalRestart?.fingerprint === review.plan.request_fingerprint ? approvalRestart.requestId : undefined;
+        const updated = await api.transitionIdentity(
+          selected.identity.id,
+          "revoked",
+          reason,
+          undefined,
+          lifecycleCommandKey(review.plan, closedRequestId),
+          review.plan.expected_version,
+        );
         if (updated.status !== "revoked") throw new Error(t("certificates.revocation.verifyFailed"));
         setCompleted({ kind: "identity", identity: updated });
         onRevoked?.(updated);
@@ -295,6 +311,7 @@ export function RevocationCenter({
         onCertificateRevoked?.(verified);
       }
     } catch (error) {
+      setApprovalNotice(lifecycleApproval(error));
       setExecuteError(apiProblemContext(error, t("certificates.revocation.executeFailed")));
     } finally {
       setExecuteLoading(false);
@@ -520,6 +537,16 @@ export function RevocationCenter({
                 {executeError}
               </p>
             ) : null}
+            <LifecycleApprovalRecovery
+              approval={approvalNotice}
+              onReviewNew={(requestId) => {
+                if (review.kind !== "identity") return;
+                setApprovalRestart({ fingerprint: review.plan.request_fingerprint, requestId });
+                setApprovalNotice(null);
+                setExecuteError(null);
+                void loadReview();
+              }}
+            />
             {completed ? (
               <div className="rounded-control border border-border bg-muted/30 p-3 text-sm">
                 {completed.kind === "certificate" && completed.queued ? (

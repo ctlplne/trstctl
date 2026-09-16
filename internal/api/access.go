@@ -118,16 +118,36 @@ func (a *API) listAccessRoles(w http.ResponseWriter, _ *http.Request) {
 	a.writeJSON(w, http.StatusOK, roleListResponse{Items: items})
 }
 
-func (a *API) getOIDCMappingStatus(w http.ResponseWriter, _ *http.Request) {
+func (a *API) getOIDCMappingStatus(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
 	if a.auth == nil {
 		a.writeJSON(w, http.StatusOK, oidcMappingResponse{Enabled: false, TenantMappings: []AuthTenantMapping{}})
 		return
 	}
+	// Authentication mappings are deployment configuration, so database RLS does
+	// not filter them. Publish only the authenticated tenant's rules; subjects,
+	// groups and the fallback tenant can identify other customers.
+	mappings := make([]AuthTenantMapping, 0)
+	for _, mapping := range a.auth.TenantMappings {
+		if mapping.TenantID == tenantID {
+			mappings = append(mappings, mapping)
+		}
+	}
+	defaultTenant := ""
+	allowDefaultTenant := false
+	if a.auth.DefaultTenant == tenantID {
+		defaultTenant = a.auth.DefaultTenant
+		allowDefaultTenant = a.auth.AllowDefaultTenant
+	}
 	a.writeJSON(w, http.StatusOK, oidcMappingResponse{
 		Enabled: a.auth.OIDCEnabled, TenantClaim: a.auth.TenantClaim, GroupsClaim: a.auth.GroupsClaim,
 		ClaimIsTenant: a.auth.ClaimIsTenant, DefaultRoles: append([]string(nil), a.auth.DefaultRoles...),
-		DefaultTenant: a.auth.DefaultTenant, AllowDefaultTenant: a.auth.AllowDefaultTenant,
-		TenantMappings: append([]AuthTenantMapping(nil), a.auth.TenantMappings...),
+		DefaultTenant: defaultTenant, AllowDefaultTenant: allowDefaultTenant,
+		TenantMappings: mappings,
 	})
 }
 

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"mime"
 	"net/http"
 	"runtime"
 	"sort"
@@ -340,10 +341,47 @@ func (a *API) authCallback(w http.ResponseWriter, r *http.Request) {
 	// (AN-1).
 	tenantID, roles, err := a.resolveLoginTenant(claims)
 	if err != nil {
+		if prefersLoginRecoveryPage(r) {
+			for _, name := range []string{preLoginCookieName, stateCookieName, nonceCookieName, pkceCookieName} {
+				a.clearCookie(w, name)
+			}
+			// Keep the authorization code, state and account details out of the
+			// recovery URL and referrers.
+			w.Header().Set("Cache-Control", "no-store")
+			w.Header().Set("Referrer-Policy", "no-referrer")
+			http.Redirect(w, r, "/login?error=tenant_access_not_configured", http.StatusSeeOther)
+			return
+		}
 		a.writeProblem(w, problem.New(http.StatusForbidden, "no tenant for this user"))
 		return
 	}
 	a.issueLoginSession(w, r, claims, tenantID, roles, preLoginCookieName, stateCookieName, nonceCookieName, pkceCookieName)
+}
+
+// prefersLoginRecoveryPage keeps JSON API callers on the existing problem
+// response while browser document navigation reaches actionable login guidance.
+func prefersLoginRecoveryPage(r *http.Request) bool {
+	htmlQuality, jsonQuality := 0.0, 0.0
+	for _, value := range strings.Split(r.Header.Get("Accept"), ",") {
+		mediaType, params, err := mime.ParseMediaType(strings.TrimSpace(value))
+		if err != nil {
+			continue
+		}
+		quality := 1.0
+		if raw, ok := params["q"]; ok {
+			quality, err = strconv.ParseFloat(raw, 64)
+			if err != nil || !(quality >= 0 && quality <= 1) {
+				continue
+			}
+		}
+		switch mediaType {
+		case "text/html":
+			htmlQuality = max(htmlQuality, quality)
+		case "application/json", "application/problem+json", "application/*", "*/*":
+			jsonQuality = max(jsonQuality, quality)
+		}
+	}
+	return htmlQuality > 0 && htmlQuality >= jsonQuality
 }
 
 func (a *API) checkAuthorizationResponseIssuer(callbackIssuer string) error {

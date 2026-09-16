@@ -286,6 +286,25 @@ describe("auth + dashboards", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: /Continue with SSO/i })).toBeInTheDocument());
   });
 
+  it("explains the tenant assignment needed after a rejected SSO login", async () => {
+    const { UnauthorizedError } = await import("@/lib/api");
+    apiMock.me.mockRejectedValue(new UnauthorizedError());
+    renderAt("/login?error=tenant_access_not_configured");
+    const notice = await screen.findByRole("alert");
+    expect(within(notice).getByText("Your account needs tenant access")).toBeInTheDocument();
+    expect(within(notice).getByText(/Ask your administrator to check your tenant mapping and membership/)).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Continue with SSO" })).toBeInTheDocument();
+  });
+
+  it("does not render arbitrary login error query text", async () => {
+    const { UnauthorizedError } = await import("@/lib/api");
+    apiMock.me.mockRejectedValue(new UnauthorizedError());
+    renderAt("/login?error=untrusted-query-message");
+    expect(await screen.findByRole("button", { name: "Continue with SSO" })).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByText(/untrusted-query-message/)).not.toBeInTheDocument();
+  });
+
   it("does not offer a broken SSO link when browser authentication is disabled", async () => {
     const { UnauthorizedError } = await import("@/lib/api");
     apiMock.me.mockRejectedValue(new UnauthorizedError());
@@ -614,6 +633,10 @@ describe("auth + dashboards", () => {
     });
     expect(apiMock.secretPage).not.toHaveBeenCalled();
     expect(apiMock.incidentExecutions).not.toHaveBeenCalled();
+    const secrets = kpiTile(screen.getByRole("region", { name: "Home" }), /^Secrets$/);
+    expect(secrets).toHaveTextContent("—");
+    expect(secrets).toHaveTextContent("Current evidence unavailable");
+    expect(secrets).not.toHaveTextContent("Checking current evidence");
     expect(screen.getAllByText(/unavailable/i).length).toBeGreaterThanOrEqual(2);
   });
 
@@ -888,6 +911,111 @@ describe("auth + dashboards", () => {
   // from the certs + rotation runs the dashboard already fetches, and its
   // at-risk number is a door into the Certificates renewal-readiness tab.
 
+  it("keeps authorization failures visible and stops optional Home polling", async () => {
+    seededTenant();
+    const denied = [
+      apiMock.certificates,
+      apiMock.rotationRuns,
+      apiMock.auditEvents,
+      apiMock.codeSigningIdentities,
+      apiMock.discoveryMonitoring,
+      apiMock.secretPage,
+      apiMock.incidentExecutions,
+    ];
+    for (const read of denied) read.mockClear().mockRejectedValue(new ApiError(403, JSON.stringify({ detail: "This account no longer has access." })));
+    vi.useFakeTimers();
+    const view = renderDashboardWithRuntime(homeRuntime(true));
+    try {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(90_000);
+      });
+      for (const read of denied) expect(read).toHaveBeenCalledTimes(1);
+      expect(screen.queryByText(/of certificates auto-renew/i)).not.toBeInTheDocument();
+      expect(screen.queryByText("No audit events yet.")).not.toBeInTheDocument();
+      expect(screen.getAllByText(/This account no longer has access/).length).toBeGreaterThanOrEqual(2);
+    } finally {
+      view.unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not present denied expanded dashboard reads as healthy zeros", async () => {
+    seededTenant();
+    const denied = [
+      apiMock.certificates,
+      apiMock.risk,
+      apiMock.contextualRiskPriorities,
+      apiMock.identities,
+      apiMock.nhiInventory,
+      apiMock.rotationRuns,
+      apiMock.secretPage,
+      apiMock.incidentExecutions,
+    ];
+    for (const read of denied) read.mockRejectedValue(new ApiError(403, JSON.stringify({ detail: "This account no longer has access." })));
+    renderDashboardWithRuntime(homeRuntime(true));
+    await screen.findAllByText(/This account no longer has access/);
+    const metrics = screen.getByText("Explore all metrics").closest("details")!;
+    for (const label of ["Certificates", "Identities (NHI)", "Secrets", "Expiring ≤7d", "Open incidents", "Future-ready"]) {
+      expect(within(metrics).getByText(label).closest("a")).toHaveTextContent("—");
+    }
+    expect(within(metrics).queryByText(/No active alerts/)).not.toBeInTheDocument();
+    expect(within(metrics).queryByRole("img", { name: "Certificate issuance rate by day" })).not.toBeInTheDocument();
+    expect(within(metrics).queryByRole("img", { name: "Algorithm mix by key type" })).not.toBeInTheDocument();
+    // A separately permitted audit feed remains readable.
+    expect(await within(metrics).findByText("identity.transition")).toBeInTheDocument();
+  });
+
+  it("shows loading instead of zero and preserves independent expanded metrics", async () => {
+    seededTenant();
+    apiMock.certificates.mockImplementation(() => new Promise(() => {}));
+    renderDashboardWithRuntime(homeRuntime(true));
+    await screen.findByText("identity.transition");
+    const metrics = screen.getByText("Explore all metrics").closest("details")!;
+    const certTile = within(metrics).getByText("Certificates").closest("a")!;
+    expect(certTile).toHaveTextContent("—");
+    expect(certTile).toHaveTextContent("Checking current evidence…");
+    expect(within(metrics).getByText("Secrets").closest("a")).toHaveTextContent("2");
+    expect(within(metrics).queryByText(/No active alerts/)).not.toBeInTheDocument();
+    expect(within(metrics).queryByRole("img", { name: "Algorithm mix by key type" })).not.toBeInTheDocument();
+  });
+
+  it("recovers expanded certificate evidence on an explicit refresh", async () => {
+    seededTenant();
+    const certificates = [
+      {
+        id: "recovered",
+        tenant_id: "t1",
+        subject: "CN=recovered",
+        status: "active",
+        fingerprint: "recovered",
+        key_algorithm: "RSA-2048",
+        not_after: dayFromNow(3),
+      },
+    ];
+    apiMock.certificates.mockRejectedValue(new ApiError(403, JSON.stringify({ detail: "Certificate feed denied." })));
+    const user = userEvent.setup();
+    renderDashboardWithRuntime(homeRuntime(true));
+    await screen.findAllByText("Certificate feed denied. (HTTP 403)");
+    await user.click(screen.getByText("Explore all metrics"));
+    const card = screen.getByRole("heading", { name: /^Algorithm mix/ }).parentElement!.parentElement!;
+    expect(within(card).queryByRole("img", { name: "Algorithm mix by key type" })).not.toBeInTheDocument();
+    apiMock.certificates.mockResolvedValue(certificates);
+    await user.click(within(card).getByRole("button", { name: "Check again" }));
+    expect(await within(card).findByRole("img", { name: "Algorithm mix by key type" })).toBeInTheDocument();
+    expect(within(card).queryByText("Certificate feed denied. (HTTP 403)")).not.toBeInTheDocument();
+    const metrics = screen.getByText("Explore all metrics").closest("details")!;
+    expect(within(metrics).getByText("Certificates").closest("a")).toHaveTextContent("1");
+  });
+
+  it("does not calculate renewal readiness while either source is still loading", async () => {
+    seededTenant();
+    apiMock.rotationRuns.mockImplementation(() => new Promise(() => {}));
+    renderDashboardWithRuntime(homeRuntime(true));
+    await waitFor(() => expect(apiMock.rotationRuns).toHaveBeenCalled());
+    expect(screen.queryByText(/of certificates auto-renew/i)).not.toBeInTheDocument();
+    expect(screen.getByText("47-day renewal readiness")).toBeInTheDocument();
+  });
+
   it("renders the 47-day readiness panel from served data on the global home (C-D1)", async () => {
     seededTenant();
     // c2 (f2) is rotation-managed; c1 (f1, expires in 3d) and c3 (f3, 120d)
@@ -899,8 +1027,8 @@ describe("auth + dashboards", () => {
     renderAt("/");
     const dash = await screen.findByRole("region", { name: "Home" });
 
-    expect(await within(dash).findByText("47-day renewal readiness")).toBeInTheDocument();
     await waitFor(() => expect(within(dash).getByText("33%")).toBeInTheDocument());
+    expect(within(dash).getByText("47-day renewal readiness")).toBeInTheDocument();
     expect(within(dash).getByText(/1 manual certs expiring within 47 days/)).toBeInTheDocument();
     for (const label of ["Current state", "200-day model", "100-day model", "47-day target"]) {
       expect(within(dash).getByText(label)).toBeInTheDocument();

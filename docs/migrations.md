@@ -125,6 +125,21 @@ identifies the DDL strategy, including conditional retry steps; it does not clai
 that every statement was executed on every retry. Older transactional installs
 retain NULL execution provenance rather than receiving invented history.
 
+## SCIM subject bindings (0220–0221)
+
+Migration 0220 adds nullable SCIM identity metadata without rewriting existing
+membership rows. Legacy members remain unbound until explicitly provisioned.
+Its object-shape check is added without scanning existing rows under the column
+expansion's exclusive lock.
+
+Migration 0221 builds the case-insensitive username index concurrently, scoped to
+each tenant, then validates the object-shape check. Membership writes can continue
+during the index build. An interrupted build is retried by dropping and rebuilding
+the index concurrently; the migration ledger is written only after the index is
+valid. Conflicting usernames prevent startup rather than silently weakening the
+uniqueness rule. Inspect and reconcile the conflicting provisioning identities
+before retrying. The usual pre-upgrade backup and bounded lock waits still apply.
+
 ## Concurrent instances are safe (advisory lock)
 
 In a multi-replica deployment, several instances may boot at once and all try to

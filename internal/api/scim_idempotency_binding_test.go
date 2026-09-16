@@ -55,9 +55,10 @@ func TestSCIMMutationBindsTokenRouteMethodAndRawBody(t *testing.T) {
 		return http.StatusOK, map[string]string{"credential": "must-not-run"}, nil
 	}
 	conflicts := map[string]*httptest.ResponseRecorder{
-		"token":  invoke(tokenB, http.MethodPatch, escapedRoute, body, conflictCallback),
-		"route":  invoke(tokenA, http.MethodPatch, "/scim/v2/Users/alice/ops", body, conflictCallback),
-		"method": invoke(tokenA, http.MethodPut, escapedRoute, body, conflictCallback),
+		"mapping": invoke(scimToken{Name: tokenA.Name, TenantID: tokenA.TenantID, TokenHash: tokenA.TokenHash, SubjectAttribute: "externalId"}, http.MethodPatch, escapedRoute, body, conflictCallback),
+		"token":   invoke(tokenB, http.MethodPatch, escapedRoute, body, conflictCallback),
+		"route":   invoke(tokenA, http.MethodPatch, "/scim/v2/Users/alice/ops", body, conflictCallback),
+		"method":  invoke(tokenA, http.MethodPut, escapedRoute, body, conflictCallback),
 		"body": invoke(tokenA, http.MethodPatch, escapedRoute,
 			[]byte(`{"active":false,"displayName":"Alice"}`), conflictCallback),
 	}

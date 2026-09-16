@@ -85,6 +85,7 @@ type API struct {
 	agentEnrollmentObserver func(result string)
 	rateLimiter             RateLimiter
 	specialAbuse            *specialRouteAbuseLimiter
+	denialAudit             *authzDenialAudit
 	gate                    MutationGate
 	abac                    ABACDenyEvaluator
 	abacEnvironment         map[string]string
@@ -511,6 +512,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		agentEnrollmentObserver:     cfg.agentEnrollmentObserver,
 		rateLimiter:                 cfg.rateLimiter,
 		specialAbuse:                newSpecialRouteAbuseLimiter(specialAbuseLimits),
+		denialAudit:                 newAuthzDenialAudit(specialAbuseLimits, orch),
 		gate:                        cfg.gate,
 		abac:                        cfg.abac,
 		abacEnvironment:             copyStringMap(cfg.abacEnvironment),
@@ -1713,6 +1715,7 @@ func (a *API) guard(perm authz.Permission, scope routeScope, h http.HandlerFunc)
 			return
 		}
 		if !principal.Can(perm, target) {
+			w.Header().Set("X-Trstctl-Audit-Status", a.denialAudit.record(r, principal, perm))
 			a.writeProblem(w, problem.New(http.StatusForbidden, "forbidden: requires "+string(perm)))
 			return
 		}

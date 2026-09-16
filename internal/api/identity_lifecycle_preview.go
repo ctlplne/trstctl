@@ -127,16 +127,18 @@ func (a *API) previewIdentityTransition(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	destination, sideEffect := orchestrator.SideEffectFor(orchestrator.State(identity.Status), to)
+	principal, _ := r.Context().Value(principalCtxKey).(authz.Principal)
 	fingerprintBody, err := json.Marshal(struct {
 		Domain          string `json:"domain"`
 		TenantID        string `json:"tenant_id"`
+		Requester       string `json:"requester"`
 		IdentityID      string `json:"identity_id"`
 		ExpectedVersion uint64 `json:"expected_version"`
 		To              string `json:"to"`
 		Reason          string `json:"reason"`
 		CSRDigest       string `json:"csr_digest,omitempty"`
 	}{
-		Domain: "trstctl.api.identity-lifecycle-preview.v1", TenantID: tenantID,
+		Domain: "trstctl.api.identity-lifecycle-preview.v2", TenantID: tenantID, Requester: principal.Subject,
 		IdentityID: id, ExpectedVersion: version, To: req.To, Reason: req.Reason,
 		CSRDigest: crypto.SHA256Hex([]byte(csrPEM)),
 	})

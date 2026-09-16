@@ -140,7 +140,9 @@ import (
 // snapshots cannot distinguish completed old events from missing old effects.
 // Version 41 retains the immutable certificate validity anchor. Older snapshots
 // cannot establish this fact and must not erase it during restore.
-const SnapshotFormatVersion = 41
+// Version 42 makes persisted SCIM subject bindings part of the recovery contract.
+// Older snapshot formats cannot assert that these identifiers were preserved.
+const SnapshotFormatVersion = 42
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

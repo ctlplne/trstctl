@@ -1,6 +1,8 @@
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
 
+import { isAccessDenied } from "@/lib/apiTransport";
+
 const AppQueryContext = createContext(false);
 const invalidateEventName = "trstctl:invalidate-app-queries";
 
@@ -26,7 +28,8 @@ export function createAppQueryClient(): QueryClient {
       queries: {
         // One retry: transient blips recover, real failures surface fast and
         // fail closed into the page's ErrorState.
-        retry: 1,
+        retry: (failureCount, error) => !isAccessDenied(error) && failureCount < 1,
+        refetchOnReconnect: (query) => !isAccessDenied(query.state.error),
         // Server truth wins on navigation, but within a screen a 30s window
         // absorbs re-render storms without re-fetching.
         staleTime: 30_000,
@@ -51,7 +54,7 @@ export function AppQueryProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     function onVisibilityChange() {
       if (document.visibilityState !== "visible") return;
-      void client.invalidateQueries({ predicate: (query) => query.meta?.live === true }, { cancelRefetch: false });
+      void client.invalidateQueries({ predicate: (query) => query.meta?.live === true && !isAccessDenied(query.state.error) }, { cancelRefetch: false });
     }
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => document.removeEventListener("visibilitychange", onVisibilityChange);
@@ -116,16 +119,18 @@ export function useApiQuery<T>(
   options?: ApiQueryOptions,
 ): ApiQueryResult<T> {
   const live = options?.live;
+  const retry = options?.retry ?? 1;
   const query = useQuery({
     queryKey: key,
     queryFn: loader,
     enabled: options?.enabled,
-    ...(options?.retry === undefined ? {} : { retry: options.retry }),
+    retry: (failureCount, error) => !isAccessDenied(error) && (retry === true || (retry !== false && failureCount < retry)),
     meta: live ? { live: true } : undefined,
-    refetchInterval: live ? () => liveRefetchInterval(live.intervalMs) : undefined,
+    refetchInterval: live ? (query) => (isAccessDenied(query.state.error) ? false : liveRefetchInterval(live.intervalMs)) : undefined,
   });
   return {
-    data: query.data ?? null,
+    // A revoked session must not keep presenting its last authorized snapshot.
+    data: isAccessDenied(query.error) ? null : (query.data ?? null),
     loading: query.isPending,
     fetching: query.isFetching,
     error: query.error ? (query.error instanceof Error ? query.error.message : String(query.error)) : null,

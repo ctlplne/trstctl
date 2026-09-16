@@ -125,14 +125,59 @@ An IdP such as Okta or Microsoft Entra sends a tenant-bound bearer token to
 startup and keeps only the hash in memory. The token chooses the tenant before any
 payload is read, so a SCIM request cannot smuggle a tenant id in its JSON body.
 
+Each token also selects the login-subject attribute: `userName` by default, or
+explicit `externalId` when the trusted IdP mapping supplies the exact login
+subject there. Both provisioning identifiers are retained. The selected value
+is the immutable resource `id`; it is never inferred from an email. See
+[SCIM identity mapping](../configuration.md#scim-provisioning) before onboarding.
+
 SCIM users project into the same tenant-member read model used by RBAC. Creating or
 updating a user appends a tenant-member upsert event; `active:false` or DELETE appends
 an offboarding event. SCIM groups map to existing RBAC role names: a group named
 `viewer` gives its members the `viewer` role, and removing a member removes that role.
+Group cleanup preserves offboarding; a group addition cannot reactivate an inactive user.
 Browser sessions consult the current tenant-member roles on each API request, so
 SCIM provisioning and deprovisioning change real authorization, beyond an admin list.
 Supported IdP operations are SCIM Users create/get/list/put/patch/delete and Groups
 create/get/list/patch/delete. **Served when `auth.scim.enabled` is configured.**
+
+Home's expanded metrics distinguish loading or unavailable reads from verified
+zero counts. Inventory, alert summaries, certificate charts, renewal trends, and
+risk ordering show their own source failures and an explicit retry. Independent
+permitted reads remain visible. A refused certificate or risk feed cannot become
+an empty estate or a claim that no alerts exist.
+
+### Evidence for denied API permissions
+
+An authenticated API request that lacks its route permission is refused with 403.
+The server also attempts to append an `authz.decision` event containing the verified
+tenant, caller, missing permission and registered route pattern. It does not copy
+request bodies, query strings or bearer credentials into that event.
+
+This evidence path has its own bounded admission budget: by default 1,200 attempts
+per minute per API process, 300 per tenant, 120 per client address and 60 per authenticated
+subject within a tenant. At most 8 appends run at once, with no waiting queue and a
+one-second context deadline. These limits do not consume the login/enrollment
+budget. Existing special-route limit overrides also configure this separate
+budget. Floods cannot turn an access denial into an allowed request.
+
+The 403 response's `X-Trstctl-Audit-Status` header is `recorded` when the append was
+confirmed, `rate_limited` when its admission budget is exhausted, `busy` when all
+append slots are occupied, or `unavailable` when no confirmed append is available.
+An append can commit just before a timeout; `unavailable` does not prove an event
+is absent. Only missing-route-permission decisions after authentication, tenant,
+CSRF and target-scope validation enter this path. Other rejections, including invalid
+credentials, conflicting tenant headers and invalid CSRF tokens, are outside it. Handler-specific and ABAC decisions retain
+their own evidence paths. Do not infer complete recording of every rejected request
+from a successful export.
+
+The console's shared query layer stops automatic retries, live polling and
+visibility/reconnection refresh for a read refused with 401 or 403. It also hides
+the last allowed result after that refusal. An explicit refresh or a new page
+navigation can check access again; an authorized successful read resumes normal
+polling. Home shows unavailable renewal and audit evidence separately from a
+verified empty result. Ask an administrator to restore the required permissions,
+then check again, or sign in with an authorized account.
 
 ### Single-binary distribution (F14)
 

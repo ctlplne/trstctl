@@ -23,6 +23,15 @@ type PatchOperation struct {
 func ApplyUserPatch(u *User, ops []PatchOperation) error {
 	for _, op := range ops {
 		action := strings.ToLower(strings.TrimSpace(op.Op))
+		if action == "remove" {
+			switch strings.ToLower(strings.TrimSpace(op.Path)) {
+			case "username":
+				u.UserName = ""
+			case "externalid":
+				u.ExternalID = ""
+			}
+			continue
+		}
 		if action != "replace" && action != "add" {
 			continue
 		}
@@ -35,6 +44,8 @@ func ApplyUserPatch(u *User, ops []PatchOperation) error {
 			u.Active = b
 		case "username":
 			u.UserName = jsonString(op.Value)
+		case "externalid":
+			u.ExternalID = jsonString(op.Value)
 		case "displayname":
 			u.DisplayName = jsonString(op.Value)
 		case "name.formatted":
@@ -51,6 +62,9 @@ func ApplyUserPatch(u *User, ops []PatchOperation) error {
 				if b, err := parseSCIMBool(v); err == nil {
 					u.Active = b
 				}
+			}
+			if v, ok := m["externalId"]; ok {
+				u.ExternalID = trimJSONString(v)
 			}
 			if v, ok := m["userName"]; ok {
 				u.UserName = trimJSONString(v)

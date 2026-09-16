@@ -52,6 +52,12 @@ export class ApiError extends Error {
   }
 }
 
+/** Authorization refusals need an explicit session or permission change, not
+ * automatic transport retries. Keep them visible to the query layer. */
+export function isAccessDenied(error: unknown): boolean {
+  return error instanceof UnauthorizedError || (error instanceof ApiError && (error.status === 401 || error.status === 403));
+}
+
 /** parseRetryAfter reads a Retry-After header (RFC 7231: either delta-seconds or an
  * HTTP-date) into seconds, or undefined when absent/unparseable. */
 function parseRetryAfter(h: string | null): number | undefined {

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -32,15 +33,17 @@ type SCIMConfig struct {
 }
 
 type SCIMToken struct {
-	Name      string
-	TenantID  string
-	TokenHash string
+	SubjectAttribute string
+	Name             string
+	TenantID         string
+	TokenHash        string
 }
 
 type scimToken struct {
-	Name      string
-	TenantID  string
-	TokenHash string
+	SubjectAttribute string
+	Name             string
+	TenantID         string
+	TokenHash        string
 }
 
 type scimHTTPError struct {
@@ -68,7 +71,14 @@ func normalizeSCIM(cfg *SCIMConfig) map[string]scimToken {
 		if name == "" {
 			name = "scim"
 		}
-		out[tok.TokenHash] = scimToken{Name: name, TenantID: tok.TenantID, TokenHash: tok.TokenHash}
+		attribute := strings.TrimSpace(tok.SubjectAttribute)
+		if attribute == "" {
+			attribute = "userName"
+		}
+		if attribute != "userName" && attribute != "externalId" {
+			continue
+		}
+		out[tok.TokenHash] = scimToken{Name: name, TenantID: tok.TenantID, TokenHash: tok.TokenHash, SubjectAttribute: attribute}
 	}
 	return out
 }
@@ -125,14 +135,14 @@ func (a *API) scimCreateUser(w http.ResponseWriter, r *http.Request) {
 	if !bytes.Contains(raw, []byte(`"active"`)) {
 		in.Active = true
 	}
-	subject := strings.TrimSpace(in.UserName)
-	if subject == "" {
-		writeSCIMError(w, http.StatusBadRequest, "invalidValue", "userName is required")
+	subject, err := scimLoginSubject(tok, in)
+	if err != nil {
+		writeSCIMMappedError(w, err)
 		return
 	}
 	key, prevKey := scimIdempotencyKey(r, raw)
 	a.scimMutate(w, r, tok, key, prevKey, raw, func(ctx context.Context, tenantID string) (int, any, error) {
-		member, err := a.applySCIMUser(ctx, tenantID, subject, in)
+		member, err := a.applySCIMUser(ctx, tok, subject, in)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -159,7 +169,7 @@ func (a *API) scimListUsers(w http.ResponseWriter, r *http.Request) {
 	}
 	filtered := members[:0]
 	for _, m := range members {
-		if filter == "" || strings.EqualFold(m.Subject, filter) {
+		if scimMemberVisible(tok, m) && (filter == "" || strings.EqualFold(userToSCIM(m, base).UserName, filter)) {
 			filtered = append(filtered, m)
 		}
 	}
@@ -178,7 +188,7 @@ func (a *API) scimGetUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	m, err := a.store.GetTenantMember(r.Context(), tok.TenantID, r.PathValue("id"))
-	if err != nil {
+	if err != nil || !scimMemberVisible(tok, m) {
 		writeSCIMError(w, http.StatusNotFound, "", "user not found")
 		return
 	}
@@ -200,12 +210,12 @@ func (a *API) scimPutUser(w http.ResponseWriter, r *http.Request) {
 		writeSCIMError(w, http.StatusBadRequest, "invalidValue", "user id is required")
 		return
 	}
-	if in.UserName == "" {
+	if in.UserName == "" && tok.SubjectAttribute == "userName" {
 		in.UserName = subject
 	}
 	key, prevKey := scimIdempotencyKey(r, raw)
 	a.scimMutate(w, r, tok, key, prevKey, raw, func(ctx context.Context, tenantID string) (int, any, error) {
-		member, err := a.applySCIMUser(ctx, tenantID, subject, in)
+		member, err := a.applySCIMUser(ctx, tok, subject, in)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -231,14 +241,14 @@ func (a *API) scimPatchUser(w http.ResponseWriter, r *http.Request) {
 	key, prevKey := scimIdempotencyKey(r, raw)
 	a.scimMutate(w, r, tok, key, prevKey, raw, func(ctx context.Context, tenantID string) (int, any, error) {
 		cur, err := a.store.GetTenantMember(ctx, tenantID, subject)
-		if err != nil {
+		if err != nil || !scimMemberVisible(tok, cur) {
 			return 0, nil, scimHTTPError{status: http.StatusNotFound, detail: "user not found"}
 		}
 		su := userToSCIM(cur, scimBase(r))
 		if err := scim.ApplyUserPatch(&su, patch.Operations); err != nil {
 			return 0, nil, scimHTTPError{status: http.StatusBadRequest, scimType: "invalidValue", detail: "invalid user patch"}
 		}
-		member, err := a.applySCIMUser(ctx, tenantID, subject, su)
+		member, err := a.applySCIMUser(ctx, tok, subject, su)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -259,7 +269,7 @@ func (a *API) scimDeleteUser(w http.ResponseWriter, r *http.Request) {
 	}
 	key, prevKey := scimIdempotencyKey(r, raw)
 	a.scimMutate(w, r, tok, key, prevKey, raw, func(ctx context.Context, tenantID string) (int, any, error) {
-		if _, err := a.store.GetTenantMember(ctx, tenantID, subject); err != nil {
+		if cur, err := a.store.GetTenantMember(ctx, tenantID, subject); err != nil || !scimMemberVisible(tok, cur) {
 			return 0, nil, scimHTTPError{status: http.StatusNotFound, detail: "user not found"}
 		}
 		if _, _, err := a.orch.OffboardTenantMember(ctx, tenantID, subject, "scim delete"); err != nil {
@@ -269,14 +279,49 @@ func (a *API) scimDeleteUser(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (a *API) applySCIMUser(ctx context.Context, tenantID, subject string, in scim.User) (store.TenantMember, error) {
+func (a *API) applySCIMUser(ctx context.Context, tok scimToken, subject string, in scim.User) (store.TenantMember, error) {
+	// Validate alias uniqueness and append its event under one cross-replica
+	// fence. Ordinary role changes never claim aliases and need no such lock.
+	var member store.TenantMember
+	err := a.store.WithProjectionLock(ctx, func(lockCtx context.Context) error {
+		var err error
+		member, err = a.applySCIMUserLocked(lockCtx, tok, subject, in)
+		return err
+	})
+	return member, err
+}
+
+func (a *API) applySCIMUserLocked(ctx context.Context, tok scimToken, subject string, in scim.User) (store.TenantMember, error) {
+	tenantID := tok.TenantID
+	boundSubject, err := scimLoginSubject(tok, in)
+	if err != nil {
+		return store.TenantMember{}, err
+	}
+	if boundSubject != subject {
+		return store.TenantMember{}, scimHTTPError{status: http.StatusBadRequest, scimType: "mutability", detail: "the configured login-subject attribute cannot change for an existing SCIM resource"}
+	}
+	current, currentErr := a.store.GetTenantMember(ctx, tenantID, subject)
+	if currentErr != nil && !store.IsNotFound(currentErr) {
+		return store.TenantMember{}, currentErr
+	}
+	if currentErr == nil && current.SCIM != nil && current.SCIM.SubjectAttribute != tok.SubjectAttribute {
+		return store.TenantMember{}, scimHTTPError{status: http.StatusConflict, scimType: "mutability", detail: "this principal already has a different explicit SCIM subject binding"}
+	}
+	identity := &store.SCIMIdentity{UserName: strings.TrimSpace(in.UserName), ExternalID: strings.TrimSpace(in.ExternalID), SubjectAttribute: tok.SubjectAttribute}
+	exists, err := a.store.TenantMemberSCIMUserNameExists(ctx, tenantID, identity.UserName, subject)
+	if err != nil {
+		return store.TenantMember{}, err
+	}
+	if exists {
+		return store.TenantMember{}, scimHTTPError{status: http.StatusConflict, scimType: "uniqueness", detail: "userName is already bound to another SCIM principal in this tenant"}
+	}
 	if !in.Active {
-		member, _, err := a.orch.OffboardTenantMember(ctx, tenantID, subject, "scim active=false")
+		member, _, err := a.orch.OffboardSCIMTenantMember(ctx, tenantID, subject, "scim active=false", identity)
 		return member, err
 	}
 	roles := []string{}
-	if cur, err := a.store.GetTenantMember(ctx, tenantID, subject); err == nil && cur.Status == "active" {
-		roles = append(roles, cur.Roles...)
+	if currentErr == nil && current.Status == "active" {
+		roles = append(roles, current.Roles...)
 	}
 	displayName := in.DisplayName
 	if displayName == "" && in.Name != nil {
@@ -287,7 +332,7 @@ func (a *API) applySCIMUser(ctx context.Context, tenantID, subject string, in sc
 		email = in.UserName
 	}
 	return a.orch.UpsertTenantMember(ctx, tenantID, store.TenantMember{
-		Subject: subject, DisplayName: displayName, Email: email, Roles: roles, Source: "scim",
+		Subject: subject, DisplayName: displayName, Email: email, Roles: roles, Source: "scim", SCIM: identity,
 	})
 }
 
@@ -316,11 +361,11 @@ func (a *API) scimCreateGroup(w http.ResponseWriter, r *http.Request) {
 			if strings.TrimSpace(m.Value) == "" {
 				continue
 			}
-			if err := a.addRoleToMember(ctx, tenantID, m.Value, roleName); err != nil {
+			if err := a.addRoleToMember(ctx, tok, m.Value, roleName); err != nil {
 				return 0, nil, err
 			}
 		}
-		g, err := a.groupToSCIM(ctx, tenantID, roleName, scimBase(r))
+		g, err := a.groupToSCIM(ctx, tok, roleName, scimBase(r))
 		if err != nil {
 			return 0, nil, err
 		}
@@ -337,7 +382,7 @@ func (a *API) scimListGroups(w http.ResponseWriter, r *http.Request) {
 	roles := a.roles.Roles()
 	resources := make([]any, 0, len(roles))
 	for _, role := range roles {
-		g, err := a.groupToSCIM(r.Context(), tok.TenantID, role.Name, base)
+		g, err := a.groupToSCIM(r.Context(), tok, role.Name, base)
 		if err != nil {
 			writeSCIMError(w, http.StatusInternalServerError, "", "list groups failed")
 			return
@@ -357,7 +402,7 @@ func (a *API) scimGetGroup(w http.ResponseWriter, r *http.Request) {
 		writeSCIMError(w, http.StatusNotFound, "", "group not found")
 		return
 	}
-	g, err := a.groupToSCIM(r.Context(), tok.TenantID, roleName, scimBase(r))
+	g, err := a.groupToSCIM(r.Context(), tok, roleName, scimBase(r))
 	if err != nil {
 		writeSCIMError(w, http.StatusInternalServerError, "", "get group failed")
 		return
@@ -399,29 +444,29 @@ func (a *API) scimPatchGroup(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			for _, m := range current {
-				if !want[m.Subject] {
-					if err := a.removeRoleFromMember(ctx, tenantID, m.Subject, roleName); err != nil {
+				if scimMemberVisible(tok, m) && !want[m.Subject] {
+					if err := a.removeRoleFromMember(ctx, tok, m.Subject, roleName); err != nil {
 						return 0, nil, err
 					}
 				}
 			}
 			for m := range want {
-				if err := a.addRoleToMember(ctx, tenantID, m, roleName); err != nil {
+				if err := a.addRoleToMember(ctx, tok, m, roleName); err != nil {
 					return 0, nil, err
 				}
 			}
 		}
 		for _, m := range gp.Add {
-			if err := a.addRoleToMember(ctx, tenantID, m, roleName); err != nil {
+			if err := a.addRoleToMember(ctx, tok, m, roleName); err != nil {
 				return 0, nil, err
 			}
 		}
 		for _, m := range gp.Remove {
-			if err := a.removeRoleFromMember(ctx, tenantID, m, roleName); err != nil {
+			if err := a.removeRoleFromMember(ctx, tok, m, roleName); err != nil {
 				return 0, nil, err
 			}
 		}
-		g, err := a.groupToSCIM(ctx, tenantID, roleName, scimBase(r))
+		g, err := a.groupToSCIM(ctx, tok, roleName, scimBase(r))
 		if err != nil {
 			return 0, nil, err
 		}
@@ -447,7 +492,7 @@ func (a *API) scimDeleteGroup(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		for _, m := range members {
-			if err := a.removeRoleFromMember(ctx, tenantID, m.Subject, roleName); err != nil {
+			if err := a.removeRoleFromMember(ctx, tok, m.Subject, roleName); err != nil {
 				return 0, nil, err
 			}
 		}
@@ -455,7 +500,8 @@ func (a *API) scimDeleteGroup(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (a *API) addRoleToMember(ctx context.Context, tenantID, subject, roleName string) error {
+func (a *API) addRoleToMember(ctx context.Context, tok scimToken, subject, roleName string) error {
+	tenantID := tok.TenantID
 	subject = strings.TrimSpace(subject)
 	if subject == "" {
 		return nil
@@ -463,6 +509,14 @@ func (a *API) addRoleToMember(ctx context.Context, tenantID, subject, roleName s
 	member, err := a.store.GetTenantMember(ctx, tenantID, subject)
 	if err != nil && !store.IsNotFound(err) {
 		return err
+	}
+	// A group delta is not an account-reactivation command. In explicit mapping
+	// mode, a group member must also name a previously bound SCIM resource.
+	if err == nil && member.Status == "offboarded" {
+		return scimHTTPError{status: http.StatusConflict, scimType: "invalidValue", detail: "provision the user as active before adding group membership"}
+	}
+	if tok.SubjectAttribute == "externalId" && (err != nil || !scimMemberVisible(tok, member)) {
+		return scimHTTPError{status: http.StatusNotFound, detail: "bound SCIM user not found"}
 	}
 	roles := appendRole(member.Roles, roleName)
 	if member.DisplayName == "" {
@@ -477,13 +531,19 @@ func (a *API) addRoleToMember(ctx context.Context, tenantID, subject, roleName s
 	return err
 }
 
-func (a *API) removeRoleFromMember(ctx context.Context, tenantID, subject, roleName string) error {
+func (a *API) removeRoleFromMember(ctx context.Context, tok scimToken, subject, roleName string) error {
+	tenantID := tok.TenantID
 	member, err := a.store.GetTenantMember(ctx, tenantID, subject)
 	if err != nil {
 		if store.IsNotFound(err) {
 			return nil
 		}
 		return err
+	}
+	// Offboarding already removes all effective permissions. A delayed group
+	// removal must remain a no-op, not emit the active-member upsert below.
+	if member.Status == "offboarded" || !scimMemberVisible(tok, member) {
+		return nil
 	}
 	roles := removeRole(member.Roles, roleName)
 	_, err = a.orch.UpsertTenantMember(ctx, tenantID, store.TenantMember{
@@ -492,7 +552,8 @@ func (a *API) removeRoleFromMember(ctx context.Context, tenantID, subject, roleN
 	return err
 }
 
-func (a *API) groupToSCIM(ctx context.Context, tenantID, roleName, base string) (scim.Group, error) {
+func (a *API) groupToSCIM(ctx context.Context, tok scimToken, roleName, base string) (scim.Group, error) {
+	tenantID := tok.TenantID
 	members, err := a.store.ListTenantMembersByRole(ctx, tenantID, roleName)
 	if err != nil {
 		return scim.Group{}, err
@@ -504,7 +565,9 @@ func (a *API) groupToSCIM(ctx context.Context, tenantID, roleName, base string) 
 		Meta:        &scim.Meta{ResourceType: "Group", Location: base + "/Groups/" + roleName},
 	}
 	for _, m := range members {
-		g.Members = append(g.Members, scim.Member{Value: m.Subject, Display: m.DisplayName, Ref: base + "/Users/" + m.Subject})
+		if scimMemberVisible(tok, m) {
+			g.Members = append(g.Members, scim.Member{Value: m.Subject, Display: m.DisplayName, Ref: base + "/Users/" + url.PathEscape(m.Subject)})
+		}
 	}
 	return g, nil
 }
@@ -574,9 +637,9 @@ func (a *API) scimMutate(w http.ResponseWriter, r *http.Request, tok scimToken, 
 		}
 	}
 	cacheRaw, err := a.idem.DoBound(ctx, tok.TenantID, idempotencyKey, binding, func(ctx context.Context) ([]byte, error) {
-		status, body, ferr := fn(ctx, tok.TenantID)
-		if ferr != nil {
-			return nil, ferr
+		status, body, err := fn(ctx, tok.TenantID)
+		if err != nil {
+			return nil, err
 		}
 		bodyJSON := json.RawMessage("null")
 		if body != nil {
@@ -710,17 +773,19 @@ func scimMutationBinding(tok scimToken, r *http.Request, body []byte) (string, e
 		escapedPath = r.URL.EscapedPath()
 	}
 	material, err := json.Marshal(struct {
-		Domain      string `json:"domain"`
-		TokenHash   string `json:"token_hash"`
-		Method      string `json:"method"`
-		EscapedPath string `json:"escaped_path"`
-		BodySHA256  string `json:"body_sha256"`
+		Domain           string `json:"domain"`
+		TokenHash        string `json:"token_hash"`
+		Method           string `json:"method"`
+		EscapedPath      string `json:"escaped_path"`
+		BodySHA256       string `json:"body_sha256"`
+		SubjectAttribute string `json:"subject_attribute,omitempty"`
 	}{
-		Domain:      "trstctl.api.scim-mutation-binding.v1",
-		TokenHash:   tok.TokenHash,
-		Method:      r.Method,
-		EscapedPath: escapedPath,
-		BodySHA256:  crypto.SHA256Hex(body),
+		Domain:           "trstctl.api.scim-mutation-binding.v1",
+		TokenHash:        tok.TokenHash,
+		Method:           r.Method,
+		EscapedPath:      escapedPath,
+		BodySHA256:       crypto.SHA256Hex(body),
+		SubjectAttribute: scimNonLegacySubjectAttribute(tok),
 	})
 	if err != nil {
 		return "", err
@@ -772,8 +837,12 @@ func userToSCIM(m store.TenantMember, base string) scim.User {
 			ResourceType: "User",
 			Created:      ptrTime(m.CreatedAt),
 			LastModified: ptrTime(m.UpdatedAt),
-			Location:     base + "/Users/" + m.Subject,
+			Location:     base + "/Users/" + url.PathEscape(m.Subject),
 		},
+	}
+	if m.SCIM != nil {
+		u.UserName = m.SCIM.UserName
+		u.ExternalID = m.SCIM.ExternalID
 	}
 	if m.Email != "" {
 		u.Emails = []scim.Email{{Value: m.Email, Primary: true}}
@@ -849,4 +918,35 @@ func ptrTime(t time.Time) *time.Time {
 		return nil
 	}
 	return &t
+}
+
+// externalId is client-issued, not inherently an OIDC subject. Only the explicit
+// tenant-token configuration selects it; payloads cannot select their own mode.
+func scimLoginSubject(tok scimToken, in scim.User) (string, error) {
+	if strings.TrimSpace(in.UserName) == "" {
+		return "", scimHTTPError{status: http.StatusBadRequest, scimType: "invalidValue", detail: "userName is required"}
+	}
+	if tok.SubjectAttribute == "externalId" {
+		subject := strings.TrimSpace(in.ExternalID)
+		if subject == "" {
+			return "", scimHTTPError{status: http.StatusBadRequest, scimType: "invalidValue", detail: "externalId is required because this provisioning token explicitly uses it as the login subject"}
+		}
+		return subject, nil
+	}
+	return strings.TrimSpace(in.UserName), nil
+}
+
+func scimNonLegacySubjectAttribute(tok scimToken) string {
+	if tok.SubjectAttribute == "externalId" {
+		return tok.SubjectAttribute
+	}
+	// Keep the pre-upgrade request binding byte-identical for default userName.
+	return ""
+}
+
+func scimMemberVisible(tok scimToken, member store.TenantMember) bool {
+	if member.SCIM == nil {
+		return tok.SubjectAttribute != "externalId"
+	}
+	return member.SCIM.SubjectAttribute == tok.SubjectAttribute
 }

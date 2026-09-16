@@ -1,14 +1,17 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Eyebrow } from "@/components/typography";
 import { Button } from "@/components/ui/button";
 import { beginLogin, useAuth } from "@/auth/AuthProvider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BrandMark } from "@/components/BrandMark";
+import { ErrorState } from "@/components/StatePrimitives";
 import { translateNow } from "@/i18n/I18nProvider";
 
 export function Login() {
   const { oidcAvailable, previewAvailable, startPreview } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const needsTenantAccess = searchParams.get("error") === "tenant_access_not_configured";
 
   function enterPreview() {
     startPreview();
@@ -31,6 +34,11 @@ export function Login() {
             <CardTitle>{translateNow(oidcAvailable ? "auth.login.title" : "auth.browserLoginDisabled.title")}</CardTitle>
           </CardHeader>
           <CardContent>
+            {needsTenantAccess && (
+              <div className="mb-4">
+                <ErrorState title={translateNow("auth.login.tenantAccessTitle")}>{translateNow("auth.login.tenantAccessBody")}</ErrorState>
+              </div>
+            )}
             <p className="mb-4 text-body text-muted-foreground">{translateNow(oidcAvailable ? "auth.login.body" : "auth.browserLoginDisabled.body")}</p>
             {oidcAvailable && (
               <Button className="min-h-11 w-full" onClick={beginLogin}>

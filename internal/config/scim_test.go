@@ -25,8 +25,9 @@ func TestSCIMDisabledNeedsNoConfig(t *testing.T) {
 
 func TestSCIMEnabledFailsClosed(t *testing.T) {
 	cases := map[string]func(*SCIM){
-		"missing tokens": func(s *SCIM) { s.Tokens = nil },
-		"missing tenant": func(s *SCIM) { s.Tokens[0].TenantID = "" },
+		"missing tokens":         func(s *SCIM) { s.Tokens = nil },
+		"inferred email mapping": func(s *SCIM) { s.Tokens[0].SubjectAttribute = "email" },
+		"missing tenant":         func(s *SCIM) { s.Tokens[0].TenantID = "" },
 		"missing token file": func(s *SCIM) {
 			s.Tokens[0].TokenFile = ""
 		},
@@ -54,10 +55,11 @@ func TestSCIMEnabledValidPasses(t *testing.T) {
 
 func TestSCIMEnvOverlaysSingleTenantToken(t *testing.T) {
 	env := map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
-		"TRSTCTL_AUTH_SCIM_ENABLED":         "true",
-		"TRSTCTL_AUTH_SCIM_TOKEN_NAME":      "entra",
-		"TRSTCTL_AUTH_SCIM_TOKEN_TENANT_ID": "tenant-b",
-		"TRSTCTL_AUTH_SCIM_TOKEN_FILE":      "/run/secrets/trstctl-scim-token",
+		"TRSTCTL_AUTH_SCIM_ENABLED":           "true",
+		"TRSTCTL_AUTH_SCIM_SUBJECT_ATTRIBUTE": "externalId",
+		"TRSTCTL_AUTH_SCIM_TOKEN_NAME":        "entra",
+		"TRSTCTL_AUTH_SCIM_TOKEN_TENANT_ID":   "tenant-b",
+		"TRSTCTL_AUTH_SCIM_TOKEN_FILE":        "/run/secrets/trstctl-scim-token",
 	}
 	cfg, err := Load(func(k string) string { return env[k] })
 	if err != nil {
@@ -70,7 +72,32 @@ func TestSCIMEnvOverlaysSingleTenantToken(t *testing.T) {
 		t.Fatalf("expected one SCIM token from env, got %d", len(cfg.Auth.SCIM.Tokens))
 	}
 	got := cfg.Auth.SCIM.Tokens[0]
-	if got.Name != "entra" || got.TenantID != "tenant-b" || got.TokenFile != "/run/secrets/trstctl-scim-token" {
+	if got.SubjectAttribute != "externalId" || got.Name != "entra" || got.TenantID != "tenant-b" || got.TokenFile != "/run/secrets/trstctl-scim-token" {
 		t.Fatalf("unexpected SCIM token overlay: %#v", got)
+	}
+}
+
+func TestSCIMSubjectMappingIsExplicit(t *testing.T) {
+	for _, attr := range []string{"", "userName", "externalId"} {
+		t.Run(attr, func(t *testing.T) {
+			c := Default()
+			c.Auth.SCIM = fullSCIM()
+			c.Auth.SCIM.Tokens[0].SubjectAttribute = attr
+			if err := c.Validate(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+	_, err := Load(func(k string) string {
+		switch k {
+		case "TRSTCTL_AUTH_SCIM_ENABLED":
+			return "true"
+		case "TRSTCTL_AUTH_SCIM_SUBJECT_ATTRIBUTE":
+			return "externalId"
+		}
+		return ""
+	})
+	if err == nil {
+		t.Fatal("mapping-only env must not silently retain a different file-configured binding; it requires a complete env token")
 	}
 }

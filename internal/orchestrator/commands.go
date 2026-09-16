@@ -2089,20 +2089,21 @@ func (o *Orchestrator) UpsertTenantMember(ctx context.Context, tenantID string, 
 	}
 	payload, err := json.Marshal(projections.TenantMemberUpserted{
 		Subject: member.Subject, DisplayName: member.DisplayName, Email: member.Email,
-		Roles: member.Roles, Source: member.Source,
+		Roles: member.Roles, Source: member.Source, SCIM: member.SCIM,
 	})
 	if err != nil {
 		return store.TenantMember{}, err
 	}
-	ev, err := o.emit(ctx, projections.EventTenantMemberUpserted, tenantID, payload)
-	if err != nil {
+	version := 1
+	if member.SCIM != nil {
+		version = projections.TenantMemberSCIMSchemaVersion
+	}
+	if _, err := o.emitVersioned(ctx, projections.EventTenantMemberUpserted, tenantID, version, payload); err != nil {
 		return store.TenantMember{}, err
 	}
-	member.TenantID = tenantID
-	member.Status = "active"
-	member.CreatedAt = ev.Time
-	member.UpdatedAt = ev.Time
-	return member, nil
+	// Projection preserves the original creation time on updates. Return the
+	// committed member so this response agrees with subsequent reads and retries.
+	return o.store.GetTenantMember(ctx, tenantID, member.Subject)
 }
 
 // OffboardTenantMember records member retirement and lets the projector revoke
@@ -2110,6 +2111,16 @@ func (o *Orchestrator) UpsertTenantMember(ctx context.Context, tenantID string, 
 // before the event is applied; replay is still deterministic because the event
 // carries the subject and the projection revokes by subject.
 func (o *Orchestrator) OffboardTenantMember(ctx context.Context, tenantID, subject, reason string) (store.TenantMember, int, error) {
+	return o.offboardTenantMember(ctx, tenantID, subject, reason, nil)
+}
+
+// OffboardSCIMTenantMember records identifiers and access removal in one event;
+// inactive-first provisioning must never briefly activate the principal.
+func (o *Orchestrator) OffboardSCIMTenantMember(ctx context.Context, tenantID, subject, reason string, identity *store.SCIMIdentity) (store.TenantMember, int, error) {
+	return o.offboardTenantMember(ctx, tenantID, subject, reason, identity)
+}
+
+func (o *Orchestrator) offboardTenantMember(ctx context.Context, tenantID, subject, reason string, identity *store.SCIMIdentity) (store.TenantMember, int, error) {
 	actor := ""
 	if a, ok := events.ActorFromContext(ctx); ok {
 		actor = a.Subject
@@ -2119,12 +2130,16 @@ func (o *Orchestrator) OffboardTenantMember(ctx context.Context, tenantID, subje
 		return store.TenantMember{}, 0, err
 	}
 	payload, err := json.Marshal(projections.TenantMemberOffboarded{
-		Subject: subject, Reason: reason, OffboardedBy: actor, RevokedTokenCount: revokedCount,
+		Subject: subject, Reason: reason, OffboardedBy: actor, RevokedTokenCount: revokedCount, SCIM: identity,
 	})
 	if err != nil {
 		return store.TenantMember{}, 0, err
 	}
-	ev, err := o.emit(ctx, projections.EventTenantMemberOffboarded, tenantID, payload)
+	version := 1
+	if identity != nil {
+		version = projections.TenantMemberSCIMSchemaVersion
+	}
+	_, err = o.emitVersioned(ctx, projections.EventTenantMemberOffboarded, tenantID, version, payload)
 	if err != nil {
 		return store.TenantMember{}, 0, err
 	}
@@ -2132,7 +2147,6 @@ func (o *Orchestrator) OffboardTenantMember(ctx context.Context, tenantID, subje
 	if err != nil {
 		return store.TenantMember{}, 0, err
 	}
-	member.UpdatedAt = ev.Time
 	return member, revokedCount, nil
 }
 

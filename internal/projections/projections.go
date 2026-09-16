@@ -2937,20 +2937,26 @@ type tenantOffboarded struct {
 }
 
 // TenantMemberUpserted is the payload of a tenant.member.upserted event.
+// TenantMemberSCIMSchemaVersion adds explicit provisioning identifiers while
+// preserving the closed historical version-one member events.
+const TenantMemberSCIMSchemaVersion = 2
+
 type TenantMemberUpserted struct {
-	Subject     string   `json:"subject"`
-	DisplayName string   `json:"display_name,omitempty"`
-	Email       string   `json:"email,omitempty"`
-	Roles       []string `json:"roles,omitempty"`
-	Source      string   `json:"source,omitempty"`
+	SCIM        *store.SCIMIdentity `json:"scim,omitempty"`
+	Subject     string              `json:"subject"`
+	DisplayName string              `json:"display_name,omitempty"`
+	Email       string              `json:"email,omitempty"`
+	Roles       []string            `json:"roles,omitempty"`
+	Source      string              `json:"source,omitempty"`
 }
 
 // TenantMemberOffboarded is the payload of a tenant.member.offboarded event.
 type TenantMemberOffboarded struct {
-	Subject           string `json:"subject"`
-	Reason            string `json:"reason,omitempty"`
-	OffboardedBy      string `json:"offboarded_by,omitempty"`
-	RevokedTokenCount int    `json:"revoked_token_count"`
+	SCIM              *store.SCIMIdentity `json:"scim,omitempty"`
+	Subject           string              `json:"subject"`
+	Reason            string              `json:"reason,omitempty"`
+	OffboardedBy      string              `json:"offboarded_by,omitempty"`
+	RevokedTokenCount int                 `json:"revoked_token_count"`
 }
 
 // APITokenCreated is the payload of an api_token.created event. It carries the
@@ -3434,8 +3440,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventHistoryTenantDataRewriteContinuity:       {1: true},
 	EventPrivacyRetentionEnforced:                 {1: true},
 	EventPrivacyArchiveErasureAttested:            {1: true},
-	EventTenantMemberUpserted:                     {1: true},
-	EventTenantMemberOffboarded:                   {1: true},
+	EventTenantMemberUpserted:                     {1: true, TenantMemberSCIMSchemaVersion: true},
+	EventTenantMemberOffboarded:                   {1: true, TenantMemberSCIMSchemaVersion: true},
 	EventAPITokenCreated:                          {1: true},
 	EventAPITokenRevoked:                          {1: true},
 	EventPAMSessionStarted:                        {1: true},
@@ -5661,6 +5667,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
+		if pl.SCIM != nil && e.SchemaVersion != TenantMemberSCIMSchemaVersion {
+			return fmt.Errorf("projections: SCIM member metadata requires schema %d", TenantMemberSCIMSchemaVersion)
+		}
 		if pl.Subject == "" {
 			return fmt.Errorf("projections: %s requires subject", e.Type)
 		}
@@ -5669,7 +5678,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			source = "manual"
 		}
 		return p.store.ApplyTenantMemberUpsertedTx(ctx, tx, store.TenantMember{
-			TenantID: e.TenantID, Subject: pl.Subject, DisplayName: pl.DisplayName,
+			TenantID: e.TenantID, Subject: pl.Subject, DisplayName: pl.DisplayName, SCIM: normalizedSCIMIdentity(pl.SCIM),
 			Email: pl.Email, Roles: pl.Roles, Source: source, Status: "active",
 			CreatedAt: e.Time, UpdatedAt: e.Time,
 		})
@@ -5678,11 +5687,14 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
+		if pl.SCIM != nil && e.SchemaVersion != TenantMemberSCIMSchemaVersion {
+			return fmt.Errorf("projections: SCIM member metadata requires schema %d", TenantMemberSCIMSchemaVersion)
+		}
 		if pl.Subject == "" {
 			return fmt.Errorf("projections: %s requires subject", e.Type)
 		}
 		if err := p.store.ApplyTenantMemberOffboardedTx(ctx, tx, store.TenantMember{
-			TenantID: e.TenantID, Subject: pl.Subject, Status: "offboarded",
+			TenantID: e.TenantID, Subject: pl.Subject, Status: "offboarded", SCIM: normalizedSCIMIdentity(pl.SCIM),
 			UpdatedAt: e.Time, OffboardedBy: pl.OffboardedBy, OffboardReason: pl.Reason,
 		}); err != nil {
 			return err

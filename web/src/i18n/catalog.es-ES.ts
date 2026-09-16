@@ -219,6 +219,10 @@ const esESCatalog = {
   "auth.login.eyebrow": "Credenciales para máquinas y aplicaciones",
   "auth.login.title": "Inicia sesión en trstctl",
   "auth.login.body": "Continúa con el proveedor de inicio de sesión configurado. Gestionarás identidades de máquina y las credenciales que utilizan.",
+  // F150: machine-authored recovery copy; human translation review required before release.
+  "auth.login.tenantAccessTitle": "Tu cuenta necesita acceso a un tenant",
+  "auth.login.tenantAccessBody":
+    "Tu proveedor de inicio de sesión verificó tu cuenta, pero no está asignada a un tenant de trstctl. Pide a tu administrador que compruebe la asignación del tenant y tu pertenencia. Después, vuelve a iniciar sesión.",
   "auth.login.action": "Continuar con SSO",
   "admin.access.pamUnavailableTitle": "Las sesiones de acceso privilegiado no están disponibles",
   "admin.access.pamUnavailableBody":
@@ -742,6 +746,10 @@ const esESCatalog = {
   "certificates.lifecycle.notManaged": "No gestionado por identidad — reemplazar mediante solicitud →",
   "certificates.lifecycle.renewStarted": "Renovación iniciada",
   "certificates.lifecycle.renewFailed": "No se pudo iniciar la renovación",
+  // Machine-authored Home access-recovery translations; human review required before release.
+  "dashboard.evidence.retry": "Comprobar de nuevo",
+  "dashboard.evidence.accessHelp":
+    "Pida a su administrador que revise los permisos de su cuenta. Vuelva a comprobar cuando se restablezca el acceso o inicie sesión con una cuenta autorizada.",
   "dashboard.recentActivity.empty": "Aún no hay eventos de auditoría.",
   // Quiet-confidence dashboard — Machine-authored, FLAG FOR HUMAN REVIEW.
   "dashboard.homeDescription": "Vea qué necesita atención ahora y qué está sano.",
@@ -8345,6 +8353,11 @@ const esESCatalog = {
   "identities.lifecycle.reviewChanged": "El motivo cambió después de la vista previa. Revise la acción actualizada antes de ejecutarla.",
   "identities.lifecycle.reviewRun": "Ejecutar acción revisada",
   "identities.lifecycle.reviewUpdated": "Revisar acción actualizada",
+  "identities.lifecycle.approvalPending": "Esta acción espera una aprobación independiente. Una vez aprobada, vuelva a intentar esta misma acción revisada.",
+  "identities.lifecycle.approvalClosed":
+    "Esta solicitud de aprobación está cerrada. Revise una nueva solicitud para volver a pedirla; las decisiones anteriores permanecen en el historial de auditoría.",
+  "identities.lifecycle.openApprovals": "Abrir solicitudes de aprobación",
+  "identities.lifecycle.reviewNewRequest": "Revisar una nueva solicitud",
   "identities.lifecycle.previewFailed": "No se pudo previsualizar la acción del ciclo de vida",
   "identities.lifecycle.verificationFailed": "La verificación falló: el servidor devolvió {actual}, no {expected}.",
   "identities.lifecycle.verified": "Solicitud aceptada para {identity}: {state}. {detail}",

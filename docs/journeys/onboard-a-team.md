@@ -100,7 +100,12 @@ group on a shared trstctl deployment.
 4. Turn on SCIM provisioning if the IdP should manage team membership. Create one
    high-entropy bearer token per tenant, store it in a root-readable secret file, and
    point the IdP at `/scim/v2`. The token is tenant-bound in trstctl config; SCIM
-   payloads do not choose the tenant.
+   payloads do not choose the tenant. Match the provisioned identity to the actual
+   login principal: by default SCIM `userName` must equal the OIDC `sub` (or the
+   configured SAML/LDAP subject). If the IdP uses an email for `userName`, explicitly
+   configure `subject_attribute: externalId` and map the exact login subject into
+   `externalId` at the IdP. An arbitrary directory ID or email is not equivalent.
+   See [the subject-binding and migration contract](../configuration.md#scim-provisioning).
 
    ```yaml
    auth:
@@ -118,7 +123,10 @@ group on a shared trstctl deployment.
    DELETE, Alice is offboarded and her session loses access on the next request.
 
    -> membership changes in the IdP become live trstctl RBAC changes without a manual
-   role edit.
+   role edit. Prove the mapping with one test user: grant a group, observe the
+   permission in that user's real session, then disable the user and verify both
+   the existing session and an issued API token are denied. Removing a group after
+   disabling the user must keep access denied.
 
 5. Decide who can do what with roles. trstctl ships `admin`, `operator`, `viewer`,
    `auditor`, and `ra-officer` (which can request but not self-issue certificates).
@@ -166,6 +174,11 @@ group on a shared trstctl deployment.
    Verify the member through `GET /api/v1/access/members`, then have that person
    sign in with the configured identity provider. A successful member creation
    does not itself prove the sign-in subject and tenant mapping are correct.
+
+   If SSO verifies the account but no tenant mapping matches, the browser returns
+   to sign-in with an explanation. Check the exact IdP subject, tenant mapping and
+   membership before trying again. This failure grants no application session;
+   API clients continue to receive a 403 problem response.
 
    Finally, list `GET /api/v1/access/api-tokens`, identify the provisioning token
    by its exact subject and id, and revoke that id with

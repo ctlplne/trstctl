@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
+import { ApiError, UnauthorizedError } from "@/lib/apiTransport";
 import { AppQueryProvider, invalidateAppQueryKeys, liveRefetchInterval, useApiQuery } from "@/lib/query";
 
 afterEach(() => {
@@ -174,5 +175,77 @@ describe("visibility-aware live queries (S-C5)", () => {
     act(() => invalidateAppQueryKeys([["static-probe"]]));
 
     await waitFor(() => expect(loader).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe("authorization-refused live queries", () => {
+  it.each([new UnauthorizedError(), new ApiError(401, "{}"), new ApiError(403, "{}")])(
+    "stops retries, polling and visibility refresh after %s, but allows an explicit retry",
+    async (failure) => {
+      vi.useFakeTimers();
+      const loader = vi.fn().mockRejectedValue(failure);
+      render(
+        <AppQueryProvider>
+          <ControlledProbe tenant="denied" loader={loader} />
+        </AppQueryProvider>,
+      );
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(90_000);
+      });
+      expect(loader).toHaveBeenCalledTimes(1);
+      setVisibility("hidden");
+      setVisibility("visible");
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(90_000);
+      });
+      expect(loader).toHaveBeenCalledTimes(1);
+      loader.mockResolvedValue("access restored");
+      act(() => {
+        screen.getByRole("button", { name: "Refresh evidence" }).click();
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(25);
+      });
+      expect(loader).toHaveBeenCalledTimes(2);
+      expect(screen.getByTestId("controlled-probe")).toHaveTextContent("access restored");
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
+      expect(loader).toHaveBeenCalledTimes(3);
+    },
+  );
+
+  it("hides the previously loaded result after permission is removed", async () => {
+    vi.useFakeTimers();
+    const loader = vi.fn().mockResolvedValueOnce("prior authorized snapshot").mockRejectedValue(new ApiError(403, "{}"));
+    render(
+      <AppQueryProvider>
+        <ControlledProbe tenant="offboarded" loader={loader} />
+      </AppQueryProvider>,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(25);
+    });
+    expect(screen.getByTestId("controlled-probe")).toHaveTextContent("prior authorized snapshot");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(90_000);
+    });
+    expect(loader).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText("prior authorized snapshot")).not.toBeInTheDocument();
+  });
+
+  it("still retries a transient server error once and resumes normal polling", async () => {
+    vi.useFakeTimers();
+    const loader = vi.fn().mockRejectedValueOnce(new ApiError(503, "{}")).mockResolvedValue("recovered");
+    render(
+      <AppQueryProvider>
+        <ControlledProbe tenant="transient" loader={loader} />
+      </AppQueryProvider>,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+    expect(loader).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId("controlled-probe")).toHaveTextContent("recovered");
   });
 });

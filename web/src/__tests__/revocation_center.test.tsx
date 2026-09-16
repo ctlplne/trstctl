@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { RevocationCenter } from "@/pages/certificates/RevocationCenter";
 import { AppQueryProvider } from "@/lib/query";
+import { ApiError } from "@/lib/api";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -148,9 +149,51 @@ describe("RevocationCenter", () => {
     await user.type(within(confirmation).getByLabelText("Type the exact credential label"), "payments.example.test");
     await user.click(within(confirmation).getByRole("button", { name: "Revoke reviewed credential" }));
 
-    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("identity-payments", "revoked", "keyCompromise", undefined, undefined, 7));
+    await waitFor(() =>
+      expect(apiMock.transitionIdentity).toHaveBeenCalledWith("identity-payments", "revoked", "keyCompromise", undefined, expect.any(String), 7),
+    );
     expect(await screen.findByRole("status")).toHaveTextContent("Revocation accepted and the identity now reads revoked.");
     expect(screen.getByRole("link", { name: "Open immutable audit evidence" })).toHaveAttribute("href", "/audit?type=identity.revoked&q=identity-payments");
+  });
+
+  it("recovers the same reviewed identity revocation after approval and remount", async () => {
+    apiMock.previewIdentityTransition.mockReset().mockResolvedValue(plan);
+    apiMock.graphBlastRadius.mockReset().mockResolvedValue({ node: { id: "cert:certificate-payments", kind: "credential", name: "payments" }, affected: [] });
+    apiMock.transitionIdentity
+      .mockReset()
+      .mockRejectedValueOnce(
+        new ApiError(
+          403,
+          JSON.stringify({
+            code: "identity_approval_required",
+            approval_request_id: "1ca14715-666f-5ed8-bd88-7b262fe543f5",
+            approval_status: "pending",
+            detail: "awaits independent approval",
+          }),
+        ),
+      )
+      .mockResolvedValue({ ...identities[0], status: "revoked" });
+    const user = userEvent.setup();
+    async function reviewAndConfirm() {
+      await user.selectOptions(screen.getByLabelText("Managed certificate"), "identity-payments");
+      await user.selectOptions(screen.getByLabelText("RFC 5280 reason"), "keyCompromise");
+      await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+      await user.click(await screen.findByRole("button", { name: "Continue to confirmation" }));
+      const confirmation = screen.getByRole("region", { name: "Confirm irreversible revocation" });
+      await user.type(within(confirmation).getByLabelText("Type the exact credential label"), "payments.example.test");
+      await user.click(within(confirmation).getByRole("button", { name: "Revoke reviewed credential" }));
+    }
+    const first = renderCenter();
+    await reviewAndConfirm();
+    expect(await screen.findByRole("alert")).toHaveTextContent("awaits independent approval");
+    expect(screen.getByRole("link", { name: "Open approval requests" })).toHaveAttribute("href", "/approvals");
+    expect(apiMock.transitionIdentity.mock.calls[0]?.[4]).toEqual(expect.any(String));
+    first.unmount();
+    renderCenter();
+    await reviewAndConfirm();
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledTimes(2));
+    expect(apiMock.transitionIdentity.mock.calls[1]).toEqual(apiMock.transitionIdentity.mock.calls[0]);
+    expect(await screen.findByRole("status")).toHaveTextContent("Revocation accepted");
   });
 
   it("keeps execution locked when preview fails and reports unknown propagation honestly", async () => {

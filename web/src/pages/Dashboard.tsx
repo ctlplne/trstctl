@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Activity, AlertTriangle, Boxes, Bot, FileSignature, KeyRound, Rocket, ScrollText, ShieldCheck, ShieldAlert, Siren } from "lucide-react";
 import { api, type AuditEvent, type Certificate, type ContextualRiskPriority, type NHIInventory as NHIInventoryResponse, type RotationRun } from "@/lib/api";
+import { isAccessDenied } from "@/lib/apiTransport";
 import { useAuth } from "@/auth/AuthProvider";
 import { useApiQuery } from "@/lib/query";
 import { useCapabilityExecution } from "@/lib/capabilities";
@@ -17,6 +18,8 @@ import {
   type StackedTimeBarDatum,
   type TimeBarDatum,
 } from "@/components/charts";
+import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/StatePrimitives";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { ReadinessPanel } from "@/components/certs";
@@ -48,12 +51,6 @@ function readNhiInventory(): Promise<NHIInventoryResponse> {
   const client = api as typeof api & { nhiInventory?: () => Promise<NHIInventoryResponse> };
   if (!client.nhiInventory) return Promise.resolve(emptyNhiInventory());
   return Promise.resolve(client.nhiInventory()).then((response) => response ?? emptyNhiInventory());
-}
-
-function inventoryCount(inventory: NHIInventoryResponse | null | undefined, kind: string): number {
-  const raw = inventory?.summary?.[kind];
-  const count = Number(raw);
-  return Number.isFinite(count) ? count : 0;
 }
 
 /** True once the first-run wizard has been completed on this browser. A fresh,
@@ -116,7 +113,10 @@ function readSecretsCount(): Promise<number | null> {
   if (!client.secretPage) return Promise.resolve(null);
   return Promise.resolve(client.secretPage({ limit: 100 }))
     .then((r) => (r?.items ?? []).length)
-    .catch(() => null);
+    .catch((error: unknown) => {
+      if (isAccessDenied(error)) throw error;
+      return null;
+    });
 }
 
 function readOpenIncidents(): Promise<number | null> {
@@ -126,15 +126,16 @@ function readOpenIncidents(): Promise<number | null> {
   if (!client.incidentExecutions) return Promise.resolve(null);
   return Promise.resolve(client.incidentExecutions({ limit: 100 }))
     .then((r) => (r?.items ?? []).filter((x) => x.status !== "completed" && x.status !== "rolled_back").length)
-    .catch(() => null);
+    .catch((error: unknown) => {
+      if (isAccessDenied(error)) throw error;
+      return null;
+    });
 }
 
 function readRecentAudit(): Promise<AuditEvent[]> {
   const client = api as typeof api & { auditEvents?: (o?: { limit?: number }) => Promise<AuditEvent[]> };
   if (!client.auditEvents) return Promise.resolve([]);
-  return Promise.resolve(client.auditEvents({ limit: 6 }))
-    .then((events) => events ?? [])
-    .catch(() => []);
+  return Promise.resolve(client.auditEvents({ limit: 6 })).then((events) => events ?? []);
 }
 
 function readCodeSigningHealth(): Promise<{ total: number; failures: number } | null> {
@@ -147,7 +148,10 @@ function readCodeSigningHealth(): Promise<{ total: number; failures: number } | 
       total: Number.isFinite(result?.total) ? Number(result.total) : (result?.items ?? []).length,
       failures: (result?.items ?? []).filter((item) => item.status === "failed" || item.transparency === "failed").length,
     }))
-    .catch(() => null);
+    .catch((error: unknown) => {
+      if (isAccessDenied(error)) throw error;
+      return null;
+    });
 }
 
 function readDiscoveryHealth(): Promise<{ sources: number; openFindings: number; failedRuns: number } | null> {
@@ -166,7 +170,10 @@ function readDiscoveryHealth(): Promise<{ sources: number; openFindings: number;
         failedRuns: Number(result.summary.failed_run_count ?? 0),
       };
     })
-    .catch(() => null);
+    .catch((error: unknown) => {
+      if (isAccessDenied(error)) throw error;
+      return null;
+    });
 }
 
 function dashboardWorkspace(kind?: string | null): string {
@@ -312,7 +319,7 @@ export function Dashboard() {
   const resourcesLoading = certs.loading || risk.loading || urgentRisk.loading || identities.loading || nhiInventory.loading;
   const realEmpty =
     !resourcesLoading &&
-    nhiInventory.error === null &&
+    [certs, risk, urgentRisk, identities, nhiInventory].every(dashboardSourceReady) &&
     (certs.data?.length ?? 0) === 0 &&
     riskRows.length === 0 &&
     inventoryTotal === 0 &&
@@ -334,15 +341,18 @@ export function Dashboard() {
         : t("dashboard.urgentRisk.unavailable");
 
   const kpis = {
-    certificates: certs.data?.length ?? 0,
-    identities: recordSummary?.managed_identity_records ?? 0,
-    secrets: secretsCount.data ?? inventoryCount(nhiInventory.data, "secret"),
-    agentRecords: recordSummary?.agent_records ?? 0,
-    expiring7d: servedCertificates.filter((c) => expiresWithinDays(c, 7)).length,
+    certificates: dashboardSourceReady(certs) ? servedCertificates.length : "—",
+    identities: dashboardSourceReady(nhiInventory) ? (recordSummary?.managed_identity_records ?? "—") : "—",
+    secrets: secretsList.runnable && dashboardSourceReady(secretsCount) ? (secretsCount.data ?? "—") : "—",
+    agentRecords: dashboardSourceReady(nhiInventory) ? (recordSummary?.agent_records ?? "—") : "—",
+    expiring7d: dashboardSourceReady(certs) ? servedCertificates.filter((c) => expiresWithinDays(c, 7)).length : "—",
     urgentRisk: urgentValue,
-    openIncidents: incidentList.runnable ? (openIncidents.data ?? 0) : "—",
-    pqcReady: servedCertificates.filter(isPqcReady).length,
+    openIncidents: incidentList.runnable && dashboardSourceReady(openIncidents) ? (openIncidents.data ?? "—") : "—",
+    pqcReady: dashboardSourceReady(certs) ? servedCertificates.filter(isPqcReady).length : "—",
   };
+
+  const sourceMessage = (source: DashboardSource) =>
+    source.loading ? t("dashboard.workspaceHealth.loading") : !dashboardSourceReady(source) ? t("dashboard.workspaceHealth.unavailable") : undefined;
 
   const contextualRotateFirst = (urgentRisk.data?.priorities ?? [])
     .filter((row) => row.severity === "critical" || row.severity === "high")
@@ -557,8 +567,8 @@ export function Dashboard() {
             to="/certificates"
             icon={<ScrollText className="h-4 w-4" aria-hidden="true" />}
             workspace={t("nav.module.certificates")}
-            state={certs.error ? t("dashboard.workspaceHealth.unavailable") : t("dashboard.workspaceHealth.certificates", { count: String(kpis.expiring7d) })}
-            urgent={certs.error !== null || kpis.expiring7d > 0}
+            state={sourceMessage(certs) ?? t("dashboard.workspaceHealth.certificates", { count: String(kpis.expiring7d) })}
+            urgent={certs.error !== null || (typeof kpis.expiring7d === "number" && kpis.expiring7d > 0)}
           />
           <WorkspaceHealthLink
             to="/workloads"
@@ -621,15 +631,35 @@ export function Dashboard() {
           derived from the same served certs + rotation runs as the trend
           charts — the posture statement lives here, the simulator stays on
           Certificates. The 100-day SC-081 step lands 2027-03-15. */}
-      <ReadinessPanel
-        certificates={servedCertificates}
-        rotationRuns={servedRotationRuns}
-        actions={
-          <Link to="/certificates?tab=renewal" className="text-caption font-medium text-brand-accent hover:underline">
-            {t("dashboard.readiness.viewAll")}
-          </Link>
-        }
-      />
+      {certs.loading || rotationRuns.loading || certs.error || rotationRuns.error ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("source.47.day.renewal.readiness.971543ca36")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <DashboardEvidenceState
+              loading={certs.loading || rotationRuns.loading}
+              error={certs.error ?? rotationRuns.error}
+              errorValue={certs.errorValue ?? rotationRuns.errorValue}
+              fetching={certs.fetching || rotationRuns.fetching}
+              retry={() => {
+                certs.refetch();
+                rotationRuns.refetch();
+              }}
+            />
+          </CardContent>
+        </Card>
+      ) : (
+        <ReadinessPanel
+          certificates={servedCertificates}
+          rotationRuns={servedRotationRuns}
+          actions={
+            <Link to="/certificates?tab=renewal" className="text-caption font-medium text-brand-accent hover:underline">
+              {t("dashboard.readiness.viewAll")}
+            </Link>
+          }
+        />
+      )}
 
       <details className="group border-t border-border pt-4">
         <summary className="cursor-pointer text-sm font-semibold text-foreground hover:text-brand-accent">
@@ -639,16 +669,34 @@ export function Dashboard() {
         <div className="mt-5 grid gap-6">
           {/* KPI row: retained as exact operational depth, after the answer. */}
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <Kpi icon={<ScrollText className="h-4 w-4" />} label="Certificates" value={kpis.certificates} to="/certificates" />
-            <Kpi icon={<KeyRound className="h-4 w-4" />} label="Identities (NHI)" value={kpis.identities} to="/identities" />
-            <Kpi icon={<Boxes className="h-4 w-4" />} label="Secrets" value={kpis.secrets} to="/secrets" />
-            <Kpi icon={<Activity className="h-4 w-4" />} label={t("dashboard.kpi.agentRecords")} value={kpis.agentRecords} to="/agents" />
+            <Kpi icon={<ScrollText className="h-4 w-4" />} label="Certificates" value={kpis.certificates} sub={sourceMessage(certs)} to="/certificates" />
+            <Kpi icon={<KeyRound className="h-4 w-4" />} label="Identities (NHI)" value={kpis.identities} sub={sourceMessage(nhiInventory)} to="/identities" />
+            <Kpi
+              icon={<Boxes className="h-4 w-4" />}
+              label="Secrets"
+              value={kpis.secrets}
+              sub={
+                secretsList.checking
+                  ? t("dashboard.workspaceHealth.loading")
+                  : secretsList.runnable
+                    ? sourceMessage(secretsCount)
+                    : t("dashboard.workspaceHealth.unavailable")
+              }
+              to="/secrets"
+            />
+            <Kpi
+              icon={<Activity className="h-4 w-4" />}
+              label={t("dashboard.kpi.agentRecords")}
+              value={kpis.agentRecords}
+              sub={sourceMessage(nhiInventory)}
+              to="/agents"
+            />
             <Kpi
               icon={<AlertTriangle className="h-4 w-4" />}
               label="Expiring ≤7d"
               value={kpis.expiring7d}
-              sub="needs action"
-              tone="warn"
+              sub={sourceMessage(certs) ?? "needs action"}
+              tone={typeof kpis.expiring7d === "number" ? "warn" : undefined}
               to="/certificates?expiry=7d"
             />
             <Kpi
@@ -678,12 +726,28 @@ export function Dashboard() {
               tone={typeof kpis.openIncidents === "number" ? (kpis.openIncidents ? "warn" : "ok") : undefined}
               to="/incidents"
             />
-            <Kpi icon={<ShieldCheck className="h-4 w-4" />} label="Future-ready" value={kpis.pqcReady} to="/posture" tone="ok" />
+            <Kpi
+              icon={<ShieldCheck className="h-4 w-4" />}
+              label="Future-ready"
+              value={kpis.pqcReady}
+              sub={sourceMessage(certs)}
+              to="/posture"
+              tone={typeof kpis.pqcReady === "number" ? "ok" : undefined}
+            />
           </div>
 
-          <NhiInventory identities={identities.data ?? []} inventory={nhiInventory.data ?? undefined} risks={riskRows} />
-          <NotificationCenter risks={riskRows} certs={certs.data ?? []} />
-          <DashboardTrendCharts certificates={servedCertificates} rotationRuns={servedRotationRuns} />
+          <DashboardSourceBoundary title={t("nhi.inventory.title")} sources={[nhiInventory, risk]}>
+            <NhiInventory identities={identities.data ?? []} inventory={nhiInventory.data ?? undefined} risks={riskRows} />
+          </DashboardSourceBoundary>
+          <DashboardSourceBoundary title={t("source.alert.center.9bbd88c00f")} sources={[risk, certs]}>
+            <NotificationCenter risks={riskRows} certs={certs.data ?? []} />
+          </DashboardSourceBoundary>
+          <DashboardTrendCharts
+            certificates={servedCertificates}
+            rotationRuns={servedRotationRuns}
+            certificateState={dashboardSourceState([certs])}
+            rotationState={dashboardSourceState([rotationRuns])}
+          />
 
           {/* Algorithm and expiry projections use the same served response shapes in both modes. */}
           <div className="grid gap-4 lg:grid-cols-3">
@@ -695,13 +759,15 @@ export function Dashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Donut
-                  segments={algoSegments(servedAlgoMix(servedCertificates))}
-                  ariaLabel="Algorithm mix by key type"
-                  centerLabel={formatNumber(kpis.certificates)}
-                  centerSub="certificates"
-                  withLegend
-                />
+                {dashboardSourceState([certs]) ?? (
+                  <Donut
+                    segments={algoSegments(servedAlgoMix(servedCertificates))}
+                    ariaLabel="Algorithm mix by key type"
+                    centerLabel={formatNumber(servedCertificates.length)}
+                    centerSub="certificates"
+                    withLegend
+                  />
+                )}
               </CardContent>
             </Card>
             <Card className="lg:col-span-2">
@@ -711,9 +777,7 @@ export function Dashboard() {
                   <span className="ml-1 text-caption font-normal text-muted-foreground">{translateNow("source.time.to.expiry.b1bf11183a")}</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <Bands bands={servedExpiryBands(servedCertificates)} />
-              </CardContent>
+              <CardContent>{dashboardSourceState([certs]) ?? <Bands bands={servedExpiryBands(servedCertificates)} />}</CardContent>
             </Card>
           </div>
 
@@ -730,17 +794,19 @@ export function Dashboard() {
                 </Link>
               </CardHeader>
               <CardContent>
-                <ul className="-mt-1 divide-y divide-border">
-                  {rotateFirst.map((r) => (
-                    <li key={r.subject} className="flex items-center justify-between gap-3 py-2">
-                      <span className="min-w-0">
-                        <span className="block truncate text-body font-medium">{r.subject}</span>
-                        <span className="block truncate text-caption text-muted-foreground">{r.detail}</span>
-                      </span>
-                      <RiskPip score={r.score} />
-                    </li>
-                  ))}
-                </ul>
+                {dashboardSourceState([urgentRisk, risk]) ?? (
+                  <ul className="-mt-1 divide-y divide-border">
+                    {rotateFirst.map((r) => (
+                      <li key={r.subject} className="flex items-center justify-between gap-3 py-2">
+                        <span className="min-w-0">
+                          <span className="block truncate text-body font-medium">{r.subject}</span>
+                          <span className="block truncate text-caption text-muted-foreground">{r.detail}</span>
+                        </span>
+                        <RiskPip score={r.score} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </CardContent>
             </Card>
 
@@ -755,7 +821,17 @@ export function Dashboard() {
                 </Link>
               </CardHeader>
               <CardContent>
-                <RecentAuditList events={recentAudit.data ?? []} />
+                {recentAudit.loading || recentAudit.error ? (
+                  <DashboardEvidenceState
+                    loading={recentAudit.loading}
+                    error={recentAudit.error}
+                    errorValue={recentAudit.errorValue}
+                    fetching={recentAudit.fetching}
+                    retry={recentAudit.refetch}
+                  />
+                ) : (
+                  <RecentAuditList events={recentAudit.data ?? []} />
+                )}
               </CardContent>
             </Card>
           </div>
@@ -765,7 +841,90 @@ export function Dashboard() {
   );
 }
 
-function DashboardTrendCharts({ certificates, rotationRuns }: { certificates: Certificate[]; rotationRuns: RotationRun[] }) {
+/** Keep unavailable evidence separate from a verified empty result. */
+type DashboardSource = {
+  data: unknown;
+  loading: boolean;
+  error: string | null;
+  errorValue: unknown;
+  fetching: boolean;
+  refetch: () => void;
+};
+
+function dashboardSourceReady(source: DashboardSource): boolean {
+  return !source.loading && !source.error && source.data !== null && source.data !== undefined;
+}
+
+function dashboardSourceState(sources: DashboardSource[]): ReactNode {
+  if (sources.every(dashboardSourceReady)) return null;
+  const failed = sources.find((source) => source.error);
+  return (
+    <DashboardEvidenceState
+      loading={sources.some((source) => source.loading)}
+      error={failed?.error ?? null}
+      errorValue={failed?.errorValue}
+      fetching={sources.some((source) => source.fetching)}
+      retry={() => sources.filter((source) => !dashboardSourceReady(source)).forEach((source) => source.refetch())}
+    />
+  );
+}
+
+function DashboardSourceBoundary({ title, sources, children }: { title: string; sources: DashboardSource[]; children: ReactNode }) {
+  const state = dashboardSourceState(sources);
+  return state ? (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent>{state}</CardContent>
+    </Card>
+  ) : (
+    <>{children}</>
+  );
+}
+
+function DashboardEvidenceState({
+  loading,
+  error,
+  errorValue,
+  fetching,
+  retry,
+}: {
+  loading: boolean;
+  error: string | null;
+  errorValue: unknown;
+  fetching: boolean;
+  retry: () => void;
+}) {
+  const { t } = useTranslation();
+  if (!error && loading) return <LoadingState>{t("app.loading")}</LoadingState>;
+  const details = (
+    <>
+      <p>{error}</p>
+      {isAccessDenied(errorValue) && <p className="mt-1">{t("dashboard.evidence.accessHelp")}</p>}
+      <Button type="button" size="sm" variant="outline" className="mt-2" loading={fetching} onClick={retry}>
+        {t("dashboard.evidence.retry")}
+      </Button>
+    </>
+  );
+  return isAccessDenied(errorValue) ? (
+    <PermissionDeniedState>{details}</PermissionDeniedState>
+  ) : (
+    <ErrorState title={t("dashboard.workspaceHealth.unavailable")}>{details}</ErrorState>
+  );
+}
+
+function DashboardTrendCharts({
+  certificates,
+  rotationRuns,
+  certificateState,
+  rotationState,
+}: {
+  certificates: Certificate[];
+  rotationRuns: RotationRun[];
+  certificateState: ReactNode;
+  rotationState: ReactNode;
+}) {
   const { locale, timeZone } = useTranslation();
   const formatPolicy = { locale, timeZone };
   const issuanceData = issuanceRateData(certificates, formatPolicy);
@@ -775,13 +934,13 @@ function DashboardTrendCharts({ certificates, rotationRuns }: { certificates: Ce
   return (
     <div className="grid gap-4 xl:grid-cols-3">
       <TrendCard title={translateNow("source.issuance.rate.91f4b7ff0d")} description="certificates recorded by day">
-        <TimeBarChart ariaLabel="Certificate issuance rate by day" data={issuanceData} tone="brand" />
+        {certificateState ?? <TimeBarChart ariaLabel="Certificate issuance rate by day" data={issuanceData} tone="brand" />}
       </TrendCard>
       <TrendCard title={translateNow("source.renewal.jobs.ef0c816533")} description="success vs failure by day">
-        <StackedTimeBarChart ariaLabel="Renewal job success and failure trend" data={renewalData} />
+        {rotationState ?? <StackedTimeBarChart ariaLabel="Renewal job success and failure trend" data={renewalData} />}
       </TrendCard>
       <TrendCard title={translateNow("source.expiration.timeline.d4a2b2aa1e")} description="next 90 days">
-        <TimeBarChart ariaLabel="Certificate expirations over the next 90 days" data={expirationData} tone="warning" />
+        {certificateState ?? <TimeBarChart ariaLabel="Certificate expirations over the next 90 days" data={expirationData} tone="warning" />}
       </TrendCard>
     </div>
   );

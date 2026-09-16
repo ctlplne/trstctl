@@ -56,11 +56,11 @@ func Catalog() []CatalogEntry {
 		},
 		{
 			ID:             "tenant_members.subject",
-			Location:       "tenant_members.subject/display_name/email",
+			Location:       "tenant_members.subject/display_name/email/scim_identity",
 			Category:       "administrator subject and contact metadata",
 			Purpose:        "RBAC membership and offboarding evidence",
 			RetentionClass: "operational:access-terminal-after-90d",
-			Erasure:        "privacy.subject.erased replaces subject with erased placeholder; privacy.retention.enforced pseudonymizes offboarded members and clears display/contact fields",
+			Erasure:        "privacy.subject.erased replaces subject with erased placeholder; privacy.retention.enforced pseudonymizes offboarded members and clears display/contact/provisioning fields",
 			Owner:          "access control",
 		},
 		{

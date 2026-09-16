@@ -346,6 +346,12 @@ describe("i18n boundary", () => {
     // requires human translation review before release; R07 removal is pending.
     // Reviewed es/de host selection, pagination, and offline assignment guidance.
     // Machine-authored translations require human review before release.
+    // F154: reviewed explicit Home read retry and account-permission recovery copy.
+    // Machine-authored es/de require human translation review before release.
+    // F150: reviewed two tenant-access recovery messages and safe next steps.
+    // Machine-authored es/de require human translation review before release.
+    // F162: reviewed four approval retry/closed-request recovery messages.
+    // Machine-authored es/de require human translation review before release.
     // Updating either digest is a deliberate translation-review decision. The
     // ratchet catches a long-tail value being reset to its English seed just as
     // it catches any other unreviewed production-catalog edit.
@@ -1584,8 +1590,8 @@ describe("i18n boundary", () => {
       // Machine-authored es/de require HUMAN TRANSLATION REVIEW before release.
       // Delivery evidence: reviewed three keys separating exact historical verification
       // from deployment retry counts. Machine-authored es/de need HUMAN REVIEW before release.
-      "es-ES": "ff89eb66f239c63204e067d75144f4ea1354b6d254e8d27ab669fd2c31f48097",
-      "de-DE": "21d41aef12a551ed45e095d67e0cd27e7716e744836b6139ad9bf3a260d43962",
+      "es-ES": "403d4a6534c1282c45a4fdfd65c6db9fa386ad08557ab8095ba9f3eca5ffbe31",
+      "de-DE": "a4ba11ce97ea9ee71cfe2581753bd35cb32a101e489243016ab581c1c0203bd4",
     });
   });
 

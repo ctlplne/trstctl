@@ -480,6 +480,15 @@ export const messages = {
     defaultMessage: "Continue with your configured sign-in provider. You will manage machine identities and the credentials they use.",
     description: "Plain-language explanation of what follows browser sign-in.",
   },
+  "auth.login.tenantAccessTitle": {
+    defaultMessage: "Your account needs tenant access",
+    description: "Unmapped SSO account recovery heading; authentication did not grant a tenant session.",
+  },
+  "auth.login.tenantAccessBody": {
+    defaultMessage:
+      "Your sign-in provider verified your account, but it is not assigned to a trstctl tenant. Ask your administrator to check your tenant mapping and membership. Then sign in again.",
+    description: "Safe next steps after OIDC tenant mapping fails; does not expose account or tenant identifiers.",
+  },
   "auth.login.action": {
     defaultMessage: "Continue with SSO",
     description: "Primary action that begins the configured OIDC sign-in flow.",
@@ -1702,6 +1711,11 @@ export const messages = {
   "certificates.lifecycle.renewFailed": {
     defaultMessage: "Renewal could not start",
     description: "Toast title shown when kicking off an identity renewal from the certificate inventory failed.",
+  },
+  "dashboard.evidence.retry": { defaultMessage: "Check again", description: "Explicit retry of a refused or unavailable Home evidence read." },
+  "dashboard.evidence.accessHelp": {
+    defaultMessage: "Ask your administrator to check your account permissions. Check again after access is restored, or sign in with an authorized account.",
+    description: "Home evidence recovery after authentication or authorization is refused; automatic polling has stopped.",
   },
   "dashboard.recentActivity.empty": {
     defaultMessage: "No audit events yet.",
@@ -26610,6 +26624,19 @@ export const messages = {
   },
   "identities.lifecycle.reviewRun": { defaultMessage: "Run reviewed action", description: "Executes the exact reviewed lifecycle plan." },
   "identities.lifecycle.reviewUpdated": { defaultMessage: "Review updated action", description: "Requests a fresh lifecycle plan after input changes." },
+  "identities.lifecycle.approvalPending": {
+    defaultMessage: "This action is awaiting independent approval. After approval, retry this same reviewed action.",
+    description: "Explains how to resume the unchanged command after an approval refusal.",
+  },
+  "identities.lifecycle.approvalClosed": {
+    defaultMessage: "This approval request is closed. Review a new request to ask again; previous decisions stay in the audit history.",
+    description: "Explains deliberate recovery after denied, expired, or superseded approval authority.",
+  },
+  "identities.lifecycle.openApprovals": { defaultMessage: "Open approval requests", description: "Opens the independent review queue." },
+  "identities.lifecycle.reviewNewRequest": {
+    defaultMessage: "Review a new request",
+    description: "Prepares a distinct command after terminal approval refusal without executing it.",
+  },
   "identities.lifecycle.previewFailed": {
     defaultMessage: "Could not preview lifecycle action",
     description: "Safe fallback heading when lifecycle preview fails.",

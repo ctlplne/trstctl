@@ -4,6 +4,7 @@ import { useApiQuery, useQueryClient } from "@/lib/query";
 import { optionalApiCall } from "@/lib/optionalApi";
 import { hasPermission } from "@/lib/access";
 import { apiProblemMessage } from "@/lib/apiProblem";
+import { approvalRequestsQueryKey } from "@/lib/approvalQueue";
 import { translateNow } from "@/i18n/I18nProvider";
 import { Button } from "@/components/ui/button";
 
@@ -150,6 +151,9 @@ export function IssuanceRequestsPanel({ currentPrincipal }: IssuanceRequestsPane
       setDecisionError(apiProblemMessage(err, translateNow("source.issuance.requests.issuefailed.i3req00024")));
     } finally {
       setBusyRequestID(null);
+      // An attempt can create an approval request or consume its authority.
+      // Refresh that independent queue even if the issuance step was refused.
+      void queryClient.invalidateQueries({ queryKey: approvalRequestsQueryKey });
     }
   }
 

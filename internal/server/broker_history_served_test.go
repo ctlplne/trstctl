@@ -12,6 +12,8 @@ import (
 
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -103,13 +105,19 @@ func TestServedBrokerHistoryIsDurableBoundedTenantScopedAndReadOnly(t *testing.T
 		t.Fatal("neighbor could list broker certificates")
 	}
 	read("/api/v1/broker/agent-identities/"+first.CertificateID, neighbor, http.StatusNotFound)
-	read("/api/v1/broker/agent-identities", issuer, http.StatusForbidden)
-	read("/api/v1/broker/agent-identities", "", http.StatusUnauthorized)
 	for _, query := range []string{"limit=0", "limit=101", "cursor=bad", "state=imaginary", "method=" + strings.Repeat("x", 129), "q=" + strings.Repeat("x", 201)} {
 		read("/api/v1/broker/agent-identities?"+query, reader, http.StatusBadRequest)
 	}
 	if after, err := h.log.LastSequence(t.Context()); err != nil || after != head || ephemeralPreviewMutationState(t, h) != before || signer.calls.Load() != 2 {
 		t.Fatal("history reads wrote state or signed")
+	}
+	// Successful, invalid and tenant-isolated reads above have zero effects.
+	// A permission refusal records exactly one denial, without a broker effect.
+	read("/api/v1/broker/agent-identities", issuer, http.StatusForbidden)
+	read("/api/v1/broker/agent-identities", "", http.StatusUnauthorized)
+	assertBrokerDenialAuditOnly(t, h, head, "certs:read", "GET /api/v1/broker/agent-identities")
+	if ephemeralPreviewMutationState(t, h) != before || signer.calls.Load() != 2 {
+		t.Fatal("denial changed broker state or signed")
 	}
 	cert, err := h.store.GetCertificate(t.Context(), h.tenant, first.CertificateID)
 	if err != nil {
@@ -125,4 +133,23 @@ func TestServedBrokerHistoryIsDurableBoundedTenantScopedAndReadOnly(t *testing.T
 	h.srv.agentBroker = nil
 	read("/api/v1/broker/agent-identities", reader, http.StatusOK)
 	read("/api/v1/broker/agent-identities/"+first.CertificateID, reader, http.StatusOK)
+}
+
+func assertBrokerDenialAuditOnly(t *testing.T, h *servedHarness, head uint64, permission, target string) {
+	t.Helper()
+	var appended []events.Event
+	if err := h.log.Replay(t.Context(), head+1, func(ev events.Event) error { appended = append(appended, ev); return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if len(appended) != 1 {
+		t.Fatalf("denied request appended %d events, want exactly one attributable denial", len(appended))
+	}
+	event := appended[0]
+	var decision orchestrator.AuthzDecision
+	if err := json.Unmarshal(event.Data, &decision); err != nil {
+		t.Fatal(err)
+	}
+	if event.Type != orchestrator.EventAuthzDecision || event.TenantID != h.tenant || event.Actor.Subject != "secrets-test" || decision.Actor != "secrets-test" || decision.Permission != permission || decision.Target != target || decision.Resource != "api_route" || decision.Decision != "deny" {
+		t.Fatalf("unexpected effect for denied broker request: event=%+v decision=%+v", event, decision)
+	}
 }

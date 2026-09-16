@@ -38,7 +38,7 @@ func buildSCIMOption(cfg config.SCIM) (api.Option, error) {
 			return nil, fmt.Errorf("auth.scim.tokens[%d] duplicates another SCIM token", i)
 		}
 		seen[hash] = true
-		out.Tokens = append(out.Tokens, api.SCIMToken{Name: tok.Name, TenantID: tok.TenantID, TokenHash: hash})
+		out.Tokens = append(out.Tokens, api.SCIMToken{Name: tok.Name, TenantID: tok.TenantID, TokenHash: hash, SubjectAttribute: tok.SubjectAttribute})
 	}
 	return api.WithSCIM(out), nil
 }

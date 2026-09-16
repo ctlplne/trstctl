@@ -565,9 +565,12 @@ type SCIM struct {
 // SCIMToken configures one IdP bearer token. TokenFile points at the raw token
 // bytes; startup hashes them through internal/crypto and retains only the hash.
 type SCIMToken struct {
-	Name      string `json:"name,omitempty"`
-	TenantID  string `json:"tenant_id,omitempty"`
-	TokenFile string `json:"token_file,omitempty"`
+	// SubjectAttribute explicitly selects the trusted SCIM attribute matching the login subject.
+	// Empty preserves userName; externalId is opt-in and must be mapped by the IdP administrator.
+	SubjectAttribute string `json:"subject_attribute,omitempty"`
+	Name             string `json:"name,omitempty"`
+	TenantID         string `json:"tenant_id,omitempty"`
+	TokenFile        string `json:"token_file,omitempty"`
 }
 
 // ABAC configures the served attribute-based deny overlay. The Rego module must
@@ -2738,7 +2741,8 @@ func applyAuthEnv(getenv func(string) string, a *Auth) {
 	setString(getenv, "TRSTCTL_AUTH_SCIM_TOKEN_NAME", &scimToken.Name)
 	setString(getenv, "TRSTCTL_AUTH_SCIM_TOKEN_TENANT_ID", &scimToken.TenantID)
 	setString(getenv, "TRSTCTL_AUTH_SCIM_TOKEN_FILE", &scimToken.TokenFile)
-	if scimToken.Name != "" || scimToken.TenantID != "" || scimToken.TokenFile != "" {
+	setString(getenv, "TRSTCTL_AUTH_SCIM_SUBJECT_ATTRIBUTE", &scimToken.SubjectAttribute)
+	if scimToken.Name != "" || scimToken.TenantID != "" || scimToken.TokenFile != "" || scimToken.SubjectAttribute != "" {
 		a.SCIM.Tokens = []SCIMToken{scimToken}
 	}
 
@@ -4320,6 +4324,9 @@ func (s SCIM) validate() []error {
 		errs = append(errs, errors.New("auth.scim.tokens requires at least one tenant-bound token when auth.scim.enabled is true"))
 	}
 	for i, tok := range s.Tokens {
+		if attr := strings.TrimSpace(tok.SubjectAttribute); attr != "" && attr != "userName" && attr != "externalId" {
+			errs = append(errs, fmt.Errorf("auth.scim.tokens[%d].subject_attribute must be userName or externalId", i))
+		}
 		if strings.TrimSpace(tok.TenantID) == "" {
 			errs = append(errs, fmt.Errorf("auth.scim.tokens[%d].tenant_id is required", i))
 		}

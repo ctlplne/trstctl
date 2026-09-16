@@ -38,6 +38,13 @@ func TestHistoricalIndexMigrationRetryKeepsApplicationWritesAvailable(t *testing
 			 VALUES ($1,$2,'notification.send','original-command','original-payload','email',7,now())`,
 			write: `UPDATE notification_delivery_receipts SET attempts=attempts+1 WHERE tenant_id=$1 AND id=$2`,
 		},
+		{
+			version: 221, index: "tenant_members_scim_user_name_idx",
+			seed: `INSERT INTO tenant_members
+			 (subject,tenant_id,display_name,roles,source,status,created_at,updated_at)
+			 VALUES ($1,$2,'original member',ARRAY['operator'],'manual','active',now(),now())`,
+			write: `UPDATE tenant_members SET display_name=display_name || ' updated' WHERE tenant_id=$1 AND subject=$2`,
+		},
 	} {
 		t.Run(fmt.Sprint(tc.version), func(t *testing.T) {
 			ctx := t.Context()
@@ -78,11 +85,19 @@ func TestHistoricalIndexMigrationRetryKeepsApplicationWritesAvailable(t *testing
 					statements = append(statements, statement)
 				}
 			}
-			if len(statements) != 2 || !strings.Contains(statements[0].sql, "ADD COLUMN") {
-				t.Fatal("historical migration fixture changed")
-			}
-			if _, err := pool.Exec(ctx, statements[0].sql); err != nil {
-				t.Fatal(err)
+			if tc.version == 221 {
+				// SCIM expansion is already committed by migration 0220. The
+				// separate online migration must not hold a transaction open.
+				if !target.noTx {
+					t.Fatal("SCIM index must be a no-transaction migration")
+				}
+			} else {
+				if len(statements) != 2 || !strings.Contains(statements[0].sql, "ADD COLUMN") {
+					t.Fatal("historical migration fixture changed")
+				}
+				if _, err := pool.Exec(ctx, statements[0].sql); err != nil {
+					t.Fatal(err)
+				}
 			}
 			migrator, err := store.Open(ctx, dsn)
 			if err != nil {

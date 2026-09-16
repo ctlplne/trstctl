@@ -16,6 +16,22 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
+// Version-one member events predate explicit provisioning identities. Keep
+// their historical payloads closed instead of silently extending schema one.
+type privacyTenantMemberUpsertedV1 struct {
+	Subject     string   `json:"subject"`
+	DisplayName string   `json:"display_name,omitempty"`
+	Email       string   `json:"email,omitempty"`
+	Roles       []string `json:"roles,omitempty"`
+	Source      string   `json:"source,omitempty"`
+}
+type privacyTenantMemberOffboardedV1 struct {
+	Subject           string `json:"subject"`
+	Reason            string `json:"reason,omitempty"`
+	OffboardedBy      string `json:"offboarded_by,omitempty"`
+	RevokedTokenCount int    `json:"revoked_token_count"`
+}
+
 // The historical connector-only binding did not carry issuer authority. Keep
 // that closed payload distinct from schema 2 during privacy export/import.
 type privacyIdentityConnectorTargetBoundV1 struct {
@@ -147,6 +163,16 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/subject", exact), privacyRule("/display_name", token),
 		privacyRule("/email", exact), privacyRule("/roles", opaque),
 		privacyRule("/source", opaque),
+	)
+	tenantMemberSCIM := privacyRules(
+		privacyRule("/subject", exact), privacyRule("/display_name", token),
+		privacyRule("/email", exact), privacyRule("/roles", opaque),
+		privacyRule("/source", opaque), privacyRule("/scim", clear),
+	)
+	tenantMemberOffboardSCIM := privacyRules(
+		privacyRule("/subject", exact), privacyRule("/reason", clear),
+		privacyRule("/offboarded_by", exact), privacyRule("/revoked_token_count", opaque),
+		privacyRule("/scim", clear),
 	)
 	ownerDeleted := privacyRules(privacyRule("/id", opaque))
 	privacyErasedV1 := privacyRules(
@@ -680,8 +706,10 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 			privacyRule("/proof_kind", opaque), privacyRule("/reason", clear),
 			privacyRule("/requested_at", opaque),
 		),
-		{EventIdentityCreated, 1}:      identityCreated,
-		{EventTenantMemberUpserted, 1}: tenantMember,
+		{EventIdentityCreated, 1}:                                    identityCreated,
+		{EventTenantMemberUpserted, 1}:                               tenantMember,
+		{EventTenantMemberUpserted, TenantMemberSCIMSchemaVersion}:   tenantMemberSCIM,
+		{EventTenantMemberOffboarded, TenantMemberSCIMSchemaVersion}: tenantMemberOffboardSCIM,
 		{EventTenantMemberOffboarded, 1}: privacyRules(
 			privacyRule("/subject", exact), privacyRule("/reason", clear),
 			privacyRule("/offboarded_by", exact), privacyRule("/revoked_token_count", opaque),
@@ -1348,8 +1376,10 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventIssuanceRequestIssued, 1}:                                   privacyPayloadShape[IssuanceRequestIssued](),
 		{EventFirstIssuanceRetryRequested, 1}:                             privacyPayloadShape[store.FirstIssuanceRetryReceipt](),
 		{EventIdentityCreated, 1}:                                         privacyPayloadShape[IdentityCreated](),
-		{EventTenantMemberUpserted, 1}:                                    privacyPayloadShape[TenantMemberUpserted](),
-		{EventTenantMemberOffboarded, 1}:                                  privacyPayloadShape[TenantMemberOffboarded](),
+		{EventTenantMemberUpserted, TenantMemberSCIMSchemaVersion}:        privacyPayloadShape[TenantMemberUpserted](),
+		{EventTenantMemberOffboarded, TenantMemberSCIMSchemaVersion}:      privacyPayloadShape[TenantMemberOffboarded](),
+		{EventTenantMemberUpserted, 1}:                                    privacyPayloadShape[privacyTenantMemberUpsertedV1](),
+		{EventTenantMemberOffboarded, 1}:                                  privacyPayloadShape[privacyTenantMemberOffboardedV1](),
 		{EventAPITokenCreated, 1}:                                         privacyPayloadShape[APITokenCreated](),
 		{EventAPITokenRevoked, 1}:                                         privacyPayloadShape[APITokenRevoked](),
 		{EventPAMSessionStarted, 1}:                                       privacyPayloadShape[PAMSessionStarted](),

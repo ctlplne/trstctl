@@ -34,6 +34,9 @@ import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { graphNodeIdForIdentity, revocationReasons } from "@/lib/revocation";
 import { LifecycleAutomationPanel } from "@/pages/identities/LifecycleAutomationPanel";
+import { LifecycleApprovalRecovery } from "@/components/LifecycleApprovalRecovery";
+import { lifecycleApproval, lifecycleCommandKey, type LifecycleApproval } from "@/lib/lifecycleCommand";
+import { approvalRequestsQueryKey } from "@/lib/approvalQueue";
 
 export { graphNodeIdForIdentity } from "@/lib/revocation";
 
@@ -358,6 +361,8 @@ export function Identities() {
   const [pendingConfirmName, setPendingConfirmName] = useState("");
   const [pendingReason, setPendingReason] = useState("");
   const [transitionPreview, setTransitionPreview] = useState<TransitionPreviewState>({ key: "", plan: null, loading: false, error: null });
+  const [approvalNotice, setApprovalNotice] = useState<LifecycleApproval | null>(null);
+  const [approvalRestart, setApprovalRestart] = useState<{ fingerprint: string; requestId: string } | null>(null);
   const [query, setQuery] = useState("");
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
@@ -433,12 +438,21 @@ export function Identities() {
   );
 
   const act = useCallback(
-    async (id: string, to: TransitionTo, reason?: string, expectedVersion?: number, identityName?: string): Promise<boolean> => {
+    async (id: string, to: TransitionTo, reason: string, plan: IdentityTransitionPreview, identityName?: string): Promise<boolean> => {
       setBusyId(id);
       setError(null);
       setNotice(null);
+      setApprovalNotice(null);
       try {
-        const updated = await api.transitionIdentity(id, to, reason?.trim() || `${to} via UI`, undefined, undefined, expectedVersion);
+        const closedRequestId = approvalRestart?.fingerprint === plan.request_fingerprint ? approvalRestart.requestId : undefined;
+        const updated = await api.transitionIdentity(
+          id,
+          to,
+          reason.trim() || `${to} via UI`,
+          undefined,
+          lifecycleCommandKey(plan, closedRequestId),
+          plan.expected_version,
+        );
         if (identityState(updated) !== to) {
           throw new Error(
             translateNow("identities.lifecycle.verificationFailed", {
@@ -464,6 +478,7 @@ export function Identities() {
         });
         return true;
       } catch (err) {
+        setApprovalNotice(lifecycleApproval(err));
         if (err instanceof ApiError && err.status === 403) {
           setDeniedTransitions((current) => ({ ...current, [deniedKey(id, to)]: apiProblemMessage(err, "Transition denied") }));
         }
@@ -471,9 +486,10 @@ export function Identities() {
         return false;
       } finally {
         setBusyId(null);
+        void queryClient.invalidateQueries({ queryKey: approvalRequestsQueryKey });
       }
     },
-    [acceptIdentity, load, loadEvidence],
+    [acceptIdentity, approvalRestart, load, loadEvidence, queryClient],
   );
 
   /** request runs a transition immediately, EXCEPT a destructive one (revoke/retire)
@@ -486,6 +502,8 @@ export function Identities() {
     setPendingConfirmName("");
     setPendingReason("");
     setTransitionPreview({ key: "", plan: null, loading: false, error: null });
+    setApprovalNotice(null);
+    setApprovalRestart(null);
     setPendingImpact(emptyBlastRadiusState);
     if (returnTarget) {
       requestAnimationFrame(() => {
@@ -532,6 +550,7 @@ export function Identities() {
   const reviewTransition = useCallback(async (transition: PendingTransition, reason: string) => {
     const key = transitionPreviewKey(transition.id, transition.to, reason);
     setTransitionPreview({ key, plan: null, loading: true, error: null });
+    setApprovalNotice(null);
     try {
       const plan = await api.previewIdentityTransition(transition.id, transition.to, reason.trim() || `${transition.to} via UI`);
       setTransitionPreview({ key, plan, loading: false, error: null });
@@ -564,6 +583,9 @@ export function Identities() {
       setPendingConfirmName("");
       setPendingReason(reviewedReason);
       setPending(transition);
+      setApprovalNotice(null);
+      setApprovalRestart(null);
+      setError(null);
       setPendingImpact(emptyBlastRadiusState);
       void reviewTransition(transition, reviewedReason);
       if (destructive) {
@@ -816,7 +838,7 @@ export function Identities() {
       )}
 
       {!items && !error && <LoadingState>{translateNow("source.loading.identities.45d7e0b5b9")}</LoadingState>}
-      {error && <ErrorState title={translateNow("source.identity.action.failed.5e3283fa66")}>{error}</ErrorState>}
+      {error && !pending && <ErrorState title={translateNow("source.identity.action.failed.5e3283fa66")}>{error}</ErrorState>}
 
       {items && items.length === 0 && !showForm && (
         <EmptyState title={translateNow("source.no.identities.yet.c8697bd1bc")} ctaTo="/wizard" ctaLabel="Set up your first certificate">
@@ -1158,6 +1180,21 @@ export function Identities() {
                 {translateNow("identities.lifecycle.reviewChanged")}
               </p>
             )}
+            {actionError && (
+              <p role="alert" className="mt-3 text-sm text-destructive">
+                {actionError}
+              </p>
+            )}
+            <LifecycleApprovalRecovery
+              approval={approvalNotice}
+              onReviewNew={(requestId) => {
+                if (!transitionPreview.plan) return;
+                setApprovalRestart({ fingerprint: transitionPreview.plan.request_fingerprint, requestId });
+                setApprovalNotice(null);
+                setError(null);
+                void reviewTransition(pending, pendingReason);
+              }}
+            />
             <div className="mt-3 flex gap-2">
               <Button
                 type="button"
@@ -1171,8 +1208,9 @@ export function Identities() {
                 }
                 onClick={() => {
                   const transition = pending;
-                  const expectedVersion = transitionPreview.plan?.expected_version;
-                  void act(transition.id, transition.to, pendingReason, expectedVersion, transition.name).then((succeeded) => {
+                  const plan = transitionPreview.plan;
+                  if (!plan) return;
+                  void act(transition.id, transition.to, pendingReason, plan, transition.name).then((succeeded) => {
                     if (succeeded) clearPending();
                   });
                 }}

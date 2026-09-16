@@ -644,21 +644,21 @@ describe("lifecycle actions from the UI", () => {
     let dialog = await openIdentityDetails(user, "requested-svc");
     await user.click(within(dialog).getByRole("button", { name: /^issue$/i }));
     await confirmReviewedAction(user);
-    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("req-1", "issued", expect.anything(), undefined, undefined, 2));
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("req-1", "issued", expect.anything(), undefined, expect.any(String), 2));
     await user.click(within(dialog).getByRole("button", { name: "Close" }));
 
     // An issued identity can be deployed or revoked.
     dialog = await openIdentityDetails(user, "issued-svc");
     await user.click(within(dialog).getByRole("button", { name: /^deploy$/i }));
     await confirmReviewedAction(user);
-    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("iss-1", "deployed", expect.anything(), undefined, undefined, 2));
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("iss-1", "deployed", expect.anything(), undefined, expect.any(String), 2));
     await user.click(within(dialog).getByRole("button", { name: "Close" }));
 
     // A deployed identity can be renewed.
     dialog = await openIdentityDetails(user, "deployed-svc");
     await user.click(within(dialog).getByRole("button", { name: /^renew$/i }));
     await confirmReviewedAction(user);
-    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-1", "renewing", expect.anything(), undefined, undefined, 2));
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-1", "renewing", expect.anything(), undefined, expect.any(String), 2));
   });
 
   it("reviews an exact server-owned lifecycle plan before execution and verifies the returned state", async () => {
@@ -683,7 +683,9 @@ describe("lifecycle actions from the UI", () => {
     expect(within(review).getByText(/Read the identity and confirm renewing/)).toBeInTheDocument();
 
     await user.click(within(review).getByRole("button", { name: "Run reviewed action" }));
-    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-1", "renewing", "rotate before maintenance", undefined, undefined, 2));
+    await waitFor(() =>
+      expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-1", "renewing", "rotate before maintenance", undefined, expect.any(String), 2),
+    );
     expect(await screen.findByText(/Request accepted for deployed-svc: renewing/i)).toBeInTheDocument();
   });
 
@@ -921,7 +923,7 @@ describe("lifecycle actions from the UI", () => {
     await user.type(screen.getByLabelText("Transition reason"), "approved in CAB-1234");
     await user.click(screen.getByRole("button", { name: "Move to issued" }));
     await confirmReviewedAction(user);
-    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("req-1", "issued", "approved in CAB-1234", undefined, undefined, 2));
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("req-1", "issued", "approved in CAB-1234", undefined, expect.any(String), 2));
   });
 
   it("shows revoked and retired terminal handling in the state machine", async () => {
@@ -983,7 +985,110 @@ describe("lifecycle actions from the UI", () => {
     await user.click(within(dialog).getByRole("button", { name: "Review updated action" }));
     await waitFor(() => expect(apiMock.previewIdentityTransition).toHaveBeenLastCalledWith("dep-9", "revoked", "keyCompromise"));
     await user.click(within(dialog).getByRole("button", { name: /yes, revoke/i }));
-    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-9", "revoked", "keyCompromise", undefined, undefined, 2));
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-9", "revoked", "keyCompromise", undefined, expect.any(String), 2));
+  });
+
+  it("keeps the reviewed command across approval refusal and a fresh page mount", async () => {
+    const identity = { id: "governed-revoke", name: "governed.example.test", kind: "x509_certificate", owner_id: "own-1", status: "deployed" };
+    apiMock.identities.mockResolvedValue([identity]);
+    apiMock.getIdentity.mockResolvedValue(identity);
+    apiMock.transitionIdentity
+      .mockRejectedValueOnce(
+        new ApiError(
+          403,
+          JSON.stringify({
+            code: "identity_approval_required",
+            approval_request_id: "1ca14715-666f-5ed8-bd88-7b262fe543f5",
+            approval_status: "pending",
+            detail: "awaits two independent approvals",
+          }),
+        ),
+      )
+      .mockResolvedValue({ ...identity, status: "revoked" });
+    const user = userEvent.setup();
+    const firstPage = renderIdentities();
+    let detail = await openIdentityDetails(user, identity.name);
+    await user.click(within(detail).getByRole("button", { name: /^revoke$/i }));
+    let dialog = await screen.findByRole("alertdialog");
+    await user.type(within(dialog).getByLabelText(/type credential name/i), identity.name);
+    await user.click(within(dialog).getByRole("button", { name: /yes, revoke/i }));
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledTimes(1));
+    expect(apiMock.transitionIdentity.mock.calls[0]?.[4]).toEqual(expect.any(String));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("awaits two independent approvals");
+    expect(within(dialog).getByRole("link", { name: "Open approval requests" })).toHaveAttribute("href", "/approvals");
+    firstPage.unmount();
+    renderIdentities();
+    detail = await openIdentityDetails(user, identity.name);
+    await user.click(within(detail).getByRole("button", { name: /^revoke$/i }));
+    dialog = await screen.findByRole("alertdialog");
+    await user.type(within(dialog).getByLabelText(/type credential name/i), identity.name);
+    await user.click(within(dialog).getByRole("button", { name: /yes, revoke/i }));
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledTimes(2));
+    expect(apiMock.transitionIdentity.mock.calls[1]).toEqual(apiMock.transitionIdentity.mock.calls[0]);
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+  });
+
+  it.each(["denied", "expired", "superseded"])("starts a distinct command only after explicit recovery from %s approval", async (status) => {
+    const identity = { id: "closed-command", name: "closed.example.test", kind: "x509_certificate", owner_id: "own-1", status: "deployed" };
+    const requestId = "1ca14715-666f-5ed8-bd88-7b262fe543f5";
+    apiMock.identities.mockResolvedValue([identity]);
+    apiMock.getIdentity.mockResolvedValue(identity);
+    const refusal = new ApiError(
+      403,
+      JSON.stringify({ code: "identity_approval_required", approval_request_id: requestId, approval_status: status, detail: "approval request is closed" }),
+    );
+    apiMock.transitionIdentity
+      .mockRejectedValueOnce(refusal)
+      .mockRejectedValueOnce(refusal)
+      .mockResolvedValue({ ...identity, status: "revoked" });
+    const user = userEvent.setup();
+    renderIdentities();
+    const detail = await openIdentityDetails(user, identity.name);
+    await user.click(within(detail).getByRole("button", { name: /^revoke$/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    await user.type(within(dialog).getByLabelText(/type credential name/i), identity.name);
+    await user.click(within(dialog).getByRole("button", { name: /yes, revoke/i }));
+    await within(dialog).findByRole("button", { name: "Review a new request" });
+    await user.click(within(dialog).getByRole("button", { name: /yes, revoke/i }));
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledTimes(2));
+    expect(apiMock.transitionIdentity.mock.calls[0]).toEqual(apiMock.transitionIdentity.mock.calls[1]);
+    await user.click(await within(dialog).findByRole("button", { name: "Review a new request" }));
+    await waitFor(() => expect(apiMock.previewIdentityTransition).toHaveBeenCalledTimes(2));
+    expect(apiMock.transitionIdentity).toHaveBeenCalledTimes(2);
+    await user.click(within(dialog).getByRole("button", { name: /yes, revoke/i }));
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledTimes(3));
+    expect(apiMock.transitionIdentity.mock.calls[2]?.[4]).toBe(`${apiMock.transitionIdentity.mock.calls[0]?.[4]}:${requestId}`);
+  });
+
+  it("keeps an uncertain network retry bound and gives a changed reviewed reason a new command", async () => {
+    const identity = { id: "uncertain-command", name: "uncertain.example.test", kind: "x509_certificate", owner_id: "own-1", status: "deployed" };
+    apiMock.identities.mockResolvedValue([identity]);
+    apiMock.getIdentity.mockResolvedValue(identity);
+    apiMock.previewIdentityTransition.mockImplementation(async (id: string, to: string, reason: string) => ({
+      ...transitionPlanFor(id, to),
+      request_fingerprint: `sha256:${id}:${to}:${reason}`,
+    }));
+    apiMock.transitionIdentity.mockRejectedValue(new TypeError("connection lost before response"));
+    const user = userEvent.setup();
+    renderIdentities();
+    const detail = await openIdentityDetails(user, identity.name);
+    await user.click(within(detail).getByRole("button", { name: /^revoke$/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    await user.type(within(dialog).getByLabelText(/type credential name/i), identity.name);
+    await user.click(within(dialog).getByRole("button", { name: /yes, revoke/i }));
+    await within(dialog).findByRole("alert");
+    expect(within(dialog).queryByRole("button", { name: "Review a new request" })).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: /yes, revoke/i }));
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledTimes(2));
+    expect(apiMock.transitionIdentity.mock.calls[0]?.[4]).toEqual(expect.any(String));
+    expect(apiMock.transitionIdentity.mock.calls[0]).toEqual(apiMock.transitionIdentity.mock.calls[1]);
+    await user.selectOptions(within(dialog).getByLabelText(/revocation reason/i), "keyCompromise");
+    expect(within(dialog).getByRole("button", { name: /yes, revoke/i })).toBeDisabled();
+    await user.click(within(dialog).getByRole("button", { name: "Review updated action" }));
+    await user.click(within(dialog).getByRole("button", { name: /yes, revoke/i }));
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledTimes(3));
+    expect(apiMock.transitionIdentity.mock.calls[2]?.[2]).toBe("keyCompromise");
+    expect(apiMock.transitionIdentity.mock.calls[2]?.[4]).not.toBe(apiMock.transitionIdentity.mock.calls[0]?.[4]);
   });
 
   it("shows served blast-radius impact before destructive confirmation (FE-083)", async () => {
@@ -1406,7 +1511,7 @@ describe("lifecycle actions from the UI", () => {
     await user.click(within(detail).getByRole("button", { name: /^issue$/i }));
     await confirmReviewedAction(user);
 
-    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("req-1", "issued", expect.anything(), undefined, undefined, 2));
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("req-1", "issued", expect.anything(), undefined, expect.any(String), 2));
     expect(await screen.findByRole("status")).toHaveTextContent(/Idempotency-Key protects/i);
     expect(screen.getByRole("status")).toHaveTextContent(/duplicate execution/i);
   });
@@ -1580,7 +1685,7 @@ describe("lifecycle actions from the UI", () => {
     expect(await screen.findByText("Wildcard renewal · verify the successor and rollback receipt")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Review renewal now" }));
     await confirmReviewedAction(user);
-    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith(wildcard.id, "renewing", expect.anything(), undefined, undefined, 2));
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith(wildcard.id, "renewing", expect.anything(), undefined, expect.any(String), 2));
 
     await user.click(screen.getByRole("button", { name: "Close" }));
     await user.click(screen.getByText("Delivery and rotation evidence", { selector: "summary" }));

@@ -278,11 +278,12 @@ type PrivacyAttestationRecord struct {
 
 // PrivacyMemberRecord is one tenant_members row for the subject (RBAC membership).
 type PrivacyMemberRecord struct {
-	Subject     string   `json:"subject"`
-	DisplayName string   `json:"display_name"`
-	Email       string   `json:"email"`
-	Roles       []string `json:"roles"`
-	Status      string   `json:"status"`
+	SCIM        *SCIMIdentity `json:"scim,omitempty"`
+	Subject     string        `json:"subject"`
+	DisplayName string        `json:"display_name"`
+	Email       string        `json:"email"`
+	Roles       []string      `json:"roles"`
+	Status      string        `json:"status"`
 }
 
 // PrivacyTokenRecord is one api_tokens row for the subject. The token hash is NEVER
@@ -484,7 +485,7 @@ func (s *Store) SelectPrivacySubjectExport(ctx context.Context, tenantID, subjec
 
 		// Tenant members (matched by subject_ref).
 		rows, err = tx.Query(ctx,
-			`SELECT subject, display_name, email, roles, status
+			`SELECT subject, display_name, email, roles, status, scim_identity
 			   FROM tenant_members
 			  WHERE tenant_id = $1 AND subject_ref = $2
 			    AND subject NOT LIKE 'erased:%'
@@ -494,7 +495,7 @@ func (s *Store) SelectPrivacySubjectExport(ctx context.Context, tenantID, subjec
 		}
 		for rows.Next() {
 			var r PrivacyMemberRecord
-			if err := rows.Scan(&r.Subject, &r.DisplayName, &r.Email, &r.Roles, &r.Status); err != nil {
+			if err := rows.Scan(&r.Subject, &r.DisplayName, &r.Email, &r.Roles, &r.Status, &r.SCIM); err != nil {
 				rows.Close()
 				return err
 			}
@@ -1010,6 +1011,7 @@ func (s *Store) ApplyPrivacySubjectErasedTx(ctx context.Context, tx pgx.Tx, e Pr
 		`UPDATE tenant_members
 		    SET subject = $3,
 		        display_name = '',
+		        scim_identity = NULL,
 		        email = '',
 		        status = 'offboarded',
 		        updated_at = $4,
@@ -1457,13 +1459,14 @@ func (s *Store) ApplyPrivacyRetentionEnforcedTx(ctx context.Context, tx pgx.Tx, 
 		`UPDATE tenant_members
 		    SET subject = 'erased:' || left(subject_ref, 12),
 		        display_name = '',
+		        scim_identity = NULL,
 		        email = ''
 		  WHERE tenant_id = $1
 		    AND subject_ref <> ''
 		    AND status = 'offboarded'
 		    AND offboarded_at IS NOT NULL
 		    AND offboarded_at < $2
-		    AND (subject NOT LIKE 'erased:%' OR display_name <> '' OR email <> '')`,
+		    AND (subject NOT LIKE 'erased:%' OR display_name <> '' OR email <> '' OR scim_identity IS NOT NULL)`,
 		r.TenantID, r.Cutoffs.AccessTerminalBefore); err != nil {
 		return err
 	}
