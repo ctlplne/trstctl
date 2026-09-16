@@ -5,9 +5,11 @@
 // When the target table carries a second unique index, Postgres's speculative
 // insertion can still raise 23505 on that index while two identical inserts
 // race — the arbiter never fires, and the tail apply surfaces as a 500. Every
-// projection upsert into such a table must either serialize on an advisory
+// projection upsert that can repeat a second unique key must serialize on an advisory
 // lock (pg_advisory_xact_lock keyed on the arbiter) or retry on
-// unique_violation. Pre-existing sites are listed in a reviewed baseline so a
+// unique_violation. An explicit fresh UUID on a secondary key does not repeat
+// that key; defaults and caller-supplied IDs receive no such exemption.
+// Pre-existing sites are listed in a reviewed baseline so a
 // NEW site fails closed; the baseline is pinned so it cannot go stale.
 package upsertarbiter
 
@@ -394,7 +396,11 @@ func concatString(e ast.Expr) (string, bool) {
 // guardMarkers are the mitigations the rule accepts inside the enclosing
 // function or a same-package function it calls: an advisory lock serializing
 // the upsert, or explicit unique-violation handling (retry / classification).
-var guardMarkers = []string{"pg_advisory_xact_lock", "23505", "UniqueViolation", "unique_violation"}
+var guardMarkers = []string{"23505", "UniqueViolation", "unique_violation"}
+
+// Shared backup/lifecycle locks admit concurrent writers; their longer name
+// must not satisfy the exclusive serialization requirement by substring.
+var exclusiveLockCall = regexp.MustCompile(`(?i)\bpg_advisory_xact_lock\s*\(`)
 
 func bodyHasGuard(fn *ast.FuncDecl) bool {
 	if fn == nil || fn.Body == nil {
@@ -408,6 +414,9 @@ func bodyHasGuard(fn *ast.FuncDecl) bool {
 		switch e := n.(type) {
 		case *ast.BasicLit:
 			if e.Kind == token.STRING {
+				if sql, err := strconv.Unquote(e.Value); err == nil && exclusiveLockCall.MatchString(sql) {
+					found = true
+				}
 				for _, m := range guardMarkers {
 					if strings.Contains(e.Value, m) {
 						found = true
@@ -510,9 +519,10 @@ func scanFiles(files []*ast.File, fset *token.FileSet, sch *schema, relName func
 				if !known || len(arb) == 0 {
 					continue
 				}
+				fresh := freshInsertColumns(text)
 				var uncovered []string
 				for _, u := range uniques {
-					if u.key() != arb.key() {
+					if u.key() != arb.key() && !hasFreshColumn(u, fresh) {
 						uncovered = append(uncovered, u.key())
 					}
 				}

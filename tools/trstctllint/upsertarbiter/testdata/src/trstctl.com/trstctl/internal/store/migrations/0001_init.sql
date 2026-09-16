@@ -37,3 +37,11 @@ ALTER TABLE repinned ALTER COLUMN diagnostic_id SET NOT NULL, DROP CONSTRAINT re
 CREATE TABLE unindexed (id uuid PRIMARY KEY, tenant_id uuid NOT NULL, name text NOT NULL);
 CREATE UNIQUE INDEX unindexed_name_idx ON unindexed (tenant_id, name);
 DROP INDEX unindexed_name_idx;
+
+CREATE TABLE triple (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    name text NOT NULL,
+    alias text NOT NULL UNIQUE,
+    UNIQUE (tenant_id, name)
+);
