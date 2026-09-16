@@ -4,7 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { RevocationCenter } from "@/pages/certificates/RevocationCenter";
 import { AppQueryProvider } from "@/lib/query";
-import { ApiError } from "@/lib/api";
+import { ApiError, type Identity } from "@/lib/api";
+import { useState } from "react";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -154,6 +155,31 @@ describe("RevocationCenter", () => {
     );
     expect(await screen.findByRole("status")).toHaveTextContent("Revocation accepted and the identity now reads revoked.");
     expect(screen.getByRole("link", { name: "Open immutable audit evidence" })).toHaveAttribute("href", "/audit?type=identity.revoked&q=identity-payments");
+  });
+
+  it("keeps the completion evidence when the parent removes the revoked identity from eligible targets", async () => {
+    apiMock.previewIdentityTransition.mockReset().mockResolvedValue(plan);
+    apiMock.graphBlastRadius.mockReset().mockResolvedValue({ node: { id: "cert:certificate-payments", kind: "credential", name: "payments" }, affected: [] });
+    apiMock.transitionIdentity.mockReset().mockResolvedValue({ ...identities[0], status: "revoked" });
+    function LiveInventory() {
+      const [current, setCurrent] = useState<Identity[]>(identities);
+      return <RevocationCenter identities={current} distributions={[]} health={null} onRevoked={(updated) => setCurrent([updated])} />;
+    }
+    render(
+      <MemoryRouter>
+        <LiveInventory />
+      </MemoryRouter>,
+    );
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByLabelText("Managed certificate"), "identity-payments");
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    await user.click(await screen.findByRole("button", { name: "Continue to confirmation" }));
+    await user.type(screen.getByLabelText("Type the exact credential label"), "payments.example.test");
+    await user.click(screen.getByRole("button", { name: "Revoke reviewed credential" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Revocation accepted and the identity now reads revoked.");
+    expect(screen.getByRole("link", { name: "Open immutable audit evidence" })).toHaveAttribute("href", "/audit?type=identity.revoked&q=identity-payments");
+    expect(screen.getByText("payments.example.test", { exact: true })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Revoke reviewed credential" })).not.toBeInTheDocument();
   });
 
   it("recovers the same reviewed identity revocation after approval and remount", async () => {

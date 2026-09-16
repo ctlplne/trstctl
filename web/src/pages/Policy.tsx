@@ -1,7 +1,11 @@
-import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ComplianceEvidencePackPanel } from "@/components/ComplianceEvidencePackPanel";
-import { Dialog } from "@/components/Dialog";
+import { PolicyRuleEditor } from "@/pages/policy/PolicyRuleEditor";
+import { useAuth } from "@/auth/AuthProvider";
+import { AppQueryProvider, useApiQuery, useHasAppQueryProvider, useQueryClient } from "@/lib/query";
+import { useRuntimeOperationExecution } from "@/lib/capabilities";
+import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
 import { ScrollableTableRegion } from "@/components/ScrollableTableRegion";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
@@ -26,6 +30,7 @@ import {
   type PolicyDryRun,
   type PolicyDryRunRequest,
   type PolicyVersion,
+  type PolicyVersionRequest,
 } from "@/lib/api";
 
 type ComplianceFramework = ComplianceEvidencePack["framework"];
@@ -153,6 +158,16 @@ const abacDryRunInput = JSON.stringify(
 );
 
 export function Policy() {
+  return useHasAppQueryProvider() ? (
+    <PolicyContent />
+  ) : (
+    <AppQueryProvider>
+      <PolicyContent />
+    </AppQueryProvider>
+  );
+}
+
+function PolicyContent() {
   const { formatDate, t } = useTranslation();
   const [selectedFramework, setSelectedFramework] = useState<ComplianceFramework>("soc2");
   const [evidencePack, setEvidencePack] = useState<ComplianceEvidencePack | null>(null);
@@ -220,21 +235,28 @@ export function Policy() {
   const [dryRunResult, setDryRunResult] = useState<PolicyDryRun | null>(null);
   const [dryRunError, setDryRunError] = useState<string | null>(null);
   const [dryRunBusy, setDryRunBusy] = useState(false);
-  const [policyVersions, setPolicyVersions] = useState<PolicyVersion[]>([]);
-  const [activePolicyVersion, setActivePolicyVersion] = useState<PolicyVersion | null>(null);
-  const [policyVersionLoading, setPolicyVersionLoading] = useState(true);
-  const [policyVersionError, setPolicyVersionError] = useState<string | null>(null);
+  const { user } = useAuth();
+  const policyQueryKey = ["policy-versions", user?.tenant_id ?? "isolated", user?.subject ?? "isolated", [...(user?.permissions ?? [])].sort().join(",")];
+  const policyQuery = useApiQuery(policyQueryKey, api.policyVersions, { retry: false, live: { intervalMs: 30_000 } });
+  const queryClient = useQueryClient();
+  const policyPage = policyQuery.error ? null : policyQuery.data;
+  const policyVersions = policyPage?.items ?? [];
+  const activePolicyVersion = policyPage?.active?.active && policyPage.active.status === "active" ? policyPage.active : null;
+  const policyVersionLoading = policyQuery.loading;
+  const [policyActionError, setPolicyVersionError] = useState<string | null>(null);
+  const policyVersionError = policyQuery.error ?? policyActionError;
+  const [policySubmitError, setPolicySubmitError] = useState<string | null>(null);
+  const enforcement = policyPage?.enforcement;
+  const verifiedEnforcement =
+    enforcement?.enabled === true && !!enforcement.module_sha256 && (!activePolicyVersion || activePolicyVersion.module_sha256 === enforcement.module_sha256);
+  const createRule = useRuntimeOperationExecution("createPolicyVersion");
+  const activateRule = useRuntimeOperationExecution("activatePolicyVersion");
+  const rollbackRule = useRuntimeOperationExecution("rollbackPolicyVersion");
   const [policyVersionNotice, setPolicyVersionNotice] = useState<string | null>(null);
   const [policyVersionAction, setPolicyVersionAction] = useState<string | null>(null);
-  const [policyVersionForm, setPolicyVersionForm] = useState({
-    description: translateNow("source.emergency.issuance.guard.5a3ad01167"),
-    changeRef: "github:security/policy#42",
-    evidenceRefs: "pr:policy-42, cab:2026-07-02",
-    module: lifecycleDryRunModule,
-  });
   const [ruleDialogOpen, setRuleDialogOpen] = useState(false);
+  const [ruleEditorGeneration, setRuleEditorGeneration] = useState(0);
   const [open, setOpen] = useState({ rules: false, test: false, compliance: false, approvals: false });
-  const ruleDescriptionRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open.compliance) return undefined;
@@ -337,28 +359,6 @@ export function Policy() {
       active = false;
     };
   }, [open.approvals]);
-
-  useEffect(() => {
-    let active = true;
-    setPolicyVersionLoading(true);
-    setPolicyVersionError(null);
-    api
-      .policyVersions()
-      .then((page) => {
-        if (!active) return;
-        setPolicyVersions(page.items ?? []);
-        setActivePolicyVersion(page.active ?? null);
-      })
-      .catch((err: unknown) => {
-        if (active) setPolicyVersionError(describePolicyError(err, "policy versions unavailable"));
-      })
-      .finally(() => {
-        if (active) setPolicyVersionLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
 
   async function exportComplianceEvidence() {
     setExporting(true);
@@ -649,40 +649,23 @@ export function Policy() {
     }
   }
 
-  async function refreshPolicyVersions(preferredID?: string) {
-    setPolicyVersionLoading(true);
-    setPolicyVersionError(null);
-    try {
-      const page = await api.policyVersions();
-      const items = page.items ?? [];
-      setPolicyVersions(items);
-      setActivePolicyVersion(page.active ?? items.find((item) => item.id === preferredID) ?? null);
-    } catch (err) {
-      setPolicyVersionError(describePolicyError(err, "policy versions unavailable"));
-    } finally {
-      setPolicyVersionLoading(false);
-    }
+  async function refreshPolicyVersions() {
+    await queryClient.invalidateQueries({ queryKey: policyQueryKey });
   }
 
-  async function createPolicyVersion(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function createPolicyVersion(input: PolicyVersionRequest) {
     setPolicyVersionAction("create");
-    setPolicyVersionError(null);
+    setPolicySubmitError(null);
     setPolicyVersionNotice(null);
     try {
-      const created = await api.createPolicyVersion({
-        kind: "lifecycle",
-        module: policyVersionForm.module,
-        description: optionalText(policyVersionForm.description),
-        change_ref: optionalText(policyVersionForm.changeRef),
-        evidence_refs: splitRefs(policyVersionForm.evidenceRefs),
-      });
+      const created = await api.createPolicyVersion(input);
       setPolicyVersionNotice(`Policy version ${created.module_sha256.slice(0, 12)} authored.`);
-      await refreshPolicyVersions(created.id);
+      await refreshPolicyVersions();
       setRuleDialogOpen(false);
+      setRuleEditorGeneration((current) => current + 1);
       setOpen((current) => ({ ...current, rules: true }));
     } catch (err) {
-      setPolicyVersionError(describePolicyError(err, "policy version create failed"));
+      setPolicySubmitError(describePolicyError(err, "policy version create failed"));
     } finally {
       setPolicyVersionAction(null);
     }
@@ -695,10 +678,10 @@ export function Policy() {
     try {
       const activated = await api.activatePolicyVersion(version.id, {
         reason: "Operator activated from Policy console",
-        evidence_refs: splitRefs(policyVersionForm.evidenceRefs),
+        evidence_refs: version.evidence_refs ?? [],
       });
       setPolicyVersionNotice(`Policy version ${activated.module_sha256.slice(0, 12)} activated.`);
-      await refreshPolicyVersions(activated.id);
+      await refreshPolicyVersions();
     } catch (err) {
       setPolicyVersionError(describePolicyError(err, "policy activation failed"));
     } finally {
@@ -713,10 +696,10 @@ export function Policy() {
     try {
       const rolledBack = await api.rollbackPolicyVersion(version.id, {
         reason: "Operator rollback from Policy console",
-        evidence_refs: splitRefs(policyVersionForm.evidenceRefs),
+        evidence_refs: version.evidence_refs ?? [],
       });
       setPolicyVersionNotice(`Policy version ${rolledBack.module_sha256.slice(0, 12)} rolled back.`);
-      await refreshPolicyVersions(rolledBack.rollback_to_id);
+      await refreshPolicyVersions();
     } catch (err) {
       setPolicyVersionError(describePolicyError(err, "policy rollback failed"));
     } finally {
@@ -764,7 +747,14 @@ export function Policy() {
         description={t("policy.design.answer")}
         technicalDetails={t("policy.design.technicalDetails")}
         actions={
-          <Button type="button" onClick={() => setRuleDialogOpen(true)}>
+          <Button
+            type="button"
+            disabled={!createRule.runnable || !verifiedEnforcement}
+            onClick={() => {
+              setPolicySubmitError(null);
+              setRuleDialogOpen(true);
+            }}
+          >
             {t("policy.design.create")}
           </Button>
         }
@@ -772,7 +762,7 @@ export function Policy() {
 
       {policyVersionLoading || accessLoading ? (
         <LoadingState>{t("policy.design.checking")}</LoadingState>
-      ) : policyVersionError || accessError ? (
+      ) : policyVersionError || accessError || !enforcement || (enforcement.enabled && !verifiedEnforcement) ? (
         <ErrorState title={t("policy.design.summaryUnavailable")}>
           <p>{t("policy.design.summaryUnavailableHelp")}</p>
           <ul className="mt-2 list-disc ps-5">
@@ -781,13 +771,17 @@ export function Policy() {
           </ul>
         </ErrorState>
       ) : (
-        <div className="ui-panel grid gap-3 p-comfortable" role="status" aria-live="polite">
+        <Card className="grid gap-3 p-comfortable" role="status" aria-live="polite">
           <div>
-            <h2 className="text-title font-semibold">{activePolicyVersion ? t("policy.design.protected") : t("policy.design.protectedNoCustom")}</h2>
+            <h2 className="text-title font-semibold">
+              {!enforcement.enabled ? t("policy.design.disabled") : activePolicyVersion ? t("policy.design.protected") : t("policy.design.protectedNoCustom")}
+            </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              {activePolicyVersion
-                ? t("policy.design.activeRule", { rule: activePolicyVersion.description || activePolicyVersion.id })
-                : t("policy.design.defaultDeny")}
+              {!enforcement.enabled
+                ? t("policy.design.disabledHelp")
+                : activePolicyVersion
+                  ? t("policy.design.activeRule", { rule: activePolicyVersion.description || activePolicyVersion.id })
+                  : t("policy.design.defaultDeny")}
             </p>
           </div>
           <dl className="grid gap-3 text-sm sm:grid-cols-2">
@@ -806,8 +800,11 @@ export function Policy() {
               value={policyVersions.length === 1 ? t("policy.design.oneVersion") : t("policy.design.manyVersions", { count: String(policyVersions.length) })}
             />
           </dl>
-        </div>
+        </Card>
       )}
+      <Button type="button" variant="outline" disabled={policyQuery.fetching} onClick={() => policyQuery.refetch()}>
+        {t("source.refresh.0e91610117")}
+      </Button>
 
       <PolicyDetails title={t("policy.design.disclosure.rules")} open={open.rules} onToggle={(value) => setOpen((current) => ({ ...current, rules: value }))}>
         <div className="grid min-w-0 gap-6">
@@ -818,7 +815,13 @@ export function Policy() {
               <h2 id="policy-gate-heading" className="text-title font-semibold">
                 {t("policy.enforcement.heading")}
               </h2>
-              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("policy.enforcement.description")}</p>
+              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+                {verifiedEnforcement
+                  ? t("policy.enforcement.description")
+                  : enforcement?.enabled === false
+                    ? t("policy.design.disabledHelp")
+                    : t("policy.design.summaryUnavailableHelp")}
+              </p>
             </div>
             <p className="text-sm text-muted-foreground">
               {t("policy.enforcement.auditPrefix")}{" "}
@@ -842,7 +845,13 @@ export function Policy() {
               <h2 id="policy-version-heading" className="text-title font-semibold">
                 {t("policy.versions.heading")}
               </h2>
-              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("policy.versions.description")}</p>
+              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+                {verifiedEnforcement
+                  ? t("policy.versions.description")
+                  : enforcement?.enabled === false
+                    ? t("policy.design.disabledHelp")
+                    : t("policy.design.summaryUnavailableHelp")}
+              </p>
             </div>
 
             <div className="grid min-w-0 gap-4">
@@ -850,7 +859,7 @@ export function Policy() {
                 <h3 id="policy-active-version-heading" className="text-sm font-semibold">
                   {t("policy.versions.activePolicy")}
                 </h3>
-                {activePolicyVersion ? (
+                {verifiedEnforcement && activePolicyVersion ? (
                   <dl className="mt-3 grid gap-2">
                     <div>
                       <dt className="text-xs font-medium text-muted-foreground">{t("policy.versions.status")}</dt>
@@ -866,7 +875,13 @@ export function Policy() {
                     </div>
                   </dl>
                 ) : (
-                  <p className="mt-3 text-muted-foreground">{t("policy.versions.noActive")}</p>
+                  <p className="mt-3 text-muted-foreground">
+                    {verifiedEnforcement
+                      ? t("policy.versions.noActive")
+                      : enforcement?.enabled === false
+                        ? t("policy.design.disabledHelp")
+                        : t("policy.design.summaryUnavailableHelp")}
+                  </p>
                 )}
               </section>
             </div>
@@ -903,7 +918,7 @@ export function Policy() {
                             type="button"
                             variant="outline"
                             onClick={() => void activatePolicyVersion(version)}
-                            disabled={version.active || policyVersionAction === `activate:${version.id}`}
+                            disabled={!verifiedEnforcement || !activateRule.runnable || version.active || policyVersionAction === `activate:${version.id}`}
                           >
                             {policyVersionAction === `activate:${version.id}` ? t("policy.versions.activating") : t("policy.versions.activate")}
                           </Button>
@@ -911,11 +926,21 @@ export function Policy() {
                             type="button"
                             variant="outline"
                             onClick={() => void rollbackPolicyVersion(version)}
-                            disabled={!version.active || policyVersionAction === `rollback:${version.id}`}
+                            disabled={
+                              !verifiedEnforcement ||
+                              !rollbackRule.runnable ||
+                              !version.active ||
+                              version.rollback_available !== true ||
+                              policyVersionAction === `rollback:${version.id}`
+                            }
+                            title={version.active && version.rollback_available === false ? t("policy.versions.noRollback") : undefined}
                           >
                             {policyVersionAction === `rollback:${version.id}` ? t("policy.versions.rollingBack") : t("policy.versions.rollback")}
                           </Button>
                         </div>
+                        {version.active && version.rollback_available === false && (
+                          <p className="mt-2 max-w-xs text-xs text-muted-foreground">{t("policy.versions.noRollback")}</p>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -1499,72 +1524,15 @@ export function Policy() {
         </div>
       </PolicyDetails>
 
-      <Dialog
+      <PolicyRuleEditor
+        key={ruleEditorGeneration}
         open={ruleDialogOpen}
         onClose={() => setRuleDialogOpen(false)}
-        titleId="create-rule-heading"
-        descriptionId="create-rule-description"
-        initialFocusRef={ruleDescriptionRef}
-        panelAnimation="none"
-        panelClassName="fixed left-1/2 top-1/2 grid max-h-[calc(100dvh-2rem)] w-[min(94vw,48rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-panel border border-border bg-card p-5 shadow-elevation3"
-      >
-        <form className="grid min-w-0 gap-4 text-sm" onSubmit={(event) => void createPolicyVersion(event)}>
-          <div>
-            <h2 id="create-rule-heading" className="text-title font-semibold">
-              {t("policy.design.create")}
-            </h2>
-            <p id="create-rule-description" className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              {t("policy.design.createHelp")}
-            </p>
-          </div>
-          <div className="grid min-w-0 gap-3 md:grid-cols-2">
-            <label className="grid min-w-0 gap-1 font-medium">
-              {t("policy.versions.descriptionLabel")}
-              <input
-                ref={ruleDescriptionRef}
-                className="ui-input font-normal"
-                value={policyVersionForm.description}
-                onChange={(event) => setPolicyVersionForm((current) => ({ ...current, description: event.target.value }))}
-                required
-              />
-            </label>
-            <label className="grid min-w-0 gap-1 font-medium">
-              {t("policy.versions.changeRef")}
-              <input
-                className="ui-input font-mono text-xs font-normal"
-                value={policyVersionForm.changeRef}
-                onChange={(event) => setPolicyVersionForm((current) => ({ ...current, changeRef: event.target.value }))}
-              />
-            </label>
-          </div>
-          <label className="grid min-w-0 gap-1 font-medium">
-            {t("policy.versions.evidenceRefs")}
-            <input
-              className="ui-input font-mono text-xs font-normal"
-              value={policyVersionForm.evidenceRefs}
-              onChange={(event) => setPolicyVersionForm((current) => ({ ...current, evidenceRefs: event.target.value }))}
-            />
-          </label>
-          <label className="grid min-w-0 gap-1 font-medium">
-            {t("policy.versions.lifecycleModule")}
-            <textarea
-              className="ui-input min-h-64 font-mono text-xs font-normal"
-              spellCheck={false}
-              value={policyVersionForm.module}
-              onChange={(event) => setPolicyVersionForm((current) => ({ ...current, module: event.target.value }))}
-            />
-          </label>
-          <p className="text-sm text-muted-foreground">{t("policy.design.moduleHelp")}</p>
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={() => setRuleDialogOpen(false)}>
-              {translateNow("source.cancel.19766ed6cc")}
-            </Button>
-            <Button type="submit" disabled={policyVersionAction === "create" || !policyVersionForm.module.trim()}>
-              {policyVersionAction === "create" ? t("policy.versions.authoring") : t("policy.design.create")}
-            </Button>
-          </div>
-        </form>
-      </Dialog>
+        onCreate={createPolicyVersion}
+        busy={policyVersionAction === "create"}
+        error={policySubmitError}
+        initialModule={lifecycleDryRunModule}
+      />
     </section>
   );
 }

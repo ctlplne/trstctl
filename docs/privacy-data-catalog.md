@@ -55,6 +55,19 @@ expired cookie cannot authorize a request, and the next session creation for the
 same tenant deletes expired rows. Operators can override the other classes via the
 `TRSTCTL_PRIVACY_RETENTION_*` settings (`docs/configuration.md`).
 
+## Lifecycle policy version evidence
+
+Policy draft, activation and rollback events retain their author or operator and
+review evidence. Subject erasure pseudonymizes the exact actor and clears matching
+free-text descriptions, change references, reasons and evidence references. The
+version identifiers, module digests and executable Rego source remain unchanged.
+
+Rego can contain an explicit subject in an authorization condition. Erasure does
+not rewrite or silently ignore that executable text: if the selected subject
+occurs in a stored module, history erasure fails closed before staging a rewrite.
+Review the rule and the documented history-retention obligations; a successful
+metadata-only rewrite must never be reported as removal of that literal.
+
 ## Read-model snapshot cache
 
 Read-model snapshots are accepted only as one complete capture generation. Every

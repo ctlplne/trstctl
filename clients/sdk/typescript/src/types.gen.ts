@@ -12905,6 +12905,8 @@ export interface components {
             module_sha256: string;
             package: string;
             query: string;
+            /** @description This active version has a recorded predecessor that the rollback operation can restore. Authorization and runtime enforcement are checked separately. Older idempotent responses may omit this field; treat absence as unknown and refresh the version list. */
+            rollback_available?: boolean;
             /** Format: uuid */
             rollback_from_id?: string;
             /** Format: uuid */
@@ -12925,6 +12927,10 @@ export interface components {
         PolicyVersionList: {
             active?: components["schemas"]["PolicyVersion"];
             counts: components["schemas"]["PolicyVersionListSummary"];
+            enforcement: {
+                enabled: boolean;
+                module_sha256?: string;
+            };
             items: components["schemas"]["PolicyVersion"][];
         };
         PolicyVersionListSummary: {

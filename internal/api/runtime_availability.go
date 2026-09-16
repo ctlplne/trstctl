@@ -11,6 +11,13 @@ package api
 // to stop a declared route from being mistaken for a configured service.
 func (a *API) runtimeRouteAvailability(r route) (bool, string) {
 	switch r.opID {
+	case "createPolicyVersion", "activatePolicyVersion", "rollbackPolicyVersion":
+		_, configured := a.liveLifecyclePolicy()
+		return runtimeDependency(configured && a.log != nil && a.store != nil,
+			"Live lifecycle policy is disabled or its durable storage is unavailable. Enable ca.policy.enabled before authoring or activating rules.")
+	case "listPolicyVersions":
+		return runtimeDependency(a.log != nil,
+			"The policy event log is unavailable. Recorded versions alone do not prove runtime enforcement.")
 	case "retryFirstIssuance":
 		return runtimeDependency(a.firstIssuanceRetry != nil,
 			"The first-certificate recovery service is not configured in this deployment.")

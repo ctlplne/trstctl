@@ -587,6 +587,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		kubernetesCSRPosture:        cfg.kubernetesCSRPosture,
 		kubernetesTrustPosture:      cfg.kubernetesTrustPosture,
 	}
+	a.bindLifecyclePolicy()
 	if a.auth != nil {
 		a.oidcPreLogin = newOIDCPreLoginStore(a.auth.PreLoginTTL, specialAbuseLimits.preLoginLimits())
 	}

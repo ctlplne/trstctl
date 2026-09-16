@@ -8234,6 +8234,7 @@ PolicyVersion = TypedDict(
         'module_sha256': str,
         'package': str,
         'query': str,
+        'rollback_available': bool,
         'rollback_from_id': str,
         'rollback_to_id': str,
         'rolled_back_at': str,
@@ -8258,6 +8259,7 @@ PolicyVersionList = TypedDict(
     {
         'active': dict[str, Any],
         'counts': dict[str, Any],
+        'enforcement': dict[str, Any],
         'items': list[dict[str, Any]],
     },
     total=False,

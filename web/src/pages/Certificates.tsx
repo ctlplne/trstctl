@@ -632,6 +632,7 @@ function CertificateWorkspace() {
   const { t, formatDate, formatDateTime } = useTranslation();
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
+  const tab = tabFromSearchParam(searchParams.get("tab"));
   const [query, setQuery] = useState("");
   const [expiry, setExpiry] = useState<ExpiryFilter>(() => expiryFromSearchParam(searchParams.get("expiry")));
   const [issuerFilter, setIssuerFilter] = useState<FacetFilter>(() => searchParams.get("issuer") ?? "all");
@@ -674,8 +675,24 @@ function CertificateWorkspace() {
     { live: { intervalMs: 30_000 }, enabled: typeof api.certificateHealth === "function" },
   );
   const health = healthQuery.data;
-  const [crlDistributions, setCRLDistributions] = useState<CRLDistribution[]>([]);
-  const [revocationHealth, setRevocationHealth] = useState<RevocationHealth | null>(null);
+  const revocationScope = [user?.tenant_id ?? null, user?.subject ?? null, (user?.permissions ?? []).join("|")];
+  const crlQuery = useApiQuery<CRLDistribution[]>(
+    ["certificate-revocation-crls", ...revocationScope],
+    async () => (await api.crlDistributions())?.items ?? [],
+    { live: { intervalMs: 30_000 }, enabled: tab === "crlct" && typeof api.crlDistributions === "function" },
+  );
+  const revocationQuery = useApiQuery<RevocationHealth | null>(
+    ["certificate-revocation-health", ...revocationScope],
+    async () => (await api.revocationHealth()) ?? null,
+    { live: { intervalMs: 30_000 }, enabled: tab === "crlct" && typeof api.revocationHealth === "function" },
+  );
+  // A failed refresh must not keep advertising its old publication/health snapshot.
+  const crlDistributions = crlQuery.error ? [] : (crlQuery.data ?? []);
+  const revocationHealth = revocationQuery.error ? null : revocationQuery.data;
+  function refreshRevocationEvidence() {
+    crlQuery.refetch();
+    revocationQuery.refetch();
+  }
   const [roguePosture, setRoguePosture] = useState<RogueCertificatePosture | null>(null);
   const [ctCertificatePEM, setCTCertificatePEM] = useState("");
   const [ctPrecertificatePEM, setCTPrecertificatePEM] = useState("");
@@ -686,7 +703,6 @@ function CertificateWorkspace() {
   const [ctError, setCTError] = useState<Notice | null>(null);
   const [ctResult, setCTResult] = useState<CTSubmission | null>(null);
   const [ctDialogOpen, setCTDialogOpen] = useState(false);
-  const tab = tabFromSearchParam(searchParams.get("tab"));
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   useEffect(() => {
     setSelectedIds(new Set());
@@ -700,8 +716,6 @@ function CertificateWorkspace() {
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      settleOptional(() => api.crlDistributions()),
-      settleOptional(() => api.revocationHealth()),
       settleOptional(() => api.rogueCertificates()),
       settleOptional(() => api.rotationRuns({ limit: 100 })),
       settleOptional(() => api.connectorDeliveries({ limit: 50 })),
@@ -710,44 +724,29 @@ function CertificateWorkspace() {
       settleOptional(() => api.notifications({ limit: 100 })),
       settleOptional(() => api.notificationChannels()),
       settleOptional(() => api.notificationRoutingPolicies()),
-    ]).then(
-      ([
-        crlResult,
-        revocationResult,
-        rogueResult,
-        rotationResult,
-        deliveryResult,
-        ownerResult,
-        identityResult,
-        notificationResult,
-        channelResult,
-        policyResult,
-      ]) => {
-        if (cancelled) return;
-        if (crlResult) setCRLDistributions(crlResult.items ?? []);
-        if (revocationResult) setRevocationHealth(revocationResult);
-        if (rogueResult) setRoguePosture(rogueResult);
-        if (rotationResult) {
-          setRotationRuns(rotationResult.items ?? []);
-          setRotationRunsObserved(true);
-        }
-        if (deliveryResult) {
-          setDeliveries(deliveryResult.items ?? []);
-          setDeliveriesObserved(true);
-        }
-        if (ownerResult) {
-          setOwners(ownerResult);
-          setOwnersObserved(true);
-        }
-        if (identityResult) {
-          setIdentities(identityResult);
-          setIdentitiesObserved(true);
-        }
-        if (notificationResult) setNotifications(notificationResult.items ?? []);
-        if (channelResult) setNotificationChannels(channelResult.items ?? []);
-        if (policyResult) setNotificationRoutingPolicies(policyResult.items ?? []);
-      },
-    );
+    ]).then(([rogueResult, rotationResult, deliveryResult, ownerResult, identityResult, notificationResult, channelResult, policyResult]) => {
+      if (cancelled) return;
+      if (rogueResult) setRoguePosture(rogueResult);
+      if (rotationResult) {
+        setRotationRuns(rotationResult.items ?? []);
+        setRotationRunsObserved(true);
+      }
+      if (deliveryResult) {
+        setDeliveries(deliveryResult.items ?? []);
+        setDeliveriesObserved(true);
+      }
+      if (ownerResult) {
+        setOwners(ownerResult);
+        setOwnersObserved(true);
+      }
+      if (identityResult) {
+        setIdentities(identityResult);
+        setIdentitiesObserved(true);
+      }
+      if (notificationResult) setNotifications(notificationResult.items ?? []);
+      if (channelResult) setNotificationChannels(channelResult.items ?? []);
+      if (policyResult) setNotificationRoutingPolicies(policyResult.items ?? []);
+    });
     return () => {
       cancelled = true;
     };
@@ -942,10 +941,7 @@ function CertificateWorkspace() {
     });
     healthQuery.refetch();
     void inventory.refresh();
-    void Promise.all([settleOptional(() => api.crlDistributions()), settleOptional(() => api.revocationHealth())]).then(([nextCRLs, nextRevocationHealth]) => {
-      if (nextCRLs) setCRLDistributions(nextCRLs.items ?? []);
-      if (nextRevocationHealth) setRevocationHealth(nextRevocationHealth);
-    });
+    refreshRevocationEvidence();
   }
 
   function recordExactCertificateRevocation(updated: Certificate) {
@@ -956,10 +952,7 @@ function CertificateWorkspace() {
     });
     healthQuery.refetch();
     void inventory.refresh(updated);
-    void Promise.all([settleOptional(() => api.crlDistributions()), settleOptional(() => api.revocationHealth())]).then(([nextCRLs, nextRevocationHealth]) => {
-      if (nextCRLs) setCRLDistributions(nextCRLs.items ?? []);
-      if (nextRevocationHealth) setRevocationHealth(nextRevocationHealth);
-    });
+    refreshRevocationEvidence();
   }
 
   const ownerByID = useMemo(() => new Map(owners.map((owner) => [owner.id, owner])), [owners]);
@@ -1210,8 +1203,23 @@ function CertificateWorkspace() {
                 onCertificateRevoked={recordExactCertificateRevocation}
                 onRevoked={recordReviewedRevocation}
               />
-              {revocationHealth && <RevocationHealthPanel health={revocationHealth} />}
-              <CRLDistributionPanel distributions={crlDistributions} />
+              <div>
+                <Button type="button" variant="outline" onClick={refreshRevocationEvidence} loading={crlQuery.fetching || revocationQuery.fetching}>
+                  {t("source.refresh.0e91610117")}
+                </Button>
+              </div>
+              {revocationQuery.error ? (
+                <ErrorState title={t("certificates.revocation.propagationUnknown")}>{revocationQuery.error}</ErrorState>
+              ) : revocationHealth ? (
+                <RevocationHealthPanel health={revocationHealth} />
+              ) : null}
+              {crlQuery.error ? (
+                <ErrorState title={t("certificates.revocation.crlUnknown")}>{crlQuery.error}</ErrorState>
+              ) : crlQuery.loading ? (
+                <LoadingState>{t("app.loading")}</LoadingState>
+              ) : (
+                <CRLDistributionPanel distributions={crlDistributions} />
+              )}
               <section aria-labelledby="ct-launch-heading" className="border-y border-border py-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>

@@ -352,6 +352,13 @@ describe("i18n boundary", () => {
     // Machine-authored es/de require human translation review before release.
     // F162: reviewed four approval retry/closed-request recovery messages.
     // Machine-authored es/de require human translation review before release.
+    // F157/F158/F159/F165: reviewed runtime authority wording, blank evidence,
+    // validation and draft review copy; removed the retired fabricated default
+    // rule name. Machine-authored es/de require human
+    // translation review before release. Enabled does not certify rule safety.
+    // F160/F167: reviewed permitted requester navigation, unavailable issuance,
+    // accurate draft errors, conditional enforcement help and rollback recovery.
+    // Machine-authored es/de require human translation review before release.
     // Updating either digest is a deliberate translation-review decision. The
     // ratchet catches a long-tail value being reset to its English seed just as
     // it catches any other unreviewed production-catalog edit.
@@ -1590,8 +1597,8 @@ describe("i18n boundary", () => {
       // Machine-authored es/de require HUMAN TRANSLATION REVIEW before release.
       // Delivery evidence: reviewed three keys separating exact historical verification
       // from deployment retry counts. Machine-authored es/de need HUMAN REVIEW before release.
-      "es-ES": "403d4a6534c1282c45a4fdfd65c6db9fa386ad08557ab8095ba9f3eca5ffbe31",
-      "de-DE": "a4ba11ce97ea9ee71cfe2581753bd35cb32a101e489243016ab581c1c0203bd4",
+      "es-ES": "f9f50ce7ff2163c916662678da41d0fb1431275807f0d26675d679b4941e7a20",
+      "de-DE": "a78d97ed8d6e785ebe396664c2719848621c62fc14ef620033f343ab9ca33709",
     });
   });
 

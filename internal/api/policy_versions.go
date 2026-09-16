@@ -78,28 +78,29 @@ type policyVersionRolledBackEvent struct {
 }
 
 type policyVersionResponse struct {
-	ID             string     `json:"id"`
-	TenantID       string     `json:"tenant_id"`
-	Kind           string     `json:"kind"`
-	Module         string     `json:"module,omitempty"`
-	ModuleSHA256   string     `json:"module_sha256"`
-	Package        string     `json:"package"`
-	Query          string     `json:"query"`
-	Description    string     `json:"description,omitempty"`
-	ChangeRef      string     `json:"change_ref,omitempty"`
-	EvidenceRefs   []string   `json:"evidence_refs"`
-	Status         string     `json:"status"`
-	Active         bool       `json:"active"`
-	CreatedBy      string     `json:"created_by,omitempty"`
-	ActivatedBy    string     `json:"activated_by,omitempty"`
-	CreatedAt      *time.Time `json:"created_at,omitempty"`
-	ActivatedAt    *time.Time `json:"activated_at,omitempty"`
-	UpdatedAt      *time.Time `json:"updated_at,omitempty"`
-	RolledBackAt   *time.Time `json:"rolled_back_at,omitempty"`
-	RollbackFromID string     `json:"rollback_from_id,omitempty"`
-	RollbackToID   string     `json:"rollback_to_id,omitempty"`
-	AuditEvent     string     `json:"audit_event,omitempty"`
-	IdempotencyKey string     `json:"idempotency_key,omitempty"`
+	ID                string     `json:"id"`
+	TenantID          string     `json:"tenant_id"`
+	Kind              string     `json:"kind"`
+	Module            string     `json:"module,omitempty"`
+	ModuleSHA256      string     `json:"module_sha256"`
+	Package           string     `json:"package"`
+	Query             string     `json:"query"`
+	Description       string     `json:"description,omitempty"`
+	ChangeRef         string     `json:"change_ref,omitempty"`
+	EvidenceRefs      []string   `json:"evidence_refs"`
+	Status            string     `json:"status"`
+	Active            bool       `json:"active"`
+	RollbackAvailable bool       `json:"rollback_available"`
+	CreatedBy         string     `json:"created_by,omitempty"`
+	ActivatedBy       string     `json:"activated_by,omitempty"`
+	CreatedAt         *time.Time `json:"created_at,omitempty"`
+	ActivatedAt       *time.Time `json:"activated_at,omitempty"`
+	UpdatedAt         *time.Time `json:"updated_at,omitempty"`
+	RolledBackAt      *time.Time `json:"rolled_back_at,omitempty"`
+	RollbackFromID    string     `json:"rollback_from_id,omitempty"`
+	RollbackToID      string     `json:"rollback_to_id,omitempty"`
+	AuditEvent        string     `json:"audit_event,omitempty"`
+	IdempotencyKey    string     `json:"idempotency_key,omitempty"`
 
 	previousID     string
 	previousModule string
@@ -107,9 +108,15 @@ type policyVersionResponse struct {
 }
 
 type policyVersionListResponse struct {
-	Items  []policyVersionResponse  `json:"items"`
-	Active *policyVersionResponse   `json:"active,omitempty"`
-	Counts policyVersionListSummary `json:"counts"`
+	Items       []policyVersionResponse  `json:"items"`
+	Active      *policyVersionResponse   `json:"active,omitempty"`
+	Counts      policyVersionListSummary `json:"counts"`
+	Enforcement policyEnforcementStatus  `json:"enforcement"`
+}
+
+type policyEnforcementStatus struct {
+	Enabled      bool   `json:"enabled"`
+	ModuleSHA256 string `json:"module_sha256,omitempty"`
 }
 
 type policyVersionListSummary struct {
@@ -128,14 +135,15 @@ type policyVersionState struct {
 
 type liveLifecyclePolicy interface {
 	PrepareModule(module string) (*policy.Engine, policy.ModuleInfo, string, error)
-	InstallPrepared(eng *policy.Engine, info policy.ModuleInfo, module string)
-	ActiveModule() (string, policy.ModuleInfo)
+	SetModuleResolver(policy.ModuleResolver)
+	BootModule() (string, policy.ModuleInfo)
+	ActiveModule(context.Context, string) (string, policy.ModuleInfo, error)
 }
 
 //trstctl:mutation
 func (a *API) createPolicyVersion(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+	a.mutatePolicyVersion(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
 		live, ok := a.liveLifecyclePolicy()
 		if !ok {
 			return 0, nil, errStatus(http.StatusServiceUnavailable, "live lifecycle policy activation is not configured")
@@ -236,14 +244,32 @@ func (a *API) listPolicyVersions(w http.ResponseWriter, r *http.Request) {
 			active = &copy
 		}
 	}
-	a.writeJSON(w, http.StatusOK, policyVersionListResponse{Items: items, Active: active, Counts: summary})
+	posture := policyEnforcementStatus{}
+	if live, configured := a.liveLifecyclePolicy(); configured {
+		_, info, err := live.ActiveModule(r.Context(), tenantID)
+		if err != nil {
+			a.writeError(w, errStatus(http.StatusServiceUnavailable, "active tenant policy could not be verified"))
+			return
+		}
+		_, bootInfo := live.BootModule()
+		expectedHash := bootInfo.ModuleSHA256
+		if active != nil {
+			expectedHash = active.ModuleSHA256
+		}
+		if info.ModuleSHA256 != expectedHash {
+			a.writeError(w, errStatus(http.StatusServiceUnavailable, "active tenant policy changed during this read; refresh its state"))
+			return
+		}
+		posture = policyEnforcementStatus{Enabled: true, ModuleSHA256: info.ModuleSHA256}
+	}
+	a.writeJSON(w, http.StatusOK, policyVersionListResponse{Items: items, Active: active, Counts: summary, Enforcement: posture})
 }
 
 //trstctl:mutation
 func (a *API) activatePolicyVersion(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	id := strings.TrimSpace(r.PathValue("id"))
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+	a.mutatePolicyVersion(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
 		live, ok := a.liveLifecyclePolicy()
 		if !ok {
 			return 0, nil, errStatus(http.StatusServiceUnavailable, "live lifecycle policy activation is not configured")
@@ -263,11 +289,14 @@ func (a *API) activatePolicyVersion(w http.ResponseWriter, r *http.Request) {
 		if rec.Kind != string(policy.DryRunKindLifecycle) {
 			return 0, nil, errStatus(http.StatusBadRequest, "only lifecycle policy versions can be activated")
 		}
-		eng, info, module, err := live.PrepareModule(rec.Module)
+		_, info, module, err := live.PrepareModule(rec.Module)
 		if err != nil {
 			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
 		}
-		previousModule, previousInfo := live.ActiveModule()
+		previousModule, previousInfo, err := live.ActiveModule(ctx, tenantID)
+		if err != nil {
+			return 0, nil, err
+		}
 		previousID := state.activeByKind[rec.Kind]
 		if previousID == "" {
 			previousID = policyVersionBootID
@@ -288,7 +317,6 @@ func (a *API) activatePolicyVersion(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
-		live.InstallPrepared(eng, info, module)
 		out := policyVersionPublic(*rec)
 		out.Module = module
 		out.ModuleSHA256 = info.ModuleSHA256
@@ -296,6 +324,7 @@ func (a *API) activatePolicyVersion(w http.ResponseWriter, r *http.Request) {
 		out.Query = info.Query
 		out.Status = "active"
 		out.Active = true
+		out.RollbackAvailable = strings.TrimSpace(previousModule) != ""
 		out.ActivatedBy = actor
 		out.ActivatedAt = &ev.Time
 		out.UpdatedAt = &ev.Time
@@ -309,7 +338,7 @@ func (a *API) activatePolicyVersion(w http.ResponseWriter, r *http.Request) {
 func (a *API) rollbackPolicyVersion(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	id := strings.TrimSpace(r.PathValue("id"))
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+	a.mutatePolicyVersion(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
 		live, ok := a.liveLifecyclePolicy()
 		if !ok {
 			return 0, nil, errStatus(http.StatusServiceUnavailable, "live lifecycle policy activation is not configured")
@@ -332,7 +361,7 @@ func (a *API) rollbackPolicyVersion(w http.ResponseWriter, r *http.Request) {
 		if strings.TrimSpace(rec.previousModule) == "" {
 			return 0, nil, errStatus(http.StatusConflict, "active policy version has no rollback target")
 		}
-		eng, info, module, err := live.PrepareModule(rec.previousModule)
+		_, info, module, err := live.PrepareModule(rec.previousModule)
 		if err != nil {
 			return 0, nil, errStatus(http.StatusBadRequest, "rollback target no longer compiles: "+err.Error())
 		}
@@ -353,10 +382,10 @@ func (a *API) rollbackPolicyVersion(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
-		live.InstallPrepared(eng, info, module)
 		out := policyVersionPublic(*rec)
 		out.Status = "rolled_back"
 		out.Active = false
+		out.RollbackAvailable = false
 		out.RollbackFromID = id
 		out.RollbackToID = rollbackToID
 		out.RolledBackAt = &ev.Time
@@ -399,16 +428,25 @@ func (a *API) policyVersions(ctx context.Context, tenantID string) (*policyVersi
 	if a.log == nil {
 		return nil, errStatus(http.StatusServiceUnavailable, "policy version event log is not configured")
 	}
-	return a.policyVersionMemo.get(ctx, a.log, tenantID,
-		func(ctx context.Context) (*policyVersionState, uint64, error) {
-			return a.replayPolicyVersions(ctx, tenantID)
-		},
-		&headMemoHooks[*policyVersionState]{
-			Copy: copyPolicyVersionState,
-			Fold: func(state **policyVersionState, ev events.Event) error {
-				return foldPolicyVersionEvent(*state, tenantID, ev)
+	var result *policyVersionState
+	err := a.log.WithHistoryRead(ctx, func(ctx context.Context) error {
+		stream, generation, err := a.log.ActiveHistoryIdentity(ctx)
+		if err != nil {
+			return err
+		}
+		result, err = a.policyVersionMemo.get(ctx, a.log, tenantID+"\x00"+stream+"\x00"+generation,
+			func(ctx context.Context) (*policyVersionState, uint64, error) {
+				return a.replayPolicyVersions(ctx, tenantID)
 			},
-		})
+			&headMemoHooks[*policyVersionState]{
+				Copy: copyPolicyVersionState,
+				Fold: func(state **policyVersionState, ev events.Event) error {
+					return foldPolicyVersionEvent(*state, tenantID, ev)
+				},
+			})
+		return err
+	})
+	return result, err
 }
 
 func (a *API) replayPolicyVersions(ctx context.Context, tenantID string) (*policyVersionState, uint64, error) {
@@ -541,6 +579,7 @@ func copyPolicyVersionState(in *policyVersionState) *policyVersionState {
 }
 
 func policyVersionPublic(in policyVersionResponse) policyVersionResponse {
+	in.RollbackAvailable = in.Active && in.Status == "active" && strings.TrimSpace(in.previousModule) != ""
 	in.previousID = ""
 	in.previousModule = ""
 	in.previousInfo = policy.ModuleInfo{}
@@ -635,4 +674,50 @@ func cloneStrings(in []string) []string {
 		return []string{}
 	}
 	return append([]string(nil), in...)
+}
+
+// bindLifecyclePolicy shares the same event-derived projection between runtime
+// decisions and operator readout. A fresh process and an existing replica both
+// catch up before deciding; a missing log fails closed.
+func (a *API) bindLifecyclePolicy() {
+	live, ok := a.liveLifecyclePolicy()
+	if !ok {
+		return
+	}
+	bootModule, bootInfo := live.BootModule()
+	live.SetModuleResolver(func(ctx context.Context, tenantID string) (string, policy.ModuleInfo, error) {
+		state, err := a.policyVersions(ctx, tenantID)
+		if err != nil {
+			return "", policy.ModuleInfo{}, err
+		}
+		id := state.activeByKind[string(policy.DryRunKindLifecycle)]
+		if id == "" {
+			return bootModule, bootInfo, nil
+		}
+		rec := state.items[id]
+		if rec == nil || !rec.Active || rec.Status != "active" || strings.TrimSpace(rec.Module) == "" {
+			return "", policy.ModuleInfo{}, fmt.Errorf("policy: active version is incomplete")
+		}
+		return rec.Module, policy.ModuleInfo{Kind: policy.DryRunKindLifecycle, ModuleSHA256: rec.ModuleSHA256, Package: rec.Package, Query: rec.Query}, nil
+	})
+}
+
+// Policy changes are rare administrative commands. The existing cross-replica
+// projection fence serializes their read/validate/append sequence so two authors
+// cannot both record the same stale rollback predecessor. No derived table is
+// written, and ordinary policy evaluations do not take this fence.
+func (a *API) mutatePolicyVersion(w http.ResponseWriter, r *http.Request, idempotencyKey string, fn func(context.Context, string) (int, any, error)) {
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.store == nil {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, "policy version storage is not configured")
+		}
+		var status int
+		var body any
+		err := a.store.WithProjectionLock(ctx, func(ctx context.Context) error {
+			var err error
+			status, body, err = fn(ctx, tenantID)
+			return err
+		})
+		return status, body, err
+	})
 }

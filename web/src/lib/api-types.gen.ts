@@ -5986,6 +5986,7 @@ export interface PolicyVersion {
   module_sha256: string;
   package: string;
   query: string;
+  rollback_available?: boolean;
   rollback_from_id?: string;
   rollback_to_id?: string;
   rolled_back_at?: string;
@@ -6002,6 +6003,7 @@ export interface PolicyVersionActionRequest {
 export interface PolicyVersionList {
   active?: PolicyVersion;
   counts: PolicyVersionListSummary;
+  enforcement: { enabled: boolean; module_sha256?: string };
   items: PolicyVersion[];
 }
 

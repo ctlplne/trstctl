@@ -17,6 +17,9 @@ import {
   type TransitionTo,
 } from "@/lib/api";
 import { useApiQuery, useQueryClient } from "@/lib/query";
+import { useAuth } from "@/auth/AuthProvider";
+import { hasPermission } from "@/lib/access";
+import { useRuntimeOperationExecution } from "@/lib/capabilities";
 import { apiProblemContext, apiProblemMessage } from "@/lib/apiProblem";
 import { Dialog } from "@/components/Dialog";
 import { IssuancePipeline } from "@/components/issuance";
@@ -306,6 +309,17 @@ function attributeRows(identity: Identity): Array<[string, string]> {
 
 export function Identities() {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const createAuthority = useRuntimeOperationExecution("createIdentity");
+  const transitionAuthority = useRuntimeOperationExecution("transitionIdentity");
+  const requestAuthority = useRuntimeOperationExecution("openIssuanceRequest");
+  // Direct issuance creates an identity and then requests its issuance. The
+  // authenticated shell must prove both operations and their combined rights.
+  const canIssue =
+    createAuthority.runnable &&
+    transitionAuthority.runnable &&
+    (!createAuthority.enforced || (hasPermission(user, "identities:write") && hasPermission(user, "certs:issue")));
+  const canRequest = requestAuthority.runnable && (!requestAuthority.enforced || hasPermission(user, "certs:request"));
   const queryClient = useQueryClient();
   const [actionError, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -716,9 +730,15 @@ export function Identities() {
             <a className={buttonVariants()} href="#identity-search">
               {t("identities.find.action")}
             </a>
-            <Button type="button" variant="outline" onClick={() => setShowForm((visible) => !visible)}>
-              {t("identities.add.action")}
-            </Button>
+            {canIssue ? (
+              <Button type="button" variant="outline" onClick={() => setShowForm((visible) => !visible)}>
+                {t("identities.add.action")}
+              </Button>
+            ) : canRequest ? (
+              <Link className={buttonVariants({ variant: "outline" })} to="/request">
+                {t("nav.item.requestCredential")}
+              </Link>
+            ) : null}
           </>
         }
       />
@@ -727,7 +747,7 @@ export function Identities() {
 
       <LifecycleAutomationPanel identities={items ?? []} onReviewRenewal={(identity, label, reason) => request(identity, "renewing", label, reason)} />
 
-      {showForm && (
+      {showForm && canIssue && (
         <NewIdentityForm
           owners={owners ?? []}
           onDone={async (issued) => {
@@ -840,9 +860,17 @@ export function Identities() {
       {!items && !error && <LoadingState>{translateNow("source.loading.identities.45d7e0b5b9")}</LoadingState>}
       {error && !pending && <ErrorState title={translateNow("source.identity.action.failed.5e3283fa66")}>{error}</ErrorState>}
 
-      {items && items.length === 0 && !showForm && (
-        <EmptyState title={translateNow("source.no.identities.yet.c8697bd1bc")} ctaTo="/wizard" ctaLabel="Set up your first certificate">
-          {translateNow("source.issue.your.first.certificate.to.start.trac.355cebb739")}
+      {items && items.length === 0 && !(showForm && canIssue) && (
+        <EmptyState
+          title={translateNow("source.no.identities.yet.c8697bd1bc")}
+          ctaTo={canIssue ? "/wizard" : canRequest ? "/request" : undefined}
+          ctaLabel={canIssue ? "Set up your first certificate" : canRequest ? t("nav.item.requestCredential") : undefined}
+        >
+          {canIssue
+            ? translateNow("source.issue.your.first.certificate.to.start.trac.355cebb739")
+            : canRequest
+              ? t("identities.issue.requestInstead")
+              : t("identities.issue.unavailable")}
         </EmptyState>
       )}
 

@@ -338,7 +338,7 @@ export function RevocationCenter({
         currentIndex={step}
         steps={steps}
         progressLabel={t("certificates.revocation.progress")}
-        onPrevious={step > 0 && !executeLoading ? () => setStep((current) => Math.max(0, current - 1)) : undefined}
+        onPrevious={step > 0 && !executeLoading && !completed ? () => setStep((current) => Math.max(0, current - 1)) : undefined}
         onNext={
           step === 0
             ? () => void loadReview()
@@ -523,7 +523,65 @@ export function RevocationCenter({
           </div>
         ) : null}
 
-        {step === 2 && selected && reviewReady && review ? (
+        {step === 2 && completed ? (
+          <div role="region" aria-label={t("certificates.revocation.confirmRegion")} className="grid max-w-2xl gap-4">
+            <p className="font-medium break-all">{completed.kind === "identity" ? completed.identity.name : certificateTargetName(completed.certificate)}</p>
+            <div className="rounded-control border border-border bg-muted/30 p-3 text-sm">
+              {completed.kind === "certificate" && completed.queued ? (
+                <QueuedCertificateRevocation
+                  certificate={completed.certificate}
+                  onConfirmed={(certificate) => {
+                    setLinkedCertificate(certificate);
+                    setCompleted({ kind: "certificate", certificate });
+                    onCertificateRevoked?.(certificate);
+                  }}
+                />
+              ) : (
+                <p role="status" className="font-semibold text-status-success">
+                  {t(completed.kind === "identity" ? "certificates.revocation.accepted" : "certificates.revocation.certificateAccepted")}
+                </p>
+              )}
+              <div className="mt-2 flex flex-wrap gap-3">
+                <Link
+                  className="text-primary underline"
+                  to={
+                    completed.kind === "identity"
+                      ? `/audit?type=${encodeURIComponent("identity.revoked")}&q=${encodeURIComponent(completed.identity.id)}`
+                      : `/audit?type=certificate.revocation.batch.applied&q=${encodeURIComponent(completed.certificate.id)}`
+                  }
+                >
+                  {t("certificates.revocation.auditLink")}
+                </Link>
+                {completed.kind === "identity" && graphNodeIdForIdentity(completed.identity) ? (
+                  <Link className="text-primary underline" to={`/graph?node=${encodeURIComponent(graphNodeIdForIdentity(completed.identity) ?? "")}`}>
+                    {t("certificates.revocation.graphLink")}
+                  </Link>
+                ) : null}
+                {completed.kind === "certificate" ? (
+                  <Link className="text-primary underline" to={`/graph?node=${encodeURIComponent(`cert:${completed.certificate.id}`)}`}>
+                    {t("certificates.revocation.graphLink")}
+                  </Link>
+                ) : null}
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setTargetKey("");
+                invalidateReview();
+                setApprovalNotice(null);
+                setApprovalRestart(null);
+                setStep(0);
+              }}
+            >
+              {t("certificates.revocation.configureTitle")}
+            </Button>
+          </div>
+        ) : null}
+
+        {step === 2 && !completed && selected && reviewReady && review ? (
           <div role="region" aria-label={t("certificates.revocation.confirmRegion")} className="grid max-w-2xl gap-4">
             <div className="rounded-control border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
               <p className="font-semibold">{t("certificates.revocation.irreversibleTitle")}</p>
@@ -547,56 +605,15 @@ export function RevocationCenter({
                 void loadReview();
               }}
             />
-            {completed ? (
-              <div className="rounded-control border border-border bg-muted/30 p-3 text-sm">
-                {completed.kind === "certificate" && completed.queued ? (
-                  <QueuedCertificateRevocation
-                    certificate={completed.certificate}
-                    onConfirmed={(certificate) => {
-                      setLinkedCertificate(certificate);
-                      setCompleted({ kind: "certificate", certificate });
-                      onCertificateRevoked?.(certificate);
-                    }}
-                  />
-                ) : (
-                  <p role="status" className="font-semibold text-status-success">
-                    {t(completed.kind === "identity" ? "certificates.revocation.accepted" : "certificates.revocation.certificateAccepted")}
-                  </p>
-                )}
-                <div className="mt-2 flex flex-wrap gap-3">
-                  <Link
-                    className="text-primary underline"
-                    to={
-                      completed.kind === "identity"
-                        ? `/audit?type=${encodeURIComponent(review.kind === "identity" ? review.plan.event_type : "")}&q=${encodeURIComponent(completed.identity.id)}`
-                        : `/audit?type=certificate.revocation.batch.applied&q=${encodeURIComponent(completed.certificate.id)}`
-                    }
-                  >
-                    {t("certificates.revocation.auditLink")}
-                  </Link>
-                  {completed.kind === "identity" && graphNodeIdForIdentity(completed.identity) ? (
-                    <Link className="text-primary underline" to={`/graph?node=${encodeURIComponent(graphNodeIdForIdentity(completed.identity) ?? "")}`}>
-                      {t("certificates.revocation.graphLink")}
-                    </Link>
-                  ) : null}
-                  {completed.kind === "certificate" ? (
-                    <Link className="text-primary underline" to={`/graph?node=${encodeURIComponent(`cert:${completed.certificate.id}`)}`}>
-                      {t("certificates.revocation.graphLink")}
-                    </Link>
-                  ) : null}
-                </div>
-              </div>
-            ) : (
-              <Button
-                type="button"
-                variant="destructive"
-                loading={executeLoading}
-                disabled={selected.name.length === 0 || confirmName.trim() !== selected.name || executeLoading}
-                onClick={() => void execute()}
-              >
-                {t("certificates.revocation.executeAction")}
-              </Button>
-            )}
+            <Button
+              type="button"
+              variant="destructive"
+              loading={executeLoading}
+              disabled={selected.name.length === 0 || confirmName.trim() !== selected.name || executeLoading}
+              onClick={() => void execute()}
+            >
+              {t("certificates.revocation.executeAction")}
+            </Button>
           </div>
         ) : null}
       </StepShell>

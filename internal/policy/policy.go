@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/open-policy-agent/opa/v1/rego"
@@ -125,43 +126,99 @@ func moduleInfo(kind DryRunKind, module, pkg, query string) ModuleInfo {
 	return ModuleInfo{Kind: kind, ModuleSHA256: base.ModuleSHA256, Package: base.Package, Query: base.Query}
 }
 
-// LiveEngine is a policy evaluator whose compiled module can be replaced by a
-// served activation workflow. It keeps evaluation lock-free apart from copying the
-// current compiled pointer, and the installed engine remains immutable.
-type LiveEngine struct {
-	mu     sync.RWMutex
-	pool   *bulkhead.Pool
-	log    *events.Log
+// ModuleResolver reads the tenant's authoritative, event-derived active version.
+// An error must deny the operation, never fall back to the boot policy.
+type ModuleResolver func(context.Context, string) (string, ModuleInfo, error)
+
+type compiledModule struct {
 	module string
 	info   ModuleInfo
 	engine *Engine
 }
 
-// NewLive compiles the initial lifecycle module and returns a dynamic evaluator
-// suitable for the served mutation gate.
+// LiveEngine resolves each decision against its tenant's durable active version.
+// Compiled engines are immutable; the cache is an optimization, not authority.
+// The boot module applies only when the resolver proves no custom rule is active.
+type LiveEngine struct {
+	mu       sync.RWMutex
+	pool     *bulkhead.Pool
+	log      *events.Log
+	boot     compiledModule
+	resolve  ModuleResolver
+	byTenant map[string]compiledModule
+}
+
+// NewLive compiles the boot policy. The served API binds the event-derived tenant
+// resolver before exposing any routes; plain library callers retain the boot rule.
 func NewLive(cfg Config) (*LiveEngine, error) {
 	eng, info, err := compileLifecycleEngine(cfg.Module, cfg.Pool, cfg.Log)
 	if err != nil {
 		return nil, err
 	}
-	module := moduleOrBase(cfg.Module, BaseModule)
-	return &LiveEngine{pool: cfg.Pool, log: cfg.Log, module: module, info: info, engine: eng}, nil
+	return &LiveEngine{pool: cfg.Pool, log: cfg.Log, boot: compiledModule{moduleOrBase(cfg.Module, BaseModule), info, eng}, byTenant: map[string]compiledModule{}}, nil
 }
 
-// Evaluate delegates to the currently active compiled engine.
-func (l *LiveEngine) Evaluate(ctx context.Context, in Input) (Decision, error) {
-	l.mu.RLock()
-	eng := l.engine
-	l.mu.RUnlock()
-	if eng == nil {
-		return Decision{Allow: false, Reason: "policy engine not configured"}, fmt.Errorf("policy: live engine not configured")
+// SetModuleResolver binds the durable projection during server construction.
+func (l *LiveEngine) SetModuleResolver(resolve ModuleResolver) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.resolve = resolve
+	l.byTenant = map[string]compiledModule{}
+}
+
+// BootModule identifies the configured fallback, not a claim about tenant state.
+func (l *LiveEngine) BootModule() (string, ModuleInfo) { return l.boot.module, l.boot.info }
+
+func (l *LiveEngine) active(ctx context.Context, tenantID string) (compiledModule, error) {
+	if strings.TrimSpace(tenantID) == "" {
+		return compiledModule{}, fmt.Errorf("policy: tenant is required")
 	}
-	return eng.Evaluate(ctx, in)
+	l.mu.RLock()
+	resolve := l.resolve
+	l.mu.RUnlock()
+	if resolve == nil {
+		return l.boot, nil
+	}
+	module, info, err := resolve(ctx, tenantID)
+	if err != nil {
+		return compiledModule{}, fmt.Errorf("policy: resolve active tenant policy: %w", err)
+	}
+	if module == l.boot.module && info == l.boot.info {
+		return l.boot, nil
+	}
+	l.mu.RLock()
+	cached, ok := l.byTenant[tenantID]
+	l.mu.RUnlock()
+	if ok && cached.module == module && cached.info == info {
+		return cached, nil
+	}
+	eng, compiledInfo, normalized, err := l.PrepareModule(module)
+	if err != nil {
+		return compiledModule{}, err
+	}
+	if info != compiledInfo {
+		return compiledModule{}, fmt.Errorf("policy: active module identity does not match its source")
+	}
+	compiled := compiledModule{normalized, compiledInfo, eng}
+	l.mu.Lock()
+	l.byTenant[tenantID] = compiled
+	l.mu.Unlock()
+	return compiled, nil
 }
 
-// PrepareModule compiles module without installing it. Callers that persist the
-// activation event first can then install the exact compiled engine with
-// InstallPrepared, avoiding a state change that is not backed by the event log.
+// Evaluate uses only this request's resolved tenant policy. A slower compile can
+// replace a cache entry, but cannot replace another request's selected authority.
+func (l *LiveEngine) Evaluate(ctx context.Context, in Input) (Decision, error) {
+	active, err := l.active(ctx, in.TenantID)
+	if err != nil {
+		denied := Decision{Allow: false, Reason: "active tenant policy unavailable"}
+		l.boot.engine.audit(ctx, in, denied, err)
+		return denied, err
+	}
+	return active.engine.Evaluate(ctx, in)
+}
+
+// PrepareModule validates authoring and activation without changing authority.
 func (l *LiveEngine) PrepareModule(module string) (*Engine, ModuleInfo, string, error) {
 	eng, info, err := compileLifecycleEngine(module, l.pool, l.log)
 	if err != nil {
@@ -170,25 +227,10 @@ func (l *LiveEngine) PrepareModule(module string) (*Engine, ModuleInfo, string, 
 	return eng, info, moduleOrBase(module, BaseModule), nil
 }
 
-// InstallPrepared swaps in a compiled module that was already persisted as active.
-func (l *LiveEngine) InstallPrepared(eng *Engine, info ModuleInfo, module string) {
-	if eng == nil {
-		return
-	}
-	module = moduleOrBase(module, BaseModule)
-	l.mu.Lock()
-	l.engine = eng
-	l.info = info
-	l.module = module
-	l.mu.Unlock()
-}
-
-// ActiveModule returns the normalized source and identity of the currently active
-// lifecycle policy module.
-func (l *LiveEngine) ActiveModule() (string, ModuleInfo) {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-	return l.module, l.info
+// ActiveModule reads the same durable tenant selection used by Evaluate.
+func (l *LiveEngine) ActiveModule(ctx context.Context, tenantID string) (string, ModuleInfo, error) {
+	active, err := l.active(ctx, tenantID)
+	return active.module, active.info, err
 }
 
 // Evaluate returns the policy decision for in. It fails closed: any evaluation error, a

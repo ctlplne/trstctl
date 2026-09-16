@@ -12,6 +12,25 @@ import type { MessageKey } from "@/i18n/messages";
  * clause turns a missing key into a type error, so every new message key
  * ships with an es-ES AND a de-DE entry from the same commit. */
 const deDECatalog = {
+  // Machine-authored policy authority/editor copy: human translation review required before release.
+  // Machine-authored requester guidance requires human translation review before release.
+  "policy.editor.saveFailed": "Die Regel konnte nicht gespeichert werden",
+  "policy.versions.noRollback":
+    "Für diese Version gibt es keine frühere Regel zur Wiederherstellung. Wählen Sie eine andere aufgezeichnete Version zur Aktivierung.",
+  "identities.issue.requestInstead": "Fordern Sie ein Zertifikat zur Prüfung an. Ein berechtigter Aussteller schließt den genehmigten Antrag ab.",
+  "identities.issue.unavailable": "Die Zertifikatserstellung ist hier für dieses Konto oder diese Bereitstellung nicht verfügbar.",
+  "policy.design.disabled": "Die Lebenszyklusrichtlinie ist deaktiviert",
+  "policy.design.disabledHelp":
+    "Dieser Server erzwingt keine Rego-Lebenszyklusregeln. Gespeicherte Versionen sind nur Verlauf. Aktivieren Sie ca.policy.enabled, um sie anzuwenden.",
+  "policy.editor.descriptionRequired": "Beschreiben Sie diese Regel.",
+  "policy.editor.moduleRequired": "Geben Sie das Rego-Modul ein.",
+  "policy.editor.describe": "Änderung beschreiben",
+  "policy.editor.describeHelp": "Benennen Sie die Regel und geben Sie nur echte Änderungs- oder Prüfverweise an.",
+  "policy.editor.review": "Entwurf prüfen",
+  "policy.editor.nextModule": "Weiter: Regellogik",
+  "policy.editor.evidenceHelp": "Optionale, kommagetrennte Verweise auf tatsächlich geprüfte Nachweise.",
+  "policy.editor.none": "Nicht angegeben",
+
   "sshTrust.revoke.choose": "Widerrufsumfang wählen",
   "sshTrust.revoke.chooseBody": "Wählen Sie eine Seriennummer, eine Schlüssel-ID oder beides. Prüfen Sie die Wirkung vor der Veröffentlichung.",
   "sshTrust.revoke.reviewHeading": "Zugriffsentzug prüfen",
@@ -4791,11 +4810,11 @@ const deDECatalog = {
   "policy.design.summaryUnavailable": "Der Schutzstatus ist unbekannt",
   "policy.design.summaryUnavailableHelp":
     "trstctl konnte den Regel- oder Genehmigungsstatus nicht prüfen. Deshalb nimmt diese Seite nicht an, dass der Schutz funktioniert. Prüfen Sie den genauen Fehler und stellen Sie die API wieder her, bevor Sie eine Richtlinienentscheidung treffen.",
-  "policy.design.protected": "Der Schutz ist aktiv",
-  "policy.design.protectedNoCustom": "Der Schutz ist aktiv; keine benutzerdefinierte Regel ist aktiv",
+  "policy.design.protected": "Die Lebenszyklusrichtlinie ist aktiviert",
+  "policy.design.protectedNoCustom": "Die Lebenszyklusrichtlinie ist aktiviert; keine benutzerdefinierte Regel ist aktiv",
   "policy.design.activeRule": 'Die benutzerdefinierte Regel "{rule}" ist aktiv.',
   "policy.design.defaultDeny":
-    "Die integrierte Standardverweigerung prüft weiterhin jede Ausstellungs-, Bereitstellungs- und Widerrufsanfrage. Erstellen und aktivieren Sie eine Regel, bevor Sie sich auf eigene Erlaubnislogik verlassen.",
+    "Dieser Mandant verwendet die auf dem Server konfigurierte Lebenszyklusregel. Keine hier erstellte Regel ist aktiv. Prüfen und testen Sie die Regel, bevor Sie sich auf ihre Entscheidungen verlassen.",
   "policy.design.approvalsLabel": "Wartet auf Genehmigung",
   "policy.design.oneApproval": "1 Anfrage muss genehmigt werden",
   "policy.design.manyApprovals": "{count} Anfragen müssen genehmigt werden",
@@ -4807,7 +4826,7 @@ const deDECatalog = {
   "policy.design.disclosure.compliance": "Framework-Nachweise und Berichte",
   "policy.design.disclosure.approvals": "Genehmigungen und Zugriffsprüfungen",
   "policy.design.rulesHelp":
-    "Die integrierte Schranke fällt geschlossen aus. Eine benutzerdefinierte Regel wird erst wirksam, wenn Entwurf, Validierung, Aktivierung und Audit-Ereignis erfolgreich sind; Rollback ist eine weitere aufgezeichnete Aktion.",
+    "Wenn die Durchsetzung der Lebenszyklusrichtlinie aktiviert ist, prüft die aktive Regel Lebenszyklusänderungen. Das Speichern eines Entwurfs aktiviert ihn nicht. Aktivierung und Rollback werden getrennt aufgezeichnet.",
   "policy.design.testHelp":
     "Ein Test wertet Rego für diesen Mandanten aus und zeichnet die Entscheidung auf. Er aktiviert die Regel nicht und ändert kein Credential.",
   "policy.design.complianceHelp":
@@ -6921,7 +6940,6 @@ const deDECatalog = {
     "Jedes Protokoll erfordert ein Aktivierungskennzeichen und eine Tenant-ID. Der Start lehnt ein aktiviertes Protokoll ohne Tenant-Bindung ab, und die Ausstellung verweigert Anfragen, wenn keine ausstellende CA bzw. kein Profil die Protokollanfrage erfüllen kann.",
   "source.edge.types.396a236285": "Kantentypen",
   "source.egress.66a3afae15": "Egress",
-  "source.emergency.issuance.guard.5a3ad01167": "Schutzmechanismus für Notfallausstellungen",
   "source.emergency.issuance.requires.declaration.qu.24cf522826":
     "Die Notfallausstellung erfordert eine Erklärung, ein Quorum, einen Nachweis der Offline-Ausstellung, Verifizierung, Ablauf, Abgleich und Bereinigung.",
   "source.enabled.92c1cdfdf4": "Aktiviert",

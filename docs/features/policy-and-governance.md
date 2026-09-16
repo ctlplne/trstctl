@@ -28,10 +28,11 @@ inevitable audit. Without these, the platform is a liability; with them, it's wh
 
 ### The policy engine (F28)
 
-Every `issue`, `deploy`, and `revoke` passes through an embedded **[OPA](../glossary.md)
-/ Rego** policy gate before it executes. The Rego module compiles once at startup — a
-module that fails to compile is a hard startup error, so the system never runs without
-an enforceable policy. Each decision sees structured input (`action`, `profile`, `actor`,
+When `ca.policy.enabled` is true, every `issue`, `deploy`, and `revoke` transition
+passes through an embedded **[OPA](../glossary.md) / Rego** policy gate before it
+executes. The configured boot module compiles at startup; an invalid module is a
+hard startup error. Each tenant can author and activate a replacement through the
+Policy console. A draft has no effect on decisions. Each decision sees structured input (`action`, `profile`, `actor`,
 `tenant_id`, attributes) and is fail-closed: an evaluation error, ambiguous result, or
 overloaded pool all return *deny*. Evaluation runs in its own bounded lane, so overload
 is rejected fast instead of starving issuance, and every decision is recorded as an
@@ -42,6 +43,45 @@ revocation and permits issuance/deployment only when a profile is bound.
 issue/deploy/revoke transition, the RA scope split (`certs:request` ≠ `certs:issue`)
 stops a requester from self-issuing, and `ca.policy.require_approval` requires a distinct
 approver — self-approval is rejected.
+
+The active rule is read from that tenant's immutable policy events before a
+mutation decision. Compiled rules are cached, but a cache is never permission:
+a restart or another server instance reads the same active version. Activating or
+rolling back a rule in one tenant cannot change another tenant's rule. An
+unreadable event history or a module/hash mismatch denies the operation instead
+of silently reverting to the boot rule.
+
+`POST /api/v1/policy/versions` creates a draft. `POST
+/api/v1/policy/versions/{id}/activate` makes it active; `POST
+/api/v1/policy/versions/{id}/rollback` restores its immediately preceding rule as
+a new recorded version. These writes require `policy:write`, an
+`Idempotency-Key`, and a reason for activation or rollback. `GET
+/api/v1/policy/versions` requires `policy:read` and lists only the current tenant's
+history. Concurrent changes are serialized before recording their predecessor.
+Disabling `ca.policy.enabled` disables this gate; a readable policy history alone
+does not prove enforcement is enabled. The list response includes
+`enforcement.enabled` from this running server and, when enabled,
+`enforcement.module_sha256` for the tenant's verified runtime rule. If that rule
+cannot be read or disagrees with the returned active version, the read fails
+instead of reporting protection. Enabled means the rule is evaluated; it does
+not certify that its allow/deny logic is safe.
+
+The console keeps drafts separate from active authority, starts change and
+evidence references blank, and reviews the exact rule before saving. A failed
+save remains visible inside the editor without discarding the draft. Activation
+and rollback carry the selected version's recorded evidence references; an
+unsubmitted editor cannot supply audit evidence for another rule. Runtime
+capabilities disable these writes when the live engine is not configured.
+
+
+The version response also reports `rollback_available`: true only for an active
+version with a recorded predecessor. A newly restored version has no earlier
+rollback target. Its Rollback control is disabled; an operator can explicitly
+activate a chosen historical version instead. If that restored record is later
+activated again, it gains a predecessor and can be rolled back. The console
+uses the served field, not the description or `rollback_from_id` label. Older
+idempotent response bodies may omit the new field; absence means unknown, so the
+console waits for the current version list before offering rollback.
 
 ### RBAC (F8)
 

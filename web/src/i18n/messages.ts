@@ -12,6 +12,39 @@ export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
 
 export const messages = {
+  "policy.editor.saveFailed": { defaultMessage: "Rule could not be saved", description: "The draft failed, without implying a server outage." },
+  "policy.versions.noRollback": {
+    defaultMessage: "This version has no earlier rule to restore. Choose another recorded version to activate.",
+    description: "Explanation of a served rollback availability refusal.",
+  },
+  "identities.issue.requestInstead": {
+    defaultMessage: "Request a certificate for review. An authorized issuer completes the approved request.",
+    description: "Permitted alternative when the account cannot issue directly.",
+  },
+  "identities.issue.unavailable": {
+    defaultMessage: "Certificate creation is not available for this account or deployment here.",
+    description: "No mutation is offered without verified permission and runtime support.",
+  },
+  "policy.design.disabled": { defaultMessage: "Lifecycle policy is disabled", description: "Live policy authority and evidence-backed draft review." },
+  "policy.design.disabledHelp": {
+    defaultMessage: "This server is not enforcing lifecycle Rego rules. Recorded versions are history only. Enable ca.policy.enabled to apply them.",
+    description: "Live policy authority and evidence-backed draft review.",
+  },
+  "policy.editor.descriptionRequired": { defaultMessage: "Describe this rule.", description: "Live policy authority and evidence-backed draft review." },
+  "policy.editor.moduleRequired": { defaultMessage: "Enter the Rego module.", description: "Live policy authority and evidence-backed draft review." },
+  "policy.editor.describe": { defaultMessage: "Describe the change", description: "Live policy authority and evidence-backed draft review." },
+  "policy.editor.describeHelp": {
+    defaultMessage: "Name the rule and add only real change or review references.",
+    description: "Live policy authority and evidence-backed draft review.",
+  },
+  "policy.editor.review": { defaultMessage: "Review draft", description: "Live policy authority and evidence-backed draft review." },
+  "policy.editor.nextModule": { defaultMessage: "Next: rule logic", description: "Live policy authority and evidence-backed draft review." },
+  "policy.editor.evidenceHelp": {
+    defaultMessage: "Optional, comma-separated references to evidence you actually reviewed.",
+    description: "Live policy authority and evidence-backed draft review.",
+  },
+  "policy.editor.none": { defaultMessage: "Not provided", description: "Live policy authority and evidence-backed draft review." },
+
   "sshTrust.revoke.choose": { defaultMessage: "Choose revocation scope", description: "SSH revocation scope, review and consumer verification." },
   "sshTrust.revoke.chooseBody": {
     defaultMessage: "Choose a serial, a key ID, or both. Review the effect before publishing.",
@@ -10627,15 +10660,18 @@ export const messages = {
       "trstctl could not verify the rule or approval state, so this page does not assume that protection is healthy. Check the exact error and restore the API before making a policy decision.",
     description: "Technical ELI5 explanation for an unavailable policy summary.",
   },
-  "policy.design.protected": { defaultMessage: "Protection is on", description: "Opening status when the fail-closed gate and a custom rule are active." },
+  "policy.design.protected": {
+    defaultMessage: "Lifecycle policy is enabled",
+    description: "Opening status when the fail-closed gate and a custom rule are active.",
+  },
   "policy.design.protectedNoCustom": {
-    defaultMessage: "Protection is on; no custom rule is active",
-    description: "Opening status when built-in fail-closed enforcement remains on without an active custom lifecycle rule.",
+    defaultMessage: "Lifecycle policy is enabled; no custom rule is active",
+    description: "Opening status when the server-configured lifecycle rule is enforced without an active custom version.",
   },
   "policy.design.activeRule": { defaultMessage: 'Custom rule "{rule}" is active.', description: "Active custom lifecycle rule summary." },
   "policy.design.defaultDeny": {
     defaultMessage:
-      "The built-in default-deny gate still checks every issue, deploy, and revoke request. Create and activate a rule before relying on custom allow logic.",
+      "This tenant uses the server-configured lifecycle rule. No rule created here is active. Review and test the rule before relying on its decisions.",
     description: "Truth boundary when no custom lifecycle policy version is active.",
   },
   "policy.design.approvalsLabel": { defaultMessage: "Waiting for approval", description: "Approval summary label." },
@@ -10659,7 +10695,7 @@ export const messages = {
   },
   "policy.design.rulesHelp": {
     defaultMessage:
-      "The built-in gate fails closed. A custom rule becomes effective only after its draft, validation, activation, and audit event succeed; rollback is another recorded action.",
+      "When lifecycle enforcement is enabled, the active rule checks lifecycle changes. Saving a draft does not activate it. Activation and rollback are separate recorded actions.",
     description: "Technical ELI5 policy-version boundary.",
   },
   "policy.design.testHelp": {
@@ -21961,10 +21997,6 @@ export const messages = {
   "source.egress.66a3afae15": {
     defaultMessage: "Egress",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Assistant.tsx.",
-  },
-  "source.emergency.issuance.guard.5a3ad01167": {
-    defaultMessage: "Emergency issuance guard",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Policy.tsx.",
   },
   "source.emergency.issuance.requires.declaration.qu.24cf522826": {
     defaultMessage: "Emergency issuance requires declaration, quorum, offline issue evidence, verification, expiry, reconciliation, and cleanup.",

@@ -24564,6 +24564,10 @@
           "query": {
             "type": "string"
           },
+          "rollback_available": {
+            "description": "This active version has a recorded predecessor that the rollback operation can restore. Authorization and runtime enforcement are checked separately. Older idempotent responses may omit this field; treat absence as unknown and refresh the version list.",
+            "type": "boolean"
+          },
           "rollback_from_id": {
             "format": "uuid",
             "type": "string"
@@ -24632,6 +24636,20 @@
           "counts": {
             "$ref": "#/components/schemas/PolicyVersionListSummary"
           },
+          "enforcement": {
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "module_sha256": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "enabled"
+            ],
+            "type": "object"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/PolicyVersion"
@@ -24641,7 +24659,8 @@
         },
         "required": [
           "items",
-          "counts"
+          "counts",
+          "enforcement"
         ],
         "type": "object"
       },

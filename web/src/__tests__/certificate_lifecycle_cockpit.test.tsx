@@ -5,6 +5,7 @@ import { axe } from "vitest-axe";
 import { ToastProvider } from "@/components/ToastProvider";
 import { Certificates } from "@/pages/Certificates";
 import { IntlProvider } from "@/i18n/I18nProvider";
+import { ApiError } from "@/lib/api";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -81,6 +82,64 @@ describe("Certificate Lifecycle cockpit", () => {
     expect(await within(center).findByRole("combobox", { name: "Managed certificate" })).toHaveValue("certificate:fresh-leaf");
     expect(screen.getByRole("tab", { name: "Revocation & CT" })).toHaveAttribute("aria-selected", "true");
   });
+  it("observes publication that completes after the initial revocation read", async () => {
+    const distribution = {
+      tenant_id: "tenant-1",
+      ca_id: "issuer-1",
+      full_number: 2,
+      full_url: "/crl/tenant-1",
+      revoked_count: 1,
+      shard_count: 0,
+      shards: [],
+      this_update: "2026-08-24T12:00:00Z",
+      next_update: "2026-08-25T12:00:00Z",
+    };
+    apiMock.crlDistributions.mockResolvedValue({ items: [distribution] });
+    renderPage();
+    fireEvent.click(await screen.findByRole("tab", { name: "Revocation & CT" }));
+    expect(await screen.findByText("CAs: 1; shards: 0; revoked serials: 1.")).toBeInTheDocument();
+    apiMock.crlDistributions.mockResolvedValue({ items: [{ ...distribution, full_number: 3, revoked_count: 2 }] });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_500);
+    });
+    expect(await screen.findByText("CAs: 1; shards: 0; revoked serials: 2.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "#3" })).toHaveAttribute("href", "/crl/tenant-1");
+  });
+
+  it("hides a refused publication snapshot, stops polling, and permits explicit read recovery", async () => {
+    const distribution = {
+      tenant_id: "tenant-1",
+      ca_id: "issuer-1",
+      full_number: 2,
+      full_url: "/crl/tenant-1",
+      revoked_count: 1,
+      shard_count: 0,
+      shards: [],
+      this_update: "2026-08-24T12:00:00Z",
+      next_update: "2026-08-25T12:00:00Z",
+    };
+    apiMock.crlDistributions.mockResolvedValue({ items: [distribution] });
+    renderPage();
+    fireEvent.click(await screen.findByRole("tab", { name: "Revocation & CT" }));
+    expect(await screen.findByText("CAs: 1; shards: 0; revoked serials: 1.")).toBeInTheDocument();
+    apiMock.crlDistributions.mockRejectedValue(new ApiError(403, '{"detail":"Certificate evidence permission removed"}'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_500);
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent("No published CRL was loaded. Publication is not proven.");
+    expect(screen.queryByText("CAs: 1; shards: 0; revoked serials: 1.")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "#2" })).not.toBeInTheDocument();
+    const callsAfterDenial = apiMock.crlDistributions.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(apiMock.crlDistributions).toHaveBeenCalledTimes(callsAfterDenial);
+    apiMock.crlDistributions.mockResolvedValue({ items: [{ ...distribution, full_number: 3, revoked_count: 2 }] });
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    expect(await screen.findByText("CAs: 1; shards: 0; revoked serials: 2.")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers({ shouldAdvanceTime: true });

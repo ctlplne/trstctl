@@ -8,6 +8,24 @@ import type { MessageKey } from "@/i18n/messages";
  * error, so every new message key still ships with its translation in the
  * same commit. */
 const esESCatalog = {
+  // Machine-authored policy authority/editor copy: human translation review required before release.
+  // Machine-authored requester guidance requires human translation review before release.
+  "policy.editor.saveFailed": "No se pudo guardar la regla",
+  "policy.versions.noRollback": "Esta versión no tiene una regla anterior que restaurar. Elija otra versión registrada para activar.",
+  "identities.issue.requestInstead": "Solicite un certificado para revisión. Un emisor autorizado completa la solicitud aprobada.",
+  "identities.issue.unavailable": "La creación de certificados no está disponible aquí para esta cuenta o implementación.",
+  "policy.design.disabled": "La política del ciclo de vida está desactivada",
+  "policy.design.disabledHelp":
+    "Este servidor no aplica las reglas Rego del ciclo de vida. Las versiones guardadas son solo historial. Active ca.policy.enabled para aplicarlas.",
+  "policy.editor.descriptionRequired": "Describa esta regla.",
+  "policy.editor.moduleRequired": "Introduzca el módulo Rego.",
+  "policy.editor.describe": "Describa el cambio",
+  "policy.editor.describeHelp": "Nombre la regla y añada solo referencias reales de cambios o revisiones.",
+  "policy.editor.review": "Revisar borrador",
+  "policy.editor.nextModule": "Siguiente: lógica de la regla",
+  "policy.editor.evidenceHelp": "Referencias opcionales, separadas por comas, a pruebas que realmente revisó.",
+  "policy.editor.none": "No indicado",
+
   "sshTrust.revoke.choose": "Elegir el alcance de revocación",
   "sshTrust.revoke.chooseBody": "Elija un número de serie, un ID de clave o ambos. Revise el efecto antes de publicar.",
   "sshTrust.revoke.reviewHeading": "Revisar la retirada de acceso",
@@ -4745,11 +4763,11 @@ const esESCatalog = {
   "policy.design.summaryUnavailable": "Se desconoce el estado de protección",
   "policy.design.summaryUnavailableHelp":
     "trstctl no pudo verificar el estado de las reglas o aprobaciones, por lo que esta página no supone que la protección esté en buen estado. Revisa el error exacto y restaura la API antes de tomar una decisión de política.",
-  "policy.design.protected": "La protección está activa",
-  "policy.design.protectedNoCustom": "La protección está activa; no hay una regla personalizada activa",
+  "policy.design.protected": "La política del ciclo de vida está activada",
+  "policy.design.protectedNoCustom": "La política del ciclo de vida está activada; no hay una regla personalizada activa",
   "policy.design.activeRule": 'La regla personalizada "{rule}" está activa.',
   "policy.design.defaultDeny":
-    "La protección integrada de denegación predeterminada sigue comprobando cada solicitud de emisión, despliegue y revocación. Cree y active una regla antes de depender de una autorización personalizada.",
+    "Este inquilino usa la regla del ciclo de vida configurada en el servidor. Ninguna regla creada aquí está activa. Revise y pruebe la regla antes de confiar en sus decisiones.",
   "policy.design.approvalsLabel": "En espera de aprobación",
   "policy.design.oneApproval": "1 solicitud necesita aprobación",
   "policy.design.manyApprovals": "{count} solicitudes necesitan aprobación",
@@ -4761,7 +4779,7 @@ const esESCatalog = {
   "policy.design.disclosure.compliance": "Evidencia de marcos e informes",
   "policy.design.disclosure.approvals": "Aprobaciones y revisiones de acceso",
   "policy.design.rulesHelp":
-    "La protección integrada falla de forma cerrada. Una regla personalizada solo entra en vigor cuando su borrador, validación, activación y evento de auditoría tienen éxito; la reversión es otra acción registrada.",
+    "Cuando la aplicación de políticas del ciclo de vida está activada, la regla activa comprueba los cambios del ciclo de vida. Guardar un borrador no lo activa. La activación y la reversión son acciones registradas por separado.",
   "policy.design.testHelp": "Una prueba evalúa Rego candidato con este inquilino y registra la decisión. No activa la regla ni cambia una credencial.",
   "policy.design.complianceHelp":
     "Los mapeos de marcos muestran la evidencia que trstctl puede probar y las brechas que debe atestiguar el operador. Una exportación firmada es evidencia, nunca una afirmación de certificación.",
@@ -6868,7 +6886,6 @@ const esESCatalog = {
     "Cada protocolo requiere una marca habilitada más un ID de inquilino. El inicio rechaza un protocolo habilitado sin enlace de inquilino, y la emisión rechaza las solicitudes cuando ninguna CA o perfil emisor puede satisfacer la solicitud del protocolo.",
   "source.edge.types.396a236285": "Tipos de arista",
   "source.egress.66a3afae15": "Egress",
-  "source.emergency.issuance.guard.5a3ad01167": "Control de emisión de emergencia",
   "source.emergency.issuance.requires.declaration.qu.24cf522826":
     "La emisión de emergencia requiere declaración, quórum, evidencia de emisión offline, verificación, vencimiento, conciliación y limpieza.",
   "source.enabled.92c1cdfdf4": "Habilitada",

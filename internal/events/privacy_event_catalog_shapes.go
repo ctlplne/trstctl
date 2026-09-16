@@ -289,6 +289,15 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 	case "policy.decision":
 		return shape(`{"action":"","profile":"","actor":"","allow":true,"reason":"","error":""}`,
 			catalogPrivacyShapeOptions{Optional: []string{"/profile", "/actor", "/reason", "/error"}}), true
+	case "policy.version.authored":
+		return shape(`{"id":"","kind":"","module":"","module_sha256":"","package":"","query":"","description":"","change_ref":"","evidence_refs":[""],"author":""}`,
+			catalogPrivacyShapeOptions{Optional: []string{"/description", "/change_ref", "/evidence_refs", "/author"}}), true
+	case "policy.version.activated":
+		return shape(`{"id":"","kind":"","reason":"","evidence_refs":[""],"activated_by":"","previous_id":"","previous_module":"","previous_module_sha256":"","previous_package":"","previous_query":""}`,
+			catalogPrivacyShapeOptions{Optional: []string{"/evidence_refs", "/activated_by", "/previous_id", "/previous_module", "/previous_module_sha256", "/previous_package", "/previous_query"}}), true
+	case "policy.version.rolled_back":
+		return shape(`{"id":"","kind":"","reason":"","evidence_refs":[""],"rolled_back_by":"","rollback_to_id":"","rollback_to_module":"","rollback_to_module_sha256":"","rollback_to_package":"","rollback_to_query":""}`,
+			catalogPrivacyShapeOptions{Optional: []string{"/evidence_refs", "/rolled_back_by"}}), true
 	case "policy.dry_run.evaluated":
 		return shape(`{"kind":"","valid":true,"module_sha256":"","allow":true,"deny":true,"reason":"","error":"","input_summary":{"action":"","permission":"","profile":"","subject":"","actor":"","tenant_id":""},"idempotency_key":""}`,
 			catalogPrivacyShapeOptions{Optional: []string{

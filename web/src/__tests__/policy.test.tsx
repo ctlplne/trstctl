@@ -191,6 +191,7 @@ function policyVersion(status: PolicyVersion["status"] = "draft", overrides: Par
     evidence_refs: ["pr:policy-42"],
     status,
     active: status === "active",
+    rollback_available: status === "active",
     created_at: "2026-07-02T12:00:00Z",
     activated_at: status === "active" ? "2026-07-02T12:05:00Z" : undefined,
     ...overrides,
@@ -414,6 +415,7 @@ describe("policy governance surface", () => {
     apiMock.getNHIReviewCampaign.mockReset().mockResolvedValue(nhiReviewCampaign());
     apiMock.nhiReviewCampaigns.mockReset().mockResolvedValue({ items: [nhiReviewCampaign()] });
     apiMock.policyVersions.mockReset().mockResolvedValue({
+      enforcement: { enabled: true, module_sha256: "sha256-active-policy-module" },
       items: [policyVersion("active"), policyVersion("draft")],
       active: policyVersion("active"),
       counts: { total: 2, active: 1, draft: 1, inactive: 0, rolled_back: 0 },
@@ -663,13 +665,134 @@ describe("policy governance surface", () => {
     );
   });
 
+  it("requires runtime enforcement evidence before claiming protection", async () => {
+    apiMock.policyVersions.mockResolvedValue({ items: [], counts: { total: 0 } });
+    renderPolicy();
+    expect(await screen.findByText("Protection state is unknown", { exact: true })).toBeInTheDocument();
+    expect(screen.queryByText(/Lifecycle policy is enabled/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/The built-in gate fails closed/)).not.toBeInTheDocument();
+  });
+
+  it("shows disabled runtime even with a recorded active version", async () => {
+    apiMock.policyVersions.mockResolvedValue({
+      items: [policyVersion("active")],
+      active: policyVersion("active"),
+      counts: { total: 1 },
+      enforcement: { enabled: false },
+    });
+    renderPolicy();
+    expect(await screen.findByText("Lifecycle policy is disabled", { exact: true })).toBeInTheDocument();
+    expect(screen.queryByText(/Lifecycle policy is enabled/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/The built-in gate fails closed/)).not.toBeInTheDocument();
+    await userEvent.setup().click(screen.getByText("Rule versions and change history", { exact: true }));
+    const detail = screen.getByRole("heading", { name: "Active policy" }).closest("section")!;
+    expect(detail).toHaveTextContent("This server is not enforcing lifecycle Rego rules");
+    expect(within(detail).queryByText("sha256-active-policy-module")).not.toBeInTheDocument();
+  });
+
+  it("rejects a runtime hash that disagrees with the active tenant version", async () => {
+    apiMock.policyVersions.mockResolvedValue({
+      items: [policyVersion("active")],
+      active: policyVersion("active"),
+      counts: { total: 1 },
+      enforcement: { enabled: true, module_sha256: "another-tenant-or-stale-module" },
+    });
+    renderPolicy();
+    expect(await screen.findByText("Protection state is unknown", { exact: true })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create rule" })).toBeDisabled();
+    expect(screen.queryByText("Lifecycle policy is enabled", { exact: true })).not.toBeInTheDocument();
+  });
+
+  it("removes cached enforcement assurance when a refresh loses access", async () => {
+    const user = userEvent.setup();
+    renderPolicy();
+    expect(await screen.findByRole("heading", { name: "Lifecycle policy is enabled" })).toBeInTheDocument();
+    apiMock.policyVersions.mockRejectedValue(new Error("Policy access was removed"));
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    expect(await screen.findByText("Protection state is unknown", { exact: true })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Lifecycle policy is enabled" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create rule" })).toBeDisabled();
+  });
+
+  it("does not offer rollback when the served active version has no predecessor", async () => {
+    const user = userEvent.setup();
+    const restored = { ...policyVersion("active"), rollback_available: false, rollback_from_id: "previous-version" };
+    apiMock.policyVersions.mockResolvedValue({
+      items: [restored],
+      active: restored,
+      counts: { total: 1 },
+      enforcement: { enabled: true, module_sha256: restored.module_sha256 },
+    });
+    renderPolicy();
+    await user.click(await screen.findByText("Rule versions and change history", { exact: true }));
+    expect(await screen.findByRole("button", { name: "Rollback" })).toBeDisabled();
+    expect(apiMock.rollbackPolicyVersion).not.toHaveBeenCalled();
+  });
+
+  it("treats missing rollback metadata as unknown instead of inventing a predecessor", async () => {
+    const user = userEvent.setup();
+    const legacy = { ...policyVersion("active") };
+    delete legacy.rollback_available;
+    apiMock.policyVersions.mockResolvedValue({
+      items: [legacy],
+      active: legacy,
+      counts: { total: 1 },
+      enforcement: { enabled: true, module_sha256: legacy.module_sha256 },
+    });
+    renderPolicy();
+    await user.click(await screen.findByText("Rule versions and change history", { exact: true }));
+    expect(await screen.findByRole("button", { name: "Rollback" })).toBeDisabled();
+    expect(screen.queryByText(/This version has no earlier rule/)).not.toBeInTheDocument();
+  });
+
+  it("does not promote an authored draft to active authority", async () => {
+    const user = userEvent.setup();
+    apiMock.policyVersions.mockResolvedValue({ items: [], counts: { total: 0 }, enforcement: { enabled: true, module_sha256: "boot-hash" } });
+    renderPolicy();
+    await user.click(await screen.findByRole("button", { name: "Create rule" }));
+    const dialog = screen.getByRole("dialog", { name: "Create rule" });
+    await user.clear(within(dialog).getByLabelText("Description", { exact: true }));
+    await user.type(within(dialog).getByLabelText("Description", { exact: true }), "Real freeze draft");
+    const draft = policyVersion("draft", { description: "Real freeze draft" });
+    apiMock.createPolicyVersion.mockResolvedValue(draft);
+    apiMock.policyVersions.mockResolvedValue({ items: [draft], counts: { total: 1 }, enforcement: { enabled: true, module_sha256: "boot-hash" } });
+    await user.click(within(dialog).getByRole("button", { name: "Next: rule logic" }));
+    await user.click(within(dialog).getByRole("button", { name: "Review draft" }));
+    await user.click(within(dialog).getByRole("button", { name: "Create rule" }));
+    await waitFor(() => expect(apiMock.createPolicyVersion).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Create rule" })).not.toBeInTheDocument());
+    expect(screen.queryByText('Custom rule "Real freeze draft" is active.', { exact: true })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Create rule" }));
+    const nextDraft = screen.getByRole("dialog", { name: "Create rule" });
+    expect(within(nextDraft).getByLabelText("Description", { exact: true })).toHaveValue("");
+    expect(within(nextDraft).getByLabelText("Evidence refs", { exact: true })).toHaveValue("");
+  });
+
+  it("starts rule evidence blank and retains submit failures inside the editor", async () => {
+    const user = userEvent.setup();
+    renderPolicy();
+    await user.click(await screen.findByRole("button", { name: "Create rule" }));
+    const dialog = screen.getByRole("dialog", { name: "Create rule" });
+    expect(within(dialog).getByLabelText("Description", { exact: true })).toHaveValue("");
+    expect(within(dialog).getByLabelText("Change ref", { exact: true })).toHaveValue("");
+    expect(within(dialog).getByLabelText("Evidence refs", { exact: true })).toHaveValue("");
+    await user.type(within(dialog).getByLabelText("Description", { exact: true }), "Reviewed freeze draft");
+    apiMock.createPolicyVersion.mockRejectedValue(new Error("Policy engine unavailable"));
+    await user.click(within(dialog).getByRole("button", { name: "Next: rule logic" }));
+    await user.click(within(dialog).getByRole("button", { name: "Review draft" }));
+    await user.click(within(dialog).getByRole("button", { name: "Create rule" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Policy engine unavailable");
+    expect(within(dialog).getByText("Reviewed freeze draft", { exact: true })).toBeInTheDocument();
+    expect(apiMock.createPolicyVersion).toHaveBeenCalledWith(expect.objectContaining({ evidence_refs: [] }));
+  });
+
   it("answers protection, change, and approval state before revealing policy machinery", async () => {
     const user = userEvent.setup();
     renderPolicy();
 
     expect(await screen.findByRole("heading", { level: 1, name: "Rules and approvals" })).toBeInTheDocument();
     expect(screen.getByText("Whether protection is on, what changed, and what needs approval.", { exact: true })).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { level: 2, name: "Protection is on" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 2, name: "Lifecycle policy is enabled" })).toBeInTheDocument();
     expect(screen.getByText('Custom rule "Default lifecycle gate" is active.', { exact: true })).toBeInTheDocument();
     expect(screen.getByText("1 request needs approval", { exact: true })).toBeInTheDocument();
     expect(screen.getByText("2 rule versions recorded", { exact: true })).toBeInTheDocument();
@@ -717,20 +840,21 @@ describe("policy governance surface", () => {
     expect(document.body.textContent).not.toMatch(/BEGIN .* PRIVATE KEY|raw token hidden/i);
   });
 
-  it("explains built-in fail-closed protection without claiming a custom rule exists", async () => {
+  it("reports the server-configured rule without inventing its allow/deny decisions", async () => {
     apiMock.policyVersions.mockResolvedValue({
       items: [],
       active: null,
       counts: { total: 0, active: 0, draft: 0, inactive: 0, rolled_back: 0 },
+      enforcement: { enabled: true, module_sha256: "boot-hash" },
     });
     apiMock.accessChangeRequests.mockResolvedValue({ items: [] });
 
     renderPolicy();
 
-    expect(await screen.findByRole("heading", { level: 2, name: "Protection is on; no custom rule is active" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 2, name: "Lifecycle policy is enabled; no custom rule is active" })).toBeInTheDocument();
     expect(
       screen.getByText(
-        "The built-in default-deny gate still checks every issue, deploy, and revoke request. Create and activate a rule before relying on custom allow logic.",
+        "This tenant uses the server-configured lifecycle rule. No rule created here is active. Review and test the rule before relying on its decisions.",
         { exact: true },
       ),
     ).toBeInTheDocument();
@@ -747,7 +871,7 @@ describe("policy governance surface", () => {
     expect(within(alert).getByText("Protection state is unknown", { exact: true })).toBeInTheDocument();
     expect(within(alert).getByText(/does not assume that protection is healthy/, { exact: false })).toBeInTheDocument();
     expect(within(alert).getByText("policy versions API unavailable", { exact: true })).toBeInTheDocument();
-    expect(screen.queryByText("Protection is on", { exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByText("Lifecycle policy is enabled", { exact: true })).not.toBeInTheDocument();
   });
 
   it("routes policy decisions to Audit and serves policy dry-run traces", async () => {
@@ -795,13 +919,18 @@ describe("policy governance surface", () => {
 
     await user.click(within(screen.getByTestId("page-depth-operate")).getByRole("button", { name: "Create rule" }));
     const dialog = screen.getByRole("dialog", { name: "Create rule" });
+    await user.type(within(dialog).getByLabelText("Description", { exact: true }), "Reviewed QA rule");
+    await user.type(within(dialog).getByLabelText("Change ref", { exact: true }), "qa:owned-change");
+    await user.type(within(dialog).getByLabelText("Evidence refs", { exact: true }), "qa:owned-evidence");
+    await user.click(within(dialog).getByRole("button", { name: "Next: rule logic" }));
+    await user.click(within(dialog).getByRole("button", { name: "Review draft" }));
     await user.click(within(dialog).getByRole("button", { name: "Create rule" }));
     await waitFor(() =>
       expect(apiMock.createPolicyVersion).toHaveBeenCalledWith(
         expect.objectContaining({
           kind: "lifecycle",
-          change_ref: "github:security/policy#42",
-          evidence_refs: ["pr:policy-42", "cab:2026-07-02"],
+          change_ref: "qa:owned-change",
+          evidence_refs: ["qa:owned-evidence"],
         }),
       ),
     );
