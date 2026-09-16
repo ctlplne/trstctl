@@ -1,5 +1,5 @@
 {
   "maxExtractedMessages": 0,
   "owner": "PRODUCT",
-  "policy": "The budget is zero and never rises: every user-facing string is a typed messages.ts key with es-ES and de-DE entries. A new hardcoded string fails CI; key it instead (DA-14 closed by the C-I sweep, 2026-07-14)."
+  "policy": "The budget is zero and never rises: every user-facing string is a typed English messages.ts key. A new hardcoded string fails CI; key it instead. English is the only production language; developer pseudo-locales exercise layout only."
 }

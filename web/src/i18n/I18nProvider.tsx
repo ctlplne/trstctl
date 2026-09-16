@@ -4,10 +4,7 @@ import {
   defaultTimeZone,
   eagerCatalogs,
   interpolateMessage,
-  isLazyLocale,
   isSupportedLocale,
-  lazyCatalogLoaders,
-  type LazyLocale,
   type Locale,
   type MessageKey,
   type MessageValues,
@@ -42,18 +39,18 @@ export function directionForLocale(locale: string): "ltr" | "rtl" {
 
 export function negotiateLocale(candidates: readonly string[] = []): Locale {
   for (const candidate of candidates) {
-    if (isSupportedLocale(candidate)) return candidate;
-    const language = candidate.split("-")[0]?.toLowerCase();
-    if (language === "en") return "en-US";
-    if (language === "es") return "es-ES";
-    if (language === "de") return "de-DE";
-    if (["ar", "fa", "he", "ur"].includes(language)) return "ar-XB";
+    if (candidate.split("-")[0]?.toLowerCase() === "en") return defaultLocale;
   }
   return defaultLocale;
 }
 
+function supportedPreference(locale?: Locale): Locale {
+  if (locale && isSupportedLocale(locale) && (locale === defaultLocale || import.meta.env.DEV)) return locale;
+  return defaultLocale;
+}
+
 function initialLocalePreference(initialLocale?: Locale): Locale {
-  if (initialLocale) return initialLocale;
+  if (initialLocale) return supportedPreference(initialLocale);
   const languages = typeof navigator === "undefined" ? [] : navigator.languages.length > 0 ? navigator.languages : [navigator.language];
   return negotiateLocale(languages);
 }
@@ -63,39 +60,8 @@ function initialTimeZonePreference(initialTimeZone?: string): string {
   return normalizeTimeZone(browserTimeZone());
 }
 
-/* S-C10: es/de catalogs are lazy same-origin JSON assets. The cache below is
- * module-scope so a catalog loads once per session; until it resolves, lookups fall back to
- * English — never to raw keys. loadLocaleCatalog de-duplicates in-flight
- * loads and reports whether anything new arrived (the provider bumps a
- * version to re-render translated copy on arrival). */
-const loadedCatalogs: Partial<Record<LazyLocale, Record<MessageKey, string>>> = {};
-const catalogLoads: Partial<Record<LazyLocale, Promise<boolean>>> = {};
-
-export function loadLocaleCatalog(locale: Locale): Promise<boolean> {
-  if (!isLazyLocale(locale)) return Promise.resolve(false);
-  if (loadedCatalogs[locale]) return Promise.resolve(false);
-  const inFlight = catalogLoads[locale];
-  if (inFlight) return inFlight;
-  const load = lazyCatalogLoaders[locale]()
-    .then((module) => {
-      loadedCatalogs[locale] = module.default;
-      return true;
-    })
-    .catch(() => {
-      // Preserve readable English; a retry happens on the next locale switch.
-      delete catalogLoads[locale];
-      return false;
-    });
-  catalogLoads[locale] = load;
-  return load;
-}
-
-function catalogFor(locale: Locale): Record<MessageKey, string> | undefined {
-  return isLazyLocale(locale) ? loadedCatalogs[locale] : eagerCatalogs[locale];
-}
-
 export function formatMessage(key: MessageKey, values?: MessageValues, locale: Locale = defaultLocale): string {
-  const message = catalogFor(locale)?.[key] ?? eagerCatalogs[defaultLocale][key];
+  const message = eagerCatalogs[locale]?.[key] ?? eagerCatalogs[defaultLocale][key];
   return interpolateMessage(message, values);
 }
 
@@ -135,22 +101,8 @@ export function IntlProvider({ children, initialLocale, initialTimeZone, serverL
   const [timeZone, updateTimeZone] = useState(() => initialTimeZonePreference(initialTimeZone));
   const dir = directionForLocale(locale);
 
-  // S-C10: lazy locales resolve their JSON catalog on demand; the version bump
-  // re-renders the tree so English fallback copy swaps to the translation the
-  // moment the asset arrives. Loading is idempotent and cached module-wide.
-  const [catalogVersion, setCatalogVersion] = useState(0);
-  useEffect(() => {
-    let cancelled = false;
-    void loadLocaleCatalog(locale).then((changed) => {
-      if (changed && !cancelled) setCatalogVersion((current) => current + 1);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [locale]);
-
   const setLocale = useCallback((nextLocale: Locale) => {
-    updateLocale(nextLocale);
+    updateLocale(supportedPreference(nextLocale));
   }, []);
 
   const setTimeZone = useCallback((nextTimeZone: string) => {
@@ -158,15 +110,12 @@ export function IntlProvider({ children, initialLocale, initialTimeZone, serverL
     updateTimeZone(normalized);
   }, []);
 
-  // catalogVersion is a real dependency: the same (key, locale) pair resolves
-  // differently once the lazy catalog lands.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const t = useCallback((key: MessageKey, values?: MessageValues) => formatMessage(key, values, locale), [locale, catalogVersion]);
+  const t = useCallback((key: MessageKey, values?: MessageValues) => formatMessage(key, values, locale), [locale]);
 
   const policy = useMemo<FormatPolicy>(() => ({ locale, timeZone }), [locale, timeZone]);
 
   useEffect(() => {
-    if (serverLocale) updateLocale(serverLocale);
+    if (serverLocale) updateLocale(supportedPreference(serverLocale));
   }, [serverLocale]);
 
   useEffect(() => {

@@ -3326,13 +3326,13 @@
                 },
                 "i18n": {
                     "evidence": [
-                        "CBOM workflow and campaign UI strings are typed messages with en-US, es-ES, and de-DE catalogs; npm run i18n:check enforces extraction parity."
+                        "CBOM workflow and campaign UI strings are typed messages with an English production runtime catalog; npm run i18n:check enforces extraction parity."
                     ],
                     "refs": [
                         "web/scripts/extract-i18n-messages.mjs",
                         "web/src/i18n/messages.ts",
-                        "web/src/i18n/catalog.es-ES.ts",
-                        "web/src/i18n/catalog.de-DE.ts",
+                        "web/src/i18n/catalog.en-US.runtime.gen.ts",
+                        "web/scripts/gen-i18n-runtime-catalogs.mjs",
                         "web/src/i18n/extractedMessages.gen.ts",
                         "web/src/__tests__/i18n.test.tsx"
                     ]
@@ -9280,13 +9280,13 @@
                 },
                 "i18n": {
                     "evidence": [
-                        "All dedicated workflow copy is keyed in the typed English catalog, translated in the Spanish and German catalogs, and compiled into runtime catalogs by npm run gen:i18n-runtime.",
+                        "All dedicated workflow copy is keyed in the typed English catalog and compiled into the English runtime catalog by npm run gen:i18n-runtime.",
                         "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
                     ],
                     "refs": [
                         "web/src/i18n/messages.ts",
-                        "web/src/i18n/catalog.es-ES.ts",
-                        "web/src/i18n/catalog.de-DE.ts",
+                        "web/src/i18n/catalog.en-US.runtime.gen.ts",
+                        "web/scripts/gen-i18n-runtime-catalogs.mjs",
                         "web/scripts/extract-i18n-messages.mjs",
                         "web/src/i18n/extractedMessages.gen.ts",
                         "web/src/__tests__/i18n.test.tsx"
@@ -9589,8 +9589,8 @@
                         "web/src/i18n/extractedMessages.gen.ts",
                         "web/src/__tests__/i18n.test.tsx",
                         "web/src/i18n/messages.ts",
-                        "web/src/i18n/catalog.es-ES.ts",
-                        "web/src/i18n/catalog.de-DE.ts"
+                        "web/src/i18n/catalog.en-US.runtime.gen.ts",
+                        "web/scripts/gen-i18n-runtime-catalogs.mjs"
                     ]
                 }
             },
@@ -11961,12 +11961,12 @@
                 },
                 "i18n": {
                     "evidence": [
-                        "Core campaign and licensed migration labels, edition-unavailable copy, loading/error states, and action text live in the typed message catalog with Spanish and German catalogs and npm run i18n:check coverage."
+                        "Core campaign and licensed migration labels, edition-unavailable copy, loading/error states, and action text live in the typed English message and runtime catalogs with npm run i18n:check coverage."
                     ],
                     "refs": [
                         "web/src/i18n/messages.ts",
-                        "web/src/i18n/catalog.es-ES.ts",
-                        "web/src/i18n/catalog.de-DE.ts",
+                        "web/src/i18n/catalog.en-US.runtime.gen.ts",
+                        "web/scripts/gen-i18n-runtime-catalogs.mjs",
                         "web/src/__tests__/i18n.test.tsx"
                     ]
                 }
@@ -17566,8 +17566,8 @@
                     ],
                     "refs": [
                         "web/src/i18n/messages.ts",
-                        "web/src/i18n/catalog.es-ES.ts",
-                        "web/src/i18n/catalog.de-DE.ts",
+                        "web/src/i18n/catalog.en-US.runtime.gen.ts",
+                        "web/scripts/gen-i18n-runtime-catalogs.mjs",
                         "web/scripts/extract-i18n-messages.mjs",
                         "web/src/i18n/extractedMessages.gen.ts",
                         "web/src/__tests__/i18n.test.tsx"

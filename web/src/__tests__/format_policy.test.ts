@@ -55,7 +55,7 @@ describe("central locale/timezone/plural policy (PRODUCT-004)", () => {
 
   it("formats short chart dates through the central date policy", () => {
     expect(formatShortDate("2026-06-08T12:00:00Z", { locale: "en-US", timeZone: "UTC" })).toBe("Jun 8");
-    expect(formatShortDate("2026-06-08T12:00:00Z", { locale: "es-ES", timeZone: "UTC" })).toMatch(/8/);
+    expect(formatShortDate("2026-06-08T23:30:00Z", { locale: "en-US", timeZone: "Asia/Tokyo" })).toBe("Jun 9");
   });
 
   it("keeps ad-hoc Intl and toLocale formatting out of shipped sources", () => {

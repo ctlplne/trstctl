@@ -1,11 +1,9 @@
 import { defaultMessageValues, orderedMessageKeys } from "@/i18n/catalog.en-US.runtime.gen";
-import esESRuntimeCatalogURL from "@/i18n/catalog.es-ES.runtime.gen.json?url";
-import deDERuntimeCatalogURL from "@/i18n/catalog.de-DE.runtime.gen.json?url";
 
 export const defaultLocale = "en-US";
 export const defaultTimeZone = "UTC";
-export const supportedLocales = ["en-US", "es-ES", "de-DE", "en-XA", "ar-XB"] as const;
-export const productionLocales = ["en-US", "es-ES", "de-DE"] as const;
+export const supportedLocales = ["en-US", "en-XA", "ar-XB"] as const;
+export const productionLocales = ["en-US"] as const;
 export const pseudoLocales = ["en-XA", "ar-XB"] as const;
 
 export type Locale = (typeof supportedLocales)[number];
@@ -6185,14 +6183,6 @@ export const messages = {
   "locale.enUS": {
     defaultMessage: "English (United States)",
     description: "Locale selector label for en-US.",
-  },
-  "locale.esES": {
-    defaultMessage: "Spanish (Spain)",
-    description: "Locale selector label for es-ES.",
-  },
-  "locale.deDE": {
-    defaultMessage: "German (Germany)",
-    description: "Locale label for the de-DE production catalog (C-L1).",
   },
   "locale.enXA": {
     defaultMessage: "English pseudo-locale",
@@ -26805,8 +26795,6 @@ export type MessageKey = keyof typeof messages;
 
 export const localeLabelKeys = {
   "en-US": "locale.enUS",
-  "es-ES": "locale.esES",
-  "de-DE": "locale.deDE",
   "en-XA": "locale.enXA",
   "ar-XB": "locale.arXB",
 } satisfies Record<Locale, MessageKey>;
@@ -26835,47 +26823,12 @@ function buildCatalog(localize: (message: string) => string): Record<MessageKey,
   return Object.fromEntries(orderedMessageKeys.map((key, index) => [key, localize(defaultMessageValues[index])])) as Record<MessageKey, string>;
 }
 
-/** Rebuild a lazy production catalog whose generated JSON asset carries
- * changed values only. Message IDs and unchanged values already exist in the
- * eager English catalog, so sending them again for every locale is duplicate
- * wire data. The exact length check makes stale output fail closed; null is
- * the generator's explicit marker for an unchanged canonical English value. */
-export function buildTranslatedCatalog(values: readonly (string | null)[]): Record<MessageKey, string> {
-  if (values.length !== orderedMessageKeys.length) {
-    throw new Error(`translated catalog has ${values.length} values for ${orderedMessageKeys.length} message keys`);
-  }
-  return Object.fromEntries(orderedMessageKeys.map((key, index) => [key, values[index] ?? defaultMessageValues[index]])) as Record<MessageKey, string>;
-}
-
-/* S-C10: generated per-locale JSON assets load on demand through the
- * I18nProvider, so the JavaScript bundle ships only the English source catalog
- * and the cheap pseudo transforms. Until a lazy catalog resolves, lookups fall
- * back to English — never to raw keys. */
-export type LazyLocale = "es-ES" | "de-DE";
-
+// English is the only production catalog. Explicit developer pseudo-locales
+// remain available for layout and direction tests; they are not translations.
 const pseudoCatalog = buildCatalog(pseudoLocalize);
 
-export const eagerCatalogs: Record<Exclude<Locale, LazyLocale>, Record<MessageKey, string>> = {
+export const eagerCatalogs: Record<Locale, Record<MessageKey, string>> = {
   "en-US": buildCatalog((message) => message),
   "en-XA": pseudoCatalog,
   "ar-XB": pseudoCatalog,
-};
-
-export function isLazyLocale(locale: Locale): locale is LazyLocale {
-  return locale === "es-ES" || locale === "de-DE";
-}
-
-async function fetchTranslatedCatalog(url: string): Promise<{ default: Record<MessageKey, string> }> {
-  const response = await fetch(url, { cache: "force-cache", credentials: "same-origin" });
-  if (!response.ok) throw new Error(`translation catalog request failed with HTTP ${response.status}`);
-  const value: unknown = await response.json();
-  if (!Array.isArray(value) || value.some((entry) => entry !== null && typeof entry !== "string")) {
-    throw new Error("translation catalog is not an ordered string/null array");
-  }
-  return { default: buildTranslatedCatalog(value) };
-}
-
-export const lazyCatalogLoaders: Record<LazyLocale, () => Promise<{ default: Record<MessageKey, string> }>> = {
-  "es-ES": () => fetchTranslatedCatalog(esESRuntimeCatalogURL),
-  "de-DE": () => fetchTranslatedCatalog(deDERuntimeCatalogURL),
 };

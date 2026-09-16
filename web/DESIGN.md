@@ -75,19 +75,15 @@ the same change.
 9. **Charts pull from the tone palette.** Use `ChartTone` names, never
    hand-picked hues; several tokens alias in dark mode, so check `/styleguide`
    when composing multi-series charts.
-10. **New user-facing strings are typed message keys.** English goes in
-    `src/i18n/messages.ts`; the `es-ES`/`de-DE` entries go in the per-locale
-    modules `src/i18n/catalog.es-ES.ts` / `catalog.de-DE.ts` (S-C10 — a
-    missing key is a type error there). Production loads generated value-only
-    mirrors of those keyed review sources; `npm run gen:i18n-runtime` rebuilds
-    them and the normal build fails if they are stale. Skip either and the
-    extraction ratchet in `extractedMessages.budget.json` or the type-checker
-    will fail — never raise the budget. The production-catalog sha256 digests in
-    `src/__tests__/i18n.test.tsx` are a REVIEW RATCHET: adding or changing a
-    translation legitimately breaks them, so re-pin them in the same change
-    with a comment saying what was reviewed. Machine-authored translations are
-    flagged for human review before release. Storybook stories are excluded
-    from extraction — keep fixture copy out of the catalog.
+10. **New user-facing strings are typed message keys.** English is the only
+    production language and lives in `src/i18n/messages.ts`. Production uses the
+    generated compact English runtime; `npm run gen:i18n-runtime` rebuilds it,
+    and the build rejects stale output. Keep `npm run i18n:check` and the zero
+    extraction budget. English catalog parity and interpolation stay tested.
+    Explicit developer pseudo-locales exercise layout and direction, not
+    translated product support. Browser language negotiation falls back to
+    English. Storybook stories are excluded from extraction; keep fixture copy
+    out of the catalog.
 11. **Multi-input operator tasks are wizards, not flat forms.** Anything with
     three or more decisions renders as a `StepShell` stepper (see Setup,
     Request Credential, Add Certificate): one job per step, validation gates

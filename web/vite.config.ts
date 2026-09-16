@@ -73,14 +73,10 @@ export default defineConfig({
         },
       },
     },
-    // S-C3: pages are route-level lazy chunks. The shell, shared UI helpers,
-    // and eager English message source form the initial module graph; es/de
-    // stay lazy and AUD-121 emits value-only locale chunks from keyed sources.
-    // The enforced budget lives in package.json "size-limit" (`npm run size`),
-    // measured compressed. This raw-size warning remains a coarse extra alarm
-    // for a new standalone giant; it does not replace those compressed gates.
-    // AUD-121 keeps the 640 kB all-JS ratchet unchanged and measures 573.65 kB
-    // brotli after removing repeated locale message IDs.
+    // Pages remain lazy chunks. English is the only production catalog.
+    // `npm run size` enforces the package.json Brotli ceilings for all shipped
+    // JavaScript and the complete entry graph, including shared imports.
+    // This raw-size warning is an additional signal, not the startup budget.
     chunkSizeWarningLimit: 1300,
   },
   server: {

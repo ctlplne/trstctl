@@ -1,19 +1,8 @@
 #!/usr/bin/env node
-// Generate compact production i18n catalogs from the hand-reviewed keyed
-// sources. Production does not need translator descriptions, so the generated
-// English module carries only ordered IDs and values. Lazy locale assets then
-// carry only JSON values in that same order and rebuild keyed objects at load
-// time. JSON keeps translated copy out of the JavaScript parse/compile budget;
-// the browser fetches only the locale the operator selects.
-// A null means "identical to the canonical English value" so lazy chunks do
-// not ship the same sentence twice; buildTranslatedCatalog restores it.
-//
-// Usage:
-//   node scripts/gen-i18n-runtime-catalogs.mjs
-//   node scripts/gen-i18n-runtime-catalogs.mjs --check
-//
-// The keyed catalog files remain the review source of truth. This generator
-// fails closed on missing, extra, duplicate, or non-literal entries.
+// Generate the English production catalog from typed messages.ts descriptors.
+// The runtime contains ordered IDs and values, without review descriptions.
+// Usage: node scripts/gen-i18n-runtime-catalogs.mjs [--check]
+// Fail closed on malformed source or stale output; extraction remains separate.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -25,10 +14,7 @@ const webRoot = path.resolve(scriptDirectory, "..");
 const i18nRoot = path.resolve(webRoot, "src", "i18n");
 const check = process.argv.includes("--check");
 
-const locales = [
-  { locale: "es-ES", variable: "esESCatalog" },
-  { locale: "de-DE", variable: "deDECatalog" },
-];
+const locales = ["en-US"];
 
 function unwrap(expression) {
   let current = expression;
@@ -115,37 +101,11 @@ function generateEnglishRuntime() {
   ].join("\n");
 }
 
-function generate(locale, variable) {
-  const sourceFile = path.resolve(i18nRoot, `catalog.${locale}.ts`);
-  const catalog = literalEntries(sourceFile, variable, (initializer, key) => {
-    const value = unwrap(initializer);
-    if (!ts.isStringLiteralLike(value)) {
-      throw new Error(`${sourceFile}: value for ${JSON.stringify(key)} must be a string literal`);
-    }
-    return value.text;
-  });
-
-  const missing = orderedKeys.filter((key) => !catalog.has(key));
-  const extra = [...catalog.keys()].filter((key) => !messages.has(key));
-  if (missing.length > 0 || extra.length > 0) {
-    throw new Error(`${sourceFile}: catalog parity failed; missing=${JSON.stringify(missing)} extra=${JSON.stringify(extra)}`);
-  }
-
-  const values = orderedKeys.map((key) => {
-    const translated = catalog.get(key);
-    return translated === messages.get(key) ? null : translated;
-  });
-  return `${JSON.stringify(values)}\n`;
-}
-
 let stale = false;
-const outputs = [
-  { outputFile: path.resolve(i18nRoot, "catalog.en-US.runtime.gen.ts"), generated: generateEnglishRuntime() },
-  ...locales.map(({ locale, variable }) => ({
-    outputFile: path.resolve(i18nRoot, `catalog.${locale}.runtime.gen.json`),
-    generated: generate(locale, variable),
-  })),
-];
+const outputs = locales.map((locale) => ({
+  outputFile: path.resolve(i18nRoot, `catalog.${locale}.runtime.gen.ts`),
+  generated: generateEnglishRuntime(),
+}));
 
 for (const { outputFile, generated } of outputs) {
   if (check) {
