@@ -10,12 +10,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"testing"
 
+	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/secrettext"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -39,7 +42,7 @@ import (
 // RunTokenCreate / no token-mint path exists) and PASS after, and is race-clean.
 //
 // Production runs the bootstrap as a SEPARATE `trstctl token create` process, so
-// the control plane is not live at the same time. This test mirrors that by giving
+// the embedded NATS path requires exclusive local custody. This test gives
 // each phase its own short-lived event log (the bundled NATS runs in-process, so
 // only one may be open at a time); tenant state survives across them because it is
 // projected into PostgreSQL, the shared read model.
@@ -179,6 +182,8 @@ func TestBootstrapTokenAuthenticatesServedRequest(t *testing.T) {
 		t.Fatalf("bootstrap recovery changed tenant registration from %+v to %+v", registered, afterRecovery)
 	}
 
+	assertBootstrapTokensRecorded(t, ctx, st, bootCfg, tenantA, []string{bearer, recoveredBearer})
+
 	// A SQL-only tenant row is not recovery authority. The command must refuse it
 	// because no exact retained registration event backs the read model.
 	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenantB, Name: "forged-sql-only"}); err != nil {
@@ -244,4 +249,74 @@ func TestBootstrapTokenAuthenticatesServedRequest(t *testing.T) {
 			t.Errorf("token listed owner %q, want payments-A (its own tenant's)", got.Items[0].Name)
 		}
 	})
+}
+
+// The bootstrap command must use the same immutable token-created event as the
+// served API. A credential that exists only in SQL disappears from audit and a
+// read-model rebuild. Check both first registration and existing-tenant recovery.
+func assertBootstrapTokensRecorded(t *testing.T, ctx context.Context, st *store.Store, cfg *config.Config, tenantID string, bearers []string) {
+	t.Helper()
+	signerRuntime, auditKey, err := openAuditSigningRuntime(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer signerRuntime.Close()
+	log, err := openSanitizedHistoryAwareEventLog(ctx, cfg.NATS, st, auditKey, cfg.Secrets.SecretRotationHistoryFleetReady)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = log.Close() }()
+	expected := make(map[string]bool)
+	for _, bearer := range bearers {
+		raw := []byte(bearer)
+		hash, err := auth.HashAPIToken(raw)
+		secret.Wipe(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		expected[hash] = false
+	}
+	count := 0
+	err = log.Replay(ctx, 0, func(ev events.Event) error {
+		if ev.TenantID != tenantID || ev.Type != projections.EventAPITokenCreated {
+			return nil
+		}
+		count++
+		for _, bearer := range bearers {
+			if bytes.Contains(ev.Data, []byte(bearer)) {
+				t.Error("raw bootstrap token leaked into event payload")
+			}
+		}
+		var payload projections.APITokenCreated
+		if err := json.Unmarshal(ev.Data, &payload); err != nil {
+			return err
+		}
+		seen, ok := expected[payload.TokenHash]
+		if !ok || seen {
+			t.Error("bootstrap token event has an unexpected or duplicate hash")
+		}
+		expected[payload.TokenHash] = true
+		if ev.Actor == nil || ev.Actor.Subject != "trstctl:local-token-create" {
+			t.Error("bootstrap event must identify the local command, not impersonate its target subject")
+		}
+		rec, err := st.GetAPIToken(ctx, tenantID, payload.ID)
+		if err != nil {
+			return err
+		}
+		if rec.TokenHash != payload.TokenHash || rec.Subject != payload.Subject || !slices.Equal(rec.Scopes, payload.Scopes) {
+			t.Error("bootstrap token read model differs from its creation event")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != len(bearers) {
+		t.Errorf("bootstrap audit recorded %d token-created events, want %d", count, len(bearers))
+	}
+	for _, seen := range expected {
+		if !seen {
+			t.Error("bootstrap credential has no immutable creation event")
+		}
+	}
 }

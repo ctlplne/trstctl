@@ -11,10 +11,9 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/app"
-	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
-	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/secrets"
 	"trstctl.com/trstctl/internal/store"
@@ -82,8 +81,8 @@ func BootstrapAdminScopes() []string {
 // It opens the datastore exactly as Run does (bundled single-node, or external by
 // DSN), applies pending migrations, registers a new tenant through the
 // event-sourced spine or verifies an existing tenant against that spine, then
-// inserts the token under the tenant's row-level-security context
-// (store.CreateAPIToken, AN-1). Only the token's hash is stored; the raw secret is
+// emits the token-created event and projects it under the tenant's
+// row-level-security context (AN-1/AN-2). Only the token's hash is stored; the raw secret is
 // returned to the caller exactly once and is NEVER written to any log.
 //
 // It deliberately touches no signing/issuance authority: it creates an API
@@ -182,21 +181,16 @@ func RunTokenCreate(ctx context.Context, cfg *config.Config, opts TokenCreateOpt
 		return nil, fmt.Errorf("bootstrap: inspect tenant: %w", tenantErr)
 	}
 
-	// Mint the token: generate a high-entropy secret, store ONLY its hash under the
-	// tenant's RLS context (AN-1), and return the raw secret to the caller to print
-	// once. The secret never reaches a log or the database.
-	raw, hash, err := auth.GenerateAPIToken()
+	// Bootstrap is a local custody-authorized command, not the target subject's
+	// authenticated HTTP session. Name that mechanism honestly in the audit actor.
+	// Reuse the served token command so the immutable event is the source of truth
+	// and the token row is its tenant-scoped projection. Raw material stays outside
+	// both the event and the database and is wiped by the command on failure.
+	mintCtx := events.ContextWithActor(ctx, events.Actor{Subject: "trstctl:local-token-create"})
+	orch := orchestrator.NewOrchestrator(log, st, nil)
+	_, raw, err := orch.CreateAPIToken(mintCtx, opts.TenantID, opts.Subject, scopes, nil)
 	if err != nil {
-		return nil, fmt.Errorf("bootstrap: generate token: %w", err)
-	}
-	if _, err := st.CreateAPIToken(ctx, store.APITokenRecord{
-		TenantID:  opts.TenantID,
-		TokenHash: hash,
-		Subject:   opts.Subject,
-		Scopes:    scopes,
-	}); err != nil {
-		secret.Wipe(raw)
-		return nil, fmt.Errorf("bootstrap: store token: %w", err)
+		return nil, fmt.Errorf("bootstrap: record token: %w", err)
 	}
 	return raw, nil
 }

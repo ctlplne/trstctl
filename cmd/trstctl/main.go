@@ -322,9 +322,9 @@ func serveControlPlane(ctx context.Context, cfg *config.Config, getenv func(stri
 // `token create`, the network-trust-free first-run bootstrap (WIRE-002) that mints
 // the first tenant-scoped API token so a freshly deployed binary — which fails
 // closed (401) until a credential exists and has no OIDC login wired yet — has an
-// obtainable credential. It writes through the same store path the API
-// authenticates against (store.CreateAPIToken) and never requires an existing
-// credential.
+// obtainable credential. It records token creation through the event log and
+// projects the hash into the same tenant-scoped store the API authenticates
+// against. It never requires an existing HTTP credential.
 func runToken(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {
 	if len(args) == 0 || args[0] != "create" {
 		return errors.New("usage: trstctl token create --tenant <uuid> [--subject <name>] [--scopes a,b,c] [--tenant-name <label>]")
