@@ -5,12 +5,11 @@ import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTranslation } from "@/i18n/I18nProvider";
-import { formatDateTime } from "@/i18n/format";
 import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/query";
 
 export function IdentityCertificateEvidence({ identityId }: { identityId: string }) {
-  const { t } = useTranslation();
+  const { t, formatDateTime } = useTranslation();
   const result = useApiQuery(
     ["identity-deployment-evidence", identityId],
     async () => {

@@ -502,6 +502,28 @@ target configuration without changing the queued policy or target revision.
 Both the control plane and host agent need this capability to complete
 password-protected host issuance and restore.
 
+### Activate Tomcat PEM certificates
+
+The `tomcat` destination writes the certificate and key paths already referenced
+by Tomcat's `SSLHostConfig`. Its fixed `tomcat-tls-reload` host action activates
+that TLS context; stock `catalina.sh reload` is not a supported Tomcat command.
+Configure `verify_address` and `verify_server_name` to independently check the
+certificate Tomcat serves after activation.
+
+Use the shipped Manager client and host-profile example in
+[Reload a Java application](#reload-a-java-application), replacing the example's
+`logical_name` with `tomcat-tls-reload`. Grant the PEM directories in
+`allowed_roots`; no keystore, store password or `reload_action` target field is
+needed for the PEM connector. The Manager password stays in its private host
+file. Configure the executing host agent's `--host-exec-profile`; the
+agent-bound destination uses that host's authority.
+
+Every retry activates TLS even if the files already match, since an earlier
+attempt may have stopped after writing them. If activation fails, the connector
+restores the complete previous certificate/key pair and activates that pair
+again. It reports a missing predecessor or failed recovery explicitly. A failed
+attempt remains failed even when the predecessor is recovered.
+
 ### Reload a Java application
 
 Writing a keystore does not make an application use it. Set `reload_action` to a
@@ -637,7 +659,7 @@ Every `*_ref` is a `secret://name` or `secret://name?version=N` reference in the
 tenant, and every `profile` points to an operator-owned `connectors.local_profiles`
 entry, which maps the connector's logical command (`nginx`, `apachectl`, `caddy`,
 `powershell`, `netsh`, `haproxy`, `systemctl`, `postfix`, `doveconf`, `doveadm`,
-`pg_ctl`, `mysql-tls-reload`, `rabbitmqctl`, or `catalina.sh`) to one absolute executable;
+`pg_ctl`, `mysql-tls-reload`, `rabbitmqctl`, or `tomcat-tls-reload`) to one absolute executable;
 general shells and symlinked executables are rejected. IIS's `powershell` action
 additionally requires an exact `logical_args` allowlist and a separate `args` list
 with `pass_args: false`, so the requested argv is only ever compared, never forwarded

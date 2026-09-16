@@ -19,6 +19,7 @@ import (
 )
 
 func TestBuildRunDepsReleasesLockedNotificationCredentialAfterLaterFailure(t *testing.T) {
+	auditKey := testAuditSigningKey(t)
 	before := lockedMemoryKiB(t)
 	cfg := config.Default()
 	cfg.RateLimit.Enabled = false
@@ -33,7 +34,7 @@ func TestBuildRunDepsReleasesLockedNotificationCredentialAfterLaterFailure(t *te
 	cfg.CodeSigning.Enabled = true
 	_, err := buildRunDeps(
 		context.Background(), cfg, nil, nil, runSigner{}, runSecrets{},
-		slog.New(slog.NewTextHandler(io.Discard, nil)), nil,
+		slog.New(slog.NewTextHandler(io.Discard, nil)), nil, auditKey,
 	)
 	if err == nil || !strings.Contains(err.Error(), "isolated signing service") {
 		t.Fatalf("buildRunDeps error = %v, want post-notification code-signing failure", err)

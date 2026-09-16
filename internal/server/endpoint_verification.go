@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
+	"fmt"
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 
-	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/servedstatus"
@@ -53,42 +53,41 @@ import (
 // still reading verified and an endpoint state reading diverged. Collapsing the
 // two would either rewrite history or freeze current state, and the tri-state's
 // whole value is that issued, delivered and verified have three lifetimes.
-func (s *Server) recordDeployVerification(ctx context.Context, tenantID, agentName, idempotencyKey, reportJSON string, jobPayload []byte) {
-	var report relay.EndpointVerifyReport
-	if err := json.Unmarshal([]byte(reportJSON), &report); err != nil || len(report.Results) == 0 {
-		return
+func (s *Server) recordDeployVerification(ctx context.Context, tenantID, agentName string, claim store.AgentJobResultClaim, req *transport.ReportJobResultRequest) error {
+	if s.orch == nil || s.store == nil {
+		return errors.New("deployment verification receiver is unavailable")
 	}
-	var intent relay.DeployIntent
-	// The connector and target come from the job payload the control plane
-	// queued, never from the agent's report — the same rule the sweep ingest
-	// follows, for the same reason.
-	intent, rollback := deployIntentForVerificationReceipt(jobPayload)
+	// The shipping agent can report a failure before a probe transcript exists.
+	// Preserve that signed failure, but never manufacture an endpoint observation.
+	if req.Outcome == transport.JobOutcomeVerifyFailed && req.EvidenceDigest == "" {
+		return nil
+	}
+	intent, _ := deployIntentForVerificationReceipt(claim.Payload)
+	if claim.Destination == agentJobKindEndpointRenew {
+		intent.Fingerprint = req.CredentialFingerprint
+	}
+	cert, err := s.store.GetCertificateByFingerprint(ctx, tenantID, normalizeVerificationFingerprint(intent.Fingerprint))
+	if err != nil {
+		return fmt.Errorf("load verification's issued certificate: %w", err)
+	}
+	expected, err := certinfo.ExpectationFromChain(cert.CertificateDER)
+	if err != nil {
+		return fmt.Errorf("reconstruct verification's issued identity: %w", err)
+	}
+	if expected.SHA256Fingerprint != normalizeVerificationFingerprint(intent.Fingerprint) {
+		return errors.New("stored verification certificate differs from its claimed fingerprint")
+	}
+	result, err := validateDeploymentVerificationReport(intent, expected, req.Detail, req.EvidenceDigest, req.Outcome)
+	if err != nil {
+		return err
+	}
+	attemptKey := fmt.Sprintf("%s:attempt:%d", claim.IdempotencyKey, req.Attempt)
+	eventID := orchestrator.DiscoveryRelayEventID(tenantID, attemptKey, "endpoint-verification:"+result.EndpointID)
+	if err := s.appendEndpointVerificationWithEventID(ctx, tenantID, agentName, result.EndpointID, result.Transcript, result.Detail, eventID); err != nil {
+		return err
+	}
 
-	for _, res := range report.Results {
-		id := strings.TrimSpace(res.EndpointID)
-		if id == "" {
-			continue
-		}
-		if err := s.appendEndpointVerification(ctx, tenantID, agentName, id, res.Transcript, res.Detail); err != nil {
-			s.logger.Warn("endpoint verification recording failed", "tenant_id", tenantID, "error", err)
-			continue
-		}
-		if !rollback {
-			s.recordVerificationReceipt(ctx, tenantID, idempotencyKey, intent, res.Transcript, res.Detail)
-		}
-		if !res.Transcript.Reached || res.Transcript.Mismatch != "" {
-			s.raiseVerificationAlert(ctx, tenantID, store.EndpointVerification{
-				EndpointID: id, Address: res.Transcript.Address,
-				Vantage:  string(res.Transcript.Vantage),
-				Reached:  res.Transcript.Reached,
-				Mismatch: string(res.Transcript.Mismatch),
-				LastGoodAt: s.lastGoodForEndpoint(ctx, tenantID, id,
-					string(res.Transcript.Vantage)),
-				ObservedFingerprint: res.Transcript.ObservedFingerprint,
-				Detail:              res.Detail,
-			})
-		}
-	}
+	return nil
 }
 
 // deployIntentForVerificationReceipt reads only the public routing half of a
@@ -98,6 +97,9 @@ func (s *Server) recordDeployVerification(ctx context.Context, tenantID, agentNa
 func deployIntentForVerificationReceipt(jobPayload []byte) (relay.DeployIntent, bool) {
 	var rollback relay.RollbackIntent
 	if json.Unmarshal(jobPayload, &rollback) == nil && strings.TrimSpace(rollback.PredecessorFingerprint) != "" {
+		if rollback.VerifyAddress == "" {
+			rollback.VerifyAddress, rollback.VerifyServerName = verifyTargetFromConfig(rollback.TargetConfig)
+		}
 		return relay.DeployIntent{
 			Connector: rollback.Connector, Target: rollback.Target, TargetID: rollback.TargetID,
 			IdentityID: rollback.IdentityID, Fingerprint: rollback.PredecessorFingerprint,
@@ -105,68 +107,39 @@ func deployIntentForVerificationReceipt(jobPayload []byte) (relay.DeployIntent, 
 			VerifyServerName: rollback.VerifyServerName,
 		}, true
 	}
+	var wrapped sealedConnectorDeployPayload
+	if json.Unmarshal(jobPayload, &wrapped) == nil && wrapped.Format == connectorDeploySealedFormat {
+		address, serverName := verifyTargetFromConfig(wrapped.TargetConfig)
+		return relay.DeployIntent{Connector: wrapped.Connector, Target: wrapped.Target, TargetID: wrapped.TargetID, Revision: wrapped.Revision, IdentityID: wrapped.IdentityID, Fingerprint: wrapped.Fingerprint, TargetConfig: append(json.RawMessage(nil), wrapped.TargetConfig...), VerifyAddress: address, VerifyServerName: serverName}, false
+	}
 	var direct relay.DeployIntent
 	if json.Unmarshal(jobPayload, &direct) == nil && strings.TrimSpace(direct.Connector) != "" {
+		if direct.VerifyAddress == "" {
+			direct.VerifyAddress, direct.VerifyServerName = verifyTargetFromConfig(direct.TargetConfig)
+		}
 		return direct, false
 	}
-	var wrapped sealedConnectorDeployPayload
-	if json.Unmarshal(jobPayload, &wrapped) != nil || wrapped.Format != connectorDeploySealedFormat {
-		return relay.DeployIntent{}, false
-	}
-	address, serverName := verifyTargetFromConfig(wrapped.TargetConfig)
-	return relay.DeployIntent{
-		Connector: wrapped.Connector, Target: wrapped.Target, TargetID: wrapped.TargetID,
-		Revision: wrapped.Revision, IdentityID: wrapped.IdentityID,
-		Fingerprint: wrapped.Fingerprint, TargetConfig: append(json.RawMessage(nil), wrapped.TargetConfig...),
-		VerifyAddress: address, VerifyServerName: serverName,
-	}, false
+	return relay.DeployIntent{}, false
 }
 
 // recordEndpointVerificationSweep ingests a relay's endpoint.verify report.
-func (s *Server) recordEndpointVerificationSweep(ctx context.Context, tenantID, agentName, _, reportJSON string) {
-	if s.log == nil || strings.TrimSpace(tenantID) == "" {
-		return
+func (s *Server) recordEndpointVerificationSweep(ctx context.Context, tenantID, agentName, idempotencyKey string, jobPayload []byte, reportJSON, evidenceDigest string) error {
+	if s.log == nil || s.orch == nil || strings.TrimSpace(tenantID) == "" {
+		return errors.New("endpoint verification receiver is unavailable")
 	}
-	var report relay.EndpointVerifyReport
-	if err := json.Unmarshal([]byte(reportJSON), &report); err != nil {
-		// Version skew, not a clean estate. Recording nothing leaves the
-		// previous observations on screen, which is the honest outcome: we do
-		// not know anything new.
-		return
+	report, err := validateEndpointVerificationReport(jobPayload, reportJSON, evidenceDigest)
+	if err != nil {
+		return err
 	}
-	if len(report.Results) == 0 {
-		return
-	}
-	// The expectation set the control plane queued. Results are matched against
-	// it by endpoint id, and a result naming an endpoint that was not asked
-	// about is dropped — see the comment above.
 	for _, res := range report.Results {
-		id := strings.TrimSpace(res.EndpointID)
-		if id == "" {
-			continue
+		id := res.EndpointID
+		eventID := orchestrator.DiscoveryRelayEventID(tenantID, idempotencyKey, "endpoint-verification:"+id)
+		if err := s.appendEndpointVerificationWithEventID(ctx, tenantID, agentName, id, res.Transcript, res.Detail, eventID); err != nil {
+			return err
 		}
-		if err := s.appendEndpointVerification(ctx, tenantID, agentName, id, res.Transcript, res.Detail); err != nil {
-			s.logger.Warn("endpoint verification recording failed", "tenant_id", tenantID, "error", err)
-			continue
-		}
-		// A divergence or an unreachable endpoint raises an operator alert. A
-		// clean observation raises nothing — an alert per healthy sweep would
-		// bury the one that matters.
-		if !res.Transcript.Reached || res.Transcript.Mismatch != "" {
-			s.raiseVerificationAlert(ctx, tenantID, store.EndpointVerification{
-				EndpointID: id, Address: res.Transcript.Address,
-				Vantage:  string(res.Transcript.Vantage),
-				Reached:  res.Transcript.Reached,
-				Mismatch: string(res.Transcript.Mismatch),
-				// LastGoodAt is read from the stored row rather than the report:
-				// only the control plane knows whether this endpoint has EVER
-				// been good, and that distinction changes the alert's wording.
-				LastGoodAt:          s.lastGoodForEndpoint(ctx, tenantID, id, string(res.Transcript.Vantage)),
-				ObservedFingerprint: res.Transcript.ObservedFingerprint,
-				Detail:              res.Detail,
-			})
-		}
+
 	}
+	return nil
 }
 
 // appendEndpointVerification records and projects one observation while holding
@@ -174,6 +147,13 @@ func (s *Server) recordEndpointVerificationSweep(ctx context.Context, tenantID, 
 func (s *Server) appendEndpointVerification(
 	ctx context.Context, tenantID, agentName, endpointID string,
 	tr transport.ProbeTranscript, detail string,
+) error {
+	return s.appendEndpointVerificationWithEventID(ctx, tenantID, agentName, endpointID, tr, detail, "")
+}
+
+func (s *Server) appendEndpointVerificationWithEventID(
+	ctx context.Context, tenantID, agentName, endpointID string,
+	tr transport.ProbeTranscript, detail, eventID string,
 ) error {
 	if err := tr.Validate(); err != nil {
 		// A transcript that does not canonicalize cannot have been signed over
@@ -188,7 +168,14 @@ func (s *Server) appendEndpointVerification(
 	if tr.ObservedAtUnix == 0 {
 		observedAt = time.Now().UTC()
 	}
-	return s.orch.RecordEndpointVerification(ctx, tenantID, projections.EndpointVerificationObserved{
+	var notBefore, notAfter time.Time
+	if tr.Reached && tr.ObservedFingerprint != "" {
+		// Unix epoch is a real certificate date. Only an absent parsed
+		// peer has no validity window.
+		notBefore = time.Unix(tr.NotBeforeUnix, 0).UTC()
+		notAfter = time.Unix(tr.NotAfterUnix, 0).UTC()
+	}
+	observation := projections.EndpointVerificationObserved{
 		EndpointID:          endpointID,
 		Address:             tr.Address,
 		Vantage:             string(tr.Vantage),
@@ -198,13 +185,17 @@ func (s *Server) appendEndpointVerification(
 		ObservedFingerprint: tr.ObservedFingerprint,
 		CheckedSANs:         tr.CheckedSANs,
 		CheckedChain:        tr.CheckedChain,
-		NotBefore:           unixOrZeroTime(tr.NotBeforeUnix),
-		NotAfter:            unixOrZeroTime(tr.NotAfterUnix),
+		NotBefore:           notBefore,
+		NotAfter:            notAfter,
 		Detail:              detail,
 		EvidenceDigest:      tr.Digest(),
 		AgentCommonName:     agentName,
 		ObservedAt:          observedAt,
-	})
+	}
+	if eventID != "" {
+		return s.orch.RecordEndpointVerificationWithEventID(ctx, tenantID, eventID, observation)
+	}
+	return s.orch.RecordEndpointVerification(ctx, tenantID, observation)
 }
 
 // recordVerificationReceipt writes the third state into the delivery evidence
@@ -219,13 +210,7 @@ func (s *Server) appendEndpointVerification(
 //
 // The same shape the dry-run result uses (D5): a distinct idempotency key
 // suffix, because "we asked" and "here is the answer" are different rows.
-func (s *Server) recordVerificationReceipt(
-	ctx context.Context, tenantID, idempotencyKey string,
-	intent relay.DeployIntent, tr transport.ProbeTranscript, detail string,
-) {
-	if s.orch == nil {
-		return
-	}
+func deploymentVerificationReceipt(intent relay.DeployIntent, tr transport.ProbeTranscript, detail string) store.ConnectorDeliveryReceipt {
 	status := servedstatus.ConnectorVerified
 	reason := "endpoint_serving_deployed_identity"
 	if !tr.Reached {
@@ -247,7 +232,7 @@ func (s *Server) recordVerificationReceipt(
 	if identityID != "" {
 		identityIDRef = &identityID
 	}
-	_, _ = s.orch.RecordConnectorDelivery(ctx, tenantID, store.ConnectorDeliveryReceipt{
+	return store.ConnectorDeliveryReceipt{
 		IdentityID:  identityIDRef,
 		Destination: "connector.deploy",
 		Connector:   intent.Connector,
@@ -255,110 +240,10 @@ func (s *Server) recordVerificationReceipt(
 		// The fingerprint recorded is the one that was DEPLOYED, so the receipt
 		// answers "was this certificate served" rather than "what is out there".
 		// The observed one lives in the endpoint verification row beside it.
-		Fingerprint:    tr.ExpectedFingerprint,
-		Status:         status,
-		Attempts:       1,
-		Reason:         reason,
-		Detail:         detail,
-		IdempotencyKey: idempotencyKey + ":verified",
-	})
-}
-
-// raiseVerificationAlert enqueues an operator alert for a divergence.
-//
-// Through the outbox, in the tenant's own transaction, like every other
-// external effect (AN-6). Never dispatched inline: a verification sweep can
-// find many endpoints at once, and a synchronous fan-out would put the
-// notification bulkhead's budget on the critical path of an agent's report.
-//
-// The severity mapping is where this is easy to get wrong. There are two
-// severity scales in this codebase — the ROUTING scale (low, informational,
-// warning, critical) and the FINDING scale (low, medium, high, critical) — and
-// they are not the same vocabulary. "high" is not a routable severity: it
-// normalizes to "low", which would route a production listener serving the
-// wrong certificate exactly like an informational notice. So this maps onto the
-// routing scale explicitly rather than passing a finding severity through.
-func (s *Server) raiseVerificationAlert(
-	ctx context.Context, tenantID string, v store.EndpointVerification,
-) {
-	if s.store == nil || s.outbox == nil {
-		return
+		Fingerprint: tr.ExpectedFingerprint,
+		Status:      status,
+		Attempts:    1,
+		Reason:      reason,
+		Detail:      detail,
 	}
-	kind := notify.KindEndpointVerificationFailed
-	severity := notify.AlertSeverityCritical
-	detail := v.Detail
-	if !v.Reached {
-		// Unreachable is real but it is not the same emergency: a probe that
-		// could not connect may be a firewall, a maintenance window, or a relay
-		// that lost its route. Paging someone at critical for that teaches them
-		// to ignore the channel, which costs more than the missed signal.
-		kind = notify.KindEndpointUnreachable
-		severity = notify.AlertSeverityWarning
-		if detail == "" {
-			detail = "verification could not reach the endpoint"
-		}
-	} else if v.LastGoodAt.IsZero() {
-		// Never once observed serving correctly. Still critical, but the detail
-		// says so: an endpoint that has never worked is a deployment that was
-		// never finished, not a regression, and it is fixed by different means.
-		detail = detail + " (this endpoint has never been observed serving the expected identity)"
-	}
-
-	payload, err := json.Marshal(notify.Alert{
-		Kind:            kind,
-		TenantID:        tenantID,
-		Severity:        severity,
-		EndpointAddress: v.Address,
-		Vantage:         v.Vantage,
-		Mismatch:        v.Mismatch,
-		LastGoodAt:      v.LastGoodAt,
-		Subject:         v.Address,
-		Detail:          detail,
-	})
-	if err != nil {
-		return
-	}
-	// The idempotency key deliberately includes the mismatch class and the
-	// vantage but NOT a timestamp. A listener serving the wrong certificate for
-	// a week should produce one open alert, not one per sweep — and when the
-	// class changes (an expired certificate replaced by a wrong one) that is
-	// genuinely new information and gets its own.
-	idem := "endpoint-verify:" + v.EndpointID + ":" + v.Vantage + ":" + v.Mismatch + ":" + v.ObservedFingerprint
-	_ = s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		_, err := s.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
-			TenantID: tenantID, Destination: notify.DestinationVerification,
-			IdempotencyKey: idem, Payload: payload,
-		})
-		return err
-	})
-}
-
-// lastGoodForEndpoint reads when this endpoint was last observed serving what
-// it should, from the control plane's own state.
-//
-// Read AFTER the observation is appended, deliberately: a passing observation
-// has already updated last_good_at, and a failing one leaves the previous value
-// intact. So this returns "the last time this worked" in both cases, which is
-// the number the alert needs — zero means it has never worked at all.
-func (s *Server) lastGoodForEndpoint(ctx context.Context, tenantID, endpointID, vantage string) time.Time {
-	if s.store == nil {
-		return time.Time{}
-	}
-	rows, err := s.store.ListEndpointVerifications(ctx, tenantID)
-	if err != nil {
-		return time.Time{}
-	}
-	for _, r := range rows {
-		if r.EndpointID == endpointID && r.Vantage == vantage {
-			return r.LastGoodAt
-		}
-	}
-	return time.Time{}
-}
-
-func unixOrZeroTime(sec int64) time.Time {
-	if sec == 0 {
-		return time.Time{}
-	}
-	return time.Unix(sec, 0).UTC()
 }

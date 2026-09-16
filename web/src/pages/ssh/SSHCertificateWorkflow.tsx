@@ -26,7 +26,7 @@ function extensionMap(input: string): Record<string, string> {
   return Object.fromEntries(splitValues(input).map((name) => [name, ""]));
 }
 
-export function SSHCertificateWorkflow() {
+export function SSHCertificateWorkflow({ onIssued }: { onIssued?: (certificate: SSHCertificate) => void }) {
   const { t } = useTranslation();
   const previewAction = useCapabilityExecution("F43", "previewSSHCertificate");
   const issueAction = useCapabilityExecution("F43", "issueSSHCertificate");
@@ -108,6 +108,7 @@ export function SSHCertificateWorkflow() {
     try {
       const value = await api.issueSSHCertificate(request);
       setIssued(value);
+      onIssued?.(value);
       setPublicKey("");
       setStep(2);
     } catch (cause) {

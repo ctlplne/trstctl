@@ -95,8 +95,9 @@ type ProbeTranscript struct {
 	// in served order.
 	ExpectedChainDigest string
 	ObservedChainDigest string
-	// NotBeforeUnix and NotAfterUnix are the served validity window, 0 when
-	// nothing was served.
+	// NotBeforeUnix and NotAfterUnix are the parsed peer validity window.
+	// Zero is a valid Unix epoch date when ObservedFingerprint is present;
+	// both are zero when no peer certificate could be parsed.
 	NotBeforeUnix int64
 	NotAfterUnix  int64
 	// Mismatch is the verdict class, empty when the identity matched.

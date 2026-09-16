@@ -18,8 +18,8 @@ import (
 
 // A completed historical event needs its exact receipt checked, not repeated
 // projection setup. Count actual driver calls instead of imposing a flaky wall
-// clock limit. The budget allows two round trips per added retained event and
-// leaves implementations free to batch those reads or use a verified index.
+// clock limit. A modest growth in completed history must fit in one additional
+// receipt read, while every immutable envelope is still checked exactly.
 func TestCertificateRecoveryCompletedHistoryHasBoundedDatabaseWork(t *testing.T) {
 	s, log, _ := recordingSpine(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 40*time.Second)
@@ -71,8 +71,8 @@ func TestCertificateRecoveryCompletedHistoryHasBoundedDatabaseWork(t *testing.T)
 		appendImport(i)
 	}
 	largeCalls, largeHead := measure()
-	if growth := largeCalls - smallCalls; largeCalls < smallCalls || growth > 2*(largeHead-smallHead) {
-		t.Fatalf("completed history added %d SQL calls for %d retained events; want at most two per event (small=%d large=%d)", growth, largeHead-smallHead, smallCalls, largeCalls)
+	if growth := largeCalls - smallCalls; largeCalls < smallCalls || growth > 1 {
+		t.Fatalf("completed history added %d SQL calls for %d retained events; want at most one additional receipt read (small=%d large=%d)", growth, largeHead-smallHead, smallCalls, largeCalls)
 	}
 
 	// An existing row is not proof by itself. A corrupted envelope digest must

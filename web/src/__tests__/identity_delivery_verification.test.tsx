@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppQueryProvider } from "@/lib/query";
 import { IdentityActivityEvidence } from "@/pages/identities/IdentityActivityEvidence";
 import type { ConnectorDelivery, Identity } from "@/lib/api";
+import { IntlProvider } from "@/i18n/I18nProvider";
 
 const { deliveries } = vi.hoisted(() => ({ deliveries: vi.fn() }));
 vi.mock("@/lib/api", async (original) => {
@@ -41,15 +42,24 @@ const verification: ConnectorDelivery = {
   detail: "Listener served the exact leaf",
   rollback_ref: "",
 };
-function show(items: ConnectorDelivery[], next_cursor = "") {
+function show(items: ConnectorDelivery[], next_cursor = "", timeZone = "UTC") {
   deliveries.mockResolvedValue({ items, next_cursor });
   render(
-    <AppQueryProvider>
-      <IdentityActivityEvidence identity={identity} />
-    </AppQueryProvider>,
+    <IntlProvider initialLocale="en-US" initialTimeZone={timeZone}>
+      <AppQueryProvider>
+        <IdentityActivityEvidence identity={identity} />
+      </AppQueryProvider>
+    </IntlProvider>,
   );
 }
 describe("delivery retries and separate endpoint verification", () => {
+  it("shows the exact verification observation in the operator's selected time zone", async () => {
+    show([verification, delivery], "", "America/New_York");
+    await screen.findByText("delivered java-keystore/payments after 5 attempts");
+    const observation = screen.getByText("Endpoint verification").closest("li")!;
+    expect(observation).toHaveTextContent(/Sep 13, 2026,\s9:33\sAM/);
+    expect(observation).not.toHaveTextContent(/1:33\sPM/);
+  });
   it.each(["verified", "verify_failed"] as const)("retains five delivery attempts beside a later %s observation", async (status) => {
     show([{ ...verification, status }, delivery]);
     const actual = await screen.findByText("delivered java-keystore/payments after 5 attempts");

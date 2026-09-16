@@ -4,7 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildInitialRequestDraft, buildOperations, type OpenAPIDocument } from "@/pages/ApiExplorer";
 import { apiWorkflowCoverage, type ApiWorkflowCoverage } from "@/lib/apiWorkflowCoverage";
-import { appRoutePaths, contextualRouteItems, navGroups, realGuiSurfaces, taskNavItems } from "@/lib/navigation";
+import { appRoutePaths, permissionAnyForPath, contextualRouteItems, navGroups, realGuiSurfaces, taskNavItems } from "@/lib/navigation";
 
 interface FeatureMapBacklog {
   items: Array<{
@@ -148,7 +148,15 @@ describe("route-level product surface parity", () => {
 
     for (const item of allItems) {
       expect(registered.has(basePath(item.to))).toBe(true);
-      expect(item.featureIds.length).toBeGreaterThan(0);
+      // Offline license inspection has no product-feature prerequisite; its
+      // explicit access permission must still be enforced. Other routes keep
+      // the feature coverage contract.
+      if (basePath(item.to) === "/admin/editions") {
+        expect(item.featureIds).toEqual([]);
+        expect(permissionAnyForPath(item.to)).toEqual(["access:read"]);
+      } else {
+        expect(item.featureIds.length).toBeGreaterThan(0);
+      }
     }
     for (const item of sidebarItems) {
       expect(item.mode).toBe("real");

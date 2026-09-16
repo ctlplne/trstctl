@@ -98,6 +98,8 @@ func (s *Store) GuardCertificateRecordingMetadataTx(ctx context.Context, tx pgx.
 // Projectors take it before their row/fingerprint locks; a recording command
 // holds it before scanning the log and before any irreversible append.
 func (s *Store) LockCertificateMetadataOrderTx(ctx context.Context, tx pgx.Tx, tenantID string) error {
-	_, err := tx.Exec(ctx, `SELECT lock_certificate_metadata_order($1::uuid)`, tenantID)
+	_, err := tx.Exec(ctx, certificateMetadataOrderLockSQL, tenantID)
 	return err
 }
+
+const certificateMetadataOrderLockSQL = `SELECT lock_certificate_metadata_order($1::uuid)`

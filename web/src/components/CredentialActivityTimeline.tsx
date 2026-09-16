@@ -1,7 +1,6 @@
 import type { ConnectorDelivery, RotationRun } from "@/lib/api";
-import { translateNow } from "@/i18n/I18nProvider";
+import { translateNow, useTranslation } from "@/i18n/I18nProvider";
 import { Num } from "@/components/typography";
-import { formatDateTime } from "@/i18n/format";
 
 function shortFingerprint(value?: string): string {
   if (!value) return "-";
@@ -25,6 +24,7 @@ export function CredentialActivityTimeline({
   rotationNotice?: string;
   rollbackNotice?: string;
 }) {
+  const { formatDateTime } = useTranslation();
   const rows = [
     { label: translateNow("source.lifecycle.accepted.436d4137b8"), value: "state is projected from the event log" },
     {

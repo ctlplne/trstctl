@@ -36,7 +36,7 @@ import (
 // check a claim about absence is to go and look.
 
 // seedRenewalJob queues an endpoint.renew job bound to the given names.
-func seedRenewalJob(t *testing.T, ctx context.Context, h *roleHarness, idemKey string, names []string) {
+func seedRenewalJob(t *testing.T, ctx context.Context, h *roleHarness, idemKey string, names []string, verifyAddress ...string) {
 	t.Helper()
 	// A real identity, because the CSR is issued AGAINST one: the certificate
 	// this produces is recorded on the identity's own history, which is what
@@ -54,13 +54,19 @@ func seedRenewalJob(t *testing.T, ctx context.Context, h *roleHarness, idemKey s
 	// This source fixture targets job authorization and signed custody. The
 	// identity stays requested; the test-only queue seed below does not prove
 	// deployment or the end-to-end lifecycle scheduler's job creation.
-	payload, err := json.Marshal(RelayDeployIntent{
+	intent := RelayDeployIntent{
 		Connector:         "nginx",
 		Target:            "edge-1",
 		IdentityID:        identity.ID,
 		SubjectCommonName: names[0],
 		SubjectDNSNames:   names,
-	})
+	}
+	if len(verifyAddress) != 0 {
+		intent.TargetID = identity.ID
+		intent.VerifyAddress = verifyAddress[0]
+		intent.VerifyServerName = names[0]
+	}
+	payload, err := json.Marshal(intent)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +237,7 @@ func TestServedHostGeneratedRenewalLeavesNoKeyMaterialBehind(t *testing.T) {
 func TestServedHostRenewalReceiptRequiresAndBindsCustodyAUD25(t *testing.T) {
 	ctx := context.Background()
 	h := newRoleHarness(t, []string{mtls.AgentRoleHost}, agentJobKindEndpointRenew)
-	seedRenewalJob(t, ctx, h, "renew:custody-receipt", []string{"custody.example.test"})
+	seedRenewalJob(t, ctx, h, "renew:custody-receipt", []string{"custody.example.test"}, "custody.example.test:443")
 	job := claimOneRenewal(t, ctx, h)
 
 	key, err := crypto.GenerateHostSubjectKey("custody.example.test", []string{"custody.example.test"})
@@ -246,9 +252,10 @@ func TestServedHostRenewalReceiptRequiresAndBindsCustodyAUD25(t *testing.T) {
 		t.Fatalf("sign renewal CSR: %v", err)
 	}
 
+	detail, digest := simulatedHostVerification(t, h, job, issued.Fingerprint, transport.JobOutcomeVerified)
 	id := h.identity.Identity()
 	omitted, err := transport.SignedReport(id, id.TenantID(), id.CommonName(), job.JobID, job.Attempt,
-		transport.JobOutcomeVerified, "", "sha256:probe", time.Now().UTC().Unix())
+		transport.JobOutcomeVerified, detail, digest, time.Now().UTC().Unix())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +271,7 @@ func TestServedHostRenewalReceiptRequiresAndBindsCustodyAUD25(t *testing.T) {
 	wrongRecord.Storage = custody.StorageOSStore
 	wrongRecord.Exportable = custody.NonExportable
 	wrong, err := transport.SignedReportWithCustody(id, id.TenantID(), id.CommonName(), job.JobID, job.Attempt,
-		transport.JobOutcomeVerified, "", "sha256:probe", issued.Fingerprint, wrongRecord, time.Now().UTC().Unix())
+		transport.JobOutcomeVerified, detail, digest, issued.Fingerprint, wrongRecord, time.Now().UTC().Unix())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -273,7 +280,7 @@ func TestServedHostRenewalReceiptRequiresAndBindsCustodyAUD25(t *testing.T) {
 	}
 
 	tampered, err := transport.SignedReportWithCustody(id, id.TenantID(), id.CommonName(), job.JobID, job.Attempt,
-		transport.JobOutcomeVerified, "", "sha256:probe", issued.Fingerprint, record, time.Now().UTC().Unix())
+		transport.JobOutcomeVerified, detail, digest, issued.Fingerprint, record, time.Now().UTC().Unix())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,7 +290,7 @@ func TestServedHostRenewalReceiptRequiresAndBindsCustodyAUD25(t *testing.T) {
 	}
 
 	valid, err := transport.SignedReportWithCustody(id, id.TenantID(), id.CommonName(), job.JobID, job.Attempt,
-		transport.JobOutcomeVerified, "", "sha256:probe", issued.Fingerprint, record, time.Now().UTC().Unix())
+		transport.JobOutcomeVerified, detail, digest, issued.Fingerprint, record, time.Now().UTC().Unix())
 	if err != nil {
 		t.Fatal(err)
 	}

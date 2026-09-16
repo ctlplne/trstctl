@@ -20,6 +20,7 @@ import {
 } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
 import { SSHCertificateWorkflow } from "@/pages/ssh/SSHCertificateWorkflow";
+import { SSHRevocationWorkflow, type SSHRevocationSeed } from "@/pages/ssh/SSHRevocationWorkflow";
 
 const rolloutStatuses: SSHTrustRolloutRequest["status"][] = ["planned", "validating", "health_passed", "rolled_back", "failed"];
 
@@ -116,9 +117,7 @@ export function SSHTrust() {
   const [principals, setPrincipals] = useState("web");
   const [sourceAddresses, setSourceAddresses] = useState("10.0.0.0/24");
   const [forceCommand, setForceCommand] = useState("/usr/local/bin/deploy");
-  const [revokeSerial, setRevokeSerial] = useState("");
-  const [revokeKeyId, setRevokeKeyId] = useState("");
-  const [revokeReason, setRevokeReason] = useState("operator requested revocation");
+  const [revocationSeed, setRevocationSeed] = useState<SSHRevocationSeed>();
   const [retireHost, setRetireHost] = useState("edge-1.internal");
   const [retireSourceId, setRetireSourceId] = useState("");
   const [retireRunId, setRetireRunId] = useState("");
@@ -241,8 +240,7 @@ export function SSHTrust() {
       attestedRetryKey.current ??= globalThis.crypto.randomUUID();
       const result = await api.issueAttestedSSHUserCert(attestedRequest, attestedRetryKey.current);
       setIssuedCert(result);
-      setRevokeSerial(String(result.serial));
-      setRevokeKeyId(result.key_id || "");
+      setRevocationSeed({ serial: result.serial, key_id: result.key_id || "" });
       // Proofs and public keys are inputs, not browser evidence. Clear both as
       // soon as issuance succeeds so a later screenshot or shared session
       // cannot recover the attestation payload.
@@ -260,21 +258,6 @@ export function SSHTrust() {
       );
     } finally {
       setAttestedIssuing(false);
-    }
-  };
-
-  const revokeCertificate = async (event: FormEvent) => {
-    event.preventDefault();
-    try {
-      const next = await api.revokeSSHCertificate({
-        serial: numericOrUndefined(revokeSerial),
-        key_id: revokeKeyId || undefined,
-        reason: revokeReason || undefined,
-      });
-      setStatus(next);
-      setActionResult(`krl:${next.krl_version}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -357,7 +340,7 @@ export function SSHTrust() {
                 <dd className="font-mono text-sm">{status.krl_version}</dd>
               </div>
               <div>
-                <dt className="text-xs text-muted-foreground">{translateNow("source.revoked.certs.267c0b721b")}</dt>
+                <dt className="text-xs text-muted-foreground">{t("sshTrust.revoke.entries")}</dt>
                 <dd className="font-mono text-sm">{status.revoked_count}</dd>
               </div>
               <div>
@@ -455,7 +438,7 @@ export function SSHTrust() {
 
           {activeTask === "certificate" && (
             <div id="task-panel-certificate" className="border-y border-border py-4">
-              <SSHCertificateWorkflow />
+              <SSHCertificateWorkflow onIssued={setRevocationSeed} />
             </div>
           )}
 
@@ -747,34 +730,13 @@ export function SSHTrust() {
 
           {activeTask === "remove" && (
             <div id="task-panel-remove" className="grid gap-4">
-              <section aria-labelledby="krl-heading" className="grid gap-3 border-y border-border py-4">
-                <div>
-                  <h2 id="krl-heading" className="text-title font-semibold">
-                    {translateNow("source.krl.revocation.7e579fb6c5")}
-                  </h2>
-                </div>
-                <form
-                  aria-label={translateNow("source.revoke.ssh.certificate.63b6e335c3")}
-                  className="ui-panel grid gap-3 md:grid-cols-3"
-                  onSubmit={(event) => void revokeCertificate(event)}
-                >
-                  <label className="grid gap-1 text-sm">
-                    {translateNow("source.serial.8ea0949377")}
-                    <input className="ui-input" inputMode="numeric" value={revokeSerial} onChange={(event) => setRevokeSerial(event.target.value)} />
-                  </label>
-                  <label className="grid gap-1 text-sm">
-                    {translateNow("source.key.id.d54d56ee0a")}
-                    <input className="ui-input" value={revokeKeyId} onChange={(event) => setRevokeKeyId(event.target.value)} />
-                  </label>
-                  <label className="grid gap-1 text-sm">
-                    {translateNow("source.reason.f81ab834de")}
-                    <input className="ui-input" value={revokeReason} onChange={(event) => setRevokeReason(event.target.value)} />
-                  </label>
-                  <Button className="md:col-span-3" type="submit" disabled={!revokeSerial && !revokeKeyId}>
-                    {translateNow("source.revoke.and.publish.krl.d5e98fd13c")}
-                  </Button>
-                </form>
-              </section>
+              <SSHRevocationWorkflow
+                initialCertificate={revocationSeed}
+                onPublished={(next) => {
+                  setStatus(next);
+                  setActionResult(`krl:${next.krl_version}`);
+                }}
+              />
 
               <section aria-labelledby="retire-heading" className="grid gap-3 border-y border-border py-4">
                 <div>

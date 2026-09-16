@@ -198,7 +198,7 @@ func servedPAMOpen(t *testing.T, h *servedHarness, token, idemKey string, req ma
 func startPAMPostgres(t *testing.T) (string, func()) {
 	t.Helper()
 	port := freePAMPort(t)
-	dir, err := os.MkdirTemp("/private/tmp", "trstctl-pam-pg-*")
+	dir, err := os.MkdirTemp("", "trstctl-pam-pg-*")
 	if err != nil {
 		t.Fatal(err)
 	}

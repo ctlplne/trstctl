@@ -5115,6 +5115,14 @@ GraphNode = TypedDict(
     total=False,
 )
 
+GraphQueryRequest = TypedDict(
+    'GraphQueryRequest',
+    {
+        'query': str,
+    },
+    total=False,
+)
+
 GraphQueryResult = TypedDict(
     'GraphQueryResult',
     {

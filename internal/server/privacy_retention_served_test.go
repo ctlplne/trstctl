@@ -478,7 +478,7 @@ func assertNoRawRetentionPII(t *testing.T, ctx context.Context, st *store.Store,
 // real upstream revocation. Other surfaces remain direct stale-data fixtures.
 func seedRetainedPrivacyCertificate(t *testing.T, ctx context.Context, st *store.Store, log *events.Log, tenantID, raw string) {
 	t.Helper()
-	old := time.Now().UTC().Add(-900 * 24 * time.Hour)
+	old := time.Now().UTC().Truncate(time.Microsecond).Add(-900 * 24 * time.Hour)
 	ownerID := "22222222-2222-2222-2222-222222222222"
 	for _, item := range []struct {
 		typeName string

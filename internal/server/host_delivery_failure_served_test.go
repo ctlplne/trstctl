@@ -31,19 +31,25 @@ func TestServedInitialHostFailureIsVisibleBeforeCertificateAndAfterRecovery(t *t
 	if err != nil || !result.Accepted {
 		t.Fatalf("failure report: result=%v err=%v", result, err)
 	}
-	read := func() map[string]any {
+	read := func(expectedCount int) map[string]any {
 		t.Helper()
 		code, body := secretsReqKey(t, h.servedHarness, http.MethodGet,
 			"/api/v1/connectors/deliveries?identity_id="+identityID, token, "", nil)
 		var page struct {
 			Items []map[string]any `json:"items"`
 		}
-		if code != http.StatusOK || json.Unmarshal(body, &page) != nil || len(page.Items) != 1 {
+		if code != http.StatusOK || json.Unmarshal(body, &page) != nil || len(page.Items) != expectedCount {
 			t.Fatalf("identity failure evidence: HTTP%d body=%s", code, body)
 		}
-		return page.Items[0]
+		for _, item := range page.Items {
+			if item["outbox_id"] == float64(job.JobID) {
+				return item
+			}
+		}
+		t.Fatal("canonical delivery receipt is missing")
+		return nil
 	}
-	first := read()
+	first := read(1)
 	if first["status"] != "failed" || first["attempts"] != float64(1) || first["identity_id"] != identityID ||
 		first["outbox_id"] != float64(job.JobID) || first["fingerprint"] != "" ||
 		!strings.Contains(first["detail"].(string), detail) || first["rollback_ref"] != "" {
@@ -79,17 +85,18 @@ func TestServedInitialHostFailureIsVisibleBeforeCertificateAndAfterRecovery(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
+	probeDetail, digest := simulatedHostVerification(t, h, next, issued.Fingerprint, transport.JobOutcomeVerified)
 	id := h.identity.Identity()
 	record := custody.Record{Origin: custody.OriginHostAgent, Storage: custody.StorageFile, Exportable: custody.Exportable, GeneratedBy: id.CommonName()}
 	success, err := transport.SignedReportWithCustody(id, id.TenantID(), id.CommonName(), next.JobID, next.Attempt,
-		transport.JobOutcomeVerified, "", "", issued.Fingerprint, record, time.Now().UTC().Unix())
+		transport.JobOutcomeVerified, probeDetail, digest, issued.Fingerprint, record, time.Now().UTC().Unix())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if result, err := h.client.ReportJobResult(ctx, success); err != nil || !result.Accepted {
 		t.Fatalf("recovery result: result=%v err=%v", result, err)
 	}
-	last := read()
+	last := read(2)
 	if last["id"] != first["id"] || last["status"] != "delivered" || last["attempts"] != float64(2) || last["fingerprint"] != issued.Fingerprint {
 		t.Fatalf("recovery lost canonical receipt: %+v", last)
 	}

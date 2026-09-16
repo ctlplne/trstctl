@@ -195,6 +195,8 @@ func TestPerfLiveMutationHotPathsMeetSLOFromFreshStack(t *testing.T) {
 				}
 			}
 			result := measure(slo, ops[hotPath], 128, Observation{})
+			t.Logf("fresh served %s: p50=%.2fms p95=%.2fms p99=%.2fms throughput=%.2f/s errors=%d",
+				hotPath, result.P50MS, result.P95MS, result.P99MS, result.ThroughputPerSecond, result.Errors)
 			if !result.Met {
 				t.Fatalf("fresh served %s missed its SLO: p50=%.2fms p95=%.2fms p99=%.2fms throughput=%.2f/s failures=%v",
 					hotPath, result.P50MS, result.P95MS, result.P99MS, result.ThroughputPerSecond, result.Failures)

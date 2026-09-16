@@ -636,12 +636,14 @@ func TestApprovedCodeSigningRetryAfterAppendAndSQLRollbackUsesDurableFirstComman
 	// append-ACK/SQL-rollback fence even though code signing is not re-enabled in
 	// the replacement configuration. Recovery is authorization already granted,
 	// not a fresh feature-gate decision.
-	if _, err := Build(ctx, Deps{
+	restarted, err := Build(ctx, Deps{
 		Store: h.store, Log: h.log, Signer: h.signer,
 		SignAuthorizer: h.authz, CACertFile: h.caFile,
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("startup reconciliation of approved code-signing fence: %v", err)
 	}
+	cleanupServedServer(t, restarted)
 
 	retryCtx, cancel := context.WithCancel(ctx)
 	retryDone := make(chan error, 1)
@@ -931,12 +933,14 @@ func TestPrivacyRewrittenLegacyApprovedFenceWithoutRetainedEventRecoversExactNan
 			rewrittenFence.SemanticDigest, err, rewrittenHistorical)
 	}
 
-	if _, err := Build(ctx, Deps{
+	restarted, err := Build(ctx, Deps{
 		Store: h.store, Log: h.log, Signer: h.signer,
 		SignAuthorizer: h.authz, CACertFile: h.caFile,
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("restart reconciliation of legacy fence-before-append: %v", err)
 	}
+	cleanupServedServer(t, restarted)
 	retained, found, err := h.log.EventByID(ctx, event.ID)
 	if err != nil || !found || !retained.Time.Equal(originalTime) ||
 		bytes.Contains(retained.Data, []byte(subject)) || retained.Actor == nil ||

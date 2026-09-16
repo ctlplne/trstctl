@@ -81,7 +81,13 @@ in lockstep.
    You should see the owner created once; re-running the exact command returns the
    same owner rather than creating a second.
 
-5. Use a typed SDK instead of hand-rolling a client. trstctl ships supported Go
+5. Use a typed SDK instead of hand-rolling a client. For an evaluation or private-CA
+   server, start with the [complete Go connection example](../guides/go-sdk-private-ca.md).
+   It explicitly loads `TRSTCTL_CA_FILE` into the HTTP transport; setting the variable
+   alone does not configure `trstctl.New`. The abbreviated iterator below assumes
+   that the server CA is already trusted by your HTTP client.
+
+   Use the SDK trstctl ships supported Go
    and TypeScript SDKs pinned to the served contract, with auth, idempotency, retries
    (honoring `Retry-After`), problem+json errors, and cursor iterators built in:
 

@@ -85,10 +85,7 @@ func (ks *KeyStore) beginSignOperation(req *signerpb.SignRequest) ([]byte, bool,
 		return nil, false, err
 	}
 	defer secret.Wipe(sealed)
-	if err := os.MkdirAll(ks.signJournalDir(), 0o700); err != nil {
-		return nil, false, err
-	}
-	if err := syncDirectory(ks.dir); err != nil {
+	if err := ks.ensureSignJournalDirectory(syncDirectory); err != nil {
 		return nil, false, err
 	}
 	file, err := os.OpenFile(ks.signJournalPath(operationID), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
@@ -130,6 +127,55 @@ func (ks *KeyStore) beginSignOperation(req *signerpb.SignRequest) ([]byte, bool,
 	default:
 		return nil, false, fmt.Errorf("signing: unsupported journal state %q", existing.State)
 	}
+}
+
+func (ks *KeyStore) ensureSignJournalDirectory(syncDir func(string) error) error {
+	ks.journalDirMu.Lock()
+	defer ks.journalDirMu.Unlock()
+
+	if err := os.MkdirAll(ks.signJournalDir(), 0o700); err != nil {
+		return err
+	}
+	parent, directory, err := ks.statSignJournalDirectory()
+	if err != nil {
+		return err
+	}
+	// Only the directory's creation belongs to its parent. Every intent and
+	// completed result still syncs its file and the journal directory. Remember
+	// successful parent durability for these exact filesystem identities, and
+	// repeat it after restart or replacement of either directory.
+	if ks.journalParent != nil && ks.journalDirectory != nil &&
+		os.SameFile(ks.journalParent, parent) && os.SameFile(ks.journalDirectory, directory) {
+		return nil
+	}
+	ks.journalParent, ks.journalDirectory = nil, nil
+	if err := syncDir(ks.dir); err != nil {
+		return err
+	}
+	afterParent, afterDirectory, err := ks.statSignJournalDirectory()
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(parent, afterParent) || !os.SameFile(directory, afterDirectory) {
+		return errors.New("signing: journal directory changed during durability sync")
+	}
+	ks.journalParent, ks.journalDirectory = afterParent, afterDirectory
+	return nil
+}
+
+func (ks *KeyStore) statSignJournalDirectory() (os.FileInfo, os.FileInfo, error) {
+	parent, err := os.Stat(ks.dir)
+	if err != nil {
+		return nil, nil, err
+	}
+	directory, err := os.Stat(ks.signJournalDir())
+	if err != nil {
+		return nil, nil, err
+	}
+	if !parent.IsDir() || !directory.IsDir() {
+		return nil, nil, errors.New("signing: journal paths must be directories")
+	}
+	return parent, directory, nil
 }
 
 func (ks *KeyStore) completeSignOperation(req *signerpb.SignRequest, signature []byte) error {

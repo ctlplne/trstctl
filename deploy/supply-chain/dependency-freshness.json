@@ -1,19 +1,28 @@
 {
   "schema_version": 1,
-  "observed_at": "2026-08-27",
+  "observed_at": "2026-09-14",
   "max_report_age_days": 30,
   "source_commands": [
-    "go list -m -u all",
-    "go list -m -versions github.com/fergusstrange/embedded-postgres",
-    "npm --prefix web outdated --json",
-    "make vuln",
-    "npm --prefix web audit --omit=dev --audit-level=high"
+    "GET https://proxy.golang.org/github.com/fergusstrange/embedded-postgres/@latest",
+    "GET https://proxy.golang.org/github.com/nats-io/nats-server/v2/@latest",
+    "GET https://proxy.golang.org/github.com/open-policy-agent/opa/@latest",
+    "GET https://proxy.golang.org/github.com/tetratelabs/wazero/@latest",
+    "GET https://proxy.golang.org/github.com/jackc/pgx/v5/@latest",
+    "GET https://proxy.golang.org/google.golang.org/grpc/@latest",
+    "GET https://registry.npmjs.org/react/latest",
+    "GET https://registry.npmjs.org/react-dom/latest",
+    "GET https://registry.npmjs.org/react-router-dom/latest",
+    "GET https://registry.npmjs.org/vite/latest",
+    "GET https://registry.npmjs.org/vitest/latest",
+    "GET https://registry.npmjs.org/%40vitest%2Fcoverage-v8/latest",
+    "GET https://registry.npmjs.org/tailwindcss/latest",
+    "GET https://registry.npmjs.org/typescript/latest"
   ],
   "security_finding_links": {
-    "SEC-f19bdd00": "Go 1.26.6 closes the eight reachable standard-library advisories reported against Go 1.26.5, and golang.org/x/text v0.39.0 closed the earlier module advisory; make vuln must report zero called vulnerabilities.",
-    "SEC-de4eb072": "google.golang.org/grpc v1.82.1 closes reachable GO-2026-6061 transport and authorization paths; the whole-module vulnerability advisory and served gRPC transport tests verify the repair.",
-    "SEC-5b43d4b3": "react-router and react-router-dom 7.18.2 close GHSA-qwww-vcr4-c8h2 on the compatible React 18 line; the package floor and lockfile both resolve the patched pair.",
-    "S-7268c77e": "The compatible build-chain repairs are Vite 8.1.5, Vitest and coverage-v8 4.1.10, PostCSS 8.5.23, and patched brace-expansion 1.1.18/5.0.9 throughout the lockfile; the complete web audit reports zero vulnerabilities."
+    "SEC-f19bdd00": "Historical repair record, not a security result from this registry review: Go 1.26.6 closes the eight reachable standard-library advisories reported against Go 1.26.5, and golang.org/x/text v0.39.0 closed the earlier module advisory; make vuln must report zero called vulnerabilities.",
+    "SEC-de4eb072": "Historical repair record, not a security result from this registry review: google.golang.org/grpc v1.82.1 closes reachable GO-2026-6061 transport and authorization paths; the whole-module vulnerability advisory and served gRPC transport tests verify the repair.",
+    "SEC-5b43d4b3": "Historical repair record, not a security result from this registry review: react-router and react-router-dom 7.18.2 close GHSA-qwww-vcr4-c8h2 on the compatible React 18 line; the package floor and lockfile both resolve the patched pair.",
+    "S-7268c77e": "Historical repair record, not a security result from this registry review: The compatible build-chain repairs are Vite 8.1.5, Vitest and coverage-v8 4.1.10, PostCSS 8.5.23, and patched brace-expansion 1.1.18/5.0.9 throughout the lockfile; the complete web audit reports zero vulnerabilities."
   },
   "freshness_slos": [
     {
@@ -54,27 +63,31 @@
       "behind_since": "2026-06-21",
       "next_review_by": "2026-10-05",
       "deferral_until": "2026-10-05",
-      "rationale": "AUD-15 dated deferral. The 2026-09-06 review downloaded the authoritative latest Go module v1.34.0 (sum h1:c6RKhPKFsLVU+Tdxsx8q0UxCHsvZZ/iShAnljRBXs6s=) and reconfirmed that its go.mod and prepare_database.go still import github.com/lib/pq, so it cannot replace the security-maintained source fork without restoring the dependency the fork removes. The fork is compiled from third_party/embedded-postgres and affects local integration tests and single-node eval startup only. The upgrade must rebase the reviewed fork, preserve the pgx and mandatory-checksum-through-internal/crypto repairs, refresh committed archive pins, and refresh Trivy receipts together, so it is one reviewed change and not a source-version-only bump. The deferral is bounded to 29 days and must be reviewed again by 2026-10-05."
+      "rationale": "AUD-15 dated deferral. The 2026-09-06 review downloaded the authoritative latest Go module v1.34.0 (sum h1:c6RKhPKFsLVU+Tdxsx8q0UxCHsvZZ/iShAnljRBXs6s=) and reconfirmed that its go.mod and prepare_database.go still import github.com/lib/pq, so it cannot replace the security-maintained source fork without restoring the dependency the fork removes. The fork is compiled from third_party/embedded-postgres and affects local integration tests and single-node eval startup only. The upgrade must rebase the reviewed fork, preserve the pgx and mandatory-checksum-through-internal/crypto repairs, refresh committed archive pins, and refresh Trivy receipts together, so it is one reviewed change and not a source-version-only bump. The deferral is bounded to 29 days and must be reviewed again by 2026-10-05.",
+      "last_reviewed_at": "2026-09-14",
+      "version_source": "https://proxy.golang.org/github.com/fergusstrange/embedded-postgres/@latest"
     },
     {
       "ecosystem": "gomod",
       "name": "github.com/nats-io/nats-server/v2",
       "current_version": "v2.12.15",
-      "latest_observed_version": "v2.14.5",
+      "latest_observed_version": "v2.14.6",
       "update_type": "minor",
       "freshness_slo_class": "critical-go-runtime",
       "owner": "Spine/Events",
       "status": "accepted_deferral",
       "behind_since": "2026-06-21",
-      "next_review_by": "2026-09-12",
+      "next_review_by": "2026-09-16",
       "deferral_until": "2026-09-19",
-      "rationale": "AUD-15 dated deferral for the remaining v2.14 upgrade. QA moved the embedded server to the maintained v2.12.15 patch after the race detector proved that v2.11 read a stream name without the configuration lock during concurrent stream listing and reconfiguration. Embedded JetStream is the AN-2 event source of truth, so the later v2.14 landing still has to run replay, projection, chaos, outbox recovery, and storage-compatibility tests together."
+      "rationale": "2026-09-14 review: the Go proxy and upstream v2.14.6 release agree on the latest version. The installed v2.12.15 already contains the earlier race repair. The 2.14 upgrade changes filestore I/O failures into frozen, unhealthy streams and adds Raft backpressure; qualify replay, projection recovery, health reporting, backup/restore, and outbox recovery together on disposable copies before upgrading retained stores. No storage or performance qualification is inferred from a version bump. Sources: https://github.com/nats-io/nats-server/releases/tag/v2.14.6 and https://docs.nats.io/release-notes/upgrade-to-2.14 . The existing deferral still expires 2026-09-19; review the upgrade evidence by 2026-09-16.",
+      "last_reviewed_at": "2026-09-14",
+      "version_source": "https://proxy.golang.org/github.com/nats-io/nats-server/v2/@latest"
     },
     {
       "ecosystem": "gomod",
       "name": "github.com/open-policy-agent/opa",
       "current_version": "v1.4.0",
-      "latest_observed_version": "v1.19.1",
+      "latest_observed_version": "v1.20.2",
       "update_type": "minor",
       "freshness_slo_class": "critical-go-runtime",
       "owner": "Policy/Security",
@@ -82,7 +95,9 @@
       "behind_since": "2026-06-21",
       "next_review_by": "2026-09-26",
       "deferral_until": "2026-10-03",
-      "rationale": "AUD-15 dated deferral, the longest of the four because the gap is the largest: v1.4.0 against v1.18.2 is fourteen minors. OPA evaluates tenant policy in-process, so the upgrade must keep Rego behaviour, the policy property tests, and the not-reachable advisory documentation aligned. Deliberately not bundled with the others: a fourteen-minor jump that fails is not diagnosable inside a combined dependency change."
+      "rationale": "2026-09-14 registry review: installed v1.4.0, observed v1.20.2, a sixteen-minor gap. Preserve the existing deferral ending 2026-10-03 and review deadline 2026-09-26. Qualify actual tenant Rego semantics, policy property tests, cancellation and concurrency, and separately reassess advisory reachability before upgrading the in-process engine. No version upgrade or fresh vulnerability result is inferred from this metadata observation.",
+      "last_reviewed_at": "2026-09-14",
+      "version_source": "https://proxy.golang.org/github.com/open-policy-agent/opa/@latest"
     },
     {
       "ecosystem": "gomod",
@@ -94,23 +109,27 @@
       "owner": "Pluginhost/Security",
       "status": "accepted_deferral",
       "behind_since": "2026-06-21",
-      "next_review_by": "2026-09-12",
+      "next_review_by": "2026-09-16",
       "deferral_until": "2026-09-19",
-      "rationale": "AUD-15 dated deferral. A WASM sandbox upgrade can change capability and host-call behaviour, which is the security boundary third-party connectors run inside; it needs pluginhost conformance and sandbox regression tests in the same change. govulncheck reports zero called vulnerabilities on the current pin, so this is hygiene debt and not live exposure."
+      "rationale": "2026-09-14 review: the Go proxy and upstream release page still identify v1.12.0. Since v1.8.2, the runtime changed compiled-module lifetime, W^X handling, and host-module start behavior. internal/pluginhost/host.go relies on context interruption, compiled-module reuse, and separate per-plugin runtimes; qualify interrupt, healing, capability and concurrency tests on the actual target architectures before changing this sandbox. Source: https://github.com/wazero/wazero/releases . The existing deferral still expires 2026-09-19; review the upgrade evidence by 2026-09-16. This review is not a fresh vulnerability scan.",
+      "last_reviewed_at": "2026-09-14",
+      "version_source": "https://proxy.golang.org/github.com/tetratelabs/wazero/@latest"
     },
     {
       "ecosystem": "gomod",
       "name": "github.com/jackc/pgx/v5",
       "current_version": "v5.10.0",
-      "latest_observed_version": "v5.10.0",
+      "latest_observed_version": "v5.11.0",
       "update_type": "minor",
       "freshness_slo_class": "critical-go-runtime",
       "owner": "Store/Tenant-isolation",
-      "status": "current",
-      "behind_since": "",
+      "status": "planned",
+      "behind_since": "2026-09-14",
       "next_review_by": "2026-09-26",
       "deferral_until": "",
-      "rationale": "AUD-15: upgraded v5.9.2 -> v5.10.0, one minor and the cheapest row in the critical-go-runtime queue. pgx sits under every RLS-enforced PostgreSQL path, so the acceptance gate was the full internal/store suite including the RLS force inventory and the doctor ISO-1..ISO-7 isolation probes."
+      "rationale": "2026-09-14 first observation behind the public registry: installed v5.10.0, observed v5.11.0. Qualify row-level security, tenant-scoped transactions, connection budgets, migration and recovery on real PostgreSQL before changing this driver.",
+      "last_reviewed_at": "2026-09-14",
+      "version_source": "https://proxy.golang.org/github.com/jackc/pgx/v5/@latest"
     },
     {
       "ecosystem": "gomod",
@@ -124,55 +143,63 @@
       "behind_since": "",
       "next_review_by": "2026-09-26",
       "deferral_until": "",
-      "rationale": "SEC-de4eb072 upgraded the agent, SPIFFE, and signer RPC transport to the fixed v1.82.1 release. The 2026-08-27 observation found v1.83.2; it is scheduled as ordinary minor-version hygiene because govulncheck reports zero called vulnerabilities on the current pin. Its acceptance gate remains UDS, mTLS, workload, process-boundary, editions, and whole-module vulnerability testing."
+      "rationale": "2026-09-14 registry review: the installed v1.83.2 matches the observed latest version. The earlier SEC-de4eb072 transport repair is historical evidence, not a new vulnerability result. Keep UDS, mTLS, workload, process-boundary, editions and whole-module vulnerability checks in the next transport update.",
+      "last_reviewed_at": "2026-09-14",
+      "version_source": "https://proxy.golang.org/google.golang.org/grpc/@latest"
     },
     {
       "ecosystem": "npm",
       "name": "react",
       "current_version": "18.3.1",
-      "latest_observed_version": "19.2.8",
+      "latest_observed_version": "19.3.0",
       "update_type": "major",
       "freshness_slo_class": "web-runtime",
       "owner": "Web/Console",
       "status": "accepted_deferral",
       "behind_since": "2026-06-21",
-      "next_review_by": "2026-09-12",
+      "next_review_by": "2026-09-16",
       "deferral_until": "2026-09-19",
-      "rationale": "React 19 needs a console compatibility pass across routing, auth context, accessibility tests, and the embedded Vite bundle; it is tracked as planned work rather than Dependabot churn."
+      "rationale": "2026-09-14 review: the npm registry and React version page identify 19.3.0. The console already uses React 18.3.1 and createRoot; React 19 still changes error reporting and requires coordinated React DOM and type-package updates. Qualify authentication context, forms, accessibility, routing, the built console and its error handling together. Sources: https://react.dev/versions and https://react.dev/blog/2024/04/25/react-19-upgrade-guide . The existing deferral still expires 2026-09-19; review the coordinated upgrade evidence by 2026-09-16.",
+      "last_reviewed_at": "2026-09-14",
+      "version_source": "https://registry.npmjs.org/react/latest"
     },
     {
       "ecosystem": "npm",
       "name": "react-dom",
       "current_version": "18.3.1",
-      "latest_observed_version": "19.2.8",
+      "latest_observed_version": "19.3.0",
       "update_type": "major",
       "freshness_slo_class": "web-runtime",
       "owner": "Web/Console",
       "status": "accepted_deferral",
       "behind_since": "2026-06-21",
-      "next_review_by": "2026-09-12",
+      "next_review_by": "2026-09-16",
       "deferral_until": "2026-09-19",
-      "rationale": "React DOM moves with React; the acceptance gate is the full console test, coverage, build, and embedded-bundle drift check."
+      "rationale": "2026-09-14 review: npm identifies react-dom 19.3.0 with a peer dependency on react ^19.3.0. Upgrade it with React and the matching type packages, then run the full console tests, coverage, build, embed checks and browser journeys. Source: https://registry.npmjs.org/react-dom/latest and https://react.dev/blog/2024/04/25/react-19-upgrade-guide . The existing deferral still expires 2026-09-19; review the coordinated upgrade evidence by 2026-09-16.",
+      "last_reviewed_at": "2026-09-14",
+      "version_source": "https://registry.npmjs.org/react-dom/latest"
     },
     {
       "ecosystem": "npm",
       "name": "react-router-dom",
       "current_version": "7.18.2",
-      "latest_observed_version": "7.18.2",
-      "update_type": "security",
+      "latest_observed_version": "7.18.3",
+      "update_type": "patch",
       "freshness_slo_class": "web-runtime",
       "owner": "Web/Console",
-      "status": "current",
-      "behind_since": "",
+      "status": "planned",
+      "behind_since": "2026-09-14",
       "next_review_by": "2026-09-26",
       "deferral_until": "",
-      "rationale": "SEC-5b43d4b3: GitHub's GHSA-qwww-vcr4-c8h2 now names 7.18.2 as the patched 7.x release. The package floor and lockfile install react-router-dom and react-router 7.18.2, and the complete route, typecheck, lint, build, embedded-console, and live-browser gates verify the compatible repair."
+      "rationale": "2026-09-14 first observation behind the public registry: installed 7.18.2, observed 7.18.3. Qualify authenticated routes, deep links, redirects and the embedded console with the matching react-router package. Existing security repairs are historical evidence; this registry review is not a security scan.",
+      "last_reviewed_at": "2026-09-14",
+      "version_source": "https://registry.npmjs.org/react-router-dom/latest"
     },
     {
       "ecosystem": "npm",
       "name": "vite",
       "current_version": "8.1.5",
-      "latest_observed_version": "8.2.2",
+      "latest_observed_version": "8.3.0",
       "update_type": "minor",
       "freshness_slo_class": "web-runtime",
       "owner": "Web/Build",
@@ -180,35 +207,41 @@
       "behind_since": "2026-08-27",
       "next_review_by": "2026-09-26",
       "deferral_until": "",
-      "rationale": "S-7268c77e upgraded the release build tool to the patched v8.1.5 release. The 2026-08-27 observation found v8.2.2; it is scheduled as ordinary minor-version hygiene because the production npm audit is clean. The upgrade must pass generated API checks, bundle hashing, Docker build, and Go embed tests together."
+      "rationale": "2026-09-14 registry review: installed 8.1.5, observed 8.3.0. Behind_since remains 2026-08-27, when this repository first observed the version gap. Qualify generated API checks, the entire console build, asset hashes, Docker packaging and Go embedding together before upgrading. Security repairs recorded elsewhere are historical; this metadata review is not a fresh npm audit.",
+      "last_reviewed_at": "2026-09-14",
+      "version_source": "https://registry.npmjs.org/vite/latest"
     },
     {
       "ecosystem": "npm",
       "name": "vitest",
       "current_version": "4.1.11",
-      "latest_observed_version": "4.1.11",
-      "update_type": "patch",
+      "latest_observed_version": "5.0.0",
+      "update_type": "major",
       "freshness_slo_class": "web-runtime",
       "owner": "Web/Quality",
-      "status": "current",
-      "behind_since": "",
+      "status": "planned",
+      "behind_since": "2026-09-14",
       "next_review_by": "2026-09-26",
       "deferral_until": "",
-      "rationale": "The 2026-09-11 repository check finds vitest already pinned to 4.1.11 in package.json and package-lock.json, matching the latest version observed in this report. This corrects the installed-version record; the registry observation date and next review deadline are unchanged. Full web test and coverage gates remain required."
+      "rationale": "2026-09-14 first observation behind the public registry: installed 4.1.11, observed 5.0.0. Upgrade with the matching coverage-v8 package and qualify existing test execution, coverage and threshold enforcement before changing the runner.",
+      "last_reviewed_at": "2026-09-14",
+      "version_source": "https://registry.npmjs.org/vitest/latest"
     },
     {
       "ecosystem": "npm",
       "name": "@vitest/coverage-v8",
       "current_version": "4.1.11",
-      "latest_observed_version": "4.1.11",
-      "update_type": "patch",
+      "latest_observed_version": "5.0.0",
+      "update_type": "major",
       "freshness_slo_class": "web-runtime",
       "owner": "Web/Quality",
-      "status": "current",
-      "behind_since": "",
+      "status": "planned",
+      "behind_since": "2026-09-14",
       "next_review_by": "2026-09-26",
       "deferral_until": "",
-      "rationale": "The 2026-09-11 repository check finds @vitest/coverage-v8 already pinned to 4.1.11 in package.json and package-lock.json, matching the latest version observed in this report. This corrects the installed-version record; the registry observation date and next review deadline are unchanged. Full web test and coverage gates remain required."
+      "rationale": "2026-09-14 first observation behind the public registry: installed 4.1.11, observed 5.0.0. Upgrade with Vitest and verify source-map coverage, threshold enforcement and unchanged exclusion scope.",
+      "last_reviewed_at": "2026-09-14",
+      "version_source": "https://registry.npmjs.org/%40vitest%2Fcoverage-v8/latest"
     },
     {
       "ecosystem": "npm",
@@ -220,9 +253,11 @@
       "owner": "Web/Design-system",
       "status": "accepted_deferral",
       "behind_since": "2026-06-21",
-      "next_review_by": "2026-09-12",
+      "next_review_by": "2026-09-16",
       "deferral_until": "2026-09-19",
-      "rationale": "Tailwind v4 changes CSS generation and plugin behavior; upgrade must preserve the shadcn-style console shell and visual regression gates."
+      "rationale": "2026-09-14 review: npm still identifies 4.3.3. The repository uses the v3 PostCSS plugin and a JavaScript theme defining all console color, type, spacing and motion tokens. The v4 guide moves that plugin to @tailwindcss/postcss, changes CSS generation, and requires modern browser CSS support. Migrate the build and token configuration together and inspect real responsive, dark-mode and modal views before upgrading. Source: https://tailwindcss.com/docs/upgrade-guide . The existing deferral still expires 2026-09-19; review the visual/build evidence by 2026-09-16.",
+      "last_reviewed_at": "2026-09-14",
+      "version_source": "https://registry.npmjs.org/tailwindcss/latest"
     },
     {
       "ecosystem": "npm",
@@ -234,9 +269,12 @@
       "owner": "Web/Build",
       "status": "accepted_deferral",
       "behind_since": "2026-06-21",
-      "next_review_by": "2026-09-12",
+      "next_review_by": "2026-09-16",
       "deferral_until": "2026-09-19",
-      "rationale": "TypeScript 5.9.3 is two majors behind the published 7.0.2, with 6.0.3 as the intermediate stable release; this dated deferral is the only thing holding the row inside the 1-major gap cap. The pin is deliberate, not drift: web/ runs `npm run gen:api -- --check` and `tsc -p tsconfig.build.json` before Vite builds, so a 5 -> 6 -> 7 walk has to regenerate the OpenAPI types and keep the strict build, typecheck and lint gates green in one reviewed change rather than an isolated manifest bump. This row measures web/package-lock.json only; clients/sdk/typescript pins its own typescript 5.5.4 under a separate lockfile and is not covered here."
+      "rationale": "2026-09-14 review: npm still identifies 7.0.2. TypeScript 7 has no stable programmatic compiler API. Five repository scripts import the TypeScript API for i18n extraction/runtime generation, source-message usage, bundle checks and route evidence, so simply replacing 5.9.3 would break required tooling. First qualify the pinned intermediate hop 6.0.3, then the publisher-supported TypeScript 6 API compatibility package alongside the native 7 compiler; preserve generated types, ESLint, i18n and bundle checks. Source: https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/ . This row covers web/package-lock.json only. The existing two-major-gap deferral still expires 2026-09-19; review compatibility evidence by 2026-09-16.",
+      "last_reviewed_at": "2026-09-14",
+      "version_source": "https://registry.npmjs.org/typescript/latest"
     }
-  ]
+  ],
+  "observation_scope": "Fourteen tracked direct/version-fork rows only. Public registry metadata GETs were observed 2026-09-14; installed pins are checked against go.mod, the source fork and web/package-lock.json by the unchanged offline checker. This is neither an all-transitive-dependency inventory nor a vulnerability scan."
 }

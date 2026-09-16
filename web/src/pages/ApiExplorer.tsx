@@ -66,6 +66,7 @@ interface OpenAPIOperation {
   security?: Array<Record<string, string[]>>;
   "x-trstctl-permission"?: string;
   "x-trstctl-sensitive-response"?: boolean;
+  "x-trstctl-read-only"?: boolean;
 }
 
 export interface OpenAPIDocument {
@@ -127,8 +128,9 @@ function methodLabel(method: HTTPMethod): string {
   return method.toUpperCase();
 }
 
-function isUnsafe(method: HTTPMethod): boolean {
-  return method !== "get";
+function isUnsafe(entry: OperationEntry): boolean {
+  // Only an explicit server contract can classify a non-GET operation as a read.
+  return entry.method !== "get" && entry.operation["x-trstctl-read-only"] !== true;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -469,7 +471,7 @@ function curlExample(entry: OperationEntry): string {
     `  -H 'Authorization: Bearer $TRSTCTL_DOCS_TOKEN'`,
     `  -H 'Accept: application/json'`,
   ];
-  if (isUnsafe(entry.method)) lines.push(`  -H 'Idempotency-Key: ${newIdempotencyKey()}'`);
+  if (isUnsafe(entry)) lines.push(`  -H 'Idempotency-Key: ${newIdempotencyKey()}'`);
   if (entry.sampleBody !== undefined) {
     lines.push(`  -H 'Content-Type: application/json'`);
     lines.push(`  --data '${JSON.stringify(entry.sampleBody)}'`);
@@ -724,7 +726,7 @@ export function ApiExplorer() {
     runController.current = null;
     setDraft(buildInitialRequestDraft(selected, spec));
     setMutationConfirmed(false);
-    setRequestDetailsOpen(isUnsafe(selected.method));
+    setRequestDetailsOpen(isUnsafe(selected));
     setRunBusy(false);
     setResponse(null);
     setRunError(null);
@@ -798,7 +800,7 @@ export function ApiExplorer() {
   }
 
   async function runRequest() {
-    if (!selected || !testKey || !prepared.request || tokenExpired || keyRevoked || (isUnsafe(selected.method) && !mutationConfirmed)) return;
+    if (!selected || !testKey || !prepared.request || tokenExpired || keyRevoked || (isUnsafe(selected) && !mutationConfirmed)) return;
     setRunBusy(true);
     setRunError(null);
     setResponse(null);
@@ -839,7 +841,7 @@ export function ApiExplorer() {
   const tokenExpiry = testKey?.expires_at ? Date.parse(testKey.expires_at) : Number.NaN;
   const tokenExpired = Boolean(testKey && (!Number.isFinite(tokenExpiry) || tokenExpiry <= tokenNow));
   const keyUsable = Boolean(testKey && !tokenExpired && !keyRevoked && testKey.scopes.includes(selected?.permission ?? ""));
-  const canRun = Boolean(prepared.request && keyUsable && !runBusy && (!selected || !isUnsafe(selected.method) || mutationConfirmed));
+  const canRun = Boolean(prepared.request && keyUsable && !runBusy && (!selected || !isUnsafe(selected) || mutationConfirmed));
   const curl = selected ? curlExample(selected) : "";
   const sdk = selected ? sdkExample(selected) : "";
 
@@ -936,7 +938,7 @@ export function ApiExplorer() {
           <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)]">
             <div className="grid min-w-0 gap-4">
               <section className="ui-panel min-w-0 p-comfortable" aria-labelledby="api-operation-detail-heading">
-                <Eyebrow as="p">{isUnsafe(selected.method) ? t("apiExplorer.changesData") : t("apiExplorer.safeStartingPoint")}</Eyebrow>
+                <Eyebrow as="p">{isUnsafe(selected) ? t("apiExplorer.changesData") : t("apiExplorer.safeStartingPoint")}</Eyebrow>
                 <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h3 id="api-operation-detail-heading" className="text-title font-semibold">
@@ -1175,7 +1177,7 @@ export function ApiExplorer() {
                 )}
 
                 <div className="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3">
-                  {isUnsafe(selected.method) && prepared.request && (
+                  {isUnsafe(selected) && prepared.request && (
                     <label
                       htmlFor="api-explorer-confirm-mutation"
                       className="flex items-start gap-2 rounded-control border border-status-warning/30 bg-status-warning/10 px-3 py-2 text-sm"

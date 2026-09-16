@@ -447,9 +447,11 @@ export function EndpointBindingWorkflow({
                         : "connectors.binding.previewReady",
                 )}
               </h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {t(completed ? "connectors.binding.authorizedHelp" : attempted ? "connectors.binding.retryHelp" : "connectors.binding.zeroEffect")}
-              </p>
+              {completed || approvalPending || !attempted ? (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {t(completed ? "connectors.binding.authorizedHelp" : approvalPending ? "connectors.binding.retryHelp" : "connectors.binding.zeroEffect")}
+                </p>
+              ) : null}
             </div>
             <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
               <Fact label={t("connectors.binding.destination")} value={`${preview.target.name} — ${preview.target.connector}`} />
@@ -476,10 +478,14 @@ export function EndpointBindingWorkflow({
             {preview.approval_required && !completed ? <p className="text-sm text-muted-foreground">{t("connectors.binding.approvalHelp")}</p> : null}
             {attempted && !completed ? (
               <div className="grid gap-2 text-sm">
-                <p>{t("connectors.binding.retryHelp")}</p>
-                <Link className="font-medium text-primary underline" to="/approvals?status=pending" target="_blank" rel="noopener noreferrer">
-                  {t("connectors.binding.openApprovals")}
-                </Link>
+                {approvalPending ? (
+                  <>
+                    <p>{t("connectors.binding.retryHelp")}</p>
+                    <Link className="font-medium text-primary underline" to="/approvals?status=pending" target="_blank" rel="noopener noreferrer">
+                      {t("connectors.binding.openApprovals")}
+                    </Link>
+                  </>
+                ) : null}
                 <Fact label={t("connectors.binding.requestKey")} value={requestKey ?? ""} mono />
               </div>
             ) : null}

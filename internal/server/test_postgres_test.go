@@ -179,7 +179,7 @@ func resetServerTestStore(t *testing.T, st *store.Store) {
 		          discovery_segments, discovery_sources, discovery_schedules, discovery_runs, discovery_findings,
 		          notification_channels, notification_reads, notification_threshold_deliveries, notification_test_operations,
 		          notification_delivery_receipts, notification_routing_policies,
-		          connector_delivery_receipts, lifecycle_rotation_runs, remediation_playbook_runs,
+		          endpoint_verifications, connector_delivery_receipts, lifecycle_rotation_runs, remediation_playbook_runs,
 		          outbox_reconciliation_conflicts, incident_executions, incident_fleet_reissuance_runs,
 		          pam_sessions, nhi_access_review_campaigns, nhi_access_review_items,
 		          access_change_requests, access_change_request_decisions, compliance_report_schedules,

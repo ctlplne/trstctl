@@ -237,7 +237,7 @@ describe("SSH trust served workflow surface", () => {
 
     renderSSHTrust();
 
-    expect(await screen.findByText("Revoked certificates: 1 · Proof methods: 0")).toBeInTheDocument();
+    expect(await screen.findByText("Revocation entries: 1 · Proof methods: 0")).toBeInTheDocument();
     expect(screen.queryByText("1 revoked certificates · 0 proof methods available")).not.toBeInTheDocument();
   });
 
@@ -283,6 +283,12 @@ describe("SSH trust served workflow surface", () => {
     expect(disclosure).not.toHaveAttribute("open");
     await user.click(within(disclosure).getByText("Show public certificate"));
     expect(screen.getByText("ssh-ed25519-cert-v01@openssh.com AAAAHOST")).toBeInTheDocument();
+    await user.click(within(chooser).getByRole("button", { name: "Remove access" }));
+    expect(screen.getByLabelText("Certificate serial")).toHaveValue("43");
+    expect(screen.getByLabelText("Revocation scope")).toHaveValue("serial");
+    expect(screen.queryByLabelText("Key ID")).not.toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Revocation scope"), "key_id");
+    expect(screen.getByLabelText("Key ID")).toHaveValue("edge-1.internal");
   });
 
   it("reveals user-only restrictions and sends them in the exact preview", async () => {
@@ -361,6 +367,95 @@ describe("SSH trust served workflow surface", () => {
     expect(screen.queryByText(/retry in 1s/i)).not.toBeInTheDocument();
   });
 
+  it("reviews an exact serial without a key-ID wildcard and explains distribution", async () => {
+    const user = userEvent.setup();
+    renderSSHTrust();
+    const chooser = (await screen.findByRole("heading", { name: "Choose what you want to do" })).closest("section") as HTMLElement;
+    await user.click(within(chooser).getByRole("button", { name: "Remove access" }));
+    expect(screen.getByLabelText("Revocation scope")).toHaveValue("serial");
+    expect(screen.queryByLabelText("Key ID")).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText("Certificate serial"), " 42 ");
+    await user.click(screen.getByRole("button", { name: "Review revocation" }));
+    expect(apiMock.revokeSSHCertificate).not.toHaveBeenCalled();
+    expect(screen.getByText("Revoke serial 42. This request does not revoke other serials with the same key ID.")).toBeInTheDocument();
+    expect(
+      screen.getByText("This KRL matches certificates from any issuing CA. Check every consumer that uses this list before publishing."),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Revoke and publish KRL" }));
+    await waitFor(() => expect(apiMock.revokeSSHCertificate).toHaveBeenCalledWith({ serial: 42, reason: "operator requested revocation" }, expect.any(String)));
+    expect(await screen.findByRole("heading", { name: "KRL published" })).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "SSH revocation progress" })).toHaveAttribute("aria-valuenow", "67");
+    expect(
+      screen.getByText(
+        "Publish succeeded. Distribute the current KRL to every relying host and SSH client, then verify that the revoked certificate is rejected and replacement access works.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Revocation entries: 3 · Proof methods: 1")).toBeInTheDocument();
+  });
+
+  it.each(["key_id", "both"])("makes %s revocation scope explicit and omits unselected fields", async (scope) => {
+    const user = userEvent.setup();
+    renderSSHTrust();
+    const chooser = (await screen.findByRole("heading", { name: "Choose what you want to do" })).closest("section") as HTMLElement;
+    await user.click(within(chooser).getByRole("button", { name: "Remove access" }));
+    await user.selectOptions(screen.getByLabelText("Revocation scope"), scope);
+    await user.type(screen.getByLabelText("Key ID"), " shared-deployer ");
+    if (scope === "both") await user.type(screen.getByLabelText("Certificate serial"), "42");
+    await user.click(screen.getByRole("button", { name: "Review revocation" }));
+    expect(
+      screen.getByText(
+        "All certificates with key ID shared-deployer are blocked, including future replacements using that name. A replacement needs a different key ID.",
+      ),
+    ).toBeInTheDocument();
+    expect(apiMock.revokeSSHCertificate).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Revoke and publish KRL" }));
+    await waitFor(() =>
+      expect(apiMock.revokeSSHCertificate).toHaveBeenCalledWith(
+        { ...(scope === "both" ? { serial: 42 } : {}), key_id: "shared-deployer", reason: "operator requested revocation" },
+        expect.any(String),
+      ),
+    );
+  });
+
+  it.each(["0", "42.5", "-1", "1e3", "9007199254740993"])("refuses ambiguous serial %s before a mutation", async (serial) => {
+    const user = userEvent.setup();
+    renderSSHTrust();
+    const chooser = (await screen.findByRole("heading", { name: "Choose what you want to do" })).closest("section") as HTMLElement;
+    await user.click(within(chooser).getByRole("button", { name: "Remove access" }));
+    await user.type(screen.getByLabelText("Certificate serial"), serial);
+    await user.click(screen.getByRole("button", { name: "Review revocation" }));
+    expect(
+      await screen.findByText(
+        "Enter a positive whole-number serial no larger than 9007199254740991. Use the API for larger serials; the console must not round them.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Certificate serial")).toHaveAttribute("aria-invalid", "true");
+    expect(apiMock.revokeSSHCertificate).not.toHaveBeenCalled();
+  });
+
+  it("uses the edited review and keeps one idempotency key after an uncertain response", async () => {
+    apiMock.revokeSSHCertificate.mockRejectedValueOnce(new ApiError(503, JSON.stringify({ detail: "response lost after publish" })));
+    const user = userEvent.setup();
+    renderSSHTrust();
+    const chooser = (await screen.findByRole("heading", { name: "Choose what you want to do" })).closest("section") as HTMLElement;
+    await user.click(within(chooser).getByRole("button", { name: "Remove access" }));
+    await user.type(screen.getByLabelText("Certificate serial"), "42");
+    await user.click(screen.getByRole("button", { name: "Review revocation" }));
+    await user.click(screen.getByRole("button", { name: "Previous" }));
+    await user.clear(screen.getByLabelText("Certificate serial"));
+    await user.type(screen.getByLabelText("Certificate serial"), "43");
+    await user.click(screen.getByRole("button", { name: "Review revocation" }));
+    expect(screen.getByText("Revoke serial 43. This request does not revoke other serials with the same key ID.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Revoke and publish KRL" }));
+    expect(await screen.findByText(/response lost after publish/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Retry publication" }));
+    await screen.findByRole("heading", { name: "KRL published" });
+    const calls = apiMock.revokeSSHCertificate.mock.calls;
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toEqual(calls[0]);
+    expect(calls[0][0].serial).toBe(43);
+  });
+
   it("issues an attested user cert, revokes it into the KRL, and retires a host", async () => {
     const user = userEvent.setup();
     renderSSHTrust();
@@ -412,16 +507,12 @@ describe("SSH trust served workflow surface", () => {
     expect(await screen.findByLabelText("Issued SSH certificate")).toHaveValue("ssh-rsa-cert-v01@openssh.com AAAA");
     expect(screen.getByText(/approver ssh-approver/)).toBeInTheDocument();
     await user.click(within(chooser).getByRole("button", { name: "Remove access" }));
+    expect(screen.getByLabelText("Certificate serial")).toHaveValue("42");
+    expect(screen.getByLabelText("Revocation scope")).toHaveValue("serial");
+    await user.click(screen.getByRole("button", { name: "Review revocation" }));
     await user.click(screen.getByRole("button", { name: "Revoke and publish KRL" }));
 
-    await waitFor(() =>
-      expect(apiMock.revokeSSHCertificate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          serial: 42,
-          key_id: "jit-deployer",
-        }),
-      ),
-    );
+    await waitFor(() => expect(apiMock.revokeSSHCertificate).toHaveBeenCalledWith({ serial: 42, reason: "operator requested revocation" }, expect.any(String)));
     await user.click(screen.getByRole("button", { name: "Record host retired" }));
     await waitFor(() =>
       expect(apiMock.retireSSHHost).toHaveBeenCalledWith(

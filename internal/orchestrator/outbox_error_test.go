@@ -14,6 +14,10 @@ func (e classifiedOutboxTestError) Error() string             { return "attacker
 func (e classifiedOutboxTestError) SafeDeliveryClass() string { return e.class }
 
 func TestPersistedDeliveryErrorAcceptsOnlyClosedSafeClasses(t *testing.T) {
+	if got := persistedDeliveryError(classifiedOutboxTestError{class: "notification_receipt_binding_conflict"}); got != "notification_receipt_binding_conflict" {
+		t.Fatalf("retained receipt conflict class = %q", got)
+	}
+
 	if got := persistedDeliveryError(classifiedOutboxTestError{class: "notification_receiver_not_configured"}); got != "notification_receiver_not_configured" {
 		t.Fatalf("missing receiver class = %q", got)
 	}

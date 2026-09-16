@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/agent/relay"
+	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/ca/adcs"
@@ -359,6 +360,19 @@ func TestServedEnrollmentDiagnosticProveFixedQueuesAndLinksSignedResult(t *testi
 		t.Fatalf("signed result link = %d %s, want exact evidence digest", status, body)
 	}
 
+	assertServedValidity := func() {
+		t.Helper()
+		observed, err := h.store.GetEndpointVerification(ctx, h.tenant, queued.VerificationEndpointID, string(transport.VantageRelay))
+		if err != nil {
+			t.Fatal(err)
+		}
+		peer := repairedEndpoint.Certificate()
+		if !observed.NotBefore.Equal(peer.NotBefore) || !observed.NotAfter.Equal(peer.NotAfter) {
+			t.Fatalf("served validity = %s to %s, want exact peer window %s to %s", observed.NotBefore, observed.NotAfter, peer.NotBefore, peer.NotAfter)
+		}
+	}
+	assertServedValidity()
+
 	if err := h.store.UpsertTenant(ctx, store.Tenant{TenantID: servedDiagnosticTenantB, Name: "foreign diagnostic tenant"}); err != nil {
 		t.Fatal(err)
 	}
@@ -379,6 +393,7 @@ func TestServedEnrollmentDiagnosticProveFixedQueuesAndLinksSignedResult(t *testi
 		rebuilt.VerificationResultPath != proved.VerificationResultPath {
 		t.Fatalf("cold-rebuilt diagnostic = %+v, want exact signed green link", rebuilt)
 	}
+	assertServedValidity()
 }
 
 func TestServedEnrollmentDiagnosticWithoutExactRouteRefusesProveFixed(t *testing.T) {

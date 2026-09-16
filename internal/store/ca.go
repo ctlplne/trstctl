@@ -494,7 +494,7 @@ func (s *Store) ReserveKeyCeremonyApproval(ctx context.Context, tenantID, ceremo
 		if _, err := tx.Exec(ctx,
 			`INSERT INTO ca_ceremony_approvals (tenant_id, ceremony_id, custodian)
 			 VALUES ($1, $2, $3)
-			 ON CONFLICT (tenant_id, ceremony_id, custodian) DO NOTHING`,
+			 ON CONFLICT DO NOTHING`,
 			tenantID, ceremonyID, custodian); err != nil {
 			return err
 		}

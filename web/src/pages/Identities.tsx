@@ -283,10 +283,6 @@ function localDateTimeToISO(value: string): string {
   return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString();
 }
 
-function formatDate(value?: string): string {
-  return formatDateTimePolicy(value);
-}
-
 function displayValue(value: unknown): string {
   if (value == null) return "-";
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
@@ -1216,6 +1212,8 @@ function DeliveryEvidencePanel({
   partial: boolean;
   notice: string | null;
 }) {
+  const { locale, timeZone } = useTranslation();
+  const formatDate = (value?: string) => formatDateTimePolicy(value, { locale, timeZone });
   const loading = (!deliveries || !rotations) && !error;
   const loadedDeliveries = (deliveries ?? []).slice(0, 5);
   const loadedRotations = (rotations ?? []).slice(0, 5);
@@ -1392,6 +1390,8 @@ function IdentityDetailPanel({
   onReasonChange: (value: string) => void;
   onTransition: (to: TransitionTo, label: string, returnFocus?: HTMLButtonElement) => void;
 }) {
+  const { locale, timeZone } = useTranslation();
+  const formatDate = (value?: string) => formatDateTimePolicy(value, { locale, timeZone });
   const state = identity ? identityState(identity) : "";
   const kind = identity?.kind ? kindCopy[identity.kind] : null;
   const terminal = terminalMessage(state);

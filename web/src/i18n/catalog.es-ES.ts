@@ -8,18 +8,56 @@ import type { MessageKey } from "@/i18n/messages";
  * error, so every new message key still ships with its translation in the
  * same commit. */
 const esESCatalog = {
+  "sshTrust.revoke.choose": "Elegir el alcance de revocación",
+  "sshTrust.revoke.chooseBody": "Elija un número de serie, un ID de clave o ambos. Revise el efecto antes de publicar.",
+  "sshTrust.revoke.reviewHeading": "Revisar la retirada de acceso",
+  "sshTrust.revoke.reviewBody": "Esta revisión no ha hecho cambios. La publicación registra la revocación y actualiza la KRL descargable.",
+  "sshTrust.revoke.publishedStep": "Distribuir y verificar",
+  "sshTrust.revoke.publishedBody": "La retirada de acceso depende de que los consumidores carguen la lista de revocación actual.",
+  "sshTrust.revoke.progress": "Progreso de revocación SSH",
+  "sshTrust.revoke.scope": "Alcance de revocación",
+  "sshTrust.revoke.scopeSerial": "Un número de serie",
+  "sshTrust.revoke.scopeKeyID": "Todos los certificados con un ID de clave",
+  "sshTrust.revoke.scopeBoth": "Número de serie más todos los certificados con un ID de clave",
+  "sshTrust.revoke.serial": "Número de serie del certificado",
+  "sshTrust.revoke.keyIDHelp": "Coincide con el nombre del certificado, no con la huella de la clave pública. Afecta a todos los certificados coincidentes.",
+  "sshTrust.revoke.reasonHelp": "Explicación opcional que se conserva en el evento de auditoría.",
+  "sshTrust.revoke.reviewAction": "Revisar revocación",
+  "sshTrust.revoke.serialEffect": "Revocar el número de serie {serial}. Esta solicitud no revoca otros números de serie con el mismo ID de clave.",
+  "sshTrust.revoke.serialBothEffect": "Revocar el número de serie {serial} y todos los certificados que coincidan con el ID de clave indicado abajo.",
+  "sshTrust.revoke.keyIDEffect":
+    "Se bloquean todos los certificados con el ID de clave {keyID}, incluidos los futuros reemplazos con ese nombre. Un reemplazo necesita otro ID de clave.",
+  "sshTrust.revoke.anyCA": "Esta KRL coincide con certificados de cualquier CA emisora. Compruebe todos los consumidores de esta lista antes de publicar.",
+  "sshTrust.revoke.noReason": "No se indicó un motivo",
+  "sshTrust.revoke.distributionBoundary":
+    "Publicar no distribuye la KRL, no termina las sesiones SSH existentes ni demuestra su aplicación en los hosts. Este flujo no permite deshacer una revocación.",
+  "sshTrust.revoke.failed": "No se pudo confirmar la publicación de la KRL",
+  "sshTrust.revoke.retryHelp":
+    "Reintentar envía la misma solicitud revisada y el mismo Idempotency-Key. Compruebe el historial de auditoría si la publicación ya pudo completarse.",
+  "sshTrust.revoke.retryAction": "Reintentar publicación",
+  "sshTrust.revoke.published": "KRL publicada",
+  "sshTrust.revoke.nextSteps":
+    "Publicación completada. Distribuya la KRL actual a todos los hosts y clientes SSH que confíen en ella. Después, verifique que el certificado revocado se rechaza y que el acceso de reemplazo funciona.",
+  "sshTrust.revoke.entries": "Entradas de revocación",
+  "sshTrust.revoke.countHelp": "El recuento indica las entradas distintas de número de serie e ID de clave, no la cantidad de certificados afectados.",
+  "sshTrust.revoke.download": "Descargar la KRL actual",
+  "sshTrust.revoke.audit": "Abrir historial de auditoría",
+  "sshTrust.revoke.another": "Revisar otra revocación",
+  "sshTrust.revoke.invalidSerial":
+    "Introduzca un número de serie entero positivo no mayor que 9007199254740991. Use la API para números mayores; la consola no debe redondearlos.",
+  "sshTrust.revoke.requiredKeyID": "Introduzca el ID de clave exacto que desea revocar.",
   "caSetup.localBoundary":
     "Cree una autoridad local mediante el flujo protegido de raíz o intermedia. Requiere la ceremonia de claves y las aprobaciones correspondientes antes de habilitar la firma.",
   "caSetup.operatorBoundary":
     "El operador del plano de control configura esta CA externa. Esta consola del inquilino no puede instalar su conexión ni sus credenciales.",
   "caSetup.configure":
-    "Añada la autoridad en external_cas del archivo JSON del servidor indicado por TRSTCTL_CONFIG_FILE. Use un ID de registro estable y el tipo exacto del proveedor.",
+    "Añada la autoridad en external_cas de la configuración JSON del servidor seleccionada al arrancar. Use un ID de registro estable y el tipo exacto del proveedor.",
   "caSetup.trust":
     "Guarde las credenciales en archivos controlados por el operador y use referencias file:/ruta/absoluta. Fije la raíz de confianza del servidor y permita solo los rangos privados necesarios. Nunca pegue credenciales aquí.",
   "caSetup.restart":
     "Ejecute trstctl -check-config, reinicie el plano de control configurado y actualice esta página. La validación de configuración no contacta con la autoridad.",
   "caSetup.verify":
-    "Confirme el ID exacto en GET /api/v1/external-cas antes de seleccionarlo para emitir. Un registro de inventario o de integración por sí solo no demuestra una solicitud correcta a la CA.",
+    "Confirme el ID de registro exacto en la lista de CA conectadas antes de seleccionarla para la emisión. Un registro de inventario o de la lista no demuestra por sí solo una solicitud exitosa a la CA.",
   "caSetup.vaultExample":
     "Ejemplo de Vault: sustituya la URL, el montaje de firma, el rol, las rutas y el CIDR de un solo host por los valores verificados. El token necesita permiso para firmar con ese rol.",
   "caSetup.reference": "Referencia completa: docs/configuration.md, sección Native connector and external-CA assembly.",
@@ -2094,7 +2132,7 @@ const esESCatalog = {
     "Configure NGINX para usar fullchain.pem y privkey.pem de este certificado. Compruebe la configuración y recárguela; guarde un hook de despliegue para recargarla tras renovar. La guía incluye la configuración exacta. Crear una vinculación de endpoint emitiría otro certificado.",
   "journeys.fleet.verify.title": "Verificar el endpoint real",
   "journeys.fleet.verify.body":
-    "Use un cliente de confianza para comparar la huella, el nombre de host y el emisor del certificado servido con los archivos emitidos; después haga una petición a la aplicación. Una confirmación de recarga o una fila del inventario no demuestran el resultado en el endpoint.",
+    "Use un cliente de confianza para comparar la huella digital del certificado del endpoint, el nombre de host y el emisor con los archivos emitidos. Después, realice una solicitud a la aplicación. Una confirmación de recarga o una fila de inventario no demuestra el estado del endpoint.",
   "journeys.fleet.renew.title": "Programar y observar la renovación",
   "journeys.fleet.renew.body":
     "Active una tarea programada con el mismo cliente, las credenciales DNS y la confianza HTTPS. Siga la guía para probar una renovación forzada y un fallo DNS; después verifique dos sucesores renovados por el programa en el endpoint. Un comando manual o una ejecución sin cambios no demuestran la renovación desatendida.",
@@ -2112,7 +2150,7 @@ const esESCatalog = {
     "Configure un cliente, demuestre el control DNS, instale y verifique su certificado, programe las renovaciones y luego revóquelo y retírelo.",
   "journeys.fleet.protocols.title": "Inspeccionar la superficie ACME",
   "journeys.fleet.protocols.body":
-    "Compruebe el directorio, el tenant, la política de emisión, la confianza HTTPS y la admisión de cuentas. ACME usa el emisor de la plataforma; las vinculaciones de endpoints permiten elegir una CA externa en otro flujo.",
+    "Compruebe el directorio, el inquilino, la política de emisión, la confianza HTTPS y la admisión de cuentas. El endpoint ACME integrado usa el emisor de la plataforma; los enlaces de endpoint permiten elegir una CA externa por separado.",
   "journeys.fleet.dns.title": "Configurar el autenticador DNS",
   "journeys.fleet.dns.body":
     "Instale el complemento DNS oficial en el mismo entorno que Certbot. El ejemplo RFC2136 necesita un archivo de credenciales con permisos 0600 y una clave TSIG limitada a los registros TXT previstos. El complemento elegido también debe admitir la delegación.",
@@ -7351,7 +7389,6 @@ const esESCatalog = {
   "source.revoke.selected.38b0352f6d": "Revocar seleccionados (",
   "source.revoke.ssh.certificate.63b6e335c3": "Revocar certificado SSH",
   "source.revoked.at.144e77bcf0": "Revocado el",
-  "source.revoked.certs.267c0b721b": "Certificados revocados",
   "source.revoked.f6f738d043": "Revocada",
   "source.rewrap.49c8c07065": "Rewrap",
   "source.risk.0711a8d636": "Riesgo",
@@ -8497,7 +8534,7 @@ const esESCatalog = {
   "secrets.tasks.pki.title": "Crear un certificado de corta duración",
   "secrets.tasks.pki.description": "Envía una solicitud de firma para que la clave privada permanezca donde se usará el certificado.",
   "secrets.tasks.pki.action": "Abrir solicitud de certificado",
-  "sshTrust.readiness.technicalSummary": "Certificados revocados: {revoked} · Métodos de prueba: {attestors}",
+  "sshTrust.readiness.technicalSummary": "Entradas de revocación: {revoked} · Métodos de prueba: {attestors}",
   "sshTrust.readiness.technicalDetails": "Mostrar estado técnico de SSH",
   "sshTrust.tasks.rollout.title": "Mover hosts a confianza de corta duración",
   "sshTrust.tasks.rollout.description": "Registra un canario, una comprobación de salud y un plan de reversión antes de cambiar sshd en un host.",

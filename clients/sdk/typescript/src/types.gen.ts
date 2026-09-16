@@ -10474,6 +10474,10 @@ export interface components {
             kind: string;
             name: string;
         };
+        GraphQueryRequest: {
+            /** @description Read-only Cypher-style MATCH path, optional WHERE equality predicates, and RETURN variables or fields. This is a minimal grammar, not full Cypher; LIMIT is not supported. */
+            query: string;
+        };
         GraphQueryResult: {
             rows: Record<string, never>[];
         };
@@ -22544,7 +22548,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GraphQueryRequest"];
+            };
+        };
         responses: {
             /** @description success */
             200: {

@@ -519,12 +519,13 @@ func (s *Store) WithTenant(ctx context.Context, tenantID string, fn func(pgx.Tx)
 	}()
 
 	if !ownsExclusiveFence {
-		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock_shared($1)", BackupWriteFenceAdvisoryLockKey); err != nil {
-			return fmt.Errorf("store: acquire backup write fence: %w", err)
+		if err := prepareTenantRoleTx(ctx, tx); err != nil {
+			return err
 		}
-	}
-	if _, err := tx.Exec(ctx, "SET LOCAL ROLE "+appRole); err != nil {
-		return fmt.Errorf("store: set role: %w", err)
+	} else {
+		if _, err := tx.Exec(ctx, "SET LOCAL ROLE "+appRole); err != nil {
+			return fmt.Errorf("store: set role: %w", err)
+		}
 	}
 	schema, err := tenancy.PostgresSchema(ctx, tenantID)
 	if err != nil {

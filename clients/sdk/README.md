@@ -68,6 +68,14 @@ Module: `trstctl.com/sdk/go`. Imports nothing outside the standard library,
 so it never pulls the control plane's dependency graph into your build. It is a
 separate module from the server, so the server's `go.mod`/`go.sum` are untouched.
 
+### Private-CA connections
+
+For an evaluation server or private CA, use the
+[complete Go connection example](../../docs/guides/go-sdk-private-ca.md).
+It loads `TRSTCTL_CA_FILE` into a strict HTTP transport and supplies it through
+`WithHTTPClient`. The `New` constructor does not read that environment variable;
+without a custom transport it uses operating-system trust roots.
+
 ### Install — `trstctl.com/sdk/go` is a vanity path, not a code host
 
 ```bash

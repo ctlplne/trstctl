@@ -12,18 +12,57 @@ import type { MessageKey } from "@/i18n/messages";
  * clause turns a missing key into a type error, so every new message key
  * ships with an es-ES AND a de-DE entry from the same commit. */
 const deDECatalog = {
+  "sshTrust.revoke.choose": "Widerrufsumfang wählen",
+  "sshTrust.revoke.chooseBody": "Wählen Sie eine Seriennummer, eine Schlüssel-ID oder beides. Prüfen Sie die Wirkung vor der Veröffentlichung.",
+  "sshTrust.revoke.reviewHeading": "Zugriffsentzug prüfen",
+  "sshTrust.revoke.reviewBody": "Diese Prüfung hat nichts geändert. Die Veröffentlichung erfasst den Widerruf und aktualisiert die herunterladbare KRL.",
+  "sshTrust.revoke.publishedStep": "Verteilen und prüfen",
+  "sshTrust.revoke.publishedBody": "Der Zugriffsentzug hängt davon ab, dass die Verbraucher die aktuelle Sperrliste laden.",
+  "sshTrust.revoke.progress": "Fortschritt des SSH-Widerrufs",
+  "sshTrust.revoke.scope": "Widerrufsumfang",
+  "sshTrust.revoke.scopeSerial": "Eine Seriennummer",
+  "sshTrust.revoke.scopeKeyID": "Alle Zertifikate mit einer Schlüssel-ID",
+  "sshTrust.revoke.scopeBoth": "Seriennummer plus alle Zertifikate mit einer Schlüssel-ID",
+  "sshTrust.revoke.serial": "Zertifikatsseriennummer",
+  "sshTrust.revoke.keyIDHelp":
+    "Bezieht sich auf den Zertifikatsnamen, nicht den Fingerabdruck des öffentlichen Schlüssels. Jedes passende Zertifikat ist betroffen.",
+  "sshTrust.revoke.reasonHelp": "Optionale Erklärung, die im Audit-Ereignis gespeichert wird.",
+  "sshTrust.revoke.reviewAction": "Widerruf prüfen",
+  "sshTrust.revoke.serialEffect": "Seriennummer {serial} widerrufen. Diese Anfrage widerruft keine anderen Seriennummern mit derselben Schlüssel-ID.",
+  "sshTrust.revoke.serialBothEffect": "Seriennummer {serial} sowie jedes Zertifikat mit der folgenden Schlüssel-ID widerrufen.",
+  "sshTrust.revoke.keyIDEffect":
+    "Alle Zertifikate mit der Schlüssel-ID {keyID} werden gesperrt, auch zukünftige Ersatzzertifikate mit diesem Namen. Ein Ersatzzertifikat benötigt eine andere Schlüssel-ID.",
+  "sshTrust.revoke.anyCA": "Diese KRL gilt für Zertifikate jeder ausstellenden CA. Prüfen Sie vor der Veröffentlichung alle Verbraucher dieser Liste.",
+  "sshTrust.revoke.noReason": "Kein Grund angegeben",
+  "sshTrust.revoke.distributionBoundary":
+    "Die Veröffentlichung verteilt die KRL nicht, beendet keine bestehenden SSH-Sitzungen und beweist nicht ihre Durchsetzung auf Hosts. Dieser Ablauf bietet keine Rücknahme des Widerrufs.",
+  "sshTrust.revoke.failed": "KRL-Veröffentlichung konnte nicht bestätigt werden",
+  "sshTrust.revoke.retryHelp":
+    "Ein erneuter Versuch sendet dieselbe geprüfte Anfrage mit demselben Idempotency-Key. Prüfen Sie den Audit-Verlauf, falls die Veröffentlichung bereits abgeschlossen sein könnte.",
+  "sshTrust.revoke.retryAction": "Veröffentlichung erneut versuchen",
+  "sshTrust.revoke.published": "KRL veröffentlicht",
+  "sshTrust.revoke.nextSteps":
+    "Veröffentlichung erfolgreich. Verteilen Sie die aktuelle KRL an alle vertrauenden Hosts und SSH-Clients. Prüfen Sie dann, ob das widerrufene Zertifikat abgelehnt wird und der Zugriff mit einem Ersatzzertifikat funktioniert.",
+  "sshTrust.revoke.entries": "Widerrufseinträge",
+  "sshTrust.revoke.countHelp": "Die Anzahl entspricht den unterschiedlichen Seriennummern- und Schlüssel-ID-Einträgen, nicht den betroffenen Zertifikaten.",
+  "sshTrust.revoke.download": "Aktuelle KRL herunterladen",
+  "sshTrust.revoke.audit": "Audit-Verlauf öffnen",
+  "sshTrust.revoke.another": "Weiteren Widerruf prüfen",
+  "sshTrust.revoke.invalidSerial":
+    "Geben Sie eine positive ganze Seriennummer bis 9007199254740991 ein. Verwenden Sie für größere Seriennummern die API; die Konsole darf sie nicht runden.",
+  "sshTrust.revoke.requiredKeyID": "Geben Sie die genaue zu widerrufende Schlüssel-ID ein.",
   "caSetup.localBoundary":
     "Erstellen Sie eine lokale CA über den geschützten Ablauf für Root- oder Zwischenzertifizierungsstellen. Die erforderliche Schlüsselzeremonie und Genehmigungen sind nötig, bevor die Signierung aktiviert wird.",
   "caSetup.operatorBoundary":
     "Der Betreiber der Steuerungsebene konfiguriert diese externe CA. Diese Mandantenkonsole kann weder ihre Verbindung noch ihre Zugangsdaten einrichten.",
   "caSetup.configure":
-    "Fügen Sie die CA unter external_cas in der durch TRSTCTL_CONFIG_FILE gewählten JSON-Serverkonfiguration hinzu. Verwenden Sie eine stabile Registry-ID und den genauen Anbietertyp.",
+    "Fügen Sie die CA unter external_cas in der beim Start gewählten JSON-Serverkonfiguration hinzu. Verwenden Sie eine stabile Registry-ID und den genauen Anbietertyp.",
   "caSetup.trust":
     "Speichern Sie Zugangsdaten in Dateien unter Kontrolle des Betreibers und referenzieren Sie diese mit file:/absoluter/pfad. Hinterlegen Sie die Vertrauenswurzel des Servers und erlauben Sie nur die benötigten privaten Adressbereiche. Fügen Sie hier niemals Zugangsdaten ein.",
   "caSetup.restart":
     "Führen Sie trstctl -check-config aus, starten Sie die konfigurierte Steuerungsebene neu und aktualisieren Sie diese Seite. Die Konfigurationsprüfung kontaktiert die CA nicht.",
   "caSetup.verify":
-    "Bestätigen Sie die genaue ID in GET /api/v1/external-cas, bevor Sie sie zur Ausstellung auswählen. Ein Inventar- oder Registry-Eintrag allein belegt keine erfolgreiche Anfrage an die CA.",
+    "Bestätigen Sie die genaue Registry-ID in der Liste verbundener CAs, bevor Sie sie für die Ausstellung wählen. Ein Inventar- oder Registry-Eintrag allein beweist keine erfolgreiche CA-Anfrage.",
   "caSetup.vaultExample":
     "Vault-Beispiel: Ersetzen Sie URL, Signatur-Mount, Rolle, Dateipfade und Einzelhost-CIDR durch Ihre geprüften Werte. Das Token benötigt die Berechtigung zum Signieren für diese Rolle.",
   "caSetup.reference": "Vollständige Konfigurationsreferenz: docs/configuration.md, Abschnitt Native connector and external-CA assembly.",
@@ -2127,7 +2166,7 @@ const deDECatalog = {
     "NGINX mit fullchain.pem und privkey.pem dieser Zertifikatsreihe konfigurieren. Konfiguration prüfen und neu laden; anschließend einen Deploy-Hook für das Neuladen nach erfolgreicher Erneuerung speichern. Die verlinkte Anleitung enthält die genaue Konfiguration. Eine Endpunktbindung würde ein anderes Zertifikat ausstellen.",
   "journeys.fleet.verify.title": "Tatsächlichen Endpunkt prüfen",
   "journeys.fleet.verify.body":
-    "Mit einem vertrauenswürdigen Client Fingerabdruck, Hostnamen und Aussteller des ausgelieferten Zertifikats mit den ausgestellten Dateien vergleichen und eine Anwendungsanfrage senden. Eine Reload-Bestätigung oder ein Inventareintrag beweist den Zustand des Endpunkts nicht.",
+    "Vergleichen Sie mit einem vertrauenswürdigen Client den Fingerabdruck des Endpunktzertifikats, den Hostnamen und den Aussteller mit den ausgestellten Dateien. Stellen Sie dann eine Anwendungsanfrage. Eine Neuladebestätigung oder eine Inventarzeile beweist den Endpunktzustand nicht.",
   "journeys.fleet.renew.title": "Erneuerung planen und beobachten",
   "journeys.fleet.renew.body":
     "Eine geplante Erneuerungsaufgabe mit demselben Client, denselben DNS-Zugangsdaten und demselben HTTPS-Vertrauen aktivieren. Laut Anleitung eine erzwungene Erneuerung und einen DNS-Ausfall testen, danach zwei regulär geplante Nachfolgezertifikate am Endpunkt prüfen. Ein manueller Befehl oder ein Lauf ohne Änderung belegt keine unbeaufsichtigte Erneuerung.",
@@ -2145,7 +2184,7 @@ const deDECatalog = {
     "Client konfigurieren, DNS-Kontrolle nachweisen, Zertifikat installieren und prüfen, Erneuerungen planen und anschließend widerrufen und außer Betrieb nehmen.",
   "journeys.fleet.protocols.title": "ACME-Oberfläche inspizieren",
   "journeys.fleet.protocols.body":
-    "Verzeichnis, Mandant, Ausstellungsrichtlinie, HTTPS-Vertrauen und Kontozulassung prüfen. ACME nutzt den Plattform-Aussteller; Endpunktbindungen bieten einen separaten Ablauf zur Auswahl einer externen CA.",
+    "Prüfen Sie das Verzeichnis, den Mandanten, die Ausstellungsrichtlinie, das HTTPS-Vertrauen und die Kontozulassung. Der integrierte ACME-Endpunkt nutzt den Plattformaussteller; über Endpunktbindungen wählen Sie eine externe CA separat.",
   "journeys.fleet.dns.title": "DNS-Authentifikator konfigurieren",
   "journeys.fleet.dns.body":
     "Das offizielle DNS-Plugin in derselben Umgebung wie Certbot installieren. Das RFC2136-Beispiel benötigt eine Zugangsdaten-Datei mit Modus 0600 und einen auf die vorgesehenen Challenge-TXT-Einträge begrenzten TSIG-Schlüssel. Das gewählte Client-Plugin muss auch die Delegierung unterstützen.",
@@ -7410,7 +7449,6 @@ const deDECatalog = {
   "source.revoke.selected.38b0352f6d": "Ausgewählte widerrufen (",
   "source.revoke.ssh.certificate.63b6e335c3": "SSH-Zertifikat widerrufen",
   "source.revoked.at.144e77bcf0": "Widerrufen am",
-  "source.revoked.certs.267c0b721b": "Widerrufene Zertifikate",
   "source.revoked.f6f738d043": "Widerrufen",
   "source.rewrap.49c8c07065": "Rewrap",
   "source.risk.0711a8d636": "Risiko",
@@ -8564,7 +8602,7 @@ const deDECatalog = {
   "secrets.tasks.pki.title": "Kurzlebiges Zertifikat erstellen",
   "secrets.tasks.pki.description": "Sende eine Zertifikatsignieranfrage, damit der private Schlüssel dort bleibt, wo das Zertifikat verwendet wird.",
   "secrets.tasks.pki.action": "Zertifikatsanfrage öffnen",
-  "sshTrust.readiness.technicalSummary": "Widerrufene Zertifikate: {revoked} · Nachweismethoden: {attestors}",
+  "sshTrust.readiness.technicalSummary": "Widerrufseinträge: {revoked} · Nachweismethoden: {attestors}",
   "sshTrust.readiness.technicalDetails": "Technischen SSH-Status anzeigen",
   "sshTrust.tasks.rollout.title": "Hosts auf kurzlebiges Vertrauen umstellen",
   "sshTrust.tasks.rollout.description": "Erfasse Canary, Zustandsprüfung und Rückrollplan, bevor sshd auf einem Host geändert wird.",

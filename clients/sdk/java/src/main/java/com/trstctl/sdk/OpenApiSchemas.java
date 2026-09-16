@@ -366,6 +366,7 @@ public final class OpenApiSchemas {
       "GraphEvidencePath",
       "GraphImpact",
       "GraphNode",
+      "GraphQueryRequest",
       "GraphQueryResult",
       "GraphReachable",
       "GraphResponse",

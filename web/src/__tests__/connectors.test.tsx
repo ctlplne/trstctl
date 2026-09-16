@@ -492,6 +492,33 @@ describe("connector deployment disclosure surface", () => {
     expect(screen.getByText("execution remains in the control plane")).toBeInTheDocument();
   });
 
+  it("guides a stale endpoint review without inventing a pending approval", async () => {
+    const user = userEvent.setup();
+    const binding = await apiMock.createEndpointBinding.getMockImplementation()?.();
+    apiMock.getIdentity.mockResolvedValue(binding.identity);
+    apiMock.createEndpointBinding.mockRejectedValueOnce(new ApiError(409, JSON.stringify({ detail: "endpoint issuer changed after review; preview again" })));
+    renderConnectors();
+    await screen.findByRole("heading", { name: "Where credentials are installed" });
+    await user.click(screen.getByText("Destinations and safe actions", { exact: true }));
+    await screen.findByRole("heading", { name: "Name the endpoint" });
+    await user.selectOptions(screen.getByLabelText("Destination"), "target-1");
+    await user.selectOptions(screen.getByLabelText("Owner"), "owner-1");
+    await user.type(screen.getByLabelText("Enrollment reason"), "review the current endpoint issuer");
+    await user.click(screen.getByRole("button", { name: "Choose CA" }));
+    await user.selectOptions(await screen.findByLabelText("Issuing CA"), "external:corporate-digicert");
+    await user.click(screen.getByRole("button", { name: "Build safe preview" }));
+    await user.click(await screen.findByRole("button", { name: "Authorize issuance and deployment" }));
+    expect(await screen.findByText(/endpoint issuer changed after review; preview again/)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Open approvals in another tab" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Keep this review open while reviewers approve/)).not.toBeInTheDocument();
+    const originalKey = apiMock.createEndpointBinding.mock.calls[0]?.[1];
+    await user.click(screen.getByRole("button", { name: "Previous" }));
+    await user.click(await screen.findByRole("button", { name: "Build safe preview" }));
+    await user.click(await screen.findByRole("button", { name: "Authorize issuance and deployment" }));
+    await waitFor(() => expect(apiMock.createEndpointBinding).toHaveBeenCalledTimes(2));
+    expect(apiMock.createEndpointBinding.mock.calls[1]?.[1]).not.toEqual(originalKey);
+  });
+
   it("keeps the exact endpoint request across pending approval retries and shows its validity", async () => {
     const user = userEvent.setup();
     const base = await apiMock.previewEndpointBinding.getMockImplementation()?.();

@@ -14,6 +14,7 @@ import (
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/netsec"
 )
 
@@ -125,6 +126,7 @@ func TestExternalCASecretSetLocksAndDestroysFileBytes(t *testing.T) {
 		t.Fatal(err)
 	}
 	set := &externalCASecretSet{}
+	t.Cleanup(set.Destroy)
 	loaded, err := set.Load("file:" + path)
 	if err != nil {
 		t.Fatal(err)
@@ -132,11 +134,26 @@ func TestExternalCASecretSetLocksAndDestroysFileBytes(t *testing.T) {
 	if string(loaded) != "authority-bearing-token" {
 		t.Fatalf("loaded = %q", loaded)
 	}
+	if len(set.buffers) != 1 {
+		t.Fatalf("owned buffers = %d, want 1", len(set.buffers))
+	}
+	buffer := set.buffers[0]
+	if buffer.Len() != len(loaded) || &buffer.Bytes()[0] != &loaded[0] {
+		t.Fatal("loaded bytes are not borrowed from the owned secret buffer")
+	}
 	set.Destroy()
-	for _, value := range loaded {
-		if value != 0 {
-			t.Fatalf("destroyed bytes = %q", loaded)
-		}
+	// Destroy wipes and unmaps on Linux. A borrowed slice is invalid afterward;
+	// reading it to look for zeroes is a use-after-free, not a zeroization check.
+	// secret's wipe/release tests own that lower-level contract. Check that this
+	// owner destroyed the actual buffer and that no subsequent borrow can run.
+	if len(set.buffers) != 0 || buffer.Bytes() != nil || buffer.Len() != 0 {
+		t.Fatal("destroyed secret buffer remains accessible")
+	}
+	if err := buffer.Use(func([]byte) error {
+		t.Fatal("destroyed buffer allowed a secret borrow")
+		return nil
+	}); !errors.Is(err, secret.ErrDestroyed) {
+		t.Fatalf("borrow after destroy = %v, want ErrDestroyed", err)
 	}
 }
 

@@ -545,7 +545,9 @@ func (s *Store) RedeemAgentJobCredential(
 			           (tenant_id, job_id, attempt, agent_id, binding, expires_at)
 			    SELECT $1, held.id, held.claim_attempts, $3::uuid, $5, held.claim_expires_at
 			      FROM held
-			    ON CONFLICT (tenant_id, job_id, attempt) DO NOTHING
+			    -- Any conflicting ledger identity refuses the redemption,
+			    -- including its separately generated public audit reference.
+			    ON CONFLICT DO NOTHING
 			    RETURNING audit_ref::text, expires_at
 			 )
 			 SELECT audit_ref, expires_at FROM ins`,
@@ -732,7 +734,15 @@ func (s *Store) AgentJobRedemptions(ctx context.Context, now time.Time) (AgentJo
 //
 // The bound is per ATTEMPT rather than per job because a genuine retry re-claims
 // the work and gets a new attempt number, which should be allowed to sign again.
-func (s *Store) AgentJobAttemptSignedOtherCSR(ctx context.Context, tenantID string, jobID int64, attempt int, idempotencyKey string) (bool, error) {
+func (s *Store) AgentJobAttemptSignedOtherCSR(ctx context.Context, tenantID string, jobID int64, attempt int, idempotencyKey, externalCAID string) (bool, error) {
+	// The external worker records its exact result under the same CSR key
+	// plus the authority namespace before host custody is recorded under the
+	// base key. Either row belongs to this request, not a different CSR. Only
+	// the authority pinned by the served job is accepted; no prefix wildcard.
+	allowedKeys := []string{idempotencyKey}
+	if externalCAID != "" {
+		allowedKeys = append(allowedKeys, idempotencyKey+":external-ca:"+externalCAID)
+	}
 	signed := false
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
@@ -740,8 +750,8 @@ func (s *Store) AgentJobAttemptSignedOtherCSR(ctx context.Context, tenantID stri
 			    SELECT 1 FROM certificates
 			     WHERE tenant_id = $1
 			       AND issuance_idempotency_key LIKE $2
-			       AND issuance_idempotency_key <> $3
-			 )`, tenantID, fmt.Sprintf("agentcsr:%d:%d:%%", jobID, attempt), idempotencyKey).Scan(&signed)
+			       AND NOT (issuance_idempotency_key = ANY($3::text[]))
+			 )`, tenantID, fmt.Sprintf("agentcsr:%d:%d:%%", jobID, attempt), allowedKeys).Scan(&signed)
 	})
 	return signed, err
 }

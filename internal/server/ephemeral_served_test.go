@@ -355,7 +355,7 @@ func TestApprovedEphemeralRetryAfterAppendAndSQLRollbackNeverResigns(t *testing.
 	}
 	event := events.Event{
 		ID: orchestrator.CertificateApprovalEventID(h.tenant, use), Type: projections.EventCertificateRecorded,
-		TenantID: h.tenant, Time: time.Now().UTC(),
+		TenantID: h.tenant, Time: time.Now().UTC().Truncate(time.Microsecond),
 		SchemaVersion: projections.CertificateApprovalEventSchemaVersion, Data: raw,
 	}
 	if err := projections.ValidateApprovedCertificatePayload(event, payload); err != nil {
@@ -405,12 +405,14 @@ func TestApprovedEphemeralRetryAfterAppendAndSQLRollbackNeverResigns(t *testing.
 	if _, err := h.srv.ephemeralIssuer.IssueEphemeralCredential(ctx, h.tenant, "jit-crash-changed", requester, changed); !errors.Is(err, store.ErrIdempotencyConflict) {
 		t.Fatalf("changed-body retry = %v, want ErrIdempotencyConflict", err)
 	}
-	if _, err := Build(ctx, Deps{
+	restarted, err := Build(ctx, Deps{
 		Store: h.store, Log: h.log, Signer: h.signer,
 		SignAuthorizer: h.authz, CACertFile: h.caFile,
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("startup reconciliation of approved certificate fence: %v", err)
 	}
+	cleanupServedServer(t, restarted)
 	issued, err := h.srv.ephemeralIssuer.IssueEphemeralCredential(ctx, h.tenant, "jit-crash-retry", requester, req)
 	if err != nil {
 		t.Fatalf("recover canonical certificate: %v", err)

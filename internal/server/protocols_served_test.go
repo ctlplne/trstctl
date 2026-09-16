@@ -201,6 +201,7 @@ func newServedHarnessWithEventOptions(t *testing.T, protocols config.Protocols, 
 	if err != nil {
 		t.Fatalf("build server: %v", err)
 	}
+	cleanupServedServer(t, srv)
 	if !srv.OutOfProcessSigning() {
 		t.Fatal("issuing CA is not signer-backed — AN-4 violated in the test rig")
 	}
@@ -2009,6 +2010,7 @@ func TestServedACMEStateRebuildsAfterServerRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("restart server build: %v", err)
 	}
+	cleanupServedServer(t, restarted)
 	ts2 := httptest.NewServer(restarted.Handler())
 	t.Cleanup(ts2.Close)
 	if !bytes.Equal(restarted.CACertPEM(), h.caPEM) {

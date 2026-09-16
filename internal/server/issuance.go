@@ -810,140 +810,147 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 	}
 	idemKey := "renew:" + m.IdempotencyKey
 	_, err := d.idem.Do(ctx, m.TenantID, idemKey, func(ctx context.Context) ([]byte, error) {
-		run := rotationRunEvidence{
-			ID:                     evidenceID("rotation", m.TenantID, m.IdempotencyKey, m.ID),
-			IdentityID:             p.IdentityID,
-			OutboxID:               outboxPtr(m.ID),
-			Trigger:                rotationTrigger(p.Origin, m.IdempotencyKey, p.Reason),
-			Reason:                 p.Reason,
-			IdempotencyKey:         m.IdempotencyKey,
-			PredecessorFingerprint: p.PredecessorFingerprint,
-		}
-		ident, err := d.store.GetIdentity(ctx, m.TenantID, p.IdentityID)
-		if err != nil {
-			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
-			return nil, fmt.Errorf("server: load identity %s: %w", p.IdentityID, err)
-		}
-		if shouldRecoverIssuedCertificate(m.Attempts) {
-			recovered, err := recoverCertificatesByIssuanceKey(ctx, d.store, d.log, m.TenantID, idemKey)
-			if err != nil {
-				_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
-				return nil, err
-			}
-			if len(recovered) > 0 {
-				return d.completeRecoveredRenewalRun(ctx, m.TenantID, p, run, recovered)
-			}
-		}
-		certs, err := d.activeRenewalCertificates(ctx, m.TenantID, ident)
-		if err != nil {
-			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
-			return nil, err
-		}
-		certs, err = renewalCertificatesForTrigger(certs, p)
-		if err != nil {
-			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
-			return nil, err
-		}
-		if run.PredecessorFingerprint == "" && len(certs) > 0 {
-			run.PredecessorFingerprint = certs[0].Fingerprint
-		}
-		if err := d.recordRotationRun(ctx, m.TenantID, run, "running", ""); err != nil {
-			return nil, err
-		}
-		if len(certs) == 0 {
-			err := fmt.Errorf("server: no active issued certificate to renew for identity %s", p.IdentityID)
-			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
-			return nil, err
-		}
-		if err := d.admitIssuance(ctx, m, p, ident, "renew"); err != nil {
-			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
-			return nil, err
-		}
-		binding, err := d.renewalIssuanceBinding(ctx, m.TenantID, ident.ID, p)
-		if err != nil {
-			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
-			return nil, err
-		}
-		// B2: hand the whole renewal to the host, before anything is minted.
-		dispatched, hostErr := d.dispatchHostRenewal(ctx, m.TenantID, ident, certs[0], run, binding, idemKey)
-		if hostErr != nil {
-			return nil, hostErr
-		}
-		if dispatched {
-			return []byte("renewal dispatched to host agent"), nil
-		}
-
-		var deployCertPEM, deployKeyPEM []byte
-		var deployMaterial issuedLeafMaterial
-		deployFingerprint := ""
-		defer func() { deployMaterial.destroyKey() }()
-		for _, old := range certs {
-			dnsNames := old.SANs
-			if len(dnsNames) == 0 {
-				dnsNames = []string{ident.Name}
-			}
-			commonName := ident.Name
-			if len(dnsNames) > 0 {
-				commonName = dnsNames[0]
-			}
-			// B2: a renewal honours the identity's CSR exactly as first
-			// issuance does.
-			//
-			// This closed a custody hole that ran on a timer. B1 made first
-			// issuance CSR-first, but renewal called mintServedLeafMaterial
-			// unconditionally — so an operator who enrolled with a CSR, key
-			// never leaving their host, silently received a
-			// control-plane-generated key on their FIRST RENEWAL, 30 to 90 days
-			// later. Nothing announced it: the renewal path did not even emit
-			// the server-side-keygen deprecation event the issue path emits.
-			// Custody that degrades automatically is worse than custody that
-			// was never claimed, because the claim outlives the property.
-			material, err := d.mintServedLeafForRenewal(withLeafSlot(ctx, old.ID), m.TenantID, ident, old, commonName, dnsNames, idemKey, binding)
-			if err != nil {
-				_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
-				return nil, err
-			}
-			successor := material.Certificate
-			successor.IssuanceIdempotencyKey = idemKey
-			recorded, err := d.orch.RecordSuccessorCertificate(ctx, m.TenantID, successor, old.ID)
-			if err != nil {
-				material.destroyKey()
-				_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
-				return nil, fmt.Errorf("server: record renewal successor: %w", err)
-			}
-			deployMaterial.destroyKey()
-			deployMaterial = material
-			deployCertPEM = material.CertPEM
-			deployKeyPEM = material.KeyPEM
-			deployFingerprint = recorded.Fingerprint
-			run.SuccessorFingerprint = recorded.Fingerprint
-		}
-		reason := p.Reason
-		if reason == "" {
-			reason = "renewal completed"
-		}
-		if err := d.transitionDeployedWithCredential(ctx, m.TenantID, ident, reason, deployCertPEM, deployKeyPEM, deployFingerprint); err != nil {
-			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
-			return nil, fmt.Errorf("server: complete renewal transition: %w", err)
-		}
-		if d.afterIssueSideEffects != nil {
-			if err := d.afterIssueSideEffects(ctx); err != nil {
-				_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
-				return nil, err
-			}
-		}
-		if run.RollbackRef == "" && run.PredecessorFingerprint != "" {
-			run.RollbackRef = "restore certificate fingerprint " + run.PredecessorFingerprint
-		}
-		if err := d.recordRotationRun(ctx, m.TenantID, run, "succeeded", ""); err != nil {
-			return nil, err
-		}
-		return []byte(fmt.Sprintf("renewed:%d", len(certs))), nil
+		return d.executeRenewal(ctx, m, p, idemKey)
 	})
 	if err != nil {
 		return err
 	}
 	return d.ensureIdentityCRL(ctx, m.TenantID, p.IdentityID)
+}
+
+// executeRenewal is the credential-bearing effect inside the durable renewal
+// idempotency boundary. Recovery, host handoff, key lifetime and final evidence
+// keep their original order; handleRenew owns admission and replay protection.
+func (d *issuanceDispatcher) executeRenewal(ctx context.Context, m orchestrator.Message, p transitionTrigger, idemKey string) ([]byte, error) {
+	run := rotationRunEvidence{
+		ID:                     evidenceID("rotation", m.TenantID, m.IdempotencyKey, m.ID),
+		IdentityID:             p.IdentityID,
+		OutboxID:               outboxPtr(m.ID),
+		Trigger:                rotationTrigger(p.Origin, m.IdempotencyKey, p.Reason),
+		Reason:                 p.Reason,
+		IdempotencyKey:         m.IdempotencyKey,
+		PredecessorFingerprint: p.PredecessorFingerprint,
+	}
+	ident, err := d.store.GetIdentity(ctx, m.TenantID, p.IdentityID)
+	if err != nil {
+		_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
+		return nil, fmt.Errorf("server: load identity %s: %w", p.IdentityID, err)
+	}
+	if shouldRecoverIssuedCertificate(m.Attempts) {
+		recovered, err := recoverCertificatesByIssuanceKey(ctx, d.store, d.log, m.TenantID, idemKey)
+		if err != nil {
+			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
+			return nil, err
+		}
+		if len(recovered) > 0 {
+			return d.completeRecoveredRenewalRun(ctx, m.TenantID, p, run, recovered)
+		}
+	}
+	certs, err := d.activeRenewalCertificates(ctx, m.TenantID, ident)
+	if err != nil {
+		_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
+		return nil, err
+	}
+	certs, err = renewalCertificatesForTrigger(certs, p)
+	if err != nil {
+		_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
+		return nil, err
+	}
+	if run.PredecessorFingerprint == "" && len(certs) > 0 {
+		run.PredecessorFingerprint = certs[0].Fingerprint
+	}
+	if err := d.recordRotationRun(ctx, m.TenantID, run, "running", ""); err != nil {
+		return nil, err
+	}
+	if len(certs) == 0 {
+		err := fmt.Errorf("server: no active issued certificate to renew for identity %s", p.IdentityID)
+		_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
+		return nil, err
+	}
+	if err := d.admitIssuance(ctx, m, p, ident, "renew"); err != nil {
+		_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
+		return nil, err
+	}
+	binding, err := d.renewalIssuanceBinding(ctx, m.TenantID, ident.ID, p)
+	if err != nil {
+		_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
+		return nil, err
+	}
+	// B2: hand the whole renewal to the host, before anything is minted.
+	dispatched, hostErr := d.dispatchHostRenewal(ctx, m.TenantID, ident, certs[0], run, binding, idemKey)
+	if hostErr != nil {
+		return nil, hostErr
+	}
+	if dispatched {
+		return []byte("renewal dispatched to host agent"), nil
+	}
+
+	var deployCertPEM, deployKeyPEM []byte
+	var deployMaterial issuedLeafMaterial
+	deployFingerprint := ""
+	defer func() { deployMaterial.destroyKey() }()
+	for _, old := range certs {
+		dnsNames := old.SANs
+		if len(dnsNames) == 0 {
+			dnsNames = []string{ident.Name}
+		}
+		commonName := ident.Name
+		if len(dnsNames) > 0 {
+			commonName = dnsNames[0]
+		}
+		// B2: a renewal honours the identity's CSR exactly as first
+		// issuance does.
+		//
+		// This closed a custody hole that ran on a timer. B1 made first
+		// issuance CSR-first, but renewal called mintServedLeafMaterial
+		// unconditionally — so an operator who enrolled with a CSR, key
+		// never leaving their host, silently received a
+		// control-plane-generated key on their FIRST RENEWAL, 30 to 90 days
+		// later. Nothing announced it: the renewal path did not even emit
+		// the server-side-keygen deprecation event the issue path emits.
+		// Custody that degrades automatically is worse than custody that
+		// was never claimed, because the claim outlives the property.
+		material, err := d.mintServedLeafForRenewal(withLeafSlot(ctx, old.ID), m.TenantID, ident, old, commonName, dnsNames, idemKey, binding)
+		if err != nil {
+			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
+			return nil, err
+		}
+		successor := material.Certificate
+		successor.IssuanceIdempotencyKey = idemKey
+		recorded, err := d.orch.RecordSuccessorCertificate(ctx, m.TenantID, successor, old.ID)
+		if err != nil {
+			material.destroyKey()
+			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
+			return nil, fmt.Errorf("server: record renewal successor: %w", err)
+		}
+		deployMaterial.destroyKey()
+		deployMaterial = material
+		deployCertPEM = material.CertPEM
+		deployKeyPEM = material.KeyPEM
+		deployFingerprint = recorded.Fingerprint
+		run.SuccessorFingerprint = recorded.Fingerprint
+	}
+	reason := p.Reason
+	if reason == "" {
+		reason = "renewal completed"
+	}
+	if err := d.transitionDeployedWithCredential(ctx, m.TenantID, ident, reason, deployCertPEM, deployKeyPEM, deployFingerprint); err != nil {
+		_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
+		return nil, fmt.Errorf("server: complete renewal transition: %w", err)
+	}
+	if d.afterIssueSideEffects != nil {
+		if err := d.afterIssueSideEffects(ctx); err != nil {
+			_ = d.recordRotationRun(ctx, m.TenantID, run, "failed", err.Error())
+			return nil, err
+		}
+	}
+	if run.RollbackRef == "" && run.PredecessorFingerprint != "" {
+		run.RollbackRef = "restore certificate fingerprint " + run.PredecessorFingerprint
+	}
+	if err := d.recordRotationRun(ctx, m.TenantID, run, "succeeded", ""); err != nil {
+		return nil, err
+	}
+	return []byte(fmt.Sprintf("renewed:%d", len(certs))), nil
 }
 
 // activeRenewalCertificates resolves the predecessor candidates for one

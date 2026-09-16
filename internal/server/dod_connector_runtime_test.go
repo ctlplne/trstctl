@@ -475,7 +475,7 @@ func dodRunAllNativeConnectorsProductionAssembly(t *testing.T) {
 		"mysql":         {mysqlExternal, []string{"mysql-tls-reload"}},
 		"rabbitmq":      {rabbitExternal, []string{"rabbitmqctl"}},
 		"elasticsearch": {elasticExternal, nil},
-		"tomcat":        {tomcatExternal, []string{"catalina.sh"}},
+		"tomcat":        {tomcatExternal, []string{"tomcat-tls-reload"}},
 	}
 
 	cfg := config.Default()
@@ -663,7 +663,7 @@ func dodRunFocusedNativeConnector(t *testing.T, entryID, connectorName string, e
 		root := local("elasticsearch", nil)
 		targetConfig, readbackPath = dodPairConfig(t, "elasticsearch", root), filepath.Join(root, "server.crt")
 	case "connector.tomcat":
-		root := local("tomcat", []string{"catalina.sh"})
+		root := local("tomcat", []string{"tomcat-tls-reload"})
 		targetConfig, readbackPath = dodPairConfig(t, "tomcat", root), filepath.Join(root, "server.crt")
 	default:
 		t.Fatalf("focused connector proof has no configuration for %q", entryID)

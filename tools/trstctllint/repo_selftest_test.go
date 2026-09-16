@@ -21,7 +21,7 @@ func TestRepoWideMulticheckerRunsAndFailsPlantedViolations(t *testing.T) {
 
 	clean := exec.Command(bin, "./...") // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	clean.Dir = root
-	clean.Env = commandEnv(t)
+	clean.Env = linterCommandEnv(t)
 	if out, err := clean.CombinedOutput(); err != nil {
 		t.Fatalf("repo-wide trstctllint ./... failed on clean tree: %v\n%s", err, out)
 	}
@@ -108,7 +108,7 @@ const Algorithm = "ML-DSA-65"
 
 	planted := exec.Command(bin, "./...") // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	planted.Dir = fixture
-	planted.Env = commandEnv(t)
+	planted.Env = linterCommandEnv(t)
 	out, err := planted.CombinedOutput()
 	if err == nil {
 		t.Fatalf("trstctllint accepted planted violations; output:\n%s", out)
@@ -149,6 +149,20 @@ func commandEnv(t *testing.T) []string {
 	env := os.Environ()
 	if os.Getenv("GOCACHE") == "" {
 		env = append(env, "GOCACHE="+filepath.Join(t.TempDir(), "gocache"))
+	}
+	return env
+}
+
+func linterCommandEnv(t *testing.T) []string {
+	t.Helper()
+	env := commandEnv(t)
+	// Whole-repository type loading creates substantial temporary garbage.
+	// Bound the analyzer's soft memory target so it collects that garbage
+	// before exhausting a local test host. This applies only to these linter
+	// children, never to product or performance-test processes. An explicit
+	// operator setting remains authoritative.
+	if os.Getenv("GOMEMLIMIT") == "" {
+		env = append(env, "GOMEMLIMIT=1536MiB")
 	}
 	return env
 }

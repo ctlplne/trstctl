@@ -170,6 +170,9 @@ func TestAUD30HostAgentProcessHelper(t *testing.T) {
 		t.Fatalf("host pass = (%d, %v), report=%s/%q; want one verified deploy",
 			executed, err, channel.lastOutcome, channel.lastDetail)
 	}
+	if !channel.lastAccepted || channel.lastReportErr != nil {
+		t.Fatalf("host receiver refused the shipping report: %v", channel.lastReportErr)
+	}
 	if channel.lastOutcome != transport.JobOutcomeVerified {
 		t.Fatalf("host agent reported %q detail=%q, want verified", channel.lastOutcome, channel.lastDetail)
 	}
@@ -225,6 +228,9 @@ func TestAUD32HostAgentProcessHelper(t *testing.T) {
 		http.DefaultClient, profile, nil, nil, state, 1, 60)
 	if err != nil {
 		t.Fatalf("cold-start host pass: %v", err)
+	}
+	if !channel.lastAccepted || channel.lastReportErr != nil {
+		t.Fatalf("host receiver refused the shipping report: %v", channel.lastReportErr)
 	}
 	wantOutcome := required("TRSTCTL_AUD32_EXPECT_OUTCOME")
 	wantExecuted := 1
@@ -288,6 +294,15 @@ func TestServedHostAgentOwnsDeployAndReloadsRemoteListenerAUD30(t *testing.T) {
 		"verify_address": listener.Addr().String(), "verify_server_name": "host-aud30.test",
 	})
 	if err != nil {
+		t.Fatal(err)
+	}
+	// The receiver checks the tenant's recorded public certificate, as the
+	// product issuance/import journey does before queueing a deployment.
+	leafDER, err := certinfo.LeafDER(newCert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.srv.orch.RecordCertificate(ctx, h.tenant, store.Certificate{Fingerprint: connector.CertificateFingerprint(newCert), CertificateDER: leafDER, CertificatePEM: newCert, Source: "import"}); err != nil {
 		t.Fatal(err)
 	}
 	const idemKey = "aud30-host-deploy"

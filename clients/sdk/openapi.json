@@ -15257,6 +15257,19 @@
         ],
         "type": "object"
       },
+      "GraphQueryRequest": {
+        "properties": {
+          "query": {
+            "description": "Read-only Cypher-style MATCH path, optional WHERE equality predicates, and RETURN variables or fields. This is a minimal grammar, not full Cypher; LIMIT is not supported.",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
+      },
       "GraphQueryResult": {
         "properties": {
           "rows": {
@@ -43777,6 +43790,16 @@
     "/api/v1/graph/query": {
       "post": {
         "operationId": "graphQuery",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GraphQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -43818,7 +43841,8 @@
           }
         ],
         "summary": "Run a Cypher-style graph query",
-        "x-trstctl-permission": "graph:read"
+        "x-trstctl-permission": "graph:read",
+        "x-trstctl-read-only": true
       }
     },
     "/api/v1/graph/reachable/{id}": {

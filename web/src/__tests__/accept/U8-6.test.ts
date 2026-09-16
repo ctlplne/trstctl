@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { appRoutePaths, contextualRouteItems, navGroups, taskNavItems } from "@/lib/navigation";
+import { appRoutePaths, permissionAnyForPath, contextualRouteItems, navGroups, taskNavItems } from "@/lib/navigation";
 
 const basePath = (to: string) => to.split("?")[0] || "/";
 
@@ -18,7 +18,15 @@ describe("U8-6 navigation & IA refresh", () => {
 
     for (const item of allItems) {
       expect(registered.has(basePath(item.to))).toBe(true); // route resolves
-      expect(item.featureIds.length).toBeGreaterThan(0); // RBAC-gated by feature
+      // Offline license inspection has no product-feature prerequisite; its
+      // explicit access permission must still be enforced. Other routes keep
+      // the feature coverage contract.
+      if (basePath(item.to) === "/admin/editions") {
+        expect(item.featureIds).toEqual([]);
+        expect(permissionAnyForPath(item.to)).toEqual(["access:read"]);
+      } else {
+        expect(item.featureIds.length).toBeGreaterThan(0);
+      } // RBAC-gated by feature
     }
     for (const item of sidebarItems) {
       expect(item.mode).toBe("real");

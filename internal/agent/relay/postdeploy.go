@@ -81,7 +81,15 @@ func postDeployVerification(ctx context.Context, intent DeployIntent, material M
 	// single immediate probe turns that healthy transition into a false rollback
 	// signal. Retry only inside this small, fixed window; a killed or ignored
 	// reload still fails closed with the final signed observation.
-	deadline := time.Now().Add(postDeployConvergenceWindow)
+	convergenceWindow := postDeployConvergenceWindow
+	if intent.Connector == "elasticsearch" {
+		// Elasticsearch polls changed TLS files every five seconds by default.
+		// Use the existing eight-second probe budget for watched activation,
+		// still inside the unchanged ten-second overall verification context.
+		// Other connectors keep their three-second graceful reload window.
+		convergenceWindow = verify.DefaultTimeout
+	}
+	deadline := time.Now().Add(convergenceWindow)
 	var res verify.Result
 verifyLoop:
 	for {

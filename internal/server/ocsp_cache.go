@@ -3,33 +3,28 @@
 package server
 
 import (
+	"container/heap"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	"trstctl.com/trstctl/internal/ttlmap"
 )
 
-// maxOCSPCacheEntries bounds the served OCSP response cache.
-//
-// The cache key includes the requested SERIAL, and /ocsp is an unauthenticated
-// public responder, so without a bound any client could mint a new cache entry
-// per request and grow control-plane memory without limit — entries were only
-// ever evicted when the SAME key was queried again after expiry, which a serial
-// the attacker never repeats never is. 8192 entries is far above any real
-// working set (a responder answers for a bounded population of live
-// certificates) and small enough that the worst case is megabytes, not the heap.
+// maxOCSPCacheEntries bounds the public responder's cache. Distinct serials
+// must not grow memory without limit or force a full-cache scan per request.
 const maxOCSPCacheEntries = 8192
 
 type ocspResponseCache struct {
 	mu      sync.Mutex
-	entries map[string]ocspResponseCacheEntry
+	entries map[string]*ocspResponseCacheEntry
+	expiry  ocspExpiryHeap
 }
 
 type ocspResponseCacheEntry struct {
+	key        string
 	der        []byte
 	nextUpdate time.Time
+	index      int
 }
 
 type ocspResponseCacheKey struct {
@@ -42,21 +37,22 @@ type ocspResponseCacheKey struct {
 }
 
 func newOCSPResponseCache() *ocspResponseCache {
-	return &ocspResponseCache{entries: make(map[string]ocspResponseCacheEntry)}
+	return &ocspResponseCache{entries: make(map[string]*ocspResponseCacheEntry)}
 }
 
 func (c *ocspResponseCache) get(key ocspResponseCacheKey, now time.Time) ([]byte, bool) {
 	if c == nil {
 		return nil, false
 	}
+	id := key.String()
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	entry, ok := c.entries[key.String()]
+	entry, ok := c.entries[id]
 	if !ok {
 		return nil, false
 	}
 	if !entry.nextUpdate.After(now) {
-		delete(c.entries, key.String())
+		c.removeLocked(entry)
 		return nil, false
 	}
 	return append([]byte(nil), entry.der...), true
@@ -66,32 +62,68 @@ func (c *ocspResponseCache) put(key ocspResponseCacheKey, der []byte, nextUpdate
 	if c == nil || len(der) == 0 || nextUpdate.IsZero() {
 		return
 	}
+	id := key.String()
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if _, replacing := c.entries[key.String()]; !replacing {
-		// Evict against the caller's REAL clock. This used to pass the new
-		// entry's nextUpdate (now + TTL) as "now", so the expiry sweep judged
-		// every live entry against a future timestamp: at the cap, one new
-		// serial mass-deleted every still-valid response and the hit rate
-		// collapsed — reinstating exactly the signer-load amplification the
-		// bound was added to absorb (AUD-201 follow-up F1/V7).
-		c.evictLocked(now)
+	if entry, replacing := c.entries[id]; replacing {
+		entry.der = append([]byte(nil), der...)
+		entry.nextUpdate = nextUpdate
+		heap.Fix(&c.expiry, entry.index)
+		return
 	}
-	c.entries[key.String()] = ocspResponseCacheEntry{der: append([]byte(nil), der...), nextUpdate: nextUpdate}
+	c.evictLocked(now)
+	entry := &ocspResponseCacheEntry{key: id, der: append([]byte(nil), der...), nextUpdate: nextUpdate}
+	c.entries[id] = entry
+	heap.Push(&c.expiry, entry)
 }
 
-// evictLocked makes room for one new entry via the shared bounded-TTL-map
-// algorithm (F2/V28): expired entries first — the common case, and free —
-// then the entry that expires soonest, whose loss costs the least. Callers
-// hold c.mu.
+// Preserve the bounded TTL policy: at capacity, remove expired entries first,
+// then the soonest-expiring live entry, breaking ties by key. The indexed heap
+// finds that entry in logarithmic time and keeps one node per cached response;
+// refreshes cannot accumulate stale queue nodes. now is the caller's wall clock,
+// never the new response's nextUpdate.
 func (c *ocspResponseCache) evictLocked(now time.Time) {
-	ttlmap.MakeRoom(c.entries, now, ttlmap.Policy[ocspResponseCacheEntry]{
-		Capacity: maxOCSPCacheEntries,
-		Expired: func(e ocspResponseCacheEntry, now time.Time) bool {
-			return !e.nextUpdate.After(now)
-		},
-		Rank: func(e ocspResponseCacheEntry) time.Time { return e.nextUpdate },
-	})
+	if len(c.entries) < maxOCSPCacheEntries {
+		return
+	}
+	for len(c.expiry) > 0 && !c.expiry[0].nextUpdate.After(now) {
+		c.removeLocked(c.expiry[0])
+	}
+	for len(c.entries) >= maxOCSPCacheEntries {
+		c.removeLocked(c.expiry[0])
+	}
+}
+
+func (c *ocspResponseCache) removeLocked(entry *ocspResponseCacheEntry) {
+	heap.Remove(&c.expiry, entry.index)
+	delete(c.entries, entry.key)
+}
+
+type ocspExpiryHeap []*ocspResponseCacheEntry
+
+func (h ocspExpiryHeap) Len() int { return len(h) }
+func (h ocspExpiryHeap) Less(i, j int) bool {
+	if h[i].nextUpdate.Equal(h[j].nextUpdate) {
+		return h[i].key < h[j].key
+	}
+	return h[i].nextUpdate.Before(h[j].nextUpdate)
+}
+func (h ocspExpiryHeap) Swap(i, j int) {
+	h[i], h[j] = h[j], h[i]
+	h[i].index, h[j].index = i, j
+}
+func (h *ocspExpiryHeap) Push(value any) {
+	entry := value.(*ocspResponseCacheEntry)
+	entry.index = len(*h)
+	*h = append(*h, entry)
+}
+func (h *ocspExpiryHeap) Pop() any {
+	last := len(*h) - 1
+	entry := (*h)[last]
+	(*h)[last] = nil
+	*h = (*h)[:last]
+	entry.index = -1
+	return entry
 }
 
 func (k ocspResponseCacheKey) String() string {

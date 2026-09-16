@@ -3,6 +3,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -119,9 +120,41 @@ func TestServedAgentCSRPendingKeepsExactRequestRecoverable(t *testing.T) {
 		t.Fatalf("claim was lost before the pending response: held=%t err=%v", held, err)
 	}
 	startServedExternalCADispatcher(t, h.servedHarness)
+	// Deterministically place the external result in its durable read model
+	// before the same CSR retries; a fast RPC must not hide this race.
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		rows, err := h.store.ListCertificatesByIssuanceIdempotencyKey(ctx, h.tenant, issueKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rows) == 1 {
+			break
+		}
+		if len(rows) > 1 || time.Now().After(deadline) {
+			t.Fatalf("external result was not recorded once before retry: rows=%d", len(rows))
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 	recovered, err := h.client.SignJobCSR(ctx, request)
 	if err != nil || recovered == nil || len(recovered.CertificatePEM) == 0 || recovered.Fingerprint == "" {
 		t.Fatalf("same CSR/claim did not recover: %v", err)
+	}
+	select {
+	case issued := <-upstream.minted:
+		if !bytes.Equal(recovered.CertificatePEM, issued.CertificatePEM) {
+			t.Fatal("retry did not recover the exact externally issued public certificate")
+		}
+	default:
+		t.Fatal("external authority did not retain the original public result")
+	}
+	otherKey, err := crypto.GenerateHostSubjectKey("pending-agent.example.test", []string{"pending-agent.example.test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer otherKey.Destroy()
+	if _, err := h.client.SignJobCSR(ctx, &transport.SignJobCSRRequest{JobID: job.JobID, Attempt: job.Attempt, CSRDER: otherKey.CSRDER}); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("different CSR on the same claim was not refused: %v", err)
 	}
 	if upstream.calls.Load() != 1 {
 		t.Fatalf("provider calls=%d, want exactly one", upstream.calls.Load())

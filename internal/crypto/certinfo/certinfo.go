@@ -175,6 +175,11 @@ func VerifyHostname(raw []byte, hostname string) error {
 // blocks and returns only public certificate metadata. Non-PEM input is tried as
 // DER, then as base64-encoded DER. No secret value is returned.
 func InspectAll(raw []byte) ([]Info, error) {
+	// DER is binary: a signature byte can look like textual whitespace.
+	// Parse the exact bytes before trimming PEM or base64 envelopes.
+	if info, err := inspectDER(raw); err == nil {
+		return []Info{info}, nil
+	}
 	trimmed := bytes.TrimSpace(raw)
 	if len(trimmed) == 0 {
 		return nil, nil

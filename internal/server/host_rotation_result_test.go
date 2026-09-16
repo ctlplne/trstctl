@@ -323,7 +323,7 @@ func newHostRotationResultFixtureWithVerify(t *testing.T, verifyAddress string, 
 	if err := registration.RegisterTenant(ctx, h.tenant, "host-rotation-fixture", "host-rotation-registration"); err != nil {
 		t.Fatal(err)
 	}
-	seedRenewalJob(t, ctx, h, "host-rotation-initial", []string{"rotation.example.test"})
+	seedRenewalJob(t, ctx, h, "host-rotation-initial", []string{"rotation.example.test"}, "rotation.example.test:443")
 	first := claimOneRenewal(t, ctx, h)
 	predecessor := signHostRotationFixtureJob(t, h, first)
 	f := &hostRotationResultFixture{h: h, job: first, fingerprint: predecessor}
@@ -369,9 +369,10 @@ func (f *hostRotationResultFixture) report(t *testing.T, outcome string) *transp
 	if outcome == transport.JobOutcomeFailed {
 		return f.h.report(t, f.job.JobID, f.job.Attempt, outcome, "controlled pre-deploy failure", "")
 	}
+	detail, digest := simulatedHostVerification(t, f.h, f.job, f.fingerprint, outcome)
 	id := f.h.identity.Identity()
 	record := custody.Record{Origin: custody.OriginHostAgent, Storage: custody.StorageFile, Exportable: custody.Exportable, GeneratedBy: id.CommonName()}
-	req, err := transport.SignedReportWithCustody(id, id.TenantID(), id.CommonName(), f.job.JobID, f.job.Attempt, outcome, "", "sha256:controlled-receiver-test", f.fingerprint, record, time.Now().UTC().Unix())
+	req, err := transport.SignedReportWithCustody(id, id.TenantID(), id.CommonName(), f.job.JobID, f.job.Attempt, outcome, detail, digest, f.fingerprint, record, time.Now().UTC().Unix())
 	if err != nil {
 		t.Fatal(err)
 	}

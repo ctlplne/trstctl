@@ -133,16 +133,8 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 	// signature per claim, but a genuine re-claim may sign again.
 	idemKey := fmt.Sprintf("agentcsr:%d:%d:%s", jobID, attempt, crypto.SHA256Hex(csrDER)[:16])
 
-	// One key per attempt. The same CSR arriving again replays through the
-	// idempotent runner below and returns the certificate the agent already
-	// owns; a DIFFERENT CSR on the same attempt is refused, because the
-	// CSR-derived key would otherwise let one claim mint without limit.
-	if other, err := d.store.AgentJobAttemptSignedOtherCSR(ctx, tenantID, jobID, attempt, idemKey); err != nil {
-		return nil, status.Errorf(codes.Internal, "check prior signature: %v", err)
-	} else if other {
-		return nil, status.Error(codes.PermissionDenied,
-			"this attempt has already had a different request signed; re-claim the job to "+
-				"certify a new key")
+	if err := d.checkAgentCSRRequestBinding(ctx, tenantID, jobID, attempt, idemKey, intent); err != nil {
+		return nil, err
 	}
 
 	out, err := d.idem.Do(ctx, tenantID, idemKey, func(ctx context.Context) ([]byte, error) {
@@ -222,6 +214,29 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 		ChainPEM:       append([]byte(nil), chainPEM...),
 		Fingerprint:    fingerprint,
 	}, nil
+}
+
+// checkAgentCSRRequestBinding permits replay of this request's result, including
+// the selected external authority's durable result, and refuses another key on
+// the same claim. The caller holds the identity issuance fence.
+func (d *issuanceDispatcher) checkAgentCSRRequestBinding(
+	ctx context.Context, tenantID string, jobID int64, attempt int,
+	idemKey string, intent RelayDeployIntent,
+) error {
+	externalCAID := ""
+	if strings.TrimSpace(intent.IssuingAuthoritySource) == "external" {
+		externalCAID = strings.TrimSpace(intent.IssuingAuthorityID)
+	}
+	other, err := d.store.AgentJobAttemptSignedOtherCSR(ctx, tenantID, jobID, attempt, idemKey, externalCAID)
+	if err != nil {
+		return status.Errorf(codes.Internal, "check prior signature: %v", err)
+	}
+	if other {
+		return status.Error(codes.PermissionDenied,
+			"this attempt has already had a different request signed; re-claim the job to "+
+				"certify a new key")
+	}
+	return nil
 }
 
 // Call only while holding this identity's issuance fence, before replaying an

@@ -113,7 +113,8 @@ describe("C10-1 issuer catalog and connection tests", () => {
     expect(within(dialog).queryByRole("button", { name: "Create issuer" })).not.toBeInTheDocument();
     expect(within(dialog).queryByRole("button", { name: "Record public CA metadata only" })).not.toBeInTheDocument();
     expect(within(dialog).getByText(/control-plane operator configures/)).toBeInTheDocument();
-    expect(within(dialog).getByText(/TRSTCTL_CONFIG_FILE/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/server JSON configuration selected at startup/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/docs\/configuration.md/)).toBeInTheDocument();
     const config = JSON.parse(within(dialog).getByTestId("vault-operator-config").textContent ?? "");
     expect(config.external_cas[0]).toMatchObject({ type: "vaultpki", mount: "pki", role: "web-certs", bearer_token_ref: "file:/run/secrets/vault-token" });
     expect(config.external_cas[0].network).toMatchObject({

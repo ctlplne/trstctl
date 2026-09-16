@@ -41,34 +41,28 @@ func (o *Orchestrator) emitCertificateRecording(ctx context.Context, next events
 			if err := o.store.LockCertificateRecordingTx(readCtx, tx, next.TenantID, material.Fingerprint); err != nil {
 				return err
 			}
-			if err := o.catchUpCertificateRecordingTx(readCtx, tx, next.TenantID, material.Fingerprint); err != nil {
+			retained, found, err := o.catchUpCertificateRecordingAndLookupTx(readCtx, tx, next.TenantID, material.Fingerprint, next.ID)
+			if err != nil {
 				return err
 			}
 			if err := o.store.ValidateCertificateIssuanceBindingTx(readCtx, tx, next.TenantID, material); err != nil {
 				return err
 			}
-			if next.ID != "" {
-				retained, found, err := o.log.EventByID(readCtx, next.ID)
-				if err != nil {
-					return err
+			if found {
+				version := next.SchemaVersion
+				if version == 0 {
+					version = events.DefaultSchemaVersion
 				}
-				if found {
-					version := next.SchemaVersion
-					if version == 0 {
-						version = events.DefaultSchemaVersion
-					}
-					if retained.Type != next.Type || !sameCertificateRecordingTenant(retained.TenantID, next.TenantID) ||
-						retained.SchemaVersion != version || !bytes.Equal(retained.Data, next.Data) {
-						return fmt.Errorf("%w: retained certificate command differs", store.ErrIdempotencyConflict)
-					}
-					result = retained
-					return o.proj.ApplyTx(readCtx, tx, retained)
+				if retained.Type != next.Type || !sameCertificateRecordingTenant(retained.TenantID, next.TenantID) ||
+					retained.SchemaVersion != version || !bytes.Equal(retained.Data, next.Data) {
+					return fmt.Errorf("%w: retained certificate command differs", store.ErrIdempotencyConflict)
 				}
+				result = retained
+				return o.proj.ApplyTx(readCtx, tx, retained)
 			}
 			if err := o.guardCertificateRecordingAppendTx(readCtx, tx, next.TenantID, material); err != nil {
 				return err
 			}
-			var err error
 			result, err = o.log.Append(readCtx, next)
 			if err != nil {
 				return err
@@ -85,25 +79,56 @@ func (o *Orchestrator) emitCertificateRecording(ctx context.Context, next events
 // next boot must still be able to replay every retained event in source order.
 // The log cut is finite; caller cancellation and deadlines remain active.
 func (o *Orchestrator) catchUpCertificateRecordingTx(ctx context.Context, tx pgx.Tx, tenantID, fingerprint string) error {
+	_, _, err := o.catchUpCertificateRecordingAndLookupTx(ctx, tx, tenantID, fingerprint, "")
+	return err
+}
+
+func (o *Orchestrator) catchUpCertificateRecordingAndLookupTx(ctx context.Context, tx pgx.Tx, tenantID, fingerprint, eventID string) (events.Event, bool, error) {
 	head, err := o.store.CertificateRecordingHeadTx(ctx, tx, tenantID, fingerprint)
 	if err != nil {
-		return err
+		return events.Event{}, false, err
 	}
 	if head.Exists && head.Sequence == 0 {
-		return store.ErrCertificateRecordingRebuildRequired
+		return events.Event{}, false, store.ErrCertificateRecordingRebuildRequired
 	}
 	through, err := o.log.LastSequence(ctx)
 	if err != nil {
-		return err
+		return events.Event{}, false, err
 	}
 	if head.Sequence > through {
-		return errors.New("orchestrator: certificate recording cursor is beyond retained log head")
+		return events.Event{}, false, errors.New("orchestrator: certificate recording cursor is beyond retained log head")
 	}
 	from := head.Sequence + 1
 	if from == 0 {
-		return errors.New("orchestrator: certificate recording cursor overflow")
+		return events.Event{}, false, errors.New("orchestrator: certificate recording cursor overflow")
 	}
-	return o.log.ReplayThrough(ctx, from, through, func(e events.Event) error {
+	page := make([]events.Event, 0, store.CertificateMetadataReceiptBatchLimit)
+	pageBytes := 0
+	flush := func() error {
+		done, err := o.store.CertificateMetadataEventsAppliedTx(ctx, tx, tenantID, page)
+		if err != nil {
+			return err
+		}
+		for i, e := range page {
+			if done[i] {
+				continue
+			}
+			_, recording, err := projections.CertificateRecordingMaterial(e)
+			if err != nil {
+				return err
+			}
+			if !recording {
+				return fmt.Errorf("%w: pending metadata event %d must project in order before a new recording", store.ErrCertificateRecordingRebuildRequired, e.Sequence)
+			}
+			if err := o.proj.ApplyTx(ctx, tx, e); err != nil {
+				return err
+			}
+		}
+		clear(page)
+		page, pageBytes = page[:0], 0
+		return nil
+	}
+	visit := func(e events.Event) error {
 		if !sameCertificateRecordingTenant(e.TenantID, tenantID) {
 			return nil
 		}
@@ -111,34 +136,45 @@ func (o *Orchestrator) catchUpCertificateRecordingTx(ctx context.Context, tx pgx
 		if err != nil {
 			return err
 		}
-		if dependent {
-			_, recording, err := projections.CertificateRecordingMaterial(e)
-			if err != nil {
-				return err
-			}
-			// The caller already holds the tenant metadata and privacy fences.
-			// An exact completed receipt makes this event inert; avoid installing
-			// projection context and retaking that fence just to check it again.
-			done, err := o.store.CertificateMetadataEventAppliedTx(ctx, tx, e)
-			if err != nil {
-				return err
-			}
-			if done {
-				return nil
-			}
-			if !recording {
-				return fmt.Errorf("%w: pending metadata event %d must project in order before a new recording", store.ErrCertificateRecordingRebuildRequired, e.Sequence)
-			}
-		}
-		_, recording, err := projections.CertificateRecordingMaterial(e)
-		if err != nil {
-			return err
-		}
-		if !recording {
+		if !dependent {
 			return nil
 		}
-		return o.proj.ApplyTx(ctx, tx, e)
-	})
+		// Match ApplyTx: admit the schema, then verify the whole immutable
+		// envelope against its completion receipt before decoding certificate
+		// material again. Only an exact receipt can skip domain decoding;
+		// flush still decodes every unapplied recording before projection.
+		// Keep transport and memory bounded without replacing source history
+		// with a maximum SQL sequence. Large envelopes get their own page.
+		const maxPageBytes = 1 << 20
+		if len(page) > 0 && pageBytes+len(e.Data) > maxPageBytes {
+			if err := flush(); err != nil {
+				return err
+			}
+		}
+		page = append(page, e)
+		pageBytes += len(e.Data)
+		if len(page) == cap(page) || pageBytes >= maxPageBytes {
+			return flush()
+		}
+		return nil
+	}
+	var retained events.Event
+	var found bool
+	if eventID == "" {
+		err = o.log.ReplayThrough(ctx, from, through, visit)
+	} else {
+		// Lookup and recovery inspect the same immutable cut under the tenant
+		// metadata/privacy fences. Reuse decoded envelopes, not a SQL maximum
+		// or a cross-command cache of previously verified history.
+		retained, found, err = o.log.ReplayThroughAndLookup(ctx, from, through, eventID, visit)
+	}
+	if err != nil {
+		return events.Event{}, false, err
+	}
+	if err := flush(); err != nil {
+		return events.Event{}, false, err
+	}
+	return retained, found, nil
 }
 
 // SQL tenant keys are UUIDs. Recovery must compare the same UUID domain as the

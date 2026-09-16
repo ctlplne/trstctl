@@ -811,6 +811,7 @@ type route struct {
 	responseOverrides  map[string]Response
 	unavailableReason  string
 	mutation           bool
+	readOnly           bool // explicit contract for a reviewed read using a write-shaped HTTP method
 	sensitiveResponse  bool
 	perm               authz.Permission // required permission; "" means public
 	scope              routeScope
@@ -1327,7 +1328,7 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/graph/crypto-readiness/actions", opID: "startCryptoReadinessAction", summary: "Create a tenant action bound to current crypto readiness topology and owner", handler: a.startCryptoReadinessAction, reqSchema: "PQCMigrationCampaignStartRequest", resSchema: "PQCMigrationCampaign", successCode: "201", mutation: true, perm: authz.DiscoveryWrite},
 		{method: "GET", path: "/api/v1/graph/crypto-readiness/export", opID: "exportCryptoReadiness", summary: "Export signed canonical crypto readiness as JSON, CSV, and NDJSON", handler: a.exportCryptoReadiness, resSchema: "CryptoReadinessExport", successCode: "200", perm: authz.AuditRead},
 		{method: "GET", path: "/api/v1/graph/blast-radius/{id}", opID: "graphBlastRadius", summary: "Blast radius of compromising a node", handler: a.graphBlastRadius, pathParams: graphNodePath, resSchema: "GraphImpact", successCode: "200", perm: authz.GraphRead},
-		{method: "POST", path: "/api/v1/graph/query", opID: "graphQuery", summary: "Run a Cypher-style graph query", handler: a.graphQuery, resSchema: "GraphQueryResult", successCode: "200", perm: authz.GraphRead},
+		{method: "POST", path: "/api/v1/graph/query", opID: "graphQuery", summary: "Run a Cypher-style graph query", handler: a.graphQuery, reqSchema: "GraphQueryRequest", resSchema: "GraphQueryResult", successCode: "200", readOnly: true, perm: authz.GraphRead},
 		{method: "GET", path: "/api/v1/ca/keys/{id}/retirement", opID: "getCARetirementChecklist", summary: "List the dependents blocking a CA key's destruction, and the destruction record once complete", handler: a.getCARetirementChecklist, pathParams: graphNodePath, resSchema: "RetirementChecklist", successCode: "200", perm: authz.KeysRead},
 		{method: "POST", path: "/api/v1/migrations/assess", opID: "assessMigration", summary: "Assess a migration plan read-only: what it would touch and what is unknown", handler: a.assessMigration, reqSchema: "MigrationAssessRequest", resSchema: "MigrationAssessment", successCode: "200", perm: authz.GraphRead},
 		{method: "POST", path: "/api/v1/migrations/runs", opID: "startMigrationRun", summary: "Start an exact-agent trust-before-leaf migration run", handler: a.startMigrationRun, reqSchema: "MigrationRunStartRequest", resSchema: "MigrationRun", successCode: "201", mutation: true, perm: authz.KeysWrite},

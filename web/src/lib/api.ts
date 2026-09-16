@@ -1843,7 +1843,7 @@ export interface Api {
   issueSSHCertificate(input: SSHCertificateRequest): Promise<SSHCertificate>;
   previewAttestedSSHUserCert(input: SSHAttestedUserCertRequest): Promise<SSHAttestedUserCertPreview>;
   issueAttestedSSHUserCert(input: SSHAttestedUserCertRequest, idempotencyKey?: string): Promise<SSHAttestedUserCert>;
-  revokeSSHCertificate(input: SSHRevokeCertificateRequest): Promise<SSHStatus>;
+  revokeSSHCertificate(input: SSHRevokeCertificateRequest, idempotencyKey?: string): Promise<SSHStatus>;
   retireSSHHost(input: SSHHostRetireRequest): Promise<SSHHostRetirement>;
   protocolStatuses(): Promise<ProtocolRuntimeStatusList>;
   /** F22: effect-free, credential-free proof of the public EST CA, CSR-rules, and authentication surfaces. */
@@ -2427,7 +2427,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   issueSSHCertificate: (input) => mutate<SSHCertificate>("POST", "/api/v1/ssh/certificates", input),
   previewAttestedSSHUserCert: (input) => postRead<SSHAttestedUserCertPreview>("/api/v1/ssh/attested-user-certs/preview", input),
   issueAttestedSSHUserCert: (input, idempotencyKey) => mutate<SSHAttestedUserCert>("POST", "/api/v1/ssh/attested-user-certs", input, idempotencyKey),
-  revokeSSHCertificate: (input) => mutate<SSHStatus>("POST", "/api/v1/ssh/certificates/revoke", input),
+  revokeSSHCertificate: (input, idempotencyKey) => mutate<SSHStatus>("POST", "/api/v1/ssh/certificates/revoke", input, idempotencyKey),
   retireSSHHost: (input) => mutate<SSHHostRetirement>("POST", "/api/v1/ssh/hosts/retire", input),
   // Browser protocol probes are feature work. Keep their parsers and probe
   // tables out of login and the shell; preview isolation is still enforced by

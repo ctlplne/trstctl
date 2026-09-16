@@ -445,7 +445,7 @@ func hostPreflightActions(name string, target HostTargetConfig) ([]connector.Loc
 		if err := require(field("cert_path", target.CertPath), field("key_path", target.KeyPath)); err != nil {
 			return nil, err
 		}
-		return []connector.LocalActionInvocation{action("catalina.sh", "reload")}, nil
+		return []connector.LocalActionInvocation{action(tomcat.TLSReloadAction)}, nil
 	case "postfix":
 		if err := require(
 			field("postfix_cert_path", target.PostfixCertPath), field("postfix_key_path", target.PostfixKeyPath),

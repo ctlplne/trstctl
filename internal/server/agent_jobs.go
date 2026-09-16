@@ -479,13 +479,14 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 	if a.outbox == nil {
 		return nil, status.Error(codes.Internal, "agent job outbox completion is not configured")
 	}
-	if err := a.recordCertificateCustodyFromJob(ctx, info, claim, req); err != nil {
-		return nil, status.Errorf(codes.Internal, "record signed certificate custody: %v", err)
-	}
 
 	if ingestErr := a.ingestExecutedReport(ctx, info, agentID, claim, req); ingestErr != nil {
 		return nil, status.Errorf(codes.Internal, "ingest signed agent result: %v", ingestErr)
 	}
+	if err := a.recordCertificateCustodyFromJob(ctx, info, claim, req); err != nil {
+		return nil, status.Errorf(codes.Internal, "record signed certificate custody: %v", err)
+	}
+
 	if receiptErr := a.recordAgentConnectorDelivery(ctx, info, claim, req); receiptErr != nil {
 		return nil, status.Errorf(codes.Internal, "record signed agent connector delivery: %v", receiptErr)
 	}
@@ -515,6 +516,15 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 			return nil, status.Errorf(codes.Internal, "record retired host rotation: %v", err)
 		}
 	}
+	a.recordExecutedReportObservations(ctx, info, agentID, claim, req, now)
+	return &transport.ReportJobResultResponse{Accepted: true}, nil
+}
+
+// recordExecutedReportObservations runs only after the exact agent claim has
+// been durably retired. These receipt and verification callbacks preserve the
+// original order; acceptance and its error paths stay in acceptExecutedReport.
+func (a *agentService) recordExecutedReportObservations(ctx context.Context, info mtls.PeerCertInfo, agentID string,
+	claim store.AgentJobResultClaim, req *transport.ReportJobResultRequest, now time.Time) {
 	destination, idemKey := claim.Destination, claim.IdempotencyKey
 	// The receipt travels WITH the event, not beside it. An event that says
 	// an agent executed a deploy, with the agent's own signature over that
@@ -557,42 +567,6 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 	if destination == "connector.test" && a.recordDryRun != nil {
 		a.recordDryRun(ctx, info.TenantID, info.CommonName, idemKey, req.Detail)
 	}
-	// D2: a verification sweep becomes observed endpoint state. The report is
-	// the whole point of the job — a sweep whose findings stayed in the job row
-	// would leave the estate exactly as blind as before it ran.
-	if destination == relay.KindEndpointVerify && a.recordEndpointVerification != nil {
-		a.recordEndpointVerification(ctx, info.TenantID, info.CommonName, idemKey, req.Detail)
-	}
-	// D2, local vantage: a deploy that verified — or failed to — carries the
-	// same report shape as a sweep. One decoder for both, because the one that
-	// drifts is always the one exercised less, and here that would be the only
-	// witness that a reload took effect.
-	if destination == "connector.deploy" && a.recordDeployVerification != nil &&
-		(req.Outcome == transport.JobOutcomeVerified || req.Outcome == transport.JobOutcomeVerifyFailed) {
-		payload, _, _ := a.store.AgentJobPayload(ctx, info.TenantID, req.JobID)
-		a.recordDeployVerification(ctx, info.TenantID, info.CommonName, idemKey, req.Detail, payload)
-	}
-	if destination == "connector.rollback" && a.recordDeployVerification != nil &&
-		(req.Outcome == transport.JobOutcomeVerified || req.Outcome == transport.JobOutcomeVerifyFailed) {
-		a.recordDeployVerification(ctx, info.TenantID, info.CommonName, idemKey, req.Detail, claim.Payload)
-	}
-	// B2: a host-generated renewal reports the same three outcomes a deploy
-	// does, and needs the same two things done with them.
-	//
-	// The lifecycle transition is the load-bearing one. The dispatcher hands
-	// this renewal off and returns WITHOUT moving the identity out of
-	// StateRenewing — deliberately, because the certificate does not exist yet
-	// — so nothing else in the system will ever move it. An identity left in
-	// renewing is not merely mislabelled: the scheduler will not renew it
-	// again, so the endpoint silently stops being renewed and expires months
-	// later with every surface reporting the rotation as succeeded.
-	if destination == agentJobKindEndpointRenew {
-		payload, _, _ := a.store.AgentJobPayload(ctx, info.TenantID, req.JobID)
-		if a.recordDeployVerification != nil &&
-			(req.Outcome == transport.JobOutcomeVerified || req.Outcome == transport.JobOutcomeVerifyFailed) {
-			a.recordDeployVerification(ctx, info.TenantID, info.CommonName, idemKey, req.Detail, payload)
-		}
-	}
 	// D2 + D4: the deploy applied and the listener is not serving it. That is
 	// the one condition under which a rollback is unambiguously the right
 	// response, and it is the decision D4's executed re-bind was waiting for.
@@ -607,7 +581,6 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 	if destination == "connector.rollback" && a.recordRollback != nil {
 		a.recordRollbackFromJob(ctx, info.TenantID, info.CommonName, req.JobID, req.Attempt, idemKey, req.Outcome, "")
 	}
-	return &transport.ReportJobResultResponse{Accepted: true}, nil
 }
 
 // recordAgentConnectorDelivery turns an accepted agent attempt into the same
@@ -695,6 +668,27 @@ func (a *agentService) recordAgentConnectorDelivery(
 		RollbackRef:    rollbackRef,
 		IdempotencyKey: claim.IdempotencyKey,
 	})
+	if err != nil {
+		return err
+	}
+	if (req.Outcome != transport.JobOutcomeVerified && req.Outcome != transport.JobOutcomeVerifyFailed) || req.EvidenceDigest == "" {
+		return nil
+	}
+	// Admission already validated this exact report. Record verification after
+	// delivery, but before the claim is retired. Stable IDs make retries converge.
+	var report relay.EndpointVerifyReport
+	if err := decodeStrictJSON([]byte(req.Detail), &report); err != nil || len(report.Results) != 1 {
+		return errors.New("admitted deployment verification cannot be decoded")
+	}
+	result := report.Results[0]
+	verified := deploymentVerificationReceipt(intent, result.Transcript, result.Detail)
+	verified.ID = evidenceID("connector-verification", info.TenantID, claim.IdempotencyKey, req.JobID)
+	// The delivery row owns the unique outbox correlation. Verification is a
+	// separate historical fact, linked by its stable ID and :verified key.
+	verified.Attempts = req.Attempt
+	verified.IdempotencyKey = claim.IdempotencyKey + ":verified"
+	_, err = a.orch.RecordConnectorDeliveryWithEventID(ctx, info.TenantID,
+		evidenceID("connector-verification-event", info.TenantID, eventKey, req.JobID), verified)
 	return err
 }
 
@@ -724,6 +718,21 @@ func (a *agentService) ingestExecutedReport(
 		return ingestErr
 	}
 	switch claim.Destination {
+	case "connector.deploy", "connector.rollback", agentJobKindEndpointRenew:
+		if req.Outcome != transport.JobOutcomeVerified && req.Outcome != transport.JobOutcomeVerifyFailed {
+			return nil
+		}
+		if a.recordDeployVerification == nil {
+			return errors.New("deployment verification receiver is not configured")
+		}
+		return a.recordDeployVerification(ctx, info.TenantID, info.CommonName, claim, req)
+	case relay.KindEndpointVerify:
+		if a.recordEndpointVerification == nil {
+			return errors.New("endpoint verification receiver is not configured")
+		}
+		attemptKey := fmt.Sprintf("%s:attempt:%d", claim.IdempotencyKey, req.Attempt)
+		return a.recordEndpointVerification(ctx, info.TenantID, info.CommonName, attemptKey,
+			claim.Payload, req.Detail, req.EvidenceDigest)
 	case agentJobKindCMDBSync:
 		if a.recordCMDBSync == nil {
 			return errors.New("CMDB result receiver is not configured")
@@ -884,6 +893,7 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 	if releaseErr != nil {
 		return nil, status.Errorf(codes.Internal, "release agent job: %v", releaseErr)
 	}
+
 	if ok && a.recordRollback != nil {
 		if dest, derr := a.store.AgentJobDestination(ctx, info.TenantID, req.JobID); derr == nil && dest == "connector.rollback" {
 			// The agent's reported detail is a closed-set reason for this

@@ -58,6 +58,11 @@ func (s *Store) UpsertCryptoAsset(ctx context.Context, a CryptoAsset) (CryptoAss
 		a.ID = StableCryptoAssetID(a.TenantID, signature)
 	}
 	err := s.WithTenant(ctx, a.TenantID, func(tx pgx.Tx) error {
+		// The direct writer derives the same ID as event replay; join the
+		// projector's arbiter lock before either unique index is touched.
+		if err := lockUpsertArbiterTx(ctx, tx, "crypto_assets", a.TenantID, signature); err != nil {
+			return err
+		}
 		return tx.QueryRow(ctx,
 			`INSERT INTO crypto_assets
 			        (id, tenant_id, signature, kind, location, algorithm, key_bits, protocol, cipher,

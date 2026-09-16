@@ -34,30 +34,24 @@ func (s *Store) LockCertificateRecordingTx(ctx context.Context, tx pgx.Tx, tenan
 	// Live writers must take the relation lock before the fingerprint lock.
 	// Otherwise a rebuild could hold the table and wait on our fingerprint
 	// while we hold that fingerprint and wait on its table: a lock inversion.
-	if _, err := tx.Exec(ctx, `LOCK TABLE certificates IN ROW EXCLUSIVE MODE`); err != nil {
-		return err
-	}
-	if err := s.LockCertificateMetadataOrderTx(ctx, tx, tenantID); err != nil {
-		return err
-	}
-	var ownsWholeTable bool
+	// The scope check above completes before any lock is sent. PostgreSQL then
+	// executes this finite batch in the same relation -> metadata -> fingerprint
+	// order as individual calls. Close drains every result and propagates any
+	// statement failure before the caller can read history or append an event.
+	batch := &pgx.Batch{}
+	batch.Queue(`LOCK TABLE certificates IN ROW EXCLUSIVE MODE`)
+	batch.Queue(certificateMetadataOrderLockSQL, tenantID)
+	// Atomic rebuild/restore already excludes every other certificate writer.
+	// The SQL predicate avoids retaining an advisory lock per replayed leaf.
+	// Canonical PostgreSQL UUID spelling keeps equivalent tenant IDs together.
 	//trstctl:system-query — within the tenant's RLS context, inspect only this backend's granted lock in the system pg_locks catalog; no tenant data or other backend identity is selected (AN-1 exemption).
-	if err := tx.QueryRow(ctx, `SELECT EXISTS (
+	batch.Queue(`SELECT pg_advisory_xact_lock(hashtextextended(
+		'certificate-recording' || chr(31) || $1::uuid::text || chr(31) || $2::text,0))
+		WHERE NOT EXISTS (
 		SELECT 1 FROM pg_locks WHERE pid=pg_backend_pid() AND locktype='relation'
 		AND relation='certificates'::regclass AND mode='AccessExclusiveLock' AND granted
-	)`).Scan(&ownsWholeTable); err != nil {
-		return err
-	}
-	if ownsWholeTable {
-		// Atomic rebuild/restore already excludes every other certificate
-		// writer. Do not retain one extra advisory lock per replayed leaf.
-		return nil
-	}
-	// PostgreSQL UUID spelling is canonical, so upper/lowercase spellings of
-	// one tenant cannot acquire different locks for the same stored row.
-	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended(
-		'certificate-recording' || chr(31) || $1::uuid::text || chr(31) || $2::text,0))`, tenantID, fingerprint)
-	return err
+	)`, tenantID, fingerprint)
+	return tx.SendBatch(ctx, batch).Close()
 }
 
 // ErrCertificateRecordingRebuildRequired distinguishes an upgraded old row from

@@ -1,14 +1,10 @@
 // SPDX-License-Identifier: MPL-2.0
 
-// Package ttlmap holds the ONE bounded-TTL-map eviction algorithm the
-// control plane's request-path caches share. The same shape used to be
-// hand-written three times — the served OCSP response cache, the licensed
-// white-label resolver, and the agent's revocation cache — differing only in
-// expiry representation, and that divergence is exactly where one copy's
-// future-timestamp bug lived (AUD-201 follow-up F2/V28, after F1/V7): a sweep
-// judged against the wrong clock mass-flushed live entries. Sharing the
-// algorithm and taking the clock as an EXPLICIT argument makes that bug
-// unrepresentable at the call site.
+// Package ttlmap provides bounded eviction for maps with caller-defined expiry
+// and ranking rules. Callers pass their wall clock explicitly: using a new
+// entry's future expiry as the clock once flushed still-valid responses.
+// The public OCSP response cache uses an indexed expiry heap to retain this
+// policy without scanning a full map for every distinct serial.
 package ttlmap
 
 import "time"

@@ -3701,6 +3701,10 @@ export interface GraphNode {
   name: string;
 }
 
+export interface GraphQueryRequest {
+  query: string;
+}
+
 export interface GraphQueryResult {
   rows: Record<string, unknown>[];
 }

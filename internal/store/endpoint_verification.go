@@ -4,10 +4,30 @@ package store
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 )
+
+// EndpointVerificationLastGoodTx snapshots the control plane's own observation
+// history while the caller holds certificate metadata admission. An absent row
+// means the endpoint has never been verified; database errors are not absence.
+func (s *Store) EndpointVerificationLastGoodTx(ctx context.Context, tx pgx.Tx, tenantID, endpointID, vantage string) (time.Time, error) {
+	var lastGood *time.Time
+	err := tx.QueryRow(ctx, `SELECT last_good_at FROM endpoint_verifications
+	 WHERE tenant_id=$1 AND endpoint_id=$2 AND vantage=$3`, tenantID, endpointID, vantage).Scan(&lastGood)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return time.Time{}, nil
+	}
+	if err != nil {
+		return time.Time{}, err
+	}
+	if lastGood == nil {
+		return time.Time{}, nil
+	}
+	return lastGood.UTC(), nil
+}
 
 // Observed endpoint identity (epic D2).
 //

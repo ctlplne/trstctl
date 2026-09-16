@@ -117,8 +117,9 @@ func TestSPIFFECustodyRowsFollowBothProductionSockets(t *testing.T) {
 }
 
 // TestRenewalCustodyRowsFollowTheProductionBranch pins the load-bearing order:
-// handleRenew asks whether the target executes on the agent before the fallback
-// mint can run. It also follows the queued work to the host executor that makes
+// handleRenew runs its durable effect through executeRenewal, which asks whether
+// the target executes on the agent before the fallback mint can run. It also
+// follows the queued work to the host executor that makes
 // the key. A census-only docs test missed both facts while stale prose stayed
 // green.
 func TestRenewalCustodyRowsFollowTheProductionBranch(t *testing.T) {
@@ -128,7 +129,12 @@ func TestRenewalCustodyRowsFollowTheProductionBranch(t *testing.T) {
 	requireCallBefore(t, handleIssue, "d.enqueueHostRenewal", "d.mintServedLeafForTrigger",
 		"a no-CSR first issuance for an agent-executed target must branch before the fallback mint")
 	handleRenew := goFunction(t, "../internal/server/issuance.go", "handleRenew")
-	requireCallBefore(t, handleRenew, "d.dispatchHostRenewal", "d.mintServedLeafForRenewal",
+	requireCall(t, handleRenew, "d.idem.Do",
+		"renewal must execute through its durable idempotency boundary")
+	requireCall(t, handleRenew, "d.executeRenewal",
+		"the served renewal handler must reach the credential-bearing effect")
+	renewalEffect := goFunction(t, "../internal/server/issuance.go", "executeRenewal")
+	requireCallBefore(t, renewalEffect, "d.dispatchHostRenewal", "d.mintServedLeafForRenewal",
 		"agent-executed renewal must branch before any control-plane fallback mint")
 	dispatch := goFunction(t, "../internal/server/host_renewal_enqueue.go", "dispatchHostRenewal")
 	requireCallBefore(t, dispatch, "d.hostRenewalTargetFor", "d.enqueueHostRenewal",

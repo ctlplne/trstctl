@@ -289,7 +289,7 @@ func (l *StoreDeliveryReceiptLedger) HasNotificationDelivery(ctx context.Context
 		got.Destination != want.Destination || got.Channel != want.Channel ||
 		!crypto.ConstantTimeEqual([]byte(got.NotificationKeyDigest), []byte(want.NotificationKeyDigest)) ||
 		!crypto.ConstantTimeEqual([]byte(got.PayloadDigest), []byte(want.PayloadDigest)) {
-		return false, fmt.Errorf("%w: notification delivery receipt binding differs", store.ErrIdempotencyConflict)
+		return false, notificationReceiptBindingError{}
 	}
 	return true, nil
 }
@@ -328,4 +328,16 @@ func (l *StoreDeliveryReceiptLedger) RecordNotificationDelivery(ctx context.Cont
 		return err
 	}
 	return l.projector.Apply(ctx, ev)
+}
+
+// This closed, credential-free error identifies a conflicting historical
+// command. Changing receiver credentials or retrying cannot repair its binding.
+type notificationReceiptBindingError struct{}
+
+func (notificationReceiptBindingError) Error() string {
+	return "notify: this alert conflicts with a retained delivery receipt; preserve the receipt and issue a new correctly bound alert"
+}
+func (notificationReceiptBindingError) Unwrap() error { return store.ErrIdempotencyConflict }
+func (notificationReceiptBindingError) SafeDeliveryClass() string {
+	return "notification_receipt_binding_conflict"
 }

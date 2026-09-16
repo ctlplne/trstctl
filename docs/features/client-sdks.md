@@ -78,6 +78,12 @@ runs the Python TypedDict generator, generates the Java OpenAPI schema index, an
 
 ### Go
 
+For evaluation certificates or a private CA, use the
+[complete Go connection example](../guides/go-sdk-private-ca.md).
+`trstctl.New` uses the operating system trust roots unless you supply an HTTP
+client with `WithHTTPClient`; it does not read `TRSTCTL_CA_FILE` automatically.
+The shorter snippets below assume your HTTP client already trusts the server CA.
+
 The Go SDK is its own module (`trstctl.com/sdk/go`) that imports nothing
 outside the standard library, so adding it never drags the control plane's
 dependency graph into your build.

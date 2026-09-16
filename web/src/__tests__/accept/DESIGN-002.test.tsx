@@ -30,6 +30,19 @@ const explorerSpec = {
   openapi: "3.1.0",
   info: { title: "trstctl API", version: "v1" },
   paths: {
+    "/api/v1/graph/query": {
+      post: {
+        operationId: "graphQuery",
+        summary: "Query the credential graph",
+        "x-trstctl-read-only": true,
+        "x-trstctl-permission": "graph:read",
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { $ref: "#/components/schemas/GraphQueryRequest" } } },
+        },
+        responses: { "200": { description: "Matching graph rows" } },
+      },
+    },
     "/api/v1/certificates": {
       get: {
         operationId: "listCertificates",
@@ -96,6 +109,11 @@ const explorerSpec = {
   },
   components: {
     schemas: {
+      GraphQueryRequest: {
+        type: "object",
+        required: ["query"],
+        properties: { query: { type: "string", minLength: 1 } },
+      },
       IdentityRequest: {
         type: "object",
         required: ["kind", "name", "owner_id"],
@@ -299,6 +317,45 @@ describe("DESIGN-002 answer-first API playground", () => {
     await user.click(screen.getByRole("button", { name: "Generate test key" }));
     await user.click(await screen.findByRole("button", { name: "Run request" }));
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(`/api/v1/identities/${identityID}`, expect.objectContaining({ method: "GET" })));
+  });
+
+  it("sends an explicit read-only POST query with validated body and scoped access", async () => {
+    const user = userEvent.setup();
+    const query = 'MATCH (n) WHERE n.name = "payments" RETURN n';
+    vi.mocked(globalThis.fetch).mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/v1/openapi.json") {
+        return new Response(JSON.stringify(explorerSpec), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      expect(url).toBe("/api/v1/graph/query");
+      expect(init).toEqual(
+        expect.objectContaining({
+          method: "POST",
+          headers: expect.objectContaining({ Authorization: "Bearer trst_test_docs_token" }),
+          body: JSON.stringify({ query }),
+        }),
+      );
+      expect(init?.headers).not.toHaveProperty("Idempotency-Key");
+      return new Response(JSON.stringify({ rows: [{ n: "workload-payments" }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    renderRoute();
+    await openPlayground(user);
+    await selectOperation(user, /graphQuery/);
+    const body = screen.getByRole("textbox", { name: "Request body JSON" });
+    await user.click(screen.getByRole("button", { name: "Generate test key" }));
+    await waitFor(() => expect(apiMock.createAPIToken).toHaveBeenCalledWith(expect.objectContaining({ scopes: ["graph:read"] })));
+    fireEvent.change(body, { target: { value: JSON.stringify({ query: "" }) } });
+    expect(screen.getByRole("button", { name: "Run request" })).toBeDisabled();
+    fireEvent.change(body, { target: { value: JSON.stringify({ query }) } });
+    expect(screen.queryByRole("checkbox", { name: /I reviewed this exact mutation request/ })).not.toBeInTheDocument();
+    expect(screen.queryByText("Changes data — confirmation required", { exact: true })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run request" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Run request" }));
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith("/api/v1/graph/query", expect.objectContaining({ method: "POST" })));
+    expect(await screen.findByText(/workload-payments/)).toBeInTheDocument();
   });
 
   it("requires an edited valid body and explicit review before a mutation", async () => {

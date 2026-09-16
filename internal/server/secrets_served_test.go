@@ -894,6 +894,7 @@ func TestServedSecretShareSurvivesRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("restart build: %v", err)
 	}
+	cleanupServedServer(t, restarted)
 	ts2 := httptest.NewServer(restarted.Handler())
 	t.Cleanup(ts2.Close)
 	restartedHarness := &servedHarness{ts: ts2}
@@ -1734,6 +1735,7 @@ func TestApplicationSecretCreateResponseLossReplaysReceiptWithoutSealer(t *testi
 	if err != nil {
 		t.Fatalf("restart with unavailable sealer: %v", err)
 	}
+	cleanupServedServer(t, restarted)
 	ts := httptest.NewServer(restarted.Handler())
 	t.Cleanup(ts.Close)
 	h2 := &servedHarness{ts: ts, store: h.store, log: h.log, tenant: h.tenant, srv: restarted}
@@ -1882,6 +1884,7 @@ func TestApplicationSecretRestartIsolatesTenantCustodyAndRetries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("tenant A custody outage failed whole startup: %v", err)
 	}
+	cleanupServedServer(t, restarted)
 	secretB, err := h.store.GetSecret(context.Background(), tenantB, "custody-b")
 	if err != nil || secretB.Version != 1 {
 		t.Fatalf("tenant A outage prevented tenant B finalization: secret=%+v err=%v", secretB, err)
@@ -2067,6 +2070,7 @@ func TestApplicationSecretLegacyActorlessFenceStartsDegradedAndLiveRetryFailsClo
 	if err != nil {
 		t.Fatalf("legacy actorless fence prevented safe startup: %v", err)
 	}
+	cleanupServedServer(t, restarted)
 	if restarted.api.ApplicationSecretMutationReconcileBlockedCount() != 1 ||
 		!restarted.api.ApplicationSecretMutationReconcileDegraded() {
 		t.Fatalf("legacy actorless startup health blocked=%d degraded=%t, want 1/true",
@@ -2183,6 +2187,7 @@ func TestApplicationSecretRequiredFenceSurvivesApprovalDisabledRestart(t *testin
 	if err != nil {
 		t.Fatalf("approval-disabled restart: %v", err)
 	}
+	cleanupServedServer(t, restarted)
 	h2 := &servedHarness{srv: restarted, store: h.store, log: h.log, tenant: h.tenant}
 	ts := httptest.NewServer(restarted.Handler())
 	t.Cleanup(ts.Close)

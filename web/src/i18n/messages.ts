@@ -12,6 +12,92 @@ export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
 
 export const messages = {
+  "sshTrust.revoke.choose": { defaultMessage: "Choose revocation scope", description: "SSH revocation scope, review and consumer verification." },
+  "sshTrust.revoke.chooseBody": {
+    defaultMessage: "Choose a serial, a key ID, or both. Review the effect before publishing.",
+    description: "SSH revocation scope, review and consumer verification.",
+  },
+  "sshTrust.revoke.reviewHeading": { defaultMessage: "Review access removal", description: "SSH revocation scope, review and consumer verification." },
+  "sshTrust.revoke.reviewBody": {
+    defaultMessage: "This review has made no changes. Publishing records the revocation and updates the downloadable KRL.",
+    description: "SSH revocation scope, review and consumer verification.",
+  },
+  "sshTrust.revoke.publishedStep": { defaultMessage: "Distribute and verify", description: "SSH revocation scope, review and consumer verification." },
+  "sshTrust.revoke.publishedBody": {
+    defaultMessage: "Access removal depends on consumers loading the current revocation list.",
+    description: "SSH revocation scope, review and consumer verification.",
+  },
+  "sshTrust.revoke.progress": { defaultMessage: "SSH revocation progress", description: "SSH revocation scope, review and consumer verification." },
+  "sshTrust.revoke.scope": { defaultMessage: "Revocation scope", description: "SSH revocation scope, review and consumer verification." },
+  "sshTrust.revoke.scopeSerial": { defaultMessage: "One serial", description: "SSH revocation scope, review and consumer verification." },
+  "sshTrust.revoke.scopeKeyID": { defaultMessage: "All certificates with a key ID", description: "SSH revocation scope, review and consumer verification." },
+  "sshTrust.revoke.scopeBoth": {
+    defaultMessage: "Serial plus all certificates with a key ID",
+    description: "SSH revocation scope, review and consumer verification.",
+  },
+  "sshTrust.revoke.serial": { defaultMessage: "Certificate serial", description: "SSH revocation scope, review and consumer verification." },
+  "sshTrust.revoke.keyIDHelp": {
+    defaultMessage: "Matches the certificate name, not the public-key fingerprint. Every matching certificate is affected.",
+    description: "SSH revocation scope, review and consumer verification.",
+  },
+  "sshTrust.revoke.reasonHelp": {
+    defaultMessage: "Optional explanation retained in the audit event.",
+    description: "SSH revocation scope, review and consumer verification.",
+  },
+  "sshTrust.revoke.reviewAction": { defaultMessage: "Review revocation", description: "SSH revocation scope, review and consumer verification." },
+  "sshTrust.revoke.serialEffect": {
+    defaultMessage: "Revoke serial {serial}. This request does not revoke other serials with the same key ID.",
+    description: "SSH revocation scope, review and consumer verification.",
+  },
+  "sshTrust.revoke.serialBothEffect": {
+    defaultMessage: "Revoke serial {serial}, plus every certificate matching the key ID below.",
+    description: "SSH revocation scope, review and consumer verification.",
+  },
+  "sshTrust.revoke.keyIDEffect": {
+    defaultMessage: "All certificates with key ID {keyID} are blocked, including future replacements using that name. A replacement needs a different key ID.",
+    description: "SSH revocation scope, review and consumer verification.",
+  },
+  "sshTrust.revoke.anyCA": {
+    defaultMessage: "This KRL matches certificates from any issuing CA. Check every consumer that uses this list before publishing.",
+    description: "SSH revocation scope, review and consumer verification.",
+  },
+  "sshTrust.revoke.noReason": { defaultMessage: "No reason supplied", description: "SSH revocation scope, review and consumer verification." },
+  "sshTrust.revoke.distributionBoundary": {
+    defaultMessage:
+      "Publishing does not distribute the KRL, terminate existing SSH sessions, or prove that hosts enforce it. There is no un-revoke operation in this workflow.",
+    description: "SSH revocation scope, review and consumer verification.",
+  },
+  "sshTrust.revoke.failed": {
+    defaultMessage: "KRL publication could not be confirmed",
+    description: "SSH revocation scope, review and consumer verification.",
+  },
+  "sshTrust.revoke.retryHelp": {
+    defaultMessage: "Retry sends the same reviewed request and Idempotency-Key. Check the audit history if publication may already have completed.",
+    description: "SSH revocation scope, review and consumer verification.",
+  },
+  "sshTrust.revoke.retryAction": { defaultMessage: "Retry publication", description: "SSH revocation scope, review and consumer verification." },
+  "sshTrust.revoke.published": { defaultMessage: "KRL published", description: "SSH revocation scope, review and consumer verification." },
+  "sshTrust.revoke.nextSteps": {
+    defaultMessage:
+      "Publish succeeded. Distribute the current KRL to every relying host and SSH client, then verify that the revoked certificate is rejected and replacement access works.",
+    description: "SSH revocation scope, review and consumer verification.",
+  },
+  "sshTrust.revoke.entries": { defaultMessage: "Revocation entries", description: "SSH revocation scope, review and consumer verification." },
+  "sshTrust.revoke.countHelp": {
+    defaultMessage: "The count is the number of distinct serial and key-ID entries, not the number of affected certificates.",
+    description: "SSH revocation scope, review and consumer verification.",
+  },
+  "sshTrust.revoke.download": { defaultMessage: "Download current KRL", description: "SSH revocation scope, review and consumer verification." },
+  "sshTrust.revoke.audit": { defaultMessage: "Open audit history", description: "SSH revocation scope, review and consumer verification." },
+  "sshTrust.revoke.another": { defaultMessage: "Review another revocation", description: "SSH revocation scope, review and consumer verification." },
+  "sshTrust.revoke.invalidSerial": {
+    defaultMessage: "Enter a positive whole-number serial no larger than 9007199254740991. Use the API for larger serials; the console must not round them.",
+    description: "SSH revocation scope, review and consumer verification.",
+  },
+  "sshTrust.revoke.requiredKeyID": {
+    defaultMessage: "Enter the exact key ID to revoke.",
+    description: "SSH revocation scope, review and consumer verification.",
+  },
   "caSetup.localBoundary": {
     defaultMessage:
       "Create a local authority through the protected root or intermediate workflow. It requires the applicable key ceremony and approvals before signing is enabled.",
@@ -23,7 +109,7 @@ export const messages = {
   },
   "caSetup.configure": {
     defaultMessage:
-      "Add the authority under external_cas in the server JSON configuration selected by TRSTCTL_CONFIG_FILE. Use a stable registry ID and the exact provider type.",
+      "Add the authority under external_cas in the server JSON configuration selected at startup. Use a stable registry ID and the exact provider type.",
     description: "Existing-CA operator setup and public metadata boundary.",
   },
   "caSetup.trust": {
@@ -38,7 +124,7 @@ export const messages = {
   },
   "caSetup.verify": {
     defaultMessage:
-      "Confirm the exact ID in GET /api/v1/external-cas before selecting it for issuance. An inventory record or registry entry alone does not prove a successful CA request.",
+      "Confirm the exact registry ID in the connected CA list before selecting it for issuance. An inventory record or registry entry alone does not prove a successful CA request.",
     description: "Existing-CA operator setup and public metadata boundary.",
   },
   "caSetup.vaultExample": {
@@ -5488,7 +5574,7 @@ export const messages = {
   "journeys.fleet.verify.title": { defaultMessage: "Verify the actual endpoint", description: "ACME fleet lifecycle operator guidance." },
   "journeys.fleet.verify.body": {
     defaultMessage:
-      "Use a trusted client to compare the served leaf fingerprint, hostname and issuer with the issued files, then make an application request. A reload acknowledgement or an inventory row is not endpoint proof.",
+      "Use a trusted client to compare the endpoint's certificate fingerprint, hostname and issuer with the issued files, then make an application request. A reload acknowledgement or an inventory row is not endpoint proof.",
     description: "ACME fleet lifecycle operator guidance.",
   },
   "journeys.fleet.renew.title": { defaultMessage: "Schedule and observe renewal", description: "ACME fleet lifecycle operator guidance." },
@@ -5523,7 +5609,7 @@ export const messages = {
   "journeys.fleet.protocols.title": { defaultMessage: "Inspect the ACME surface", description: "Fleet journey step title." },
   "journeys.fleet.protocols.body": {
     defaultMessage:
-      "Check the directory, tenant, issuing policy, HTTPS trust, and account admission. The served ACME path uses the platform issuer; endpoint bindings are a separate way to choose an external CA.",
+      "Check the directory, tenant, issuing policy, HTTPS trust, and account admission. The built-in ACME endpoint uses the platform issuer; endpoint bindings are a separate way to choose an external CA.",
     description: "ACME fleet lifecycle operator guidance.",
   },
   "journeys.fleet.dns.title": { defaultMessage: "Configure the DNS authenticator", description: "ACME fleet lifecycle operator guidance." },
@@ -9457,7 +9543,7 @@ export const messages = {
     description: "Explanation of the available SSH workflow.",
   },
   "sshTrust.readiness.technicalSummary": {
-    defaultMessage: "Revoked certificates: {revoked} · Proof methods: {attestors}",
+    defaultMessage: "Revocation entries: {revoked} · Proof methods: {attestors}",
     description: "Compact SSH technical-state summary shown before exact details are opened.",
   },
   "sshTrust.readiness.technicalDetails": {
@@ -24331,10 +24417,6 @@ export const messages = {
   "source.revoked.at.144e77bcf0": {
     defaultMessage: "Revoked at",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Certificates.tsx.",
-  },
-  "source.revoked.certs.267c0b721b": {
-    defaultMessage: "Revoked certs",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/SSHTrust.tsx.",
   },
   "source.revoked.f6f738d043": {
     defaultMessage: "Revoked",

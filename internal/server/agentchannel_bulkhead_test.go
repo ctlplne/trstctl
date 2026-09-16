@@ -115,7 +115,9 @@ func TestAgentBulkheadRejectsMissingPool(t *testing.T) {
 	if _, err := newBulkheadedAgentService(stubAgentChannelService{}, nil, nil); err == nil {
 		t.Fatal("agent channel accepted a missing agent bulkhead")
 	}
-	if bulkhead.Default().Pool(bulkhead.SubsystemAgent) == nil {
+	pools := bulkhead.Default()
+	defer pools.Close()
+	if pools.Pool(bulkhead.SubsystemAgent) == nil {
 		t.Fatal("default bulkhead set does not include the agent subsystem")
 	}
 }

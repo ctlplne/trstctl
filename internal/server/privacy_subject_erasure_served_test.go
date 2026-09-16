@@ -267,7 +267,7 @@ func TestBuildAutonomouslyCompletesPreparedPrivacyErasureBeforeRestore(t *testin
 	}); err != nil {
 		t.Fatal(err)
 	}
-	preparedAt := time.Now().UTC().Round(0)
+	preparedAt := time.Now().UTC().Truncate(time.Microsecond)
 	requestBinding := strings.Repeat("8", 64)
 	identity := orchestrator.PrivacySubjectErasureIdentityFor(
 		tenantID, "privacy-prepared-restart", requestBinding,

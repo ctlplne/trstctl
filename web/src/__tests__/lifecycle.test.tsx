@@ -7,6 +7,7 @@ import { Identities, graphNodeIdForIdentity } from "@/pages/Identities";
 // replaces `api`), used to simulate a 429 with a Retry-After hint (SURFACE-007).
 import { ApiError } from "@/lib/api";
 import { AppQueryProvider } from "@/lib/query";
+import { IntlProvider } from "@/i18n/I18nProvider";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -33,12 +34,14 @@ vi.mock("@/lib/api", async (orig) => {
   return { ...actual, api: apiMock };
 });
 
-function renderIdentities(path = "/identities") {
+function renderIdentities(path = "/identities", timeZone = "UTC") {
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <AppQueryProvider>
-        <Identities />
-      </AppQueryProvider>
+      <IntlProvider initialLocale="en-US" initialTimeZone={timeZone}>
+        <AppQueryProvider>
+          <Identities />
+        </AppQueryProvider>
+      </IntlProvider>
     </MemoryRouter>,
   );
 }
@@ -99,6 +102,31 @@ async function confirmReviewedAction(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("lifecycle actions from the UI", () => {
+  it("keeps identity validity and rotation history in the operator's selected time zone", async () => {
+    const identity = {
+      id: "timezone-identity",
+      name: "timezone.example.test",
+      kind: "x509_certificate",
+      status: "deployed",
+      not_before: "2030-01-01T00:30:00Z",
+      not_after: "2030-01-02T00:30:00Z",
+    };
+    apiMock.identities.mockResolvedValue([identity]);
+    apiMock.getIdentity.mockResolvedValue(identity);
+    apiMock.rotationRuns.mockResolvedValue({
+      items: [{ id: "zone-run", identity_id: identity.id, status: "succeeded", trigger: "scheduler", completed_at: "2030-01-01T00:35:00Z" }],
+    });
+    const user = userEvent.setup();
+    renderIdentities("/identities", "America/New_York");
+    const row = (await screen.findByText(identity.name, { selector: "span" })).closest("tr")!;
+    await user.click(screen.getByText("Delivery and rotation evidence", { selector: "summary" }));
+    const history = await screen.findByRole("table", { name: "Loaded lifecycle rotation runs" });
+    expect(await within(history).findByText(/Dec 31, 2029,\s7:35\sPM/)).toBeInTheDocument();
+    await user.click(within(row).getByRole("button", { name: /view details/i }));
+    const detail = await screen.findByRole("dialog", { name: "Identity detail" });
+    expect(within(detail).getByText(/Dec 31, 2029,\s7:30\sPM/)).toBeInTheDocument();
+    expect(within(detail).getByText(/Jan 1, 2030,\s7:30\sPM/)).toBeInTheDocument();
+  });
   it.each([
     ["revoked", "Revoked; evidence is retained.", "running"],
     ["retired", "Retired; no further action is available.", "running"],

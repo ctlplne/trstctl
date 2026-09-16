@@ -117,6 +117,7 @@ nav:
       - CLI reference: cli.md
       - Platform and API: features/platform-and-api.md
       - Client SDKs: features/client-sdks.md
+      - Go SDK with a private CA: guides/go-sdk-private-ca.md
       - Terraform provider: terraform-provider.md
       - Authoring guides:
           - Connectors: guides/connector-authoring.md

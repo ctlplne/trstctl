@@ -104,6 +104,7 @@ type Record struct {
 }
 
 type claimedOutboxEntry struct {
+	halfOpenProbe     *circuitProbe
 	id                int64
 	msg               Message
 	attempts          int
@@ -156,7 +157,13 @@ type circuitKey struct {
 
 func (k circuitKey) string() string { return k.tenantID + "\x1f" + k.destination }
 
+// circuitProbe identifies one reservation so stale cleanup cannot release a newer probe.
+type circuitProbe struct {
+	key circuitKey
+}
+
 type outboxCircuit struct {
+	probe     *circuitProbe
 	state     CircuitState
 	failures  int
 	openUntil time.Time
@@ -722,6 +729,14 @@ func (o *Outbox) DispatchOneScoped(ctx context.Context, h Handler, scope Destina
 }
 
 func (o *Outbox) dispatchClaim(ctx context.Context, h Handler, claim claimedOutboxEntry) error {
+	// A probe belongs to this delivery attempt, not its SQL finalization.
+	// Cancellation, a failed finalization, or proven no-effect deferral must
+	// release that reservation; the durable outbox lease still owns retry timing.
+	if probe := claim.halfOpenProbe; probe != nil {
+		defer func() {
+			o.releaseUnclaimedHalfOpenProbes(map[circuitKey]*circuitProbe{probe.key: probe}, circuitKey{}, o.clockNow())
+		}()
+	}
 	deliverErr := o.deliver(ctx, h, claim)
 	if deliverErr != nil && !IsDeliveryDeferred(deliverErr) && claim.attempts >= claim.attemptLimit(o.maxAttempts) {
 		if terminal, ok := h.(TerminalFailureHandler); ok {
@@ -971,7 +986,9 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 	}
 	claim.msg.ID = claim.id
 	claim.msg.Attempts = claim.attempts
-	o.releaseUnclaimedHalfOpenProbes(reservedHalfOpen, circuitKey{tenantID: claim.msg.TenantID, destination: effectiveOutboxLane(claim.msg.Destination, claim.msg.EffectLane)}, now)
+	key := circuitKey{tenantID: claim.msg.TenantID, destination: effectiveOutboxLane(claim.msg.Destination, claim.msg.EffectLane)}
+	claim.halfOpenProbe = reservedHalfOpen[key]
+	o.releaseUnclaimedHalfOpenProbes(reservedHalfOpen, key, now)
 	return claim, true, nil
 }
 
@@ -1034,8 +1051,7 @@ func (o *Outbox) finalizeClaim(ctx context.Context, claim claimedOutboxEntry, de
 			// The old effect remains unknown and this attempt still consumes its
 			// retry budget. It made no new receiver call, so release any probe
 			// reservation without recording either success or another failure.
-			key := circuitKey{tenantID: claim.msg.TenantID, destination: effectiveOutboxLane(claim.msg.Destination, claim.msg.EffectLane)}
-			o.releaseUnclaimedHalfOpenProbes(map[circuitKey]bool{key: true}, circuitKey{}, now)
+			// dispatchClaim releases only the reservation this attempt owns.
 		} else if !deferred {
 			o.recordCircuitFailure(claim.msg, deliverErr, now)
 		}
@@ -1214,7 +1230,7 @@ func safePersistableDeliveryClass(err error) (string, bool) {
 		case "external_ca_account_failed", "external_ca_order_failed", "external_ca_finalize_failed", "external_ca_protocol_failed",
 			"external_ca_provider_failed", "external_ca_record_failed", "external_ca_result_encode_failed",
 			"external_ca_idempotency_failed", "external_ca_result_decode_failed", "external_ca_observation_failed",
-			"external_ca_dns01_unconfigured", "notification_receiver_not_configured":
+			"external_ca_dns01_unconfigured", "notification_receiver_not_configured", "notification_receipt_binding_conflict":
 			return class, true
 		}
 	}
@@ -1262,7 +1278,7 @@ func (o *Outbox) retryDelay(attempts int) time.Duration {
 	return delay
 }
 
-func (o *Outbox) reserveHalfOpenProbes(now time.Time, scope DestinationScope) ([]string, map[circuitKey]bool) {
+func (o *Outbox) reserveHalfOpenProbes(now time.Time, scope DestinationScope) ([]string, map[circuitKey]*circuitProbe) {
 	if o.circuitFailureThreshold <= 0 {
 		return []string{}, nil
 	}
@@ -1271,7 +1287,7 @@ func (o *Outbox) reserveHalfOpenProbes(now time.Time, scope DestinationScope) ([
 	o.circuitMu.Lock()
 	o.pruneIdleCircuitsLocked(now)
 	blocked := make([]string, 0, len(o.circuits))
-	reserved := make(map[circuitKey]bool)
+	reserved := make(map[circuitKey]*circuitProbe)
 	for key, circuit := range o.circuits {
 		if !scope.matches(key.destination) {
 			continue
@@ -1285,7 +1301,8 @@ func (o *Outbox) reserveHalfOpenProbes(now time.Time, scope DestinationScope) ([
 			from := circuit.state
 			circuit.state = CircuitHalfOpen
 			circuit.updatedAt = now
-			reserved[key] = true
+			circuit.probe = &circuitProbe{key: key}
+			reserved[key] = circuit.probe
 			transitions = append(transitions, CircuitTransition{
 				TenantID: key.tenantID, Destination: key.destination,
 				From: from, To: circuit.state, Failures: circuit.failures, OpenUntil: circuit.openUntil,
@@ -1300,17 +1317,18 @@ func (o *Outbox) reserveHalfOpenProbes(now time.Time, scope DestinationScope) ([
 	return blocked, reserved
 }
 
-func (o *Outbox) releaseUnclaimedHalfOpenProbes(reserved map[circuitKey]bool, claimed circuitKey, now time.Time) {
+func (o *Outbox) releaseUnclaimedHalfOpenProbes(reserved map[circuitKey]*circuitProbe, claimed circuitKey, now time.Time) {
 	if len(reserved) == 0 {
 		return
 	}
 	o.circuitMu.Lock()
-	for key := range reserved {
+	for key, probe := range reserved {
 		if key == claimed {
 			continue
 		}
-		if circuit := o.circuits[key]; circuit != nil && circuit.state == CircuitHalfOpen {
+		if circuit := o.circuits[key]; circuit != nil && circuit.state == CircuitHalfOpen && circuit.probe == probe {
 			circuit.state = CircuitOpen
+			circuit.probe = nil
 			circuit.openUntil = now
 			circuit.updatedAt = now
 		}
@@ -1336,6 +1354,7 @@ func (o *Outbox) recordCircuitFailure(m Message, err error, now time.Time) {
 	circuit.lastError = persistedDeliveryError(err)
 	circuit.updatedAt = now
 	if circuit.state == CircuitHalfOpen || circuit.failures >= o.circuitFailureThreshold {
+		circuit.probe = nil
 		circuit.state = CircuitOpen
 		circuit.openUntil = now.Add(o.circuitOpenDuration)
 	}
@@ -1364,6 +1383,7 @@ func (o *Outbox) recordCircuitSuccess(m Message, now time.Time) {
 	if circuit != nil {
 		from := circuit.state
 		circuit.state = CircuitClosed
+		circuit.probe = nil
 		circuit.failures = 0
 		circuit.openUntil = time.Time{}
 		circuit.updatedAt = now

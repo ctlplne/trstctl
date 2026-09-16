@@ -758,7 +758,7 @@ func TestServedScheduledConnectorRotationKeepsDueEdgeUntilExactApproval(t *testi
 		t.Fatalf("seed scheduled connector source: status=%d body=%s", status, body)
 	}
 	connector.put("rotation/scheduled-exact", []byte("scheduled-v1"))
-	dueAt := time.Now().Add(-time.Minute).UTC()
+	dueAt := time.Now().UTC().Truncate(time.Microsecond).Add(-time.Minute)
 	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/secrets/rotation-schedules", requester,
 		map[string]any{
 			"name": "scheduled-exact", "provider": "connector:ci", "key": "rotation/scheduled-exact",
@@ -967,6 +967,7 @@ func TestServedScheduledConnectorAuthoritySurvivesRunnerChangeAndRestart(t *test
 	if err != nil {
 		t.Fatalf("restart with approved scheduled authority: %v", err)
 	}
+	cleanupServedServer(t, restarted)
 	ts := httptest.NewServer(restarted.Handler())
 	t.Cleanup(ts.Close)
 	h2 := &servedHarness{ts: ts, srv: restarted, store: h.store, log: h.log, tenant: h.tenant}
@@ -1180,7 +1181,7 @@ func TestServedScheduledConnectorInFlightCommandDefersWithoutStarvingLaterWork(t
 		t.Fatalf("open competing command fence: status=%d body=%s", status, body)
 	}
 
-	dueAt := time.Now().Add(-2 * time.Minute).UTC()
+	dueAt := time.Now().UTC().Truncate(time.Microsecond).Add(-2 * time.Minute)
 	create := func(name, provider, key, oldRef string, at time.Time) secretRotationScheduleValue {
 		t.Helper()
 		status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/rotation-schedules", runner,
@@ -1249,7 +1250,7 @@ func TestServedScheduledRotationScansPastFiftyDeferredRowsWithinBound(t *testing
 	}
 	connector.put("rotation/shared-deferred-source", []byte("shared-v1"))
 
-	dueAt := time.Now().Add(-10 * time.Minute).UTC()
+	dueAt := time.Now().UTC().Truncate(time.Microsecond).Add(-10 * time.Minute)
 	deferredSchedules := make([]store.SecretRotationSchedule, 0, 50)
 	for i := 0; i < 50; i++ {
 		scheduled, err := h.srv.orch.UpsertSecretRotationSchedule(context.Background(), h.tenant, store.SecretRotationSchedule{
@@ -1367,6 +1368,7 @@ func TestServedScheduledRotationFairCursorReachesRow501AcrossRestartAUD111AUD113
 	if err != nil {
 		t.Fatalf("restart before row 501: %v", err)
 	}
+	cleanupServedServer(t, restarted)
 	ts := httptest.NewServer(restarted.Handler())
 	t.Cleanup(ts.Close)
 	h2 := &servedHarness{ts: ts, srv: restarted, store: h.store, log: h.log, tenant: h.tenant}
@@ -2333,6 +2335,7 @@ func TestServedScheduledConnectorRotationOutboxSurvivesRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("restart with pending scheduled connector outbox: %v", err)
 	}
+	cleanupServedServer(t, restarted)
 	drainCtx, cancelDrain := context.WithTimeout(t.Context(), 10*time.Second)
 	drainErr := restarted.Drain(drainCtx)
 	cancelDrain()
@@ -2545,7 +2548,7 @@ func (b *rotationDynamicBackend) issuedCount() int {
 func startRotationPostgres(t *testing.T) (string, func()) {
 	t.Helper()
 	port := freeRotationPort(t)
-	dir, err := os.MkdirTemp("/private/tmp", "trstctl-rotation-pg-*")
+	dir, err := os.MkdirTemp("", "trstctl-rotation-pg-*")
 	if err != nil {
 		t.Fatal(err)
 	}

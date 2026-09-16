@@ -5,6 +5,7 @@ package notify
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -264,6 +265,7 @@ func (d *Dispatcher) dispatchAlert(ctx context.Context, message DeliveryMessage,
 		return noReceiverError{}
 	}
 	failed := make([]string, 0)
+	var receiptBindingConflict bool
 	type deliveryAttempt struct {
 		notifier Notifier
 		receipt  NotificationDeliveryReceipt
@@ -283,6 +285,8 @@ func (d *Dispatcher) dispatchAlert(ctx context.Context, message DeliveryMessage,
 		receipt.RoutingPolicyDigest = route.policyDigest
 		delivered, err := d.deliveryAlreadyRecorded(ctx, receipt)
 		if err != nil {
+			var conflict notificationReceiptBindingError
+			receiptBindingConflict = receiptBindingConflict || errors.As(err, &conflict)
 			failed = append(failed, ch.Name()+": delivery receipt check: "+err.Error())
 			continue
 		}
@@ -380,6 +384,11 @@ func (d *Dispatcher) dispatchAlert(ctx context.Context, message DeliveryMessage,
 		}
 	}
 	if len(failed) > 0 {
+		// Other eligible channels have still been attempted. Persist the
+		// actionable local cause without copying transport errors or secrets.
+		if receiptBindingConflict {
+			return notificationReceiptBindingError{}
+		}
 		return fmt.Errorf("notify: %d channel(s) failed: %s", len(failed), strings.Join(failed, "; "))
 	}
 	return nil

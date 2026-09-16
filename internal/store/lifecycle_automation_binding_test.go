@@ -22,7 +22,8 @@ func TestLifecycleAutomationUsesIdentityBoundServedCertificate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	now := time.Now().UTC()
+	// The fixture is stored in PostgreSQL, whose timestamp precision is microseconds.
+	now := time.Now().UTC().Truncate(time.Microsecond)
 	var identities []store.Identity
 	var certs []store.Certificate
 	// These are relational read-model fixtures, not signing or live TLS proof.

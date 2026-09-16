@@ -3395,7 +3395,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventACMEDNS01RecordPresented:                 {1: true},
 	EventACMEDNS01RecordCleaned:                   {1: true},
 	EventACMEUpstreamAuthorizationObserved:        {1: true},
-	EventEndpointVerified:                         {1: true},
+	EventEndpointVerified:                         {1: true, EndpointVerificationAlertEventSchemaVersion: true},
 	EventMDMSCEPPolicyUpserted:                    {1: true},
 	EventMDMSCEPPolicyDeleted:                     {1: true},
 	EventMDMSCEPChallengeRotated:                  {1: true},
@@ -4890,8 +4890,8 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		return p.store.ApplyACMEDNS01ProviderConfigDeletedTx(ctx, tx, e.TenantID, pl.ID)
 	case EventEndpointVerified:
-		var pl EndpointVerificationObserved
-		if err := decode(e, &pl); err != nil {
+		pl, err := decodeEndpointVerificationObserved(e)
+		if err != nil {
 			return err
 		}
 		if pl.EndpointID == "" || pl.Address == "" || pl.Vantage == "" {

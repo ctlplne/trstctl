@@ -28,7 +28,7 @@ func TestDeployWritesTLSFilesAndReloads(t *testing.T) {
 	if got, ok := ops.File("/etc/tomcat/tls/server.key"); !ok || !bytes.Equal(got, tomcatKey) {
 		t.Fatal("key was not written")
 	}
-	if got := ops.Execs(); len(got) != 1 || got[0][0] != "catalina.sh" {
+	if got := ops.Execs(); len(got) != 1 || got[0][0] != "tomcat-tls-reload" || len(got[0]) != 1 {
 		t.Fatalf("reload not recorded: %+v", got)
 	}
 }

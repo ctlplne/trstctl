@@ -338,6 +338,12 @@ describe("i18n boundary", () => {
       return createHash("sha256").update(payload).digest("hex");
     };
 
+    // Also reviewed connected-CA setup and endpoint-verification copy: exact
+    // configuration syntax remains in the referenced operator documentation;
+    // endpoint proof explicitly compares the certificate fingerprint.
+    // F140: reviewed serial/key-ID/combined scope, wildcard CA, consumer
+    // distribution limits and stable publication retry. Machine-authored es/de
+    // requires human translation review before release; R07 removal is pending.
     // Reviewed es/de host selection, pagination, and offline assignment guidance.
     // Machine-authored translations require human review before release.
     // Updating either digest is a deliberate translation-review decision. The
@@ -1578,8 +1584,8 @@ describe("i18n boundary", () => {
       // Machine-authored es/de require HUMAN TRANSLATION REVIEW before release.
       // Delivery evidence: reviewed three keys separating exact historical verification
       // from deployment retry counts. Machine-authored es/de need HUMAN REVIEW before release.
-      "es-ES": "d975827c92a999df4fe7376461f8c0af8b6e81c61085592a176522b11f3701c6",
-      "de-DE": "32f378d230c13c230549c294515a8037a6766186a856e43e8bd457779277b75c",
+      "es-ES": "ff89eb66f239c63204e067d75144f4ea1354b6d254e8d27ab669fd2c31f48097",
+      "de-DE": "21d41aef12a551ed45e095d67e0cd27e7716e744836b6139ad9bf3a260d43962",
     });
   });
 

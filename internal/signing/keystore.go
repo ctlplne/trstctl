@@ -26,6 +26,10 @@ type KeyStore struct {
 	keyFactory KeyFactory
 	signMu     sync.Mutex
 	signLocks  map[string]*signOperationLock
+
+	journalDirMu     sync.Mutex
+	journalParent    os.FileInfo
+	journalDirectory os.FileInfo
 }
 
 type signOperationLock struct {

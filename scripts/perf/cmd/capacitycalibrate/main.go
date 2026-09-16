@@ -267,14 +267,18 @@ func insertCredentials(ctx context.Context, s *store.Store, samples int) error {
 }
 
 func drainBatch(ctx context.Context, s *store.Store, batch *pgx.Batch, expected int) error {
-	br := s.SystemPool().SendBatch(ctx, batch)
-	for i := 0; i < expected; i++ {
-		if _, err := br.Exec(); err != nil {
-			_ = br.Close()
-			return err
+	// Calibration rows belong to one tenant. Use the ordinary scoped role so
+	// schema ordering and RLS enforce the same boundary as application writes.
+	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		br := tx.SendBatch(ctx, batch)
+		for i := 0; i < expected; i++ {
+			if _, err := br.Exec(); err != nil {
+				_ = br.Close()
+				return err
+			}
 		}
-	}
-	return br.Close()
+		return br.Close()
+	})
 }
 
 func measureJetStream(ctx context.Context, samples int) (jetStreamMeasurement, error) {

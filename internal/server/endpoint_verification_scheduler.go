@@ -108,12 +108,25 @@ func (s *Server) queueEndpointVerificationSweep(ctx context.Context, tenantID st
 		return 0, err
 	}
 
-	// One expectation per ENDPOINT, taken from whichever vantage last saw it.
-	// Not per row: probing the same listener twice because two vantages have
-	// observed it would double the load to learn the same fact.
+	// Display ordering puts mismatches first. It must not select the expected
+	// certificate: a relay can observe a newer deployment while still comparing
+	// it with the expectation captured by an earlier sweep. Post-deploy and
+	// rollback observations are local-vantage records and carry that operation's
+	// expected identity, including when the listener failed to serve it.
+	// Keep the display priority for endpoints, but resolve each expectation from
+	// its deployment observation before falling back to relay-only history.
+	local := make(map[string]store.EndpointVerification)
+	for _, row := range rows {
+		if row.Vantage == "local" && row.Address != "" && row.ExpectedFingerprint != "" {
+			local[row.EndpointID] = row
+		}
+	}
 	seen := map[string]bool{}
 	intent := relay.EndpointVerifyIntent{}
 	for _, r := range rows {
+		if deployed, ok := local[r.EndpointID]; ok {
+			r = deployed
+		}
 		if seen[r.EndpointID] || r.Address == "" || r.ExpectedFingerprint == "" {
 			continue
 		}

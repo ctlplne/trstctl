@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: MPL-2.0
 
-// Package tomcat deploys renewed PEM TLS files to an Apache Tomcat connector
-// and invokes a direct reload command.
+// Package tomcat deploys renewed TLS files to a Tomcat server and runs a direct
+// reload command so the listener can use the new certificate.
 package tomcat
 
 import (
-	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path"
 
 	"trstctl.com/trstctl/internal/connector"
-	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/pluginhost"
 )
@@ -21,14 +20,19 @@ import (
 type Connector struct {
 	certPath string
 	keyPath  string
-	reload   []string
 }
+
+// TLSReloadAction is the fixed operator-owned action that activates Tomcat's
+// TLS context. Map it to the shipped agent's one-shot Tomcat Manager client
+// with an exact SSLHostConfig name and a private password file. Stock
+// catalina.sh has no TLS reload command.
+const TLSReloadAction = "tomcat-tls-reload"
 
 var _ connector.Connector = (*Connector)(nil)
 
-// New returns a Tomcat connector for the configured PEM cert and key.
+// New returns a Tomcat connector for the configured server cert and key.
 func New(certPath, keyPath string) *Connector {
-	return &Connector{certPath: certPath, keyPath: keyPath, reload: []string{"catalina.sh", "reload"}}
+	return &Connector{certPath: certPath, keyPath: keyPath}
 }
 
 // Name identifies the connector.
@@ -42,10 +46,10 @@ func (c *Connector) Capabilities() pluginhost.Grant {
 
 // Deploy writes the renewed certificate/key and reloads Tomcat.
 func (c *Connector) Deploy(_ context.Context, sb connector.Sandbox, dep connector.Deployment) error {
-	return deployFiles("tomcat", c.certPath, c.keyPath, c.reload, sb, dep)
+	return deployFiles("tomcat", c.certPath, c.keyPath, sb, dep)
 }
 
-func deployFiles(prefix, certPath, keyPath string, reload []string, sb connector.Sandbox, dep connector.Deployment) error {
+func deployFiles(prefix, certPath, keyPath string, sb connector.Sandbox, dep connector.Deployment) error {
 	oldCert, hadCert, err := readExisting(sb, certPath)
 	if err != nil {
 		return fmt.Errorf("%s: read current certificate: %w", prefix, err)
@@ -56,25 +60,27 @@ func deployFiles(prefix, certPath, keyPath string, reload []string, sb connector
 		return fmt.Errorf("%s: read current key: %w", prefix, err)
 	}
 	defer secret.Wipe(oldKey)
-	if hadCert && crypto.SHA256Hex(oldCert) == dep.Fingerprint && (len(dep.KeyPEM) == 0 || hadKey && bytes.Equal(oldKey, dep.KeyPEM)) {
-		return nil
-	}
+	// Repeating identical file bytes must still activate TLS: an earlier
+	// attempt may have stopped between the file write and the server reload.
 	if err := sb.WriteFile(certPath, dep.CertPEM); err != nil {
 		return fmt.Errorf("%s: write certificate: %w", prefix, err)
 	}
 	if len(dep.KeyPEM) > 0 {
 		if err := sb.WriteFile(keyPath, dep.KeyPEM); err != nil {
-			_ = rollback(sb, certPath, oldCert, hadCert, keyPath, oldKey, hadKey)
-			return fmt.Errorf("%s: write key: %w", prefix, err)
+			if rb := rollback(sb, certPath, oldCert, hadCert, keyPath, oldKey, hadKey); rb != nil {
+				return fmt.Errorf("%s: write key failed and predecessor restore failed: write=%w restore=%v", prefix, err, rb)
+			}
+			return fmt.Errorf("%s: write key failed; predecessor files restored: %w", prefix, err)
 		}
 	}
-	if len(reload) > 0 {
-		if err := sb.Exec(reload[0], reload[1:]...); err != nil {
-			if rb := rollback(sb, certPath, oldCert, hadCert, keyPath, oldKey, hadKey); rb != nil {
-				return fmt.Errorf("%s: reload failed and rollback failed: reload=%w rollback=%v", prefix, err, rb)
-			}
-			return fmt.Errorf("%s: reload failed; rollback complete: %w", prefix, err)
+	if err := sb.Exec(TLSReloadAction); err != nil {
+		if rb := rollback(sb, certPath, oldCert, hadCert, keyPath, oldKey, hadKey); rb != nil {
+			return fmt.Errorf("%s: TLS reload failed and predecessor restore failed: reload=%w restore=%v", prefix, err, rb)
 		}
+		if rb := sb.Exec(TLSReloadAction); rb != nil {
+			return fmt.Errorf("%s: TLS reload failed; predecessor files restored but its TLS activation failed: reload=%w restore=%v", prefix, err, rb)
+		}
+		return fmt.Errorf("%s: TLS reload failed; predecessor files restored and TLS reload completed: %w", prefix, err)
 	}
 	return nil
 }
@@ -91,15 +97,14 @@ func readExisting(sb connector.Sandbox, file string) ([]byte, bool, error) {
 }
 
 func rollback(sb connector.Sandbox, certPath string, oldCert []byte, hadCert bool, keyPath string, oldKey []byte, hadKey bool) error {
-	if hadCert {
-		if err := sb.WriteFile(certPath, oldCert); err != nil {
-			return fmt.Errorf("restore certificate: %w", err)
-		}
+	if !hadCert || !hadKey {
+		return errors.New("no complete predecessor certificate/key pair exists to restore")
 	}
-	if hadKey {
-		if err := sb.WriteFile(keyPath, oldKey); err != nil {
-			return fmt.Errorf("restore key: %w", err)
-		}
+	if err := sb.WriteFile(certPath, oldCert); err != nil {
+		return fmt.Errorf("restore certificate: %w", err)
+	}
+	if err := sb.WriteFile(keyPath, oldKey); err != nil {
+		return fmt.Errorf("restore key: %w", err)
 	}
 	return nil
 }

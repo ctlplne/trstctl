@@ -210,7 +210,12 @@ func (a *API) validateEndpointEnrollmentSnapshot(ctx context.Context, tenantID s
 	if err := a.checkEndpointIssuerValidationPrerequisites(ctx, tenantID, issuer, req.IdentityName); err != nil {
 		return err
 	}
-	if !reflect.DeepEqual(issuer, snapshot.Preview.Issuer) {
+	// DNS-01 capability is runtime-only metadata and is intentionally omitted
+	// from the durable JSON review. Check its current prerequisites above, then
+	// compare the issuer facts that were actually retained for authorization.
+	reviewedIssuer := snapshot.Preview.Issuer
+	reviewedIssuer.upstreamDNS01 = issuer.upstreamDNS01
+	if !reflect.DeepEqual(issuer, reviewedIssuer) {
 		return errStatus(http.StatusConflict, "endpoint issuer changed after review; preview again")
 	}
 	profile, err := a.endpointIssuanceRequirement(ctx, tenantID, snapshot.Preview.ExistingIdentity, req.ProfileName)

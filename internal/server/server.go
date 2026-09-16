@@ -910,6 +910,11 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 			notificationOwner.transferToDispatcher()
 			return
 		}
+		if d.Bulkhead == nil && s != nil && s.bulk != nil {
+			// No Server is returned to own Shutdown on failure. Close only the
+			// pools this Build allocated; injected pools remain caller-owned.
+			s.bulk.Close()
+		}
 		if d.CloudTokenMinter != nil {
 			d.CloudTokenMinter.Close()
 		}

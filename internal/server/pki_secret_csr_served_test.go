@@ -107,6 +107,7 @@ func TestServedPKISecretCSRFirstAndLegacyEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("restart PKI-secret assembly: %v", err)
 	}
+	cleanupServedServer(t, restarted)
 	restartedHTTP := httptest.NewServer(restarted.Handler())
 	t.Cleanup(restartedHTTP.Close)
 	restartedHarness := &servedHarness{

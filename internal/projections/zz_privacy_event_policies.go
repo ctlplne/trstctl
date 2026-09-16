@@ -1504,6 +1504,7 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventACMEDNS01RecordCleaned, 1}:                                        privacyPayloadShape[ACMEDNS01RecordChanged](),
 		{EventACMEUpstreamAuthorizationObserved, 1}:                             privacyPayloadShape[ACMEUpstreamAuthorizationObserved](),
 		{EventEndpointVerified, 1}:                                              privacyPayloadShape[EndpointVerificationObserved](),
+		{EventEndpointVerified, EndpointVerificationAlertEventSchemaVersion}:    privacyPayloadShape[EndpointVerificationObservedWithAlert](),
 		{EventMDMSCEPPolicyUpserted, 1}:                                         privacyPayloadShape[MDMSCEPPolicyUpserted](),
 		{EventMDMSCEPPolicyDeleted, 1}:                                          privacyPayloadShape[MDMSCEPPolicyDeleted](),
 		{EventMDMSCEPChallengeRotated, 1}:                                       privacyPayloadShape[MDMSCEPChallengeRotated](),

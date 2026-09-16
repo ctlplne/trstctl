@@ -47,6 +47,7 @@ type Operation struct {
 	XPermission        string                `json:"x-trstctl-permission,omitempty"`
 	XPublicRationale   string                `json:"x-trstctl-public-rationale,omitempty"`
 	XSensitiveResponse bool                  `json:"x-trstctl-sensitive-response,omitempty"`
+	XReadOnly          bool                  `json:"x-trstctl-read-only,omitempty"`
 	XAvailability      string                `json:"x-trstctl-availability,omitempty"`
 	XUnavailableReason string                `json:"x-trstctl-unavailable-reason,omitempty"`
 }
@@ -199,6 +200,8 @@ func buildSpec(routes []route, extraSchemas map[string]*Schema) *Document {
 			doc.Paths[docPath] = pi
 		}
 		op := &Operation{OperationID: r.opID, Summary: r.summary, Responses: map[string]Response{}}
+		// A contradictory route never suppresses mutation confirmation.
+		op.XReadOnly = r.readOnly && !r.mutation
 		if r.sensitiveResponse {
 			op.XSensitiveResponse = true
 		}
@@ -4925,6 +4928,9 @@ func componentSchemas() map[string]*Schema {
 		"table": str(), "status": str(), "outbox_id": {Type: "integer"},
 		"idempotency_key": str(), "created_at": timestamp(),
 	}, "id", "tenant_id", "provider", "destination", "table", "status", "outbox_id", "idempotency_key", "created_at")
+	graphQueryRequest := object(map[string]*Schema{
+		"query": {Type: "string", MinLength: 1, Description: "Read-only Cypher-style MATCH path, optional WHERE equality predicates, and RETURN variables or fields. This is a minimal grammar, not full Cypher; LIMIT is not supported."},
+	}, "query")
 	graphQueryResult := object(map[string]*Schema{
 		"rows": {Type: "array", Items: &Schema{Type: "object"}},
 	}, "rows")
@@ -6577,6 +6583,7 @@ func componentSchemas() map[string]*Schema {
 		"MigrationRun":                             migrationRun,
 		"MigrationRunList":                         list("MigrationRun"),
 		"MigrationRunActionRequest":                migrationRunActionRequest,
+		"GraphQueryRequest":                        graphQueryRequest,
 		"GraphQueryResult":                         graphQueryResult,
 		"Owner":                                    owner,
 		"OwnerRequest":                             ownerReq,
