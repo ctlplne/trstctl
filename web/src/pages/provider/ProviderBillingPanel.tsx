@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,7 +60,12 @@ export function ProviderBillingPanel({ tenants, onAuthError }: { tenants: Provid
     if (customerId && !tenants.some((tenant) => tenant.id === customerId)) setCustomerId(tenants[0]?.id ?? "");
   }, [customerId, tenants]);
 
-  useEffect(() => {
+  const generation = useRef(0);
+  useLayoutEffect(() => {
+    // Invalidate pending health, evidence and signature work before the new
+    // selection paints. Keep the form mounted so editing dates retains focus.
+    generation.current += 1;
+    setLoading(false);
     // Never leave one customer's health/evidence visible under another
     // customer's selected label. The operator must pull the new customer.
     setHealth(null);
@@ -68,11 +73,16 @@ export function ProviderBillingPanel({ tenants, onAuthError }: { tenants: Provid
     setDocument(null);
     setVerification(null);
     setError(null);
-  }, [customerId]);
+    return () => {
+      generation.current += 1;
+    };
+  }, [customerId, periodStart, periodEnd]);
 
   async function pull(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!customerId || !periodStart || !periodEnd) return;
+    const requestGeneration = ++generation.current;
+    const isCurrent = () => generation.current === requestGeneration;
     setLoading(true);
     setError(null);
     setHealth(null);
@@ -84,6 +94,7 @@ export function ProviderBillingPanel({ tenants, onAuthError }: { tenants: Provid
         providerApi.customerHealth(customerId),
         providerApi.usageEvidence(customerId, asRFC3339(periodStart), asRFC3339(periodEnd)),
       ]);
+      if (!isCurrent()) return;
       for (const result of [healthResult, evidenceResult]) {
         if (result.status === "rejected" && result.reason instanceof ProviderAuthError) {
           onAuthError();
@@ -102,27 +113,31 @@ export function ProviderBillingPanel({ tenants, onAuthError }: { tenants: Provid
       const evidence = evidenceResult.value;
       setDocument(evidence);
       if (evidence.signature?.jws) {
-        setVerification(await providerApi.verifyUsageEvidence(evidence));
+        const verified = await providerApi.verifyUsageEvidence(evidence);
+        if (isCurrent()) setVerification(verified);
       } else {
         setVerification({ verified: false });
       }
     } catch (reason) {
+      if (!isCurrent()) return;
       if (reason instanceof ProviderAuthError) {
         onAuthError();
         return;
       }
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   }
 
   async function download(format: "json" | "csv") {
     if (!customerId || !periodStart || !periodEnd) return;
+    const requestGeneration = generation.current;
     setError(null);
     try {
       await providerApi.downloadUsageEvidence(customerId, asRFC3339(periodStart), asRFC3339(periodEnd), format);
     } catch (reason) {
+      if (generation.current !== requestGeneration) return;
       if (reason instanceof ProviderAuthError) {
         onAuthError();
         return;

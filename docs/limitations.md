@@ -2509,9 +2509,13 @@ than sending an operator looking for a credential that was never there.
   control, profile binding, signer isolation, outbox delivery, and idempotency
   are not bypassed by the convenience journey. Finally,
   `POST /api/v1/issuance-requests/{id}/complete` moves the request to `issued`
-  only when its linked identity is issued AND active inventory contains a real
-  certificate recorded under the exact canonical issue key. Reviewer
-  (`decided_by`) and issuance actor (`issued_by`) remain separate facts. A
+  only when its linked identity has an immutable issuance transition AND inventory
+  contains its real certificate under the exact canonical issue key. The signing
+  worker also completes this receipt, so closing the browser cannot lose it.
+  Recovery after revocation or retirement records historical fulfillment without
+  reactivating the credential or signing again. Reviewer (`decided_by`) and original
+  issuance actor (`issued_by`) remain separate facts; `issued_at` is the retained
+  certificate-recording time, not the later recovery time. A
   signer or outbox failure therefore leaves an honest, retryable `approved`
   request instead of producing a false green status. The console keeps that
   approved row visible, explains the interruption, and labels the recovery action

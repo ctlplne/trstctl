@@ -83,6 +83,10 @@ group on a shared trstctl deployment.
    a session that authorizes API calls under the same roles as a token. An enabled but
    incomplete OIDC, SAML, or LDAP block fails closed at startup.
 
+   Open a bookmarked console page while signed out, then complete OIDC sign-in.
+   The browser should return to the same page with its query filters and fragment;
+   a tenant-mapping error keeps that destination available for a later retry.
+
 3. Map each signed-in user to the right tenant so two users in different teams see only
    their own data. Use a configurable id_token/SAML claim, an LDAP group mapping, or an
    explicit subject/claim/group mapping; a user who maps to no tenant is rejected. See

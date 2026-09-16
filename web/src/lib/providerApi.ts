@@ -107,12 +107,30 @@ export interface ProviderTenantSnapshot {
 export type ProviderOperatorRole = "admin" | "operator";
 export type ProviderOperation = "read" | "provision" | "suspend" | "offboard" | "break_glass";
 
+export interface ProviderConsoleCustomerAuthority {
+  read_quota: boolean;
+  write_quota: boolean;
+  write_brand: boolean;
+  suspend: boolean;
+  offboard: boolean;
+}
+
+export interface ProviderConsoleAuthority {
+  available: boolean;
+  access_read: boolean;
+  access_write: boolean;
+  provision: boolean;
+  isolation_drill: boolean;
+  customers: Record<string, ProviderConsoleCustomerAuthority>;
+}
+
 export interface ProviderOperator {
   id: string;
   email: string;
   role: ProviderOperatorRole;
   mfa: boolean;
   session?: string;
+  authority?: ProviderConsoleAuthority;
 }
 
 export interface ProviderOperatorIdentity {
@@ -194,7 +212,9 @@ async function providerFetch(path: string, init?: RequestInit): Promise<Response
       ...(init?.headers ?? {}),
     },
   });
-  if (res.status === 401 || res.status === 403) {
+  // Missing customer delegation, role, MFA, or write entitlement is a refusal
+  // of this operation, not evidence that the operator's credential expired.
+  if (res.status === 401) {
     throw new ProviderAuthError(await res.text());
   }
   if (!res.ok) {

@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MPL-2.0
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 import { formatDateTime } from "@/i18n/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useApiQuery } from "@/lib/query";
+import { createAppQueryClient, useApiQuery, useQueryClient } from "@/lib/query";
 import { ProviderAccessPanel } from "@/pages/provider/ProviderAccessPanel";
 import { ProviderBillingPanel } from "@/pages/provider/ProviderBillingPanel";
 import {
@@ -57,10 +58,20 @@ export function Provider() {
     );
   }
 
-  if (!authed) {
-    return <ProviderLogin onAuthed={() => setAuthed(true)} />;
-  }
-  return <ProviderConsole onSignOut={() => setAuthed(false)} />;
+  return (
+    <ProviderSessionQueries key={authed ? "operator" : "signed-out"}>
+      {authed ? <ProviderConsole onSignOut={() => setAuthed(false)} /> : <ProviderLogin onAuthed={() => setAuthed(true)} />}
+    </ProviderSessionQueries>
+  );
+}
+
+// The Provider plane has its own authentication boundary. A new login must not
+// inherit a previous operator's customer roster or in-flight query results from
+// the tenant shell's longer-lived cache. Public attachment checks stay outside.
+function ProviderSessionQueries({ children }: { children: ReactNode }) {
+  const [client] = useState(createAppQueryClient);
+  useEffect(() => () => client.clear(), [client]);
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
 function ProviderAvailabilityState({ detail }: { detail: string }) {
@@ -205,6 +216,24 @@ function QuotaEditor({
   );
 }
 
+function QuotaSummary({ quota }: { quota: ProviderQuota }) {
+  const fields: [MessageKey, number | undefined][] = [
+    ["source.provider.quota.agents.l3prov0024", quota.max_agents],
+    ["source.provider.quota.certs.l3prov0025", quota.max_certificates_stored],
+    ["source.provider.quota.secrets.l3prov0026", quota.max_secrets_stored],
+  ];
+  return (
+    <dl className="grid gap-2 sm:grid-cols-3">
+      {fields.map(([label, value]) => (
+        <div key={label}>
+          <dt className="text-muted-foreground">{translateNow(label)}</dt>
+          <dd className="font-mono tabular-nums">{value ?? translateNow("source.provider.quota.unlimited.l3prov0027")}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 type QuotaViewState = { id: string; state: "loading" } | { id: string; state: "error" } | { id: string; state: "ok"; data: ProviderQuota };
 
 function BrandEditor({ tenantId, onSaved, onAuthError }: { tenantId: string; onSaved: () => void; onAuthError: () => void }) {
@@ -262,6 +291,17 @@ function BrandEditor({ tenantId, onSaved, onAuthError }: { tenantId: string; onS
 }
 
 function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
+  const queryClient = useQueryClient();
+  const session = useApiQuery(["provider", "session"], providerApi.session, { retry: false, live: { intervalMs: 15_000 } });
+  // Never infer grants from the role name or a previous successful operation.
+  // Missing/unreadable authority keeps the identity but offers no controls.
+  const authority = !session.error && session.data?.authority?.available ? session.data.authority : undefined;
+  useEffect(() => {
+    if (session.errorValue instanceof ProviderAuthError) {
+      clearProviderToken();
+      onSignOut();
+    }
+  }, [session.errorValue, onSignOut]);
   const [tenants, setTenants] = useState<ProviderTenant[] | null>(null);
   const [activity, setActivity] = useState<ProviderActivity[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -355,9 +395,10 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
         setError(err instanceof Error ? err.message : String(err));
       } finally {
         setBusy(false);
+        void queryClient.invalidateQueries({ queryKey: ["provider", "session"] });
       }
     },
-    [load, onSignOut],
+    [load, onSignOut, queryClient],
   );
 
   const statusClass = (status: ProviderTenant["status"]) =>
@@ -389,12 +430,25 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
 
       {error ? <p className="mt-3 text-caption text-status-danger">{error}</p> : null}
 
-      <ProviderAccessPanel
-        onAuthError={() => {
-          clearProviderToken();
-          onSignOut();
-        }}
-      />
+      {session.loading ? (
+        <p className="mt-3 text-caption text-muted-foreground">{translateNow("capabilities.loading")}</p>
+      ) : !authority ? (
+        <div className="mt-3 text-caption" role="status">
+          <p>{translateNow("capabilities.readFailed.title")}</p>
+          <Button type="button" variant="outline" onClick={session.refetch}>
+            {translateNow("capabilities.retry")}
+          </Button>
+        </div>
+      ) : null}
+      {authority?.access_read ? (
+        <ProviderAccessPanel
+          canWrite={authority.access_write}
+          onAuthError={() => {
+            clearProviderToken();
+            onSignOut();
+          }}
+        />
+      ) : null}
 
       <ProviderBillingPanel
         tenants={tenants ?? []}
@@ -404,34 +458,36 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
         }}
       />
 
-      <section className="mt-5">
-        <h2 className="text-title font-semibold">{translateNow("source.provider.provision.l3prov0007")}</h2>
-        <form
-          className="mt-2 flex flex-wrap items-end gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (slug.trim() && name.trim()) {
-              void act(async () => {
-                await providerApi.provisionTenant({ slug: slug.trim(), name: name.trim() });
-                setSlug("");
-                setName("");
-              });
-            }
-          }}
-        >
-          <label className="grid gap-1">
-            <span className="text-caption font-medium">{translateNow("source.provider.slug.l3prov0008")}</span>
-            <Input value={slug} onChange={(e) => setSlug(e.target.value)} aria-label={translateNow("source.provider.slug.l3prov0008")} />
-          </label>
-          <label className="grid gap-1">
-            <span className="text-caption font-medium">{translateNow("source.provider.name.l3prov0009")}</span>
-            <Input value={name} onChange={(e) => setName(e.target.value)} aria-label={translateNow("source.provider.name.l3prov0009")} />
-          </label>
-          <Button type="submit" disabled={busy || !slug.trim() || !name.trim()}>
-            {translateNow("source.provider.provision.action.l3prov0010")}
-          </Button>
-        </form>
-      </section>
+      {authority?.provision ? (
+        <section className="mt-5">
+          <h2 className="text-title font-semibold">{translateNow("source.provider.provision.l3prov0007")}</h2>
+          <form
+            className="mt-2 flex flex-wrap items-end gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (slug.trim() && name.trim()) {
+                void act(async () => {
+                  await providerApi.provisionTenant({ slug: slug.trim(), name: name.trim() });
+                  setSlug("");
+                  setName("");
+                });
+              }
+            }}
+          >
+            <label className="grid gap-1">
+              <span className="text-caption font-medium">{translateNow("source.provider.slug.l3prov0008")}</span>
+              <Input value={slug} onChange={(e) => setSlug(e.target.value)} aria-label={translateNow("source.provider.slug.l3prov0008")} />
+            </label>
+            <label className="grid gap-1">
+              <span className="text-caption font-medium">{translateNow("source.provider.name.l3prov0009")}</span>
+              <Input value={name} onChange={(e) => setName(e.target.value)} aria-label={translateNow("source.provider.name.l3prov0009")} />
+            </label>
+            <Button type="submit" disabled={busy || !slug.trim() || !name.trim()}>
+              {translateNow("source.provider.provision.action.l3prov0010")}
+            </Button>
+          </form>
+        </section>
+      ) : null}
 
       <section className="mt-6">
         <h2 className="text-title font-semibold">{translateNow("source.recent.activity.6cb44b5633")}</h2>
@@ -459,33 +515,35 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
         )}
       </section>
 
-      <section className="mt-6">
-        <h2 className="text-title font-semibold">{translateNow("source.provider.drill.title.l3prov0036")}</h2>
-        <p className="mt-1 text-caption text-muted-foreground">{translateNow("source.provider.drill.intro.l3prov0037")}</p>
-        <div className="mt-2 flex items-center gap-3">
-          <Button type="button" variant="outline" disabled={drill === "running"} onClick={() => void runDrill()}>
-            {translateNow("source.provider.drill.run.l3prov0038")}
-          </Button>
-          {drill === "running" ? (
-            <span className="text-caption text-muted-foreground">{translateNow("source.loading.4f9d1e0e3a")}</span>
-          ) : drill ? (
-            <span className={`text-caption ${drill.passed ? "text-status-success" : "text-status-danger"}`}>
-              {translateNow(drill.passed ? "source.provider.drill.pass.l3prov0039" : "source.provider.drill.fail.l3prov0040")}
-            </span>
+      {authority?.isolation_drill ? (
+        <section className="mt-6">
+          <h2 className="text-title font-semibold">{translateNow("source.provider.drill.title.l3prov0036")}</h2>
+          <p className="mt-1 text-caption text-muted-foreground">{translateNow("source.provider.drill.intro.l3prov0037")}</p>
+          <div className="mt-2 flex items-center gap-3">
+            <Button type="button" variant="outline" disabled={drill === "running"} onClick={() => void runDrill()}>
+              {translateNow("source.provider.drill.run.l3prov0038")}
+            </Button>
+            {drill === "running" ? (
+              <span className="text-caption text-muted-foreground">{translateNow("source.loading.4f9d1e0e3a")}</span>
+            ) : drill ? (
+              <span className={`text-caption ${drill.passed ? "text-status-success" : "text-status-danger"}`}>
+                {translateNow(drill.passed ? "source.provider.drill.pass.l3prov0039" : "source.provider.drill.fail.l3prov0040")}
+              </span>
+            ) : null}
+          </div>
+          {drill && drill !== "running" && !drill.passed ? (
+            <ul className="mt-2 list-disc pl-5 text-xs text-muted-foreground">
+              {(drill.checks ?? [])
+                .filter((c) => !c.passed)
+                .map((c) => (
+                  <li key={c.name}>
+                    <span className="font-mono">{c.name}</span>: {c.detail}
+                  </li>
+                ))}
+            </ul>
           ) : null}
-        </div>
-        {drill && drill !== "running" && !drill.passed ? (
-          <ul className="mt-2 list-disc pl-5 text-xs text-muted-foreground">
-            {(drill.checks ?? [])
-              .filter((c) => !c.passed)
-              .map((c) => (
-                <li key={c.name}>
-                  <span className="font-mono">{c.name}</span>: {c.detail}
-                </li>
-              ))}
-          </ul>
-        ) : null}
-      </section>
+        </section>
+      ) : null}
 
       <section className="mt-6">
         <h2 className="text-title font-semibold">{translateNow("source.provider.customers.l3prov0011")}</h2>
@@ -514,7 +572,7 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
                       <td className={`py-1 pr-4 ${statusClass(tenant.status)}`}>{tenant.status}</td>
                       <td className="py-1 pr-4 text-xs text-muted-foreground">{formatDateTime(tenant.created_at)}</td>
                       <td className="py-1 pr-4">
-                        {tenant.status === "active" ? (
+                        {tenant.status === "active" && authority?.customers[tenant.id]?.suspend ? (
                           <Button
                             type="button"
                             variant="outline"
@@ -528,7 +586,7 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
                             {translateNow("source.provider.suspend.l3prov0019")}
                           </Button>
                         ) : null}
-                        {tenant.status !== "offboarded" ? (
+                        {tenant.status !== "offboarded" && authority?.customers[tenant.id]?.offboard ? (
                           <Button
                             type="button"
                             variant="outline"
@@ -543,10 +601,12 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
                             {translateNow("source.provider.offboard.l3prov0021")}
                           </Button>
                         ) : null}
-                        <Button type="button" variant="ghost" className="ml-2" onClick={() => void viewQuota(tenant.id)}>
-                          {translateNow("source.provider.quota.l3prov0022")}
-                        </Button>
-                        {tenant.status !== "offboarded" ? (
+                        {authority?.customers[tenant.id]?.read_quota ? (
+                          <Button type="button" variant="ghost" className="ml-2" onClick={() => void viewQuota(tenant.id)}>
+                            {translateNow("source.provider.quota.l3prov0022")}
+                          </Button>
+                        ) : null}
+                        {tenant.status !== "offboarded" && authority?.customers[tenant.id]?.write_brand ? (
                           <Button type="button" variant="ghost" className="ml-2" onClick={() => setBrandFor((cur) => (cur === tenant.id ? null : tenant.id))}>
                             {translateNow("source.provider.brand.l3prov0030")}
                           </Button>
@@ -561,7 +621,7 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
                   .flatMap((rowEl, i) => {
                     const tenant = tenants[i];
                     const extras = [rowEl];
-                    if (quotaView?.id === tenant.id) {
+                    if (quotaView?.id === tenant.id && authority?.customers[tenant.id]?.read_quota) {
                       extras.push(
                         <tr key={`${tenant.id}-quota`} className="bg-muted/30">
                           <td colSpan={5} className="px-4 py-2 text-xs">
@@ -569,6 +629,8 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
                               translateNow("source.loading.4f9d1e0e3a")
                             ) : quotaView.state === "error" ? (
                               <span className="text-muted-foreground">{translateNow("source.provider.quota.none.l3prov0023")}</span>
+                            ) : !authority.customers[tenant.id]?.write_quota ? (
+                              <QuotaSummary quota={quotaView.data} />
                             ) : (
                               <QuotaEditor
                                 key={tenant.id}
@@ -585,7 +647,7 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
                         </tr>,
                       );
                     }
-                    if (brandFor === tenant.id) {
+                    if (brandFor === tenant.id && authority?.customers[tenant.id]?.write_brand) {
                       extras.push(
                         <tr key={`${tenant.id}-brand`} className="bg-muted/30">
                           <td colSpan={5} className="px-4 py-2 text-xs">

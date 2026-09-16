@@ -21,7 +21,7 @@ const grantSchema = z.object({
 });
 type GrantForm = z.infer<typeof grantSchema>;
 
-export function ProviderAccessPanel({ onAuthError }: { onAuthError: () => void }) {
+export function ProviderAccessPanel({ onAuthError, canWrite }: { onAuthError: () => void; canWrite: boolean }) {
   const access = useApiQuery(["provider", "operator-access"], providerApi.listOperatorAccess);
   const customers = useApiQuery(["provider", "access-customers"], providerApi.listAccessCustomers);
   const queryClient = useQueryClient();
@@ -34,6 +34,7 @@ export function ProviderAccessPanel({ onAuthError }: { onAuthError: () => void }
       (rows ?? []).map((row) => (row.identity.id === next.identity.id ? next : row)),
     );
     void queryClient.invalidateQueries({ queryKey: ["provider", "operator-access"] });
+    void queryClient.invalidateQueries({ queryKey: ["provider", "session"] });
   };
   const fail = (error: unknown) => {
     if (error instanceof ProviderAuthError) {
@@ -84,49 +85,51 @@ export function ProviderAccessPanel({ onAuthError }: { onAuthError: () => void }
       </h2>
       <p className="mt-1 text-caption text-muted-foreground">{translateNow("source.provider.access.intro.aud580002")}</p>
 
-      <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={(event) => void grant(event)}>
-        <label className="grid gap-1">
-          <span className="text-caption font-medium">{translateNow("source.provider.access.operator.aud580003")}</span>
-          <Select aria-label={translateNow("source.provider.access.operator.aud580003")} {...form.register("operatorId")}>
-            <option value="">—</option>
-            {(access.data ?? [])
-              .filter((row) => row.identity.active)
-              .map((row) => (
-                <option key={row.identity.id} value={row.identity.id}>
-                  {row.identity.display_name || row.identity.user_name} — {row.identity.user_name}
+      {canWrite ? (
+        <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={(event) => void grant(event)}>
+          <label className="grid gap-1">
+            <span className="text-caption font-medium">{translateNow("source.provider.access.operator.aud580003")}</span>
+            <Select aria-label={translateNow("source.provider.access.operator.aud580003")} {...form.register("operatorId")}>
+              <option value="">—</option>
+              {(access.data ?? [])
+                .filter((row) => row.identity.active)
+                .map((row) => (
+                  <option key={row.identity.id} value={row.identity.id}>
+                    {row.identity.display_name || row.identity.user_name} — {row.identity.user_name}
+                  </option>
+                ))}
+            </Select>
+          </label>
+          <label className="grid gap-1">
+            <span className="text-caption font-medium">{translateNow("source.provider.access.customer.aud580004")}</span>
+            <Select aria-label={translateNow("source.provider.access.customer.aud580004")} {...form.register("customerId")}>
+              <option value="">—</option>
+              {(customers.data ?? []).map((tenant) => (
+                <option key={tenant.id} value={tenant.id}>
+                  {tenant.name} — {tenant.slug}
                 </option>
               ))}
-          </Select>
-        </label>
-        <label className="grid gap-1">
-          <span className="text-caption font-medium">{translateNow("source.provider.access.customer.aud580004")}</span>
-          <Select aria-label={translateNow("source.provider.access.customer.aud580004")} {...form.register("customerId")}>
-            <option value="">—</option>
-            {(customers.data ?? []).map((tenant) => (
-              <option key={tenant.id} value={tenant.id}>
-                {tenant.name} — {tenant.slug}
-              </option>
-            ))}
-          </Select>
-        </label>
-        <label className="grid gap-1">
-          <span className="text-caption font-medium">{translateNow("source.provider.access.operation.aud580005")}</span>
-          <Select aria-label={translateNow("source.provider.access.operation.aud580005")} {...form.register("operation")}>
-            {operations.map((operation) => (
-              <option key={operation} value={operation}>
-                {operation}
-              </option>
-            ))}
-          </Select>
-        </label>
-        <label className="grid gap-1">
-          <span className="text-caption font-medium">{translateNow("source.provider.access.expiry.aud580006")}</span>
-          <Input type="datetime-local" aria-label={translateNow("source.provider.access.expiry.aud580006")} {...form.register("expiresAt")} />
-        </label>
-        <Button type="submit" disabled={form.formState.isSubmitting || access.loading}>
-          {translateNow("source.provider.access.grant.aud580007")}
-        </Button>
-      </form>
+            </Select>
+          </label>
+          <label className="grid gap-1">
+            <span className="text-caption font-medium">{translateNow("source.provider.access.operation.aud580005")}</span>
+            <Select aria-label={translateNow("source.provider.access.operation.aud580005")} {...form.register("operation")}>
+              {operations.map((operation) => (
+                <option key={operation} value={operation}>
+                  {operation}
+                </option>
+              ))}
+            </Select>
+          </label>
+          <label className="grid gap-1">
+            <span className="text-caption font-medium">{translateNow("source.provider.access.expiry.aud580006")}</span>
+            <Input type="datetime-local" aria-label={translateNow("source.provider.access.expiry.aud580006")} {...form.register("expiresAt")} />
+          </label>
+          <Button type="submit" disabled={form.formState.isSubmitting || access.loading}>
+            {translateNow("source.provider.access.grant.aud580007")}
+          </Button>
+        </form>
+      ) : null}
       {form.formState.errors.root?.message ? <p className="mt-2 text-caption text-status-danger">{form.formState.errors.root.message}</p> : null}
 
       {access.loading ? (
@@ -159,15 +162,19 @@ export function ProviderAccessPanel({ onAuthError }: { onAuthError: () => void }
                     </span>
                   </td>
                   <td className="py-3 pr-3">
-                    <Select
-                      aria-label={translateNow("source.provider.access.role.aud580010")}
-                      value={row.identity.role}
-                      disabled={!row.identity.active}
-                      onChange={(event) => void setRole(row, event.target.value as ProviderOperatorRole)}
-                    >
-                      <option value="admin">{translateNow("source.provider.access.role.admin.aud580021")}</option>
-                      <option value="operator">{translateNow("source.provider.access.role.operator.aud580022")}</option>
-                    </Select>
+                    {canWrite ? (
+                      <Select
+                        aria-label={translateNow("source.provider.access.role.aud580010")}
+                        value={row.identity.role}
+                        disabled={!row.identity.active}
+                        onChange={(event) => void setRole(row, event.target.value as ProviderOperatorRole)}
+                      >
+                        <option value="admin">{translateNow("source.provider.access.role.admin.aud580021")}</option>
+                        <option value="operator">{translateNow("source.provider.access.role.operator.aud580022")}</option>
+                      </Select>
+                    ) : (
+                      <span>{row.identity.role}</span>
+                    )}
                   </td>
                   <td className="py-3 pr-3 font-mono">{row.identity.source}</td>
                   <td className="py-3 pr-3">
@@ -196,7 +203,7 @@ export function ProviderAccessPanel({ onAuthError }: { onAuthError: () => void }
                                 <span className="block text-status-danger">
                                   {translateNow("source.provider.access.revoked.aud580018")}: {formatDateTime(delegation.revoked_at)}
                                 </span>
-                              ) : active ? (
+                              ) : active && canWrite ? (
                                 <Button
                                   type="button"
                                   size="sm"

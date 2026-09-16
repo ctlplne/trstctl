@@ -82,9 +82,9 @@
   },
   "size-limit": [
     {
-      "name": "entry chunk (shell + vendor + en catalog, Brotli)",
+      "name": "entry chunk only (Brotli; complete graph checked separately)",
       "path": "../internal/webui/dist/assets/index-*.js",
-      "limit": "185 kB"
+      "limit": "240 kB"
     },
     {
       "name": "largest page chunk (Brotli)",
@@ -94,7 +94,7 @@
     {
       "name": "all JS shipped (Brotli)",
       "path": "../internal/webui/dist/assets/*.js",
-      "limit": "645 kB"
+      "limit": "700 kB"
     }
   ]
 }

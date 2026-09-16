@@ -320,6 +320,15 @@ enables submission only while a green preview still matches every reviewed field
 Operators and automation can ask the same question with
 `trstctl issuance-requests preview --body request.json`.
 
+Once the exact approved issuance has a recorded certificate, the signing worker
+marks the request fulfilled without requiring the requester to keep a browser
+open. The completion API can also reconcile a historical result after deployment,
+revocation, or retirement. This changes only the request receipt: the credential's
+current state stays intact. `issued_by` comes from the original issuance event
+(and remains empty when that historical event has no actor); `issued_at` is the
+certificate's retained recording time. Missing or ambiguous signing evidence,
+a different owner or profile, and an unrelated issuance key still refuse completion.
+
 Submission sends the normalized body to `POST /api/v1/issuance-requests`. The
 server re-runs that shared admission rule before appending
 `issuance.request.opened`; missing or malformed values return 400, while absent and

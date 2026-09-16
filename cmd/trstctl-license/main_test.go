@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -120,5 +121,47 @@ func TestLicenseHelperRejectsIncompleteCommands(t *testing.T) {
 		if err := run(tc, &bytes.Buffer{}, &bytes.Buffer{}); err == nil {
 			t.Fatalf("run(%v) succeeded, want an error", tc)
 		}
+	}
+}
+
+func TestSignedLicenseOutputHasInstallerPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX license-file mode contract")
+	}
+	dir := t.TempDir()
+	key, pub := filepath.Join(dir, "vendor.key"), filepath.Join(dir, "vendor.pub")
+	if err := run([]string{"gen-key", "--private-key", key, "--public-key", pub}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	for _, existing := range []bool{false, true} {
+		name := "new"
+		if existing {
+			name = "existing-public-mode"
+		}
+		t.Run(name, func(t *testing.T) {
+			out := filepath.Join(dir, name+".json")
+			if existing {
+				if err := os.WriteFile(out, []byte("superseded public license"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Chmod(out, 0o644); err != nil { // #nosec G302 -- regression fixture deliberately starts with an insecure mode to prove signing repairs it (CWE-276)
+					t.Fatal(err)
+				}
+			}
+			args := []string{"sign", "--private-key", key, "--out", out, "--id", "mode-fixture", "--customer", "QA", "--tier", "provider", "--production-deployment-id", "qa-mode", "--issued-at", "2026-07-01T00:00:00Z", "--expires-at", "2027-07-01T00:00:00Z"}
+			if err := run(args, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+				t.Fatal(err)
+			}
+			st, err := os.Stat(out)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := st.Mode().Perm(); got != 0o600 {
+				t.Errorf("signed license mode = %04o, installer requires0600", got)
+			}
+			if err := run([]string{"verify", "--license", out, "--public-key", pub}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }

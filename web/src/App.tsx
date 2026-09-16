@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { lazy, type ComponentType, type ReactElement } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider, useAuth } from "@/auth/AuthProvider";
@@ -71,6 +71,7 @@ const Journeys = lazyPage(() => import("@/pages/Journeys"), "Journeys");
 /** RequireAuth gates the app behind a resolved session, redirecting to login
  * when there is none. */
 function RequireAuth({ children }: { children: ReactElement }) {
+  const location = useLocation();
   const { user, loading, preview } = useAuth();
   const { t } = useTranslation();
   if (loading) {
@@ -80,7 +81,10 @@ function RequireAuth({ children }: { children: ReactElement }) {
       </p>
     );
   }
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) {
+    const query = new URLSearchParams({ return_to: location.pathname + location.search + location.hash });
+    return <Navigate to={`/login?${query}`} replace />;
+  }
   return (
     <RbacProvider permissions={user.permissions ?? null}>
       <CapabilityProvider enabled={!preview}>{children}</CapabilityProvider>

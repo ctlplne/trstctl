@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"mime"
 	"net/http"
+	"net/url"
 	"runtime"
 	"sort"
 	"strconv"
@@ -250,7 +251,7 @@ func (a *API) authLogin(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusServiceUnavailable, "OIDC pre-login store is not configured"))
 		return
 	}
-	preLoginID, err := a.oidcPreLogin.create(state, nonce, pkceVerifier, requestClientIP(r), r.UserAgent())
+	preLoginID, err := a.oidcPreLogin.create(state, nonce, pkceVerifier, requestClientIP(r), r.UserAgent(), safeLoginReturnPath(r.URL.Query().Get("return_to")))
 	if err != nil {
 		var capacityErr oidcPreLoginCapacityError
 		if errors.As(err, &capacityErr) {
@@ -349,13 +350,17 @@ func (a *API) authCallback(w http.ResponseWriter, r *http.Request) {
 			// recovery URL and referrers.
 			w.Header().Set("Cache-Control", "no-store")
 			w.Header().Set("Referrer-Policy", "no-referrer")
-			http.Redirect(w, r, "/login?error=tenant_access_not_configured", http.StatusSeeOther)
+			recovery := "/login?error=tenant_access_not_configured"
+			if preLogin.ReturnTo != "" {
+				recovery += "&return_to=" + url.QueryEscape(preLogin.ReturnTo)
+			}
+			http.Redirect(w, r, recovery, http.StatusSeeOther)
 			return
 		}
 		a.writeProblem(w, problem.New(http.StatusForbidden, "no tenant for this user"))
 		return
 	}
-	a.issueLoginSession(w, r, claims, tenantID, roles, preLoginCookieName, stateCookieName, nonceCookieName, pkceCookieName)
+	a.issueLoginSessionWithReturn(w, r, claims, tenantID, roles, preLogin.ReturnTo, preLoginCookieName, stateCookieName, nonceCookieName, pkceCookieName)
 }
 
 // prefersLoginRecoveryPage keeps JSON API callers on the existing problem
@@ -545,6 +550,10 @@ func (a *API) authLDAPLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) issueLoginSession(w http.ResponseWriter, r *http.Request, claims auth.Claims, tenantID string, roles []string, clearCookies ...string) {
+	a.issueLoginSessionWithReturn(w, r, claims, tenantID, roles, "", clearCookies...)
+}
+
+func (a *API) issueLoginSessionWithReturn(w http.ResponseWriter, r *http.Request, claims auth.Claims, tenantID string, roles []string, returnTo string, clearCookies ...string) {
 	token, err := a.auth.Sessions.IssueContext(r.Context(), claims.Subject, tenantID, claims.Email, roles)
 	if err != nil {
 		a.writeError(w, err)
@@ -565,7 +574,10 @@ func (a *API) issueLoginSession(w http.ResponseWriter, r *http.Request, claims a
 	for _, name := range clearCookies {
 		a.clearCookie(w, name)
 	}
-	redirect := a.auth.LoginRedirect
+	redirect := safeLoginReturnPath(returnTo)
+	if redirect == "" {
+		redirect = a.auth.LoginRedirect
+	}
 	if redirect == "" {
 		redirect = "/"
 	}

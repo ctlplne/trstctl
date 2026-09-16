@@ -170,6 +170,7 @@ export function useAuth(): AuthState {
 }
 
 /** beginLogin sends the browser into the OIDC flow. */
-export function beginLogin() {
-  window.location.assign(loginURL);
+export function beginLogin(returnTo?: string) {
+  const query = returnTo ? new URLSearchParams({ return_to: returnTo }).toString() : "";
+  window.location.assign(query ? `${loginURL}?${query}` : loginURL);
 }

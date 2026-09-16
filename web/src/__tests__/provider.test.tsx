@@ -39,7 +39,7 @@ vi.mock("@/lib/providerApi", async (orig) => {
 });
 
 import { Provider } from "@/pages/Provider";
-import { setProviderToken, clearProviderToken } from "@/lib/providerApi";
+import { setProviderToken, clearProviderToken, providerToken } from "@/lib/providerApi";
 
 function renderProvider() {
   return render(
@@ -60,7 +60,24 @@ describe("provider console (L3)", () => {
     providerMock.listActivity.mockResolvedValue([]);
     providerMock.availability.mockResolvedValue(true);
     providerMock.authMethods.mockResolvedValue([]);
-    providerMock.session.mockRejectedValue(new Error("no provider session"));
+    // Existing action tests exercise a fully authorized administrator. The new
+    // authority regression suite separately covers limited and unknown grants.
+    providerMock.session.mockImplementation(async () => {
+      if (!providerToken()) throw new Error("no provider session");
+      return {
+        id: "test-admin",
+        role: "admin",
+        mfa: true,
+        authority: {
+          available: true,
+          access_read: true,
+          access_write: true,
+          provision: true,
+          isolation_drill: true,
+          customers: { "t-1": { read_quota: true, write_quota: true, write_brand: true, suspend: true, offboard: true } },
+        },
+      };
+    });
     providerMock.listOperatorAccess.mockResolvedValue([]);
     providerMock.listAccessCustomers.mockResolvedValue([]);
     providerMock.customerHealth.mockResolvedValue({ tenant_id: "", health: "unknown", active_certificates: 0 });
@@ -303,7 +320,7 @@ describe("provider console (L3)", () => {
     renderProvider();
 
     expect(await screen.findByRole("heading", { name: "Operator access" })).toBeInTheDocument();
-    expect(screen.getByText("Casey")).toBeInTheDocument();
+    expect(await screen.findByText("Casey")).toBeInTheDocument();
     expect(screen.getByText("scim:entra")).toBeInTheDocument();
     expect(screen.getByText("tenant-acme")).toBeInTheDocument();
     expect(screen.getByText(/Last used/)).toBeInTheDocument();

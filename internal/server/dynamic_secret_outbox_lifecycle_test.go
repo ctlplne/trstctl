@@ -528,10 +528,21 @@ func TestDurableDynamicSecretIssueIsOutboxOnlyAndCrashReplaySafe(t *testing.T) {
 		dynamicProviders: DynamicSecretProviderRegistry{tenant: {provider}},
 		kek:              kek, store: st, log: log,
 	}
+	// Hold the worker after its result is projected but before Dispatch can
+	// mark the outbox delivered. IssueBound observes the committed lease, not
+	// the worker's later bookkeeping. Exercise that crash window deliberately.
+	handlerMayReturn := make(chan struct{})
 	handler := orchestrator.HandlerFunc(func(ctx context.Context, message orchestrator.Message) error {
 		handled, err := dispatcher.Deliver(ctx, message)
 		if !handled && err == nil {
 			return fmt.Errorf("test outbox did not handle %s", message.Destination)
+		}
+		if handled && err == nil && message.Destination == dynamicSecretIssueDestination {
+			select {
+			case <-handlerMayReturn:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		}
 		return err
 	})
@@ -580,8 +591,8 @@ func TestDurableDynamicSecretIssueIsOutboxOnlyAndCrashReplaySafe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if outboxRecord.Status != "delivered" || outboxRecord.Destination != dynamicSecretIssueDestination {
-		t.Fatalf("issue outbox = %+v, want delivered dynsecret.issue", outboxRecord)
+	if outboxRecord.Status != "processing" || outboxRecord.Destination != dynamicSecretIssueDestination {
+		t.Fatalf("issue outbox = %+v, want worker-held dynsecret.issue before finalization", outboxRecord)
 	}
 
 	// Simulate the process dying after the issued event/projector committed but
@@ -594,6 +605,11 @@ func TestDurableDynamicSecretIssueIsOutboxOnlyAndCrashReplaySafe(t *testing.T) {
 	if err != nil || !handled || len(provider.Requests()) != 1 {
 		t.Fatalf("finalization replay handled=%t err=%v provider_calls=%d", handled, err, len(provider.Requests()))
 	}
+
+	// Now release the real worker and require its durable completion within the
+	// existing outbox test deadline. This is not satisfied by the lease alone.
+	close(handlerMayReturn)
+	waitForOutboxStatus(t, outbox, tenant, record.IssueOutboxID, "delivered")
 
 	// A new lifecycle instance models an API restart before its own idempotency
 	// result committed. It replays the identical sealed credential and does not

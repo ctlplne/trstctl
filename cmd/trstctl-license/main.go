@@ -145,7 +145,24 @@ func runSign(args []string, stdout, stderr io.Writer) error {
 		_, _ = io.WriteString(stdout, "\n")
 		return nil
 	}
-	return os.WriteFile(*outPath, raw, 0o644) // #nosec G306 G703 -- writes the license PUBLIC key/inspection output; public material (CWE-22, CWE-276)
+	// The shipped installer accepts only an owner-only license file. Tighten
+	// an existing output before replacing its contents; WriteFile's mode alone
+	// applies only when creating a new file.
+	out, err := os.OpenFile(*outPath, os.O_WRONLY|os.O_CREATE, 0o600) // #nosec G304 G703 -- vendor operator explicitly selects the local CLI output path (CWE-22)
+	if err != nil {
+		return fmt.Errorf("open license output: %w", err)
+	}
+	defer func() { _ = out.Close() }()
+	if err := out.Chmod(0o600); err != nil {
+		return fmt.Errorf("protect license output: %w", err)
+	}
+	if err := out.Truncate(0); err != nil {
+		return fmt.Errorf("replace license output: %w", err)
+	}
+	if _, err := out.Write(raw); err != nil {
+		return fmt.Errorf("write license output: %w", err)
+	}
+	return out.Close()
 }
 
 func runVerify(args []string, stdout, stderr io.Writer) error {

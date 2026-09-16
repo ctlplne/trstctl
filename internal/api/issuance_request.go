@@ -360,7 +360,7 @@ func (a *API) prepareIssuanceRequest(w http.ResponseWriter, r *http.Request) {
 func (a *API) completeIssuanceRequest(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		request, err := a.orch.CompleteIssuanceRequest(ctx, tenantID, r.PathValue("id"), principalSubject(ctx))
+		request, err := a.orch.CompleteIssuanceRequest(ctx, tenantID, r.PathValue("id"))
 		if err != nil {
 			if errors.Is(err, orchestrator.ErrIssuanceRequestNotReady) {
 				return 0, nil, errStatus(http.StatusConflict, err.Error())

@@ -52,9 +52,15 @@ signed your license; if it reads Grace or Read-only, the plane refuses mutations
 Open the console's **Provider** page (`/provider`). It offers the sign-in methods
 your deployment pinned: SAML redirects to your identity provider; OIDC accepts the
 bearer your identity provider issued to the operator (the lab's local provider shows
-it once on its sign-in page). The token is held in memory only. `GET
+it once on its sign-in page). The token is held in memory only. Signing out clears the Provider query cache, so the next operator cannot inherit customer or workforce records. A refused customer action preserves the current sign-in and form so you can fix delegation or MFA and retry; an expired or invalid credential returns to sign-in. `GET
 /provider/v1/auth/session` answers who you are and which role and MFA state the
-plane derived from the signed claims.
+plane derived from the signed claims. It also reports the current effective
+controls from the license, role, MFA, customer delegation, and attached services.
+The console hides actions that are not allowed, never treats a suspend grant as an
+offboard grant, and shows quotas as a read-only summary unless quota changes are
+allowed. Missing or unreadable authority leaves controls unavailable; **Check
+again** retries that read without discarding a valid sign-in. The server repeats
+its checks for every action, even when the button was available a moment ago.
 
 ### 3. Bootstrap delegation once
 
@@ -98,6 +104,10 @@ partner lab that is the customer listener on port 10449
 (`deploy/demo/lab/README.md`). Then pull the customer's metering (`/provider/v1/tenants/{id}/quota` and
 the provider evidence endpoints) as invoice evidence; the verification keys for
 that evidence are published at `/provider/v1/evidence/verification-keys`.
+
+Changing the invoice customer or period clears the displayed health and evidence.
+Pull the newly selected period before downloading it; a response from an earlier
+selection cannot populate the new customer or mark its signature as verified.
 
 ### 6. Prove the refusals
 

@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1408 annotated sites across 26 rules. Each row is
+1409 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -679,10 +679,10 @@ not this file.
 | `ee/provider/saml_authenticator.go:250` | this non-credential double-submit cookie must remain JavaScript-readable; strict and served-mode Secure still apply (CWE-614). |
 | `ee/provider/saml_authenticator.go:346` | short-lived HttpOnly state/request correlation; None is paired with Secure for the required cross-site SAML POST. |
 | `ee/provider/saml_authenticator.go:353` | expiry retains HttpOnly/Lax and uses insecure transport only in explicit loopback development mode (CWE-614). |
-| `internal/api/auth.go:816` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
-| `internal/api/auth.go:827` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
-| `internal/api/auth.go:851` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
-| `internal/api/auth.go:858` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
+| `internal/api/auth.go:828` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
+| `internal/api/auth.go:839` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
+| `internal/api/auth.go:863` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
+| `internal/api/auth.go:870` | HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004) |
 | `internal/api/auth_hardening_test.go:21` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/auth_test.go:226` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/auth_test.go:227` | test cookie against the test's own local server (CWE-1004) |
@@ -945,12 +945,13 @@ not this file.
 | `tools/trstctllint/eventsource/eventsource_test.go:98` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/trstctllint/idempotency/idempotency_test.go:198` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G302 — CWE-276 Incorrect default permissions (chmod) (32 sites)
+### G302 — CWE-276 Incorrect default permissions (chmod) (33 sites)
 
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-agent/main.go:480` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
 | `cmd/trstctl-agent/tomcat_reload_test.go:80` | deliberately public disposable password fixture must be rejected before any request (CWE-276). |
+| `cmd/trstctl-license/main_test.go:147` | regression fixture deliberately starts with an insecure mode to prove signing repairs it (CWE-276) |
 | `internal/agent/destination/fs_unix_test.go:82` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/drift/drift_unix_test.go:28` | deliberately loosens the fixture key's mode; detecting exactly this is what the test proves (CWE-276) |
 | `internal/agent/drift/drift_unix_test.go:53` | deliberately loosens the fixture key's mode; detecting exactly this is what the test proves (CWE-276) |
@@ -982,7 +983,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (380 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (381 sites)
 
 | Location | Reason |
 |---|---|
@@ -1004,6 +1005,7 @@ not this file.
 | `cmd/trstctl-agent/pluginruntime.go:400` | operator-supplied public issuer certificate (CWE-22) |
 | `cmd/trstctl-agent/sshtrust.go:90` | operator-configured local path from the agent's own config (CWE-22) |
 | `cmd/trstctl-license/aud56_test.go:35` | licensePath is created inside this test's TempDir (CWE-22). |
+| `cmd/trstctl-license/main.go:151` | vendor operator explicitly selects the local CLI output path (CWE-22) |
 | `cmd/trstctl/backup_cmd_test.go:46` | test reads its own fixture/tempdir path (CWE-22) |
 | `cmd/trstctl/backup_cmd_test.go:64` | test reads its own fixture/tempdir path (CWE-22) |
 | `cmd/trstctl/backup_cmd_test.go:111` | test reads a fixed repository artifact (CWE-22) |
@@ -1367,7 +1369,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/upsertarbiter.go:287` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G306 — CWE-276 Incorrect default permissions (file write) (87 sites)
+### G306 — CWE-276 Incorrect default permissions (file write) (86 sites)
 
 | Location | Reason |
 |---|---|
@@ -1378,7 +1380,6 @@ not this file.
 | `cmd/trstctl-agent/sshtrust_test.go:182` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `cmd/trstctl-agent/sshtrust_test.go:224` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `cmd/trstctl-license/main.go:67` | writes the license PUBLIC key/inspection output; public material (CWE-276) |
-| `cmd/trstctl-license/main.go:148` | writes the license PUBLIC key/inspection output; public material (CWE-22, CWE-276) |
 | `cmd/trstctl/backup_cmd_test.go:31` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `deploy/docker/dist_test.go:1043` | non-secret npm fixture manifest in t.TempDir (CWE-276) |
 | `deploy/docker/dist_test.go:1046` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -1554,7 +1555,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `cmd/trstctl-license/main.go:148` | writes the license PUBLIC key/inspection output; public material (CWE-22, CWE-276) |
+| `cmd/trstctl-license/main.go:151` | vendor operator explicitly selects the local CLI output path (CWE-22) |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `internal/agent/relay/hostrollback.go:309` | both paths are inside the validated agent-local state directory (CWE-22) |
 | `internal/agent/sshtrust/sshd_live_test.go:115` | temp file beside the harness-owned sshd config in a test dir (CWE-22) |

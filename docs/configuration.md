@@ -820,6 +820,21 @@ dropping a user into the wrong tenant.
 | `TRSTCTL_AUTH_LDAP_GROUP_NAME_ATTRIBUTE` | unset | Group attribute mapped to `tenant_mappings[].group`, usually `cn`. |
 | `TRSTCTL_AUTH_LDAP_SESSION_SECRET_FILE` | unset | HMAC secret file used to sign browser sessions. |
 
+An OIDC login started from a protected console page returns to that page after
+sign-in, including its query filters and fragment. This also works when opening
+a bookmarked page after the browser session has expired.
+
+The console passes a local `return_to` path to `/auth/login`. The server validates
+it and binds it to the same one-use pre-login record as state, nonce, and PKCE;
+a callback parameter cannot replace it. A tenant-mapping recovery page retains
+that validated destination for the next sign-in attempt.
+
+The path is limited to 4096 bytes. External URLs, protocol-relative URLs,
+backslashes in the path, control characters, and login or authentication routes
+are ignored. With an absent or invalid destination, OIDC uses its configured
+`auth.oidc.login_redirect`, or `/` when unset. SAML and LDAP retain their existing
+configured post-login destinations.
+
 ## SCIM provisioning
 
 SCIM 2.0 provisioning is optional and separate from browser sign-on. Enable it when

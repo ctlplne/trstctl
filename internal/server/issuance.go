@@ -508,6 +508,19 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 		})
 	}
 	if err := d.identityStillPermitsIssuance(ctx, m.TenantID, p.IdentityID); err != nil {
+		// A terminal identity cannot authorize another signature or deployment.
+		// It can still have a completed signature whose request receipt was lost
+		// when this worker stopped. Reconcile only that exact retained result.
+		if strings.HasPrefix(m.IdempotencyKey, "transition:issuance-request-issue:") {
+			identity, readErr := d.store.GetIdentity(ctx, m.TenantID, p.IdentityID)
+			if readErr == nil && (identity.Status == string(orchestrator.StateRevoked) || identity.Status == string(orchestrator.StateRetired)) {
+				requestKey := strings.TrimPrefix(m.IdempotencyKey, "transition:")
+				result, resultErr := d.store.GetIdentityIssuanceResult(ctx, m.TenantID, p.IdentityID, requestKey)
+				if resultErr == nil && result.Certificate != nil {
+					return d.orch.CompleteIssuanceRequestForIdentity(ctx, m.TenantID, p.IdentityID, requestKey)
+				}
+			}
+		}
 		return err
 	}
 	idemKey := "issue:" + m.IdempotencyKey
@@ -598,7 +611,10 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 	if err != nil {
 		return err
 	}
-	return d.ensureIdentityCRL(ctx, m.TenantID, p.IdentityID)
+	if err := d.ensureIdentityCRL(ctx, m.TenantID, p.IdentityID); err != nil {
+		return err
+	}
+	return d.orch.CompleteIssuanceRequestForIdentity(ctx, m.TenantID, p.IdentityID, strings.TrimPrefix(m.IdempotencyKey, "transition:"))
 }
 
 // shouldRecoverIssuedCertificate distinguishes a new durable outbox claim from

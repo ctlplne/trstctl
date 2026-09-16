@@ -21,6 +21,7 @@ type oidcPreLoginEntry struct {
 	State        string
 	Nonce        string
 	PKCEVerifier string
+	ReturnTo     string
 	ClientIP     string
 	UserAgent    string
 	ExpiresAt    time.Time
@@ -67,7 +68,7 @@ func newOIDCPreLoginStore(ttl time.Duration, limits oidcPreLoginLimits) *oidcPre
 	}
 }
 
-func (s *oidcPreLoginStore) create(state, nonce, verifier, clientIP, userAgent string) (string, error) {
+func (s *oidcPreLoginStore) create(state, nonce, verifier, clientIP, userAgent, returnTo string) (string, error) {
 	id, err := auth.RandomState()
 	if err != nil {
 		return "", err
@@ -84,7 +85,7 @@ func (s *oidcPreLoginStore) create(state, nonce, verifier, clientIP, userAgent s
 		s.decrementSourceLocked(old.ClientIP)
 	}
 	s.entries[id] = oidcPreLoginEntry{
-		State: state, Nonce: nonce, PKCEVerifier: verifier,
+		State: state, Nonce: nonce, PKCEVerifier: verifier, ReturnTo: returnTo,
 		ClientIP: source, UserAgent: userAgent, ExpiresAt: now.Add(s.ttl),
 	}
 	s.sourceCounts[source]++

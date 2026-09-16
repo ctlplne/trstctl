@@ -327,11 +327,10 @@ func (o *Orchestrator) validateCompletedIssuanceIdentity(ctx context.Context, te
 	return nil
 }
 
-// CompleteIssuanceRequest records fulfillment only after the linked identity is
-// issued and inventory contains a matching active certificate minted under the
-// request's stable idempotency key. A green status can therefore never get
-// ahead of the signer-backed evidence.
-func (o *Orchestrator) CompleteIssuanceRequest(ctx context.Context, tenantID, id, issuedBy string) (store.IssuanceRequest, error) {
+// CompleteIssuanceRequest records the historical fulfillment proved by the exact
+// signing command and its certificate. Later deployment, revocation or retirement
+// cannot erase that fact; completion never changes the credential's current state.
+func (o *Orchestrator) CompleteIssuanceRequest(ctx context.Context, tenantID, id string) (store.IssuanceRequest, error) {
 	var completed store.IssuanceRequest
 	err := o.store.WithProjectionLock(ctx, func(lockCtx context.Context) error {
 		current, err := o.store.GetIssuanceRequest(lockCtx, tenantID, id)
@@ -353,8 +352,10 @@ func (o *Orchestrator) CompleteIssuanceRequest(ctx context.Context, tenantID, id
 		if err := o.validateCompletedIssuanceIdentity(lockCtx, tenantID, current, identity); err != nil {
 			return err
 		}
-		if identity.Status != string(StateIssued) {
-			return fmt.Errorf("%w: linked identity %s is %s, not issued", ErrIssuanceRequestNotReady, identity.ID, identity.Status)
+		switch State(identity.Status) {
+		case StateIssued, StateDeployed, StateRenewing, StateRenewalFailed, StateRevoked, StateRetired:
+		default:
+			return fmt.Errorf("%w: linked identity %s has no completed issuance", ErrIssuanceRequestNotReady, identity.ID)
 		}
 		result, err := o.store.GetIdentityIssuanceResult(lockCtx, tenantID, identity.ID, IssuanceRequestIssueIdempotencyKey(current.ID))
 		if store.IsNotFound(err) || errors.Is(err, store.ErrIdempotencyConflict) {
@@ -373,12 +374,23 @@ func (o *Orchestrator) CompleteIssuanceRequest(ctx context.Context, tenantID, id
 		}
 		certificate := *result.Certificate
 		ownerMatches := certificate.OwnerID != nil && *certificate.OwnerID == current.OwnerID
-		if !ownerMatches || certificate.IssuanceEventID == "" || certificate.Status != "active" ||
+		knownCertificateState := certificate.Status == "active" || certificate.Status == "superseded" || certificate.Status == "revoked"
+		if !ownerMatches || certificate.IssuanceEventID == "" || !knownCertificateState ||
 			(len(certificate.CertificateDER) == 0 || len(certificate.CertificatePEM) == 0) {
 			return fmt.Errorf("%w: signer-backed certificate for request %s is not in inventory yet",
 				ErrIssuanceRequestNotReady, current.ID)
 		}
-		at := time.Now().UTC()
+		// Attribute signing to its immutable original command, not to the person
+		// or worker who later reconciles the request. Unattributed historical
+		// events remain unattributed rather than fabricating a human issuer.
+		issuedBy, err := o.issuanceRequestOriginalIssuer(lockCtx, tenantID, identity.ID, current.ID)
+		if err != nil {
+			return err
+		}
+		at := certificate.CreatedAt.UTC()
+		if at.IsZero() {
+			return fmt.Errorf("%w: certificate recording time is missing", ErrIssuanceRequestNotReady)
+		}
 		payload, err := json.Marshal(projections.IssuanceRequestIssued{
 			ID: current.ID, IdentityID: identity.ID, IssuedBy: issuedBy, IssuedAt: at,
 		})
@@ -393,6 +405,66 @@ func (o *Orchestrator) CompleteIssuanceRequest(ctx context.Context, tenantID, id
 		return nil
 	})
 	return completed, err
+}
+
+func (o *Orchestrator) issuanceRequestOriginalIssuer(ctx context.Context, tenantID, identityID, requestID string) (string, error) {
+	initial, found, err := o.store.IdentityInitialIssuance(ctx, tenantID, identityID)
+	if err != nil {
+		return "", err
+	}
+	if !found || initial.IdempotencyKey != IssuanceRequestIssueIdempotencyKey(requestID) || o.log == nil {
+		return "", fmt.Errorf("%w: original issuance command is unavailable", ErrIssuanceRequestNotReady)
+	}
+	event, found, err := o.log.EventAtSequence(ctx, initial.Seq)
+	if err != nil {
+		return "", err
+	}
+	if !found || event.Sequence != initial.Seq || event.TenantID != tenantID || event.Type != projections.EventIdentityIssued {
+		return "", fmt.Errorf("%w: original issuance event does not match", ErrIssuanceRequestNotReady)
+	}
+	if err := projections.ValidateLifecycleApprovalEvent(event); err != nil {
+		return "", err
+	}
+	var command transitionPayload
+	if err := json.Unmarshal(event.Data, &command); err != nil {
+		return "", err
+	}
+	if command.IdentityID != identityID || command.From != StateRequested || command.To != StateIssued || command.IdempotencyKey != initial.IdempotencyKey {
+		return "", fmt.Errorf("%w: original issuance event names another command", ErrIssuanceRequestNotReady)
+	}
+	if event.Actor == nil {
+		return "", nil
+	}
+	return event.Actor.Subject, nil
+}
+
+// CompleteIssuanceRequestForIdentity closes only the first-class request named
+// by this exact issuance command. The durable outbox retries a failed completion
+// without re-signing, so closing the browser cannot strand an issued request.
+func (o *Orchestrator) CompleteIssuanceRequestForIdentity(ctx context.Context, tenantID, identityID, requestKey string) error {
+	const prefix = "issuance-request-issue:"
+	if !strings.HasPrefix(requestKey, prefix) {
+		return nil
+	}
+	id := strings.TrimPrefix(requestKey, prefix)
+	if _, err := uuid.Parse(id); err != nil {
+		return nil // Ordinary idempotency keys may share the prefix.
+	}
+	request, err := o.store.GetIssuanceRequest(ctx, tenantID, id)
+	if store.IsNotFound(err) {
+		return nil // An ordinary caller's key is not itself a request binding.
+	}
+	if err != nil {
+		return err
+	}
+	if request.IdentityID != identityID {
+		return fmt.Errorf("%w: issuance command names another request identity", ErrIssuanceRequestNotReady)
+	}
+	if request.Status != issuancerequest.StateApproved && request.Status != issuancerequest.StateIssued {
+		return nil // Preserve explicit denial, expiry or withdrawal.
+	}
+	_, err = o.CompleteIssuanceRequest(ctx, tenantID, id)
+	return err
 }
 
 // ConfigureTicketIntake records the standing instruction to read the ITSM for

@@ -713,8 +713,10 @@ offers requeue only for failed delivery. Toasts report real success and failure.
   intake and specialized controls are not loaded or rendered until their section is
   opened. After a certificate approval, the issuance lifecycle opens and preserves a
   failed signer-backed attempt as an approved request with a safe retry under the same
-  deterministic identity and issuance key. Credential values and private keys never
-  enter the review.
+  deterministic identity and issuance key. The signing worker records fulfillment
+  even if the browser closes. A later recovery can reconcile the exact signed result
+  after revocation or retirement; it does not restore that credential's validity or
+  mint another certificate. Credential values and private keys never enter the review.
 - Rules and approvals (`/policy`) includes access-change approvals for NHI entitlement changes: a
   PR/ticket/CAB-backed request, evidence refs, and approve/deny by a distinct
   reviewer. The panel stores metadata and evidence references only, never credential

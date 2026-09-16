@@ -41,7 +41,7 @@ export function Login() {
             )}
             <p className="mb-4 text-body text-muted-foreground">{translateNow(oidcAvailable ? "auth.login.body" : "auth.browserLoginDisabled.body")}</p>
             {oidcAvailable && (
-              <Button className="min-h-11 w-full" onClick={beginLogin}>
+              <Button className="min-h-11 w-full" onClick={() => beginLogin(searchParams.get("return_to") ?? undefined)}>
                 {translateNow("auth.login.action")}
               </Button>
             )}

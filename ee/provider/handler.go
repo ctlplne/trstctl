@@ -83,7 +83,10 @@ func (h *handler) serveIdentityRoute(w http.ResponseWriter, r *http.Request) boo
 		if !ok {
 			writeProviderError(w, ErrProviderUnauthenticated)
 		} else {
-			writeJSON(w, http.StatusOK, operator)
+			writeJSON(w, http.StatusOK, struct {
+				Operator
+				Authority ConsoleAuthority `json:"authority"`
+			}{Operator: operator, Authority: h.svc.consoleAuthority(r.Context(), operator)})
 		}
 		return true
 	case r.Method == http.MethodGet && r.URL.Path == "/provider/v1/auth/saml/login":
