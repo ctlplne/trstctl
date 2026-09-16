@@ -3,12 +3,10 @@
 package events
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -544,9 +542,7 @@ func (l *Log) EventByID(ctx context.Context, eventID string) (Event, bool, error
 				found = true
 				return nil
 			}
-			if canonical.Type != event.Type || canonical.TenantID != event.TenantID ||
-				!canonical.Time.Equal(event.Time) || canonical.SchemaVersion != event.SchemaVersion ||
-				!bytes.Equal(canonical.Data, event.Data) || !reflect.DeepEqual(canonical.Actor, event.Actor) {
+			if !sameRetainedEvent(canonical, event) {
 				if conflict == nil {
 					conflict = fmt.Errorf("%w: event id %q has conflicting retained envelopes at sequences %d and %d",
 						ErrConflictingEventIdentity, eventID, canonical.Sequence, event.Sequence)
@@ -681,11 +677,7 @@ func (l *Log) preflightLegacySchedulerHistory(
 	stream jetstream.Stream,
 	through uint64,
 ) error {
-	return readRetainedThrough(ctx, stream, 1, through, func(raw *jetstream.RawStreamMsg) error {
-		event, err := decodeStored(raw.Data, raw.Sequence)
-		if err != nil {
-			return err
-		}
+	return readRetainedEventsThrough(ctx, stream, 1, through, func(event Event) error {
 		unsafe, inspectErr := schedulerhistory.RequiresSanitation(
 			event.Type, event.SchemaVersion, event.Data,
 		)
@@ -718,7 +710,7 @@ func (l *Log) resolveReplayStream(
 	if backupRestoreMetadataPending(info.Config.Metadata) {
 		return "", nil, 0, ErrBackupRestoreIncomplete
 	}
-	return name, stream, info.State.LastSeq, nil
+	return name, l.retainedTransport(stream, info), info.State.LastSeq, nil
 }
 
 func (l *Log) replayResolved(
@@ -731,13 +723,7 @@ func (l *Log) replayResolved(
 	if from == 0 {
 		from = 1
 	}
-	if err := readRetainedThrough(ctx, stream, from, through, func(raw *jetstream.RawStreamMsg) error {
-		event, err := decodeStored(raw.Data, raw.Sequence)
-		if err != nil {
-			return err
-		}
-		return fn(event)
-	}); err != nil {
+	if err := readRetainedEventsThrough(ctx, stream, from, through, fn); err != nil {
 		return err
 	}
 	current, err := l.activeStreamName(ctx)

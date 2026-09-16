@@ -541,7 +541,7 @@ func privacyPayloadShapeForType(typ reflect.Type, visiting map[reflect.Type]bool
 			if field.PkgPath != "" && !field.Anonymous {
 				continue
 			}
-			name, include, flatten, omitEmpty := privacyJSONFieldName(field)
+			name, include, flatten, omitEmpty, omitZero := privacyJSONFieldName(field)
 			if !include {
 				continue
 			}
@@ -553,6 +553,12 @@ func privacyPayloadShapeForType(typ reflect.Type, visiting map[reflect.Type]bool
 			// version.
 			if omitEmpty && !privacyJSONOmitEmptyCanOmit(field.Type) {
 				omitEmpty = false
+			}
+			// omitzero can omit zero structs and time.Time, unlike omitempty.
+			// An unnamed embedded struct still promotes its child fields; the
+			// parent tag does not suppress those encoding/json fields.
+			if omitZero && !flatten {
+				omitEmpty = true
 			}
 			child := privacyPayloadShapeForType(field.Type, visiting)
 			if flatten && child != nil && child.kind == privacyPayloadShapeObject {
@@ -617,10 +623,10 @@ func implementsPrivacyScalarMarshaler(typ reflect.Type) bool {
 		(reflect.PointerTo(typ).Implements(jsonMarshalerType) || reflect.PointerTo(typ).Implements(textMarshalerType))
 }
 
-func privacyJSONFieldName(field reflect.StructField) (name string, include, flatten, omitEmpty bool) {
+func privacyJSONFieldName(field reflect.StructField) (name string, include, flatten, omitEmpty, omitZero bool) {
 	tag := field.Tag.Get("json")
 	if tag == "-" {
-		return "", false, false, false
+		return "", false, false, false, false
 	}
 	options := strings.Split(tag, ",")
 	name = options[0]
@@ -628,14 +634,17 @@ func privacyJSONFieldName(field reflect.StructField) (name string, include, flat
 		if option == "omitempty" {
 			omitEmpty = true
 		}
+		if option == "omitzero" {
+			omitZero = true
+		}
 	}
 	if name == "" {
 		if field.Anonymous {
-			return "", true, true, omitEmpty
+			return "", true, true, omitEmpty, omitZero
 		}
 		name = field.Name
 	}
-	return name, true, false, omitEmpty
+	return name, true, false, omitEmpty, omitZero
 }
 
 // privacyJSONOmitEmptyCanOmit reports whether a field of typ has any value that

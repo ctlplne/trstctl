@@ -19,6 +19,14 @@ func readRetainedThrough(ctx context.Context, stream jetstream.Stream, from, thr
 	if from == 0 {
 		from = 1
 	}
+	if from > through {
+		return ctx.Err()
+	}
+	if batched, ok := stream.(interface {
+		readRetainedRange(context.Context, uint64, uint64, func(*jetstream.RawStreamMsg) error) error
+	}); ok {
+		return batched.readRetainedRange(ctx, from, through, visit)
+	}
 	readCtx, cancel := context.WithCancel(ctx)
 	var workers sync.WaitGroup
 	defer func() { cancel(); workers.Wait() }()
@@ -26,35 +34,43 @@ func readRetainedThrough(ctx context.Context, stream jetstream.Stream, from, thr
 		raw *jetstream.RawStreamMsg
 		err error
 	}
-	for from <= through {
+	count := min(uint64(retainedReadWindow), through-from+1)
+	rows := make([]chan result, count)
+	for i := range rows {
+		// Each reader owns at most one response. Unbuffered handoff keeps a
+		// slow callback from accumulating an unbounded read-ahead queue.
+		rows[i] = make(chan result)
+		workers.Add(1)
+		go func(sequence uint64, out chan<- result) {
+			defer workers.Done()
+			for {
+				if readCtx.Err() != nil {
+					return
+				}
+				raw, err := stream.GetMsg(readCtx, sequence)
+				select {
+				case out <- result{raw, err}:
+				case <-readCtx.Done():
+					return
+				}
+				if through-sequence < count {
+					return
+				} // Never wrap a MaxUint64 cut into zero.
+				sequence += count
+			}
+		}(from+uint64(i), rows[i])
+	}
+	for sequence := from; ; sequence++ {
+		var item result
+		select {
+		case <-readCtx.Done():
+			return readCtx.Err()
+		case item = <-rows[(sequence-from)%count]:
+		}
 		if err := readCtx.Err(); err != nil {
 			return err
 		}
-		count := min(uint64(retainedReadWindow), through-from+1)
-		rows := make([]chan result, count)
-		for i := range rows {
-			rows[i] = make(chan result, 1)
-			workers.Add(1)
-			go func(sequence uint64, out chan<- result) {
-				defer workers.Done()
-				raw, err := stream.GetMsg(readCtx, sequence)
-				out <- result{raw, err}
-			}(from+uint64(i), rows[i])
-		}
-		for i, row := range rows {
-			var item result
-			select {
-			case <-readCtx.Done():
-				return readCtx.Err()
-			case item = <-row:
-			}
-			if err := readCtx.Err(); err != nil {
-				return err
-			}
-			sequence := from + uint64(i)
-			if errors.Is(item.err, jetstream.ErrMsgNotFound) {
-				continue
-			}
+		if !errors.Is(item.err, jetstream.ErrMsgNotFound) {
 			if item.err != nil {
 				return fmt.Errorf("events: get seq %d: %w", sequence, item.err)
 			}
@@ -65,11 +81,9 @@ func readRetainedThrough(ctx context.Context, stream jetstream.Stream, from, thr
 				return err
 			}
 		}
-		workers.Wait()
-		if count == through-from+1 {
+		if sequence == through {
 			break
-		} // Never wrap a MaxUint64 cut into zero.
-		from += count
+		}
 	}
 	return nil
 }

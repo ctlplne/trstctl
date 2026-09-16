@@ -111,6 +111,65 @@ wait:
 	}
 }
 
+// One slow read must not idle every otherwise available lane at an artificial
+// batch boundary. Publication stays ordered even when later reads finish first.
+func TestRetainedReplayKeepsAvailableReadLanesBusy(t *testing.T) {
+	log, name, stream, head := retainedReadFixture(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	release := make(chan struct{})
+	var once sync.Once
+	unblock := func() { once.Do(func() { close(release) }) }
+	defer unblock()
+	ahead := make(chan struct{}, 1)
+	wrapped := retainedReadTestStream{Stream: stream, get: func(ctx context.Context, seq uint64, opts ...jetstream.GetMsgOpt) (*jetstream.RawStreamMsg, error) {
+		if seq == 8 {
+			select {
+			case <-release:
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+		if seq == 9 {
+			ahead <- struct{}{}
+		}
+		return stream.GetMsg(ctx, seq, opts...)
+	}}
+	var got []uint64
+	done := make(chan error, 1)
+	go func() {
+		done <- log.replayResolved(ctx, name, wrapped, 1, head, func(e Event) error {
+			got = append(got, e.Sequence)
+			return nil
+		})
+	}()
+	progressed := false
+	select {
+	case <-ahead:
+		progressed = true
+	case <-time.After(time.Second):
+	}
+	unblock()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-ctx.Done():
+		t.Fatal("replay did not join its readers")
+	}
+	if !progressed {
+		t.Error("one slow request idled available read lanes at the batch boundary")
+	}
+	want := make([]uint64, head)
+	for i := range want {
+		want[i] = uint64(i + 1)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("callbacks=%v want=%v", got, want)
+	}
+}
+
 func TestRetainedReplayCancellationJoinsReaders(t *testing.T) {
 	log, name, stream, head := retainedReadFixture(t)
 	ctx, cancel := context.WithCancel(context.Background())
