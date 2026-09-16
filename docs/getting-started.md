@@ -378,9 +378,11 @@ host with the same PostgreSQL, signer, event-log, and audit configuration as the
 running service. Do not run an unconfigured local binary: it would bootstrap a
 different datastore.
 
-The token carries a full set of operator scopes deliberately excluding
-certificate issuance (`certs:issue`): a bootstrap credential can administer
-the platform but cannot self-issue a certificate. Use it as
+The token carries bounded bootstrap administration scopes. It excludes certificate
+issuance (`certs:issue`) and separately delegated permissions such as
+`access:role.assign`; it cannot assign a member's roles or grant itself issuance
+authority. For the first member of a new tenant, follow the explicit
+[role-provisioning handoff](journeys/onboard-a-team.md#steps). Use it as
 `Authorization: Bearer <token>`; shell examples keep it in
 `TRSTCTL_BOOTSTRAP_TOKEN`.
 

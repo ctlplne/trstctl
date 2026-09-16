@@ -87,7 +87,7 @@ in lockstep.
    alone does not configure `trstctl.New`. The abbreviated iterator below assumes
    that the server CA is already trusted by your HTTP client.
 
-   Use the SDK trstctl ships supported Go
+   trstctl ships supported Go
    and TypeScript SDKs pinned to the served contract, with auth, idempotency, retries
    (honoring `Retry-After`), problem+json errors, and cursor iterators built in:
 

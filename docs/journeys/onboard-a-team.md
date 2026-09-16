@@ -129,6 +129,51 @@ group on a shared trstctl deployment.
    certificate but cannot issue it — the registration-authority separation, enforced,
    not assumed.
 
+   The default bootstrap token from step 1 cannot assign member roles. It lacks
+   `access:role.assign`; trying to add even a viewer returns 403. An administrator
+   who already holds that permission can use **Operations → People and roles**.
+   For the first member of a new tenant, the deployment administrator can instead
+   create a separate role-provisioning token inside the same custody boundary:
+
+   ```sh
+   umask 077
+   docker compose -f deploy/docker/docker-compose.yml exec -T trstctl \
+     /usr/local/bin/trstctl token create \
+     --tenant 22222222-2222-2222-2222-222222222222 \
+     --subject team-role-provisioner \
+     --scopes access:read,access:write,access:role.assign \
+     > ./team-role-provisioner-token
+   ```
+
+   This credential can assign privileged roles. Give it only to the administrator
+   doing this setup, and revoke it when the handoff is complete. It has no direct
+   certificate-issuance permission. Do not add these permissions to the default
+   bootstrap token or use a wildcard scope.
+
+   Obtain the new member's exact subject from the configured identity provider.
+   An email address is correct only if that provider uses it as the subject. The
+   member's tenant must match the claim or mapping from step 3. Create the member
+   through `PUT /api/v1/access/members/{subject}` with an `Idempotency-Key`; the
+   caller needs both `access:write` and `access:role.assign`. URL-encode the subject
+   in the path. The provisioning subject and target subject must differ because
+   self-assignment is refused. For example, the request body for a reader is:
+
+   ```json
+   {"display_name":"Team reader","roles":["viewer"]}
+   ```
+
+   Use `admin` only for the person explicitly authorized to administer the team.
+   Verify the member through `GET /api/v1/access/members`, then have that person
+   sign in with the configured identity provider. A successful member creation
+   does not itself prove the sign-in subject and tenant mapping are correct.
+
+   Finally, list `GET /api/v1/access/api-tokens`, identify the provisioning token
+   by its exact subject and id, and revoke that id with
+   `DELETE /api/v1/access/api-tokens/{id}` and a new `Idempotency-Key`. The original
+   bootstrap token can perform this cleanup. Confirm 204, then confirm the revoked
+   credential receives 401 on its next protected request. Keep the audit event;
+   remove the local token file only after the revocation is confirmed.
+
 6. Turn on default-deny policy for the dangerous actions and require a second approver.
    With the policy gate enabled, every issue, deploy, and revoke is denied unless your
    Rego explicitly allows it, and a privileged action needs a *distinct* approver
