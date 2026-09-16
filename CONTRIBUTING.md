@@ -90,6 +90,22 @@ group on timeout, cancellation or abnormal exit. This gate requires Python 3
 on a POSIX host. A lower count is reported for a
 reviewed baseline change; lint never rewrites the baseline itself.
 
+`make test` runs the server suite in two isolated processes so database startup
+and lifecycle checks can make progress together. It lists the compiled tests,
+examples and fuzz seed targets, then requires exactly one start and completion
+for every selected target. Both processes retain race detection and full
+first-party coverage under one shared 15-minute execution deadline. The separate
+row-501 fairness proof keeps its 10-minute deadline; performance and coverage
+floors are unchanged.
+
+This runner also requires Python 3 on a POSIX host. It copies only compressed
+public PostgreSQL archives into separate temporary directories; the product
+authenticates and extracts them again. Database and signer state are independent.
+Compilation/listing is timed separately from execution. Logs, the census, skips
+and completion counts remain in `cover.out.server.shards/`. Timeout, cancellation,
+missing tests or failed processes reject the merged profile and clean up only
+the runner's own processes. Its self-tests run at the start of `make test`.
+
 ## Security
 
 Do not open a public issue for a vulnerability. Follow

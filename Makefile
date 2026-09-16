@@ -58,10 +58,11 @@ LIVE_PERF_IMPORT_RE := $(MODULE)/(internal/perf|scripts/perf/cmd/(capacitycalibr
 LIVE_PERF_SLO_TEST := ^TestPerfLiveMutationHotPathsMeetSLOFromFreshStack$$
 # internal/server has one deliberately large fairness/restart acceptance proof.
 # Keep that proof and every assertion, but give it an independent package clock.
-# The complementary shard has twice reached the old 10m deadline on different
-# just-started tests under race+repository-wide coverage, so its explicit 15m
-# budget raises the old ceiling by 50% without removing instrumentation or assertions.
-# The isolated row-501 proof retains its separate 10m ceiling.
+# The remaining tests run in two processes with independent databases and signer
+# helpers. Their complete compiled census must finish under one shared 15m wall,
+# retaining race detection and full first-party coverage. Compilation/listing is
+# timed separately, as with go test -timeout. The isolated row-501 proof retains
+# its separate 10m ceiling.
 SERVER_IMPORT := $(MODULE)/internal/server
 SERVER_ROTATION_CURSOR_TEST := ^TestServedScheduledRotationFairCursorReachesRow501AcrossRestartAUD111AUD113$$
 SERVER_COMPLEMENTARY_TIMEOUT := 15m
@@ -180,12 +181,13 @@ fips-build: ## Build all binaries with the Go FIPS 140-3 Cryptographic Module en
 
 .PHONY: test
 test: ## Run all tests (race + coverage) and enforce the coverage minimum
+	@PYTHONDONTWRITEBYTECODE=1 python3 scripts/ci/server-test-shards_selftest.py
 	@echo ">> go test (race + merged first-party coverage)"
 	@set -euo pipefail; parallelism="$$(scripts/ci/go-package-parallelism.sh)"; \
 	pkgs="$$( $(GO) list $(GO_PACKAGES) | grep -v -E '^$(LIVE_PERF_IMPORT_RE)$$' | grep -v -E '^$(SERVER_IMPORT)$$' )"; \
 	$(GO) test -race -count=1 -p=$$parallelism -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_MAIN) $$pkgs
 	@echo ">> go test internal/server complementary shard (race + merged first-party coverage)"
-	@$(GO) test -race -count=1 -p=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_SERVER) -skip '$(SERVER_ROTATION_CURSOR_TEST)' -timeout=$(SERVER_COMPLEMENTARY_TIMEOUT) ./internal/server
+	@python3 scripts/ci/server-test-shards.py --go '$(GO)' --coverpkg='$(GO_COVER_PACKAGES)' --coverprofile=$(COVERPROFILE_SERVER) --skip '$(SERVER_ROTATION_CURSOR_TEST)' --timeout=$(SERVER_COMPLEMENTARY_TIMEOUT) --package ./internal/server
 	@echo ">> go test internal/server row-501 fairness shard (race + merged first-party coverage)"
 	@$(GO) test -race -count=1 -p=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_SERVER_ROTATION_CURSOR) -run '$(SERVER_ROTATION_CURSOR_TEST)' -timeout=10m ./internal/server
 	@echo ">> go test live perf packages (serial race + coverage correctness lane)"

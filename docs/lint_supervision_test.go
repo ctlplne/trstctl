@@ -14,7 +14,7 @@ func TestEELintScannerSupervision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []string{"success", "timeout", "term", "interrupt", "outer-term", "leader-exit", "stdout-limit", "stderr-limit", "spawn-failure"} {
+	for _, mode := range []string{"success", "timeout", "startup-timeout", "term", "interrupt", "outer-term", "leader-exit", "stdout-limit", "stderr-limit", "spawn-failure"} {
 		t.Run(mode, func(t *testing.T) {
 			cmd := exec.Command(python, "-B", "-c", lintSupervisionControl, mode, t.TempDir()) // #nosec G204 -- fixed supervision regression with owned scanner and child fixtures (CWE-78)
 			out, err := cmd.CombinedOutput()
@@ -35,6 +35,7 @@ scanner.write_text('''
 import os, pathlib, signal, subprocess, sys, time
 root, mode = pathlib.Path(sys.argv[1]), sys.argv[2]
 (root / "scanner.pid").write_text(str(os.getpid()))
+if mode == "startup-timeout": time.sleep(60)
 if mode != "success":
     child = subprocess.Popen([sys.executable, "-c", "import pathlib,signal,sys,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); signal.signal(signal.SIGINT,signal.SIG_IGN); pathlib.Path(sys.argv[1]).write_text('ready'); time.sleep(1); pathlib.Path(sys.argv[2]).write_text('survived')", str(root / "child.ready"), str(root / "survived")])
     while not (root / "child.ready").exists(): time.sleep(.005)
@@ -46,14 +47,37 @@ if mode == "stderr-limit": sys.stderr.write("x" * 70000); sys.stderr.flush()
 if mode not in ("success", "leader-exit"): time.sleep(60)
 ''')
 runner.write_text('''
-import importlib.util, pathlib, sys
+import importlib.util, pathlib, subprocess, sys, time
 module, scanner, root, mode = sys.argv[1:]
 spec = importlib.util.spec_from_file_location("ee_lint", module)
 m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 m.MAX_REPORT_BYTES = 65536
+if mode == "timeout":
+    # Prepare the process tree before exercising the 200 ms running-scanner
+    # deadline. Interpreter startup is variable under concurrent package tests.
+    # The separate startup-timeout case uses Popen unchanged and proves that
+    # an unready scanner still hits the same production deadline.
+    real_popen = m.subprocess.Popen
+    def ready_popen(*args, **kwargs):
+        process = real_popen(*args, **kwargs)
+        try:
+            ready_by = time.monotonic() + 3
+            while not (pathlib.Path(root) / "ready").exists():
+                if process.poll() is not None or time.monotonic() >= ready_by:
+                    raise AssertionError("timeout fixture scanner did not become ready")
+                time.sleep(.005)
+        except BaseException:
+            # The fixture factory owns this group until it returns it to the
+            # real supervisor. Failed preparation must not orphan that group.
+            try: m.os.killpg(process.pid, m.signal.SIGKILL)
+            except ProcessLookupError: pass
+            process.wait(timeout=3)
+            raise
+        return process
+    m.subprocess.Popen = ready_popen
 try:
     command = [str(pathlib.Path(root) / "missing-scanner")] if mode == "spawn-failure" else [sys.executable, scanner, root, mode]
-    code, raw = m.run_scanner(command, timeout=.2 if mode == "timeout" else 5)
+    code, raw = m.run_scanner(command, timeout=.2 if mode in ("timeout", "startup-timeout") else 5)
     sys.exit(code)
 except Exception as exc:
     print(type(exc).__name__ + ": " + str(exc), file=sys.stderr)
@@ -82,10 +106,13 @@ try:
             os.kill(p.pid, signal.SIGTERM if mode == "term" else signal.SIGINT)
     output, _ = p.communicate(timeout=6)
     assert p.returncode == (0 if mode == "success" else 2), (p.returncode, output)
-    if mode != "spawn-failure":
+    if mode not in ("spawn-failure", "startup-timeout"):
         assert b"partial scanner stdout" in output, output
         if mode != "stdout-limit": assert b"partial scanner stderr" in output, output
-    expected = {"timeout": b"TimeoutExpired", "term": b"cancelled by signal 15", "interrupt": b"cancelled by signal 2", "outer-term": b"cancelled by signal 15", "leader-exit": b"surviving children", "stdout-limit": b"output exceeds", "stderr-limit": b"output exceeds", "spawn-failure": b"FileNotFoundError"}
+    if mode == "startup-timeout":
+        assert b"partial scanner stdout" not in output, output
+        assert b"partial scanner stderr" not in output, output
+    expected = {"timeout": b"TimeoutExpired", "startup-timeout": b"TimeoutExpired", "term": b"cancelled by signal 15", "interrupt": b"cancelled by signal 2", "outer-term": b"cancelled by signal 15", "leader-exit": b"surviving children", "stdout-limit": b"output exceeds", "stderr-limit": b"output exceeds", "spawn-failure": b"FileNotFoundError"}
     if mode in expected: assert expected[mode] in output, output
     time.sleep(1.1)
     assert not (root / "survived").exists(), "scanner child ran after gate exit"
