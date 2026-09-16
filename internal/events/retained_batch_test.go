@@ -144,7 +144,21 @@ func fakeRetainedBatch(t *testing.T, messages func() []*nats.Msg) (*Log, retaine
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = sub.Unsubscribe() })
+	// Unsubscribe stops future dispatch but does not join a callback already
+	// publishing its response. Join the subscription worker before the earlier
+	// log cleanup closes the connection or the test's lifetime ends.
+	done := make(chan struct{})
+	sub.SetClosedHandler(func(string) { close(done) })
+	t.Cleanup(func() {
+		if err := sub.Unsubscribe(); err != nil && !errors.Is(err, nats.ErrConnectionClosed) {
+			t.Errorf("unsubscribe test responder: %v", err)
+		}
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Error("test responder did not finish before connection teardown")
+		}
+	})
 	return log, retainedBatchStream{Stream: log.stream, nc: log.nc, name: "qa-batch", prefix: "_QA.BATCH.", timeout: time.Second}
 }
 
