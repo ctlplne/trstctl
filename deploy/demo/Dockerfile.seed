@@ -36,7 +36,7 @@ ADD --checksum=sha256:d6ec970cc10e01539e41626f720c4e0ac69016eaa2079a10ef776ffd32
 ADD --checksum=sha256:0d12f4f145ec045dd19e8465bd3cb07b08197f96a3776641511dc2bec53cc0b7 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/openssl-3.5.8-r0.apk /arm64/openssl-3.5.8-r0.apk
 ADD --checksum=sha256:bc5d3ae0b602748852e0bc601a4348cabc4f654f12f27578919cbf3c810f1c1e https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/ca-certificates-bundle-20260611-r0.apk /arm64/ca-certificates-bundle-20260611-r0.apk
 
-FROM node:24.21.0-alpine@sha256:50c8e8ca1d27439048670df5883f32d57cf81cff6233222c893fd0d9884cbd81
+FROM node:26.8-alpine@sha256:ef24c5053d50fdc3e4e56eb4e7ddb7861874ab0fdc797046ba897581deb8e868
 ARG TARGETARCH
 COPY --from=runtime-packages /${TARGETARCH}/ /tmp/trstctl-seed-packages/
 RUN --network=none apk add --no-network /tmp/trstctl-seed-packages/*.apk \
