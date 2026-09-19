@@ -1,0 +1,19 @@
+name: "trstctl CodeQL configuration"
+
+# Scope the security-extended suite to shipped product code.
+#
+# Test fixtures and demo seeding are not part of the distributed product, and
+# scanning them produced most of the open code-scanning backlog without saying
+# anything about the control plane, the console or the SDKs. Nineteen alerts
+# were "missing regular expression anchor" on URL assertions inside a single
+# test file; the remainder were a ReDoS-shaped regex applied to this
+# repository's own source inside a test, and the demo seeder — including one
+# alert raised against the seeder's own secret-pattern guard.
+#
+# Every Go package, every shipped web source file and every SDK remains in
+# scope. This narrows what is scanned, not which queries run: the workflow
+# still requests security-extended.
+paths-ignore:
+  - "**/*.test.ts"
+  - "**/__tests__/**"
+  - "deploy/demo/**"
