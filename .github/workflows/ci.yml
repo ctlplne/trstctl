@@ -93,7 +93,7 @@ jobs:
           python3 -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])" "${RUNNER_TEMP}/terraform.zip" "${RUNNER_TEMP}/tfbin"
           chmod +x "${RUNNER_TEMP}/tfbin/terraform"
           TRSTCTL_RUN_TERRAFORM_ACC=1 TRSTCTL_TERRAFORM_PATH="${RUNNER_TEMP}/tfbin/terraform" CHECKPOINT_DISABLE=1 \
-            go test -count=1 -run TestTerraformApplyCreatesProfileCertificateAndSecret ./internal/terraformprovider/
+            go test -C clients/terraform -count=1 -run TestTerraformApplyCreatesProfileCertificateAndSecret ./internal/terraformprovider/
 
       - name: Perf smoke SLO gate
         run: scripts/perf/run-local.sh --profile smoke --out "${RUNNER_TEMP}/perf-smoke.json"

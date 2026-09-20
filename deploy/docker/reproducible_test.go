@@ -77,7 +77,6 @@ func TestShippedBinariesBuildReproducibly(t *testing.T) {
 		"trstctl-agent",
 		"trstctl-operator",
 		"trstctl-cli",
-		"terraform-provider-trstctl",
 		"trstctl-license",
 	} {
 		a := filepath.Join(dir, bin+".a")
@@ -88,5 +87,26 @@ func TestShippedBinariesBuildReproducibly(t *testing.T) {
 		if !bytes.Equal(readFile(t, a), readFile(t, b)) {
 			t.Fatalf("%s binary is not reproducible: two builds differ", bin)
 		}
+	}
+
+	// The Terraform provider is its own MPL-2.0 module under clients/terraform
+	// (2026-09-20). It is built from that directory with the provider's own
+	// version symbol, the way `make build`, `make reproducible-check` and the
+	// registry release script build it.
+	buildProvider := func(out string) {
+		cmd := exec.Command(goBin, "build", "-trimpath", "-buildvcs=false", // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
+			"-ldflags", "-s -w -buildid= -X trstctl.com/terraform-provider/internal/version.version=test", "-o", out, ".")
+		cmd.Dir = filepath.Join(root, "clients", "terraform")
+		cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
+		if b, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("build terraform-provider-trstctl: %v\n%s", err, b)
+		}
+	}
+	a := filepath.Join(dir, "terraform-provider-trstctl.a")
+	b := filepath.Join(dir, "terraform-provider-trstctl.b")
+	buildProvider(a)
+	buildProvider(b)
+	if !bytes.Equal(readFile(t, a), readFile(t, b)) {
+		t.Fatal("terraform-provider-trstctl binary is not reproducible: two builds differ")
 	}
 }

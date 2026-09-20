@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: MPL-2.0
 
 package terraformprovider
 
@@ -19,8 +19,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
-
-	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
 // This exercises the real provider configuration and TLS handshake. The HTTP
@@ -39,10 +37,7 @@ func TestProviderCAFileTLSVerification(t *testing.T) {
 	if err := os.WriteFile(caFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: srv.Certificate().Raw}), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	unrelated, err := mtls.GenerateSignerPeerMaterial(t.TempDir(), "unrelated.example.test", time.Hour)
-	if err != nil {
-		t.Fatal(err)
-	}
+	unrelatedCA := writeTestCA(t, "unrelated.example.test")
 	t.Setenv("TRSTCTL_TOKEN", "")
 	t.Setenv("TRSTCTL_TENANT", "")
 	for _, tc := range []struct {
@@ -53,7 +48,7 @@ func TestProviderCAFileTLSVerification(t *testing.T) {
 		{name: "default roots reject private CA", endpoint: srv.URL, wantError: "unknown authority"},
 		{name: "environment bundle trusts private CA", endpoint: srv.URL, envCA: caFile},
 		{name: "explicit bundle overrides environment", endpoint: srv.URL, envCA: "absent.pem", explicitCA: &caFile},
-		{name: "unrelated CA rejected", endpoint: srv.URL, envCA: unrelated.ControlPlane.PeerCAFile, wantError: "unknown authority"},
+		{name: "unrelated CA rejected", endpoint: srv.URL, envCA: unrelatedCA, wantError: "unknown authority"},
 		{name: "wrong hostname rejected", endpoint: strings.Replace(srv.URL, "127.0.0.1", "localhost", 1), envCA: caFile, wantError: "not localhost"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -162,10 +157,7 @@ func TestProviderCAFilePreservesEnvironmentProxy(t *testing.T) {
 		}
 		return // Selection only: never dial the .invalid host or the proxy.
 	}
-	material, err := mtls.GenerateSignerPeerMaterial(t.TempDir(), "fixture.example.test", time.Hour)
-	if err != nil {
-		t.Fatal(err)
-	}
+	materialCA := writeTestCA(t, "fixture.example.test")
 	self, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -175,7 +167,7 @@ func TestProviderCAFilePreservesEnvironmentProxy(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, self, "-test.run=^TestProviderCAFilePreservesEnvironmentProxy$", "-test.count=1") // #nosec G204 -- fixed arguments to this test's own executable (CWE-78)
-	cmd.Env = append(os.Environ(), "TRSTCTL_PROVIDER_PROXY_CHILD=1", "TRSTCTL_TEST_CA_FILE="+material.ControlPlane.PeerCAFile,
+	cmd.Env = append(os.Environ(), "TRSTCTL_PROVIDER_PROXY_CHILD=1", "TRSTCTL_TEST_CA_FILE="+materialCA,
 		"HTTPS_PROXY="+proxyURL, "https_proxy="+proxyURL, "NO_PROXY=", "no_proxy=")
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("fresh-process proxy selection: %v\n%s", err, output)

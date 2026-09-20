@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: MPL-2.0
 
 package terraformprovider
 
@@ -11,7 +11,7 @@ import (
 
 func TestTerraformProviderRoutesStayGeneratedFromOpenAPI(t *testing.T) {
 	t.Parallel()
-	raw, err := os.ReadFile(filepath.Join("..", "..", "clients", "sdk", "openapi.json"))
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "sdk", "openapi.json"))
 	if err != nil {
 		t.Fatalf("read OpenAPI: %v", err)
 	}

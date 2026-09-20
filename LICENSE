@@ -14,8 +14,9 @@ file sits, and nothing about being able to read a file grants a right to use it.
     License 2.0.
 
   * The CLIENT tree — everything INSIDE the top-level `clients/` directory (the
-    Go, TypeScript, Python and Java SDKs, the embedded client and the GitHub
-    Action) — is licensed under the Mozilla Public License 2.0, reproduced in
+    Go, TypeScript, Python and Java SDKs, the embedded client, the GitHub
+    Action and the Terraform provider) — is licensed under the Mozilla Public
+    License 2.0, reproduced in
     full below. Client files carry `SPDX-License-Identifier: MPL-2.0`, so they
     can be embedded in your own software without the core's use grant
     attaching to that software.

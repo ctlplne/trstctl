@@ -34,7 +34,7 @@ suffix_out="$(mktemp)"
 ambiguous_suffix_profile="$(mktemp)"
 ambiguous_suffix_out="$(mktemp)"
 trap 'rm -f "$duplicate_profile" "$normalized_profile" "$bad_profile" "$bad_out" "$repaired_profile" "$repaired_out" "$orphan_profile" "$orphan_out" "$numeric_orphan_profile" "$numeric_orphan_out" "$path_orphan_profile" "$path_orphan_out" "$suffix_profile" "$suffix_out" "$ambiguous_suffix_profile" "$ambiguous_suffix_out"' EXIT
-covered_block="trstctl.com/trstctl/cmd/terraform-provider-trstctl/main.go:13.13,17.16"
+covered_block="trstctl.com/trstctl/cmd/trstctl-cli/main.go:13.13,17.16"
 uncovered_block="trstctl.com/trstctl/cmd/trstctl/connector.go:39.2,40.16"
 if [[ -z "${GOCACHE:-}" ]]; then
 	export GOCACHE="${TMPDIR:-/tmp}/trstctl-cover-normalize-selftest-gocache"

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: MPL-2.0
 
 package terraformprovider
 
@@ -14,9 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"trstctl.com/trstctl/internal/crypto"
-	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
 type Client struct {
@@ -98,7 +95,7 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 		if err != nil {
 			return nil, fmt.Errorf("CA file: %w", err)
 		}
-		transport, err := mtls.HTTPTransport(caPEM)
+		transport, err := httpTransport(caPEM)
 		if err != nil {
 			return nil, fmt.Errorf("CA file: %w", err)
 		}
@@ -260,5 +257,5 @@ func problemDetail(raw []byte) string {
 }
 
 func stableIdempotencyKey(parts ...string) string {
-	return "tf-" + crypto.SHA256Hex([]byte(strings.Join(parts, "\x00")))[:32]
+	return "tf-" + sha256Hex([]byte(strings.Join(parts, "\x00")))[:32]
 }

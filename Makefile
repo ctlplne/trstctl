@@ -11,7 +11,7 @@ SHELL := /usr/bin/env bash
 
 MODULE  := trstctl.com/trstctl
 BIN_DIR := bin
-CMDS    := trstctl trstctl-signer trstctl-agent trstctl-operator trstctl-cli terraform-provider-trstctl trstctl-license trstctl-spire-upstream-authority
+CMDS    := trstctl trstctl-signer trstctl-agent trstctl-operator trstctl-cli trstctl-license trstctl-spire-upstream-authority
 
 GO          ?= go
 CGO_ENABLED ?= 0
@@ -35,6 +35,11 @@ LDFLAGS   := -s -w \
 	-X $(BUILDINFO).date=$(DATE) \
 	-X $(LICENSEINFO).builtinPubKeysB64=$(LICENSE_KEYS_B64)
 GO_BUILD  := CGO_ENABLED=$(CGO_ENABLED) $(GO) build -trimpath -ldflags '$(LDFLAGS)'
+# The Terraform provider is its own MPL-2.0 module under clients/terraform (see its
+# go.mod): it is built with -C and carries its own version symbol.
+TF_PROVIDER_DIR := clients/terraform
+TF_LDFLAGS      := -s -w -X trstctl.com/terraform-provider/internal/version.version=$(VERSION)
+GO_BUILD_TF     := CGO_ENABLED=$(CGO_ENABLED) $(GO) build -C $(TF_PROVIDER_DIR) -trimpath -ldflags '$(TF_LDFLAGS)'
 # npm installs may include Go helper packages inside web/node_modules. web/ is
 # gated by npm scripts; Go gates enumerate first-party Go roots by construction.
 # ./ee/... is scanned separately by `make ee-lint-ratchet`, with uncapped
@@ -137,6 +142,8 @@ build: ## Build all binaries into ./bin
 		echo ">> build $$cmd"; \
 		$(GO_BUILD) -o $(BIN_DIR)/$$cmd ./cmd/$$cmd; \
 	done
+	@echo ">> build terraform-provider-trstctl ($(TF_PROVIDER_DIR) module)"
+	@$(GO_BUILD_TF) -o $(CURDIR)/$(BIN_DIR)/terraform-provider-trstctl .
 
 .PHONY: build-trstctl
 build-trstctl: ## Build the default static control-plane artifact used by the DoD profile
@@ -767,8 +774,9 @@ sdk-check: ## Verify the published client SDKs are in sync with the served OpenA
 	./scripts/gen-sdk.sh --check
 
 .PHONY: sdk-test
-sdk-test: ## Build and test the Go, TypeScript, Python, and Java client SDKs
+sdk-test: ## Build and test the Go, TypeScript, Python, and Java client SDKs and the Terraform provider module
 	cd clients/sdk/go && $(GO) build ./... && $(GO) vet ./... && $(GO) test ./... -count=1
+	cd $(TF_PROVIDER_DIR) && $(GO) build ./... && $(GO) vet ./... && $(GO) test ./... -count=1
 	npm --prefix clients/sdk/typescript ci
 	npm --prefix clients/sdk/typescript run typecheck
 	npm --prefix clients/sdk/typescript test
@@ -796,7 +804,7 @@ reproducible-check: ## Build shipped binaries and image layers twice; verify byt
 	@set -euo pipefail; \
 	tmp=$$(mktemp -d); \
 	trap 'rm -rf "$$tmp"' EXIT; \
-	reproducible_cmds="trstctl trstctl-signer trstctl-agent trstctl-operator trstctl-cli terraform-provider-trstctl trstctl-license trstctl-spire-upstream-authority"; \
+	reproducible_cmds="trstctl trstctl-signer trstctl-agent trstctl-operator trstctl-cli trstctl-license trstctl-spire-upstream-authority"; \
 	for cmd in $$reproducible_cmds; do \
 		a="$$tmp/$$cmd.a"; b="$$tmp/$$cmd.b"; \
 		echo ">> reproducible binary $$cmd"; \
@@ -809,7 +817,12 @@ reproducible-check: ## Build shipped binaries and image layers twice; verify byt
 			exit 1; \
 		fi; \
 	done; \
-	echo "reproducible: identical binaries ($$reproducible_cmds)"; \
+	echo ">> reproducible binary terraform-provider-trstctl ($(TF_PROVIDER_DIR) module)"; \
+	$(GO_BUILD_TF) -buildvcs=false -o "$$tmp/terraform-provider-trstctl.a" .; \
+	$(GO_BUILD_TF) -buildvcs=false -o "$$tmp/terraform-provider-trstctl.b" .; \
+	cmp -s "$$tmp/terraform-provider-trstctl.a" "$$tmp/terraform-provider-trstctl.b" || { echo "NOT reproducible: terraform-provider-trstctl differs" >&2; exit 1; }; \
+	echo "reproducible: identical binary terraform-provider-trstctl"; \
+	echo "reproducible: identical binaries ($$reproducible_cmds terraform-provider-trstctl)"; \
 	command -v docker >/dev/null 2>&1 || { echo "docker is required for the reproducible image-layer check" >&2; exit 1; }; \
 	docker buildx version >/dev/null 2>&1 || { echo "docker buildx is required for the reproducible image-layer check" >&2; exit 1; }; \
 	command -v python3 >/dev/null 2>&1 || { echo "python3 is required for the reproducible image metadata check" >&2; exit 1; }; \

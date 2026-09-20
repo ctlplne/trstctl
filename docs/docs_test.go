@@ -231,21 +231,23 @@ func TestTerraformProviderDocsStayWired(t *testing.T) {
 			t.Errorf("terraform-provider.md missing %q", want)
 		}
 	}
-	if _, err := os.Stat(filepath.FromSlash("../cmd/terraform-provider-trstctl/main.go")); err != nil {
+	// The provider is its own MPL-2.0 module under clients/terraform (2026-09-20).
+	if _, err := os.Stat(filepath.FromSlash("../clients/terraform/main.go")); err != nil {
 		t.Fatalf("terraform provider binary entrypoint missing: %v", err)
 	}
 	for _, path := range []string{
-		"../internal/terraformprovider/provider.go",
-		"../internal/terraformprovider/resource_profile.go",
-		"../internal/terraformprovider/resource_pki_certificate.go",
-		"../internal/terraformprovider/resource_secret.go",
-		"../internal/terraformprovider/openapi_routes.gen.go",
+		"../clients/terraform/go.mod",
+		"../clients/terraform/internal/terraformprovider/provider.go",
+		"../clients/terraform/internal/terraformprovider/resource_profile.go",
+		"../clients/terraform/internal/terraformprovider/resource_pki_certificate.go",
+		"../clients/terraform/internal/terraformprovider/resource_secret.go",
+		"../clients/terraform/internal/terraformprovider/openapi_routes.gen.go",
 	} {
 		if _, err := os.Stat(filepath.FromSlash(path)); err != nil {
 			t.Fatalf("terraform provider implementation file %s missing: %v", path, err)
 		}
 	}
-	openapiRoutes := read(t, "../internal/terraformprovider/openapi_routes.gen.go")
+	openapiRoutes := read(t, "../clients/terraform/internal/terraformprovider/openapi_routes.gen.go")
 	for _, want := range []string{
 		"routeCreateProfilePath",
 		"routeIssuePKISecretPath",

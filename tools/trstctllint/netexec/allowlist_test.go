@@ -135,7 +135,12 @@ var permanentAmbientHTTPClients = map[string]map[string]bool{
 }
 
 func TestAmbientHTTPBurnDownLedgerKeepsTheMigratedSitesOut(t *testing.T) {
-	const sizeAfterTheFirstBurnDown = 20
+	// 20 after the first burn-down pass; 19 since 2026-09-20, when the Terraform
+	// provider (internal/terraformprovider/client.go:NewClient) left the root
+	// module for the MPL-2.0 clients/terraform module, outside this analyzer's
+	// scope. That site was not migrated: it still builds its own http.Client, and
+	// the ledger only counts sites the analyzer can see.
+	const sizeAfterTheFirstBurnDown = 19
 	migrated := []string{
 		"internal/agent/httpenroll.go",
 		"internal/discovery/ctmonitor/httpfetcher.go",

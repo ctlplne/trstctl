@@ -31,6 +31,15 @@ This file is the human-readable companion to the git tags; the
 - **Migration ledger.** The `-- SPDX-License-Identifier:` line is outside a shipped
   migration's content digest; a ledger row recorded by an earlier binary under the
   previous identifier is recognised and re-stamped with `checksum_adopted_at`.
+- **The Terraform provider is its own MPL-2.0 module.** `terraform-provider-trstctl`
+  moved from `cmd/terraform-provider-trstctl` and `internal/terraformprovider` to
+  `clients/terraform` (module `trstctl.com/terraform-provider`), licensed MPL-2.0
+  with the rest of `clients/`. Its module path sits outside `trstctl.com/trstctl`,
+  so the compiler refuses any import of the control plane's `internal/` packages:
+  the provider reaches trstctl only through the served REST API. `make build`,
+  `make reproducible-check`, `make sdk-test` and the registry release script
+  build and test it from that directory, and the Terraform SDK modules are no
+  longer requirements of the core module.
 
 ### Bundled PostgreSQL authenticates executable bytes before startup (2026-09-09)
 

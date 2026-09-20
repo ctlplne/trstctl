@@ -200,9 +200,6 @@ var reviewedAmbientHTTPClients = map[string]map[string]bool{
 	"internal/telemetry/poster.go": {
 		"HTTPPoster": true,
 	},
-	"internal/terraformprovider/client.go": {
-		"NewClient": true,
-	},
 	"tools/dodcensus/proof/launched.go": {
 		"Do": true,
 	},

@@ -602,6 +602,11 @@ func TestProductionCryptoImportsStayCentralized(t *testing.T) {
 		"internal/pqc/",
 		"internal/crypto/",
 		"tools/trstctllint/",
+		// The Terraform provider is its own module (trstctl.com/terraform-provider,
+		// MPL-2.0, 2026-09-20) and cannot import internal/crypto. This one file
+		// builds its CA-pinned TLS transport from the standard library and holds no
+		// key material; any other crypto import under clients/terraform still trips.
+		"clients/terraform/internal/terraformprovider/transport.go",
 	}
 	forbiddenPrefixes := []string{
 		"crypto",
@@ -634,7 +639,7 @@ func TestProductionCryptoImportsStayCentralized(t *testing.T) {
 		}
 	}
 	if len(violations) > 0 {
-		t.Errorf("CRYPTO-101: production crypto imports must stay inside internal/crypto or the proprietary internal/pqc boundary:\n%s", strings.Join(violations, "\n"))
+		t.Errorf("CRYPTO-101: production crypto imports must stay inside internal/crypto or the internal/pqc boundary:\n%s", strings.Join(violations, "\n"))
 	}
 }
 

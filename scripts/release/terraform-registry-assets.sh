@@ -26,7 +26,7 @@ OUT="$(cd "$OUT" && pwd)"
 
 COMMIT="$(git rev-parse --short=12 HEAD 2>/dev/null || echo none)"
 DATE="$(git show -s --format=%cI HEAD 2>/dev/null || echo unknown)"
-LDFLAGS="-s -w -buildid= -X trstctl.com/trstctl/internal/buildinfo.version=v${VERSION} -X trstctl.com/trstctl/internal/buildinfo.commit=${COMMIT} -X trstctl.com/trstctl/internal/buildinfo.date=${DATE}"
+LDFLAGS="-s -w -buildid= -X trstctl.com/terraform-provider/internal/version.version=v${VERSION}"
 
 for platform in linux_amd64 linux_arm64 darwin_amd64 darwin_arm64 windows_amd64; do
 	os="${platform%%_*}"
@@ -39,7 +39,7 @@ for platform in linux_amd64 linux_arm64 darwin_amd64 darwin_arm64 windows_amd64;
 	echo ">> build ${platform}"
 	CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
 		go build -trimpath -buildvcs=false -ldflags "$LDFLAGS" \
-		-o "${workdir}/${bin}" ./cmd/terraform-provider-trstctl
+		-C clients/terraform -o "${workdir}/${bin}" .
 	# python3 zipfile keeps the packaging dependency surface at what the
 	# runners and the sandbox already carry (no zip(1) requirement).
 	python3 - "$workdir" "$bin" "${OUT}/terraform-provider-trstctl_${VERSION}_${platform}.zip" <<'PYEOF'
