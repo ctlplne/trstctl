@@ -565,19 +565,18 @@ with independent command-line readback; the default control-plane artifact stays
 static and never loads a native module, keeping provider credentials and private-key
 operations inside the separate signer.
 
-CAP-KEY-05 — Multiple algorithms (RSA / ECDSA / Ed25519) + Enterprise/PQC — is served:
+CAP-KEY-05 — Multiple algorithms (RSA / ECDSA / Ed25519) + PQC — is served:
 the profile path is `POST /api/v1/profiles` and
 `trstctl-cli profiles create -f profile.json`. The profile API validates
 `allowed_key_algorithms` through `internal/crypto`, then stores the accepted policy as
 `profile.created` evidence. It accepts classical `RSA`, `ECDSA`, and `Ed25519` labels
-in the MPL core; PACKAGING-007 makes the PQC signature labels proprietary Enterprise/PQC
-capabilities under `ee/`: `Hybrid-ML-DSA-44-ECDSA-P256`, `ML-DSA-65`,
-and `SLH-DSA-SHA2-128s`. Unknown labels fail closed, and ML-KEM stays out of
+and, with PQC in the core since 2026-09-20, the PQC signature labels
+`Hybrid-ML-DSA-44-ECDSA-P256`, `ML-DSA-65`, and `SLH-DSA-SHA2-128s`. Unknown labels fail closed, and ML-KEM stays out of
 certificate-signing profiles because it's a key-encapsulation mechanism, not a signing
 algorithm. `internal/server/crypto_agility_served_test.go`'s
 `TestServedCryptoAgilityProfilesValidateBoundaryAlgorithms` proves the served profile
-create/list round trip; those Enterprise/PQC issuance proofs live under `internal/pqc` and
-`internal/pqcmigration`, so they don't count as MPL-core served evidence.
+create/list round trip; the PQC issuance proofs live under `internal/pqc` and
+`internal/pqcmigration`.
 
 The managed-key API spine is configuration- and license-gated for AWS KMS, Azure Key
 Vault/Managed HSM, GCP Cloud KMS, PKCS#11, TPM 2.0, and YubiHSM 2 custody: once

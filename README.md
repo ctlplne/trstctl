@@ -19,7 +19,7 @@ API keys, and SPIFFE workload identities. No per-certificate or ephemeral-identi
 <a href="https://goreportcard.com/report/github.com/ctlplne/trstctl"><img alt="Go Report Card" src="https://goreportcard.com/badge/github.com/ctlplne/trstctl"></a>
 <img alt="Go" src="https://img.shields.io/badge/Go-1.26.6+-00ADD8?logo=go&logoColor=white">
 <img alt="status" src="https://img.shields.io/badge/status-active%20development-orange">
-<img alt="license" src="https://img.shields.io/badge/license-MPL--2.0%20open%20core-blue">
+<img alt="license" src="https://img.shields.io/badge/license-BUSL--1.1%20source--available-blue">
 </p>
 
 <p align="center">
@@ -51,8 +51,8 @@ API keys, and SPIFFE workload identities. No per-certificate or ephemeral-identi
 > the hash-chained audit log, observability, resilience, backup/DR, migrations.
 > Much of the broader surface is library-complete and tested but not yet wired into
 > the served binary. **[Current limitations](docs/limitations.md) is the single
-> authority** on which is which. trstctl is MPL-2.0 open core: the Free core is
-> open-source; Enterprise and Provider/MSP capabilities live under proprietary
+> authority** on which is which. trstctl's core is source-available (BUSL-1.1, converting
+> to MPL-2.0 four years after each release); Enterprise and Provider/MSP capabilities live under proprietary
 > `ee/`. Enterprise bills per control-plane deployment. Credentials and rotations
 > are never billed ([details](#license)).
 
@@ -190,9 +190,9 @@ each served claim below was proved.
 | **SSH**                 | SSH certificate authority + KRL, additive trust agent (validate → reload → health-check → rollback), attestation-gated user certs                                                                                                                                                                                                                                                                                                                                                                                 |
 | **Secrets**             | envelope-encrypted store, transit + KMIP, PKI-as-a-secrets-engine, and rotation. Dynamic-secret backends: **8 inventory / 8 served through the production-assembled handler**. Secret-sync targets: **10 inventory / 10 served through the production-assembled handler**. Each is tenant-bound, operator-configured, and reached only through the event-projected sealed outbox.                                                                                                                                 |
 | **Deployment**          | Deployment connectors: **24 inventory / 24 served through the production-assembled handler** (web servers, load balancers, appliances, mail proxies, databases, messaging/search targets, and cloud cert stores). Production `buildRunDeps` constructs the selected native registry; served target/identity/deploy flows perform target-specific mutation and independent readback. Also includes an example connector harness, Kubernetes agent/Operator, and cert-manager `Issuer`/`ClusterIssuer` integration. |
-| **Discovery & posture** | network/filesystem, SSH, agentless cloud certs (AWS/Azure/GCP), CBOM crypto posture, Enterprise/PQC migration posture, CT monitoring, drift, risk scoring, the credential graph                                                                                                                                                                                                                                                                                                                                   |
+| **Discovery & posture** | network/filesystem, SSH, agentless cloud certs (AWS/Azure/GCP), CBOM crypto posture, PQC migration posture, CT monitoring, drift, risk scoring, the credential graph                                                                                                                                                                                                                                                                                                                                   |
 | **Key protection**      | HSM/KMS backends: **6 inventory / 6 served by the launched shipped binary** through the separately shipped cgo HSM signer profile: AWS KMS, Azure Key Vault / Managed HSM, GCP Cloud KMS, PKCS#11, TPM 2.0, and YubiHSM 2. The managed-key surface remains Enterprise-license- and configuration-gated, and every provider operation stays inside the isolated signer.                                                                                                                                            |
-| **Crypto-agility**      | classical algorithms in the MPL core; Enterprise/PQC algorithms (ML-DSA, ML-KEM, SLH-DSA, hybrid) and the PQC-migration orchestrator live behind the proprietary `ee/` boundary                                                                                                                                                                                                                                                                                                                                   |
+| **Crypto-agility**      | classical and post-quantum algorithms (ML-DSA, ML-KEM, SLH-DSA, hybrid) and the PQC-migration orchestrator in the core (`internal/pqc`, `internal/pqcmigration`)                                                                                                                                                                                                                                                                                                                                   |
 | **Platform**            | REST API (OpenAPI 3.1), CLI at full parity, a unified web console — six operator tools (Discover, Certificates, Workloads & Machines, Secrets, Software Trust, Operations) over one control plane, with Home as the cross-tool overview, a first-run wizard, journeys hub, command palette, and en/es/de localization — OIDC/SAML/LDAP sign-on, SCIM 2.0 provisioning, RBAC + ABAC, append-only audit, multi-tenancy                                                                                         |
 | **Notifications**       | Outbox-backed email, Slack, Teams, SMS, SIEM, HMAC webhook, native PagerDuty Events v2, and native OpsGenie Alert v2 delivery. The shipped binary constructs every channel family; credentials are redacted, locked where supported, and wiped on shutdown.                                                                                                                                                                                                                                                       |
 | **Code signing**        | Conditionally served key-backed and GitHub-OIDC keyless signing through the isolated signer. The operator pins Rekor log trust; the outbox worker publishes official HashedRekord entries and verifies their signed-entry timestamps before acknowledgement.                                                                                                                                                                                                                                                      |
@@ -222,7 +222,7 @@ outbox and bulkhead regression suites under `internal/orchestrator` and
 | **AN-6** | **An outbox for every external call.** The intent to call out (a CA, a webhook) is written in the _same database transaction_ as the state change, and a worker delivers it at least once — so calls are never lost on a crash.                                                                                                                                                                                                                                       |
 | **AN-7** | **Bulkheads and backpressure.** Each subsystem has its own bounded worker pool; one slow connector or a discovery storm can never starve the API.                                                                                                                                                                                                                                                                                                                     |
 | **AN-8** | **Memory safety for keys.** Secret material lives in locked, zeroed `[]byte`, never a Go `string` (which the garbage collector can copy freely). A key lives in RAM for milliseconds, not indefinitely.                                                                                                                                                                                                                                                               |
-| **AN-9** | **The editions boundary.** Commercial code lives only under `ee/`; core never imports it, and a core-only build links zero `ee/` packages. Multi-tenancy, the crypto boundary, audit/export rights, and the offline license verifier stay in the MPL core.                                                                                                                                                                                                            |
+| **AN-9** | **The editions boundary.** Commercial code lives only under `ee/`; core never imports it, and a core-only build links zero `ee/` packages. Multi-tenancy, the crypto boundary, audit/export rights, and the offline license verifier stay in the core.                                                                                                                                                                                                            |
 
 ```mermaid
 %%{init: {'theme':'base','themeVariables':{'background':'transparent','primaryColor':'#161b22','primaryTextColor':'#e6edf3','primaryBorderColor':'#3b82f6','lineColor':'#768390','clusterBkg':'#161b22','clusterBorder':'#30363d','fontFamily':'ui-monospace, SFMono-Regular, Menlo, monospace'},'flowchart':{'curve':'basis','nodeSpacing':55,'rankSpacing':55,'padding':12}}}%%
@@ -395,22 +395,27 @@ optional. Start with the authoring guides for
 [plugins](docs/guides/plugin-authoring.md).
 
 [CONTRIBUTING.md](CONTRIBUTING.md) has the full contract. The short version:
-core is MPL-2.0 and takes contributions under the **Developer Certificate of
+core is BUSL-1.1 and takes contributions under the **Developer Certificate of
 Origin** — sign off with `git commit -s`, no copyright assignment — while the
 proprietary `ee/` tree requires a signed CLA, so open an issue before writing
 code there.
 
 ## License
 
-**MPL-2.0 open core.** The Free/Community core is licensed under the
-[Mozilla Public License 2.0](LICENSE). Commercial Enterprise, Provider, PQC, and
-other license-gated features are proprietary material under `ee/`, governed by
-[ee/LICENSE](ee/LICENSE), and activated by an offline Ed25519-signed license.
+**Source-available core, commercial editions.** The core — everything outside
+`ee/` and `clients/` — is licensed under the [Business Source License 1.1](LICENSE):
+production use is permitted under its Additional Use Grant, the Free tier needs no
+signed license, and each release converts to the Mozilla Public License 2.0 four
+years after it is published. The client libraries under `clients/` are MPL-2.0. The
+patent-pending families (PCAS, AGID, XREC, VDEC) and post-quantum cryptography
+ship in the core. Commercial Enterprise and Provider features are proprietary
+material under `ee/`, governed by [ee/LICENSE](ee/LICENSE), and activated by an
+offline Ed25519-signed license.
 Provider licenses include every Enterprise feature plus managed-service and resale
 rights. The Provider wholesale price is negotiated around a managed-customer band;
 the MSP controls its own downstream hosting, support, and customer pricing.
 Multi-tenancy, the event spine, the crypto boundary, audit/export rights, and
-the offline license verifier stay in MPL core.
+the offline license verifier stay in the core.
 
 **Provisional patent applications filed.** certctl LLC, a Florida limited
 liability company, has filed four US provisional patent applications covering PCAS (proof-carrying algorithm
@@ -418,10 +423,8 @@ succession), XREC (drift reconciliation), VDEC (attested decommissioning), and
 AGID (agent delegation identity). A provisional application confers no exclusive
 rights and nothing has issued, so "provisional applications filed" is the precise
 status and the only one this project claims — a reader who checks USPTO will find
-exactly that and nothing more. That does not put the open-source core at risk:
-MPL-2.0 section 2.1(b) grants every recipient of the core a perpetual, worldwide,
-royalty-free patent license under each Contributor's Patent Claims that are
-necessarily infringed by that Contributor's Contributions, so using, modifying,
-and redistributing the MPL-2.0 core carries an express patent license. The
-proprietary `ee/` tree is outside the MPL and outside that grant — see
-[ee/LICENSE](ee/LICENSE).
+exactly that and nothing more. Patent terms for the core are not
+stated in `LICENSE` and will be published separately once settled; the client
+libraries under `clients/`, being MPL-2.0, carry that license's section 2.1(b)
+patent grant for what they themselves practise. The proprietary `ee/` tree is
+outside both — see [ee/LICENSE](ee/LICENSE).

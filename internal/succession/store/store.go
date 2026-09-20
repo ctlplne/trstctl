@@ -2,7 +2,7 @@
 
 // Package store is the tenant-scoped (RLS) persistence for PCAS: the durable
 // succession-record chain and the serving copy of each identity's algorithm-epoch
-// high-water. It layers on the MPL core store through the feature-neutral
+// high-water. It layers on the core store through the feature-neutral
 // WithExtraMigrations seam and the RLS-scoped Store.WithTenant transaction; it
 // forks neither the core store nor its migration runner (AN-1, AN-9).
 package store

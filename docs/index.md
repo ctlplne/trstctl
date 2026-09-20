@@ -86,9 +86,11 @@ credentials. It connects work that separate certificate, secrets, workload, and
 software-signing products often hide from one another: ownership, dependency
 blast radius, expiry alerts, delivery proof, policy, and audit history.
 
-It is MPL-2.0 open core. Community code is open source under the repository
-`LICENSE`. Proprietary Enterprise and Provider code lives under `ee/` and activates
-with an offline Ed25519-signed license. Billing units are control-plane deployments,
+It is source-available: the core is licensed under the Business Source License 1.1
+(BUSL-1.1) in the repository `LICENSE` — production use permitted, converting to
+MPL-2.0 four years after each release — the client libraries are MPL-2.0, and
+proprietary Enterprise and Provider code lives under `ee/` and activates with an
+offline Ed25519-signed license. Billing units are control-plane deployments,
 never credential or rotation counts. trstctl is pre-1.0 and under active hardening;
 [Current limitations](limitations.md) is the authority for what the running binary
 serves today.
@@ -102,7 +104,7 @@ rest. [Architecture invariants](design/architecture-invariants.md) explains the
 exact design and its test boundaries.
 
 Everything runs on infrastructure you control. Telemetry is opt-in and off by
-default. Exact license terms ship in the source checkout at `LICENSE` (MPL-2.0 core)
+default. Exact license terms ship in the source checkout at `LICENSE` (BUSL-1.1 core, MPL-2.0 clients)
 and `ee/LICENSE` (commercial code); [Editions](editions.md) explains the boundary.
 
 Next: [understand the product map](product-map.md) or

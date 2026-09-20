@@ -224,7 +224,7 @@ func WithFeatureObserver(fn func(feature, action, outcome string, seconds float6
 }
 
 // LicensedRoute lets proprietary edition packages mount their own guarded API
-// routes without making the MPL core import ee/. The route metadata is still fed
+// routes without making the core import ee/. The route metadata is still fed
 // through the shared OpenAPI/RBAC/idempotency machinery.
 type LicensedRoute struct {
 	Method            string

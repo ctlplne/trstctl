@@ -328,7 +328,7 @@ func (c *Client) GenerateConstrainedKeyHandle(ctx context.Context, algorithm cry
 // GenerateLicensedKeyHandle creates a key for a proprietary algorithm whose
 // concrete name is owned by an EE package. The caller supplies the neutral
 // signer-protocol slot and the algorithm label to bind onto the returned remote
-// signer; MPL core callers should use GenerateConstrainedKeyHandle instead.
+// signer; core callers should use GenerateConstrainedKeyHandle instead.
 func (c *Client) GenerateLicensedKeyHandle(ctx context.Context, protoAlg signerpb.Algorithm, algorithm crypto.Algorithm, handle string, allowedPurposes []KeyPurpose, declaredPurpose KeyPurpose) (*RemoteSigner, error) {
 	resp, err := c.svc.GenerateKey(ctx, &signerpb.GenerateKeyRequest{
 		Algorithm:       protoAlg,

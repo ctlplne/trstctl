@@ -22,7 +22,7 @@ type AlgorithmEpoch uint64
 // RotationCounter is the read-only view of core byok lifecycle state that the
 // algorithm-epoch model layers beside. *internal/crypto/byok.ManagedSigner
 // satisfies it (Version + Algorithm). PCAS reads this state and never mutates
-// byok (AN-9: no PCAS scaffolding in, or mutation of, MPL core).
+// byok (AN-9, historical: PCAS stayed out of the core until 2026-09-20).
 type RotationCounter interface {
 	// Version is the same-algorithm rotation count from core byok.
 	Version() int

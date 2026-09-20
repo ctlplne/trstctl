@@ -101,7 +101,7 @@ func WithExternalIssueReplaySafety(safety ExternalIssueReplaySafety) Option {
 
 // WithDependentRecorder registers a feature-neutral observer for credentials
 // minted by this issuance path. Edition code can attach an implementation through
-// the tagged attach seam without making MPL core import the edition package.
+// the tagged attach seam without making core import the edition package.
 func WithDependentRecorder(rec dependents.Recorder) Option {
 	return func(s *IssuanceService) { s.dependentRecorder = rec }
 }

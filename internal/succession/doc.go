@@ -10,9 +10,9 @@
 //
 // PCAS is a patent-pending feature set — certctl LLC filed a US
 // provisional application covering it in July 2026 and nothing has issued —
-// and it lives entirely under ee/ (SPDX LicenseRef-trstctl-EE); MPL core never
-// imports it outside the tagged attach seam (AN-9, HARNESS §1.6). This package
-// touches no core code.
+// and since 2026-09-20 it ships in the BSL core (SPDX BUSL-1.1) under
+// internal/succession, attached in every build through cmd/*/attach_families.go.
+// This package touches no other core code.
 //
 // This file set (card PCAS-01) provides two things:
 //

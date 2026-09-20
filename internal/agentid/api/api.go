@@ -18,7 +18,7 @@
 //
 // It mirrors internal/succession/api (the PCAS precedent): it attaches through the feature-
 // neutral api.Option route seam (WithLicensedRoutes/WithLicensedSchemas), no AGID
-// route/handler/DTO lives in MPL core, and every mutation flows through the shared
+// route/handler/DTO lives in the static API package, and every mutation flows through the shared
 // idempotency path (api.Mutate) so a replayed Idempotency-Key returns the original
 // result (AN-5).
 //

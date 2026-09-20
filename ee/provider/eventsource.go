@@ -197,7 +197,7 @@ func (s *EventMutationSink) Append(
 
 // AuthorityProjection owns the six PostgreSQL views of Provider authority.
 // It is registered through core's feature-neutral EventProjection seam, keeping
-// MPL core free of EE imports while making normal startup and explicit replay
+// core free of EE imports while making normal startup and explicit replay
 // rebuild the licensed views from the same log.
 type AuthorityProjection struct {
 	store *corestore.Store

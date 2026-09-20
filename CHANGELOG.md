@@ -13,6 +13,25 @@ This file is the human-readable companion to the git tags; the
 
 ## [Unreleased]
 
+### Changed
+
+- **Licensing.** The core moved from the Mozilla Public License 2.0 to the
+  Business Source License 1.1 (Licensor certctl LLC): production use is permitted
+  under the Additional Use Grant, the Free tier needs no signed license, and each
+  release converts to MPL-2.0 four years after it is published. `clients/` stays
+  MPL-2.0; `ee/` stays proprietary. Every core file's SPDX header reads
+  `BUSL-1.1`.
+- **The patent-pending families and PQC are core.** PCAS (`internal/succession`,
+  `internal/translog`, `internal/rpverify`), AGID (`internal/agentid`), XREC
+  (`internal/reconcile`), VDEC (`internal/decommission`) and PQC (`internal/pqc`,
+  `internal/pqcruntime`, `internal/pqcmigration`, `internal/kmip`) moved out of
+  `ee/` and attach in every build through `cmd/*/attach_families.go`; the
+  `pcas`, `agent-delegation`, `reconcile`, `vdec` and `pqc` license features are
+  gone (a license file that still names them parses and grants nothing extra).
+- **Migration ledger.** The `-- SPDX-License-Identifier:` line is outside a shipped
+  migration's content digest; a ledger row recorded by an earlier binary under the
+  previous identifier is recognised and re-stamped with `checksum_adopted_at`.
+
 ### Bundled PostgreSQL authenticates executable bytes before startup (2026-09-09)
 
 - The evaluation database verifies its independent committed archive checksum

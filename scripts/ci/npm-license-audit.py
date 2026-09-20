@@ -11,7 +11,7 @@ inventing frontend features on its own.
 What it does: read `web/package-lock.json` (lockfileVersion 3 carries a
 `license` field and a `dev` marker per package), split the tree into what SHIPS
 to users and what only builds it, and fail on a runtime dependency whose licence
-would contaminate an MPL-2.0 distribution or forbid the commercial motion this
+would contaminate a BUSL-1.1 distribution or forbid the commercial motion this
 product is built for.
 
 Two classes of denial, for two different harms:
@@ -60,7 +60,7 @@ ALLOWED = {
     "blueoak-1.0.0", "mit-0", "apache 2.0", "artistic-2.0",
     # OFL-1.1 (SIL Open Font Licence) is the standard licence for open fonts and
     # is permissive for our purposes: it allows bundling, redistribution, and
-    # commercial use, and it does not contaminate an MPL-2.0 distribution. Its
+    # commercial use, and it does not contaminate a BUSL-1.1 distribution. Its
     # one live obligation is the Reserved Font Name clause, so it earns an
     # advisory note rather than silence — see RESERVED_NAME_NOTE.
     "ofl-1.1",

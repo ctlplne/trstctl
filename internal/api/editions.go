@@ -124,7 +124,7 @@ func editionPackaging() editionPackagingResponse {
 		NoEphemeralIdentityBilling:        true,
 		CertificateCountersClassification: usage.MeterOperationalTelemetry,
 		ManagedBoundary:                   "Provider/MSP normally runs one shared control plane with multiple customer tenants, with dedicated customer deployments available when its security posture requires them.",
-		PricingPosture:                    "Free is the self-hosted MPL core. Enterprise reference list is USD 15,000/year Standard or USD 30,000/year Plus per production control-plane deployment. Provider/MSP wholesale reference bands are USD 12,000/year for 1-10 managed customers, USD 30,000/year for 11-50, and USD 72,000/year for 51-250; 250+ is negotiable, and each MSP controls its downstream pricing. Credentials and rotations are never billing units.",
+		PricingPosture:                    "Free is the self-hosted BUSL-1.1 core; no signed license is needed. Enterprise reference list is USD 15,000/year Standard or USD 30,000/year Plus per production control-plane deployment. Provider/MSP wholesale reference bands are USD 12,000/year for 1-10 managed customers, USD 30,000/year for 11-50, and USD 72,000/year for 51-250; 250+ is negotiable, and each MSP controls its downstream pricing. Credentials and rotations are never billing units.",
 		BundledNonProductionDeployments:   license.BundledNonProductionDeployments,
 		NonProductionSupportPosture:       "Each Enterprise or Provider entitlement bundles three explicitly bound non-production control planes with the full licensed feature set and no production SLA.",
 		ReferencePriceBands: []referencePriceBand{

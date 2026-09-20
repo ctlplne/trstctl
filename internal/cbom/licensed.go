@@ -2,7 +2,7 @@
 
 package cbom
 
-// Licensed posture seam (AN-9). The MPL core classifies classical cryptography
+// Licensed posture seam (AN-9). The core classifies classical cryptography
 // and names only edition-neutral migration placeholders; it deliberately does
 // not name licensed algorithms. A licensed edition may install one resolver
 // pair that (a) names the concrete replacement algorithm for a classical

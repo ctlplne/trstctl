@@ -68,9 +68,9 @@ const protocolLeafTTL = 30 * 24 * time.Hour
 type protocolIssuer struct {
 	tenantServiceCheck tenancy.ServiceCheck
 	issue              issueFunc                  // Server.IssueLeafWithProfile — signs through the signer (AN-3/AN-4)
-	issueLicensed      issueFunc                  // proprietary edition signer path; nil in MPL core builds
-	inspectLicensedCSR LicensedCSRInspector       // proprietary CSR detector; nil in MPL core builds
-	parseLicensedCSR   LicensedCSRParser          // verified parser for subject algorithms unknown to core; nil in MPL core
+	issueLicensed      issueFunc                  // PQC signer path; nil until attachPQC installs it
+	inspectLicensedCSR LicensedCSRInspector       // PQC CSR detector; nil until attachPQC installs it
+	parseLicensedCSR   LicensedCSRParser          // verified parser for PQC subject algorithms; nil until attachPQC installs it
 	orch               *orchestrator.Orchestrator // records the cert as an event (AN-2)
 	idem               *orchestrator.Idempotency  // dedupe a retried enrollment (AN-5)
 	store              *store.Store               // tenant-scoped reads/writes under RLS (AN-1)

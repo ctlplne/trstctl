@@ -4,7 +4,7 @@
 // delegation/issuance lifecycle: the durable delegation tree, the issued-credential
 // registry, the attestation bindings that justified issuances, the signed refusal
 // artifacts, and the revocation directive + per-descendant jobs. It layers on the
-// MPL core store through the feature-neutral WithExtraMigrations seam and the
+// core store through the feature-neutral WithExtraMigrations seam and the
 // RLS-scoped Store.WithTenant transaction; it forks neither the core store nor its
 // migration runner (AN-1, AN-9). AGID DDL ships here as embedded migrations/*.sql
 // and is registered only through the tagged ee_attach seam, so the core-only build

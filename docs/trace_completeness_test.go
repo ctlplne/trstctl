@@ -533,26 +533,13 @@ func TestAIAgentBrokerNarrowedToServedReadOnlyMCPVsLibraryBroker(t *testing.T) {
 
 // ---- TRACE-008: licensed PQC end-to-end residuals are served but bounded -----------
 
-// pqcMigrationServedInMPLCore reports whether the MPL core still exposes the
-// proprietary PQC migration endpoint/CLI. PACKAGING-007 requires this to stay false.
-func pqcMigrationServedInMPLCore(t *testing.T) bool {
-	t.Helper()
-	apiRoutes := read(t, "../internal/api/api.go")
-	cliCommands := read(t, "../internal/cli/command.go")
-	return strings.Contains(apiRoutes, "startPQCMigration") &&
-		strings.Contains(apiRoutes, "rollbackPQCMigration") &&
-		strings.Contains(cliCommands, `{"pqc", "migrations", "start"}`) &&
-		strings.Contains(cliCommands, `{"pqc", "migrations", "rollback"}`)
-}
-
-// TestPQCMigrationServedResidualsDisclosed pins TRACE-008. PACKAGING-007 keeps
-// PQC algorithms and the migration API behind the proprietary ee/ boundary. The
-// shipped-binary census now proves the three old end-to-end gaps, while the docs
-// must keep the exact client/connector boundary visible.
+// TestPQCMigrationServedResidualsDisclosed pins TRACE-008. PQC and its migration
+// engine moved into the core on 2026-09-20; the docs must say so and keep the
+// exact client/connector boundary visible.
 func TestPQCMigrationServedResidualsDisclosed(t *testing.T) {
 	low := limLower(t)
 
-	// Reality anchor (licensed side): the migration orchestrator still exists.
+	// Reality anchor: the migration orchestrator still exists, in the core.
 	if _, err := os.Stat("../internal/pqcmigration"); err != nil {
 		t.Fatalf("internal/pqcmigration no longer exists; revisit this TRACE-008 reality test: %v", err)
 	}
@@ -569,20 +556,16 @@ func TestPQCMigrationServedResidualsDisclosed(t *testing.T) {
 	}
 
 	lcp := strings.ToLower(read(t, "features/lifecycle-and-pqc.md"))
-	if pqcMigrationServedInMPLCore(t) {
-		t.Error("PQC migration surfaced in MPL core API/CLI; PACKAGING-007 requires it to attach only through ee/ — TRACE-008")
-	}
 	for _, want := range []string{
-		"proprietary ee",
-		"not part of the mpl core openapi",
-		"no mpl-core cli command",
-		"served when the enterprise/pqc license attaches",
+		"part of the core",
+		"attach_families.go",
+		"in every build",
 		"stock openssl 3.5",
 		"two-entry classical + ml-dsa-65 response",
 		"receiver readback and exact rollback",
 	} {
 		if !strings.Contains(lcp, want) {
-			t.Errorf("features/lifecycle-and-pqc.md must disclose licensed PQC placement (missing %q) — TRACE-008", want)
+			t.Errorf("features/lifecycle-and-pqc.md must disclose PQC placement in the core (missing %q) — TRACE-008", want)
 		}
 	}
 	if strings.Contains(lcp, "every legacy client") && !strings.Contains(lcp, "not a claim about every legacy client") {

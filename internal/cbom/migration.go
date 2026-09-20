@@ -21,7 +21,7 @@ const (
 )
 
 // MigrationTargetFor maps observed cryptography to a remediation target. An
-// installed licensed resolver names concrete algorithms; the MPL core fallback
+// installed licensed resolver names concrete algorithms; the core fallback
 // deliberately does not, and emits edition-neutral placeholders.
 func MigrationTargetFor(f Finding) MigrationTarget {
 	if licensedTargetFor != nil {

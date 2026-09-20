@@ -6,7 +6,7 @@
 // freezes evidence for signer-local destruction.
 //
 // Both attach through the feature-neutral api.Option seam (the internal/succession
-// precedent); no VDEC route, handler, or DTO lives in MPL core. Before this
+// precedent); no VDEC route, handler, or DTO lives in the static API package. Before this
 // adapter existed the core route was registered and published in OpenAPI but its
 // source had no production caller, so every deployment — licensed or not —
 // answered 501 (AUD-3), and the re-protection pipeline behind the outbox handler

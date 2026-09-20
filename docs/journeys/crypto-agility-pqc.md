@@ -143,8 +143,8 @@ post-quantum target.
    `migration_progress`. The outbox worker mints a `Hybrid-ML-DSA-44-ECDSA-P256`
    transition certificate through the served ACME/protocol issuer, records
    `protocol.issued` and `licensed_crypto.migration.asset_completed`, and updates
-   CBOM progress. The MPL core has no `trstctl-cli pqc` command; any PQC operator
-   command belongs in the proprietary EE bundle.
+   CBOM progress. The `trstctl-cli pqc migrations` commands drive it; PQC ships in the core
+   since 2026-09-20.
 
    For a CBOM TLS endpoint or host-config finding, bind the finding to the connector
    target that owns the listener and include the desired TLS posture in the same

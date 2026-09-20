@@ -859,7 +859,7 @@ func payloadStructBody(t *testing.T, src string) string {
 }
 
 // TestEditionGatingIsConfinedToOpenCoreSeams is the DOCS-008 lock for the
-// open-core claim: edition vocabulary is permitted only in the core license
+// editions claim: edition vocabulary is permitted only in the core license
 // verifier, the vendor signing CLI, and the one tagged attach seam. That keeps
 // AN-9 honest: no scattered tier checks in handlers, stores, or engines.
 func TestEditionGatingIsConfinedToOpenCoreSeams(t *testing.T) {
@@ -889,7 +889,7 @@ func TestEditionGatingIsConfinedToOpenCoreSeams(t *testing.T) {
 		})
 	}
 	if len(hits) > 0 {
-		t.Errorf("DOCS-008: found edition-gating idioms outside the allowed open-core seams:\n%s", strings.Join(hits, "\n"))
+		t.Errorf("DOCS-008: found edition-gating idioms outside the allowed attach seams:\n%s", strings.Join(hits, "\n"))
 	}
 }
 

@@ -9,7 +9,7 @@ taxes, support contacts, and any negotiated term.
 
 | Edition / band | Annual USD list | Licensed unit | Included environment bundle |
 |---|---:|---|---|
-| Free | $0 | None; the MPL-2.0 core needs no signed license. | Unlimited self-operated Community deployments. |
+| Free | $0 | None; the BUSL-1.1 core needs no signed license. | Unlimited self-operated Community deployments. |
 | Enterprise Standard | $15,000 | One production `control_plane_deployment`. | 1 production + 3 non-production control planes. |
 | Enterprise Plus | $30,000 | One HA or multi-region production `control_plane_deployment`. | 1 production + 3 non-production control planes. |
 | Provider / MSP, 1–10 managed customers | $12,000 | `managed_customer_band`. | Full Enterprise entitlement plus Provider rights. |
@@ -69,7 +69,7 @@ At expiry, the offline verifier provides a 30-day grace period. During grace,
 licensed modes remain enabled. After grace, the license state and commercial
 feature modes become `read_only`; core issuance, renewal, revocation, protocol,
 audit/export, tenancy, and license-verification capabilities remain Community
-software. The MPL core keeps running: a lapsed commercial order never bricks a
+software. The core keeps running: a lapsed commercial order never bricks a
 customer's PKI. Individual commercial mutation surfaces must honor the served
 `read_only` mode; the editions page makes that state visible before an operator
 acts.

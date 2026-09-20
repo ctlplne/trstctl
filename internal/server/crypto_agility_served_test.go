@@ -12,7 +12,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
-// TestServedCryptoAgilityProfilesValidateCoreAlgorithms proves the MPL-core
+// TestServedCryptoAgilityProfilesValidateCoreAlgorithms proves the core
 // served profile-selection path: operators can select supported classical
 // signature labels through /api/v1/profiles, unsupported labels are rejected
 // before they become policy, and accepted labels round-trip through the served

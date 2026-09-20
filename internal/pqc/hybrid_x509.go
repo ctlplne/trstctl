@@ -113,7 +113,7 @@ func SignHybridLeafFromCSRWithProfile(caCertDER []byte, caSigner boundarycrypto.
 }
 
 // InspectHybridCSR verifies the hybrid proof extension and reports whether the
-// licensed signer path must handle this CSR. The MPL core receives only the
+// licensed signer path must handle this CSR. The core receives only the
 // boolean decision through the edition seam.
 func InspectHybridCSR(csrDER []byte, _ boundarycrypto.CSRInfo) (bool, error) {
 	csr, err := x509.ParseCertificateRequest(csrDER)

@@ -2,12 +2,12 @@ import { describe, it, expect } from "vitest";
 import { lockedModuleIds, moduleRequiredFeature } from "@/lib/navigation";
 
 /** S-B5: the locked-module upsell mechanism. trstctl's five modules are all
- * MPL-core, so moduleRequiredFeature is empty and no module ever locks — the
+ * core, so moduleRequiredFeature is empty and no module ever locks — the
  * upsell row is latent by design. This test pins that contract AND exercises
  * the mechanism with a synthetic map so the code path is covered. */
 
 describe("module lock / upsell mechanism (S-B5)", () => {
-  it("locks no module today — all five modules are MPL-core", () => {
+  it("locks no module today — all five modules are core", () => {
     expect(Object.keys(moduleRequiredFeature)).toHaveLength(0);
     // Even with nothing licensed, no core module is locked.
     expect(lockedModuleIds(new Set())).toEqual([]);

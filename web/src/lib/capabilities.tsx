@@ -198,8 +198,8 @@ export function resolveCapabilityAction(view: CapabilityView | null, capabilityI
   return { state: "unknown", capability, unavailable: null };
 }
 
-/** Exact process-level preflight for routes that cannot live in the MPL feature
- * catalog, including proprietary routes attached through AN-9's edition seam.
+/** Exact process-level preflight for routes that cannot live in the core feature
+ * catalog, including routes attached through the attach seams.
  * A valid registry that omits an operation proves it is not attached. */
 export function resolveRuntimeOperation(view: CapabilityView | null, operationId: string): RuntimeOperationPosture {
   if (!isCapabilityView(view)) return { state: "unknown", operation: null, unavailable: null };

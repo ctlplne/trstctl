@@ -7,8 +7,9 @@ plainly rather than leave someone to discover it after writing a patch.
 
 ## Why
 
-trstctl is dual-licensed source-available software. The core outside `ee/` is
-MPL-2.0; the `ee/` tree is proprietary and commercially licensed (see
+trstctl is source-available software licensed by tree. The core outside `ee/` and
+`clients/` is BUSL-1.1 (converting to MPL-2.0 four years after each release);
+`clients/` is MPL-2.0; the `ee/` tree is proprietary and commercially licensed (see
 [LICENSE](LICENSE) and [ee/LICENSE](ee/LICENSE)). Parts of the mechanism are also
 the subject of pending patent applications.
 
@@ -31,8 +32,9 @@ queue nobody can service is worse for a would-be contributor than a clear no.
 - **Want a capability that does not exist?** Open an issue describing the
   problem rather than the solution. What an operator actually needs is more
   useful than an implementation of what they think would provide it.
-- **Want to use the core in your own work?** You already may, under MPL-2.0,
-  without asking. The `ee/` tree is separate and needs a commercial agreement.
+- **Want to use the core in your own work?** You already may, under the Business Source License
+  1.1's use grant (production included, short of offering it to third parties as a
+  hosted or managed service), without asking. The `ee/` tree is separate and needs a commercial agreement.
 
 ## Unsolicited pull requests
 

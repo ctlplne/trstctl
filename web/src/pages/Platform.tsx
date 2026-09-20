@@ -56,7 +56,7 @@ const defaultPackaging: NonNullable<EditionsInfo["packaging"]> = {
   managed_boundary:
     "Provider/MSP normally runs one shared control plane with multiple customer tenants, with dedicated customer deployments available when its security posture requires them.",
   pricing_posture:
-    "Free is the self-hosted MPL core. Enterprise reference list is USD 15,000/year Standard or USD 30,000/year Plus per production control-plane deployment. Provider/MSP reference bands start at USD 12,000/year.",
+    "Free is the self-hosted BUSL-1.1 core; no signed license is needed. Enterprise reference list is USD 15,000/year Standard or USD 30,000/year Plus per production control-plane deployment. Provider/MSP reference bands start at USD 12,000/year.",
   bundled_non_production_deployments: 3,
   non_production_support_posture: "Three bound non-production control planes are included with no production SLA.",
   reference_price_bands: [

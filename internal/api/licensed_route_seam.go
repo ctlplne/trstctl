@@ -48,7 +48,7 @@ func (a *API) ObserveFeature(feature, action string, start time.Time, err error)
 // Tenant resolves the authenticated caller's tenant for a licensed READ handler,
 // the same way Mutate resolves it for a licensed write. It is the feature-neutral
 // read seam: a licensed GET handler (which does not go through Mutate) uses it to
-// scope its query to the caller's tenant without the MPL core importing ee/. It
+// scope its query to the caller's tenant without the core importing ee/. It
 // returns false when no valid tenant is present (the handler should then refuse).
 func (a *API) Tenant(r *http.Request) (string, bool) { return a.tenant(r) }
 

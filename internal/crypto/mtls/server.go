@@ -423,7 +423,7 @@ func PeerCertificateDER(conn net.Conn) ([]byte, error) {
 	return append([]byte(nil), state.PeerCertificates[0].Raw...), nil
 }
 
-// CurvePreferences returns the key-agreement groups offered by MPL-core served
+// CurvePreferences returns the key-agreement groups offered by core served
 // TLS paths.
 func CurvePreferences() []tls.CurveID {
 	return []tls.CurveID{

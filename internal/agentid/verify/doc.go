@@ -65,11 +65,11 @@
 // agent-stack representation (encoding/binary) is canonical framing, not a crypto
 // primitive, and matches the discipline the carriage and agentstack packages use.
 //
-// LICENSE (decision recorded 2026-07-07): this
-// package is proprietary LicenseRef-trstctl-EE so NO MPL patent grant attaches to
-// independent AGID-claim-28 (or dependent 29). It is deliberately NOT in MPL core and
-// is NOT the internal/license offline license checker (a different thing the AN-9
-// editions boundary keeps in MPL core). The same ISARA / audit-N-8 grant trap PCAS-07 / XREC-12 /
+// LICENSE (decision recorded 2026-07-07, revised 2026-09-20): this package ships
+// in the BSL core (SPDX BUSL-1.1), a license that carries no patent grant of its
+// own; the core's patent terms are published separately, so nothing here grants
+// independent AGID-claim-28 (or dependent 29) away. It is NOT the internal/license
+// offline license checker (a different thing the AN-9 editions boundary keeps in core). The same ISARA / audit-N-8 grant trap PCAS-07 / XREC-12 /
 // GRCA-04 guard applies: shipping this in core would grant AGID-claim-28 away under
 // MPL 2.1.
 //

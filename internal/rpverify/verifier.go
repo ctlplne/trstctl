@@ -7,9 +7,9 @@
 // (PCAS-04) and internal/translog (PCAS-06); all hashing and signature verification
 // route through the core internal/crypto AN-3 boundary.
 //
-// LICENSE (HARNESS §1.6.4, decision 2026-07-05): this package is proprietary
-// LicenseRef-trstctl-EE so that NO MPL patent grant attaches to independent claim
-// 13. It is deliberately NOT in MPL core, and it is NOT the internal/license
+// LICENSE (HARNESS §1.6.4, decision 2026-07-05, revised 2026-09-20): this package
+// ships in the BSL core (SPDX BUSL-1.1), a license with no patent grant of its own,
+// so nothing here grants independent claim 13 away. It is NOT the internal/license
 // offline license checker (a different thing the AN-9 editions boundary keeps in core).
 package rpverify
 

@@ -5,7 +5,7 @@
 // Generic on purpose: it knows about ordering, cohorts and gates, and nothing
 // about what is being migrated. That is what lets a licensed campaign under ee/
 // drive the same sequencing without this package growing a dependency on it —
-// the engine stays MPL core, and anything algorithm-specific stays behind the
+// the engine stays core, and anything algorithm-specific stays behind the
 // AN-9 boundary where the contract puts it.
 //
 // The only "wave" in the codebase before this was a free-text label on a

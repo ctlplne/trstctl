@@ -2812,7 +2812,7 @@ type Projector struct {
 	restoreDrillVerificationKeys     *jose.JWKSet
 }
 
-// Option customizes the generic projector without coupling MPL core to any
+// Option customizes the generic projector without coupling core to any
 // edition package.
 type Option func(*Projector)
 

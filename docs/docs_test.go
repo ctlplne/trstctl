@@ -3938,7 +3938,7 @@ func TestLicenseStatusIsConsistent(t *testing.T) {
 	// commercial counterparty must contract with — and it named nobody
 	// ("Copyright (c) trstctl author.", no year) while NOTICE named a different,
 	// plural holder with a year. Pin the holder and a four-digit year on both
-	// files, and pin that the two agree, so the open-core and proprietary halves
+	// files, and pin that the two agree, so the source-available and proprietary halves
 	// of one repository cannot state two different owners. Changing the holder is
 	// a deliberate legal act; it must be a deliberate edit here too.
 	const copyrightHolder = "certctl LLC"
@@ -3971,10 +3971,6 @@ func TestLicenseStatusIsConsistent(t *testing.T) {
 		strings.Join([]string{"not", "open-source", "(yet)"}, " "),
 		strings.Join([]string{"not", "oss", "yet"}, " "),
 		strings.Join([]string{"not%20", "oss%20", "yet"}, ""),
-		strings.Join([]string{"source", "available"}, "-"),
-		strings.Join([]string{"source", "", "available"}, "-"),
-		strings.Join([]string{"not an osi-approved", "open-source license"}, " "),
-		strings.Join([]string{"production", "self-host", "grant"}, " "),
 		strings.Join([]string{"set the real", "license"}, " "),
 		strings.Join([]string{"once", "finalized"}, " "),
 		strings.Join([]string{"license", "badge"}, " "),
@@ -3984,7 +3980,7 @@ func TestLicenseStatusIsConsistent(t *testing.T) {
 		"docs/index.md":       strings.ToLower(read(t, "index.md")),
 		"docs/limitations.md": strings.ToLower(read(t, "limitations.md")),
 	} {
-		for _, want := range []string{"mpl-2.0", "open core", "ee/", "proprietary", "offline"} {
+		for _, want := range []string{"busl-1.1", "source-available", "ee/", "proprietary", "offline"} {
 			if !strings.Contains(body, want) {
 				t.Errorf("%s should state the current license status (missing %q)", name, want)
 			}
@@ -3995,7 +3991,7 @@ func TestLicenseStatusIsConsistent(t *testing.T) {
 			}
 		}
 		if strings.Contains(body, strings.Join([]string{"open-source", "edition"}, " ")) {
-			t.Errorf("%s must use \"open core\" instead of edition ambiguity", name)
+			t.Errorf("%s must say \"source-available\" instead of edition ambiguity", name)
 		}
 	}
 	sdkPackage := read(t, "../clients/sdk/typescript/package.json")
@@ -4051,12 +4047,11 @@ func TestOpenAPISpecIsAdvertised(t *testing.T) {
 }
 
 // TestPQCAlgorithmsDisclosed (R4.7, PACKAGING-007): the docs disclose trstctl's
-// real post-quantum posture and it matches code placement. The licensed ee/
-// boundary provides ML-DSA, ML-KEM, hybrid signing, and SLH-DSA / SPHINCS+
-// signing (FIPS 205, via CIRCL). The MPL core must not be treated as the PQC
-// implementation boundary.
+// real post-quantum posture and it matches code placement: internal/pqc (part
+// of the core since 2026-09-20) provides ML-DSA, ML-KEM, hybrid signing, and
+// SLH-DSA / SPHINCS+ signing (FIPS 205, via CIRCL).
 func TestPQCAlgorithmsDisclosed(t *testing.T) {
-	// Code reality: ML-DSA / ML-KEM / hybrid schemes exist under ee/.
+	// Code reality: ML-DSA / ML-KEM / hybrid schemes exist under internal/pqc.
 	pqc := read(t, "../internal/pqc/pqc.go")
 	for _, want := range []string{"MLDSA", "MLKEM", "HybridEd25519Dilithium3"} {
 		if !strings.Contains(pqc, want) {

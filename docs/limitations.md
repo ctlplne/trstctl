@@ -5,9 +5,10 @@ running binary serves today versus what is built and tested as library code but
 not yet wired into the served product, and which surfaces are explicitly Phase 2.
 Maturity is separate from edition gates: Community self-host includes the core
 control plane; Enterprise and Provider capabilities activate by an offline signed
-license behind the `ee/` boundary. trstctl is MPL-2.0 open core under `LICENSE`;
-Enterprise, Provider, PQC, and other license-gated features are proprietary
-material under `ee/LICENSE`.
+license behind the `ee/` boundary. trstctl's core is source-available under `LICENSE`
+(BUSL-1.1, converting to MPL-2.0 four years after each release); Enterprise,
+Provider and other license-gated features are proprietary material under
+`ee/LICENSE`, while PQC and the patent-pending families ship in the core.
 
 If a capability matters to your evaluation, check this page before relying on it.
 
@@ -176,7 +177,7 @@ statusless.
 
 | Page | Served state | Why it has no `F*` row |
 |---|---|---|
-| docs/features/agent-delegation.md | Conditional | The Enterprise `agent-delegation` license feature. `attachAgentDelegation` in `cmd/trstctl/ee_attach.go` attaches the `/api/v1/agent-delegation/*` routes and the `agentid.issue-chain-bound` outbox worker only when the license carries that feature, and the signer refuses a chain-bound mint until the operator provisions the root-anchor, reachability-verdict, and attestor trust floors under the signer key store. |
+| docs/features/agent-delegation.md | Conditional | Part of the core since 2026-09-20. `attachAgentDelegation` in `cmd/trstctl/attach_families.go` attaches the `/api/v1/agent-delegation/*` routes and the `agentid.issue-chain-bound` outbox worker in every build, and the signer refuses a chain-bound mint until the operator provisions the root-anchor, reachability-verdict, and attestor trust floors under the signer key store. |
 | docs/features/client-sdks.md | Served | The generated clients under `clients/sdk/` track the served OpenAPI 3.1 contract; they package the REST API rather than adding a capability of their own. |
 
 ## Census proof modes
@@ -1053,9 +1054,7 @@ never live in the API process. What you can do end to end against the running bi
   cryptographic bill of materials scanner against TLS endpoints and host config
   files, records `cbom.asset.observed` events, and projects tenant-scoped
   `crypto_assets`. `GET /api/v1/cbom/assets` returns the inventory plus
-  migration targets and `migration_progress`. The MPL core names only
-  edition-neutral transition targets; with the Enterprise PQC feature
-  licensed, the targets are the concrete FIPS 203/204/205 algorithms and
+  migration targets and `migration_progress`. With PQC in the core, the targets are the concrete FIPS 203/204/205 algorithms and
   `migration_progress` counts which assets are already post-quantum-ready.
 - Credential-compromise incident execution: when the Enterprise `remediation`
   feature is licensed, the old `POST /api/v1/incidents/executions` single-identity

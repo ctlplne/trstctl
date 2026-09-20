@@ -4,9 +4,10 @@ package cli
 
 // Commands for API routes that only a licensed server serves.
 //
-// Why this is a separate file. PACKAGING-007 keeps PQC out of the MPL core so
-// the open-core boundary is real: a Community build must not carry the
-// proprietary migration engine. The CLI is a thin HTTP client — these entries
+// Why this is a separate file. These routes are mounted by attach seams rather
+// than the static route table (PQC migration attaches in every build since
+// 2026-09-20; the others still by license), and the per-file rule that keeps
+// command.go feature-neutral is worth keeping. The CLI is a thin HTTP client — these entries
 // are route strings and help text, not an implementation, and the same request
 // can be made with curl against the same server. But the rule is enforced
 // per-file, so naming these routes inside command.go would have exempted that

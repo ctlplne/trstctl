@@ -3,7 +3,7 @@
 // Package orchestrator runs idempotent PCAS succession jobs. A job mints a
 // successor through the signer, then appends the succession record and a
 // transactional-outbox publish intent in the SAME database transaction (PCAS-claim-6 /
-// INV-4), so publication is exactly-once under retries. It reuses the MPL core
+// INV-4), so publication is exactly-once under retries. It reuses the core
 // store, its RLS-scoped transaction, and the core outbox table; it forks none of
 // them (AN-6).
 package orchestrator

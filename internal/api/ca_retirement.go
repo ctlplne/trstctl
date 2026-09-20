@@ -57,7 +57,7 @@ type RetirementChecklist struct {
 
 // RetirementChecklistSource is the licensed seam that answers the checklist.
 //
-// An interface rather than a direct call because internal/api is MPL core and
+// An interface rather than a direct call because internal/api is core and
 // may never import ee/ (AN-9). Nil means the licensed feature is not attached,
 // and the route then refuses rather than reporting an empty checklist — an
 // unlicensed deployment showing "0 outstanding dependents" would read as

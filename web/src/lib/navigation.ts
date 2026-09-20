@@ -355,7 +355,7 @@ export function moduleLabelKey(moduleId: string): MessageKey | undefined {
 }
 
 /** S-B5 (DA-26 point-of-use upsell): the commercial feature each module needs
- * to be fully usable, if any. trstctl's five modules are all MPL-core, so this
+ * to be fully usable, if any. trstctl's five modules are all core, so this
  * map is EMPTY today — no module ever renders as a whole locked upsell row.
  * Edition gating in trstctl is per-sub-feature, quarantined to Platform →
  * Editions (S-A3). The seam exists so a future fully-commercial module (e.g. a

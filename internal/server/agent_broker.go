@@ -185,7 +185,7 @@ func (s *Server) IssueBrokerAgentIdentity(ctx context.Context, tenantID, idempot
 
 // BrokerTaskEnvelopeGate verifies an AGID-05 task envelope as a precondition of
 // broker issuance and returns the digest the credential should bind. It is the
-// feature-neutral seam: the MPL core names it and enforces when it must be
+// feature-neutral seam: the core names it and enforces when it must be
 // consulted, while what a valid envelope IS lives entirely in the edition
 // (internal/agentid/taskenv + the delegation gate's requester trust store).
 type BrokerTaskEnvelopeGate func(ctx context.Context, tenantID string, envelope []byte, now time.Time) (digest []byte, err error)

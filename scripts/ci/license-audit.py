@@ -5,7 +5,7 @@
 What it does, in one breath: resolve every Go module actually linked into the
 shipped commands, find each one's license file, classify it, and fail if a
 strong-copyleft license (AGPL/GPL/SSPL and friends) is linked into a binary we
-distribute under MPL-2.0 open core, or if a module ships no license text at
+distribute under the BUSL-1.1 core, or if a module ships no license text at
 all.
 
 Why it is not `grep -i gpl`: MPL-2.0's own Exhibit B names the GNU GPL as a
@@ -65,7 +65,7 @@ LICENSE_TITLES = [
     ("EPL", r"Eclipse Public License"),
 ]
 
-# Linking any of these into a distributed MPL-2.0 binary is the contamination
+# Linking any of these into a distributed BUSL-1.1 binary is the contamination
 # diligence hunts for.
 DENIED = {"AGPL-3.0", "GPL", "LGPL", "SSPL", "CDDL", "EPL"}
 

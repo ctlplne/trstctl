@@ -201,7 +201,7 @@ receipt lists the host-archive eval path, Docker Compose eval path, Kubernetes/H
 path, and external-datastore production path; supported host archives
 (`linux-amd64`, `linux-arm64v8`, `darwin-arm64v8`); the embedded-PostgreSQL runtime
 pin; release gates such as `make lint test`, embedded-Postgres scan receipts,
-OpenAPI/CLI route parity, and the architecture linter; and the open-core guard that
+OpenAPI/CLI route parity, and the architecture linter; and the editions guard that
 offline license verification plus audit/export stay in core.
 
 The CAP-MODEL-03 receipt (Air-gapped / on-prem + data residency): the same served
@@ -283,7 +283,7 @@ boots the same binary composition used by production tests (PostgreSQL, NATS Jet
 and the separate signer process) and proves the Provider license gate, tenant projection,
 event metadata, and idempotent replay.
 
-The public packaging boundary has three tiers — Free (self-hosted MPL core),
+The public packaging boundary has three tiers — Free (self-hosted BUSL-1.1 core),
 Enterprise (the commercial `ee/` set, per control-plane deployment), and
 Provider/MSP, which inherits Enterprise, adds provider-plane operation, and
 grants managed-service and resale rights with dedicated-deployment flexibility.

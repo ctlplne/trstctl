@@ -836,7 +836,7 @@ jobs:
         run: make vuln
 
       # D9: the OSS license audit runs beside the vulnerability scan, so
-      # copyleft contamination of the distributed MPL-2.0 binaries is caught
+      # copyleft contamination of the distributed BUSL-1.1 binaries is caught
       # by CI rather than by an acquirer's diligence. It now covers BOTH
       # dependency trees: the Go audit reads what is linked into the shipped
       # binaries, and the npm audit reads the console's runtime closure from

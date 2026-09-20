@@ -14,7 +14,7 @@ func TestAUD56PublishesCompletePricingAndEnvironmentEntitlement(t *testing.T) {
 		"$15,000", "$30,000", "$12,000", "$72,000",
 		"1 production", "3 non-production", "no production SLA",
 		"no per-connector", "no per-protocol", "60-day", "5%", "30-day grace",
-		"read-only", "MPL core keeps running",
+		"read-only", "core keeps running",
 	} {
 		if !strings.Contains(strings.ToLower(pricing), strings.ToLower(want)) {
 			t.Errorf("pricing.md does not publish %q", want)

@@ -220,18 +220,19 @@ algorithm is therefore a one-place change, and every backend must pass a conform
 harness (`ConformBackend`) that signs a probe, verifies it, and confirms a wrong message
 and a tampered signature both fail.
 
-In the MPL core, profile selection is served for classical RSA, ECDSA, and Ed25519.
+Profile selection is served for classical RSA, ECDSA, and Ed25519 and, with PQC in the
+core since 2026-09-20, for the post-quantum and hybrid labels.
 Operators create profile versions with `POST /api/v1/profiles` or `trstctl-cli profiles
 create -f profile.json`; the API validates every `allowed_key_algorithms` value through
 `internal/crypto` before emitting a `profile.created` event, and unknown labels fail
 closed.
 
-All post-quantum algorithms and post-quantum issuance/signing paths are proprietary EE
-features. That includes ML-DSA (FIPS 204), ML-KEM (FIPS 203), SLH-DSA (FIPS 205), hybrid
-certificate/key types, and PQC signer-held keys. They plug into the same crypto and
-signer interfaces from `ee/`, so the MPL core stays buildable without them and never
-imports `ee/`. The core campaign tracker described next records work and evidence; it
-does not contain an algorithm implementation or fleet executor.
+All post-quantum algorithms and issuance/signing paths — ML-DSA (FIPS 204), ML-KEM
+(FIPS 203), SLH-DSA (FIPS 205), hybrid certificate/key types, and PQC signer-held keys —
+are part of the core (`internal/pqc`, `internal/pqcruntime`) and attach in every build
+through `cmd/trstctl/attach_families.go`. They plug into the crypto and signer
+interfaces behind the AN-3 boundary. The core campaign tracker described next records
+work and evidence; the fleet executor (`internal/pqcmigration`) attaches beside it.
 
 ### Core migration campaigns
 
@@ -265,29 +266,29 @@ The canonical read and evidence routes are `GET /api/v1/graph/crypto-readiness` 
 rows, owners, actions, evidence references, recommendations, and coverage limitation
 as CSV and NDJSON, with an audit-key JWS and public JWKS for offline verification.
 
-The edition boundary is explicit: the core response says automated fleet execution is
-unavailable while keeping all tracking and proof actions live. The licensed engine may
-execute a campaign across a fleet, but it is an optional executor—not a prerequisite
-for a useful core campaign.
+Automated fleet execution is an optional executor, not a prerequisite for a useful
+campaign: the tracker records work and evidence on its own, and the executor
+(`internal/pqcmigration`, attached in every build) runs re-issuance with rollback when
+an operator starts a migration.
 
 ### PQC migration orchestration (F57)
 
 Knowing *where* your weak crypto is (the [CBOM](observability-and-risk.md)) is half the
 battle; the other half is *fixing* it without a manual project. PQC migration is served
-when the Enterprise/PQC license attaches the proprietary EE package: the orchestrator
+in every build (`internal/pqcmigration`): the orchestrator
 consumes the CBOM read model, finds quantum-vulnerable certificate-key assets, and queues
 re-issuance through the outbox toward the licensed target.
 
-The licensed EE API attaches `POST /api/v1/pqc/migrations` and
-`POST /api/v1/pqc/migrations/{run_id}/rollback`. Those routes are not part of the MPL core OpenAPI
-golden. There is no MPL-core CLI command for licensed fleet execution or rollback; the core
-`pqc campaigns` commands record operator work and never call these licensed routes. Completion and rollback
+The migration API attaches `POST /api/v1/pqc/migrations` and
+`POST /api/v1/pqc/migrations/{run_id}/rollback` through the attach seam, so those routes
+are not part of the static OpenAPI golden; `trstctl-cli pqc migrations start|rollback`
+drives them, while the `pqc campaigns` commands record operator work and never call them. Completion and rollback
 project through the event log into `crypto_assets`, so posture dashboards and
 `migration_progress` stay derived from replayable state, not hand-edited tables.
 
-**Execution status:** served when the Enterprise/PQC license attaches `internal/pqcmigration`, for CBOM
-certificate-key assets through ACME hybrid transition re-issuance with rollback. The MPL
-core exposes CBOM posture, classical profile selection, and migration campaign
+**Execution status:** served in every build through `internal/pqcmigration`, for CBOM
+certificate-key assets through ACME hybrid transition re-issuance with rollback. The core
+also exposes CBOM posture, profile selection, and migration campaign
 tracking/proof, but not PQC algorithms, issuance, or automated fleet execution.
 
 ### Offline operator rehearsal
@@ -367,10 +368,9 @@ from proprietary EE.
   successors without the timestamp can still repeat. This change covers the served
   identity scheduler and its plan, not the separate fixed-threshold
   `lifecycle.Manager.RenewExpiring` library method.
-- **PQC execution** is licensed EE scope. The MPL core exposes CBOM posture and the
-  useful standalone `pqc campaigns` API/CLI/UI, but not PQC algorithms or automated
-  fleet execution.
-- **Former PQC end-to-end residuals** are served under the Enterprise/PQC attach.
+- **PQC execution** is core scope since 2026-09-20: PQC algorithms, automated fleet
+  execution and the standalone `pqc campaigns` API/CLI/UI all attach in every build.
+- **Former PQC end-to-end residuals** are served in every build.
   Stock OpenSSL 3.5 enrolls and verifies a pure ML-DSA-65 subject leaf over EST; the
   stock SPIFFE Workload API receives a two-entry classical + ML-DSA-65 response; and CBOM
   TLS findings roll out TLS 1.3 plus `X25519MLKEM768` through a posture-capable connector

@@ -7,19 +7,17 @@ isolated signer verifies a delegation chain: a root principal delegates a
 narrow slice of authority, every hop must be no broader than its parent, and
 the signer checks the whole chain before any agent key is generated.
 
-This is a licensed Enterprise capability (the `agent-delegation` license
-feature) implemented under `ee/`. Its `/api/v1/agent-delegation/*` routes are
-attached only when the license is present and are not part of the MPL-core
-OpenAPI document. The free single-hop attested workload credential path
+Agent delegation is part of the core (`internal/agentid`, since 2026-09-20). Its
+`/api/v1/agent-delegation/*` routes attach in every build through
+`cmd/trstctl/attach_families.go` and are not part of the static OpenAPI document. The free single-hop attested workload credential path
 ([Workload identity](workload-identity.md), including the AI-agent broker at
 `POST /api/v1/broker/agent-identities`) is separate and unchanged.
 
 Served state: **Conditional** in the vocabulary
 [Current limitations](../limitations.md) defines — the served path exists in the
-running binary, but it is inert until the Enterprise license carries
-`agent-delegation` and the operator provisions the signer trust floors listed
-below. Until both hold, a chain-bound request is refused rather than issued
-unverified.
+running binary, but it is inert until the operator provisions the signer trust
+floors listed below. Until then, a chain-bound request is refused rather than
+issued unverified.
 
 ## Why it exists
 
@@ -114,8 +112,8 @@ GET  /api/v1/agent-delegation/revocations/evidence?directive_id=...
 
 ## Pitfalls & limits
 
-- Licensed and gated: without the `agent-delegation` license feature the
-  routes are not attached. This page describes the EE build, not MPL core.
+- Provisioning-gated: the routes attach in every build, but a chain-bound request
+  is refused until the signer trust floors above are provisioned.
 - The TTL ceiling is sub-hour by design; a request above it is refused, not
   clamped.
 - Root-anchor and attestor floors are operator-provisioned files — an absent

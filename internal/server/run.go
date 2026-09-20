@@ -55,7 +55,7 @@ import (
 	"trstctl.com/trstctl/internal/tenantseal"
 )
 
-// EditionAttach is the single open-core seam. The default cmd/trstctl build
+// EditionAttach is the single edition attach seam. The default cmd/trstctl build
 // passes the tagged attachEE implementation; the trstctl_core build passes the
 // no-op twin. S-E0 uses it only to prove the seam exists. Later edition cards
 // may mutate Deps here before Build wires the API and background workers.

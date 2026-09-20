@@ -484,7 +484,7 @@ ee-test: ## Run the ee/ unit tests with a coverage floor (TEST-EE-CI-001)
 	awk -v t="$$total" -v m=$(EE_COVERAGE_MIN) 'BEGIN { if (t+0 < m+0) exit 1 }' || \
 		{ echo "FAIL: ee/ coverage $$total% is below the required $(EE_COVERAGE_MIN)%"; exit 1; }
 
-editions-gate: ## Prove the open-core one-way valve and core-only build
+editions-gate: ## Prove the editions one-way valve and core-only build
 	@echo ">> editions import guard self-test"
 	@SELFTEST=1 ./scripts/check_editions_imports.sh
 	@echo ">> trstctl_core build"

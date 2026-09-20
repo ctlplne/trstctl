@@ -126,7 +126,7 @@ type Config struct {
 	AgentChannel AgentChannel `json:"agent_channel"`
 }
 
-// License configures the offline open-core license file. Empty means Community.
+// License configures the offline license file. Empty means Community.
 type License struct {
 	File         string `json:"file,omitempty"`
 	DeploymentID string `json:"deployment_id,omitempty"`

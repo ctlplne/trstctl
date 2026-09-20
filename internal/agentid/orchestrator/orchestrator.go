@@ -36,7 +36,7 @@
 // issuing an unverified credential. The reachability, cascade, executor, terminal, and
 // evidence mechanisms all run for real against the live store/log/outbox the deps provide.
 //
-// It reuses the MPL core store, its RLS-scoped transaction, the core event log, and the
+// It reuses the core store, its RLS-scoped transaction, the core event log, and the
 // core outbox table; it forks none of them (AN-6). It holds no issuance key material; the
 // per-job/aggregate evidence signer is a control-plane software signer (AN-3), distinct
 // from the isolated AN-4 signer.

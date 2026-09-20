@@ -69,7 +69,7 @@ func TestServedPlatformDistributionCAPMODEL01(t *testing.T) {
 		t.Fatalf("distribution posture missing buyer-facing lineage or run modes: %+v", got)
 	}
 	if !got.OfflineLicenseVerifier || !got.CoreAuditAndExport {
-		t.Fatalf("open-core posture must keep offline license verification and audit/export in core: %+v", got)
+		t.Fatalf("distribution posture must keep offline license verification and audit/export in core: %+v", got)
 	}
 	requirePlatformRunMode(t, got.RunModes, "host-archive-eval", "bundled", "embedded")
 	requirePlatformRunMode(t, got.RunModes, "external-production", "external", "external")

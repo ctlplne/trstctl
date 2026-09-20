@@ -1277,10 +1277,9 @@ transaction as that history row.
 
 ## License
 
-trstctl ships as a single open-core binary. Enterprise-tier features (managed keys,
-PCAS, HA support, FIPS artifact posture, remediation, PQC, governance, agent
-delegation, reconciliation, and verifiable decommission — the full Enterprise row in
-[Editions](editions.md)) unlock through an offline, no-phone-home license check: the
+trstctl ships as a single binary. Enterprise-tier features (managed keys, HA
+support, FIPS artifact posture, remediation, and governance — the full Enterprise row
+in [Editions](editions.md)) unlock through an offline, no-phone-home license check: the
 file is verified locally against public keys baked into the binary at release time.
 No configured file means Community edition; a corrupt or untrusted file fails startup
 loudly; an expired file still loads and walks a grace ladder so licensed read paths

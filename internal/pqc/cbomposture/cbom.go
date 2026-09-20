@@ -9,7 +9,7 @@ import (
 	pqc "trstctl.com/trstctl/internal/pqc"
 )
 
-// CBOM licensed posture: the MPL core inventories cryptography but deliberately
+// CBOM licensed posture: the core inventories cryptography but deliberately
 // names no licensed algorithm, so its migration targets are edition-neutral
 // placeholders and its classifier treats post-quantum families as unknown.
 // These two resolvers are installed through cbom.InstallLicensedPosture by the

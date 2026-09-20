@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 
-// Package license implements trstctl's offline open-core edition checks.
+// Package license implements trstctl's offline edition checks.
 //
 // The package deliberately lives in core so "no phone-home" licensing is
 // auditable: a configured license file is verified locally against public keys

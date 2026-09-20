@@ -1,6 +1,8 @@
 # Plan and license
 
-trstctl is an MPL-2.0 open-core Machine Identity Security Control Plane. The
+trstctl is a source-available Machine Identity Security Control Plane: the core is
+BUSL-1.1, converting to MPL-2.0 four years after each release, and the commercial
+editions are proprietary. The
 product line keeps core credential issuance, enrollment,
 rotation primitives, protocol interoperability, audit/export, PostgreSQL RLS
 tenant isolation, and the offline license verifier in Free. Enterprise adds the
@@ -90,9 +92,10 @@ pins the lab's local identity provider for provider-operator sign-in (see
 | Primary billing unit | None | Per control-plane deployment | Negotiated managed-customer band |
 | Core protocols | ACME, EST, SCEP, CMP, SPIFFE, SSH CA, TSA | Included | Included |
 | Tenant isolation | PostgreSQL RLS and event spine | Included | Included; shared multi-tenant control plane is the normal shape |
-| Enterprise features | Not included | FIPS artifact posture, remediation, PQC, HA support, BYOK, governance, PCAS, agent delegation, reconciliation, and VDEC | All Enterprise features |
+| Patent-pending families and PQC | Included: PCAS, agent delegation, reconciliation, VDEC, and post-quantum cryptography attach in every build | Included | Included |
+| Enterprise features | Not included | FIPS artifact posture, remediation, HA support, BYOK, and governance | All Enterprise features |
 | Provider operations | Not included | Not included | Provider plane, metering, white label, and siloed isolation |
-| Product motion and commercial `ee/` rights | Self-hosted core under MPL-2.0 | Self-hosted commercial feature set | Self-host, managed service, and resale of the commercial feature set |
+| Product motion and commercial `ee/` rights | Self-hosted core under BUSL-1.1 | Self-hosted commercial feature set | Self-host, managed service, and resale of the commercial feature set |
 | Deployment flexibility | Customer operated | Customer operated | Shared control plane or dedicated customer deployments |
 | Pricing | No license fee | $15,000 Standard or $30,000 Plus annual reference list | $12,000 / $30,000 / $72,000 annual wholesale reference bands; 250+ negotiated |
 | Environment entitlement | Community deployments are unmetered | 1 production + 3 signed non-production deployment slots | Same bundle per licensed Provider control plane |

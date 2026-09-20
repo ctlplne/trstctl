@@ -20,7 +20,7 @@ transaction and a worker performs it later. Tenant isolation is PostgreSQL
 row-level security, not application `if` statements. All cryptography enters
 through one package (`internal/crypto`) and private keys live in a **separate
 signing process** the control plane can call but never inspect. Commercial code
-lives under `ee/` behind an offline license check applied at exactly three
+lives under `ee/` behind an offline license check applied at exactly two
 tagged attach seams. Every one of those sentences is enforced by a test or a
 linter, which is why the invariants have survived.
 
@@ -40,7 +40,7 @@ symptom until an incident. The analyzers:
 | `eventsource` | AN-2 | a served mutation writing the read model directly |
 | `cryptoagility` | PQC-00 | a runtime plugin/provider registry growing inside crypto |
 | `netexec` | SEC-005 | a new HTTP/exec surface bypassing the SSRF-safe client |
-| `licenseboundary` | AN-9 / PACKAGING-007 | SPDX drift, a core→`ee/` import, or PQC code in MPL core |
+| `licenseboundary` | AN-9 / PACKAGING-007 | SPDX drift or a core→`ee/` import |
 
 Run it standalone (`go run ./tools/trstctllint ./...`) or as a vettool, which
 is what `make lint` does. **There is deliberately no per-line suppression** —
@@ -81,12 +81,15 @@ sometimes legitimate (a scheduler enumerating tenants), and those are marked
 with a `//trstctl:system-query` comment explaining why; the linter honors the
 marker, so the marker is where the review attention belongs.
 
-**The three attach seams** — `cmd/trstctl/ee_attach.go`,
-`cmd/trstctl-signer/ee_attach.go`, `cmd/trstctl-agent/cosign_attach.go`. These
-are the *only* files where core may reference `ee/`, each with a
-`//go:build !trstctl_core` tag and a `*_core.go` twin. License checks belong
-here, one block per feature — never scattered `lic.Has()` calls in handlers.
-The core-only build must link zero `ee/` packages; that is a test, not a hope.
+**The two attach seams** — `cmd/trstctl/ee_attach.go` and
+`cmd/trstctl-signer/ee_attach.go`. These are the *only* files where core may
+reference `ee/`, each with a `//go:build !trstctl_core` tag and a `*_core.go`
+twin. License checks belong here, one block per feature — never scattered
+`lic.Has()` calls in handlers. The core families (PCAS, AGID, XREC, VDEC, PQC)
+are not licensed: they attach in every build through the untagged
+`cmd/*/attach_families.go` files and `cmd/trstctl-agent/cosign_attach.go`,
+which import nothing from `ee/`. The core-only build must link zero `ee/`
+packages; that is a test, not a hope.
 
 ## The gate map
 

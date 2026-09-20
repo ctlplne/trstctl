@@ -5,7 +5,7 @@
 // party verifies offline with PCAS-07), and record a signed relying-party
 // capability acknowledgement (an nhi.rp.ack the PCAS-10 quorum counts). It attaches
 // through the feature-neutral api.Option route seam (the internal/pqcmigration precedent);
-// no PCAS route, handler, or DTO lives in MPL core. Every mutation flows through the
+// no PCAS route, handler, or DTO lives in the static API package. Every mutation flows through the
 // shared idempotency path (api.Mutate), so a replayed Idempotency-Key returns the
 // original result (PCAS-claim-6).
 package api
