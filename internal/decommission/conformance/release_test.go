@@ -1,0 +1,425 @@
+// SPDX-License-Identifier: BUSL-1.1
+
+package conformance
+
+import (
+	"os"
+	"os/exec"
+	"path/filepath"
+	"reflect"
+	"regexp"
+	"strings"
+	"testing"
+)
+
+var vdecPackageDirs = []string{"internal/decommission"}
+
+// TestEdition_CoreBuildLinksVDECAndNoEE: VDEC is part of the core since
+// 2026-09-20, so the trstctl_core build of cmd/trstctl must link it — and must
+// still link zero ee/ packages.
+func TestEdition_CoreBuildLinksVDECAndNoEE(t *testing.T) {
+	goBin := filepath.Join(goRoot(t), "bin", "go")
+	cmd := exec.Command(goBin, "list", "-tags", "trstctl_core", "-deps", "trstctl.com/trstctl/cmd/trstctl") // #nosec G204 -- goBin is derived from runtime.GOROOT and every argument is fixed (CWE-78).
+	cmd.Dir = moduleRoot(t)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("go list (core build graph): %v\n%s", err, out)
+	}
+	linked := false
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "trstctl.com/trstctl/ee/") {
+			t.Fatalf("core-only build links an ee/ package: %q", line)
+		}
+		if line == "trstctl.com/trstctl/internal/decommission" {
+			linked = true
+		}
+	}
+	if !linked {
+		t.Fatal("core-only build does not link internal/decommission; VDEC must attach in every build")
+	}
+}
+
+func TestEdition_AllVDECPackagesAreCore(t *testing.T) {
+	root := moduleRoot(t)
+	for _, d := range vdecPackageDirs {
+		if !strings.HasPrefix(d, "internal/") {
+			t.Fatalf("VDEC package tree %q is not under internal/", d)
+		}
+		dir := filepath.Join(root, d)
+		err := filepath.WalkDir(dir, func(path string, de os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if de.IsDir() || !strings.HasSuffix(path, ".go") {
+				return nil
+			}
+			b, err := readWalkedUnder(dir, path)
+			if err != nil {
+				return err
+			}
+			if !hasBUSLSPDXBeforePackage(string(b)) {
+				t.Fatalf("VDEC file %s: missing BUSL-1.1 SPDX header before package declaration", path)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walk %s: %v", d, err)
+		}
+	}
+}
+
+func TestZeroRemoval_BasicKeyDestructionIntact(t *testing.T) {
+	root := moduleRoot(t)
+	required := map[string][]string{
+		"internal/crypto/secret/buffer.go": {
+			"func (b *Buffer) Destroy()",
+			"func Wipe(b []byte)",
+			"runtime.KeepAlive(b)",
+		},
+		"internal/rotation/rotation.go": {
+			"Retire(ctx context.Context, key, oldRef string) error",
+		},
+		"internal/rotation/rotators.go": {
+			"func (r *BackendRotator) Retire",
+			"secret.Wipe(",
+		},
+		"internal/lifecycle/lifecycle.go": {
+			"func (m *Manager) Revoke(",
+			"func (m *Manager) Rotate(",
+		},
+	}
+	for rel, needles := range required {
+		b, err := readRelUnder(root, rel)
+		if err != nil {
+			t.Fatalf("read zero-removal file %s: %v", rel, err)
+		}
+		text := string(b)
+		if strings.Contains(text, "trstctl.com/trstctl/internal/decommission") ||
+			strings.Contains(text, "lic.Has(") {
+			t.Fatalf("free zero-removal substrate %s is gated or imports VDEC", rel)
+		}
+		for _, needle := range needles {
+			if !strings.Contains(text, needle) {
+				t.Fatalf("free zero-removal substrate %s no longer contains %q", rel, needle)
+			}
+		}
+	}
+}
+
+func TestConformance_PublishedDestructionRecordVectors(t *testing.T) {
+	if os.Getenv("UPDATE_VDEC_VECTORS") == "1" {
+		writeVector(t)
+	}
+	for _, v := range loadVectors(t) {
+		if v.Version != 1 || v.Vector.Version != 1 || v.Vector.Domain == "" || v.Vector.Name == "" {
+			t.Fatalf("vector metadata = %+v, want versioned named destruction-record vector", v.Vector)
+		}
+		rec, err := decodePublishedRecord(v)
+		if err != nil {
+			t.Fatalf("%s: decode published record: %v", v.Vector.Name, err)
+		}
+		if got, want := sha(v.Vector.EncodedRecord), v.Vector.EncodedRecordDigest; !same(got, want) {
+			t.Fatalf("%s: encoded record digest %x, want %x", v.Vector.Name, got, want)
+		}
+		if got, err := differentialCommitmentDigest(rec); err != nil {
+			t.Fatalf("%s: differential commitment digest: %v", v.Vector.Name, err)
+		} else if !same(got, rec.CommitmentDigest) {
+			t.Fatalf("%s: differential commitment digest %x != record %x", v.Vector.Name, got, rec.CommitmentDigest)
+		}
+		if err := verifyVector(v); err != nil {
+			t.Fatalf("%s: verify vector: %v", v.Vector.Name, err)
+		}
+
+		tampered := v.Request
+		tampered.Record.Signature = append([]byte{0}, tampered.Record.Signature...)
+		if _, err := verifyRequest(tampered); err == nil {
+			t.Fatalf("%s: tampered signature verified", v.Vector.Name)
+		}
+	}
+}
+
+func TestConformance_GoWASMVerifierParity(t *testing.T) {
+	for _, v := range loadVectors(t) {
+		goVerdict, err := verifyRequest(v.Request)
+		if err != nil {
+			t.Fatalf("%s: Go verifier rejected vector: %v", v.Vector.Name, err)
+		}
+		wasmVerdict, err := wasmVerifyRequest(v.Request)
+		if err != nil {
+			t.Fatalf("%s: WASM verifier rejected vector: %v", v.Vector.Name, err)
+		}
+		if !reflect.DeepEqual(goVerdict, wasmVerdict) {
+			t.Fatalf("%s: Go/WASM verdict mismatch:\nGo:   %+v\nWASM: %+v", v.Vector.Name, goVerdict, wasmVerdict)
+		}
+	}
+}
+
+func TestConformance_FuzzSeedCorpusPresent(t *testing.T) {
+	root := moduleRoot(t)
+	for _, corpus := range []string{
+		"internal/decommission/conformance/testdata/fuzz/FuzzVDECRecordDecode/empty",
+		"internal/decommission/conformance/testdata/fuzz/FuzzVDECRecordDecode/not_json",
+		"internal/decommission/conformance/testdata/fuzz/FuzzVDECVerifyRequestJSON/empty_object",
+		"internal/decommission/conformance/testdata/fuzz/FuzzVDECDepstateEventDecode/registered",
+	} {
+		if st, err := os.Stat(filepath.Join(root, corpus)); err != nil || st.Size() == 0 {
+			t.Fatalf("missing committed VDEC fuzz seed corpus %s: size=%d err=%v", corpus, sizeOf(st), err)
+		}
+	}
+	tests := mustReadAllGoTests(t, filepath.Join(root, "internal/decommission/conformance"))
+	for _, fn := range []string{"FuzzVDECRecordDecode", "FuzzVDECVerifyRequestJSON", "FuzzVDECDepstateEventDecode"} {
+		if !regexp.MustCompile(`func\s+` + fn + `\s*\(`).MatchString(tests) {
+			t.Fatalf("missing VDEC fuzz target %s", fn)
+		}
+	}
+}
+
+func TestConformance_TraceabilityMatrixAllClaimsProven(t *testing.T) {
+	// VDEC-TRACE-001. This assertion used to read a hand-edited manifest that said
+	// every claim was "proven" -- the artifact deciding the question was the artifact
+	// a human edited, so the test was true by construction and carried no information
+	// about the code. Worse, it preferred an out-of-repo TRACEABILITY-MATRIX.md when
+	// one existed, so it silently changed oracles between a developer machine and CI.
+	//
+	// It now cross-checks against ee/docs/claim-traceability.md, which is GENERATED
+	// from the VDEC-claim-N citations in ee/ source and kept byte-fresh by
+	// `make claim-traceability-check`. A claim counts as proven only when the
+	// generated table carries a row for it with both an implementation and a test.
+	root := moduleRoot(t)
+	table, err := readRelUnder(root, "ee/docs/claim-traceability.md")
+	if err != nil {
+		t.Fatalf("VDEC-TRACE-001: generated claim-traceability table unreadable: %v", err)
+	}
+
+	section := ""
+	for _, part := range strings.Split(string(table), "\n## ") {
+		if strings.HasPrefix(part, "VDEC") {
+			section = part
+			break
+		}
+	}
+	if section == "" {
+		t.Fatal("VDEC-TRACE-001: the generated table has no VDEC section; either the family lost every citation or the table format changed")
+	}
+
+	// Columns may carry SEVERAL comma-separated paths, so match the cells rather
+	// than assuming one backticked path each. A claim counts as proven only when the
+	// implementation cell AND the test cell each name at least one file.
+	row := regexp.MustCompile(`(?m)^\| ([0-9]+) \| ([^|]*) \| ([^|]*) \|`)
+	hasPath := regexp.MustCompile("`[^`]+`")
+	proven := map[string]bool{}
+	for _, mm := range row.FindAllStringSubmatch(section, -1) {
+		if hasPath.MatchString(mm[2]) && hasPath.MatchString(mm[3]) {
+			proven[mm[1]] = true
+		}
+	}
+
+	var missing []string
+	for _, claim := range claimIDs() {
+		if !proven[claim] {
+			missing = append(missing, claim)
+		}
+	}
+	if len(missing) > 0 {
+		t.Fatalf("VDEC-TRACE-001: %d VDEC claim(s) have no generated row carrying BOTH an implementation and a test: %s. "+
+			"Cite them from the ee/ code that practises them and regenerate with make claim-traceability-check -- "+
+			"do not record them as proven by hand.", len(missing), strings.Join(missing, ", "))
+	}
+}
+
+func TestConformance_AllInvariantGuardsPresent(t *testing.T) {
+	if got := len(canonicalInvariantTests()); got != canonicalInvariantTestCount {
+		t.Fatalf("canonical invariant guard list has %d entries, want %d: this list is a ratchet and must not shrink", got, canonicalInvariantTestCount)
+	}
+	root := moduleRoot(t)
+	tests := mustReadAllGoTests(t, filepath.Join(root, "internal/decommission"))
+	tests += mustReadAllGoTests(t, filepath.Join(root, "internal/signing"))
+	for _, name := range canonicalInvariantTests() {
+		if !regexp.MustCompile(`func\s+` + regexp.QuoteMeta(name) + `\s*\(`).MatchString(tests) {
+			t.Fatalf("missing canonical invariant guard test %s", name)
+		}
+	}
+}
+
+// readRelUnder reads rel -- interpreted relative to dir -- through a directory
+// handle scoped to dir. These conformance gates decide whether a release is
+// allowed to ship, so the bytes they judge must come from inside the tree being
+// audited: os.Root resolves every path component at the syscall layer and
+// refuses a ".." component or a symlink that leaves dir, which a plain
+// os.ReadFile of a walked path would silently follow.
+func readRelUnder(dir, rel string) ([]byte, error) {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = root.Close() }()
+	return root.ReadFile(rel)
+}
+
+// readWalkedUnder is readRelUnder for a path produced by filepath.WalkDir over
+// dir, which yields absolute paths.
+func readWalkedUnder(dir, path string) ([]byte, error) {
+	rel, err := filepath.Rel(dir, path)
+	if err != nil {
+		return nil, err
+	}
+	return readRelUnder(dir, rel)
+}
+
+func moduleRoot(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatal("go.mod not found above the test working directory")
+		}
+		dir = parent
+	}
+}
+
+func hasBUSLSPDXBeforePackage(s string) bool {
+	for _, line := range strings.Split(s, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "package ") {
+			return false
+		}
+		if trimmed == "// SPDX-License-Identifier: BUSL-1.1" {
+			return true
+		}
+	}
+	return false
+}
+
+func sizeOf(st os.FileInfo) int64 {
+	if st == nil {
+		return 0
+	}
+	return st.Size()
+}
+
+func mustReadAllGoTests(t *testing.T, root string) string {
+	t.Helper()
+	var b strings.Builder
+	err := filepath.WalkDir(root, func(path string, de os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if de.IsDir() || !strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		raw, err := readWalkedUnder(root, path)
+		if err != nil {
+			return err
+		}
+		b.Write(raw)
+		b.WriteByte('\n')
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("read tests under %s: %v", root, err)
+	}
+	return b.String()
+}
+
+func claimIDs() []string {
+	out := make([]string, 0, 24)
+	for i := 1; i <= 24; i++ {
+		out = append(out, strconvItoa(i))
+	}
+	return out
+}
+
+func strconvItoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	var buf [20]byte
+	i := len(buf)
+	for n > 0 {
+		i--
+		buf[i] = byte('0' + n%10)
+		n /= 10
+	}
+	return string(buf[i:])
+}
+
+// canonicalInvariantTestCount is a ratchet on canonicalInvariantTests: the list of
+// canonical VDEC invariant guards may grow but must never shrink, so a guard cannot
+// be quietly dropped while the release gate still reports green.
+const canonicalInvariantTestCount = 41
+
+func canonicalInvariantTests() []string {
+	return []string{
+		"TestGate_RefusesDestroyUntilAllDependentsReprotected",
+		"TestGate_SetDifferenceEmptyRequired",
+		"TestGate_VerifyBeforeDestroyOrdering",
+		"TestDepState_AssociatesAllDependentClasses",
+		"TestDepState_DeterministicReplayProjection",
+		"TestDepState_ReprotectionJobsGeneratedFromState",
+		"TestDepState_UnaccountedDependentBlocksDestroy",
+		"TestReprotect_ReencryptInCryptoBoundaryNoKeyBytes",
+		"TestReprotect_PlaintextZeroizedAfter",
+		"TestReprotect_IdempotentAtMostOneCompletion",
+		"TestReprotect_StagedCutoverHealthRollback",
+		"TestReprotect_CredentialReissueSupersession",
+		"TestReprotect_LeasedCredentialRevocationResumes",
+		"TestRevokeFirst_FailClosedPermitsReprotectDecrypt",
+		"TestRevokeFirst_IntentsSameTxnAsStateChange",
+		"TestRevokeFirst_PerDestinationCompletionRequired",
+		"TestDestroy_ZeroizeLockedBuffers",
+		"TestDestroy_HSMDestroyReturnsAttestation",
+		"TestDestroy_HSMTerminalEpochRefusesAtOrBelow",
+		"TestDestroy_AttestationClassMinGate",
+		"TestRecord_CommitmentBindsClaim1Fields",
+		"TestRecord_MintedInsideSignerWithAttestationKey",
+		"TestRecord_ControlPlaneHoldsNoAttestationKey",
+		"TestRecord_BindsSuccessorAndAuditHead",
+		"TestRecord_CanonicalEncodingStable",
+		"TestVerify_OfflineFromRecordAndKeys",
+		"TestVerify_InclusionProofAgainstLogHead",
+		"TestVerify_FinalEpochNotBelowLastAccepted",
+		"TestVerify_SuccessionChainCorrespondence",
+		"TestVerify_RecomputeCompletionDigest",
+		"TestAggregate_TenantScopeRecordOfflineVerifiable",
+		"TestCampaign_KeyedToSuccessionEpoch",
+		"TestErasure_SanitizationClaimBound",
+		"TestRefusal_SignedArtifactNamesUnaccountedDependent",
+		"TestQuorum_RequiredAndBound",
+		"TestCeremony_BundleVerifiedAndReplayed",
+		"TestCeremony_FailedBundleRejectedNotReplayed",
+		"TestCountersign_DistinctAuthorityDoesNotAlterRecord",
+		"TestEdition_CoreBuildLinksVDECAndNoEE",
+		"TestEdition_AllVDECPackagesAreCore",
+		"TestZeroRemoval_BasicKeyDestructionIntact",
+	}
+}
+
+// goRoot returns the toolchain's GOROOT by asking the go command rather than
+// reading runtime.GOROOT(), which is deprecated since Go 1.24: it reports the
+// root used at BUILD time, which is meaningless once a test binary is copied to
+// another machine.
+//
+// It FAILS rather than skips when the toolchain cannot be located. This is a
+// conformance gate (pcas-no-skip-gate / vdec equivalent enforce exactly this): a
+// skipped edition check reports green while proving nothing about the boundary
+// it exists to police.
+func goRoot(t *testing.T) string {
+	t.Helper()
+	out, err := exec.Command("go", "env", "GOROOT").Output() // #nosec G204 -- fixed argv, no user input (CWE-78)
+	if err != nil {
+		t.Fatalf("go env GOROOT: %v", err)
+	}
+	root := strings.TrimSpace(string(out))
+	if root == "" {
+		t.Fatal("go env GOROOT is empty")
+	}
+	return root
+}

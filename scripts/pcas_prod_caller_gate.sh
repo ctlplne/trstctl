@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: LicenseRef-trstctl-EE
+# SPDX-License-Identifier: BUSL-1.1
 #
 # PCAS production-caller gate (INT-INV-1: "delivered != tested"), finalized at INT-23.
 #
@@ -8,13 +8,13 @@
 # makes that machine-checkable and BLOCKING:
 #
 #   REQUIRED  — every PCAS mechanism that claims delivered status. Each MUST have a
-#               non-test caller reachable from the shipped EE attach/API/outbox/background
+#               non-test caller reachable from the shipped attach/API/outbox/background
 #               wiring; a regression to test-only fails the gate.
 #
 # SCOPE (PCAS-INT-CALL, 2026-08-02): the REQUIRED array below is HAND-WRITTEN, so it can
 # only ever prove what someone remembered to add to it. The constructor-shaped half of
-# the family no longer depends on it: ee/succession/intgate ENUMERATES every exported
-# ee/succession constructor straight from the AST and applies the same non-test-caller
+# the family no longer depends on it: internal/succession/intgate ENUMERATES every exported
+# internal/succession constructor straight from the AST and applies the same non-test-caller
 # floor plus a seam tier and an RTA whole-program reachability tier, so a newly added
 # constructor cannot hide from the gate. This script is kept as the COMPLEMENT: it covers
 # the mechanism entry points that are NOT constructors (Mint, MintPairedThroughSigner,
@@ -48,19 +48,19 @@ echo
 
 # REQUIRED: "pattern|defining-file|label"
 REQUIRED=(
-  'NewProductionMinter(|ee/succession/signerwiring/wiring.go|signer minter attach (→ minter.New)'
-  'eesuccessionapi.NewAPIOptionsFactory(|ee/succession/api/api.go|request-succession API factory'
-  'eesuccessionorch.NewLicensedOutboxFactory(|ee/succession/orchestrator/serverfactory.go|succession outbox worker'
-  'recovery.Mint(|ee/succession/recovery/recovery.go|recovery mint worker'
-  'MintPairedThroughSigner(|ee/succession/kem/signer_mint.go|KEM-through-signer worker'
-  'monitor.New(|ee/succession/monitor/monitor.go|misissuance background monitor'
-  'IssueLeafCertificate(|ee/succession/issuer/x509leaf.go|issuer X.509 leaf API'
-  'IssueStapledLeaf(|ee/succession/staple/x509carriage.go|stapled X.509 leaf API'
-  'federation.Import(|ee/succession/federation/federation.go|federation import worker'
-  'NewMinterConstraint(|ee/succession/delegation/delegation.go|delegation minter constraint'
-  'SignEpochCheckpoint(|ee/succession/checkpoint.go|checkpoint background signer'
-  'BuildPostureReport(|ee/succession/report.go|signed posture API'
-  'retirement.New(|ee/succession/retirement/retirement.go|retirement quorum worker'
+  'NewProductionMinter(|internal/succession/signerwiring/wiring.go|signer minter attach (→ minter.New)'
+  'successionapi.NewAPIOptionsFactory(|internal/succession/api/api.go|request-succession API factory'
+  'successionorch.NewLicensedOutboxFactory(|internal/succession/orchestrator/serverfactory.go|succession outbox worker'
+  'recovery.Mint(|internal/succession/recovery/recovery.go|recovery mint worker'
+  'MintPairedThroughSigner(|internal/succession/kem/signer_mint.go|KEM-through-signer worker'
+  'monitor.New(|internal/succession/monitor/monitor.go|misissuance background monitor'
+  'IssueLeafCertificate(|internal/succession/issuer/x509leaf.go|issuer X.509 leaf API'
+  'IssueStapledLeaf(|internal/succession/staple/x509carriage.go|stapled X.509 leaf API'
+  'federation.Import(|internal/succession/federation/federation.go|federation import worker'
+  'NewMinterConstraint(|internal/succession/delegation/delegation.go|delegation minter constraint'
+  'SignEpochCheckpoint(|internal/succession/checkpoint.go|checkpoint background signer'
+  'BuildPostureReport(|internal/succession/report.go|signed posture API'
+  'retirement.New(|internal/succession/retirement/retirement.go|retirement quorum worker'
 )
 
 echo "-- REQUIRED (must be wired into a shipped binary) --"

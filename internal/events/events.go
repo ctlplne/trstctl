@@ -44,7 +44,7 @@ var ErrConflictingEventIdentity = errors.New("events: conflicting event identity
 const DefaultSchemaVersion = eventspec.DefaultSchemaVersion
 
 // Event is the immutable AN-2 event envelope. Its definition lives in
-// internal/eventspec so projection-only packages (e.g. ee/succession) can construct
+// internal/eventspec so projection-only packages (e.g. internal/succession) can construct
 // and read events without linking the embedded message bus (AN-4); this alias keeps
 // every events.Event reference working and is the identical type.
 type Event = eventspec.Event

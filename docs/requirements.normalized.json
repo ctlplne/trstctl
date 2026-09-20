@@ -619,7 +619,7 @@
       "requirement_text": "trstctl shall provide PQC migration orchestration.",
       "owner": "Lifecycle and PQC",
       "priority": "P2",
-      "acceptance_criteria": "ee/pqcmigration tests scan a CBOM RSA certificate-key estate, queue licensed ACME PQC re-issuance through the outbox, verify migration progress, and exercise rollback.",
+      "acceptance_criteria": "internal/pqcmigration tests scan a CBOM RSA certificate-key estate, queue licensed ACME PQC re-issuance through the outbox, verify migration progress, and exercise rollback.",
       "status": "partial",
       "served_state": "partial",
       "backend_status": "partial: served when licensed from ee/",

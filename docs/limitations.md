@@ -1246,7 +1246,7 @@ never live in the API process. What you can do end to end against the running bi
   anchoring at a known cadence, which is not served. A deployment without a TSA
   exports successfully and says in the payload that it is unanchored; that is a
   weaker claim, not an invalid one, and the export states which it is. Translog
-  inclusion proofs (`ee/translog`) are not wired into this path.
+  inclusion proofs (`internal/translog`) are not wired into this path.
 - Signed invoice evidence (L2): `GET /api/v1/provider/usage-evidence` (`trstctl
   usage evidence`, Platform console panel) serves a per-customer, per-period
   document that states its own completeness and carries THREE attestation
@@ -2856,7 +2856,7 @@ than sending an operator looking for a credential that was never there.
   rounds worker now survives a failed round (logged, retried next tick) instead
   of dying on the first transient error. The claim-1 acceptance is demonstrated
   end-to-end on the production assembly in
-  `ee/reconcile/conformance/storebacked_e2e_test.go`: seeded divergence, a real
+  `internal/reconcile/conformance/storebacked_e2e_test.go`: seeded divergence, a real
   scheduled round, a witness naming exactly the differing subset, offline
   verification from the recorded event alone, and remediation authorized only
   after in-signer plan verification. Boundaries, stated exactly: the vault,

@@ -5,7 +5,7 @@ package clusterfuzz
 import (
 	"testing"
 
-	"trstctl.com/trstctl/ee/agentid/delegation/carriage"
+	"trstctl.com/trstctl/internal/agentid/delegation/carriage"
 )
 
 // fail-closed: an error and no usable value is the acceptable outcome.

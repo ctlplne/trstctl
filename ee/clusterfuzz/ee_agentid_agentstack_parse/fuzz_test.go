@@ -6,7 +6,7 @@ import (
 	"bytes"
 	"testing"
 
-	"trstctl.com/trstctl/ee/agentid/agentstack"
+	"trstctl.com/trstctl/internal/agentid/agentstack"
 )
 
 func FuzzParse(f *testing.F) {

@@ -81,7 +81,6 @@ not this file.
 | `deploy/helm/helm_test.go:1495` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/helm/helm_test.go:1526` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/helm/helm_test.go:1528` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `ee/decommission/reprotect/credential_test.go:16` | NewCredentialID is public fixture metadata, not credential material (CWE-798). |
 | `ee/provider/aud58_test.go:173` | deterministic non-deployable test bearer exercises hashing/authentication (CWE-798). |
 | `ee/provider/aud59_test.go:24` | deterministic non-deployable test bearer (CWE-798). |
 | `ee/provider/aud60_test.go:16` | deterministic non-deployable test bearer (CWE-798). |
@@ -213,6 +212,7 @@ not this file.
 | `internal/connector/gcpcm/gcpcm_test.go:18` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/connector/kemp/kemp_test.go:65` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/connector/paloalto/paloalto_test.go:28` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
+| `internal/decommission/reprotect/credential_test.go:16` | NewCredentialID is public fixture metadata, not credential material (CWE-798). |
 | `internal/discovery/apikey/apikey_test.go:13` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
 | `internal/discovery/apikey/apikey_test.go:20` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
 | `internal/discovery/apikey/apikey_test.go:25` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
@@ -648,13 +648,13 @@ not this file.
 | `deploy/helm/airgap_bundle_test.go:163` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/ai_surface_placement_test.go:27` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/deferred_wipe_guard_test.go:45` | walking the repo's own tree (CWE-22) |
-| `docs/docs_test.go:2568` | test walks the repo's own checkout; no hostile symlink exposure (CWE-367) |
+| `docs/docs_test.go:2561` | test walks the repo's own checkout; no hostile symlink exposure (CWE-367) |
 | `docs/embedded_postgres_teardown_test.go:46` | walks this repository's own test sources (CWE-22) |
 | `docs/est_differential_test.go:190` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_completeness_test.go:261` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:876` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:939` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:4658` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:942` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:4661` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `internal/agent/discovery/filesystem.go:57` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/agent/discovery/privatekey.go:67` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
@@ -772,26 +772,14 @@ not this file.
 | `docs/lint_gate_test.go:39` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `docs/lint_supervision_test.go:19` | fixed supervision regression with owned scanner and child fixtures (CWE-78) |
 | `docs/vuln_gate_test.go:44` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `ee/agentid/delegation/signer_subprocess_test.go:144` | executable and argv are fixed; output is confined to TempDir (CWE-78). |
-| `ee/agentid/verify/wasm_parity_test.go:49` | executable and argv are fixed; output is confined to TempDir (CWE-78). |
-| `ee/agentid/verify/wasm_parity_test.go:59` | execShim is Go's fixed wasm_exec_node shim and wasmOut is this test's TempDir artifact (CWE-78). |
-| `ee/decommission/conformance/release_test.go:19` | goBin is derived from runtime.GOROOT and every argument is fixed (CWE-78). |
-| `ee/decommission/conformance/release_test.go:438` | fixed argv, no user input (CWE-78) |
-| `ee/kmip/independent_verifier_test.go:119` | python is LookPath-resolved and module is a fixed repository verifier path (CWE-78). |
-| `ee/pqc/pure_x509_openssl_test.go:129` | path is exec.LookPath("openssl") and arguments are fixed (CWE-78). |
-| `ee/pqc/pure_x509_openssl_test.go:139` | executable is the LookPath-resolved OpenSSL and test call sites supply fixed verbs plus TempDir paths (CWE-78). |
-| `ee/pqc/signer_served_test.go:88` | executable and argv are fixed; output is confined to TempDir (CWE-78). |
-| `ee/pqcruntime/spiffe_hybrid_test.go:81` | path is exec.LookPath("openssl") and arguments are fixed (CWE-78). |
-| `ee/pqcruntime/spiffe_hybrid_test.go:91` | executable is the LookPath-resolved OpenSSL and call sites supply fixed verbs plus TempDir paths (CWE-78). |
-| `ee/rpverify/verifier_test.go:380` | fixed argv, no user input (CWE-78) |
-| `ee/succession/conformance/edition_test.go:43` | goBin is derived from runtime.GOROOT and every argument is fixed (CWE-78). |
-| `ee/succession/conformance/edition_test.go:118` | fixed argv, no user input (CWE-78) |
-| `ee/succession/conformance/int20_fullstack_test.go:608` | executable/argv are fixed and ldflags contain only this test's base64 public key (CWE-78). |
 | `internal/agent/sshtrust/sshd_live_test.go:61` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/agent/sshtrust/sshd_live_test.go:153` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/agent/sshtrust/sshd_live_test.go:179` | live-sshd test harness validating its own config with the resolved sshd binary (CWE-78) |
 | `internal/agent/sshtrust/sshd_live_test.go:188` | HUPs the harness's own child sshd by pid (CWE-78) |
 | `internal/agent/sshtrust/sshd_live_test.go:240` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/agentid/delegation/signer_subprocess_test.go:144` | executable and argv are fixed; output is confined to TempDir (CWE-78). |
+| `internal/agentid/verify/wasm_parity_test.go:49` | executable and argv are fixed; output is confined to TempDir (CWE-78). |
+| `internal/agentid/verify/wasm_parity_test.go:59` | execShim is Go's fixed wasm_exec_node shim and wasmOut is this test's TempDir artifact (CWE-78). |
 | `internal/api/headerauth_guard_test.go:34` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/api/headerauth_guard_test.go:39` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/ca/shellca/shellca.go:120` | the shell-CA backend exists to run the operator's configured signing command (CWE-78) |
@@ -800,10 +788,18 @@ not this file.
 | `internal/crypto/kmswrap/external_kms.go:122` | operator-configured external KMS helper command (CWE-78) |
 | `internal/crypto/pfx/alias_test.go:88` | runs the locally installed JDK tool with fixed arguments (CWE-78). |
 | `internal/crypto/pfx/alias_test.go:117` | stock JDK import uses disposable test paths and a password file, never a shell or secret argv (CWE-78). |
+| `internal/decommission/conformance/release_test.go:22` | goBin is derived from runtime.GOROOT and every argument is fixed (CWE-78). |
+| `internal/decommission/conformance/release_test.go:416` | fixed argv, no user input (CWE-78) |
+| `internal/kmip/independent_verifier_test.go:119` | python is LookPath-resolved and module is a fixed repository verifier path (CWE-78). |
 | `internal/kms/pkcs11/softhsm_container_test.go:116` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/kms/tpm/swtpm_container_test.go:94` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/perf/live.go:735` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
 | `internal/perf/live.go:899` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
+| `internal/pqc/pure_x509_openssl_test.go:129` | path is exec.LookPath("openssl") and arguments are fixed (CWE-78). |
+| `internal/pqc/pure_x509_openssl_test.go:139` | executable is the LookPath-resolved OpenSSL and test call sites supply fixed verbs plus TempDir paths (CWE-78). |
+| `internal/pqc/signer_served_test.go:88` | executable and argv are fixed; output is confined to TempDir (CWE-78). |
+| `internal/pqcruntime/spiffe_hybrid_test.go:81` | path is exec.LookPath("openssl") and arguments are fixed (CWE-78). |
+| `internal/pqcruntime/spiffe_hybrid_test.go:91` | executable is the LookPath-resolved OpenSSL and call sites supply fixed verbs plus TempDir paths (CWE-78). |
 | `internal/projections/server_assembly_test.go:44` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/protocols/acme/certbot_client_test.go:240` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/protocols/cmp/conformance_test.go:116` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -816,6 +812,7 @@ not this file.
 | `internal/protocols/scep/sscep_client_test.go:74` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/protocols/ssh/krl_binary_test.go:193` | fixed reference tool and task-owned test files (CWE-78) |
 | `internal/protocols/ssh/ssh_test.go:66` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/rpverify/verifier_test.go:380` | fixed argv, no user input (CWE-78) |
 | `internal/secretscan/gitdiff.go:169` | fixed git/gitleaks binaries over the operator's own repository (CWE-78) |
 | `internal/secretscan/gitdiff_test.go:93` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/secretscan/gitleaks.go:218` | fixed git/gitleaks binaries over the operator's own repository (CWE-78) |
@@ -864,6 +861,9 @@ not this file.
 | `internal/signing/static_test.go:41` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/signing/supervisor.go:46` | spawns the repo's own signer binary; AN-4 child-process mode (CWE-78) |
 | `internal/signing/supervisor.go:235` | spawns the repo's own signer binary; AN-4 child-process mode (CWE-78) |
+| `internal/succession/conformance/edition_test.go:44` | goBin is derived from runtime.GOROOT and every argument is fixed (CWE-78). |
+| `internal/succession/conformance/edition_test.go:128` | fixed argv, no user input (CWE-78) |
+| `internal/succession/conformance/int20_fullstack_test.go:608` | executable/argv are fixed and ldflags contain only this test's base64 public key (CWE-78). |
 | `internal/terraformprovider/provider_tls_test.go:177` | fixed arguments to this test's own executable (CWE-78) |
 | `internal/testutil/openssltest/openssltest.go:97` | test-support helper running the system openssl found above; not linked into served binaries (CWE-78) |
 | `internal/tsa/http_test.go:48` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -888,10 +888,10 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1142` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:888` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/dodcensus/substrate_broker.go:222` | developer tool running fixed toolchain commands over the repo (CWE-78) |
-| `tools/pqclab/main.go:594` | developer tool running fixed toolchain commands over the repo (CWE-78) |
+| `tools/pqclab/main.go:344` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/trstctllint/repo_selftest_test.go:22` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `tools/trstctllint/repo_selftest_test.go:117` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `tools/trstctllint/repo_selftest_test.go:184` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `tools/trstctllint/repo_selftest_test.go:111` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `tools/trstctllint/repo_selftest_test.go:177` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 
 ### G301 — CWE-276 Incorrect default permissions (directory) (47 sites)
 
@@ -941,7 +941,7 @@ not this file.
 | `scripts/perf/cmd/soakgate/main.go:120` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `scripts/perf/cmd/spineburst/main.go:170` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `tools/dodcensus/main.go:1285` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
-| `tools/pqclab/main.go:795` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
+| `tools/pqclab/main.go:438` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `tools/trstctllint/eventsource/eventsource_test.go:98` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/trstctllint/idempotency/idempotency_test.go:198` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 
@@ -988,7 +988,7 @@ not this file.
 | Location | Reason |
 |---|---|
 | `clients/embedded/est_client_test.go:81` | test reads its own fixture/tempdir path (CWE-22) |
-| `cmd/trstctl-agent/cosign_attach.go:89` | operator-configured local path from the agent's own config (CWE-22) |
+| `cmd/trstctl-agent/cosign_attach.go:86` | operator-configured local path from the agent's own config (CWE-22) |
 | `cmd/trstctl-agent/edgeca.go:161` | operator-configured local path from the agent's own flags (CWE-22) |
 | `cmd/trstctl-agent/edgeca.go:185` | operator-configured local path from the agent's own flags (CWE-22) |
 | `cmd/trstctl-agent/edgeca.go:195` | operator-configured local handle path from the agent's own flags (CWE-22) |
@@ -1010,8 +1010,8 @@ not this file.
 | `cmd/trstctl/backup_cmd_test.go:64` | test reads its own fixture/tempdir path (CWE-22) |
 | `cmd/trstctl/backup_cmd_test.go:111` | test reads a fixed repository artifact (CWE-22) |
 | `cmd/trstctl/connector.go:207` | the operator explicitly names the public trust-bundle path (CWE-22) |
-| `cmd/trstctl/ee_attach.go:504` | operator-supplied path to their own IdP's JWKS (CWE-22) |
-| `cmd/trstctl/ee_attach.go:532` | operator-pinned local IdP metadata, validated as configuration. |
+| `cmd/trstctl/ee_attach.go:296` | operator-supplied path to their own IdP's JWKS (CWE-22) |
+| `cmd/trstctl/ee_attach.go:324` | operator-pinned local IdP metadata, validated as configuration. |
 | `deploy/demo/aud66_test.go:105` | fixed repository test path (CWE-22) |
 | `deploy/demo/demo_test.go:56` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/deploycheck_test.go:98` | test reads its own fixture/tempdir path (CWE-22) |
@@ -1059,8 +1059,8 @@ not this file.
 | `docs/operational_transfer_test.go:64` | test reads its own fixture/tempdir path (CWE-22) |
 | `docs/protect_guards_completeness_test.go:261` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:876` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:939` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:4658` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:942` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:4661` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/provenance/authorship_test.go:38` | fixed sibling path inside the package's own directory (CWE-22) |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `ee/billing/evidence_test.go:140` | test reads repo source files it names itself (CWE-22) |
@@ -1167,7 +1167,7 @@ not this file.
 | `internal/featureparity/feature_facet_coverage_test.go:140` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/featureparity/mcp_rest_coverage.go:53` | fixed repo-relative catalog path read by tools and tests (CWE-22) |
 | `internal/fsatomic/fsatomic.go:19` | the caller's own state directory (CWE-22) |
-| `internal/license/license.go:370` | operator-supplied license file path (CWE-22) |
+| `internal/license/license.go:351` | operator-supplied license file path (CWE-22) |
 | `internal/notify/response_buffer_guard_test.go:37` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/perf/smoke.go:173` | perf harness reading its own artifact path (CWE-22) |
 | `internal/pluginhost/containment_test.go:122` | test reads its own fixture/tempdir path (CWE-22) |
@@ -1357,14 +1357,14 @@ not this file.
 | `tools/dodcensus/secret_integrations_manifest_test.go:113` | test reads the exact committed substrate source (CWE-22) |
 | `tools/dodcensus/secret_integrations_manifest_test.go:145` | test reads the exact committed runtime proof source (CWE-22) |
 | `tools/featureparityreport/main.go:49` | explicit operator-selected local report output |
-| `tools/pqclab/main.go:233` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/pqclab/main.go:298` | developer tool reading the repo paths it is pointed at (CWE-22) |
-| `tools/pqclab/main_test.go:76` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/pqclab/main_test.go:80` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/pqclab/main.go:201` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/pqclab/main.go:266` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/pqclab/main_test.go:49` | test reads its own fixture/tempdir path (CWE-22) |
+| `tools/pqclab/main_test.go:53` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/trstctllint/docs_test.go:75` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/trstctllint/hotspot_test.go:205` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/trstctllint/hotspot_test.go:303` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/trstctllint/licenseboundary/licenseboundary.go:39` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/trstctllint/licenseboundary/licenseboundary.go:38` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/trstctllint/upsertarbiter/sites_dump_test.go:30` | test-only maintenance dump to an operator-chosen path (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter.go:287` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |

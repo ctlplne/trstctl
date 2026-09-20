@@ -9,10 +9,10 @@ Enterprise feature (`ee/`, `LicenseRef-trstctl-EE`); this document implements no
 ## Published vectors
 
 Versioned conformance vectors live under
-`ee/succession/conformance/testdata/`. `chain_vector.json` (schema `version: 1`) is a
+`internal/succession/conformance/testdata/`. `chain_vector.json` (schema `version: 1`) is a
 genesis-anchored succession chain of dual-signed records. A relying party is
 conformant if it reproduces the PASS/FAIL verdicts of the reference verifier
-(`ee/rpverify`) on every published vector.
+(`internal/rpverify`) on every published vector.
 
 Each vector carries the tenant-trust-root public key, the genesis record, the record
 chain, and the expected head epoch. Verification is **offline**: no algorithm
@@ -21,7 +21,7 @@ supplies the chain (independent claim 13).
 
 ## Differential conformance
 
-`TestConformance_ChainVector` verifies each vector with `ee/rpverify` **and** with an
+`TestConformance_ChainVector` verifies each vector with `internal/rpverify` **and** with an
 independent re-implementation of chain verification (`differentialVerify`), and
 requires the two to agree — on acceptance of a valid chain and on rejection of a
 tampered one. An external re-implementation should agree likewise.
@@ -45,5 +45,5 @@ relying-party verifier (HARNESS §1.6 decision, 2026-07-05).
 `TestE2E_Succession_OfflineVerify` mints a multi-epoch algorithm succession for a
 workload identity through the signer (each successor generated and used inside the
 custody boundary, epochs enforced by the signer floor), assembles the trust-root-
-anchored chain, and verifies it offline via `ee/rpverify` — the full method of
+anchored chain, and verifies it offline via `internal/rpverify` — the full method of
 independent claim 1.

@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	eepqc "trstctl.com/trstctl/ee/pqc"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/compliance"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/graph"
+	eepqc "trstctl.com/trstctl/internal/pqc"
 )
 
 func cbom() *graph.Graph {

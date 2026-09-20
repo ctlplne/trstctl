@@ -15,8 +15,6 @@ import (
 	"sort"
 	"strings"
 	"testing"
-
-	"trstctl.com/trstctl/internal/license"
 )
 
 func TestLicensedStagesAreTheThreeShippedPQCProofs(t *testing.T) {
@@ -31,31 +29,6 @@ func TestLicensedStagesAreTheThreeShippedPQCProofs(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("licensed stages = %v, want %v", got, want)
-	}
-}
-
-func TestCoreEditionReceiptRequiresCommunityPQCOff(t *testing.T) {
-	info := license.Community().Info()
-	receipt, err := coreEditionReceipt(info)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if receipt.Status != statusUnavailableByEdition {
-		t.Fatalf("status = %q, want %q", receipt.Status, statusUnavailableByEdition)
-	}
-	if receipt.MutationAttempted {
-		t.Fatal("core receipt claims the unavailable proprietary mutation was attempted")
-	}
-
-	info.Features = append([]license.FeatureInfo(nil), info.Features...)
-	for i := range info.Features {
-		if info.Features[i].Name == license.FeaturePQC {
-			info.Features[i].Licensed = true
-			info.Features[i].Mode = license.ModeEnabled
-		}
-	}
-	if _, err := coreEditionReceipt(info); err == nil {
-		t.Fatal("licensed PQC was accepted as an honest Community unavailable state")
 	}
 }
 
@@ -224,7 +197,6 @@ func TestValidatedCommandBoundaryAllowsOnlyReviewedArgv(t *testing.T) {
 	root := t.TempDir()
 	repo := t.TempDir()
 	report := filepath.Join(root, "report.json")
-	control := filepath.Join(root, "trstctl")
 	cases := []struct {
 		name    string
 		request commandRequest
@@ -242,23 +214,6 @@ func TestValidatedCommandBoundaryAllowsOnlyReviewedArgv(t *testing.T) {
 			},
 			want: []string{"go", "run", "./tools/dodcensus", "--repo", ".", "--manifest", "tools/dodcensus/manifest.json", "--out", report, "--capability", licensedStages[0].ID},
 		},
-		{
-			name: "core build",
-			request: commandRequest{
-				kind: commandCoreBuild, repo: repo, root: root, output: control, pkg: "./cmd/trstctl",
-			},
-			want: []string{"go", "build", "-trimpath", "-tags", "trstctl_core", "-o", control, "./cmd/trstctl"},
-		},
-		{
-			name:    "core token",
-			request: commandRequest{kind: commandCoreToken, root: root, binary: control},
-			want:    []string{control, "token", "create", "--tenant", coreTenantID, "--tenant-name", "PQC core operator rehearsal", "--subject", "pqc-core-rehearsal", "--scopes", "risk:read"},
-		},
-		{
-			name:    "core serve",
-			request: commandRequest{kind: commandCoreServe, root: root, binary: control},
-			want:    []string{control},
-		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -273,13 +228,9 @@ func TestValidatedCommandBoundaryAllowsOnlyReviewedArgv(t *testing.T) {
 	}
 
 	for name, request := range map[string]commandRequest{
-		"unknown kind":      {kind: 255},
-		"unknown stage":     {kind: commandDODCensus, repo: repo, root: root, output: report, stage: "pqc_end_to_end.unreviewed"},
-		"report escape":     {kind: commandDODCensus, repo: repo, root: root, output: filepath.Join(root, "..", "report.json"), stage: licensedStages[0].ID},
-		"unknown package":   {kind: commandCoreBuild, repo: repo, root: root, output: control, pkg: "./cmd/unreviewed"},
-		"build escape":      {kind: commandCoreBuild, repo: repo, root: root, output: filepath.Join(root, "..", "trstctl"), pkg: "./cmd/trstctl"},
-		"ambient token bin": {kind: commandCoreToken, root: root, binary: "trstctl"},
-		"ambient serve bin": {kind: commandCoreServe, root: root, binary: "trstctl"},
+		"unknown kind":  {kind: 255},
+		"unknown stage": {kind: commandDODCensus, repo: repo, root: root, output: report, stage: "pqc_end_to_end.unreviewed"},
+		"report escape": {kind: commandDODCensus, repo: repo, root: root, output: filepath.Join(root, "..", "report.json"), stage: licensedStages[0].ID},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := newValidatedCommand(context.Background(), request); err == nil {

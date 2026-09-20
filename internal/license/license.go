@@ -38,7 +38,6 @@ const (
 	// internal/crypto, not branch on Manager.Has(FeatureFIPS).
 	FeatureFIPS            Feature = "fips"
 	FeatureRemediation     Feature = "remediation"
-	FeaturePQC             Feature = "pqc"
 	FeatureHASupport       Feature = "ha_support"
 	FeatureBYOK            Feature = "byok"
 	FeatureGovernance      Feature = "governance"
@@ -46,31 +45,13 @@ const (
 	FeatureMetering        Feature = "metering"
 	FeatureWhiteLabel      Feature = "white_label"
 	FeatureSiloedIsolation Feature = "siloed_isolation"
-	// FeaturePCAS gates Proof-Carrying Algorithm Succession (the ee/succession
-	// family). It is the single AN-9 activation point for PCAS; attachEE has
-	// exactly one lic.Has(FeaturePCAS) block.
-	FeaturePCAS Feature = "pcas"
-	// FeatureAgentDelegation gates the Agent Identity Lifecycle Enforcement family
-	// (the ee/agentid delegation-chain broker/gate). It is the single AN-9 activation
-	// point for AGID; attachEE has exactly one lic.Has(FeatureAgentDelegation) block
-	// that attaches the chain-bound broker issuance precondition. The free single-hop
-	// attested-ephemeral badge is never gated by this feature (INV-A10 zero removal).
-	FeatureAgentDelegation Feature = "agent-delegation"
-	// FeatureReconcile gates XREC cross-plane trust reconciliation. It is the single
-	// AN-9 activation point for XREC control-plane scheduling; attachEE has exactly
-	// one lic.Has(FeatureReconcile) block that mounts the EE round scheduler and later
-	// cards extend that block instead of scattering checks.
-	FeatureReconcile Feature = "reconcile"
-	// FeatureVerifiableDecommission gates VDEC verifiable decommissioning. It is the
-	// single AN-9 activation point for the ee/decommission family; attachEE has exactly
-	// one lic.Has(FeatureVerifiableDecommission) block, and later VDEC cards extend that
-	// block rather than scattering tier checks.
-	FeatureVerifiableDecommission Feature = "vdec"
 )
 
-// tierFeatures is the only feature-to-tier table in the codebase.
+// tierFeatures is the only feature-to-tier table in the codebase. The core
+// families (PCAS, AGID, XREC, VDEC) and PQC are not features: they ship in the
+// BSL core and attach in every build (cmd/trstctl/attach_families.go).
 var tierFeatures = map[Tier][]Feature{
-	TierEnterprise: {FeatureFIPS, FeatureRemediation, FeaturePQC, FeatureHASupport, FeatureBYOK, FeatureGovernance, FeaturePCAS, FeatureAgentDelegation, FeatureReconcile, FeatureVerifiableDecommission},
+	TierEnterprise: {FeatureFIPS, FeatureRemediation, FeatureHASupport, FeatureBYOK, FeatureGovernance},
 	TierProvider:   {FeatureProviderPlane, FeatureMetering, FeatureWhiteLabel, FeatureSiloedIsolation},
 }
 
@@ -95,8 +76,8 @@ const (
 	RightResale         Right = "resale"
 )
 
-// tierRights is the single tier-to-use-rights table. The MPL core remains usable
-// under its repository license; these rows describe the supported product motion
+// tierRights is the single tier-to-use-rights table. The core remains usable
+// under its repository license (BUSL-1.1); these rows describe the supported product motion
 // and the commercial ee/ rights carried by a signed tier. Provider adds the right
 // to operate the commercial feature set for customers and resell that service.
 var tierRights = map[Tier][]Right{

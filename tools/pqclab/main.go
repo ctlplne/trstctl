@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 // Command pqclab runs the operator-facing, offline PQC rehearsal and archives
-// evidence that is safe to hand to an auditor. Licensed mode delegates each
-// stage to the exact shipped-binary DoD proof. Core mode launches a real
-// trstctl_core binary and proves that Community honestly reports PQC execution
-// as unavailable without attempting the proprietary mutation.
+// evidence that is safe to hand to an auditor. Each stage delegates to the
+// exact shipped-binary DoD proof. (The former core mode proved a trstctl_core
+// build reported PQC as unavailable; PQC ships in the core since 2026-09-20, so
+// there is no such build to rehearse.)
 package main
 
 import (
@@ -16,9 +16,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
-	"net"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,11 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"trstctl.com/trstctl/internal/config"
 	internalcrypto "trstctl.com/trstctl/internal/crypto"
-	"trstctl.com/trstctl/internal/crypto/secret"
-	"trstctl.com/trstctl/internal/license"
-	"trstctl.com/trstctl/internal/netsec"
 )
 
 const (
@@ -39,7 +32,6 @@ const (
 	archiveSchemaVersion       = 1
 	statusServed               = "served"
 	statusUnavailableByEdition = "unavailable_by_edition"
-	coreTenantID               = "d0d00000-0000-4000-8000-000000000607"
 )
 
 type licensedStage struct {
@@ -111,18 +103,6 @@ type stageReceipt struct {
 	MutationAttempted *bool  `json:"mutation_attempted,omitempty"`
 }
 
-type coreReport struct {
-	SchemaVersion      int          `json:"schema_version"`
-	Status             string       `json:"status"`
-	Edition            license.Info `json:"edition"`
-	CBOMMethod         string       `json:"cbom_method"`
-	CBOMPath           string       `json:"cbom_path"`
-	CBOMStatusCode     int          `json:"cbom_status_code"`
-	MutationAttempted  bool         `json:"mutation_attempted"`
-	ExecutionAvailable bool         `json:"execution_available"`
-	Explanation        string       `json:"explanation"`
-}
-
 type options struct {
 	mode string
 	out  string
@@ -134,9 +114,6 @@ type commandKind uint8
 const (
 	commandGitRevision commandKind = iota + 1
 	commandDODCensus
-	commandCoreBuild
-	commandCoreToken
-	commandCoreServe
 )
 
 type commandRequest struct {
@@ -145,8 +122,6 @@ type commandRequest struct {
 	root   string
 	output string
 	stage  string
-	pkg    string
-	binary string
 }
 
 func main() {
@@ -159,15 +134,15 @@ func main() {
 func run(ctx context.Context, args []string) error {
 	flags := flag.NewFlagSet("pqc-operator-lab", flag.ContinueOnError)
 	flags.SetOutput(os.Stderr)
-	mode := flags.String("mode", "licensed", "rehearsal mode: licensed or core")
+	mode := flags.String("mode", "licensed", "rehearsal mode (licensed is the only mode)")
 	out := flags.String("out", "", "receipt archive path")
 	repo := flags.String("repo", ".", "trstctl repository root")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	opts := options{mode: strings.TrimSpace(*mode), out: strings.TrimSpace(*out), repo: strings.TrimSpace(*repo)}
-	if opts.mode != "licensed" && opts.mode != "core" {
-		return fmt.Errorf("--mode must be licensed or core, got %q", opts.mode)
+	if opts.mode != "licensed" {
+		return fmt.Errorf("--mode must be licensed, got %q", opts.mode)
 	}
 	if opts.out == "" {
 		opts.out = filepath.Join(opts.repo, "dist", "pqc-operator-lab-"+opts.mode+".tar.gz")
@@ -188,14 +163,7 @@ func run(ctx context.Context, args []string) error {
 		return err
 	}
 
-	var files map[string][]byte
-	var receipts []stageReceipt
-	switch opts.mode {
-	case "licensed":
-		files, receipts, err = runLicensed(ctx, opts.repo, entries)
-	case "core":
-		files, receipts, err = runCore(ctx, opts.repo)
-	}
+	files, receipts, err := runLicensed(ctx, opts.repo, entries)
 	if err != nil {
 		return err
 	}
@@ -339,198 +307,6 @@ func requireServedReport(raw []byte, id string) error {
 	return nil
 }
 
-func runCore(ctx context.Context, repo string) (map[string][]byte, []stageReceipt, error) {
-	if err := requireLocalPostgresArtifact(); err != nil {
-		return nil, nil, err
-	}
-	root, cleanup, err := privateWorkspace("/tmp", "trstctl-pqc-operator-core-")
-	if err != nil {
-		return nil, nil, err
-	}
-	defer cleanup()
-
-	controlBin := filepath.Join(root, "trstctl")
-	signerBin := filepath.Join(root, "trstctl-signer")
-	for _, build := range []struct {
-		output string
-		pkg    string
-	}{
-		{controlBin, "./cmd/trstctl"},
-		{signerBin, "./cmd/trstctl-signer"},
-	} {
-		fmt.Printf(">> PQC core rehearsal: build %s with trstctl_core\n", build.pkg)
-		cmd, err := newValidatedCommand(ctx, commandRequest{
-			kind: commandCoreBuild, repo: repo, root: root, output: build.output, pkg: build.pkg,
-		})
-		if err != nil {
-			return nil, nil, err
-		}
-		cmd.Env = offlineGoEnv(os.Environ())
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			return nil, nil, fmt.Errorf("build core artifact %s: %w", build.pkg, err)
-		}
-	}
-
-	serverPort, err := freePort()
-	if err != nil {
-		return nil, nil, err
-	}
-	postgresPort, err := freePort()
-	if err != nil {
-		return nil, nil, err
-	}
-	cfg := config.Default()
-	cfg.Server.Addr = fmt.Sprintf("127.0.0.1:%d", serverPort)
-	cfg.Server.TLS.Mode = config.TLSDisabled
-	cfg.Server.TLS.AllowPlaintextDev = true
-	cfg.Postgres.DataDir = filepath.Join(root, "postgres")
-	cfg.Postgres.Port = postgresPort
-	cfg.NATS.StoreDir = filepath.Join(root, "nats")
-	cfg.AirGap.Enabled = true
-	cfg.Telemetry.Enabled = false
-	cfg.RateLimit.Enabled = false
-	cfg.Audit.SigningKeyFile = filepath.Join(root, "audit-signing-key.pem")
-	cfg.Secrets.KEKFile = filepath.Join(root, "secrets-kek.bin")
-	cfg.Signer.Socket = filepath.Join(root, "signer.sock")
-	cfg.Signer.KeyStoreDir = filepath.Join(root, "signer-keys")
-	cfg.Signer.AuthSecretFile = filepath.Join(root, "signer-auth.bin")
-	cfg.Signer.AllowInsecureDevNonLinux = true
-	cfg.CA.CertFile = filepath.Join(root, "issuing-ca.pem")
-	configRaw, err := json.Marshal(cfg)
-	if err != nil {
-		return nil, nil, fmt.Errorf("encode core rehearsal config: %w", err)
-	}
-	configPath := filepath.Join(root, "config.json")
-	if err := os.WriteFile(configPath, configRaw, 0o600); err != nil {
-		return nil, nil, fmt.Errorf("write core rehearsal config: %w", err)
-	}
-	env := runtimeEnv(configPath)
-
-	var tokenStdout bytes.Buffer
-	var tokenStderr bytes.Buffer
-	tokenCmd, err := newValidatedCommand(ctx, commandRequest{
-		kind: commandCoreToken, root: root, binary: controlBin,
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-	tokenCmd.Env = env
-	tokenCmd.Stdout = &tokenStdout
-	tokenCmd.Stderr = &tokenStderr
-	fmt.Println(">> PQC core rehearsal: bootstrap an isolated Community tenant")
-	if err := tokenCmd.Run(); err != nil {
-		return nil, nil, fmt.Errorf("bootstrap Community token: %w; stderr=%s", err, strings.TrimSpace(tokenStderr.String()))
-	}
-	token := bytes.TrimSpace(tokenStdout.Bytes())
-	defer secret.Wipe(token)
-	if len(token) == 0 {
-		return nil, nil, errors.New("bootstrap Community token was empty")
-	}
-
-	var serverLog bytes.Buffer
-	serverCmd, err := newValidatedCommand(ctx, commandRequest{
-		kind: commandCoreServe, root: root, binary: controlBin,
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-	serverCmd.Env = env
-	serverCmd.Stdout = &serverLog
-	serverCmd.Stderr = &serverLog
-	if err := serverCmd.Start(); err != nil {
-		return nil, nil, fmt.Errorf("start core control plane: %w", err)
-	}
-	serverProcess := &runningProcess{cmd: serverCmd, done: make(chan struct{})}
-	go func() {
-		serverProcess.err = serverCmd.Wait()
-		close(serverProcess.done)
-	}()
-	defer serverProcess.stop()
-
-	baseURL := fmt.Sprintf("http://127.0.0.1:%d", serverPort)
-	client := netsec.InsecureLoopbackClient(10 * time.Second)
-	fmt.Println(">> PQC core rehearsal: inspect served edition and CBOM read paths")
-	if err := waitReady(ctx, client, baseURL, serverProcess); err != nil {
-		return nil, nil, fmt.Errorf("%w; control-plane log=%s", err, sanitizeLog(serverLog.String()))
-	}
-	var editions license.Info
-	if _, err := getJSON(ctx, client, baseURL+"/v1/editions", nil, &editions); err != nil {
-		return nil, nil, err
-	}
-	report, err := coreEditionReceipt(editions)
-	if err != nil {
-		return nil, nil, err
-	}
-	auth := []byte("Bearer ")
-	auth = append(auth, token...)
-	defer secret.Wipe(auth)
-	status, err := getJSON(ctx, client, baseURL+"/api/v1/cbom/assets", auth, nil)
-	if err != nil {
-		return nil, nil, err
-	}
-	if status != http.StatusOK {
-		return nil, nil, fmt.Errorf("community CBOM read status = %d, want %d", status, http.StatusOK)
-	}
-	report.CBOMStatusCode = status
-
-	reportRaw := mustJSON(report)
-	notAttempted := false
-	receipt := stageReceipt{
-		ID:                "pqc_core.community_honest_degradation",
-		Status:            statusUnavailableByEdition,
-		Expectation:       "Community serves CBOM visibility, names PQC execution as unavailable by edition, and never calls the proprietary mutation",
-		Method:            http.MethodGet,
-		Path:              "/v1/editions + /api/v1/cbom/assets",
-		SubstrateID:       "bundled-postgres-embedded-nats-core-binaries",
-		ReportSHA256:      checksumHex(reportRaw),
-		MutationAttempted: &notAttempted,
-	}
-	files := map[string][]byte{
-		"reports/core-community.json":     reportRaw,
-		"transcripts/core-community.json": mustJSON(receipt),
-	}
-	return files, []stageReceipt{receipt}, nil
-}
-
-func coreEditionReceipt(info license.Info) (coreReport, error) {
-	if info.Tier != license.TierCommunity || info.State != license.StateCommunity {
-		return coreReport{}, fmt.Errorf("core artifact reported tier/state %q/%q, want community/community", info.Tier, info.State)
-	}
-	var found bool
-	for _, feature := range info.Features {
-		if feature.Name != license.FeaturePQC {
-			continue
-		}
-		found = true
-		if feature.Licensed || feature.Mode != license.ModeOff {
-			return coreReport{}, fmt.Errorf("community PQC feature reported licensed=%t mode=%q, want false/off", feature.Licensed, feature.Mode)
-		}
-	}
-	if !found {
-		return coreReport{}, errors.New("community editions response omitted the PQC feature")
-	}
-	return coreReport{
-		SchemaVersion:      archiveSchemaVersion,
-		Status:             statusUnavailableByEdition,
-		Edition:            info,
-		CBOMMethod:         http.MethodGet,
-		CBOMPath:           "/api/v1/cbom/assets",
-		MutationAttempted:  false,
-		ExecutionAvailable: false,
-		Explanation:        "PQC execution is unavailable in Community; CBOM visibility remains served and the rehearsal does not call an unserved proprietary mutation.",
-	}, nil
-}
-
-func requireLocalPostgresArtifact() error {
-	binary := filepath.Join(os.TempDir(), "trstctl-pg-bin", "bin", "postgres")
-	if info, err := os.Stat(binary); err != nil || info.IsDir() {
-		return fmt.Errorf("offline rehearsal requires the locally supplied bundled PostgreSQL artifact at %s; warm it through the verified supply-chain gate before disconnecting", binary)
-	}
-	return nil
-}
-
 // newValidatedCommand is the only process-creation boundary in pqclab. Callers
 // choose a closed command kind; this function owns every executable and flag.
 // Dynamic paths must remain inside the private workspace that this invocation
@@ -562,32 +338,6 @@ func newValidatedCommand(ctx context.Context, request commandRequest) (*exec.Cmd
 			"--out", request.output,
 			"--capability", request.stage,
 		}
-	case commandCoreBuild:
-		if request.pkg != "./cmd/trstctl" && request.pkg != "./cmd/trstctl-signer" {
-			return nil, fmt.Errorf("unreviewed core build package %q", request.pkg)
-		}
-		if !pathWithin(request.root, request.output) {
-			return nil, fmt.Errorf("core build output %q escapes private workspace %q", request.output, request.root)
-		}
-		name, dir = "go", request.repo
-		args = []string{"build", "-trimpath", "-tags", "trstctl_core", "-o", request.output, request.pkg}
-	case commandCoreToken:
-		if request.binary != filepath.Join(request.root, "trstctl") {
-			return nil, fmt.Errorf("core token command binary %q is not the private control-plane artifact", request.binary)
-		}
-		name, dir = request.binary, request.root
-		args = []string{
-			"token", "create",
-			"--tenant", coreTenantID,
-			"--tenant-name", "PQC core operator rehearsal",
-			"--subject", "pqc-core-rehearsal",
-			"--scopes", "risk:read",
-		}
-	case commandCoreServe:
-		if request.binary != filepath.Join(request.root, "trstctl") {
-			return nil, fmt.Errorf("core serve command binary %q is not the private control-plane artifact", request.binary)
-		}
-		name, dir = request.binary, request.root
 	default:
 		return nil, fmt.Errorf("unreviewed command kind %d", request.kind)
 	}
@@ -622,113 +372,6 @@ func privateWorkspace(parent, prefix string) (string, func(), error) {
 	return root, func() {
 		once.Do(func() { _ = os.RemoveAll(root) })
 	}, nil
-}
-
-func freePort() (int, error) {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return 0, fmt.Errorf("reserve loopback port: %w", err)
-	}
-	defer func() { _ = listener.Close() }()
-	return listener.Addr().(*net.TCPAddr).Port, nil
-}
-
-type runningProcess struct {
-	cmd  *exec.Cmd
-	done chan struct{}
-	err  error
-}
-
-func waitReady(ctx context.Context, client *http.Client, baseURL string, process *runningProcess) error {
-	deadline := time.NewTimer(2 * time.Minute)
-	defer deadline.Stop()
-	ticker := time.NewTicker(250 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/readyz", nil)
-		if err != nil {
-			return err
-		}
-		response, err := client.Do(req)
-		if err == nil {
-			_ = response.Body.Close()
-			if response.StatusCode >= 200 && response.StatusCode < 300 {
-				return nil
-			}
-		}
-		select {
-		case <-process.done:
-			return fmt.Errorf("core control plane exited before readiness: %w", process.err)
-		case <-deadline.C:
-			return errors.New("core control plane did not become ready within 2m")
-		case <-ticker.C:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-}
-
-func getJSON(ctx context.Context, client *http.Client, url string, authorization []byte, dst any) (int, error) {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return 0, fmt.Errorf("build GET %s: %w", url, err)
-	}
-	if len(authorization) > 0 {
-		request.Header.Set("Authorization", string(authorization))
-	}
-	response, err := client.Do(request)
-	if err != nil {
-		return 0, fmt.Errorf("GET %s: %w", url, err)
-	}
-	defer func() { _ = response.Body.Close() }()
-	raw, err := io.ReadAll(io.LimitReader(response.Body, 8<<20))
-	if err != nil {
-		return response.StatusCode, fmt.Errorf("read GET %s: %w", url, err)
-	}
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return response.StatusCode, fmt.Errorf("GET %s status=%d body=%s", url, response.StatusCode, sanitizeLog(string(raw)))
-	}
-	if dst != nil {
-		if err := json.Unmarshal(raw, dst); err != nil {
-			return response.StatusCode, fmt.Errorf("decode GET %s: %w", url, err)
-		}
-	}
-	return response.StatusCode, nil
-}
-
-func (process *runningProcess) stop() {
-	if process == nil || process.cmd == nil || process.cmd.Process == nil {
-		return
-	}
-	select {
-	case <-process.done:
-		return
-	default:
-	}
-	_ = process.cmd.Process.Signal(os.Interrupt)
-	select {
-	case <-process.done:
-		return
-	case <-time.After(30 * time.Second):
-		_ = process.cmd.Process.Kill()
-		<-process.done
-	}
-}
-
-func runtimeEnv(configPath string) []string {
-	env := make([]string, 0, len(os.Environ())+5)
-	for _, value := range os.Environ() {
-		if !strings.HasPrefix(value, "TRSTCTL_") {
-			env = append(env, value)
-		}
-	}
-	return append(env,
-		"TRSTCTL_CONFIG_FILE="+configPath,
-		"TRSTCTL_AIRGAP_ENABLED=true",
-		"GOPROXY=off",
-		"GOSUMDB=off",
-		"GOTOOLCHAIN=local",
-	)
 }
 
 func offlineGoEnv(base []string) []string {

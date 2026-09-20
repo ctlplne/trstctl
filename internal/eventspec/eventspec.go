@@ -3,7 +3,7 @@
 // Package eventspec holds the pure, dependency-light type surface of the AN-2
 // event log: the Event envelope, its Actor, and the default schema version. It
 // imports only the standard library — no NATS, no SQL — so packages that need only
-// to construct or read Event values (for example ee/succession's projection layer)
+// to construct or read Event values (for example internal/succession's projection layer)
 // can depend on it WITHOUT linking the embedded message bus. internal/events
 // aliases these types so every existing events.Event / events.Actor reference keeps
 // working, while the sacred signer's dependency closure (AN-4) stays free of

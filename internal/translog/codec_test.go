@@ -1,0 +1,80 @@
+// SPDX-License-Identifier: BUSL-1.1
+
+package translog
+
+import "testing"
+
+// The expected values below are hand-written two's-complement literals, NOT results
+// computed from the conversions under test. They pin the wire encoding the STH and
+// Proof signatures are taken over: if one of these bytes ever changes, every
+// previously issued signature stops verifying.
+
+func TestPutI64BE_Literals(t *testing.T) {
+	cases := []struct {
+		name string
+		in   int64
+		want [8]byte
+	}{
+		{"zero", 0, [8]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}},
+		{"one", 1, [8]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01}},
+		{"minus one", -1, [8]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}},
+		{"minus two", -2, [8]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe}},
+		{"byte boundary", 255, [8]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff}},
+		{"carry into second byte", 256, [8]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00}},
+		{"every byte distinct", 0x0102030405060708, [8]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}},
+		{"max int64", 9223372036854775807, [8]byte{0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}},
+		{"min int64", -9223372036854775808, [8]byte{0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}},
+		{"min int64 plus one", -9223372036854775807, [8]byte{0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01}},
+		{"unix nanos sample", 1700000000000000000, [8]byte{0x17, 0x97, 0x9c, 0xfe, 0x36, 0x2a, 0x00, 0x00}},
+	}
+	for _, tc := range cases {
+		var got [8]byte
+		putI64BE(&got, tc.in)
+		if got != tc.want {
+			t.Errorf("%s: putI64BE(%d) = % x, want % x", tc.name, tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestI64BE_Literals(t *testing.T) {
+	cases := []struct {
+		name string
+		in   [8]byte
+		want int64
+	}{
+		{"zero", [8]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, 0},
+		{"one", [8]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01}, 1},
+		{"byte boundary", [8]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff}, 255},
+		{"carry into second byte", [8]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00}, 256},
+		{"every byte distinct", [8]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}, 72623859790382856},
+		{"max int64", [8]byte{0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}, 9223372036854775807},
+		{"min int64", [8]byte{0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, -9223372036854775808},
+		{"min int64 plus one", [8]byte{0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01}, -9223372036854775807},
+		{"all ones is minus one", [8]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}, -1},
+		{"minus two", [8]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe}, -2},
+		{"unix nanos sample", [8]byte{0x17, 0x97, 0x9c, 0xfe, 0x36, 0x2a, 0x00, 0x00}, 1700000000000000000},
+	}
+	for _, tc := range cases {
+		if got := i64BE(tc.in); got != tc.want {
+			t.Errorf("%s: i64BE(% x) = %d, want %d", tc.name, tc.in, got, tc.want)
+		}
+	}
+}
+
+// TestPutI64BE_I64BE_RoundTrip pins the two helpers as exact inverses across the
+// boundaries, which is what makes EncodeProof/DecodeProof lossless for timestamps.
+func TestPutI64BE_I64BE_RoundTrip(t *testing.T) {
+	values := []int64{
+		0, 1, -1, 2, -2, 255, 256, -255, -256,
+		2147483647, -2147483648, 4294967296,
+		1700000000000000000, -1700000000000000000,
+		9223372036854775807, -9223372036854775808,
+	}
+	for _, v := range values {
+		var enc [8]byte
+		putI64BE(&enc, v)
+		if got := i64BE(enc); got != v {
+			t.Errorf("round trip %d: encoded % x, decoded %d", v, enc, got)
+		}
+	}
+}

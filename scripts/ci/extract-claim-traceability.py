@@ -47,7 +47,10 @@ from datetime import date
 
 # --- configuration ---------------------------------------------------------
 
-EE_ROOT = "ee"
+# Trees scanned for claim citations: the patent-family packages (moved from ee/ to
+# the BSL core on 2026-09-20) plus whatever still cites a claim under ee/.
+SCAN_ROOTS = ("internal/succession", "internal/rpverify", "internal/translog", "internal/pqcmigration",
+              "internal/agentid", "internal/reconcile", "internal/decommission", "ee")
 OUT_PATH = os.path.join("ee", "docs", "claim-traceability.md")
 
 # The one human-maintained input. Repo-relative POSIX form for prose, os-native for
@@ -66,9 +69,10 @@ PENDING_CELL = "_[counsel to supply]_"
 # Marker for a claim counsel has not yet reviewed.
 UNREVIEWED_CELL = "_[counsel]_"
 
-# Directory under ee/ -> patent family label. Extend as families are added.
+# Family package directory (its top-level name under internal/ or ee/) -> patent
+# family label. Extend as families are added.
 # The filed provisionals are PCAS, AGID, XREC, and VDEC — there is no PQCM
-# application. ee/pqcmigration cites the PCAS mechanisms (the claim-9
+# application. internal/pqcmigration cites the PCAS mechanisms (the claim-9
 # credential genus, the claim-23 policy_ref decision that PCAS-04/PCAS-05
 # carry and verify), so it maps to PCAS.
 FAMILY_BY_DIR = {
@@ -178,7 +182,7 @@ def family_for(path: str) -> str:
     return "UNKNOWN"
 
 
-def scan(root: str):
+def scan(roots) -> tuple:
     """Return (records, qualified_count, bare_count).
 
     records[(family, claim)] = {"impl": {paths}, "test": {paths}, "qualified": bool}
@@ -186,7 +190,7 @@ def scan(root: str):
     records = defaultdict(lambda: {"impl": set(), "test": set(), "qualified": False})
     n_qualified = n_bare = 0
 
-    for dirpath, _dirs, filenames in os.walk(root):
+    for dirpath, _dirs, filenames in (entry for root in roots for entry in os.walk(root)):
         for filename in sorted(filenames):
             if not filename.endswith(".go"):
                 continue
@@ -274,7 +278,7 @@ def render(records, found, n_qualified, n_bare, verif) -> str:
     w("")
     w("# Patent claim traceability")
     w("")
-    w("Every patent-claim citation in `ee/` Go source, grouped by family, with the")
+    w("Every patent-claim citation in the patent-family Go source (`internal/{succession,rpverify,translog,pqcmigration,agentid,reconcile,decommission}` and `ee/`), grouped by family, with the")
     w("implementing files and the tests that exercise them. Generated from source, so")
     w("it cannot drift from the code it describes.")
     w("")
@@ -329,7 +333,7 @@ def render(records, found, n_qualified, n_bare, verif) -> str:
     w("")
     if found["uncovered_families"]:
         w("**Configured families with zero citations** — the family is configured in "
-          "`FAMILY_BY_DIR` but no file under `ee/` cites a single one of its claims, so "
+          "`FAMILY_BY_DIR` but no file under its tree cites a single one of its claims, so "
           "it is missing from every section above. This fails the gate unconditionally, "
           "not only under `--strict`:")
         w("")
@@ -388,11 +392,12 @@ def main() -> int:
                     help=f"human-maintained sidecar (default {VERIFICATION_PATH})")
     args = ap.parse_args()
 
-    if not os.path.isdir(EE_ROOT):
-        print(f"error: run from the repository root ({EE_ROOT}/ not found)", file=sys.stderr)
+    missing = [r for r in SCAN_ROOTS if not os.path.isdir(r)]
+    if missing:
+        print(f"error: run from the repository root ({missing[0]}/ not found)", file=sys.stderr)
         return 2
 
-    records, n_qualified, n_bare = scan(EE_ROOT)
+    records, n_qualified, n_bare = scan(SCAN_ROOTS)
     if not records:
         print("error: no claim citations found — has the citation convention changed?",
               file=sys.stderr)
@@ -406,7 +411,7 @@ def main() -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
-    # Every family cited in ee/ must have an application entry. Without this a newly
+    # Every cited family must have an application entry. Without this a newly
     # cited family would silently have no row, and no filing date or conversion
     # deadline anywhere — the defect this sidecar exists to remove.
     undeclared = [f for f in found["families"] if f not in verif["applications"]]
@@ -464,7 +469,7 @@ def main() -> int:
     if found["uncovered_families"]:
         print("CLAIMTRACE-001: configured famil(ies) with zero claim citations: "
               + ", ".join(found["uncovered_families"])
-              + " — cite those claims in ee/ or remove the family from FAMILY_BY_DIR",
+              + " — cite those claims in the family tree or remove the family from FAMILY_BY_DIR",
               file=sys.stderr)
         return 1
 
@@ -475,7 +480,7 @@ def main() -> int:
     if found["uncovered_families"]:
         print("CLAIMTRACE-001: configured famil(ies) with zero claim citations: "
               + ", ".join(found["uncovered_families"])
-              + " — cite those claims in ee/ or remove the family from FAMILY_BY_DIR",
+              + " — cite those claims in the family tree or remove the family from FAMILY_BY_DIR",
               file=sys.stderr)
         return 1
 

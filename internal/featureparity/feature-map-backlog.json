@@ -11472,7 +11472,7 @@
                 "internal/cbom",
                 "internal/api/profiles.go",
                 "internal/api/cbom.go",
-                "ee/pqcmigration"
+                "internal/pqcmigration"
             ],
             "source_frontend": [
                 "web/src/pages/Profiles.tsx",
@@ -11480,7 +11480,7 @@
                 "web/src/pages/posture/CBOMScanWorkflow.tsx"
             ],
             "status": "closed",
-            "notes": "Complete vertical slice closed on exact g138 candidate 90921be12671fee121c9bd57810355307ba3d302. PACKAGING-007 keeps MPL-core profile selection classical and moves PQC algorithms, APIs, UI, and tests under ee/. internal/server/crypto_agility_served_test.go proves unsupported labels fail before profile policy is emitted and classical signature labels round-trip through /api/v1/profiles; internal/server/cbom_served_test.go proves CBOM migration targets; ee/pqcmigration tests cover licensed ACME hybrid re-issuance with rollback. The exact-candidate live receipt qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g138-f16-live-r2.json proves effect-free API/real-CLI parity, bounded loopback TLS discovery, independent inventory readback, stable migration IDs, byte-identical idempotent replay, controlled process restart, and post-restart API/CLI agreement. The browser receipt qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g138-f16-browser.receipt.json proves the served choose, review, execute, observe, recover, and saved-evidence journey at desktop and mobile widths, zero console errors or page overflow, strict HTTPS restoration, and durable saved IDs after restart. The preserved first live receipt records a QA-oracle object-order defect instead of hiding the failed control.",
+            "notes": "Complete vertical slice closed on exact g138 candidate 90921be12671fee121c9bd57810355307ba3d302. PACKAGING-007 keeps MPL-core profile selection classical and moves PQC algorithms, APIs, UI, and tests under ee/. internal/server/crypto_agility_served_test.go proves unsupported labels fail before profile policy is emitted and classical signature labels round-trip through /api/v1/profiles; internal/server/cbom_served_test.go proves CBOM migration targets; internal/pqcmigration tests cover licensed ACME hybrid re-issuance with rollback. The exact-candidate live receipt qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g138-f16-live-r2.json proves effect-free API/real-CLI parity, bounded loopback TLS discovery, independent inventory readback, stable migration IDs, byte-identical idempotent replay, controlled process restart, and post-restart API/CLI agreement. The browser receipt qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g138-f16-browser.receipt.json proves the served choose, review, execute, observe, recover, and saved-evidence journey at desktop and mobile widths, zero console errors or page overflow, strict HTTPS restoration, and durable saved IDs after restart. The preserved first live receipt records a QA-oracle object-order defect instead of hiding the failed control.",
             "api_surface": [
                 "createProfile",
                 "listProfiles",
@@ -11513,7 +11513,7 @@
                         "internal/profile/profile.go",
                         "internal/api/profiles.go",
                         "internal/api/cbom.go",
-                        "ee/pqcmigration"
+                        "internal/pqcmigration"
                     ],
                     "commands": [
                         "make test"
@@ -11565,7 +11565,7 @@
                     "evidence": [
                         "acceptance_test: internal/server/crypto_agility_served_test.go proves served profile-selection validation for unsupported and classical signature labels.",
                         "internal/server/cbom_served_test.go proves CBOM exposes licensed migration targets and progress.",
-                        "ee/pqcmigration proves licensed ACME hybrid PQC migration re-issuance and rollback.",
+                        "internal/pqcmigration proves licensed ACME hybrid PQC migration re-issuance and rollback.",
                         "PACKAGING-007 moves hybrid/PQC profile UI evidence to proprietary ee/.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
@@ -11573,7 +11573,7 @@
                     "refs": [
                         "internal/server/crypto_agility_served_test.go",
                         "internal/server/cbom_served_test.go",
-                        "ee/pqcmigration",
+                        "internal/pqcmigration",
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "web/src/__tests__/operations_surface.test.tsx",
                         "web/src/__tests__/route_parity.test.ts",
@@ -11609,7 +11609,7 @@
                     "refs": [
                         "internal/orchestrator/commands.go",
                         "internal/server/cbom_served_test.go",
-                        "ee/pqcmigration",
+                        "internal/pqcmigration",
                         "internal/server/crypto_agility_served_test.go"
                     ]
                 },
@@ -11620,7 +11620,7 @@
                     ],
                     "refs": [
                         "internal/observ/middleware.go",
-                        "ee/pqcmigration",
+                        "internal/pqcmigration",
                         "docs/observability.md"
                     ]
                 },
@@ -11727,7 +11727,7 @@
                             "The served CBOM test proves cbom.asset.observed append-and-project behavior plus customer-readable migration guidance.",
                             "internal/server/crypto_agility_served_test.go",
                             "The served crypto-agility test proves unsupported profile algorithms are rejected and classical labels are accepted through the internal crypto boundary.",
-                            "ee/pqcmigration",
+                            "internal/pqcmigration",
                             "Licensed migration tests prove re-issuance and rollback behind the editions boundary.",
                             "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g138-f16-live-r2.json proves exact g138 API and native CLI agreement, independent saved-row readback, stable IDs, idempotent replay, controlled restart, and post-restart persistence.",
                             "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g138-f16-browser.receipt.json proves the live served verification copy, exact saved IDs and migration targets, desktop/mobile rendering, zero console errors, and strict HTTPS persistence after browser cleanup."
@@ -11770,7 +11770,7 @@
             "backend_status": "partial: core campaign ownership/readiness/disposition/signed closure is served standalone; automated fleet planning/start/progress/rollback attaches from ee/ when licensed",
             "current_frontend_mapping": "served split on Posture at /posture: PQCCampaigns is the standalone core ownership/evidence workflow; PQCMigrationWorkflow is the licence-aware fleet plan/start/progress/rollback workflow",
             "target_gui_mapping": "Keep the useful standalone core campaign workflow and the licensed fleet-execution workflow visibly separate on Posture.",
-            "acceptance_test": "TestPQCMigrationCampaignServedManualClosureSignedEvidence proves manual or external work can close with signed evidence in core; TestPQCMigrationCampaignTenantIsolation proves the campaign path is tenant-scoped; ee/pqcmigration tests prove licensed planning, execution, progress, and rollback.",
+            "acceptance_test": "TestPQCMigrationCampaignServedManualClosureSignedEvidence proves manual or external work can close with signed evidence in core; TestPQCMigrationCampaignTenantIsolation proves the campaign path is tenant-scoped; internal/pqcmigration tests prove licensed planning, execution, progress, and rollback.",
             "source_docs": [
                 "docs/features/lifecycle-and-pqc.md",
                 "docs/cli.md",
@@ -11782,7 +11782,7 @@
                 "internal/orchestrator/pqc_migration_campaign.go",
                 "internal/store/pqc_migration_campaign.go",
                 "internal/projections/projections.go",
-                "ee/pqcmigration"
+                "internal/pqcmigration"
             ],
             "source_frontend": [
                 "web/src/pages/Posture.tsx",
@@ -11792,7 +11792,7 @@
                 "web/src/__tests__/posture.test.tsx"
             ],
             "status": "closed",
-            "notes": "Owner edition decision: campaign seeing, ownership, assignment, readiness, manual or external disposition, and signed closure evidence are CORE and remain genuinely useful without a licence; automated fleet execution remains EE. Community can find, own, track, and prove closure over core CBOM findings by any execution means. The separate licence-aware workflow may plan/start/read/rollback fleet execution only when ee/pqcmigration is attached.",
+            "notes": "Owner edition decision: campaign seeing, ownership, assignment, readiness, manual or external disposition, and signed closure evidence are CORE and remain genuinely useful without a licence; automated fleet execution remains EE. Community can find, own, track, and prove closure over core CBOM findings by any execution means. The separate licence-aware workflow may plan/start/read/rollback fleet execution only when internal/pqcmigration is attached.",
             "api_surface": [
                 "startPQCMigrationCampaign",
                 "listPQCMigrationCampaigns",
@@ -11820,7 +11820,7 @@
                     "evidence": [
                         "Core serves tenant-scoped PQC campaigns for owner, deadline, wave, readiness, manual or external finding disposition, and signed closure evidence over core CBOM findings.",
                         "The core campaign remains useful without a licence and never requires the EE engine to record operator work or prove closure.",
-                        "ee/pqcmigration attaches planPQCMigration, startPQCMigration, getPQCMigrationProgress, and rollbackPQCMigration only when licensed; the core-only dependency graph links zero ee/ packages.",
+                        "internal/pqcmigration attaches planPQCMigration, startPQCMigration, getPQCMigrationProgress, and rollbackPQCMigration only when licensed; the core-only dependency graph links zero ee/ packages.",
                         "served_state=partial",
                         "backend_status=partial: core campaign ownership/readiness/disposition/signed closure is served standalone; automated fleet planning/start/progress/rollback attaches from ee/ when licensed"
                     ],
@@ -11829,13 +11829,13 @@
                         "internal/orchestrator/pqc_migration_campaign.go",
                         "internal/store/pqc_migration_campaign.go",
                         "internal/server/pqc_migration_campaign_served_test.go",
-                        "ee/pqcmigration/api.go",
+                        "internal/pqcmigration/api.go",
                         "cmd/trstctl/ee_attach.go",
                         "cmd/trstctl/ee_attach_core.go"
                     ],
                     "commands": [
                         "go test ./internal/server -run '^TestPQCMigrationCampaign' -count=1",
-                        "go test ./ee/pqcmigration -count=1",
+                        "go test ./internal/pqcmigration -count=1",
                         "make editions-gate"
                     ]
                 },
@@ -11875,7 +11875,7 @@
                         "internal/api/openapi.go",
                         "internal/api/testdata/openapi.golden.json",
                         "internal/api/pqc_migration_campaign.go",
-                        "ee/pqcmigration/api.go"
+                        "internal/pqcmigration/api.go"
                     ]
                 },
                 "test": {
@@ -11883,7 +11883,7 @@
                         "TestPQCMigrationCampaignServedManualClosureSignedEvidence proves a core campaign can track manually performed work and close with independently verifiable signed evidence.",
                         "TestPQCMigrationCampaignTenantIsolation and TestPQCMigrationCampaignConcurrentCloseSerializesSignedEvidence prove tenant isolation and serialized closure.",
                         "pqc_campaigns.test.tsx proves the core operator workflow; posture.test.tsx proves the licence-aware execution plan/start/status/rollback workflow and honest Community degradation.",
-                        "ee/pqcmigration tests prove the licensed engine plans from CBOM findings, queues execution through the outbox, reports progress, and rolls back.",
+                        "internal/pqcmigration tests prove the licensed engine plans from CBOM findings, queues execution through the outbox, reports progress, and rolls back.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
                     ],
@@ -11891,7 +11891,7 @@
                         "internal/server/pqc_migration_campaign_served_test.go",
                         "web/src/__tests__/pqc_campaigns.test.tsx",
                         "web/src/__tests__/posture.test.tsx",
-                        "ee/pqcmigration",
+                        "internal/pqcmigration",
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "web/src/__tests__/route_parity.test.ts",
                         "web/src/__tests__/feature_coverage.test.tsx"
@@ -11920,7 +11920,7 @@
                         "internal/api/api.go",
                         "internal/api/feature_authz_test.go",
                         "internal/featureparity/authz_manifest.go",
-                        "ee/pqcmigration/api.go"
+                        "internal/pqcmigration/api.go"
                     ]
                 },
                 "audit": {
@@ -11932,7 +11932,7 @@
                         "internal/projections/projections.go",
                         "internal/orchestrator/pqc_migration_campaign.go",
                         "internal/api/pqc_migration_campaign.go",
-                        "ee/pqcmigration"
+                        "internal/pqcmigration"
                     ]
                 },
                 "telemetry": {
@@ -11942,7 +11942,7 @@
                     ],
                     "refs": [
                         "internal/observ/middleware.go",
-                        "ee/pqcmigration/api.go",
+                        "internal/pqcmigration/api.go",
                         "docs/observability.md"
                     ]
                 },
@@ -16421,7 +16421,7 @@
             ],
             "source_backend": [
                 "internal/transit",
-                "ee/kmip",
+                "internal/kmip",
                 "internal/api/transit.go",
                 "internal/server/server.go",
                 "internal/server/kmip.go",
@@ -16474,8 +16474,8 @@
                         "internal/api/api.go",
                         "internal/server/server.go",
                         "internal/transit/transit.go",
-                        "ee/kmip/wire.go",
-                        "ee/kmip/runtime.go"
+                        "internal/kmip/wire.go",
+                        "internal/kmip/runtime.go"
                     ],
                     "commands": [
                         "make test"
@@ -16552,7 +16552,7 @@
                         "internal/server/transit_wiring_test.go",
                         "internal/server/kmip_seam_test.go",
                         "internal/api/transit_posture_test.go",
-                        "ee/kmip/kmip_test.go",
+                        "internal/kmip/kmip_test.go",
                         "internal/transit/transit_more_test.go",
                         "web/src/__tests__/secrets.test.tsx",
                         "internal/featureparity/feature_facet_coverage_test.go",
@@ -16588,7 +16588,7 @@
                     "refs": [
                         "internal/transit/transit.go",
                         "internal/server/transit_served_test.go",
-                        "ee/kmip/kmip.go",
+                        "internal/kmip/kmip.go",
                         "internal/server/kmip_seam_test.go"
                     ]
                 },

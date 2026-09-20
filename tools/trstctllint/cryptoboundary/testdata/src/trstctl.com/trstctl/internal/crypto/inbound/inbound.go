@@ -8,10 +8,10 @@ import (
 
 	_ "trstctl.com/trstctl/internal/store" // want `AN-3: .* may not import .*internal/store.* from outside it`
 
-	// ee/pqc is a crypto boundary too, but core importing it is AN-9's other
+	// internal/pqc is a crypto boundary too, but core importing it is AN-9's other
 	// direction — core may never import ee/. "Both are boundaries" must not
 	// read as "so they may import each other".
-	_ "trstctl.com/trstctl/ee/pqc" // want `AN-3: .* may not import .*ee/pqc.* from outside it`
+	_ "trstctl.com/trstctl/internal/pqc" // want `AN-3: .* may not import .*internal/pqc.* from outside it`
 )
 
 // Sum keeps the fixture non-empty.

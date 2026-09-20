@@ -23,3 +23,7 @@ func OnlineMigrationExecutionSQLForTest(name string, body []byte) (string, error
 	}
 	return p.executionSQL(), nil
 }
+
+// MigrationChecksumForTest exposes the ledger digest so the checksum guards pin
+// the same function the runner records.
+func MigrationChecksumForTest(body []byte) string { return migrationChecksum(body) }

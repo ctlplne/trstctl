@@ -8,7 +8,7 @@ import (
 
 // The CA-key retirement checklist (epic H4).
 //
-// The VDEC engine under ee/decommission already refuses to destroy a key while
+// The VDEC engine under internal/decommission already refuses to destroy a key while
 // any dependent is unaccounted for, and mints an offline-verifiable destruction
 // record when they are. What it had no way to do was TELL anyone: an operator
 // asking "why can I not retire this key" had to read logs, and one asking "is it

@@ -56,9 +56,94 @@ var immutableShippedMigrationDigests = []shippedMigrationDigest{
 }
 
 func normalizedMigrationDigest(raw []byte) string {
+	return store.MigrationChecksumForTest(raw)
+}
+
+// wholeFileDigest is the digest a binary from before 2026-09-20 recorded: the
+// whole file, licence header included. Kept here as the fixture for the ledger
+// rows such a binary left behind.
+func wholeFileDigest(raw []byte) string {
 	normalized := strings.ReplaceAll(string(raw), "\r\n", "\n")
 	normalized = strings.TrimRight(normalized, "\n")
 	return "sha256:" + crypto.SHA256Hex([]byte(normalized))
+}
+
+// TestMigrationChecksumIgnoresLicenseHeader: the relicensing of 2026-09-20 rewrote
+// the SPDX comment in every shipped migration. That line is metadata about the
+// file, so it must be outside the digest — while any change to the SQL stays inside.
+func TestMigrationChecksumIgnoresLicenseHeader(t *testing.T) {
+	t.Parallel()
+	bare := normalizedMigrationDigest([]byte(ledgerProbeBodyV1))
+	for _, tc := range []struct{ header, kept string }{
+		{"-- SPDX-License-Identifier: MPL-2.0\n", ""},
+		{"-- SPDX-License-Identifier: BUSL-1.1\n", ""},
+		{"-- SPDX-License-Identifier: LicenseRef-trstctl-EE\n", ""},
+		// The directive stays inside the digest; only the licence line leaves it.
+		{"-- migrate: no-transaction\n-- SPDX-License-Identifier: BUSL-1.1\n", "-- migrate: no-transaction\n"},
+	} {
+		got := normalizedMigrationDigest([]byte(tc.header + ledgerProbeBodyV1))
+		want := normalizedMigrationDigest([]byte(tc.kept + ledgerProbeBodyV1))
+		if got != want {
+			t.Fatalf("digest with header %q = %s, want %s (the licence line must not be part of the identity)", tc.header, got, want)
+		}
+	}
+	if normalizedMigrationDigest([]byte(ledgerProbeBodyV2)) == bare {
+		t.Fatal("a DDL edit hashed the same as the original; the digest must still see the SQL")
+	}
+	if normalizedMigrationDigest([]byte("-- a comment\n"+ledgerProbeBodyV1)) == bare {
+		t.Fatal("an ordinary comment hashed the same as the original; only the SPDX line is outside the digest")
+	}
+}
+
+// TestMigrationLedgerRestampsRowsHashedUnderPreviousLicenseHeader is the
+// EXISTING-DEPLOYMENT path across the relicensing: a node whose ledger rows were
+// written by a binary that hashed the whole file — MPL-2.0 header included — must
+// boot on the BUSL-1.1 files, re-stamp those rows, and still refuse a real edit.
+func TestMigrationLedgerRestampsRowsHashedUnderPreviousLicenseHeader(t *testing.T) {
+	ctx := context.Background()
+	dsn := createFreshMigrationDatabase(t)
+	const busl = "-- SPDX-License-Identifier: BUSL-1.1\n"
+	const mpl = "-- SPDX-License-Identifier: MPL-2.0\n"
+
+	current := openMigrator(t, dsn, ledgerProbeFS(busl+ledgerProbeBodyV1))
+	if err := current.Migrate(ctx); err != nil {
+		t.Fatalf("Migrate with the relicensed probe migration: %v", err)
+	}
+	// Rewrite the row the way the previous binary left it: the whole-file digest
+	// of the MPL-headed file, never adopted.
+	legacy := wholeFileDigest([]byte(mpl + ledgerProbeBodyV1))
+	if _, err := current.SystemPool().Exec(ctx,
+		"UPDATE schema_migrations SET checksum = $2, checksum_adopted_at = NULL WHERE version = $1", int64(ledgerProbeVersion), legacy); err != nil {
+		t.Fatalf("plant the pre-relicensing ledger row: %v", err)
+	}
+
+	upgraded := openMigrator(t, dsn, ledgerProbeFS(busl+ledgerProbeBodyV1))
+	if err := upgraded.Migrate(ctx); err != nil {
+		t.Fatalf("Migrate over a ledger row recorded under the previous licence header must succeed, got: %v", err)
+	}
+	var checksum string
+	var adoptedAt *string
+	if err := current.SystemPool().QueryRow(ctx,
+		"SELECT checksum, checksum_adopted_at::text FROM schema_migrations WHERE version = $1", int64(ledgerProbeVersion)).Scan(&checksum, &adoptedAt); err != nil {
+		t.Fatalf("read the re-stamped ledger row: %v", err)
+	}
+	if want := normalizedMigrationDigest([]byte(busl + ledgerProbeBodyV1)); checksum != want {
+		t.Fatalf("re-stamped checksum = %s, want the current digest %s", checksum, want)
+	}
+	if adoptedAt == nil {
+		t.Fatal("a re-stamped ledger row carries no checksum_adopted_at; the rows whose digest was translated rather than observed must stay visible to an operator")
+	}
+
+	// The tolerance is exactly one line wide: the same legacy row against an
+	// edited body is still the in-place edit the ledger exists to refuse.
+	if _, err := current.SystemPool().Exec(ctx,
+		"UPDATE schema_migrations SET checksum = $2, checksum_adopted_at = NULL WHERE version = $1", int64(ledgerProbeVersion), legacy); err != nil {
+		t.Fatalf("re-plant the pre-relicensing ledger row: %v", err)
+	}
+	edited := openMigrator(t, dsn, ledgerProbeFS(busl+ledgerProbeBodyV2))
+	if err := edited.Migrate(ctx); !errors.Is(err, store.ErrMigrationChecksumMismatch) {
+		t.Fatalf("Migrate with an edited body over a legacy row = %v, want ErrMigrationChecksumMismatch", err)
+	}
 }
 
 func isExactImmutableShippedMigration(name string, raw []byte) bool {

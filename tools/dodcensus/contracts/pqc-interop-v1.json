@@ -22,6 +22,6 @@
   "fail_closed": {
     "bindings": "unbound, duplicate, extraneous, conflicting, disabled, missing-revision, or unsupported connector targets reject the whole batch before an event or outbox intent",
     "integrity": "tenant, destination, idempotency key, run, asset, target revision, and ciphertext substitution cannot open a forward or rollback intent",
-    "edition": "all PQC implementation code remains under ee and is reachable only through cmd/trstctl/ee_attach.go"
+    "edition": "all PQC implementation code lives under internal/pqc in the core and attaches in every build through cmd/trstctl/attach_families.go"
   }
 }

@@ -107,12 +107,6 @@ package okclient
 
 package badclient
 `)
-	writeFile(t, filepath.Join(fixture, "internal", "random", "pqc.go"), `// SPDX-License-Identifier: BUSL-1.1
-
-package random
-
-const Algorithm = "ML-DSA-65"
-`)
 
 	planted := exec.Command(bin, "./...") // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
 	planted.Dir = fixture
@@ -136,7 +130,6 @@ const Algorithm = "ML-DSA-65"
 		"core file imports \"trstctl.com/trstctl/ee/billing\"",
 		"ee/ file must not carry SPDX-License-Identifier: MPL-2.0",
 		"clients/ file must not carry SPDX-License-Identifier: BUSL-1.1",
-		"PQC algorithm or fleet-execution code",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("planted violation output missing %q:\n%s", want, got)

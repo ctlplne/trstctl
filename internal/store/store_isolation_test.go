@@ -296,6 +296,18 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		// the ordinary tenant-scoped path against that database, so the drill
 		// proves the production restore rather than a privileged shortcut.
 		"internal/server/drill.go": 2,
+		// VDEC (part of the core since 2026-09-20; this inventory did not scan
+		// ee/ before): the retirement projection's standalone Reset and Apply
+		// entry points open one system-pool transaction each. Reset is the
+		// full-replay wipe of every tenant's derived retirement view, cross-tenant
+		// by design, before exact tenant-bound events repopulate it. Apply drives
+		// ApplyTx for one event: every statement it runs is scoped by that
+		// event's own tenant_id (the payload's tenant must equal the event's or
+		// the event is refused), the same rows the core projector writes through
+		// ApplyTx inside the tenant's RLS transaction. Reads go through Fetch,
+		// which enters the tenant's RLS context; nothing tenant-owned is returned
+		// to a caller from the system pool.
+		"internal/decommission/retirement/projection.go": 2,
 	}
 	found := map[string]int{}
 

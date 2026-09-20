@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/fs"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -311,14 +312,49 @@ type migrationLedger struct {
 // endings are normalized to "\n" and trailing newlines trimmed before hashing, so
 // the same file checked out under a different core.autocrlf — or re-saved by an
 // editor that adds a final newline — does not read as an edit and refuse to boot.
-// Nothing else is normalized: comments and whitespace are inside the digest,
-// because a shipped migration is immutable by policy (docs/migrations.md) and the
-// runner cannot tell a comment fix from a DDL edit. Hashing goes through the AN-3
-// crypto boundary rather than crypto/sha256 directly.
+// The SPDX licence-identifier comment line is excluded too: the relicensing of
+// 2026-09-20 rewrote that one line in every shipped migration, and a licence
+// notice is metadata about the file, not part of the migration. Nothing else is
+// normalized: comments and whitespace are inside the digest, because a shipped
+// migration is immutable by policy (docs/migrations.md) and the runner cannot
+// tell a comment fix from a DDL edit. Hashing goes through the AN-3 crypto
+// boundary rather than crypto/sha256 directly.
 func migrationChecksum(body []byte) string {
 	normalized := strings.ReplaceAll(string(body), "\r\n", "\n")
+	if loc := migrationSPDXLine.FindStringIndex(normalized); loc != nil {
+		normalized = normalized[:loc[0]] + normalized[loc[1]:]
+	}
 	normalized = strings.TrimRight(normalized, "\n")
 	return "sha256:" + crypto.SHA256Hex([]byte(normalized))
+}
+
+// migrationSPDXLine is the licence-identifier comment a shipped migration carries
+// on its first line (or its second, after a `-- migrate:` directive).
+var migrationSPDXLine = regexp.MustCompile(`(?m)^-- SPDX-License-Identifier: [A-Za-z0-9.+-]+\n?`)
+
+// previousLicenseIdentifiers are the identifiers shipped migrations carried before
+// 2026-09-20: MPL-2.0 for core migrations, LicenseRef-trstctl-EE for the families
+// that moved into the core that day.
+var previousLicenseIdentifiers = []string{"MPL-2.0", "LicenseRef-trstctl-EE"}
+
+// legacyMigrationChecksums are the digests a binary from before the licence line
+// was excluded could have recorded for body: the whole file as it is now, and the
+// whole file under each identifier it shipped with earlier. reconcile re-stamps a
+// ledger row carrying one of them, because the migration itself is unchanged.
+func legacyMigrationChecksums(body []byte) []string {
+	normalized := strings.ReplaceAll(string(body), "\r\n", "\n")
+	whole := func(text string) string {
+		return "sha256:" + crypto.SHA256Hex([]byte(strings.TrimRight(text, "\n")))
+	}
+	out := []string{whole(normalized)}
+	loc := migrationSPDXLine.FindStringIndex(normalized)
+	if loc == nil {
+		return out
+	}
+	for _, id := range previousLicenseIdentifiers {
+		out = append(out, whole(normalized[:loc[0]]+"-- SPDX-License-Identifier: "+id+"\n"+normalized[loc[1]:]))
+	}
+	return out
 }
 
 // loadMigrationLedger reads the applied set together with each row's recorded
@@ -364,7 +400,9 @@ func (l *migrationLedger) record(version int64, name, checksum string) {
 //   - the row carries NO digest (it predates checksums) -> ADOPT the on-disk
 //     digest and stamp checksum_adopted_at. An existing install therefore boots
 //     normally on first upgrade: no backfill migration, no manual step, no brick.
-//   - the row carries a digest that differs -> ErrMigrationChecksumMismatch.
+//   - the row carries a digest that differs -> ErrMigrationChecksumMismatch,
+//     unless it is one a pre-2026-09-20 binary recorded for the same bytes under
+//     the previous licence header (legacyMigrationChecksums) -> re-stamp it.
 //
 // Adoption is honest about its limit: it makes today's files the baseline and
 // closes the window from here on; it cannot detect an edit made BEFORE the
@@ -372,7 +410,7 @@ func (l *migrationLedger) record(version int64, name, checksum string) {
 // caveat, and clearing name/checksum is how an operator deliberately re-adopts.
 // Versions in the ledger with no corresponding file are not visited at all, so a
 // core-only binary against an ee-migrated database is unaffected.
-func (l *migrationLedger) reconcile(ctx context.Context, conn *pgxpool.Conn, version int64, name, checksum string) error {
+func (l *migrationLedger) reconcile(ctx context.Context, conn *pgxpool.Conn, version int64, name, checksum string, legacy []string) error {
 	row := l.rows[version]
 	if row.name != "" && row.name != name {
 		return fmt.Errorf("%w: version %d was applied as %q but %q also claims it; extension migrations must use the reserved >= 900000 version band (Store.WithExtraMigrations)",
@@ -388,6 +426,18 @@ func (l *migrationLedger) reconcile(ctx context.Context, conn *pgxpool.Conn, ver
 		return nil
 	}
 	if row.checksum != checksum {
+		if slices.Contains(legacy, row.checksum) {
+			// Recorded by a binary that hashed the whole file, licence header
+			// included; the migration itself is unchanged. Re-stamp the row so the
+			// caveat stays visible, exactly like a pre-checksum adoption.
+			if _, err := conn.Exec(ctx,
+				"UPDATE schema_migrations SET name = $2, checksum = $3, checksum_adopted_at = now() WHERE version = $1 AND checksum = $4",
+				version, name, checksum, row.checksum); err != nil {
+				return fmt.Errorf("store: re-stamp content digest for migration %s: %w", name, err)
+			}
+			l.rows[version] = ledgerRow{name: name, checksum: checksum}
+			return nil
+		}
 		return fmt.Errorf("%w: migration %d was applied with %s but %s now hashes to %s; a shipped migration must never be edited in place — add a new migration instead. If this node's schema is confirmed correct, re-adopt the file with: UPDATE schema_migrations SET name = NULL, checksum = NULL WHERE version = %d; (docs/migrations.md)",
 			ErrMigrationChecksumMismatch, version, row.checksum, name, checksum, version)
 	}
@@ -414,7 +464,7 @@ func applyMigrationSet(ctx context.Context, conn *pgxpool.Conn, led *migrationLe
 		if applied[version] {
 			// Forward-only: an applied version is never re-run. But "already
 			// applied" is now checked against what was applied.
-			if err := led.reconcile(ctx, conn, version, name, checksum); err != nil {
+			if err := led.reconcile(ctx, conn, version, name, checksum, legacyMigrationChecksums(body)); err != nil {
 				return err
 			}
 			continue

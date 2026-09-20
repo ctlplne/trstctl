@@ -140,7 +140,7 @@ func main() {
 		}
 	}
 	defer cleanup()
-	opts = appendEEOptions(opts, lic, *keystore, wrapper)
+	opts = appendFamilyOptions(opts, *keystore, wrapper)
 	if *keystore != "" {
 		var err error
 		srv, err = signing.NewPersistentServer(signing.NewKeyStore(*keystore, wrapper), opts...)

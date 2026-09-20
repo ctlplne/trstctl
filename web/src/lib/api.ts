@@ -509,7 +509,7 @@ export type CTSubmissionRequest = CTLogSubmissionRequest;
 // Hand-declared rather than generated. The route is licensed (Enterprise
 // `reconcile`) and its schemas are contributed at attach time by ee/, so they
 // are not in the core OpenAPI golden the generator reads. Keep this in step
-// with ee/reconcile/api/openapi.go by hand.
+// with internal/reconcile/api/openapi.go by hand.
 export interface AuthorityWitnessClassCount {
   class: string;
   count: number;
@@ -644,7 +644,7 @@ export type {
   PQCMigrationCampaignUpdateRequest,
   PQCMigrationFindingDispositionRequest,
 };
-// These four shapes come from ee/pqcmigration's runtime OpenAPI schemas. They
+// These four shapes come from internal/pqcmigration's runtime OpenAPI schemas. They
 // intentionally remain beside the browser client rather than in the core SDK
 // golden: a core-only binary does not mount or advertise licensed routes.
 export interface PQCMigrationRequest {

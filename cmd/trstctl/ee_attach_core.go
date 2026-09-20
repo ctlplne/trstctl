@@ -7,7 +7,6 @@ package main
 import (
 	"context"
 	"io"
-	"io/fs"
 	"log/slog"
 
 	"trstctl.com/trstctl/internal/config"
@@ -17,8 +16,6 @@ import (
 	"trstctl.com/trstctl/internal/server"
 	"trstctl.com/trstctl/internal/store"
 )
-
-func extraMigrationSources() []fs.FS { return nil }
 
 // eeLocalCommand is the core-only twin: the core build has no EE subcommands.
 func eeLocalCommand(context.Context, []string, func(string) string, io.Writer, io.Writer) (bool, error) {

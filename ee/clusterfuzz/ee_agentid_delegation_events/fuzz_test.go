@@ -5,7 +5,7 @@ package clusterfuzz
 import (
 	"testing"
 
-	"trstctl.com/trstctl/ee/agentid/delegation"
+	"trstctl.com/trstctl/internal/agentid/delegation"
 	"trstctl.com/trstctl/internal/events"
 )
 

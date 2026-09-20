@@ -35,7 +35,7 @@ func TestEveryUntrustedParserIsFuzzed(t *testing.T) {
 	// whose name begins with a parse/decode verb — the shape of "turn
 	// attacker-controlled bytes into structure". Each such parser's package must
 	// carry a Go fuzz target.
-	roots := []string{".", "../protocols", "../tsa", "../signing", "../secretscan", "../attest", "../../ee/kmip"}
+	roots := []string{".", "../protocols", "../tsa", "../signing", "../secretscan", "../attest", "../../internal/kmip"}
 	discovered := discoverUntrustedParsers(t, roots)
 
 	// The walker must not silently regress to finding nothing: pin a few
@@ -115,7 +115,7 @@ func TestEveryUntrustedParserIsFuzzed(t *testing.T) {
 	requireFuzzFuncByName(t, "../attest/azureimds", map[string]string{
 		"FuzzAzureIMDSAttest": "Azure IMDS attester Attest (azureimds.go) — untrusted CMS document pre-verification",
 	})
-	requireFuzzFuncByName(t, "../../ee/kmip", map[string]string{
+	requireFuzzFuncByName(t, "../../internal/kmip", map[string]string{
 		"FuzzParseTTLV": "KMIP TTLV wire frame decoder (kmip ttlv.go) — enterprise key-management client bytes",
 	})
 

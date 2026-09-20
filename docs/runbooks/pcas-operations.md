@@ -49,7 +49,7 @@ That target proves:
 For local investigation, run only the ops gate:
 
 ```bash
-go test ./ee/succession/conformance -run TestINT21_PCASOpsSLOBackpressureAndCrash -count=1 -timeout=10m
+go test ./internal/succession/conformance -run TestINT21_PCASOpsSLOBackpressureAndCrash -count=1 -timeout=10m
 ```
 
 ## Backpressure Model

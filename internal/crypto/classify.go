@@ -20,7 +20,7 @@ type Classification struct {
 
 // licensedClassifier recognizes algorithm labels the core deliberately does
 // not know. It is installed exactly once, from the tagged attach seam
-// (cmd/trstctl/ee_attach.go, AN-9), before serving begins; nil keeps the
+// (cmd/trstctl/attach_families.go), before serving begins; nil keeps the
 // strict core behavior, so an unlicensed binary fails closed on those labels.
 var licensedClassifier func(Algorithm) (Classification, bool)
 

@@ -576,8 +576,8 @@ and `SLH-DSA-SHA2-128s`. Unknown labels fail closed, and ML-KEM stays out of
 certificate-signing profiles because it's a key-encapsulation mechanism, not a signing
 algorithm. `internal/server/crypto_agility_served_test.go`'s
 `TestServedCryptoAgilityProfilesValidateBoundaryAlgorithms` proves the served profile
-create/list round trip; those Enterprise/PQC issuance proofs live under `ee/pqc` and
-`ee/pqcmigration`, so they don't count as MPL-core served evidence.
+create/list round trip; those Enterprise/PQC issuance proofs live under `internal/pqc` and
+`internal/pqcmigration`, so they don't count as MPL-core served evidence.
 
 The managed-key API spine is configuration- and license-gated for AWS KMS, Azure Key
 Vault/Managed HSM, GCP Cloud KMS, PKCS#11, TPM 2.0, and YubiHSM 2 custody: once

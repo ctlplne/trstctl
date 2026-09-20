@@ -55,8 +55,7 @@ func (p *resultPrecondition) CheckIssuancePreconditionResult(_ context.Context, 
 
 // TestZeroRemoval_SingleHopIssuanceIntact is the AGID-12 canonical zero-removal
 // guard (INV-A10), landed here. With NO issuance precondition attached — exactly the
-// state of an unlicensed / core-only deployment where attachEE never runs the
-// FeatureAgentDelegation block — the free single-hop attested-ephemeral badge must
+// state of a deployment whose composition root attached no AGID precondition — the free single-hop attested-ephemeral badge must
 // issue EXACTLY as before: a genuine attestation yields a one-hop, sub-hour
 // credential recorded in the graph and audited. The proof has three legs:
 //

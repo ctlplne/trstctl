@@ -31,9 +31,9 @@ func TestCryptoBoundary(t *testing.T) {
 		"thirdpartycrypto",
 		// The boundary itself may import third-party crypto freely.
 		"trstctl.com/trstctl/internal/crypto/pqcfix",
-		// ee/pqc holds crypto AND imports core, and both are correct: it is
+		// internal/pqc holds crypto AND imports core, and both are correct: it is
 		// inside the boundary for "may hold crypto" and outside it for "must
 		// stay small", because its imports of core ARE the AN-9 attach seam.
-		"trstctl.com/trstctl/ee/pqc",
+		"trstctl.com/trstctl/internal/pqc",
 	)
 }

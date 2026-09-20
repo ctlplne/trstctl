@@ -15,7 +15,7 @@ import (
 // TestEveryEmbeddedPostgresHarnessStopsWhatItStarts guards against a test harness
 // leaking a database server.
 //
-// ee/agentid/delegation/brokerstore called inst.Start() and never stopped it, so
+// internal/agentid/delegation/brokerstore called inst.Start() and never stopped it, so
 // every invocation of that package left a PostgreSQL server running for the life
 // of the machine, each holding a SysV shared-memory segment. macOS allows 32
 // (kern.sysv.shmmni), so after roughly thirty runs NO Postgres-backed test in the

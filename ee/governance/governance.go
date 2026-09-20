@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"time"
 
-	eepqc "trstctl.com/trstctl/ee/pqc"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/compliance"
@@ -20,6 +19,7 @@ import (
 	"trstctl.com/trstctl/internal/cryptoreadiness"
 	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/graph"
+	eepqc "trstctl.com/trstctl/internal/pqc"
 )
 
 // Framework is a compliance framework.
@@ -119,7 +119,7 @@ func (r *Reporter) Generate(fw Framework, records []audit.Record, cbom *graph.Gr
 		}
 		profile := compliance.RegulatedFIPSDeploymentProfile(status)
 		profile.NonFIPSFences = append(profile.NonFIPSFences, pqcFIPSFence())
-		profile.EvidenceRefs = append(profile.EvidenceRefs, "code:ee/pqc/doc.go")
+		profile.EvidenceRefs = append(profile.EvidenceRefs, "code:internal/pqc/doc.go")
 		if err := compliance.ValidateFIPSRegulatedDeploymentProfile(profile); err != nil {
 			return Report{}, fmt.Errorf("governance: fips regulated deployment profile invalid: %w", err)
 		}
@@ -201,7 +201,7 @@ func classifyLicensedAlgorithm(alg crypto.Algorithm) (crypto.Classification, err
 
 func pqcFIPSFence() compliance.FIPSNonFIPSFence {
 	return compliance.FIPSNonFIPSFence{
-		Surface: "ee/pqc",
+		Surface: "internal/pqc",
 		Algorithms: []string{
 			string(eepqc.MLDSA44), string(eepqc.MLDSA65), string(eepqc.MLDSA87),
 			string(eepqc.MLKEM512), string(eepqc.MLKEM768), string(eepqc.MLKEM1024),
@@ -210,7 +210,7 @@ func pqcFIPSFence() compliance.FIPSNonFIPSFence {
 		StatusUnderFIPS: "fenced: not eligible for approved-mode issuance unless the operation is supplied by a validated module boundary",
 		Reason:          "The licensed PQC implementations are outside the Go FIPS 140-3 module boundary even though the algorithms map to FIPS 203/204/205 migration posture.",
 		Action:          "Treat as non-FIPS migration evidence in --fips deployments, or route the operation to a validated PQC module/HSM before claiming approved mode.",
-		EvidenceRef:     "ee/pqc/doc.go",
+		EvidenceRef:     "internal/pqc/doc.go",
 	}
 }
 

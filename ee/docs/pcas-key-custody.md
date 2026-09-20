@@ -47,7 +47,7 @@ private material never exists outside the module. This plugs in at the existing
 `signing.WithKeyFactory` seam — the same seam the EE build uses for post-quantum
 algorithms — with no change to the mint path. The PKCS#11 primitives already exist
 in-tree (`internal/kms/pkcs11`, `github.com/miekg/pkcs11`), and
-`ee/succession/minter.SoftHSM` is the software double used to exercise the module
+`internal/succession/minter.SoftHSM` is the software double used to exercise the module
 semantics in unit tests.
 
 What is **not** delivered here is a full integration test against a real module: it

@@ -165,7 +165,7 @@ jobs:
         run: make cbom-docs-check
 
       # AGID-INT-CALL STRONG check: an RTA call graph seeded from the cmd/* main.main
-      # (built WITHOUT -tags trstctl_core) proves every ee/agentid constructor is
+      # (built WITHOUT -tags trstctl_core) proves every internal/agentid constructor is
       # reachable from a running binary. The floor tier already ran inside `make lint`
       # (agid-caller-gate); this runs the heavier whole-program reachability proof.
       - name: AGID production-caller gate (strong / RTA)

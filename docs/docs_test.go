@@ -2006,7 +2006,7 @@ func binaryServesTransitOrKMIP(t *testing.T) bool {
 	t.Helper()
 	imports := []string{
 		`trstctl.com/trstctl/internal/transit"`,
-		`trstctl.com/trstctl/ee/kmip"`,
+		`trstctl.com/trstctl/internal/kmip"`,
 	}
 	for _, dir := range []string{"../internal/api", "../internal/server", "../cmd/trstctl"} {
 		for _, f := range nonTestGoFiles(t, dir) {
@@ -2025,18 +2025,11 @@ func TestTransitAndKMIPServedStatusIsHonest(t *testing.T) {
 	if _, err := os.Stat(filepath.FromSlash("../internal/transit")); err != nil {
 		t.Fatalf("internal/transit no longer exists; revisit this F66 reality test: %v", err)
 	}
-	if _, err := os.Stat(filepath.FromSlash("../ee/kmip")); err != nil {
-		t.Fatalf("licensed ee/kmip no longer exists; revisit this F66 reality test: %v", err)
-	}
-	// B-6a332fa9: Git cannot represent an empty directory. Missing and empty
-	// both mean the core KMIP boundary is clean; any entry means KMIP leaked
-	// back across PACKAGING-007.
-	if entries, err := os.ReadDir(filepath.FromSlash("../internal/kmip")); err != nil {
-		if !os.IsNotExist(err) {
-			t.Fatalf("inspect core internal/kmip boundary: %v", err)
-		}
-	} else if len(entries) != 0 {
-		t.Fatalf("internal/kmip must stay absent or empty, found %d entries", len(entries))
+	// The KMIP runtime moved from ee/kmip into the core on 2026-09-20; the
+	// served-status question below is unchanged (it is decided by what the
+	// binaries import, not by where the package lives).
+	if _, err := os.Stat(filepath.FromSlash("../internal/kmip")); err != nil {
+		t.Fatalf("internal/kmip no longer exists; revisit this F66 reality test: %v", err)
 	}
 
 	feature := strings.Join(strings.Fields(strings.ToLower(read(t, "features/secrets.md"))), " ")
@@ -2546,7 +2539,7 @@ func TestFuzzSmokeInventoryIsAutoDiscoveredAndCIWired(t *testing.T) {
 	}
 
 	parserGuard := read(t, "../internal/crypto/parserfuzz_audit_test.go")
-	for _, want := range []string{"TestEveryUntrustedParserIsFuzzed", "FuzzParseOCSPRequestSerial", "FuzzParseTTLV", "../../ee/kmip"} {
+	for _, want := range []string{"TestEveryUntrustedParserIsFuzzed", "FuzzParseOCSPRequestSerial", "FuzzParseTTLV", "../../internal/kmip"} {
 		if !strings.Contains(parserGuard, want) {
 			t.Errorf("FUZZ-010: parser denominator guard no longer contains %q", want)
 		}
@@ -4064,17 +4057,17 @@ func TestOpenAPISpecIsAdvertised(t *testing.T) {
 // implementation boundary.
 func TestPQCAlgorithmsDisclosed(t *testing.T) {
 	// Code reality: ML-DSA / ML-KEM / hybrid schemes exist under ee/.
-	pqc := read(t, "../ee/pqc/pqc.go")
+	pqc := read(t, "../internal/pqc/pqc.go")
 	for _, want := range []string{"MLDSA", "MLKEM", "HybridEd25519Dilithium3"} {
 		if !strings.Contains(pqc, want) {
-			t.Fatalf("ee/pqc no longer provides %q; revisit this reality test", want)
+			t.Fatalf("internal/pqc no longer provides %q; revisit this reality test", want)
 		}
 	}
 	// Code reality (Path B): SLH-DSA signing IS implemented under ee/.
-	slh := read(t, "../ee/pqc/slhdsa.go")
+	slh := read(t, "../internal/pqc/slhdsa.go")
 	for _, want := range []string{"GenerateSLHDSAKey", "SLHDSASigner", "circl/sign/slhdsa"} {
 		if !strings.Contains(slh, want) {
-			t.Fatalf("ee/pqc/slhdsa.go no longer provides %q; if SLH-DSA signing was removed this is Path A again — restore the deferred disclosure and revert this test", want)
+			t.Fatalf("internal/pqc/slhdsa.go no longer provides %q; if SLH-DSA signing was removed this is Path A again — restore the deferred disclosure and revert this test", want)
 		}
 	}
 	// Docs reality: limitations.md names the supported set, including SLH-DSA (FIPS 205).

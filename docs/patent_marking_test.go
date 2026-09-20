@@ -14,7 +14,7 @@ package docs
 //   - TestEEPatentMarkingClaimsOnlyPendingStatus scans every TRACKED prose file
 //     present in the candidate tree under ee/ and fails if any of them asserts a
 //     granted patent, then requires the two PCAS marking sites (ee/README.md,
-//     ee/succession/doc.go) to carry the pending wording, the filing that backs
+//     internal/succession/doc.go) to carry the pending wording, the filing that backs
 //     it, and the owning entity. Index-tracked files deleted by the candidate are
 //     skipped because they cannot ship and disappear from git's tracked set when
 //     that deletion is committed.
@@ -26,7 +26,7 @@ package docs
 // The scan asks git for the tracked set rather than walking the filesystem, the
 // same way CODE-105 (docs/agent_contract_files_test.go) does. An agent tool or an
 // editor that leaves an untracked file in a working tree is not a published patent
-// marking: AH-0002 relocated ee/succession/AGENTS.md — the third original site of
+// marking: AH-0002 relocated internal/succession/AGENTS.md — the third original site of
 // this finding — out of the repository and into .gitignore, yet a copy can still
 // sit in a maintainer's tree, and that copy must not turn the suite red.
 //
@@ -161,7 +161,7 @@ func TestEEPatentMarkingClaimsOnlyPendingStatus(t *testing.T) {
 	// words the operator picked: pending status, the filing that backs it, and the
 	// owning entity. Dropping any one of the three turns an accurate marking back
 	// into a vague one.
-	for _, f := range []string{"../ee/README.md", "../ee/succession/doc.go"} {
+	for _, f := range []string{"../ee/README.md", "../internal/succession/doc.go"} {
 		body := read(t, f)
 		for _, want := range []string{"patent-pending", "provisional application", "certctl LLC"} {
 			if !strings.Contains(body, want) {

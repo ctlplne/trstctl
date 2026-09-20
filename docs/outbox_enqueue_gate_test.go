@@ -288,15 +288,15 @@ func TestOutboxEnqueuesExecuteOnATransactionHandle(t *testing.T) {
 // not need a row. A row that stops matching means an enqueue path moved: confirm the
 // move was intended, then update the row.
 var outboxEnqueueExpectedSites = map[string]int{
-	"internal/orchestrator/outbox.go":                 2, // canonical Enqueue + EnqueueIfAbsent
-	"internal/store/code_signing.go":                  1,
-	"internal/store/managed_key.go":                   1,
-	"internal/store/notification_delivery.go":         1,
-	"internal/store/remediation_playbooks.go":         1,
-	"internal/store/secret_integration_outbox.go":     2,
-	"internal/store/tenant_key_domain_seal_outbox.go": 1,
-	"ee/agentid/delegation/brokerstore/recorder.go":   1,
-	"ee/succession/orchestrator/orchestrator.go":      1,
+	"internal/orchestrator/outbox.go":                     2, // canonical Enqueue + EnqueueIfAbsent
+	"internal/store/code_signing.go":                      1,
+	"internal/store/managed_key.go":                       1,
+	"internal/store/notification_delivery.go":             1,
+	"internal/store/remediation_playbooks.go":             1,
+	"internal/store/secret_integration_outbox.go":         2,
+	"internal/store/tenant_key_domain_seal_outbox.go":     1,
+	"internal/agentid/delegation/brokerstore/recorder.go": 1,
+	"internal/succession/orchestrator/orchestrator.go":    1,
 }
 
 // TestOutboxEnqueueInventoryPinsTheKnownSites keeps the class gate honest and pins the

@@ -4174,7 +4174,7 @@ export const canonicalCapabilities = [
             "The served CBOM test proves cbom.asset.observed append-and-project behavior plus customer-readable migration guidance.",
             "internal/server/crypto_agility_served_test.go",
             "The served crypto-agility test proves unsupported profile algorithms are rejected and classical labels are accepted through the internal crypto boundary.",
-            "ee/pqcmigration",
+            "internal/pqcmigration",
             "Licensed migration tests prove re-issuance and rollback behind the editions boundary.",
             "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g138-f16-live-r2.json proves exact g138 API and native CLI agreement, independent saved-row readback, stable IDs, idempotent replay, controlled restart, and post-restart persistence.",
             "qa-runs/20260827t070850z-e8701546c-goal-continuation/artifacts/g138-f16-browser.receipt.json proves the live served verification copy, exact saved IDs and migration targets, desktop/mobile rendering, zero console errors, and strict HTTPS persistence after browser cleanup."

@@ -187,7 +187,7 @@ func (s *Server) IssueBrokerAgentIdentity(ctx context.Context, tenantID, idempot
 // broker issuance and returns the digest the credential should bind. It is the
 // feature-neutral seam: the MPL core names it and enforces when it must be
 // consulted, while what a valid envelope IS lives entirely in the edition
-// (ee/agentid/taskenv + the delegation gate's requester trust store).
+// (internal/agentid/taskenv + the delegation gate's requester trust store).
 type BrokerTaskEnvelopeGate func(ctx context.Context, tenantID string, envelope []byte, now time.Time) (digest []byte, err error)
 
 // bindTaskEnvelope enforces the rule that makes a task binding worth anything:

@@ -15,7 +15,9 @@ import (
 
 // These two already-shipped files are immutable. A pending upgrade uses a
 // checksum-bound online execution plan; an applied ledger row is never rerun.
-// Unknown bytes cannot fall back to the unsafe historical execution path.
+// Unknown bytes cannot fall back to the unsafe historical execution path. The
+// digests are migrationChecksum digests, so the SPDX licence line is outside
+// them (0219's was rewritten by the 2026-09-20 relicensing; its DDL was not).
 type onlineCompatibilityPlan struct {
 	name, digest, table, expandSQL, index, createSQL, predicate, validateSQL string
 	columns                                                                  []onlineCompatibilityColumn
@@ -47,7 +49,7 @@ func historicalOnlinePlan(name string, body []byte) (*onlineCompatibilityPlan, e
 		}
 	case "0219_notification_delivery_routing.sql":
 		p = onlineCompatibilityPlan{
-			name: name, digest: "sha256:32310f4bc7d24c07f9a5b37c4686dbb577460328d2710e90e178fa2b3b8a3bac",
+			name: name, digest: "sha256:d4e4640fce403643f8c1584a623139a7ff371718ea32632bc261774e6a0d5668",
 			table: "public.notification_delivery_receipts", index: "notification_delivery_receipts_command_idx",
 			columns: []onlineCompatibilityColumn{
 				{name: "routing_source", dataType: "text", defaultExpression: "''::text", notNull: true},

@@ -48,7 +48,15 @@ whose version is already in the ledger and compares:
 
 The digest is taken over the file with line endings normalized to `\n` and
 trailing newlines trimmed, so the same file checked out under a different
-`core.autocrlf` does not read as an edit.
+`core.autocrlf` does not read as an edit. The `-- SPDX-License-Identifier:`
+comment line, when present, is outside the digest as well: the relicensing of
+2026-09-20 rewrote that one line in every shipped migration, and a licence notice
+is metadata about the file, not part of the migration. A ledger row recorded by
+an earlier binary that hashed the whole file is recognised when its digest
+matches the file under the identifier it shipped with (`MPL-2.0`, or
+`LicenseRef-trstctl-EE` for the families that moved into the core) and is
+re-stamped with the current digest and `checksum_adopted_at`, exactly like a
+pre-checksum row.
 
 ### Upgrading an existing install (no backfill step, no brick)
 

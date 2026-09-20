@@ -553,8 +553,8 @@ func TestPQCMigrationServedResidualsDisclosed(t *testing.T) {
 	low := limLower(t)
 
 	// Reality anchor (licensed side): the migration orchestrator still exists.
-	if _, err := os.Stat("../ee/pqcmigration"); err != nil {
-		t.Fatalf("ee/pqcmigration no longer exists; revisit this TRACE-008 reality test: %v", err)
+	if _, err := os.Stat("../internal/pqcmigration"); err != nil {
+		t.Fatalf("internal/pqcmigration no longer exists; revisit this TRACE-008 reality test: %v", err)
 	}
 
 	if !containsAll(low, []string{

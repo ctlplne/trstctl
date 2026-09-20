@@ -8,7 +8,7 @@ package cbom
 // pair that (a) names the concrete replacement algorithm for a classical
 // finding and (b) recognizes licensed algorithm families the core does not
 // know. Installation happens exactly once, from the tagged attach seam
-// (cmd/trstctl/ee_attach.go, one block per feature), before the server begins
+// (cmd/trstctl/attach_families.go, one named stage per family), before the server begins
 // serving. Nothing else may install, and the core-only build never calls it.
 
 // LicensedTargetResolver names a concrete migration target for a finding.

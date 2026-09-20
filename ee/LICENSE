@@ -16,6 +16,8 @@ not grant any right to use, copy, distribute, sublicense, or offer the ee/
 material except as expressly permitted by that commercial agreement and a valid
 offline signed license.
 
-All post-quantum cryptography (PQC), PQC-related algorithms and issuance paths,
-all other license-gated features, and future patented features belong behind this
-ee/ boundary unless certctl LLC authorizes a different written license.
+Post-quantum cryptography (PQC) and the patent-pending families (PCAS, AGID, XREC,
+VDEC) are not ee/ material: since 2026-09-20 they ship in the trstctl core under
+the Business Source License 1.1. The license-gated Enterprise and Provider
+features, and any future material certctl LLC places behind this boundary, stay
+under this notice unless certctl LLC authorizes a different written license.

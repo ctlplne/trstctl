@@ -6,11 +6,10 @@ cd "$(dirname "$0")/.."
 module='trstctl.com/trstctl'
 # Tagged attach seams: the only command-entry files permitted to import ee/. Each
 # must carry //go:build !trstctl_core so core-only builds link zero ee/ packages.
-# The signer-side seam follows the FeaturePQC precedent and is the home for
-# signing.WithSuccessionMinter(...) et al.; the agent-side seam serves the PCAS
-# workload co-sign endpoint from the shipped agent binary without moving PCAS into
-# MPL core.
-allowlist='cmd/trstctl/ee_attach.go cmd/trstctl-signer/ee_attach.go cmd/trstctl-agent/cosign_attach.go'
+# The core families (PCAS, AGID, XREC, VDEC, PQC) no longer pass through here:
+# they live under internal/ and attach through the untagged attach_families.go
+# files, which import nothing from ee/.
+allowlist='cmd/trstctl/ee_attach.go cmd/trstctl-signer/ee_attach.go'
 # Files that mention ee/ import paths only inside string-literal *fixtures*
 # (test data written into a temp tree at runtime), not as real imports of the
 # file's own package. The AST-level licenseboundary analyzer in tools/trstctllint

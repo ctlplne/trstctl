@@ -122,7 +122,7 @@ CRITICAL_COVERAGE_MIN_TIER2 ?= 70
 # ee/ measured 69.5% on 2026-08-02 (go tool cover -func=cover.out.ee) against a
 # floor of 40 — ~30 points of dead headroom. Ratcheted to 65 rather than to the
 # 66-67 the margin would allow only because that profile predates the
-# ee/reconcile/quarantine work; re-ratchet toward the measured figure after the
+# internal/reconcile/quarantine work; re-ratchet toward the measured figure after the
 # next full `make ee-test`. Never lower it.
 EE_COVERAGE_MIN ?= 65
 
@@ -250,18 +250,12 @@ dod-gate: ## Prove every required capability is compiled, production-assembled, 
 	@TRSTCTL_DOD_GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" $(GO) run ./tools/dodcensus \
 		--repo . --manifest tools/dodcensus/manifest.json --out "$(DOD_CENSUS_OUT)" $(DOD_SELECTION)
 
-PQC_OPERATOR_LAB_MODE = $(if $(filter core-only,$(MAKECMDGOALS)),core,licensed)
-PQC_OPERATOR_LAB_OUT ?= dist/pqc-operator-lab-$(PQC_OPERATOR_LAB_MODE).tar.gz
+PQC_OPERATOR_LAB_OUT ?= dist/pqc-operator-lab-licensed.tar.gz
 
-.PHONY: pqc-operator-lab core-only
+.PHONY: pqc-operator-lab
 pqc-operator-lab: ## Run the offline shipped-binary PQC rehearsal and archive non-secret receipts
 	@TRSTCTL_DOD_GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" \
-		$(GO) run ./tools/pqclab --repo . --mode "$(PQC_OPERATOR_LAB_MODE)" --out "$(PQC_OPERATOR_LAB_OUT)"
-
-core-only:
-	@if [ -z "$(filter pqc-operator-lab,$(MAKECMDGOALS))" ]; then \
-		echo "core-only is a selector; run: make core-only pqc-operator-lab" >&2; exit 2; \
-	fi
+		$(GO) run ./tools/pqclab --repo . --out "$(PQC_OPERATOR_LAB_OUT)"
 
 .PHONY: journey-census journey-census-check
 journey-census: ## Regenerate journey served badges and console data from wiring-census.json
@@ -450,12 +444,12 @@ lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint
 	@bash scripts/ci/check-actions-pinned.sh .
 	@echo ">> web dependency reuse guard self-test"
 	@bash scripts/ci/install-web-deps_selftest.sh >/dev/null
-	@# AGID-INT-CALL production-caller FLOOR: every ee/agentid mechanism has a non-test
-	@# caller (the DEFERRED ee/agentid/verify RP SDK excepted). This is the lexical,
+	@# AGID-INT-CALL production-caller FLOOR: every internal/agentid mechanism has a non-test
+	@# caller (the DEFERRED internal/agentid/verify RP SDK excepted). This is the lexical,
 	@# always-runnable tier; the whole-program RTA strong check is CI-only (-tags agidrta).
-	@# ee/... is outside GO_PACKAGES (the core Go gates skip ee/), so the floor is invoked
-	@# explicitly here. PCAS gets the same always-runnable caller/no-skip floors; its
-	@# heavyweight real-infra e2e runs through pcas-release-gate in CI/release.
+	@# The floors are invoked explicitly here so lint stays the one gate that runs them.
+	@# PCAS gets the same always-runnable caller/no-skip floors; its heavyweight
+	@# real-infra e2e runs through pcas-release-gate in CI/release.
 	@if [ "$${LINT_ALLOW_PARTIAL:-0}" = "1" ]; then \
 		echo "!! WARNING: PCAS caller/no-skip gates NOT run by lint-partial; run 'make pcas-release-gate' for the full PCAS release gate."; \
 	else \
@@ -502,11 +496,17 @@ editions-gate: ## Prove the open-core one-way valve and core-only build
 		exit 1; \
 	fi
 	@echo ">> trstctl_core dependency graph links zero remediation internals"
-	@if $(GO) list -tags trstctl_core -deps ./cmd/trstctl | grep -E '^$(MODULE)/internal/(incident|fleet|pqcmigration)(/|$$)' >/dev/null; then \
+	@if $(GO) list -tags trstctl_core -deps ./cmd/trstctl | grep -E '^$(MODULE)/internal/(incident|fleet)(/|$$)' >/dev/null; then \
 		echo "FAIL: trstctl_core build links moved remediation internals" >&2; \
-		$(GO) list -tags trstctl_core -deps ./cmd/trstctl | grep -E '^$(MODULE)/internal/(incident|fleet|pqcmigration)(/|$$)' >&2; \
+		$(GO) list -tags trstctl_core -deps ./cmd/trstctl | grep -E '^$(MODULE)/internal/(incident|fleet)(/|$$)' >&2; \
 		exit 1; \
 	fi
+	@echo ">> trstctl_core dependency graph links the core families (PCAS, AGID, XREC, VDEC, PQC)"
+	@for pkg in succession agentid reconcile decommission pqc; do \
+		if ! $(GO) list -tags trstctl_core -deps ./cmd/trstctl | grep -qE "^$(MODULE)/internal/$$pkg(/|$$)"; then \
+			echo "FAIL: trstctl_core build does not link internal/$$pkg; the core families attach in every build" >&2; exit 1; \
+		fi; \
+	done
 	@echo ">> trstctl_core tests over non-ee packages"
 	@set -euo pipefail; parallelism="$$(scripts/ci/go-package-parallelism.sh)"; \
 	pkgs="$$( $(GO) list $(GO_PACKAGES) | grep -v -E '^$(MODULE)/ee(/|$$)' | grep -v -E '^$(LIVE_PERF_IMPORT_RE)$$' )"; \
@@ -515,13 +515,13 @@ editions-gate: ## Prove the open-core one-way valve and core-only build
 	@GOFLAGS="$${GOFLAGS:-} -timeout=$(SERVER_COMPLEMENTARY_TIMEOUT)" $(GO) test -tags trstctl_core $(GO_TEST_EXACT_FLAG) -p=1 $(LIVE_PERF_PACKAGES)
 
 .PHONY: pcas-caller-gate pcas-caller-gate-strong
-pcas-caller-gate: ## PCAS-INT-CALL production-caller FLOOR: the non-constructor mechanism gate plus the auto-enumerated ee/succession constructor floor + seam
+pcas-caller-gate: ## PCAS-INT-CALL production-caller FLOOR: the non-constructor mechanism gate plus the auto-enumerated internal/succession constructor floor + seam
 	@./scripts/pcas_prod_caller_gate.sh
-	@echo ">> pcas-caller-gate (PCAS-INT-CALL floor + seam: every ee/succession constructor has a non-test caller rooted at an EE attach seam)"
-	@$(GO) test ./ee/succession/intgate/... -count=1
-pcas-caller-gate-strong: ## PCAS-INT-CALL STRONG check (CI): RTA call graph from cmd/trstctl, cmd/trstctl-signer and cmd/trstctl-agent proves every ee/succession constructor is reachable
+	@echo ">> pcas-caller-gate (PCAS-INT-CALL floor + seam: every internal/succession constructor has a non-test caller rooted at a core attach seam)"
+	@$(GO) test ./internal/succession/intgate/... -count=1
+pcas-caller-gate-strong: ## PCAS-INT-CALL STRONG check (CI): RTA call graph from cmd/trstctl, cmd/trstctl-signer and cmd/trstctl-agent proves every internal/succession constructor is reachable
 	@echo ">> pcas-caller-gate-strong (PCAS-INT-CALL RTA reachability; whole-program load, CI-only)"
-	@$(GO) test -tags pcasrta ./ee/succession/intgate/... -count=1
+	@$(GO) test -tags pcasrta ./internal/succession/intgate/... -count=1
 
 .PHONY: pcas-no-skip-gate no-skip-gate
 pcas-no-skip-gate: ## PCAS no-skip gate (INT-20): release-gate tests must not call t.Skip
@@ -531,49 +531,49 @@ no-skip-gate: pcas-no-skip-gate
 
 .PHONY: pcas-e2e-gate pcas-release-gate
 pcas-e2e-gate: ## PCAS full-stack e2e gate (INT-20): real PG + JetStream + signer subprocess + WASM parity
-	@$(GO) test ./ee/succession/conformance -run '$(PCAS_E2E_RUN)' -count=1 -timeout=10m
+	@$(GO) test ./internal/succession/conformance -run '$(PCAS_E2E_RUN)' -count=1 -timeout=10m
 
 pcas-release-gate: pcas-caller-gate pcas-no-skip-gate pcas-e2e-gate ## PCAS release gate (INT-23)
 
 .PHONY: agid-caller-gate agid-caller-gate-strong agid-wire-gate
-agid-caller-gate: ## AGID-INT-CALL production-caller FLOOR: every ee/agentid mechanism has a non-test caller; the ee/agentid/verify RP SDK is the DEFERRED exception
-	@echo ">> agid-caller-gate (AGID-INT-CALL floor + seam: every ee/agentid constructor has a non-test caller rooted at the ee_attach seam)"
-	@$(GO) test ./ee/agentid/intgate/... -count=1
-agid-caller-gate-strong: ## AGID-INT-CALL STRONG check (CI): RTA call graph from cmd/* main.main (no -tags trstctl_core) proves every ee/agentid constructor is reachable
+agid-caller-gate: ## AGID-INT-CALL production-caller FLOOR: every internal/agentid mechanism has a non-test caller; the internal/agentid/verify RP SDK is the DEFERRED exception
+	@echo ">> agid-caller-gate (AGID-INT-CALL floor + seam: every internal/agentid constructor has a non-test caller rooted at the attach_families seam)"
+	@$(GO) test ./internal/agentid/intgate/... -count=1
+agid-caller-gate-strong: ## AGID-INT-CALL STRONG check (CI): RTA call graph from cmd/* main.main (no -tags trstctl_core) proves every internal/agentid constructor is reachable
 	@echo ">> agid-caller-gate-strong (AGID-INT-CALL RTA reachability; whole-program load, CI-only)"
-	@$(GO) test -tags agidrta ./ee/agentid/intgate/... -count=1
+	@$(GO) test -tags agidrta ./internal/agentid/intgate/... -count=1
 agid-wire-gate: ## AGID-INT-WIRE real-infra gate: PostgreSQL/RLS + embedded NATS + real signer (the agentid twin of vdec-wire-gate/xrec-wire-gate)
 	@echo ">> agid-wire-gate (AGID-INT-WIRE real PG/RLS + embedded NATS + real signer)"
-	@$(GO) test -tags integration ./ee/agentid/intwire/... ./ee/agentid/delegation/... -count=1 -timeout=12m
+	@$(GO) test -tags integration ./internal/agentid/intwire/... ./internal/agentid/delegation/... -count=1 -timeout=12m
 
 .PHONY: xrec-caller-gate xrec-caller-gate-strong xrec-wire-gate xrec-release-gate
-xrec-caller-gate: ## XREC-INT-CALL production-caller FLOOR: every ee/reconcile constructor has a seam-rooted non-test caller
-	@echo ">> xrec-caller-gate (XREC-INT-CALL floor + seam: every ee/reconcile constructor has a non-test caller rooted at the ee_attach seam)"
-	@$(GO) test ./ee/reconcile/intgate/... -count=1
+xrec-caller-gate: ## XREC-INT-CALL production-caller FLOOR: every internal/reconcile constructor has a seam-rooted non-test caller
+	@echo ">> xrec-caller-gate (XREC-INT-CALL floor + seam: every internal/reconcile constructor has a non-test caller rooted at the attach_families seam)"
+	@$(GO) test ./internal/reconcile/intgate/... -count=1
 xrec-caller-gate-strong: ## XREC-INT-CALL STRONG check (CI): RTA call graph from cmd/trstctl and cmd/trstctl-signer proves every XREC constructor is reachable
 	@echo ">> xrec-caller-gate-strong (XREC-INT-CALL RTA reachability; whole-program load, CI-only)"
-	@$(GO) test -tags xrecrta ./ee/reconcile/intgate/... -count=1
+	@$(GO) test -tags xrecrta ./internal/reconcile/intgate/... -count=1
 
 .PHONY: vdec-caller-gate vdec-caller-gate-strong vdec-wire-gate vdec-release-gate
-vdec-caller-gate: ## VDEC-INT-CALL production-caller FLOOR: every ee/decommission constructor has a seam-rooted non-test caller
-	@echo ">> vdec-caller-gate (VDEC-INT-CALL floor + seam: every ee/decommission constructor has a non-test caller rooted at the ee_attach seam)"
-	@$(GO) test ./ee/decommission/intgate/... -count=1
+vdec-caller-gate: ## VDEC-INT-CALL production-caller FLOOR: every internal/decommission constructor has a seam-rooted non-test caller
+	@echo ">> vdec-caller-gate (VDEC-INT-CALL floor + seam: every internal/decommission constructor has a non-test caller rooted at the attach_families seam)"
+	@$(GO) test ./internal/decommission/intgate/... -count=1
 vdec-caller-gate-strong: ## VDEC-INT-CALL STRONG check (CI): RTA call graph from cmd/trstctl and cmd/trstctl-signer proves every VDEC constructor is reachable
 	@echo ">> vdec-caller-gate-strong (VDEC-INT-CALL RTA reachability; whole-program load, CI-only)"
-	@$(GO) test -tags vdecrta ./ee/decommission/intgate/... -count=1
+	@$(GO) test -tags vdecrta ./internal/decommission/intgate/... -count=1
 vdec-wire-gate: ## VDEC-INT-WIRE real-infra gate: PostgreSQL/RLS + embedded NATS + real signer + restart replay
 	@echo ">> vdec-wire-gate (VDEC-INT-WIRE real PG/RLS + embedded NATS + cmd/trstctl-signer)"
-	@$(GO) test -tags integration ./ee/decommission/intwire/... -count=1 -timeout=10m
+	@$(GO) test -tags integration ./internal/decommission/intwire/... -count=1 -timeout=10m
 vdec-release-gate: vdec-caller-gate vdec-wire-gate ## VDEC-11 release gate: conformance, vectors, fuzz seeds, traceability, edition/zero-removal, and e2e
 	@echo ">> vdec-release-gate (VDEC-11 conformance, vectors, fuzz seeds, traceability, edition/zero-removal, and real-substrate e2e)"
-	@$(GO) test ./ee/decommission/conformance/... -count=1
-	@$(GO) test -tags integration ./ee/decommission/conformance/... -count=1 -timeout=12m
+	@$(GO) test ./internal/decommission/conformance/... -count=1
+	@$(GO) test -tags integration ./internal/decommission/conformance/... -count=1 -timeout=12m
 xrec-wire-gate: ## XREC-INT-WIRE real-infra gate: PostgreSQL/RLS + embedded NATS + real signer + restart replay
 	@echo ">> xrec-wire-gate (XREC-INT-WIRE real PG/RLS + embedded NATS + cmd/trstctl-signer)"
-	@$(GO) test -tags integration ./ee/reconcile/intwire/... -count=1 -timeout=10m
+	@$(GO) test -tags integration ./internal/reconcile/intwire/... -count=1 -timeout=10m
 xrec-release-gate: ## XREC-13 release gate: conformance vectors + differential + fuzz decode smoke + edition/zero-removal + e2e
 	@echo ">> xrec-release-gate (XREC-13 conformance, differential, fuzz decode smoke, edition/zero-removal, and real-substrate e2e)"
-	@$(GO) test -tags integration ./ee/reconcile/conformance/... -count=1 -timeout=10m
+	@$(GO) test -tags integration ./internal/reconcile/conformance/... -count=1 -timeout=10m
 
 .PHONY: claim-traceability-check
 claim-traceability-check: ## Verify ee/docs/claim-traceability.md regenerates byte-identical from the claim citations in ee/ source, with zero integrity findings
@@ -598,7 +598,7 @@ connector-support-docs-check: ## Verify docs/features/connector-support-matrix.m
 .PHONY: security-review
 security-review: editions-gate xrec-caller-gate xrec-caller-gate-strong xrec-wire-gate xrec-release-gate vdec-caller-gate vdec-caller-gate-strong vdec-wire-gate vdec-release-gate ## Security-focused local review for signer, remediation, connectors, XREC, and VDEC delivery paths
 	@echo ">> security-review (privileged signer/server/orchestrator/connectors/XREC/VDEC package tests)"
-	@$(GO) test ./internal/signing ./internal/server ./internal/orchestrator ./internal/connector/... ./ee/reconcile/... ./ee/decommission/... -count=1
+	@$(GO) test ./internal/signing ./internal/server ./internal/orchestrator ./internal/connector/... ./internal/reconcile/... ./internal/decommission/... -count=1
 
 .PHONY: web-typecheck web-lint web-format-check web-check
 web-typecheck: ## Run the frontend TypeScript no-emit check from the repository root (CODE-002)

@@ -311,7 +311,7 @@ func serveControlPlane(ctx context.Context, cfg *config.Config, getenv func(stri
 		}()
 	}
 
-	if err := server.RunWithExtraMigrations(ctx, cfg, extraMigrationSources(), attachEE); err != nil {
+	if err := server.RunWithExtraMigrations(ctx, cfg, extraMigrationSources(), attachAll); err != nil {
 		return err
 	}
 	_, _ = fmt.Fprintln(stderr, "trstctl stopped cleanly")

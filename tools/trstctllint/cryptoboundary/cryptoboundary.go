@@ -28,10 +28,11 @@ import (
 
 const (
 	modulePath = "trstctl.com/trstctl"
-	// boundaryPkg = modulePath + "/internal/crypto" remains the canonical MPL
-	// crypto boundary; ee/pqc is the proprietary PQC implementation boundary.
-	boundaryPkg      = modulePath + "/internal/crypto"
-	eePQCBoundaryPkg = modulePath + "/ee/pqc"
+	// boundaryPkg = modulePath + "/internal/crypto" remains the canonical core
+	// crypto boundary; internal/pqc is the PQC implementation boundary (part of
+	// the core since 2026-09-20, previously ee/pqc).
+	boundaryPkg    = modulePath + "/internal/crypto"
+	pqcBoundaryPkg = modulePath + "/internal/pqc"
 )
 
 // thirdPartyCryptoPrefixes are third-party cryptography module path prefixes that,
@@ -96,28 +97,28 @@ func run(pass *analysis.Pass) (interface{}, error) {
 }
 
 // withinBoundary reports whether pkgPath may import crypto/* and third-party
-// cryptography: the MPL boundary, or the proprietary PQC boundary under ee/.
+// cryptography: the internal/crypto boundary, or the PQC boundary internal/pqc.
 func withinBoundary(pkgPath string) bool {
 	return withinMPLBoundary(pkgPath) ||
-		pkgPath == eePQCBoundaryPkg || strings.HasPrefix(pkgPath, eePQCBoundaryPkg+"/")
+		pkgPath == pqcBoundaryPkg || strings.HasPrefix(pkgPath, pqcBoundaryPkg+"/")
 }
 
 // withinMPLBoundary reports whether pkgPath is internal/crypto or a subpackage.
 //
 // The two boundaries are one set for the OUTWARD rule and two different things
 // for the INWARD one, and conflating them is a mistake worth naming: this check
-// originally used withinBoundary for both, which made ee/pqc subject to the
-// inward rule and reported its imports of internal/signing as violations. Those
-// imports are not violations. ee/pqc reaches the runtime by implementing
-// signing.KeyFactory at the attach seam, so importing core is how AN-9 says an
-// ee/ package is supposed to work ("ee/ may import core") — the alternative
-// would be duplicating the signer's proto types into ee/, which is strictly
-// worse for the property this rule protects.
+// originally used withinBoundary for both, which made the PQC package subject
+// to the inward rule and reported its imports of internal/signing as
+// violations. Those imports are not violations. internal/pqc reaches the runtime
+// by implementing signing.KeyFactory at the attach seam, so importing the
+// signer's types is how it is supposed to work — the alternative would be
+// duplicating the signer's proto types, which is strictly worse for the
+// property this rule protects.
 //
-// So: ee/pqc is inside the boundary for "may hold crypto" and outside it for
-// "must stay small". Only internal/crypto — the auditable MPL boundary whose
-// whole value is that a reader can hold it in their head — is subject to the
-// inward half.
+// So: internal/pqc is inside the boundary for "may hold crypto" and outside it
+// for "must stay small". Only internal/crypto — the auditable core boundary
+// whose whole value is that a reader can hold it in their head — is subject to
+// the inward half.
 func withinMPLBoundary(pkgPath string) bool {
 	return pkgPath == boundaryPkg || strings.HasPrefix(pkgPath, boundaryPkg+"/")
 }
@@ -159,9 +160,8 @@ func checkInboundImports(pass *analysis.Pass) error {
 			if !strings.HasPrefix(path, modulePath+"/") {
 				continue
 			}
-			// internal/crypto only, not withinBoundary: core importing ee/pqc
-			// would break AN-9 in the other direction, so the boundary may
-			// import itself and nothing else in the module.
+			// internal/crypto only, not withinBoundary: the crypto boundary may
+			// import itself and nothing else in the module, internal/pqc included.
 			if withinMPLBoundary(path) {
 				continue
 			}

@@ -285,7 +285,7 @@ golden. There is no MPL-core CLI command for licensed fleet execution or rollbac
 project through the event log into `crypto_assets`, so posture dashboards and
 `migration_progress` stay derived from replayable state, not hand-edited tables.
 
-**Execution status:** served when the Enterprise/PQC license attaches `ee/pqcmigration`, for CBOM
+**Execution status:** served when the Enterprise/PQC license attaches `internal/pqcmigration`, for CBOM
 certificate-key assets through ACME hybrid transition re-issuance with rollback. The MPL
 core exposes CBOM posture, classical profile selection, and migration campaign
 tracking/proof, but not PQC algorithms, issuance, or automated fleet execution.

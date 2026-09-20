@@ -70,7 +70,11 @@ func TestEditionsEndpointReturnsCommunityAndFIPSPosture(t *testing.T) {
 		t.Fatalf("community editions header = tier %s state %s", got.Tier, got.State)
 	}
 	assertEditionsFeature(t, got.Features, license.FeatureFIPS, license.TierEnterprise, false, license.ModeOff)
-	assertEditionsFeature(t, got.Features, license.FeaturePQC, license.TierEnterprise, false, license.ModeOff)
+	for _, f := range got.Features {
+		if f.Name == "pqc" {
+			t.Fatal("editions advertise pqc as a license feature; PQC ships in the core")
+		}
+	}
 	if got.FIPS.ModuleActive != crypto.FIPSEnabled() {
 		t.Fatalf("fips.module_active=%t, want crypto.FIPSEnabled()=%t", got.FIPS.ModuleActive, crypto.FIPSEnabled())
 	}

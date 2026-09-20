@@ -24,8 +24,8 @@ func TestAttachEERemediationRequiresEnterpriseLicense(t *testing.T) {
 	if err := attachEE(context.Background(), &config.Config{}, nil, license.Community(), deps); err != nil {
 		t.Fatalf("community attachEE: %v", err)
 	}
-	if deps.EnableRemediation || deps.LicensedAPIOptionsFactory != nil || deps.LicensedOutboxFactory != nil || deps.LicensedLeafSigner != nil || deps.LicensedCSRInspector != nil || deps.LicensedCSRParser != nil || deps.LicensedSPIFFESVIDFactory != nil {
-		t.Fatal("community attach must not enable remediation or PQC")
+	if deps.EnableRemediation {
+		t.Fatal("community attach must not enable remediation")
 	}
 
 	deps = &server.Deps{}
@@ -34,9 +34,6 @@ func TestAttachEERemediationRequiresEnterpriseLicense(t *testing.T) {
 	}
 	if !deps.EnableRemediation {
 		t.Fatal("enterprise remediation feature did not mount the remediation surface")
-	}
-	if deps.LicensedAPIOptionsFactory == nil || deps.LicensedOutboxFactory == nil || deps.LicensedLeafSigner == nil || deps.LicensedCSRInspector == nil || deps.LicensedCSRParser == nil || deps.LicensedSPIFFESVIDFactory == nil {
-		t.Fatal("enterprise PQC feature did not mount the PQC surface")
 	}
 }
 
@@ -125,61 +122,13 @@ func TestAttachEEGovernanceRequiresEnterpriseLicense(t *testing.T) {
 	}
 }
 
-func TestAttachEEAgentDelegationRequiresEnterpriseLicense(t *testing.T) {
-	// Feature absent (Community): the FeatureAgentDelegation block is skipped, so no
-	// chain-bound broker issuance precondition is attached. The free single-hop
-	// attested badge is unaffected because it never routes through this precondition
-	// (INV-A10 zero removal): its absence here is exactly the unlicensed steady state.
-	deps := &server.Deps{}
-	if err := attachEE(context.Background(), &config.Config{}, nil, license.Community(), deps); err != nil {
-		t.Fatalf("community attachEE: %v", err)
-	}
-	if deps.BrokerIssuancePrecondition != nil {
-		t.Fatal("community attach must not attach a chain-bound broker issuance precondition")
-	}
-
-	// Feature present (Enterprise): the single lic.Has(FeatureAgentDelegation) block
-	// runs and wires the AGID broker precondition factory.
-	deps = &server.Deps{}
-	if err := attachEE(context.Background(), &config.Config{}, nil, enterpriseLicense(t), deps); err != nil {
-		t.Fatalf("enterprise attachEE: %v", err)
-	}
-	if deps.BrokerIssuancePrecondition == nil {
-		t.Fatal("enterprise agent-delegation feature did not attach the chain-bound broker issuance precondition")
-	}
-}
-
-func TestAttachEEReconcileRequiresEnterpriseLicense(t *testing.T) {
-	deps := &server.Deps{}
-	if err := attachEE(context.Background(), &config.Config{}, nil, license.Community(), deps); err != nil {
-		t.Fatalf("community attachEE: %v", err)
-	}
-	if hasBackgroundWorker(deps, "xrec.rounds") {
-		t.Fatal("community attach must not mount XREC round scheduler")
-	}
-	if len(deps.LicensedProjectionOptions) != 0 {
-		t.Fatal("community attach must not register XREC drift projections")
-	}
-
-	deps = &server.Deps{}
-	if err := attachEE(context.Background(), &config.Config{}, nil, enterpriseLicense(t), deps); err != nil {
-		t.Fatalf("enterprise attachEE: %v", err)
-	}
-	if !hasBackgroundWorker(deps, "xrec.rounds") {
-		t.Fatal("enterprise reconcile feature did not mount the XREC round scheduler")
-	}
-	if len(deps.LicensedProjectionOptions) == 0 {
-		t.Fatal("enterprise reconcile feature did not register the XREC drift projection")
-	}
-}
-
 func TestAttachEEProviderLicenseMountsEnterpriseAndProviderSurfaces(t *testing.T) {
 	deps := &server.Deps{}
 	if err := attachEE(context.Background(), &config.Config{}, nil, commercialLicense(t, license.TierProvider), deps); err != nil {
 		t.Fatalf("provider attachEE: %v", err)
 	}
-	if !deps.EnableRemediation || deps.LicensedCSRParser == nil || deps.GovernanceFactory == nil {
-		t.Fatal("Provider license did not mount inherited Enterprise remediation, PQC, and governance surfaces")
+	if !deps.EnableRemediation || deps.GovernanceFactory == nil {
+		t.Fatal("Provider license did not mount inherited Enterprise remediation and governance surfaces")
 	}
 	if deps.ProviderHandler == nil {
 		t.Fatal("Provider license did not mount the Provider control-plane surface")
@@ -212,44 +161,6 @@ func TestOneShotRecoveryProjectionAttachIsProviderGated(t *testing.T) {
 		commercialLicense(t, license.TierProvider), nil, nil); err == nil {
 		t.Fatal("provider recovery projection accepted missing PostgreSQL/JetStream; a restore would silently omit authority state")
 	}
-}
-
-// TestAttachVerifiableDecommissionMountsBothSeams is the AUD-2/AUD-3 attach
-// regression: the VDEC block must mount BOTH the re-protection outbox handler
-// AND the API options factory (retirement checklist source + the re-protection
-// start route, the handler's only production producer). Mounting just the
-// outbox factory is exactly the defect the unreachable-capability audit found:
-// a consumer with no producer and a served route with no source.
-func TestAttachVerifiableDecommissionMountsBothSeams(t *testing.T) {
-	deps := &server.Deps{}
-	if err := attachVerifiableDecommission(nil, deps); err != nil {
-		t.Fatalf("attachVerifiableDecommission: %v", err)
-	}
-	if deps.LicensedOutboxFactory == nil {
-		t.Fatal("VDEC attach did not mount the re-protection outbox handler factory")
-	}
-	if deps.LicensedAPIOptionsFactory == nil {
-		t.Fatal("VDEC attach did not mount the API options factory (checklist source + reprotect route)")
-	}
-	if len(deps.LicensedProjectionOptions) != 1 {
-		t.Fatalf("VDEC attach mounted %d projection options, want the retirement replay projection", len(deps.LicensedProjectionOptions))
-	}
-	opts, err := deps.LicensedAPIOptionsFactory(server.LicensedAPIOptionsDeps{})
-	if err != nil {
-		t.Fatalf("VDEC API options factory: %v", err)
-	}
-	if len(opts) != 3 {
-		t.Fatalf("VDEC API options factory yielded %d options, want 3 (checklist source, routes, schemas)", len(opts))
-	}
-}
-
-func hasBackgroundWorker(deps *server.Deps, name string) bool {
-	for _, worker := range deps.LicensedBackgroundWorkers {
-		if worker != nil && worker.Name() == name {
-			return true
-		}
-	}
-	return false
 }
 
 func enterpriseLicense(t *testing.T) *license.Manager {

@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
 
-//go:build !trstctl_core
-
 package main
 
 import (
@@ -15,17 +13,16 @@ import (
 
 	"google.golang.org/grpc"
 
-	"trstctl.com/trstctl/ee/succession/agent"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/succession/agent"
 )
 
-// cosign_attach.go is the workload-agent co-sign seam (INT-16, claim 19), behind the
-// same !trstctl_core tag as the other ee attach seams. When configured, the agent
-// serves the ee/succession/agent CoSignerService: it holds the workload's predecessor
+// cosign_attach.go is the workload-agent co-sign seam (INT-16, claim 19). PCAS is
+// part of the core, so every agent build carries it. When configured, the agent
+// serves the internal/succession/agent CoSignerService: it holds the workload's predecessor
 // key and co-signs succession commitments the control plane forms, over a real gRPC
 // transport, enforcing the FIG. 5 oracle-prevention rules server-side. Only the
-// predecessor signature (public) ever leaves the agent. The core build stubs this out
-// (cosign_attach_core.go).
+// predecessor signature (public) ever leaves the agent.
 
 // workloadCoSignConfig configures the workload-held predecessor co-sign service.
 type workloadCoSignConfig struct {

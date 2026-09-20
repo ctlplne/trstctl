@@ -599,7 +599,7 @@ func TestProductionCryptoImportsStayCentralized(t *testing.T) {
 	}
 
 	allowedRoots := []string{
-		"ee/pqc/",
+		"internal/pqc/",
 		"internal/crypto/",
 		"tools/trstctllint/",
 	}
@@ -634,7 +634,7 @@ func TestProductionCryptoImportsStayCentralized(t *testing.T) {
 		}
 	}
 	if len(violations) > 0 {
-		t.Errorf("CRYPTO-101: production crypto imports must stay inside internal/crypto or the proprietary ee/pqc boundary:\n%s", strings.Join(violations, "\n"))
+		t.Errorf("CRYPTO-101: production crypto imports must stay inside internal/crypto or the proprietary internal/pqc boundary:\n%s", strings.Join(violations, "\n"))
 	}
 }
 
@@ -897,7 +897,10 @@ func allowedEditionGatingPath(path string) bool {
 	return strings.HasPrefix(path, "../internal/license/") ||
 		strings.HasPrefix(path, "../cmd/trstctl-license/") ||
 		path == "../cmd/trstctl/ee_attach.go" ||
-		path == "../cmd/trstctl/ee_attach_core.go"
+		path == "../cmd/trstctl/ee_attach_core.go" ||
+		// The AGID production-caller gate classifies constructors by a gate tier
+		// (required/deferred); that is gate inventory, not an edition check.
+		strings.HasPrefix(path, "../internal/agentid/intgate/")
 }
 
 // TestMeasuredIssuanceClaimCitesRealTest is the DOCS-008 lock for the measured-
@@ -4050,10 +4053,10 @@ func TestTestTrackStrengthGuardsStayRequired(t *testing.T) {
 		"untrustedParseVerbs",
 		"dirHasFuzzTarget",
 		"requireFuzzFuncByName",
-		`roots := []string{".", "../protocols", "../tsa", "../signing", "../secretscan", "../attest", "../../ee/kmip"}`,
+		`roots := []string{".", "../protocols", "../tsa", "../signing", "../secretscan", "../attest", "../../internal/kmip"}`,
 		`[]string{"Inspect", "ParseSCEPRequest", "ParseTTLV", "ParseOrderRequest"}`,
 		`firstParamIsByteSlice`,
-		`"../../ee/kmip"`,
+		`"../../internal/kmip"`,
 		"FuzzParseSCEPRequest",
 		"FuzzParseSCEPResponse",
 		"FuzzVerifyCMSSignature",

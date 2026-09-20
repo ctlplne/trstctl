@@ -141,6 +141,6 @@ Mapped to the claim / invariant that carries the mitigation.
 The mitigations above are exercised by the PCAS conformance, differential, fuzz, and
 golden-vector gates, the per-card integration tests (INT-01..INT-19), and the
 security-review regression tests added in INT-22
-(`ee/rpverify/security_hardening_test.go`, the cross-deployment break-glass case in
-`ee/succession/minter/strength_test.go`). The architecture linter (`tools/trstctllint`)
+(`internal/rpverify/security_hardening_test.go`, the cross-deployment break-glass case in
+`internal/succession/minter/strength_test.go`). The architecture linter (`tools/trstctllint`)
 enforces AN-3/AN-4/AN-9 on every build.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: LicenseRef-trstctl-EE
+# SPDX-License-Identifier: BUSL-1.1
 #
 # PCAS no-skip gate (INT-INV-4): a gate/e2e test that t.Skip()s over missing
 # infrastructure is not a gate. This fails if any PCAS gate package contains a
@@ -13,7 +13,7 @@ cd "$(dirname "$0")/.." || exit 2
 # Packages whose tests are release GATES and must run over real infrastructure.
 # Every release-GATE and real-infra WIRE-GATE package: a t.Skip in any of these
 # is a gate that silently degrades when its substrate is absent (TEST-NOSKIP-001).
-GATE_DIRS="ee/succession/conformance ee/succession/signerwiring ee/agentid/intwire ee/decommission/intwire ee/reconcile/intwire"
+GATE_DIRS="internal/succession/conformance internal/succession/signerwiring internal/agentid/intwire internal/decommission/intwire internal/reconcile/intwire"
 
 hits=$(grep -rn --include='*_test.go' -e 't\.Skip' $GATE_DIRS 2>/dev/null)
 if [ -n "$hits" ]; then
