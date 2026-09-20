@@ -3064,6 +3064,7 @@ export interface EditionPackaging {
   bundled_non_production_deployments: number;
   category_label: string;
   certificate_counters_classification: string;
+  commercial_posture: string;
   editions: EditionPackagingEntry[];
   evidence_rail: string[];
   managed_boundary: string;
@@ -3072,9 +3073,7 @@ export interface EditionPackaging {
   no_per_certificate_billing: boolean;
   non_production_support_posture: string;
   positioning: string;
-  pricing_posture: string;
   provider_billing_unit: string;
-  reference_price_bands: ReferencePriceBand[];
 }
 
 export interface EditionPackagingEntry {
@@ -6286,13 +6285,6 @@ export interface ProtocolProfileStatus {
 export interface RCARequest {
   question: string;
   subject?: string;
-}
-
-export interface ReferencePriceBand {
-  annual_usd: number;
-  id: string;
-  label: string;
-  unit: string;
 }
 
 export interface RegionalFailoverStep {

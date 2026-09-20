@@ -1295,7 +1295,7 @@ The ID is not a secret and does not phone home. It is a local name bound by the
 vendor's Ed25519 signature. Copying a non-production license to another control
 plane without giving that deployment its own signed ID fails startup. See
 [Editions](editions.md#signed-deployment-environment-entitlement) for the claim
-shape and [Pricing](pricing.md#bundled-non-production-entitlement) for what is
+shape and [Editions](editions.md#commercial-posture) for what is
 included.
 
 The related `TRSTCTL_PCAS_*` variable surface (about two dozen settings covering

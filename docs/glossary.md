@@ -61,7 +61,7 @@ The optional trstctl process that runs inside a customer network or beside a hos
 opens an outbound mTLS channel to the control plane, and claims only allowed job
 kinds. The product calls it the **agent** everywhere you meet it — the
 `trstctl-agent` binary, the setup wizard, the `agents` API and CLI resource, and the
-console pages. "trstctl Edge" is the packaging name for that runtime in pricing and
+console pages. "trstctl Edge" is the packaging name for that runtime in packaging and
 roadmap language; when you read it, read "agent". Its enrolled certificate fixes whether it has the
 `host` role, the `network` role, or both; an ordinary host enrollment cannot silently
 become a network relay. The binary remains `trstctl-agent` and the API/CLI resource

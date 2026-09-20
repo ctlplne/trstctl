@@ -40,6 +40,12 @@ This file is the human-readable companion to the git tags; the
   `make reproducible-check`, `make sdk-test` and the registry release script
   build and test it from that directory, and the Terraform SDK modules are no
   longer requirements of the core module.
+- **No published pricing.** Reference list prices and wholesale bands are gone
+  from the docs (`docs/pricing.md` is removed), the README and the editions API:
+  `GET /api/v1/editions` no longer serves `reference_price_bands`, and
+  `pricing_posture` is now `commercial_posture`, stating that Enterprise and
+  Provider terms are agreed per customer and not yet published. The console's
+  editions panel no longer renders a price table.
 
 ### Bundled PostgreSQL authenticates executable bytes before startup (2026-09-09)
 

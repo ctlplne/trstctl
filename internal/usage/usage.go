@@ -22,7 +22,7 @@ const (
 	MeterManagedCustomerBand       = "managed_customer_band"
 	BillingUnitControlPlane        = "control_plane_deployment"
 	BillingUnitManagedCustomerBand = "managed_customer_band"
-	// Deprecated compatibility aliases. Provider pricing is based on contracted
+	// Deprecated compatibility aliases. Provider terms are based on contracted
 	// managed customers, even when an MSP chooses dedicated deployments instead
 	// of representing every customer as one tenant in a shared control plane.
 	MeterManagedTenantBand       = MeterManagedCustomerBand
@@ -33,7 +33,7 @@ const (
 )
 
 // MeterDefinition classifies a usage counter for public packaging and Provider
-// export. Counters can exist for operations without becoming pricing axes.
+// export. Counters can exist for operations without becoming billing axes.
 type MeterDefinition struct {
 	Name            string `json:"name"`
 	Classification  string `json:"classification"`

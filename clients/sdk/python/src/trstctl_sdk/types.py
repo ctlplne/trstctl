@@ -4248,6 +4248,7 @@ EditionPackaging = TypedDict(
         'bundled_non_production_deployments': int,
         'category_label': str,
         'certificate_counters_classification': str,
+        'commercial_posture': str,
         'editions': list[dict[str, Any]],
         'evidence_rail': list[str],
         'managed_boundary': str,
@@ -4256,9 +4257,7 @@ EditionPackaging = TypedDict(
         'no_per_certificate_billing': bool,
         'non_production_support_posture': str,
         'positioning': str,
-        'pricing_posture': str,
         'provider_billing_unit': str,
-        'reference_price_bands': list[dict[str, Any]],
     },
     total=False,
 )
@@ -8666,17 +8665,6 @@ RCARequest = TypedDict(
     {
         'question': str,
         'subject': str,
-    },
-    total=False,
-)
-
-ReferencePriceBand = TypedDict(
-    'ReferencePriceBand',
-    {
-        'annual_usd': int,
-        'id': str,
-        'label': str,
-        'unit': str,
     },
     total=False,
 )

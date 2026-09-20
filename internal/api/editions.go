@@ -40,20 +40,12 @@ type editionPackagingResponse struct {
 	NoEphemeralIdentityBilling        bool                    `json:"no_ephemeral_identity_billing"`
 	CertificateCountersClassification string                  `json:"certificate_counters_classification"`
 	ManagedBoundary                   string                  `json:"managed_boundary"`
-	PricingPosture                    string                  `json:"pricing_posture"`
+	CommercialPosture                 string                  `json:"commercial_posture"`
 	BundledNonProductionDeployments   int                     `json:"bundled_non_production_deployments"`
 	NonProductionSupportPosture       string                  `json:"non_production_support_posture"`
-	ReferencePriceBands               []referencePriceBand    `json:"reference_price_bands"`
 	EvidenceRail                      []string                `json:"evidence_rail"`
 	Editions                          []editionPackagingEntry `json:"editions"`
 	Meters                            []usage.MeterDefinition `json:"meters"`
-}
-
-type referencePriceBand struct {
-	ID        string `json:"id"`
-	Label     string `json:"label"`
-	AnnualUSD int    `json:"annual_usd"`
-	Unit      string `json:"unit"`
 }
 
 type editionPackagingEntry struct {
@@ -124,16 +116,9 @@ func editionPackaging() editionPackagingResponse {
 		NoEphemeralIdentityBilling:        true,
 		CertificateCountersClassification: usage.MeterOperationalTelemetry,
 		ManagedBoundary:                   "Provider/MSP normally runs one shared control plane with multiple customer tenants, with dedicated customer deployments available when its security posture requires them.",
-		PricingPosture:                    "Free is the self-hosted BUSL-1.1 core; no signed license is needed. Enterprise reference list is USD 15,000/year Standard or USD 30,000/year Plus per production control-plane deployment. Provider/MSP wholesale reference bands are USD 12,000/year for 1-10 managed customers, USD 30,000/year for 11-50, and USD 72,000/year for 51-250; 250+ is negotiable, and each MSP controls its downstream pricing. Credentials and rotations are never billing units.",
+		CommercialPosture:                 "Free is the self-hosted BUSL-1.1 core; no signed license is needed. Enterprise and Provider are commercial: their terms are not published yet and are agreed per customer, and a Provider sets its own downstream terms.",
 		BundledNonProductionDeployments:   license.BundledNonProductionDeployments,
 		NonProductionSupportPosture:       "Each Enterprise or Provider entitlement bundles three explicitly bound non-production control planes with the full licensed feature set and no production SLA.",
-		ReferencePriceBands: []referencePriceBand{
-			{ID: "enterprise-standard", Label: "Enterprise Standard", AnnualUSD: 15000, Unit: "production control plane"},
-			{ID: "enterprise-plus", Label: "Enterprise Plus", AnnualUSD: 30000, Unit: "HA production control plane"},
-			{ID: "provider-1-10", Label: "Provider 1-10", AnnualUSD: 12000, Unit: "managed customer band"},
-			{ID: "provider-11-50", Label: "Provider 11-50", AnnualUSD: 30000, Unit: "managed customer band"},
-			{ID: "provider-51-250", Label: "Provider 51-250", AnnualUSD: 72000, Unit: "managed customer band"},
-		},
 		EvidenceRail: []string{
 			"live eval receipts",
 			"served NHI route coverage",
@@ -165,7 +150,7 @@ func editionPackaging() editionPackagingResponse {
 				Column:          "Provider / MSP",
 				BuyerFit:        "MSPs operating trstctl for customers from a shared control plane or dedicated deployments",
 				LicenseBoundary: "offline signed Provider license",
-				Billing:         "negotiated managed-customer band; MSP sets downstream hosting, support, and customer prices",
+				Billing:         "managed-customer band; the MSP sets its own downstream hosting, support, and terms",
 				Included:        []string{"all Enterprise features", "provider plane", "metering", "white label", "siloed isolation", "managed-service rights", "resale rights"},
 			},
 		},

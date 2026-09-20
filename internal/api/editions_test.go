@@ -43,14 +43,10 @@ type editionsTestResponse struct {
 		NoEphemeralIdentityBilling        bool   `json:"no_ephemeral_identity_billing"`
 		CertificateCountersClassification string `json:"certificate_counters_classification"`
 		ManagedBoundary                   string `json:"managed_boundary"`
-		PricingPosture                    string `json:"pricing_posture"`
+		CommercialPosture                 string `json:"commercial_posture"`
 		BundledNonProductionDeployments   int    `json:"bundled_non_production_deployments"`
 		NonProductionSupportPosture       string `json:"non_production_support_posture"`
-		ReferencePriceBands               []struct {
-			ID        string `json:"id"`
-			AnnualUSD int    `json:"annual_usd"`
-		} `json:"reference_price_bands"`
-		Editions []struct {
+		Editions                          []struct {
 			ID   string `json:"id"`
 			Name string `json:"name"`
 		} `json:"editions"`
@@ -106,9 +102,12 @@ func TestEditionsEndpointServesRED006PackagingDecisions(t *testing.T) {
 		!strings.Contains(strings.ToLower(got.Packaging.ManagedBoundary), "dedicated") {
 		t.Fatalf("provider deployment flexibility is not published: %q", got.Packaging.ManagedBoundary)
 	}
-	if !strings.Contains(strings.ToLower(got.Packaging.PricingPosture), "negotiable") ||
-		!strings.Contains(strings.ToLower(got.Packaging.PricingPosture), "downstream") {
-		t.Fatalf("MSP pricing discretion is not published: %q", got.Packaging.PricingPosture)
+	if !strings.Contains(strings.ToLower(got.Packaging.CommercialPosture), "not published") ||
+		!strings.Contains(strings.ToLower(got.Packaging.CommercialPosture), "downstream") {
+		t.Fatalf("commercial posture must say terms are unpublished and downstream terms are the MSP's: %q", got.Packaging.CommercialPosture)
+	}
+	if strings.Contains(got.Packaging.CommercialPosture, "USD") || strings.Contains(got.Packaging.CommercialPosture, "$") {
+		t.Fatalf("no prices are published; got %q", got.Packaging.CommercialPosture)
 	}
 	if len(got.Packaging.Editions) != 3 {
 		t.Fatalf("license packaging must have exactly Free, Enterprise, and Provider/MSP, got %+v", got.Packaging.Editions)
@@ -197,23 +196,6 @@ func TestAUD56EditionsEndpointServesEffectiveNonProductionEntitlementAndPriceBan
 	}
 	if got.Packaging.BundledNonProductionDeployments != 3 || !strings.Contains(strings.ToLower(got.Packaging.NonProductionSupportPosture), "no production sla") {
 		t.Fatalf("packaging non-production promise = %+v", got.Packaging)
-	}
-	for wantID, wantAnnual := range map[string]int{
-		"enterprise-standard": 15000,
-		"enterprise-plus":     30000,
-		"provider-1-10":       12000,
-		"provider-11-50":      30000,
-		"provider-51-250":     72000,
-	} {
-		found := false
-		for _, band := range got.Packaging.ReferencePriceBands {
-			if band.ID == wantID && band.AnnualUSD == wantAnnual {
-				found = true
-			}
-		}
-		if !found {
-			t.Fatalf("reference price %s=%d missing from %+v", wantID, wantAnnual, got.Packaging.ReferencePriceBands)
-		}
 	}
 }
 

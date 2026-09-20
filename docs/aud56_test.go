@@ -4,24 +4,34 @@ package docs
 
 import (
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 )
 
-func TestAUD56PublishesCompletePricingAndEnvironmentEntitlement(t *testing.T) {
-	pricing := readAUD56Doc(t, "pricing.md")
+func TestAUD56PublishesEnvironmentEntitlementWithoutPrices(t *testing.T) {
+	editions := readAUD56Doc(t, "editions.md")
+	// No prices are published anywhere (2026-09-20): the commercial posture says
+	// so, and the entitlement, grace and read-only behavior stay documented.
+	// Prose wraps, so phrases are matched with whitespace collapsed.
+	flatEditions := strings.ToLower(strings.Join(strings.Fields(editions), " "))
 	for _, want := range []string{
-		"$15,000", "$30,000", "$12,000", "$72,000",
-		"1 production", "3 non-production", "no production SLA",
-		"no per-connector", "no per-protocol", "60-day", "5%", "30-day grace",
+		"not published yet",
+		"1 production", "3 non-production", "no production sla",
+		"no per-connector", "no per-protocol", "30-day grace",
 		"read-only", "core keeps running",
 	} {
-		if !strings.Contains(strings.ToLower(pricing), strings.ToLower(want)) {
-			t.Errorf("pricing.md does not publish %q", want)
+		if !strings.Contains(flatEditions, want) {
+			t.Errorf("editions.md does not state %q", want)
 		}
 	}
+	if price := regexp.MustCompile(`\$[0-9]|USD ?[0-9]`).FindString(editions); price != "" {
+		t.Errorf("editions.md publishes a price (%q); there is no published pricing", price)
+	}
+	if _, err := os.Stat("pricing.md"); err == nil {
+		t.Error("docs/pricing.md exists; there is no published pricing")
+	}
 
-	editions := readAUD56Doc(t, "editions.md")
 	for _, want := range []string{
 		"environment_entitlement", "production_deployment_id",
 		"non_production_deployment_ids", "TRSTCTL_LICENSE_DEPLOYMENT_ID",

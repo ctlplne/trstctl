@@ -148,7 +148,7 @@ const (
 )
 
 // BundledNonProductionDeployments is the public Enterprise/Provider promise.
-// Keep the signed-claim validator, editions API, console, and pricing docs pinned
+// Keep the signed-claim validator, editions API, console, and editions docs pinned
 // to this one constant so the product cannot sell three while enforcing two.
 const BundledNonProductionDeployments = 3
 

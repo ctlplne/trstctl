@@ -121,13 +121,6 @@ describe("WIRE-12 Platform served admin surface", () => {
         managed_boundary: "Provider/MSP normally runs one shared control plane; dedicated customer deployments are supported.",
         bundled_non_production_deployments: 3,
         non_production_support_posture: "Bundled non-production deployments include all Enterprise features and no production SLA.",
-        reference_price_bands: [
-          { id: "enterprise-standard", label: "Enterprise Standard", annual_usd: 15000, unit: "production control plane" },
-          { id: "enterprise-plus", label: "Enterprise Plus", annual_usd: 30000, unit: "HA production control plane" },
-          { id: "provider-1-10", label: "Provider 1–10", annual_usd: 12000, unit: "managed customer band" },
-          { id: "provider-11-50", label: "Provider 11–50", annual_usd: 30000, unit: "managed customer band" },
-          { id: "provider-51-250", label: "Provider 51–250", annual_usd: 72000, unit: "managed customer band" },
-        ],
         editions: [
           { id: "community", name: "Free" },
           { id: "enterprise", name: "Enterprise self-host" },
@@ -242,7 +235,7 @@ describe("WIRE-12 Platform served admin surface", () => {
         { id: "soak", command: "scripts/perf/soak.sh --in <series.json>", artifact: "soak-trend.json", required: true },
       ],
       operator_actions: ["run perf-live"],
-      residuals: ["customer infrastructure pricing is operator-specific"],
+      residuals: ["customer infrastructure costs are operator-specific"],
       evidence_refs: ["internal/perf/contract.go"],
       measurement_artifacts: ["scripts/perf/artifacts/smoke-baseline.json", "scripts/perf/artifacts/live-load-baseline.json"],
       estimated_daily_event_load: 10000000,
@@ -358,8 +351,9 @@ describe("WIRE-12 Platform served admin surface", () => {
     expect(screen.getByText("0 production units")).toBeInTheDocument();
     expect(screen.getByText("2 of 3 non-production slots remaining")).toBeInTheDocument();
     await user.click(screen.getByText("Packaging edition matrix", { exact: true, selector: "summary" }));
-    expect(screen.getByRole("row", { name: /Enterprise Standard.*\$15,000/i })).toBeInTheDocument();
-    expect(screen.getByRole("row", { name: /Provider 51–250.*\$72,000/i })).toBeInTheDocument();
+    // No prices are published (2026-09-20): the editions panel renders no price table.
+    expect(screen.queryByText(/reference price/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\$15,000/)).not.toBeInTheDocument();
     expect(screen.getByRole("row", { name: /Free Enterprise self-host Provider \/ MSP/i })).toBeInTheDocument();
     await user.click(screen.getByText("Feature table", { exact: true }));
     expect(screen.getByRole("row", { name: /fips enterprise Enabled/i })).toBeInTheDocument();

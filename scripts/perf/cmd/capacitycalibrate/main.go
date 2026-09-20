@@ -124,7 +124,7 @@ func main() {
 			JetStreamBytesPerEvent:            jetStream.bytesPerEvent,
 			Notes: []string{
 				"Audit records are measured as event-log projections because trstctl does not maintain a separate audit table.",
-				"Cost rows are model outputs from measured storage/resource units plus visible base/headroom assumptions; customer SKU pricing is intentionally outside this artifact.",
+				"Cost rows are model outputs from measured storage/resource units plus visible base/headroom assumptions; customer SKU costs are intentionally outside this artifact.",
 			},
 		},
 	}

@@ -197,7 +197,7 @@ describe("SIMP-01 Platform served-data reduction", () => {
         { id: "perf-live", command: "scripts/perf/run-local.sh --profile live", artifact: "scripts/perf/artifacts/live-load-baseline.json", required: true },
       ],
       operator_actions: ["run perf-live"],
-      residuals: ["customer infrastructure pricing is operator-specific"],
+      residuals: ["customer infrastructure costs are operator-specific"],
       evidence_refs: ["internal/perf/contract.go"],
       measurement_artifacts: ["scripts/perf/artifacts/smoke-baseline.json", "scripts/perf/artifacts/live-load-baseline.json"],
       estimated_daily_event_load: 10000000,

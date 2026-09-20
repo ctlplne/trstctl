@@ -1108,12 +1108,6 @@ func componentSchemas() map[string]*Schema {
 		"billing":          str(),
 		"included":         {Type: "array", Items: str()},
 	}, "id", "name", "column", "buyer_fit", "license_boundary", "billing", "included")
-	referencePriceBand := object(map[string]*Schema{
-		"id":         str(),
-		"label":      str(),
-		"annual_usd": {Type: "integer"},
-		"unit":       str(),
-	}, "id", "label", "annual_usd", "unit")
 	deploymentEntitlementInfo := object(map[string]*Schema{
 		"deployment_id":                         str(),
 		"environment":                           {Type: "string", Enum: []string{"production", "non_production"}},
@@ -1138,14 +1132,13 @@ func componentSchemas() map[string]*Schema {
 		"no_ephemeral_identity_billing":       {Type: "boolean"},
 		"certificate_counters_classification": str(),
 		"managed_boundary":                    str(),
-		"pricing_posture":                     str(),
+		"commercial_posture":                  str(),
 		"bundled_non_production_deployments":  {Type: "integer"},
 		"non_production_support_posture":      str(),
-		"reference_price_bands":               {Type: "array", Items: ref("ReferencePriceBand")},
 		"evidence_rail":                       {Type: "array", Items: str()},
 		"editions":                            {Type: "array", Items: ref("EditionPackagingEntry")},
 		"meters":                              {Type: "array", Items: ref("UsageMeterDefinition")},
-	}, "category_label", "positioning", "billable_unit", "provider_billing_unit", "no_per_certificate_billing", "no_ephemeral_identity_billing", "certificate_counters_classification", "managed_boundary", "pricing_posture", "bundled_non_production_deployments", "non_production_support_posture", "reference_price_bands", "evidence_rail", "editions", "meters")
+	}, "category_label", "positioning", "billable_unit", "provider_billing_unit", "no_per_certificate_billing", "no_ephemeral_identity_billing", "certificate_counters_classification", "managed_boundary", "commercial_posture", "bundled_non_production_deployments", "non_production_support_posture", "evidence_rail", "editions", "meters")
 	editionsInfo := object(map[string]*Schema{
 		"tier":                   {Type: "string", Enum: editionTiers},
 		"state":                  {Type: "string", Enum: editionStates},
@@ -6872,7 +6865,6 @@ func componentSchemas() map[string]*Schema {
 		"EditionFeature":                     editionFeature,
 		"EditionPackaging":                   editionPackaging,
 		"EditionPackagingEntry":              editionPackagingEntry,
-		"ReferencePriceBand":                 referencePriceBand,
 		"DeploymentEntitlementInfo":          deploymentEntitlementInfo,
 		"FIPSAlgorithmMode":                  fipsAlgorithmMode,
 		"FIPSNonFIPSFence":                   fipsNonFIPSFence,

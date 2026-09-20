@@ -648,7 +648,7 @@ not this file.
 | `deploy/helm/airgap_bundle_test.go:163` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/ai_surface_placement_test.go:27` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/deferred_wipe_guard_test.go:45` | walking the repo's own tree (CWE-22) |
-| `docs/docs_test.go:2563` | test walks the repo's own checkout; no hostile symlink exposure (CWE-367) |
+| `docs/docs_test.go:2562` | test walks the repo's own checkout; no hostile symlink exposure (CWE-367) |
 | `docs/embedded_postgres_teardown_test.go:46` | walks this repository's own test sources (CWE-22) |
 | `docs/est_differential_test.go:190` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_completeness_test.go:261` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
@@ -1049,7 +1049,7 @@ not this file.
 | `deploy/kubernetes/manifests_test.go:494` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/local-oidc/oidc_test.go:164` | paths are exact children of t.TempDir (CWE-22) |
 | `docs/ai_surface_placement_test.go:27` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/aud56_test.go:52` | name comes from the fixed documentation manifest in this test (CWE-22). |
+| `docs/aud56_test.go:61` | name comes from the fixed documentation manifest in this test (CWE-22). |
 | `docs/aud58_test.go:15` | name comes from the fixed documentation manifest in this test (CWE-22). |
 | `docs/aud65_test.go:18` | name comes from the fixed documentation manifest in this test (CWE-22). |
 | `docs/deferred_wipe_guard_test.go:45` | walking the repo's own tree (CWE-22) |

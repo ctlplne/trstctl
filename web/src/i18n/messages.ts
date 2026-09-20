@@ -14314,42 +14314,6 @@ export const messages = {
     defaultMessage: "Billing unit",
     description: "Label for the billing-unit row on the managed-offering panel.",
   },
-  "platform.editions.referencePrices": {
-    defaultMessage: "Published annual reference prices",
-    description: "Heading for the public annual reference price table.",
-  },
-  "platform.editions.priceBand": {
-    defaultMessage: "Band",
-    description: "Column label for a commercial price band.",
-  },
-  "platform.editions.annualPrice": {
-    defaultMessage: "Annual price",
-    description: "Column label for annual USD list price.",
-  },
-  "platform.editions.unit": {
-    defaultMessage: "Unit",
-    description: "Column label for the unit covered by a price band.",
-  },
-  "platform.editions.enterpriseStandard": {
-    defaultMessage: "Enterprise Standard",
-    description: "Published Enterprise Standard reference price band.",
-  },
-  "platform.editions.enterprisePlus": {
-    defaultMessage: "Enterprise Plus",
-    description: "Published Enterprise Plus reference price band.",
-  },
-  "platform.editions.provider1To10": {
-    defaultMessage: "Provider 1–10",
-    description: "Published Provider reference price band for one through ten managed customers.",
-  },
-  "platform.editions.provider11To50": {
-    defaultMessage: "Provider 11–50",
-    description: "Published Provider reference price band for eleven through fifty managed customers.",
-  },
-  "platform.editions.provider51To250": {
-    defaultMessage: "Provider 51–250",
-    description: "Published Provider reference price band for fifty-one through 250 managed customers.",
-  },
   "platform.editions.environment": {
     defaultMessage: "Environment entitlement",
     description: "Label for the effective signed production or non-production environment.",

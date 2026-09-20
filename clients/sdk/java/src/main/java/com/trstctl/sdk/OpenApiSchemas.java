@@ -608,7 +608,6 @@ public final class OpenApiSchemas {
       "ProfileRestoreRequest",
       "ProtocolProfileStatus",
       "RCARequest",
-      "ReferencePriceBand",
       "RegionalFailoverStep",
       "RegionalIssuanceLane",
       "RelayPluginEntry",

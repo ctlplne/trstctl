@@ -9812,6 +9812,7 @@ export interface components {
             bundled_non_production_deployments: number;
             category_label: string;
             certificate_counters_classification: string;
+            commercial_posture: string;
             editions: components["schemas"]["EditionPackagingEntry"][];
             evidence_rail: string[];
             managed_boundary: string;
@@ -9820,9 +9821,7 @@ export interface components {
             no_per_certificate_billing: boolean;
             non_production_support_posture: string;
             positioning: string;
-            pricing_posture: string;
             provider_billing_unit: string;
-            reference_price_bands: components["schemas"]["ReferencePriceBand"][];
         };
         EditionPackagingEntry: {
             billing: string;
@@ -13223,12 +13222,6 @@ export interface components {
         RCARequest: {
             question: string;
             subject?: string;
-        };
-        ReferencePriceBand: {
-            annual_usd: number;
-            id: string;
-            label: string;
-            unit: string;
         };
         RegionalFailoverStep: {
             action: string;

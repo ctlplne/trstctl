@@ -2216,7 +2216,7 @@ describe("scale orchestration contract", () => {
           { id: "perf-live", command: "scripts/perf/run-local.sh --profile live", artifact: "scripts/perf/artifacts/live-load-baseline.json", required: true },
         ],
         operator_actions: ["run perf-live"],
-        residuals: ["customer pricing is operator-specific"],
+        residuals: ["customer infrastructure costs are operator-specific"],
         evidence_refs: ["internal/perf/contract.go"],
         measurement_artifacts: ["scripts/perf/artifacts/live-load-baseline.json"],
         estimated_daily_event_load: 10000000,

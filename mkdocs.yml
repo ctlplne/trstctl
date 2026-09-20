@@ -64,7 +64,6 @@ nav:
       - Support and defect reporting: support.md
       - Current limitations: limitations.md
       - Editions: editions.md
-      - Pricing and billing posture: pricing.md
   - Choose a goal:
       - Issue your first certificate: journeys/first-certificate.md
       - Automate TLS across your fleet: journeys/automate-fleet-tls.md

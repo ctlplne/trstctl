@@ -1328,13 +1328,6 @@ export interface EditionPackagingEntry {
   included: string[];
 }
 
-export interface ReferencePriceBand {
-  id: string;
-  label: string;
-  annual_usd: number;
-  unit: string;
-}
-
 export interface EditionPackaging {
   category_label: string;
   positioning: string;
@@ -1344,10 +1337,9 @@ export interface EditionPackaging {
   no_ephemeral_identity_billing: boolean;
   certificate_counters_classification: string;
   managed_boundary: string;
-  pricing_posture: string;
+  commercial_posture: string;
   bundled_non_production_deployments: number;
   non_production_support_posture: string;
-  reference_price_bands: ReferencePriceBand[];
   evidence_rail: string[];
   editions: EditionPackagingEntry[];
   meters: UsageMeterDefinition[];

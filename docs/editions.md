@@ -9,16 +9,35 @@ tenant isolation, and the offline license verifier in Free. Enterprise adds the
 commercial `ee/` feature set. Provider / MSP includes every Enterprise feature and
 adds provider-plane operations plus managed-service and resale rights.
 
-## Pricing Posture
+## Commercial posture
 
-The canonical billing reference is [Pricing](pricing.md); the posture in brief:
-Free has no license bill. Enterprise publishes annual USD reference list prices
-of $15,000 Standard and $30,000 Plus per production
-`control_plane_deployment`. Provider / MSP publishes wholesale bands of $12,000
-for 1–10 managed customers, $30,000 for 11–50, and $72,000 for 51–250; 250+
-is negotiated. The MSP controls its downstream hosting and support prices.
-Certificates, SVIDs, secrets, API keys, tokens, rotations, and nodes are never
-automatic billing units. See [Pricing](pricing.md) for support and renewal terms.
+Free has no license bill: the BUSL-1.1 core runs in production without a signed
+license. Enterprise and Provider / MSP are commercial editions activated by an
+offline Ed25519-signed license; their commercial terms are not published yet and
+are agreed per customer. A Provider license is scoped by a managed-customer
+band, and the MSP controls its own downstream hosting, support, and terms.
+Certificates, SVIDs, secrets, API keys, tokens, rotations, nodes, discovery
+findings, and audit events are never automatic billing units: there is no
+per-connector, no per-protocol, and no per-certificate or per-ephemeral-identity
+meter. Every Enterprise or Provider license names 1 production deployment and
+bundles 3 non-production deployments with the full licensed feature set and no
+production SLA; see
+[Signed deployment environment entitlement](#signed-deployment-environment-entitlement).
+
+### Grace and expiry
+
+At expiry, the offline verifier provides a 30-day grace period. During grace,
+licensed modes remain enabled. After grace, the license state and commercial
+feature modes become `read_only`; core issuance, renewal, revocation, protocol,
+audit/export, tenancy, and license-verification capabilities remain Community
+software. The core keeps running: a lapsed commercial order never bricks a
+customer's PKI. Commercial mutation surfaces honor the served `read_only` mode,
+and the editions page makes that state visible before an operator acts.
+`GET /api/v1/editions` and Platform → Editions expose the effective tier, the
+expiry/read-only horizon, the signed deployment environment, production-unit
+consumption, remaining non-production slots, and packaging rules;
+`internal/license` owns the one feature-to-tier table and the one bundled
+allowance constant, and the API and docs are guarded against drift from them.
 
 ## Console journey
 
@@ -97,7 +116,7 @@ pins the lab's local identity provider for provider-operator sign-in (see
 | Provider operations | Not included | Not included | Provider plane, metering, white label, and siloed isolation |
 | Product motion and commercial `ee/` rights | Self-hosted core under BUSL-1.1 | Self-hosted commercial feature set | Self-host, managed service, and resale of the commercial feature set |
 | Deployment flexibility | Customer operated | Customer operated | Shared control plane or dedicated customer deployments |
-| Pricing | No license fee | $15,000 Standard or $30,000 Plus annual reference list | $12,000 / $30,000 / $72,000 annual wholesale reference bands; 250+ negotiated |
+| Commercial terms | No license fee | Not yet published | Not yet published |
 | Environment entitlement | Community deployments are unmetered | 1 production + 3 signed non-production deployment slots | Same bundle per licensed Provider control plane |
 
 The same binary lineage serves all three tiers. The offline signed tier drives

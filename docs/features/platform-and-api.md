@@ -287,8 +287,8 @@ The public packaging boundary has three tiers — Free (self-hosted BUSL-1.1 cor
 Enterprise (the commercial `ee/` set, per control-plane deployment), and
 Provider/MSP, which inherits Enterprise, adds provider-plane operation, and
 grants managed-service and resale rights with dedicated-deployment flexibility.
-The tier matrix and billing posture live in [Editions](../editions.md) and
-[Pricing](../pricing.md). Every path uses the same event-sourced,
+The tier matrix and commercial posture live in [Editions](../editions.md).
+Every path uses the same event-sourced,
 PostgreSQL-RLS-isolated binary lineage; none moves tenancy, audit/export,
 crypto, or license verification into `ee/`.
 
@@ -306,7 +306,7 @@ credentials. `GET /api/v1/scale/orchestration` and
 - the bounded queues, bulkhead environment knobs, backpressure signals, replay source,
   and AN-\* architecture invariant for each lane;
 - the shard plan for inventory pages, CRL shards, and projection batches;
-- explicit residuals for customer infrastructure pricing, external relying-party CRL
+- explicit residuals for customer infrastructure costs, external relying-party CRL
   adoption, and remote CI behavior.
 
 This endpoint is read-only and guarded by `access:read`. It does not count a vendor SKU

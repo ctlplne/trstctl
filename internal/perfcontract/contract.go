@@ -503,7 +503,7 @@ func ScaleOrchestration(generatedAt string) ScaleOrchestrationPlan {
 			"use sharded/delta CRLs and external ingress/CDN distribution for high-churn revocation lanes",
 		},
 		Residuals: []string{
-			"customer infrastructure pricing and exact datastore SKU are operator-specific",
+			"customer infrastructure costs and exact datastore SKU are operator-specific",
 			"external relying-party adoption of CRL shard and delta URLs depends on customer CDP/AIA rollout",
 			"remote GitHub-hosted matrix behavior is not proven by this local served endpoint",
 		},

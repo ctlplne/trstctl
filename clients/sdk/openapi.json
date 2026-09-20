@@ -12626,6 +12626,9 @@
           "certificate_counters_classification": {
             "type": "string"
           },
+          "commercial_posture": {
+            "type": "string"
+          },
           "editions": {
             "items": {
               "$ref": "#/components/schemas/EditionPackagingEntry"
@@ -12659,17 +12662,8 @@
           "positioning": {
             "type": "string"
           },
-          "pricing_posture": {
-            "type": "string"
-          },
           "provider_billing_unit": {
             "type": "string"
-          },
-          "reference_price_bands": {
-            "items": {
-              "$ref": "#/components/schemas/ReferencePriceBand"
-            },
-            "type": "array"
           }
         },
         "required": [
@@ -12681,10 +12675,9 @@
           "no_ephemeral_identity_billing",
           "certificate_counters_classification",
           "managed_boundary",
-          "pricing_posture",
+          "commercial_posture",
           "bundled_non_production_deployments",
           "non_production_support_posture",
-          "reference_price_bands",
           "evidence_rail",
           "editions",
           "meters"
@@ -25808,29 +25801,6 @@
         },
         "required": [
           "question"
-        ],
-        "type": "object"
-      },
-      "ReferencePriceBand": {
-        "properties": {
-          "annual_usd": {
-            "type": "integer"
-          },
-          "id": {
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
-          "unit": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "label",
-          "annual_usd",
-          "unit"
         ],
         "type": "object"
       },

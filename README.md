@@ -30,7 +30,6 @@ API keys, and SPIFFE workload identities. No per-certificate or ephemeral-identi
 <a href="#how-its-built">How it's built</a> ·
 <a href="#try-it">Try it</a> ·
 <a href="#documentation">Docs</a> ·
-<a href="docs/pricing.md">Pricing</a> ·
 <a href="#license">License</a>
 </p>
 
@@ -412,8 +411,8 @@ ship in the core. Commercial Enterprise and Provider features are proprietary
 material under `ee/`, governed by [ee/LICENSE](ee/LICENSE), and activated by an
 offline Ed25519-signed license.
 Provider licenses include every Enterprise feature plus managed-service and resale
-rights. The Provider wholesale price is negotiated around a managed-customer band;
-the MSP controls its own downstream hosting, support, and customer pricing.
+rights. A Provider license is scoped by a managed-customer band; the MSP controls
+its own downstream hosting, support, and terms.
 Multi-tenancy, the event spine, the crypto boundary, audit/export rights, and
 the offline license verifier stay in the core.
 

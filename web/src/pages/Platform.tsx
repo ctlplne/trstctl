@@ -55,17 +55,10 @@ const defaultPackaging: NonNullable<EditionsInfo["packaging"]> = {
   certificate_counters_classification: "operational_telemetry",
   managed_boundary:
     "Provider/MSP normally runs one shared control plane with multiple customer tenants, with dedicated customer deployments available when its security posture requires them.",
-  pricing_posture:
-    "Free is the self-hosted BUSL-1.1 core; no signed license is needed. Enterprise reference list is USD 15,000/year Standard or USD 30,000/year Plus per production control-plane deployment. Provider/MSP reference bands start at USD 12,000/year.",
+  commercial_posture:
+    "Free is the self-hosted BUSL-1.1 core; no signed license is needed. Enterprise and Provider are commercial: their terms are not published yet and are agreed per customer, and a Provider sets its own downstream terms.",
   bundled_non_production_deployments: 3,
   non_production_support_posture: "Three bound non-production control planes are included with no production SLA.",
-  reference_price_bands: [
-    { id: "enterprise-standard", label: "", annual_usd: 15000, unit: "production control plane" },
-    { id: "enterprise-plus", label: "", annual_usd: 30000, unit: "HA production control plane" },
-    { id: "provider-1-10", label: "", annual_usd: 12000, unit: "managed customer band" },
-    { id: "provider-11-50", label: "", annual_usd: 30000, unit: "managed customer band" },
-    { id: "provider-51-250", label: "", annual_usd: 72000, unit: "managed customer band" },
-  ],
   evidence_rail: ["live eval receipts", "served NHI route coverage", "OWASP NHI mapping", "current limitations"],
   editions: [
     { id: "community", name: "Free", column: "Free", buyer_fit: "", license_boundary: "", billing: "", included: [] },
@@ -74,14 +67,6 @@ const defaultPackaging: NonNullable<EditionsInfo["packaging"]> = {
   ],
   meters: [],
 };
-
-const priceBandLabelKeys = {
-  "enterprise-standard": "platform.editions.enterpriseStandard",
-  "enterprise-plus": "platform.editions.enterprisePlus",
-  "provider-1-10": "platform.editions.provider1To10",
-  "provider-11-50": "platform.editions.provider11To50",
-  "provider-51-250": "platform.editions.provider51To250",
-} as const;
 
 /** C-A1 keeps protected admin detail split into independently fetch-scoped
  * routes. Bare /platform is the calm, API-free readiness doorway; historical
@@ -1264,30 +1249,6 @@ export function AdminEditions() {
                             <td key={edition.id}>{edition.name}</td>
                           ))}
                         </tr>
-                      </tbody>
-                    </table>
-                  </SystemTableRegion>
-                  <SystemTableRegion label={t("platform.editions.referencePrices")}>
-                    <table className="ui-table min-w-[36rem]">
-                      <caption>{t("platform.editions.referencePrices")}</caption>
-                      <thead>
-                        <tr>
-                          <th scope="col">{t("platform.editions.priceBand")}</th>
-                          <th scope="col">{t("platform.editions.annualPrice")}</th>
-                          <th scope="col">{t("platform.editions.unit")}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {packaging.reference_price_bands.map((band) => {
-                          const labelKey = priceBandLabelKeys[band.id as keyof typeof priceBandLabelKeys];
-                          return (
-                            <tr key={band.id}>
-                              <td>{labelKey ? t(labelKey) : band.label}</td>
-                              <td>{formatCurrencyPolicy(band.annual_usd, formatPolicy, { maximumFractionDigits: 0 })}</td>
-                              <td>{band.unit}</td>
-                            </tr>
-                          );
-                        })}
                       </tbody>
                     </table>
                   </SystemTableRegion>

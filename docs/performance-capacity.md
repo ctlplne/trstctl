@@ -8,7 +8,7 @@ are recalculated from the capacity calibration artifact at
 `scripts/perf/artifacts/capacity-measurement-baseline.json`. Event-spine burst and
 drain behavior is pinned by
 `scripts/perf/artifacts/spine-burst-cap-small.json`; operators should replace the
-cost column with their infrastructure pricing, but should not remove the measured
+cost column with their infrastructure costs, but should not remove the measured
 unit rows.
 
 ## Capacity Tiers
