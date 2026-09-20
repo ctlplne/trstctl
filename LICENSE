@@ -6,8 +6,9 @@ file sits, and nothing about being able to read a file grants a right to use it.
 
   * The trstctl CORE — everything OUTSIDE the top-level `ee/`, `clients/` and
     `third_party/` directories — is licensed under the Business Source License
-    1.1 (BSL 1.1), reproduced in full below together with its parameters. Core
-    files carry `SPDX-License-Identifier: BUSL-1.1`. The BSL is a
+    1.1 (BSL 1.1), reproduced in full below together with its parameters. Go
+    files in the core carry `SPDX-License-Identifier: BUSL-1.1`; every other
+    core file takes this license from its location. The BSL is a
     source-available license, not an open source license: production use is
     permitted under the Additional Use Grant stated below, and on the Change
     Date each published version of the core converts to the Mozilla Public
@@ -16,33 +17,34 @@ file sits, and nothing about being able to read a file grants a right to use it.
   * The CLIENT tree — everything INSIDE the top-level `clients/` directory (the
     Go, TypeScript, Python and Java SDKs, the embedded client, the GitHub
     Action and the Terraform provider) — is licensed under the Mozilla Public
-    License 2.0, reproduced in
-    full below. Client files carry `SPDX-License-Identifier: MPL-2.0`, so they
-    can be embedded in your own software without the core's use grant
-    attaching to that software.
+    License 2.0, reproduced in full below. The MPL is a file-level license, so
+    client code can be embedded in your own software without the core's use
+    grant attaching to that software. Client Go files carry
+    `SPDX-License-Identifier: MPL-2.0`.
 
   * Everything INSIDE the top-level `ee/` directory is proprietary trstctl
     Enterprise Edition and Provider Edition material. It is NOT licensed under
-    the BSL or the MPL — ee/ material is not licensed under either in any form.
-    It carries `SPDX-License-Identifier: LicenseRef-trstctl-EE`, and its terms
-    are in `ee/LICENSE`: use is governed solely by a separate commercial
-    agreement together with a valid offline Ed25519-signed trstctl license.
-    Possession of this source grants no right to use, copy, modify, distribute,
+    the BSL or the MPL in any form. It carries
+    `SPDX-License-Identifier: LicenseRef-trstctl-EE`, and its terms are in
+    `ee/LICENSE`: use is governed solely by a separate commercial agreement
+    together with a valid offline Ed25519-signed trstctl license. Possession
+    of this source grants no right to use, copy, modify, distribute,
     sublicense, or operate the `ee/` material.
 
   * The `third_party/` directory keeps its upstream licenses (embedded-postgres
-    is MIT). Those files are not certctl LLC's to relicense and no term below
-    applies to them.
+    is MIT), and dependencies bundled into built artifacts keep theirs, as
+    NOTICE states. Those files are not certctl LLC's to relicense and no term
+    below applies to them.
 
 Both licenses are scoped by tree and by file: the MPL is a file-level
 copyleft, and the BSL's Licensed Work is defined above by directory. A file
 therefore keeps its own license no matter what it is combined with, which is
-what makes this split work. Enterprise features are never implemented
-by editing a core file. They live in their own files under `ee/` and are bound
-to the core through narrow, tagged attach seams, each with a core-only twin so
-a core build links no `ee/` package at all. A CI analyzer enforces this: core
-may not import `ee/`, and every file must carry the SPDX identifier matching
-the tree it is in.
+what makes this split work. Enterprise features are never implemented by
+editing a core file. They live in their own files under `ee/` and are bound to
+the core through narrow, tagged attach seams, each with a core-only twin so a
+core build links no `ee/` package at all. A CI analyzer enforces this for Go:
+core may not import `ee/`, and each Go file must carry the SPDX identifier of
+the tree it sits in.
 
 Patents: certctl LLC has patent applications pending on parts of the core.
 Patent terms for the Licensed Work are not stated in this file; they will be
@@ -50,26 +52,27 @@ published separately once settled.
 
 ----------------------------------------------------------------------------
 
-Business Source License 1.1 — Parameters
-========================================
+Business Source License 1.1
+
+Parameters
 
 Licensor:             certctl LLC
 
 Licensed Work:        trstctl core — every file in this repository outside the
-                      top-level `ee/`, `clients/` and `third_party/` directories.
-                      The Licensed Work is (c) 2026 certctl LLC.
+                      top-level `ee/`, `clients/` and `third_party/`
+                      directories. The Licensed Work is (c) 2026 certctl LLC.
 
 Additional Use Grant: You may make production use of the Licensed Work,
                       provided that (a) you do not offer the Licensed Work, or
                       a product or service whose value derives substantially
-                      from it, to third parties as a hosted or managed service;
-                      (b) you do not embed the Licensed Work in a product or
-                      service that competes with those offered by certctl LLC;
-                      and (c) you do not move, change, disable, or circumvent
-                      the license-key functionality in the Licensed Work.
-                      Operating the Licensed Work on a customer's own
-                      deployment as that customer's service provider is
-                      permitted.
+                      from it, to third parties as a hosted or managed service,
+                      except that operating the Licensed Work on a customer's
+                      own deployment as that customer's service provider is
+                      permitted; (b) you do not embed the Licensed Work in a
+                      product or service that competes with those offered by
+                      certctl LLC; and (c) you do not move, change, disable, or
+                      circumvent the license-key functionality in the Licensed
+                      Work.
 
 Change Date:          Four years from the date the Licensed Work is published.
 

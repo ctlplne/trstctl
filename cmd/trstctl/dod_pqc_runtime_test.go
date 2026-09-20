@@ -1,6 +1,6 @@
 //go:build trstctl_dodproof
 
-// SPDX-License-Identifier: LicenseRef-trstctl-EE
+// SPDX-License-Identifier: BUSL-1.1
 
 package main
 
