@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package ssh implements the SSH certificate authority (S13.1, F43): it signs
 // short-lived OpenSSH host and user certificates — a first-class credential type

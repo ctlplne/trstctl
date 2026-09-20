@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: MPL-2.0
+-- SPDX-License-Identifier: BUSL-1.1
 
 -- A4 / AUD-22: one row per authenticated relay already exists in agents. Add
 -- its measured enrollment-proxy topology and evidence there, rather than a

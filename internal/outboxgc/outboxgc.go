@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package outboxgc is the outbox retention sweep (SPINE-003): a system
 // (cross-tenant) maintenance subsystem that bounds the outbox table so a

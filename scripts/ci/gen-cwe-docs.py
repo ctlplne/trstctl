@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: BUSL-1.1
 """CWE register + coverage ledger generator.
 
 Generates two committed documents from the tree, so neither can drift from the

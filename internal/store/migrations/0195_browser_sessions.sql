@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: MPL-2.0
+-- SPDX-License-Identifier: BUSL-1.1
 
 -- Browser authentication must survive a process restart and must work when a
 -- load balancer sends consecutive requests to different control-plane replicas.

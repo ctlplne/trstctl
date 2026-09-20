@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package detrand provides a deterministic byte stream derived from a seed, for
 // the rare cases where an encoder's randomness must be a pure function of its

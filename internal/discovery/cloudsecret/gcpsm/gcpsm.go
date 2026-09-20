@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package gcpsm enumerates certificate material stored in GCP Secret Manager.
 // It uses read-only list/access GET calls and returns metadata-only cloudsecret

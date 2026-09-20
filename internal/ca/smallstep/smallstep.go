@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package smallstep is the Smallstep (step-ca) CA plugin (F4, sprint S4.11),
 // built from the CA-plugin template (internal/ca/catemplate): it implements only

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package secretfile loads persisted secret material from local files with
 // custody checks before bytes enter process memory.

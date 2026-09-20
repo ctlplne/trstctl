@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: MPL-2.0
+-- SPDX-License-Identifier: BUSL-1.1
 
 -- tenant_key_domains is the tenant-scoped read model for independently wrapped
 -- cryptographic domains. Immutable tenant.key_domain.* events are the source of

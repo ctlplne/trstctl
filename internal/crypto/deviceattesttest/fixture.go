@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package deviceattesttest builds real TPM WebAuthn attestation fixtures for
 // tests. It lives below internal/crypto so fixture key generation and X.509

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package awsiid is the AWS IMDSv2 instance-identity attester (S11.4, F30). AWS
 // publishes a PKCS#7 signature over an instance's identity document, signed by a

@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: MPL-2.0
+-- SPDX-License-Identifier: BUSL-1.1
 
 -- AUD-39 / R3: newest signed metadata-only CRL/OCSP cache posture from each
 -- certificate-bound relay. Cached DER, issuer DER, and upstream URLs remain in

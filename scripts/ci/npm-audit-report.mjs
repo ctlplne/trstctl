@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 // npm audit v2 report reader. A scanner exit is not a report-schema proof.
 import fs from 'node:fs';
 import path from 'node:path';

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package servedstatus is the single source of truth for the status strings the
 // served API hands an operator to describe what trstctl actually did to a target

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package dependents defines a feature-neutral hook vocabulary for recording
 // objects whose validity or confidentiality depends on another key.

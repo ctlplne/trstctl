@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package paloalto is the Palo Alto Networks (PAN-OS) deployment connector
 // (S10.10), built from the connector SDK (S5.5). A PAN-OS firewall (and Panorama)

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package audit exposes query, search, filter, and signed-export surfaces over
 // the event-sourced audit log (F9). The AN-2 event log remains the source of

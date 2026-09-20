@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: BUSL-1.1
 #
 # OPP-C02: prove the embedded console was built from the console source that is
 # checked in. `make web` writes a digest of every console build input to

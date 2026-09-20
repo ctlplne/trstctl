@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package telemetry implements trstctl's opt-in, off-by-default, non-PII usage
 // reporting (Section 8 of the PRD).

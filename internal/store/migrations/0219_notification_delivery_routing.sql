@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: MPL-2.0
+-- SPDX-License-Identifier: BUSL-1.1
 -- Record the route used by each successful channel. Older receipts remain
 -- explicitly unknown; current routing configuration cannot reconstruct history.
 ALTER TABLE notification_delivery_receipts

@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: MPL-2.0
+-- SPDX-License-Identifier: BUSL-1.1
 -- migrate: no-transaction
 
 -- This migration runs outside a transaction because the final unique index is

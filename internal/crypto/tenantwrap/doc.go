@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package tenantwrap binds a tenant's domain key-encryption key (KEK) to an
 // operator-provisioned local wrapper key.

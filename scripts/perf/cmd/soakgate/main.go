@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Command soakgate is the PERF-004 endurance/soak gate driver. It analyzes a
 // sustained-load resource series against the committed soak thresholds and exits

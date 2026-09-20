@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package ari implements ACME Renewal Information (RFC 9773) — the shared types
 // and logic used by both trstctl's ACME server (which emits per-certificate

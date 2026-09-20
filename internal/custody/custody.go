@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package custody is the vocabulary for stating, per credential, where its
 // private key was generated and where it lives (epic B5).

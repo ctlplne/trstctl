@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: MPL-2.0
+-- SPDX-License-Identifier: BUSL-1.1
 -- Host/relay failures need their own deadline. next_attempt_at belongs to the
 -- control-plane dispatcher, which also defers jobs waiting for an agent.
 -- A constant past default preserves existing jobs without rewriting the table.

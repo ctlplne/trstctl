@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package venafifake is an in-process test double of the Venafi TPP Web SDK
 // certificate request/retrieve flow. It is enough to exercise the Venafi CA

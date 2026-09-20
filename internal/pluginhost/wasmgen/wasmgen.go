@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package wasmgen builds minimal WASM guest modules against the plugin host's
 // capability ABI.

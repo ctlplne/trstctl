@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package githuboidc is the GitHub Actions OIDC attester (S11.8, F30), including
 // the Sigstore Fulcio identity mapping. A GitHub Actions workflow presents an

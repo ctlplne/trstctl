@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package proof writes nonce-bound runtime receipts for the repository-native
 // Definition-of-Done census. Evidence is sealed: callers can choose one of the

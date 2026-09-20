@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package orchestrator stands in for the real orchestrator so the analyzer can
 // resolve the canonical dedupe sink, (*Idempotency).Do, by its true type and

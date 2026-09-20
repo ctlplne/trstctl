@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package cloudflare is the Cloudflare DNS-01 provider (S8b.6), built from the same
 // plugin template as the Route 53 reference provider (internal/dns/route53): the

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package k8stls normalizes Kubernetes Ingress and Gateway API TLS resources
 // into metadata-only auto-issuance requests. It never accepts TLS private keys,

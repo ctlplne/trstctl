@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: BUSL-1.1
 """Claim -> code -> test traceability extractor for the ee/ patent surface.
 
 Target path in repo: scripts/ci/extract-claim-traceability.py

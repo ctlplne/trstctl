@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package tomcat deploys renewed TLS files to a Tomcat server and runs a direct
 // reload command so the listener can use the new certificate.

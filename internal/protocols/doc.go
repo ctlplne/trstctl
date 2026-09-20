@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package protocols groups the credential-issuance and enrollment protocol
 // servers, each implemented in its own subpackage: acme (RFC 8555), ari

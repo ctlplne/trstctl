@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package netexecgood is the positive fixture: an ordinary outbound caller that
 // obtains its client from the reviewed constructor instead of building one, and

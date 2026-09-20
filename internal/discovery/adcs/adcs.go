@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package adcs inventories an Active Directory Certificate Services deployment's
 // certificate templates and enrollment services over LDAP (epic F1).

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package keymaterial implements the AN-8 architecture rule: in packages that
 // handle secret key material, key bytes must live in []byte (which can be

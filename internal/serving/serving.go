@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package serving is the Phase-2 composition root (S15.0): it mounts every new
 // Phase-2 serving surface (EST/SCEP/CMP, the SPIFFE Workload API, the AI-agent

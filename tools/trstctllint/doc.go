@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Command trstctllint is the trstctl architecture linter: a go/analysis
 // multichecker that makes the architectural non-negotiables un-violable and is
@@ -13,7 +13,7 @@
 //   - eventsource    (AN-2): a served mutation must not write the read model directly; it emits an event.
 //   - cryptoagility  (PQC-00): crypto/signer code must not grow runtime plugin/provider/engine registries.
 //   - netexec        (SEC-005): new HTTP/exec surfaces must use SSRF-safe clients (netsec/egress) or reviewed argv paths; ambient http.Client construction and the http.Get/Post package helpers fail closed too.
-//   - licenseboundary (PACKAGING-007): core files carry MPL-2.0 SPDX, ee/ files carry the proprietary SPDX, core cannot import ee/, and PQC algorithms/fleet execution stay out of core while CBOM campaign records remain core.
+//   - licenseboundary (PACKAGING-007): core files carry BUSL-1.1 SPDX, clients/ files carry MPL-2.0, ee/ files carry the proprietary SPDX, core cannot import ee/, and PQC algorithms/fleet execution stay out of core while CBOM campaign records remain core.
 //   - tlsverify      (SEC-CWE-295): InsecureSkipVerify may be set only in internal/crypto/tlsprobe (the discovery prober), the mtls loopback liveness probe, and _test.go files.
 //   - upsertarbiter (OPP-C01): an ON CONFLICT upsert into a table with a second unique index must serialize or retry on unique_violation.
 //

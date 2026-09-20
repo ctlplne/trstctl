@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package acmefake is a minimal in-process ACME (RFC 8555) certificate authority
 // for exercising ACME clients in tests and local development. It is the test

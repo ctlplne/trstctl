@@ -890,8 +890,8 @@ not this file.
 | `tools/dodcensus/substrate_broker.go:222` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/pqclab/main.go:594` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 | `tools/trstctllint/repo_selftest_test.go:22` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `tools/trstctllint/repo_selftest_test.go:109` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `tools/trstctllint/repo_selftest_test.go:172` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `tools/trstctllint/repo_selftest_test.go:117` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `tools/trstctllint/repo_selftest_test.go:184` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 
 ### G301 — CWE-276 Incorrect default permissions (directory) (47 sites)
 
@@ -1364,7 +1364,7 @@ not this file.
 | `tools/trstctllint/docs_test.go:75` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/trstctllint/hotspot_test.go:205` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/trstctllint/hotspot_test.go:303` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/trstctllint/licenseboundary/licenseboundary.go:37` | developer tool reading the repo paths it is pointed at (CWE-22) |
+| `tools/trstctllint/licenseboundary/licenseboundary.go:39` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/trstctllint/upsertarbiter/sites_dump_test.go:30` | test-only maintenance dump to an operator-chosen path (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter.go:287` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 package docs
 
@@ -3842,8 +3842,9 @@ func TestSignerCAKeyDocumentedAsPersisted(t *testing.T) {
 
 // TestLicenseStatusIsConsistent (R4.6 #1c; PACKAGING-007): README, docs/index,
 // package metadata, and the license artifacts state the same license posture:
-// MPL-2.0 open core with proprietary ee/ material gated by the offline
-// Ed25519-signed license model.
+// a BUSL-1.1 core that converts to MPL-2.0 four years after each release,
+// MPL-2.0 client libraries under clients/, and proprietary ee/ material gated
+// by the offline Ed25519-signed license model.
 func TestLicenseStatusIsConsistent(t *testing.T) {
 	for _, path := range []string{"../LICENSE", "../NOTICE", "../ee/LICENSE"} {
 		if _, err := os.Stat(path); err != nil {
@@ -3858,14 +3859,21 @@ func TestLicenseStatusIsConsistent(t *testing.T) {
 	// already knows to look for it. The first file anyone reads has to carry
 	// the split, and a scope notice is easy to lose in a future edit that
 	// "restores the license to its official text", so CI holds it.
-	scope := strings.ToLower(read(t, "../LICENSE"))
+	// Compare on whitespace-collapsed text so re-wrapping a licence file cannot
+	// split a phrase across a line break and fake a missing notice.
+	flat := func(s string) string { return strings.Join(strings.Fields(s), " ") }
+	scope := flat(strings.ToLower(read(t, "../LICENSE")))
 	for _, want := range []string{
 		"scope of this license",
-		"outside the top-level `ee/` directory",
+		"outside the top-level `ee/`, `clients/` and `third_party/` directories",
+		"business source license 1.1",
+		"inside the top-level `clients/` directory",
 		"inside the top-level `ee/` directory",
-		"not licensed under the mpl",
+		"not licensed under the bsl or the mpl",
 		"licenseref-trstctl-ee",
 		"grants no right to use",
+		"change license: mozilla public license 2.0",
+		"four years from the date the licensed work is published",
 	} {
 		if !strings.Contains(scope, want) {
 			t.Errorf("LICENSE scope notice missing %q; the root license must state which tree "+
@@ -3874,20 +3882,20 @@ func TestLicenseStatusIsConsistent(t *testing.T) {
 	}
 	// And the MPL text itself must still be present and complete beneath it —
 	// the scope notice explains the split, it does not replace the license.
-	license := strings.ToLower(read(t, "../LICENSE"))
-	for _, want := range []string{"mozilla public license version 2.0", "mpl", "exhibit a - source code form license notice"} {
+	license := scope
+	for _, want := range []string{"business source license 1.1", "mozilla public license version 2.0", "mpl", "exhibit a - source code form license notice"} {
 		if !strings.Contains(license, want) {
 			t.Errorf("LICENSE missing %q", want)
 		}
 	}
-	eeLicense := strings.ToLower(read(t, "../ee/LICENSE"))
+	eeLicense := flat(strings.ToLower(read(t, "../ee/LICENSE")))
 	for _, want := range []string{"licenseref-trstctl-ee", "proprietary", "offline ed25519", "not licensed under the mozilla public license 2.0", "post-quantum"} {
 		if !strings.Contains(eeLicense, want) {
 			t.Errorf("ee/LICENSE missing %q", want)
 		}
 	}
-	notice := strings.ToLower(read(t, "../NOTICE"))
-	for _, want := range []string{"mpl-2.0 open-source", "ee/", "offline ed25519", "single author"} {
+	notice := flat(strings.ToLower(read(t, "../NOTICE")))
+	for _, want := range []string{"business source license 1.1", "mpl-2.0", "ee/", "offline ed25519", "single author"} {
 		if !strings.Contains(notice, want) {
 			t.Errorf("NOTICE missing %q", want)
 		}
@@ -3903,8 +3911,7 @@ func TestLicenseStatusIsConsistent(t *testing.T) {
 	// stale process sentence sits unread for a year, so CI reads it instead.
 	// Compare on whitespace-collapsed text so re-wrapping either file cannot
 	// split a phrase across a line break and fake a disagreement.
-	flat := func(s string) string { return strings.Join(strings.Fields(s), " ") }
-	noticeFlat := flat(notice)
+	noticeFlat := notice
 	contributingFlat := flat(strings.ToLower(read(t, "../CONTRIBUTING.md")))
 	for _, w := range []struct{ workflow, phrase string }{
 		{"DCO", "developer certificate of origin"},

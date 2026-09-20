@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package adcsfake is a faithful in-process double of the MS-WCCE transport an
 // ADCS CA exposes over DCOM/RPC, enough to exercise the ADCS plugin end-to-end

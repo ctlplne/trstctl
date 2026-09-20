@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: MPL-2.0
+-- SPDX-License-Identifier: BUSL-1.1
 
 -- AUD-47: ServiceNow and Jira share one tenant-scoped scheduled intake model.
 -- A sweep is a named chain of signed, bounded relay pages. last_run_at remains

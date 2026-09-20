@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package drift reconciles the credentials the agent installed on a host (S5.2)
 // against their declared state, and detects when something on the host has moved

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package example is a sample deployment connector built from the connector SDK
 // (S5.5). It is the model every real connector (S5.6+) follows: implement the

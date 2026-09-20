@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package apache is the Apache (httpd) deployment connector (S5.7), built from
 // the connector SDK (S5.5). It installs a renewed certificate the way an

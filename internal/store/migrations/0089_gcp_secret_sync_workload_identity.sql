@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: MPL-2.0
+-- SPDX-License-Identifier: BUSL-1.1
 
 -- Extend the existing tenant-scoped workload-identity source with GCP's thin
 -- provider encoder. The shared row remains reference-only: no proof or bearer

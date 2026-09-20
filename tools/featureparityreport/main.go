@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // featureparityreport renders the canonical capability catalog as one
 // standalone, sanitized HTML control panel. It does not maintain a second

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package privacy holds the product's subject-level privacy primitives. It keeps
 // personal identifiers out of control events by converting a raw subject string

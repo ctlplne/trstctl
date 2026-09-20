@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package cloudcert discovers certificates directly through cloud-provider APIs
 // — AWS ACM, Azure Key Vault, GCP Certificate Manager — without a

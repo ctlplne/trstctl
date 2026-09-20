@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package otlp is the OTLP trace/audit exporter, split out of internal/observ
 // so the metrics core stays linkable by the agent binary (epic A3): this

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: BUSL-1.1
 # check-compose-images-pinned.sh — enforce that every third-party container image
 # the shipped deploy/ stacks reference is pinned by an immutable @sha256 digest,
 # never a floating tag (SUPPLY-008). deploy/docker/docker-compose.yml already

@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: MPL-2.0
+-- SPDX-License-Identifier: BUSL-1.1
 
 -- seal_queued is the short, honest state between accepting an idempotent seal
 -- request and the bounded outbox worker acquiring the cross-replica exclusive

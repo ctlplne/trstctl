@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package haproxytest is a faithful in-process HAProxy double for connector
 // tests and conformance. It records the bundle a connector writes, validates it

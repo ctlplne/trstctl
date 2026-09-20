@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: BUSL-1.1
 """Run a complete server-test census in two isolated processes under one wall.
 
 Compilation/listing is outside the test wall, as it is for go test -timeout.

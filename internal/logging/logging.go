@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package logging builds the application's structured logger: a log/slog logger
 // that emits JSON (or text) with a consistent set of fields. It carries no

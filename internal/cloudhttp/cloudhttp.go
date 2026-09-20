@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package cloudhttp is the thin shared HTTP round-trip used by trstctl's cloud
 // provider families (KMS backends, DNS-01 providers) so the common request/response

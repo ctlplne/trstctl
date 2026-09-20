@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package ttlmap provides bounded eviction for maps with caller-defined expiry
 // and ranking rules. Callers pass their wall clock explicitly: using a new

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package cloudsecret inventories metadata from managed secret stores. Content
 // inspection is a separate explicit provider option: only then may an adapter

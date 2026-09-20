@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package doctor implements `trstctl doctor --prove-isolation`: a fixed set of
 // invariant probes an operator runs against their own live deployment, turning

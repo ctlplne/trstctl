@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package samlsp keeps SAML XML signature verification behind the internal
 // cryptography boundary (AN-3). Callers get URLs, metadata bytes, and normalized

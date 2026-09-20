@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package relay is the agent-side executor for network-relay connector work
 // (epic A3). It is what makes the credential lease mean something: a relay

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package acmdisc enumerates certificates from AWS Certificate Manager through
 // its read-only ListCertificates and GetCertificate operations (F49). It signs

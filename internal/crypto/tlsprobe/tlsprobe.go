@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package tlsprobe performs a non-invasive TLS handshake to obtain the
 // certificate a server presents, for certificate discovery (F2, S6.1). It is

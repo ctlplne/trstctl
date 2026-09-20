@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package leaseworker is the supervised, durable lease-expiry worker (S19.0): it
 // periodically sweeps expired dynamic-secret leases and drains the revocation

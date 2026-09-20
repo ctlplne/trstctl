@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package winservice describes how the trstctl agent registers and runs as a
 // Windows service, and renders the WiX source for its MSI installer.

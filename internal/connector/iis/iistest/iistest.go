@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package iistest is a faithful in-process IIS (HTTP.SYS / Windows certificate
 // store) double for connector tests and conformance. It models the two effects

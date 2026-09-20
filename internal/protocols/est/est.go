@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package est implements the RFC 7030 EST enrollment server, so network devices
 // and IoT fleets enroll and re-enroll for certificates automatically, under

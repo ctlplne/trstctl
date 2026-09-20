@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package mtls implements the agent transport's mutual-TLS security, inside the
 // AN-3 crypto boundary (it is a subpackage of internal/crypto, so it alone — with

@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: MPL-2.0
+-- SPDX-License-Identifier: BUSL-1.1
 
 -- Tenant-authored workload-identity sources for outbound secret sync. Rows hold
 -- policy and reference metadata only. Workload proof bytes and short-lived cloud

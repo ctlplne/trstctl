@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: BUSL-1.1
 #
 # Package terraform-provider-trstctl in the exact release layout the Terraform
 # Registry ingests: one zip per OS/arch whose only entry is the provider binary

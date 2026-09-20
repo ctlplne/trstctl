@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package enrollproxy serves ACME, EST and SCEP inside a dark segment (epic A4).
 //

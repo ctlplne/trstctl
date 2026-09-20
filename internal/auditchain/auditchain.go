@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package auditchain contains the dependency-light audit hash-chain primitive.
 // It deliberately imports no event log, SQL, HTTP, or signing-service dependencies

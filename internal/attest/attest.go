@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package attest is the attestation template (S11.2, F30): it makes attestation a
 // first-class entity so every credential issuance can record the verifiable proof

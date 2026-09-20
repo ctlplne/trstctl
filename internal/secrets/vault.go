@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package secrets stores upstream CA and connector credentials encrypted at rest
 // (R3.1). It wires the envelope-encryption boundary (internal/crypto/seal) to the

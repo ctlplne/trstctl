@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package tpmquote is the TPM 2.0 quote attester (S11.3, F30). A node proves
 // possession of a hardware TPM by signing a quote (binding a challenge nonce)

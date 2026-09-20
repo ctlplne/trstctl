@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package spiffe implements the SPIFFE Workload API (S11.1): it issues
 // SPIFFE-standard workload identities — X.509-SVIDs and JWT-SVIDs — to callers

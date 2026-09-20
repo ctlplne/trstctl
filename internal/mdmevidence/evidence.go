@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package mdmevidence reads immutable SCEP attempt facts for the MDM
 // correlation and trace surfaces. It deliberately lives outside internal/mdm:

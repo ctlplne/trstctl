@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package upsertarbiter is the OPP-C01 guard for the DP2-043 / DP2-046 defect
 // family: an INSERT ... ON CONFLICT upsert is race-safe only on its arbiter.

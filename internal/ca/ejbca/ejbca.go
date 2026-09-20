@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package ejbca is the EJBCA CA plugin (F4, sprint S4.10), built from the
 // CA-plugin template (internal/ca/catemplate): it implements only the

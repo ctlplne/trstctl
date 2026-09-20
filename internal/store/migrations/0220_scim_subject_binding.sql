@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: MPL-2.0
+-- SPDX-License-Identifier: BUSL-1.1
 -- Preserve provisioning identifiers independently of the authenticated subject.
 -- Legacy rows are unbound until explicitly provisioned with the new contract.
 ALTER TABLE tenant_members ADD COLUMN scim_identity jsonb;

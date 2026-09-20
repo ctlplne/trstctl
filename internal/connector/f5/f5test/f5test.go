@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package f5test is a faithful in-process double of the F5 BIG-IP iControl REST
 // API, for testing the f5 connector without a real appliance. It is an

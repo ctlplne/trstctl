@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package dependencyobs owns the one metadata-only wire/storage contract for an
 // observed workload-to-resource dependency. Agent ingress and graph.Build use

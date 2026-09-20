@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package scep implements the RFC 8894 SCEP enrollment server, compatible with
 // MDM-style clients.

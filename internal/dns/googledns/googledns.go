@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package googledns is the Google Cloud DNS DNS-01 provider (S8b.8), built from the
 // DNS-provider plugin template — the acme.DNSProvider interface plus the

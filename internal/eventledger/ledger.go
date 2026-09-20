@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package eventledger is the single source of truth that binds every mutating
 // served GA capability to the immutable AN-2 event it emits (COVER-008). The audit

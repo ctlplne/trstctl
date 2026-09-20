@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package envoy is the Envoy SDS push deployment connector. It sends a renewed
 // certificate/key pair to an explicit SDS-management endpoint; it does not

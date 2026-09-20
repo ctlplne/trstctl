@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package secretscan ingests leaked-secret findings from scanners (trufflehog,
 // gitleaks) into the inventory/graph with provenance (S20.4, F39) so an exposed

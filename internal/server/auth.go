@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // This file wires the served OIDC browser-login + session + per-user → tenant
 // mapping (EXC-WIRE-01) into the control-plane composition, closing the served-vs-

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package issuancerequest holds the lifecycle of a first-class issuance request
 // (epic I3).

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package profile is trstctl's certificate-profile model (S8.1, F53): the
 // versioned, fine-grained rules that govern what a certificate may be — allowed

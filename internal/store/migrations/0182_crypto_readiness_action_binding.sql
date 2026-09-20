@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: MPL-2.0
+-- SPDX-License-Identifier: BUSL-1.1
 
 -- AUD-65 binds an owner action to the exact production graph-readiness row the
 -- operator saw. The campaign/finding tables remain projections of immutable

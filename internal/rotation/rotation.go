@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package rotation is the policy-driven, rollback-safe secret rotation engine
 // (S20.3, F37): a two-phase rotation — stage → cut over → verify → retire — where

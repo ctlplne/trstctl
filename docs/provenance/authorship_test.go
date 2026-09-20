@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package provenance holds the guards for the authorship and development-method
 // record. The record itself (AUTHORSHIP.md) is NOT tracked: AH-0003 unshipped it

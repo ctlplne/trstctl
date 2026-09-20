@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package ns1 is the NS1 (IBM NS1 Connect) DNS-01 provider (S8b.9), built from the
 // DNS-provider plugin template — the acme.DNSProvider interface plus the

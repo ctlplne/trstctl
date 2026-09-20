@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package quorum is the tiny, signer-safe break-glass quorum primitive. It is
 // kept separate from the wider breakglass package so AN-4 signer integrations can

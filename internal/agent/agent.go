@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package agent is the trstctl in-network agent core (F3 base, F15, sprint S5.1):
 // it registers with the control plane (one-time bootstrap token or, later,

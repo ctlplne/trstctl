@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package kubernetes embeds the Kubernetes deployment manifests for the trstctl
 // agent — the namespace, the trstctl Issuer/ClusterIssuer/Certificate CRDs,

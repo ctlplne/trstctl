@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // This file implements S13.4 (F45): SSH user certificates issued only against a
 // valid attestation — the same F30 gate as ephemeral X.509-SVIDs (S11.9) — so

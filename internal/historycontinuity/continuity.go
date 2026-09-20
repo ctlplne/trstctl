@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package historycontinuity signs and verifies the durable authorization that
 // lets the event log switch from one history generation to another.

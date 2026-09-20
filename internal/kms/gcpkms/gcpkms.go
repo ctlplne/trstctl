@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package gcpkms is the Google Cloud KMS key-management backend (S9.5), built from the
 // S9.1 backend template behind the AN-3 crypto boundary. GenerateKey creates an

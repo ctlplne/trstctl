@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package revocationhealth defines the bounded public command/report/event
 // contract shared by the control plane and a network relay. It contains no

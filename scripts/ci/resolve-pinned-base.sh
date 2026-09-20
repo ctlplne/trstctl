@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: BUSL-1.1
 #
 # Resolve an external base image to a digest and REQUIRE it to match the digest
 # committed in .github/base-image-digests.env (SUPPLY-001).

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 package main
 
@@ -28,13 +28,13 @@ func TestRepoWideMulticheckerRunsAndFailsPlantedViolations(t *testing.T) {
 
 	fixture := t.TempDir()
 	writeFile(t, filepath.Join(fixture, "go.mod"), "module trstctl.com/trstctl\n\ngo 1.22\n")
-	writeFile(t, filepath.Join(fixture, "badcrypto", "bad.go"), `// SPDX-License-Identifier: MPL-2.0
+	writeFile(t, filepath.Join(fixture, "badcrypto", "bad.go"), `// SPDX-License-Identifier: BUSL-1.1
 
 package badcrypto
 
 import _ "crypto/x509"
 `)
-	writeFile(t, filepath.Join(fixture, "internal", "api", "secrets.go"), `// SPDX-License-Identifier: MPL-2.0
+	writeFile(t, filepath.Join(fixture, "internal", "api", "secrets.go"), `// SPDX-License-Identifier: BUSL-1.1
 
 package api
 
@@ -46,7 +46,7 @@ func leak(credential []byte) string {
 	return string(credential)
 }
 `)
-	writeFile(t, filepath.Join(fixture, "internal", "crypto", "agility.go"), `// SPDX-License-Identifier: MPL-2.0
+	writeFile(t, filepath.Join(fixture, "internal", "crypto", "agility.go"), `// SPDX-License-Identifier: BUSL-1.1
 
 package crypto
 
@@ -54,11 +54,11 @@ import _ "trstctl.com/trstctl/internal/policy"
 
 var providerRegistry = map[string]any{}
 `)
-	writeFile(t, filepath.Join(fixture, "internal", "policy", "policy.go"), `// SPDX-License-Identifier: MPL-2.0
+	writeFile(t, filepath.Join(fixture, "internal", "policy", "policy.go"), `// SPDX-License-Identifier: BUSL-1.1
 
 package policy
 `)
-	writeFile(t, filepath.Join(fixture, "internal", "badnetexec", "bad.go"), `// SPDX-License-Identifier: MPL-2.0
+	writeFile(t, filepath.Join(fixture, "internal", "badnetexec", "bad.go"), `// SPDX-License-Identifier: BUSL-1.1
 
 package badnetexec
 
@@ -85,7 +85,7 @@ func ambient(url string) error {
 `)
 	writeFile(t, filepath.Join(fixture, "internal", "badlicense", "missing_spdx.go"), `package badlicense
 `)
-	writeFile(t, filepath.Join(fixture, "internal", "badimport", "bad.go"), `// SPDX-License-Identifier: MPL-2.0
+	writeFile(t, filepath.Join(fixture, "internal", "badimport", "bad.go"), `// SPDX-License-Identifier: BUSL-1.1
 
 package badimport
 
@@ -99,7 +99,15 @@ package billing
 
 package badspdx
 `)
-	writeFile(t, filepath.Join(fixture, "internal", "random", "pqc.go"), `// SPDX-License-Identifier: MPL-2.0
+	writeFile(t, filepath.Join(fixture, "clients", "okclient", "ok.go"), `// SPDX-License-Identifier: MPL-2.0
+
+package okclient
+`)
+	writeFile(t, filepath.Join(fixture, "clients", "badclient", "bad.go"), `// SPDX-License-Identifier: BUSL-1.1
+
+package badclient
+`)
+	writeFile(t, filepath.Join(fixture, "internal", "random", "pqc.go"), `// SPDX-License-Identifier: BUSL-1.1
 
 package random
 
@@ -124,14 +132,18 @@ const Algorithm = "ML-DSA-65"
 		"ambient http.Client construction is not allowed in new outbound surfaces",
 		"http.Get/http.Head/http.Post/http.PostForm are not allowed",
 		"direct shell interpreter execution is not allowed",
-		"core file must carry SPDX-License-Identifier: MPL-2.0",
+		"core file must carry SPDX-License-Identifier: BUSL-1.1",
 		"core file imports \"trstctl.com/trstctl/ee/billing\"",
-		"ee/ file must not carry MPL-2.0 SPDX",
+		"ee/ file must not carry SPDX-License-Identifier: MPL-2.0",
+		"clients/ file must not carry SPDX-License-Identifier: BUSL-1.1",
 		"PQC algorithm or fleet-execution code",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("planted violation output missing %q:\n%s", want, got)
 		}
+	}
+	if strings.Contains(got, "okclient") {
+		t.Fatalf("trstctllint reported the MPL-2.0 clients/ fixture, which is the licence that tree must carry:\n%s", got)
 	}
 }
 

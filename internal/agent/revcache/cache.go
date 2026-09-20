@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package revcache serves the control plane's CRLs inside a dark segment
 // (epic R3).

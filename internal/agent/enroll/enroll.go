@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package enroll is the control-plane side of agent enrollment (F3/F15, sprint
 // S5.1): it issues one-time bootstrap tokens, signs agents' CSRs into short-lived

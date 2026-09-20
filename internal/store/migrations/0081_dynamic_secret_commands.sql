@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: MPL-2.0
+-- SPDX-License-Identifier: BUSL-1.1
 -- Durable authenticated command identities for dynamic-secret lifecycle
 -- mutations and secret-sync delivery.
 --

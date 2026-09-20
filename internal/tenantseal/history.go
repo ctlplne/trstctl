@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package tenantseal coordinates tenant-scoped cryptographic protection domains
 // without moving cryptographic primitives outside internal/crypto.

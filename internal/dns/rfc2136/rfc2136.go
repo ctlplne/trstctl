@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package rfc2136 is the RFC 2136 dynamic DNS UPDATE provider for ACME DNS-01. It
 // publishes and retracts TXT records directly against an authoritative DNS server.

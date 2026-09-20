@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: MPL-2.0
+-- SPDX-License-Identifier: BUSL-1.1
 -- Name the byte format stored in every idempotency result row. A reader must
 -- know whether result is an old opaque byte string or a tenant-bound sealed
 -- container before it can safely return a replay.

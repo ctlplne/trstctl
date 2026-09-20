@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package postgresql deploys renewed TLS files to a PostgreSQL server and
 // reloads the local instance so the new certificate can be picked up.

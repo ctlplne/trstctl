@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package netsec holds shared network-security primitives. Its centerpiece is the
 // SSRF guard (SEC-006/SEC-008): a dialer Control callback and HTTP client that

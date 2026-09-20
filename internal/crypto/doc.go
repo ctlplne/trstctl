@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package crypto is the AN-3 cryptography boundary: the single package in the
 // tree permitted to import the standard library's crypto/* packages.

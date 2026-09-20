@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: MPL-2.0
+-- SPDX-License-Identifier: BUSL-1.1
 -- Durable, event-projected code-signing commands.  The command body is sealed
 -- with the deployment KEK before it reaches PostgreSQL; only its request hash
 -- and public routing metadata are readable here.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 // Run after npm ci in web/: node --test docs/demo_html_behavior.test.mjs
 // These are isolated document tests, not a browser or live-product qualification.
 import assert from 'node:assert/strict';

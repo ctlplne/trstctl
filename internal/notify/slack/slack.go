@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package slack is the Slack notification channel (S10.3), the first concrete
 // notify.Notifier built on the channel template (S10.2): notify already defines the

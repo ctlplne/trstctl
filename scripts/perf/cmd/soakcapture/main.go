@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Command soakcapture drives the local eval perf stack long enough to emit a
 // captured soak series that scripts/perf/soak.sh can analyze with --in.

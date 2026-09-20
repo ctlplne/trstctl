@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package bulkhead implements AN-7: each subsystem runs on its own bounded worker
 // pool with a bounded queue. When a pool is saturated it rejects new work fast,

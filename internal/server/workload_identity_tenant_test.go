@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // SPIFFE-TENANT-001: different tenants must not obtain the same identity under
 // a shared CA, even when their independently trusted proofs name the same workload.

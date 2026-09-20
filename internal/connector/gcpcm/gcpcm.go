@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package gcpcm is the GCP Certificate Manager deployment connector (S5.13), the
 // last cloud certificate store, built from the connector SDK (S5.5). A renewed

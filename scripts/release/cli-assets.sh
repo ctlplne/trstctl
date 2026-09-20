@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: BUSL-1.1
 #
 # Build the standalone API client for the five supported desktop/CI targets.
 # Every archive embeds the full source commit, and one checksum manifest binds

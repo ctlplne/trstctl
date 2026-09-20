@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package smallstepfake is a faithful in-process test double of the Smallstep
 // step-ca HTTP API, enough to exercise the Smallstep CA plugin end-to-end without

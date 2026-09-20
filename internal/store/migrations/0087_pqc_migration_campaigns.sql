@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: MPL-2.0
+-- SPDX-License-Identifier: BUSL-1.1
 
 -- Core PQC migration campaigns turn tenant CBOM observations into an owned,
 -- deadline-bound program. These tables are read-model projections only; immutable

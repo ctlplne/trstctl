@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package fortigatetest is a faithful in-process double of the FortiOS REST API
 // local-certificate surface (`/api/v2/cmdb/vpn.certificate/local/{name}`), for

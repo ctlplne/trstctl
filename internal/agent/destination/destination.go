@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package destination installs an issued credential — a certificate and,
 // optionally, its private key — to a place on the host where a workload

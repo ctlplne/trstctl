@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package nginx is the NGINX deployment connector (S5.6), built from the
 // connector SDK (S5.5). It installs a renewed certificate the way an operator

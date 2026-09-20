@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package transit is encryption-as-a-service (S18.1, F66): applications encrypt,
 // decrypt, sign, verify, HMAC, and rewrap via named keys held behind the crypto

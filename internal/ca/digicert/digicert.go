@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package digicert is the DigiCert CertCentral CA plugin (F4, sprint S4.7), built
 // from the CA-plugin template (internal/ca/catemplate): it implements only the

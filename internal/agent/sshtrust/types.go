@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package sshtrust configures a host to trust the trstctl SSH CA. This file is
 // the S13.2 design contract: the seams and types the S13.3 build implements. The

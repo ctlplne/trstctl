@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package mdm provides the dynamic SCEP challenge that MDM/EMM platforms (Microsoft
 // Intune, JAMF) inject into a managed device's SCEP profile so that only a device the MDM

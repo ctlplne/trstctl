@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package kvdisc enumerates certificates from Azure Key Vault through its
 // read-only list and get operations (F49). It authenticates with a bearer token

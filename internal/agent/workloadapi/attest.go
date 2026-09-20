@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package workloadapi serves the SPIFFE Workload API on the host that runs the
 // workloads (epic B3).

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package helm holds reality tests for the trstctl control-plane Helm chart under
 // deploy/helm/trstctl. The chart itself is plain YAML/templates; these tests

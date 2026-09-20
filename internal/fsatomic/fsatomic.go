@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package fsatomic holds the small filesystem-durability helpers an
 // atomic-replace write needs. A write-then-rename is only crash-safe when the

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: BUSL-1.1
 #
 # npm ci is intentionally destructive. Reuse only a tree produced by this
 # script for the exact current lock digest. CI and exact-tip/full-clean callers

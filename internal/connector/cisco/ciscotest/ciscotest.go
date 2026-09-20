@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package ciscotest is a faithful in-process double of the Cisco ASA / Identity
 // Services Engine (ISE ERS) management API's certificate-import endpoint, for

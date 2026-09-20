@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package javakeystore is the Java keystore deployment connector (S5.13.2), built
 // from the connector SDK (S5.5). Unlike the appliance and cloud connectors, a

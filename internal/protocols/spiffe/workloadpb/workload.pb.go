@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Vendored from github.com/spiffe/go-spiffe/v2@v2.6.0
 // proto/spiffe/workload/workload.pb.go (Apache-2.0). The SPIFFE Workload API

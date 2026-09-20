@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package azurekvtest is a faithful in-process double of the Azure Key Vault
 // certificate-import endpoint, for testing the azurekv connector without a real

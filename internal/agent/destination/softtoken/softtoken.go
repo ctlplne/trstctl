@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package softtoken is an in-process, software PKCS#11 token used to exercise
 // the PKCS#11 destination in tests and CI, where a real token (SoftHSM via CGO,

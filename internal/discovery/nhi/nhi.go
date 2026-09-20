@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package nhi normalizes metadata-only non-human identity observations from
 // multiple estate surfaces into discovery findings. It never accepts or persists

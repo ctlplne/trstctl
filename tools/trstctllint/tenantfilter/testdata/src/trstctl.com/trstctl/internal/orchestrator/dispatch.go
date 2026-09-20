@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package orchestrator stands in for the real orchestrator, one of the packages
 // OUTSIDE internal/store that runs raw DML against tenant tables on the pool (the

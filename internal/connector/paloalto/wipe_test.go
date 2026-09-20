@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // The rest of this connector's tests live in the external paloalto_test package,
 // which is where they belong: they drive the connector the way the relay does.

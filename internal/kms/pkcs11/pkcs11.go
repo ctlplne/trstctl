@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package pkcs11 is the PKCS#11 (HSM) key-management backend (S9.2), built from the
 // S9.1 backend template behind the AN-3 crypto boundary. GenerateKey asks the token to

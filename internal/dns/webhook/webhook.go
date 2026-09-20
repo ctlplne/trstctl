@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package webhook is the generic DNS-01 webhook provider. It lets operators wire
 // providers outside the built-in catalog without giving trstctl a provider-specific

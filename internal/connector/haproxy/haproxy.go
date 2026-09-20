@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package haproxy is the HAProxy deployment connector (S5.9), built from the
 // connector SDK (S5.5). HAProxy reads the certificate and key from a single

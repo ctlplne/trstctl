@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package fortigate is the Fortinet FortiGate / FortiWeb deployment connector
 // (S10.9), built from the connector SDK (S5.5). A FortiGate (and the FortiWeb

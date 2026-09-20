@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package byok implements the full bring-your-own-key (BYOK) / HSM key lifecycle
 // for the highest-value keys trstctl custodies — CA/issuing signing keys and the

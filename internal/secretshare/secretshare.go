@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package secretshare provides one-time self-destructing secret-sharing links and
 // secret-change approvals (S19.3, F60). A link is single-use — a second view

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package revcacheposture defines the signed, metadata-only statement a
 // network relay uses to report LAN revocation-cache health.

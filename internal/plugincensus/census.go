@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package plugincensus defines the small, metadata-only description of WASM
 // connectors a verified network-relay runtime has actually loaded.

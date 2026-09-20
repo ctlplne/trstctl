@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Command cbomcoveragedoc generates docs/design/cbom-coverage.md from the
 // coverage model itself (WS-1 card A9).

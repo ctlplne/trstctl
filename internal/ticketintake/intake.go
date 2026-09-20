@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package ticketintake defines reference-only ServiceNow and Jira read intents
 // and their bounded parsers. The network relay executes the read; the control

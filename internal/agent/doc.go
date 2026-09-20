@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package agent holds the in-network agent's worker logic: certificate and
 // credential discovery, deployment to host destinations, SSH trust

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package cbom is trstctl's cryptographic discovery and observability layer
 // (F52): it inventories cryptographic *usage* across an environment — TLS

@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: MPL-2.0
+-- SPDX-License-Identifier: BUSL-1.1
 -- Durable, event-projected managed-key lifecycle + external-action command state.
 
 CREATE TABLE managed_key_operations (

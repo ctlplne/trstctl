@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: BUSL-1.1
 """Dependency license audit for the SHIPPED binaries (D9).
 
 What it does, in one breath: resolve every Go module actually linked into the

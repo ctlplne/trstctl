@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package config loads, merges, and validates trstctl's configuration from a
 // JSON file and the environment, with precedence defaults < file < environment.

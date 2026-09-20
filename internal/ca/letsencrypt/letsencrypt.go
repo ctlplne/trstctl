@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package letsencrypt is the first CA plugin: an ACME (RFC 8555) certificate
 // authority — Let's Encrypt or any ACME CA — implementing the ca.CA interface.

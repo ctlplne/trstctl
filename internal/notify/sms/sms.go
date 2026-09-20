@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package sms is the SMS notification channel. It posts a small JSON message to an
 // operator-managed SMS gateway, authenticated with an optional bearer token. The

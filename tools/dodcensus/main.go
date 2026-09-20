@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // dodcensus proves that advertised capabilities are compiled into cmd/trstctl,
 // assembled by buildRunDeps, and exercised through the resulting served handler.

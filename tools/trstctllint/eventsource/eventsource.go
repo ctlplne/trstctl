@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package eventsource implements the AN-2 architecture rule: a served mutating
 // handler must not write the relational read model directly. State changes are

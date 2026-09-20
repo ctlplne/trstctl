@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package iis is the Microsoft IIS deployment connector (S5.8), built from the
 // connector SDK (S5.5). Unlike the file-plus-reload connectors, IIS reads its

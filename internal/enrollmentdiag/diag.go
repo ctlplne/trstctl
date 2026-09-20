@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package enrollmentdiag turns a failed enrollment into a specific step, a
 // specific cause, and something to do about it (epic I4).

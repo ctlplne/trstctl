@@ -1,8 +1,12 @@
 trstctl Notice
 
-trstctl core is MPL-2.0 open-source software. Enterprise, Provider, PQC, and
-other license-gated features live under ee/ as proprietary material and require a
-valid offline Ed25519-signed commercial license before production use.
+The trstctl core is source-available under the Business Source License 1.1
+(SPDX: BUSL-1.1): production use is permitted under the Additional Use Grant in
+LICENSE, and each published version converts to the Mozilla Public License 2.0
+four years after its publication. The client libraries under clients/ are
+MPL-2.0. Enterprise, Provider, and other license-gated features live under ee/
+as proprietary material and require a valid offline Ed25519-signed commercial
+license before production use.
 
 Copyright (c) 2026 certctl LLC.
 

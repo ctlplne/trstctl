@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: MPL-2.0
+-- SPDX-License-Identifier: BUSL-1.1
 
 -- AUD-34 / E4: the latest signed, metadata-only census from each authenticated
 -- network relay. The immutable agent.heartbeat v2 event is the authority; these

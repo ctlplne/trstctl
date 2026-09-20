@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package cryptoboundary implements the AN-3 architecture rule: the standard
 // library's crypto and crypto/* packages may be imported only from within

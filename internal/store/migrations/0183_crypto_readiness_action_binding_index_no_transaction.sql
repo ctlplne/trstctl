@@ -1,5 +1,5 @@
 -- migrate: no-transaction
--- SPDX-License-Identifier: MPL-2.0
+-- SPDX-License-Identifier: BUSL-1.1
 
 -- AUD-65 joins current graph rows to event-projected action bindings by tenant
 -- and finding. The campaign table is already live, so build the partial index

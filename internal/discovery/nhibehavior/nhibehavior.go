@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package nhibehavior normalizes metadata-only non-human identity activity
 // observations into anomaly findings. It builds a per-principal baseline from

@@ -1,7 +1,8 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
-// Package licenseboundary enforces PACKAGING-007: MPL-2.0 core files, proprietary
-// ee/ files, no core imports of ee/, and a bounded PQC placement rule.
+// Package licenseboundary enforces PACKAGING-007: BUSL-1.1 core files, MPL-2.0
+// client files under clients/, proprietary ee/ files, no core imports of ee/, and a
+// bounded PQC placement rule.
 package licenseboundary
 
 import (
@@ -16,14 +17,15 @@ import (
 
 const (
 	modulePath = "trstctl.com/trstctl"
-	coreSPDX   = "SPDX-License-Identifier: MPL-2.0"
+	coreSPDX   = "SPDX-License-Identifier: BUSL-1.1"
+	clientSPDX = "SPDX-License-Identifier: MPL-2.0"
 	eeSPDX     = "SPDX-License-Identifier: LicenseRef-trstctl-EE"
 	mitSPDX    = "SPDX-License-Identifier: MIT"
 )
 
 var Analyzer = &analysis.Analyzer{
 	Name: "licenseboundary",
-	Doc:  "PACKAGING-007: enforce MPL core, proprietary ee/, no core->ee imports, and PQC placement.",
+	Doc:  "PACKAGING-007: enforce BUSL-1.1 core, MPL-2.0 clients/, proprietary ee/, no core->ee imports, and PQC placement.",
 	Run:  run,
 }
 
@@ -40,7 +42,8 @@ func run(pass *analysis.Pass) (interface{}, error) {
 		}
 		body := string(bodyBytes)
 		isEE := isEEPath(sourcePath) || strings.HasPrefix(pass.Pkg.Path(), modulePath+"/ee")
-		checkSPDX(pass, file, sourcePath, isEE, body)
+		isClient := !isEE && (isClientPath(sourcePath) || strings.HasPrefix(pass.Pkg.Path(), modulePath+"/clients/"))
+		checkSPDX(pass, file, sourcePath, isEE, isClient, body)
 		if !isEE {
 			checkCoreImports(pass, file, sourcePath)
 			checkCorePQCPlacement(pass, file, sourcePath, body)
@@ -74,12 +77,14 @@ func repoSourcePath(filename, pkgPath string) string {
 	return relPkg + "/" + base
 }
 
-func checkSPDX(pass *analysis.Pass, file *ast.File, sourcePath string, isEE bool, body string) {
+func checkSPDX(pass *analysis.Pass, file *ast.File, sourcePath string, isEE, isClient bool, body string) {
 	header := spdxHeaderWindow(body)
 	if isEE {
-		if strings.Contains(header, coreSPDX) {
-			pass.Reportf(file.Package, "ee/ file must not carry MPL-2.0 SPDX; use %s", eeSPDX)
-			return
+		for _, wrong := range []string{coreSPDX, clientSPDX} {
+			if strings.Contains(header, wrong) {
+				pass.Reportf(file.Package, "ee/ file must not carry %s; use %s", wrong, eeSPDX)
+				return
+			}
 		}
 		if !strings.Contains(header, eeSPDX) {
 			pass.Reportf(file.Package, "ee/ file must carry %s", eeSPDX)
@@ -87,18 +92,39 @@ func checkSPDX(pass *analysis.Pass, file *ast.File, sourcePath string, isEE bool
 		return
 	}
 	if isEmbeddedPostgresSource(sourcePath) {
-		if !strings.Contains(header, mitSPDX) || strings.Contains(header, coreSPDX) || strings.Contains(header, eeSPDX) {
+		if !strings.Contains(header, mitSPDX) || strings.Contains(header, coreSPDX) || strings.Contains(header, clientSPDX) || strings.Contains(header, eeSPDX) {
 			pass.Reportf(file.Package, "embedded-postgres source file must preserve upstream %s", mitSPDX)
 		}
 		return
 	}
-	if strings.Contains(header, eeSPDX) {
-		pass.Reportf(file.Package, "core file must not carry proprietary EE SPDX; use %s", coreSPDX)
+	if isClient {
+		// The client tree (SDKs, embedded client, GitHub Action) stays MPL-2.0 so it
+		// can be embedded in a customer's own software without the core's BSL use
+		// grant attaching to that software.
+		for _, wrong := range []string{coreSPDX, eeSPDX} {
+			if strings.Contains(header, wrong) {
+				pass.Reportf(file.Package, "clients/ file must not carry %s; use %s", wrong, clientSPDX)
+				return
+			}
+		}
+		if !strings.Contains(header, clientSPDX) {
+			pass.Reportf(file.Package, "clients/ file must carry %s", clientSPDX)
+		}
 		return
+	}
+	for _, wrong := range []string{eeSPDX, clientSPDX} {
+		if strings.Contains(header, wrong) {
+			pass.Reportf(file.Package, "core file must not carry %s; use %s", wrong, coreSPDX)
+			return
+		}
 	}
 	if !strings.Contains(header, coreSPDX) {
 		pass.Reportf(file.Package, "core file must carry %s", coreSPDX)
 	}
+}
+
+func isClientPath(sourcePath string) bool {
+	return strings.HasPrefix(sourcePath, "clients/")
 }
 
 func isEmbeddedPostgresSource(sourcePath string) bool {

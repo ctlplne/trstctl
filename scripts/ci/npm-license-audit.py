@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: BUSL-1.1
 """Dependency licence audit for the CONSOLE's shipped dependency tree.
 
 The sibling `license-audit.py` answers this question for the Go binaries. It

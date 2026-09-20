@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package tpm is the TPM 2.0 key-management backend (S9.6), built from the S9.1 backend
 // template behind the AN-3 crypto boundary. GenerateKey asks the TPM to create a key and

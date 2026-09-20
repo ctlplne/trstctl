@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package segmentscan defines the bounded command and report exchanged between
 // the control plane and a network-role relay for network and SSH discovery.

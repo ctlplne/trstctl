@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package observ is trstctl's observability baseline: a dependency-free metrics
 // registry that renders the Prometheus text exposition format, W3C-traceparent

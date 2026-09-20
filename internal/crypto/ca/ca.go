@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package ca is the X.509 certificate-issuance authority inside the AN-3 crypto
 // boundary (a subpackage of internal/crypto): it turns a PKCS#10 CSR into a

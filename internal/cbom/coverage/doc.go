@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package coverage computes cryptographic discovery coverage: which asset
 // classes the deployment's discovery sources can observe, which of those have

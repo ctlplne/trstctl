@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package edgetest builds adversarial X.509 fixtures for B6 edge sub-CA
 // tests. It lives below internal/crypto for the same reason deviceattesttest

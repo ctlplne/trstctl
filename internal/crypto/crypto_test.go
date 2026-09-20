@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // These tests are written from a caller's perspective: the external test
 // package imports only the boundary and never a standard-library crypto package

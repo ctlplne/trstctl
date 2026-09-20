@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package ca defines the certificate-authority plugin interface and a built-in
 // CA that implements it. Every CA — the built-in one here, the signer-backed

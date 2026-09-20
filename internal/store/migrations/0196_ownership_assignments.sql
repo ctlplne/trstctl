@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: MPL-2.0
+-- SPDX-License-Identifier: BUSL-1.1
 -- Asset-specific accountability is event-sourced. This table is only the
 -- tenant-scoped current projection; the immutable ownership.assigned events
 -- retain every prior decision and its attributed reason.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package idem is the shared idempotency seam (AN-5) used by the incident-response
 // and approval subsystems (Epoch 12). The PostgreSQL-backed

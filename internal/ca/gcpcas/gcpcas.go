@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package gcpcas is the Google Cloud Certificate Authority Service (CAS) CA
 // plugin (F4, sprint S4.13), built from the CA-plugin template

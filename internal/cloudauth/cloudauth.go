@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package cloudauth owns the provider-neutral short-lived cloud credential
 // minter used by bounded outbox workers. It keeps authority-bearing bytes in

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package jks encodes a private key together with its certificate chain as a
 // Java KeyStore (the legacy JKS format, magic 0xFEEDFEED) under a named alias.

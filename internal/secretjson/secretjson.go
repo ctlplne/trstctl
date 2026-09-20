@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package secretjson contains JSON marshal helpers for edge payloads that must
 // carry secret bytes as wire strings without first materializing those bytes as

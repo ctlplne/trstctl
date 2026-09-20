@@ -1,5 +1,5 @@
 -- migrate: no-transaction
--- SPDX-License-Identifier: MPL-2.0
+-- SPDX-License-Identifier: BUSL-1.1
 
 -- AUD-70 active readers intentionally ignore retired CT watchlist history.
 -- Both tables are already populated, so build the partial lookup indexes

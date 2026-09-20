@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package cryptoreadiness builds the one tenant-bound crypto migration dataset
 // consumed by JSON, CBOM/Posture, Risk, owner actions, and signed evidence.

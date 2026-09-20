@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package sshdiscovery inventories the SSH key material on a host (F42, S6.3):
 // host keys, user public keys, authorized_keys grants, known_hosts trust, and

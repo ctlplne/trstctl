@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package ejbcafake is a faithful in-process test double of the EJBCA REST API
 // certificate-enrollment endpoint, enough to exercise the EJBCA CA plugin

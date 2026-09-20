@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: BUSL-1.1
 """Require a complete golangci-lint JSON scan before comparing the EE baseline."""
 
 import argparse

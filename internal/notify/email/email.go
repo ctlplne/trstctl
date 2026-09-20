@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package email is the email (SMTP) notification channel (S10.8), built from the same
 // notification template as every other channel: it implements notify.Notifier and

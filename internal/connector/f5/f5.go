@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package f5 is the F5 BIG-IP deployment connector (S5.10), built from the
 // connector SDK (S5.5). Unlike the file-plus-reload connectors, BIG-IP is an

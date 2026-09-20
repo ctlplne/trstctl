@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package deploy holds the cross-cutting, behavioural deployment checks that span
 // every deploy/ subtree (Docker, Helm, raw Kubernetes manifests, the operator).

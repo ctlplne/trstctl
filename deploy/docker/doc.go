@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package docker holds trstctl's container distribution artifacts — the
 // reproducible image Dockerfile, the one-command Compose evaluation stack, and

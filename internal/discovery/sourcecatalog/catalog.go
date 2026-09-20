@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package sourcecatalog is the shared, operator-facing discovery-source
 // contract. The API, CLI, console, documentation checks, and QA matrix consume

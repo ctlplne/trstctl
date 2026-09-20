@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package elasticsearch deploys renewed HTTP TLS files to Elasticsearch. The
 // Elasticsearch SSL resource watcher reloads changed certificate files, so this

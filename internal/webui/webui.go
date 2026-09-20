@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package webui serves trstctl's single-page web application (F12) from assets
 // embedded in the binary. Real asset files are served with their content type;

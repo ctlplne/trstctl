@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package codesigningref defines opaque, non-PII identities shared by the
 // code-signing projector and the event-history privacy rewriter. It is a leaf so

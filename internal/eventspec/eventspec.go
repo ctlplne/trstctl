@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package eventspec holds the pure, dependency-light type surface of the AN-2
 // event log: the Event envelope, its Actor, and the default schema version. It

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package discovery provides read-only discovery of credentials that already live
 // elsewhere (S20.1 secret stores / F35, S20.2 API keys & tokens / F36): a

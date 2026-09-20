@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 import { useEffect, useState } from "react";
 import { translateNow } from "@/i18n/I18nProvider";

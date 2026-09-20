@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package secrettext contains tiny edge helpers for authority-bearing bytes that
 // must cross APIs requiring string values, such as net/http headers.

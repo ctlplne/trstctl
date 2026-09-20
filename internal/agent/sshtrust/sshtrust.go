@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // This file is the S13.3 build: the Applier implements the reviewed S13.2 design
 // (docs/design/ssh-trust-rewrite.md). It configures a host to trust the SSH CA

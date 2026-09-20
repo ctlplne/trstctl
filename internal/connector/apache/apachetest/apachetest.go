@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package apachetest is a faithful in-process Apache (httpd) double for
 // connector tests and conformance. It records the files a connector writes,

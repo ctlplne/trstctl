@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: BUSL-1.1
 set -euo pipefail
 
 repo_script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/install-web-deps.sh"

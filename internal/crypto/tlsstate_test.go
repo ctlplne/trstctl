@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // This test lives in package crypto (not crypto_test) because it must build a
 // tls.ConnectionState and parse certificates directly, and AN-3 confines

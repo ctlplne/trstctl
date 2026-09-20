@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 package licenseboundary
 
@@ -47,6 +47,24 @@ func TestRepoSourcePathIgnoresCheckoutParentNames(t *testing.T) {
 	eeFilename := "/tmp/a-path-containing-pqc-and-core/ee/pqc/service.go"
 	if got, want := repoSourcePath(eeFilename, modulePath+"/ee/pqc"), "ee/pqc/service.go"; got != want {
 		t.Fatalf("repoSourcePath() for EE = %q, want %q", got, want)
+	}
+}
+
+func TestClientTreeIsClassifiedByRepositoryRelativePath(t *testing.T) {
+	for _, path := range []string{"clients/embedded/embedded.go", "clients/sdk/go/trstctl/client.go"} {
+		if !isClientPath(path) {
+			t.Fatalf("client tree path %q was not classified as clients/", path)
+		}
+	}
+	for _, path := range []string{
+		"internal/server/clients.go",
+		"cmd/trstctl/clients_cmd.go",
+		"ee/provider/clients.go",
+		"/workspace/clients/embedded/embedded.go",
+	} {
+		if isClientPath(path) {
+			t.Fatalf("non-client path %q was classified as clients/", path)
+		}
 	}
 }
 

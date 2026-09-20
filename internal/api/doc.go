@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package api exposes the platform's external surfaces: a resource-oriented
 // REST API (OpenAPI 3.1) and the gRPC channel for agents.

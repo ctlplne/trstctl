@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package secretsdk is the secrets SDK core (S19.2, F64): a client that fetches
 // secrets and short-lived credentials, caches them, auto-refreshes before expiry,

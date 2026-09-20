@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package netsec is the analyzer fixture stand-in for the real
 // internal/netsec: the package that IMPLEMENTS the sanctioned outbound path.

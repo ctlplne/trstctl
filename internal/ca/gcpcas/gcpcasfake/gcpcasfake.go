@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package gcpcasfake is a faithful in-process double of the Google Cloud
 // Certificate Authority Service (CAS) API the plugin uses, enough to exercise the

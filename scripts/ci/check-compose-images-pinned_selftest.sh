@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: BUSL-1.1
 # Self-test for check-compose-images-pinned.sh — proves the SUPPLY-008 digest-pin
 # guard accepts a fully pinned deploy tree and rejects each way a floating tag can
 # come back, so a regression in the guard is caught here rather than silently

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package rca builds grounded root-cause answers (F77, S19b.2 evidence pipeline +
 // S19b.3 synthesis). A question is turned into a query plan; evidence is gathered

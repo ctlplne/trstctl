@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package awssm enumerates certificate material stored in AWS Secrets Manager.
 // It uses only read-only ListSecrets and GetSecretValue calls, signs requests with

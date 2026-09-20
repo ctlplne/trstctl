@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package server is the composition root of the trstctl control plane (S7.7): it
 // wires the configuration, datastore, event log, projections, orchestrator, and

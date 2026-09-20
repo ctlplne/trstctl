@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package gcpcmtest is a faithful in-process double of the GCP Certificate
 // Manager certificates.patch API, for testing the gcpcm connector without real

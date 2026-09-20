@@ -1,6 +1,6 @@
 //go:build chaos && !linux
 
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 package signing_test
 

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package azurekv is the Azure Key Vault (keys) key-management backend (S9.4), built from
 // the S9.1 backend template behind the AN-3 crypto boundary. GenerateKey creates an

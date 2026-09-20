@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package secretsync pushes trstctl's secrets into external platforms (S19.4,
 // F68): a sync template (push + drift detection) plus targets — Kubernetes,

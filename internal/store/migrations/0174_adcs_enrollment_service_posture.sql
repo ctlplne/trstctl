@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: MPL-2.0
+-- SPDX-License-Identifier: BUSL-1.1
 
 -- AUD-37 / F3: normalized, event-derived CA and IIS enrollment-service posture.
 -- The relay keeps response bodies, cookies, raw certutil output, and credentials

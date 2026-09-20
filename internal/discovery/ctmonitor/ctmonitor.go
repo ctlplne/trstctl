@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package ctmonitor watches Certificate Transparency logs (RFC 6962) for
 // certificates issued for an organization's domains and raises an alert on any

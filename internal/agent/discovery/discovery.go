@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package discovery inventories the certificates an agent can see locally (F3,
 // S6.2): on the filesystem, in a PKCS#11 token, in the Windows certificate store,

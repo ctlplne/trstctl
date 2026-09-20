@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package venafi is the Venafi TPP / TLS Protect CA plugin (F4, CLM-04), built
 // from the CA-plugin template (internal/ca/catemplate): it implements only the

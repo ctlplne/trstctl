@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseReport, assess, aggregate } from './npm-audit-report.mjs';

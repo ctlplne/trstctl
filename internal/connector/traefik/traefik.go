@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package traefik is the Traefik file-provider deployment connector. It writes a
 // renewed certificate/key pair to the files referenced by Traefik dynamic config;

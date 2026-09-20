@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package serviceaccount normalizes metadata-only Active Directory and cloud
 // service-account inventory into discovery findings. It never accepts password,

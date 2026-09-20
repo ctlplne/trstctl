@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package netscan discovers certificates by non-invasive TLS handshakes over
 // operator-defined IP/port ranges (F2, S6.1). It runs on its own bounded worker

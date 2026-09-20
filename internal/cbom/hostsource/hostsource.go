@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package hostsource is a CBOM source that reads host TLS configuration files
 // (nginx, Apache, sshd-style) and reports the protocol versions and cipher

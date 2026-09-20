@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: BUSL-1.1
 
 # AUD-68 assembled proof: every Docker object is scoped to one freshly generated
 # Compose project. The script never addresses the ordinary `trstctl-demo` project.

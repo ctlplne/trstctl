@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package rotationcommand defines the deterministic identity of one scheduled
 // secret-rotation due edge. It is a small leaf so the command side, projector,

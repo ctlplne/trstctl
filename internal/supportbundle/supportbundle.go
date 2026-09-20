@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package supportbundle creates a bounded, offline-first diagnostic archive.
 // It deliberately records posture and aggregate counts, never raw environment,

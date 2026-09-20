@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package driftplan owns the validated, normalized execution contract for a
 // credential-drift discovery source. The effect-free API preview and the

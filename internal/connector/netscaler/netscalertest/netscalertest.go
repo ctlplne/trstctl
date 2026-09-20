@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package netscalertest is a faithful in-process double of the Citrix ADC
 // (NetScaler) NITRO REST API, for testing the netscaler connector without a real

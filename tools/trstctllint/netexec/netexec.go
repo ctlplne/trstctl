@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package netexec enforces the SEC-005 hardening guardrail: new outbound HTTP
 // and process-exec surfaces must use the shared SSRF primitives or validated

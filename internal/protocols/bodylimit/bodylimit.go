@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package bodylimit provides strict request-body size enforcement for protocol
 // handlers that parse attacker-controlled bytes.

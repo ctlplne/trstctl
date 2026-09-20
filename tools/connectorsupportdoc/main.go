@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Command connectorsupportdoc generates the connector support matrix page from
 // the census in internal/connector (epic E3).

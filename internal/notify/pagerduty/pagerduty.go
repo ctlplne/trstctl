@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package pagerduty is the PagerDuty notification channel (S10.5), built from the same
 // notification template as every other channel: the notify.Notifier interface plus the

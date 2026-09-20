@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package breakglass implements the break-glass emergency-issuance ceremony
 // (S12.4, F34): a degraded, offline mode of the signing service for when the

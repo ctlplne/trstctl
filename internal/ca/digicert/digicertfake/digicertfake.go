@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package digicertfake is a faithful in-process test double of the DigiCert
 // CertCentral Services API, enough of it to exercise the DigiCert CA plugin

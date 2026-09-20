@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package deviceattest isolates reviewed, high-dependency attestation parsers
 // below the crypto boundary without adding them to the sacred signer's lean

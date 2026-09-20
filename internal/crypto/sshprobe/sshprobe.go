@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package sshprobe performs a non-invasive SSH protocol handshake to capture the
 // host key a server presents, for SSH host-key discovery (F42, S6.3) — the SSH

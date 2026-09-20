@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package oauthgrant normalizes metadata-only OAuth application grants into
 // discovery findings. It models the SaaS-to-SaaS consent layer and never accepts

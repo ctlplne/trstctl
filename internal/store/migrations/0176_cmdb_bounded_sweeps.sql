@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: MPL-2.0
+-- SPDX-License-Identifier: BUSL-1.1
 
 -- AUD-46: one CMDB sweep is a chain of bounded, sys_id-keyset pages. These
 -- columns are the tenant-local checkpoint operators read and the scheduler

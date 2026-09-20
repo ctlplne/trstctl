@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: MPL-2.0
+-- SPDX-License-Identifier: BUSL-1.1
 
 -- Extend the same tenant-scoped workload-identity source with Azure Entra's
 -- federated-credential fields. These values are routing policy, not authority:

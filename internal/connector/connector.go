@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package connector is the deployment-connector SDK (F7, F20). It extracts the
 // shape shared by every deployment target — write the renewed credential out and

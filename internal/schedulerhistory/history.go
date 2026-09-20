@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package schedulerhistory owns the closed historical wire contract for
 // secret.rotation_schedule.ran. It is deliberately dependency-light so event

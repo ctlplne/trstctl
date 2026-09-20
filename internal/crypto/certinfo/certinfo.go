@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package certinfo extracts inventory metadata from an X.509 certificate inside
 // the AN-3 crypto boundary (a subpackage of internal/crypto, so it alone may

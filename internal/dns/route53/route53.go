@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package route53 is the AWS Route 53 reference DNS-01 provider (S8b.1), the first
 // provider built from the DNS-provider plugin template — the acme.DNSProvider

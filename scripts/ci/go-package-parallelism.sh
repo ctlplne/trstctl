@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-License-Identifier: BUSL-1.1
 #
 # Choose a conservative Go package-worker bound from the descriptor budget that
 # this shell actually received. The 256-descriptor macOS default stays serial;

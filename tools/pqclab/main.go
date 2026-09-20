@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Command pqclab runs the operator-facing, offline PQC rehearsal and archives
 // evidence that is safe to hand to an auditor. Licensed mode delegates each

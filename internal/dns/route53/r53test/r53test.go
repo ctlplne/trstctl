@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package r53test is a faithful in-process double of the AWS Route 53
 // ChangeResourceRecordSets API, for testing the route53 DNS-01 provider on CI

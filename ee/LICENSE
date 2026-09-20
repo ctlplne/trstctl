@@ -5,8 +5,9 @@ SPDX-License-Identifier: LicenseRef-trstctl-EE
 Copyright (c) 2026 certctl LLC. All rights reserved.
 
 The files under ee/ are proprietary trstctl Enterprise Edition and Provider
-Edition material. They are not licensed under the Mozilla Public License 2.0 and
-are distributed only as commercial/proprietary material.
+Edition material. They are not licensed under the Mozilla Public License 2.0 or
+the Business Source License 1.1 and are distributed only as commercial/proprietary
+material.
 
 Use, reproduction, modification, distribution, and operation of ee/ material are
 governed solely by a separate commercial agreement and by the offline Ed25519

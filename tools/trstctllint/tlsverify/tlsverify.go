@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package tlsverify implements the SEC-CWE-295 architecture rule: no shipped
 // code path may disable TLS certificate verification. `InsecureSkipVerify:

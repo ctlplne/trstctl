@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package netscaler is the Citrix ADC (NetScaler) deployment connector (S5.13.1),
 // built from the connector SDK (S5.5). A NetScaler is an appliance driven over

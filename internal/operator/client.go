@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package operator is the trstctl Kubernetes Operator's reconcile core: it
 // watches TrstctlControlPlane custom resources (group trstctl.com,

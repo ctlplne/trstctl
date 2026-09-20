@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package azurekvfake is a faithful in-process double of the Azure Key Vault
 // certificates API the plugin uses, enough to exercise the plugin end-to-end in a

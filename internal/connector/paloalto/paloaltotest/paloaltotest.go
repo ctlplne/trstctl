@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package paloaltotest is a faithful in-process double of the PAN-OS XML API
 // certificate-import surface, for testing the paloalto connector without a real

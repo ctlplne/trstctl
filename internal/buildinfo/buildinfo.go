@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package buildinfo exposes build and version metadata shared by every trstctl
 // binary (trstctl, trstctl-signer, trstctl-agent).

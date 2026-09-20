@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package a10test is an in-process double of the A10 aXAPI endpoints used by
 // the A10 deployment connector.

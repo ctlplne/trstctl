@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package apikey normalizes metadata-only API-key, token, and PAT estate
 // observations into discovery findings. Source configs carry references and

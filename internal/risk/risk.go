@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package risk computes a composite, numerical risk score per credential — the
 // single answer to "what should I rotate first" (F19). The score combines six

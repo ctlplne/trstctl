@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package sectigo is the Sectigo Certificate Manager (SCM) CA plugin (F4, sprint
 // S4.8), built from the CA-plugin template (internal/ca/catemplate): it

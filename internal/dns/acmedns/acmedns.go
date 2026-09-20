@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package acmedns is the acme-dns DNS-01 provider (S8b.12), built from the
 // DNS-provider plugin template — the acme.DNSProvider interface that the DNS-01

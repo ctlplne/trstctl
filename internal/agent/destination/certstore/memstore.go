@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package certstore provides Windows certificate-store backends for the
 // WindowsCertStore destination: an in-process software store (Memory) used by

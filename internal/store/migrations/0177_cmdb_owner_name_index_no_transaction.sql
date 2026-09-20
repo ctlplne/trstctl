@@ -1,5 +1,5 @@
 -- migrate: no-transaction
--- SPDX-License-Identifier: MPL-2.0
+-- SPDX-License-Identifier: BUSL-1.1
 
 -- AUD-46: each relay page resolves only the owner names it carries. This
 -- expression index makes that bounded lookup independent of the total owner

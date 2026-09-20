@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package verify handshakes an endpoint and reports what it is actually
 // serving (epic D2).

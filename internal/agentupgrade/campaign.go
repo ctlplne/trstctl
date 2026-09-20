@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package agentupgrade holds staged agent-upgrade campaigns (epic A5).
 //
