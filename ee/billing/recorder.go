@@ -4,6 +4,7 @@ package billing
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -55,19 +56,26 @@ func (r *Recorder) Flush(ctx context.Context) error {
 	r.pending = map[recordKey]int64{}
 	r.mu.Unlock()
 
-	deltas := make([]CounterDelta, 0, len(batch))
+	// The durable store commits each tenant in its own RLS transaction. Flush
+	// those groups independently so a later tenant failure cannot replay an
+	// earlier tenant's already committed counters.
+	byTenant := make(map[string][]CounterDelta)
 	for k, delta := range batch {
-		deltas = append(deltas, CounterDelta{TenantID: k.tenant, Meter: k.meter, Period: k.period, Delta: delta})
+		byTenant[k.tenant] = append(byTenant[k.tenant], CounterDelta{TenantID: k.tenant, Meter: k.meter, Period: k.period, Delta: delta})
 	}
-	if err := r.store.AddCounters(ctx, deltas); err != nil {
-		r.mu.Lock()
-		for k, delta := range batch {
-			r.pending[k] += delta
+	var failures []error
+	for _, deltas := range byTenant {
+		if err := r.store.AddCounters(ctx, deltas); err != nil {
+			r.mu.Lock()
+			for _, delta := range deltas {
+				k := recordKey{tenant: delta.TenantID, meter: delta.Meter, period: delta.Period}
+				r.pending[k] += delta.Delta
+			}
+			r.mu.Unlock()
+			failures = append(failures, err)
 		}
-		r.mu.Unlock()
-		return err
 	}
-	return nil
+	return errors.Join(failures...)
 }
 
 func (r *Recorder) Run(ctx context.Context, interval time.Duration) {

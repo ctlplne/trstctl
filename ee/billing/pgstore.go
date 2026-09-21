@@ -4,6 +4,7 @@ package billing
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -121,10 +122,13 @@ func (p *PGStore) CoverageFor(ctx context.Context, tenantID string) (Coverage, e
 			`SELECT observed_from, observed_to FROM provider_usage_coverage WHERE tenant_id = $1`,
 			tenantID).Scan(&out.ObservedFrom, &out.ObservedTo)
 	})
-	if err != nil {
+	if errors.Is(err, pgx.ErrNoRows) {
 		// No coverage row means the store never observed this customer. Zero
 		// times make MaySign refuse, which is the correct answer.
 		return Coverage{Durable: true}, nil
+	}
+	if err != nil {
+		return Coverage{}, err
 	}
 	return out, nil
 }
