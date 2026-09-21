@@ -39,7 +39,6 @@ next documentation pass.
 - `ee/clusterfuzz`: isolated test-only bridge packages that let the stock
   ClusterFuzzLite Go helper compile external-package Enterprise fuzz targets
   without weakening the AN-9 core-to-EE import fence.
-- `ee/incident`: credential-compromise workflow library.
 - `ee/federation`: cross-cluster DR import worker. Core keeps the checkpoint
   store interface and leader election; the tagged attach seam supplies the
   worker factory only when `FeatureHASupport` is licensed.
@@ -66,8 +65,8 @@ next documentation pass.
   schema/subject/object-prefix routing only when `FeatureSiloedIsolation` is
   licensed.
 
-The served trstctl remediation surface (`ee/incident`) is not
-probectl-style advisory remediation: it executes replacement issue/deploy/revoke
-work on a human trigger. The tagged attach seam mounts it only when
-`FeatureRemediation` is licensed, and the API still requires RBAC (`incidents:*`
-plus `certs:issue` for replacement issuance).
+Remediation is part of Core. The production server mounts incident and
+remediation routes without a license; RBAC (`incidents:*` plus `certs:issue`
+for replacement issuance), tenant isolation, policy and idempotency still apply.
+The standalone credential-compromise workflow library lives in `internal/incident`;
+the served workflows use the durable Core API and outbox implementations.

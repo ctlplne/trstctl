@@ -284,10 +284,9 @@ func WithLicense(m *license.Manager) Option {
 	return func(c *config) { c.license = m }
 }
 
-// WithRemediation mounts the Enterprise remediation HTTP surface. Without it the
-// route registry still describes the full licensed API contract, but the runtime
-// mux returns 404 for incident and licensed remediation paths so Community cannot probe a
-// dormant mutating surface.
+// WithRemediation mounts the Core remediation HTTP surface. Production server
+// assembly installs it unconditionally. Bare API instances may omit the routes;
+// mounting them does not bypass authentication, RBAC, policy or idempotency.
 func WithRemediation() Option {
 	return func(c *config) { c.remediation = true }
 }

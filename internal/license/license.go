@@ -37,7 +37,6 @@ const (
 	// distribution posture. Runtime code must report FIPS posture through
 	// internal/crypto, not branch on Manager.Has(FeatureFIPS).
 	FeatureFIPS            Feature = "fips"
-	FeatureRemediation     Feature = "remediation"
 	FeatureHASupport       Feature = "ha_support"
 	FeatureBYOK            Feature = "byok"
 	FeatureGovernance      Feature = "governance"
@@ -51,7 +50,7 @@ const (
 // families (PCAS, AGID, XREC, VDEC) and PQC are not features: they ship in the
 // BSL core and attach in every build (cmd/trstctl/attach_families.go).
 var tierFeatures = map[Tier][]Feature{
-	TierEnterprise: {FeatureFIPS, FeatureRemediation, FeatureHASupport, FeatureBYOK, FeatureGovernance},
+	TierEnterprise: {FeatureFIPS, FeatureHASupport, FeatureBYOK, FeatureGovernance},
 	TierProvider:   {FeatureProviderPlane, FeatureMetering, FeatureWhiteLabel, FeatureSiloedIsolation},
 }
 

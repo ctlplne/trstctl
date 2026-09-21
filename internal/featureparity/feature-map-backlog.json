@@ -13286,10 +13286,10 @@
             "phase": "P2",
             "priority": 72,
             "served_state": "conditional",
-            "backend_status": "conditional: the Enterprise remediation spine and connector.right_size external entitlement mutation are production-served when licensed and bound to an operator-configured tenant/connector endpoint",
+            "backend_status": "conditional: the Core remediation spine and connector.right_size external entitlement mutation are production-served when bound to an operator-configured tenant/connector endpoint",
             "current_frontend_mapping": "conditional: licensed Incidents at /incidents exposes compromise execution, revoke/rotate evidence, response dispatch, owner recommendations, right-size delivered/failed receipts, and audit bundles; Discovery exposes metadata-only compromise and OAuth-grant findings",
             "target_gui_mapping": "Incident workflow UI for compromised credential intake, blast-radius preview, remediation plan, reissue-before-revoke order, approvals, and evidence bundle.",
-            "acceptance_test": "API tests exercise licensed incident/remediation and discovery spines; the connector.right_size DoD proof enters through the served playbook route, replays idempotently, performs the external entitlement mutation, reads effective scopes back, and exposes the delivered receipt.",
+            "acceptance_test": "API tests exercise Core incident/remediation and discovery spines; the connector.right_size DoD proof enters through the served playbook route, replays idempotently, performs the external entitlement mutation, reads effective scopes back, and exposes the delivered receipt.",
             "source_docs": [
                 "docs/features/incident-and-jit.md",
                 "docs/features/discovery-and-inventory.md"
@@ -13309,7 +13309,7 @@
                 "internal/server/discovery.go",
                 "internal/store/incidents.go",
                 "internal/store/remediation_playbooks.go",
-                "ee/incident"
+                "internal/incident"
             ],
             "source_frontend": [
                 "web/src/pages/Incidents.tsx",
@@ -13369,7 +13369,7 @@
                         "connector.right_size selects an operator-bound tenant/connector entitlement endpoint, applies the usage-backed removal with the stable outbox idempotency key, reads effective scopes back, and advances the API-created receipt to delivered or failed.",
                         "GET /api/v1/incidents/outbox-reconciliation-conflicts exposes the tenant-scoped immutable AUD-97 quarantine with safe source/outbox/hash/lane/role evidence and no receiver command payload.",
                         "served_state=conditional",
-                        "backend_status=conditional: the Enterprise remediation spine and connector.right_size external entitlement mutation are production-served when licensed and bound to an operator-configured tenant/connector endpoint"
+                        "backend_status=conditional: the Core remediation spine and connector.right_size external entitlement mutation are production-served when bound to an operator-configured tenant/connector endpoint"
                     ],
                     "refs": [
                         "internal/api/incidents.go",
@@ -13537,7 +13537,7 @@
                 }
             },
             "ga_served_scope": "out_of_ga",
-            "ga_scope_reason": "The residual GA conditions are the Enterprise remediation license and an operator-configured tenant/connector entitlement binding.",
+            "ga_scope_reason": "The residual GA condition is an operator-configured tenant/connector entitlement binding; remediation requires no commercial license.",
             "dod_capabilities": [
                 "connector_right_size"
             ],

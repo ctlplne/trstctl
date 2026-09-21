@@ -112,7 +112,8 @@ pins the lab's local identity provider for provider-operator sign-in (see
 | Core protocols | ACME, EST, SCEP, CMP, SPIFFE, SSH CA, TSA | Included | Included |
 | Tenant isolation | PostgreSQL RLS and event spine | Included | Included; shared multi-tenant control plane is the normal shape |
 | Patent-pending families and PQC | Included: PCAS, agent delegation, reconciliation, VDEC, and post-quantum cryptography attach in every build | Included | Included |
-| Enterprise features | Not included | FIPS artifact posture, remediation, HA support, BYOK, and governance | All Enterprise features |
+| Remediation | Incident response and guided remediation, subject to authorization and configured targets | Included | Included |
+| Enterprise features | Not included | FIPS artifact posture, HA support, BYOK, and governance | All Enterprise features |
 | Provider operations | Not included | Not included | Provider plane, metering, white label, and siloed isolation |
 | Product motion and commercial `ee/` rights | Self-hosted core under BUSL-1.1 | Self-hosted commercial feature set | Self-host, managed service, and resale of the commercial feature set |
 | Deployment flexibility | Customer operated | Customer operated | Shared control plane or dedicated customer deployments |
@@ -195,7 +196,6 @@ Provider inherits every Enterprise row below, then adds the Provider rows.
 | Feature ID | Edition | Product line |
 |---|---|---|
 | `fips` | Enterprise | Assurance: FIPS-capable distribution posture and evidence. |
-| `remediation` | Enterprise | Governance: guided remediation workflows and controls. |
 | `pqc` | Enterprise | Proprietary post-quantum algorithms, key/certificate types, issuance/signing paths, migration APIs/UI, and tests. |
 | `ha_support` | Enterprise | Scale: served enterprise support posture, SLA target catalog, 24x7 production tier, and professional-services packages. |
 | `byok` | Enterprise | Assurance: bring-your-own-key / external custody operations. |

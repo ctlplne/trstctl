@@ -2,6 +2,12 @@
 
 ### Changed
 
+- Remediation is part of Core: incident and guided remediation routes now mount
+  without a commercial license in both normal and Core-only builds. Tenant
+  isolation, RBAC, policy, idempotency and outbox requirements are unchanged. The
+  credential-compromise workflow library moved from `ee/incident` to
+  `internal/incident` under BUSL-1.1.
+
 - **Licensing.** The core moved from the Mozilla Public License 2.0 to the
   Business Source License 1.1 (Licensor certctl LLC): production use is permitted
   under the Additional Use Grant, the Free tier needs no signed license, and each

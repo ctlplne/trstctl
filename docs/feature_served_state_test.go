@@ -122,8 +122,8 @@ func TestFeatureServedStateClassifiesRuntimeConditionsAndResiduals(t *testing.T)
 		"F26": "conditional", // all six backends are served; Enterprise license/config remains the runtime condition
 		"F27": "conditional", // the additional native connectors share the configured production target registry
 		"F29": "served",      // all advertised channels are production-assembled
-		"F31": "conditional", // Enterprise remediation license and configured connector target gate the served workflow
-		"F32": "conditional", // Enterprise remediation license
+		"F31": "conditional", // configured connector targets gate verified external effects
+		"F32": "conditional", // requires an attested fleet and verified rollout/revocation targets
 		"F34": "conditional", // breakglass.enabled/online_enabled plus custody and roster configuration
 		"F37": "conditional", // secrets.enable_api
 		"F39": "conditional", // secrets.enable_api

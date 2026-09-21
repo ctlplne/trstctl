@@ -41,7 +41,7 @@ func TestServedIncidentExecutionRefusesMutationAndRetainsHistoryAUD41(t *testing
 		t.Fatalf("open event log: %v", err)
 	}
 	srv, err := Build(ctx, Deps{
-		Store: st, Log: log, EnableRemediation: true,
+		Store: st, Log: log,
 		APIOptions: []api.Option{api.WithAuth(api.AuthConfig{OIDCEnabled: true})},
 	})
 	if err != nil {

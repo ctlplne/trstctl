@@ -156,7 +156,6 @@ func TestCommunityAndLoad(t *testing.T) {
 		t.Fatalf("community info wrong: %+v", info)
 	}
 	assertFeatureRow(t, info, FeatureFIPS, TierEnterprise, false, ModeOff)
-	assertFeatureRow(t, info, FeatureRemediation, TierEnterprise, false, ModeOff)
 	assertFeatureRow(t, info, FeatureHASupport, TierEnterprise, false, ModeOff)
 	assertFeatureRow(t, info, FeatureBYOK, TierEnterprise, false, ModeOff)
 	assertFeatureRow(t, info, FeatureGovernance, TierEnterprise, false, ModeOff)
@@ -236,7 +235,6 @@ func TestInfoRendersLicenseTruth(t *testing.T) {
 func TestInfoListsEnterpriseFeatureRows(t *testing.T) {
 	community := Community().Info()
 	assertFeatureRow(t, community, FeatureFIPS, TierEnterprise, false, ModeOff)
-	assertFeatureRow(t, community, FeatureRemediation, TierEnterprise, false, ModeOff)
 	assertFeatureRow(t, community, FeatureHASupport, TierEnterprise, false, ModeOff)
 	assertFeatureRow(t, community, FeatureBYOK, TierEnterprise, false, ModeOff)
 	assertFeatureRow(t, community, FeatureGovernance, TierEnterprise, false, ModeOff)
@@ -249,7 +247,6 @@ func TestInfoListsEnterpriseFeatureRows(t *testing.T) {
 	expires := time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC)
 	active := managerAt(t, testClaims(TierEnterprise, expires), priv, pub, expires.Add(-time.Hour)).Info()
 	assertFeatureRow(t, active, FeatureFIPS, TierEnterprise, true, ModeEnabled)
-	assertFeatureRow(t, active, FeatureRemediation, TierEnterprise, true, ModeEnabled)
 	assertFeatureRow(t, active, FeatureHASupport, TierEnterprise, true, ModeEnabled)
 	assertFeatureRow(t, active, FeatureBYOK, TierEnterprise, true, ModeEnabled)
 	assertFeatureRow(t, active, FeatureGovernance, TierEnterprise, true, ModeEnabled)
@@ -263,20 +260,19 @@ func TestInfoListsEnterpriseFeatureRows(t *testing.T) {
 	assertFeatureRow(t, provider, FeatureMetering, TierProvider, true, ModeEnabled)
 	assertFeatureRow(t, provider, FeatureWhiteLabel, TierProvider, true, ModeEnabled)
 	assertFeatureRow(t, provider, FeatureSiloedIsolation, TierProvider, true, ModeEnabled)
-	assertFeatureRow(t, provider, FeatureRemediation, TierEnterprise, true, ModeEnabled)
 }
 
 // TestCoreFamiliesAreNotLicenseFeatures pins the 2026-09-20 relicensing: PCAS,
-// AGID, XREC, VDEC and PQC ship in the BSL core and attach in every build, so
+// AGID, XREC, VDEC, PQC and remediation ship in the BSL core and attach in every build, so
 // the table must not list them and an old license naming them grants nothing.
 func TestCoreFamiliesAreNotLicenseFeatures(t *testing.T) {
 	for _, f := range AllFeatures() {
 		switch f {
-		case "pcas", "agent-delegation", "reconcile", "vdec", "pqc":
+		case "pcas", "agent-delegation", "reconcile", "vdec", "pqc", "remediation":
 			t.Fatalf("core family %q is listed as a license feature", f)
 		}
 	}
-	for _, f := range []Feature{"pcas", "agent-delegation", "reconcile", "vdec", "pqc"} {
+	for _, f := range []Feature{"pcas", "agent-delegation", "reconcile", "vdec", "pqc", "remediation"} {
 		if tier := FeatureTier(f); tier != TierCommunity {
 			t.Fatalf("FeatureTier(%q) = %s, want %s (not a feature)", f, tier, TierCommunity)
 		}

@@ -43,10 +43,9 @@ so a crash can't drop them.
 
 This is deliberately stricter than probectl's guarded-remediation pattern. probectl
 proposes and records remediation; trstctl's remediation actually executes issue,
-deploy, and revoke work after a human operator trigger. For that reason the served
-route is an Enterprise `remediation` feature: Community returns 404, and licensed
-deployments still require RBAC (`incidents:write` and `certs:issue` for replacement
-issuance) before anything mutates.
+deploy, and revoke work after a human operator trigger. The served routes are part of Core and require no commercial license. All
+deployments require RBAC (`incidents:write` and `certs:issue` for replacement
+issuance), policy approval where configured, and idempotency before anything mutates.
 
 The same incident surface can open a **ServiceNow / ITSM workflow** after the
 operator has enough evidence. `POST /api/v1/itsm/servicenow/tickets` records an

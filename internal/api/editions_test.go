@@ -67,8 +67,8 @@ func TestEditionsEndpointReturnsCommunityAndFIPSPosture(t *testing.T) {
 	}
 	assertEditionsFeature(t, got.Features, license.FeatureFIPS, license.TierEnterprise, false, license.ModeOff)
 	for _, f := range got.Features {
-		if f.Name == "pqc" {
-			t.Fatal("editions advertise pqc as a license feature; PQC ships in the core")
+		if f.Name == "pqc" || f.Name == "remediation" {
+			t.Fatalf("editions advertise %s as a license feature; it ships in Core", f.Name)
 		}
 	}
 	if got.FIPS.ModuleActive != crypto.FIPSEnabled() {

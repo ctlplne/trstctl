@@ -694,16 +694,16 @@
       "requirement_text": "trstctl shall provide Credential compromise workflow.",
       "owner": "Incident and JIT",
       "priority": "P2",
-      "acceptance_criteria": "API tests exercise licensed incident/remediation and discovery spines; the connector.right_size DoD proof enters through the served playbook route, replays idempotently, performs the external entitlement mutation, reads effective scopes back, and exposes the delivered receipt.",
+      "acceptance_criteria": "API tests exercise Core incident/remediation and discovery spines; the connector.right_size DoD proof enters through the served playbook route, replays idempotently, performs the external entitlement mutation, reads effective scopes back, and exposes the delivered receipt.",
       "status": "conditional",
       "served_state": "conditional",
-      "backend_status": "conditional: the Enterprise remediation spine and connector.right_size external entitlement mutation are production-served when licensed and bound to an operator-configured tenant/connector endpoint",
+      "backend_status": "conditional: the Core remediation spine and connector.right_size external entitlement mutation are production-served when bound to an operator-configured tenant/connector endpoint",
       "source_docs": [
         "docs/features/incident-and-jit.md",
         "docs/features/discovery-and-inventory.md"
       ],
       "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "The residual GA conditions are the Enterprise remediation license and an operator-configured tenant/connector entitlement binding."
+      "ga_scope_reason": "The residual GA condition is an operator-configured tenant/connector entitlement binding; remediation requires no commercial license."
     },
     {
       "requirement_id": "F32",

@@ -31,7 +31,7 @@ func TestRemediationSurface404sWhenNotAttached(t *testing.T) {
 		req := httptest.NewRequest(probe.method, probe.path, strings.NewReader(probe.body))
 		if probe.method != http.MethodGet {
 			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("Idempotency-Key", "remediation-unlicensed")
+			req.Header.Set("Idempotency-Key", "remediation-unattached")
 		}
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)

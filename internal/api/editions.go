@@ -133,7 +133,7 @@ func editionPackaging() editionPackagingResponse {
 				BuyerFit:        "single organization operating its own credential control plane",
 				LicenseBoundary: "free core; no commercial license file required",
 				Billing:         "no license meter; no per-certificate or ephemeral-identity billing",
-				Included:        []string{"core protocols", "event spine", "PostgreSQL RLS tenancy", "audit/export", "offline license verifier"},
+				Included:        []string{"core protocols", "event spine", "PostgreSQL RLS tenancy", "audit/export", "remediation", "offline license verifier"},
 			},
 			{
 				ID:              "enterprise",
@@ -142,7 +142,7 @@ func editionPackaging() editionPackagingResponse {
 				BuyerFit:        "regulated or scaled operators that need assurance, governance, BYOK, and support",
 				LicenseBoundary: "offline signed Enterprise license",
 				Billing:         "one production control-plane deployment; three explicitly bound non-production deployments included",
-				Included:        []string{"FIPS-capable artifact posture", "BYOK", "governance", "remediation", "PQC", "enterprise support"},
+				Included:        []string{"FIPS-capable artifact posture", "BYOK", "governance", "PQC", "enterprise support"},
 			},
 			{
 				ID:              "provider",

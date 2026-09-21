@@ -46,7 +46,6 @@ func TestServedIncidentMigrationGatesRevocationAndRollsBackAUD41(t *testing.T) {
 	h := newRoleHarnessWithDeps(t, []string{mtls.AgentRoleHost},
 		[]string{agentrelay.KindTrustDistribute, agentrelay.KindEndpointRenew, agentrelay.KindConnectorRollback},
 		func(d *Deps) {
-			d.EnableRemediation = true
 			d.AuditSigningKey = auditKey
 		})
 	if _, err := h.client.Heartbeat(ctx, &transport.HeartbeatRequest{

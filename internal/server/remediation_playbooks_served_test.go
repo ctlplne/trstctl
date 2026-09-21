@@ -71,7 +71,7 @@ func TestServedRemediationPlaybooksCAPREM01RightSizeEndToEnd(t *testing.T) {
 		t.Fatalf("open event log: %v", err)
 	}
 	srv, err := Build(ctx, Deps{
-		Store: st, Log: log, EnableRemediation: true,
+		Store: st, Log: log,
 		APIOptions: []api.Option{api.WithAuth(api.AuthConfig{OIDCEnabled: true})},
 	})
 	if err != nil {
@@ -285,7 +285,7 @@ func TestServedOwnerDrivenSelfRemediationCAPREM02EndToEnd(t *testing.T) {
 		t.Fatalf("open event log: %v", err)
 	}
 	srv, err := Build(ctx, Deps{
-		Store: st, Log: log, EnableRemediation: true,
+		Store: st, Log: log,
 		APIOptions: []api.Option{api.WithAuth(api.AuthConfig{OIDCEnabled: true})},
 	})
 	if err != nil {

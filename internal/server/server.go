@@ -209,7 +209,6 @@ type Deps struct {
 	OutboxHandler             orchestrator.Handler // delivers outbox entries; defaults to a no-op success
 	APIOptions                []api.Option         // auth/audit/etc.
 	License                   *license.Manager     // offline edition state exposed by GET /v1/editions
-	EnableRemediation         bool                 // Enterprise remediation: incident execution and guided remediation routes
 	EnablePCAS                bool                 // PCAS: proof-carrying algorithm succession (internal/succession); the succession API/orchestrator wiring keys off this
 	LicensedAPIOptionsFactory LicensedAPIOptionsFactory
 	LicensedOutboxFactory     LicensedOutboxFactory
@@ -1211,11 +1210,8 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	if d.AuditSigningKey != nil {
 		defaults = append(defaults, api.WithPQCCampaignClosureSigner(d.AuditSigningKey))
 	}
-	if d.EnableRemediation {
-		defaults = append(defaults,
-			api.WithRemediation(),
-		)
-	}
+	// Remediation is part of Core; authentication, RBAC and policy still apply.
+	defaults = append(defaults, api.WithRemediation())
 	if d.LicensedAPIOptionsFactory != nil {
 		licensedOpts, err := d.LicensedAPIOptionsFactory(LicensedAPIOptionsDeps{
 			Store: d.Store, Log: d.Log, Outbox: s.outbox, SignerKeyStoreDir: d.SignerKeyStoreDir,

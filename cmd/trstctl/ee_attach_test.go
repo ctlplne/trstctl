@@ -19,24 +19,6 @@ import (
 	"trstctl.com/trstctl/internal/server"
 )
 
-func TestAttachEERemediationRequiresEnterpriseLicense(t *testing.T) {
-	deps := &server.Deps{}
-	if err := attachEE(context.Background(), &config.Config{}, nil, license.Community(), deps); err != nil {
-		t.Fatalf("community attachEE: %v", err)
-	}
-	if deps.EnableRemediation {
-		t.Fatal("community attach must not enable remediation")
-	}
-
-	deps = &server.Deps{}
-	if err := attachEE(context.Background(), &config.Config{}, nil, enterpriseLicense(t), deps); err != nil {
-		t.Fatalf("enterprise attachEE: %v", err)
-	}
-	if !deps.EnableRemediation {
-		t.Fatal("enterprise remediation feature did not mount the remediation surface")
-	}
-}
-
 func TestAttachEEHASupportRequiresEnterpriseLicense(t *testing.T) {
 	cfg := &config.Config{Federation: config.Federation{
 		Enabled:   true,
@@ -127,8 +109,8 @@ func TestAttachEEProviderLicenseMountsEnterpriseAndProviderSurfaces(t *testing.T
 	if err := attachEE(context.Background(), &config.Config{}, nil, commercialLicense(t, license.TierProvider), deps); err != nil {
 		t.Fatalf("provider attachEE: %v", err)
 	}
-	if !deps.EnableRemediation || deps.GovernanceFactory == nil {
-		t.Fatal("Provider license did not mount inherited Enterprise remediation and governance surfaces")
+	if deps.GovernanceFactory == nil {
+		t.Fatal("Provider license did not mount inherited Enterprise governance surface")
 	}
 	if deps.ProviderHandler == nil {
 		t.Fatal("Provider license did not mount the Provider control-plane surface")

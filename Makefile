@@ -502,12 +502,6 @@ editions-gate: ## Prove the editions one-way valve and core-only build
 		$(GO) list -tags trstctl_core -deps ./cmd/trstctl | grep -E '^$(MODULE)/ee(/|$$)' >&2; \
 		exit 1; \
 	fi
-	@echo ">> trstctl_core dependency graph links zero remediation internals"
-	@if $(GO) list -tags trstctl_core -deps ./cmd/trstctl | grep -E '^$(MODULE)/internal/(incident|fleet)(/|$$)' >/dev/null; then \
-		echo "FAIL: trstctl_core build links moved remediation internals" >&2; \
-		$(GO) list -tags trstctl_core -deps ./cmd/trstctl | grep -E '^$(MODULE)/internal/(incident|fleet)(/|$$)' >&2; \
-		exit 1; \
-	fi
 	@echo ">> trstctl_core dependency graph links the core families (PCAS, AGID, XREC, VDEC, PQC)"
 	@for pkg in succession agentid reconcile decommission pqc; do \
 		if ! $(GO) list -tags trstctl_core -deps ./cmd/trstctl | grep -qE "^$(MODULE)/internal/$$pkg(/|$$)"; then \

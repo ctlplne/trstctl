@@ -87,9 +87,6 @@ func attachEEProjectionOptions(
 }
 
 func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *license.Manager, deps *server.Deps) error {
-	if lic != nil && lic.Has(license.FeatureRemediation) {
-		attachRemediation(log, deps)
-	}
 	if lic != nil && lic.Has(license.FeatureHASupport) {
 		if err := attachFederation(ctx, cfg, log, deps); err != nil {
 			return err
@@ -438,13 +435,6 @@ func attachEEProviderMetering(ctx context.Context, log *slog.Logger, lic *licens
 		log.Info("Provider metering attached", slog.String("feature", string(license.FeatureMetering)))
 	}
 	return providerBillingEvidence{deps: evidenceDeps, verificationJWKS: verificationJWKS}, nil
-}
-
-func attachRemediation(log *slog.Logger, deps *server.Deps) {
-	server.EnableRemediationEdition(deps)
-	if log != nil {
-		log.Info("Enterprise remediation attached", slog.String("feature", string(license.FeatureRemediation)))
-	}
 }
 
 func attachFederation(ctx context.Context, cfg *config.Config, log *slog.Logger, deps *server.Deps) error {

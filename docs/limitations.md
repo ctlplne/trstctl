@@ -1056,13 +1056,12 @@ never live in the API process. What you can do end to end against the running bi
   `crypto_assets`. `GET /api/v1/cbom/assets` returns the inventory plus
   migration targets and `migration_progress`. With PQC in the core, the targets are the concrete FIPS 203/204/205 algorithms and
   `migration_progress` counts which assets are already post-quantum-ready.
-- Credential-compromise incident execution: when the Enterprise `remediation`
-  feature is licensed, the old `POST /api/v1/incidents/executions` single-identity
+- Credential-compromise incident execution is part of Core: the old `POST /api/v1/incidents/executions` single-identity
   mutation refuses with conflict and points to the H2 fleet route; it cannot prove
   exact trust scope, trust-before-leaf ordering, or signed live health before
   revocation. Historical evidence remains readable via
   `GET /api/v1/incidents/executions{,/{id}}`. Automated remediation playbooks are
-  also served under the same Enterprise feature: `GET /api/v1/remediation/playbooks`,
+  also served without a commercial license: `GET /api/v1/remediation/playbooks`,
   `POST /api/v1/remediation/playbooks/{id}/runs`, and
   `GET /api/v1/remediation/playbook-runs{,/{id}}` cover revoke, rotate, and NHI
   right-size. Owner-driven self-remediation is served through
