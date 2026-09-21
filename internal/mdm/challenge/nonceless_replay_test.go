@@ -69,7 +69,7 @@ func TestNoncelessChallengeIsRejectedRatherThanReplayable(t *testing.T) {
 	}
 }
 
-// TestNoncedChallengeStillValidatesExactlyOnce keeps the working behaviour
+// TestNoncedChallengeStillValidatesExactlyOnce keeps the working behavior
 // intact: a challenge WITH a nonce must be accepted once and refused after.
 func TestNoncedChallengeStillValidatesExactlyOnce(t *testing.T) {
 	now := time.Unix(1_900_000_000, 0).UTC()

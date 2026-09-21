@@ -122,7 +122,7 @@ func TestChainOrderIsPartOfTheIdentity(t *testing.T) {
 	}, reordered)
 	if v.Mismatch != certinfo.MismatchChain {
 		t.Errorf("a reordered chain compared as %q; order is part of what clients build paths "+
-			"from, so a chain served backwards is a real divergence", v.Mismatch)
+			"from, so a chain served backward is a real divergence", v.Mismatch)
 	}
 }
 

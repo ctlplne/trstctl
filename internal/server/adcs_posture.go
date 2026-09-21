@@ -109,7 +109,7 @@ func (s *Server) recordADCSInventory(ctx context.Context, tenantID, agentName, i
 //
 // A forest holds several domains and their template sets are separate. The
 // publishing CA's name is the best label available from what the directory
-// returned; when nothing published anything, the observation is labelled
+// returned; when nothing published anything, the observation is labeled
 // explicitly as unattributed rather than being silently merged into another
 // domain's row set.
 func adcsDomainFor(templates []adcs.Template) string {

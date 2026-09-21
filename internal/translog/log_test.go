@@ -79,7 +79,7 @@ func TestSTH_CarriesLogTimestamp(t *testing.T) {
 		t.Fatalf("idx=%d size=%d, want 1,2", idx1, sth1.TreeSize)
 	}
 	if sth1.Timestamp < sth0.Timestamp {
-		t.Fatal("STH timestamp went backwards")
+		t.Fatal("STH timestamp went backward")
 	}
 }
 

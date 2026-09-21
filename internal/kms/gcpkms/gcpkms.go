@@ -276,7 +276,7 @@ func (s *kmsSigner) SignContext(ctx context.Context, message []byte, opts crypto
 
 // call performs an authenticated Cloud KMS JSON request and decodes the JSON response. A
 // nil in sends no body. The provider-specific parts (URL, the Bearer auth header) stay
-// here; the shared round-trip — bounded read, non-2xx normalisation, JSON decode — is
+// here; the shared round-trip — bounded read, non-2xx normalization, JSON decode — is
 // internal/cloudhttp (CODE-006). The per-op timeout is already applied by the caller via
 // withTimeout(ctx) (CODE-002), so the context carries the deadline and we pass 0 here.
 func (b *Backend) call(ctx context.Context, method, path string, in any, out any) error {

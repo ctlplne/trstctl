@@ -1119,7 +1119,7 @@ func mustReadTempFixture(t *testing.T, path string) []byte {
 // The connector's own Deploy runs `nginx -t` then `nginx -s reload`. Binding
 // them to /bin/true is what makes "the deploy succeeded" true in the test while
 // leaving the listener untouched — which is precisely the production failure
-// being modelled: the reload ran, or claimed to, and the process kept serving
+// being modeled: the reload ran, or claimed to, and the process kept serving
 // what it had.
 func hostProfileForNginx(t *testing.T, root string) connector.LocalOpsConfig {
 	t.Helper()

@@ -35,7 +35,7 @@ const (
 //     immediately; an agent observed on the target version verifies; an agent
 //     that neither failed nor arrived within the grace window is silent, and
 //     silence halts.
-//   - OBSERVE-ONLY (no artifacts): the pre-dispatch behaviour, kept for fleets
+//   - OBSERVE-ONLY (no artifacts): the pre-dispatch behavior, kept for fleets
 //     an external mechanism upgrades. Verification is "the agent reports the
 //     target version"; an agent seen recently on the old version is treated as
 //     mid-upgrade and waited for. This mode has no dispatch timestamp, so it
@@ -50,7 +50,7 @@ func (s *Server) RunAgentUpgradeCampaignOnce(ctx context.Context, tenantID strin
 	}
 	if !fleet.CanDispatch(c.Status) {
 		// Halted or paused. Returning here is what makes the console's pause
-		// real: a pause that only greyed out a button while this loop kept
+		// real: a pause that only grayed out a button while this loop kept
 		// dispatching would be worse than none.
 		return nil
 	}

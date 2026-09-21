@@ -83,7 +83,7 @@ func (s *Server) RunDiscoverySchedulerOnce(ctx context.Context) (int, error) {
 }
 
 // RunDiscoveryScheduler runs the leader-only discovery schedule ticker until
-// ctx is cancelled: it sweeps once on start (so an overdue deployment catches
+// ctx is canceled: it sweeps once on start (so an overdue deployment catches
 // up promptly after boot) and then on a fixed cadence. A sweep error is logged
 // and the next tick retries — the same resilient pattern the CRL and lifecycle
 // schedulers use. It is a no-op when the spine is not assembled.

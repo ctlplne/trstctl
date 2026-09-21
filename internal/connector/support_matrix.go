@@ -64,7 +64,7 @@ var supportMatrix = []SupportRow{
 			"rollback: re-bind the template to a previously installed certificate",
 		},
 		KnownLimits: []string{
-			"partition-aware deploys are not modelled; the double serves a single partition",
+			"partition-aware deploys are not modeled; the double serves a single partition",
 		},
 	},
 	{
@@ -131,8 +131,8 @@ var supportMatrix = []SupportRow{
 		},
 		KnownLimits: []string{
 			"the HA peer shares the pair's synced admin credential; a pair with per-peer " +
-				"credentials is not modelled",
-			"partition (folder) routing is not modelled beyond the default",
+				"credentials is not modeled",
+			"partition (folder) routing is not modeled beyond the default",
 		},
 	},
 	{
@@ -145,7 +145,7 @@ var supportMatrix = []SupportRow{
 			"no rollback: the local-certificate object holds the material rather than referencing " +
 				"it, and the deploy replaces its contents in place, so no predecessor survives to " +
 				"bind back to",
-			"VDOM routing is not modelled; the double serves the root VDOM",
+			"VDOM routing is not modeled; the double serves the root VDOM",
 		},
 	},
 	{
@@ -169,7 +169,7 @@ var supportMatrix = []SupportRow{
 			"rollback: re-bind the virtual service to a previously installed certificate",
 		},
 		KnownLimits: []string{
-			"certificate-set naming collisions across virtual services are not modelled",
+			"certificate-set naming collisions across virtual services are not modeled",
 		},
 	},
 	{

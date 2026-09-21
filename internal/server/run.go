@@ -63,7 +63,7 @@ type EditionAttach func(context.Context, *config.Config, *slog.Logger, *license.
 
 // Run opens the datastore and event log, supervises the signer as a child
 // process (AN-4), assembles the control plane, and serves until ctx is
-// cancelled — then shuts down in order (stop accepting → drain the outbox →
+// canceled — then shuts down in order (stop accepting → drain the outbox →
 // close the event log and datastore). It is the production composition the
 // trstctl binary calls.
 func Run(ctx context.Context, cfg *config.Config, attachers ...EditionAttach) error {

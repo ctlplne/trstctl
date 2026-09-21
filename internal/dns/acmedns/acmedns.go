@@ -169,7 +169,7 @@ func (p *Provider) update(ctx context.Context, value string) error {
 	// (AN-8); the long-lived secret stays []byte in the Credentials.
 	req.Header.Set("X-Api-Key", string(p.creds.Password))
 
-	// The shared cloudhttp round-trip owns the bounded read, non-2xx normalisation,
+	// The shared cloudhttp round-trip owns the bounded read, non-2xx normalization,
 	// and drain (CODE-006); a non-2xx response retains only its status, never the
 	// attacker-controlled response body (AN-8). acme-dns's /update returns no body the
 	// provider reads, so out is nil.

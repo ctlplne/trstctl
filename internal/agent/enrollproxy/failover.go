@@ -12,7 +12,7 @@ import (
 
 // Surviving the loss of a relay (epic A4).
 //
-// One relay in a dark segment is a single point of failure for every enrolment
+// One relay in a dark segment is a single point of failure for every enrollment
 // in it, and the failure is silent until a certificate expires. Multiple relays
 // fix that, but only if a client that was talking to one can finish with
 // another — and the interesting question is what "finish" means.
@@ -28,7 +28,7 @@ import (
 // request replay, partial-state handoff — would be inventing state the design
 // went to some trouble not to have.
 
-// Pool routes enrolment traffic across several control-plane endpoints.
+// Pool routes enrollment traffic across several control-plane endpoints.
 //
 // The endpoints are the CONTROL PLANE's, not other relays'. A relay chaining to
 // a relay would multiply the trust surface for no benefit: each hop is another
@@ -115,7 +115,7 @@ func newPool(upstreams []string, publicURL string, client *http.Client, cooldown
 func (p *Pool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !Proxied(r.URL.Path) {
 		p.refused.Add(1)
-		http.Error(w, "not an enrolment protocol path", http.StatusNotFound)
+		http.Error(w, "not an enrollment protocol path", http.StatusNotFound)
 		return
 	}
 	for attempt := 0; attempt < len(p.targets); attempt++ {

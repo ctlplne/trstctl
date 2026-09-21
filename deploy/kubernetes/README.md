@@ -5,7 +5,7 @@ certificates into Kubernetes **Secrets** and acts as a **cert-manager external
 issuer**. It ships trstctl `Issuer` and `ClusterIssuer` CRDs, marks them Ready,
 signs cert-manager `CertificateRequest`s through a served trstctl issuance
 endpoint, signs approved native Kubernetes `CertificateSigningRequest`s, and
-fulfils trstctl-native `Certificate` CRDs directly into TLS Secrets.
+fulfills trstctl-native `Certificate` CRDs directly into TLS Secrets.
 
 The agent talks to the Kubernetes API server directly over its JSON/HTTPS wire
 protocol, authenticating with the pod's service-account token and trusting the
@@ -129,7 +129,7 @@ The DaemonSet runs `trstctl-agent --k8s`, which:
    `--bridge-signer-token-file` are set, reconciles trstctl `Issuer` and
    `ClusterIssuer` CRDs, marks them Ready, signs matching cert-manager
    `CertificateRequest`s, signs approved native Kubernetes
-   `CertificateSigningRequest`s, fulfils trstctl-native `Certificate` resources
+   `CertificateSigningRequest`s, fulfills trstctl-native `Certificate` resources
    into their requested TLS Secrets, and writes status back to the owning
    resource.
 

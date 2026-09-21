@@ -2,14 +2,14 @@
 
 // Package enrollproxy serves ACME, EST and SCEP inside a dark segment (epic A4).
 //
-// A host or device with no route to the control plane cannot enrol. That is the
+// A host or device with no route to the control plane cannot enroll. That is the
 // ordinary condition in the segments that matter most — an OT network, a PCI
 // zone, a lab behind a one-way firewall — and the usual answer is a per-segment
 // exception in somebody's firewall, which is the thing those segments exist to
 // avoid.
 //
 // The relay already has the one outbound pipe those segments allow. This lets a
-// stock certbot, sscep or estclient point at the relay and enrol through it.
+// stock certbot, sscep or estclient point at the relay and enroll through it.
 //
 // IT DECIDES NOTHING. That is the whole design and the reason this package is
 // small. The relay sits inside the customer's network, which is precisely where
@@ -40,7 +40,7 @@ import (
 // An allowlist, not a catch-all. The relay must not become a general tunnel into
 // the control plane's API: a segment that can reach /api/v1 through a relay has
 // the control plane's whole administrative surface, which is a different and
-// much larger grant than "devices here can enrol".
+// much larger grant than "devices here can enroll".
 var proxiedPrefixes = []string{
 	"/directory", // ACME directory
 	"/acme/",
@@ -49,7 +49,7 @@ var proxiedPrefixes = []string{
 	"/cmp",
 }
 
-// Proxy forwards enrolment protocol traffic to the control plane.
+// Proxy forwards enrollment protocol traffic to the control plane.
 type Proxy struct {
 	upstream  *url.URL
 	publicURL *url.URL
@@ -150,9 +150,9 @@ func Proxied(path string) bool {
 	return false
 }
 
-// ServeHTTP forwards one enrolment request.
+// ServeHTTP forwards one enrollment request.
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Normalise BEFORE the allowlist check. "/../api/v1/certificates" is a path
+	// Normalize BEFORE the allowlist check. "/../api/v1/certificates" is a path
 	// a Go client happens to resolve on the way out, but relying on that would
 	// make the confinement somebody else's property; cleaning here means the
 	// string the allowlist sees is the string that gets sent.
@@ -164,14 +164,14 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		p.refused.Add(1)
 		// A closed refusal. Naming what IS proxied would help somebody probing
 		// for a way through, and the operator who configured this already knows.
-		http.Error(w, "not an enrolment protocol path", http.StatusNotFound)
+		http.Error(w, "not an enrollment protocol path", http.StatusNotFound)
 		return
 	}
 
 	// The scheme and host come from the OPERATOR's configured upstream and are
 	// never taken from the request; only the path and query travel, and the path
 	// has just been cleaned and allowlisted. So a device in the segment can
-	// choose which enrolment endpoint it reaches and cannot choose the host the
+	// choose which enrollment endpoint it reaches and cannot choose the host the
 	// relay connects to.
 	outURL := *p.upstream
 	outURL.Path = cleanPath
@@ -206,8 +206,8 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// #nosec G704 -- the destination host is the operator-configured upstream,
 	// never the request's; the only request-derived component is a path that was
-	// cleaned and matched against the enrolment allowlist above, and the client
-	// is netsec-checked. A device in the segment can choose which enrolment
+	// cleaned and matched against the enrollment allowlist above, and the client
+	// is netsec-checked. A device in the segment can choose which enrollment
 	// endpoint it reaches and cannot redirect the relay (CWE-918).
 	resp, err := p.client.Do(out)
 	if err != nil {

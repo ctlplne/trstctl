@@ -112,7 +112,7 @@ func (p *countingRevokeProvider) Calls() int {
 // parkedDispatch runs one Dispatch sweep whose handler claims a row and then holds
 // its lease until the test releases it (or the context ends, so a t.Fatalf on the
 // failure path cannot strand the worker). It returns the release func, a channel
-// signalling the claim, the channel carrying Dispatch's result, and a live counter
+// signaling the claim, the channel carrying Dispatch's result, and a live counter
 // of handler invocations — the dispatcher-side external effect.
 func parkedDispatch(ctx context.Context, t *testing.T, ob *orchestrator.Outbox) (release func(), claimed <-chan struct{}, dispatched <-chan error, calls func() int) {
 	t.Helper()

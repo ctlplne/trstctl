@@ -361,7 +361,7 @@ export function Sparkline({
   className,
 }: {
   points: number[];
-  /** Omit for purely decorative sparklines next to an already-labelled value. */
+  /** Omit for purely decorative sparklines next to an already-labeled value. */
   ariaLabel?: string;
   tone?: ChartTone;
   width?: number;

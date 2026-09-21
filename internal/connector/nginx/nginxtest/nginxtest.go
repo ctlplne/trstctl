@@ -3,7 +3,7 @@
 // Package nginxtest is a faithful in-process NGINX double for connector tests
 // and conformance. It records the files a connector writes, validates the
 // certificate when the connector runs `nginx -t`, and activates it on
-// `nginx -s reload` — modelling that nginx keeps serving the running
+// `nginx -s reload` — modeling that nginx keeps serving the running
 // certificate until a configuration that passes validation is reloaded.
 package nginxtest
 

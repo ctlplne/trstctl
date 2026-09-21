@@ -63,7 +63,7 @@ func putInt64(buf []byte, v int64) {
 // Unlike the helpers above this one can fail, and it must: a value longer than
 // 4 GiB has no valid encoding, and silently truncating it would emit a frame
 // whose declared length disagrees with its payload — which a peer parses as the
-// next item, i.e. it desynchronises the stream.
+// next item, i.e. it desynchronizes the stream.
 func frameLen32(n int) (uint32, error) {
 	if n < 0 || int64(n) > math.MaxUint32 {
 		return 0, fmt.Errorf("kmip: length %d does not fit a TTLV length field", n)

@@ -118,7 +118,7 @@ func TestReconcileNeverCreatesOwnersFromCMDBRows(t *testing.T) {
 	}
 }
 
-// readSourceFile is a structural guard, not a behavioural one, and is used
+// readSourceFile is a structural guard, not a behavioral one, and is used
 // only where the property IS the absence of a call. RunCMDBReconcileOnce needs
 // a live store to exercise, and a test that stood up Postgres to prove a
 // function is never called would prove less than reading the function.

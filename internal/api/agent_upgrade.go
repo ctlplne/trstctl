@@ -17,7 +17,7 @@ type upgradeCampaignBody struct {
 	TargetVersion string `json:"target_version"`
 	// Artifacts turns the campaign from observe-only into a rollout that
 	// DISPATCHES: one downloadable build per platform, each pinned by its
-	// sha256. Omitted = observe-only, the pre-dispatch behaviour.
+	// sha256. Omitted = observe-only, the pre-dispatch behavior.
 	Artifacts []fleet.Artifact `json:"artifacts,omitempty"`
 }
 

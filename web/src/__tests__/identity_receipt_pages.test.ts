@@ -13,7 +13,7 @@ describe("identity receipt page reads", () => {
     expect(load).toHaveBeenCalledTimes(2);
   });
 
-  it("stops a cancelled traversal after its in-flight read", async () => {
+  it("stops a canceled traversal after its in-flight read", async () => {
     const controller = new AbortController();
     const load = vi.fn().mockImplementation(async () => {
       controller.abort();

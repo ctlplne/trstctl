@@ -39,7 +39,7 @@ type IssuerReconcileResult struct {
 
 // IssuerController is the trstctl Kubernetes CRD controller. It marks trstctl
 // Issuer and ClusterIssuer resources Ready, signs cert-manager CertificateRequests,
-// and fulfils trstctl-native Certificate resources into TLS Secrets. It
+// and fulfills trstctl-native Certificate resources into TLS Secrets. It
 // intentionally follows the repository's dependency-free Kubernetes pattern:
 // direct JSON/HTTPS API calls with the service-account token instead of
 // client-go/controller-runtime.

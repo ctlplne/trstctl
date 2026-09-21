@@ -28,7 +28,7 @@ import (
 //
 // The branch is at MINT TIME, not deploy time, and that placement is the whole
 // design. By the time a certificate has been minted the control plane has
-// already generated a private key — refusing to deploy it afterwards would be
+// already generated a private key — refusing to deploy it afterward would be
 // too late to make any custody claim, because the key already existed here. So
 // the question "does this identity's target want host-generated keys?" has to be
 // asked before anything is minted at all.
@@ -91,7 +91,7 @@ func (d *issuanceDispatcher) hostRenewalTargetFor(
 	if err != nil {
 		// A read failure is NOT "no". The earlier version swallowed this and
 		// called falling through "the safe direction", which had it exactly
-		// backwards: the fallback mints a control-plane key, so a transient
+		// backward: the fallback mints a control-plane key, so a transient
 		// database blip would silently generate one for a target whose operator
 		// had opted out — the single outcome this epic exists to prevent, caused
 		// by a hiccup nobody would ever see.

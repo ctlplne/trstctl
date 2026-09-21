@@ -23,7 +23,7 @@ import (
 // real laptops.
 
 // MDM names a supported device management system. Intune and Jamf are kept
-// distinct rather than normalised: an estate can run both, and a device present
+// distinct rather than normalized: an estate can run both, and a device present
 // in one is not evidence about the other.
 const (
 	MDMIntune = "intune"

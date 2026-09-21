@@ -39,7 +39,7 @@ type Command struct {
 
 // Destructive reports whether the command can remove, revoke, erase, zeroize,
 // offboard, or otherwise run irreversible/destructive work and therefore needs
-// an explicit --force acknowledgement in the CLI.
+// an explicit --force acknowledgment in the CLI.
 func (c Command) Destructive() bool {
 	if c.Method == "DELETE" {
 		return true
@@ -137,7 +137,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"endpoints", "verifications"}, Method: "GET", Path: "/api/v1/endpoints/verifications", Summary: "List observed endpoint identity: what each listener is actually serving, per vantage"},
 	{Name: []string{"endpoints", "verifications", "get"}, Method: "GET", Path: "/api/v1/endpoints/verifications/{id}", Summary: "Get one signed relay verification result"},
 	{Name: []string{"endpoints", "key-custody"}, Method: "GET", Path: "/api/v1/endpoints/key-custody", Summary: "List where each deployment target's private key is generated: host agent or control plane"},
-	{Name: []string{"enrollment", "diagnostics"}, Method: "GET", Path: "/api/v1/enrollment/diagnostics", Summary: "List recent enrolment refusals with the failing step, cause and remediation"},
+	{Name: []string{"enrollment", "diagnostics"}, Method: "GET", Path: "/api/v1/enrollment/diagnostics", Summary: "List recent enrollment refusals with the failing step, cause and remediation"},
 	{Name: []string{"enrollment", "diagnostics", "support-addendum"}, Method: "GET", Path: "/api/v1/enrollment/diagnostics/support-addendum", Summary: "Get the authorized aggregate-only support-bundle addendum"},
 	{Name: []string{"enrollment", "diagnostics", "prove-fixed"}, Method: "POST", Path: "/api/v1/enrollment/diagnostics/{id}/prove-fixed", Body: bodyNone, Summary: "Queue a signed network verification for one exact failed enrollment"},
 	{Name: []string{"protocols", "cmp", "qualify"}, Method: "POST", Path: "/api/v1/protocols/cmp/qualification", Body: bodyNone, ReadOnly: true, Summary: "Check CMP tenant, trust, RA, signer, profile, and capacity gates without sending a PKIMessage or writing state"},

@@ -1526,7 +1526,7 @@ export interface Api {
   endpointVerifications(): Promise<EndpointVerificationList>;
   // B2: where each deployment target's private key is generated.
   endpointKeyCustody(): Promise<EndpointKeyCustodyList>;
-  // I4: recent enrolment refusals, classified.
+  // I4: recent enrollment refusals, classified.
   enrollmentDiagnostics(): Promise<EnrollmentDiagnosticList>;
   /** I4/AUD-49: queue one network relay to re-check the exact failed target. */
   proveEnrollmentDiagnosticFixed(id: string): Promise<EnrollmentDiagnosticVerification>;

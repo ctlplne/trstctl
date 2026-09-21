@@ -133,7 +133,7 @@ func (a *OIDCAuthenticator) AuthenticateOperator(r *http.Request) (Operator, boo
 	}
 	if claims.Exp == 0 || !now.Before(time.Unix(claims.Exp, 0)) {
 		// A token with no expiry is a permanent credential minted by accident;
-		// refusing it is kinder than honouring it forever.
+		// refusing it is kinder than honoring it forever.
 		return Operator{}, false
 	}
 	if claims.Nbf != 0 && now.Before(time.Unix(claims.Nbf, 0)) {

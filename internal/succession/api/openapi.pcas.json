@@ -833,7 +833,7 @@
             "description": "success"
           }
         },
-        "summary": "Record a signed relying-party post-quantum capability acknowledgement"
+        "summary": "Record a signed relying-party post-quantum capability acknowledgment"
       }
     },
     "/api/v1/pcas/chain": {
@@ -1240,7 +1240,7 @@
             "description": "success"
           }
         },
-        "summary": "Configure the RP acknowledgement quorum for PCAS retirement"
+        "summary": "Configure the RP acknowledgment quorum for PCAS retirement"
       }
     },
     "/api/v1/pcas/rewrap": {

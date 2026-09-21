@@ -120,8 +120,8 @@ const (
 	DiscoveryTargetResultsEventSchemaVersion = 2
 
 	// I2: an operator closing an ownership disagreement. An event because the
-	// resolution is a JUDGEMENT — which side was right and why — and a
-	// judgement that lives only in a mutable column cannot be audited later.
+	// resolution is a JUDGMENT — which side was right and why — and a
+	// judgment that lives only in a mutable column cannot be audited later.
 	EventOwnershipConflictResolved = "ownership.conflict.resolved"
 	// A5: a staged agent-upgrade campaign and every state change on it. The
 	// halt is the product, so it is an event: an automatic halt that lived only
@@ -860,7 +860,7 @@ type CMDBScheduleConfigured struct {
 	Enabled              bool   `json:"enabled"`
 	// Execution is the sync vantage (I2): "" / "control_plane", or "relay" to
 	// dispatch the read to a network relay inside the segment. Absent on old
-	// events, which decodes to "" — the control-plane behaviour they had.
+	// events, which decodes to "" — the control-plane behavior they had.
 	Execution string `json:"execution,omitempty"`
 }
 
@@ -3889,7 +3889,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}, e.Sequence); err != nil {
 			return err
 		}
-		// The leaf exists in the world whether or not it honoured the
+		// The leaf exists in the world whether or not it honored the
 		// constraints, so it enters the inventory either way; hiding a
 		// violating certificate from the estate would compound the violation
 		// with invisibility. The row id derives from (tenant, fingerprint) so

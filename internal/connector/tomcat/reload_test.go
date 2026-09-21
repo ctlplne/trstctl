@@ -13,7 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/connector/tomcat"
 )
 
-var errReload = errors.New("TLS reload acknowledgement failed")
+var errReload = errors.New("TLS reload acknowledgment failed")
 
 type tomcatTLSOps struct {
 	*connector.MemoryOps
@@ -62,7 +62,7 @@ func TestTomcatTLSActivationUsesFixedActionAndRepeatsForIdenticalFiles(t *testin
 	dep := connector.NewDeployment("tomcat", tomcatCert, tomcatKey)
 	for i := 1; i <= 2; i++ {
 		// Represents a service which has not adopted the current files (for example
-		// a lost reload acknowledgement or a process restart using another context).
+		// a lost reload acknowledgment or a process restart using another context).
 		o.served = []byte("old-public-certificate")
 		if _, err := connector.Run(context.Background(), c, o, dep); err != nil {
 			t.Fatal(err)

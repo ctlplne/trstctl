@@ -84,7 +84,7 @@ func TestBrokerRefusesWhenGateRejectsOrReturnsNoDigest(t *testing.T) {
 	}
 
 	// A gate that verifies but yields nothing to bind is a broken gate, not a
-	// licence to issue an unbound credential.
+	// license to issue an unbound credential.
 	silent := &agentBrokerService{
 		taskEnvelopeGate: func(context.Context, string, []byte, time.Time) ([]byte, error) { return nil, nil },
 	}

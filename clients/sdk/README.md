@@ -374,5 +374,5 @@ and runs a Java program against the assembled control-plane handler and proves a
 
 ## Licensing
 
-These SDKs are MPL-2.0, the licence of the `clients/` tree; the core they talk to
+These SDKs are MPL-2.0, the license of the `clients/` tree; the core they talk to
 is source-available under BUSL-1.1. See the repository `LICENSE`.

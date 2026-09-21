@@ -41,11 +41,11 @@ type Elector struct {
 	store    *store.Store
 	logger   *slog.Logger
 	interval time.Duration
-	// onLeader runs the leader-only work. It is given a context that is cancelled the
+	// onLeader runs the leader-only work. It is given a context that is canceled the
 	// moment leadership is lost (the lock dropped) or the Elector is stopped, so the
 	// continuous workers it starts stop promptly and another replica can take over
 	// without two leaders overlapping. onLeader is expected to block until that context
-	// is cancelled; if it returns early, the Elector steps down and re-campaigns.
+	// is canceled; if it returns early, the Elector steps down and re-campaigns.
 	onLeader func(ctx context.Context)
 }
 
@@ -68,8 +68,8 @@ func WithLogger(l *slog.Logger) Option {
 }
 
 // New returns an Elector that campaigns against s and runs onLeader while it is the
-// leader. onLeader must block until its context is cancelled (it receives a context
-// that is cancelled on leadership loss or shutdown).
+// leader. onLeader must block until its context is canceled (it receives a context
+// that is canceled on leadership loss or shutdown).
 func New(s *store.Store, onLeader func(ctx context.Context), opts ...Option) *Elector {
 	e := &Elector{store: s, interval: DefaultCampaignInterval, onLeader: onLeader}
 	for _, o := range opts {
@@ -81,12 +81,12 @@ func New(s *store.Store, onLeader func(ctx context.Context), opts ...Option) *El
 	return e
 }
 
-// Run campaigns for leadership until ctx is cancelled (RESIL-004). It loops: try to
+// Run campaigns for leadership until ctx is canceled (RESIL-004). It loops: try to
 // become leader; if it loses the race it waits one interval and retries (staying a
 // follower); if it wins, it runs onLeader with a leadership-scoped context and
-// monitors the lock, cancelling that context and stepping down the instant the lock
+// monitors the lock, canceling that context and stepping down the instant the lock
 // is lost — then re-campaigns. It is meant to run in its own goroutine and returns
-// when ctx is cancelled (after a graceful step-down).
+// when ctx is canceled (after a graceful step-down).
 func (e *Elector) Run(ctx context.Context) {
 	t := time.NewTicker(e.interval)
 	defer t.Stop()
@@ -116,9 +116,9 @@ func (e *Elector) Run(ctx context.Context) {
 	}
 }
 
-// serveAsLeader runs onLeader under a context cancelled on leadership loss, and
+// serveAsLeader runs onLeader under a context canceled on leadership loss, and
 // monitors the lease. It returns (and the lease is released) when the lock is lost,
-// onLeader returns, or ctx is cancelled — so the next campaign can re-elect.
+// onLeader returns, or ctx is canceled — so the next campaign can re-elect.
 func (e *Elector) serveAsLeader(ctx context.Context, lease *store.LeaderLease) {
 	defer lease.Release()
 	e.logger.Info("leader election: this replica is now the leader (running continuous background workers)")

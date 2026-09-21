@@ -14,7 +14,7 @@ import (
 // TestServedNHILifecyclePlanIsEffectFreeVersionBoundAndVerifiable is the F59
 // operator oracle. The console must be able to explain one exact lifecycle
 // action before it changes anything, reject a plan reviewed against old state,
-// and return enough durable evidence to prove what happened afterwards.
+// and return enough durable evidence to prove what happened afterward.
 func TestServedNHILifecyclePlanIsEffectFreeVersionBoundAndVerifiable(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{})
 	registerServedTenant(t, h, "F59 lifecycle-plan tenant")

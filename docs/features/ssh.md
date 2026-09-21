@@ -103,7 +103,7 @@ any file changes. See the [complete rollout example](../journeys/ssh-at-scale.md
 The control plane also has a served handoff for this high-blast-radius path:
 `POST /api/v1/ssh/trust-rollouts` records the source, target hosts, CA fingerprint,
 reload/health commands, rollback plan, status, and an explicit `confirmed=true`
-acknowledgement; `POST /api/v1/ssh/hosts/retire` records retirement evidence once
+acknowledgment; `POST /api/v1/ssh/hosts/retire` records retirement evidence once
 migration completes. The browser and CLI record/request the workflow, but host file
 edits happen only inside the operator-confirmed agent path.
 

@@ -27,7 +27,7 @@ import (
 // CSV and NDJSON fix that, and the interesting design question is what happens
 // to the chain hash. It travels in both formats, per record. That is the point:
 // a row lifted out of a SIEM months later still carries the hash that binds it
-// to its neighbours, so an investigator who exported to Splunk has not thereby
+// to its neighbors, so an investigator who exported to Splunk has not thereby
 // downgraded their evidence to "some log lines".
 
 // Format is a served audit export encoding.

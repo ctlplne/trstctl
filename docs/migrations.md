@@ -39,7 +39,7 @@ whose version is already in the ledger and compares:
 - **Digest matches** — nothing to do; the migration is not re-run.
 - **Digest differs** — the run **fails closed** and the node does not start. A
   shipped migration was edited in place, so this node's schema and the file the
-  binary is reading are no longer the same artefact, and the binary cannot know
+  binary is reading are no longer the same artifact, and the binary cannot know
   which half of the edit ran here.
 - **A different filename claims an applied version** — the run fails closed with
   a version-collision error. This used to be a silent skip: the colliding
@@ -50,9 +50,9 @@ The digest is taken over the file with line endings normalized to `\n` and
 trailing newlines trimmed, so the same file checked out under a different
 `core.autocrlf` does not read as an edit. The `-- SPDX-License-Identifier:`
 comment line, when present, is outside the digest as well: the relicensing of
-2026-09-20 rewrote that one line in every shipped migration, and a licence notice
+2026-09-20 rewrote that one line in every shipped migration, and a license notice
 is metadata about the file, not part of the migration. A ledger row recorded by
-an earlier binary that hashed the whole file is recognised when its digest
+an earlier binary that hashed the whole file is recognized when its digest
 matches the file under the identifier it shipped with (`MPL-2.0`, or
 `LicenseRef-trstctl-EE` for the families that moved into the core) and is
 re-stamped with the current digest and `checksum_adopted_at`, exactly like a
@@ -180,7 +180,7 @@ deliberate choice, not a gap.
 - The relational store is a **projection of the event log**. The event log
   is the source of truth; the read model can be **rebuilt** from it at any time
   (see [Backup & disaster recovery](disaster-recovery.md)). Generic, automated
-  rollback of arbitrary DDL is fragile theatre by comparison.
+  rollback of arbitrary DDL is fragile theater by comparison.
 - Migrations are written to be **additive and non-destructive** (new tables and
   columns, not drops/renames of live data), so a forward roll is low-risk and an
   upgrade does not silently discard state.

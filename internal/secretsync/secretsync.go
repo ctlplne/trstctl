@@ -73,7 +73,7 @@ func (t *Target) Deliver(ctx context.Context, key string, value []byte) error {
 
 // DeliverOperation is the production/outbox path. The stable operation id must
 // survive every redelivery so version-creating receivers can dedupe or reconcile
-// a success whose local acknowledgement was interrupted.
+// a success whose local acknowledgment was interrupted.
 func (t *Target) DeliverOperation(ctx context.Context, operationID, key string, value []byte) error {
 	if operationID == "" {
 		return errors.New("secretsync: durable delivery operation id is required")

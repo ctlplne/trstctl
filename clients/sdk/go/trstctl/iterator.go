@@ -37,7 +37,7 @@ func newIterator[T any](opts ListOptions, fetch func(ctx context.Context, opts L
 
 // Next advances to the next item, fetching the next page if needed. It returns
 // false when the list is exhausted or an error occurred; check Err after the
-// loop. A cancelled ctx surfaces as an error and stops iteration.
+// loop. A canceled ctx surfaces as an error and stops iteration.
 func (it *Iterator[T]) Next(ctx context.Context) bool {
 	if it.err != nil {
 		return false

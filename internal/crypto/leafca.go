@@ -455,7 +455,7 @@ func SignServerCertFromCSR(caCertDER []byte, caSigner DigestSigner, csrDER []byt
 // (spiffe://trstctl.example/tenant/<id>/agent/<cn>, built by the caller from the
 // REDEEMED/PRESENTED tenant — never the CSR), so the mTLS consumer derives the
 // tenant from the certificate, not a client-chosen field (WIRE-003/AN-1). It is
-// the served agent-channel analogue of mtls.SignClientCSRWithTenant, which signs
+// the served agent-channel analog of mtls.SignClientCSRWithTenant, which signs
 // with an in-process CA key; this routes through the signer instead.
 //
 // The common name still comes from the CSR subject (the agent identity), but the

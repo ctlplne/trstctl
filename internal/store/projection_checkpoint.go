@@ -49,7 +49,7 @@ type ProjectionTailHealth struct {
 // WithProjectionLock runs fn while holding the projection advisory lock on a
 // dedicated session connection (RESIL-004), so concurrent boot catch-ups across
 // replicas serialize rather than racing into the read model. The lock is released
-// when fn returns (even on error or a cancelled ctx). It is a system operation on
+// when fn returns (even on error or a canceled ctx). It is a system operation on
 // the pool, like the migration lock.
 func (s *Store) WithProjectionLock(ctx context.Context, fn func(context.Context) error) error {
 	// The lock-holding session comes from the lock pool: a command parked on

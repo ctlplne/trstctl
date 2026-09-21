@@ -51,7 +51,7 @@ type RingOutcome struct {
 	// Verified is how many returned a receipt proving they are healthy on the
 	// new version. NOT how many acknowledged the job: an agent that took the
 	// upgrade and then failed to serve is the exact failure a canary exists to
-	// catch, and counting acknowledgements would score it as a success.
+	// catch, and counting acknowledgments would score it as a success.
 	Verified int
 	// Failed is how many returned a receipt saying they are not healthy.
 	Failed int
@@ -166,7 +166,7 @@ func Resume(state string, haltedAt Ring) (Decision, error) {
 // CanDispatch reports whether a campaign in this state may send upgrade jobs.
 //
 // Used by the worker before every dispatch. The console's pause button is only
-// as real as this check: a pause that merely greys out a button while jobs keep
+// as real as this check: a pause that merely grays out a button while jobs keep
 // flowing is worse than no pause, because an operator believes they stopped it.
 func CanDispatch(state string) bool {
 	return state == StatePending || state == StateRunning

@@ -40,7 +40,7 @@ func TestCMPCSRVerifierSeamConsulted(t *testing.T) {
 
 	// A CSR whose proof-of-possession the CORE parser fails: flip one
 	// signature byte. The message protection over the PKIMessage body is
-	// computed by the client afterwards, so it still verifies.
+	// computed by the client afterward, so it still verifies.
 	opaqueCSR := append([]byte(nil), csrDER...)
 	opaqueCSR[len(opaqueCSR)-1] ^= 0x01
 	reqDER := buildRequest(t, clientCert, clientKey, opaqueCSR)

@@ -32,7 +32,7 @@ const (
 	ActionCodeSign Action = "code_sign"
 )
 
-// Input is the decision input. It is marshalled to the Rego document `input`, so policies
+// Input is the decision input. It is marshaled to the Rego document `input`, so policies
 // reference `input.action`, `input.profile`, etc.
 type Input struct {
 	Action   Action         `json:"action"`

@@ -127,7 +127,7 @@ const (
 	// pluginConnectorsKey counts verified third-party connectors on this relay
 	// (epic E4).
 	pluginConnectorsKey = "plugin_connectors_loaded"
-	// A4: how many control-plane endpoints this relay's enrolment proxy can
+	// A4: how many control-plane endpoints this relay's enrollment proxy can
 	// currently reach, and how many are in cooldown.
 	//
 	// Both, not a ratio: "two of two healthy" and "two of four healthy" are
@@ -168,7 +168,7 @@ func workloadAPICounters(inv map[string]int64) map[string]int64 {
 	// keys, and cannot enumerate what a given machine loaded — so any count it
 	// rendered from its own state would be a guess. This is the measurement.
 	out[pluginConnectorsKey] = pluginConnectorCount.Load()
-	// A4: enrolment proxy health, so the Protocols console can show which
+	// A4: enrollment proxy health, so the Protocols console can show which
 	// segments have a working proxy and how many endpoints each relay can
 	// currently reach. Reported by the relay because only the relay knows which
 	// of its upstreams are answering from where it sits.

@@ -52,7 +52,7 @@ func (o Options) withDefaults() Options {
 	return o
 }
 
-// Run drives the reconcile loop until ctx is cancelled. It reconciles once
+// Run drives the reconcile loop until ctx is canceled. It reconciles once
 // immediately, then on every tick. A transient reconcile error is logged and the
 // loop continues (the next tick retries) so a flaky API call does not crash the
 // operator. The Kubernetes service-account token authenticating the client is

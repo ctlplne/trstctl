@@ -91,7 +91,7 @@ func TestMailHeadersAndUnicodeBody(t *testing.T) {
 }
 
 func TestMailMessageIdentityBindsOutboxAndSurvivesRetry(t *testing.T) {
-	fake := &fakeSender{err: errors.New("acceptance acknowledgement lost")}
+	fake := &fakeSender{err: errors.New("acceptance acknowledgment lost")}
 	newDispatcher := func(from, to string) *notify.Dispatcher {
 		return notify.NewDispatcher(email.New("unused:25", from, []string{to}, email.WithSender(fake)))
 	}
@@ -102,7 +102,7 @@ func TestMailMessageIdentityBindsOutboxAndSurvivesRetry(t *testing.T) {
 	message := notify.DeliveryMessage{TenantID: "tenant-1", Destination: notify.DestinationRenewalFailure, IdempotencyKey: "command-1", Payload: payload, OutboxID: 1, Attempts: 1}
 	d := newDispatcher("alerts@example.test", "oncall@example.test")
 	if err := d.DispatchMessage(t.Context(), message); err == nil {
-		t.Fatal("lost acknowledgement must remain a delivery failure")
+		t.Fatal("lost acknowledgment must remain a delivery failure")
 	}
 	first, _, _ := readNotificationMail(t, fake.Message())
 	id := first.Header.Get("Message-ID")

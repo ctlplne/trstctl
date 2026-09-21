@@ -75,7 +75,7 @@ func main() {
 	hostExecProfile := flag.String("host-exec-profile", "", "path to this host's connector exec profile: the operator-owned allowlist of directories a deploy may write and commands it may run (epic D1). A file rather than flags, because it is the boundary that stops a compromised control plane running arbitrary commands here — and because it describes THIS machine's paths and binaries. Without it the agent claims no file/reload deploys")
 	hostRollbackDir := flag.String("host-rollback-dir", "", "directory for this host agent's encrypted, two-generation connector predecessor bundles (AUD32/G1). Empty stores them beside --key under host-rollbacks. The bundles never return to the control plane and are required for host rollback after restart")
 	enrollProxyListen := flag.String("enroll-proxy-listen", "", "serve a LAN-local ACME/EST/SCEP proxy on this address for hosts and devices in this segment that have no route to the control plane (epic A4). The proxy is pass-through: it forwards protocol traffic unaltered, adds no credential of its own, and makes no trust decision — the control plane's validators and policy still decide. Empty disables it")
-	enrollProxyUpstream := flag.String("enroll-proxy-upstream", "", "comma-separated https control-plane endpoints the enrolment proxy forwards to. More than one gives automatic failover when an endpoint stops answering; a control-plane ERROR is passed back to the client rather than retried, because it is an answer")
+	enrollProxyUpstream := flag.String("enroll-proxy-upstream", "", "comma-separated https control-plane endpoints the enrollment proxy forwards to. More than one gives automatic failover when an endpoint stops answering; a control-plane ERROR is passed back to the client rather than retried, because it is an answer")
 	enrollProxySegment := flag.String("enroll-proxy-segment", "", "stable operator name for the dark segment this relay serves; required with --enroll-proxy-listen and reported as tenant-scoped topology evidence")
 	enrollProxyPublicURL := flag.String("enroll-proxy-public-url", "", "stable HTTPS URL stock enrollment clients use for this segment; required with --enroll-proxy-listen and shared by redundant relays so ACME absolute URLs remain on the relay path")
 	revCacheListen := flag.String("crl-cache-listen", "", "serve the control plane's CRL to relying parties in this segment on this address (epic R3). The relay holds the CA's signed bytes and hands them over — it signs nothing — and REFUSES to serve a list past its nextUpdate, because a stale CRL still verifies and would have a relying party trust a certificate revoked yesterday. Empty disables it")
@@ -428,7 +428,7 @@ type agentOptions struct {
 	// pinned, and the capabilities they run under. None of it is derived from
 	// the module or from the control plane, because a publisher who could widen
 	// their own grant would make the sandbox decorative.
-	// A4: the LAN-local enrolment proxy for dark segments.
+	// A4: the LAN-local enrollment proxy for dark segments.
 	enrollProxyListen    string
 	enrollProxyUpstream  string
 	enrollProxySegment   string
@@ -1251,7 +1251,7 @@ func (a channelAdapter) ReportInventory(ctx context.Context, req *agent.Inventor
 
 // renewWithBackoff attempts a steady-state channel renewal (a.RenewOverChannel), and on
 // failure keeps retrying with full-jitter exponential backoff until it succeeds, the
-// budget elapses (so the next regular tick takes over), or ctx is cancelled (RESIL-006).
+// budget elapses (so the next regular tick takes over), or ctx is canceled (RESIL-006).
 func renewWithBackoff(ctx context.Context, a *agent.Agent, ch agent.ChannelClient, budget time.Duration, rng *rand.Rand) bool {
 	deadline := time.Now().Add(budget)
 	for attempt := 0; ; attempt++ {
@@ -1357,7 +1357,7 @@ func resetTimer(t *time.Timer, d time.Duration) {
 // Jitter spreads a fleet that enrolled together. Without it ten thousand agents
 // installed by the same automation renew in the same second, and the thundering
 // herd arrives precisely when the control plane is least able to absorb it —
-// during the recovery from the outage that synchronised them.
+// during the recovery from the outage that synchronized them.
 func nextRotationDelay(rotateEvery time.Duration, notAfter, now time.Time, rng *rand.Rand) time.Duration {
 	if rotateEvery <= 0 {
 		rotateEvery = 12 * time.Hour

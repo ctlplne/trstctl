@@ -164,7 +164,7 @@ class ProcessTests(unittest.TestCase):
     def test_cancellation_cleans_children_and_rejects_stale_coverage(self):
         result, record, profile, _, elapsed = self.run_gate('cancel')
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn('cancelled', record['error'])
+        self.assertIn('canceled', record['error'])
         self.assertIsNone(profile)
         self.assertLess(elapsed, 3)
 

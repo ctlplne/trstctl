@@ -5270,7 +5270,7 @@ export const messages = {
   "operations.summary.rotationCompleted": { defaultMessage: "Credential rotation completed.", description: "Completed rotation summary." },
   "operations.summary.rotationCancelled": {
     defaultMessage: "Renewal stopped after identity revocation or retirement.",
-    description: "Cancelled rotation outcome; does not imply successful renewal or remote compensation.",
+    description: "Canceled rotation outcome; does not imply successful renewal or remote compensation.",
   },
   "operations.summary.approval": {
     defaultMessage: "{count} of {required} required approvals recorded.",
@@ -5619,7 +5619,7 @@ export const messages = {
   "journeys.fleet.verify.title": { defaultMessage: "Verify the actual endpoint", description: "ACME fleet lifecycle operator guidance." },
   "journeys.fleet.verify.body": {
     defaultMessage:
-      "Use a trusted client to compare the endpoint's certificate fingerprint, hostname and issuer with the issued files, then make an application request. A reload acknowledgement or an inventory row is not endpoint proof.",
+      "Use a trusted client to compare the endpoint's certificate fingerprint, hostname and issuer with the issued files, then make an application request. A reload acknowledgment or an inventory row is not endpoint proof.",
     description: "ACME fleet lifecycle operator guidance.",
   },
   "journeys.fleet.renew.title": { defaultMessage: "Schedule and observe renewal", description: "ACME fleet lifecycle operator guidance." },
@@ -15471,7 +15471,7 @@ export const messages = {
   },
   "source.dependents.m2seq00006": {
     defaultMessage: "Observed dependents",
-    description: "M2: labelled OBSERVED because the graph is built from discovery; zero is not proof of none.",
+    description: "M2: labeled OBSERVED because the graph is built from discovery; zero is not proof of none.",
   },
   "source.owners.m2seq00007": {
     defaultMessage: "Owners to coordinate with",
@@ -15544,16 +15544,16 @@ export const messages = {
     description: "E3: this family is exercised against an API double only, never real hardware.",
   },
   "source.enrollment.diagnostics.i4diag0001": {
-    defaultMessage: "Enrolment failures",
-    description: "I4: section heading \u2014 recent refused enrolments and what to do about them.",
+    defaultMessage: "Enrollment failures",
+    description: "I4: section heading \u2014 recent refused enrollments and what to do about them.",
   },
   "source.enrollment.diagnostics.caption.i4diag0002": {
-    defaultMessage: "Recent enrolment refusals with their cause and remediation",
+    defaultMessage: "Recent enrollment refusals with their cause and remediation",
     description: "I4: screen-reader caption for the diagnostics table.",
   },
   "source.protocol.i4diag0003": {
     defaultMessage: "Protocol",
-    description: "I4: column heading \u2014 which enrolment protocol refused.",
+    description: "I4: column heading \u2014 which enrollment protocol refused.",
   },
   "source.failing.step.i4diag0004": {
     defaultMessage: "Failing step",
@@ -18531,7 +18531,7 @@ export const messages = {
     description: "Button label for aborting an in-flight Explorer request.",
   },
   "apiExplorer.cancelled": {
-    defaultMessage: "Request cancelled.",
+    defaultMessage: "Request canceled.",
     description: "Status shown after an in-flight Explorer request is aborted.",
   },
   "apiExplorer.needsKey": {
@@ -21286,7 +21286,7 @@ export const messages = {
   },
   "source.retirement.confirm.h4ret00008": {
     defaultMessage: "I understand this permanently destroys the signer-held key",
-    description: "H4: explicit irreversible-action acknowledgement.",
+    description: "H4: explicit irreversible-action acknowledgment.",
   },
   "source.retirement.irreversible.action.h4ret00009": {
     defaultMessage: "Irreversibly retire key",
@@ -26466,7 +26466,7 @@ export const messages = {
   "identities.automation.nextOpen": { defaultMessage: " Next opening: {time}.", description: "Next lifecycle maintenance opening." },
   "identities.automation.cancelLimit": {
     defaultMessage:
-      "Revocation or retirement cancels queued issuance and renewal retries once any current worker attempt ends or times out. Work already performed on a target is not undone. Cancelling renewal while keeping the identity active is not yet available.",
+      "Revocation or retirement cancels queued issuance and renewal retries once any current worker attempt ends or times out. Work already performed on a target is not undone. Canceling renewal while keeping the identity active is not yet available.",
     description: "Honest lifecycle cancellation limit.",
   },
   "lifecycle.status.cancelled": { defaultMessage: "Cancelled", description: "Queued lifecycle work stopped by identity revocation or retirement." },
@@ -26508,7 +26508,7 @@ export const messages = {
   },
   "identities.wildcard.ackHelp": {
     defaultMessage: "This operator issue records your blast-radius approval; it does not weaken ACME validation.",
-    description: "Wildcard acknowledgement consequence.",
+    description: "Wildcard acknowledgment consequence.",
   },
   "identities.wildcard.issueFailed": {
     defaultMessage: "No wildcard certificate was issued",
@@ -26689,7 +26689,7 @@ export const messages = {
   },
   "identities.lifecycle.verified": {
     defaultMessage: "Request accepted for {identity}: {state}. {detail}",
-    description: "Historical acknowledgement of the returned request state; current lifecycle and receipt results appear separately.",
+    description: "Historical acknowledgment of the returned request state; current lifecycle and receipt results appear separately.",
   },
   "identities.find.action": { defaultMessage: "Find identities", description: "Primary action that jumps to identity search." },
   "identities.search.label": { defaultMessage: "Find identities", description: "Identity inventory search label." },

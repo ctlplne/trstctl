@@ -357,7 +357,7 @@ func (s *kvSigner) signDigestContext(ctx context.Context, digest []byte, opts cr
 // call performs a bearer-authenticated Key Vault REST request and decodes the JSON response.
 // The api-version query parameter is appended to every request. The provider-specific
 // parts (URL + api-version, the Bearer/Accept headers) stay here; the shared round-trip —
-// bounded read, non-2xx normalisation, JSON decode — is internal/cloudhttp (CODE-006). The
+// bounded read, non-2xx normalization, JSON decode — is internal/cloudhttp (CODE-006). The
 // per-op timeout is already applied by the caller via withTimeout(ctx) (CODE-002).
 func (b *Backend) call(ctx context.Context, method, path string, body []byte, out any) error {
 	if b.initErr != nil || b.token == nil {

@@ -21,7 +21,7 @@ func recSleep(rec *[]time.Duration) func(context.Context, time.Duration) error {
 
 func noSleep(context.Context, time.Duration) error { return nil }
 
-// relGatedResolver reports value only after visibleAfter lookups, modelling DNS
+// relGatedResolver reports value only after visibleAfter lookups, modeling DNS
 // propagation delay on one authoritative view.
 type relGatedResolver struct {
 	value        string

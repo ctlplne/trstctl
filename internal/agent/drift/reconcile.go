@@ -17,7 +17,7 @@ type Mode string
 const (
 	// AlertOnly records the drift and takes no corrective action.
 	AlertOnly Mode = "alert_only"
-	// AlertAndBlock records the drift and blocks the credential, signalling the
+	// AlertAndBlock records the drift and blocks the credential, signaling the
 	// caller to stop relying on it until an operator intervenes.
 	AlertAndBlock Mode = "alert_and_block"
 	// AutoRemediate records the drift and restores the declared state.

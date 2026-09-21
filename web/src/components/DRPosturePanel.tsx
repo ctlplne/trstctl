@@ -158,7 +158,7 @@ export function DRPosturePanel({ posture, error, formatPolicy }: { posture: DRPo
                     </div>
                     <div>
                       <dt className="text-caption font-medium text-muted-foreground">{translateNow("source.rto.floor.j2dr000014")}</dt>
-                      {/* Labelled a FLOOR here and not just in the
+                      {/* Labeled a FLOOR here and not just in the
                         attestation. A drill on an idle machine is not a
                         measurement of a bad afternoon, and this number is
                         the one an operator would otherwise quote. */}

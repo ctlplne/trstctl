@@ -17,9 +17,9 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
-// What went wrong with an enrolment, in the operator's terms (epic I4).
+// What went wrong with an enrollment, in the operator's terms (epic I4).
 //
-// A refused enrolment is the moment an operator has the least information and
+// A refused enrollment is the moment an operator has the least information and
 // the most urgency. The protocol told the client something — an RFC 8555 problem
 // type, an EST status, a SCEP failInfo — and none of that reaches the person who
 // has to fix it, because the client logged it on a host they are not looking at.

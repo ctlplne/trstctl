@@ -74,7 +74,7 @@ type Server struct {
 //
 // password is []byte rather than string so the double holds the credential the
 // same way the connector does (AN-8); a test that had to hand over a string
-// would be modelling custody the product does not use.
+// would be modeling custody the product does not use.
 func New(user string, password []byte) *Server {
 	s := &Server{
 		user:     user,

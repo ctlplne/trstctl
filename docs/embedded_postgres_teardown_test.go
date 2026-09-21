@@ -89,7 +89,7 @@ func hasPostgresStart(src string) bool {
 
 // Recognize actual method references, not comments containing "Stop". An
 // owned foreground process is also cleaned up when the same command is
-// signalled, reaped with Wait, and has a Kill fallback for a shutdown timeout.
+// signaled, reaped with Wait, and has a Kill fallback for a shutdown timeout.
 // This remains a source guard, not proof that every runtime path reaches cleanup.
 func hasPostgresCleanup(src string) bool {
 	f, err := parser.ParseFile(token.NewFileSet(), "fixture.go", src, 0)

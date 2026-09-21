@@ -630,7 +630,7 @@ func (k *LocalServerKey) Credentials(serverCertChainPEM, agentCAPEM []byte) (cre
 
 // HTTPServerTLSConfig assembles the HTTPS server TLS config for the embedded-agent
 // renewal listener from an agent-CA-signed server chain and the agent CA bundle. It
-// is the HTTP analogue of Credentials: TLS 1.3, RequireAndVerifyClientCert, and the
+// is the HTTP analog of Credentials: TLS 1.3, RequireAndVerifyClientCert, and the
 // agent CA as the only accepted client anchor.
 func (k *LocalServerKey) HTTPServerTLSConfig(serverCertChainPEM, agentCAPEM []byte) (*tls.Config, error) {
 	der, err := x509.MarshalPKCS8PrivateKey(k.key)

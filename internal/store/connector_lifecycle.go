@@ -222,7 +222,7 @@ func (s *Store) ApplyRotationRunRecordedTx(ctx context.Context, tx pgx.Tx, r Rot
 		// The upgraded row may already contain the terminal result while the
 		// durable tail starts again at an older event. Enter the ordered epoch at
 		// that historical event without pulling the retained terminal result
-		// backwards; later replayed events advance latest_event_sequence normally.
+		// backward; later replayed events advance latest_event_sequence normally.
 		desired.LatestEventSequence = r.LatestEventSequence
 	}
 	if rotationRunPrecedes(r, existing) {
@@ -268,7 +268,7 @@ func (s *Store) ApplyRotationRunRecordedTx(ctx context.Context, tx pgx.Tx, r Rot
 			// may advance the row.
 			applyRotationRunObservation(&desired, r)
 		case existingTerminal && !incomingTerminal:
-			// The same precision tie cannot pull a terminal row backwards.
+			// The same precision tie cannot pull a terminal row backward.
 		default:
 			return fmt.Errorf(
 				"%w: lifecycle rotation tenant=%s existing_id=%s incoming_id=%s differing_same_time_fields=%s",
@@ -385,7 +385,7 @@ func applyLaterRotationRunObservation(destination *RotationRun, source RotationR
 	}
 	if destination.Status == "cancelled" && (source.Status == "running" || source.Status == "failed") {
 		// An already-issued failure callback can trail the stop event. Preserve
-		// that event in the audit log without re-arming cancelled work.
+		// that event in the audit log without re-arming canceled work.
 		return nil
 	}
 	if destination.Status == "succeeded" || destination.Status == "cancelled" {

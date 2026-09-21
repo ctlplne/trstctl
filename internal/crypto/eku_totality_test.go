@@ -59,7 +59,7 @@ func TestExtKeyUsageComparisonFailsOnExtraUsage(t *testing.T) {
 	}
 }
 
-// TestExtKeyUsageIncludesCustomOIDs pins the other half: Go parks unrecognised
+// TestExtKeyUsageIncludesCustomOIDs pins the other half: Go parks unrecognized
 // usages in UnknownExtKeyUsage, so a comparison that reads only ExtKeyUsage
 // ignores a custom OID entirely.
 func TestExtKeyUsageIncludesCustomOIDs(t *testing.T) {

@@ -115,7 +115,7 @@ func startOpenLDAPContainer(t *testing.T) string {
 		"run", "-d", "--rm",
 		"--name", name,
 		"-p", "127.0.0.1::389",
-		"-e", "LDAP_ORGANISATION=trstctl test",
+		"-e", "LDAP_ORGANIZATION=trstctl test",
 		"-e", "LDAP_DOMAIN=example.org",
 		"-e", "LDAP_ADMIN_PASSWORD=admin-password",
 		"-e", "LDAP_TLS=false",

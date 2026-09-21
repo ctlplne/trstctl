@@ -105,8 +105,8 @@ func (b *Backend) RevokeKey(_ context.Context, ref crypto.KeyRef) error {
 	return nil
 }
 
-// ZeroizeKey schedules destruction of the key material; afterwards it is gone and
-// cannot sign. Irreversible (the remote analogue of wiping a locked buffer).
+// ZeroizeKey schedules destruction of the key material; afterward it is gone and
+// cannot sign. Irreversible (the remote analog of wiping a locked buffer).
 func (b *Backend) ZeroizeKey(_ context.Context, ref crypto.KeyRef) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()

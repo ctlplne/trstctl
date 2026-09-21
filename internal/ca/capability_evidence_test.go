@@ -47,7 +47,7 @@ func TestEveryIssuerRowNamesItsEvidence(t *testing.T) {
 // allowlist here drifted after that proof landed and left the buyer-facing matrix
 // understating the evidence. Deriving this oracle from the runtime manifest makes
 // either direction of drift fail: an unproved claim is rejected, and a newly
-// proved authority cannot remain labelled "not tested".
+// proved authority cannot remain labeled "not tested".
 func TestIssueProvenMatchesWhatIsActuallyExercised(t *testing.T) {
 	t.Parallel()
 	type runtimeEntry struct {

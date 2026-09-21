@@ -21,7 +21,7 @@ metadata:
 # ConfigMaps are NOT in this Role, and that distinction is load-bearing —
 # see the ClusterRole below.
 #
-# Deployments that fulfil certificates in additional namespaces should copy this
+# Deployments that fulfill certificates in additional namespaces should copy this
 # Role + RoleBinding into each of those namespaces rather than promoting it back
 # to cluster scope.
 apiVersion: rbac.authorization.k8s.io/v1
@@ -52,7 +52,7 @@ subjects:
     name: trstctl-agent
     namespace: trstctl
 ---
-# The agent acts as a cert-manager external issuer, fulfils trstctl-native
+# The agent acts as a cert-manager external issuer, fulfills trstctl-native
 # Certificate resources, signs approved native Kubernetes
 # CertificateSigningRequests, and distributes public CA trust bundles into
 # ConfigMaps. It reads requests and updates only their status. No delete, no

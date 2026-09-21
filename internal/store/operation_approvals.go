@@ -446,7 +446,7 @@ func (s *Store) MatchOperationApprovalDecisionCommandTx(ctx context.Context, tx 
 }
 
 // ApplyOperationApprovalStatusTx projects expiry/supersession. A terminal or
-// consumed request never moves backwards to a reusable state.
+// consumed request never moves backward to a reusable state.
 func (s *Store) ApplyOperationApprovalStatusTx(ctx context.Context, tx pgx.Tx, tenantID, requestID, digest, status string, at time.Time) error {
 	if status != ApprovalStatusExpired && status != ApprovalStatusSuperseded {
 		return fmt.Errorf("store: invalid approval terminal status %q", status)

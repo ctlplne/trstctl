@@ -30,7 +30,7 @@ This file is the human-readable companion to the git tags; the
   gone (a license file that still names them parses and grants nothing extra).
 - **Migration ledger.** The `-- SPDX-License-Identifier:` line is outside a shipped
   migration's content digest; a ledger row recorded by an earlier binary under the
-  previous identifier is recognised and re-stamped with `checksum_adopted_at`.
+  previous identifier is recognized and re-stamped with `checksum_adopted_at`.
 - **The Terraform provider is its own MPL-2.0 module.** `terraform-provider-trstctl`
   moved from `cmd/terraform-provider-trstctl` and `internal/terraformprovider` to
   `clients/terraform` (module `trstctl.com/terraform-provider`), licensed MPL-2.0
@@ -160,7 +160,7 @@ This file is the human-readable companion to the git tags; the
 
 ### Signing history is verifiable after the fact (B-4, 2026-07-26)
 - **Code signing served the two mutations and nothing that answered
-  afterwards.** You could sign with a managed key or keylessly, but nothing
+  afterward.** You could sign with a managed key or keylessly, but nothing
   told you which identities had signed or whether the transparency-log entry
   actually landed. `GET /api/v1/code-signing/identities` (and `trstctl-cli
   code-signing identities`) lists recent operations with their identity kind
@@ -722,7 +722,7 @@ and still gate the spaces IA.*
   Terraform and Python clients, signed compliance evidence, OTLP export, passive
   federation, JIT access, signed WASM plugins, and cloud managed-key custody.
 - Introduced the single-repository open-core edition boundary: core/Enterprise/
-  Provider status, offline licence seams, Provider metering/branding/isolation, and
+  Provider status, offline license seams, Provider metering/branding/isolation, and
   explicit Enterprise fences for remediation, federation, managed-key/KMIP custody,
   and governance evidence.
 

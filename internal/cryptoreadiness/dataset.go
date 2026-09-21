@@ -29,7 +29,7 @@ const CoverageGuidance = "Sequenced by exposure, not severity alone: two identic
 	"algorithms are ordered by how many parties actually depend on them, because severity says " +
 	"which crypto is worst while only dependency says which change is hard. Dependents are what " +
 	"DISCOVERY HAS OBSERVED — the graph is built from scans, so an asset with zero dependents reads " +
-	"identically to one on a resource nothing has scanned. No row is ever labelled safe to rotate; " +
+	"identically to one on a resource nothing has scanned. No row is ever labeled safe to rotate; " +
 	"confirm coverage of an asset's exhibitors before treating a low count as a low-coordination change."
 
 // Action is one real event-sourced migration-campaign item bound to an exact

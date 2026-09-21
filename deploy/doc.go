@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 
-// Package deploy holds the cross-cutting, behavioural deployment checks that span
+// Package deploy holds the cross-cutting, behavioral deployment checks that span
 // every deploy/ subtree (Docker, Helm, raw Kubernetes manifests, the operator).
 //
 // The per-subtree packages (deploy/docker, deploy/helm, deploy/kubernetes,

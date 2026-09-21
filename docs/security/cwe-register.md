@@ -34,7 +34,7 @@ golangci-lint results do not replace that evidence.
 
 | CWE | Where | What was fixed | Guard that fails if it returns |
 |---|---|---|---|
-| CWE-400 | `internal/notify/email/email.go` | Native SMTP delivery could remain blocked after the notification dispatch deadline. The complete exchange now shares a bounded socket deadline, and context cancellation closes the connection, releasing the worker even when a relay withholds its greeting or DATA acknowledgement. | TestSMTPGreetingHonorsCancellation and TestSMTPProductionExchangeAndDataDeadline (internal/notify/email/smtp_deadline_test.go) |
+| CWE-400 | `internal/notify/email/email.go` | Native SMTP delivery could remain blocked after the notification dispatch deadline. The complete exchange now shares a bounded socket deadline, and context cancellation closes the connection, releasing the worker even when a relay withholds its greeting or DATA acknowledgment. | TestSMTPGreetingHonorsCancellation and TestSMTPProductionExchangeAndDataDeadline (internal/notify/email/smtp_deadline_test.go) |
 | CWE-863 | `internal/api/endpoint_binding_execution.go` | Endpoint enrollment and direct destination deployment could queue certificate issuance without the ordinary issuance permission, policy, dual-control and profile checks. Both now share the identity issuance gate and retain the exact profile binding through host-agent handoff. | TestEndpointEnrollmentHonorsIssuanceAuthority (internal/server/endpoint_binding_authority_served_test.go) |
 | CWE-367 | `internal/orchestrator/endpoint_binding.go` | Endpoint metadata changes do not increment the lifecycle version. Reviewed identity snapshots now participate in approval evidence and are compared under the identity row lock before issuance, preventing policy-time binding changes from authorizing different work. | TestEndpointEnrollmentHonorsIssuanceAuthority/endpoint_enrollment/identity_changed_during_policy and target_deploy/identity_changed_during_policy (internal/server/endpoint_binding_authority_served_test.go) |
 | CWE-494 | `internal/server/bundled_pg.go` | Bundled PostgreSQL could execute a cold download before its committed archive checksum was checked, or reuse unrelated extracted binaries. Startup now requires independent archive authentication and fresh private extraction before execution. | TestBundledPostgresRejectsUnrelatedExtractedCache and TestBundledPostgresAuthenticatedFixtureReachesInitializerAndCleansUp (internal/server/bundled_pg_start_test.go) + TestVerifiedStartAuthenticatesColdArchiveBeforeInit (third_party/embedded-postgres/verified_binary_test.go) |
@@ -1049,7 +1049,7 @@ not this file.
 | `deploy/kubernetes/manifests_test.go:494` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/local-oidc/oidc_test.go:164` | paths are exact children of t.TempDir (CWE-22) |
 | `docs/ai_surface_placement_test.go:27` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/aud56_test.go:61` | name comes from the fixed documentation manifest in this test (CWE-22). |
+| `docs/aud56_test.go:62` | name comes from the fixed documentation manifest in this test (CWE-22). |
 | `docs/aud58_test.go:15` | name comes from the fixed documentation manifest in this test (CWE-22). |
 | `docs/aud65_test.go:18` | name comes from the fixed documentation manifest in this test (CWE-22). |
 | `docs/deferred_wipe_guard_test.go:45` | walking the repo's own tree (CWE-22) |

@@ -62,7 +62,7 @@ func TestSerialsIncreaseWithinOneAuthority(t *testing.T) {
 }
 
 // TestSerialStaysExactlyRepresentableInJSON is the guard for the regression this
-// randomisation caused the first time.
+// randomization caused the first time.
 //
 // A 63-bit seed looked fine and broke long-term validation: the token manifest is
 // JSON, an audit anchor is exported and re-verified through the CLI, and on that

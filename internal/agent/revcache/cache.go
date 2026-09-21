@@ -137,7 +137,7 @@ func (c *Cache) Refresh(ctx context.Context) error {
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	// A CRL number that went BACKWARDS is a rollback, and the cache refuses it.
+	// A CRL number that went BACKWARD is a rollback, and the cache refuses it.
 	// Whoever served it is either badly out of date or replaying an older list
 	// to un-revoke something, and neither is a reason to replace a newer one.
 	if len(c.der) > 0 && info.Number < c.info.Number {

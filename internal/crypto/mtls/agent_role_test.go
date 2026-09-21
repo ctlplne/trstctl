@@ -83,7 +83,7 @@ func TestAgentRoleStampedByCANotCSR(t *testing.T) {
 	}
 }
 
-// TestAgentCertWithoutRoleSANReadsAsHost pins the migration behaviour: every agent
+// TestAgentCertWithoutRoleSANReadsAsHost pins the migration behavior: every agent
 // enrolled before roles existed keeps working, as a host agent, rather than being
 // read as capability-less and stranded.
 func TestAgentCertWithoutRoleSANReadsAsHost(t *testing.T) {

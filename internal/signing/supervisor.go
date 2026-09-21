@@ -73,7 +73,7 @@ func StartChild(ctx context.Context, binaryPath, socketPath string, extraArgs ..
 
 // Supervisor keeps the signer child process running: it launches
 // cmd/trstctl-signer, and if the child exits it relaunches it with capped
-// exponential backoff until its context is cancelled. The control plane signs
+// exponential backoff until its context is canceled. The control plane signs
 // only through the current child (AN-4); when the child is down, Client returns
 // nil and signing operations fail closed.
 //
@@ -230,7 +230,7 @@ func (s *Supervisor) run(ctx context.Context, binaryPath, socketPath string, rea
 			s.restarts.Add(1)
 		}
 
-		// CommandContext so cancelling the supervisor terminates the child; a
+		// CommandContext so canceling the supervisor terminates the child; a
 		// graceful SIGINT with a kill fallback after WaitDelay.
 		cmd := exec.CommandContext(ctx, binaryPath, append([]string{"--socket", socketPath}, extraArgs...)...) // #nosec G204 -- spawns the repo's own signer binary; AN-4 child-process mode (CWE-78)
 		cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }

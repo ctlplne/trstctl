@@ -26,7 +26,7 @@ describe("hasPermission", () => {
     expect(hasPermission(user, "owners:write")).toBe(false);
   });
 
-  it("honours the wildcard, which is how unrestricted access is expressed", () => {
+  it("honors the wildcard, which is how unrestricted access is expressed", () => {
     expect(hasPermission({ permissions: [wildcardPermission] }, "anything:at:all")).toBe(true);
   });
 });

@@ -6,7 +6,7 @@
 // external CA, the host-custody keys the endpoint preview requires. Each
 // template below mirrors the required target config fields the control plane
 // validates (see docs/features/deployment-connectors.md) and, for host-executed
-// families, the custody and verification keys the enrolled host agent honours.
+// families, the custody and verification keys the enrolled host agent honors.
 // Values are placeholders an operator replaces; secret fields are references,
 // never values.
 

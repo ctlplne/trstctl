@@ -18,7 +18,7 @@ import (
 // hostname simply points it at 169.254.169.254, and a grant that reads "may reach
 // my vendor API" delivers the cloud metadata service instead. No rebinding race
 // is needed — one A record does it. The old comment on dial() claimed the
-// positive list made this stronger than an SSRF check, which had it backwards:
+// positive list made this stronger than an SSRF check, which had it backward:
 // a positive list of names constrains nothing about resolved addresses.
 func TestGrantedNamesCannotResolveToTheMetadataService(t *testing.T) {
 	for _, addr := range []string{

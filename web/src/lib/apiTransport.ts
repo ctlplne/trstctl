@@ -114,7 +114,7 @@ export function setAuthenticatedBrowserTenantID(tenantID: string | null | undefi
 
 /** Read the preview-isolation wall. A reader rather than an exported binding,
  * so this module stays the only writer (epic J1's audit download needs to
- * honour the same wall without being able to lower it). */
+ * honor the same wall without being able to lower it). */
 export function previewTransportIsIsolated(): boolean {
   return previewTransportIsolated;
 }

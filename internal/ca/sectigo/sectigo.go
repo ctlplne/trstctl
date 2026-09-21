@@ -58,7 +58,7 @@ type Config struct {
 }
 
 // backend talks the SCM SSL REST API. It is the only CA-specific code; the
-// template supplies the ca.CA behaviour.
+// template supplies the ca.CA behavior.
 type backend struct {
 	cfg          Config
 	client       *http.Client

@@ -668,7 +668,7 @@ func (o *Orchestrator) ResolveOwnershipConflict(ctx context.Context, tenantID, i
 		return fmt.Errorf("orchestrator: no conflict named")
 	}
 	if strings.TrimSpace(by) == "" {
-		return fmt.Errorf("orchestrator: a resolution needs the operator who made it; an unattributed judgement cannot be questioned later")
+		return fmt.Errorf("orchestrator: a resolution needs the operator who made it; an unattributed judgment cannot be questioned later")
 	}
 	if strings.TrimSpace(resolution) == "" {
 		return fmt.Errorf("orchestrator: a resolution needs a reason. Closing a disagreement without saying which side was right leaves the next reader exactly where they started")

@@ -95,7 +95,7 @@ func TestAnUnknownExpiryFallsBackToTheCadence(t *testing.T) {
 //
 // Ten thousand agents installed by the same automation hold near-identical
 // expiry times. Without jitter they renew in the same second, and the herd
-// arrives exactly during recovery from the outage that synchronised them.
+// arrives exactly during recovery from the outage that synchronized them.
 func TestJitterSpreadsAFleetThatEnrolledTogether(t *testing.T) {
 	t.Parallel()
 	now := time.Now()

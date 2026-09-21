@@ -37,7 +37,7 @@ func TestServedFixtureReleasesEverySubsystemPool(t *testing.T) {
 
 // cleanupServedServer registers cleanup immediately after a successful Build.
 // Register listener cleanup afterward so no request is using the server when
-// its resources close. Tests own delivery: a cancelled context prevents teardown
+// its resources close. Tests own delivery: a canceled context prevents teardown
 // from sending deliberately pending commands to targets that may already be gone.
 func cleanupServedServer(t *testing.T, srv *Server) {
 	t.Helper()

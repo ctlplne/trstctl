@@ -82,7 +82,7 @@ func TestChartIsStructurallyComplete(t *testing.T) {
 // only over a shared in-memory UDS — and both containers run a restrictive
 // securityContext.
 //
-// Behavioural (OPS-008): the old version string-matched "trstctl-signer",
+// Behavioral (OPS-008): the old version string-matched "trstctl-signer",
 // "/run/trstctl", "emptyDir", "runAsNonRoot" anywhere in the template text — it
 // would pass even if those tokens were in unrelated places. This renders the
 // Deployment, finds the signer container as a PARSED object, and asserts the
@@ -264,7 +264,7 @@ func TestReadinessProbeUsesReadyCheck(t *testing.T) {
 }
 
 // TestExternalDatastoresAreTheDefault: the chart deploys against EXTERNAL
-// PostgreSQL and NATS (the production/tested path). Behavioural (OPS-008): instead
+// PostgreSQL and NATS (the production/tested path). Behavioral (OPS-008): instead
 // of grepping the configMap text for "external", it renders the configMap with the
 // DEFAULT values and asserts the resolved env values are actually "external" — so a
 // values default flipped to in-process would FAIL here.
@@ -311,7 +311,7 @@ func TestBulkheadValuesRenderConfigMap(t *testing.T) {
 }
 
 // TestNetworkPolicyAndTLS: a NetworkPolicy ships (default-deny posture) and TLS is
-// configurable (R1.3). Behavioural (OPS-008): render the NetworkPolicy and assert it
+// configurable (R1.3). Behavioral (OPS-008): render the NetworkPolicy and assert it
 // is a structurally-valid object whose policyTypes lock BOTH directions (parsed list,
 // not substring), and that the TLS-mode env key the chart wires is one the binary
 // reads.
@@ -1215,11 +1215,11 @@ func TestSecretTemplateRendersEvalSecretsAsSeparateDocuments(t *testing.T) {
 	}
 }
 
-// --- Behavioural render + reconciliation helpers (OPS-008) -------------------
+// --- Behavioral render + reconciliation helpers (OPS-008) -------------------
 //
 // These render the chart templates into REAL Kubernetes objects (parsed YAML) and
 // reconcile the env the chart wires against the binary's config loader, so the helm
-// tests assert behaviour (a structurally-valid, correctly-wired render) rather than
+// tests assert behavior (a structurally-valid, correctly-wired render) rather than
 // substrings. `helm template` does the authoritative render in CI; this local render
 // pins the structural + wiring facts.
 

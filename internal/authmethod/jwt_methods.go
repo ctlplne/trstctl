@@ -362,7 +362,7 @@ func authenticateJWT(credential []byte, opts jwtMethodOptions) (verifiedJWT, err
 	}
 	if opts.replay != nil {
 		if reg.JTI == "" {
-			return verifiedJWT{}, fmt.Errorf("%s: token has no jti (replay defence requires one)", methodName)
+			return verifiedJWT{}, fmt.Errorf("%s: token has no jti (replay defense requires one)", methodName)
 		}
 		if !opts.replay.Add(reg.JTI, time.Unix(reg.Exp, 0), nowT) {
 			return verifiedJWT{}, fmt.Errorf("%s: token replayed (jti already seen)", methodName)

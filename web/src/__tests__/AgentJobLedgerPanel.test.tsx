@@ -32,7 +32,7 @@ function posture(overrides: Partial<AgentJobPosture> = {}): AgentJobPosture {
   } as AgentJobPosture;
 }
 
-// valueFor reads the <dd> beside a labelled <dt>. Matching on text alone would
+// valueFor reads the <dd> beside a labeled <dt>. Matching on text alone would
 // pick up the redemption counters, which are legitimately zero at the same time.
 function valueFor(label: string): HTMLElement {
   const term = screen.getByText(label);

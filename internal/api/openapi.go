@@ -1602,7 +1602,7 @@ func componentSchemas() map[string]*Schema {
 			"attempts": {Type: "integer"},
 		}, "status", "attempts"),
 	}, "identity_id", "request_key", "state")
-	identityIssuanceResult.Description = "Exact accepted issuance and its recorded public certificate. Failed means the original receiver command exhausted delivery and will not retry automatically; it does not prove no upstream certificate was signed. Unavailable means neither a recorded leaf nor its delivery bookkeeping is retained. Cancelled means the original command was stopped after revocation or retirement; no more attempts may run and it cannot be retried. Pending also covers delivery handed to an asynchronous host agent. A recorded certificate takes precedence over receiver status; it is not proof of deployment or listener verification. Reads never retry issuance."
+	identityIssuanceResult.Description = "Exact accepted issuance and its recorded public certificate. Failed means the original receiver command exhausted delivery and will not retry automatically; it does not prove no upstream certificate was signed. Unavailable means neither a recorded leaf nor its delivery bookkeeping is retained. Canceled means the original command was stopped after revocation or retirement; no more attempts may run and it cannot be retried. Pending also covers delivery handed to an asynchronous host agent. A recorded certificate takes precedence over receiver status; it is not proof of deployment or listener verification. Reads never retry issuance."
 	identityDeploymentEvidence := object(map[string]*Schema{
 		"identity_id": uuid(), "read_at": timestamp(),
 		"receipt": ref("ConnectorDelivery"), "certificate": ref("Certificate"),
@@ -2656,7 +2656,7 @@ func componentSchemas() map[string]*Schema {
 		"last_drill":    ref("DRDrill"),
 		"drill_history": {Type: "array", Items: ref("DRDrill")},
 	}, "backup_configured", "verified", "artifacts_checked", "artifacts_unverifiable", "detail", "guidance")
-	// I4: recent enrolment refusals, classified.
+	// I4: recent enrollment refusals, classified.
 	enrollmentDiagnostic := object(map[string]*Schema{
 		"id":       str(),
 		"protocol": {Type: "string", Enum: []string{"acme", "est", "scep", "cmp", "adcs"}},
@@ -3306,7 +3306,7 @@ func componentSchemas() map[string]*Schema {
 	}, "served", "pools")
 	rotationRun := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "identity_id": uuid(), "outbox_id": {Type: "integer"},
-		"status":  {Type: "string", Enum: []string{"running", "succeeded", "failed", "cancelled"}, Description: "Cancelled means retained identity revocation or retirement stopped queued issuance work; it does not undo an external effect."},
+		"status":  {Type: "string", Enum: []string{"running", "succeeded", "failed", "cancelled"}, Description: "Canceled means retained identity revocation or retirement stopped queued issuance work; it does not undo an external effect."},
 		"trigger": str(), "reason": str(), "predecessor_fingerprint": str(),
 		"successor_fingerprint": str(), "rollback_ref": str(), "error": str(),
 		"idempotency_key": str(), "created_at": timestamp(), "updated_at": timestamp(),

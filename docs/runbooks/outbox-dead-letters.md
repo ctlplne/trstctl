@@ -55,7 +55,7 @@ evidence remains visible.
 4. The gauge re-samples on the next health probe; a drained ordinary bucket
    returns to zero and the alert clears. A remediated secret-sync bucket keeps its
    historical failed count, so close the incident through the alerting system's
-   exact-series acknowledgement/silence recorded in step 3.
+   exact-series acknowledgment/silence recorded in step 3.
 
 ## Why there is no automatic sweep
 

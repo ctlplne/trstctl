@@ -15,7 +15,7 @@ import (
 // This is the whole design constraint. A tool that says "your DNS record is
 // missing" when the responder was unreachable sends an operator to the zone file
 // for an hour before they think to doubt it — and they will doubt the tool
-// afterwards, on the occasions it was right.
+// afterward, on the occasions it was right.
 //
 // So the tests that matter most are the ones asserting the classifier DECLINES.
 
@@ -67,7 +67,7 @@ func TestAnUnreachableChallengeIsNotReportedAsAWrongValue(t *testing.T) {
 	}
 }
 
-// An unrecognised problem type produces "unknown", not a guess.
+// An unrecognized problem type produces "unknown", not a guess.
 func TestAnUnrecognisedFailureIsNotGuessedAt(t *testing.T) {
 	t.Parallel()
 	for _, problem := range []string{

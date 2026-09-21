@@ -108,7 +108,7 @@ func runIsolationProbes(ctx context.Context, s *store.Store, writeProbe bool) []
 }
 
 // runWriteProbes performs the cross-tenant write attempts against two
-// ephemeral probe tenants. Rows are deleted afterwards and the deletion is
+// ephemeral probe tenants. Rows are deleted afterward and the deletion is
 // verified; failure to clean up is itself a FAIL (emitted as ISO-CLEAN).
 func runWriteProbes(ctx context.Context, s *store.Store) (out []Probe) {
 	tenantA, tenantB := newProbeTenantID(), newProbeTenantID()

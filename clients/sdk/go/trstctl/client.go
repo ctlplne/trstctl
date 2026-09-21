@@ -588,7 +588,7 @@ func backoff(p RetryPolicy, attempt int, retryAfter time.Duration) time.Duration
 	return d
 }
 
-// sleepCtx waits for d or until ctx is done, returning ctx.Err() if cancelled.
+// sleepCtx waits for d or until ctx is done, returning ctx.Err() if canceled.
 func sleepCtx(ctx context.Context, d time.Duration) error {
 	if d <= 0 {
 		return ctx.Err()

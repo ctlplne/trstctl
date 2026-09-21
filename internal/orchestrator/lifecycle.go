@@ -97,7 +97,7 @@ func EventTypeFor(from, to State) (string, bool) {
 // LifecycleEventTypes returns the distinct set of event types the lifecycle state
 // machine emits, derived from the transition registry (the source of truth). The
 // COVER-008 completeness test uses it to assert every served lifecycle transition
-// maps to a catalogued event name in the event ledger — so a new transition cannot
+// maps to a cataloged event name in the event ledger — so a new transition cannot
 // ship an event type the audit catalog does not know about.
 func LifecycleEventTypes() map[string]struct{} {
 	out := make(map[string]struct{}, len(transitionEvents))
@@ -124,7 +124,7 @@ var ErrInvalidTransition = errors.New("orchestrator: invalid lifecycle transitio
 
 // ErrStaleLifecyclePreview means the identity changed after an operator
 // reviewed a lifecycle plan. The action must be previewed again; silently
-// applying an old plan would make review theatre rather than authority.
+// applying an old plan would make review theater rather than authority.
 var ErrStaleLifecyclePreview = errors.New("orchestrator: stale lifecycle preview")
 
 // ErrRenewalWorkPending prevents manual and scheduled renewals from overlapping

@@ -179,7 +179,7 @@ func (p *Provider) change(ctx context.Context, action, name, value string) error
 	}
 	req.Header.Set("Content-Type", "text/xml")
 	// Record the XML body so the SigV4 signer hashes exactly the bytes sent, then run
-	// the shared cloudhttp round-trip (bounded read, non-2xx normalisation, drain;
+	// the shared cloudhttp round-trip (bounded read, non-2xx normalization, drain;
 	// CODE-006). SigV4 stays here — supplied as a cloudhttp request-signer so its keyed
 	// MAC remains in this package behind the crypto boundary (AN-3). The non-2xx
 	// Route 53's idempotent-delete response is classified while cloudhttp still owns

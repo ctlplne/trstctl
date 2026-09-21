@@ -39,7 +39,7 @@ func TestSignerRestartsCounterIsMonotonic(t *testing.T) {
 	// exported counter.
 	m.Observe(true, 1)
 	if got := renderProm(t, reg); !strings.Contains(got, "trstctl_signer_restarts_total 3") {
-		t.Errorf("counter must not go backwards; want 3:\n%s", got)
+		t.Errorf("counter must not go backward; want 3:\n%s", got)
 	}
 	// A higher value adds only the delta.
 	m.Observe(true, 5)

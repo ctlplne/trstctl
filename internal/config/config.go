@@ -716,7 +716,7 @@ type Protocols struct {
 	// protection identity must chain to. CMP carries that identity in the
 	// message's own extraCerts, so without anchors the protection check proves
 	// only that the sender signed their own message and a self-signed key pair
-	// is enough to enrol. Served CMP refuses to enrol while this is unset.
+	// is enough to enroll. Served CMP refuses to enroll while this is unset.
 	CMPClientTrustAnchorFile string `json:"cmp_client_trust_anchor_file,omitempty"`
 	// CMPAllowRAEnrollment is the explicit RFC 4210 registration-authority
 	// opt-in (AUD-201 follow-up H1/V22). Off (the default), the CMP mount
@@ -1121,7 +1121,7 @@ type Lifecycle struct {
 	// MaintenanceWindows restrict when the scheduler may renew (epic D6).
 	//
 	// A renewal deploys to a listener and reloads a service, and there are hours
-	// in every organisation's week when nobody wants that unattended — a change
+	// in every organization's week when nobody wants that unattended — a change
 	// freeze, a month-end close, a trading window. Before this the only control
 	// was to switch renewal off, which trades an outage risk for an expiry risk.
 	//
@@ -1551,7 +1551,7 @@ type Backup struct {
 	// by something already holding the KEK.
 	ManifestSigningKeyFile string `json:"manifest_signing_key_file,omitempty"`
 	// TrustedManifestKeyFiles lists the deployment public keys whose signed
-	// artifacts this deployment will restore. Empty keeps the previous behaviour
+	// artifacts this deployment will restore. Empty keeps the previous behavior
 	// (signatures recorded but not required), which is what an in-place restore of
 	// this deployment's own backup needs. Set it on a disaster-recovery target and
 	// an artifact from an unknown deployment is refused.
@@ -2137,7 +2137,7 @@ type AgentChannel struct {
 	// That is deliberate: a kind should be enabled when an agent-side executor for
 	// it exists, and handing out work nothing can perform fills a queue while the
 	// control plane's own worker stops doing it. Anything outside the allowlist is
-	// dropped rather than honoured, so naming ca.issue here does not move
+	// dropped rather than honored, so naming ca.issue here does not move
 	// CA-adjacent effects onto a host.
 	ClaimableJobKinds []string `json:"claimable_job_kinds,omitempty"`
 }

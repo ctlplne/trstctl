@@ -57,7 +57,7 @@ const receipt = {
     "served React web console",
     "authenticated shell navigation",
     "shared data grid and dialog primitives",
-    "keyboard-only and screen-reader-labelled flows",
+    "keyboard-only and screen-reader-labeled flows",
     "reduced-motion and RTL behavior",
   ],
   automated_gates: [

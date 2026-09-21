@@ -115,7 +115,7 @@ func TestServedFirstLeafResultIsExactPendingIdempotentAndReplayable(t *testing.T
 	if counts["issuance.server_side_keygen"] != 0 {
 		t.Fatal("caller CSR fell back to server key generation")
 	}
-	// Lost create/transition acknowledgements must not select another identity/key.
+	// Lost create/transition acknowledgments must not select another identity/key.
 	if got := servedCreateID(t, h, token, "first-leaf-create", "/api/v1/identities", identityBody); got != identity {
 		t.Fatal("creation retry changed identity")
 	}

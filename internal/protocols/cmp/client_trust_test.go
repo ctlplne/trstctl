@@ -51,10 +51,10 @@ func TestCMPRefusesUnanchoredProtectionIdentity(t *testing.T) {
 }
 
 // TestCMPAcceptsAnchoredProtectionIdentity keeps the guard honest: a client
-// whose protection identity was issued by the configured anchor still enrols.
+// whose protection identity was issued by the configured anchor still enrolls.
 //
 // DELIBERATE CONTRACT CHANGE (AUD-201 follow-up H1/V22): this test used to pin
-// the UNBOUND behaviour — protection identity "anchored-device" enrolling a
+// the UNBOUND behavior — protection identity "anchored-device" enrolling a
 // CSR for "device-1" — which meant any anchored credential could mint ANY name
 // the profile admitted. That third-party shape is now the RFC 4210 RA case and
 // requires the explicit AllowRAEnrollment opt-in, exercised here; the default

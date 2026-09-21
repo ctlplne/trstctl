@@ -27,7 +27,7 @@ import (
 // lockDynamicSecretOperationTx before touching either table, so both walks serialize
 // on one lock and no cycle can form.
 //
-// This test is a SOURCE-LEVEL guard, deliberately. The behavioural reproduction
+// This test is a SOURCE-LEVEL guard, deliberately. The behavioral reproduction
 // needs a live PostgreSQL and two racing transactions, and it only fired about 1 in
 // 60 runs under CPU load -- a regression test that flaky gets deleted as noise
 // within a month. What actually keeps the class dead is the invariant "the lock is

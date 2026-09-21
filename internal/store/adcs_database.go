@@ -38,7 +38,7 @@ type ADCSDatabaseSummary struct {
 
 // ApplyADCSDatabaseIngestedTx projects adcs.ca_database.ingested. The event
 // sequence guards it monotone so a delayed tail replay cannot move the row
-// backwards to an older sweep.
+// backward to an older sweep.
 func (s *Store) ApplyADCSDatabaseIngestedTx(ctx context.Context, tx pgx.Tx, sum ADCSDatabaseSummary, eventSequence uint64) error {
 	_, err := tx.Exec(ctx,
 		`INSERT INTO adcs_ca_databases

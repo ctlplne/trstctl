@@ -268,7 +268,7 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// F38 adds the read-only, effect-free ephemeral API-key preview command.
 	// F39 adds the read-only, effect-free secret-scan preview command.
 	// F65 adds the read-only configured-provider catalog and effect-free lease
-	// preview commands; issue, read, renew, and revoke were already catalogued.
+	// preview commands; issue, read, renew, and revoke were already cataloged.
 	// F66 adds read-only complete key-version history plus effect-free sealed
 	// restore and KMIP runtime posture, then F68 added the effect-free
 	// `secrets syncs preview` command, raising the catalog to 438. F50's managed

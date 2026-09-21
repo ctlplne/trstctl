@@ -1313,7 +1313,7 @@ describe("api CSRF contract (SEC-001)", () => {
     });
   });
 
-  it("adds wildcard DNS-01 acknowledgement attributes only after operator acknowledgement", () => {
+  it("adds wildcard DNS-01 acknowledgment attributes only after operator acknowledgment", () => {
     expect(firstCertificateIdentityRequest({ name: "*.payments.example" }, "owner-1")).toEqual({
       kind: "x509_certificate",
       name: "*.payments.example",

@@ -331,7 +331,7 @@ func TestSandboxRefusesToTreatTheGrantRootAsAFile(t *testing.T) {
 	}
 }
 
-// TestMissingGrantRootFailsAtUseNotAtLoad pins the load-time behaviour for a
+// TestMissingGrantRootFailsAtUseNotAtLoad pins the load-time behavior for a
 // configured prefix that does not exist: the plugin still loads (it may never
 // touch that prefix), and the operation that needs it fails loudly.
 func TestMissingGrantRootFailsAtUseNotAtLoad(t *testing.T) {

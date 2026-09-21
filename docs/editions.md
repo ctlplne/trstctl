@@ -272,7 +272,7 @@ remove those lines itself, since rewriting an operator's config file from the
 running process would put the file out of step with the system it describes.
 
 This is a local command rather than a served route because of the bootstrap
-problem: a route that hands out provider authority must itself be authorised by
+problem: a route that hands out provider authority must itself be authorized by
 somebody holding provider authority, and at install time no such operator
 exists. The command opens the configured PostgreSQL and JetStream stores,
 bootstraps any pre-event delegation rows exactly once, appends one immutable

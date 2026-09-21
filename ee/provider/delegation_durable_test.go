@@ -12,7 +12,7 @@ import (
 // L1: the delegation rule must be REACHED, not merely written.
 //
 // delegation.go and its unit tests existed for a full session while every
-// served provider route still authorised any authenticated operator against any
+// served provider route still authorized any authenticated operator against any
 // customer, because nothing constructed a set and nothing consulted one. That
 // is the exact defect class this backlog exists to remove, and a rule is only
 // as real as the call site that runs it.
@@ -78,7 +78,7 @@ func TestANilDurableSourceRefusesRatherThanReturningAnEmptyAllowlist(t *testing.
 
 // The grant command's vocabulary is closed.
 //
-// A typo'd operation stored as-is would authorise nothing, and the person who
+// A typo'd operation stored as-is would authorize nothing, and the person who
 // ran the command would see "granted" and be refused later with no way to
 // connect the two.
 func TestGrantRefusesAnOperationOutsideTheVocabulary(t *testing.T) {

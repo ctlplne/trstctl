@@ -636,7 +636,7 @@ creating access or sending it.
 The runner uses a self-service 15-minute token scoped only to the selected
 operation. A write cannot run until its draft validates and the operator confirms
 the exact mutation preview; changing any input clears that confirmation. In-flight
-requests can be cancelled, expired tokens fail closed in the browser, and a live
+requests can be canceled, expired tokens fail closed in the browser, and a live
 token can be revoked immediately. The response starts with a plain-language answer,
 then shows the real status and content type. RFC 7807 problem details remain visible,
 and **Raw response** retains the exact payload. A denied or unavailable contract

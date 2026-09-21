@@ -20,7 +20,7 @@ import (
 //
 // A unit test cannot move the host clock, so this pins the observable
 // consequence: refill must track real elapsed time as the database measures it,
-// and must never run backwards.
+// and must never run backward.
 func TestRateLimitRefillUsesTheDatabaseClock(t *testing.T) {
 	st := newStore(t)
 	ctx := context.Background()

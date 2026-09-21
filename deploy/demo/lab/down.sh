@@ -26,7 +26,7 @@ cd "$repo_dir" || exit 1
 compose="docker compose -p $lab_project -f deploy/demo/docker-compose.yml -f deploy/demo/lab/docker-compose.yml"
 # Every profile, so out-of-profile services (the control plane) are torn down too.
 $compose --profile partner-lab --profile partner-lab-customer down --volumes --remove-orphans || exit $?
-# Belt and braces: anything still labelled or named for this project is removed.
+# Belt and braces: anything still labeled or named for this project is removed.
 leftover_containers=$(docker ps -aq --filter "label=com.docker.compose.project=$lab_project" --filter "name=^${lab_project}-" | sort -u)
 if [ -n "$leftover_containers" ]; then docker rm -f $leftover_containers >/dev/null || exit $?; fi
 leftover_volumes=$(docker volume ls -q --filter "label=com.docker.compose.project=$lab_project")

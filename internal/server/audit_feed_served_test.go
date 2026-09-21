@@ -124,7 +124,7 @@ func auditFeedPreviewCountsF9(t *testing.T, h *servedHarness) (feeds, outbox, id
 // AUD-52 acceptance is a delivery journey, not another export-format test. The
 // API records standing tenant instructions, the scheduler records exact bounded
 // work before any network call, the outbox owns retries, and only a collector
-// acknowledgement becomes green evidence.
+// acknowledgment becomes green evidence.
 func TestServedAuditFeedsDeliverSplunkAndSentinelWithRetryAUD52(t *testing.T) {
 	collector := newAuditFeedCollectorAUD52(t)
 	t.Setenv("TRSTCTL_AUD52_SPLUNK_TOKEN", "aud52-splunk-token")

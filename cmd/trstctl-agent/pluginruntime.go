@@ -152,7 +152,7 @@ func pluginCapability(name string) (pluginhost.Capability, bool) {
 	}
 }
 
-// startEnrollProxy serves the LAN-local enrolment proxy, if configured.
+// startEnrollProxy serves the LAN-local enrollment proxy, if configured.
 //
 // Returns a report function and a stop function that are always safe to call. A failure to bind is
 // reported and does NOT bring the agent down: the proxy is one of several things
@@ -182,12 +182,12 @@ func startEnrollProxy(ctx context.Context, o agentOptions, client *http.Client) 
 	}
 	pool, err := enrollproxy.NewPoolWithPublicURL(upstreams, publicURL, client, 0)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "trstctl-agent: enrolment proxy:", err)
+		fmt.Fprintln(os.Stderr, "trstctl-agent: enrollment proxy:", err)
 		return notServing, func() {}
 	}
 	listener, err := net.Listen("tcp", listen)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "trstctl-agent: enrolment proxy cannot bind:", err)
+		fmt.Fprintln(os.Stderr, "trstctl-agent: enrollment proxy cannot bind:", err)
 		return notServing, func() {}
 	}
 	srv := &http.Server{
@@ -200,9 +200,9 @@ func startEnrollProxy(ctx context.Context, o agentOptions, client *http.Client) 
 	go func() {
 		defer close(done)
 		defer serving.Store(false)
-		fmt.Printf("trstctl-agent: enrolment proxy serving segment %s at %s on %s -> %v\n", segment, publicURL, listener.Addr(), upstreams)
+		fmt.Printf("trstctl-agent: enrollment proxy serving segment %s at %s on %s -> %v\n", segment, publicURL, listener.Addr(), upstreams)
 		if err := srv.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			fmt.Fprintln(os.Stderr, "trstctl-agent: enrolment proxy stopped:", err)
+			fmt.Fprintln(os.Stderr, "trstctl-agent: enrollment proxy stopped:", err)
 		}
 	}()
 	enrollProxyPool.Store(pool)

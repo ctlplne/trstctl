@@ -12,7 +12,7 @@ physically lives.
 The mental model: trstctl is a **passport office**. A CA prints and signs passports; a
 *profile* is the rulebook for what a valid passport may say; a *registration
 authority* checks your paperwork but can't print the passport itself; *revocation* is
-the bulletin of cancelled passports; and the *HSM* is the locked vault holding the
+the bulletin of canceled passports; and the *HSM* is the locked vault holding the
 official seal.
 
 ## Why it exists
@@ -105,7 +105,7 @@ trstctl ships `Issuer`, `ClusterIssuer`, and `Certificate` CRDs in the `trstctl.
 API group. The Kubernetes agent reconciles them, marks issuers Ready, signs
 cert-manager `CertificateRequest`s only when they target an existing trstctl issuer,
 signs approved native `CertificateSigningRequest`s from `certificates.k8s.io/v1`, and
-can fulfil a trstctl-native `Certificate` directly into a Kubernetes TLS Secret. The
+can fulfill a trstctl-native `Certificate` directly into a Kubernetes TLS Secret. The
 read-only `GET /api/v1/kubernetes/certificate-signing-requests` / CLI
 `trstctl-cli kubernetes csr` report the served CAP-K8S-04 surface, supported signer
 names, required RBAC, and residuals.

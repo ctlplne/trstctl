@@ -32,7 +32,7 @@ import (
 // cannot see it by construction, because they are the thing standing in for the
 // caller that does not exist.
 //
-// So these tests assert the WIRING, not the behaviour. They are deliberately
+// So these tests assert the WIRING, not the behavior. They are deliberately
 // cheap and deliberately about plumbing.
 
 func TestTheRestoreDrillSchedulerIsRegisteredAsARuntimeWorker(t *testing.T) {
@@ -292,8 +292,8 @@ func TestAZeroDrillIntervalDisablesRatherThanDefaulting(t *testing.T) {
 		{"explicit \"0\" disables", true, 0, false, 0},
 		{"negative disables", true, -time.Second, false, 0},
 		{"no runner disables", false, time.Hour, false, 0},
-		{"a positive interval is honoured exactly", true, 6 * time.Hour, true, 6 * time.Hour},
-		{"the resolved default is honoured", true, config.DefaultBackupDrillInterval, true, config.DefaultBackupDrillInterval},
+		{"a positive interval is honored exactly", true, 6 * time.Hour, true, 6 * time.Hour},
+		{"the resolved default is honored", true, config.DefaultBackupDrillInterval, true, config.DefaultBackupDrillInterval},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

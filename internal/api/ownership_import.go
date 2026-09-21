@@ -86,7 +86,7 @@ func (a *API) importOwnership(w http.ResponseWriter, r *http.Request) {
 			if !found {
 				// An import that invented owners would let a typo create a parallel
 				// estate nobody is looking at. Naming an unknown owner is a conflict
-				// with the estate, not a licence to add one.
+				// with the estate, not a license to add one.
 				out.Conflicts = append(out.Conflicts, ownershipConflict{
 					Field: "owner", IncomingValue: rec.OwnerName, IncomingRef: rec.SourceRef,
 					IncomingSource: string(ownership.SourceCSVImport),

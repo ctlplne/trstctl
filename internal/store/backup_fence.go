@@ -177,7 +177,7 @@ func (s *Store) WithBackupWriteFence(
 		conn.Release()
 	}()
 	if _, err := conn.Exec(ctx, "SELECT pg_advisory_lock($1)", BackupWriteFenceAdvisoryLockKey); err != nil {
-		// A cancelled/failed round trip can make it ambiguous whether PostgreSQL
+		// A canceled/failed round trip can make it ambiguous whether PostgreSQL
 		// granted the session lock before the client saw the error. Never return
 		// that session to the pool: closing it makes either state safe.
 		raw := conn.Hijack()

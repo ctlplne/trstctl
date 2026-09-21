@@ -185,7 +185,7 @@ func (p *Provider) change(ctx context.Context, body changeBody) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", p.creds.BearerToken))
 
-	// The shared cloudhttp round-trip owns the bounded read, non-2xx normalisation,
+	// The shared cloudhttp round-trip owns the bounded read, non-2xx normalization,
 	// and drain (CODE-006). Idempotent semantic responses are classified while
 	// cloudhttp still owns the bounded mutable bytes. Only a closed sentinel or
 	// status survives; cloudhttp wipes the body before returning (AN-8).

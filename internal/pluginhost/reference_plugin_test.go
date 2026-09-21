@@ -39,7 +39,7 @@ var abiArity = map[string]int{
 // reference plugins still declared `(param i32)` and would have failed to load
 // with "signature mismatch" for the first author who tried them.
 //
-// The guard checks the declaration, not the behaviour: the import's arity against
+// The guard checks the declaration, not the behavior: the import's arity against
 // the host's published arity, plus the exported memory the ABI requires for
 // passing a path.
 func TestReferencePluginsDeclareTheCurrentABI(t *testing.T) {

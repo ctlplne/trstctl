@@ -82,7 +82,7 @@ func (e EndpointVerification) Verified() bool { return e.Reached && e.Mismatch =
 // The sequence guard is not optional. Boot replays the entire event log without
 // truncating, and the durable tailer can re-deliver an event the inline path
 // already applied; without the guard an out-of-order replay could move an
-// endpoint's state BACKWARDS — resurrecting a stale divergence over a good
+// endpoint's state BACKWARD — resurrecting a stale divergence over a good
 // observation, or worse, a stale good observation over a live divergence.
 //
 // last_good_at uses GREATEST rather than assignment so a failing observation
@@ -270,7 +270,7 @@ func (s *Store) SummarizeEndpointVerifications(ctx context.Context, tenantID str
 //
 // Cross-tenant by necessity — a scheduler must ask "who has work" before it can
 // enter any tenant's scope — so it runs on the system pool with the annotation
-// that marks it as a deliberate AN-1 exemption, and every ROW read afterwards
+// that marks it as a deliberate AN-1 exemption, and every ROW read afterward
 // happens inside WithTenant.
 func (s *Store) TenantsWithVerifiableEndpoints(ctx context.Context) ([]string, error) {
 	rows, err := s.SystemPool().Query(ctx,

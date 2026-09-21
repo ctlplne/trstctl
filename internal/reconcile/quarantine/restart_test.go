@@ -222,7 +222,7 @@ func TestQuarantine_AdmissionRefusesWhenDurableStateReportsOpen(t *testing.T) {
 		t.Fatalf("refusal was not recorded: decision = %+v events = %+v", decision, log.events)
 	}
 
-	// The pinned behaviour must not regress: an observed input from an authority
+	// The pinned behavior must not regress: an observed input from an authority
 	// that is NOT quarantined is still allowed (quarantine_test.go pins this for
 	// the in-process state; it must hold identically through the seam).
 	allowed, err := mgr.Admit(ctx, editionseam.AdmissionRequest{

@@ -14,7 +14,7 @@ import (
 // TestSealAndCommitWipesExportedSigningKeyDER is the AN-8 regression guard for
 // AUD-201 follow-up B2/V6. export() copies each signing key out of locked
 // memory via signer.PKCS8(), whose contract says the caller MUST wipe the copy
-// promptly — but Save wiped only the marshalled JSON, abandoning every signing
+// promptly — but Save wiped only the marshaled JSON, abandoning every signing
 // key's raw DER on the GC heap at every checkpoint, recoverable from a heap
 // dump or core file. This holds references to the exported copies and proves
 // they are all-zero once the commit path returns. Save routes through the same

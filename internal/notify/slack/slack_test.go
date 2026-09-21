@@ -20,7 +20,7 @@ import (
 )
 
 // TestSlackConforms drives the channel through the shared notification conformance
-// harness (the analogue of connector/DNS-01 conformance): construct the channel against
+// harness (the analog of connector/DNS-01 conformance): construct the channel against
 // the double's webhook URL with the double's client, then assert notify.Conform passes
 // and that the double actually served the post.
 func TestSlackConforms(t *testing.T) {
@@ -67,7 +67,7 @@ func TestDeliversFormattedText(t *testing.T) {
 	}
 }
 
-// TestUnknownPathRejected: a post to a path the double does not recognise comes back 404,
+// TestUnknownPathRejected: a post to a path the double does not recognize comes back 404,
 // and the channel surfaces that as an error rather than treating it as delivered. This
 // pins down the "any 2xx is success, everything else is an error" contract.
 func TestUnknownPathRejected(t *testing.T) {

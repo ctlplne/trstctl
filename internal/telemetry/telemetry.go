@@ -118,7 +118,7 @@ func (r *Reporter) ReportOnce(ctx context.Context) error {
 }
 
 // Run reports once immediately, then on each tick of Interval, until ctx is
-// cancelled. It returns immediately, having done nothing, when telemetry is
+// canceled. It returns immediately, having done nothing, when telemetry is
 // disabled. Report errors are swallowed: telemetry must never disrupt the
 // control plane.
 func (r *Reporter) Run(ctx context.Context) {

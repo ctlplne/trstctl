@@ -33,7 +33,7 @@ type workloadCoSignConfig struct {
 	PredecessorKeyPath string // PKCS#8 PEM holding the workload predecessor key
 }
 
-// runWorkloadCoSign serves the co-sign service until ctx is cancelled, then stops it
+// runWorkloadCoSign serves the co-sign service until ctx is canceled, then stops it
 // gracefully. It is a self-contained agent mode (like --secret-inject): it needs no
 // enrollment/connection settings.
 func runWorkloadCoSign(ctx context.Context, cfg workloadCoSignConfig) error {

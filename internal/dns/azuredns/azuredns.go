@@ -169,7 +169,7 @@ func (p *Provider) CleanupTXT(ctx context.Context, name, value string) error {
 
 // do builds an authorized request for the TXT record set named by the FQDN name and
 // runs it through the shared cloudhttp round-trip (bounded read, non-2xx
-// normalisation, drain; CODE-006). allow404 maps a 404 to success (the idempotent-
+// normalization, drain; CODE-006). allow404 maps a 404 to success (the idempotent-
 // cleanup case); any other non-2xx becomes an *apiError whose text never carries the
 // bearer token (AN-8). Azure DNS returns no body the provider reads, so out is nil.
 func (p *Provider) do(ctx context.Context, method, name string, body []byte, allow404 bool) error {

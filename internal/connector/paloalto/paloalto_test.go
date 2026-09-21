@@ -293,7 +293,7 @@ func TestPrivateKeyNeverAppearsInAnyError(t *testing.T) {
 			if bytes.Contains(msg, secretKey) {
 				t.Errorf("error leaked the private key: %q", msg)
 			}
-			// Even a fragment is a leak: PEM armour is public, the base64 payload
+			// Even a fragment is a leak: PEM armor is public, the base64 payload
 			// between the markers is the secret.
 			if bytes.Contains(msg, []byte("ultra-secret-pan-key-material")) {
 				t.Errorf("error leaked private key material: %q", msg)

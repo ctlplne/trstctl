@@ -18,7 +18,7 @@ import (
 // the notification.* outbox destinations (the producer side); this adds the consumer
 // side: a Notifier interface every channel implements, a Dispatcher that delivers a
 // notification.* outbox entry to the registered channels (AN-6), and a conformance
-// harness each channel self-validates against — the notification analogue of the
+// harness each channel self-validates against — the notification analog of the
 // connector SDK (S5.5).
 
 // Notifier delivers an Alert to one channel (Slack, Teams, PagerDuty, OpsGenie, a

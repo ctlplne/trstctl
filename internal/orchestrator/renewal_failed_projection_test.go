@@ -45,7 +45,7 @@ func mustStatus(t *testing.T, st *store.Store, tenantID, identityID, want string
 // never registered them in the projector's lifecycleEventTypes — so ApplyTx
 // fell through to nil and a served renewing -> renewal_failed transition
 // REPORTED SUCCESS while identities.status stayed 'renewing'. Every
-// downstream behaviour then broke: retry edges never fired (from is read off
+// downstream behavior then broke: retry edges never fired (from is read off
 // the projected status), and accepting the standing certificate computed as
 // renewing -> deployed, re-pushing a certificate that was never renewed.
 func TestRenewalFailureProjectsIntoTheReadModel(t *testing.T) {

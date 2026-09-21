@@ -12,11 +12,11 @@ import (
 // TestEventLedgerCoversLifecycleTransitions is the COVER-008 conformance check on
 // the served lifecycle path: every event type the lifecycle state machine emits
 // (derived from the transition registry, the source of truth) must map back to a
-// catalogued entry in the event-name ledger. The audit finding was that some
+// cataloged entry in the event-name ledger. The audit finding was that some
 // mutating GA paths emitted events with no defined feature/action, so an auditor
 // could not filter the trail by feature_id/action. This test makes that
 // impossible to regress for the lifecycle path: add a transition that emits a new
-// event type without cataloguing it in internal/eventledger and this fails.
+// event type without cataloging it in internal/eventledger and this fails.
 //
 // It needs no database — it compares two in-memory tables — but lives in the
 // orchestrator package so the assertion sits next to the state machine it guards
@@ -24,7 +24,7 @@ import (
 func TestEventLedgerCoversLifecycleTransitions(t *testing.T) {
 	for typ := range orchestrator.LifecycleEventTypes() {
 		if !eventledger.HasEventType(typ) {
-			t.Errorf("lifecycle emits event %q that the event ledger does not catalogue; "+
+			t.Errorf("lifecycle emits event %q that the event ledger does not catalog; "+
 				"add a row to internal/eventledger so audit can filter it by feature_id/action (COVER-008)", typ)
 		}
 	}
@@ -91,7 +91,7 @@ var orchestratorCommandEventTypes = []string{
 }
 
 // TestEventLedgerCoversCommandEvents asserts every served orchestrator command event
-// is catalogued, and conversely every ledger entry names a non-empty event type — the
+// is cataloged, and conversely every ledger entry names a non-empty event type — the
 // two-direction completeness contract from COVER-008.
 func TestEventLedgerCoversCommandEvents(t *testing.T) {
 	for _, typ := range orchestratorCommandEventTypes {

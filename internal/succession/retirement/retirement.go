@@ -2,13 +2,13 @@
 
 // Package retirement is the evidence-gated tail of the PCAS loop (PCAS-claims-2, 3, 8).
 // A hybrid→pure-PQC cutover — and the retirement of the superseded predecessor key
-// — proceeds only after a quorum of relying-party acknowledgements that are each
+// — proceeds only after a quorum of relying-party acknowledgments that are each
 // (a) signed by the acknowledging RP, (b) bound to the identity and the epoch being
 // acknowledged, and (c) recorded within a configured validity window; the quorum is
 // evaluated per tenant from AN-2 ledger events. On success the predecessor is
 // revoked (fail-closed) then zeroized through the core byok lifecycle, and an
 // nhi.algorithm.retirement event is emitted that binds a digest of the satisfying
-// acknowledgement set, so the condition is itself offline-verifiable. No PCAS
+// acknowledgment set, so the condition is itself offline-verifiable. No PCAS
 // retirement logic lives in core; this package consumes the core byok lifecycle and
 // the AN-2 ledger only (INV-7, INV-9).
 package retirement
@@ -27,15 +27,15 @@ import (
 	"trstctl.com/trstctl/internal/succession"
 )
 
-// ackDomain separates the RP-acknowledgement signing message from every other
+// ackDomain separates the RP-acknowledgment signing message from every other
 // signed structure. It is frozen: changing it invalidates every prior ack.
 const ackDomain = "trstctl/pcas/rp-ack/v1"
 
 // Errors.
 var (
-	// ErrQuorumNotMet is returned when the acknowledgement quorum is not satisfied;
+	// ErrQuorumNotMet is returned when the acknowledgment quorum is not satisfied;
 	// the cutover and retirement are refused and nothing is emitted (INV-7).
-	ErrQuorumNotMet = errors.New("retirement: acknowledgement quorum not met; cutover refused")
+	ErrQuorumNotMet = errors.New("retirement: acknowledgment quorum not met; cutover refused")
 	// ErrConfig is returned for an unusable controller configuration.
 	ErrConfig = errors.New("retirement: invalid configuration")
 )
@@ -48,7 +48,7 @@ type Target struct {
 	Epoch      uint64
 }
 
-// SignedAck is a relying party's signed post-quantum-capability acknowledgement.
+// SignedAck is a relying party's signed post-quantum-capability acknowledgment.
 // The signature is over AckMessage(TenantID, IdentityID, Epoch, RelyingParty), so
 // it binds the identity and epoch and cannot be replayed onto another identity or
 // epoch. RecordedAt is the AN-2 ledger time at which the ack was recorded; it
@@ -97,7 +97,7 @@ func AckMessage(tenantID, identityID string, epoch uint64, relyingParty string) 
 	return b.Bytes()
 }
 
-// SignAck signs the acknowledgement message for a with signer, returning the
+// SignAck signs the acknowledgment message for a with signer, returning the
 // signature to place in SignedAck.Signature. It is a helper for RP producers and
 // tests; the signer routes through the core AN-3 crypto boundary.
 func SignAck(signer crypto.Signer, tenantID, identityID string, epoch uint64, relyingParty string) ([]byte, error) {
@@ -111,7 +111,7 @@ func (r Roster) verify(ack SignedAck) error {
 		return fmt.Errorf("retirement: relying party %q is not rostered", ack.RelyingParty)
 	}
 	if len(ack.Signature) == 0 {
-		return errors.New("retirement: acknowledgement is unsigned")
+		return errors.New("retirement: acknowledgment is unsigned")
 	}
 	return crypto.VerifyMessage(pub, AckMessage(ack.TenantID, ack.IdentityID, ack.Epoch, ack.RelyingParty), ack.Signature)
 }
@@ -152,7 +152,7 @@ func EvaluateQuorum(acks []SignedAck, target Target, roster Roster, policy Quoru
 	}
 }
 
-// AckSetDigest is the digest binding a set of satisfying acknowledgements, hashed
+// AckSetDigest is the digest binding a set of satisfying acknowledgments, hashed
 // through the core AN-3 boundary. The set is sorted by relying party, then each ack
 // is length-prefix encoded (tenant, identity, epoch, RP, signature), so an auditor
 // with the same acks recomputes the same digest (PCAS-claim-3, offline-verifiable limb).
@@ -172,7 +172,7 @@ func AckSetDigest(acks []SignedAck) []byte {
 	return crypto.SHA256Sum(b.Bytes())
 }
 
-// AcksFromEvents extracts signed acknowledgements from AN-2 ledger events, using
+// AcksFromEvents extracts signed acknowledgments from AN-2 ledger events, using
 // each event's recorded time as the ack's RecordedAt. Non-ack events and events
 // whose schema version is newer than this build understands are skipped, so the
 // evaluation is forward-compatible (quorum is evaluated from ledger events).

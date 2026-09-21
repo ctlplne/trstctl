@@ -60,7 +60,7 @@ func testCSR(t *testing.T, cn string) []byte {
 }
 
 // TestPluginWrapsBackend: the template turns a Backend into a ca.CA, parsing the
-// issued chain and labelling it with the backend's name.
+// issued chain and labeling it with the backend's name.
 func TestPluginWrapsBackend(t *testing.T) {
 	p := catemplate.New(newLocalBackend(t, "wrap-ca"))
 	if p.Name() != "wrap-ca" {
@@ -109,7 +109,7 @@ func TestPluginSurfacesBackendError(t *testing.T) {
 }
 
 // TestConformancePassesForConformingBackend: the shared conformance suite passes
-// for a plugin that honours the contract.
+// for a plugin that honors the contract.
 func TestConformancePassesForConformingBackend(t *testing.T) {
 	p := catemplate.New(newLocalBackend(t, "conforming-ca"))
 	report := catemplate.Conformance(context.Background(), p)

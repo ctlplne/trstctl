@@ -105,7 +105,7 @@ func TestAKeyBearingDeployToAnAgentTargetIsRefused(t *testing.T) {
 	if err := enforceExecutorParity(json.RawMessage(`{"cert_path":"/etc/x"}`),
 		[]byte("-----BEGIN PRIVATE KEY-----")); err != nil {
 		t.Errorf("an unmarked target's legacy deploy was refused: %v; targets that never opted "+
-			"in must not change behaviour because a version shipped", err)
+			"in must not change behavior because a version shipped", err)
 	}
 }
 
@@ -157,7 +157,7 @@ func TestARenewalForAnAgentExecutedTargetQueuesHostWorkAndMintsNothing(t *testin
 	}
 
 	// The realistic migration: the target starts on the legacy path, gets a
-	// certificate the ordinary way, and is marked agent-executed afterwards.
+	// certificate the ordinary way, and is marked agent-executed afterward.
 	// Marking it before first issuance would exercise the first-issuance divert
 	// instead, which has its own test.
 	target := agentExecutedTarget(t)
@@ -565,7 +565,7 @@ func TestFirstIssuanceToAnAgentTargetIsDivertedNotRefused(t *testing.T) {
 	if n := len(dispatcherCertificates(t, h)); n != 0 {
 		t.Errorf("first issuance minted %d certificates for an agent-executed target; the "+
 			"control plane generated a private key for a target that opted out of receiving "+
-			"one, and refusing the deploy afterwards cannot unmake it", n)
+			"one, and refusing the deploy afterward cannot unmake it", n)
 	}
 	payload, role := queuedHostRenewal(t, ctx, h)
 	if len(payload) == 0 {

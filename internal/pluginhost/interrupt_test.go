@@ -14,12 +14,12 @@ import (
 // worker-occupancy defect. The host loaded guests with wazero's DEFAULT runtime
 // config, which runs guest code to completion regardless of the context: a
 // plugin containing an infinite loop occupied its bounded-pool worker forever
-// and could be neither cancelled, shed, nor drained at shutdown. Capability
+// and could be neither canceled, shed, nor drained at shutdown. Capability
 // grants close what a plugin can REACH; nothing bounded how long it could RUN.
 //
 // The fix is WithCloseOnContextDone plus a default per-call deadline. This test
 // pins the property that makes both work — that the context actually reaches the
-// guest — by cancelling before the call and requiring it not to succeed.
+// guest — by canceling before the call and requiring it not to succeed.
 func TestPluginInvocationHonoursContextCancellation(t *testing.T) {
 	h := pluginhost.New()
 	t.Cleanup(func() { _ = h.Close(context.Background()) })
@@ -43,6 +43,6 @@ func TestPluginInvocationHonoursContextCancellation(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(10 * time.Second):
-		t.Fatal("Invoke did not return on a cancelled context; a guest can pin its bounded-pool worker indefinitely")
+		t.Fatal("Invoke did not return on a canceled context; a guest can pin its bounded-pool worker indefinitely")
 	}
 }

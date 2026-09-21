@@ -206,7 +206,7 @@ describe("first-certificate client custody and exact attempt", () => {
     expect(() => checkWizardPublicResult({ ...value, request_key: "another-request" }, saved)).toThrow("result_mismatch");
     expect(() => checkWizardPublicResult({ ...value, certificate_pem: pem }, saved)).toThrow("public_result_invalid");
   });
-  it("refuses a retry grant or pending state for cancelled delivery", async () => {
+  it("refuses a retry grant or pending state for canceled delivery", async () => {
     await submitWizardCertificateAttempt(saved, new AbortController().signal, keep);
     const cancelled: WizardPublicResult = {
       ...result("pending"),
@@ -267,7 +267,7 @@ describe("first-certificate client custody and exact attempt", () => {
       expect(calls).toEqual([]);
     },
   );
-  it("retains required owner attribution and wildcard acknowledgement in the wire body", async () => {
+  it("retains required owner attribution and wildcard acknowledgment in the wire body", async () => {
     expect(wizardCertificateForm.safeParse({ ...input, name: "*.example.test" }).success).toBe(false);
     saved = newWizardCertificateAttempt({ ...input, name: "*.example.test", wildcardAck: true }, principal);
     await submitWizardCertificateAttempt(saved, new AbortController().signal, keep);

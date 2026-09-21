@@ -2,7 +2,7 @@
 
 // Package cloudhttp is the thin shared HTTP round-trip used by trstctl's cloud
 // provider families (KMS backends, DNS-01 providers) so the common request/response
-// plumbing — bounded reads, non-2xx error normalisation, JSON decode, a per-call
+// plumbing — bounded reads, non-2xx error normalization, JSON decode, a per-call
 // timeout floor, and a request-signing seam — lives in one place instead of being
 // copy-pasted into each provider's package-local call()/do() (CODE-006).
 //
@@ -18,7 +18,7 @@
 //   - send the request through an injectable Doer (so tests pass a double),
 //   - read the body under a fixed cap so a hostile/huge response cannot exhaust
 //     memory,
-//   - turn a non-2xx status into a normalised *StatusError carrying only the status,
+//   - turn a non-2xx status into a normalized *StatusError carrying only the status,
 //     after a bounded, byte-native classification pass and explicit body wipe,
 //   - decode a 2xx JSON body into out (when out != nil) or drain-and-discard it.
 //
@@ -32,13 +32,13 @@
 //   - the bearer/API-key KMS backends internal/kms/gcpkms and internal/kms/azurekv;
 //   - internal/kms/awskms, which passes a SigV4 Signer (its keyed MAC stays in the
 //     awskms package, behind the crypto boundary) so AWS keeps its request signing
-//     while sharing the bounded-read / timeout-floor / error-normalisation core;
+//     while sharing the bounded-read / timeout-floor / error-normalization core;
 //   - the eight internal/dns/* DNS-01 providers (cloudflare, ns1, azuredns, googledns,
 //     ultradns, acmedns over their bearer/API-key headers; aws-route53 over a SigV4
 //     Signer; akamai over an EdgeGrid Signer). The signing DNS providers carry their
 //     keyed MAC through internal/crypto exactly as before; only the transport core is
 //     shared. A single change to the timeout floor, the body bound, or the non-2xx
-//     normalisation here is now inherited by every provider at once.
+//     normalization here is now inherited by every provider at once.
 package cloudhttp
 
 import (
@@ -60,7 +60,7 @@ type Doer interface {
 }
 
 // Signer is the per-request signing seam (AWS SigV4, Akamai EdgeGrid). It is called
-// with the request and its already-marshalled body just before the request is sent,
+// with the request and its already-marshaled body just before the request is sent,
 // after the timeout floor has been applied, and is expected only to set
 // authentication headers on req. The body bytes are passed separately because a
 // signature is computed over a digest of the body and req.Body is a single-use
@@ -79,7 +79,7 @@ const (
 	MaxErrorBytes = 4096
 )
 
-// StatusError is a normalised non-2xx response. It deliberately retains only the
+// StatusError is a normalized non-2xx response. It deliberately retains only the
 // status code. Upstream error bodies are attacker-controlled and can echo submitted
 // credentials, so JSON keeps them in a bounded []byte, optionally classifies them,
 // and wipes them before returning (AN-8). Callers may wrap this error with provider
@@ -200,7 +200,7 @@ func JSON(doer Doer, req *http.Request, out any, opts ...Option) error {
 }
 
 // signedBody returns the body bytes a Signer must hash. A provider that signs a
-// request stashes the marshalled body on the request via SetBody (below) so the
+// request stashes the marshaled body on the request via SetBody (below) so the
 // signature is computed over the exact bytes that will be sent; if none was stashed
 // (an empty-body request such as a GET/DELETE), the body is empty.
 func signedBody(req *http.Request) []byte {
@@ -212,7 +212,7 @@ func signedBody(req *http.Request) []byte {
 
 type bodyKey struct{}
 
-// SetBody records the marshalled request body on req's context so a WithSigner Signer
+// SetBody records the marshaled request body on req's context so a WithSigner Signer
 // can hash exactly the bytes that will be transmitted, then returns the updated
 // request. A signing provider builds its *http.Request with this body as the stream
 // and calls SetBody with the same bytes; a nil/empty body (GET/DELETE) needs no call.

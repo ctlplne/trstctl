@@ -137,7 +137,7 @@ func (s *WorkloadAPIServer) FetchX509SVID(_ *workloadpb.X509SVIDRequest, stream 
 //
 // Retained for one release, and recorded every time, because the migration is
 // otherwise invisible: an operator who moves their agents to the host Workload
-// API has no way to tell which workloads are still dialling the old socket, and
+// API has no way to tell which workloads are still dialing the old socket, and
 // "we think everything moved" is exactly the kind of belief this workstream
 // exists to replace with evidence.
 //
@@ -415,7 +415,7 @@ func concatDER(blocks [][]byte) []byte {
 }
 
 // ServeWorkloadAPI registers the Workload API service on a new gRPC server and serves
-// it on the given Unix domain socket until ctx is cancelled. It removes a stale
+// it on the given Unix domain socket until ctx is canceled. It removes a stale
 // socket file first and sets 0600 perms so only the owning user can dial (the UDS
 // peer-trust boundary; AN-1's tenant scoping is enforced inside the wrapped Server).
 // It is the served entry point cmd/trstctl uses when protocols.spiffe.enabled.

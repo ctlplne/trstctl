@@ -282,7 +282,7 @@ func (s *Store) WithExtraMigrations(fsys fs.FS) *Store {
 // ErrMigrationChecksumMismatch means an already-applied migration's file no longer
 // hashes to what was recorded under that version: a shipped migration was edited
 // in place. The run fails closed, because this node's schema and the file the
-// binary is reading are no longer the same artefact and the binary cannot know
+// binary is reading are no longer the same artifact and the binary cannot know
 // which half of the edit actually ran here. docs/migrations.md has the recovery.
 var ErrMigrationChecksumMismatch = errors.New("store: applied migration content differs from the embedded file")
 
@@ -312,8 +312,8 @@ type migrationLedger struct {
 // endings are normalized to "\n" and trailing newlines trimmed before hashing, so
 // the same file checked out under a different core.autocrlf — or re-saved by an
 // editor that adds a final newline — does not read as an edit and refuse to boot.
-// The SPDX licence-identifier comment line is excluded too: the relicensing of
-// 2026-09-20 rewrote that one line in every shipped migration, and a licence
+// The SPDX license-identifier comment line is excluded too: the relicensing of
+// 2026-09-20 rewrote that one line in every shipped migration, and a license
 // notice is metadata about the file, not part of the migration. Nothing else is
 // normalized: comments and whitespace are inside the digest, because a shipped
 // migration is immutable by policy (docs/migrations.md) and the runner cannot
@@ -328,7 +328,7 @@ func migrationChecksum(body []byte) string {
 	return "sha256:" + crypto.SHA256Hex([]byte(normalized))
 }
 
-// migrationSPDXLine is the licence-identifier comment a shipped migration carries
+// migrationSPDXLine is the license-identifier comment a shipped migration carries
 // on its first line (or its second, after a `-- migrate:` directive).
 var migrationSPDXLine = regexp.MustCompile(`(?m)^-- SPDX-License-Identifier: [A-Za-z0-9.+-]+\n?`)
 
@@ -337,7 +337,7 @@ var migrationSPDXLine = regexp.MustCompile(`(?m)^-- SPDX-License-Identifier: [A-
 // that moved into the core that day.
 var previousLicenseIdentifiers = []string{"MPL-2.0", "LicenseRef-trstctl-EE"}
 
-// legacyMigrationChecksums are the digests a binary from before the licence line
+// legacyMigrationChecksums are the digests a binary from before the license line
 // was excluded could have recorded for body: the whole file as it is now, and the
 // whole file under each identifier it shipped with earlier. reconcile re-stamps a
 // ledger row carrying one of them, because the migration itself is unchanged.
@@ -402,7 +402,7 @@ func (l *migrationLedger) record(version int64, name, checksum string) {
 //     normally on first upgrade: no backfill migration, no manual step, no brick.
 //   - the row carries a digest that differs -> ErrMigrationChecksumMismatch,
 //     unless it is one a pre-2026-09-20 binary recorded for the same bytes under
-//     the previous licence header (legacyMigrationChecksums) -> re-stamp it.
+//     the previous license header (legacyMigrationChecksums) -> re-stamp it.
 //
 // Adoption is honest about its limit: it makes today's files the baseline and
 // closes the window from here on; it cannot detect an edit made BEFORE the
@@ -427,7 +427,7 @@ func (l *migrationLedger) reconcile(ctx context.Context, conn *pgxpool.Conn, ver
 	}
 	if row.checksum != checksum {
 		if slices.Contains(legacy, row.checksum) {
-			// Recorded by a binary that hashed the whole file, licence header
+			// Recorded by a binary that hashed the whole file, license header
 			// included; the migration itself is unchanged. Re-stamp the row so the
 			// caveat stays visible, exactly like a pre-checksum adoption.
 			if _, err := conn.Exec(ctx,
@@ -567,7 +567,7 @@ var createIndexConcurrentlyNames = regexp.MustCompile(
 // applied when one of its CONCURRENTLY-built indexes came out invalid.
 //
 // A concurrent build that fails partway — a deadlock, a unique violation in live
-// data, an operator cancelling it — does not raise here. PostgreSQL leaves the
+// data, an operator canceling it — does not raise here. PostgreSQL leaves the
 // index in place with indisvalid = false: it enforces nothing and the planner
 // ignores it. The trap is IF NOT EXISTS, which every one of these migrations
 // uses: the next run finds the name already present and skips it, so the broken

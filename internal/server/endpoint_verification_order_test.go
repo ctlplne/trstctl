@@ -87,7 +87,7 @@ func TestEndpointVerificationCannotAppendAheadOfCertificateMetadata(t *testing.T
 	err = srv.appendEndpointVerification(waitCtx, tenant, "mail-host", "cancelled-target", transcript, "")
 	waitCancel()
 	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("cancelled metadata admission returned %v", err)
+		t.Fatalf("canceled metadata admission returned %v", err)
 	}
 	if head, err := log.LastSequence(ctx); err != nil || head != registered.Sequence {
 		t.Fatalf("endpoint source append overtook metadata admission: head=%d err=%v", head, err)

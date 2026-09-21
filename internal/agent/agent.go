@@ -222,7 +222,7 @@ type (
 		CertSerial string
 		Inventory  map[string]int64
 	}
-	// HeartbeatResponse is the control plane's acknowledgement.
+	// HeartbeatResponse is the control plane's acknowledgment.
 	HeartbeatResponse struct {
 		TenantID             string
 		NextHeartbeatSeconds int64
@@ -281,7 +281,7 @@ func (a *Agent) ReportInventory(ctx context.Context, ch ChannelClient, sourceKin
 // RenewOverChannel rotates the agent's certificate over the steady-state gRPC channel
 // (rather than the HTTP bootstrap/renewal endpoint): it generates a fresh local key,
 // submits only its CSR, adopts the issued chain, and persists it. The new private key
-// never leaves the host. It is the steady-state analogue of Rotate.
+// never leaves the host. It is the steady-state analog of Rotate.
 func (a *Agent) RenewOverChannel(ctx context.Context, ch ChannelClient) error {
 	a.renewMu.Lock()
 	defer a.renewMu.Unlock()

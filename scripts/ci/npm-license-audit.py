@@ -58,7 +58,7 @@ ALLOWED = {
     "mit", "isc", "apache-2.0", "bsd-2-clause", "bsd-3-clause", "0bsd",
     "bsd", "mpl-2.0", "unlicense", "cc0-1.0", "python-2.0", "wtfpl",
     "blueoak-1.0.0", "mit-0", "apache 2.0", "artistic-2.0",
-    # OFL-1.1 (SIL Open Font Licence) is the standard licence for open fonts and
+    # OFL-1.1 (SIL Open Font License) is the standard license for open fonts and
     # is permissive for our purposes: it allows bundling, redistribution, and
     # commercial use, and it does not contaminate a BUSL-1.1 distribution. Its
     # one live obligation is the Reserved Font Name clause, so it earns an
@@ -98,7 +98,7 @@ def main() -> int:
     ap.add_argument("--lock", default="web/package-lock.json")
     ap.add_argument("--json", dest="receipt")
     ap.add_argument("--strict-dev", action="store_true",
-                    help="also fail on a denied licence in a dev-only dependency")
+                    help="also fail on a denied license in a dev-only dependency")
     args = ap.parse_args()
 
     lock_path = Path(args.lock)
@@ -136,7 +136,7 @@ def main() -> int:
             (denied_dev if is_dev else denied_runtime).append(f"{name}: {expr} [{reason}]")
         elif not is_dev:
             if not expr:
-                unknown_runtime.append(f"{name}: no licence declared")
+                unknown_runtime.append(f"{name}: no license declared")
             elif not on_floor(expr):
                 unknown_runtime.append(f"{name}: {expr} is not on the permissive floor")
 
@@ -144,7 +144,7 @@ def main() -> int:
     for row in runtime_rows:
         counts[row["license"]] = counts.get(row["license"], 0) + 1
 
-    print(f">> npm licence audit: {len(runtime_rows)} shipped, "
+    print(f">> npm license audit: {len(runtime_rows)} shipped, "
           f"{len(dev_rows)} dev-only ({lock_path})")
     for name, count in sorted(counts.items()):
         print(f"   {name}: {count}")
@@ -164,7 +164,7 @@ def main() -> int:
     failed = False
     if denied_runtime:
         failed = True
-        print("FAIL: a SHIPPED console dependency carries a licence we cannot "
+        print("FAIL: a SHIPPED console dependency carries a license we cannot "
               "distribute or commercialize under:", file=sys.stderr)
         for item in denied_runtime:
             print(f"  {item}", file=sys.stderr)
@@ -178,7 +178,7 @@ def main() -> int:
     if denied_dev:
         where = sys.stderr if args.strict_dev else sys.stdout
         label = "FAIL" if args.strict_dev else "note"
-        print(f"{label}: dev-only dependency with a restrictive licence "
+        print(f"{label}: dev-only dependency with a restrictive license "
               f"(does not ship, so it does not travel into the artifact):",
               file=where)
         for item in denied_dev:

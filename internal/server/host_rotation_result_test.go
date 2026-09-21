@@ -299,7 +299,7 @@ func TestHostRotationRecoveryContinuesPastFailedEarlierJob(t *testing.T) {
 	start := time.Now()
 	f.h.srv.RunHostRotationRecovery(cancelled)
 	if time.Since(start) > time.Second {
-		t.Fatal("cancelled recovery worker did not stop promptly")
+		t.Fatal("canceled recovery worker did not stop promptly")
 	}
 }
 

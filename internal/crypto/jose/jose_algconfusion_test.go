@@ -77,7 +77,7 @@ func TestJOSEVerifierRejectsHS256Confusion(t *testing.T) {
 	token := signingInput + "." + algB64.EncodeToString(mac.Sum(nil))
 
 	if _, err := set.Verify(token); err == nil {
-		t.Error("Verify accepted an HS256-labelled token MAC'd with the RSA public key — RS256->HS256 confusion is not rejected")
+		t.Error("Verify accepted an HS256-labeled token MAC'd with the RSA public key — RS256->HS256 confusion is not rejected")
 	}
 	// The rejection must be on algorithm grounds (the verifier never reaches a MAC
 	// check), so the error mentions the unsupported alg.

@@ -151,7 +151,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.clientAnchors.Empty() && !s.allowAnonymous {
-		// Fail closed rather than enrol anyone who can compose a PKIMessage.
+		// Fail closed rather than enroll anyone who can compose a PKIMessage.
 		s.audit(r.Context(), "deny", "no client trust anchors configured", "")
 		s.emitFailure(r, enrollmentdiag.ClassifyCMP(enrollmentdiag.StepAccount, enrollmentdiag.CMPReasonUnknown, nil),
 			r.Method+" "+r.URL.Path, "")

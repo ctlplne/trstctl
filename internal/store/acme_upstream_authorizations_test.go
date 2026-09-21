@@ -352,7 +352,7 @@ func TestADivergentObservationKeepsItsExpectedFingerprint(t *testing.T) {
 	// measure of how long this has been broken.
 	if got.LastGoodAt.IsZero() {
 		t.Error("last_good_at was erased by a failing observation; the age of the outage is " +
-			"the one thing an operator cannot reconstruct afterwards")
+			"the one thing an operator cannot reconstruct afterward")
 	}
 }
 

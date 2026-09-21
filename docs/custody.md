@@ -99,7 +99,7 @@ generators to remove.
 
 **Identity leaf without a CSR, including its renewal fallback.** Supplying
 `subject_csr_pem` is the primary direct-identity path: trstctl signs the request
-you built and generates nothing. On renewal, the recorded CSR is honoured again,
+you built and generates nothing. On renewal, the recorded CSR is honored again,
 so the requester keeps the same key and the control plane still generates nothing.
 
 If the deployment target says `executor=agent`, first issuance and renewal take a

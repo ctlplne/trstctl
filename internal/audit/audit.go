@@ -69,10 +69,10 @@ type Query struct {
 }
 
 // featureActionTypes resolves the query's feature_id/action selector to the event
-// types catalogued for it in the ledger (COVER-008). It returns (nil, false) when
+// types cataloged for it in the ledger (COVER-008). It returns (nil, false) when
 // no feature/action filter is set, so callers leave the type filter untouched; it
 // returns (types, true) — possibly an empty slice — when a selector is set, so a
-// selector that names no catalogued events filters everything out rather than
+// selector that names no cataloged events filters everything out rather than
 // silently matching the whole log.
 func (q Query) featureActionTypes() (types []string, set bool) {
 	return eventledger.EventTypesForFeatureAction(q.FeatureID, q.Action)
@@ -296,7 +296,7 @@ func (q Query) matches(e events.Event, tenantSequence uint64) bool {
 		return false
 	}
 	// feature_id/action filter (COVER-008): when set, the event's type must be one
-	// the ledger catalogues for that feature/action. A selector that resolves to no
+	// the ledger catalogs for that feature/action. A selector that resolves to no
 	// types matches nothing, so filtering by an action with no events returns an
 	// empty result rather than the unfiltered log. Combined with an explicit Types
 	// filter, both must hold (the type is both named and ledger-bound).

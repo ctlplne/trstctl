@@ -3,7 +3,7 @@
 // Package haproxytest is a faithful in-process HAProxy double for connector
 // tests and conformance. It records the bundle a connector writes, validates it
 // when the connector runs `haproxy -c` (the configuration check), and activates
-// it on `systemctl reload haproxy` — modelling that haproxy keeps serving the
+// it on `systemctl reload haproxy` — modeling that haproxy keeps serving the
 // running bundle until a configuration that passes the check is reloaded.
 package haproxytest
 

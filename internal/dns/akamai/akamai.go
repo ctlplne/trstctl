@@ -7,7 +7,7 @@
 // the DNS-01 solver needs by calling Akamai's Edge DNS Zone Management API over
 // HTTPS: a PUT upsert of the TXT record set to present, a DELETE to clean up.
 //
-// Authentication is Akamai EdgeGrid (EG1-HMAC-SHA256), the analogue of AWS SigV4:
+// Authentication is Akamai EdgeGrid (EG1-HMAC-SHA256), the analog of AWS SigV4:
 // each request carries an Authorization header whose signature is a keyed MAC over a
 // canonical "data to sign" string. Like the Route 53 signer, that keyed MAC and the
 // request-body digest route through the crypto boundary (internal/crypto; AN-3) and
@@ -355,7 +355,7 @@ func edgeGridSign(clientSecret []byte, timestamp string, dataToSign []byte) stri
 }
 
 // do signs req with EdgeGrid and runs it through the shared cloudhttp round-trip
-// (bounded read, non-2xx normalisation, drain; CODE-006). EdgeGrid signing stays here
+// (bounded read, non-2xx normalization, drain; CODE-006). EdgeGrid signing stays here
 // — supplied as a cloudhttp request-signer so its keyed MAC and content digest remain
 // in this package behind the crypto boundary (AN-3) — and is applied just before the
 // request is sent, over exactly the body bytes that will be transmitted. A non-2xx

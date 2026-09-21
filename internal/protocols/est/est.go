@@ -307,7 +307,7 @@ func (s *Server) enroll(opType string) http.HandlerFunc {
 		// certificate (mTLS route), bind the CSR's subject/SANs to it — otherwise
 		// any credential chaining to the EST client CA could re-key ANY name the
 		// tenant profile admits, one stolen credential tenant-wide in blast radius
-		// (the hole H1 closed for CMP, generalised here; AUD-201 follow-up).
+		// (the hole H1 closed for CMP, generalized here; AUD-201 follow-up).
 		if opType == estOpReenroll && isMTLSRoute(r.Context()) {
 			if err := crypto.CSRBoundToTLSClientIdentity(r.TLS, csrDER); err != nil {
 				s.audit(r.Context(), opType, "deny", err.Error())

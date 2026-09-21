@@ -36,7 +36,7 @@ rolling `next_review_by` forward no longer keeps a stale dependency compliant.
 - A `current` row must leave `behind_since` empty, so a dependency cannot be marked
   caught-up while still carrying a start date.
 - The only way past the budget is `status: accepted_deferral` with a `deferral_until`
-  that still covers today. An expired or missing `deferral_until` fails, and relabelling
+  that still covers today. An expired or missing `deferral_until` fails, and relabeling
   the row back to `planned` fails on age instead.
 
 `behind_since` records the earliest date this repository observed the row as not

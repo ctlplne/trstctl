@@ -58,7 +58,7 @@ type PKCS11Config struct {
 }
 
 // pkcs11Reader is the platform call this source depends on, declared as an
-// interface so the source's behaviour is testable in a build with no PKCS#11
+// interface so the source's behavior is testable in a build with no PKCS#11
 // module present, and so the cgo surface stays in exactly one build-tagged file.
 type pkcs11Reader interface {
 	readTokens(ctx context.Context, cfg PKCS11Config) (map[string][]byte, error)
@@ -136,7 +136,7 @@ func pkcs11ObjectLabel(tokenLabel, objectLabel string, index int) string {
 	}
 	object := strings.TrimSpace(objectLabel)
 	if object == "" {
-		// An unlabelled certificate object is common on smart cards. The index
+		// An unlabeled certificate object is common on smart cards. The index
 		// keeps two of them distinguishable within a token.
 		object = fmt.Sprintf("object-%d", index)
 	}

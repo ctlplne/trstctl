@@ -13,7 +13,7 @@ import (
 // A leaf certificate that expires is a page. A root or intermediate that expires
 // is an outage across every leaf beneath it, and you cannot fix it in an
 // afternoon: a new root has to be distributed to every relying party first, which
-// is a quarters-long programme. Leaf-scale alerting — the 7/30/90-day windows the
+// is a quarters-long program. Leaf-scale alerting — the 7/30/90-day windows the
 // expiry scheduler uses — never fires early enough to start one.
 //
 // So CA authorities get their own clock, measured in months rather than days.
@@ -78,7 +78,7 @@ func MonthsRemaining(now, notAfter time.Time) int {
 
 // CAHorizonSeverity scales alert severity to runway. The bands are not arbitrary:
 // under three months there is no time to distribute a new trust anchor, so that
-// is critical; a year or less is warning because a migration programme has to be
+// is critical; a year or less is warning because a migration program has to be
 // funded and staffed; beyond that it is a planning signal, not an alarm.
 func CAHorizonSeverity(band int) string {
 	switch {

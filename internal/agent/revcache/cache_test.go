@@ -157,7 +157,7 @@ func TestACRLThatDoesNotVerifyIsNotCached(t *testing.T) {
 	}
 }
 
-// A CRL number going BACKWARDS is refused.
+// A CRL number going BACKWARD is refused.
 //
 // Whoever served it is either badly out of date or replaying an older list to
 // un-revoke something, and neither is a reason to replace a newer one.

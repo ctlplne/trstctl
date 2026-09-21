@@ -112,7 +112,7 @@ try:
     if mode == "startup-timeout":
         assert b"partial scanner stdout" not in output, output
         assert b"partial scanner stderr" not in output, output
-    expected = {"timeout": b"TimeoutExpired", "startup-timeout": b"TimeoutExpired", "term": b"cancelled by signal 15", "interrupt": b"cancelled by signal 2", "outer-term": b"cancelled by signal 15", "leader-exit": b"surviving children", "stdout-limit": b"output exceeds", "stderr-limit": b"output exceeds", "spawn-failure": b"FileNotFoundError"}
+    expected = {"timeout": b"TimeoutExpired", "startup-timeout": b"TimeoutExpired", "term": b"canceled by signal 15", "interrupt": b"canceled by signal 2", "outer-term": b"canceled by signal 15", "leader-exit": b"surviving children", "stdout-limit": b"output exceeds", "stderr-limit": b"output exceeds", "spawn-failure": b"FileNotFoundError"}
     if mode in expected: assert expected[mode] in output, output
     time.sleep(1.1)
     assert not (root / "survived").exists(), "scanner child ran after gate exit"

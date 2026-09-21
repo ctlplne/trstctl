@@ -2,7 +2,7 @@
 
 // Package teams is the Microsoft Teams notification channel (S10.4), built from the
 // same notification template as the other channels: it implements notify.Notifier and
-// self-validates against the notify.Conform harness, the notification analogue of the
+// self-validates against the notify.Conform harness, the notification analog of the
 // DNS-01 and connector conformance suites.
 //
 // A Teams "incoming webhook" accepts a legacy MessageCard JSON document posted to a

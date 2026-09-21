@@ -180,7 +180,7 @@ func (p *Provider) list(ctx context.Context, name, value string) ([]txtRecord, e
 // do issues an authenticated request to endpoint+path and, on a 2xx, decodes the JSON
 // response into out (out may be nil to drain it). The bearer token is attached here
 // and nowhere else; it is never written to logs or error text (AN-8). The round-trip
-// — bounded read, non-2xx normalisation, JSON decode/drain — is the shared
+// — bounded read, non-2xx normalization, JSON decode/drain — is the shared
 // internal/cloudhttp (CODE-006); a non-2xx *StatusError is translated to a status-only
 // *apiError so attacker-controlled response bytes cannot escape (AN-8).
 func (p *Provider) do(ctx context.Context, method, path string, body []byte, out any) error {

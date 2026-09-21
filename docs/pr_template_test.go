@@ -6,7 +6,7 @@ package docs
 // .github/pull_request_template.md straight into the compose box, so it is the one
 // page nothing else in the repository can correct: whatever it asks for is what the
 // author tries to supply. It asked them to "link the issue or sprint card", and a
-// sprint card is a planning artefact that exists only in the maintainer's ignored
+// sprint card is a planning artifact that exists only in the maintainer's ignored
 // docs-internal/ tree — a reader who has just cloned the repository would go looking
 // for a board that is not there. AGENTS.md already states the rule this broke: no
 // sprint/REPORT/DoD process identifiers on reader pages unless a test requires them.

@@ -229,7 +229,7 @@ posture, and a migration target:
 post-quantum-ready or quantum-vulnerable, and the ready percentage.
 
 Core PQC campaigns turn those observations into owned work without requiring a
-licence. From `/posture`, `/api/v1/pqc/campaigns`, or `trstctl-cli pqc campaigns`, an
+license. From `/posture`, `/api/v1/pqc/campaigns`, or `trstctl-cli pqc campaigns`, an
 operator can assign owner/deadline/wave/readiness, record a manual or third-party
 remediation for each finding, and close only after every finding has evidence. Closure
 produces an offline-verifiable signed artifact. Automated fleet execution remains an

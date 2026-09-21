@@ -126,8 +126,8 @@ func TestSignedTicketResultStaysRetryableUntilProjectionSucceeds(t *testing.T) {
 // refused rather than applied.
 
 // agentChannelHarness is a served control plane with the agent channel mounted on
-// an ephemeral port and one enrolled agent already dialled in — the shape every
-// job test needs, so none of them repeats the enrolment dance.
+// an ephemeral port and one enrolled agent already dialed in — the shape every
+// job test needs, so none of them repeats the enrollment dance.
 type agentChannelHarness struct {
 	*servedHarness
 	client *transport.AgentClient

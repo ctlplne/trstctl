@@ -223,7 +223,7 @@ func TestConformance_TraceabilityMatrixAllClaimsProven(t *testing.T) {
 	}
 	if len(missing) > 0 {
 		t.Fatalf("VDEC-TRACE-001: %d VDEC claim(s) have no generated row carrying BOTH an implementation and a test: %s. "+
-			"Cite them from the ee/ code that practises them and regenerate with make claim-traceability-check -- "+
+			"Cite them from the ee/ code that practices them and regenerate with make claim-traceability-check -- "+
 			"do not record them as proven by hand.", len(missing), strings.Join(missing, ", "))
 	}
 }

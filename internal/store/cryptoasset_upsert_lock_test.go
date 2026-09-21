@@ -69,7 +69,7 @@ func TestCryptoAssetDirectUpsertSharesProjectionArbiter(t *testing.T) {
 			return err
 		}
 		if count != 0 {
-			t.Errorf("cancelled waiter inserted %d rows", count)
+			t.Errorf("canceled waiter inserted %d rows", count)
 		}
 		return nil
 	}); err != nil {

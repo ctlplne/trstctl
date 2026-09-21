@@ -392,7 +392,7 @@ identically once the opt-in check passes. RFC 8555 §7.1.1, §8.4.
 For served X.509 identity issuance, `POST /api/v1/identities` fails closed for wildcard
 names until the request carries both `wildcard_blast_radius_acknowledged=true` and
 `validation_method=dns-01` in `attributes`; the Identities page exposes that
-acknowledgement before it sends the issue request. Once the wildcard identity is deployed,
+acknowledgment before it sends the issue request. Once the wildcard identity is deployed,
 the lifecycle scheduler treats it like any other deployed X.509 identity: it queues
 `ca.renew`, mints a successor with the same wildcard SAN, and records
 `lifecycle.rotation.recorded` evidence for renewal history.
@@ -407,9 +407,9 @@ instead of dropping the operator back into an undifferentiated list.
 
 The operator-issued path and the ACME protocol path have different authorities. The
 operator path records an authorized administrator's explicit blast-radius decision;
-that acknowledgement is not a DNS ownership proof. A public ACME wildcard order still
+that acknowledgment is not a DNS ownership proof. A public ACME wildcard order still
 must complete DNS-01, and its tenant provider policy is enforced by the ACME server.
-The UI states this distinction so an acknowledgement cannot be mistaken for a
+The UI states this distinction so an acknowledgment cannot be mistaken for a
 successful challenge.
 
 After deployment, **Lifecycle automation** names wildcard items in the due-renewal
@@ -467,7 +467,7 @@ tenant cannot read another tenant's certificate identifiers or rotation evidence
   delegation so trstctl never holds production DNS keys.
 - **Propagation takes time.** Use the propagation checker and the preflight so renewals
   don't fail on a too-early lookup.
-- **Wildcards require DNS-01, profile/provider opt-in, and blast-radius acknowledgement**
+- **Wildcards require DNS-01, profile/provider opt-in, and blast-radius acknowledgment**
   — this is deliberate, not a bug.
 - **CAA fails closed** on lookup errors: if your DNS is unreachable, issuance is
   refused rather than risked.

@@ -9,7 +9,7 @@ import "trstctl.com/trstctl/internal/authz"
 // Split out of api.go's route table when adding the upstream authorization read
 // (epic B7) pushed that file past the served-surface size budget. The grouping
 // is by workflow rather than by convenience: these twelve routes are the entire
-// operator-facing surface for domain validation — the provider catalogue, the
+// operator-facing surface for domain validation — the provider catalog, the
 // tenant provider configs, the evidence-only preflight, the real provider
 // qualification/recovery workflow, and the freshness read that says when each
 // identifier last actually proved control.

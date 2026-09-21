@@ -168,7 +168,7 @@ func TestWindowsStoreNameNormalization(t *testing.T) {
 	_ = reader
 }
 
-// TestWindowsStoreUnsupportedOnNonWindows pins the stub's behaviour: an error,
+// TestWindowsStoreUnsupportedOnNonWindows pins the stub's behavior: an error,
 // never an empty inventory. A Linux operator must not be told their Windows
 // estate is clean.
 func TestWindowsStoreUnsupportedOnNonWindows(t *testing.T) {

@@ -21,7 +21,7 @@ const (
 	// TypeRetirement records retirement of a predecessor key after a succession
 	// (lifecycle step 7).
 	TypeRetirement = "nhi.algorithm.retirement"
-	// TypeRPAck is a signed relying-party capability acknowledgement (step 6).
+	// TypeRPAck is a signed relying-party capability acknowledgment (step 6).
 	TypeRPAck = "nhi.rp.ack"
 	// TypeRefusal records a signer's signed refusal of a mint (PCAS-claim-41, PCAS-20):
 	// the refused request and the violated constraint, attributable to the signer.
@@ -100,7 +100,7 @@ func (SuccessionV1) isSuccessionPayload() {}
 
 // RetirementV1 records retirement of the predecessor at a given epoch. The
 // succession record persists as durable proof linking the epochs (PCAS-claim-8).
-// AckSetDigest binds a digest of the signed relying-party acknowledgements that
+// AckSetDigest binds a digest of the signed relying-party acknowledgments that
 // satisfied the cutover quorum, so the evidence condition is itself offline
 // verifiable (PCAS-claim-3); it is empty for a policy-time-bound retirement embodiment.
 type RetirementV1 struct {

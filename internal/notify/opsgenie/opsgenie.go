@@ -2,12 +2,12 @@
 
 // Package opsgenie is the OpsGenie notification channel (S10.6), built from the same
 // notification template as every other channel: the notify.Notifier interface plus the
-// notify.Conform harness (the notification analogue of the connector SDK, S5.5). It
+// notify.Conform harness (the notification analog of the connector SDK, S5.5). It
 // delivers an Alert by creating an OpsGenie alert through the Alert API over HTTPS,
 // authenticated with a scoped API key.
 //
 // OpsGenie's Alert API authenticates with an API key carried in the Authorization header
-// in the GenieKey scheme (Authorization: GenieKey <key>) — the header analogue of
+// in the GenieKey scheme (Authorization: GenieKey <key>) — the header analog of
 // Cloudflare's bearer token, not a body-embedded routing key like PagerDuty. The key is
 // opaque to this package, never logged, and sealed at rest by the caller via the platform
 // secret store (AN-8); remote response bodies are redacted on every error path because a

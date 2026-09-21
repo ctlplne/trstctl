@@ -109,7 +109,7 @@ type enrollBootstrapResponse struct {
 // its one-time bootstrap token (S5.1/F15). The token authenticates the request
 // (so the route carries no RBAC permission and lives outside /api); a bad or
 // reused token is a 401. It performs no store mutation — the agent registers
-// itself over its new mTLS identity afterwards — so it is not idempotency-keyed.
+// itself over its new mTLS identity afterward — so it is not idempotency-keyed.
 func (a *API) enrollBootstrap(w http.ResponseWriter, r *http.Request) {
 	result := "failed"
 	defer func() { a.observeAgentEnrollment(result) }()

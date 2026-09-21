@@ -51,7 +51,7 @@ def run_scanner(command, timeout=1530):
             return False
 
     def stop_group():
-        # A separate scanner group prevents signalling Make or unrelated tools.
+        # A separate scanner group prevents signaling Make or unrelated tools.
         # Forward cancellation promptly: an outer supervisor may escalate after
         # 150 ms. Escalate even when the scanner leader has already exited.
         for sig in (signal.SIGTERM, signal.SIGKILL):
@@ -73,7 +73,7 @@ def run_scanner(command, timeout=1530):
             started = time.monotonic()
             while True:
                 if cancelled:
-                    raise ValueError("scanner cancelled by signal " + str(cancelled))
+                    raise ValueError("scanner canceled by signal " + str(cancelled))
                 if os.fstat(output.fileno()).st_size + os.fstat(diagnostics.fileno()).st_size > MAX_REPORT_BYTES:
                     raise ValueError("scanner output exceeds 64 MiB")
                 if process.poll() is not None:

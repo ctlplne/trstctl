@@ -21,11 +21,11 @@ import (
 // The WASM plugin host already existed and already had the properties that
 // matter: modules are signature- and digest-verified before they load, they run
 // under a declared capability grant, and an out-of-grant operation is denied at
-// runtime rather than audited afterwards. What it did not have was a location.
+// runtime rather than audited afterward. What it did not have was a location.
 //
 // It ran on the control plane, which means a partner's code executed in the
 // vendor's process against the customer's estate. Every guarantee held, and the
-// arrangement still asked two organisations to accept something neither should
+// arrangement still asked two organizations to accept something neither should
 // have to: the customer, that a third party's module runs somewhere they cannot
 // see; the vendor, that they execute partner code with reach into customer
 // networks.
@@ -38,7 +38,7 @@ import (
 // without verifying them, or ran them under a wider grant because the relay
 // "already has network access", would be a downgrade wearing the same name. The
 // tests in plugins_test.go exist to hold each property in the new location
-// rather than to assume it travelled.
+// rather than to assume it traveled.
 
 // PluginRuntime is the relay's verified WASM connector host.
 //

@@ -18,7 +18,7 @@ func TestCAPreservingJourneyLeadsBeforeOptionalCAReplacement(t *testing.T) {
 		"operator prerequisites",
 		"second renewal",
 		"listener fingerprint",
-		"alert acknowledgement",
+		"alert acknowledgment",
 	} {
 		if !strings.Contains(preserve, want) {
 			t.Errorf("CA-preserving journey is missing cold-reader contract %q", want)

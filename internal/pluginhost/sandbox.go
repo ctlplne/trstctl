@@ -205,7 +205,7 @@ func (s *sandbox) readFile(p string, limit int) ([]byte, uint32) {
 // 169.254.169.254 and the grant that reads "may reach my vendor API" delivers the
 // cloud metadata service. No rebinding race is even needed — one A record does
 // it. The comment here used to claim this was stronger than an SSRF check for
-// being a positive list, which had it backwards.
+// being a positive list, which had it backward.
 //
 // pluginDialControl closes that: it runs after resolution and immediately before
 // connect, on the actual IP the socket will use, for every attempt. Both checks

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { rolloutSteps } from "@/pages/SSHTrust";
 
 // S-C16: the stepper draws the rollout state machine, so what counts as done,
-// current, and terminal is pinned rather than inferred from a badge colour.
+// current, and terminal is pinned rather than inferred from a badge color.
 describe("SSH trust rollout stepper", () => {
   it("marks earlier steps done and the served status current on the happy path", () => {
     expect(rolloutSteps("planned")).toEqual([

@@ -3,7 +3,7 @@
 // Package apachetest is a faithful in-process Apache (httpd) double for
 // connector tests and conformance. It records the files a connector writes,
 // validates the certificate when the connector runs `apachectl configtest`, and
-// activates it on `apachectl graceful` — modelling that apache keeps serving the
+// activates it on `apachectl graceful` — modeling that apache keeps serving the
 // running certificate until a configuration that passes the config test is
 // gracefully reloaded.
 package apachetest

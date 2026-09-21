@@ -87,7 +87,7 @@ type connectorCatalogItem struct {
 
 // connectorRelayParity is one appliance family's E1 gate status.
 //
-// Missing gates are named individually rather than summarised as a percentage.
+// Missing gates are named individually rather than summarized as a percentage.
 // A number lets a reader believe the remainder is small and similar; the names
 // say that cisco is held back by having no rollback and no readback, which is a
 // different conversation from f5 being held back by HA-peer sync.

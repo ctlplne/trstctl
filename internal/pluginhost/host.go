@@ -117,7 +117,7 @@ func (h *Host) Load(ctx context.Context, wasm []byte, grant Grant) (*Plugin, err
 	// WithCloseOnContextDone is what makes a guest INTERRUPTIBLE. wazero's default
 	// runtime runs guest code to completion regardless of the context, so a plugin
 	// containing `loop { }` — a bug or a hostile plugin — occupied its bounded-pool
-	// worker forever and could not be cancelled, shed, or drained at shutdown.
+	// worker forever and could not be canceled, shed, or drained at shutdown.
 	// Capability grants close the plugin's reach; they do nothing about its
 	// runtime, which is what this bounds (AN-7).
 	rt := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig().WithCloseOnContextDone(true))

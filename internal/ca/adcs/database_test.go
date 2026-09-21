@@ -29,7 +29,7 @@ func TestPendingIsNotFailed(t *testing.T) {
 func TestAnUnknownDispositionCodeIsUnknownNotFailed(t *testing.T) {
 	t.Parallel()
 	if got := MapDisposition(9999); got != DispositionUnknown {
-		t.Fatalf("unrecognised code mapped to %q. A build that guesses \"failure\" reports "+
+		t.Fatalf("unrecognized code mapped to %q. A build that guesses \"failure\" reports "+
 			"healthy certificates as broken the first time it meets a code Microsoft added", got)
 	}
 }
@@ -61,7 +61,7 @@ func TestParsingToleratesColumnNamingVariants(t *testing.T) {
 			t.Fatalf("parsed = %+v", row)
 		}
 		if row.Serial != "1a2b3c" {
-			t.Fatalf("serial = %q; it must normalise so the same certificate from two exports "+
+			t.Fatalf("serial = %q; it must normalize so the same certificate from two exports "+
 				"does not become two inventory rows", row.Serial)
 		}
 		if row.Disposition != DispositionIssued {

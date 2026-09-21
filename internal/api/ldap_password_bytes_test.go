@@ -124,7 +124,7 @@ func TestLdapPasswordDecodeDoesNotReallocate(t *testing.T) {
 }
 
 // TestLdapPasswordRejectsControlBytesAndMalformedSurrogates pins the strict
-// behaviour AUD-201 follow-up I2/V24 adopted with the shared decoder. The
+// behavior AUD-201 follow-up I2/V24 adopted with the shared decoder. The
 // bespoke copy had diverged: it accepted unescaped control bytes and folded
 // lone or invalid surrogates to U+FFFD — lossy for a bind credential, since
 // two malformed inputs decoded to the same password bytes.

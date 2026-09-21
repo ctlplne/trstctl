@@ -45,7 +45,7 @@ func TestRollbackCensusMatchesTheImplementations(t *testing.T) {
 		if !declared[name] {
 			t.Errorf("the rollback census claims %q can roll back, but its package declares no "+
 				"Rollback method; this is the drift that leaves an operator holding a "+
-				"capability list the binary does not honour", name)
+				"capability list the binary does not honor", name)
 		}
 	}
 }

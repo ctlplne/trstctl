@@ -25,7 +25,7 @@ import (
 // issuer outward, and neither is expressible over a finding table without the
 // caller reimplementing a join by hand.
 //
-// The modelling choice worth stating: a trust store is its own node rather than
+// The modeling choice worth stating: a trust store is its own node rather than
 // an attribute of the host. One machine routinely carries several with different
 // contents — the OS store, a JVM's cacerts, Firefox's NSS DB — so "is this CA
 // trusted on host X" has no single answer, and folding the store into the host

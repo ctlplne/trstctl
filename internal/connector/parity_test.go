@@ -141,7 +141,7 @@ func TestOnlyApplianceFamiliesCanBeRelayMigrated(t *testing.T) {
 // This started life asserting that NOTHING was migrated, which was true while
 // cp_path_refusal was unimplemented. The assertion that mattered was never the
 // zero — it was that the console cannot claim a migration the running binary
-// does not honour. That is what is asserted now, so the test survived the
+// does not honor. That is what is asserted now, so the test survived the
 // change it was written to catch instead of being deleted by it.
 func TestNothingReadsAsMigratedWhileTheControlPlaneStillExecutesIt(t *testing.T) {
 	t.Parallel()

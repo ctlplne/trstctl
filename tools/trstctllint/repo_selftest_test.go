@@ -136,7 +136,7 @@ package badclient
 		}
 	}
 	if strings.Contains(got, "okclient") {
-		t.Fatalf("trstctllint reported the MPL-2.0 clients/ fixture, which is the licence that tree must carry:\n%s", got)
+		t.Fatalf("trstctllint reported the MPL-2.0 clients/ fixture, which is the license that tree must carry:\n%s", got)
 	}
 }
 

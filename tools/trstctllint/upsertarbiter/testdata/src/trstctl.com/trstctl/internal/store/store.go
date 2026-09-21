@@ -70,7 +70,7 @@ func ApplyIndexedUnguarded(ctx context.Context, t tx, id, tenant, ref string) er
 	return err
 }
 
-// Dropped or moved keys are honoured: none of these is reported.
+// Dropped or moved keys are honored: none of these is reported.
 func ApplyMoved(ctx context.Context, t tx, id, tenant string) error {
 	_, err := t.Exec(ctx, `INSERT INTO moved (tenant_id, id) VALUES ($1, $2)
 	 ON CONFLICT (tenant_id, id) DO NOTHING`, tenant, id)

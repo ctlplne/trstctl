@@ -311,7 +311,7 @@ type spiffeProtocol struct {
 }
 
 // RunSPIFFE serves the SPIFFE Workload API gRPC server on its UDS until ctx is
-// cancelled (EXC-WIRE-02 / INTEROP-004). It is a no-op when SPIFFE is not enabled or
+// canceled (EXC-WIRE-02 / INTEROP-004). It is a no-op when SPIFFE is not enabled or
 // no issuing CA is provisioned, so it is always safe to start in its own goroutine.
 func (s *Server) RunSPIFFE(ctx context.Context) {
 	if s.protocols == nil || s.protocols.spiffe == nil {

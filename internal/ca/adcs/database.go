@@ -40,7 +40,7 @@ const (
 	DispositionDenied DBDisposition = "denied"
 	// DispositionFailed: the CA could not process it at all.
 	DispositionFailed DBDisposition = "failed"
-	// DispositionUnknown: a disposition code this build does not recognise.
+	// DispositionUnknown: a disposition code this build does not recognize.
 	// Microsoft adds codes; mapping an unseen one onto "failed" would report
 	// healthy certificates as broken.
 	DispositionUnknown DBDisposition = "unknown"

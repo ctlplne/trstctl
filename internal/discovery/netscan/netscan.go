@@ -88,7 +88,7 @@ type Report struct {
 	Targets    int // addresses submitted
 	Discovered int // certificates found and recorded
 	Failed     int // probe errors (unreachable, no TLS, sink error)
-	Rejected   int // could not be submitted (pool closed or context cancelled)
+	Rejected   int // could not be submitted (pool closed or context canceled)
 	Blocked    int // skipped before dialing by the SSRF/reserved-address guard
 	// TargetResults carries bounded per-target facts to the immutable run
 	// completion event: one entry per submitted address (sorted by target) so a
@@ -255,7 +255,7 @@ func (s *Scanner) Scan(ctx context.Context, targets []string) Report {
 			continue
 		}
 		if ctx.Err() != nil {
-			outcome(addr, TargetRejected, "scan cancelled before the probe was submitted")
+			outcome(addr, TargetRejected, "scan canceled before the probe was submitted")
 			continue
 		}
 		addr := addr
@@ -304,7 +304,7 @@ func (s *Scanner) blockedTarget(addr string) (BlockedTarget, bool) {
 // submit enqueues task, throttling on backpressure: a retryable rejection (full
 // queue) is retried after a backoff, so no target is dropped just because the
 // pool is momentarily saturated. A permanent rejection (closed pool) or a
-// cancelled context returns an error.
+// canceled context returns an error.
 func (s *Scanner) submit(ctx context.Context, task func()) error {
 	for {
 		err := s.pool.Submit(task)

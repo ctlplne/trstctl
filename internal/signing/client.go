@@ -226,7 +226,7 @@ func DialReady(ctx context.Context, socketPath string, timeout time.Duration) (*
 }
 
 // DialReadyMTLS dials an isolated signer over mTLS (DialMTLS) and waits up to
-// timeout for it to report SERVING. It is the cross-node analogue of DialReady:
+// timeout for it to report SERVING. It is the cross-node analog of DialReady:
 // the control plane attaches to a separately-hosted signer pod over the
 // authenticated, mutually-pinned network channel (SIGNER-005). On timeout (or a
 // rejected handshake surfaced by a failing Health) it closes the connection and
@@ -381,7 +381,7 @@ func (c *Client) GenerateDualControlKeyHandle(ctx context.Context, algorithm cry
 
 // SignerForDualControlHandle binds a RemoteSigner to an already-held dual-control
 // key and supplies the authorizer that mints the per-Sign token. It is the restart
-// / multi-replica analogue of GenerateDualControlKeyHandle: the key already exists
+// / multi-replica analog of GenerateDualControlKeyHandle: the key already exists
 // (persisted, requireAuth sealed in), and the approval authority supplies the
 // Authorize secret so the bound signer can produce valid tokens.
 func (c *Client) SignerForDualControlHandle(ctx context.Context, handle string, declaredPurpose KeyPurpose, authorizer SignTokenProvider) (*RemoteSigner, error) {

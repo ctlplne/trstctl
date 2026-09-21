@@ -223,7 +223,7 @@ type CMPTrustAnchors struct {
 
 // NewCMPTrustAnchors parses the anchor set once. Nil/empty input yields a nil
 // handle, which Empty() reports — the fail-closed served endpoint refuses to
-// enrol in that state, while differential harnesses that authenticate another
+// enroll in that state, while differential harnesses that authenticate another
 // way pass none deliberately.
 func NewCMPTrustAnchors(anchorsDER [][]byte) (*CMPTrustAnchors, error) {
 	if len(anchorsDER) == 0 {
@@ -429,7 +429,7 @@ func rawCert(der []byte) asn1.RawValue {
 // the certificate carries an SKI extension it is used directly; otherwise the
 // SHA-256-truncated key identifier (RFC 7093 method) is derived from the public
 // key so senderKID is always populated. Returns nil only if the public key cannot
-// be marshalled (the caller then omits the optional field).
+// be marshaled (the caller then omits the optional field).
 func skiOf(cert *x509.Certificate) []byte {
 	if len(cert.SubjectKeyId) > 0 {
 		return cert.SubjectKeyId

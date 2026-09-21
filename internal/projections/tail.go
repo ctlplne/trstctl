@@ -71,7 +71,7 @@ func (w *TailWorker) Lag(ctx context.Context) (uint64, error) {
 }
 
 // Run tails the event stream and applies every event to the read model through the
-// durable consumer until ctx is cancelled (SPINE-009). It also samples projection
+// durable consumer until ctx is canceled (SPINE-009). It also samples projection
 // lag on a fixed cadence into the configured sampler. It is meant to run in its own
 // goroutine; a tail error (e.g. a poison event leaving the cursor stuck) is returned
 // so the caller can log it and the lag metric surfaces the stall.
@@ -146,7 +146,7 @@ func (w *TailWorker) persistEnvelopeDecodeFailure(ctx context.Context, err error
 
 // persistFailure records a poison before this Run invocation returns. It uses a
 // short fresh deadline because the projection operation may have consumed its own
-// request deadline; a cancelled worker shutdown is not a poison and is left clean.
+// request deadline; a canceled worker shutdown is not a poison and is left clean.
 func (w *TailWorker) persistFailure(ctx context.Context, seq uint64, projectionErr error) error {
 	if ctx.Err() != nil {
 		return projectionErr
@@ -181,7 +181,7 @@ func (w *TailWorker) syncAppliedCheckpoint(ctx context.Context) error {
 }
 
 // sampleLagLoop periodically samples projection lag into the sampler until ctx is
-// cancelled, so the lag gauge reflects a stuck or catching-up projection even when no
+// canceled, so the lag gauge reflects a stuck or catching-up projection even when no
 // new events are arriving.
 func (w *TailWorker) sampleLagLoop(ctx context.Context) {
 	t := time.NewTicker(w.lagPeriod)

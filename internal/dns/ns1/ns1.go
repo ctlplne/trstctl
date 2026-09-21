@@ -163,7 +163,7 @@ func (p *Provider) CleanupTXT(ctx context.Context, name, _ string) error {
 }
 
 // do sets the NS1 auth header on req and runs it through the shared cloudhttp
-// round-trip (bounded read, non-2xx normalisation, drain; CODE-006). A non-2xx
+// round-trip (bounded read, non-2xx normalization, drain; CODE-006). A non-2xx
 // response is translated into a status-only *apiError so CleanupTXT's 404-is-a-no-op
 // predicate works without retaining attacker-controlled response bytes (AN-8). The
 // NS1 records API returns no body the provider reads, so out is nil.

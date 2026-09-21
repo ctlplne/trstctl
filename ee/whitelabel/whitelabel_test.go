@@ -124,7 +124,7 @@ func TestBrandedEmailUsesResolvedBrandAndEscapesFields(t *testing.T) {
 
 // TestHostileLogoURIIsNotEmbedded covers the branding field that bypassed
 // escaping: LogoDataURI is tenant-configurable, and the renderer wraps it in
-// template.URL, which tells html/template not to sanitise it. Anything that is
+// template.URL, which tells html/template not to sanitize it. Anything that is
 // not a plain https URL or a raster image data URI must be dropped, leaving the
 // text fallback, rather than reaching an outbound email.
 func TestHostileLogoURIIsNotEmbedded(t *testing.T) {

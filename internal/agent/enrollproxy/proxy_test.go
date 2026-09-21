@@ -14,13 +14,13 @@ import (
 	"trstctl.com/trstctl/internal/agent/enrollproxy"
 )
 
-// The relay proxies enrolment and decides nothing (epic A4).
+// The relay proxies enrollment and decides nothing (epic A4).
 //
 // The relay sits inside the customer's network — which is exactly where an
 // attacker with a foothold already is. So the properties that matter are all
 // about what this proxy does NOT do: it does not speak with its own identity, it
 // does not interpret a protocol body, and it does not open a path to anything
-// but the enrolment endpoints.
+// but the enrollment endpoints.
 
 // upstream is a stand-in control plane that records what reached it.
 type upstream struct {
@@ -60,7 +60,7 @@ func newProxy(t *testing.T, up *upstream) *httptest.Server {
 	return srv
 }
 
-// An enrolment request reaches the control plane unchanged.
+// An enrollment request reaches the control plane unchanged.
 func TestAnEnrolmentRequestReachesTheControlPlaneUnaltered(t *testing.T) {
 	t.Parallel()
 	up := newUpstream(t)
@@ -154,7 +154,7 @@ func TestPublicRelayURLMustBeAStableHTTPSAuthority(t *testing.T) {
 // THE property: the relay does not speak with its own identity.
 //
 // The relay holds an mTLS credential the control plane trusts. If the proxy
-// attached it, every device in the segment would enrol with the relay's
+// attached it, every device in the segment would enroll with the relay's
 // authority — so a device that should only be able to request its own
 // certificate could request any of them. A compromised sensor would become a CA
 // client.
@@ -172,7 +172,7 @@ func TestTheProxyDoesNotAddItsOwnCredential(t *testing.T) {
 
 	if len(up.gotAuth) != 0 {
 		t.Fatalf("the proxy attached an Authorization header (%v) the client never sent; every "+
-			"device in the segment would then enrol with the relay's authority", up.gotAuth)
+			"device in the segment would then enroll with the relay's authority", up.gotAuth)
 	}
 	for _, header := range []string{"X-Trstctl-Agent", "X-Agent-Identity", "Proxy-Authorization"} {
 		if up.gotHdrs.Get(header) != "" {
@@ -204,7 +204,7 @@ func TestAClientsOwnCredentialSurvives(t *testing.T) {
 //
 // A segment that could reach /api/v1 through a relay would hold the control
 // plane's whole administrative surface — a far larger grant than "devices here
-// can enrol", and one nobody would have knowingly given.
+// can enroll", and one nobody would have knowingly given.
 func TestTheProxyIsNotATunnelToTheAPI(t *testing.T) {
 	t.Parallel()
 	up := newUpstream(t)
@@ -224,7 +224,7 @@ func TestTheProxyIsNotATunnelToTheAPI(t *testing.T) {
 		}
 		_ = resp.Body.Close()
 		if resp.StatusCode != http.StatusNotFound {
-			t.Errorf("path %q was proxied (status %d); the relay must forward enrolment "+
+			t.Errorf("path %q was proxied (status %d); the relay must forward enrollment "+
 				"protocols and nothing else", path, resp.StatusCode)
 		}
 	}
@@ -272,7 +272,7 @@ func TestHopByHopHeadersAreStripped(t *testing.T) {
 	}
 }
 
-// The paths this proxy serves are exactly the enrolment protocols.
+// The paths this proxy serves are exactly the enrollment protocols.
 func TestProxiedPathsAreTheEnrolmentProtocolsAndNothingElse(t *testing.T) {
 	t.Parallel()
 	for _, path := range []string{
@@ -280,14 +280,14 @@ func TestProxiedPathsAreTheEnrolmentProtocolsAndNothingElse(t *testing.T) {
 		"/scep", "/scep?operation=PKIOperation", "/cmp",
 	} {
 		if !enrollproxy.Proxied(path) {
-			t.Errorf("%q is an enrolment path and is not proxied", path)
+			t.Errorf("%q is an enrollment path and is not proxied", path)
 		}
 	}
 	for _, path := range []string{
 		"/api/v1/certificates", "/", "/healthz", "/metrics", "/ssh/", "/tsa",
 	} {
 		if enrollproxy.Proxied(path) {
-			t.Errorf("%q is not an enrolment path and would be proxied", path)
+			t.Errorf("%q is not an enrollment path and would be proxied", path)
 		}
 	}
 }
@@ -477,7 +477,7 @@ func TestEveryEndpointDownIsReportedRatherThanHidden(t *testing.T) {
 // A traversal path is cleaned BEFORE the allowlist sees it.
 //
 // "/acme/../api/v1/certificates" starts with a proxied prefix and resolves to
-// one that is not. Relying on the outbound HTTP client to normalise it would
+// one that is not. Relying on the outbound HTTP client to normalize it would
 // make the confinement somebody else's property; cleaning first means the string
 // the allowlist checks is the string that gets sent.
 func TestATraversalPathIsCleanedBeforeTheAllowlistCheck(t *testing.T) {
@@ -495,7 +495,7 @@ func TestATraversalPathIsCleanedBeforeTheAllowlistCheck(t *testing.T) {
 	} {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "http://relay.local", nil)
-		// Set the path directly: a normalising client would otherwise resolve
+		// Set the path directly: a normalizing client would otherwise resolve
 		// it before this handler ever saw it, which is the point.
 		req.URL.Path = raw
 		p.ServeHTTP(rec, req)

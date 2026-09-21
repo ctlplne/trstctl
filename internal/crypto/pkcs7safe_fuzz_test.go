@@ -9,7 +9,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
-// scepCrasherFUZZ001 is the minimised input that reproduced FUZZ-001: a 2-byte
+// scepCrasherFUZZ001 is the minimized input that reproduced FUZZ-001: a 2-byte
 // CMS — 0x30 0x84 — a DER SEQUENCE whose long-form length octet (0x84) claims
 // four length bytes follow, none of which are present. The smallstep/pkcs7 BER
 // decoder (ber.go readObject) indexes out of range on it and panics with

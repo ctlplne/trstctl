@@ -673,7 +673,7 @@ func (a *API) getDiscoveryCoverage(w http.ResponseWriter, r *http.Request) {
 // Excluded segments are removed from BOTH halves of the percentage rather than
 // counted as covered. An operator who declares a lab out of scope has not
 // observed it, and a coverage number that rose when somebody excluded something
-// would reward exactly the wrong behaviour.
+// would reward exactly the wrong behavior.
 func (a *API) appendSegmentCoverage(ctx context.Context, tenantID string, out *DiscoveryCoverageResponse) {
 	segments, err := a.store.ListDiscoverySegments(ctx, tenantID)
 	if err != nil {
@@ -712,7 +712,7 @@ func (a *API) appendSegmentCoverage(ctx context.Context, tenantID string, out *D
 			out.Unknowns = append(out.Unknowns, DiscoveryUnknown{
 				Kind: "segment_never_swept", Subject: seg.Name,
 				Detail: "declared, and nothing has ever swept it",
-				Action: "enrol a network-role agent that can reach it and run a discovery sweep",
+				Action: "enroll a network-role agent that can reach it and run a discovery sweep",
 			})
 		case now.Sub(*seg.LastSweptAt) > time.Duration(seg.StalenessHours)*time.Hour:
 			inScope++

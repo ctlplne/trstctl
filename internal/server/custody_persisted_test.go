@@ -82,7 +82,7 @@ func TestCustodyReachesTheDatabaseAndNotJustTheStruct(t *testing.T) {
 
 // The event that carries custody must carry ALL of it.
 //
-// A structural check beside the behavioural one above, because the failure mode
+// A structural check beside the behavioral one above, because the failure mode
 // is a field added to the database and to the API and not to the event in
 // between — and that gap is invisible from either end.
 func TestTheCertificateEventCarriesEveryCustodyFieldTheRowHas(t *testing.T) {

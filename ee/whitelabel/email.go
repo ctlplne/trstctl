@@ -81,7 +81,7 @@ const maxLogoURIBytes = 256 * 1024
 //
 // brand.LogoDataURI is tenant-configurable and arrives as a plain string.
 // Wrapping a tenant string in template.URL is an explicit instruction to
-// html/template NOT to sanitise it (gosec G203), so without this check a tenant
+// html/template NOT to sanitize it (gosec G203), so without this check a tenant
 // could set a javascript: or data:text/html payload and have it rendered into
 // every outbound email sent under the platform's name.
 func safeLogoURI(raw string) template.URL {

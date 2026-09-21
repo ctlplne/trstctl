@@ -60,7 +60,7 @@ func KnownVantage(v Vantage) bool { return v == VantageLocal || v == VantageRela
 
 // ProbeTranscript is the record of one handshake and comparison.
 type ProbeTranscript struct {
-	// Address is the host:port that was dialled.
+	// Address is the host:port that was dialed.
 	Address string
 	// Vantage is where the probe ran from.
 	Vantage Vantage
@@ -155,7 +155,7 @@ func (t ProbeTranscript) Validate() error {
 		return errors.New("transport: probe transcript has no address")
 	}
 	if !KnownVantage(t.Vantage) {
-		return errors.New("transport: probe transcript has no recognised vantage")
+		return errors.New("transport: probe transcript has no recognized vantage")
 	}
 	if !certinfo.KnownMismatch(t.Mismatch) {
 		return errors.New("transport: probe transcript carries an unknown mismatch class")
@@ -199,7 +199,7 @@ func (t ProbeTranscript) Digest() string {
 //
 // Order-independent because a certificate's SAN order is not meaningful and two
 // listeners serving the same names in a different order are serving the same
-// names. Case-normalised because DNS names are case-insensitive, and a digest
+// names. Case-normalized because DNS names are case-insensitive, and a digest
 // that disagreed would raise a divergence nobody can fix.
 //
 // The empty set digests to the empty string rather than to the hash of nothing,
@@ -223,7 +223,7 @@ func SANSetDigest(names []string) string {
 // ChainDigest commits to an issuer chain IN SERVED ORDER.
 //
 // Ordered, unlike the SAN digest, because chain order changes how clients build
-// paths: a chain served backwards breaks handshakes for implementations that do
+// paths: a chain served backward breaks handshakes for implementations that do
 // not reorder, and a digest that ignored order would call that identical.
 func ChainDigest(fingerprints []string) string {
 	if len(fingerprints) == 0 {

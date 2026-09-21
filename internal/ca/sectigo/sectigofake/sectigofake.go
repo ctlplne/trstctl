@@ -71,7 +71,7 @@ func (s *Server) CustomerURI() string { return customerURI }
 func (s *Server) Close() { s.ts.Close() }
 
 // SetPendingPolls makes the first n collect calls for each certificate report
-// "being processed" (code -183) before the chain is returned, modelling SCM's
+// "being processed" (code -183) before the chain is returned, modeling SCM's
 // asynchronous issuance.
 func (s *Server) SetPendingPolls(n int) {
 	s.mu.Lock()

@@ -551,7 +551,7 @@ HashiCorp Vault/OpenBao KV v2, and a generic CI/JSON endpoint.
 Every redelivery reuses the same sync-operation ID — AWS Secrets Manager sends it as
 both `ClientRequestToken` and `Idempotency-Key`; GCP Secret Manager and Azure Key Vault
 compare the current version before creating another, forwarding the ID too — so a
-crash between commit and acknowledgement reconciles to the existing value instead of
+crash between commit and acknowledgment reconciles to the existing value instead of
 duplicating, rejecting any changed replay outright.
 
 Commands are FIFO across the whole tenant+target, not merely one spelling of a

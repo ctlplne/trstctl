@@ -51,7 +51,7 @@ func NewTransport() (*Transport, error) {
 }
 
 // SetPendingPolls makes a submitted request come back under submission and stay
-// there for the next n RetrievePending calls before it is issued, modelling a
+// there for the next n RetrievePending calls before it is issued, modeling a
 // request held for manager approval.
 func (t *Transport) SetPendingPolls(n int) {
 	t.mu.Lock()

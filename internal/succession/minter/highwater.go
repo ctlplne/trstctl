@@ -78,7 +78,7 @@ func WithCheckpointKey(pubDER []byte) HWOption {
 // (now - IssuedAt) exceeds bound does not clear an identity's fail-closed state.
 func WithFreshnessBound(bound int64) HWOption { return func(h *HighWater) { h.freshness = bound } }
 
-// WithQuorum requires size acknowledgements for an epoch advance to become durable.
+// WithQuorum requires size acknowledgments for an epoch advance to become durable.
 func WithQuorum(size int) HWOption { return func(h *HighWater) { h.quorumSize = size } }
 
 // NewHighWater builds a HighWater over a sealed floor map (as loaded from PCAS-05's
@@ -209,10 +209,10 @@ func (h *HighWater) Reconcile(cp succession.SignedEpochCheckpoint, now int64) er
 	return nil
 }
 
-// ProposeAdvance records an instance's acknowledgement of an epoch advance for
+// ProposeAdvance records an instance's acknowledgment of an epoch advance for
 // identityID. The advance becomes durable (sealed) only once a quorum of DISTINCT
 // instances has acknowledged it; it returns whether the advance is now durable. With
-// no quorum configured (size <= 1) the first acknowledgement is durable.
+// no quorum configured (size <= 1) the first acknowledgment is durable.
 func (h *HighWater) ProposeAdvance(identityID string, epoch uint64, instance string) (durable bool, err error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()

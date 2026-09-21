@@ -75,7 +75,7 @@ const evidenceGuidance = "This document states its own completeness. Read `signa
 
 // BuildEvidence assembles a period's document from durable usage.
 //
-// Lines are SORTED by meter. Map iteration order in Go is randomised, so an
+// Lines are SORTED by meter. Map iteration order in Go is randomized, so an
 // unsorted document would hash differently on every build and a signature over
 // it would verify only on the machine that produced it.
 //

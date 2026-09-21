@@ -141,7 +141,7 @@ var agentJobKindVantage = map[string][]string{
 	"connector.deploy":   {mtls.AgentRoleHost, mtls.AgentRoleNetwork},
 	"connector.rollback": {mtls.AgentRoleHost, mtls.AgentRoleNetwork},
 	"connector.test":     {mtls.AgentRoleHost, mtls.AgentRoleNetwork},
-	// B2: HOST ONLY, and this one is not a judgement call. The kind exists so a
+	// B2: HOST ONLY, and this one is not a judgment call. The kind exists so a
 	// private key is generated on the machine that will serve it; a network
 	// relay generating a key for an appliance it merely reaches would recreate
 	// the exact custody hop the epic removes, with an extra machine in the
@@ -365,7 +365,7 @@ func (a *agentService) ReportJobResult(ctx context.Context, req *transport.Repor
 	switch outcome {
 	// D2: all three mean the agent finished the work, so all three are terminal
 	// and none returns the job to the queue. They differ in what was OBSERVED
-	// afterwards, which the receipt and the endpoint state record — a
+	// afterward, which the receipt and the endpoint state record — a
 	// verify_failed deploy that got requeued would retry forever against a
 	// listener that is serving the wrong certificate.
 	case transport.JobOutcomeExecuted, transport.JobOutcomeVerified, transport.JobOutcomeVerifyFailed:

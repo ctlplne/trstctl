@@ -38,7 +38,7 @@ func TestDemoForcesTheSettingsWithoutWhichItSilentlyDoesNothing(t *testing.T) {
 	}
 	if len(cfg.AgentChannel.ClaimableJobKinds) == 0 {
 		t.Error("demo left the claimable allowlist empty. The job ledger is then served and hands " +
-			"nothing out, so the agent enrols successfully and idles forever — the most misleading " +
+			"nothing out, so the agent enrolls successfully and idles forever — the most misleading " +
 			"possible demo, because every surface looks healthy")
 	}
 	// An agent that can mutate an appliance nobody meant to point it at is not a

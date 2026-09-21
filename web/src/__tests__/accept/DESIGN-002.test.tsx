@@ -437,7 +437,7 @@ describe("DESIGN-002 answer-first API playground", () => {
     await user.click(await screen.findByRole("button", { name: "Cancel request" }));
 
     expect((requestSignal as unknown as AbortSignal).aborted).toBe(true);
-    expect(await screen.findByText("Request cancelled.")).toBeInTheDocument();
+    expect(await screen.findByText("Request canceled.")).toBeInTheDocument();
   });
 
   it("disables expired keys and revokes live test keys", async () => {

@@ -25,7 +25,7 @@
 // interfaces remain what they are — per-connector implementation seams — and
 // no fourth list is introduced.
 //
-// Classification is pure, clock-explicit data modelling: no crypto imports,
+// Classification is pure, clock-explicit data modeling: no crypto imports,
 // no I/O, consistent with the package cbom stance. The persisted input (one
 // per-source rollup row per tenant, see internal/store discovery_coverage) is
 // an AN-2 projection of the existing discovery.source.upserted and

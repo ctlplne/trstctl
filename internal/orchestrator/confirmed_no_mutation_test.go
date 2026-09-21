@@ -40,7 +40,7 @@ func TestConfirmedNoMutationBoundaries(t *testing.T) {
 						attempts.Add(1)
 						close(started)
 						<-release
-						// Preserve a real cancelled operation's proof: no signing
+						// Preserve a real canceled operation's proof: no signing
 						// request was sent, so bounded cleanup must still run.
 						return nil, orchestrator.ConfirmedNoMutation(firstCtx.Err())
 					})

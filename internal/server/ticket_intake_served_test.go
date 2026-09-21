@@ -324,7 +324,7 @@ func TestServedTicketIntakePaginatesBothProvidersWithoutGapsAUD47(t *testing.T) 
 		t.Fatalf("provider request coverage = %+v", counts)
 	}
 
-	// Losing the result acknowledgement replays the same first-page event. Its
+	// Losing the result acknowledgment replays the same first-page event. Its
 	// stable event and ticket identities must not roll the terminal checkpoint
 	// backward or open a 203rd request.
 	for _, run := range runs {

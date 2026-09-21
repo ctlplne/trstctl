@@ -51,7 +51,7 @@ func (s *Server) LifecycleAutomationPlan(ctx context.Context, tenantID string, a
 			{Action: "pause", State: "configuration_only", Detail: "Maintenance windows pause new scheduler starts; changing them is an operator configuration action."},
 			{Action: "resume", State: "automatic", Detail: "Deferred starts resume automatically when the next maintenance window opens."},
 			{Action: "retry", State: "conditional", Detail: "A failed renewal can be reviewed as a new attempt once its earlier renewal job is terminal."},
-			{Action: "cancel", State: "unavailable_after_enqueue", Detail: "Cancelling renewal while keeping the identity active is unavailable. Revocation or retirement stops queued issuance retries after any live worker attempt ends or expires; completed external effects are retained."},
+			{Action: "cancel", State: "unavailable_after_enqueue", Detail: "Canceling renewal while keeping the identity active is unavailable. Revocation or retirement stops queued issuance retries after any live worker attempt ends or expires; completed external effects are retained."},
 			{Action: "rollback", State: "conditional", Detail: "Use connector rollback only when a deployed predecessor and a connector-backed rollback procedure exist."},
 		},
 		PreviewWrites:          []string{},

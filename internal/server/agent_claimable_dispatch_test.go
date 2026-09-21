@@ -14,7 +14,7 @@ import (
 // claim it.
 //
 // The control-plane dispatcher is the sole handler for every outbox sweep, and
-// its default branch returns a hard error for an unrecognised destination —
+// its default branch returns a hard error for an unrecognized destination —
 // correct for a genuinely unknown one, catastrophic for a kind an AGENT is
 // supposed to execute. A hard error burns the row's attempt budget and lands it
 // in status='failed', and ClaimAgentJobs only ever hands out rows in 'pending'.
@@ -59,7 +59,7 @@ func TestNoAgentClaimableKindIsEverDeadLettered(t *testing.T) {
 
 // A genuinely unknown destination must STILL fail hard. The fix above must not
 // have turned the dispatcher into a global silent ACK — there is no second
-// worker to own an unrecognised row, so accepting one would lose it quietly,
+// worker to own an unrecognized row, so accepting one would lose it quietly,
 // which is worse than dead-lettering it loudly.
 func TestAnUnknownDestinationStillFailsClosed(t *testing.T) {
 	t.Parallel()

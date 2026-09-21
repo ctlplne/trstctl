@@ -198,7 +198,7 @@ func TestBackupWriteFenceCancelledExternalMutationDoesNotRun(t *testing.T) {
 	waitForAcquiredConnections(t, peer, 1)
 	cancelWait()
 	if err := waitHistoryRewriteResult(t, mutationResult); !errors.Is(err, context.Canceled) {
-		t.Fatalf("cancelled external mutation = %v, want context.Canceled", err)
+		t.Fatalf("canceled external mutation = %v, want context.Canceled", err)
 	}
 
 	close(releaseFence)
@@ -208,7 +208,7 @@ func TestBackupWriteFenceCancelledExternalMutationDoesNotRun(t *testing.T) {
 	if _, ok, err := peer.LatestAuditCheckpoint(context.Background(), tenantA); err != nil {
 		t.Fatalf("LatestAuditCheckpoint: %v", err)
 	} else if ok {
-		t.Fatal("cancelled external mutation persisted a checkpoint")
+		t.Fatal("canceled external mutation persisted a checkpoint")
 	}
 }
 

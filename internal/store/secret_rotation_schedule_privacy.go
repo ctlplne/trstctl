@@ -135,7 +135,7 @@ func ValidateSecretRotationSchedulePrivacyEvidenceV3(
 
 // SecretRotationSchedulePrivacyPreparation reports the exact rows closed by one
 // preparation transaction. OuterResolutions counts exact same-transaction
-// acknowledgements from the generic protected idempotency-result owner.
+// acknowledgments from the generic protected idempotency-result owner.
 type SecretRotationSchedulePrivacyPreparation struct {
 	Ticks            int
 	TickRows         int
@@ -229,7 +229,7 @@ type secretRotationSchedulePrivacyCommand struct {
 // the exact subject. tx belongs to the caller's already-open privacy preparation
 // transaction and exclusive history-operation grant. This function never opens
 // another transaction. It delegates selected outer key/result changes to their
-// generic owner and verifies that owner's exact same-transaction acknowledgement.
+// generic owner and verifies that owner's exact same-transaction acknowledgment.
 func (s *Store) PrepareSecretRotationSchedulePrivacyErasureTx(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -1575,7 +1575,7 @@ func verifySecretRotationSchedulePrivacyOuterAcknowledgementTx(
 		ack.OriginalResultCodec != requirement.ResultCodec ||
 		ack.ResolvedIdempotencyKey != requirement.ReplacementIdempotencyKey ||
 		ack.ResolvedIdempotencyKey == "" {
-		return fmt.Errorf("%w: scheduler outer privacy acknowledgement differs from requirement",
+		return fmt.Errorf("%w: scheduler outer privacy acknowledgment differs from requirement",
 			ErrSecretRotationScheduleTickConflict)
 	}
 	if requirement.TerminalBodyMatch {
@@ -1610,7 +1610,7 @@ func verifySecretRotationSchedulePrivacyOuterAcknowledgementTx(
 	}
 	if outer.status == "completed" {
 		if !bytes.Equal(protected, ack.ProtectedResult) {
-			return fmt.Errorf("%w: resolved scheduler outer row differs from protected acknowledgement",
+			return fmt.Errorf("%w: resolved scheduler outer row differs from protected acknowledgment",
 				ErrSecretRotationScheduleTickConflict)
 		}
 	} else if len(protected) != 0 || len(outer.result) != 0 {

@@ -169,7 +169,7 @@ type EnrollmentService struct {
 	// EnrollmentWebServices are the CES URIs published in the directory's
 	// msPKI-Enrollment-Servers attribute. They are not legacy /certsrv or NDES
 	// endpoints; keeping the three concepts separate prevents a CES record from
-	// being mislabelled as evidence that those IIS role services are absent.
+	// being mislabeled as evidence that those IIS role services are absent.
 	EnrollmentWebServices []string `json:"enrollment_web_services,omitempty"`
 	// Endpoints are live, configured relay probes for IIS enrollment surfaces.
 	// Only normalized URL/status/authentication facts cross the agent boundary;

@@ -74,7 +74,7 @@ const succeededRotation = {
 };
 
 describe("Jobs and queues design contract", () => {
-  it("keeps a cancelled rotation out of failures and exposes its stopped outcome in filters and review", async () => {
+  it("keeps a canceled rotation out of failures and exposes its stopped outcome in filters and review", async () => {
     apiMock.rotationRuns.mockResolvedValue({ items: [{ ...succeededRotation, status: "cancelled" }] });
     apiMock.connectorDeliveries.mockResolvedValue({ items: [] });
     const user = userEvent.setup();

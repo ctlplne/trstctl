@@ -29,7 +29,7 @@ func EndpointReplacementIdentityID(tenantID, originalID, previewFingerprint stri
 // EnsureEndpointReplacement prepares one successor for an exact reviewed
 // original. Its deterministic identity and event make a retry after creation
 // safe even when the HTTP response was never cached. Issuance still goes through
-// the normal policy, approval, lifecycle event, and outbox path afterwards.
+// the normal policy, approval, lifecycle event, and outbox path afterward.
 func (o *Orchestrator) EnsureEndpointReplacement(ctx context.Context, tenantID string, reviewed store.Identity, version uint64, target store.DeploymentTarget, issuer store.IdentityEndpointIssuer) (store.Identity, error) {
 	return o.EnsureEndpointReplacementWithProfile(ctx, tenantID, reviewed, version, target, issuer, "")
 }

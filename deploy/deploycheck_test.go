@@ -22,7 +22,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// These tests are the behavioural counterpart to the static deploy/ string-match
+// These tests are the behavioral counterpart to the static deploy/ string-match
 // suite (OPS-008). A green `go test ./deploy/...` used to mean only that the
 // manifests *named* certain strings; it never bound a manifest to the artifact it
 // drives. These checks close that gap by reconciling every manifest against the

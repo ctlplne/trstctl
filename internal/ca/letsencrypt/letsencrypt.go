@@ -48,7 +48,7 @@ func NewPluginWithRemoteAccountSigner(name, directoryURL string, client *http.Cl
 		o(&cfg)
 	}
 	// A nil solver stays nil. The driver fails closed when an authority
-	// actually requires validation, which is the honest behaviour for a
+	// actually requires validation, which is the honest behavior for a
 	// deployment that has configured no DNS-01 provider — the previous no-op
 	// substitution made that state indistinguishable from a working one.
 	driver, err := acmekey.NewDriverWithDigestSigner(directoryURL, cfg.solver, client, signer)

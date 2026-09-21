@@ -79,7 +79,7 @@ func (s *Server) KMIPAddr() string {
 	return s.kmip.Addr()
 }
 
-// RunKMIP binds and serves the configured KMIP listener until ctx is cancelled.
+// RunKMIP binds and serves the configured KMIP listener until ctx is canceled.
 func (s *Server) RunKMIP(ctx context.Context) {
 	if s.kmip == nil {
 		return

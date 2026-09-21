@@ -232,7 +232,7 @@ func (s *Service) Revoke(ctx context.Context, tenantID, keyID, requester, idempo
 }
 
 // Zeroize schedules/performs the provider's destruction of the key material (the
-// remote analogue of wiping a locked buffer). After zeroize the operator can no
+// remote analog of wiping a locked buffer). After zeroize the operator can no
 // longer recover the material once the provider's window elapses. It is the most
 // destructive transition and requires a distinct-approver approval under dual
 // control; it emits byok.EventKeyZeroized (AN-2).

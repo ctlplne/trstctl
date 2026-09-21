@@ -23,7 +23,7 @@
 #     the narrowest suppression this tool version actually honors.
 #   - Guarded by two tests in internal/secretscan: this file's SHAPE (no
 #     `paths`, no `targetRules`, conformance-key body still pinned) by
-#     TestGitleaksConfigHasNoPathBasedTestSourceExemption, and the BEHAVIOUR
+#     TestGitleaksConfigHasNoPathBasedTestSourceExemption, and the BEHAVIOR
 #     (a token and a PEM planted in a `*_test.go` file are reported by a scan
 #     running under this very config, while the conformance vector is not) by
 #     TestServedGitleaksScanDetectsPlantedSecretInTestSource.

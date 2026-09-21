@@ -42,7 +42,7 @@ func TestEABPolicyPermitsScopesWithoutSurprises(t *testing.T) {
 		t.Error("a credential with no allowed identifiers must stay unscoped; adding scope is opt-in")
 	}
 	// An empty entry must not quietly widen a scope that looks narrow. Config
-	// validation rejects it too; this is the second line of defence.
+	// validation rejects it too; this is the second line of defense.
 	narrow := EABPolicy{AllowedIdentifiers: []string{"", "fixed.example.test"}}
 	if narrow.permits("anything.example.test") {
 		t.Error("an empty entry must not act as a wildcard")

@@ -40,7 +40,7 @@ func TestSignContextFallsBackForSoftwareSigner(t *testing.T) {
 }
 
 // TestSignContextRespectsAlreadyCancelledContext verifies the helpers fail fast on
-// an already-cancelled context rather than performing the operation — the cheap
+// an already-canceled context rather than performing the operation — the cheap
 // safety property that makes threading a context meaningful even for the fallback
 // (software) path, which would otherwise ignore the context entirely.
 func TestSignContextRespectsAlreadyCancelledContext(t *testing.T) {
@@ -51,12 +51,12 @@ func TestSignContextRespectsAlreadyCancelledContext(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // cancelled before use
+	cancel() // canceled before use
 
 	if _, err := crypto.SignContext(ctx, signer, []byte("x"), crypto.SignOptions{Hash: crypto.SHA256}); !errors.Is(err, context.Canceled) {
-		t.Errorf("SignContext with a cancelled context = %v; want context.Canceled", err)
+		t.Errorf("SignContext with a canceled context = %v; want context.Canceled", err)
 	}
 	if _, err := crypto.GenerateKeyContext(ctx, b, crypto.ECDSAP256); !errors.Is(err, context.Canceled) {
-		t.Errorf("GenerateKeyContext with a cancelled context = %v; want context.Canceled", err)
+		t.Errorf("GenerateKeyContext with a canceled context = %v; want context.Canceled", err)
 	}
 }

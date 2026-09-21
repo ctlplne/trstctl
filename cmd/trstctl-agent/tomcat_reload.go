@@ -26,7 +26,7 @@ type tomcatReloadOptions struct {
 // runTomcatReload is an operator-owned host action, invoked by a connector's
 // outbox attempt with fixed argv from the local exec profile. Stock catalina.sh
 // has no TLS reload command; Tomcat Manager's sslReload is the supported API.
-// A file change, HTTP 200 with FAIL text, or a redirect is not an acknowledgement.
+// A file change, HTTP 200 with FAIL text, or a redirect is not an acknowledgment.
 func runTomcatReload(ctx context.Context, options tomcatReloadOptions) (bool, error) {
 	if options.url == "" && options.user == "" && options.passwordFile == "" {
 		return false, nil

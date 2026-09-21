@@ -61,7 +61,7 @@ announcement. The current receipt has no blocking keyboard-only defect.
 Method: screen reader audit checklist for the served console shell, using the DOM
 accessibility tree as the committed source of truth. The checklist verifies that
 the primary navigation is named, page changes announce the new heading, loading
-states expose `role="status"`, data tables carry captions or labelled headings,
+states expose `role="status"`, data tables carry captions or labeled headings,
 and icon-only controls have programmatic labels. Automated axe checks are not used
 as the sole proof; they are the repeatable regression gate for this manual
 assistive-technology receipt.
@@ -70,7 +70,7 @@ Receipt anchors:
 
 - `web/src/components/AppShell.tsx` owns the skip link, primary navigation label,
   route focus, and live route announcement.
-- `web/src/components/DataGrid.tsx` owns labelled grid controls, column chooser
+- `web/src/components/DataGrid.tsx` owns labeled grid controls, column chooser
   labels, and table semantics.
 - `web/src/__tests__/reduced_motion_and_a11y.test.tsx` proves the primary
   navigation has accessible names and the default shell route has no axe

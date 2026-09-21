@@ -100,7 +100,7 @@ func ValidWindowsStoreLocation(location WindowsStoreLocation) bool {
 }
 
 // windowsCertReader is the platform call this source depends on, declared as an
-// interface so the source's behaviour — normalization, skipping, error handling
+// interface so the source's behavior — normalization, skipping, error handling
 // — is testable on every platform, and so the syscall surface stays in exactly
 // one file behind a build tag.
 //

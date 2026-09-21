@@ -9,7 +9,7 @@ import (
 )
 
 // The offline-renewal distinctions (I5). Each row exists because merging it
-// with a neighbour sends an operator to the wrong laptop — or to no laptop,
+// with a neighbor sends an operator to the wrong laptop — or to no laptop,
 // which is worse: the whole failure mode here is that NOTHING fails until the
 // certificate already has.
 func TestRenewalRiskDistinctions(t *testing.T) {

@@ -106,7 +106,7 @@ func TestUpstreamIssuanceSolvesDNS01Unattended(t *testing.T) {
 	if srv.ChallengeAccepts() != 1 {
 		t.Errorf("the authority saw %d challenge accepts, want 1", srv.ChallengeAccepts())
 	}
-	// The record is retracted afterwards. A validation token left live in
+	// The record is retracted afterward. A validation token left live in
 	// public DNS is a real leak of estate structure.
 	if retracted != 1 {
 		t.Errorf("the published record was retracted %d times, want 1 — a TXT record left "+

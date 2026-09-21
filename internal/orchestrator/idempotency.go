@@ -253,7 +253,7 @@ type schedulerPrivacyCachedResponse struct {
 // exact row lock in tx. This method authenticates the cached HTTP envelope,
 // re-protects it under the replacement key's AAD when the raw key changes, and
 // installs the result with an exact old-row CAS before returning an
-// acknowledgement. It never opens a second SQL mutation transaction.
+// acknowledgment. It never opens a second SQL mutation transaction.
 func (i *Idempotency) ResolveSecretRotationSchedulePrivacyOuter(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -447,7 +447,7 @@ const (
 // by its request deadline and by the 60 s server-side statement timeout, and
 // the record or release step by its own bounded context, so no live claimant
 // can still own a claim two minutes after making it. A claim left pending by a
-// cancelled request whose release failed under pool pressure (seen on the lab
+// canceled request whose release failed under pool pressure (seen on the lab
 // at 24-way concurrency) is therefore reclaimable by the customer's next retry
 // within two minutes instead of ten.
 const (

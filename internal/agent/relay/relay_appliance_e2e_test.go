@@ -35,7 +35,7 @@ import (
 // proof: the DoD suite drives a10, cisco, kemp and netscaler through the served
 // API against these same emulators. Refusing the control-plane path — E1's
 // acceptance criterion — without this file would have retired a proven path in
-// favour of an unproven one. So the refusal waits on this, not the other way
+// favor of an unproven one. So the refusal waits on this, not the other way
 // round.
 //
 // What each case asserts is deliberately not "no error": a connector that

@@ -26,7 +26,7 @@ export function DiscoveryHero({ findings }: { findings: DiscoveryFinding[] }) {
 }
 
 // C5: certificate transparency used to share this tile with drift detection —
-// one number labelled "CT-log & drift findings", which is not a capability, it
+// one number labeled "CT-log & drift findings", which is not a capability, it
 // is a footnote. CT monitoring now has its own surface (CTMonitoringPanel) and
 // this counts drift alone, so neither number is diluted by the other.
 export function DriftPanel({ findings, sources }: { findings: DiscoveryFinding[]; sources: DiscoverySource[] }) {

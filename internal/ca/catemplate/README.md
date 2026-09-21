@@ -17,12 +17,12 @@ type Backend interface {
 ```
 
 `Issue` submits `req.CSR` to your CA (authorizing `req.DNSNames`, requesting
-`req.TTL` where the CA honours it) and returns the issued chain, leaf first, PEM.
+`req.TTL` where the CA honors it) and returns the issued chain, leaf first, PEM.
 That is the only CA-specific code you write.
 
 The template's `Plugin` (from `New(backend)`) contributes the rest: implementing
 `ca.CA`, rejecting an empty CSR, parsing the chain, extracting the serial and
-expiry, labelling the issuer, and wrapping errors.
+expiry, labeling the issuer, and wrapping errors.
 
 ## Adding a CA plugin
 

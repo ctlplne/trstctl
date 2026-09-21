@@ -211,7 +211,7 @@ for (const viewport of viewports) {
       await signIn(page);
       // signIn proves the authenticated shell as soon as Home is interactive,
       // while Home's live tiles may still be reading. WebKit reports a fetch
-      // cancelled by the following navigation as a page error on the new
+      // canceled by the following navigation as a page error on the new
       // route, especially when several route workers share the live stack.
       // Drain the authenticated entry page before resetting its diagnostics so
       // a Home teardown cannot be misattributed to the destination receipt.

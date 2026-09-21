@@ -141,7 +141,7 @@ def signal_group(child, sig):
 
 
 def cancel_run(_signum, _frame):
-    raise KeyboardInterrupt("server test run cancelled")
+    raise KeyboardInterrupt("server test run canceled")
 
 
 def run(args):

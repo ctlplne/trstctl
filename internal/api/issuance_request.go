@@ -100,7 +100,7 @@ type issuanceRequestList struct {
 }
 
 const issuanceRequestGuidance = "A request has a real lifecycle: requested, then approved, denied, " +
-	"expired, or cancelled — and approved is not the end, because issuance can still fail. Denial " +
+	"expired, or canceled — and approved is not the end, because issuance can still fail. Denial " +
 	"and expiry are deliberately different: a denial is somebody's decision with a reason, an expiry " +
 	"is nobody's. A requester can withdraw their own request and can never decide it; self-approval " +
 	"would leave an approval record that looks legitimate while nobody independent ever looked."

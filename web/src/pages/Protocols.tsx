@@ -241,7 +241,7 @@ export function Protocols() {
   const [protocolStatuses, setProtocolStatuses] = useState<ProtocolRuntimeStatus[]>([]);
   const [relayAgents, setRelayAgents] = useState<Agent[]>([]);
   const [relayTopologyError, setRelayTopologyError] = useState<string | null>(null);
-  // I4: recent enrolment refusals, classified. Loaded separately so a
+  // I4: recent enrollment refusals, classified. Loaded separately so a
   // deployment without the surface still renders the rest of the page.
   const [diagnostics, setDiagnostics] = useState<EnrollmentDiagnosticList | null>(null);
   const [verifyingDiagnostic, setVerifyingDiagnostic] = useState<string | null>(null);
@@ -595,7 +595,7 @@ export function Protocols() {
         </ul>
       </section>
 
-      {/* I4: what enrolments are failing and what to do about it. Rendered only
+      {/* I4: what enrollments are failing and what to do about it. Rendered only
           when something has failed — an empty panel on a healthy estate is
           noise, and this surface earns attention by appearing. */}
       {(diagnostics?.items ?? []).length > 0 ? (

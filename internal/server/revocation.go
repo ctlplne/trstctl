@@ -891,7 +891,7 @@ func (s *revocationService) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /crl/{tenant}", s.crlHandler())
 }
 
-// runScheduler runs the CRL freshness scheduler until ctx is cancelled: it sweeps
+// runScheduler runs the CRL freshness scheduler until ctx is canceled: it sweeps
 // once on start (so a freshly booted, overdue deployment regenerates promptly) and
 // then on a fixed cadence, regenerating any CRL whose nextUpdate is within the
 // refresh lead. A sweep error is logged and the next tick retries — the same

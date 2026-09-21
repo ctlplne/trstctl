@@ -4,7 +4,7 @@ import path from "node:path";
 
 /** S-R1: permanent ratchets that keep the defect classes this IA train fixed
  * from silently returning. These are source-level guards (they read the shipped
- * tree) plus a meta-check that the behavioural guards stay in CI. */
+ * tree) plus a meta-check that the behavioral guards stay in CI. */
 
 const SRC = path.resolve(process.cwd(), "src");
 
@@ -44,7 +44,7 @@ describe("IA ratchets (S-R1)", () => {
     expect(dashboard).toMatch(/expiresWithinDays|servedAlgoMix/);
   });
 
-  it("keeps the behavioural IA guards present in the test suite", () => {
+  it("keeps the behavioral IA guards present in the test suite", () => {
     const tests = path.join(SRC, "__tests__");
     for (const guard of [
       "naming_parity.test.tsx",

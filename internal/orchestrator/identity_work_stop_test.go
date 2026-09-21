@@ -113,12 +113,12 @@ func TestTerminalIdentityWorkCancellationSurvivesReplay(t *testing.T) {
 			}
 		}
 		if !publish {
-			t.Fatal("revocation publication was cancelled")
+			t.Fatal("revocation publication was canceled")
 		}
 	}
 	assertState()
 	// Reports already in flight can enter the event log after the stop. They
-	// remain audit evidence without reopening a cancelled run or its queue.
+	// remain audit evidence without reopening a canceled run or its queue.
 	for _, status := range []string{"running", "failed"} {
 		observation := projections.LifecycleRotationRecorded{ID: runID, IdentityID: id, OutboxID: &parent.ID, Status: status, Trigger: "scheduler", IdempotencyKey: parent.IdempotencyKey}
 		if status == "failed" {

@@ -17,11 +17,11 @@
 //
 //   - completeness: every entry names a non-empty event type, and every event the
 //     orchestrator/lifecycle actually emits maps back to a ledger entry (no served
-//     mutation can quietly emit an event that is not catalogued, and no catalogued
+//     mutation can quietly emit an event that is not cataloged, and no cataloged
 //     action can point at an empty event);
 //   - filterability: the audit query layer resolves a feature_id/action filter to
 //     the event types in this ledger, so an operator can ask "show me every
-//     revocation" without memorising raw event-type strings.
+//     revocation" without memorizing raw event-type strings.
 //
 // Feature ids match the catalog in docs/features.tsv; actions are the stable verb an
 // operator reasons about. The ledger is keyed by (feature_id, action) so the same
@@ -356,7 +356,7 @@ var ledger = []FeatureEvent{
 	{"F37", "Secret rotation engine", "run_due_secret_rotations", "runDueSecretRotationSchedules", []string{EventSecretRotationScheduleRan}},
 }
 
-// eventTypeSet is the flattened set of every event type catalogued above, built
+// eventTypeSet is the flattened set of every event type cataloged above, built
 // once. It is the denominator the completeness test uses to prove no emitted event
 // escapes the ledger.
 var eventTypeSet = func() map[string]struct{} {
@@ -414,7 +414,7 @@ func EventTypesForFeatureAction(featureID, action string) (types []string, ok bo
 	return types, true
 }
 
-// HasEventType reports whether t is catalogued in the ledger. The completeness test
+// HasEventType reports whether t is cataloged in the ledger. The completeness test
 // uses it to assert every emitted lifecycle/orchestrator event type maps back to a
 // ledger entry.
 func HasEventType(t string) bool {
@@ -422,7 +422,7 @@ func HasEventType(t string) bool {
 	return ok
 }
 
-// EventTypes returns every distinct event type the ledger catalogues, sorted.
+// EventTypes returns every distinct event type the ledger catalogs, sorted.
 func EventTypes() []string {
 	out := make([]string, 0, len(eventTypeSet))
 	for t := range eventTypeSet {

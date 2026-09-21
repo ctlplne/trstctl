@@ -11,7 +11,7 @@ import (
 )
 
 // Worker drives evidence-gated cutovers from the AN-2 ledger (INT-17): it extracts an
-// identity's signed relying-party acknowledgements from ledger events, evaluates the
+// identity's signed relying-party acknowledgments from ledger events, evaluates the
 // quorum via the Controller, and — only if met — announces the pure-PQC succession,
 // revokes then zeroizes the predecessor, and emits the retirement event binding the
 // ack-set digest (PCAS-claims-2/3/8). At-least-once invocation is safe: a below-quorum
@@ -21,7 +21,7 @@ type Worker struct{ ctrl *Controller }
 // NewWorker returns a retirement worker over ctrl.
 func NewWorker(ctrl *Controller) *Worker { return &Worker{ctrl: ctrl} }
 
-// EvaluateCutover reads the acknowledgements for target from ledgerEvents and runs the
+// EvaluateCutover reads the acknowledgments for target from ledgerEvents and runs the
 // evidence-gated cutover. predecessor performs the fail-closed revoke + zeroize (in
 // production, a signer-backed implementation that destroys the identity's predecessor
 // key). A re-wrap gate (PCAS-14 / INT-12) may be threaded via ctrl's CutoverRequest

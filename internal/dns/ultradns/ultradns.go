@@ -158,7 +158,7 @@ func (p *Provider) newRequest(ctx context.Context, method, name string, body io.
 }
 
 // do runs req through the shared cloudhttp round-trip (bounded read, non-2xx
-// normalisation, drain; CODE-006) and maps a non-2xx response to an *apiError so
+// normalization, drain; CODE-006) and maps a non-2xx response to an *apiError so
 // CleanupTXT's 404-is-a-no-op predicate can inspect the retained status without
 // retaining attacker-controlled response bytes (AN-8). UltraDNS returns no body the
 // provider reads, so out is nil.

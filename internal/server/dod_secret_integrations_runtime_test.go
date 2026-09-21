@@ -450,7 +450,7 @@ func dodCrashFirstVersioningSyncAfterReceiverCommit(t *testing.T, srv *Server) {
 			return nil
 		}
 		delete(remaining, payload.Target)
-		return errors.New("dod forced crash after receiver commit before local acknowledgement")
+		return errors.New("dod forced crash after receiver commit before local acknowledgment")
 	}
 }
 

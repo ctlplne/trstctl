@@ -19,7 +19,7 @@ type fakePersist struct {
 	domains []string
 	logs    []ctmonitor.LogState
 	saved   map[string]int64
-	saveSig chan struct{} // signalled on each SaveCheckpoint
+	saveSig chan struct{} // signaled on each SaveCheckpoint
 }
 
 type aud70MixedFetcher struct{}
@@ -150,7 +150,7 @@ func TestSchedulerRunOnceNoConfig(t *testing.T) {
 	}
 }
 
-// Run polls immediately, then loops until the context is cancelled, returning
+// Run polls immediately, then loops until the context is canceled, returning
 // cleanly.
 func TestSchedulerRunStopsOnContextCancel(t *testing.T) {
 	fetch := &fakeFetcher{tree: []ctlog.Entry{entry("shadow.example.com")}}

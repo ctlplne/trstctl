@@ -148,7 +148,7 @@ func ResolveCustomerRef(value string) (string, bool) {
 
 // parseDelegatedOperations refuses anything outside the closed vocabulary.
 //
-// A typo'd operation that were accepted would store a grant that authorises
+// A typo'd operation that were accepted would store a grant that authorizes
 // nothing, and the operator would see "granted" and later be refused with no
 // way to connect the two.
 func parseDelegatedOperations(raw string) ([]Operation, error) {
@@ -172,7 +172,7 @@ func parseDelegatedOperations(raw string) ([]Operation, error) {
 	}
 	if len(out) == 0 {
 		return nil, fmt.Errorf("provider-grant: -operations is required. A grant with no operations " +
-			"authorises nothing, and storing one would put a row in the table that reads like access")
+			"authorizes nothing, and storing one would put a row in the table that reads like access")
 	}
 	return out, nil
 }

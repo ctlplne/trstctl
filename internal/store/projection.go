@@ -193,7 +193,7 @@ type UpgradeDispatchJob struct {
 //
 // Replay-safe twice over: dispatch rows land ON CONFLICT DO NOTHING (the PK is
 // the event's own identity), and the campaign's round only moves FORWARD — a
-// replayed round cannot drag dispatch_round backwards past a later one.
+// replayed round cannot drag dispatch_round backward past a later one.
 func (s *Store) ApplyAgentUpgradeRingDispatchedTx(ctx context.Context, tx pgx.Tx, tenantID, campaignID, ring string, round int, jobs []UpgradeDispatchJob, at time.Time) error {
 	for _, j := range jobs {
 		if _, err := tx.Exec(ctx,
@@ -285,7 +285,7 @@ func (s *Store) ApplyIssuanceRequestIssuedTx(ctx context.Context, tx pgx.Tx, ten
 // ApplyOwnershipConflictResolvedTx closes an ownership disagreement (I2).
 //
 // The WHERE pins resolved_at IS NULL, so a second operator resolving the same
-// row cannot overwrite the first one's judgement. Two people closing a conflict
+// row cannot overwrite the first one's judgment. Two people closing a conflict
 // with different reasons and the later one silently winning is exactly what the
 // queue exists to prevent.
 func (s *Store) ApplyOwnershipConflictResolvedTx(ctx context.Context, tx pgx.Tx, tenantID, id, by, resolution string, at time.Time) error {

@@ -49,7 +49,7 @@ func TestSMTPGreetingHonorsCancellation(t *testing.T) {
 	select {
 	case err := <-result:
 		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("cancelled SMTP send returned %v", err)
+			t.Fatalf("canceled SMTP send returned %v", err)
 		}
 	case <-time.After(time.Second):
 		_ = conn.Close() // Release the pre-fix sender; never leak the fault fixture.
@@ -102,7 +102,7 @@ func TestSMTPProductionExchangeAndDataDeadline(t *testing.T) {
 				}
 				bodyReceived <- string(body)
 				if stall {
-					_, err = wire.ReadLine() // The cancelled client must close the socket.
+					_, err = wire.ReadLine() // The canceled client must close the socket.
 					if err == nil {
 						err = errors.New("client proceeded without DATA acceptance")
 					} else if errors.Is(err, io.EOF) {
@@ -124,7 +124,7 @@ func TestSMTPProductionExchangeAndDataDeadline(t *testing.T) {
 			err = email.New(listener.Addr().String(), "alerts@example.test", []string{"qa@example.test"}).Notify(ctx, notify.Alert{Subject: "wire delivery", Detail: "exact marker\n.dot-prefixed line"})
 			if stall {
 				if !errors.Is(err, context.DeadlineExceeded) {
-					t.Fatalf("DATA acknowledgement deadline: %v", err)
+					t.Fatalf("DATA acknowledgment deadline: %v", err)
 				}
 			} else if err != nil {
 				t.Fatal(err)

@@ -49,7 +49,7 @@ import (
 //
 // It is a LOCAL subcommand against the database, not a served route, because of
 // the bootstrap problem: a route handing out provider authority must itself be
-// authorised by somebody holding provider authority, and at install time no
+// authorized by somebody holding provider authority, and at install time no
 // such operator exists. Requiring direct database access states the real trust
 // level instead of inventing a self-referential API gate.
 func eeLocalCommand(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) (bool, error) {

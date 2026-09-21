@@ -9,7 +9,7 @@ import (
 )
 
 // issuanceprecondition.go is the broker's generic, feature-neutral issuance-
-// precondition seam. It is the control-plane analogue of the AN-4 signer's
+// precondition seam. It is the control-plane analog of the AN-4 signer's
 // signing.WithIssuanceGate seam: the core defines ONLY this generic extension point;
 // what a precondition actually verifies, and how a decision is reached, lives entirely
 // in an edition implementation attached via WithIssuancePrecondition. The core-only
@@ -102,7 +102,7 @@ type BrokerOption func(*Broker)
 
 // WithIssuancePrecondition attaches a generic issuance precondition consulted on the
 // chain-bound issuance path (Broker.IssueChainBound). A nil precondition is ignored, so
-// an unlicensed attach leaves the seam inert. This is the broker analogue of
+// an unlicensed attach leaves the seam inert. This is the broker analog of
 // signing.WithIssuanceGate: the core names only the generic seam; the edition supplies
 // the implementation without importing ee/ into core.
 func WithIssuancePrecondition(p IssuancePrecondition) BrokerOption {

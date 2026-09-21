@@ -13,7 +13,7 @@ import (
 // Maintenance windows: when a renewal is allowed to touch production (epic D6).
 //
 // A certificate renewal is not a passive event. It deploys to a listener and
-// reloads a service, and there are hours in every organisation's week when
+// reloads a service, and there are hours in every organization's week when
 // nobody wants that to happen unattended — a trading window, a month-end close,
 // a change freeze. Before this, the scheduler renewed whenever the certificate
 // was due and an operator's only control was to turn renewal off entirely,
@@ -28,7 +28,7 @@ import (
 var (
 	errWindowEmpty    = errors.New("lifecycle: maintenance window spec is empty")
 	errWindowNoTime   = errors.New("lifecycle: maintenance window names days but no time range")
-	errWindowBadDay   = errors.New("lifecycle: maintenance window names an unrecognised weekday")
+	errWindowBadDay   = errors.New("lifecycle: maintenance window names an unrecognized weekday")
 	errWindowBadRange = errors.New("lifecycle: maintenance window time range must be HH:MM-HH:MM")
 	errWindowBadClock = errors.New("lifecycle: maintenance window time is not a valid HH:MM")
 )
@@ -36,7 +36,7 @@ var (
 // Window is one recurring period during which renewals may run.
 //
 // Expressed in local weekday/hour terms rather than as absolute instants,
-// because that is how organisations actually describe change windows ("weekends
+// because that is how organizations actually describe change windows ("weekends
 // and weeknights after 8pm"), and an absolute schedule would need regenerating
 // forever.
 type Window struct {

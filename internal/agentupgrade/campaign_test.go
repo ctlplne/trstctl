@@ -55,7 +55,7 @@ func TestSilentAgentsHaltTheRollout(t *testing.T) {
 	}
 }
 
-// Verification means a health receipt, not an acknowledgement of the job.
+// Verification means a health receipt, not an acknowledgment of the job.
 func TestVerificationIsAHealthReceiptNotAnAcknowledgement(t *testing.T) {
 	t.Parallel()
 	// All five acknowledged, none verified healthy: that is five silent agents.
@@ -102,12 +102,12 @@ func TestResumeRestartsAtTheRingThatHaltedNotPastIt(t *testing.T) {
 	}
 }
 
-// Pause must actually gate execution, not just grey out a button.
+// Pause must actually gate execution, not just gray out a button.
 func TestPauseGatesDispatchRatherThanJustTheButton(t *testing.T) {
 	t.Parallel()
 	if CanDispatch(StatePaused) {
 		t.Fatal("a paused campaign may still dispatch upgrade jobs.\n\n" +
-			"A pause that greys out a button while jobs keep flowing is worse than no pause: the " +
+			"A pause that grays out a button while jobs keep flowing is worse than no pause: the " +
 			"operator believes they stopped the rollout.")
 	}
 	if CanDispatch(StateHalted) {

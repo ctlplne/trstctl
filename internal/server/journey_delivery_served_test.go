@@ -569,7 +569,7 @@ func TestServedWildcardIdentityRequiresAcknowledgementAndRenewsTRACE017(t *testi
 		"owner_id": owner.ID,
 	})
 	if status != http.StatusBadRequest {
-		t.Fatalf("wildcard identity without blast-radius acknowledgement: status %d body %s, want 400", status, body)
+		t.Fatalf("wildcard identity without blast-radius acknowledgment: status %d body %s, want 400", status, body)
 	}
 	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/identities", tok, map[string]any{
 		"kind":     "x509_certificate",
@@ -605,7 +605,7 @@ func TestServedWildcardIdentityRequiresAcknowledgementAndRenewsTRACE017(t *testi
 		t.Fatalf("decode wildcard identity: %v", err)
 	}
 	if ident.ID == "" || !jsonContains(t, ident.Attributes, "wildcard_blast_radius_acknowledged") || !jsonContains(t, ident.Attributes, "dns-01") {
-		t.Fatalf("wildcard identity response lost acknowledgement/DNS-01 attributes: %s", ident.Attributes)
+		t.Fatalf("wildcard identity response lost acknowledgment/DNS-01 attributes: %s", ident.Attributes)
 	}
 
 	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/identities/"+ident.ID+"/transitions", tok, map[string]any{

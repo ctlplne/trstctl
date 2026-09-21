@@ -39,7 +39,7 @@ a retry.
 
 A failed renewal warning records the host job and attempt that failed. Open
 **Open exact run and current retry status** to see whether that same run is still
-working, recovered, failed, or was cancelled. The historical warning does not
+working, recovered, failed, or was canceled. The historical warning does not
 change when a later attempt succeeds.
 
 The link uses `/operations?run=<run-id>` and reads the exact run, including runs
@@ -89,7 +89,7 @@ The pool sizes ship with conservative defaults and are tuned per deployment.
 
 The PostgreSQL pool is bounded too. A request that cannot obtain a connection
 within the acquire window (10 s by default, `TRSTCTL_POSTGRES_ACQUIRE_TIMEOUT`),
-or whose statement is cancelled by the server-side statement deadline, or that
+or whose statement is canceled by the server-side statement deadline, or that
 runs into its own request deadline while the datastore is busy, is refused with
 **503** and a `Retry-After` header; the problem detail says so ("datastore is
 busy ... retry"). It is safe to retry such a request with the **same**
@@ -127,7 +127,7 @@ The default budget is **32 connections per replica** (each small pool keeps one
 connection warm, so an idle replica holds about five). Size PostgreSQL so that
 `max_connections` ≥ replicas × 32 + `superuser_reserved_connections` + every
 other client of the database (backup tooling, the doctor, dashboards). Every
-pool is opened and pinged at startup: a PostgreSQL that cannot honour the budget
+pool is opened and pinged at startup: a PostgreSQL that cannot honor the budget
 fails the process closed with a message naming the budget and the settings,
 instead of starving at runtime. The control plane logs `store: connection
 budget` at startup and exports `trstctl_store_pool_connections{pool,state}`

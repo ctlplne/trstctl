@@ -34,7 +34,7 @@ func (a *API) auditVerificationKeys(w http.ResponseWriter, r *http.Request) {
 // auditQueryParams describes the audit query string for the OpenAPI document.
 //
 // It lives beside the audit handlers rather than in the route table, because it
-// describes THIS workflow's inputs and the handlers are what have to honour
+// describes THIS workflow's inputs and the handlers are what have to honor
 // them. Keeping the two together is also what stops the served surface file
 // growing without bound as workflows are added — the served-file budget is a
 // guard against exactly that.

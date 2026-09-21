@@ -165,7 +165,7 @@ openssl x509 -in /etc/letsencrypt/live/api.example.com/cert.pem \
 ```
 
 The application request must return the expected result for your service. Compare
-the served certificate's fingerprint with `cert.pem`; a reload acknowledgement
+the served certificate's fingerprint with `cert.pem`; a reload acknowledgment
 alone is insufficient.
 
 Save an executable deploy hook at

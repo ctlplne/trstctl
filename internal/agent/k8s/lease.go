@@ -66,7 +66,7 @@ func (l *Lease) path() string {
 }
 
 // Acquire tries to become (or stay) the leader exactly once. It returns true
-// when this identity holds the lease afterwards. A lost race is an ordinary
+// when this identity holds the lease afterward. A lost race is an ordinary
 // false, not an error: the other pod is doing the work.
 func (l *Lease) Acquire(ctx context.Context) (bool, error) {
 	st, body, err := l.client.request(ctx, http.MethodGet, l.path()+"/"+l.name, nil)

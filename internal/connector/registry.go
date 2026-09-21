@@ -77,7 +77,7 @@ type Registry struct {
 
 // ReplaySafety describes the receiver guarantee a connector offers across the
 // outbox crash window between a successful remote mutation and the local
-// delivery acknowledgement. Unknown and third-party connectors are deliberately
+// delivery acknowledgment. Unknown and third-party connectors are deliberately
 // AtMostOnce: claiming them before I/O is safer than guessing that a repeated
 // POST/import is harmless.
 type ReplaySafety uint8

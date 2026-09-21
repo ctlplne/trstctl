@@ -959,7 +959,7 @@ func (s *Server) agentChannelHosts() []string {
 }
 
 // RunAgentChannel serves the agent steady-state gRPC channel (heartbeat + renewal)
-// over mutual TLS on the configured address (default :9443) until ctx is cancelled
+// over mutual TLS on the configured address (default :9443) until ctx is canceled
 // (WIRE-004 / OPS-005). It is a no-op when the agent channel is not provisioned (the
 // channel was disabled or no signer is available), so it is always safe to start in
 // its own goroutine alongside the other Run workers — mirroring RunSPIFFE. The agent
@@ -979,7 +979,7 @@ func (s *Server) RunAgentChannel(ctx context.Context) {
 
 // serveAgentChannel builds the agent gRPC server (health + the heartbeat/renewal
 // service) over freshly-minted mTLS credentials and serves it on ln until ctx is
-// cancelled. It is the seam the acceptance test drives with its own ephemeral
+// canceled. It is the seam the acceptance test drives with its own ephemeral
 // listener; RunAgentChannel wraps it with the configured listener.
 func (s *Server) serveAgentChannel(ctx context.Context, ln net.Listener) {
 	s.serveAgentChannelWithLifetime(ctx, ln, agentServerCertTTL)

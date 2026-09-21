@@ -91,7 +91,7 @@ func (s *Server) recordDeployVerification(ctx context.Context, tenantID, agentNa
 }
 
 // deployIntentForVerificationReceipt reads only the public routing half of a
-// queued deploy. Modern credential-bearing jobs are sealed, so unmarshalling
+// queued deploy. Modern credential-bearing jobs are sealed, so unmarshaling
 // them directly as DeployIntent silently produced an empty connector/target on
 // the verified receipt even though the agent executed the right work.
 func deployIntentForVerificationReceipt(jobPayload []byte) (relay.DeployIntent, bool) {

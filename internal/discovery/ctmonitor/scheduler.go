@@ -132,7 +132,7 @@ func (s *Scheduler) RunOnceDetailed(ctx context.Context, tenantID string) (RunRe
 	return RunResult{Findings: findings, Logs: outcomes}, errors.Join(pollErr, errors.Join(persistErrs...))
 }
 
-// Run polls immediately and then every interval until ctx is cancelled, at which
+// Run polls immediately and then every interval until ctx is canceled, at which
 // point it returns nil. An error from a pass is reported to the error handler
 // (if registered) and does not stop the loop.
 func (s *Scheduler) Run(ctx context.Context, tenantID string) error {

@@ -552,7 +552,7 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 		if err := d.admitIssuance(ctx, m, p, ident, "issue"); err != nil {
 			return nil, err
 		}
-		// B2: first issuance to an agent-executed target, with no CSR to honour.
+		// B2: first issuance to an agent-executed target, with no CSR to honor.
 		//
 		// Narrow on purpose. An identity that carries a CSR — on the transition
 		// or recorded at creation — already has the custody B2 wants: the
@@ -914,7 +914,7 @@ func (d *issuanceDispatcher) executeRenewal(ctx context.Context, m orchestrator.
 		if len(dnsNames) > 0 {
 			commonName = dnsNames[0]
 		}
-		// B2: a renewal honours the identity's CSR exactly as first
+		// B2: a renewal honors the identity's CSR exactly as first
 		// issuance does.
 		//
 		// This closed a custody hole that ran on a timer. B1 made first

@@ -47,7 +47,7 @@ type persistedKey struct {
 	AEAD   [][]byte `json:"aead,omitempty"`
 	HMAC   [][]byte `json:"hmac,omitempty"`
 	// SignPKCS8 holds each signing version as PKCS#8 DER. LockedSigner is not
-	// serialisable, so the key is exported once here and re-locked on load.
+	// serializable, so the key is exported once here and re-locked on load.
 	SignPKCS8 [][]byte `json:"sign_pkcs8,omitempty"`
 }
 
@@ -60,7 +60,7 @@ type persistedState struct {
 type Store struct {
 	dir     string
 	wrapper seal.KeyWrapper
-	// mu serialises Save end to end — export through rename. Checkpoints run
+	// mu serializes Save end to end — export through rename. Checkpoints run
 	// outside Service.mu (Save re-acquires it), so two concurrent mutations
 	// used to race their WriteFile/Rename pairs on one fixed temp path: the
 	// staler snapshot could rename last and persist a keyring MISSING a key
@@ -291,7 +291,7 @@ func (s *Store) Load(svc *Service) error {
 }
 
 // export renders the ring's keys for sealing. Signing keys are exported as
-// PKCS#8 because a LockedSigner cannot be serialised; the caller seals the
+// PKCS#8 because a LockedSigner cannot be serialized; the caller seals the
 // result immediately and wipes the plaintext.
 func (k *Keyring) export() (map[string]persistedKey, error) {
 	k.mu.Lock()
@@ -302,7 +302,7 @@ func (k *Keyring) export() (map[string]persistedKey, error) {
 		// Deep-copy AEAD/HMAC key bytes rather than aliasing the live ring
 		// slices. Aliasing let a concurrent failed-checkpoint rollback wipe
 		// (discardUnpersistedKey/Version) zero the very bytes another Save was
-		// marshalling under Store.mu alone — an unsynchronised read/write race
+		// marshaling under Store.mu alone — an unsynchronised read/write race
 		// that could seal all-zero, attacker-predictable key material into the
 		// keyring (AUD-201 follow-up, T-RACE). The independent copies are wiped
 		// after the seal, exactly like the SignPKCS8 DER.

@@ -103,7 +103,7 @@ func (s *Store) ApplyCryptoAssetObservedTx(ctx context.Context, tx pgx.Tx, a Cry
 	// Resolve the immutable asset id first. A migration can change the public
 	// crypto fact (and therefore its signature), but an older observation still
 	// carries the original id. The sequence predicate makes that delayed replay a
-	// no-op instead of letting it move the row backwards.
+	// no-op instead of letting it move the row backward.
 	tag, err := tx.Exec(ctx,
 		`UPDATE crypto_assets
 		    SET signature = $3, kind = $4, location = $5, algorithm = $6, key_bits = $7,

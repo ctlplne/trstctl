@@ -15,7 +15,7 @@ import (
 // scans four boolean columns across ninety templates and notices that number
 // forty-one is a domain escalation path. What makes this worth reading is that
 // the COMBINATIONS are named, because that is what a finding is: not "this
-// template has enrollee-supplies-subject set" but "anyone who can enrol on this
+// template has enrollee-supplies-subject set" but "anyone who can enroll on this
 // template can obtain a certificate that authenticates as anyone else".
 //
 // Each check below states the condition, why the combination is dangerous, and
@@ -185,7 +185,7 @@ func findingsForTemplate(t Template, restrictions EnrollmentAgentRestrictions) [
 	// a single such certificate is a master key to every template that accepts
 	// agent-signed requests. It is worth its own finding rather than being
 	// folded into the client-auth checks, because the remediation is different:
-	// restricting who may enrol is not enough, the CA must also restrict which
+	// restricting who may enroll is not enough, the CA must also restrict which
 	// templates accept agent requests and from which agents.
 	if containsEKU(t.EKUs, EKUCertificateRequestAgent) && !t.RequiresManagerApproval && restrictions.State == EvidenceDisabled {
 		out = append(out, Finding{

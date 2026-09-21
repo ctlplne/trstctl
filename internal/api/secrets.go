@@ -288,7 +288,7 @@ func WithSecrets(be SecretsBackend) Option {
 func (a *API) SecretsServed() bool { return a.secrets != nil }
 
 // RunDynamicLeaseWorker runs the served dynamic-secret leaseworker until ctx is
-// cancelled. server.Run starts this alongside the other bounded background workers;
+// canceled. server.Run starts this alongside the other bounded background workers;
 // tests call it directly against the assembled server.
 func (a *API) RunDynamicLeaseWorker(ctx context.Context) {
 	interval := 30 * time.Second

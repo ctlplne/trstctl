@@ -226,7 +226,7 @@ func (s *Store) PreparePrivacySubjectErasure(
 // PreparePrivacySubjectErasureWithSchedulerResolver is the production privacy
 // preparation entrypoint. The resolver is invoked only when a selected scheduler
 // tick requires its generic idempotency key or protected terminal response to be
-// rewritten; that acknowledgement and all scheduler closures occur in this same
+// rewritten; that acknowledgment and all scheduler closures occur in this same
 // SQL transaction before the canonical crash marker is inserted.
 func (s *Store) PreparePrivacySubjectErasureWithSchedulerResolver(
 	ctx context.Context,
@@ -495,7 +495,7 @@ func (s *Store) GetPrivacySubjectErasurePreparation(
 // PrivacySubjectErasurePreparationActiveForGeneration proves whether one
 // tenant's independently durable SQL preparation names an exact staged event
 // generation. The event-log recovery coordinator calls it before activating a
-// target after an ambiguous commit acknowledgement or process restart.
+// target after an ambiguous commit acknowledgment or process restart.
 func (s *Store) PrivacySubjectErasurePreparationActiveForGeneration(
 	ctx context.Context,
 	tenantID, targetGeneration string,

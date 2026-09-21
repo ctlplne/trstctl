@@ -43,7 +43,7 @@ func (s *Server) buildServedCMP(cfg config.Protocols, tenantFallback string, iss
 	sp.cmpTenant = firstNonEmpty(cfg.CMP.TenantID, tenantFallback)
 	// CMP's protection identity travels in the message's own extraCerts, so it
 	// authenticates nothing until it chains to an operator-configured anchor.
-	// Unset anchors leave the mount refusing to enrol (fail closed).
+	// Unset anchors leave the mount refusing to enroll (fail closed).
 	cmpAnchors, err := loadCMPClientTrustAnchors(cfg.CMPClientTrustAnchorFile)
 	if err != nil {
 		return err

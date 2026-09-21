@@ -52,7 +52,7 @@ type Config struct {
 }
 
 // backend mints OTTs and calls step-ca's /1.0/sign. It is the only CA-specific
-// code; the template supplies the ca.CA behaviour.
+// code; the template supplies the ca.CA behavior.
 type backend struct {
 	cfg          Config
 	client       *http.Client

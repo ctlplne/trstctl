@@ -19,7 +19,7 @@ import (
 func TestPureMLDSALeafInteroperatesWithStockOpenSSL(t *testing.T) {
 	openssl := requireOpenSSLMLDSA(t)
 	dir := t.TempDir()
-	// Read the OpenSSL artefacts back through a directory handle rather than by
+	// Read the OpenSSL artifacts back through a directory handle rather than by
 	// name: this test hands the bytes straight to the CSR parser and the leaf
 	// signer, so a symlink or ".." planted in dir must not be able to redirect
 	// the read outside the temp dir.

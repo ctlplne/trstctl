@@ -708,7 +708,7 @@ func TestWizardFirstCertificateContractIsBackedByOpenAPIAndStoreValidator(t *tes
 		"{ to, reason, subject_csr_pem: csr }, key)",
 	} {
 		if !strings.Contains(wizardAttempt, want) {
-			t.Errorf("wizard operation must retain owner, CSR, idempotency and conditional wildcard acknowledgement; missing %q", want)
+			t.Errorf("wizard operation must retain owner, CSR, idempotency and conditional wildcard acknowledgment; missing %q", want)
 		}
 	}
 	if strings.Contains(wizardTS+wizardStep+wizardAttempt, "api.createIssuer") {
@@ -3853,7 +3853,7 @@ func TestLicenseStatusIsConsistent(t *testing.T) {
 	// already knows to look for it. The first file anyone reads has to carry
 	// the split, and a scope notice is easy to lose in a future edit that
 	// "restores the license to its official text", so CI holds it.
-	// Compare on whitespace-collapsed text so re-wrapping a licence file cannot
+	// Compare on whitespace-collapsed text so re-wrapping a license file cannot
 	// split a phrase across a line break and fake a missing notice.
 	flat := func(s string) string { return strings.Join(strings.Fields(s), " ") }
 	scope := flat(strings.ToLower(read(t, "../LICENSE")))
@@ -3935,7 +3935,7 @@ func TestLicenseStatusIsConsistent(t *testing.T) {
 
 	// AH-fa72c599: the copyright line is a legal fact, not prose, and until this
 	// guard existed nothing in CI read it. ee/ ships source-visible under a
-	// proprietary licence, so the holder named in ee/LICENSE is the party a
+	// proprietary license, so the holder named in ee/LICENSE is the party a
 	// commercial counterparty must contract with — and it named nobody
 	// ("Copyright (c) trstctl author.", no year) while NOTICE named a different,
 	// plural holder with a year. Pin the holder and a four-digit year on both

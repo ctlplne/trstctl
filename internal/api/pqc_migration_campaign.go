@@ -19,7 +19,7 @@ import (
 
 const (
 	pqcCampaignClosureFormat = "trstctl.pqc-migration-campaign-closure.v1"
-	campaignExecutionNote    = "Campaign tracking and evidence work without a licence. Automated fleet execution is unavailable in this edition; record work performed manually or by another tool."
+	campaignExecutionNote    = "Campaign tracking and evidence work without a license. Automated fleet execution is unavailable in this edition; record work performed manually or by another tool."
 )
 
 // PQCCampaignClosureSigner is the crypto-free API-side view of the persistent

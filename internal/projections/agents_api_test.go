@@ -321,7 +321,7 @@ func TestPreviewEnrollmentPlanEnforcesRelayGrant(t *testing.T) {
 	}
 }
 
-// doJSONBody is doJSON with a request body, for the routes whose behaviour depends
+// doJSONBody is doJSON with a request body, for the routes whose behavior depends
 // on what the operator asked for rather than only on who they are.
 func doJSONBody(
 	t *testing.T,

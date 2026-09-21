@@ -49,7 +49,7 @@ func Terminal(state string) bool {
 // legal maps each state to the states it may move to.
 var legal = map[string][]string{
 	StateRequested: {StateApproved, StateDenied, StateExpired, StateCancelled},
-	// An approved request can still be cancelled by its requester (they no
+	// An approved request can still be canceled by its requester (they no
 	// longer need it) and can still expire (nobody minted it in time). It can
 	// NOT go back to requested: re-opening a decided request would let an
 	// approval be silently reused for a different ask.

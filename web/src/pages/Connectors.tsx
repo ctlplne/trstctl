@@ -1082,7 +1082,7 @@ export function Connectors() {
                               ) : (
                                 /* Deliberately NOT styled as an error. A control-plane
                            key is the supported path today; painting a working
-                           estate red teaches operators to ignore the colour. */
+                           estate red teaches operators to ignore the color. */
                                 <span className="text-muted-foreground">{translateNow("source.key.origin.control.plane.b2cus00009")}</span>
                               )}
                               <span className="mt-1 block text-xs text-muted-foreground">{row.detail}</span>

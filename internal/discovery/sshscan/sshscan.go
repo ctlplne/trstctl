@@ -222,7 +222,7 @@ func (s *Scanner) Scan(ctx context.Context, targets []string) Report {
 			continue
 		}
 		if ctx.Err() != nil {
-			outcome(addr, TargetRejected, "scan cancelled before the probe was submitted")
+			outcome(addr, TargetRejected, "scan canceled before the probe was submitted")
 			continue
 		}
 		addr := addr

@@ -228,7 +228,7 @@ func TestEvidenceSignsOnlyWhenMeterAndLogAgree(t *testing.T) {
 	for i := range 3 {
 		seedIssuedTransition(t, cs, quotaTenant, int64(i+1), mid.Add(time.Duration(i)*time.Minute))
 	}
-	// A neighbouring tenant's issuance must not leak into the recount.
+	// A neighboring tenant's issuance must not leak into the recount.
 	seedIssuedTransition(t, cs, otherTenant, 1, mid)
 	// Coverage must span the period or MaySign refuses before reconciliation.
 	if err := pgStore.AddCounters(ctx, []billing.CounterDelta{

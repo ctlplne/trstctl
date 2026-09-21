@@ -15,14 +15,14 @@ import (
 // The vocabulary next door has been complete for a while and had no callers:
 // every value defined, every remediation written, and nothing in the served
 // binary ever producing one. That is worth naming rather than quietly fixing,
-// because a diagnosis catalogue with no classifier is the same shape of defect
+// because a diagnosis catalog with no classifier is the same shape of defect
 // it exists to describe — a capability that looks finished from the inside.
 //
 // The classifier's whole job is to be conservative. A wrong diagnosis is worse
 // than none: it sends an operator to the DNS zone when the responder was
 // unreachable, and they lose an hour before they think to doubt the tool. So
 // this matches on conditions that are unambiguous and returns CauseUnknown for
-// everything else, which the catalogue already treats as a first-class answer
+// everything else, which the catalog already treats as a first-class answer
 // rather than a fallback.
 
 // ClassifyACME diagnoses an ACME failure from the problem type the server
@@ -55,7 +55,7 @@ func ClassifyACME(step Step, problemType string, err error) Diagnosis {
 	case "externalaccountrequired":
 		return Diagnose(ProtocolACME, StepAccount, CauseEABUnauthorized)
 	}
-	// No recognised problem type. Before giving up, a transport failure is
+	// No recognized problem type. Before giving up, a transport failure is
 	// unambiguous enough to name on its own.
 	if isUnreachable(err) {
 		return Diagnose(ProtocolACME, orDefault(step, StepOrder), CauseResponderUnreachable)
@@ -168,7 +168,7 @@ func ClassifyADCS(step Step, detail string, err error) Diagnosis {
 
 // ClassifyRevocation diagnoses a revocation-reachability failure.
 //
-// Its own entry point because revocation fails independently of enrolment: a
+// Its own entry point because revocation fails independently of enrollment: a
 // certificate can issue perfectly and still be unusable to a relying party that
 // cannot check it, and the two failures send an operator to different places.
 func ClassifyRevocation(err error) Diagnosis {

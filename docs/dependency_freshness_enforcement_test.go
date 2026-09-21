@@ -156,7 +156,7 @@ func TestDependencyFreshnessRejectsAnExpiredDeferralOnAnOverBudgetRow(t *testing
 }
 
 // TestDependencyFreshnessCannotBeEvadedByRelabellingAnExpiredDeferral covers the other
-// half of that escape hatch: relabelling an over-budget row away from accepted_deferral
+// half of that escape hatch: relabeling an over-budget row away from accepted_deferral
 // removes the deferral check, so the age check has to catch it instead.
 func TestDependencyFreshnessCannotBeEvadedByRelabellingAnExpiredDeferral(t *testing.T) {
 	stale := time.Now().UTC().AddDate(0, 0, -400).Format(time.DateOnly)
@@ -171,7 +171,7 @@ func TestDependencyFreshnessCannotBeEvadedByRelabellingAnExpiredDeferral(t *test
 	})
 	out, failed := runFreshnessChecker(t, body)
 	if !failed {
-		t.Fatalf("CODE-111: relabelling an over-budget deferral as planned must still fail, got success:\n%s", out)
+		t.Fatalf("CODE-111: relabeling an over-budget deferral as planned must still fail, got success:\n%s", out)
 	}
 	if !strings.Contains(out, "record status accepted_deferral with a dated deferral_until") {
 		t.Errorf("CODE-111: the failure must point at the dated-deferral escape hatch, got:\n%s", out)

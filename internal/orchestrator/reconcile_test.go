@@ -90,7 +90,7 @@ func countOutbox(t *testing.T, ctx context.Context, pool *pgxpool.Pool, tenantID
 }
 
 // enqueueIfAbsent runs Outbox.EnqueueIfAbsent under the entry's tenant context,
-// modelling the inline Transition enqueue.
+// modeling the inline Transition enqueue.
 func enqueueIfAbsent(t *testing.T, s *store.Store, ob *orchestrator.Outbox, e orchestrator.Entry) error {
 	t.Helper()
 	return s.WithTenant(context.Background(), e.TenantID, func(tx pgx.Tx) error {

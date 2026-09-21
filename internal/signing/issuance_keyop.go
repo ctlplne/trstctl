@@ -214,7 +214,7 @@ func firstNonEmpty(a, b []byte) []byte {
 
 // GenerateIssuanceKey generates an agent-credential key of alg INSIDE the signer under
 // the given handle and returns a message-Signer view of it. It is the issuance-custody
-// analogue of GenerateSuccessorKey: the private key persists in the signer (sealed at rest
+// analog of GenerateSuccessorKey: the private key persists in the signer (sealed at rest
 // when a key store is configured) so the issued agent can later use it, and it never leaves
 // the boundary. The attached issuance key op calls it (via SignerCustody) to obtain the
 // agent key it certifies. An empty handle is rejected fail-closed.

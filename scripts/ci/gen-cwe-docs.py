@@ -79,7 +79,7 @@ CWE_BY_RULE = {
 # if the weakness returns. Hand-maintained: a fix lands here in the same change.
 FIXED = [
     ("CWE-400", "internal/notify/email/email.go",
-     "Native SMTP delivery could remain blocked after the notification dispatch deadline. The complete exchange now shares a bounded socket deadline, and context cancellation closes the connection, releasing the worker even when a relay withholds its greeting or DATA acknowledgement.",
+     "Native SMTP delivery could remain blocked after the notification dispatch deadline. The complete exchange now shares a bounded socket deadline, and context cancellation closes the connection, releasing the worker even when a relay withholds its greeting or DATA acknowledgment.",
      "TestSMTPGreetingHonorsCancellation and TestSMTPProductionExchangeAndDataDeadline (internal/notify/email/smtp_deadline_test.go)"),
     ("CWE-863", "internal/api/endpoint_binding_execution.go",
      "Endpoint enrollment and direct destination deployment could queue certificate issuance without the ordinary issuance permission, policy, dual-control and profile checks. Both now share the identity issuance gate and retain the exact profile binding through host-agent handoff.",

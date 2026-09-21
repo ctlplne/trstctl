@@ -1016,7 +1016,7 @@ func (l *Log) rewriteStoredGeneration(
 							ctx, tenantID, report.TargetGeneration,
 						)
 						if resolveErr != nil {
-							// A commit acknowledgement can be lost. If PostgreSQL cannot
+							// A commit acknowledgment can be lost. If PostgreSQL cannot
 							// prove the transaction absent, preserve the signed target;
 							// deleting it could strand an already-committed marker.
 							externallyPrepared = true

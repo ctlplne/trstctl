@@ -14,7 +14,7 @@ import (
 // silent-no-op secret wipe (AN-8).
 //
 // `defer secret.Wipe(out.Token)` evaluates out.Token AT THE DEFER STATEMENT.
-// When the field is only populated afterwards — which is the whole shape of
+// When the field is only populated afterward — which is the whole shape of
 // "declare a response struct, defer the wipe, then decode into it" — the defer
 // captures a nil slice, wipes nothing, and the decoder's fresh backing array is
 // never zeroed. The secret then lives in the heap for the process lifetime while

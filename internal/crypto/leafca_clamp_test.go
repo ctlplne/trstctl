@@ -37,7 +37,7 @@ func clampTestCSR(t *testing.T) []byte {
 }
 
 // TestClampTTLToIssuerBoundsTheLeaf preserves the served hierarchy's TTL-clamp
-// behaviour after the clamp moved INTO the signing helper (AUD-201 follow-up
+// behavior after the clamp moved INTO the signing helper (AUD-201 follow-up
 // E2/V34): a requested TTL beyond the issuer's expiry is clamped to the
 // issuer's remaining window, and a zero TTL means "as long as the issuer can
 // vouch".
@@ -69,7 +69,7 @@ func TestClampTTLToIssuerBoundsTheLeaf(t *testing.T) {
 		}
 	}
 
-	// A modest TTL inside the window is honoured, not stretched.
+	// A modest TTL inside the window is honored, not stretched.
 	leafDER, err := SignLeafFromCSRWithProfile(caDER, caKey, csr, 10*time.Minute, LeafProfile{ClampTTLToIssuer: true})
 	if err != nil {
 		t.Fatal(err)

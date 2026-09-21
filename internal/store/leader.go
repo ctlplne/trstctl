@@ -112,7 +112,7 @@ func (s *Store) TryBecomeLeader(ctx context.Context) (*LeaderLease, error) {
 // Healthy reports whether the lease's connection — and therefore the held lock — is
 // still alive (RESIL-004). The leader loop calls it on a cadence: if it returns false
 // the leader has lost the lock (the connection died) and must stop the continuous
-// workers and re-campaign, so two replicas never run them at once. A cancelled ctx
+// workers and re-campaign, so two replicas never run them at once. A canceled ctx
 // reports unhealthy without touching the connection.
 func (l *LeaderLease) Healthy(ctx context.Context) bool {
 	if l == nil || l.conn == nil {

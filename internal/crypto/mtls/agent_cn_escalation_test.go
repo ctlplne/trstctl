@@ -37,7 +37,7 @@ func TestAgentCommonNameCannotForgeRoleSegments(t *testing.T) {
 }
 
 // TestAgentCommonNameAcceptsOrdinarySubjects keeps the guard honest: real agent
-// names must still enrol, so the check cannot be a blanket refusal.
+// names must still enroll, so the check cannot be a blanket refusal.
 func TestAgentCommonNameAcceptsOrdinarySubjects(t *testing.T) {
 	for _, cn := range []string{
 		"agent1",

@@ -98,7 +98,7 @@ const objectNameFingerprintLen = 12
 //
 // base is the connector's per-target object base (a profile name, a virtual
 // service name). An empty fingerprint returns base unchanged, which is the
-// pre-D4 behaviour: a connector that has no fingerprint to work with should
+// pre-D4 behavior: a connector that has no fingerprint to work with should
 // deploy the way it always did rather than inventing a name.
 func DeployedObjectName(base, fingerprint string) string {
 	fp := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(fingerprint), "sha256:"))

@@ -129,7 +129,7 @@ func TestDestinations_Stable(t *testing.T) {
 
 // TestService_NilBackedReadsAreSafe asserts the read models fail soft (empty, no panic)
 // when the service is built without a store — the Community/unlicensed shape. The mutating
-// paths still return an acknowledgement (the outbox enqueue is skipped without a store).
+// paths still return an acknowledgment (the outbox enqueue is skipped without a store).
 func TestService_NilBackedReadsAreSafe(t *testing.T) {
 	svc := agidapi.NewService(nil, nil, nil)
 	ctx := context.Background()

@@ -56,7 +56,7 @@ func TestAnotherCustomersUsageIsNeverBilledHere(t *testing.T) {
 	}
 }
 
-// The canonical form must be deterministic. Go randomises map iteration, so an
+// The canonical form must be deterministic. Go randomizes map iteration, so an
 // unsorted document would hash differently on every build and a signature over
 // it would verify only on the machine that produced it.
 func TestTheDigestIsStableAcrossBuilds(t *testing.T) {
@@ -66,7 +66,7 @@ func TestTheDigestIsStableAcrossBuilds(t *testing.T) {
 		again := BuildEvidence(period(), fullDurable(), docRecords(), after)
 		if again.Digest != first.Digest {
 			t.Fatalf("digest changed between builds (%s vs %s).\n\n"+
-				"Map iteration order is randomised in Go, so a signature over an unstable "+
+				"Map iteration order is randomized in Go, so a signature over an unstable "+
 				"rendering verifies on the machine that made it and nowhere else.",
 				first.Digest, again.Digest)
 		}

@@ -419,7 +419,7 @@ func TestRenewWithBackoffSucceedsAndBoundsFailure(t *testing.T) {
 	cancelled := &renewalChannel{ca: ca, err: errors.New("control plane unavailable")}
 	renewWithBackoff(cancelledCtx, a, cancelled, 2*time.Second, rand.New(rand.NewSource(3))) // #nosec G404 -- test jitter/shuffle, not a security decision (CWE-338)
 	if cancelled.calls != 1 {
-		t.Fatalf("cancelled renewal calls=%d, want one", cancelled.calls)
+		t.Fatalf("canceled renewal calls=%d, want one", cancelled.calls)
 	}
 }
 

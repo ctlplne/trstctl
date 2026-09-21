@@ -26,7 +26,7 @@ import (
 // unique index with a raw unique_violation (DP2-043, DP2-046). Each site below
 // is the guard for one such table: many simultaneous identical applies from a
 // start barrier reproduce that window, every apply must converge, and exactly
-// one row may exist afterwards. UPSERT_RACE_ROUNDS / UPSERT_RACE_PROJECTORS
+// one row may exist afterward. UPSERT_RACE_ROUNDS / UPSERT_RACE_PROJECTORS
 // raise the pressure for a reproduction run.
 type raceSite struct {
 	name       string

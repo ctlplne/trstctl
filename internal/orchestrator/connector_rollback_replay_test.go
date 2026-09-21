@@ -76,7 +76,7 @@ func TestRollbackPriorResultProjectionCannotCompleteRearmedReceipt(t *testing.T)
 		t.Fatalf("accepted old event crossed the new execution boundary: old_event_seq=%d outbox=%s receipt=%s attempts=%d key=%s", oldResult.Sequence, status, read.Status, read.Attempts, read.IdempotencyKey)
 	}
 	// Full rebuild must derive the same current queue from the unchanged history,
-	// and the old event must remain inert when the tail resumes afterwards.
+	// and the old event must remain inert when the tail resumes afterward.
 	if err := projector.Rebuild(ctx, log); err != nil {
 		t.Fatal(err)
 	}

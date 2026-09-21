@@ -1153,7 +1153,7 @@ describe("lifecycle actions from the UI", () => {
     expect(await within(dialog).findByText(/Blast-radius impact unavailable: graph node not found/i)).toBeInTheDocument();
   });
 
-  it("cancelling the confirmation does not revoke (SURFACE-007)", async () => {
+  it("canceling the confirmation does not revoke (SURFACE-007)", async () => {
     const identity = { id: "dep-9", name: "keep-me", status: "deployed" };
     apiMock.identities.mockResolvedValue([identity]);
     apiMock.getIdentity.mockResolvedValue(identity);
@@ -1556,7 +1556,7 @@ describe("lifecycle actions from the UI", () => {
     expect(apiMock.issueCertificate).not.toHaveBeenCalled();
   });
 
-  it("requires explicit acknowledgement before issuing a wildcard identity", async () => {
+  it("requires explicit acknowledgment before issuing a wildcard identity", async () => {
     apiMock.identities.mockResolvedValue([]);
     const issued = {
       id: "wildcard-1",

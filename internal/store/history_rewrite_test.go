@@ -89,7 +89,7 @@ func TestHistoryRewriteOperationIsSingleAcrossStoreInstances(t *testing.T) {
 	}
 	select {
 	case <-secondEntered:
-		t.Fatal("cancelled second rewriter invoked its callback")
+		t.Fatal("canceled second rewriter invoked its callback")
 	default:
 	}
 
@@ -314,7 +314,7 @@ func TestHistoryRewriteBarrierWaitIsContextCancellable(t *testing.T) {
 		t.Fatalf("cancel blocked read view: got %v, want context.Canceled", err)
 	}
 	if got := callbackCalls.Load(); got != 0 {
-		t.Fatalf("cancelled read callback calls = %d, want 0", got)
+		t.Fatalf("canceled read callback calls = %d, want 0", got)
 	}
 
 	close(releaseHolder)
@@ -905,7 +905,7 @@ func TestPrepareTenantDataCutoverFailsClosed(t *testing.T) {
 		)
 	})
 
-	t.Run("cancelled backup-fence wait neither deletes nor proceeds", func(t *testing.T) {
+	t.Run("canceled backup-fence wait neither deletes nor proceeds", func(t *testing.T) {
 		primary := newStore(t)
 		peer := openHistoryRewritePeer(t)
 		insertTestSnapshots(t, peer, 1)
@@ -938,15 +938,15 @@ func TestPrepareTenantDataCutoverFailsClosed(t *testing.T) {
 		waitForAcquiredConnections(t, peer, 1)
 		cancelWait()
 		if err := waitHistoryRewriteResult(t, prepareResult); !errors.Is(err, context.Canceled) {
-			t.Fatalf("cancelled preparation = %v, want context.Canceled", err)
+			t.Fatalf("canceled preparation = %v, want context.Canceled", err)
 		}
 		if got := proceedCalls.Load(); got != 0 {
-			t.Fatalf("proceed calls after cancelled fence wait = %d, want 0", got)
+			t.Fatalf("proceed calls after canceled fence wait = %d, want 0", got)
 		}
 		if count, err := peer.SnapshotCount(context.Background()); err != nil {
 			t.Fatalf("SnapshotCount after cancel: %v", err)
 		} else if count != 1 {
-			t.Fatalf("snapshots after cancelled fence wait = %d, want 1", count)
+			t.Fatalf("snapshots after canceled fence wait = %d, want 1", count)
 		}
 
 		close(releaseFence)

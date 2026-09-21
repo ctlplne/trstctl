@@ -16,7 +16,7 @@ import (
 // recordingPrecondition is an instrumented, feature-neutral issuance precondition:
 // it records every consult and returns the configured error (nil = allow). It mints
 // nothing itself, so any credential that appears did so through the broker's issuance
-// path AFTER the precondition returned. It is the broker analogue of the signer's
+// path AFTER the precondition returned. It is the broker analog of the signer's
 // recordingGate used to prove INV-A1 ordering at the AN-4 seam.
 type recordingPrecondition struct {
 	calls int

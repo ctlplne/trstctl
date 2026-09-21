@@ -26,7 +26,7 @@ import (
 // investigate targets that are still serving perfectly well — during an
 // incident, which is the worst possible time to waste attention.
 //
-// UNVERIFIED IS NOT VERIFIED. A canary nobody has probed yet does not authorise
+// UNVERIFIED IS NOT VERIFIED. A canary nobody has probed yet does not authorize
 // the rest of the fleet. The run waits rather than proceeding on silence,
 // because "we have not looked" and "it is fine" are the two things this whole
 // workstream exists to keep apart.
@@ -46,7 +46,7 @@ const (
 // evaluateCanary reports what the first batch's verification says.
 //
 // Only the FIRST batch is the canary. Treating every batch as a gate for the
-// next would serialise the whole rollout behind a verification interval each
+// next would serialize the whole rollout behind a verification interval each
 // time, which turns a fleet re-issuance during an incident into an overnight
 // job — the opposite of what an incident needs.
 func evaluateCanary(ctx context.Context, st *store.Store, tenantID string, batches []store.FleetReissuanceBatch) canaryOutcome {
@@ -60,7 +60,7 @@ func evaluateCanary(ctx context.Context, st *store.Store, tenantID string, batch
 	outcome, err := st.SummarizeFleetVerification(ctx, tenantID, canary.ReplacementIdentityIDs)
 	if err != nil {
 		// A read failure is not a verdict. Treating it as healthy would let an
-		// unreadable canary authorise the fleet; treating it as failed would
+		// unreadable canary authorize the fleet; treating it as failed would
 		// halt a rollout over a transient database error. Pending is the only
 		// honest answer, and the next read resolves it.
 		return canaryPending

@@ -108,7 +108,7 @@ func checksByName(checks []corestore.IsolationDrillCheck) map[string]corestore.I
 // run for real: probe tenants placed in the durable registry, probe events
 // appended through the live router onto embedded JetStream, and the lane
 // counts observed on the actual stream. Every check must pass, the probe
-// placements must be gone afterwards, and the probe slugs collide under
+// placements must be gone afterward, and the probe slugs collide under
 // normalization on purpose — the historical breach shape must not recur.
 func TestLaneDrill_LiveStreamProvesLaneIsolation(t *testing.T) {
 	h := newLaneDrillHarness(t)

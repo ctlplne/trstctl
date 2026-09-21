@@ -187,7 +187,7 @@ func TestTheRunningServerFillsTheUpstreamDVSeam(t *testing.T) {
 
 // The ACME factory branch that attaches the solver must not quietly disappear.
 //
-// This one is structural rather than behavioural, and it is worth saying why.
+// This one is structural rather than behavioral, and it is worth saying why.
 // Exercising the branch for real means standing up an ACME account signer and a
 // directory, which the DoD external-CA runtime proof already does at a cost
 // this package should not pay per-run. What is cheap and still load-bearing is
@@ -252,7 +252,7 @@ func TestUpstreamCAAResolvesEvenWhenNothingInjectedOne(t *testing.T) {
 	injected := &countingCAAResolver{}
 	solver.automation.caaResolver = injected
 	if got := solver.caaResolver(); got != acme.CAAResolver(injected) {
-		t.Errorf("an injected resolver was ignored in favour of the default; %T", got)
+		t.Errorf("an injected resolver was ignored in favor of the default; %T", got)
 	}
 }
 
@@ -474,7 +474,7 @@ func TestAClosedMaintenanceWindowDefersRatherThanDropsRenewals(t *testing.T) {
 // never ran. Every deploy reported "executed" rather than verified, which is
 // precisely the defect class D2 exists to remove, one layer up.
 //
-// Worse than the missing behaviour was the documentation: limitations.md
+// Worse than the missing behavior was the documentation: limitations.md
 // described verification as opt-in per target via a configured listener
 // address, and there was no way for an operator to configure one.
 func TestTheDeployIntentCarriesTheConfiguredVerificationAddress(t *testing.T) {
@@ -547,7 +547,7 @@ func TestARenewalHonoursTheIdentitysRecordedCSR(t *testing.T) {
 
 // An agent-executed target REFUSES key bytes rather than degrading (epic B2).
 //
-// B2's value is a negative property — private key bytes stop travelling from
+// B2's value is a negative property — private key bytes stop traveling from
 // the control plane to the host — and a negative property is only worth
 // anything if it cannot be silently violated. A migration that "prefers" the
 // host-generated path but falls back to shipping a key would give an estate
@@ -587,7 +587,7 @@ func TestAnAgentExecutedTargetRefusesCredentialBearingDeploys(t *testing.T) {
 			"all-or-nothing on exactly the systems least able to take one", err)
 	}
 
-	// An absent or unparseable config never changes behaviour on upgrade.
+	// An absent or unparseable config never changes behavior on upgrade.
 	if targetExecutorIsAgent(nil) || targetExecutorIsAgent(json.RawMessage(`{not json`)) {
 		t.Error("a target with no or malformed config was treated as agent-executed; on upgrade " +
 			"that would refuse deploys across an entire estate")

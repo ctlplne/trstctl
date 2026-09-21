@@ -14,7 +14,7 @@ import (
 	"trstctl.com/trstctl/internal/dependents"
 )
 
-// stubBackend tracks created and revoked refs to assert engine behaviour.
+// stubBackend tracks created and revoked refs to assert engine behavior.
 type stubBackend struct {
 	mu      sync.Mutex
 	n       int

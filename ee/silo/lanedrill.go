@@ -23,7 +23,7 @@ import (
 // places two ephemeral probe tenants, appends one real enveloped event as each
 // through the normal AN-2 path (so the subject derives from the real router),
 // and observes on the live stream that each lane gained exactly its own event
-// and the neighbour's lane was undisturbed.
+// and the neighbor's lane was undisturbed.
 //
 // The probe slugs are chosen to COLLIDE under slug normalization — the exact
 // shape of the lane-collision breach this package fixed — so a regression to
@@ -37,7 +37,7 @@ import (
 
 // laneDrillProbePrefix is the reserved synthetic prefix of every drill probe
 // tenant. Deliberately identical to the store drill's isolationProbePrefix and
-// the doctor's ProbeTenantPrefix so every residue sweep recognises — and
+// the doctor's ProbeTenantPrefix so every residue sweep recognizes — and
 // refuses to ignore — anything a drill leaves behind. Keep the three in
 // lockstep.
 const laneDrillProbePrefix = "00000000-d0c7"
@@ -213,7 +213,7 @@ func (d *LaneDrill) Run(ctx context.Context) (checks []corestore.IsolationDrillC
 		fail("event_lane_cross_isolation", fmt.Sprintf(
 			"tenant B's probe append moved tenant A's lane count (%d -> %d); one tenant's events are landing in another's lane", afterA_A, afterB_A))
 	default:
-		pass("event_lane_cross_isolation", "each probe tenant's append landed on its own lane and left the neighbour's lane count undisturbed, observed on the live stream in both directions")
+		pass("event_lane_cross_isolation", "each probe tenant's append landed on its own lane and left the neighbor's lane count undisturbed, observed on the live stream in both directions")
 	}
 	return checks
 }

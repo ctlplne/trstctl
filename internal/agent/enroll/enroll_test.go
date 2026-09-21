@@ -164,7 +164,7 @@ func TestEnrollRenewalRequiresVerifiedClientCert(t *testing.T) {
 
 // TestBootstrapTokenIsSingleUse: a token redeemed once is rejected on every later
 // attempt (single-use) — proving a replayed token cannot mint a second
-// certificate. This is the in-memory analogue of the cross-instance/cross-restart
+// certificate. This is the in-memory analog of the cross-instance/cross-restart
 // durable-store test (see the store-backed test in internal/projections).
 func TestBootstrapTokenIsSingleUse(t *testing.T) {
 	a, err := enroll.NewAuthority("cp", enroll.NewMemoryTokenStore())

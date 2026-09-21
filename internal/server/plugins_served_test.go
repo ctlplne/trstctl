@@ -41,7 +41,7 @@ func pluginGrantDir(t *testing.T) (string, pluginhost.Grant) {
 // connectorWASM is a minimal WASM connector plugin: it imports env.cap_write and
 // exports run() i32 that writes one file inside the granted prefix and returns the
 // status. With a grant covering that prefix it returns 0 (success); with a grant
-// that does not cover it, the host denies the write. It is the served analogue of
+// that does not cover it, the host denies the write. It is the served analog of
 // the pluginhost test fixture, here driven through the real outbox handler.
 func connectorWASMFor(dir string) []byte {
 	return wasmgen.WriteGuest(filepath.Join(dir, pluginWriteTarget), "deployed", "run")

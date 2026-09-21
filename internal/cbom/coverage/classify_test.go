@@ -11,7 +11,7 @@ func at(t time.Time) *time.Time { return &t }
 
 // TestClassifyKnownEstate is the golden fixture: a known estate with one
 // source in every interesting state, and the exact bucket asserted per class.
-// A source whose envelope drifts from its behaviour changes a bucket here and
+// A source whose envelope drifts from its behavior changes a bucket here and
 // breaks the build.
 func TestClassifyKnownEstate(t *testing.T) {
 	now := time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)

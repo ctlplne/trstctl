@@ -24,7 +24,7 @@ import (
 
 // nolintDirectiveAt reports the linter list of a golangci-lint suppression
 // directive that begins the first comment on line, and whether such a directive
-// is present at all. golangci-lint honours the directive only when the marker
+// is present at all. golangci-lint honors the directive only when the marker
 // is the first token of a comment, with no space between the comment slashes
 // and it, so a mention of the marker inside ordinary comment prose — as in
 // tools/trstctllint/doc.go, which documents that the architecture linter has no

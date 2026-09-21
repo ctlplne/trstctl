@@ -125,7 +125,7 @@ func TestOperatorDocIsHonestAndCodeBound(t *testing.T) {
 	}
 }
 
-// TestOperatorManifestHasRBACAndIsolatedDeployment (OPS-008 behavioural): instead
+// TestOperatorManifestHasRBACAndIsolatedDeployment (OPS-008 behavioral): instead
 // of grepping operator.yaml for "kind: ServiceAccount", "runAsNonRoot: true", etc.
 // (which pass even if those tokens sit in comments or the wrong object), this parses
 // every document into a Kubernetes object and asserts the BUNDLE composition by KIND,

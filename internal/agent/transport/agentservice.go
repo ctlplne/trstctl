@@ -388,7 +388,7 @@ func (c *AgentClient) withProtocol(ctx context.Context) context.Context {
 	return metadata.AppendToOutgoingContext(ctx, pairs...)
 }
 
-// Heartbeat sends one steady-state beat and returns the server's acknowledgement.
+// Heartbeat sends one steady-state beat and returns the server's acknowledgment.
 func (c *AgentClient) Heartbeat(ctx context.Context, req *HeartbeatRequest) (*HeartbeatResponse, error) {
 	out := new(HeartbeatResponse)
 	if err := c.cc.Invoke(c.withProtocol(ctx), fullMethodHeartbeat, req, out, grpc.CallContentSubtype(AgentCodecName)); err != nil {
@@ -472,7 +472,7 @@ const (
 	// the queue: a failure on one host is not evidence the work is impossible.
 	JobOutcomeFailed = "failed"
 	// JobOutcomeVerified means the agent performed the work AND observed the
-	// endpoint serving the expected identity afterwards (epic D2). Distinct
+	// endpoint serving the expected identity afterward (epic D2). Distinct
 	// from executed because "we applied it" and "it is live" are different
 	// claims, and only the second one is what an operator actually wanted.
 	JobOutcomeVerified = "verified"

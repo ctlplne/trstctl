@@ -151,7 +151,7 @@ func TestServedPauseActuallyGatesTheSweep(t *testing.T) {
 	}
 	if view := readCampaign(t, h, tok); view.Status != fleet.StatePaused {
 		t.Fatalf("status = %q after a sweep while paused, want paused.\n\n"+
-			"A pause that greys out a button while the sweep keeps dispatching is worse than no "+
+			"A pause that grays out a button while the sweep keeps dispatching is worse than no "+
 			"pause: the operator believes they stopped the rollout.", view.Status)
 	}
 }

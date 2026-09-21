@@ -137,7 +137,7 @@ func nativeConnectorReplaySafety(name string) connector.ReplaySafety {
 // local-vs-HTTP factory split below: that split is a transport decision, and
 // transport does not decide vantage — envoy is driven over HTTP yet its xDS/SDS
 // admin socket is commonly co-resident with the workload, which is exactly the
-// kind of judgement a derivation would get wrong.
+// kind of judgment a derivation would get wrong.
 //
 // The census answers one question per connector: what IS the target?
 //

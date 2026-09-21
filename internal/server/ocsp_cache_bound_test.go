@@ -73,6 +73,6 @@ func TestOCSPResponseCacheEvictsExpiredBeforeLive(t *testing.T) {
 	c.put(fresh, []byte("fresh-der"), later.Add(time.Hour), later)
 
 	if got, ok := c.get(fresh, later); !ok || string(got) != "fresh-der" {
-		t.Fatalf("a live response was evicted in favour of expired entries: ok=%v got=%q", ok, got)
+		t.Fatalf("a live response was evicted in favor of expired entries: ok=%v got=%q", ok, got)
 	}
 }

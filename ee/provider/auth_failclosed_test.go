@@ -76,7 +76,7 @@ func TestTheOldShapeOnlyTokenNoLongerAuthenticatesAnyone(t *testing.T) {
 //
 // Every other dependency in Config falls back to a working stand-in. This one
 // must not: the safe stand-in for "who is this caller" does not exist, and a
-// placeholder is exactly how the original behaviour came to be.
+// placeholder is exactly how the original behavior came to be.
 func TestANilAuthenticatorRefusesEveryRequest(t *testing.T) {
 	t.Parallel()
 	h := providerHandler(t, nil)

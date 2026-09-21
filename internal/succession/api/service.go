@@ -115,7 +115,7 @@ func NewService(store *corestore.Store, log *events.Log, outbox *orchestrator.Ou
 var _ Service = (*service)(nil)
 
 // RequestSuccession records an accepted succession request as an idempotent outbox
-// job for the signer to mint (AN-4/AN-5/AN-6). It returns a request acknowledgement;
+// job for the signer to mint (AN-4/AN-5/AN-6). It returns a request acknowledgment;
 // the actual dual-signed record is produced asynchronously by the signer-side
 // orchestrator.
 func (s *service) RequestSuccession(ctx context.Context, tenantID string, req RequestSuccessionRequest) (RequestSuccessionResponse, error) {
@@ -618,7 +618,7 @@ func (s *service) FetchChain(ctx context.Context, tenantID, identityID string) (
 	return resp, nil
 }
 
-// RecordAck appends the relying party's signed acknowledgement as an nhi.rp.ack
+// RecordAck appends the relying party's signed acknowledgment as an nhi.rp.ack
 // event on the AN-2 ledger, preserving the signature and identity/epoch binding so
 // the PCAS-10 quorum can count it. The ledger stamps the recorded time (the quorum
 // validity-window anchor).

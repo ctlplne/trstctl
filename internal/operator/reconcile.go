@@ -27,7 +27,7 @@ const (
 const defaultControlPlaneImage = "ghcr.io/ctlplne/trstctl:latest"
 
 // ControlPlaneSpec is the desired state declared on a TrstctlControlPlane.spec.
-// Unknown fields are ignored, but every field modelled here is reconciled into
+// Unknown fields are ignored, but every field modeled here is reconciled into
 // the managed control-plane Deployment.
 type ControlPlaneSpec struct {
 	Replicas    int             `json:"replicas"`
@@ -162,9 +162,9 @@ const (
 	ActionUpdate Action = "update"
 )
 
-// decideAction is the pure desired-vs-actual diff at the centre of the
+// decideAction is the pure desired-vs-actual diff at the center of the
 // reconcile. Given the spec and the live Deployment, it returns the action to
-// take. Keeping it pure makes the controller's behaviour unit-testable without a
+// take. Keeping it pure makes the controller's behavior unit-testable without a
 // cluster: the reconcile test asserts decideAction returns the right action for
 // each missing/drifted/in-sync case.
 func decideAction(spec ControlPlaneSpec, live deploymentState) Action {

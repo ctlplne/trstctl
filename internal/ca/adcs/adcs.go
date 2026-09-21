@@ -125,7 +125,7 @@ type Config struct {
 }
 
 // backend drives the WCCE enrollment state machine over a Transport. It is the
-// only CA-specific code; the template supplies the ca.CA behaviour.
+// only CA-specific code; the template supplies the ca.CA behavior.
 type backend struct {
 	cfg       Config
 	transport Transport

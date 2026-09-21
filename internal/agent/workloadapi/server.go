@@ -105,7 +105,7 @@ func New(up Upstream, onIssue func(string, []string)) *Server {
 	return &Server{up: up, onIssue: onIssue}
 }
 
-// Serve runs the Workload API on a UDS until ctx is cancelled.
+// Serve runs the Workload API on a UDS until ctx is canceled.
 //
 // The socket's directory is owner-only, and the socket itself is created with a
 // restrictive umask: this endpoint is an identity oracle for every workload on

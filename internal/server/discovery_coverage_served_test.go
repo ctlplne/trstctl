@@ -152,7 +152,7 @@ func TestServedDiscoveryCoverageThreeBuckets(t *testing.T) {
 // with nothing declared must report NO coverage, not full coverage. A system
 // that declares itself complete because nobody told it what it was missing is
 // the exact failure this epic exists to remove — and it is the natural
-// behaviour of any coverage number computed from findings alone, because what
+// behavior of any coverage number computed from findings alone, because what
 // was never looked at leaves no trace in what was found.
 func TestServedCoverageMeasuresAgainstDeclaredSegments(t *testing.T) {
 	ctx := context.Background()
@@ -237,7 +237,7 @@ func TestServedCoverageMeasuresAgainstDeclaredSegments(t *testing.T) {
 
 	// One of two in-scope segments swept. The excluded one is in NEITHER half:
 	// a coverage number that rose because somebody excluded something would
-	// reward exactly the wrong behaviour.
+	// reward exactly the wrong behavior.
 	if got.SegmentCoveragePercent != 50 {
 		t.Errorf("coverage = %d%%, want 50%% (core swept, dmz not, lab excluded from both halves)",
 			got.SegmentCoveragePercent)

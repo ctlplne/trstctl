@@ -4,7 +4,7 @@
 // template (internal/ca/catemplate). It is the scaffold a new CA copies: to add
 // an authority, copy this package, rename it, and reimplement backend.Issue to
 // call that CA's API — everything else (the ca.CA interface, request validation,
-// chain parsing, issuer labelling, error wrapping, and riding the idempotency
+// chain parsing, issuer labeling, error wrapping, and riding the idempotency
 // and outbox rails through ca.IssuanceService) comes from the template.
 //
 // This example's backend signs against a local in-process software authority — a

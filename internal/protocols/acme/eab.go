@@ -35,7 +35,7 @@ import (
 
 // EABPolicy is what one external account credential is authorized to do. A zero
 // policy authorizes everything the server would otherwise allow, which is the
-// pre-B4 behaviour and remains the default for an operator who sets no scope.
+// pre-B4 behavior and remains the default for an operator who sets no scope.
 type EABPolicy struct {
 	// AllowedIdentifiers scopes which DNS identifiers orders under this
 	// credential may request. An entry is either an exact name
@@ -45,7 +45,7 @@ type EABPolicy struct {
 	// Profile binding is deliberately absent. The ACME server does not select a
 	// certificate profile — that decision is made at the issuance seam in
 	// internal/server — so a Profile field here would be policy that nothing
-	// reads. Adding one before the seam can honour it would put back exactly the
+	// reads. Adding one before the seam can honor it would put back exactly the
 	// kind of advertised-but-inert setting the truth-integrity sweep removed.
 	// MaxOrders caps how many orders may be created under this credential over
 	// the server's lifetime. Zero means uncapped.

@@ -200,7 +200,7 @@ func TestRetainedReplayCancellationJoinsReaders(t *testing.T) {
 			t.Fatalf("error=%v", err)
 		}
 	case <-time.After(time.Second):
-		t.Fatal("cancelled replay did not return")
+		t.Fatal("canceled replay did not return")
 	}
 	if active.Load() != 0 || callbacks.Load() != 0 {
 		t.Fatalf("active=%d callbacks=%d", active.Load(), callbacks.Load())

@@ -17,7 +17,7 @@ import (
 // Discovery claimed a listener's certificate into an identity named after its DNS
 // name; the endpoint wizard for the same DNS name must enroll that identity, not
 // mint a twin. The preview names the existing identity, the create binds it, and
-// exactly one identity carries the name afterwards (DP2-019).
+// exactly one identity carries the name afterward (DP2-019).
 func TestEndpointBindingReusesTheIdentityClaimedForTheSameName(t *testing.T) {
 	dc, err := digicertfake.NewServer()
 	if err != nil {

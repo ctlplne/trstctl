@@ -71,7 +71,7 @@ func (s *Server) PolicyDN() string { return policyDN }
 func (s *Server) Close() { s.ts.Close() }
 
 // SetPendingPolls makes the first n Retrieve calls for each certificate return a
-// pending status without CertificateData, modelling asynchronous issuance.
+// pending status without CertificateData, modeling asynchronous issuance.
 func (s *Server) SetPendingPolls(n int) {
 	s.mu.Lock()
 	s.pendingPolls = n

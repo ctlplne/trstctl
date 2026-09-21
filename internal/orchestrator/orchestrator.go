@@ -63,7 +63,7 @@ type Orchestrator struct {
 	// effectRole classifies a transition side effect's per-row agent-role demand
 	// (epic A3) from its destination and RAW (pre-seal) payload. Injected by the
 	// composition root; nil means every row gets the empty demand, which is the
-	// pre-A3 behaviour.
+	// pre-A3 behavior.
 	effectRole func(destination string, payload []byte) string
 	// ownershipAttestationCadence enables the I1 steady-state authority gate.
 	// Zero keeps source-compatible embedded/test orchestrators disabled; the

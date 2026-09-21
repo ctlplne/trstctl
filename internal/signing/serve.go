@@ -48,7 +48,7 @@ func Serve(ctx context.Context, socketPath string) error {
 }
 
 // ServeServer runs the given signing server on a Unix domain socket at
-// socketPath until ctx is cancelled, then drains in-flight requests and zeroizes
+// socketPath until ctx is canceled, then drains in-flight requests and zeroizes
 // all keys. The socket lives in a 0700 directory as a 0600 socket, and
 // connections are restricted to the signer's own uid (SO_PEERCRED on Linux). A
 // persistent server (NewPersistentServer) gives the issuing CA key custody that
@@ -67,7 +67,7 @@ func ServeServerWithOptions(ctx context.Context, socketPath string, svc *Server,
 }
 
 // ServeServerMTLS runs the signing server on a TCP listener bound to addr, over
-// gRPC-on-mTLS, until ctx is cancelled, then drains in-flight requests and
+// gRPC-on-mTLS, until ctx is canceled, then drains in-flight requests and
 // zeroizes all keys. This is the cross-node alternative to the UDS path (AN-4
 // multi-node mode, SIGNER-005 / design §3, §5.2): the channel is TLS 1.3,
 // AEAD-only, with the signer and the control plane each PINNING the other's
@@ -89,7 +89,7 @@ func ServeServerMTLS(ctx context.Context, addr string, svc *Server, tlsCfg mtls.
 }
 
 // serveGRPC registers svc on a gRPC server over ln and serves until ctx is
-// cancelled, then drains and zeroizes. When creds is nil the channel is the bare
+// canceled, then drains and zeroizes. When creds is nil the channel is the bare
 // (UDS) transport whose security is filesystem permissions + SO_PEERCRED; when
 // creds is non-nil (mTLS) the transport is mutually authenticated and pinned. The
 // AN-7 bulkhead and message bounds are identical on both paths.

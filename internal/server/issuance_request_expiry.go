@@ -25,7 +25,7 @@ const (
 // Expiry is recorded with NO decider. Nobody chose it — time ran out — and
 // stamping a person on it would put a decision in the audit trail that no human
 // ever made. That is why expired and denied are separate states rather than one
-// "closed" flag: a denial is somebody's judgement with a reason attached, an
+// "closed" flag: a denial is somebody's judgment with a reason attached, an
 // expiry is the absence of one, and a requester needs to tell those apart to
 // know whether re-asking is reasonable.
 func (s *Server) RunIssuanceRequestExpiryOnce(ctx context.Context) (int, error) {

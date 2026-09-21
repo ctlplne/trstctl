@@ -164,7 +164,7 @@ type account struct {
 type DirectoryMeta struct {
 	TermsOfService          string   // URL of the current terms of service
 	Website                 string   // URL of a human-readable CA website
-	CAAIdentities           []string // hostnames the CA recognises in CAA records
+	CAAIdentities           []string // hostnames the CA recognizes in CAA records
 	ExternalAccountRequired bool     // require an externalAccountBinding on newAccount
 }
 
@@ -1867,7 +1867,7 @@ func (s *Server) SetFailureDiagnosis(fn func(context.Context, enrollmentdiag.Dia
 //
 // From the PATH, which is the one piece of evidence available at the refusal
 // site that says where the client had got to. It is deliberately coarse: an
-// unrecognised path yields an empty step and the classifier substitutes its own
+// unrecognized path yields an empty step and the classifier substitutes its own
 // default, rather than this function guessing at a stage nobody observed.
 func acmeStepForPath(r *http.Request) enrollmentdiag.Step {
 	step, _ := acmeDiagnosticRoute(r)

@@ -159,7 +159,7 @@ func (p PoolSizes) withDefaults() PoolSizes {
 
 // WithPoolSizes sets the connection budget (docs/operations.md, "Connection
 // budget"). Every pool is opened at startup and pinged, so a PostgreSQL whose
-// max_connections cannot honour the total fails the process closed with a
+// max_connections cannot honor the total fails the process closed with a
 // message naming the budget instead of starving at runtime.
 func WithPoolSizes(sizes PoolSizes) OpenOption {
 	return func(o *openOptions) { o.pools = sizes }
@@ -188,7 +188,7 @@ func Open(ctx context.Context, dsn string, opts ...OpenOption) (*Store, error) {
 	if cfg.ConnConfig.RuntimeParams == nil {
 		cfg.ConnConfig.RuntimeParams = map[string]string{}
 	}
-	// Server-enforced statement deadline: a runaway query is cancelled by
+	// Server-enforced statement deadline: a runaway query is canceled by
 	// PostgreSQL itself (SQLSTATE 57014), bounding request latency even when a
 	// caller forgot a context deadline. Long system operations (read-model
 	// rebuild/restore) explicitly widen it inside their own transactions.
@@ -314,7 +314,7 @@ func (s *Store) beginTx(ctx context.Context, options pgx.TxOptions) (pgx.Tx, err
 
 // IsBusy reports whether err is a bounded-latency datastore failure a handler
 // should surface as a structured 503: a pool-acquire timeout or a statement
-// cancelled by the server-side statement_timeout (SQLSTATE 57014).
+// canceled by the server-side statement_timeout (SQLSTATE 57014).
 func IsBusy(err error) bool {
 	if errors.Is(err, ErrDatastoreBusy) {
 		return true
@@ -510,7 +510,7 @@ func (s *Store) WithTenant(ctx context.Context, tenantID string, fn func(pgx.Tx)
 	}
 	defer func() {
 		// Rollback must still reach PostgreSQL after the request context is
-		// cancelled. This is especially important when tx reuses the session
+		// canceled. This is especially important when tx reuses the session
 		// holding the exclusive backup fence: returning with an open transaction
 		// would make the later advisory unlock ambiguous and poison that session.
 		rollbackCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

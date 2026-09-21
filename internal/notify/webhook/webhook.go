@@ -3,7 +3,7 @@
 // Package webhook is the generic HMAC-signed webhook notification channel (S10.7),
 // built from the same notification template as every other channel: it implements
 // notify.Notifier and self-validates against the notify.Conform harness (the
-// notification analogue of the connector SDK, S5.5). It delivers an Alert by POSTing
+// notification analog of the connector SDK, S5.5). It delivers an Alert by POSTing
 // the alert as JSON to a caller-supplied endpoint over HTTP, signing the request body
 // with HMAC-SHA256 so the receiver can authenticate it.
 //

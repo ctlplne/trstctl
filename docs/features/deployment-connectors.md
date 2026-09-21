@@ -449,9 +449,9 @@ instead of being ignored:
 ### Host-executed keys
 
 Host-executed targets (the file-and-reload families above) also accept the custody
-and verification keys the enrolled host agent honours: `"executor": "agent"` makes
+and verification keys the enrolled host agent honors: `"executor": "agent"` makes
 the agent generate the private key on the host and submit only a CSR;
-`required_agent_role` (`host`) names the enrolment role that may claim the work.
+`required_agent_role` (`host`) names the enrollment role that may claim the work.
 Choose **Host agent** when adding or editing the destination; the console loads
 enrolled agents, with pagination for larger fleets. The selection is saved as
 `required_agent_id`, the UUID shown on the Agents page. An enabled host destination
@@ -571,7 +571,7 @@ host profile action can be:
 The host profile also needs the keystore directory in `allowed_roots`. The target
 selects only the action's name, never executable arguments or a password. The
 helper accepts literal loopback HTTP(S) addresses at `/manager/text/sslReload`,
-refuses redirects, and requires Tomcat's acknowledgement for the exact TLS host.
+refuses redirects, and requires Tomcat's acknowledgment for the exact TLS host.
 HTTPS uses normal certificate validation. The password file contains one line
 (up to 4096 bytes); errors do not include credentials or Manager response bodies.
 Other Java applications can use their own fixed, operator-approved reload action.

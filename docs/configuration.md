@@ -416,7 +416,7 @@ seconds, including the greeting, STARTTLS, authentication, message acceptance an
 QUIT. A shorter caller deadline takes precedence; normal notification fanout gives
 each channel five seconds. Cancellation closes the connection. If the relay offers
 STARTTLS, its certificate must pass system-root and exact-hostname verification.
-An acknowledgement lost after message submission can cause a duplicate on retry;
+An acknowledgment lost after message submission can cause a duplicate on retry;
 email delivery is at least once.
 
 Email subjects name the alert condition and affected subject, capped at 160

@@ -105,7 +105,7 @@ func TestEELintRatchetBaselineIsHonest(t *testing.T) {
 		t.Error("no lint recipe line invokes ee-lint-ratchet; a ratchet nobody runs is not a ratchet")
 	}
 	if !strings.Contains(makefile, "ee/ lint ratchet NOT run by lint-partial") {
-		t.Error("the ratchet does not honour LINT_ALLOW_PARTIAL; lint-partial is the escape " +
+		t.Error("the ratchet does not honor LINT_ALLOW_PARTIAL; lint-partial is the escape " +
 			"hatch for a machine without the optional tools and must stay usable there")
 	}
 	// GO_PACKAGES must NOT yet claim ee/ while the ratchet is the mechanism --

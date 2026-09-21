@@ -537,7 +537,7 @@ func TestRotationRunProjectionReplaysPostgreSQLNormalizedCompletionAUD126(t *tes
 // TestRotationRunProjectionOrdersByLocalStreamSequence proves the immutable
 // local JetStream order, not a producer/import wall clock, decides which
 // lifecycle observation is current. Federation preserves source timestamps and
-// clocks can step backwards, while the local sequence is always monotonic.
+// clocks can step backward, while the local sequence is always monotonic.
 func TestRotationRunProjectionOrdersByLocalStreamSequence(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()

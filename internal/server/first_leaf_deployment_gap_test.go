@@ -213,7 +213,7 @@ func TestFirstLeafRetryDoesNotRepeatCommittedDeployment(t *testing.T) {
 		signCalls++
 		return issue(ctx, csr, ttl, profile)
 	}
-	lostResult := errors.New("QA: lost acknowledgement after deployment intent committed")
+	lostResult := errors.New("QA: lost acknowledgment after deployment intent committed")
 	h.handler.afterIssueSideEffects = func(context.Context) error { return lostResult }
 	box := orchestrator.NewOutbox(h.store, orchestrator.WithBackoff(func(int) time.Duration { return 0 }), orchestrator.WithMaxAttempts(2))
 	for attempt := 1; attempt <= 2; attempt++ {

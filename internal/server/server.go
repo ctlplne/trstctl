@@ -408,7 +408,7 @@ type Deps struct {
 	// factories capture it during dependency construction; the Server fills it
 	// once the DNS-01 automation exists, so an order arriving before that fails
 	// closed rather than appearing to validate. Nil disables upstream DV, which
-	// is the pre-B7 behaviour: issuance only for already-authorized identifiers.
+	// is the pre-B7 behavior: issuance only for already-authorized identifiers.
 	UpstreamDV *upstreamDVHolder
 
 	// ConnectorRegistry configures the trusted, in-process native deployment
@@ -1364,7 +1364,7 @@ func (s *Server) appendProtocolQualificationOptions(d Deps, options *[]api.Optio
 }
 
 // baseAPIOptions is the always-on half of the served API surface: the options
-// that do not depend on a licence, a flag, or a constructor that can fail.
+// that do not depend on a license, a flag, or a constructor that can fail.
 // Named stage of configureAPI (startup-hotspot ratchet).
 func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 	return []api.Option{
@@ -1522,7 +1522,7 @@ func (s *Server) buildTransitService(d Deps) (*transitpkg.Service, error) {
 	// Persistence needs the deployment KEK: key material is sealed at rest or it
 	// is not written at all. NewStore returns nil when either the directory or
 	// the wrapper is missing, so an unconfigured deployment keeps the old
-	// in-memory behaviour rather than silently writing keys in the clear.
+	// in-memory behavior rather than silently writing keys in the clear.
 	s.transitStore = transitpkg.NewStore(d.TransitKeyringDir, d.KEK)
 	if s.transitStore != nil {
 		found, err := s.transitStore.HasState()
@@ -2607,7 +2607,7 @@ var outboxDispatchFamilies = func() []outboxDispatchFamily {
 	})
 }()
 
-// RunDispatcher runs the outbox dispatcher continuously until ctx is cancelled,
+// RunDispatcher runs the outbox dispatcher continuously until ctx is canceled,
 // delivering due entries (issuance, deployment, notifications) on a short
 // interval — so external effects happen while the process runs, not only at
 // shutdown. Per-entry failures are recorded on the row for retry inside Dispatch;
@@ -2719,7 +2719,7 @@ func (s *Server) hasOutboxFamilyPool() bool {
 const retentionInterval = time.Hour
 
 // RunRetention runs the audit retention worker on the retention cadence until ctx
-// is cancelled (R4.4). It is a no-op when retention/archive are not configured, so
+// is canceled (R4.4). It is a no-op when retention/archive are not configured, so
 // it is always safe to start in its own goroutine. It sweeps once on start so a
 // freshly booted, long-overdue deployment archives promptly rather than waiting a
 // full interval.
@@ -2743,7 +2743,7 @@ func (s *Server) RunRetention(ctx context.Context) {
 }
 
 // RunPrivacyRetention runs the non-audit PII retention worker on its configured
-// cadence until ctx is cancelled. It sweeps once on start so overdue terminal
+// cadence until ctx is canceled. It sweeps once on start so overdue terminal
 // personal data is pseudonymized promptly after boot.
 func (s *Server) RunPrivacyRetention(ctx context.Context) {
 	if s.privacyRetention == nil {
@@ -2822,7 +2822,7 @@ func (s *Server) reconcileApplicationSecretMutationsOnce(ctx context.Context) {
 }
 
 // RunIdempotencyGC reclaims completed idempotency keys past the retention window
-// on a fixed cadence until ctx is cancelled (SPINE-002), keeping idempotency_keys
+// on a fixed cadence until ctx is canceled (SPINE-002), keeping idempotency_keys
 // bounded for a high-volume fleet. AN-5 holds within the window. It sweeps once on
 // start so a long-running deployment reclaims promptly, then on each tick; a sweep
 // error is logged and the next tick retries (same pattern as the outbox dispatcher
@@ -2867,7 +2867,7 @@ func (s *Server) idemGCOnce(ctx context.Context) {
 const outboxGCInterval = time.Hour
 
 // RunOutboxGC reclaims delivered outbox rows past the retention window on a fixed
-// cadence until ctx is cancelled (SPINE-003), keeping the outbox table bounded for a
+// cadence until ctx is canceled (SPINE-003), keeping the outbox table bounded for a
 // high-volume fleet. At-least-once delivery (AN-6) is unaffected — only already-
 // delivered rows are reclaimed. It sweeps once on start so a long-running deployment
 // reclaims promptly, then on each tick; a sweep error is logged and the next tick
@@ -2906,7 +2906,7 @@ func (s *Server) outboxGCOnce(ctx context.Context) {
 	}
 }
 
-// RunProjectionTail runs the tailing projection worker until ctx is cancelled
+// RunProjectionTail runs the tailing projection worker until ctx is canceled
 // (SPINE-009): a durable consumer that projects any event appended out of band and
 // keeps the projection-lag gauge current. The worker is submitted to the
 // projections bulkhead (SPINE-005), so the advertised projection worker/queue
@@ -2959,7 +2959,7 @@ func (s *Server) runProjectionTailOnce(ctx context.Context) error {
 }
 
 // RunFederation imports configured peer event logs into the local log and projects
-// them until ctx is cancelled. It is a leader-only worker under Run, so one replica
+// them until ctx is canceled. It is a leader-only worker under Run, so one replica
 // owns peer imports while all replicas can serve the replicated read model.
 func (s *Server) RunFederation(ctx context.Context) {
 	if s.federation == nil {
@@ -2981,7 +2981,7 @@ func (s *Server) RunFederation(ctx context.Context) {
 }
 
 // RunOTLPAuditStream exports event-sourced audit records to the configured
-// OTLP collector until ctx is cancelled. It is a leader-only worker under Run, so
+// OTLP collector until ctx is canceled. It is a leader-only worker under Run, so
 // HA deployments do not duplicate the same event stream from every replica. The
 // exporter carries stream sequence attributes, so downstream SIEMs can dedupe on
 // restart and alert on gaps.
@@ -3138,7 +3138,7 @@ func (s *Server) RunAgentFleetMonitor(ctx context.Context) {
 func (s *Server) SetSnapshotInterval(d time.Duration) { s.snapshotInterval = d }
 
 // RunSnapshotWorker periodically captures a read-model snapshot at the current
-// projection checkpoint until ctx is cancelled (SPINE-007 / EXC-SCALE-01), so a later
+// projection checkpoint until ctx is canceled (SPINE-007 / EXC-SCALE-01), so a later
 // cold boot / DR restore rehydrates from it and replays ONLY the tail — making boot
 // constant-time w.r.t. the lifetime event count. It is a LEADER-ONLY worker (gated by
 // leader election in Run, RESIL-004): a single replica writes snapshots so concurrent
@@ -3185,7 +3185,7 @@ func (s *Server) snapshotOnce(ctx context.Context) {
 	}
 }
 
-// RunCRLScheduler runs the served CRL freshness scheduler until ctx is cancelled
+// RunCRLScheduler runs the served CRL freshness scheduler until ctx is canceled
 // (EXC-REVOKE-01): it regenerates each tenant's CRL ahead of its nextUpdate (and
 // generates a first one on demand), so the CRL the CDP serves is never stale. CRLs
 // are signed through the out-of-process signer (AN-4). It is a no-op when no
@@ -3224,7 +3224,7 @@ const (
 )
 
 // RunLifecycleScheduler runs the leader-only certificate renewal scheduler until
-// ctx is cancelled (JOURNEY-002/F6/NOTIF-01). It does not sign certificates or send
+// ctx is canceled (JOURNEY-002/F6/NOTIF-01). It does not sign certificates or send
 // notifications directly. It scans deployed X.509 identities with active served
 // certificates expiring within the configured renewal window and queues the normal
 // deployed->renewing lifecycle transition; the outbox then mints the successor
@@ -3272,7 +3272,7 @@ func (s *Server) runLifecycleOnceAt(ctx context.Context, renewalAt time.Time) (i
 	}
 	now := renewalAt.UTC()
 	// Stopping issuance remains active during maintenance windows and when
-	// automatic renewal is disabled. Only idle work is cancelled; live leases
+	// automatic renewal is disabled. Only idle work is canceled; live leases
 	// retain their original completion/report path until they finish or expire.
 	stoppedTenants, err := s.store.TenantsWithStoppedIdentityWork(ctx, now)
 	if err != nil {
@@ -3528,7 +3528,7 @@ func (s *Server) observeLifecycleSweep(queued, alerted int, err error) {
 const signerMonitorInterval = 5 * time.Second
 
 // RunSignerMonitor periodically samples the signer's health/restarts into the
-// shared metrics registry until ctx is cancelled (SF.3). It is a no-op when no
+// shared metrics registry until ctx is canceled (SF.3). It is a no-op when no
 // signer is configured, so it is always safe to start in its own goroutine, and
 // it stops promptly on shutdown (the graceful-shutdown contract).
 func (s *Server) RunSignerMonitor(ctx context.Context) {

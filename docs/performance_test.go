@@ -458,7 +458,7 @@ func TestSoakEnduranceGateIsExecutableEvidence(t *testing.T) {
 	}
 
 	// The shipped soak gate exists and is a self-testing pass/fail gate (an induced
-	// leak MUST fail; a healthy series MUST pass), so it is real evidence not theatre.
+	// leak MUST fail; a healthy series MUST pass), so it is real evidence not theater.
 	mk := read(t, "../Makefile")
 	if !strings.Contains(mk, "soak:") {
 		t.Error("Makefile no longer defines the `soak` target; the TRACE-009 endurance evidence is gone — revisit this reality test")

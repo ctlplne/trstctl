@@ -12,7 +12,7 @@
 //
 // No crypto/* (AN-3): the PEM check is a structural encoding/pem decode, not a
 // parse of the key. Material is held as []byte (AN-8), never as a string, and
-// the request body is unmarshalled through secretjson so the private-key PEM
+// the request body is unmarshaled through secretjson so the private-key PEM
 // never becomes an immutable Go string inside the double either.
 package fortigatetest
 
@@ -116,7 +116,7 @@ func (s *Server) Puts() int {
 }
 
 // Bodies returns a copy of every request body the appliance received, so a test
-// can prove the API token travelled only in the Authorization header.
+// can prove the API token traveled only in the Authorization header.
 func (s *Server) Bodies() [][]byte {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -160,7 +160,7 @@ func (s *Server) Refused() []Call {
 // SetFailure makes the next and all subsequent authenticated imports answer with
 // status and body until it is cleared with a zero status.
 //
-// It exists to model the one appliance behaviour that matters for secret
+// It exists to model the one appliance behavior that matters for secret
 // handling: FortiOS error bodies are assembled from the request that failed and
 // can echo submitted fields back. A connector must not forward those bytes into
 // an error an operator will paste into a ticket, and that property cannot be

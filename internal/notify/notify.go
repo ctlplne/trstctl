@@ -86,7 +86,7 @@ const (
 	// approver. It contains routing metadata only, never credential material.
 	KindApprovalRequest = "approval.requested"
 	// KindCAHorizon marks a CA authority crossing into a tighter expiry band
-	// (H5). Replacing a trust anchor is a quarters-long programme, so this fires
+	// (H5). Replacing a trust anchor is a quarters-long program, so this fires
 	// years ahead and again at each tightening.
 	// KindEndpointVerificationFailed means a TLS handshake found a listener
 	// serving something other than what was deployed (D2).
@@ -181,7 +181,7 @@ type Alert struct {
 	// EndpointAddress is the host:port that was handshaked; Vantage says
 	// whether the serving host itself or a network relay observed it; Mismatch
 	// names the divergence class. LastGoodAt is what turns an alert into a
-	// judgement of severity — an endpoint that was good an hour ago and one
+	// judgment of severity — an endpoint that was good an hour ago and one
 	// that has never once served correctly are different incidents.
 	EndpointAddress string    `json:"endpoint_address,omitempty"`
 	Vantage         string    `json:"vantage,omitempty"`

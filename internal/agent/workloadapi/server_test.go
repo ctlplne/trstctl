@@ -136,10 +136,10 @@ func TestTheSVIDKeyIsGeneratedOnTheHostAndOnlyThePublicHalfTravels(t *testing.T)
 		t.Fatal("no public key was sent up, so the control plane signed nothing this host made")
 	}
 	if !crypto.IsPKIXPublicKey(up.gotPublicKey) {
-		t.Error("what travelled up is not a PKIX public key")
+		t.Error("what traveled up is not a PKIX public key")
 	}
 	if crypto.IsPKCS8PrivateKey(up.gotPublicKey) {
-		t.Error("a PRIVATE key travelled up; only the public half may leave the host that " +
+		t.Error("a PRIVATE key traveled up; only the public half may leave the host that " +
 			"generated it, and that is the entire security claim of moving the Workload API here")
 	}
 	for _, marker := range [][]byte{[]byte("PRIVATE KEY"), []byte("-----BEGIN")} {

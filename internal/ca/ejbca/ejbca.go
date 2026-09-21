@@ -63,7 +63,7 @@ type Config struct {
 }
 
 // backend talks the EJBCA REST API. It is the only CA-specific code; the template
-// supplies the ca.CA behaviour.
+// supplies the ca.CA behavior.
 type backend struct {
 	cfg          Config
 	client       *http.Client

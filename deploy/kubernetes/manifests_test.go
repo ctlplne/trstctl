@@ -199,7 +199,7 @@ func TestDaemonSetRunsAgentAsServiceAccount(t *testing.T) {
 	c := containers[0].(map[string]any)
 	// The agent ships inside the single multi-binary trstctl image and is run by
 	// overriding the entrypoint to trstctl-agent (OPS-002: there is no separate,
-	// un-built -agent image). So assert on the COMMAND that runs (the behaviour),
+	// un-built -agent image). So assert on the COMMAND that runs (the behavior),
 	// not on the image name string.
 	command := strings.Join(asStringSlice(c["command"]), " ")
 	if !strings.Contains(command, "trstctl-agent") {
@@ -210,7 +210,7 @@ func TestDaemonSetRunsAgentAsServiceAccount(t *testing.T) {
 		t.Errorf("container image = %q, want the built multi-binary trstctl image", img)
 	}
 
-	// OPS-008 behavioural: every flag the DaemonSet passes to trstctl-agent must be a
+	// OPS-008 behavioral: every flag the DaemonSet passes to trstctl-agent must be a
 	// flag the agent BINARY actually defines (parsed from its --help, not hard-coded),
 	// and the agent must be put into --k8s mode. The old test only substring-matched
 	// "--k8s" — it could not catch a typo'd or removed flag (the OPS-001 crash-loop

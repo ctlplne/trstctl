@@ -17,12 +17,12 @@ import (
 
 // signThenBlockDoer answers the key-creation round-trips (CreateKey / GetPublicKey)
 // immediately so a signer can be built, but BLOCKS forever on the Sign call until
-// the request's context is cancelled — modelling a KMS that wedges on the signing
+// the request's context is canceled — modeling a KMS that wedges on the signing
 // operation specifically. It performs no SigV4 verification (the test asserts
 // cancellation, not auth) and returns no crypto material it does not have to.
 type signThenBlockDoer struct {
 	key     *crypto.LockedSigner
-	signHit chan struct{} // signalled the first time a Sign request arrives
+	signHit chan struct{} // signaled the first time a Sign request arrives
 }
 
 func newSignThenBlockDoer(t *testing.T) *signThenBlockDoer {

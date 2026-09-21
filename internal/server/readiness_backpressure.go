@@ -24,7 +24,7 @@ const loadSensitiveGrace = 2 * time.Minute
 
 // shedProbe wraps a readiness probe that reads through the shared request pool.
 // Under AN-7 the main pool sheds load with a 503 while it is saturated; that is
-// correct serving behaviour, not a reason to take the replica out of rotation,
+// correct serving behavior, not a reason to take the replica out of rotation,
 // so a pool-acquire/statement timeout (store.IsBusy) or an exhausted probe
 // budget answers observ.Degraded rather than failing readiness. PostgreSQL
 // reachability is proven separately by the db check on the dedicated probe pool

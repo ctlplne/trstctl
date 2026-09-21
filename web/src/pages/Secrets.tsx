@@ -800,7 +800,7 @@ export function Secrets() {
   }
 
   function closeCreateForm() {
-    // A cancelled secret value should leave React state immediately, just as a
+    // A canceled secret value should leave React state immediately, just as a
     // submitted value does. Names and ownership are cleared too so reopening
     // cannot look like a half-finished mutation.
     setCreateName("");

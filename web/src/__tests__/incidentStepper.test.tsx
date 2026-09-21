@@ -47,7 +47,7 @@ describe("incident remediation stepper", () => {
     expect(stateOf(steps, "revoked")).toBe("done");
   });
 
-  it("honours the dedicated revocation status when the phase does not say so", () => {
+  it("honors the dedicated revocation status when the phase does not say so", () => {
     const steps = incidentSteps(execution({ revocation_status: "revoked" }));
     expect(stateOf(steps, "revoked")).toBe("done");
   });

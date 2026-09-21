@@ -14,7 +14,7 @@ import (
 // Destruction is irreversible, so the only question that matters about this
 // surface is what it says when it does not know. An unlicensed deployment
 // rendering an empty checklist would read as "this key has no dependents" —
-// permission to destroy — which is the worst available way for a licence check
+// permission to destroy — which is the worst available way for a license check
 // to fail.
 
 func TestAnUnlicensedDeploymentRefusesRatherThanReportingNoDependents(t *testing.T) {

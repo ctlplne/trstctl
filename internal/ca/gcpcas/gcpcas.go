@@ -62,7 +62,7 @@ type Config struct {
 }
 
 // backend drives CAS CreateCertificate over the API seam. It is the only
-// CA-specific code; the template supplies the ca.CA behaviour.
+// CA-specific code; the template supplies the ca.CA behavior.
 type backend struct {
 	cfg Config
 	api API

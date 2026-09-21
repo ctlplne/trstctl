@@ -42,7 +42,7 @@ func (o *Orchestrator) correlateMDMDevice(ctx context.Context, tenantID, eventID
 	switch in.InstallState {
 	case "ok", "failed", "unknown":
 	default:
-		// Fail closed on an unrecognised state rather than storing it. A state
+		// Fail closed on an unrecognized state rather than storing it. A state
 		// the console cannot render becomes an invisible row.
 		return fmt.Errorf("orchestrator: install_state %q is not ok, failed, or unknown", in.InstallState)
 	}

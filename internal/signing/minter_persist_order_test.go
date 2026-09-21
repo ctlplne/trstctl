@@ -80,7 +80,7 @@ func TestFailedPersistLeavesNoResolvableHandle(t *testing.T) {
 //
 // With the save inside the critical section a reader cannot interleave at all.
 // With the old ordering the handle was published, the lock dropped, and the save
-// ran afterwards — so a reader could see a handle with no file behind it.
+// ran afterward — so a reader could see a handle with no file behind it.
 func TestHandleNeverResolvesBeforeItIsPersisted(t *testing.T) {
 	dir := t.TempDir()
 	srv, err := NewPersistentServer(NewKeyStore(dir, inPackageTestKEK(t)))

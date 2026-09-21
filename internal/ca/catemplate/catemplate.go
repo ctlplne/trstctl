@@ -8,7 +8,7 @@
 // A CA plugin differs from every other only in how it asks its upstream
 // authority to sign a CSR. Everything else — implementing the ca.CA interface,
 // validating the request, parsing the issued chain, extracting the serial and
-// expiry, labelling the issuer, wrapping errors — is identical, and lives here.
+// expiry, labeling the issuer, wrapping errors — is identical, and lives here.
 // A new plugin therefore implements just Backend (see the example plugin in
 // internal/ca/example and README.md) and wraps it with New; it then rides the
 // same issuance rails (idempotency AN-5, outbox AN-6) through ca.IssuanceService
@@ -33,7 +33,7 @@ type Backend interface {
 	// issued certificate and appears in events.
 	CAName() string
 	// Issue submits req.CSR to the upstream CA, authorizing req.DNSNames and
-	// requesting req.TTL where the CA honours it, and returns the chain PEM.
+	// requesting req.TTL where the CA honors it, and returns the chain PEM.
 	Issue(ctx context.Context, req ca.IssueRequest) (chainPEM []byte, err error)
 }
 

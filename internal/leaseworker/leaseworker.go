@@ -56,7 +56,7 @@ func (w *Worker) Tick(ctx context.Context) (expired, revoked int, err error) {
 	return expired, revoked, err
 }
 
-// Run loops, ticking every interval, until ctx is cancelled (graceful stop). It
+// Run loops, ticking every interval, until ctx is canceled (graceful stop). It
 // performs a final drain on shutdown so an in-flight expiry is not stranded.
 func (w *Worker) Run(ctx context.Context) error {
 	t := time.NewTicker(w.interval)

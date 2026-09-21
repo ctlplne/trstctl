@@ -174,7 +174,7 @@ func WithIdempotencyResultProtection(fn IdempotencyResultProtectionProvider) Opt
 
 // WithTenantKeyDomainLifecycle wires the CORE tenant-scoped cryptographic
 // custody status and lifecycle. A nil service remains an honest unavailable
-// status; it never mounts an edition or licence gate.
+// status; it never mounts an edition or license gate.
 func WithTenantKeyDomainLifecycle(service TenantKeyDomainLifecycle) Option {
 	return func(c *config) { c.tenantKeyDomains = service }
 }

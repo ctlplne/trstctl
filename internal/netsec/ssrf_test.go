@@ -144,7 +144,7 @@ func TestParseEgressAllowPrefixIsTheOneGate(t *testing.T) {
 	}
 }
 
-// TestDialTimeSkipIsObservable pins the defence-in-depth half: an invalid
+// TestDialTimeSkipIsObservable pins the defense-in-depth half: an invalid
 // prefix that still reaches the dialer (only possible from an unvalidated
 // path) is skipped AND counted, never silently ignored.
 func TestDialTimeSkipIsObservable(t *testing.T) {

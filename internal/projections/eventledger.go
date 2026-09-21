@@ -29,5 +29,5 @@ func EventTypesForFeatureAction(featureID, action string) ([]string, bool) {
 	return eventledger.EventTypesForFeatureAction(featureID, action)
 }
 
-// LedgerHasEventType reports whether t is catalogued in the ledger.
+// LedgerHasEventType reports whether t is cataloged in the ledger.
 func LedgerHasEventType(t string) bool { return eventledger.HasEventType(t) }

@@ -920,7 +920,7 @@ describe("protocol surface", () => {
 
     await renderProtocols();
 
-    expect(await screen.findByRole("heading", { name: "Enrolment failures" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Enrollment failures" })).toBeInTheDocument();
     expect(screen.getByText(/durable tenant-scoped events/)).toBeInTheDocument();
     expect(screen.getByText("The authority could not see the challenge this system published.")).toBeInTheDocument();
     expect(screen.getByText("Check propagation from an external resolver.")).toBeInTheDocument();
@@ -965,7 +965,7 @@ describe("protocol surface", () => {
     });
     mountProtocols(["certs:issue"]);
 
-    const panel = await screen.findByRole("region", { name: "Enrolment failures" });
+    const panel = await screen.findByRole("region", { name: "Enrollment failures" });
     expect(within(panel).getByText("order/order-42/authorization/authz-9/challenge/chal-7")).toBeInTheDocument();
     expect(within(panel).getByText("dns/api.example.test")).toBeInTheDocument();
     expect(within(panel).getByText("https/api.example.test:443")).toBeInTheDocument();
@@ -1018,7 +1018,7 @@ describe("protocol surface", () => {
     });
     mountProtocols(["certs:read"]);
 
-    const panel = await screen.findByRole("region", { name: "Enrolment failures" });
+    const panel = await screen.findByRole("region", { name: "Enrollment failures" });
     expect(within(panel).queryByRole("button", { name: "Prove fixed" })).not.toBeInTheDocument();
     expect(within(panel).getByText("No network proof queued")).toBeInTheDocument();
   });
@@ -1050,7 +1050,7 @@ describe("protocol surface", () => {
     });
     mountProtocols(["certs:issue"]);
 
-    const panel = await screen.findByRole("region", { name: "Enrolment failures" });
+    const panel = await screen.findByRole("region", { name: "Enrollment failures" });
     expect(within(panel).getByText("Verified fixed")).toBeInTheDocument();
     expect(within(panel).getByText("network-relay-7")).toBeInTheDocument();
     expect(within(panel).getByText("sha256:feedface")).toBeInTheDocument();

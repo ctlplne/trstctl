@@ -82,7 +82,7 @@ func TestCustodyTableNamesEveryControlPlaneKeygenPathAndItsSuccessor(t *testing.
 // from the shipped composition roots, not from phrases that happen to occur in
 // comments. B3 added a host-local server without deleting the control-plane
 // compatibility socket. Collapsing those two runtimes into one row makes either
-// "yes" or "no" a lie, depending on which socket the workload dialled.
+// "yes" or "no" a lie, depending on which socket the workload dialed.
 func TestSPIFFECustodyRowsFollowBothProductionSockets(t *testing.T) {
 	t.Parallel()
 

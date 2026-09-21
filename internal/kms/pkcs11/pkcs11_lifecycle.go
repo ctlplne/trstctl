@@ -123,7 +123,7 @@ func (b *Backend) RevokeKeyForOperation(ctx context.Context, operationID string,
 	return nil
 }
 
-// ZeroizeKey destroys the token object. This is the PKCS#11 analogue of wiping a
+// ZeroizeKey destroys the token object. This is the PKCS#11 analog of wiping a
 // local locked buffer: the provider removes the material and signing fails closed.
 func (b *Backend) ZeroizeKey(ctx context.Context, ref crypto.KeyRef) error {
 	if ref.ID == "" {

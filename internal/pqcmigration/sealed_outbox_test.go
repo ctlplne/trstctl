@@ -634,7 +634,7 @@ func TestTLSPostureRetryAfterDurableCompletionNeverReappliesAfterRollback(t *tes
 				value := payload.(TLSFindingCompleted)
 				completed = &value
 				if crashAfterCompletion {
-					return errors.New("completion persisted but local acknowledgement crashed")
+					return errors.New("completion persisted but local acknowledgment crashed")
 				}
 			}
 			return nil

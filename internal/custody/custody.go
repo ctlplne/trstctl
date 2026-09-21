@@ -133,7 +133,7 @@ func (r Record) Recorded() bool {
 
 // Complete reports whether the record answers all four custody questions.
 //
-// Recorded is deliberately weaker for backwards compatibility: an old event
+// Recorded is deliberately weaker for backward compatibility: an old event
 // may truthfully establish origin and nothing else. Evidence packs use Complete
 // because a partial answer must stay in the explicit-unrecorded list rather
 // than being rounded up to a complete attestation.
@@ -377,7 +377,7 @@ const ExecutorAgent = "agent"
 // host-generated keys.
 //
 // Absent means no, and so does unparseable. A target whose config predates this
-// feature must not change behaviour because a new version shipped, and the
+// feature must not change behavior because a new version shipped, and the
 // failure direction is the one that matters: reading "agent" from a config that
 // does not say it would both refuse that target's deploys and report it as
 // migrated when it is not.

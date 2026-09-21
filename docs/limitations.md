@@ -319,8 +319,8 @@ never live in the API process. What you can do end to end against the running bi
   Single-box demo (A5): `trstctl --demo` serves the control plane AND starts a
   colocated host agent. Evaluating this product otherwise needs two installs, and
   until both exist nothing the product is FOR can be shown — no deploy executes, no
-  endpoint verifies, no renewal lands on a host. It is also the cheapest defence
-  against the defect this programme keeps finding: six capabilities have been
+  endpoint verifies, no renewal lands on a host. It is also the cheapest defense
+  against the defect this program keeps finding: six capabilities have been
   complete, tested and unreachable from the running binary, and every one would have
   been obvious the first time somebody drove it end to end on one machine.
   The agent is EXEC'd, never linked. `cmd/trstctl-agent` must not link the control
@@ -333,7 +333,7 @@ never live in the API process. What you can do end to end against the running bi
   because the agent has nothing to dial) and a conservative claimable-job set
   (`discovery.run`, `endpoint.verify`, `connector.test`). An empty claimable
   allowlist is the trap worth naming: the job ledger is served, hands nothing out,
-  and the agent enrols successfully and idles while every surface looks healthy —
+  and the agent enrolls successfully and idles while every surface looks healthy —
   the most misleading possible demo. `connector.deploy` is deliberately NOT enabled;
   an evaluation box must not mutate an appliance somebody pointed it at by accident.
   Settings an operator did set are never overwritten.
@@ -341,8 +341,8 @@ never live in the API process. What you can do end to end against the running bi
   one, not a warning. `--demo` is an explicit request for a colocated agent, and a
   run that serves the control plane while silently omitting the agent is exactly the
   "looks like it worked" outcome the flag exists to prevent. The bootstrap token is
-  minted through the SERVED enrolment API — not by reaching into the store, because
-  reaching in would let the demo work while the served enrolment path was broken —
+  minted through the SERVED enrollment API — not by reaching into the store, because
+  reaching in would let the demo work while the served enrollment path was broken —
   and written to a 0600 file, never passed as an argument, since process arguments
   expose bearer credentials and the agent refuses them for that reason.
   Also fixed here: `agent_channel.claimable_job_kinds` was the ONE AgentChannel
@@ -365,7 +365,7 @@ never live in the API process. What you can do end to end against the running bi
   Fixed by requiring a configured `OperatorAuthenticator`. Every other dependency in the
   provider Config falls back to a working stand-in; this one deliberately does not,
   because the safe stand-in for "who is this caller" does not exist and a placeholder is
-  precisely how the original behaviour came to ship. A nil authenticator now refuses
+  precisely how the original behavior came to ship. A nil authenticator now refuses
   every request — an unconfigured provider plane is closed, not open — and the consenting
   subject is the authenticated caller, with a `subject` in the body REJECTED rather than
   ignored so an integration cannot keep sending one and believe it has effect.
@@ -423,7 +423,7 @@ never live in the API process. What you can do end to end against the running bi
   Two honesty constraints are built into the wording rather than left to the reader.
   Dependents are what DISCOVERY HAS OBSERVED: the graph is built from scans, so an
   asset with zero dependents renders identically to one sitting on a resource nothing
-  has scanned, and no row is ever labelled safe to rotate — the recommendation for a
+  has scanned, and no row is ever labeled safe to rotate — the recommendation for a
   weak asset with no observed dependents says in words that zero observed is not zero.
   And a CBOM usage recorded with NO LOCATION has no place on the graph and no
   computable blast radius; it is counted separately as unplaceable rather than sorted
@@ -454,7 +454,7 @@ never live in the API process. What you can do end to end against the running bi
   CORRECTION (D2/D3, B2, R1, F1, H2 — 2026-08-05): FIVE agent-claimable job kinds
   dead-lettered before any agent could claim them. The control-plane dispatcher is
   the sole handler for every outbox sweep, and its default branch returns a hard
-  error for an unrecognised destination — right for a genuinely unknown one, fatal
+  error for an unrecognized destination — right for a genuinely unknown one, fatal
   for work an AGENT is meant to execute. A hard error burns the row's attempt budget
   and lands it in `status='failed'`, and `ClaimAgentJobs` only ever hands out rows in
   `pending`. So `endpoint.verify` (D2/D3), `endpoint.renew` (B2's host-generated
@@ -474,7 +474,7 @@ never live in the API process. What you can do end to end against the running bi
   it is what made the dead-lettering visible — the scheduler began producing work
   that immediately died. Both halves are fixed; either alone would have left the
   capability dark.
-  That makes SIX instances of one defect in this programme: D2's VerifyAddress with
+  That makes SIX instances of one defect in this program: D2's VerifyAddress with
   no producer, B2's `endpoint.renew` with no enqueue, B5's custody projection never
   written, J2's restore drill with no production caller, the unregistered
   verification scheduler, and this dead-letter path. The shape never varies — the
@@ -504,7 +504,7 @@ never live in the API process. What you can do end to end against the running bi
   than left as dead code under a false claim. The jitter is not cosmetic: agents
   installed by the same automation hold near-identical expiries, and without spread
   a fleet renews in one second — arriving during recovery from the very outage that
-  synchronised it.
+  synchronized it.
   Local clock, deliberately: the agent that cannot reach the control plane is exactly
   the agent that most needs to renew early, and it has no other clock to consult. A
   host with a badly wrong clock renews at the wrong time, which is a real limitation
@@ -517,7 +517,7 @@ never live in the API process. What you can do end to end against the running bi
   signed receipt and restarts; and `--demo` exists. Agent/control-plane version
   skew IS enforced — `agentProtocolInterceptor` refuses a handshake outside
   `MinSupportedVersion..MaxSupportedVersion` — and was met before this
-  programme, so it is not claimed as new work.
+  program, so it is not claimed as new work.
   Constrained edge sub-CA (B6, THE one deliberate exception to AN-3/AN-4): a
   host with no path to the brain issues leaves locally under a delegated CA,
   and every bound that makes that defensible is enforced, not documented.
@@ -619,7 +619,7 @@ never live in the API process. What you can do end to end against the running bi
   estate has not deployed a relay yet" into "this estate's appliance deploys
   stopped working", and would retire the only path with end-to-end proof through
   the served API — the DoD connector suite drives a10, cisco, kemp and netscaler
-  through the control plane to their device doubles and enrols no relay. So what is
+  through the control plane to their device doubles and enrolls no relay. So what is
   promised is narrower and keepable: if you run a relay, the control plane will not
   do its work behind its back. An estate with no relay deploys exactly as it did
   before. A failed relay-presence lookup DEFERS rather than falling through, because
@@ -749,7 +749,7 @@ never live in the API process. What you can do end to end against the running bi
   projected in one tenant transaction, so a crash cannot commit a red drill while
   silently dropping its alert. The scheduler logs structural/signing failures
   instead of discarding its returned error.
-  Enrolment diagnostics (I4): refused ACME, EST, SCEP, and AD CS enrolments now
+  Enrollment diagnostics (I4): refused ACME, EST, SCEP, and AD CS enrollments now
   produce a diagnosis naming the protocol, the step that failed, a cause from a
   CLOSED set, and a remediation. Each protocol emits at its shared refusal choke
   point, so a new refusal cannot silently bypass the recorder. AD CS keeps only an
@@ -757,7 +757,7 @@ never live in the API process. What you can do end to end against the running bi
   status is never retained because IIS or a proxy can echo submitted credentials.
   The design constraint is that it must DECLINE rather than guess. A tool that says
   "your DNS record is missing" when the responder was unreachable sends an operator
-  to the zone file for an hour, and they will doubt it afterwards on the occasions it
+  to the zone file for an hour, and they will doubt it afterward on the occasions it
   was right. So the classifier matches only unambiguous evidence — RFC 8555 problem
   types, EST status codes, the two stable AD CS error phrases — and returns `unknown`
   for everything else, which is a first-class answer carrying NO remediation rather
@@ -840,7 +840,7 @@ never live in the API process. What you can do end to end against the running bi
   stale list with a warning header, because a client that receives bytes will use
   them. `--crl-cache-grace` can extend the window, defaults to zero, and is
   deliberately an operator decision: serving a list the CA declared expired is a risk
-  only they can weigh. A CRL whose number went BACKWARDS is refused, since replaying
+  only they can weigh. A CRL whose number went BACKWARD is refused, since replaying
   an older list is how a revoked certificate comes back to life. A failed refresh
   keeps a still-valid cached list rather than discarding it. Both fail-closed
   properties are mutation-verified. Before opening its steady-state channel, the
@@ -856,10 +856,10 @@ never live in the API process. What you can do end to end against the running bi
   isolation, replay, snapshot, and cold rebuild against controlled responders. A
   domain-joined Windows AD CS deployment using its real CDP/OCSP endpoints remains
   external lab evidence rather than a repository claim.
-  Enrolment proxy for dark segments (A4): a network-role relay started with
+  Enrollment proxy for dark segments (A4): a network-role relay started with
   `--enroll-proxy-listen`, `--enroll-proxy-segment`,
   `--enroll-proxy-public-url`, and `--enroll-proxy-upstream` serves ACME, EST and
-  SCEP on the LAN so hosts and devices with no route to the control plane can enrol
+  SCEP on the LAN so hosts and devices with no route to the control plane can enroll
   through the one outbound pipe the relay already has. Stock clients (certbot,
   sscep, estclient) point at the stable public URL unmodified. The agent listener is
   HTTP; the public URL is HTTPS, so the segment's TLS-terminating load balancer
@@ -884,7 +884,7 @@ never live in the API process. What you can do end to end against the running bi
   stock client signed through failover.
   The forwarded paths are an allowlist, not a catch-all: a segment able to reach
   /api/v1 through a relay would hold the control plane's entire administrative
-  surface, which is a far larger grant than "devices here can enrol".
+  surface, which is a far larger grant than "devices here can enroll".
   Two kinds of failover stay separate. Several `--enroll-proxy-upstream` values let
   ONE relay choose another control-plane endpoint after a transport failure. Several
   relay processes behind the SAME public URL let the segment frontend select a
@@ -906,7 +906,7 @@ never live in the API process. What you can do end to end against the running bi
   `--connector-plugin-dir` executes signature-verified WASM connectors inside the
   customer's network, under a capability grant its own operator sets. The control
   plane never loads partner code. Every guarantee is re-proven in the new location
-  rather than assumed to have travelled with the code: an unsigned, tampered, or
+  rather than assumed to have traveled with the code: an unsigned, tampered, or
   untrusted-key module is refused AT LOAD and fails the whole runtime rather than
   being skipped — a relay serving a subset of its configured connectors would be
   missing precisely the one somebody tampered with. An out-of-grant operation is
@@ -971,7 +971,7 @@ never live in the API process. What you can do end to end against the running bi
   revoke and unattended-DV columns remain separately census-checked against the
   implementations. Every row names the tests backing it, and a manifest-derived
   guard fails both when a row outruns its proof and when new executable proof remains
-  incorrectly labelled "not tested."
+  incorrectly labeled "not tested."
   Support matrix (E3): docs/features/connector-support-matrix.md is GENERATED from
   the same census the API serves, and a Go test fails if the two diverge — so a
   capability cannot be removed while its published row survives. It deliberately
@@ -1283,7 +1283,7 @@ never live in the API process. What you can do end to end against the running bi
   undelegated customer or wrong-operation grant is refused before metering is
   touched. Reconciliation compares against the
   transitions projection, so a rebuild-in-progress can transiently refuse to
-  sign — the refusal names the numbers, which is the correct behaviour while
+  sign — the refusal names the numbers, which is the correct behavior while
   the projection catches up.
 - notification routing matrix and inbox: expiry, CT, drift, and workflow alerts
   resolve through the configured severity-to-channel matrix, dedup by
@@ -1345,7 +1345,7 @@ edges and follow-up integration work.
 Leaf expiry alerting runs on 7/30/90-day windows. That is the right clock for a
 leaf and useless for a certificate authority: replacing a trust anchor means
 getting the new one into every relying party first, which is a quarters-long
-programme, so a 90-day warning arrives long after it could have helped. Nothing
+program, so a 90-day warning arrives long after it could have helped. Nothing
 evaluated `ca_authorities.not_after` at all before this, and the CA console
 printed the raw date and called anything past 90 days healthy.
 
@@ -1516,7 +1516,7 @@ never guessed broad. Enrollment-agent templates get their own rule
 (`ADCS-ESC3-AGENT`) rather than being folded into the client-auth checks,
 because the primitive is different — an agent certificate requests on behalf of
 *any* principal, so one of them is a master key rather than an impersonation of
-one account — and so is the remediation: restricting who may enrol is not
+one account — and so is the remediation: restricting who may enroll is not
 enough, the CA must also bound which templates accept agent-signed requests.
 
 The same sweep checks the surfaces outside template LDAP. Plaintext published
@@ -1524,7 +1524,7 @@ CES URIs, reachable plaintext Web Enrollment/NDES, anonymous `mscep_admin`, and
 Windows-authenticated Web Enrollment whose Extended Protection is disabled or
 unobserved produce separate findings with the exact endpoint/status/header
 facts. `msPKI-Enrollment-Servers` is treated only as the CES metadata it is; it
-is never mislabelled as proof that legacy `/certsrv` or NDES exists or is absent.
+is never mislabeled as proof that legacy `/certsrv` or NDES exists or is absent.
 On Windows relays, `certutil.exe` queries each publishing CA's
 `CA\\EnrollmentAgentRights`: a present policy is `enabled`, Microsoft's stable
 missing-value result is `disabled`, and access/transport/tool failures are
@@ -1784,7 +1784,7 @@ buffers that are wiped as soon as the response is encoded.
 if the caller currently holds the job's claim lease. A replay inserts nothing. So
 does a second agent that stole a lapsed lease, and so does a stale attempt
 number. All three get the same coarse `PermissionDenied` with nothing to
-distinguish them; the reason is classified afterwards for the audit event only,
+distinguish them; the reason is classified afterward for the audit event only,
 so probing the endpoint cannot map the claim table. Material is resolved BEFORE
 the gate is taken, so a custody outage refuses the call without burning the
 attempt's one redemption — the relay retries rather than failing the job. The
@@ -2025,7 +2025,7 @@ distribution, CMDB/MDM/ticket observation, and self-upgrade also have the execut
 named in their own sections. The claimable set remains empty by default and
 `agent_channel.claimable_job_kinds` is the only way to fill it. That is deliberate
 rather than unfinished: handing out work nothing can perform fills a queue while the
-control plane's own worker stops doing it. The kinds the allowlist recognises
+control plane's own worker stops doing it. The kinds the allowlist recognizes
 — `connector.deploy`, `connector.test`, `connector.rollback`, `endpoint.renew`,
 `endpoint.verify`, `discovery.run`, `revocation.probe`, `adcs.inventory`,
 `trust.distribute`, `cmdb.sync`, `mdm.sync`, `ticket.sync`, and `agent.upgrade` —
@@ -2069,7 +2069,7 @@ evidence predicate is reviewed.
 | `delivered` | connector delivery | A connector reached the target and applied the credential. | That the endpoint is serving it. Live verification is a **separate state**, served since D2 — see `GET /api/v1/endpoints/verifications` and the endpoint verification vocabulary below. A delivery receipt says what this control plane did; only a handshake says what the listener answers with. |
 | `failed` | connector delivery | The attempt ran and did not succeed. | — |
 | `config_validated` | connector delivery | `POST /api/v1/connectors/targets/{id}/test` resolved target metadata, schema, and credential references **locally**, because an agent-owned target has no eligible `connector.test` path enabled. Cloud-store targets do not use this fallback. | That the target was contacted, reachable, or willing to accept the credential. Nothing was changed. |
-| `verified` | connector delivery | A connector applied the credential AND a TLS handshake against the endpoint afterwards observed it serving that exact identity. The only delivery state that says the certificate is **live** rather than that it was sent. | That it is still live now. A delivery receipt is historical — it records what was true when that delivery ran. Current state is the endpoint verification row beside it. |
+| `verified` | connector delivery | A connector applied the credential AND a TLS handshake against the endpoint afterward observed it serving that exact identity. The only delivery state that says the certificate is **live** rather than that it was sent. | That it is still live now. A delivery receipt is historical — it records what was true when that delivery ran. Current state is the endpoint verification row beside it. |
 | `verify_failed` | connector delivery | A connector applied the credential and a handshake found the endpoint serving something else. | That the delivery failed. It succeeded; the endpoint did not take it. This is a renewal that did not land, and it is what triggers rollback where a target has opted in. |
 | `verified` | endpoint verification | A TLS handshake against the live listener observed it serving the expected identity. The record carries which comparisons ran — fingerprint always, name set and chain when an expectation supplied them. | That every vantage agrees. A `local` row means the serving host's own agent confirmed it; only a `relay` row means a client across the segment could get it. |
 | `diverged` | endpoint verification | A handshake succeeded and the listener is **not** serving what was deployed. The mismatch class says which way: `fingerprint`, `sans`, `chain`, `expired`, `not_yet_valid`. | That the deploy failed. It usually succeeded — this is a renewal that did not land, which is exactly the failure inventory-based expiry alerting cannot see. |
@@ -2098,7 +2098,7 @@ ran per batch. Both remain in the served OpenAPI enum and render in the console,
 because receipts written before the correction still carry them and removing an
 enum member would put stored rows outside the contract that describes them.
 
-Making these statuses stronger is real work, not relabelling. The dry-run half
+Making these statuses stronger is real work, not relabeling. The dry-run half
 is now served from every execution vantage. With `connector.test` enabled,
 `POST /api/v1/connectors/targets/{id}/test` queues a job for the bound host agent
 or network relay. A network relay redeems the appliance-management credential
@@ -2406,9 +2406,9 @@ than sending an operator looking for a credential that was never there.
   a disagreement is CLOSED through `POST /api/v1/owners/ownership-conflicts/{id}/resolve`
   (`trstctl owners resolve-conflict`), which REQUIRES both a reason and an
   attributed operator — "resolved" with no explanation tells the next reader
-  nothing about which side was right, and an unattributed judgement cannot be
+  nothing about which side was right, and an unattributed judgment cannot be
   questioned later. The projection pins `resolved_at IS NULL` so a second
-  operator cannot overwrite the first one's judgement. The console lists
+  operator cannot overwrite the first one's judgment. The console lists
   disagreements but has no resolve control yet;
   and the CI-to-CERTIFICATE mapping is by owner NAME, so a CMDB whose owner
   labels do not match this estate's owner names reconciles nothing and says so.
@@ -2634,7 +2634,7 @@ than sending an operator looking for a credential that was never there.
   can supply Kerberos/NTLM through a `WebEnrollmentConfig.Authenticator`, an
   interface rather than a GSSAPI dependency because the credential belongs in
   the host's credential store and core must have no code path that could
-  serialise a domain password. Configuring BOTH a password and an authenticator
+  serialize a domain password. Configuring BOTH a password and an authenticator
   is refused: the authenticator would win, leaving a live domain credential in
   configuration that nothing reads — which is exactly what somebody later
   "fixes" by making it take effect. A failing authenticator fails the request
@@ -2642,9 +2642,9 @@ than sending an operator looking for a credential that was never there.
   password on the wire. AD CS certificate-database rows parse into a vocabulary
   that keeps PENDING distinct from FAILED and from DENIED (a pending request
   rendered as failed makes an operator re-submit instead of going to get it
-  approved; a human decided a denial), an unrecognised disposition code maps to
+  approved; a human decided a denial), an unrecognized disposition code maps to
   `unknown` rather than `failed` so a code Microsoft adds does not report
-  healthy certificates as broken, serials normalise so the same certificate from
+  healthy certificates as broken, serials normalize so the same certificate from
   two exports is not two inventory rows, and an unparseable NotAfter is counted
   as a VISIBILITY GAP rather than treated as an expiry in year zero. Scope,
   stated exactly: this is the transport and parsing layer only. NOTHING YET
@@ -2672,7 +2672,7 @@ than sending an operator looking for a credential that was never there.
   broken build while the campaign reported success — and a halted campaign never
   un-halts on its own, so a flapping agent cannot resume a rollout nobody
   re-approved. Pause GATES DISPATCH (the sweep returns early and `fleet.Advance`
-  refuses independently), not merely the button; a pause that greyed out UI
+  refuses independently), not merely the button; a pause that grayed out UI
   while jobs kept flowing would be worse than none because the operator believes
   they stopped it. `upgrade_ring` empty means UNASSIGNED and is never read as
   `broad`, and the console counts unassigned separately. Halted and paused are
@@ -2697,7 +2697,7 @@ than sending an operator looking for a credential that was never there.
   Resume re-dispatches the halted ring as a NEW round, so the failed round's
   receipts stop counting against the retry.
   Scope, stated exactly: a campaign with NO artifacts is OBSERVE-ONLY — the
-  pre-dispatch behaviour, kept for fleets an external mechanism upgrades, where
+  pre-dispatch behavior, kept for fleets an external mechanism upgrades, where
   verification is "the agent reports the target version and has been seen
   since" and nothing is pushed; the console says which mode a campaign is in.
   The artifact sha256 is operator-supplied — the platform guarantees the fleet
@@ -2776,7 +2776,7 @@ than sending an operator looking for a credential that was never there.
   certutil rows a domain-joined relay collected into a per-CA breakdown by
   disposition — issued, PENDING a CA manager's approval, revoked, denied,
   failed. Pending is kept distinct from failed and denied throughout, because
-  the fix for a pending request is approval, not resubmission; an unrecognised
+  the fix for a pending request is approval, not resubmission; an unrecognized
   disposition code is `unknown`, never folded into failed; an issued row whose
   expiry could not be read is counted `unparsed`; and a row carrying no request
   id is counted `rejected`, never dropped — so a collection problem cannot read
@@ -3167,7 +3167,7 @@ time, so private egress failed as SSRF-blocked with nothing explaining why.
 **Migration:** operators whose entries currently carry host bits should write
 the network address the entry already effectively meant (for `10.1.2.3/8`,
 write `10.0.0.0/8` — or, if a single host was intended, `10.1.2.3/32`). The
-dial-time guard remains as defence in depth and now logs and counts any entry
+dial-time guard remains as defense in depth and now logs and counts any entry
 it skips.
 
 **CMP binds every CSR to the authenticated protection identity by default.**
@@ -3183,7 +3183,7 @@ environment (echoed by `-check-config` as
 requests under the default are refused with a distinct audit reason
 (`csr not bound to protection identity`), so an operator can tell an
 impersonation attempt from a malformed message. Deployments that relied on the
-previous unbound behaviour must set the RA opt-in deliberately on upgrade.
+previous unbound behavior must set the RA opt-in deliberately on upgrade.
 
 Six of six secrets/identity frameworks are mounted on the running binary
 under `/api/v1/secrets/*` (off by default — `secrets.enable_api` — fail-closed
@@ -3543,7 +3543,7 @@ This is a deliberate, documented trust boundary, not an accident.
   publishes and cleans through `acme.dns01.present` / `acme.dns01.cleanup`
   outbox rows using tenant provider configs and secret-reference-backed
   credentials. Wildcard X.509 identity issuance requires an explicit
-  blast-radius acknowledgement and `validation_method=dns-01`; deployed
+  blast-radius acknowledgment and `validation_method=dns-01`; deployed
   wildcard identities renew through the lifecycle scheduler's `ca.renew` path
   with rotation evidence. The ACME server is served by the running binary:
   it is mounted on the control-plane TLS listener at `/directory` +
@@ -4430,7 +4430,7 @@ here, which is the correct starting picture rather than a discouraging one.
 ## Renewal windows, canaries and SLOs
 
 **Maintenance windows defer, they never drop.** A renewal deploys to a listener
-and reloads a service, and there are hours in every organisation's week when
+and reloads a service, and there are hours in every organization's week when
 nobody wants that unattended. Before this the only control was switching renewal
 off, which trades an outage risk for an expiry risk. A window that closes now
 holds the sweep and records why, naming when it reopens — because a change
@@ -4528,7 +4528,7 @@ that has never once been observed serving what it should reads as *never
 verified*, which is a stronger statement than "not recently" and renders as one.
 
 **Re-verification is a loop, not an event.** A post-deploy check proves the
-reload took effect at that moment; it says nothing about the weeks afterwards,
+reload took effect at that moment; it says nothing about the weeks afterward,
 and a listener can start serving the wrong certificate long after a deploy — a
 failover to a node that never got the file, a config reload elsewhere, a restored
 backup. Sweeps run hourly by default (`EndpointVerificationInterval`), batched at
@@ -4642,7 +4642,7 @@ deliberately out of scope, and a staleness window that is theirs to set — a DM
 and a lab do not deserve the same answer. Coverage is then the share of
 declared, non-excluded segments swept inside their own window. Excluded segments
 are removed from **both** halves rather than counted as covered; a number that
-rose when somebody excluded something would reward exactly the wrong behaviour.
+rose when somebody excluded something would reward exactly the wrong behavior.
 
 The consequence is worth stating plainly: **an estate with nothing declared
 reports no coverage, not full coverage.** That reads as unhelpful on day one and
@@ -4716,7 +4716,7 @@ as the default, a default-deny `NetworkPolicy`, and TLS.
   `CertificateRequest`s through a served trstctl issuance endpoint using a
   mounted API token, signs approved native Kubernetes
   `CertificateSigningRequest`s from `certificates.k8s.io/v1`, and also
-  fulfils a trstctl-native `Certificate` directly into a `kubernetes.io/tls`
+  fulfills a trstctl-native `Certificate` directly into a `kubernetes.io/tls`
   Secret. `GET /api/v1/kubernetes/certificate-signing-requests` and
   `trstctl-cli kubernetes csr` expose the CAP-K8S-04 posture, supported
   signer names, RBAC, status fields, and residuals. The cert-manager path

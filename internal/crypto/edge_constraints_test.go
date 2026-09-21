@@ -97,9 +97,9 @@ func TestNameMatchingIsCaseAndTrailingDotInsensitive(t *testing.T) {
 				"them differently means a constraint can be evaded by typing it differently", name, err)
 		}
 	}
-	// The bypass must stay closed under the same normalisation.
+	// The bypass must stay closed under the same normalization.
 	if err := CheckEdgeIssuance(c, []string{"EVILCORP.EXAMPLE"}, nil, edgeNow); err == nil {
-		t.Fatal("normalisation re-opened the suffix bypass")
+		t.Fatal("normalization re-opened the suffix bypass")
 	}
 }
 

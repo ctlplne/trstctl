@@ -19,7 +19,7 @@ import (
 // Re-verifying endpoints on a schedule (epic D2).
 //
 // A post-deploy check proves the reload took effect at the moment of deploy.
-// It says nothing about the weeks afterwards, and the failure this epic exists
+// It says nothing about the weeks afterward, and the failure this epic exists
 // to catch does not only happen at deploy time: a config reload elsewhere, a
 // failover to a node that never got the file, an operator restoring an old
 // backup — each leaves a listener serving a certificate nobody deployed, with

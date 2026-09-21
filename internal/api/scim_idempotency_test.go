@@ -45,7 +45,7 @@ func TestSCIMDerivedIdempotencyKeyIsBoundedInTime(t *testing.T) {
 	}
 }
 
-// TestSCIMExplicitIdempotencyKeyWins pins the behaviour that was already right:
+// TestSCIMExplicitIdempotencyKeyWins pins the behavior that was already right:
 // a provider that supplies its own key controls deduplication, and nothing is
 // derived on its behalf.
 func TestSCIMExplicitIdempotencyKeyWins(t *testing.T) {

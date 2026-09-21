@@ -1122,7 +1122,7 @@ func (a auditTimestamper) Timestamp(ctx context.Context, hashedMessage []byte) (
 
 // loadCMPClientTrustAnchors reads the PEM bundle whose certificates a CMP
 // client's PKIMessage protection identity must chain to. An unset path yields no
-// anchors, which leaves the served CMP mount refusing to enrol (fail closed)
+// anchors, which leaves the served CMP mount refusing to enroll (fail closed)
 // rather than accepting a self-signed protection identity.
 func loadCMPClientTrustAnchors(path string) ([][]byte, error) {
 	path = strings.TrimSpace(path)

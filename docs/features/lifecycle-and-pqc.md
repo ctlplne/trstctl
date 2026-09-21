@@ -4,7 +4,7 @@
 
 A [certificate](../glossary.md) is not a "set it and forget it" object: it's issued,
 used, nears expiry and must be renewed, sometimes rotated (replaced early) or revoked
-(cancelled), and eventually retired. Lifecycle automation is trstctl doing that work on a
+(canceled), and eventually retired. Lifecycle automation is trstctl doing that work on a
 schedule. This page also covers two forward-looking concerns: crypto-agility (changing
 algorithms without rewriting the system) and PQC migration (moving your estate to
 [post-quantum](../glossary.md) algorithms before quantum computers break today's keys).
@@ -38,7 +38,7 @@ and agent leases keep their result path until completion or expiry. A bounded
 maintenance sweep, agent claim, or startup reconciliation then cancels remaining
 idle work, even when scheduled renewal is disabled or a maintenance window is
 closed. Attempts, errors, issuance bindings, and audit history remain intact;
-replaying the event log does not re-arm cancelled work. Cancelling a renewal
+replaying the event log does not re-arm canceled work. Canceling a renewal
 while keeping its identity active is not yet available.
 
 Open an X.509 identity's detail to see the certificate from its last completed
@@ -205,7 +205,7 @@ The control limits are intentional and visible:
   not silently rewrite operator configuration.
 - **Resume** is automatic when the next configured maintenance window opens.
 - **Cancel after enqueue** is not offered. A worker may already have leased the command,
-  so claiming it was cancelled could allow an unseen issuance or deployment to finish.
+  so claiming it was canceled could allow an unseen issuance or deployment to finish.
 - **Rollback** is available through Connectors only when a deployed predecessor and a
   connector-backed rollback procedure exist. The rotation run keeps the public rollback
   reference used to verify that recovery.
@@ -239,7 +239,7 @@ work and evidence; the fleet executor (`internal/pqcmigration`) attaches beside 
 CBOM sees the problem, so campaign ownership lives beside CBOM in core. A Community
 operator can create a tenant-scoped campaign over existing quantum-vulnerable or
 out-of-policy CBOM findings, assign an owner, deadline, wave, and readiness criteria,
-then record work performed manually or by any external tool. No licence is required:
+then record work performed manually or by any external tool. No license is required:
 `POST /api/v1/pqc/campaigns` starts the campaign; the corresponding list/detail/update,
 readiness, finding-disposition, close, and evidence routes serve the complete workflow.
 The same operations are available under `trstctl-cli pqc campaigns` and on `/posture`.

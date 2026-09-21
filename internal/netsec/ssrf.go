@@ -298,7 +298,7 @@ func ParseEgressAllowPrefix(raw string) (netip.Prefix, error) {
 }
 
 // egressAllowSkips counts allowlist entries ignored at dial time because they
-// failed validation — defence in depth that is OBSERVABLE: after J1 the config
+// failed validation — defense in depth that is OBSERVABLE: after J1 the config
 // surfaces reject such entries at load, so a non-zero count means an
 // unvalidated path fed the dialer.
 var egressAllowSkips atomic.Int64

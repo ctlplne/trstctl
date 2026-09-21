@@ -52,7 +52,7 @@ import (
 // (b) a hardware security module or key-management service together with an enforcement
 // component that is its sole authorized invoker.
 //
-// THIS TREE PRACTISES LIMB (a) ONLY. The Gate itself holds no issuance key -- its only key
+// THIS TREE PRACTICES LIMB (a) ONLY. The Gate itself holds no issuance key -- its only key
 // is the refusal signer -- but it executes inside cmd/trstctl-signer, and that same
 // process custodies the AGID issuing-CA key and the generated agent keys as mlock'd,
 // MADV_DONTDUMP, zeroize-on-Destroy material: signing.SignerCustody.GenerateSuccessorKey
@@ -60,7 +60,7 @@ import (
 // issuancekeyop.go is where this side of the boundary lives. Verification and issuance-key
 // custody are therefore the same process boundary, which is what the claim recites.
 //
-// Limb (b) is NOT practised for AGID issuance key material. The KMS/HSM providers in
+// Limb (b) is NOT practiced for AGID issuance key material. The KMS/HSM providers in
 // ee/managedkeys/signerwiring are installed by signing.WithManagedKeyProviders onto a
 // separate managed-key runtime that serves the managed-key lifecycle RPCs; they are not
 // reachable from the SignerCustody path issuancekeyop.go generates the issuing CA and

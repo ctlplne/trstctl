@@ -2,7 +2,7 @@
 
 // Package email is the email (SMTP) notification channel (S10.8), built from the same
 // notification template as every other channel: it implements notify.Notifier and
-// self-validates against the notify.Conform harness (the notification analogue of the
+// self-validates against the notify.Conform harness (the notification analog of the
 // connector SDK, S5.5). It delivers an Alert as an RFC 5322 message sent to a fixed
 // recipient list through an SMTP relay.
 //
@@ -17,7 +17,7 @@
 // never logged, and never written into error text (AN-8 lineage — the same rule the Teams
 // channel follows for its webhook URL and PagerDuty for its routing key). net/smtp's own
 // errors describe the protocol exchange and do not echo the password, so they are wrapped
-// without further sanitisation; the password is set on the auth value and nowhere else.
+// without further sanitization; the password is set on the auth value and nowhere else.
 //
 // STARTTLS configuration comes from internal/crypto/mtls; this package imports no
 // crypto/* (AN-3). When the channel is driven from
@@ -117,7 +117,7 @@ func (c *Channel) Notify(ctx context.Context, alert notify.Alert) error {
 
 // NotifyDelivery uses the trusted tenant/command/channel receipt identity and
 // payload digest, never the physical outbox row or attempt number. A lost SMTP
-// acknowledgement may cause another copy, but retries retain the Message-ID.
+// acknowledgment may cause another copy, but retries retain the Message-ID.
 // Date describes rendering time, not event time or proof of receiver acceptance.
 func (c *Channel) NotifyDelivery(ctx context.Context, alert notify.Alert, delivery notify.NotificationDeliveryReceipt) error {
 	if delivery.ID == "" || delivery.PayloadDigest == "" {

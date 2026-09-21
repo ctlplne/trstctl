@@ -88,7 +88,7 @@ func (s *Store) ApplyIdentityWorkStopTx(ctx context.Context, tx pgx.Tx, tenantID
 	}
 	// The parent ca.renew may already be delivered because it handed the work
 	// to an endpoint.renew job. Only close its running rotation when that exact
-	// child (or the parent itself) was cancelled and no related work remains.
+	// child (or the parent itself) was canceled and no related work remains.
 	_, err = tx.Exec(ctx, `UPDATE lifecycle_rotation_runs run
 	 SET status='cancelled', completed_at=$3, updated_at=GREATEST(updated_at,$3),
 	     latest_event_sequence=GREATEST(COALESCE(latest_event_sequence,0),$4)

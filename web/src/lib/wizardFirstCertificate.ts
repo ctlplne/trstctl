@@ -392,7 +392,7 @@ export const wizardIssuanceRetryForm = z
 export type WizardIssuanceRetryForm = z.infer<typeof wizardIssuanceRetryForm>;
 
 // A separate, bounded grant resumes the original receiver command. Retaining
-// its body and key before dispatch makes a lost acknowledgement safe to repeat.
+// its body and key before dispatch makes a lost acknowledgment safe to repeat.
 // It never repeats identity creation or creates a different issuance request.
 export async function retryWizardFirstIssuance(
   attempt: WizardCertificateAttempt,

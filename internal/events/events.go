@@ -999,8 +999,8 @@ func decodeStored(data []byte, seq uint64) (Event, error) {
 // cursors belong to one stream and cannot move across a generation switch.
 const tailConsumerName = "trstctl_projector"
 
-// tailAckConfirmationTimeout bounds the final server-confirmed acknowledgement
-// after a projection callback has durably committed. That acknowledgement uses a
+// tailAckConfirmationTimeout bounds the final server-confirmed acknowledgment
+// after a projection callback has durably committed. That acknowledgment uses a
 // context which survives caller cancellation: otherwise a shutdown arriving in
 // the few instructions between commit and ack can leave JetStream's single
 // MaxAckPending slot occupied until redelivery, hiding every newer event.

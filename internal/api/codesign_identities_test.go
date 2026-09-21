@@ -33,7 +33,7 @@ func fetchCodeSigningIdentities(t *testing.T, handler http.Handler, authenticate
 }
 
 // B-4: code signing served the two mutations and nothing that answered
-// afterwards — which identities signed, and did the transparency entry land.
+// afterward — which identities signed, and did the transparency entry land.
 // These pin the counts a reviewer asks for first.
 func TestCodeSigningIdentitiesReportTransparencyState(t *testing.T) {
 	signed := time.Date(2026, 7, 24, 10, 0, 0, 0, time.UTC)

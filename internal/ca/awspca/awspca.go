@@ -90,7 +90,7 @@ type Config struct {
 }
 
 // backend drives the acm-pca issue→poll-get flow over the API seam. It is the
-// only CA-specific code; the template supplies the ca.CA behaviour.
+// only CA-specific code; the template supplies the ca.CA behavior.
 type backend struct {
 	cfg  Config
 	api  API

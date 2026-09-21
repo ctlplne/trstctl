@@ -37,7 +37,7 @@ var errPKCS7Panic = errors.New("crypto: CMS/PKCS7 decoder panicked on malformed 
 // BER decoder (smallstep/pkcs7) and returning it as an error. It is the ONLY way
 // untrusted bytes should reach pkcs7.Parse inside this boundary: a malformed or
 // hostile message must fail closed with an error, never panic the goroutine /
-// process (FUZZ-001). It adds no behaviour for well-formed input — on success it
+// process (FUZZ-001). It adds no behavior for well-formed input — on success it
 // returns exactly what pkcs7.Parse returns.
 func safeParsePKCS7(der []byte) (p7 *pkcs7.PKCS7, err error) {
 	defer func() {

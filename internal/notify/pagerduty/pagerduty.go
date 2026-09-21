@@ -2,7 +2,7 @@
 
 // Package pagerduty is the PagerDuty notification channel (S10.5), built from the same
 // notification template as every other channel: the notify.Notifier interface plus the
-// notify.Conform harness (the notification analogue of the connector SDK, S5.5). It
+// notify.Conform harness (the notification analog of the connector SDK, S5.5). It
 // delivers an Alert by triggering a PagerDuty incident through the Events API v2 enqueue
 // endpoint over HTTPS, authenticated with a scoped integration routing key.
 //

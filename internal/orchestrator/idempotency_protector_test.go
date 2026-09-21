@@ -183,7 +183,7 @@ func TestSchedulerPrivacyOuterResolverRekeysAndReprotectsInCallerTransaction(t *
 		if ack.ResolvedIdempotencyKey != replacementKey ||
 			ack.ResolvedResultCodec != orchestrator.ResultCodecSealedRowV1 ||
 			len(ack.ProtectedResult) == 0 {
-			t.Fatalf("same-tx scheduler privacy acknowledgement = %+v", ack)
+			t.Fatalf("same-tx scheduler privacy acknowledgment = %+v", ack)
 		}
 		var oldExists, newExists bool
 		if err := tx.QueryRow(ctx,
@@ -286,7 +286,7 @@ func TestSchedulerPrivacyOuterResolverRekeysBoundReceiverWithoutInventingResult(
 	if acknowledgement.ResolvedIdempotencyKey != replacementKey ||
 		acknowledgement.ResolvedResultCodec != orchestrator.ResultCodecSealedRowV1 ||
 		len(acknowledgement.ProtectedResult) != 0 {
-		t.Fatalf("bound scheduler privacy acknowledgement = %+v", acknowledgement)
+		t.Fatalf("bound scheduler privacy acknowledgment = %+v", acknowledgement)
 	}
 	var oldExists, newExists bool
 	var status, codec string

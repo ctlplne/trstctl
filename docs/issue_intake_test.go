@@ -138,7 +138,7 @@ func TestIssueIntakeConfigRoutesVulnerabilitiesAwayFromPublicIssues(t *testing.T
 // TestCodeOfConductIsTheContributorCovenant locks CODE_OF_CONDUCT.md as the adopted
 // Contributor Covenant 2.1 rather than a bespoke rewrite: the pledge, standards,
 // responsibilities, scope, enforcement, the four-rung impact ladder, and the
-// attribution the licence requires must all still be there, and the upstream
+// attribution the license requires must all still be there, and the upstream
 // placeholder must be gone.
 func TestCodeOfConductIsTheContributorCovenant(t *testing.T) {
 	t.Parallel()

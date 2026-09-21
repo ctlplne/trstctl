@@ -1011,7 +1011,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/protocols"],
     component: "Protocols",
     kind: "observe",
-    evidence: "wildcard DNS-01-only acknowledgement and blast-radius disclosure",
+    evidence: "wildcard DNS-01-only acknowledgment and blast-radius disclosure",
   },
   { featureId: "F75", routes: ["/assistant"], component: "Assistant", kind: "operate", evidence: "grounded query with citations and runtime status" },
   {

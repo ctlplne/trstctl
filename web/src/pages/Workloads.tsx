@@ -77,7 +77,7 @@ function WorkloadHealthLink({ to, icon, label, urgent }: { to: string; icon: Rea
 }
 
 /** S-C20: an unsuccessful issuance attempt observed in this browser session. The served
- * API answers per request, so this is client-observed history, labelled as
+ * API answers per request, so this is client-observed history, labeled as
  * such — never presented as a server-side failure feed. */
 export type AttestationFailure = { method: string; message: string; at: string };
 

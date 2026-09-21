@@ -13,7 +13,7 @@ import (
 //
 // delegation.go decides the rule. Nothing read it: the set was constructed
 // nowhere, stored nowhere, and consulted by no served route, so every provider
-// route still authorised any authenticated operator against any customer. A
+// route still authorized any authenticated operator against any customer. A
 // rule with no enforcement point is the defect this backlog exists to remove.
 
 // DelegationSource supplies the delegations in force.

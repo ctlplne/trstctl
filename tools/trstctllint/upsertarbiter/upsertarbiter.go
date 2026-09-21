@@ -147,7 +147,7 @@ func defaultKeyName(table string, c colset) string {
 	return table + "_" + strings.Join(c, "_") + "_key"
 }
 
-// splitStatements cuts the migration stream at top-level semicolons, honouring
+// splitStatements cuts the migration stream at top-level semicolons, honoring
 // parentheses and single-quoted strings, so DDL is applied in migration order.
 func splitStatements(sql string) []string {
 	var out []string

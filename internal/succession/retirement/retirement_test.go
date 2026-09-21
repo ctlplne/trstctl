@@ -329,7 +329,7 @@ func TestRetirement_RevokeThenZeroize_FailClosed(t *testing.T) {
 	}
 	// The digest is recomputable by an auditor from the acks alone (offline-verifiable).
 	if !bytes.Equal(retirement.AckSetDigest(acks), wantDigest) {
-		t.Fatal("ack-set digest is not reproducible from the acknowledgement set")
+		t.Fatal("ack-set digest is not reproducible from the acknowledgment set")
 	}
 }
 
@@ -361,7 +361,7 @@ func TestZeroize_Residue(t *testing.T) {
 	}
 }
 
-// TestAcksFromEvents_LedgerSourced: acknowledgements are reconstructed from AN-2
+// TestAcksFromEvents_LedgerSourced: acknowledgments are reconstructed from AN-2
 // ledger events, using the event's recorded time as the ack's window anchor.
 func TestAcksFromEvents_LedgerSourced(t *testing.T) {
 	rp1 := newRP(t, "rp1")

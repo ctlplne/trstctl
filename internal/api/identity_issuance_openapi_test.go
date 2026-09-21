@@ -53,7 +53,7 @@ func TestOpenAPIIdentityIssuanceResultIncludesCancelledDelivery(t *testing.T) {
 			}
 		}
 		if !found {
-			t.Errorf("%s cannot represent a cancelled issuance: %v", name, values)
+			t.Errorf("%s cannot represent a canceled issuance: %v", name, values)
 		}
 	}
 }

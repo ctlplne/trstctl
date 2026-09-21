@@ -21,7 +21,7 @@ func TestServedADCSDatabaseIngestionAndVisibility(t *testing.T) {
 	})
 
 	// certutil-shaped rows: the disposition codes are certutil's own (20 issued,
-	// 9 pending, 21 revoked, 31 denied, 30 failed, 99 an unrecognised code).
+	// 9 pending, 21 revoked, 31 denied, 30 failed, 99 an unrecognized code).
 	rows := []map[string]string{
 		{"RequestID": "101", "SerialNumber": "0a0b0c", "CommonName": "web1.corp", "Request.Disposition": "20", "NotAfter": "2027-01-01 00:00:00"},
 		{"RequestID": "102", "SerialNumber": "0a0b0d", "CommonName": "web2.corp", "Request.Disposition": "20"}, // issued, NotAfter unparseable -> unparsed
@@ -29,7 +29,7 @@ func TestServedADCSDatabaseIngestionAndVisibility(t *testing.T) {
 		{"RequestID": "104", "SerialNumber": "0a0b0e", "CommonName": "old.corp", "Request.Disposition": "21", "Request.RevokedWhen": "2026-06-01 00:00:00"},
 		{"RequestID": "105", "CommonName": "denied.corp", "Request.Disposition": "31"},
 		{"RequestID": "106", "CommonName": "failed.corp", "Request.Disposition": "30"},
-		{"RequestID": "107", "CommonName": "future.corp", "Request.Disposition": "99"}, // unrecognised -> unknown, never failed
+		{"RequestID": "107", "CommonName": "future.corp", "Request.Disposition": "99"}, // unrecognized -> unknown, never failed
 		{"CommonName": "no-request-id.corp", "Request.Disposition": "20"},              // no RequestID -> rejected, not counted as issued
 	}
 	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/adcs/ca-database/ingest", token, "adcs-ingest-1", map[string]any{
@@ -55,7 +55,7 @@ func TestServedADCSDatabaseIngestionAndVisibility(t *testing.T) {
 	if err := json.Unmarshal(body, &ingested); err != nil {
 		t.Fatalf("decode ingest: %v", err)
 	}
-	// The load-bearing distinctions: pending is NOT failed, an unrecognised code
+	// The load-bearing distinctions: pending is NOT failed, an unrecognized code
 	// is unknown NOT failed, an unparseable-expiry issued row is flagged
 	// unparsed, and the id-less row is rejected rather than folded into issued.
 	if ingested.Issued != 2 || ingested.Pending != 1 || ingested.Revoked != 1 ||

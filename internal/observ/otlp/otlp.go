@@ -355,7 +355,7 @@ func NewAuditStreamer(log *events.Log, exporter *Exporter) *AuditStreamer {
 	return &AuditStreamer{log: log, exporter: exporter, next: 1, poll: defaultOTLPAuditPoll}
 }
 
-// Run exports new event-log records until ctx is cancelled.
+// Run exports new event-log records until ctx is canceled.
 func (s *AuditStreamer) Run(ctx context.Context) error {
 	if s == nil || s.log == nil || s.exporter == nil {
 		return nil

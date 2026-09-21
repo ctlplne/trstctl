@@ -307,7 +307,7 @@ func seedAgentJobTenant(t *testing.T, ctx context.Context, st *store.Store, tena
 // kind, four different demands, and each agent receives exactly the rows its
 // certificate's roles satisfy. The 'control_plane' stamp matches no role, so a
 // cloud-store deploy is handed to nobody; the empty demand preserves pre-A3
-// behaviour for every row enqueued before the census existed.
+// behavior for every row enqueued before the census existed.
 func TestClaimHonorsPerRowRoleDemand(t *testing.T) {
 	st, tenantID := newStore(t), tenantA
 	ctx := context.Background()

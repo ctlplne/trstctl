@@ -63,7 +63,7 @@ func TestFeatureMetricsExposition(t *testing.T) {
 		}
 	}
 
-	// (2) No label carries tenant or secret data. The per-feature metrics are labelled
+	// (2) No label carries tenant or secret data. The per-feature metrics are labeled
 	// only by feature/action/outcome; assert the forbidden label keys never appear on
 	// any feature exposition line.
 	forbidden := []string{"tenant_id", "tenant=", "subject", "serial", "fingerprint", "secret", "token", "email"}

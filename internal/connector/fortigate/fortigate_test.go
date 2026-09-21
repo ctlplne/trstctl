@@ -20,7 +20,7 @@ import (
 
 // apiToken is the FortiOS REST API token the fake appliance requires. It is
 // []byte, not a string, because that is how the connector custodies it (AN-8) and
-// a test that pinned it as a string would be modelling a shape the product does
+// a test that pinned it as a string would be modeling a shape the product does
 // not use.
 var apiToken = []byte("fortios-rest-api-token-supersecret")
 

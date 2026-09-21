@@ -97,7 +97,7 @@ func TestServedEndpointObservationCancellationKeepsTheClaimRetryable(t *testing.
 	select {
 	case err := <-done:
 		if err == nil {
-			t.Fatal("cancelled recording returned success")
+			t.Fatal("canceled recording returned success")
 		}
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())

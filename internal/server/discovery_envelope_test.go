@@ -13,7 +13,7 @@ import (
 // the observability-envelope registry in internal/cbom/coverage, in both
 // directions: a served kind with no envelope means the system cannot say what
 // that source can and cannot see, and an envelope naming an unserved kind is
-// a phantom declaration. Either direction fails the build — modelled on
+// a phantom declaration. Either direction fails the build — modeled on
 // TestEveryTenantTableForcesRLS: catalog-derived, never a hand-typed list.
 func TestEveryDiscoverySourceDeclaresEnvelope(t *testing.T) {
 	kinds := servedDiscoverySourceKinds()

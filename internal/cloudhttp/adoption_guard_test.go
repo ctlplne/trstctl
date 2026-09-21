@@ -7,7 +7,7 @@ package cloudhttp_test
 // http round-trip. It is a source-level guard (it parses the provider packages'
 // imports with go/parser and scans their source) so it fails fast in CI the moment a
 // provider regresses to copy-pasted request/response plumbing — the exact duplication
-// CODE-006 consolidated. The behavioural proof that the shared client is genuinely
+// CODE-006 consolidated. The behavioral proof that the shared client is genuinely
 // wired (a centrally-applied bound observed *through* a provider) lives in the
 // per-provider tests and in observed_central_bound_test.go; this guard proves the
 // *structure* stays shared.
@@ -58,7 +58,7 @@ func TestProvidersImportAndCallCloudhttp(t *testing.T) {
 				t.Fatalf("%s does not import %s — it is not on the shared client (CODE-006)", p.file, cloudhttpImport)
 			}
 			// The round-trip is the shared client: cloudhttp.JSON sends the request,
-			// bounds the read, normalises non-2xx, and decodes/drains. Every provider
+			// bounds the read, normalizes non-2xx, and decodes/drains. Every provider
 			// invokes it exactly as `cloudhttp.JSON(`.
 			if !strings.Contains(string(src), "cloudhttp.JSON(") {
 				t.Fatalf("%s does not call cloudhttp.JSON — its round-trip is not the shared client (CODE-006)", p.file)
@@ -82,8 +82,8 @@ func TestProvidersHaveNoBespokeRoundTrip(t *testing.T) {
 			if strings.Contains(src, ".doer.Do(") {
 				t.Errorf("%s calls .doer.Do( directly — reintroduced a bespoke round-trip (CODE-006); send via cloudhttp.JSON", p.file)
 			}
-			// The hand-repeated bounded reads cloudhttp centralised. Their reappearance
-			// means a provider is normalising errors / draining bodies on its own again.
+			// The hand-repeated bounded reads cloudhttp centralized. Their reappearance
+			// means a provider is normalizing errors / draining bodies on its own again.
 			for _, lit := range []string{"io.LimitReader(resp.Body, 4096)", "io.LimitReader(resp.Body, 1<<20)"} {
 				if strings.Contains(src, lit) {
 					t.Errorf("%s contains the bespoke bound %q — that read is now cloudhttp's (CODE-006)", p.file, lit)

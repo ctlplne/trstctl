@@ -755,7 +755,7 @@ func parsePKIXPublicKey(pub PublicKey) (any, error) {
 // a set comparison into a false match — a CA carrying [serverAuth, ocspSigning]
 // rendered as ["serverAuth"] and so "matched" a reviewed profile of
 // ["serverAuth"], accepting a more capable authority than the ceremony
-// approved. Anything unrecognised now renders as a distinguishable token that
+// approved. Anything unrecognized now renders as a distinguishable token that
 // cannot equal a profile name, so an unknown usage fails the comparison instead
 // of disappearing from it.
 //
@@ -786,7 +786,7 @@ func extKeyUsageString(u x509.ExtKeyUsage) string {
 	if oid := certinfo.ExtKeyUsageOID(u); oid != nil {
 		return oid.String()
 	}
-	// Never silently drop: an unrecognised usage must break the match. The
+	// Never silently drop: an unrecognized usage must break the match. The
 	// round-trip totality test proves this branch is unreachable for every
 	// usage the current Go release defines.
 	return fmt.Sprintf("unrecognized-eku-%d", int(u))

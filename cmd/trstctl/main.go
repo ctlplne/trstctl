@@ -53,7 +53,7 @@ func main() {
 // run is the testable program entry point. It parses args, resolves the
 // effective configuration from getenv (injected for testability), and then
 // either prints version/config information and returns, or boots the control
-// plane and blocks until ctx is cancelled (as it is on SIGINT/SIGTERM), then
+// plane and blocks until ctx is canceled (as it is on SIGINT/SIGTERM), then
 // returns nil to signal a clean shutdown. A misconfiguration is returned as an
 // error before the control plane boots, so a bad deployment fails fast rather
 // than starting half-configured.
@@ -269,7 +269,7 @@ func serveControlPlane(ctx context.Context, cfg *config.Config, getenv func(stri
 
 	// Assemble and serve the control plane (S7.7). Run starts the event log,
 	// projections, orchestrator, and API in order, supervises the signer as a
-	// child process (AN-4), serves until ctx is cancelled, and then shuts down
+	// child process (AN-4), serves until ctx is canceled, and then shuts down
 	// gracefully (drain the outbox, close connections in order).
 	// A5: single-box demo. The config is adjusted BEFORE the summary prints, so
 	// what an operator reads is what actually runs — and every change is listed

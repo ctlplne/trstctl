@@ -115,7 +115,7 @@ func TestServedFirstLeafRecordedCertificateSurvivesLateDeliveryFailure(t *testin
 		}
 		// The real signer and orchestrator recorded the certificate; simulate
 		// a failure immediately before the worker acknowledges delivery.
-		return errors.New("late acknowledgement failure")
+		return errors.New("late acknowledgment failure")
 	}), orchestrator.DestinationScope{IncludePrefixes: []string{"ca.issue"}})
 	if err != nil || !delivered {
 		t.Fatalf("late failure: %t %v", delivered, err)
@@ -145,7 +145,7 @@ func TestServedFirstLeafRecordedCertificateSurvivesLateDeliveryFailure(t *testin
 	}
 	did, err := box.DispatchOneScoped(t.Context(), h.srv.obHandler, orchestrator.DestinationScope{IncludePrefixes: []string{"ca.issue"}})
 	if err != nil || did {
-		t.Fatalf("cancelled retained-result work was claimable: %t %v", did, err)
+		t.Fatalf("canceled retained-result work was claimable: %t %v", did, err)
 	}
 	assertPublicResult := func(wantCertificateStatus string) {
 		t.Helper()

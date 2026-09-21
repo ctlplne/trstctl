@@ -11,12 +11,12 @@ import (
 	"trstctl.com/trstctl/internal/enrollmentdiag"
 )
 
-// A deliberately broken enrolment yields a specific, actionable trace (epic I4).
+// A deliberately broken enrollment yields a specific, actionable trace (epic I4).
 //
 // The diagnosis vocabulary and its remediations existed for a while with no
 // production caller: every cause defined, every remediation written, and nothing
 // in the served binary ever producing one. Worth naming, because a diagnosis
-// catalogue with no classifier is the same shape of defect it exists to describe
+// catalog with no classifier is the same shape of defect it exists to describe
 // — it looks finished from the inside.
 //
 // So the test that matters is not "does Diagnose work" but "does a real refusal
@@ -28,13 +28,13 @@ func TestARefusalOnTheServedPathProducesADiagnosis(t *testing.T) {
 	var got []enrollmentdiag.Diagnosis
 	s.SetFailureDiagnosis(func(_ context.Context, d enrollmentdiag.Diagnosis) { got = append(got, d) })
 
-	// A challenge the authority could not see — the classic broken enrolment.
+	// A challenge the authority could not see — the classic broken enrollment.
 	req := httptest.NewRequest(http.MethodPost, "/acme/chal/abc", nil)
 	s.problem(httptest.NewRecorder(), req, http.StatusForbidden, "dns",
 		"no TXT record found for _acme-challenge.api.example.test")
 
 	if len(got) != 1 {
-		t.Fatalf("a served refusal produced %d diagnoses, want 1. The catalogue is only worth "+
+		t.Fatalf("a served refusal produced %d diagnoses, want 1. The catalog is only worth "+
 			"having if the served path emits into it", len(got))
 	}
 	d := got[0]
@@ -82,7 +82,7 @@ func TestChallengeRefusalCarriesTheExactDNSIdentityWithoutGuessingItsDeployment(
 	}
 }
 
-// The step is inferred from the path, and an unrecognised path does not invent
+// The step is inferred from the path, and an unrecognized path does not invent
 // one.
 func TestTheStepComesFromThePathAndIsNotGuessed(t *testing.T) {
 	t.Parallel()
@@ -99,10 +99,10 @@ func TestTheStepComesFromThePathAndIsNotGuessed(t *testing.T) {
 			t.Errorf("path %q placed the failure at %q, want %q", path, got, want)
 		}
 	}
-	// An unrecognised path yields NO step; the classifier then substitutes its
+	// An unrecognized path yields NO step; the classifier then substitutes its
 	// own default rather than this function guessing at a stage nobody observed.
 	if got := acmeStepForPath(httptest.NewRequest(http.MethodGet, "/acme/something", nil)); got != "" {
-		t.Errorf("an unrecognised path was placed at step %q rather than left unplaced", got)
+		t.Errorf("an unrecognized path was placed at step %q rather than left unplaced", got)
 	}
 }
 

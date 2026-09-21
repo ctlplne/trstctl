@@ -10,7 +10,7 @@ import (
 	"trstctl.com/trstctl/internal/auditsink"
 )
 
-// failingAuditor returns an error from every Audit call, modelling an event log
+// failingAuditor returns an error from every Audit call, modeling an event log
 // that cannot accept an append (NATS down / backpressure / marshal error).
 type failingAuditor struct{ err error }
 

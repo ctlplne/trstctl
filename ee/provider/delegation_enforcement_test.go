@@ -137,7 +137,7 @@ func TestAnAbsentDelegationSourceRefusesEveryOperator(t *testing.T) {
 	rec := providerRequest(t, h, http.MethodPost, "/provider/v1/tenants/tenant-alpha/suspend", "")
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("with no delegation source at all, suspend = %d, want 403.\n"+
-			"A provider plane that authorises everybody until somebody wires delegations is the "+
+			"A provider plane that authorizes everybody until somebody wires delegations is the "+
 			"state this epic exists to end.\nbody: %s", rec.Code, rec.Body.String())
 	}
 }

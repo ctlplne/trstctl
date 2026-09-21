@@ -11,7 +11,7 @@ of evidence, and you would reasonably plan a migration around it.
 
 What is published instead is narrower and true: the API or local execution
 contract each connector speaks, the operations exercised by repository tests,
-and what the family cannot do. Device-API-double evidence is labelled separately
+and what the family cannot do. Device-API-double evidence is labeled separately
 from ordinary connector tests. Every line below is backed by a test.
 
 If you are asking "will this work against our devices", the honest answer is
@@ -47,7 +47,7 @@ that we implement the named contract and exercise the listed calls. Run a dry-ru
 
 **Known limits:**
 
-- partition-aware deploys are not modelled; the double serves a single partition
+- partition-aware deploys are not modeled; the double serves a single partition
 
 ## aws-acm
 
@@ -127,8 +127,8 @@ that we implement the named contract and exercise the listed calls. Run a dry-ru
 
 **Known limits:**
 
-- the HA peer shares the pair's synced admin credential; a pair with per-peer credentials is not modelled
-- partition (folder) routing is not modelled beyond the default
+- the HA peer shares the pair's synced admin credential; a pair with per-peer credentials is not modeled
+- partition (folder) routing is not modeled beyond the default
 
 ## fortigate
 
@@ -143,7 +143,7 @@ that we implement the named contract and exercise the listed calls. Run a dry-ru
 **Known limits:**
 
 - no rollback: the local-certificate object holds the material rather than referencing it, and the deploy replaces its contents in place, so no predecessor survives to bind back to
-- VDOM routing is not modelled; the double serves the root VDOM
+- VDOM routing is not modeled; the double serves the root VDOM
 
 ## gcp-certificate-manager
 
@@ -174,7 +174,7 @@ that we implement the named contract and exercise the listed calls. Run a dry-ru
 
 **Known limits:**
 
-- certificate-set naming collisions across virtual services are not modelled
+- certificate-set naming collisions across virtual services are not modeled
 
 ## mysql
 

@@ -736,7 +736,7 @@ const scimRetryWindow = 5 * time.Minute
 // execute rather than be deduped against a result up to a full window old.
 const scimRetryStraddleGrace = 10 * time.Second
 
-// scimNow is the derivation clock, injectable so boundary behaviour is
+// scimNow is the derivation clock, injectable so boundary behavior is
 // testable without wall-time flakiness.
 var scimNow = time.Now
 

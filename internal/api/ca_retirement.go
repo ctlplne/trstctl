@@ -61,7 +61,7 @@ type RetirementChecklist struct {
 // may never import ee/ (AN-9). Nil means the licensed feature is not attached,
 // and the route then refuses rather than reporting an empty checklist — an
 // unlicensed deployment showing "0 outstanding dependents" would read as
-// permission to destroy a key, which is the worst possible way for a licence
+// permission to destroy a key, which is the worst possible way for a license
 // check to fail.
 type RetirementChecklistSource interface {
 	RetirementChecklist(r *http.Request, tenantID, keyID string) (RetirementChecklist, error)

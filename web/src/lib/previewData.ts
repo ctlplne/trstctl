@@ -719,7 +719,7 @@ const previewReaders: Record<string, () => unknown> = {
         excepted_count: 0,
         automated_execution_available: false,
         automated_execution_note:
-          "Campaign tracking and evidence work without a licence. Automated fleet execution is unavailable in this edition; record work performed manually or by another tool.",
+          "Campaign tracking and evidence work without a license. Automated fleet execution is unavailable in this edition; record work performed manually or by another tool.",
         created_at: generatedAt,
         updated_at: generatedAt,
       },

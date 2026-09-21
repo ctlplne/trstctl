@@ -17,7 +17,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// helm_s15_test.go is the BEHAVIOURAL counterpart to the old static
+// helm_s15_test.go is the BEHAVIORAL counterpart to the old static
 // string-matching of the isolated-signer chart (S15.1 / SIGNER-005; OPS-008). The
 // previous version only asserted the templates *named* "--mtls-listen=:9443",
 // "port: 9443", "grpc-mtls", etc. — it never bound those names to the signer
@@ -89,7 +89,7 @@ func mtlsListenPort(body string) string {
 
 // TestSignerIsolationChartFlagsMatchTheBinary (S15.1 / SIGNER-005) asserts the
 // isolated-signer Deployment passes ONLY flags the trstctl-signer binary defines.
-// This is the behavioural replacement for the old `containsAll("--mtls-listen=:9443",
+// This is the behavioral replacement for the old `containsAll("--mtls-listen=:9443",
 // "--mtls-cert=", …)` substring block: instead of checking the template NAMES the
 // flags, it checks the binary DEFINES them (so a typo or a removed flag fails fast,
 // the OPS-001 crash-loop class).
@@ -137,7 +137,7 @@ func TestSignerIsolationChartFlagsMatchTheBinary(t *testing.T) {
 // BINARY listens on (--mtls-listen=:N in signer-deployment.yaml), the containerPort
 // it exposes, the Service targetPort, and the NetworkPolicy port it admits. A drift
 // between any of these would leave the signer unreachable or its port unprotected —
-// the behavioural replacement for the old `containsAll("port: 9443", "grpc-mtls")`
+// the behavioral replacement for the old `containsAll("port: 9443", "grpc-mtls")`
 // substring asserts, which could pass even if the numbers disagreed.
 func TestSignerIsolationPortIsConsistentEverywhere(t *testing.T) {
 	dep := read(t, "templates", "signer-deployment.yaml")
@@ -521,7 +521,7 @@ func renderSimpleSignerObj(t *testing.T, name, body string) map[string]any {
 // signer-mode guard helper exists and is invoked from an always-rendered template,
 // so every install validates signer.mode and a half-configured isolated install
 // fails fast. This is code-bound (the helper + its invocation), not a substring on
-// the rendered output, and it drills the guard's BEHAVIOUR: an unknown mode and an
+// the rendered output, and it drills the guard's BEHAVIOR: an unknown mode and an
 // isolated-without-serverName both fail the render.
 func TestIsolatedSignerGuardIsCodeBound(t *testing.T) {
 	helpers := read(t, "templates", "_helpers.tpl")
@@ -535,7 +535,7 @@ func TestIsolatedSignerGuardIsCodeBound(t *testing.T) {
 		t.Error("deployment.yaml must invoke trstctl.signer.guardMode so a default render validates signer.mode (SIGNER-005)")
 	}
 
-	// Behaviour: render the guard with a bogus mode and with isolated-but-no-serverName
+	// Behavior: render the guard with a bogus mode and with isolated-but-no-serverName
 	// and assert BOTH fail (the guard calls `fail`). We render just the helper by
 	// wrapping it in a tiny template that includes it.
 	guard := extractDefine(helpers, "trstctl.signer.guardMode")

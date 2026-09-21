@@ -40,7 +40,7 @@ type WebEnrollmentConfig struct {
 	//
 	// An interface rather than a Kerberos implementation because the credential
 	// lives on the relay host, not here. Core stays free of a GSSAPI dependency
-	// and, more importantly, of any code path that could serialise a domain
+	// and, more importantly, of any code path that could serialize a domain
 	// password.
 	Authenticator Authenticator
 	HTTPClient    *http.Client

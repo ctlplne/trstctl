@@ -136,7 +136,7 @@ func TestSANDigestIgnoresOrderAndCase(t *testing.T) {
 }
 
 // The chain digest RESPECTS order, unlike the SAN digest, because a chain
-// served backwards breaks handshakes for clients that do not reorder.
+// served backward breaks handshakes for clients that do not reorder.
 func TestChainDigestRespectsOrder(t *testing.T) {
 	t.Parallel()
 	forward := transport.ChainDigest([]string{"int1", "root1"})
@@ -183,13 +183,13 @@ func TestTranscriptCarriesItsVersion(t *testing.T) {
 	}
 }
 
-// Both vantages are recognised and nothing else is. A record that did not say
+// Both vantages are recognized and nothing else is. A record that did not say
 // where it was observed from would let a passing local check stand in for
 // evidence the endpoint is reachable.
 func TestVantageVocabularyIsClosed(t *testing.T) {
 	t.Parallel()
 	if !transport.KnownVantage(transport.VantageLocal) || !transport.KnownVantage(transport.VantageRelay) {
-		t.Fatal("a shipped vantage is not recognised")
+		t.Fatal("a shipped vantage is not recognized")
 	}
 	if transport.KnownVantage(transport.Vantage("somewhere")) {
 		t.Error("an unknown vantage was accepted")

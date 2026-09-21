@@ -494,7 +494,7 @@ func TestServedMDMSCEPPolicyTrustAnchorLifecycleTRACE010(t *testing.T) {
 // (no /cmp route) and PASS after.
 func TestServedCMPEndToEnd(t *testing.T) {
 	// The served CMP mount now requires the PKIMessage protection identity to
-	// chain to a configured anchor; without one it refuses to enrol rather than
+	// chain to a configured anchor; without one it refuses to enroll rather than
 	// accepting any self-signed key pair. This client is self-signed, so it is
 	// its own anchor — which is what the deployment would configure for it.
 	clientCertDER, clientKeyPKCS8, csrDER := newSCEPClient(t, "device-cmp-1")

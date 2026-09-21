@@ -10,7 +10,7 @@ import (
 
 // The trust query's shape and its refusals (epic H1).
 //
-// The interesting behaviour is not the happy path — it is what the surface says
+// The interesting behavior is not the happy path — it is what the surface says
 // when it has nothing to say. "No store trusts this CA" and "you asked about
 // something that is not a CA" are different statements, and during a rollover
 // the first one read wrongly is how a root gets retired out from under a fleet.

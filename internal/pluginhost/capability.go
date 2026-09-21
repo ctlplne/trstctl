@@ -146,7 +146,7 @@ func (g Grant) Allows(cap Capability, resource string) bool {
 }
 
 // pathPrefixAllows reports whether resource resolves to the granted prefix or to
-// something beneath it, with both sides canonicalised first and the match forced
+// something beneath it, with both sides canonicalized first and the match forced
 // onto a separator boundary.
 func pathPrefixAllows(prefix, resource string) bool {
 	if prefix == "" {
@@ -180,7 +180,7 @@ func authorityAllows(constraint, resource string) bool {
 	return grantedPort == "" || grantedPort == port
 }
 
-// splitAuthority canonicalises a host[:port] authority into a comparable
+// splitAuthority canonicalizes a host[:port] authority into a comparable
 // hostname (lowercased, IPv6 brackets and the trailing root dot removed) and its
 // port, which is empty when the authority names none.
 func splitAuthority(authority string) (host, port string) {

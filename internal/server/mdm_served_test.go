@@ -270,7 +270,7 @@ func TestServedCorrelationRefusesAnUnrenderableState(t *testing.T) {
 		MDM: "intune", MDMDeviceID: "d1", InstallState: "somethingElse",
 	})
 	if err == nil {
-		t.Fatal("an unrecognised install state was stored. The console cannot render it, so the " +
+		t.Fatal("an unrecognized install state was stored. The console cannot render it, so the " +
 			"row would be invisible — a device with a problem nobody can see")
 	}
 	if err := h.srv.orch.CorrelateMDMDevice(t.Context(), h.tenant, projections.MDMDeviceCorrelated{

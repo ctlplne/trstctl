@@ -298,11 +298,11 @@ func TestServedFirstLeafRetryRefusesUnsafeRequestsAndNeverRefundsAnAttempt(t *te
 			} `json:"delivery"`
 		}
 		if err := json.Unmarshal(cancelledBody, &cancelled); err != nil || status != http.StatusOK || cancelled.State != "cancelled" || cancelled.Delivery.Status != "cancelled" || cancelled.Delivery.Attempts != 1 || cancelled.Certificate != nil {
-			t.Fatalf("cancelled issuance was not a terminal public result: %d %s err=%v", status, cancelledBody, err)
+			t.Fatalf("canceled issuance was not a terminal public result: %d %s err=%v", status, cancelledBody, err)
 		}
 		status, retryBody := secretsReqKey(t, h, http.MethodPost, path, token, "cancelled-new-grant", map[string]any{"request_key": key, "reason": "must not restart revoked work"})
 		if status != http.StatusConflict {
-			t.Fatalf("cancelled issuance accepted a retry: %d %s", status, retryBody)
+			t.Fatalf("canceled issuance accepted a retry: %d %s", status, retryBody)
 		}
 		if err := projections.New(h.store).Rebuild(ctx, h.log); err != nil {
 			t.Fatal(err)

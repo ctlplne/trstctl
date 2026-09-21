@@ -48,7 +48,7 @@ func TestIssuedButNeverInstalledIsDistinctFromNeverAsked(t *testing.T) {
 	if silent.Steps[1].Outcome == OutcomePending {
 		t.Fatal("a device that never asked shows its ISSUED step as pending.\n\n" +
 			"That makes a device nobody ever enrolled look mid-flight, and it will sit in a queue " +
-			"labelled 'in progress' forever while somebody waits for it to finish.")
+			"labeled 'in progress' forever while somebody waits for it to finish.")
 	}
 	if issued.Summary == silent.Summary {
 		t.Fatalf("an issued-not-installed device and a never-asked device read identically: %q. "+

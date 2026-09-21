@@ -76,7 +76,7 @@ func render() []byte {
 	b.WriteString("of evidence, and you would reasonably plan a migration around it.\n\n")
 	b.WriteString("What is published instead is narrower and true: the API or local execution\n")
 	b.WriteString("contract each connector speaks, the operations exercised by repository tests,\n")
-	b.WriteString("and what the family cannot do. Device-API-double evidence is labelled separately\n")
+	b.WriteString("and what the family cannot do. Device-API-double evidence is labeled separately\n")
 	b.WriteString("from ordinary connector tests. Every line below is backed by a test.\n\n")
 	b.WriteString("If you are asking \"will this work against our devices\", the honest answer is\n")
 	b.WriteString("that we implement the named contract and exercise the listed calls. Run a dry-run\n")

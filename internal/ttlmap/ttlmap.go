@@ -9,7 +9,7 @@ package ttlmap
 
 import "time"
 
-// Policy describes one cache's eviction behaviour. Expired is the cache's own
+// Policy describes one cache's eviction behavior. Expired is the cache's own
 // staleness predicate (boundary semantics differ between caches and are
 // preserved bit-for-bit); Rank orders live entries for forced eviction — the
 // smallest rank is the cheapest victim (soonest expiry, oldest fetch, oldest

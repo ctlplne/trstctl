@@ -43,7 +43,7 @@ const KindEndpointRenew = "endpoint.renew"
 // relay that cannot generate host keys — a network relay driving an appliance —
 // has no use for this call and should not be made to implement it to satisfy a
 // compiler. A channel that does not implement it simply cannot take renewal
-// work, and says so, which is exactly the right behaviour for a build that
+// work, and says so, which is exactly the right behavior for a build that
 // predates the RPC.
 type CSRSigner interface {
 	SignJobCSR(ctx context.Context, jobID int64, attempt int, csrDER []byte) (certPEM, chainPEM []byte, fingerprint string, err error)

@@ -157,7 +157,7 @@ type transitionRequest struct {
 	// request and generates no key, so the subject private key stays wherever the
 	// caller made it and never reaches this process.
 	//
-	// Absent keeps the legacy behaviour — the control plane generates the subject
+	// Absent keeps the legacy behavior — the control plane generates the subject
 	// key — which is deprecated, records an `issuance.server_side_keygen` event
 	// each time it runs, and is retained for one release train.
 	SubjectCSRPEM string `json:"subject_csr_pem,omitempty"`

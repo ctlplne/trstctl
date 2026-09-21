@@ -465,7 +465,7 @@ lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint
 	@$(MAKE) -f $(firstword $(MAKEFILE_LIST)) agid-caller-gate xrec-caller-gate vdec-caller-gate
 	@# ee/ ratchet runs LAST, deliberately: as a prerequisite it executed before the
 	@# golangci-lint discovery above and made `make lint` fail with "golangci-lint is
-	@# required" instead of the fail-closed message CODE-005 asserts. It also honours
+	@# required" instead of the fail-closed message CODE-005 asserts. It also honors
 	@# LINT_ALLOW_PARTIAL, because lint-partial is the explicit escape hatch for a
 	@# machine without the optional tools and must stay usable there.
 	@if [ "$${LINT_ALLOW_PARTIAL:-0}" = "1" ]; then \

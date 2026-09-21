@@ -255,7 +255,7 @@ var deviceCSRCapableFamilies = []string{
 //
 // They are exactly E1's acceptance line — deploy, verify, rollback, published
 // support row — plus HA-peer sync for the families that need it, and the HA
-// inclusion is a judgement worth stating. HA-peer sync is not on the acceptance
+// inclusion is a judgment worth stating. HA-peer sync is not on the acceptance
 // line. It is included because migrating without it would make the migrated
 // path WRONG rather than merely incomplete: a relay deploy to an F5 pair would
 // report success having updated one peer, and the failure surfaces at failover,
@@ -348,7 +348,7 @@ func gateMet(family string, gate ParityGate) bool {
 		//
 		// The refusal is CONDITIONAL on a relay existing, and this census says
 		// "met" for that rather than inventing a fourth state. An estate with no
-		// relay still deploys from the control plane, which is the behaviour
+		// relay still deploys from the control plane, which is the behavior
 		// that predates E1 and is not a defect — E1's claim is that a relay,
 		// where you run one, is the executor and not merely a candidate.
 		return IsRelayVantageFamily(family)

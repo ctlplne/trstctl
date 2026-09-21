@@ -20,7 +20,7 @@ import (
 // evidence somebody can act on and later prove was not edited. A readiness
 // report is a recommendation about a migration nobody can easily reverse, so
 // the artifact it travels as must be signed inside the isolated signer (AN-3)
-// and verifiable offline — a report an operator cannot check is a rumour with
+// and verifiable offline — a report an operator cannot check is a rumor with
 // a logo.
 //
 // The report carries the FULL evidence, not just the verdict: the cohort's

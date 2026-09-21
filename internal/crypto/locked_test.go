@@ -55,7 +55,7 @@ func TestLockedSigner(t *testing.T) {
 	}
 }
 
-// TestCreateAndVerifyCSR is the in-process analogue of the over-UDS CSR test:
+// TestCreateAndVerifyCSR is the in-process analog of the over-UDS CSR test:
 // a DigestSigner (here a LockedSigner) signs a CSR through internal/crypto.
 func TestCreateAndVerifyCSR(t *testing.T) {
 	ls, err := crypto.GenerateLockedKey(crypto.ECDSAP256)

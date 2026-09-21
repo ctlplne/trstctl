@@ -139,7 +139,7 @@ const (
 	// ConnectorFailed means the attempt ran and did not succeed.
 	ConnectorFailed = "failed"
 	// ConnectorVerified means the credential was applied AND a TLS handshake
-	// afterwards observed the endpoint serving it (epic D3).
+	// afterward observed the endpoint serving it (epic D3).
 	//
 	// This is the third state the delivery vocabulary has been missing, and
 	// ConnectorDelivered's own Meaning has pointed at it since it shipped:
@@ -174,7 +174,7 @@ const (
 	ConnectorRollbackQueued = "rollback_queued"
 	// ConnectorRolledBack means an agent reported a family-specific predecessor
 	// restore: appliance re-bind or host-local bundle restore and reload. Receipt
-	// reason/detail say whether the listener was reverified afterwards.
+	// reason/detail say whether the listener was reverified afterward.
 	ConnectorRolledBack = "rolled_back"
 	// ConnectorRollbackRefused means the agent declined the rollback WITHOUT
 	// reaching the target — it could not execute the connector, the connector
@@ -229,7 +229,7 @@ var ConnectorDelivery = Registry{
 			ContactedTarget: true,
 			MutatedTarget:   true,
 			Verified:        true,
-			Meaning:         "A connector applied the credential and a TLS handshake against the endpoint afterwards observed it serving that exact identity. This is the only delivery state that says the certificate is live rather than that it was sent.",
+			Meaning:         "A connector applied the credential and a TLS handshake against the endpoint afterward observed it serving that exact identity. This is the only delivery state that says the certificate is live rather than that it was sent.",
 		},
 		{
 			Value:           ConnectorVerifyFailed,

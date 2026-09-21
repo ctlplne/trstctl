@@ -124,7 +124,7 @@ func (o *Orchestrator) DecideIssuanceRequest(ctx context.Context, tenantID, id, 
 			}
 		}
 	}
-	// Cancelling is the requester's own right, and only theirs.
+	// Canceling is the requester's own right, and only theirs.
 	if to == issuancerequest.StateCancelled && decidedBy != current.Requester {
 		return store.IssuanceRequest{}, fmt.Errorf(
 			"orchestrator: only %s can withdraw their own request; someone else closing it is a "+

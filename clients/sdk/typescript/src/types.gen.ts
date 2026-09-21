@@ -2411,7 +2411,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List recent enrolment refusals with the failing step, cause and remediation */
+        /** List recent enrollment refusals with the failing step, cause and remediation */
         get: operations["listEnrollmentDiagnostics"];
         put?: never;
         post?: never;
@@ -10562,7 +10562,7 @@ export interface components {
             read_at: string;
             receipt?: components["schemas"]["ConnectorDelivery"];
         };
-        /** @description Exact accepted issuance and its recorded public certificate. Failed means the original receiver command exhausted delivery and will not retry automatically; it does not prove no upstream certificate was signed. Unavailable means neither a recorded leaf nor its delivery bookkeeping is retained. Cancelled means the original command was stopped after revocation or retirement; no more attempts may run and it cannot be retried. Pending also covers delivery handed to an asynchronous host agent. A recorded certificate takes precedence over receiver status; it is not proof of deployment or listener verification. Reads never retry issuance. */
+        /** @description Exact accepted issuance and its recorded public certificate. Failed means the original receiver command exhausted delivery and will not retry automatically; it does not prove no upstream certificate was signed. Unavailable means neither a recorded leaf nor its delivery bookkeeping is retained. Canceled means the original command was stopped after revocation or retirement; no more attempts may run and it cannot be retried. Pending also covers delivery handed to an asynchronous host agent. A recorded certificate takes precedence over receiver status; it is not proof of deployment or listener verification. Reads never retry issuance. */
         IdentityIssuanceResult: {
             certificate?: components["schemas"]["Certificate"];
             certificate_pem?: string;
@@ -13592,7 +13592,7 @@ export interface components {
             reason?: string;
             rollback_ref?: string;
             /**
-             * @description Cancelled means retained identity revocation or retirement stopped queued issuance work; it does not undo an external effect.
+             * @description Canceled means retained identity revocation or retirement stopped queued issuance work; it does not undo an external effect.
              * @enum {string}
              */
             status: "running" | "succeeded" | "failed" | "cancelled";

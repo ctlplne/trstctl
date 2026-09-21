@@ -13,7 +13,7 @@ import (
 
 // TestConcurrentCreatesNeverLoseAnAcknowledgedKey is the regression guard for
 // AUD-201 follow-up B1/V3. Every checkpoint used to write one FIXED temp path
-// with no store-level serialisation, and checkpoints run outside Service.mu, so
+// with no store-level serialization, and checkpoints run outside Service.mu, so
 // two concurrent CreateKey checkpoints could interleave their WriteFile/Rename
 // pairs: the staler snapshot renames last and the sealed file loses a key whose
 // creation already returned success — or a truncating write lands mid-rename

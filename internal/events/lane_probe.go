@@ -15,7 +15,7 @@ import (
 // appends are routed to. It is a READ-ONLY probe over stream metadata (a
 // filtered StreamInfo, no consumer is created and no message is touched), built
 // for the L4 isolation drill: proving live that one tenant's lane holds its
-// probe event while a neighbour's lane count is undisturbed is what turns lane
+// probe event while a neighbor's lane count is undisturbed is what turns lane
 // disjointness from a derivation property into an observed one.
 //
 // The lane is a single subject token: wildcards, dots, and whitespace are

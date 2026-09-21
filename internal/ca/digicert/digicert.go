@@ -42,7 +42,7 @@ const (
 )
 
 // backend talks the CertCentral Services API. It is the only CA-specific code;
-// the template supplies the ca.CA behaviour.
+// the template supplies the ca.CA behavior.
 type backend struct {
 	name         string
 	baseURL      string

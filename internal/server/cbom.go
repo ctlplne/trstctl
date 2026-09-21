@@ -189,7 +189,7 @@ func (s *eventedCBOMSink) Record(ctx context.Context, f cbom.Finding) error {
 		return fmt.Errorf("server: encode CBOM asset event: %w", err)
 	}
 	// Pin one event ID across retries. If JetStream committed the first publish but
-	// its acknowledgement was lost, the retry is duplicate-suppressed and returns
+	// its acknowledgment was lost, the retry is duplicate-suppressed and returns
 	// the canonical immutable event instead of adding a second observation.
 	event := events.Event{ID: events.NewID(), Type: projections.EventCBOMAssetObserved, TenantID: s.tenantID, Data: data}
 	var stored events.Event

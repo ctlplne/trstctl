@@ -26,7 +26,7 @@ import (
 // with the fault address, and does not take the rest of the package's tests down
 // with it.
 //
-// It also keeps the behavioural assertion, because a fault is not guaranteed: the
+// It also keeps the behavioral assertion, because a fault is not guaranteed: the
 // allocator may re-map the freed address before the parked reader touches it, in
 // which case the read silently returns garbage instead of faulting. Correct code
 // produces a valid signature; broken code either faults or fails to parse.

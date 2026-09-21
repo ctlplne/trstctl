@@ -66,7 +66,7 @@ const campaign = {
   remediated_count: 0,
   excepted_count: 0,
   automated_execution_available: false,
-  automated_execution_note: "Campaign tracking works without a licence.",
+  automated_execution_note: "Campaign tracking works without a license.",
   created_at: "2026-07-28T00:00:00Z",
   updated_at: "2026-07-28T00:00:00Z",
   findings: [finding],

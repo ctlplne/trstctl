@@ -46,7 +46,7 @@ func ValidateArtifacts(artifacts []Artifact) error {
 	seen := map[string]bool{}
 	for i, a := range artifacts {
 		if strings.TrimSpace(a.OS) == "" || strings.TrimSpace(a.Arch) == "" {
-			return fmt.Errorf("artifact %d: os and arch are required; the agent picks its build by platform and an unlabelled artifact matches nothing", i)
+			return fmt.Errorf("artifact %d: os and arch are required; the agent picks its build by platform and an unlabeled artifact matches nothing", i)
 		}
 		key := strings.ToLower(strings.TrimSpace(a.OS)) + "/" + strings.ToLower(strings.TrimSpace(a.Arch))
 		if seen[key] {

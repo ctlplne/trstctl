@@ -9,7 +9,7 @@ import (
 )
 
 // B-4: code signing served the two mutations (sign with a managed key, sign
-// keylessly) and nothing that answered afterwards: which identities signed,
+// keylessly) and nothing that answered afterward: which identities signed,
 // and did the transparency-log entry actually land. Rekor publication rides
 // the outbox, and the Rekor handler refuses to acknowledge an entry whose
 // signed receipt does not verify — so a delivered transparency row IS a

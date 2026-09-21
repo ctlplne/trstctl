@@ -11,7 +11,7 @@ import (
 )
 
 // TestStatementTimeoutBoundsSlowQuery is the OPS-TIMEOUTS-001 acceptance for
-// the server-side statement deadline: a runaway query is cancelled by
+// the server-side statement deadline: a runaway query is canceled by
 // PostgreSQL within the configured bound and surfaces as a structured "busy"
 // failure a handler maps to 503 — never an unbounded hang.
 func TestStatementTimeoutBoundsSlowQuery(t *testing.T) {

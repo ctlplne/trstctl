@@ -13,7 +13,7 @@ import (
 )
 
 // Signer signs a CSR (DER) and returns the issued certificate chain (PEM). The
-// cert-manager bridge uses it to fulfil CertificateRequests; in production it is
+// cert-manager bridge uses it to fulfill CertificateRequests; in production it is
 // backed by the control plane's issuance, and in tests by the crypto boundary's
 // CA.
 type Signer interface {
@@ -36,7 +36,7 @@ type Bridge struct {
 	issuerGroup string
 }
 
-// NewBridge returns a bridge that fulfils CertificateRequests whose issuerRef
+// NewBridge returns a bridge that fulfills CertificateRequests whose issuerRef
 // names issuerName in issuerGroup, signing them with signer.
 func NewBridge(client *Client, signer Signer, issuerName, issuerGroup string) *Bridge {
 	return &Bridge{client: client, signer: signer, issuerName: issuerName, issuerGroup: issuerGroup}

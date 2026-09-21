@@ -87,7 +87,7 @@ func Endpoint(ctx context.Context, req Request) (Result, error) {
 	}
 	vantage := req.Vantage
 	if !transport.KnownVantage(vantage) {
-		return Result{}, errors.New("verify: probe has no recognised vantage")
+		return Result{}, errors.New("verify: probe has no recognized vantage")
 	}
 	timeout := req.Timeout
 	if timeout <= 0 {

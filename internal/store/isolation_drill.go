@@ -27,7 +27,7 @@ import (
 // isolationProbePrefix is the reserved synthetic prefix of every drill probe
 // tenant. It is deliberately identical to the doctor's ProbeTenantPrefix
 // (internal/cli/doctor) so DoctorProbeResidue and the doctor's own leak sweep
-// both recognise — and refuse to ignore — any residue a drill leaves behind.
+// both recognize — and refuse to ignore — any residue a drill leaves behind.
 // Keep the two values in lockstep.
 const isolationProbePrefix = "00000000-d0c7"
 
@@ -97,15 +97,15 @@ func (s *Store) RunIsolationDrill(ctx context.Context) (report IsolationDrillRep
 	}
 
 	// Check 1 — cross-tenant read denial: tenant B must see zero rows even
-	// though A has one, so a neighbour cannot read this tenancy's data.
+	// though A has one, so a neighbor cannot read this tenancy's data.
 	if _, gerr := s.GetAgent(ctx, tenantB, agentID); errors.Is(gerr, pgx.ErrNoRows) {
 		report.Checks = append(report.Checks, IsolationDrillCheck{
 			Name: "cross_tenant_read_denied", Passed: true,
-			Detail: "a neighbouring tenant read 0 rows of the marker (expected 0)"})
+			Detail: "a neighboring tenant read 0 rows of the marker (expected 0)"})
 	} else {
 		report.Checks = append(report.Checks, IsolationDrillCheck{
 			Name: "cross_tenant_read_denied", Passed: false,
-			Detail: fmt.Sprintf("a neighbouring tenant's read returned %v, want no rows", gerr)})
+			Detail: fmt.Sprintf("a neighboring tenant's read returned %v, want no rows", gerr)})
 	}
 
 	// Check 2 — cross-tenant write symmetry: tenant B directly targets A's
@@ -126,7 +126,7 @@ func (s *Store) RunIsolationDrill(ctx context.Context) (report IsolationDrillRep
 	if writeErr != nil || affected != 0 {
 		report.Checks = append(report.Checks, IsolationDrillCheck{
 			Name: "cross_tenant_write_refused", Passed: false,
-			Detail: fmt.Sprintf("a neighbouring tenant's targeted update returned err=%v affected=%d, want no error and 0 rows", writeErr, affected)})
+			Detail: fmt.Sprintf("a neighboring tenant's targeted update returned err=%v affected=%d, want no error and 0 rows", writeErr, affected)})
 	} else if a, aerr := s.GetAgent(ctx, tenantA, agentID); aerr != nil || a.Name != "isolation-drill" {
 		report.Checks = append(report.Checks, IsolationDrillCheck{
 			Name: "cross_tenant_write_refused", Passed: false,
@@ -134,7 +134,7 @@ func (s *Store) RunIsolationDrill(ctx context.Context) (report IsolationDrillRep
 	} else {
 		report.Checks = append(report.Checks, IsolationDrillCheck{
 			Name: "cross_tenant_write_refused", Passed: true,
-			Detail: "a neighbouring tenant's targeted update affected 0 rows; the marker row is intact"})
+			Detail: "a neighboring tenant's targeted update affected 0 rows; the marker row is intact"})
 	}
 
 	return report, nil

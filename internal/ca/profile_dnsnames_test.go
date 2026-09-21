@@ -14,7 +14,7 @@ import (
 // any, and only otherwise fell back to req.DNSNames. In-process CAs take the
 // issued names from the CSR, but several external-CA adapters build the UPSTREAM
 // order's CN/SANs from req.DNSNames — so whenever the CSR carried any SAN, the
-// req.DNSNames set travelled to the upstream CA having never been checked
+// req.DNSNames set traveled to the upstream CA having never been checked
 // against the tenant's profile suffix policy.
 func TestProfileDNSNamesValidatesBothSources(t *testing.T) {
 	info := crypto.CSRInfo{DNSNames: []string{"allowed.corp.example"}}
@@ -43,7 +43,7 @@ func TestProfileDNSNamesDeduplicates(t *testing.T) {
 	}
 }
 
-// TestProfileDNSNamesFallbackStillWorks pins the original behaviour that was
+// TestProfileDNSNamesFallbackStillWorks pins the original behavior that was
 // correct: a CSR with no SANs must still have req.DNSNames checked.
 func TestProfileDNSNamesFallbackStillWorks(t *testing.T) {
 	got := profileDNSNames(crypto.CSRInfo{}, []string{"only.corp.example"})

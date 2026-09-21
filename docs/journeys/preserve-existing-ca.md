@@ -303,7 +303,7 @@ trstctl-cli --idempotency-key preserve-ca-alert-read-001 \
 ```
 
 For an external channel, retain the provider's acceptance receipt as well as the
-trstctl outbox receipt. This is the alert acknowledgement proof that an owner can see
+trstctl outbox receipt. This is the alert acknowledgment proof that an owner can see
 and work the warning.
 
 ### 8. Verify revocation and retirement
@@ -392,7 +392,7 @@ following evidence:
 - one scheduled renewal completes without a manual signing step, and a **second renewal**
   repeats the result with a new serial and the same expected authority;
 - the expiry alert reaches the controlled sink, maps to the right owner, and an
-  **alert acknowledgement** is visible in the inbox and audit trail;
+  **alert acknowledgment** is visible in the inbox and audit trail;
 - an unreachable authority, invalid CSR, and unreachable destination all fail closed;
 - rollback restores a previously proven certificate and independent listener
   fingerprint;

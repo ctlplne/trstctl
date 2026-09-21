@@ -79,7 +79,7 @@ func (c *spiffeWorkloadAPIClient) FetchX509SVID(ctx context.Context, in *X509SVI
 	return x, nil
 }
 
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+// This type alias is provided for backward compatibility with existing code that references the prior non-generic stream type by name.
 type SpiffeWorkloadAPI_FetchX509SVIDClient = grpc.ServerStreamingClient[X509SVIDResponse]
 
 func (c *spiffeWorkloadAPIClient) FetchX509Bundles(ctx context.Context, in *X509BundlesRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[X509BundlesResponse], error) {
@@ -98,7 +98,7 @@ func (c *spiffeWorkloadAPIClient) FetchX509Bundles(ctx context.Context, in *X509
 	return x, nil
 }
 
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+// This type alias is provided for backward compatibility with existing code that references the prior non-generic stream type by name.
 type SpiffeWorkloadAPI_FetchX509BundlesClient = grpc.ServerStreamingClient[X509BundlesResponse]
 
 func (c *spiffeWorkloadAPIClient) FetchJWTSVID(ctx context.Context, in *JWTSVIDRequest, opts ...grpc.CallOption) (*JWTSVIDResponse, error) {
@@ -127,7 +127,7 @@ func (c *spiffeWorkloadAPIClient) FetchJWTBundles(ctx context.Context, in *JWTBu
 	return x, nil
 }
 
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+// This type alias is provided for backward compatibility with existing code that references the prior non-generic stream type by name.
 type SpiffeWorkloadAPI_FetchJWTBundlesClient = grpc.ServerStreamingClient[JWTBundlesResponse]
 
 func (c *spiffeWorkloadAPIClient) ValidateJWTSVID(ctx context.Context, in *ValidateJWTSVIDRequest, opts ...grpc.CallOption) (*ValidateJWTSVIDResponse, error) {
@@ -219,7 +219,7 @@ func _SpiffeWorkloadAPI_FetchX509SVID_Handler(srv interface{}, stream grpc.Serve
 	return srv.(SpiffeWorkloadAPIServer).FetchX509SVID(m, &grpc.GenericServerStream[X509SVIDRequest, X509SVIDResponse]{ServerStream: stream})
 }
 
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+// This type alias is provided for backward compatibility with existing code that references the prior non-generic stream type by name.
 type SpiffeWorkloadAPI_FetchX509SVIDServer = grpc.ServerStreamingServer[X509SVIDResponse]
 
 func _SpiffeWorkloadAPI_FetchX509Bundles_Handler(srv interface{}, stream grpc.ServerStream) error {
@@ -230,7 +230,7 @@ func _SpiffeWorkloadAPI_FetchX509Bundles_Handler(srv interface{}, stream grpc.Se
 	return srv.(SpiffeWorkloadAPIServer).FetchX509Bundles(m, &grpc.GenericServerStream[X509BundlesRequest, X509BundlesResponse]{ServerStream: stream})
 }
 
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+// This type alias is provided for backward compatibility with existing code that references the prior non-generic stream type by name.
 type SpiffeWorkloadAPI_FetchX509BundlesServer = grpc.ServerStreamingServer[X509BundlesResponse]
 
 func _SpiffeWorkloadAPI_FetchJWTSVID_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -259,7 +259,7 @@ func _SpiffeWorkloadAPI_FetchJWTBundles_Handler(srv interface{}, stream grpc.Ser
 	return srv.(SpiffeWorkloadAPIServer).FetchJWTBundles(m, &grpc.GenericServerStream[JWTBundlesRequest, JWTBundlesResponse]{ServerStream: stream})
 }
 
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+// This type alias is provided for backward compatibility with existing code that references the prior non-generic stream type by name.
 type SpiffeWorkloadAPI_FetchJWTBundlesServer = grpc.ServerStreamingServer[JWTBundlesResponse]
 
 func _SpiffeWorkloadAPI_ValidateJWTSVID_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {

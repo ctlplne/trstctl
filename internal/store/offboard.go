@@ -220,7 +220,7 @@ var TenantScopedTables = []string{
 	"provider_tenant_quotas",
 	// L3: the provider's durable registry rows for this customer. The
 	// break-glass grants reference the customer's id; both leave with the
-	// tenant, and the registry row is the provider-plane analogue of the core
+	// tenant, and the registry row is the provider-plane analog of the core
 	// `tenants` row deleted last.
 	"provider_breakglass_grants",
 	"provider_tenants",

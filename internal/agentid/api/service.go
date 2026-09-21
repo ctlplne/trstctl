@@ -169,7 +169,7 @@ type issuanceJob struct {
 
 // IssueChainBound records an accepted chain-bound issuance as an idempotent outbox job
 // (agentid.issue-chain-bound) for the orchestrator to drive (AN-5/AN-6). It returns an
-// issuance acknowledgement; the actual verify-before-keygen + broker mint happen
+// issuance acknowledgment; the actual verify-before-keygen + broker mint happen
 // asynchronously in the worker, exactly as PCAS RequestSuccession enqueues and the PCAS
 // worker mints.
 func (s *service) IssueChainBound(ctx context.Context, tenantID string, req IssueChainBoundRequest) (IssueChainBoundResponse, error) {
@@ -208,7 +208,7 @@ type revocationJob struct {
 
 // Revoke records an accepted revocation directive as an idempotent outbox job
 // (agentid.revoke-directive) for the orchestrator's cascade to drive (AN-5/AN-6). It
-// returns a directive acknowledgement; the descendant determination + transactional
+// returns a directive acknowledgment; the descendant determination + transactional
 // per-descendant job enqueue + terminal transition happen asynchronously in the worker.
 func (s *service) Revoke(ctx context.Context, tenantID string, req RevokeRequest) (RevokeResponse, error) {
 	directiveID := events.NewID()

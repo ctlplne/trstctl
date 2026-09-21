@@ -10,7 +10,7 @@ import (
 	"trstctl.com/trstctl/internal/events"
 )
 
-// TestMDMTelemetryDoesNotReplayFromZeroPerRequest is the behavioural pin for
+// TestMDMTelemetryDoesNotReplayFromZeroPerRequest is the behavioral pin for
 // AUD-201 follow-up F5/V21: mdmSCEPTelemetry runs on the GET policy read path
 // and replayed the ENTIRE log from sequence zero on every request — the third
 // such endpoint, left unmemoized when its two siblings were fixed. Its cost

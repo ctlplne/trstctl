@@ -75,7 +75,7 @@ type postgresStateTrailer struct {
 // itself — and includes everything that identifies the stream: the format tag,
 // the content digest, the record and per-table counts, and the event cut.
 //
-// Field order is fixed and length-prefixed rather than JSON-marshalled, because
+// Field order is fixed and length-prefixed rather than JSON-marshaled, because
 // JSON key order and optional-field omission are not stable enough to sign.
 func signedTrailerBytes(tr postgresStateTrailer) []byte {
 	var b bytes.Buffer
@@ -228,7 +228,7 @@ func WritePostgresStateTx(ctx context.Context, snapshot *PostgresStateSnapshot, 
 // smuggling signer and anchors through unsynchronized package globals, where
 // the nightly drill re-ran configuration against them and a later signer-less
 // call silently INHERITED a previously installed signer. A zero identity signs
-// nothing and requires nothing, the pre-existing behaviour.
+// nothing and requires nothing, the pre-existing behavior.
 type PostgresStateIdentity struct {
 	// Signer, when set, signs each artifact's trailer so a restorer sharing
 	// no secret with this deployment can still establish where it came from.

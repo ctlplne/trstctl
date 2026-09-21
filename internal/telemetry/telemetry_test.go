@@ -221,7 +221,7 @@ func TestInstanceIDStableAndAnonymous(t *testing.T) {
 }
 
 // TestRunReportsOnceThenStops: an enabled loop reports immediately and then
-// stops cleanly when its context is cancelled.
+// stops cleanly when its context is canceled.
 func TestRunReportsOnceThenStops(t *testing.T) {
 	rp := &recordingPoster{}
 	r := &telemetry.Reporter{

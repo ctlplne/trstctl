@@ -156,7 +156,7 @@ func ShippedJobKinds() []ShippedJobKind {
 	}
 }
 
-// UnshippedJobKinds are kinds the control plane's allowlist recognises that this
+// UnshippedJobKinds are kinds the control plane's allowlist recognizes that this
 // relay build cannot execute, with the reason. Naming them is the point: an
 // operator enabling one of these on the control plane should be able to find out
 // here why nothing happens, rather than watching a queue not drain.

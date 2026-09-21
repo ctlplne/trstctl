@@ -16,7 +16,7 @@ import (
 // These two already-shipped files are immutable. A pending upgrade uses a
 // checksum-bound online execution plan; an applied ledger row is never rerun.
 // Unknown bytes cannot fall back to the unsafe historical execution path. The
-// digests are migrationChecksum digests, so the SPDX licence line is outside
+// digests are migrationChecksum digests, so the SPDX license line is outside
 // them (0219's was rewritten by the 2026-09-20 relicensing; its DDL was not).
 type onlineCompatibilityPlan struct {
 	name, digest, table, expandSQL, index, createSQL, predicate, validateSQL string

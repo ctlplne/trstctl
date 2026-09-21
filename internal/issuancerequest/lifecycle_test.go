@@ -50,7 +50,7 @@ func TestApprovedIsNotTerminalBecauseIssuanceStillHasToHappen(t *testing.T) {
 	if _, err := Transition(StateApproved, StateIssued); err != nil {
 		t.Fatalf("approved -> issued refused: %v", err)
 	}
-	// It must still be able to expire and be cancelled.
+	// It must still be able to expire and be canceled.
 	for _, to := range []string{StateExpired, StateCancelled} {
 		if _, err := Transition(StateApproved, to); err != nil {
 			t.Errorf("approved -> %s refused: %v", to, err)

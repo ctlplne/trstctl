@@ -22,7 +22,7 @@ const (
 	// A store is a node rather than an attribute on the host because the same
 	// machine routinely carries several with DIFFERENT contents: the OS store,
 	// a JVM's cacerts, Firefox's NSS DB. "Is this CA trusted on host X" has no
-	// single answer, and modelling the store as a property of the host would
+	// single answer, and modeling the store as a property of the host would
 	// force one.
 	KindTrustStore NodeKind = "trust-store"
 )

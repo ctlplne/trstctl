@@ -194,7 +194,7 @@ func (b *Backend) RevokeKey(ctx context.Context, ref crypto.KeyRef) error {
 
 // ZeroizeKey schedules deletion of the KMS key material. KMS destroys the key after
 // the pending-deletion window; until then the key is in PendingDeletion and cannot
-// sign. This is the remote analogue of wiping a locked buffer — the operator no
+// sign. This is the remote analog of wiping a locked buffer — the operator no
 // longer holds, and cannot recover after the window, the private material.
 func (b *Backend) ZeroizeKey(ctx context.Context, ref crypto.KeyRef) error {
 	if ref.ID == "" {

@@ -31,7 +31,7 @@ import (
 // wedge is the agent doing work in the estate, so a single-box evaluation that
 // omits the agent evaluates the part that does not matter.
 //
-// This is also the cheapest defence against the defect this programme keeps
+// This is also the cheapest defense against the defect this program keeps
 // finding. Six times now a capability has been complete, tested and unreachable
 // from the running binary, and every one of them would have been obvious the
 // first time somebody drove it end to end on one machine. `--demo` makes that
@@ -47,7 +47,7 @@ import (
 // demoAgentBinary is the sibling executable name looked up next to this one.
 const demoAgentBinary = "trstctl-agent"
 
-// demoAgentName is the colocated agent's identity. Fixed so a restart re-enrols
+// demoAgentName is the colocated agent's identity. Fixed so a restart re-enrolls
 // as the same agent rather than accumulating one record per demo run.
 const demoAgentName = "demo-host-agent"
 
@@ -57,7 +57,7 @@ const demoAgentName = "demo-host-agent"
 // The agent channel is OFF by default and the claimable-job allowlist is EMPTY
 // by default — both correct, both fail-closed, and both fatal to a demo: with
 // the channel off the agent has nothing to dial, and with no claimable kinds the
-// job ledger is served but hands nothing out, so the agent enrols successfully
+// job ledger is served but hands nothing out, so the agent enrolls successfully
 // and then sits there doing nothing. That is the most misleading possible demo,
 // because it looks like it is working.
 //
@@ -79,7 +79,7 @@ func ApplyDemoDefaults(cfg *config.Config) []string {
 		// should not mutate an appliance nobody meant to point it at.
 		cfg.AgentChannel.ClaimableJobKinds = []string{"discovery.run", "endpoint.verify", "connector.test"}
 		changed = append(changed, "agent_channel.claimable_job_kinds=[discovery.run endpoint.verify connector.test] "+
-			"(an empty allowlist serves the ledger and hands out nothing, so the agent would enrol and idle)")
+			"(an empty allowlist serves the ledger and hands out nothing, so the agent would enroll and idle)")
 	}
 	return changed
 }
@@ -176,7 +176,7 @@ func runDemoAgent(ctx context.Context, cfg *config.Config, apiToken string, stde
 	return nil
 }
 
-// demoAPIToken mints the credential the demo uses to ask for an enrolment token.
+// demoAPIToken mints the credential the demo uses to ask for an enrollment token.
 //
 // Through server.RunTokenCreate — the same path `trstctl token create` uses, and
 // the same path the API authenticates against. Minting rather than requiring one
@@ -283,7 +283,7 @@ func waitForControlPlane(ctx context.Context, base string, stderr io.Writer) err
 // mintDemoEnrollmentToken asks the SERVED API for a host-role bootstrap token.
 //
 // Through the API on purpose. Reaching into the store would let the demo work
-// while the served enrolment path was broken, which is precisely the class of
+// while the served enrollment path was broken, which is precisely the class of
 // bug a single-box demo exists to surface.
 func mintDemoEnrollmentToken(ctx context.Context, base, apiToken string) ([]byte, error) {
 	body, err := json.Marshal(map[string]any{"roles": []string{"host"}})

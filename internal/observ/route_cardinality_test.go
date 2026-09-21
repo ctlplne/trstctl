@@ -32,7 +32,7 @@ func TestRouteLabelCardinalityIsBounded(t *testing.T) {
 
 // TestRouteLabelStillDistinguishesRealRoutes keeps the cap honest: the real
 // routes a deployment serves are far fewer than the cap, so they must remain
-// individually labelled rather than all collapsing to "other".
+// individually labeled rather than all collapsing to "other".
 func TestRouteLabelStillDistinguishesRealRoutes(t *testing.T) {
 	m := &Middleware{}
 	for _, path := range []string{

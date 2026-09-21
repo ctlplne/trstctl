@@ -53,7 +53,7 @@ func mustContainAny(t *testing.T, name, body string, wants ...string) {
 // pinned build id), running unprivileged, and carrying the control plane, the
 // isolated signer (AN-4), the agent, and the operator.
 //
-// Behavioural (OPS-008): instead of only substring-matching "./cmd/trstctl-agent",
+// Behavioral (OPS-008): instead of only substring-matching "./cmd/trstctl-agent",
 // this extracts every `./cmd/<bin>` the Dockerfile builds and asserts each names a
 // REAL cmd package directory on disk — so the image cannot claim to build a binary
 // that does not exist (the OPS-002 unbuilt-image class), and conversely every
@@ -447,7 +447,7 @@ func TestComposeBlankEvaluationHasASafeFirstOperatorLogin(t *testing.T) {
 // `docker compose up` brings up the control plane against Postgres and NATS, wired
 // as an EXTERNAL datastore configuration.
 //
-// Behavioural (OPS-008): the old version string-matched "postgres", "depends_on",
+// Behavioral (OPS-008): the old version string-matched "postgres", "depends_on",
 // "TRSTCTL_POSTGRES_MODE", "external" anywhere in the file — it could pass even if
 // the dependency graph was wrong or a flag was undefined. This PARSES the compose
 // file and asserts the real structure: the four services exist, NATS runs with

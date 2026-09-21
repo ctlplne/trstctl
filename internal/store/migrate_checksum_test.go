@@ -23,7 +23,7 @@ import (
 // could hold different schemas and both believe they were current, and a second
 // file claiming an applied version was skipped in silence. These tests drive the
 // real migration runner against a real (embedded) PostgreSQL through the public
-// WithExtraMigrations seam, so the behaviour proven here is the behaviour a
+// WithExtraMigrations seam, so the behavior proven here is the behavior a
 // booting node gets.
 
 // ledgerProbeVersion sits in the reserved extension band (>= 900000) and above
@@ -60,7 +60,7 @@ func normalizedMigrationDigest(raw []byte) string {
 }
 
 // wholeFileDigest is the digest a binary from before 2026-09-20 recorded: the
-// whole file, licence header included. Kept here as the fixture for the ledger
+// whole file, license header included. Kept here as the fixture for the ledger
 // rows such a binary left behind.
 func wholeFileDigest(raw []byte) string {
 	normalized := strings.ReplaceAll(string(raw), "\r\n", "\n")
@@ -78,13 +78,13 @@ func TestMigrationChecksumIgnoresLicenseHeader(t *testing.T) {
 		{"-- SPDX-License-Identifier: MPL-2.0\n", ""},
 		{"-- SPDX-License-Identifier: BUSL-1.1\n", ""},
 		{"-- SPDX-License-Identifier: LicenseRef-trstctl-EE\n", ""},
-		// The directive stays inside the digest; only the licence line leaves it.
+		// The directive stays inside the digest; only the license line leaves it.
 		{"-- migrate: no-transaction\n-- SPDX-License-Identifier: BUSL-1.1\n", "-- migrate: no-transaction\n"},
 	} {
 		got := normalizedMigrationDigest([]byte(tc.header + ledgerProbeBodyV1))
 		want := normalizedMigrationDigest([]byte(tc.kept + ledgerProbeBodyV1))
 		if got != want {
-			t.Fatalf("digest with header %q = %s, want %s (the licence line must not be part of the identity)", tc.header, got, want)
+			t.Fatalf("digest with header %q = %s, want %s (the license line must not be part of the identity)", tc.header, got, want)
 		}
 	}
 	if normalizedMigrationDigest([]byte(ledgerProbeBodyV2)) == bare {
@@ -119,7 +119,7 @@ func TestMigrationLedgerRestampsRowsHashedUnderPreviousLicenseHeader(t *testing.
 
 	upgraded := openMigrator(t, dsn, ledgerProbeFS(busl+ledgerProbeBodyV1))
 	if err := upgraded.Migrate(ctx); err != nil {
-		t.Fatalf("Migrate over a ledger row recorded under the previous licence header must succeed, got: %v", err)
+		t.Fatalf("Migrate over a ledger row recorded under the previous license header must succeed, got: %v", err)
 	}
 	var checksum string
 	var adoptedAt *string
@@ -256,7 +256,7 @@ func TestMigrationLedgerRejectsEditedAppliedMigration(t *testing.T) {
 
 	// Break-glass (docs/migrations.md): an operator who has confirmed this node's
 	// schema clears the recorded identity; the next boot re-adopts the file and
-	// STAMPS the row, so the grandfathering stays visible afterwards.
+	// STAMPS the row, so the grandfathering stays visible afterward.
 	if _, err := first.SystemPool().Exec(ctx,
 		"UPDATE schema_migrations SET name = NULL, checksum = NULL WHERE version = $1", int64(ledgerProbeVersion)); err != nil {
 		t.Fatalf("clear the ledger identity: %v", err)

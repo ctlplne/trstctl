@@ -26,7 +26,7 @@ import (
 // Restoring into a database that exists only for the drill (epic J2).
 //
 // The ephemeral target is a real PostgreSQL database created for this run and
-// dropped afterwards. It has to be real: a drill against an in-memory double
+// dropped afterward. It has to be real: a drill against an in-memory double
 // would prove the double accepts the backup, and the failures worth catching are
 // exactly the ones a double cannot have — a migration the artifacts predate, a
 // column the restore path expects, a constraint the replayed events violate.
@@ -86,7 +86,7 @@ func (s *Server) RunRestoreDrillScheduler(ctx context.Context) {
 // default looks EXACTLY like a correctly disabled one for any window shorter
 // than a day. My first test here asserted no drill fired within 150ms and
 // passed against the bug it was written to catch, which is the same
-// passes-for-the-wrong-reason failure this programme keeps finding elsewhere.
+// passes-for-the-wrong-reason failure this program keeps finding elsewhere.
 //
 // The config layer resolves an unset interval to DefaultBackupDrillInterval, so
 // a zero arriving here can only mean the operator wrote "0" — documented as the
@@ -380,7 +380,7 @@ func createEphemeralDatabase(ctx context.Context, adminDSN string) (string, func
 		return "", nil, fmt.Errorf("server: create drill database: %w", err)
 	}
 	drop := func() {
-		// A fresh context: the drill's own may already be cancelled by the
+		// A fresh context: the drill's own may already be canceled by the
 		// failure being drilled, and the database still has to go.
 		dropCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()

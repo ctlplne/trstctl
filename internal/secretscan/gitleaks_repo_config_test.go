@@ -27,10 +27,10 @@ func conformanceKeyBody() string { return strings.Split(conformanceKeyPEM, "\n")
 
 // TestGitleaksConfigHasNoPathBasedTestSourceExemption is the SHAPE half of the
 // SF.1 test-source coverage proof: it reads .gitleaks.toml as text and never
-// invokes gitleaks. The BEHAVIOURAL half — a token planted in a *_test.go file
+// invokes gitleaks. The BEHAVIORAL half — a token planted in a *_test.go file
 // is actually reported by a scan driven through the repository's own config —
 // is TestServedGitleaksScanDetectsPlantedSecretInTestSource below. Keep both:
-// the shape test always runs, the behavioural test needs the pinned binary.
+// the shape test always runs, the behavioral test needs the pinned binary.
 //
 // .gitleaks.toml used to carry a top-level `[allowlist] paths` list holding
 // `.*_test\.go$` and `(^|/)testdata/`. A top-level allowlist `paths` entry
@@ -107,7 +107,7 @@ func TestGitleaksHistoricalGeneratedIdentifierPinsAreExact(t *testing.T) {
 	}
 }
 
-// TestServedGitleaksScanDetectsPlantedSecretInTestSource is the BEHAVIOURAL SF.1
+// TestServedGitleaksScanDetectsPlantedSecretInTestSource is the BEHAVIORAL SF.1
 // acceptance for test sources, and the direct counterpart of
 // TestServedGitleaksScanDetectsPlantedSecret (internal/server), which proves the
 // same thing for production source. It plants secrets in a `*_test.go` file and

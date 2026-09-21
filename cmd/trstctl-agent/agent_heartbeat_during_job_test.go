@@ -129,7 +129,7 @@ func TestAgentHeartbeatsWhileJobChannelIsBlocked(t *testing.T) {
 		select {
 		case <-done:
 		case <-time.After(5 * time.Second):
-			t.Error("agent did not join the cancelled job")
+			t.Error("agent did not join the canceled job")
 		}
 	})
 	select {

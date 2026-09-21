@@ -298,7 +298,7 @@ func (s *Server) FetchJWTBundle(ctx context.Context) (crypto.JWKS, error) {
 // not symmetric:
 //
 //   - "" (the local socket) sees entries with NO ParentID. It is the pre-B3
-//     behaviour, unchanged, and it cannot reach node-scoped entries because it
+//     behavior, unchanged, and it cannot reach node-scoped entries because it
 //     is not that node.
 //   - a real parentID sees only entries scoped to exactly that node. It cannot
 //     reach unscoped entries, because an unscoped entry has not been authorized

@@ -530,7 +530,7 @@ func reportConnectorTestPlan(ctx context.Context, ch Channel, job Job, plan Plan
 //
 // An appliance re-bind still redeems its management credential. A host restore
 // redeems NOTHING: it opens the encrypted predecessor held only by this exact
-// agent, uses the key inside the restore callback, and wipes it afterwards.
+// agent, uses the key inside the restore callback, and wipes it afterward.
 func runRollback(ctx context.Context, ch Channel, client *http.Client, hostProfile connector.LocalOpsConfig, hostRollback *HostRollbackStore, job Job) bool {
 	var intent RollbackIntent
 	if err := decodeJobPayload(job.Payload, &intent); err != nil {

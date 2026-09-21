@@ -12,13 +12,13 @@
 // the exact failure this emulator exists to rule out: paloalto was advertised as
 // relay-executable with nothing driving it. So every parameter the real API
 // validates is validated here, and the two PAN-OS failure shapes are both
-// modelled — a transport-level rejection (403/400/404/405) and PAN-OS's
+// modeled — a transport-level rejection (403/400/404/405) and PAN-OS's
 // signature failure-inside-a-200, where the HTTP layer accepts the request and
 // the XML envelope carries status="error". The second shape is why the connector
 // cannot trust a 2xx alone, so a double that never produced one would leave that
 // logic unproven.
 //
-// No crypto/* (AN-3): PEM is matched as opaque bytes by its armour, never
+// No crypto/* (AN-3): PEM is matched as opaque bytes by its armor, never
 // parsed. Imported material is held as []byte (AN-8), never as a string.
 //
 // Two known fidelity gaps bound what a passing test here proves. Both are
@@ -320,7 +320,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	obj, exists := s.objects[name]
 	// A private key attaches to a certificate object, so there has to be one to
-	// attach it to. Modelled because it pins the connector's call ORDER: import
+	// attach it to. Modeled because it pins the connector's call ORDER: import
 	// the certificate, then the key. A double indifferent to order would let a
 	// connector that reversed them ship, and it would fail on first contact with
 	// real hardware.
@@ -370,7 +370,7 @@ func (s *Server) injectedFor(category string) (int, []byte, bool) {
 }
 
 // materialMatchesCategory rejects a key imported as a certificate and vice
-// versa, which PAN-OS also rejects. Matching the armour keeps this free of any
+// versa, which PAN-OS also rejects. Matching the armor keeps this free of any
 // certificate parse (AN-3).
 func materialMatchesCategory(body []byte, category string) bool {
 	if category == categoryCertificate {

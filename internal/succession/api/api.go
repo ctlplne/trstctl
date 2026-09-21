@@ -3,7 +3,7 @@
 // Package api is the external PCAS surface (PCAS-claims-6, 9): request a succession
 // (idempotent, AN-5), fetch an identity's succession chain (a response a relying
 // party verifies offline with PCAS-07), and record a signed relying-party
-// capability acknowledgement (an nhi.rp.ack the PCAS-10 quorum counts). It attaches
+// capability acknowledgment (an nhi.rp.ack the PCAS-10 quorum counts). It attaches
 // through the feature-neutral api.Option route seam (the internal/pqcmigration precedent);
 // no PCAS route, handler, or DTO lives in the static API package. Every mutation flows through the
 // shared idempotency path (api.Mutate), so a replayed Idempotency-Key returns the
@@ -60,7 +60,7 @@ type ChainResponse struct {
 	Count      int      `json:"count"`
 }
 
-// AckRequest is a relying party's signed post-quantum-capability acknowledgement.
+// AckRequest is a relying party's signed post-quantum-capability acknowledgment.
 type AckRequest struct {
 	IdentityID   string `json:"identity_id"`
 	Epoch        uint64 `json:"epoch"`
@@ -351,7 +351,7 @@ func Routes(svc Service) []api.LicensedRoute {
 		},
 		{
 			Method: "POST", Path: "/api/v1/pcas/acks", OperationID: "recordRPAck",
-			Summary:       "Record a signed relying-party post-quantum capability acknowledgement",
+			Summary:       "Record a signed relying-party post-quantum capability acknowledgment",
 			Handler:       func(a *api.API) http.HandlerFunc { return ackHandler(a, svc) },
 			RequestSchema: "PCASAckRequest", ResponseSchema: "PCASAck",
 			SuccessCode: "202", Mutation: true, Permission: authz.CertsWrite,
@@ -437,7 +437,7 @@ func Routes(svc Service) []api.LicensedRoute {
 		},
 		{
 			Method: "POST", Path: "/api/v1/pcas/retirement/policies", OperationID: "configurePCASRetirementPolicy",
-			Summary:       "Configure the RP acknowledgement quorum for PCAS retirement",
+			Summary:       "Configure the RP acknowledgment quorum for PCAS retirement",
 			Handler:       func(a *api.API) http.HandlerFunc { return retirementPolicyHandler(a, svc) },
 			RequestSchema: "PCASRetirementPolicyRequest", ResponseSchema: "PCASRetirementPolicy",
 			SuccessCode: "200", Mutation: true, Permission: authz.CertsWrite,
@@ -539,10 +539,10 @@ func ackHandler(a *api.API, svc Service) http.HandlerFunc {
 			if req.IdentityID == "" || req.RelyingParty == "" {
 				return 0, nil, api.ErrStatus(http.StatusBadRequest, "identity_id and relying_party are required")
 			}
-			// The signature is the whole point of an acknowledgement: reject a stripped
+			// The signature is the whole point of an acknowledgment: reject a stripped
 			// ack at ingestion so an unsigned ack can never reach the quorum (PCAS-claim-3).
 			if len(req.Signature) == 0 {
-				return 0, nil, api.ErrStatus(http.StatusBadRequest, "signature is required; an unsigned acknowledgement is not accepted")
+				return 0, nil, api.ErrStatus(http.StatusBadRequest, "signature is required; an unsigned acknowledgment is not accepted")
 			}
 			start := time.Now()
 			var opErr error

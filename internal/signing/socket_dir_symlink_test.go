@@ -48,7 +48,7 @@ func TestSignerSocketDirRefusesASymlink(t *testing.T) {
 	}
 }
 
-// TestSignerSocketDirTightensAWidePreexistingDir keeps the behaviour that
+// TestSignerSocketDirTightensAWidePreexistingDir keeps the behavior that
 // mattered: a real directory that already exists with loose permissions is
 // narrowed to 0700 rather than rejected.
 func TestSignerSocketDirTightensAWidePreexistingDir(t *testing.T) {

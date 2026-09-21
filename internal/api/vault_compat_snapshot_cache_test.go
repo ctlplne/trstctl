@@ -28,7 +28,7 @@ func TestVaultCompatSnapshotIsMemoizedAgainstTheLogHead(t *testing.T) {
 		t.Fatalf("snapshot: %v", err)
 	}
 	if first.mounts == nil || first.policies == nil {
-		t.Fatal("snapshot returned uninitialised maps")
+		t.Fatal("snapshot returned uninitialized maps")
 	}
 
 	// Repeated calls must stay correct (an empty projection for an absent log).

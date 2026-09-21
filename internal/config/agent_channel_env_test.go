@@ -9,7 +9,7 @@ import "testing"
 // ClaimableJobKinds was the one that was not, and it is the field that decides
 // whether an enrolled agent can do anything at all: an empty allowlist serves
 // the job ledger and hands nothing out, so a container deployment could enable
-// the channel, watch an agent enrol, and never learn why no work ran. A compose
+// the channel, watch an agent enroll, and never learn why no work ran. A compose
 // file setting a variable nothing reads is the same defect one layer out.
 func TestTheClaimableJobAllowlistIsSettableByEnvironment(t *testing.T) {
 	t.Parallel()

@@ -29,7 +29,7 @@ describe("first certificate attempt", () => {
     expect(Object.isFrozen(attempt.input)).toBe(true);
     expect(attempt.createKey).not.toBe(attempt.issueKey);
   });
-  it("persists the created identity before transition and resumes the same key after a lost acknowledgement", async () => {
+  it("persists the created identity before transition and resumes the same key after a lost acknowledgment", async () => {
     let saved = newFirstCertificateAttempt(input, principal);
     const original = saved;
     const c = client();

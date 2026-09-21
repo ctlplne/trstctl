@@ -130,19 +130,19 @@ var projectionEventConstants = map[string]string{
 }
 
 // TestEventLedgerConstantsMatchProjector asserts every event type the ledger
-// catalogues is a real projector event constant — so the leaf-package literals
+// catalogs is a real projector event constant — so the leaf-package literals
 // cannot drift from the shapes the projector actually decodes. A typo in the ledger
 // (an event type the projector never emits) fails here.
 func TestEventLedgerConstantsMatchProjector(t *testing.T) {
 	for _, typ := range eventledger.EventTypes() {
 		if _, ok := projectionEventConstants[typ]; !ok {
-			t.Errorf("ledger catalogues event %q that is not a projector event constant; the catalog has drifted from internal/projections", typ)
+			t.Errorf("ledger catalogs event %q that is not a projector event constant; the catalog has drifted from internal/projections", typ)
 		}
 	}
 }
 
 // TestEventLedgerEntriesNonEmpty asserts every ledger row names a feature id, an
-// action, and at least one non-empty event type. This is the "no catalogued action
+// action, and at least one non-empty event type. This is the "no cataloged action
 // points at an empty event name" half of the COVER-008 completeness contract.
 func TestEventLedgerEntriesNonEmpty(t *testing.T) {
 	for _, fe := range projections.EventLedger() {

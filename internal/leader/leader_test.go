@@ -144,7 +144,7 @@ func tryBecomeLeaderEventually(ctx context.Context, s *store.Store, within time.
 
 // TestElectorRunsLeaderWorkOnExactlyOneReplica is the EXC-RESIL-01 "no double-apply"
 // proof at the election layer: two Electors campaign against one database, each with a
-// leader function that marks itself ACTIVE and runs until its context is cancelled.
+// leader function that marks itself ACTIVE and runs until its context is canceled.
 // The test asserts that NEVER are both leader functions active at once (a shared
 // active-count that would exceed 1 if two leaders ran), and that on killing the
 // current leader, the OTHER elector takes over (failover) and runs its leader work.
@@ -161,7 +161,7 @@ func TestElectorRunsLeaderWorkOnExactlyOneReplica(t *testing.T) {
 	var ranA, ranB atomic.Bool // which electors ever became leader (both, after failover)
 
 	// makeLeaderFn returns a leader function that records concurrency and which replica
-	// ran, then blocks until its leadership context is cancelled.
+	// ran, then blocks until its leadership context is canceled.
 	makeLeaderFn := func(ran *atomic.Bool) func(context.Context) {
 		return func(ctx context.Context) {
 			ran.Store(true)

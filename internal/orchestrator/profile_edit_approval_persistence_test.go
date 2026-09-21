@@ -19,7 +19,7 @@ import (
 // The request is an event; its projection carries the state, so a second
 // orchestrator over the same store (a restarted plane, or another replica)
 // lists it, refuses the requester's self-approval, records a reviewer's
-// approval and applies the queued spec. An identical approval afterwards is
+// approval and applies the queued spec. An identical approval afterward is
 // absorbed, and the closed request names the version it produced.
 func TestParkedProfileEditApprovalSurvivesARestart(t *testing.T) {
 	s := newStore(t)

@@ -179,7 +179,7 @@ type DVObserver interface {
 }
 
 // ErrSolverNotConfigured is returned when a challenge must be solved and no
-// solver was supplied. It fails closed: the previous behaviour substituted a
+// solver was supplied. It fails closed: the previous behavior substituted a
 // no-op solver, which turned "this deployment cannot validate" into "validation
 // silently did nothing".
 var ErrSolverNotConfigured = errors.New("acmekey: no challenge solver is configured for this authority")

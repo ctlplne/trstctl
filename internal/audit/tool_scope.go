@@ -40,7 +40,7 @@ var canonicalToolEvents = sync.OnceValues(func() (map[string]map[string]bool, er
 		result[string(tool)] = map[string]bool{}
 	}
 	for _, item := range catalog.Items {
-		// Campaign bookkeeping and every other catalogued action use exact
+		// Campaign bookkeeping and every other cataloged action use exact
 		// server-owned event names, never a guessed execution namespace.
 		types, _ := eventledger.EventTypesForFeatureAction(item.FeatureID, "")
 		for _, typ := range types {

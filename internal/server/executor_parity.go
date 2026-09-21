@@ -12,7 +12,7 @@ import (
 // The per-target parity gate: once a target is agent-executed, key bytes may
 // never be sent to it (epic B2).
 //
-// B2's value is a negative property — private key bytes stop travelling from
+// B2's value is a negative property — private key bytes stop traveling from
 // the control plane to the host — and a negative property is only worth
 // anything if it cannot be silently violated. A migration that "prefers" the
 // host-generated path but falls back to shipping a key when something is
@@ -27,7 +27,7 @@ import (
 // It is per target on purpose. A real estate migrates a few targets at a time,
 // and a global switch would force an all-or-nothing cutover on exactly the
 // systems least able to take one. Targets not marked keep working precisely as
-// before — this adds no behaviour to them at all.
+// before — this adds no behavior to them at all.
 
 // The marker itself lives in internal/custody, imported by both this package and
 // internal/api. It used to be defined in each, with a comment promising a guard
@@ -51,7 +51,7 @@ var ErrCredentialBearingPathRefused = errors.New(
 // executor as an agent.
 //
 // Absent means no. A target whose config predates this feature must never
-// change behaviour because a new version shipped, and the failure direction
+// change behavior because a new version shipped, and the failure direction
 // matters: defaulting to "agent" would refuse deploys across an entire estate
 // on upgrade.
 func targetExecutorIsAgent(cfg json.RawMessage) bool {
