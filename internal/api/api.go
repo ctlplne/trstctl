@@ -135,6 +135,7 @@ type API struct {
 	cbom                               CBOMService // served CBOM scanner and crypto inventory
 	pqcCampaignSigner                  PQCCampaignClosureSigner
 	licensedRoutes                     []LicensedRoute
+	coreRoutes                         []LicensedRoute
 	licensedSchemas                    map[string]*Schema
 	complianceEvidence                 ComplianceEvidenceService
 	license                            *license.Manager
@@ -248,6 +249,7 @@ type config struct {
 	cbom                        CBOMService
 	pqcCampaignSigner           PQCCampaignClosureSigner
 	licensedRoutes              []LicensedRoute
+	coreRoutes                  []LicensedRoute
 	licensedSchemas             map[string]*Schema
 	complianceEvidence          ComplianceEvidenceService
 	license                     *license.Manager
@@ -553,6 +555,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		cbom:                        cfg.cbom,
 		pqcCampaignSigner:           cfg.pqcCampaignSigner,
 		licensedRoutes:              append([]LicensedRoute(nil), cfg.licensedRoutes...),
+		coreRoutes:                  append([]LicensedRoute(nil), cfg.coreRoutes...),
 		licensedSchemas:             copySchemaMap(cfg.licensedSchemas),
 		complianceEvidence:          cfg.complianceEvidence,
 		license:                     cfg.license,
@@ -1491,20 +1494,25 @@ func (a *API) routes() []route {
 	routes = append(routes, a.extractedRouteGroups()...) // see routes_ownership.go
 	routes = append(routes, a.codeSigningRoutes()...)
 	routes = append(routes, a.platformRoutes()...)
+	routes = append(routes, a.extensionRouteRegistry(a.coreRoutes, false)...)
 	return append(routes, a.licensedRouteRegistry()...)
 }
 
 func (a *API) licensedRouteRegistry() []route {
-	if len(a.licensedRoutes) == 0 {
+	return a.extensionRouteRegistry(a.licensedRoutes, true)
+}
+
+func (a *API) extensionRouteRegistry(extensions []LicensedRoute, commercial bool) []route {
+	if len(extensions) == 0 {
 		return nil
 	}
-	out := make([]route, 0, len(a.licensedRoutes))
-	for _, lr := range a.licensedRoutes {
+	out := make([]route, 0, len(extensions))
+	for _, lr := range extensions {
 		if lr.Handler == nil {
 			continue
 		}
 		handler := lr.Handler(a)
-		if lr.Mutation {
+		if commercial && lr.Mutation {
 			handler = a.requireWritableCommercialLicense(handler)
 		}
 		out = append(out, route{
@@ -1530,7 +1538,7 @@ func (a *API) licensedRouteRegistry() []route {
 // requireWritableCommercialLicense preserves licensed read paths after the
 // renewal grace period while refusing proprietary state changes. Core routes
 // are deliberately outside this wrapper: an expired commercial license must
-// never stop the MPL control plane from issuing, rotating, or revoking through
+// never stop the BSL control plane from issuing, rotating, or revoking through
 // its Community surfaces.
 func (a *API) requireWritableCommercialLicense(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

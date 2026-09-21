@@ -277,7 +277,7 @@ Knowing *where* your weak crypto is (the [CBOM](observability-and-risk.md)) is h
 battle; the other half is *fixing* it without a manual project. PQC migration is served
 in every build (`internal/pqcmigration`): the orchestrator
 consumes the CBOM read model, finds quantum-vulnerable certificate-key assets, and queues
-re-issuance through the outbox toward the licensed target.
+re-issuance through the outbox toward the selected target algorithm.
 
 The migration API attaches `POST /api/v1/pqc/migrations` and
 `POST /api/v1/pqc/migrations/{run_id}/rollback` through the attach seam, so those routes
@@ -288,12 +288,14 @@ project through the event log into `crypto_assets`, so posture dashboards and
 
 **Execution status:** served in every build through `internal/pqcmigration`, for CBOM
 certificate-key assets through ACME hybrid transition re-issuance with rollback. The core
-also exposes CBOM posture, profile selection, and migration campaign
-tracking/proof, but not PQC algorithms, issuance, or automated fleet execution.
+also exposes CBOM posture, profile selection, migration campaign tracking and
+proof, PQC algorithms, issuance, and the automated execution described here.
+An expired commercial license does not disable Core migration or rollback;
+tenant authorization and idempotency requirements still apply.
 
 ### Offline operator rehearsal
 
-Run the licensed rehearsal from the repository root after the pinned Go modules,
+Run the offline rehearsal from the repository root after the pinned Go modules,
 container images, OpenSSL interop image, and bundled PostgreSQL artifact have been
 supplied locally:
 
@@ -307,19 +309,11 @@ CBOM migration plus rollback. It sets the Go module resolver offline and the
 pinned interop runner uses `--pull=never`. The result is
 `dist/pqc-operator-lab-licensed.tar.gz`.
 
-Community operators use the same workflow with an edition selector:
+PQC is part of the core, so there is no separate edition-unavailable rehearsal.
+Use the command above for the shipped-binary workflow. The archive's historical
+`licensed` filename does not identify a PQC license requirement.
 
-```sh
-make core-only pqc-operator-lab
-```
-
-That command builds and starts isolated `trstctl_core` control-plane and signer
-binaries against private bundled PostgreSQL and embedded NATS data directories.
-It proves that CBOM reading remains served and that `/v1/editions` reports PQC
-execution as unavailable. It exits successfully without advertising or calling
-the proprietary migration mutation.
-
-Both archives contain a versioned manifest, one machine report and one public
+The archive contains a versioned manifest, one machine report and one public
 transcript per stage, and `SHA256SUMS`. Archive construction rejects private-key
 PEM, bearer credentials, trstctl API tokens, and non-empty password/secret/token
 JSON fields. The command deletes only its own private runtime directory; the
@@ -332,7 +326,7 @@ command center: expiry bands, a 47-day renewal-readiness simulator (does each ce
 renew inside the shrinking CA/Browser Forum maximum lifetime?), deployment receipts, and
 a per-certificate renewal-history timeline. The crypto-agility work surfaces at
 `/posture` as CBOM-backed algorithm posture, the complete core campaign/evidence
-workflow, and the licensed executor when attached. See [The web console](../web-console.md).
+workflow, and the Core migration executor. See [The web console](../web-console.md).
 
 ## Use it
 
@@ -352,8 +346,8 @@ expiry when trstctl re-issues absent an earlier ARI window; `alert_before` is wh
 warns. See [Configuration](../configuration.md) and [Operations](../operations.md) for
 the full set and running behavior. PQC posture is visible in the
 [CBOM](observability-and-risk.md) via `GET /api/v1/cbom/assets`; core campaigns are
-served under `/api/v1/pqc/campaigns`, while automated fleet execution attaches only
-from proprietary EE.
+served under `/api/v1/pqc/campaigns`, and automated fleet execution attaches in
+every build through `internal/pqcmigration`.
 
 ## Pitfalls & limits
 
@@ -393,13 +387,13 @@ from proprietary EE.
   `licensed_crypto.migration.started`, `licensed_crypto.migration.asset_completed`,
   `licensed_crypto.migration.rollback_completed`, `protocol.issued`.
 - **CBOM migration feed:** `POST /api/v1/cbom/scans` records `cbom.asset.observed`; `GET
-  /api/v1/cbom/assets` returns crypto posture, licensed migration targets, and
+  /api/v1/cbom/assets` returns crypto posture, available migration targets, and
   `migration_progress`.
-- **PQC migration API:** proprietary EE attaches `POST /api/v1/pqc/migrations` (CBOM
+- **PQC migration API:** Core attaches `POST /api/v1/pqc/migrations` (CBOM
   certificate-key assets) and `POST /api/v1/pqc/migrations/{run_id}/rollback`.
 - **Core PQC campaign API:** `/api/v1/pqc/campaigns` plus detail, update, readiness,
   finding disposition, close, and signed-evidence export routes.
-- **PQC algorithms:** proprietary EE scope: ML-DSA (FIPS 204), ML-KEM (FIPS 203),
+- **PQC algorithms:** Core includes ML-DSA (FIPS 204), ML-KEM (FIPS 203),
   SLH-DSA (FIPS 205), and hybrid algorithms. See the post-quantum section of
   [Current limitations](../limitations.md).
 

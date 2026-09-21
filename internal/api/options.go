@@ -262,6 +262,13 @@ func WithLicensedRoutes(routes ...LicensedRoute) Option {
 	return func(c *config) { c.licensedRoutes = append(c.licensedRoutes, routes...) }
 }
 
+// WithCoreRoutes mounts routes from Core feature packages through the shared
+// OpenAPI, authorization and mutation machinery. Commercial license expiry does
+// not disable these routes. Proprietary packages must use WithLicensedRoutes.
+func WithCoreRoutes(routes ...LicensedRoute) Option {
+	return func(c *config) { c.coreRoutes = append(c.coreRoutes, routes...) }
+}
+
 // WithLicensedSchemas appends proprietary edition OpenAPI component schemas to
 // this API instance. Names must be unique across core and licensed components.
 func WithLicensedSchemas(schemas map[string]*Schema) Option {

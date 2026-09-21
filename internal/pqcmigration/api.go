@@ -91,7 +91,7 @@ func NewAPIOptionsFactory(projection *ProgressProjection) editionseam.LicensedAP
 			integrityKey: d.OutboxIntegrityKey, tenantCrypto: d.TenantCrypto,
 		}
 		return []api.Option{
-			api.WithLicensedRoutes(routes(svc)...),
+			api.WithCoreRoutes(routes(svc)...),
 			api.WithLicensedSchemas(schemas()),
 		}, nil
 	}

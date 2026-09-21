@@ -2,6 +2,11 @@
 
 ### Changed
 
+- Core PQC migration and rollback remain available after a commercial license
+  expires, with tenant authorization and idempotency checks preserved. Edition
+  disclosures now place PQC in Free Core and the operator guide reflects the
+  current rehearsal command.
+
 - Remediation is part of Core: incident and guided remediation routes now mount
   without a commercial license in both normal and Core-only builds. Tenant
   isolation, RBAC, policy, idempotency and outbox requirements are unchanged. The

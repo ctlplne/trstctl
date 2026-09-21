@@ -196,7 +196,6 @@ Provider inherits every Enterprise row below, then adds the Provider rows.
 | Feature ID | Edition | Product line |
 |---|---|---|
 | `fips` | Enterprise | Assurance: FIPS-capable distribution posture and evidence. |
-| `pqc` | Enterprise | Proprietary post-quantum algorithms, key/certificate types, issuance/signing paths, migration APIs/UI, and tests. |
 | `ha_support` | Enterprise | Scale: served enterprise support posture, SLA target catalog, 24x7 production tier, and professional-services packages. |
 | `byok` | Enterprise | Assurance: bring-your-own-key / external custody operations. |
 | `governance` | Enterprise | Governance: advanced approvals, policy, and audit controls. |
