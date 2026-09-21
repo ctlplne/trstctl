@@ -1,16 +1,3 @@
-# Changelog
-
-All notable changes to trstctl are documented here. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to
-follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) once it reaches
-1.0. trstctl is **pre-1.0 and under active hardening**: minor versions may carry
-breaking changes, and the tagged versions below are development milestones, not
-supported release lines (see [SECURITY.md](SECURITY.md) for the support policy and
-[docs/limitations.md](docs/limitations.md) for what the running binary serves today).
-
-This file is the human-readable companion to the git tags; the
-[README roadmap](README.md#roadmap) describes what is planned.
-
 ## [Unreleased]
 
 ### Changed
@@ -46,6 +33,44 @@ This file is the human-readable companion to the git tags; the
   `pricing_posture` is now `commercial_posture`, stating that Enterprise and
   Provider terms are agreed per customer and not yet published. The console's
   editions panel no longer renders a price table.
+
+## [0.6.3] - 2026-09-19
+
+Tagged after 0.7.0 on the same line of development; it carries one change.
+
+### Changed
+- CI: CodeQL is scoped to shipped product code, so analysis time goes to the
+  binaries that ship rather than to tooling and fixtures.
+
+## [0.7.0] - 2026-09-16
+
+### Fixed
+- Provider authority and customer service state are enforced on every
+  provider-plane mutation, and completed credential requests are recovered
+  rather than dropped.
+- Live tenant policy is isolated per tenant, and the lifecycle surfaces show
+  the actual authority that governs each identity.
+- Tenant authority is preserved through governed lifecycle recovery.
+- Local bootstrap token creation is recorded through events, so the audit
+  trail covers it like every other issuance.
+- Retained-batch subscription callbacks are joined before cleanup in the
+  events tests, removing a teardown race.
+
+### Changed
+- The console is English-only (R07); the locale plumbing that shipped no
+  translations is gone.
+- Documentation explains the first-member role provisioning handoff.
+
+## [0.6.0] - 2026-09-15
+
+The development milestone that closed the summer hardening train: 1,762
+commits since 0.5.4. The last weeks before the tag repaired the verified
+lifecycle and operator journeys, bounded retained-history transport and
+decoding, activated existing SSH trust on retry with effective-config
+validation, retained verified PostgreSQL archives in server test shards,
+made the lint tool distinguish fresh upsert keys from exclusive locks, and
+refused repeat signing when retained issuance needs a rebuild. The dated
+entries below are the train's own log.
 
 ### Bundled PostgreSQL authenticates executable bytes before startup (2026-09-09)
 
@@ -802,6 +827,9 @@ and still gate the spaces IA.*
 - Initial tagged development milestone.
 
 [Unreleased]: https://github.com/ctlplne/trstctl/compare/v0.5.4...HEAD
+[0.6.3]: https://github.com/ctlplne/trstctl/releases/tag/v0.6.3
+[0.7.0]: https://github.com/ctlplne/trstctl/releases/tag/v0.7.0
+[0.6.0]: https://github.com/ctlplne/trstctl/releases/tag/v0.6.0
 [0.5.4]: https://github.com/ctlplne/trstctl/releases/tag/v0.5.4
 [0.5.3]: https://github.com/ctlplne/trstctl/releases/tag/v0.5.3
 [0.5.2]: https://github.com/ctlplne/trstctl/releases/tag/v0.5.2
