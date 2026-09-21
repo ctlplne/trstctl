@@ -2764,10 +2764,15 @@ func TestDocsUseTheQuietConfidenceProductLanguage(t *testing.T) {
 			t.Errorf("docs stylesheet is missing quiet-confidence token %q", marker)
 		}
 	}
+	// The shared mark is the Level mark adopted on 2026-09-20 (a92cbb9c9): a forest
+	// disc carrying a ring, a level line and a plumb line, drawn identically in the
+	// docs asset and the console favicon.
 	for _, asset := range []string{"assets/trstctl-mark.svg", "../web/public/favicon.svg"} {
 		mark := read(t, asset)
-		if !strings.Contains(mark, `<circle cx="16" cy="16" r="15" fill="#174f45"`) {
-			t.Errorf("%s does not use the shared circular forest mark", asset)
+		for _, want := range []string{`<circle cx="16" cy="16" r="16" fill="#174f42"`, `M6.60 12.6H25.40M16 12.6V22.8`} {
+			if !strings.Contains(mark, want) {
+				t.Errorf("%s does not carry the shared Level mark (%q)", asset, want)
+			}
 		}
 	}
 }
