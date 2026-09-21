@@ -646,35 +646,46 @@ func (s *Service) ConsentBreakGlass(ctx context.Context, actor Operator, tenantI
 	return grant, nil
 }
 
-func (s *Service) BreakGlassResults(ctx context.Context, actor Operator, grantID string) (TenantSnapshot, error) {
+// authorizeBreakGlassResults checks current access without reading customer data
+// or recording a second use. Cached snapshots need the same checks as new reads.
+func (s *Service) authorizeBreakGlassResults(ctx context.Context, actor Operator, grantID string) (BreakGlassGrant, error) {
 	if err := s.requireOperator(actor); err != nil {
-		return TenantSnapshot{}, err
+		return BreakGlassGrant{}, err
 	}
 	if s.license.Mode(license.FeatureProviderPlane) == license.ModeOff {
-		return TenantSnapshot{}, ErrUnlicensed
+		return BreakGlassGrant{}, ErrUnlicensed
 	}
 	grant, err := s.store.BreakGlassGrant(ctx, grantID)
 	if err != nil {
-		return TenantSnapshot{}, err
+		return BreakGlassGrant{}, err
 	}
 	if grant.OperatorID != actor.ID {
-		return TenantSnapshot{}, ErrBreakGlassWrongOperator
+		return BreakGlassGrant{}, ErrBreakGlassWrongOperator
 	}
 	// Re-checked at USE time, not only when the grant was requested. A
 	// delegation revoked after a grant was consented must stop the access it
 	// would otherwise still authorise — otherwise revocation only takes effect
 	// for operators who had not already asked.
 	if err := s.authorize(ctx, actor, grant.TenantID, OpBreakGlass); err != nil {
-		return TenantSnapshot{}, err
+		return BreakGlassGrant{}, err
 	}
 	now := s.clock()
 	switch state := grant.State(now); state {
 	case GrantActive:
 	case GrantExpired:
-		return TenantSnapshot{}, ErrBreakGlassExpired
+		return BreakGlassGrant{}, ErrBreakGlassExpired
 	default:
-		return TenantSnapshot{}, ErrBreakGlassNotConsented
+		return BreakGlassGrant{}, ErrBreakGlassNotConsented
 	}
+	return grant, nil
+}
+
+func (s *Service) BreakGlassResults(ctx context.Context, actor Operator, grantID string) (TenantSnapshot, error) {
+	grant, err := s.authorizeBreakGlassResults(ctx, actor, grantID)
+	if err != nil {
+		return TenantSnapshot{}, err
+	}
+	now := s.clock()
 	if s.mutations != nil {
 		snapshot, err := s.telemetry.TenantSnapshot(ctx, grant.TenantID)
 		if err != nil {

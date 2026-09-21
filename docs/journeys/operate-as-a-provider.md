@@ -145,9 +145,12 @@ and stops it from being used, even after the first approval.
 
 After both approvals, only the requester can send
 `POST /provider/v1/breakglass/{grant_id}/results` to obtain the customer snapshot.
-The server rechecks the requester's delegation and grant expiry, records the
-access, then reads the customer data. A single approval opens no access. An
-identical retry replays its original outcome; after fixing a refused request,
+The server rechecks the requester's MFA, delegation, and grant expiry, and
+records access before returning customer data. A single approval opens no access.
+An identical successful retry returns the saved snapshot only while the requester
+still has access and the grant remains active; it does not read a new snapshot or
+record another use. A retry after access is revoked or the grant expires returns
+403. A recorded refusal stays bound to its key; after fixing a refused request,
 use a new idempotency key. These emergency approvals do not grant lifecycle
 operations such as suspend or offboard.
 

@@ -343,6 +343,17 @@ func (h *handler) serveIdempotentMutation(w http.ResponseWriter, r *http.Request
 		writeProviderError(w, fmt.Errorf("provider: decode idempotent response: %w", err))
 		return
 	}
+	// A stored result is not a permanent grant to read customer data. Preserve
+	// the original outcome/key binding, but recheck current authority before
+	// releasing a successful emergency snapshot. Refusal replays remain intact.
+	if !executed && response.Status == http.StatusOK &&
+		strings.HasPrefix(r.URL.Path, "/provider/v1/breakglass/") && strings.HasSuffix(r.URL.Path, "/results") {
+		grantID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/provider/v1/breakglass/"), "/results")
+		if _, err := h.svc.authorizeBreakGlassResults(r.Context(), op, grantID); err != nil {
+			writeProviderError(w, err)
+			return
+		}
+	}
 	for name, values := range response.Header {
 		for _, value := range values {
 			w.Header().Add(name, value)
