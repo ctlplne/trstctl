@@ -1007,27 +1007,8 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 	if err != nil {
 		return nil, err
 	}
-	if healed, reconcileErr := a.ReconcileApplicationSecretMutationFences(ctx); reconcileErr != nil {
-		if !errors.Is(reconcileErr, api.ErrApplicationSecretMutationReconcileBlocked) {
-			return nil, fmt.Errorf("server: reconcile application-secret mutation fences: %w", reconcileErr)
-		}
-		if d.Logger != nil {
-			d.Logger.Warn("application-secret crash recovery is custody-blocked; affected commands remain fenced and readiness will be degraded",
-				slog.Int("blocked", a.ApplicationSecretMutationReconcileBlockedCount()))
-		}
-	} else if healed > 0 && d.Logger != nil {
-		d.Logger.Warn("reconciled application-secret commands missed by an append/project crash", slog.Int("healed", healed))
-	}
-	if healed, reconcileErr := reconcileApprovedTargetEventFences(ctx, d.Store, d.Log, orch); reconcileErr != nil {
-		if !errors.Is(reconcileErr, store.ErrPrivacySubjectErasurePreparationActive) {
-			return nil, fmt.Errorf("server: reconcile approved target event fences: %w", reconcileErr)
-		}
-		if d.Logger != nil {
-			d.Logger.Warn("approved-target crash recovery is blocked by an active privacy erasure preparation; commands remain fenced")
-		}
-	} else if healed > 0 && d.Logger != nil {
-		d.Logger.Warn("reconciled approved certificate/code-signing commands missed by an append/project crash",
-			slog.Int("healed", healed))
+	if err := reconcileCrashFences(ctx, d, a, orch); err != nil {
+		return nil, err
 	}
 	if err := s.configureKMIPSurface(d); err != nil {
 		return nil, err
@@ -1044,6 +1025,37 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 	}
 	s.configureRootMux(d, a)
 	return s, nil
+}
+
+// reconcileCrashFences is the startup stage that heals commands a crash left
+// fenced between append and project: application-secret mutations first, then
+// approved certificate and code-signing targets. A custody block or an active
+// privacy erasure preparation leaves the affected commands fenced and is
+// logged, not fatal; any other failure stops Build.
+func reconcileCrashFences(ctx context.Context, d Deps, a *api.API, orch *orchestrator.Orchestrator) error {
+	if healed, reconcileErr := a.ReconcileApplicationSecretMutationFences(ctx); reconcileErr != nil {
+		if !errors.Is(reconcileErr, api.ErrApplicationSecretMutationReconcileBlocked) {
+			return fmt.Errorf("server: reconcile application-secret mutation fences: %w", reconcileErr)
+		}
+		if d.Logger != nil {
+			d.Logger.Warn("application-secret crash recovery is custody-blocked; affected commands remain fenced and readiness will be degraded",
+				slog.Int("blocked", a.ApplicationSecretMutationReconcileBlockedCount()))
+		}
+	} else if healed > 0 && d.Logger != nil {
+		d.Logger.Warn("reconciled application-secret commands missed by an append/project crash", slog.Int("healed", healed))
+	}
+	if healed, reconcileErr := reconcileApprovedTargetEventFences(ctx, d.Store, d.Log, orch); reconcileErr != nil {
+		if !errors.Is(reconcileErr, store.ErrPrivacySubjectErasurePreparationActive) {
+			return fmt.Errorf("server: reconcile approved target event fences: %w", reconcileErr)
+		}
+		if d.Logger != nil {
+			d.Logger.Warn("approved-target crash recovery is blocked by an active privacy erasure preparation; commands remain fenced")
+		}
+	} else if healed > 0 && d.Logger != nil {
+		d.Logger.Warn("reconciled approved certificate/code-signing commands missed by an append/project crash",
+			slog.Int("healed", healed))
+	}
+	return nil
 }
 
 func catchUpReadModel(ctx context.Context, d Deps) (*projections.Projector, error) {
