@@ -18,7 +18,7 @@ API keys, and SPIFFE workload identities. No per-certificate or ephemeral-identi
 <a href="https://github.com/ctlplne/trstctl/tags"><img alt="tag" src="https://img.shields.io/github/v/tag/ctlplne/trstctl?label=tag&sort=semver"></a>
 <a href="https://goreportcard.com/report/github.com/ctlplne/trstctl"><img alt="Go Report Card" src="https://goreportcard.com/badge/github.com/ctlplne/trstctl"></a>
 <img alt="Go" src="https://img.shields.io/badge/Go-1.26.6+-00ADD8?logo=go&logoColor=white">
-<img alt="status" src="https://img.shields.io/badge/status-active%20development-orange">
+<img alt="status" src="https://img.shields.io/badge/status-alpha-orange">
 <img alt="license" src="https://img.shields.io/badge/license-BUSL--1.1%20source--available-blue">
 </p>
 
@@ -44,7 +44,7 @@ API keys, and SPIFFE workload identities. No per-certificate or ephemeral-identi
 > [feature index](docs/features.md) covers all 79 capabilities, each with a
 > deep-dive page; the [glossary](docs/glossary.md) defines every term.
 
-> **Status — active development.** A core slice is **served end to end by the running
+> **Status — alpha, in active development.** A core slice is **served end to end by the running
 > binary today** — certificate inventory, real X.509 issuance, the credential graph,
 > risk scoring, OIDC/SAML/LDAP login, SCIM provisioning, RBAC plus ABAC,
 > the hash-chained audit log, observability, resilience, backup/DR, migrations.
