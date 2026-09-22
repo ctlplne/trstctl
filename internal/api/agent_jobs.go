@@ -24,9 +24,8 @@ import (
 type AgentJobQueue struct {
 	// Kind is the job kind (the outbox destination).
 	Kind string `json:"kind"`
-	// Enabled reports whether an operator has made this kind claimable. A kind
-	// that is served but not enabled shows zero because nothing is handed out,
-	// which is a different thing from a queue that has drained.
+	// Enabled reports whether an operator has made this kind claimable. Disabled
+	// queues can retain pending work; disabling claims does not drain the queue.
 	Enabled bool `json:"enabled"`
 	// Pending is work waiting for an agent to take it.
 	Pending int `json:"pending"`

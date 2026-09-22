@@ -260,6 +260,31 @@ describe("Jobs and queues design contract", () => {
     expect(screen.getByText("Completed work and exact evidence are still available below.")).toBeInTheDocument();
   });
 
+  it.each([
+    { enabledPending: 0, count: 1, summary: "1 job is waiting; the oldest has waited 2h." },
+    { enabledPending: 2, count: 3, summary: "3 jobs are waiting; the oldest has waited 2h." },
+  ])("keeps disabled queued work visible alongside $enabledPending enabled jobs", async ({ enabledPending, summary }) => {
+    apiMock.rotationRuns.mockResolvedValue({ items: [] });
+    apiMock.connectorDeliveries.mockResolvedValue({ items: [] });
+    apiMock.agentJobPosture.mockResolvedValue({
+      served: true,
+      generated_at: "2026-08-20T23:15:00Z",
+      claimable_kinds: ["connector.deploy"],
+      queues: [
+        { kind: "endpoint.renew", enabled: false, pending: 1, claimed: 0, oldest_unclaimed_seconds: 7200 },
+        { kind: "connector.deploy", enabled: true, pending: enabledPending, claimed: 0, oldest_unclaimed_seconds: enabledPending ? 60 : 0 },
+      ],
+      redemptions: { live: 0, total: 0 },
+      receipts: { verified: 0, rejected: 0 },
+    });
+
+    renderOperations();
+
+    expect(await screen.findByText(summary)).toBeInTheDocument();
+    expect(screen.getByText("1 waiting job cannot be claimed because its queue is disabled. Review agent queue configuration below.")).toBeInTheDocument();
+    expect(screen.queryByText("No failed or waiting jobs.")).not.toBeInTheDocument();
+  });
+
   it("does not call an unserved agent queue healthy", async () => {
     apiMock.rotationRuns.mockResolvedValue({ items: [] });
     apiMock.connectorDeliveries.mockResolvedValue({ items: [] });

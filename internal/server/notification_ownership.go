@@ -97,6 +97,14 @@ func ensureNotificationChannelOwnership(d *Deps) *notificationChannelOwnership {
 	return d.notificationChannelOwner
 }
 
+// closeOnError observes the constructor's final named return value when deferred.
+// Successful construction leaves ownership available for transfer to Build.
+func (o *notificationChannelOwnership) closeOnError(err *error) {
+	if err != nil && *err != nil {
+		o.closeUntransferred()
+	}
+}
+
 func (o *notificationChannelOwnership) closeUntransferred() {
 	if o == nil {
 		return

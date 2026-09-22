@@ -5196,6 +5196,14 @@ export const messages = {
     defaultMessage: "Agent queue status is unavailable; recent control-plane jobs are still shown.",
     description: "Partial-evidence warning when agent queue health cannot be read.",
   },
+  "operations.attention.disabledWaitingOne": {
+    defaultMessage: "1 waiting job cannot be claimed because its queue is disabled. Review agent queue configuration below.",
+    description: "Explains why queued work cannot start even when no failed delivery exists.",
+  },
+  "operations.attention.disabledWaitingMany": {
+    defaultMessage: "{count} waiting jobs cannot be claimed because their queues are disabled. Review agent queue configuration below.",
+    description: "Explains disabled queues with retained waiting work.",
+  },
   "operations.attention.historyUnavailable": {
     defaultMessage: "Recent job history is unavailable, so trstctl cannot confirm that nothing failed.",
     description: "Fail-closed attention summary when a core operations history read cannot be loaded.",
@@ -26848,7 +26856,10 @@ export const messages = {
   "identities.delivery.failed": { defaultMessage: "Delivery needs attention.", description: "Calm identity delivery failure summary." },
   "identities.delivery.waiting": { defaultMessage: "Waiting for delivery.", description: "Calm identity queued-delivery summary." },
   "identities.delivery.awaitingIssue": { defaultMessage: "Waiting to be issued.", description: "Calm requested-identity summary." },
-  "identities.delivery.readyToDeploy": { defaultMessage: "Issued and ready to deploy.", description: "Calm issued-identity summary." },
+  "identities.delivery.readyToDeploy": {
+    defaultMessage: "Issuance accepted; deployment evidence is not available yet.",
+    description: "An issued lifecycle state alone does not prove certificate issuance or delivery completed.",
+  },
   "identities.delivery.noReceipt": { defaultMessage: "No delivery receipt yet.", description: "Honest summary when no connector receipt exists." },
   "identities.delivery.revoked": { defaultMessage: "Revoked; evidence is retained.", description: "Calm revoked-identity summary." },
   "identities.delivery.retired": { defaultMessage: "Retired; no further action is available.", description: "Calm retired-identity summary." },

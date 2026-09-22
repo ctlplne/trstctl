@@ -8269,6 +8269,8 @@ export interface components {
         };
         CBOMAsset: {
             algorithm?: string;
+            /** @description SHA-256 of the exact leaf observed for this certificate-key finding. Absent on historical or non-certificate observations; absence must not be inferred from a hostname or algorithm. */
+            certificate_fingerprint?: string;
             cipher?: string;
             /** Format: uuid */
             id: string;
@@ -9876,6 +9878,11 @@ export interface components {
             reason?: string;
             /** Format: uuid */
             replace_identity_id?: string;
+            /**
+             * @description Optional explicit certificate subject-key algorithm, retained for unattended renewal. ML-DSA requires a host-executed destination, a compatible CA/profile, host native TLS readback and compatible clients. The exact choice is bound by preview; no hybrid or classical substitution is authorized.
+             * @enum {string}
+             */
+            subject_key_algorithm?: "ECDSA-P256" | "ML-DSA-44" | "ML-DSA-65" | "ML-DSA-87";
             target?: components["schemas"]["DeploymentTargetRequest"];
             /** Format: uuid */
             target_id?: string;
@@ -9909,6 +9916,11 @@ export interface components {
             replaced_identity?: components["schemas"]["Identity"];
             replaced_identity_version?: number;
             request_fingerprint: string;
+            /**
+             * @description Optional explicit certificate subject-key algorithm, retained for unattended renewal. ML-DSA requires a host-executed destination, a compatible CA/profile, host native TLS readback and compatible clients. The exact choice is bound by preview; no hybrid or classical substitution is authorized.
+             * @enum {string}
+             */
+            subject_key_algorithm?: "ECDSA-P256" | "ML-DSA-44" | "ML-DSA-65" | "ML-DSA-87";
             target: components["schemas"]["EndpointBindingTarget"];
             verification_steps: string[];
         };
@@ -9923,6 +9935,11 @@ export interface components {
             reason?: string;
             /** Format: uuid */
             replace_identity_id?: string;
+            /**
+             * @description Optional explicit certificate subject-key algorithm, retained for unattended renewal. ML-DSA requires a host-executed destination, a compatible CA/profile, host native TLS readback and compatible clients. The exact choice is bound by preview; no hybrid or classical substitution is authorized.
+             * @enum {string}
+             */
+            subject_key_algorithm?: "ECDSA-P256" | "ML-DSA-44" | "ML-DSA-65" | "ML-DSA-87";
             target?: components["schemas"]["DeploymentTargetRequest"];
             /** Format: uuid */
             target_id?: string;

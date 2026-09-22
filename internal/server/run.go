@@ -615,11 +615,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	// From this point until the returned Deps is successfully transferred to
 	// Build, buildRunDeps owns every channel credential. Any later constructor
 	// failure must wipe that authority rather than abandoning locked buffers.
-	defer func() {
-		if err != nil {
-			notificationOwner.closeUntransferred()
-		}
-	}()
+	defer notificationOwner.closeOnError(&err)
 	codeSigning, err := codeSigningConfigFromConfig(ctx, cfg.CodeSigning, signer.signer, signer.tokenProvider, egressGuard)
 	if err != nil {
 		return Deps{}, fmt.Errorf("code-signing: %w", err)

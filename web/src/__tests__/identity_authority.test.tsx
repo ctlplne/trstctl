@@ -7,7 +7,7 @@ import { AppQueryProvider } from "@/lib/query";
 import { CapabilityFixtureProvider } from "@/lib/capabilities";
 import type { CapabilityView } from "@/lib/api-types.gen";
 
-const fixture = vi.hoisted(() => ({ permissions: ["certs:request", "identities:read"], issue: vi.fn() }));
+const fixture = vi.hoisted(() => ({ permissions: ["certs:request", "identities:read"], issue: vi.fn(), identities: vi.fn() }));
 vi.mock("@/auth/AuthProvider", () => ({
   useAuth: () => ({ user: { subject: "requester", tenant_id: "tenant-a", roles: ["requester"], permissions: fixture.permissions }, loading: false }),
 }));
@@ -17,7 +17,7 @@ vi.mock("@/lib/api", async (original) => {
     ...actual,
     api: {
       ...actual.api,
-      identities: vi.fn(async () => []),
+      identities: fixture.identities,
       owners: vi.fn(async () => []),
       connectorDeliveries: vi.fn(async () => ({ items: [] })),
       rotationRuns: vi.fn(async () => ({ items: [] })),
@@ -55,8 +55,18 @@ function page(runtime: CapabilityView) {
 beforeEach(() => {
   fixture.permissions = ["certs:request", "identities:read"];
   fixture.issue.mockReset();
+  fixture.identities.mockReset().mockResolvedValue([]);
 });
 describe("machine identity issuance authority", () => {
+  it("does not present accepted issuance without delivery evidence as ready to deploy", async () => {
+    fixture.permissions = ["*"];
+    fixture.identities.mockResolvedValue([
+      { id: "pending-host", tenant_id: "tenant-a", kind: "x509_certificate", name: "pending.example.test", status: "issued", owner_id: "owner-a" },
+    ]);
+    render(page(view(true, true)));
+    expect(await screen.findByText("Issuance accepted; deployment evidence is not available yet.")).toBeInTheDocument();
+    expect(screen.queryByText("Issued and ready to deploy.")).not.toBeInTheDocument();
+  });
   it("offers authorized issuance and removes an open form when authority is lost", async () => {
     const user = userEvent.setup();
     fixture.permissions = ["*"];

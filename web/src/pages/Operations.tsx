@@ -116,12 +116,13 @@ export function Operations() {
     () => rows.filter((row) => isFailureStatus(row.statusKey) || isActiveStatus(row.statusKey) || row.statusKey === "awaiting_approval"),
     [rows],
   );
-  const waitingJobs = useMemo(
-    () => (jobPosture.data?.queues ?? []).reduce((total, queue) => total + (queue.enabled ? queue.pending : 0), 0),
+  const waitingJobs = useMemo(() => (jobPosture.data?.queues ?? []).reduce((total, queue) => total + queue.pending, 0), [jobPosture.data]);
+  const oldestWaitingSeconds = useMemo(
+    () => Math.max(0, ...(jobPosture.data?.queues ?? []).map((queue) => (queue.pending > 0 ? (queue.oldest_unclaimed_seconds ?? 0) : 0))),
     [jobPosture.data],
   );
-  const oldestWaitingSeconds = useMemo(
-    () => Math.max(0, ...(jobPosture.data?.queues ?? []).map((queue) => (queue.enabled ? (queue.oldest_unclaimed_seconds ?? 0) : 0))),
+  const disabledWaitingJobs = useMemo(
+    () => (jobPosture.data?.queues ?? []).reduce((total, queue) => total + (queue.enabled ? 0 : queue.pending), 0),
     [jobPosture.data],
   );
   const checkingAttention = loading || jobPosture.loading;
@@ -231,6 +232,13 @@ export function Operations() {
                     {waitingJobs === 1
                       ? t("operations.attention.waitingOne", { age: waitLabel(oldestWaitingSeconds) })
                       : t("operations.attention.waitingMany", { count: waitingJobs, age: waitLabel(oldestWaitingSeconds) })}
+                  </p>
+                ) : null}
+                {disabledWaitingJobs > 0 ? (
+                  <p className="font-medium">
+                    {disabledWaitingJobs === 1
+                      ? t("operations.attention.disabledWaitingOne")
+                      : t("operations.attention.disabledWaitingMany", { count: disabledWaitingJobs })}
                   </p>
                 ) : null}
                 {agentQueueUnavailable ? <p className="text-muted-foreground">{t("operations.attention.agentUnavailable")}</p> : null}
