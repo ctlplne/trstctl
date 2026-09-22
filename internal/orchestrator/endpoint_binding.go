@@ -95,6 +95,13 @@ func endpointBoundIdentity(identity store.Identity, target store.DeploymentTarge
 		}
 		attrs[key] = raw
 	}
+	if issuer.SubjectKeyAlgorithm != "" {
+		raw, err := json.Marshal(issuer.SubjectKeyAlgorithm)
+		if err != nil {
+			return store.Identity{}, err
+		}
+		attrs["subject_key_algorithm"] = raw
+	}
 	if route := deploymentRoute(target); route != "" {
 		raw, err := json.Marshal(route)
 		if err != nil {

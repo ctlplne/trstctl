@@ -526,6 +526,7 @@ describe("connector deployment disclosure surface", () => {
     apiMock.getIdentity.mockResolvedValue(binding.identity);
     apiMock.previewEndpointBinding.mockResolvedValue({
       ...base,
+      subject_key_algorithm: "ML-DSA-65",
       approval_required: true,
       issuance: { profile_name: "mail-short-life", profile_version: 3, requested_ttl_seconds: 2592000, effective_ttl_seconds: 720 },
     });
@@ -548,6 +549,7 @@ describe("connector deployment disclosure surface", () => {
     await user.type(screen.getByLabelText("Enrollment reason"), "approve exact mail enrollment");
     await user.click(screen.getByRole("button", { name: "Choose CA" }));
     await user.selectOptions(await screen.findByLabelText("Issuing CA"), "external:corporate-digicert");
+    await user.selectOptions(screen.getByLabelText("Certificate key algorithm"), "ML-DSA-65");
     await user.click(screen.getByRole("button", { name: "Build safe preview" }));
     expect(await screen.findByText("mail-short-life · version 3")).toBeInTheDocument();
     expect(screen.getByText("720 seconds")).toBeInTheDocument();
@@ -556,7 +558,9 @@ describe("connector deployment disclosure surface", () => {
     expect(await screen.findAllByText("Waiting for approval")).not.toHaveLength(0);
     expect(screen.queryByRole("heading", { name: "Ready to authorize — nothing changed" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open approvals in another tab" })).toHaveAttribute("target", "_blank");
+    expect(apiMock.previewEndpointBinding).toHaveBeenCalledWith(expect.objectContaining({ subject_key_algorithm: "ML-DSA-65" }));
     const first = apiMock.createEndpointBinding.mock.calls[0];
+    expect(first?.[0]).toEqual(expect.objectContaining({ subject_key_algorithm: "ML-DSA-65" }));
     expect(first?.[1]).toEqual(expect.any(String));
     expect(first?.[1].length).toBeGreaterThan(10);
     await user.click(retry);
@@ -1071,5 +1075,24 @@ describe("connector deployment disclosure surface", () => {
     expect(screen.getByRole("button", { name: "Deploy" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Review restore" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Preview changes (no writes)" })).toBeEnabled();
+  });
+  it.each([undefined, "ECDSA-P256"])("refuses a preview that substitutes the requested ML-DSA algorithm with %s", async (reportedAlgorithm) => {
+    const user = userEvent.setup();
+    const base = await apiMock.previewEndpointBinding.getMockImplementation()?.();
+    apiMock.previewEndpointBinding.mockResolvedValue({ ...base, subject_key_algorithm: reportedAlgorithm });
+    renderConnectors();
+    await user.click(await screen.findByText("Destinations and safe actions", { exact: true }));
+    await screen.findByRole("heading", { name: "Name the endpoint" });
+    await user.selectOptions(screen.getByLabelText("Destination"), "target-1");
+    await user.selectOptions(screen.getByLabelText("Owner"), "owner-1");
+    await user.type(screen.getByLabelText("Enrollment reason"), "review the exact ML-DSA subject key");
+    await user.click(screen.getByRole("button", { name: "Choose CA" }));
+    await user.selectOptions(await screen.findByLabelText("Issuing CA"), "external:corporate-digicert");
+    await user.selectOptions(screen.getByLabelText("Certificate key algorithm"), "ML-DSA-65");
+    await user.click(screen.getByRole("button", { name: "Build safe preview" }));
+    expect(await screen.findByText(/The server did not confirm the selected algorithm/)).toBeInTheDocument();
+    expect(apiMock.previewEndpointBinding).toHaveBeenCalledWith(expect.objectContaining({ subject_key_algorithm: "ML-DSA-65" }));
+    expect(screen.queryByRole("button", { name: "Authorize issuance and deployment" })).not.toBeInTheDocument();
+    expect(apiMock.createEndpointBinding).not.toHaveBeenCalled();
   });
 });

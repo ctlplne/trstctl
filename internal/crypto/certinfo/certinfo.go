@@ -122,6 +122,16 @@ func Inspect(raw []byte) (Info, error) {
 		PublicKeyBits:     publicKeyBits(cert.PublicKey),
 		IsCA:              cert.IsCA,
 	}
+	// Structural inventory only: neither certificate trust nor issuer signature.
+	if cert.PublicKeyAlgorithm == x509.UnknownPublicKeyAlgorithm {
+		algorithm, err := inspectMLDSASubject(cert.RawSubjectPublicKeyInfo)
+		if err != nil {
+			return Info{}, err
+		}
+		if algorithm != "" {
+			info.KeyAlgorithm = algorithm
+		}
+	}
 	for _, ip := range cert.IPAddresses {
 		info.IPAddresses = append(info.IPAddresses, ip.String())
 	}
@@ -247,6 +257,16 @@ func inspectDER(der []byte) (Info, error) {
 		KeyAlgorithm:      cert.PublicKeyAlgorithm.String(),
 		PublicKeyBits:     publicKeyBits(cert.PublicKey),
 		IsCA:              cert.IsCA,
+	}
+	// Structural inventory only: neither certificate trust nor issuer signature.
+	if cert.PublicKeyAlgorithm == x509.UnknownPublicKeyAlgorithm {
+		algorithm, err := inspectMLDSASubject(cert.RawSubjectPublicKeyInfo)
+		if err != nil {
+			return Info{}, err
+		}
+		if algorithm != "" {
+			info.KeyAlgorithm = algorithm
+		}
 	}
 	for _, ip := range cert.IPAddresses {
 		info.IPAddresses = append(info.IPAddresses, ip.String())

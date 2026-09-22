@@ -27,14 +27,15 @@ const (
 // Finding is one observed cryptographic usage. Exactly one of the crypto facts
 // — Protocol, Cipher, or Algorithm — drives its classification.
 type Finding struct {
-	Kind      AssetKind      `json:"kind"`
-	Location  string         `json:"location"`            // host:port or file path
-	Algorithm string         `json:"algorithm,omitempty"` // RSA, ECDSA, Ed25519, ...
-	KeyBits   int            `json:"key_bits,omitempty"`
-	Protocol  string         `json:"protocol,omitempty"` // TLSv1.0, TLSv1.2, ...
-	Cipher    string         `json:"cipher,omitempty"`   // cipher suite name
-	Library   string         `json:"library,omitempty"`
-	Class     Classification `json:"classification"`
+	CertificateFingerprint string         `json:"certificate_fingerprint,omitempty"`
+	Kind                   AssetKind      `json:"kind"`
+	Location               string         `json:"location"`            // host:port or file path
+	Algorithm              string         `json:"algorithm,omitempty"` // RSA, ECDSA, Ed25519, ...
+	KeyBits                int            `json:"key_bits,omitempty"`
+	Protocol               string         `json:"protocol,omitempty"` // TLSv1.0, TLSv1.2, ...
+	Cipher                 string         `json:"cipher,omitempty"`   // cipher suite name
+	Library                string         `json:"library,omitempty"`
+	Class                  Classification `json:"classification"`
 }
 
 // Classified returns a copy of the finding with its classification filled in

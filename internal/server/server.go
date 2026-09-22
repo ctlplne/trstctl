@@ -40,6 +40,7 @@ import (
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/crypto/tlsprobe"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/egress"
 	"trstctl.com/trstctl/internal/events"
@@ -110,6 +111,8 @@ type IdempotencyResultMigrator interface {
 }
 
 type Deps struct {
+	// CBOMTLSProbeOpenSSL is a trusted local startup path, never tenant-authored.
+	CBOMTLSProbeOpenSSL string
 	// BackupDirectory is the full-backup directory the served DR posture
 	// reports on (epic J2). Empty means none is configured, which the API
 	// serves as such rather than reporting an invented path as a missing
@@ -933,6 +936,11 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 		}
 		notificationOwner.closeUntransferred()
 	}()
+	if d.CBOMTLSProbeOpenSSL != "" {
+		if err := tlsprobe.ValidateOpenSSLExecutable(d.CBOMTLSProbeOpenSSL); err != nil {
+			return nil, fmt.Errorf("server: CBOM native TLS probe: %w", err)
+		}
+	}
 	if d.Store == nil || d.Log == nil {
 		return nil, errors.New("server: store and log are required")
 	}

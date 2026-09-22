@@ -15,11 +15,12 @@ import (
 // IdentityEndpointIssuer records the authority explicitly reviewed for an
 // endpoint enrollment. It contains public metadata, never CA credentials.
 type IdentityEndpointIssuer struct {
-	OwnerID            string `json:"owner_id"`
-	Source             string `json:"source"`
-	ID                 string `json:"id"`
-	Name               string `json:"name"`
-	PreviewFingerprint string `json:"preview_fingerprint"`
+	SubjectKeyAlgorithm string `json:"subject_key_algorithm,omitempty"`
+	OwnerID             string `json:"owner_id"`
+	Source              string `json:"source"`
+	ID                  string `json:"id"`
+	Name                string `json:"name"`
+	PreviewFingerprint  string `json:"preview_fingerprint"`
 }
 
 var ErrIdentityEnrollmentConflict = errors.New("identity cannot be enrolled with this owner and issuer")
@@ -104,10 +105,32 @@ func ValidateIdentityEndpointIssuer(identity Identity, issuer IdentityEndpointIs
 			}
 		}
 	}
+	if issuer.SubjectKeyAlgorithm != "" {
+		if raw, exists := attributes["subject_key_algorithm"]; exists {
+			var got string
+			if json.Unmarshal(raw, &got) != nil || (got != "" && got != issuer.SubjectKeyAlgorithm) {
+				return fmt.Errorf("%w: existing subject algorithm differs; create a separate replacement before changing algorithms", ErrIdentityEnrollmentConflict)
+			}
+		}
+	}
 	return nil
 }
 
+// ValidateEndpointSubjectAlgorithm names the explicit host generators; omission
+// retains the historical/default choice. It never maps one algorithm to another.
+func ValidateEndpointSubjectAlgorithm(algorithm string) error {
+	switch algorithm {
+	case "", "ECDSA-P256", "ML-DSA-44", "ML-DSA-65", "ML-DSA-87":
+		return nil
+	default:
+		return fmt.Errorf("%w: unsupported subject_key_algorithm %q; no algorithm substitution is authorized", ErrIdentityEnrollmentConflict, algorithm)
+	}
+}
+
 func validateEndpointIssuerFields(issuer IdentityEndpointIssuer) error {
+	if err := ValidateEndpointSubjectAlgorithm(issuer.SubjectKeyAlgorithm); err != nil {
+		return err
+	}
 	if issuer.OwnerID == "" || issuer.ID == "" || issuer.Name == "" ||
 		(issuer.Source != "platform" && issuer.Source != "private" && issuer.Source != "external") {
 		return fmt.Errorf("%w: an exact owner and issuer are required", ErrIdentityEnrollmentConflict)
@@ -128,6 +151,7 @@ func (s *Store) BindIdentityEndpointIssuerTx(ctx context.Context, tx pgx.Tx, ten
 		SET attributes = attributes || jsonb_build_object(
 			'issuing_authority_source', $3::text, 'issuing_authority_id', $4::text,
 			'issuing_authority_name', $5::text, 'endpoint_preview_sha256', $6::text)
-		WHERE tenant_id = $1 AND id = $2`, tenantID, identityID, issuer.Source, issuer.ID, issuer.Name, issuer.PreviewFingerprint)
+            || CASE WHEN $7::text = '' THEN '{}'::jsonb ELSE jsonb_build_object('subject_key_algorithm', $7::text) END
+		WHERE tenant_id = $1 AND id = $2`, tenantID, identityID, issuer.Source, issuer.ID, issuer.Name, issuer.PreviewFingerprint, issuer.SubjectKeyAlgorithm)
 	return err
 }

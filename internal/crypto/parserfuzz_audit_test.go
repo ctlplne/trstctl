@@ -98,7 +98,8 @@ func TestEveryUntrustedParserIsFuzzed(t *testing.T) {
 		"FuzzMySQLSSLRequestPacket": "bounded unauthenticated MySQL greeting before certificate observation",
 	})
 	requireFuzzFuncByName(t, "certinfo", map[string]string{
-		"FuzzParsePublicPEMChain": "exact public certificate result envelope and retained leaf binding",
+		"FuzzMLDSASubjectInventory": "bounded RFC 9881 subject key identification without trust inference",
+		"FuzzParsePublicPEMChain":   "exact public certificate result envelope and retained leaf binding",
 	})
 	requireFuzzFuncByName(t, "deviceattest", map[string]string{
 		"FuzzParseAndVerifyTPMDeviceAttestation": "ACME device-attest-01 WebAuthn/CBOR/COSE/TPM envelope (deviceattest/tpm.go)",

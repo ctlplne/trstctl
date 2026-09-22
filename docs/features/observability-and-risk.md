@@ -205,7 +205,7 @@ call, or outbox call.
 
 `POST /api/v1/cbom/scans` (`discovery:write`, accepts an `Idempotency-Key`) rebuilds
 that plan, then runs it in the serving binary. One request accepts at most 64 TLS
-targets and 64 absolute file/glob selectors. TLS discovery performs one handshake per
+targets and 64 absolute file/glob selectors. TLS discovery normally performs one handshake per
 target with a ten-second timeout and sends no application data. Host discovery reads
 at most 256 matching files and 1 MiB per file, returns no file contents, and the scan
 can append/project no more than 1,024 findings per source. Every successful observation
@@ -430,3 +430,9 @@ glossary: [Certificate Transparency](../glossary.md), [drift](../glossary.md),
 [CBOM](../glossary.md), [PQC](../glossary.md)
 
 **Covers:** F17, F18, F19, F52
+
+For algorithms unsupported by the Go TLS client, the deployment operator can
+configure [native TLS discovery](../configuration.md#native-tls-discovery-for-cryptographic-inventory).
+Its preview includes up to two connections per endpoint under the same deadline.
+Certificate inspection failures count as partial failures; a completed handshake
+alone is insufficient to claim a complete certificate inventory.

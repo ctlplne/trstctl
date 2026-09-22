@@ -189,15 +189,16 @@ type identityConnectorTargetRequest struct {
 }
 
 type endpointBindingRequest struct {
-	OwnerID            string                   `json:"owner_id"`
-	ReplaceIdentityID  string                   `json:"replace_identity_id,omitempty"`
-	IdentityName       string                   `json:"identity_name"`
-	ProfileName        string                   `json:"profile_name,omitempty"`
-	TargetID           string                   `json:"target_id"`
-	Target             *deploymentTargetRequest `json:"target"`
-	Issuer             endpointIssuerRequest    `json:"issuer"`
-	Reason             string                   `json:"reason"`
-	PreviewFingerprint string                   `json:"preview_fingerprint"`
+	SubjectKeyAlgorithm string                   `json:"subject_key_algorithm,omitempty"`
+	OwnerID             string                   `json:"owner_id"`
+	ReplaceIdentityID   string                   `json:"replace_identity_id,omitempty"`
+	IdentityName        string                   `json:"identity_name"`
+	ProfileName         string                   `json:"profile_name,omitempty"`
+	TargetID            string                   `json:"target_id"`
+	Target              *deploymentTargetRequest `json:"target"`
+	Issuer              endpointIssuerRequest    `json:"issuer"`
+	Reason              string                   `json:"reason"`
+	PreviewFingerprint  string                   `json:"preview_fingerprint"`
 }
 
 type endpointBindingResponse struct {
@@ -249,6 +250,7 @@ type endpointBindingCustody struct {
 }
 
 type endpointBindingPreviewResponse struct {
+	SubjectKeyAlgorithm     string                                  `json:"subject_key_algorithm,omitempty"`
 	ExistingIdentityVersion uint64                                  `json:"existing_identity_version,omitempty"`
 	Issuance                *store.OperationApprovalIssuanceBinding `json:"issuance"`
 	ApprovalRequired        bool                                    `json:"approval_required"`
@@ -1026,7 +1028,7 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 			return endpointBindingPreviewResponse{}, errStatus(http.StatusConflict, "existing identity changed during preview; preview again")
 		}
 		if err := store.ValidateIdentityEndpointIssuer(existing, store.IdentityEndpointIssuer{
-			OwnerID: req.OwnerID, Source: issuer.Source, ID: issuer.ID, Name: issuer.Name,
+			OwnerID: req.OwnerID, Source: issuer.Source, ID: issuer.ID, Name: issuer.Name, SubjectKeyAlgorithm: req.SubjectKeyAlgorithm,
 		}); err != nil {
 			return endpointBindingPreviewResponse{}, errWithStatus(http.StatusConflict, err)
 		}
@@ -1034,14 +1036,22 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 		existingResp = &resp
 		identityChange = "Enroll existing X.509 identity " + existing.ID + " for " + req.IdentityName + " owned by " + strings.TrimSpace(owner.Name) + " (" + req.OwnerID + ")."
 	}
+	subjectAlgorithm, err := endpointSubjectChoice(req.SubjectKeyAlgorithm, existingResp, replacedResp)
+	if err != nil {
+		return endpointBindingPreviewResponse{}, err
+	}
+	if err := validateEndpointSubjectChoice(subjectAlgorithm, target); err != nil {
+		return endpointBindingPreviewResponse{}, err
+	}
 	profileRequirement, err := a.endpointIssuanceRequirement(ctx, tenantID, existingResp, req.ProfileName)
 	if err != nil {
 		return endpointBindingPreviewResponse{}, err
 	}
-	if err := a.validateEndpointProfileMetadata(ctx, tenantID, req.IdentityName, profileRequirement); err != nil {
+	if err := a.validateEndpointProfileMetadata(ctx, tenantID, req.IdentityName, profileRequirement, subjectAlgorithm); err != nil {
 		return endpointBindingPreviewResponse{}, err
 	}
 	fingerprintInput := struct {
+		SubjectKeyAlgorithm     string                                  `json:"subject_key_algorithm,omitempty"`
 		ExistingIdentityVersion uint64                                  `json:"existing_identity_version,omitempty"`
 		Issuance                *store.OperationApprovalIssuanceBinding `json:"issuance"`
 		ApprovalRequired        bool                                    `json:"approval_required"`
@@ -1053,7 +1063,7 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 		ExistingIdentity        *identityResponse                       `json:"existing_identity,omitempty"`
 		ReplacedIdentity        *identityResponse                       `json:"replaced_identity,omitempty"`
 		ReplacedVersion         uint64                                  `json:"replaced_identity_version,omitempty"`
-	}{existingVersion, profileRequirement.IssuanceBinding(), a.gate.RequireApproval || profileRequirement.RequiresApproval, req.OwnerID, req.IdentityName, endpointBindingReason(req), issuer, target, existingResp, replacedResp, replacedVersion}
+	}{subjectAlgorithm, existingVersion, profileRequirement.IssuanceBinding(), a.gate.RequireApproval || profileRequirement.RequiresApproval, req.OwnerID, req.IdentityName, endpointBindingReason(req), issuer, target, existingResp, replacedResp, replacedVersion}
 	raw, err := json.Marshal(fingerprintInput)
 	if err != nil {
 		return endpointBindingPreviewResponse{}, err
@@ -1083,6 +1093,7 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 		}
 	}
 	return endpointBindingPreviewResponse{
+		SubjectKeyAlgorithm:     subjectAlgorithm,
 		ExistingIdentityVersion: existingVersion,
 		Issuance:                profileRequirement.IssuanceBinding(),
 		ApprovalRequired:        a.gate.RequireApproval || profileRequirement.RequiresApproval,
@@ -1418,6 +1429,10 @@ func decodeEndpointBindingRequest(r *http.Request) (endpointBindingRequest, erro
 	req.ReplaceIdentityID = strings.TrimSpace(req.ReplaceIdentityID)
 	req.IdentityName = strings.TrimSpace(req.IdentityName)
 	req.ProfileName = strings.TrimSpace(req.ProfileName)
+	req.SubjectKeyAlgorithm = strings.TrimSpace(req.SubjectKeyAlgorithm)
+	if err := store.ValidateEndpointSubjectAlgorithm(req.SubjectKeyAlgorithm); err != nil {
+		return endpointBindingRequest{}, errWithStatus(http.StatusBadRequest, err)
+	}
 	req.TargetID = strings.TrimSpace(req.TargetID)
 	req.Issuer.Source = strings.ToLower(strings.TrimSpace(req.Issuer.Source))
 	req.Issuer.ID = strings.TrimSpace(req.Issuer.ID)

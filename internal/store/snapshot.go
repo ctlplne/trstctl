@@ -142,7 +142,10 @@ import (
 // cannot establish this fact and must not erase it during restore.
 // Version 42 makes persisted SCIM subject bindings part of the recovery contract.
 // Older snapshot formats cannot assert that these identifiers were preserved.
-const SnapshotFormatVersion = 42
+// Version 43 retains the exact observed CBOM leaf fingerprint. Earlier
+// snapshots lack this column and must replay observations rather than skip
+// their covered history with an incomplete certificate identity.
+const SnapshotFormatVersion = 43
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

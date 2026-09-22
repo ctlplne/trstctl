@@ -33,6 +33,7 @@ type FormValues = {
   reason: string;
   issuer_key: string;
   profile_name: string;
+  subject_key_algorithm: "" | "ECDSA-P256" | "ML-DSA-44" | "ML-DSA-65" | "ML-DSA-87";
 };
 
 type IssuerOption = EndpointIssuer & { available: boolean };
@@ -75,6 +76,7 @@ export function EndpointBindingWorkflow({
           reason: z.string().trim().min(1, t("connectors.binding.required")),
           issuer_key: z.string().trim().min(1, t("connectors.binding.issuerRequired")),
           profile_name: z.string().trim(),
+          subject_key_algorithm: z.enum(["", "ECDSA-P256", "ML-DSA-44", "ML-DSA-65", "ML-DSA-87"]),
         })
         .superRefine((values, context) => {
           if (values.mode === "replace" && !values.replace_identity_id) {
@@ -93,7 +95,17 @@ export function EndpointBindingWorkflow({
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     mode: "onTouched",
-    defaultValues: { mode: "enroll", replace_identity_id: "", target_id: "", owner_id: "", identity_name: "", reason: "", issuer_key: "", profile_name: "" },
+    defaultValues: {
+      mode: "enroll",
+      replace_identity_id: "",
+      target_id: "",
+      owner_id: "",
+      identity_name: "",
+      reason: "",
+      issuer_key: "",
+      profile_name: "",
+      subject_key_algorithm: "",
+    },
   });
   const issuerKey = useWatch({ control, name: "issuer_key" });
   const targetID = useWatch({ control, name: "target_id" });
@@ -197,7 +209,7 @@ export function EndpointBindingWorkflow({
       if (await trigger(["target_id", "owner_id", "identity_name", "reason", "mode", "replace_identity_id"])) setStep(1);
       return;
     }
-    if (!(await trigger(["issuer_key", "profile_name"]))) return;
+    if (!(await trigger(["issuer_key", "profile_name", "subject_key_algorithm"]))) return;
     const values = getValues();
     const issuer = decodeIssuer(values.issuer_key);
     if (!issuer) return;
@@ -211,9 +223,13 @@ export function EndpointBindingWorkflow({
         reason: values.reason.trim(),
         issuer,
         ...(values.profile_name ? { profile_name: values.profile_name.trim() } : {}),
+        ...(values.subject_key_algorithm ? { subject_key_algorithm: values.subject_key_algorithm } : {}),
       });
       if (!reviewed.ready || !reviewed.effect_free || reviewed.preview_writes.length > 0 || reviewed.preview_external_effects.length > 0) {
         throw new Error(t("connectors.binding.previewUnsafe"));
+      }
+      if (values.subject_key_algorithm && reviewed.subject_key_algorithm !== values.subject_key_algorithm) {
+        throw new Error(t("connectors.binding.subjectAlgorithmNotReviewed"));
       }
       if (values.mode === "replace" && reviewed.replaced_identity?.id !== values.replace_identity_id) {
         throw new Error(t("connectors.binding.replacementPreviewMissing"));
@@ -248,6 +264,7 @@ export function EndpointBindingWorkflow({
           reason: values.reason.trim(),
           issuer,
           ...(values.profile_name ? { profile_name: values.profile_name.trim() } : {}),
+          ...(values.subject_key_algorithm ? { subject_key_algorithm: values.subject_key_algorithm } : {}),
           preview_fingerprint: preview.request_fingerprint,
         },
         requestKey,
@@ -387,6 +404,22 @@ export function EndpointBindingWorkflow({
                 </Select>
               )}
             </Field>
+            <Field
+              label={t("connectors.binding.subjectAlgorithm")}
+              description={t("connectors.binding.subjectAlgorithmHelp")}
+              error={errors.subject_key_algorithm?.message}
+            >
+              {(field) => (
+                <Select {...field} {...register("subject_key_algorithm")}>
+                  <option value="">{t("connectors.binding.keepSubjectAlgorithm")}</option>
+                  {["ECDSA-P256", "ML-DSA-44", "ML-DSA-65", "ML-DSA-87"].map((algorithm) => (
+                    <option key={algorithm} value={algorithm}>
+                      {algorithm}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
             {profiles.loading ? <LoadingState>{t("connectors.binding.profilesLoading")}</LoadingState> : null}
             {profiles.error ? (
               <ErrorState title={t("connectors.binding.profilesUnavailable")}>
@@ -457,6 +490,7 @@ export function EndpointBindingWorkflow({
               <Fact label={t("connectors.binding.destination")} value={`${preview.target.name} — ${preview.target.connector}`} />
               <Fact label={t("connectors.binding.issuer")} value={`${sourceLabel(preview.issuer.source, t)}: ${preview.issuer.name ?? preview.issuer.id}`} />
               <Fact label={t("connectors.binding.keyCustody")} value={preview.custody.key_origin} />
+              <Fact label={t("connectors.binding.subjectAlgorithm")} value={preview.subject_key_algorithm ?? t("connectors.binding.keepSubjectAlgorithm")} />
               <Fact label={t("connectors.binding.owner")} value={owners.find((owner) => owner.id === preview.owner_id)?.name ?? preview.owner_id} />
             </dl>
             {preview.issuance ? (

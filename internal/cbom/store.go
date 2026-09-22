@@ -25,18 +25,19 @@ func NewStoreSink(s *store.Store, tenantID string) *StoreSink {
 // Record upserts the classified finding into the CBOM.
 func (ss *StoreSink) Record(ctx context.Context, f Finding) error {
 	_, err := ss.store.UpsertCryptoAsset(ctx, store.CryptoAsset{
-		TenantID:          ss.tenantID,
-		Kind:              string(f.Kind),
-		Location:          f.Location,
-		Algorithm:         f.Algorithm,
-		KeyBits:           f.KeyBits,
-		Protocol:          f.Protocol,
-		Cipher:            f.Cipher,
-		Library:           f.Library,
-		Strength:          string(f.Class.Strength),
-		QuantumVulnerable: f.Class.QuantumVulnerable,
-		OutOfPolicy:       f.Class.OutOfPolicy,
-		Reasons:           f.Class.Reasons,
+		TenantID:               ss.tenantID,
+		CertificateFingerprint: f.CertificateFingerprint,
+		Kind:                   string(f.Kind),
+		Location:               f.Location,
+		Algorithm:              f.Algorithm,
+		KeyBits:                f.KeyBits,
+		Protocol:               f.Protocol,
+		Cipher:                 f.Cipher,
+		Library:                f.Library,
+		Strength:               string(f.Class.Strength),
+		QuantumVulnerable:      f.Class.QuantumVulnerable,
+		OutOfPolicy:            f.Class.OutOfPolicy,
+		Reasons:                f.Class.Reasons,
 	})
 	return err
 }

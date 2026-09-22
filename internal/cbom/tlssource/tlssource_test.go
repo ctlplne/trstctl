@@ -68,15 +68,44 @@ func TestScanReportsUnreachableWithoutFindings(t *testing.T) {
 }
 
 func TestScanKeepsReachableFindingBesideUnreachableInput(t *testing.T) {
+	der, _, issueErr := ctlogtest.IssueCert("svc", "svc.example.com")
+	if issueErr != nil {
+		t.Fatal(issueErr)
+	}
 	prober := func(_ context.Context, addr string) (tlsprobe.Result, error) {
 		if addr == "down:443" {
 			return tlsprobe.Result{}, errors.New("connection refused")
 		}
-		return tlsprobe.Result{TLSVersion: 0x0304}, nil
+		return tlsprobe.Result{TLSVersion: 0x0304, PeerCertificates: [][]byte{der}}, nil
 	}
 	findings, err := tlssource.New([]string{"up:443", "down:443"}, tlssource.WithProber(prober)).Scan(context.Background())
 	var partial *cbom.PartialScanError
-	if !errors.As(err, &partial) || partial.Failures != 1 || len(findings) != 1 || findings[0].Location != "up:443" {
+	if !errors.As(err, &partial) || partial.Failures != 1 || len(findings) != 2 || findings[0].Location != "up:443" || findings[1].Location != "up:443" {
 		t.Fatalf("mixed TLS scan findings=%+v err=%v, want reachable evidence plus one visible failure", findings, err)
+	}
+}
+
+// A negotiated protocol is useful evidence, but it cannot hide a missing or
+// malformed leaf. Keep the protocol and report one visibly failed endpoint.
+func TestScanReportsMissingOrInvalidCertificateAsPartialFailure(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		certificates [][]byte
+	}{
+		{"missing", nil}, {"malformed", [][]byte{[]byte("not a certificate")}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			probe := func(context.Context, string) (tlsprobe.Result, error) {
+				return tlsprobe.Result{TLSVersion: 0x0304, PeerCertificates: tc.certificates}, nil
+			}
+			findings, err := tlssource.New([]string{"up:443"}, tlssource.WithProber(probe)).Scan(t.Context())
+			var partial *cbom.PartialScanError
+			if !errors.As(err, &partial) || partial.Failures != 1 {
+				t.Fatalf("missing visible certificate failure: %v", err)
+			}
+			if len(findings) != 1 || findings[0].Kind != cbom.AssetTLSEndpoint || findings[0].Protocol != "TLSv1.3" {
+				t.Fatalf("protocol observation lost or certificate invented: %+v", findings)
+			}
+		})
 	}
 }

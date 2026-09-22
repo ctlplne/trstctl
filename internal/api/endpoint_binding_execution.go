@@ -62,7 +62,7 @@ func (a *API) endpointIssuanceRequirement(ctx context.Context, tenantID string, 
 	return a.orch.ProfileApprovalRequirementByName(ctx, tenantID, a.gate.Profile)
 }
 
-func (a *API) validateEndpointProfileMetadata(ctx context.Context, tenantID, dnsName string, requirement orchestrator.ProfileApprovalRequirement) error {
+func (a *API) validateEndpointProfileMetadata(ctx context.Context, tenantID, dnsName string, requirement orchestrator.ProfileApprovalRequirement, subjectAlgorithm ...string) error {
 	if requirement.ProfileName == "" {
 		return nil
 	}
@@ -78,10 +78,16 @@ func (a *API) validateEndpointProfileMetadata(ctx context.Context, tenantID, dns
 		return fmt.Errorf("decode endpoint certificate profile: %w", err)
 	}
 	policy.Name, policy.Version = record.Name, record.Version
-	if err := policy.ValidateRequestMetadata(profile.Request{
-		Protocol: "api", DNSNames: []string{dnsName},
-		TTL: time.Duration(requirement.EffectiveTTLSeconds) * time.Second,
-	}); err != nil {
+	request := profile.Request{Protocol: "api", DNSNames: []string{dnsName}, TTL: time.Duration(requirement.EffectiveTTLSeconds) * time.Second}
+	validate := policy.ValidateRequestMetadata
+	if len(subjectAlgorithm) > 0 && subjectAlgorithm[0] != "" {
+		request.KeyAlgorithm = subjectAlgorithm[0]
+		if request.KeyAlgorithm == string(crypto.ECDSAP256) {
+			request.KeyAlgorithm, request.KeyBits = "ECDSA", 256
+		}
+		validate = policy.Validate
+	}
+	if err := validate(request); err != nil {
 		return errStatus(http.StatusUnprocessableEntity, err.Error()+"; choose a certificate profile that permits this endpoint before authorizing issuance; nothing was queued")
 	}
 	return nil
@@ -253,13 +259,16 @@ func (a *API) prepareEndpointEnrollment(ctx context.Context, tenantID, keyDigest
 			return nil, err
 		}
 		issuer := store.IdentityEndpointIssuer{OwnerID: req.OwnerID, Source: snapshot.Preview.Issuer.Source,
-			ID: snapshot.Preview.Issuer.ID, Name: snapshot.Preview.Issuer.Name, PreviewFingerprint: snapshot.Preview.RequestFingerprint}
+			ID: snapshot.Preview.Issuer.ID, Name: snapshot.Preview.Issuer.Name, PreviewFingerprint: snapshot.Preview.RequestFingerprint, SubjectKeyAlgorithm: snapshot.Preview.SubjectKeyAlgorithm}
 		var identity store.Identity
 		if snapshot.Preview.ReplacedIdentity != nil {
 			identity, err = a.orch.EnsureEndpointReplacementWithProfile(ctx, tenantID, snapshot.Replaced, snapshot.Preview.ReplacedIdentityVersion, target, issuer, req.ProfileName)
 		} else {
 			attrs := map[string]string{"issuing_authority_source": issuer.Source,
 				"issuing_authority_id": issuer.ID, "issuing_authority_name": issuer.Name, "endpoint_preview_sha256": issuer.PreviewFingerprint}
+			if issuer.SubjectKeyAlgorithm != "" {
+				attrs["subject_key_algorithm"] = issuer.SubjectKeyAlgorithm
+			}
 			if req.ProfileName != "" {
 				attrs["profile_name"] = req.ProfileName
 			}
@@ -338,6 +347,13 @@ func endpointCreatedIdentityMatches(identity store.Identity, issuer store.Identi
 		if json.Unmarshal(attrs[key], &got) != nil || got != want {
 			return false
 		}
+	}
+	var retainedAlgorithm string
+	if raw, ok := attrs["subject_key_algorithm"]; ok && json.Unmarshal(raw, &retainedAlgorithm) != nil {
+		return false
+	}
+	if retainedAlgorithm != issuer.SubjectKeyAlgorithm {
+		return false
 	}
 	// A recovered preparation cannot adopt a newly edited identity policy.
 	var retainedProfile, legacyProfile string

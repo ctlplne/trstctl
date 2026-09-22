@@ -4,6 +4,7 @@ package store
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strconv"
@@ -16,20 +17,21 @@ import (
 
 // CryptoAsset is one classified cryptographic observation in the CBOM (F52).
 type CryptoAsset struct {
-	ID                string
-	TenantID          string
-	Kind              string
-	Location          string
-	Algorithm         string
-	KeyBits           int
-	Protocol          string
-	Cipher            string
-	Library           string
-	Strength          string
-	QuantumVulnerable bool
-	OutOfPolicy       bool
-	Reasons           []string
-	CreatedAt         time.Time
+	CertificateFingerprint string
+	ID                     string
+	TenantID               string
+	Kind                   string
+	Location               string
+	Algorithm              string
+	KeyBits                int
+	Protocol               string
+	Cipher                 string
+	Library                string
+	Strength               string
+	QuantumVulnerable      bool
+	OutOfPolicy            bool
+	Reasons                []string
+	CreatedAt              time.Time
 }
 
 // signature identifies an asset within a tenant: the kind, location, and the
@@ -49,6 +51,9 @@ func StableCryptoAssetID(tenantID, signature string) string {
 // UpsertCryptoAsset inserts or refreshes a crypto asset by (tenant, signature),
 // returning it with its id and created_at. Tenant-scoped (RLS-enforced).
 func (s *Store) UpsertCryptoAsset(ctx context.Context, a CryptoAsset) (CryptoAsset, error) {
+	if err := validateCryptoAssetFingerprint(a); err != nil {
+		return a, err
+	}
 	reasons := a.Reasons
 	if reasons == nil {
 		reasons = []string{}
@@ -66,15 +71,15 @@ func (s *Store) UpsertCryptoAsset(ctx context.Context, a CryptoAsset) (CryptoAss
 		return tx.QueryRow(ctx,
 			`INSERT INTO crypto_assets
 			        (id, tenant_id, signature, kind, location, algorithm, key_bits, protocol, cipher,
-			         library, strength, quantum_vulnerable, out_of_policy, reasons)
-			 VALUES ($14, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+			         library, strength, quantum_vulnerable, out_of_policy, reasons, certificate_fingerprint)
+			 VALUES ($14, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $15)
 			 ON CONFLICT (tenant_id, signature) DO UPDATE
 			    SET key_bits = EXCLUDED.key_bits, library = EXCLUDED.library, strength = EXCLUDED.strength,
 			        quantum_vulnerable = EXCLUDED.quantum_vulnerable, out_of_policy = EXCLUDED.out_of_policy,
-			        reasons = EXCLUDED.reasons, is_active = true
+			        reasons = EXCLUDED.reasons, is_active = true, certificate_fingerprint = EXCLUDED.certificate_fingerprint
 			 RETURNING id::text, created_at`,
 			a.TenantID, signature, a.Kind, a.Location, a.Algorithm, a.KeyBits, a.Protocol, a.Cipher,
-			a.Library, a.Strength, a.QuantumVulnerable, a.OutOfPolicy, reasons, a.ID).
+			a.Library, a.Strength, a.QuantumVulnerable, a.OutOfPolicy, reasons, a.ID, a.CertificateFingerprint).
 			Scan(&a.ID, &a.CreatedAt)
 	})
 	return a, err
@@ -85,6 +90,9 @@ func (s *Store) UpsertCryptoAsset(ctx context.Context, a CryptoAsset) (CryptoAss
 // signature handles independently observed equivalent facts. The stream sequence
 // makes both conflict paths monotonic under direct projection plus tail replay.
 func (s *Store) ApplyCryptoAssetObservedTx(ctx context.Context, tx pgx.Tx, a CryptoAsset, eventSequence uint64, observedAt time.Time) error {
+	if err := validateCryptoAssetFingerprint(a); err != nil {
+		return err
+	}
 	reasons := a.Reasons
 	if reasons == nil {
 		reasons = []string{}
@@ -109,11 +117,11 @@ func (s *Store) ApplyCryptoAssetObservedTx(ctx context.Context, tx pgx.Tx, a Cry
 		    SET signature = $3, kind = $4, location = $5, algorithm = $6, key_bits = $7,
 		        protocol = $8, cipher = $9, library = $10, strength = $11,
 		        quantum_vulnerable = $12, out_of_policy = $13, reasons = $14,
-		        event_sequence = $15, is_active = true
+		        event_sequence = $15, is_active = true, certificate_fingerprint = $16
 		  WHERE tenant_id = $1 AND id = $2 AND event_sequence <= $15`,
 		a.TenantID, a.ID, signature, a.Kind, a.Location, a.Algorithm, a.KeyBits,
 		a.Protocol, a.Cipher, a.Library, a.Strength, a.QuantumVulnerable, a.OutOfPolicy,
-		reasons, sequence)
+		reasons, sequence, a.CertificateFingerprint)
 	if err != nil {
 		return err
 	}
@@ -138,15 +146,15 @@ func (s *Store) ApplyCryptoAssetObservedTx(ctx context.Context, tx pgx.Tx, a Cry
 		`INSERT INTO crypto_assets
 		        (id, tenant_id, signature, kind, location, algorithm, key_bits, protocol, cipher,
 		         library, strength, quantum_vulnerable, out_of_policy, reasons, created_at,
-		         event_sequence, is_active)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, true)
+		         event_sequence, is_active, certificate_fingerprint)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, true, $17)
 		 ON CONFLICT (tenant_id, signature) DO UPDATE
 		    SET key_bits = EXCLUDED.key_bits, library = EXCLUDED.library, strength = EXCLUDED.strength,
 		        quantum_vulnerable = EXCLUDED.quantum_vulnerable, out_of_policy = EXCLUDED.out_of_policy,
-		        reasons = EXCLUDED.reasons, event_sequence = EXCLUDED.event_sequence, is_active = true
+		        reasons = EXCLUDED.reasons, event_sequence = EXCLUDED.event_sequence, is_active = true, certificate_fingerprint = EXCLUDED.certificate_fingerprint
 		  WHERE EXCLUDED.event_sequence >= crypto_assets.event_sequence`,
 		a.ID, a.TenantID, signature, a.Kind, a.Location, a.Algorithm, a.KeyBits, a.Protocol, a.Cipher,
-		a.Library, a.Strength, a.QuantumVulnerable, a.OutOfPolicy, reasons, observedAt, sequence)
+		a.Library, a.Strength, a.QuantumVulnerable, a.OutOfPolicy, reasons, observedAt, sequence, a.CertificateFingerprint)
 	return err
 }
 
@@ -231,7 +239,7 @@ func (s *Store) replaceCryptoAssetTx(ctx context.Context, tx pgx.Tx, a CryptoAss
 		    SET signature = $3, kind = $4, location = $5, algorithm = $6, key_bits = $7,
 		        protocol = $8, cipher = $9, library = $10, strength = $11,
 		        quantum_vulnerable = $12, out_of_policy = $13, reasons = $14,
-		        event_sequence = $15, is_active = true
+		        event_sequence = $15, is_active = true, certificate_fingerprint = ''
 		  WHERE tenant_id = $1 AND id = $2`,
 		a.TenantID, a.ID, signature, a.Kind, a.Location, a.Algorithm, a.KeyBits,
 		a.Protocol, a.Cipher, a.Library, a.Strength, a.QuantumVulnerable, a.OutOfPolicy, reasons, sequence)
@@ -260,7 +268,7 @@ func (s *Store) ListCryptoAssets(ctx context.Context, tenantID string) ([]Crypto
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
 			`SELECT id::text, tenant_id::text, kind, location, algorithm, key_bits, protocol, cipher,
-			        library, strength, quantum_vulnerable, out_of_policy, reasons, created_at
+			        library, strength, quantum_vulnerable, out_of_policy, reasons, created_at, certificate_fingerprint
 			   FROM crypto_assets WHERE tenant_id = $1 AND is_active ORDER BY location, algorithm, protocol, cipher`, tenantID)
 		if err != nil {
 			return err
@@ -270,7 +278,7 @@ func (s *Store) ListCryptoAssets(ctx context.Context, tenantID string) ([]Crypto
 			var a CryptoAsset
 			if err := rows.Scan(&a.ID, &a.TenantID, &a.Kind, &a.Location, &a.Algorithm, &a.KeyBits,
 				&a.Protocol, &a.Cipher, &a.Library, &a.Strength, &a.QuantumVulnerable, &a.OutOfPolicy,
-				&a.Reasons, &a.CreatedAt); err != nil {
+				&a.Reasons, &a.CreatedAt, &a.CertificateFingerprint); err != nil {
 				return err
 			}
 			out = append(out, a)
@@ -278,4 +286,16 @@ func (s *Store) ListCryptoAssets(ctx context.Context, tenantID string) ([]Crypto
 		return rows.Err()
 	})
 	return out, err
+}
+
+// A missing fingerprint means unknown; it is never filled from a matching name.
+func validateCryptoAssetFingerprint(a CryptoAsset) error {
+	if a.CertificateFingerprint == "" {
+		return nil
+	}
+	raw, err := hex.DecodeString(a.CertificateFingerprint)
+	if err != nil || len(raw) != 32 || a.CertificateFingerprint != strings.ToLower(a.CertificateFingerprint) || a.Kind != "certificate-key" {
+		return errors.New("store: observed certificate fingerprint requires a certificate-key finding and lowercase SHA-256")
+	}
+	return nil
 }

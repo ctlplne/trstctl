@@ -164,7 +164,10 @@ func runComposeCurl(t *testing.T, mode, base, trust, path, curlrc string) compos
 	case "post":
 		call = `post fixture-key "$1" '{"probe":true}'`
 	case "ready":
-		call = `compose_e2e_wait_ready "$BASE_URL$1" "$((SECONDS + 1))"`
+		// SECONDS has integer resolution: one tick can leave only milliseconds.
+		// Two ticks allow at least one full second; the stall assertion still
+		// enforces its four-second outer bound. Production budgets are unchanged.
+		call = `compose_e2e_wait_ready "$BASE_URL$1" "$((SECONDS + 2))"`
 	case "ready_zero":
 		// Advance the real Bash clock at the exact pre-dispatch boundary. The
 		// native curl must never be invoked with a computed zero timeout.

@@ -14126,6 +14126,20 @@ export const messages = {
     description: "Endpoint preview invariant refusal.",
   },
   // Machine-authored Spanish/German wording requires human review before release.
+  "connectors.binding.subjectAlgorithm": { defaultMessage: "Certificate key algorithm", description: "Endpoint enrollment subject-key selection." },
+  "connectors.binding.subjectAlgorithmHelp": {
+    defaultMessage:
+      "The selected algorithm is retained for renewal. ML-DSA needs a compatible CA, profile, endpoint and clients, with host-agent key custody and native TLS verification. Review compatibility before replacing a working certificate.",
+    description: "Requirements for post-quantum certificate deployment.",
+  },
+  "connectors.binding.keepSubjectAlgorithm": {
+    defaultMessage: "Keep the current choice or use the default",
+    description: "Omit an algorithm override during endpoint enrollment.",
+  },
+  "connectors.binding.subjectAlgorithmNotReviewed": {
+    defaultMessage: "The server did not confirm the selected algorithm. Review the endpoint again before authorizing issuance.",
+    description: "Refuse an endpoint preview that silently drops algorithm intent.",
+  },
   "connectors.binding.profile": { defaultMessage: "Certificate profile", description: "Endpoint issuance authority and approval continuation." },
   // Endpoint profile selection: machine-authored es/de require human review before release.
   "connectors.binding.profileChoiceHelp": {

@@ -144,6 +144,24 @@ trying a different policy. The signer still validates the
 actual CSR, key strength, and requested key usages when issuance runs; a metadata
 preview does not replace those checks.
 
+Choose **Certificate key algorithm** in the same CA step when enrollment or
+replacement must use a specific subject key. The choice is retained for renewal;
+leaving it blank preserves a configured algorithm on an existing or replaced
+identity. ML-DSA needs a compatible CA, certificate profile, endpoint, and clients.
+It uses a host-executed destination so the host keeps the private key through
+signing and installation. Configure that host's native TLS probe before deployment
+and independently test the application's clients. A successful metadata preview
+cannot establish receiver or client compatibility.
+
+Preview and execution accept `subject_key_algorithm`: `ECDSA-P256`, `ML-DSA-44`,
+`ML-DSA-65`, or `ML-DSA-87`. An explicit selection is checked against the profile
+and included in `preview_fingerprint`; changing it requires a new review. The
+console refuses a preview that drops or changes the explicit choice. A reused
+requested identity cannot be repurposed from one configured algorithm to another;
+use the replacement flow for that change. The existing CA selection and approval
+checks still apply. This endpoint flow is separate from binding a CBOM asset into
+a migration campaign; issuance alone is not evidence that an asset was migrated.
+
 Three closed sections keep implementation machinery available without making it the
 default reading path:
 

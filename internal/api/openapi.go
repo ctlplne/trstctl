@@ -2944,25 +2944,27 @@ func componentSchemas() map[string]*Schema {
 		"availability": str(),
 	}, "source", "id")
 	endpointBindingPlanReq := object(map[string]*Schema{
-		"profile_name":        {Type: "string", Description: "Optional active certificate profile name in this tenant. Omit to keep an existing identity's policy or use the configured default for a new identity. An explicit choice is retained on a new or replacement identity; it cannot override a reused identity's policy. Preview binds the exact revision and approval requirement."},
-		"owner_id":            uuid(),
-		"replace_identity_id": uuid(),
-		"identity_name":       str(),
-		"target_id":           uuid(),
-		"target":              ref("DeploymentTargetRequest"),
-		"issuer":              ref("EndpointIssuer"),
-		"reason":              str(),
+		"subject_key_algorithm": {Type: "string", Enum: []string{"ECDSA-P256", "ML-DSA-44", "ML-DSA-65", "ML-DSA-87"}, Description: "Optional explicit certificate subject-key algorithm, retained for unattended renewal. ML-DSA requires a host-executed destination, a compatible CA/profile, host native TLS readback and compatible clients. The exact choice is bound by preview; no hybrid or classical substitution is authorized."},
+		"profile_name":          {Type: "string", Description: "Optional active certificate profile name in this tenant. Omit to keep an existing identity's policy or use the configured default for a new identity. An explicit choice is retained on a new or replacement identity; it cannot override a reused identity's policy. Preview binds the exact revision and approval requirement."},
+		"owner_id":              uuid(),
+		"replace_identity_id":   uuid(),
+		"identity_name":         str(),
+		"target_id":             uuid(),
+		"target":                ref("DeploymentTargetRequest"),
+		"issuer":                ref("EndpointIssuer"),
+		"reason":                str(),
 	}, "owner_id", "identity_name", "issuer")
 	endpointBindingReq := object(map[string]*Schema{
-		"profile_name":        {Type: "string", Description: "The same optional certificate profile name used for preview. Changing the choice or active revision requires a fresh preview and request key."},
-		"owner_id":            uuid(),
-		"replace_identity_id": uuid(),
-		"identity_name":       str(),
-		"target_id":           uuid(),
-		"target":              ref("DeploymentTargetRequest"),
-		"issuer":              ref("EndpointIssuer"),
-		"reason":              str(),
-		"preview_fingerprint": str(),
+		"subject_key_algorithm": {Type: "string", Enum: []string{"ECDSA-P256", "ML-DSA-44", "ML-DSA-65", "ML-DSA-87"}, Description: "Optional explicit certificate subject-key algorithm, retained for unattended renewal. ML-DSA requires a host-executed destination, a compatible CA/profile, host native TLS readback and compatible clients. The exact choice is bound by preview; no hybrid or classical substitution is authorized."},
+		"profile_name":          {Type: "string", Description: "The same optional certificate profile name used for preview. Changing the choice or active revision requires a fresh preview and request key."},
+		"owner_id":              uuid(),
+		"replace_identity_id":   uuid(),
+		"identity_name":         str(),
+		"target_id":             uuid(),
+		"target":                ref("DeploymentTargetRequest"),
+		"issuer":                ref("EndpointIssuer"),
+		"reason":                str(),
+		"preview_fingerprint":   str(),
 	}, "owner_id", "identity_name", "issuer", "preview_fingerprint")
 	endpointBindingTarget := object(map[string]*Schema{
 		"id": uuid(), "name": str(), "connector": str(), "config": {Type: "object"},
@@ -2972,6 +2974,7 @@ func componentSchemas() map[string]*Schema {
 		"key_origin": str(), "private_key_enters_control_plane": {Type: "boolean"}, "detail": str(),
 	}, "key_origin", "private_key_enters_control_plane", "detail")
 	endpointBindingPreview := object(map[string]*Schema{
+		"subject_key_algorithm": {Type: "string", Enum: []string{"ECDSA-P256", "ML-DSA-44", "ML-DSA-65", "ML-DSA-87"}, Description: "Optional explicit certificate subject-key algorithm, retained for unattended renewal. ML-DSA requires a host-executed destination, a compatible CA/profile, host native TLS readback and compatible clients. The exact choice is bound by preview; no hybrid or classical substitution is authorized."},
 		"issuance": object(map[string]*Schema{
 			"profile_name": str(), "profile_id": uuid(), "profile_version": {Type: "integer"}, "profile_spec_digest": str(),
 			"requested_ttl_seconds": {Type: "integer"}, "effective_ttl_seconds": {Type: "integer"},
@@ -5159,7 +5162,8 @@ func componentSchemas() map[string]*Schema {
 		"percent_migrated":          {Type: "number"},
 	}, "total_assets", "quantum_vulnerable_assets", "out_of_policy_assets", "post_quantum_ready_assets", "percent_migrated")
 	cbomAsset := object(map[string]*Schema{
-		"id": uuid(), "kind": str(), "location": str(), "algorithm": str(),
+		"certificate_fingerprint": {Type: "string", Description: "SHA-256 of the exact leaf observed for this certificate-key finding. Absent on historical or non-certificate observations; absence must not be inferred from a hostname or algorithm."},
+		"id":                      uuid(), "kind": str(), "location": str(), "algorithm": str(),
 		"key_bits": {Type: "integer"}, "protocol": str(), "cipher": str(), "library": str(),
 		"strength": str(), "quantum_vulnerable": {Type: "boolean"}, "out_of_policy": {Type: "boolean"},
 		"reasons": {Type: "array", Items: str()}, "migration_target": str(),

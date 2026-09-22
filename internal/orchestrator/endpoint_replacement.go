@@ -55,6 +55,9 @@ func (o *Orchestrator) EnsureEndpointReplacementWithProfile(ctx context.Context,
 		"connector": target.Type, "deployment_connector": target.Type,
 		"target": target.Name, "deployment_target": target.Name, "deployment_target_id": target.ID,
 	}
+	if issuer.SubjectKeyAlgorithm != "" {
+		attrs["subject_key_algorithm"] = issuer.SubjectKeyAlgorithm
+	}
 	if profileName != "" {
 		attrs["profile_name"] = profileName
 	}
@@ -107,7 +110,7 @@ func (o *Orchestrator) EnsureEndpointReplacementWithProfile(ctx context.Context,
 					return fmt.Errorf("%w: replacement binding changed", store.ErrIdentityEnrollmentConflict)
 				}
 			}
-			if existingAttrs["profile_name"] != profileName || existingAttrs["profile"] != "" {
+			if existingAttrs["profile_name"] != profileName || existingAttrs["profile"] != "" || existingAttrs["subject_key_algorithm"] != issuer.SubjectKeyAlgorithm {
 				return fmt.Errorf("%w: replacement certificate profile changed", store.ErrIdentityEnrollmentConflict)
 			}
 			if existing.Status == "revoked" || existing.Status == "retired" {

@@ -80,6 +80,7 @@ const (
 
 // Config is the top-level configuration.
 type Config struct {
+	CBOM                      CBOM                     `json:"cbom"`
 	Server                    Server                   `json:"server"`
 	Postgres                  Postgres                 `json:"postgres"`
 	NATS                      NATS                     `json:"nats"`
@@ -124,6 +125,11 @@ type Config struct {
 	// AgentChannel configures the served agent steady-state mTLS gRPC channel
 	// (WIRE-004 / OPS-005). Off by default.
 	AgentChannel AgentChannel `json:"agent_channel"`
+}
+
+// CBOM configures local cryptographic inventory. Tenant requests never select executables.
+type CBOM struct {
+	TLSProbeOpenSSL string `json:"tls_probe_openssl,omitempty"`
 }
 
 // License configures the offline license file. Empty means Community.
@@ -2573,6 +2579,7 @@ func applyAgentChannelEnv(getenv func(string) string, a *AgentChannel) {
 }
 
 func applyServerAndSpineEnv(getenv func(string) string, c *Config) {
+	setString(getenv, "TRSTCTL_CBOM_TLS_PROBE_OPENSSL", &c.CBOM.TLSProbeOpenSSL)
 	setString(getenv, "TRSTCTL_SERVER_ADDR", &c.Server.Addr)
 	setString(getenv, "TRSTCTL_SERVER_TLS_MODE", &c.Server.TLS.Mode)
 	setString(getenv, "TRSTCTL_SERVER_TLS_CERT_FILE", &c.Server.TLS.CertFile)
@@ -3138,6 +3145,7 @@ func (c *Config) Validate() error {
 	var errs []error
 	for _, validate := range []func(*Config) []error{
 		validateServerConfig,
+		validateCBOMConfig,
 		validateDatastores,
 		validateLoggingAndLifecycle,
 		func(c *Config) []error { return validateConnectors(c.Connectors) },
@@ -3158,6 +3166,14 @@ func (c *Config) Validate() error {
 		errs = append(errs, validate(c)...)
 	}
 	return errors.Join(errs...)
+}
+
+func validateCBOMConfig(c *Config) []error {
+	path := c.CBOM.TLSProbeOpenSSL
+	if path != "" && (!filepath.IsAbs(path) || strings.ContainsRune(path, 0)) {
+		return []error{errors.New("cbom.tls_probe_openssl must be an absolute local executable path")}
+	}
+	return nil
 }
 
 func validateLicenseConfig(c *Config) []error {

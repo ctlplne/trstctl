@@ -1604,6 +1604,7 @@ export interface CASpec {
 
 export interface CBOMAsset {
   algorithm?: string;
+  certificate_fingerprint?: string;
   cipher?: string;
   id: string;
   key_bits?: number;
@@ -3125,6 +3126,7 @@ export interface EndpointBindingPlanRequest {
   profile_name?: string;
   reason?: string;
   replace_identity_id?: string;
+  subject_key_algorithm?: "ECDSA-P256" | "ML-DSA-44" | "ML-DSA-65" | "ML-DSA-87";
   target?: DeploymentTargetRequest;
   target_id?: string;
 }
@@ -3149,6 +3151,7 @@ export interface EndpointBindingPreview {
   replaced_identity?: Identity;
   replaced_identity_version?: number;
   request_fingerprint: string;
+  subject_key_algorithm?: "ECDSA-P256" | "ML-DSA-44" | "ML-DSA-65" | "ML-DSA-87";
   target: EndpointBindingTarget;
   verification_steps: string[];
 }
@@ -3161,6 +3164,7 @@ export interface EndpointBindingRequest {
   profile_name?: string;
   reason?: string;
   replace_identity_id?: string;
+  subject_key_algorithm?: "ECDSA-P256" | "ML-DSA-44" | "ML-DSA-65" | "ML-DSA-87";
   target?: DeploymentTargetRequest;
   target_id?: string;
 }

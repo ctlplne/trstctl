@@ -20,12 +20,13 @@ import (
 )
 
 type cbomService struct {
-	store *store.Store
-	log   *events.Log
+	nativeTLSExecutable string
+	store               *store.Store
+	log                 *events.Log
 }
 
 func (s *Server) buildCBOMService(d Deps) api.CBOMService {
-	return &cbomService{store: d.Store, log: d.Log}
+	return &cbomService{store: d.Store, log: d.Log, nativeTLSExecutable: d.CBOMTLSProbeOpenSSL}
 }
 
 const (
@@ -42,6 +43,10 @@ func (s *cbomService) plan(req api.CBOMScanRequest) (api.CBOMScanPreview, error)
 	if err != nil {
 		return api.CBOMScanPreview{}, err
 	}
+	tlsConnectionLimit := len(normalized.TLSEndpoints)
+	if s.nativeTLSExecutable != "" {
+		tlsConnectionLimit *= 2
+	}
 	sourceCount := 0
 	findingWriteLimit := 0
 	outsideCalls := []string{}
@@ -52,7 +57,7 @@ func (s *cbomService) plan(req api.CBOMScanRequest) (api.CBOMScanPreview, error)
 		sourceCount++
 		findingWriteLimit += min(len(normalized.TLSEndpoints)*2, cbom.DefaultMaxFindingsPerSource)
 		outsideCalls = append(outsideCalls,
-			fmt.Sprintf("Open at most %d TLS connections: one handshake to each normalized endpoint, with no application request or payload.", len(normalized.TLSEndpoints)))
+			fmt.Sprintf("Open at most %d TLS connections across %d normalized endpoints, with no application request or payload. When a native probe is configured, a failed Go handshake may be followed by one native handshake within the same endpoint deadline.", tlsConnectionLimit, len(normalized.TLSEndpoints)))
 	}
 	if len(normalized.HostConfigs) > 0 {
 		sourceCount++
@@ -69,7 +74,7 @@ func (s *cbomService) plan(req api.CBOMScanRequest) (api.CBOMScanPreview, error)
 	return api.CBOMScanPreview{
 		Capability: "F52", Ready: len(blockers) == 0, EffectFree: true,
 		NormalizedRequest: normalized, SourceCount: sourceCount,
-		TLSConnectionLimit:    len(normalized.TLSEndpoints),
+		TLSConnectionLimit:    tlsConnectionLimit,
 		HostReadSelectorCount: len(normalized.HostConfigs),
 		HostFileReadLimit:     hostFileReadLimit, HostFileByteLimit: hostFileByteLimit,
 		FindingWriteLimit: findingWriteLimit, WorkerLimit: cbomWorkerLimit,
@@ -102,7 +107,13 @@ func (s *cbomService) Scan(ctx context.Context, tenantID string, req api.CBOMSca
 	}
 	sources := make([]cbom.Source, 0, 2)
 	if len(plan.NormalizedRequest.TLSEndpoints) > 0 {
-		sources = append(sources, tlssource.New(plan.NormalizedRequest.TLSEndpoints))
+		var options []tlssource.Option
+		if s.nativeTLSExecutable != "" {
+			options = append(options, tlssource.WithProber(func(ctx context.Context, addr string) (tlsprobe.Result, error) {
+				return tlsprobe.ProbeWithNativeFallback(ctx, s.nativeTLSExecutable, addr)
+			}))
+		}
+		sources = append(sources, tlssource.New(plan.NormalizedRequest.TLSEndpoints, options...))
 	}
 	if len(plan.NormalizedRequest.HostConfigs) > 0 {
 		sources = append(sources, hostsource.New(plan.NormalizedRequest.HostConfigs...))
@@ -171,7 +182,7 @@ func (s *eventedCBOMSink) Record(ctx context.Context, f cbom.Finding) error {
 		return errors.New("server: CBOM sink requires store and event log")
 	}
 	asset := store.CryptoAsset{
-		TenantID: s.tenantID, Kind: string(f.Kind), Location: f.Location,
+		TenantID: s.tenantID, Kind: string(f.Kind), Location: f.Location, CertificateFingerprint: f.CertificateFingerprint,
 		Algorithm: f.Algorithm, KeyBits: f.KeyBits, Protocol: f.Protocol,
 		Cipher: f.Cipher, Library: f.Library, Strength: string(f.Class.Strength),
 		QuantumVulnerable: f.Class.QuantumVulnerable, OutOfPolicy: f.Class.OutOfPolicy,
@@ -179,7 +190,7 @@ func (s *eventedCBOMSink) Record(ctx context.Context, f cbom.Finding) error {
 	}
 	asset.ID = store.StableCryptoAssetID(asset.TenantID, asset.Signature())
 	payload := projections.CBOMAssetObserved{
-		ID: asset.ID, Kind: asset.Kind, Location: asset.Location, Algorithm: asset.Algorithm,
+		ID: asset.ID, Kind: asset.Kind, Location: asset.Location, Algorithm: asset.Algorithm, CertificateFingerprint: asset.CertificateFingerprint,
 		KeyBits: asset.KeyBits, Protocol: asset.Protocol, Cipher: asset.Cipher,
 		Library: asset.Library, Strength: asset.Strength, QuantumVulnerable: asset.QuantumVulnerable,
 		OutOfPolicy: asset.OutOfPolicy, Reasons: asset.Reasons,

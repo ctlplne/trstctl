@@ -1990,3 +1990,25 @@ environment variables override file values, which override defaults.
   "telemetry": { "enabled": false, "instance_id_file": "data/telemetry/instance-id" }
 }
 ```
+
+## Native TLS discovery for cryptographic inventory
+
+A control plane that inventories endpoints with certificate algorithms unsupported
+by its Go TLS runtime can use an operator-installed OpenSSL build for discovery.
+This setting identifies public certificates; it does not establish application
+availability, issuer trust, revocation enforcement, or complete migration.
+
+Set `cbom.tls_probe_openssl` in the local JSON configuration, or set
+`TRSTCTL_CBOM_TLS_PROBE_OPENSSL` to the absolute path of the actual executable.
+The default is empty. The executable and its parent directories must be controlled
+by the deployment operator, and its build must support the endpoint's algorithm.
+Startup refuses a relative path, missing file, symlink, or non-executable file.
+No tenant API or scan request can choose this path. Host-agent verification uses
+its separately configured `tls_probe_openssl` setting.
+
+Discovery first tries the usual Go handshake. For a failed direct TLS handshake,
+it may try the configured native TLS 1.3 client within the same endpoint deadline.
+Scan preview reports at most two connections per normalized endpoint when this
+option is enabled; neither client sends application data. Native fallback does
+not bypass a database STARTTLS negotiation. A failed handshake or unreadable leaf
+remains a partial-scan failure, while successful observations remain available.

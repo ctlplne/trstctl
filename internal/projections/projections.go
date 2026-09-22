@@ -2325,18 +2325,19 @@ type NotificationRead struct {
 // observed public cryptographic facts and classification labels, never key
 // material. The projector rebuilds crypto_assets from these events.
 type CBOMAssetObserved struct {
-	ID                string   `json:"id"`
-	Kind              string   `json:"kind"`
-	Location          string   `json:"location"`
-	Algorithm         string   `json:"algorithm,omitempty"`
-	KeyBits           int      `json:"key_bits,omitempty"`
-	Protocol          string   `json:"protocol,omitempty"`
-	Cipher            string   `json:"cipher,omitempty"`
-	Library           string   `json:"library,omitempty"`
-	Strength          string   `json:"strength"`
-	QuantumVulnerable bool     `json:"quantum_vulnerable"`
-	OutOfPolicy       bool     `json:"out_of_policy"`
-	Reasons           []string `json:"reasons,omitempty"`
+	CertificateFingerprint string   `json:"certificate_fingerprint,omitempty"`
+	ID                     string   `json:"id"`
+	Kind                   string   `json:"kind"`
+	Location               string   `json:"location"`
+	Algorithm              string   `json:"algorithm,omitempty"`
+	KeyBits                int      `json:"key_bits,omitempty"`
+	Protocol               string   `json:"protocol,omitempty"`
+	Cipher                 string   `json:"cipher,omitempty"`
+	Library                string   `json:"library,omitempty"`
+	Strength               string   `json:"strength"`
+	QuantumVulnerable      bool     `json:"quantum_vulnerable"`
+	OutOfPolicy            bool     `json:"out_of_policy"`
+	Reasons                []string `json:"reasons,omitempty"`
 }
 
 // LicensedCryptoMigrationStarted records the tenant-scoped operator intent to
@@ -5247,7 +5248,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return fmt.Errorf("projections: %s requires id, kind, location, and strength", e.Type)
 		}
 		return p.store.ApplyCryptoAssetObservedTx(ctx, tx, store.CryptoAsset{
-			ID: pl.ID, TenantID: e.TenantID, Kind: pl.Kind, Location: pl.Location,
+			ID: pl.ID, TenantID: e.TenantID, Kind: pl.Kind, Location: pl.Location, CertificateFingerprint: pl.CertificateFingerprint,
 			Algorithm: pl.Algorithm, KeyBits: pl.KeyBits, Protocol: pl.Protocol,
 			Cipher: pl.Cipher, Library: pl.Library, Strength: pl.Strength,
 			QuantumVulnerable: pl.QuantumVulnerable, OutOfPolicy: pl.OutOfPolicy,

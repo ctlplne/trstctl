@@ -71,19 +71,20 @@ func (s *Source) Scan(ctx context.Context) ([]cbom.Finding, error) {
 			Protocol: cbom.TLSVersionName(res.TLSVersion),
 			Library:  res.NegotiatedProtocol,
 		})
-		if len(res.PeerCertificates) > 0 {
-			if info, err := certinfo.Inspect(res.PeerCertificates[0]); err == nil {
-				out = append(out, cbom.Finding{
-					Kind:      cbom.AssetCertKey,
-					Location:  addr,
-					Algorithm: info.KeyAlgorithm,
-					KeyBits:   info.PublicKeyBits,
-				})
-			}
+		if len(res.PeerCertificates) == 0 {
+			failures++
+			continue
 		}
+		info, err := certinfo.Inspect(res.PeerCertificates[0])
+		if err != nil {
+			failures++
+			continue
+		}
+		out = append(out, cbom.Finding{Kind: cbom.AssetCertKey, Location: addr, Algorithm: info.KeyAlgorithm, KeyBits: info.PublicKeyBits, CertificateFingerprint: info.SHA256Fingerprint})
+
 	}
 	if failures > 0 {
-		return out, &cbom.PartialScanError{Failures: failures, Err: errors.New("one or more CBOM TLS endpoints could not complete a bounded handshake")}
+		return out, &cbom.PartialScanError{Failures: failures, Err: errors.New("one or more CBOM TLS endpoints could not complete a bounded handshake and certificate inspection")}
 	}
 	return out, nil
 }

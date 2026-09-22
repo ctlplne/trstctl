@@ -178,21 +178,22 @@ type CBOMReport struct {
 
 // CBOMAsset is one customer-readable crypto inventory row with migration posture.
 type CBOMAsset struct {
-	ID                  string   `json:"id"`
-	Kind                string   `json:"kind"`
-	Location            string   `json:"location"`
-	Algorithm           string   `json:"algorithm,omitempty"`
-	KeyBits             int      `json:"key_bits,omitempty"`
-	Protocol            string   `json:"protocol,omitempty"`
-	Cipher              string   `json:"cipher,omitempty"`
-	Library             string   `json:"library,omitempty"`
-	Strength            string   `json:"strength"`
-	QuantumVulnerable   bool     `json:"quantum_vulnerable"`
-	OutOfPolicy         bool     `json:"out_of_policy"`
-	Reasons             []string `json:"reasons,omitempty"`
-	MigrationTarget     string   `json:"migration_target"`
-	MigrationStandard   string   `json:"migration_standard"`
-	MigrationGeneration string   `json:"migration_generation"`
+	CertificateFingerprint string   `json:"certificate_fingerprint,omitempty"`
+	ID                     string   `json:"id"`
+	Kind                   string   `json:"kind"`
+	Location               string   `json:"location"`
+	Algorithm              string   `json:"algorithm,omitempty"`
+	KeyBits                int      `json:"key_bits,omitempty"`
+	Protocol               string   `json:"protocol,omitempty"`
+	Cipher                 string   `json:"cipher,omitempty"`
+	Library                string   `json:"library,omitempty"`
+	Strength               string   `json:"strength"`
+	QuantumVulnerable      bool     `json:"quantum_vulnerable"`
+	OutOfPolicy            bool     `json:"out_of_policy"`
+	Reasons                []string `json:"reasons,omitempty"`
+	MigrationTarget        string   `json:"migration_target"`
+	MigrationStandard      string   `json:"migration_standard"`
+	MigrationGeneration    string   `json:"migration_generation"`
 }
 
 // CBOMInventoryResponse is the read API for the CBOM plus its migration-progress
@@ -214,7 +215,7 @@ func CBOMInventoryFromAssets(assets []store.CryptoAsset) CBOMInventoryResponse {
 	findings := make([]cbom.Finding, 0, len(assets))
 	for _, a := range assets {
 		f := cbom.Finding{
-			Kind: cbom.AssetKind(a.Kind), Location: a.Location, Algorithm: a.Algorithm,
+			Kind: cbom.AssetKind(a.Kind), Location: a.Location, Algorithm: a.Algorithm, CertificateFingerprint: a.CertificateFingerprint,
 			KeyBits: a.KeyBits, Protocol: a.Protocol, Cipher: a.Cipher, Library: a.Library,
 			Class: cbom.Classification{
 				Strength: cbom.Strength(a.Strength), QuantumVulnerable: a.QuantumVulnerable,
@@ -223,7 +224,7 @@ func CBOMInventoryFromAssets(assets []store.CryptoAsset) CBOMInventoryResponse {
 		}
 		target := cbom.MigrationTargetFor(f)
 		items = append(items, CBOMAsset{
-			ID: a.ID, Kind: a.Kind, Location: a.Location, Algorithm: a.Algorithm,
+			ID: a.ID, Kind: a.Kind, Location: a.Location, Algorithm: a.Algorithm, CertificateFingerprint: a.CertificateFingerprint,
 			KeyBits: a.KeyBits, Protocol: a.Protocol, Cipher: a.Cipher, Library: a.Library,
 			Strength: a.Strength, QuantumVulnerable: a.QuantumVulnerable,
 			OutOfPolicy: a.OutOfPolicy, Reasons: a.Reasons,
