@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { PQCMigrationProgressDetails } from "@/components/PQCMigrationProgressDetails";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { api, type CBOMAsset, type PQCMigrationPlan, type PQCMigrationProgress, type PQCMigrationRequest, type PQCMigrationRun } from "@/lib/api";
@@ -205,16 +206,11 @@ export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
           <h4 id="pqc-run-heading" className="font-medium">
             {t("posture.pqcMigration.progressHeading", { runId: run.run_id })}
           </h4>
-          <p className="text-sm">
-            {progress
-              ? t("posture.pqcMigration.progressSummary", {
-                  applied: String(progress.applied),
-                  queued: String(progress.queued),
-                  failed: String(progress.failed),
-                  rolledBack: String(progress.rolled_back),
-                })
-              : t("posture.pqcMigration.progressNotLoaded")}
-          </p>
+          {progress ? (
+            <PQCMigrationProgressDetails progress={progress} assets={assets} loading={busy === "progress"} />
+          ) : (
+            <p className="text-sm">{t("posture.pqcMigration.progressNotLoaded")}</p>
+          )}
           <OperationNotice action={progressAuthority} />
           <Button type="button" variant="outline" onClick={() => void refresh()} disabled={!progressAuthority.runnable || busy !== null}>
             {busy === "progress" ? t("posture.pqcMigration.refreshing") : t("posture.pqcMigration.refresh")}

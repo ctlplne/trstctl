@@ -84,18 +84,21 @@ type TLSFindingFailure struct {
 }
 
 type FindingProgress struct {
-	RunID          string                `json:"run_id"`
-	AssetID        string                `json:"asset_id"`
-	FindingKind    string                `json:"finding_kind"`
-	TargetID       string                `json:"target_id"`
-	TargetRevision string                `json:"target_revision"`
-	Connector      string                `json:"connector"`
-	Desired        connector.TLSPosture  `json:"desired"`
-	Previous       *connector.TLSPosture `json:"previous,omitempty"`
-	Observed       *connector.TLSPosture `json:"observed,omitempty"`
-	Status         string                `json:"status"`
-	Failure        string                `json:"failure,omitempty"`
-	UpdatedAt      time.Time             `json:"updated_at"`
+	CertificateFingerprint string                `json:"certificate_fingerprint,omitempty"`
+	TargetAlgorithm        string                `json:"target_algorithm,omitempty"`
+	EffectiveAlgorithm     string                `json:"effective_algorithm,omitempty"`
+	RunID                  string                `json:"run_id"`
+	AssetID                string                `json:"asset_id"`
+	FindingKind            string                `json:"finding_kind"`
+	TargetID               string                `json:"target_id"`
+	TargetRevision         string                `json:"target_revision"`
+	Connector              string                `json:"connector"`
+	Desired                connector.TLSPosture  `json:"desired"`
+	Previous               *connector.TLSPosture `json:"previous,omitempty"`
+	Observed               *connector.TLSPosture `json:"observed,omitempty"`
+	Status                 string                `json:"status"`
+	Failure                string                `json:"failure,omitempty"`
+	UpdatedAt              time.Time             `json:"updated_at"`
 }
 
 type progressKey struct {
@@ -149,6 +152,24 @@ func (p *ProgressProjection) Apply(ctx context.Context, ev eventspec.Event) erro
 			return err
 		}
 		p.applyStarted(ev, started)
+	case EventCertificateFindingFailed:
+		var failed CertificateFindingFailure
+		if err := json.Unmarshal(ev.Data, &failed); err != nil {
+			return err
+		}
+		return p.applyCertificateFailure(ev, failed)
+	case projections.EventLicensedCryptoMigrationAssetCompleted:
+		var issued projections.LicensedCryptoMigrationAssetCompleted
+		if err := json.Unmarshal(ev.Data, &issued); err != nil {
+			return err
+		}
+		p.applyCertificateIssued(ev, issued)
+	case projections.EventLicensedCryptoMigrationRollbackCompleted:
+		var restored projections.LicensedCryptoMigrationRollbackCompleted
+		if err := json.Unmarshal(ev.Data, &restored); err != nil {
+			return err
+		}
+		p.applyCertificateRollback(ev, restored)
 	case EventTLSFindingPrepared:
 		var prepared TLSFindingPrepared
 		if err := json.Unmarshal(ev.Data, &prepared); err != nil {
@@ -201,6 +222,7 @@ func (p *ProgressProjection) applyPrepared(ev eventspec.Event, prepared TLSFindi
 func (p *ProgressProjection) applyStarted(ev eventspec.Event, started projections.LicensedCryptoMigrationStarted) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	p.applyCertificateStarted(ev, started)
 	for _, intent := range started.TLSPostures {
 		key := progressKey{tenantID: ev.TenantID, runID: intent.RunID, assetID: intent.AssetID}
 		if item, exists := p.items[key]; exists {

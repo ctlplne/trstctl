@@ -58,13 +58,15 @@ type Response struct {
 }
 
 type RunProgressResponse struct {
-	RunID      string            `json:"run_id"`
-	Total      int               `json:"total"`
-	Queued     int               `json:"queued"`
-	Applied    int               `json:"applied"`
-	Failed     int               `json:"failed"`
-	RolledBack int               `json:"rolled_back"`
-	Findings   []FindingProgress `json:"findings"`
+	Issued             int               `json:"issued"`
+	RollbackUnverified int               `json:"rollback_unverified"`
+	RunID              string            `json:"run_id"`
+	Total              int               `json:"total"`
+	Queued             int               `json:"queued"`
+	Applied            int               `json:"applied"`
+	Failed             int               `json:"failed"`
+	RolledBack         int               `json:"rolled_back"`
+	Findings           []FindingProgress `json:"findings"`
 }
 
 type RollbackRequest struct {
@@ -101,7 +103,7 @@ func routes(svc Service) []api.LicensedRoute {
 	return []api.LicensedRoute{
 		{
 			Method: "GET", Path: "/api/v1/pqc/migrations/{run_id}", OperationID: "getPQCMigrationProgress",
-			Summary:        "Read projected per-finding PQC TLS rollout progress and receiver evidence",
+			Summary:        "Read PQC certificate issuance, target verification, and recovery progress",
 			Handler:        func(a *api.API) http.HandlerFunc { return progressHandler(a, svc) },
 			PathParams:     []api.RouteParam{api.PathStringParam("run_id", "PQC migration run id")},
 			ResponseSchema: "PQCMigrationProgress", SuccessCode: "200", Permission: authz.CertsRead,
@@ -321,12 +323,14 @@ func schemas() map[string]*api.Schema {
 			"desired": api.SchemaRef("PQCMigrationTLSPosture"), "previous": api.SchemaRef("PQCMigrationTLSPosture"),
 			"observed": api.SchemaRef("PQCMigrationTLSPosture"), "status": api.StringSchema(),
 			"failure": api.StringSchema(), "updated_at": api.TimestampSchema(),
+			"certificate_fingerprint": api.StringSchema(), "target_algorithm": api.StringSchema(), "effective_algorithm": api.StringSchema(),
 		}, "run_id", "asset_id", "finding_kind", "target_id", "target_revision", "connector", "desired", "status", "updated_at"),
 		"PQCMigrationProgress": api.ObjectSchema(map[string]*api.Schema{
 			"run_id": api.StringSchema(), "total": api.IntegerSchema(), "queued": api.IntegerSchema(),
+			"issued": api.IntegerSchema(), "rollback_unverified": api.IntegerSchema(),
 			"applied": api.IntegerSchema(), "failed": api.IntegerSchema(), "rolled_back": api.IntegerSchema(),
 			"findings": api.ArraySchema(api.SchemaRef("PQCMigrationFindingProgress")),
-		}, "run_id", "total", "queued", "applied", "failed", "rolled_back", "findings"),
+		}, "run_id", "total", "queued", "issued", "applied", "failed", "rolled_back", "rollback_unverified", "findings"),
 		"PQCMigrationRollbackRequest": api.ObjectSchema(map[string]*api.Schema{
 			"asset_ids": api.ArraySchema(api.StringSchema()),
 			"reason":    api.StringSchema(),

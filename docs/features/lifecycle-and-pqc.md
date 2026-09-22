@@ -286,6 +286,21 @@ drives them, while the `pqc campaigns` commands record operator work and never c
 project through the event log into `crypto_assets`, so posture dashboards and
 `migration_progress` stay derived from replayable state, not hand-edited tables.
 
+Read `GET /api/v1/pqc/migrations/{run_id}` to distinguish work that was queued,
+issued, applied, failed, or rolled back. The console's **Refresh progress** action
+shows each finding, its bound target when present, and the issued certificate's
+fingerprint and requested/effective algorithms. Run progress is tenant-scoped and
+rebuilt from retained events, including certificate reissues in older runs.
+
+For certificate-key findings, `issued` means the issuer returned a certificate;
+it does not prove installation or that a listener serves it. These findings count
+under `issued`, not `applied`. Historical certificate rollback restores inventory
+and reports `rollback_unverified`, counted separately from `rolled_back`, because
+it carries no endpoint recovery receipt. Exhausted issuance and rollback attempts
+report `failed` and `rollback_failed` with a redacted explanation. A missing target
+or deployment proof remains visible; neither a successful issuance nor inventory
+rollback establishes working key custody, renewal, or endpoint recovery.
+
 **Execution status:** served in every build through `internal/pqcmigration`, for CBOM
 certificate-key assets through ACME hybrid transition re-issuance with rollback. The core
 also exposes CBOM posture, profile selection, migration campaign tracking and

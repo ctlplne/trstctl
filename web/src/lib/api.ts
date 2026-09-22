@@ -698,6 +698,9 @@ export interface PQCMigrationRun {
 }
 
 export interface PQCMigrationFindingProgress {
+  certificate_fingerprint?: string;
+  target_algorithm?: string;
+  effective_algorithm?: string;
   run_id: string;
   asset_id: string;
   finding_kind: string;
@@ -710,6 +713,8 @@ export interface PQCMigrationFindingProgress {
 }
 
 export interface PQCMigrationProgress {
+  issued?: number;
+  rollback_unverified?: number;
   run_id: string;
   total: number;
   queued: number;

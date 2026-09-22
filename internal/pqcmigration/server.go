@@ -127,6 +127,8 @@ func (h *outboxHandler) deliverLicensed(ctx context.Context, m orchestrator.Mess
 // identifiers; receiver errors and target config never enter the event.
 func (h *outboxHandler) DeliverLicensedTerminalFailure(ctx context.Context, m orchestrator.Message, _ error) (bool, error) {
 	switch m.Destination {
+	case licensedCryptoMigrationReissueDestination, licensedCryptoMigrationRollbackDestination:
+		return true, h.certificateTerminalFailure(ctx, m)
 	case licensedCryptoMigrationTLSPostureDestination, licensedCryptoMigrationTLSRollbackDestination:
 		var handled bool
 		err := withTLSPostureTenantCipher(ctx, h.tenantCrypto, h.integrityKey, m.TenantID, func(scoped context.Context, _ tlsPostureCipher) (err error) {
@@ -457,12 +459,20 @@ func (s *pqcMigrationService) Progress(ctx context.Context, tenantID, runID stri
 	if !found {
 		return RunProgressResponse{}, pgx.ErrNoRows
 	}
-	resp := RunProgressResponse{RunID: runID, Findings: s.progress.Snapshot(tenantID, runID)}
+	return progressResponse(runID, s.progress.Snapshot(tenantID, runID)), nil
+}
+
+func progressResponse(runID string, findings []FindingProgress) RunProgressResponse {
+	resp := RunProgressResponse{RunID: runID, Findings: findings}
 	resp.Total = len(resp.Findings)
 	for _, finding := range resp.Findings {
 		switch finding.Status {
 		case TLSFindingQueued:
 			resp.Queued++
+		case CertificateFindingIssued:
+			resp.Issued++
+		case CertificateFindingRollbackUnverified:
+			resp.RollbackUnverified++
 		case TLSFindingApplied:
 			resp.Applied++
 		case TLSFindingFailed, TLSFindingRollbackFailed:
@@ -471,7 +481,7 @@ func (s *pqcMigrationService) Progress(ctx context.Context, tenantID, runID stri
 			resp.RolledBack++
 		}
 	}
-	return resp, nil
+	return resp
 }
 
 type tlsRollbackGroup struct {
