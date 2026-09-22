@@ -24,6 +24,7 @@ import (
 	"trstctl.com/trstctl/internal/breakglass"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
@@ -46,9 +47,10 @@ const (
 // (AN-5), and the lifecycle orchestrator, resolves the tenant and principal per
 // request, and enforces RBAC (F8) on every guarded route.
 type API struct {
-	tenantServiceCheck tenancy.ServiceCheck
-	store              *store.Store
-	log                *events.Log
+	subjectCSRInspector func([]byte) (crypto.CSRInfo, error)
+	tenantServiceCheck  tenancy.ServiceCheck
+	store               *store.Store
+	log                 *events.Log
 	// policyVersionMemo memoizes the policy-version projection against the
 	// event-log head so GET /api/v1/policy/versions stops replaying the whole
 	// log per request.
@@ -184,7 +186,8 @@ type API struct {
 type Option func(*config)
 
 type config struct {
-	tenantServiceCheck tenancy.ServiceCheck
+	subjectCSRInspector func([]byte) (crypto.CSRInfo, error)
+	tenantServiceCheck  tenancy.ServiceCheck
 	// backupDir is the full-backup directory this API reports DR posture on
 	// (J2). Empty means none is configured.
 	backupDir string
@@ -493,6 +496,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	}
 	specialAbuseLimits := cfg.specialAbuseLimits.withDefaults()
 	a := &API{
+		subjectCSRInspector:         cfg.subjectCSRInspector,
 		tenantServiceCheck:          cfg.tenantServiceCheck,
 		store:                       st,
 		log:                         cfg.eventLog,

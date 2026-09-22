@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"trstctl.com/trstctl/internal/connector"
-	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/custody"
 )
@@ -118,7 +117,7 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 		}
 	}
 
-	key, err := crypto.GenerateHostSubjectKey(intent.SubjectCommonName, intent.SubjectDNSNames)
+	key, err := generateHostRenewSubjectKey(intent)
 	if err != nil {
 		report(ctx, ch, job, OutcomeFailed, "a subject key could not be generated on this host")
 		return false
@@ -229,7 +228,7 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 	// D2's post-deploy handshake, unchanged. A renewal that installed and does
 	// not serve is not a success, and the whole reason this pipeline reports
 	// three outcomes rather than two is so it can say which happened.
-	outcome, detail, evidence := postDeployVerification(ctx, installIntent, material)
+	outcome, detail, evidence := postDeployVerificationWithNative(ctx, installIntent, material, profile.TLSProbeOpenSSL)
 	record, err := HostRenewCustody(intent.Connector, "")
 	if err != nil {
 		report(ctx, ch, job, OutcomeFailed, "the installed key custody could not be classified")

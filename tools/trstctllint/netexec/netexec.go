@@ -210,6 +210,17 @@ var reviewedAmbientHTTPClients = map[string]map[string]bool{
 }
 
 var reviewedExecUses = map[string]map[string]bool{
+	// Native certificate inventory needs separate stdout/stderr evidence, which
+	// the activation-only localOps executor deliberately does not return. This
+	// boundary accepts an operator-owned absolute regular executable, builds
+	// fixed s_client options from validated address/SNI/ALPN tokens, sends no
+	// application stdin, uses one deadline, and reads bounded output directly
+	// into locked buffers before wiping it. No tenant-supplied executable or
+	// shell is accepted. Runtime negative controls live in crypto/tlsprobe;
+	// TestNativeProbeExecBoundary keeps this review file-and-function specific.
+	"internal/crypto/tlsprobe/openssl.go": {
+		"ProbeWithOpenSSL": true,
+	},
 	// The vendored embedded-Postgres launcher executes only fixed PostgreSQL
 	// utilities from the checksum-pinned archive (plus the fixed local `uname`
 	// probe). No shell is involved, the password uses a mode-0600 file, and the

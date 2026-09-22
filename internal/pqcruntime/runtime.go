@@ -12,17 +12,19 @@ import (
 // the wiring census the same closed inventory: licensed X.509 signing, hybrid
 // CSR inspection, pure RFC 9881 parsing, and multi-key SPIFFE issuance.
 type Runtime struct {
-	LeafSigner        editionseam.LicensedLeafSigner
-	CSRInspector      editionseam.LicensedCSRInspector
-	CSRParser         editionseam.LicensedCSRParser
-	SPIFFESVIDFactory editionseam.LicensedSPIFFESVIDFactory
+	LeafSigner         editionseam.LicensedLeafSigner
+	PreparedLeafSigner editionseam.PreparedSubjectLeafSigner
+	CSRInspector       editionseam.LicensedCSRInspector
+	CSRParser          editionseam.LicensedCSRParser
+	SPIFFESVIDFactory  editionseam.LicensedSPIFFESVIDFactory
 }
 
 func NewRuntime() Runtime {
 	return Runtime{
-		LeafSigner:        pqc.SignLicensedLeafFromCSRWithProfile,
-		CSRInspector:      pqc.InspectHybridCSR,
-		CSRParser:         pqc.ParsePureMLDSACSR,
-		SPIFFESVIDFactory: NewSPIFFEHybridSVIDIssuer,
+		LeafSigner:         pqc.SignLicensedLeafFromCSRWithProfile,
+		PreparedLeafSigner: pqc.SignPQCLeafFromCSRWithPreparation,
+		CSRInspector:       pqc.InspectHybridCSR,
+		CSRParser:          pqc.ParsePureMLDSACSR,
+		SPIFFESVIDFactory:  NewSPIFFEHybridSVIDIssuer,
 	}
 }

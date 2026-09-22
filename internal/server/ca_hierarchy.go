@@ -42,11 +42,14 @@ type caCrossSignedEvent struct {
 }
 
 type caHierarchyService struct {
-	store       *store.Store
-	log         *events.Log
-	signer      SignerProvider
-	signAuthz   signing.SignTokenProvider
-	leafProfile crypto.LeafProfile
+	parseSubjectCSR           LicensedCSRParser
+	inspectHybridSubjectCSR   LicensedCSRInspector
+	preparedSubjectLeafSigner PreparedSubjectLeafSigner
+	store                     *store.Store
+	log                       *events.Log
+	signer                    SignerProvider
+	signAuthz                 signing.SignTokenProvider
+	leafProfile               crypto.LeafProfile
 
 	mu      sync.Mutex
 	signers map[string]*signing.RemoteSigner
@@ -57,7 +60,9 @@ func (s *Server) buildCAHierarchyService(d Deps) api.CAHierarchyService {
 		return nil
 	}
 	return &caHierarchyService{
-		store: d.Store, log: d.Log, signer: d.Signer, signAuthz: s.signAuthz,
+		parseSubjectCSR: d.LicensedCSRParser, inspectHybridSubjectCSR: d.LicensedCSRInspector,
+		preparedSubjectLeafSigner: d.PreparedSubjectLeafSigner,
+		store:                     d.Store, log: d.Log, signer: d.Signer, signAuthz: s.signAuthz,
 		leafProfile: d.LeafProfile, signers: map[string]*signing.RemoteSigner{},
 	}
 }
@@ -216,7 +221,7 @@ func (h *caHierarchyService) issueLeafForExactAuthorityWithValidity(
 	// A migration member is pinned to this exact authority, so it cannot follow a
 	// later rotation. It still must stop when that pinned authority expires.
 	profile.ClampTTLToIssuer = true
-	issued, err := signLifecycleLeaf(ctx, caDER, signer, csrDER, ttl, profile)
+	issued, err := signSubjectLifecycleLeaf(ctx, caDER, signer, csrDER, ttl, profile, h.parseSubjectCSR, h.inspectHybridSubjectCSR, h.preparedSubjectLeafSigner)
 	if err != nil {
 		if crypto.IsLeafProfileViolation(err) {
 			return crypto.IssuedLeaf{}, nil, "", fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)

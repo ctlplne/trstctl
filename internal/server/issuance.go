@@ -103,13 +103,12 @@ func connectorPluginDeployerFromManager(pm *PluginManager) connectorPluginDeploy
 // source of truth. It is idempotent on
 // the outbox message's key (AN-5), so a redelivery never mints a second
 // certificate nor double-revokes.
-// Scope decision (A0.3d): the direct identity API deliberately performs
-// server-side CLASSICAL keygen (ephemeral NHI identities; no CSR input), so
-// this dispatcher carries no licensed signer twin — CSR-based enrollment,
-// including licensed subject algorithms, is the protocols' job through
-// protocolIssuer. A future identity key-algorithm parameter is roadmap work,
-// not a dormant seam here.
+// Requester and host-generated CSRs share runtime proof verification and
+// profile enforcement. Key custody does not change authority or name admission;
+// legacy control-plane generation remains the existing classical path.
 type issuanceDispatcher struct {
+	parseSubjectCSR         LicensedCSRParser
+	inspectHybridSubjectCSR LicensedCSRInspector
 	// relayPresence overrides the store for the E1 control-plane refusal; nil in
 	// production, where the store answers.
 	relayPresence  relayPresence
@@ -1050,7 +1049,7 @@ func (d *issuanceDispatcher) enforceProfile(ctx context.Context, tenantID string
 	if err := json.Unmarshal(rec.Spec, &prof); err != nil {
 		return crypto.LeafProfile{}, fmt.Errorf("server: decode profile %q: %w", profileName, err)
 	}
-	info, err := crypto.InspectCSR(csrDER)
+	info, err := d.inspectSubjectCSR(csrDER)
 	if err != nil {
 		if aerr := d.auditProfileDecision(ctx, tenantID, profileName, rec.Version, "deny", "unparseable CSR"); aerr != nil {
 			return crypto.LeafProfile{}, aerr

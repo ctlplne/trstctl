@@ -94,6 +94,7 @@ func TestEveryUntrustedParserIsFuzzed(t *testing.T) {
 		"FuzzInspectCSR":        "profile-validation CSR inspection + EKU ASN.1 decode (csr.go InspectCSR, eku.go)",
 	})
 	requireFuzzFuncByName(t, "tlsprobe", map[string]string{
+		"FuzzNativeProbeOutput":     "bounded native TLS chain and completed-handshake evidence",
 		"FuzzMySQLSSLRequestPacket": "bounded unauthenticated MySQL greeting before certificate observation",
 	})
 	requireFuzzFuncByName(t, "certinfo", map[string]string{

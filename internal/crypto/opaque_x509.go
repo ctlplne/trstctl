@@ -171,58 +171,105 @@ func MarshalOpaquePKCS8(algorithmOID string, keyDER []byte) ([]byte, error) {
 // the private CA operation still crosses the isolated-signer boundary exactly
 // once and the result is verified against the issuing CA before return.
 func SignOpaqueLeafFromVerifiedRequestWithProfile(caCertDER []byte, caSigner DigestSigner, req OpaqueLeafRequest, ttl time.Duration, prof LeafProfile) ([]byte, error) {
+	issued, err := SignOpaqueLeafFromVerifiedRequestWithValidity(caCertDER, caSigner, req, ttl, prof)
+	return issued.DER, err
+}
+
+// SignOpaqueLeafFromVerifiedRequestWithValidity returns the exact signing
+// validity anchor alongside the verified leaf. The caller must already have
+// verified the opaque request's proof of possession.
+func SignOpaqueLeafFromVerifiedRequestWithValidity(caCertDER []byte, caSigner DigestSigner, req OpaqueLeafRequest, ttl time.Duration, prof LeafProfile) (IssuedLeaf, error) {
+	return signOpaqueLeafWithPreparation(caCertDER, caSigner, req, ttl, prof, nil)
+}
+
+// SignOpaqueLeafFromVerifiedRequestWithPreparation preserves the public serial
+// and validity anchor across receiver retries. Bind the preparation durably to
+// the exact issuer, verified request and profile before signing; use an
+// operation-bound signer to retain the signature as well. This constructor
+// enforces the same issuer and profile checks as ordinary opaque issuance.
+func SignOpaqueLeafFromVerifiedRequestWithPreparation(caCertDER []byte, caSigner DigestSigner, req OpaqueLeafRequest, ttl time.Duration, prof LeafProfile, prepared LeafPreparation) (IssuedLeaf, error) {
+	if _, err := prepared.validatedSerial(); err != nil {
+		return IssuedLeaf{}, err
+	}
+	return signOpaqueLeafWithPreparation(caCertDER, caSigner, req, ttl, prof, &prepared)
+}
+
+func signOpaqueLeafWithPreparation(caCertDER []byte, caSigner DigestSigner, req OpaqueLeafRequest, ttl time.Duration, prof LeafProfile, prepared *LeafPreparation) (IssuedLeaf, error) {
 	if caSigner == nil {
-		return nil, errors.New("crypto: opaque leaf requires CA signer")
+		return IssuedLeaf{}, errors.New("crypto: opaque leaf requires CA signer")
 	}
 	if len(req.SubjectPublicKeyInfoDER) == 0 {
-		return nil, errors.New("crypto: opaque leaf requires subject SPKI")
+		return IssuedLeaf{}, errors.New("crypto: opaque leaf requires subject SPKI")
+	}
+	caCert, err := x509.ParseCertificate(caCertDER)
+	if err != nil {
+		return IssuedLeaf{}, fmt.Errorf("crypto: parse opaque-leaf CA cert: %w", err)
+	}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	if prof.ClampTTLToIssuer {
+		remaining := caCert.NotAfter.Sub(now)
+		if remaining <= 0 {
+			return IssuedLeaf{}, &leafProfileError{fmt.Sprintf("issuing CA expired at %s; it cannot vouch for a new leaf", caCert.NotAfter.UTC().Format(time.RFC3339))}
+		}
+		if prepared != nil {
+			remaining = caCert.NotAfter.Sub(prepared.ValidityAnchor)
+			if remaining <= 0 {
+				return IssuedLeaf{}, &leafProfileError{"retained leaf validity starts after issuer expiry"}
+			}
+		}
+		if ttl <= 0 || ttl > remaining {
+			ttl = remaining
+		}
 	}
 	if err := EnforceLeafProfileInfo(req.Info, ttl, prof); err != nil {
-		return nil, err
+		return IssuedLeaf{}, err
 	}
 	if req.SignatureOnly {
 		if u := prof.AllowedKeyUsages; u != nil && (u.KeyEncipherment || u.KeyAgreement || u.DataEncipherment) {
-			return nil, &leafProfileError{"signature-only subject key cannot use keyEncipherment, keyAgreement, or dataEncipherment"}
+			return IssuedLeaf{}, &leafProfileError{"signature-only subject key cannot use keyEncipherment, keyAgreement, or dataEncipherment"}
 		}
 		prof.AllowedKeyUsages = &KeyUsages{DigitalSignature: true}
 	}
 
-	caCert, err := x509.ParseCertificate(caCertDER)
-	if err != nil {
-		return nil, fmt.Errorf("crypto: parse opaque-leaf CA cert: %w", err)
-	}
 	var spki opaquePublicKeyInfo
 	if rest, err := asn1.Unmarshal(req.SubjectPublicKeyInfoDER, &spki); err != nil || len(rest) != 0 {
-		return nil, errors.New("crypto: opaque leaf subject SPKI is malformed")
+		return IssuedLeaf{}, errors.New("crypto: opaque leaf subject SPKI is malformed")
 	}
 	if len(spki.Algorithm.Parameters.FullBytes) != 0 || len(spki.PublicKey.Bytes) == 0 || spki.PublicKey.BitLength != len(spki.PublicKey.Bytes)*8 {
-		return nil, errors.New("crypto: opaque leaf subject SPKI must have absent parameters and an octet-aligned non-empty key")
+		return IssuedLeaf{}, errors.New("crypto: opaque leaf subject SPKI must have absent parameters and an octet-aligned non-empty key")
 	}
 	// RawContent wins over the decoded fields during asn1.Marshal. Clear it so
 	// the validated algorithm/key fields above are what enter the certificate.
 	spki.Raw = nil
 
-	serial, err := randomSerial()
+	var serial *big.Int
+	if prepared != nil {
+		serial, err = prepared.validatedSerial()
+	} else {
+		serial, err = randomSerial()
+	}
 	if err != nil {
-		return nil, err
+		return IssuedLeaf{}, err
 	}
 	knownEKUs, customEKUs, err := leafExtKeyUsage(prof.AllowedExtKeyUsage)
 	if err != nil {
-		return nil, &leafProfileError{err.Error()}
+		return IssuedLeaf{}, &leafProfileError{err.Error()}
 	}
 	ips, err := opaqueIPs(req.Info.IPAddresses)
 	if err != nil {
-		return nil, err
+		return IssuedLeaf{}, err
 	}
 	uniqueURIs, err := opaqueURIs(req.Info.URIs)
 	if err != nil {
-		return nil, err
+		return IssuedLeaf{}, err
 	}
 	ski := sha1.Sum(spki.PublicKey.Bytes) // #nosec G401 -- RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328)
-	now := time.Now().UTC()
+	if prepared != nil {
+		now = prepared.ValidityAnchor.UTC()
+	}
 	notBefore, notAfter, err := leafValidityBounds(now, ttl, prof.MaxValidity)
 	if err != nil {
-		return nil, err
+		return IssuedLeaf{}, err
 	}
 	leaf := &x509.Certificate{
 		SerialNumber: serial,
@@ -241,29 +288,29 @@ func SignOpaqueLeafFromVerifiedRequestWithProfile(caCertDER []byte, caSigner Dig
 	if len(prof.ExtraExtensions) > 0 {
 		extra, err := x509Extensions(prof.ExtraExtensions)
 		if err != nil {
-			return nil, err
+			return IssuedLeaf{}, err
 		}
 		leaf.ExtraExtensions = append(leaf.ExtraExtensions, extra...)
 	}
 	if len(prof.CertificatePolicyOIDs) > 0 {
 		leaf.PolicyIdentifiers, err = policyOIDs(prof.CertificatePolicyOIDs)
 		if err != nil {
-			return nil, err
+			return IssuedLeaf{}, err
 		}
 		leaf.Policies, err = modernPolicyOIDs(prof.CertificatePolicyOIDs)
 		if err != nil {
-			return nil, err
+			return IssuedLeaf{}, err
 		}
 	}
 
 	metadataKey, err := GenerateLockedKey(caSigner.Algorithm())
 	if err != nil {
-		return nil, err
+		return IssuedLeaf{}, err
 	}
 	defer metadataKey.Destroy()
 	metadataAdapter, err := newX509Signer(metadataKey)
 	if err != nil {
-		return nil, err
+		return IssuedLeaf{}, err
 	}
 	metadataParent := *caCert
 	metadataParent.PublicKey = metadataAdapter.Public()
@@ -272,16 +319,16 @@ func SignOpaqueLeafFromVerifiedRequestWithProfile(caCertDER []byte, caSigner Dig
 	// while the actual CA signer is invoked exactly once for the final TBS.
 	metadataDER, err := x509.CreateCertificate(rand.Reader, leaf, &metadataParent, metadataAdapter.Public(), metadataAdapter)
 	if err != nil {
-		return nil, fmt.Errorf("crypto: build opaque leaf metadata: %w", err)
+		return IssuedLeaf{}, fmt.Errorf("crypto: build opaque leaf metadata: %w", err)
 	}
 	var cert opaqueCertificate
 	if rest, err := asn1.Unmarshal(metadataDER, &cert); err != nil || len(rest) != 0 {
-		return nil, errors.New("crypto: decode opaque leaf metadata certificate")
+		return IssuedLeaf{}, errors.New("crypto: decode opaque leaf metadata certificate")
 	}
 	if len(req.RawSubject) > 0 {
 		var subject pkix.RDNSequence
 		if rest, err := asn1.Unmarshal(req.RawSubject, &subject); err != nil || len(rest) != 0 {
-			return nil, errors.New("crypto: opaque leaf subject is malformed")
+			return IssuedLeaf{}, errors.New("crypto: opaque leaf subject is malformed")
 		}
 		cert.TBS.Subject = asn1.RawValue{FullBytes: append([]byte(nil), req.RawSubject...)}
 	}
@@ -289,26 +336,26 @@ func SignOpaqueLeafFromVerifiedRequestWithProfile(caCertDER []byte, caSigner Dig
 	cert.TBS.Raw = nil
 	tbsDER, err := asn1.Marshal(cert.TBS)
 	if err != nil {
-		return nil, fmt.Errorf("crypto: marshal opaque TBSCertificate: %w", err)
+		return IssuedLeaf{}, fmt.Errorf("crypto: marshal opaque TBSCertificate: %w", err)
 	}
 	cert.TBS.Raw = tbsDER
 	signature, err := signOpaqueTBS(caSigner, tbsDER)
 	if err != nil {
-		return nil, err
+		return IssuedLeaf{}, err
 	}
 	cert.SignatureValue = asn1.BitString{Bytes: signature, BitLength: len(signature) * 8}
 	der, err := asn1.Marshal(cert)
 	if err != nil {
-		return nil, fmt.Errorf("crypto: marshal opaque certificate: %w", err)
+		return IssuedLeaf{}, fmt.Errorf("crypto: marshal opaque certificate: %w", err)
 	}
 	issued, err := x509.ParseCertificate(der)
 	if err != nil {
-		return nil, fmt.Errorf("crypto: parse issued opaque leaf: %w", err)
+		return IssuedLeaf{}, fmt.Errorf("crypto: parse issued opaque leaf: %w", err)
 	}
 	if err := issued.CheckSignatureFrom(caCert); err != nil {
-		return nil, fmt.Errorf("crypto: issued opaque leaf failed verification (signer misbehaved): %w", err)
+		return IssuedLeaf{}, fmt.Errorf("crypto: issued opaque leaf failed verification (signer misbehaved): %w", err)
 	}
-	return der, nil
+	return IssuedLeaf{DER: der, ValidityAnchor: now}, nil
 }
 
 type opaqueCertificate struct {

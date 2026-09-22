@@ -79,8 +79,11 @@ type DeployIntent struct {
 	// names from the job payload it queued when the CSR arrives and refuses
 	// anything outside that set, so an agent that edited these before building
 	// its CSR would get a refusal rather than a wider certificate.
-	SubjectCommonName string   `json:"subject_common_name,omitempty"`
-	SubjectDNSNames   []string `json:"subject_dns_names,omitempty"`
+	// SubjectKeyAlgorithm is the reviewed key choice retained in this job.
+	// Empty preserves legacy ECDSA-P256 jobs. Explicit choices never fall back.
+	SubjectKeyAlgorithm string   `json:"subject_key_algorithm,omitempty"`
+	SubjectCommonName   string   `json:"subject_common_name,omitempty"`
+	SubjectDNSNames     []string `json:"subject_dns_names,omitempty"`
 	// PredecessorCertificateID is control-plane bookkeeping the agent never
 	// reads. It is declared so the intent round-trips without loss.
 	PredecessorCertificateID string `json:"predecessor_certificate_id,omitempty"`

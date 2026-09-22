@@ -215,6 +215,7 @@ type Deps struct {
 	LicensedBackgroundWorkers []BackgroundWorker
 	LicensedProjectionOptions []projections.Option
 	LicensedLeafSigner        LicensedLeafSigner
+	PreparedSubjectLeafSigner PreparedSubjectLeafSigner
 	LicensedCSRInspector      LicensedCSRInspector
 	LicensedCSRParser         LicensedCSRParser
 	LicensedSPIFFESVIDFactory LicensedSPIFFESVIDFactory
@@ -718,6 +719,7 @@ type Server struct {
 	// always-present Subject Key Identifier).
 	leafProfile               crypto.LeafProfile
 	licensedLeafSigner        LicensedLeafSigner
+	preparedSubjectLeafSigner PreparedSubjectLeafSigner
 	licensedCSRInspector      LicensedCSRInspector
 	licensedCSRParser         LicensedCSRParser
 	licensedSPIFFESVIDFactory LicensedSPIFFESVIDFactory
@@ -950,6 +952,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 		obHandler:                 d.OutboxHandler,
 		leafProfile:               d.LeafProfile,
 		licensedLeafSigner:        d.LicensedLeafSigner,
+		preparedSubjectLeafSigner: d.PreparedSubjectLeafSigner,
 		licensedCSRInspector:      d.LicensedCSRInspector,
 		licensedCSRParser:         d.LicensedCSRParser,
 		licensedSPIFFESVIDFactory: d.LicensedSPIFFESVIDFactory,
@@ -1444,6 +1447,10 @@ func (s *Server) appendOperationalReadModels(d Deps, defaults *[]api.Option) {
 	// scheduler uses, so the "renew/re-key by" date it shows and the alert an
 	// operator receives are answering the same question.
 	*defaults = append(*defaults, api.WithCALeafValidity(s.lifecycleLeafValidity))
+	*defaults = append(*defaults, api.WithSubjectCSRInspector(func(der []byte) (crypto.CSRInfo, error) {
+		info, _, err := inspectSubjectCSR(der, s.licensedCSRParser, s.licensedCSRInspector)
+		return info, err
+	}))
 	// B4: the ACME external-account-binding operator surface. Read at request
 	// time because protocol construction follows API construction, and because
 	// the usage counters it exposes are live.
@@ -1786,9 +1793,9 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 	switch {
 	case s.obHandler != nil:
 	case s.caSigner != nil:
-		s.obHandler = &issuanceDispatcher{issue: s.issueLeafWithValidity, authorityIssue: authorityIssue, chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.caCertDER}), orch: orch, idem: idem, outbox: s.outbox, store: d.Store, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
+		s.obHandler = &issuanceDispatcher{parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, issue: s.issueLeafWithValidity, authorityIssue: authorityIssue, chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.caCertDER}), orch: orch, idem: idem, outbox: s.outbox, store: d.Store, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
 	default:
-		s.obHandler = &issuanceDispatcher{authorityIssue: authorityIssue, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
+		s.obHandler = &issuanceDispatcher{parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, authorityIssue: authorityIssue, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains}
 	}
 	return nil
 }
@@ -2440,7 +2447,7 @@ func (s *Server) issueLeafWithValidity(ctx context.Context, csrDER []byte, ttl t
 		// Sign under the served issuing profile (PKIGOV-001/002): the leaf carries
 		// the configured CDP/AIA/policy pointers + an always-present SKI, and any
 		// profile constraints (validity/EKU/DNS-suffix) are enforced before signing.
-		issued, err := signLifecycleLeaf(ctx, s.caCertDER, s.caSigner, csrDER, ttl, leafProfile)
+		issued, err := signSubjectLifecycleLeaf(ctx, s.caCertDER, s.caSigner, csrDER, ttl, leafProfile, s.licensedCSRParser, s.licensedCSRInspector, s.preparedSubjectLeafSigner)
 		ch <- result{issued, err}
 	}()
 	select {
@@ -2465,6 +2472,9 @@ func (s *Server) IssueLicensedLeaf(ctx context.Context, csrDER []byte, ttl time.
 // IssueLicensedLeafWithProfile is IssueLicensedLeaf with an explicit served leaf
 // profile, matching IssueLeafWithProfile for tenant profile enforcement.
 func (s *Server) IssueLicensedLeafWithProfile(ctx context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) ([]byte, error) {
+	if s.preparedSubjectLeafSigner != nil {
+		return s.IssueLeafWithProfile(ctx, csrDER, ttl, leafProfile)
+	}
 	if s.caSigner == nil || s.caCertDER == nil {
 		return nil, errors.New("server: licensed issuance unavailable — no out-of-process signer (fail closed)")
 	}

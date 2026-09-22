@@ -21,6 +21,11 @@ import (
 
 type LicensedLeafSigner func(caCertDER []byte, caSigner crypto.DigestSigner, csrDER []byte, ttl time.Duration, prof crypto.LeafProfile) ([]byte, error)
 
+// PreparedSubjectLeafSigner verifies the requested subject proofs and signs
+// the retained public template through the supplied CA signer. Core runtime
+// attachment supplies this for PQC; it grants no private-key custody capability.
+type PreparedSubjectLeafSigner func(caCertDER []byte, caSigner crypto.DigestSigner, csrDER []byte, ttl time.Duration, prof crypto.LeafProfile, prepared crypto.LeafPreparation) (crypto.IssuedLeaf, error)
+
 type LicensedCSRInspector func(csrDER []byte, classical crypto.CSRInfo) (useLicensedSigner bool, err error)
 
 // LicensedCSRParser verifies and describes a subject algorithm the core Go

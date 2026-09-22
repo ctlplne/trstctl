@@ -45,6 +45,10 @@ const postDeployConvergenceWindow = 3 * time.Second
 // stated in the detail so an operator reading a deploy receipt can tell "not
 // checked" from "checked and fine".
 func postDeployVerification(ctx context.Context, intent DeployIntent, material Material) (outcome, detail, evidence string) {
+	return postDeployVerificationWithNative(ctx, intent, material, "")
+}
+
+func postDeployVerificationWithNative(ctx context.Context, intent DeployIntent, material Material, executable string) (outcome, detail, evidence string) {
 	if intent.VerifyAddress == "" {
 		// Honest silence. Reporting OutcomeVerified here would be the exact
 		// overclaim the epic exists to remove, one layer down.
@@ -69,12 +73,13 @@ func postDeployVerification(ctx context.Context, intent DeployIntent, material M
 	defer cancel()
 
 	request := verify.Request{
-		Address:      intent.VerifyAddress,
-		ServerName:   intent.VerifyServerName,
-		Vantage:      transport.VantageLocal,
-		Expect:       expect,
-		Timeout:      time.Second,
-		PreHandshake: connectorTLSNegotiation(intent.Connector),
+		NativeProbeExecutable: executable,
+		Address:               intent.VerifyAddress,
+		ServerName:            intent.VerifyServerName,
+		Vantage:               transport.VantageLocal,
+		Expect:                expect,
+		Timeout:               time.Second,
+		PreHandshake:          connectorTLSNegotiation(intent.Connector),
 	}
 	// A graceful service reload can accept a connection on the predecessor
 	// worker for a short handoff window after the reload command succeeds. A

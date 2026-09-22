@@ -283,6 +283,7 @@ func attachPQC(log *slog.Logger, deps *server.Deps) {
 	deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, migrationRuntime.OutboxFactory)
 	deps.LicensedProjectionOptions = append(deps.LicensedProjectionOptions, migrationRuntime.ProjectionOptions...)
 	deps.LicensedLeafSigner = cryptoRuntime.LeafSigner
+	deps.PreparedSubjectLeafSigner = cryptoRuntime.PreparedLeafSigner
 	deps.LicensedCSRInspector = cryptoRuntime.CSRInspector
 	deps.LicensedCSRParser = cryptoRuntime.CSRParser
 	deps.LicensedSPIFFESVIDFactory = cryptoRuntime.SPIFFESVIDFactory

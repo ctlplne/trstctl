@@ -97,13 +97,16 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 		return nil, status.Error(codes.FailedPrecondition, "issuance is not configured")
 	}
 
-	if err := authorizeAgentCSR(csrDER, permitted); err != nil {
+	if err := authorizeAgentCSRWithInspector(csrDER, permitted, d.inspectSubjectCSR); err != nil {
 		return nil, err
 	}
 
 	var intent RelayDeployIntent
 	if err := json.Unmarshal(job.Payload, &intent); err != nil {
 		return nil, status.Errorf(codes.Internal, "decode renewal job payload: %v", err)
+	}
+	if err := d.authorizeAgentSubjectAlgorithm(csrDER, intent.SubjectKeyAlgorithm); err != nil {
+		return nil, err
 	}
 	identityID := strings.TrimSpace(intent.IdentityID)
 	if identityID == "" {
@@ -138,6 +141,11 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 	}
 
 	out, err := d.idem.Do(ctx, tenantID, idemKey, func(ctx context.Context) ([]byte, error) {
+		// One exact claimed CSR is one signing operation. Transport retries
+		// must preserve its serial/time/signature even if recording the result
+		// fails. A new claim can generate a new key only through the existing
+		// claim/attempt fence and one-CSR-per-attempt check above.
+		ctx = withLeafCommand(ctx, d.idem, tenantID, idemKey)
 		csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
 		selection := endpointAuthoritySelection{
 			Source: strings.TrimSpace(intent.IssuingAuthoritySource),
@@ -286,18 +294,18 @@ func (d *issuanceDispatcher) bindAgentCSRMigrationSuccessor(
 	return nil
 }
 
-// authorizeAgentCSR is the whole authorization decision for an agent's request.
+// authorizeAgentCSRWithInspector is the authorization decision for CSR names.
 //
 // Split out of signAgentSubjectCSR so the decision reads as one thing rather
 // than as a prologue to issuance — and because it is the part worth reading on
 // its own. Everything after it is ordinary minting; everything that stops an
 // agent widening its certificate is here.
-func authorizeAgentCSR(csrDER []byte, permitted []string) error {
+func authorizeAgentCSRWithInspector(csrDER []byte, permitted []string, inspect func([]byte) (crypto.CSRInfo, error)) error {
 	// Parse before trusting anything about it. InspectCSR also verifies the
 	// request's self-signature, which is what makes the CSR proof of possession
 	// rather than an assertion: an agent cannot get a certificate for a public
 	// key it does not hold the private half of.
-	info, err := crypto.InspectCSR(csrDER)
+	info, err := inspect(csrDER)
 	if err != nil {
 		return status.Errorf(codes.InvalidArgument,
 			"csr is not a valid, self-signed PKCS#10 request: %v", err)

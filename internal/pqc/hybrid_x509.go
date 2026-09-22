@@ -89,27 +89,46 @@ func HybridLeafCSRExtraExtension(traditional boundarycrypto.PublicKey, mldsa bou
 // so a PQ-aware client can verify that the issued certificate binds both
 // component keys.
 func SignHybridLeafFromCSRWithProfile(caCertDER []byte, caSigner boundarycrypto.DigestSigner, csrDER []byte, ttl time.Duration, prof boundarycrypto.LeafProfile) ([]byte, error) {
+	profile, err := verifiedHybridLeafProfile(csrDER, prof)
+	if err != nil {
+		return nil, err
+	}
+	return boundarycrypto.SignLeafFromCSRWithProfile(caCertDER, caSigner, csrDER, ttl, profile)
+}
+
+// SignHybridLeafFromCSRWithPreparation binds the same verified hybrid proof to
+// a retained serial and validity anchor. The caller supplies the durable
+// operation-bound CA signer; both subject signatures remain mandatory.
+func SignHybridLeafFromCSRWithPreparation(caCertDER []byte, caSigner boundarycrypto.DigestSigner, csrDER []byte, ttl time.Duration, prof boundarycrypto.LeafProfile, prepared boundarycrypto.LeafPreparation) (boundarycrypto.IssuedLeaf, error) {
+	profile, err := verifiedHybridLeafProfile(csrDER, prof)
+	if err != nil {
+		return boundarycrypto.IssuedLeaf{}, err
+	}
+	return boundarycrypto.SignLeafFromCSRWithPreparation(caCertDER, caSigner, csrDER, ttl, profile, prepared)
+}
+
+func verifiedHybridLeafProfile(csrDER []byte, prof boundarycrypto.LeafProfile) (boundarycrypto.LeafProfile, error) {
 	csr, err := x509.ParseCertificateRequest(csrDER)
 	if err != nil {
-		return nil, fmt.Errorf("pqc: parse hybrid CSR: %w", err)
+		return boundarycrypto.LeafProfile{}, fmt.Errorf("pqc: parse hybrid CSR: %w", err)
 	}
 	if err := csr.CheckSignature(); err != nil {
-		return nil, fmt.Errorf("pqc: hybrid CSR signature: %w", err)
+		return boundarycrypto.LeafProfile{}, fmt.Errorf("pqc: hybrid CSR signature: %w", err)
 	}
 	tradPub, err := ecdsaP256PublicKey(csr.PublicKey)
 	if err != nil {
-		return nil, err
+		return boundarycrypto.LeafProfile{}, err
 	}
 	value, err := verifiedHybridCSRExtension(csr.Extensions, tradPub)
 	if err != nil {
-		return nil, err
+		return boundarycrypto.LeafProfile{}, err
 	}
 	prof.ExtraExtensions = append(append([]boundarycrypto.CertificateExtension(nil), prof.ExtraExtensions...), boundarycrypto.CertificateExtension{
 		OID:      HybridLeafExtensionOID,
 		Critical: false,
 		Value:    value,
 	})
-	return boundarycrypto.SignLeafFromCSRWithProfile(caCertDER, caSigner, csrDER, ttl, prof)
+	return prof, nil
 }
 
 // InspectHybridCSR verifies the hybrid proof extension and reports whether the

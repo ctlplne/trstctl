@@ -140,8 +140,13 @@ func TestRenewalCustodyRowsFollowTheProductionBranch(t *testing.T) {
 	requireCallBefore(t, dispatch, "d.hostRenewalTargetFor", "d.enqueueHostRenewal",
 		"the endpoint.renew job must be selected from the target's executor")
 	hostExecutor := goFunction(t, "../internal/agent/relay/hostrenew.go", "runHostRenew")
-	requireCall(t, hostExecutor, "crypto.GenerateHostSubjectKey",
-		"the queued renewal must terminate in key generation on the serving host")
+	requireCall(t, hostExecutor, "generateHostRenewSubjectKey",
+		"the queued renewal must reach the host's algorithm-specific key generator")
+	hostGenerator := goFunction(t, "../internal/agent/relay/host_subject_algorithm.go", "generateHostRenewSubjectKey")
+	requireCall(t, hostGenerator, "crypto.GenerateHostSubjectKey",
+		"classical renewal must generate its subject key on the serving host")
+	requireCall(t, hostGenerator, "pqc.GenerateHostMLDSASubjectKey",
+		"ML-DSA renewal must generate its subject key on the serving host")
 
 	custody := read(t, "custody.md")
 	requireCustodyRow(t, custody, "Identity leaf, no CSR, agent-executed target", "host agent", "No")

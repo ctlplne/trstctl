@@ -116,7 +116,7 @@ func (a *API) previewIdentityTransition(w http.ResponseWriter, r *http.Request) 
 			a.writeError(w, errStatus(http.StatusBadRequest, "subject_csr_pem is only meaningful on a transition to issued"))
 			return
 		}
-		if err := validateSubjectCSRPEM(csrPEM); err != nil {
+		if err := a.validateSubjectCSRPEM(csrPEM); err != nil {
 			a.writeError(w, errWithStatus(http.StatusBadRequest, err))
 			return
 		}

@@ -42,6 +42,9 @@ const DefaultTimeout = 8 * time.Second
 
 // Request is one endpoint to verify.
 type Request struct {
+	// NativeProbeExecutable comes only from trusted local agent configuration.
+	// It is never accepted from an endpoint verification job or remote JSON.
+	NativeProbeExecutable string `json:"-"`
 	// Address is host:port. Required.
 	Address string
 	// ServerName overrides SNI. Empty sends the address host, which is what a
@@ -109,7 +112,7 @@ func Endpoint(ctx context.Context, req Request) (Result, error) {
 	// handshake worked (M1). Measured around the dial itself, so it includes the
 	// key exchange whose size is the whole question for a hybrid group.
 	handshakeStart := time.Now()
-	probe, err := tlsprobe.Probe(ctx, addr, tlsprobe.WithTimeout(timeout), tlsprobe.WithServerName(strings.TrimSpace(req.ServerName)), tlsprobe.WithPreHandshake(req.PreHandshake))
+	probe, err := tlsprobe.ProbeWithNativeFallback(ctx, req.NativeProbeExecutable, addr, tlsprobe.WithTimeout(timeout), tlsprobe.WithServerName(strings.TrimSpace(req.ServerName)), tlsprobe.WithPreHandshake(req.PreHandshake))
 	tr.HandshakeMillis = time.Since(handshakeStart).Milliseconds()
 	if err != nil {
 		// Unreachable. The transcript says so and claims nothing else: no

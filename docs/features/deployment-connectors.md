@@ -225,6 +225,23 @@ rows select a logical profile name but cannot add a root, executable, or argumen
 }
 ```
 
+For a host that serves ML-DSA certificates, the optional `tls_probe_openssl`
+property in that same local profile names an absolute OpenSSL executable, for
+example `"tls_probe_openssl": "/opt/openssl-3.5/bin/openssl"`. Install a build that
+supports the selected ML-DSA signature and verify its provenance on the host.
+The file must be a regular executable, not a symlink; a missing or invalid path
+refuses the profile at startup. Tenant targets and jobs cannot supply this path.
+
+The ordinary probe runs first. If a direct TLS handshake fails, the configured
+native probe attempts TLS 1.3 within the same deadline and reports the exact
+presented leaf and chain. This applies to target tests, deployments, host
+renewals and host rollback. It preserves working classical and STARTTLS paths;
+it does not replace a failed STARTTLS negotiation with direct TLS. Without the
+option, a listener Go cannot handshake remains unverified. The native probe sends
+no application requests and does not establish CA trust or revocation status.
+Those checks, and testing the application's actual operation, remain separate
+qualification steps.
+
 Envoy uses its co-resident HTTP SDS endpoint and does not consume filesystem or exec
 permissions, but it is still host-vantage work: the control plane never falls back to
 dialing a loopback Envoy endpoint on its own machine. The host executor accepts only

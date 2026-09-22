@@ -29,3 +29,9 @@ func TestNetExecGuardAcceptsTheSanctionedPath(t *testing.T) {
 		"trstctl.com/trstctl/internal/netsec",
 	)
 }
+
+func TestNativeProbeExecBoundary(t *testing.T) {
+	analysistest.Run(t, analysistest.TestData(), netexec.Analyzer,
+		"trstctl.com/trstctl/internal/crypto/tlsprobe",
+	)
+}

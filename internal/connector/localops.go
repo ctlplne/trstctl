@@ -48,8 +48,11 @@ type LocalAction struct {
 // AllowedRoots and Action come from operator startup config, never from a tenant
 // deployment target.
 type LocalOpsConfig struct {
-	AllowedRoots []string
-	Actions      []LocalAction
+	// TLSProbeOpenSSL is an optional absolute executable path from the local
+	// host profile. Tenant target/job JSON cannot set process authority.
+	TLSProbeOpenSSL string
+	AllowedRoots    []string
+	Actions         []LocalAction
 }
 
 // LocalActionInvocation is one command a host connector would ask its sandbox

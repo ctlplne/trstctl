@@ -78,6 +78,29 @@ func SignLicensedLeafFromCSRWithProfile(caCertDER []byte, caSigner boundarycrypt
 	}, ttl, prof)
 }
 
+// SignPQCLeafFromCSRWithPreparation verifies the requested subject proof and
+// preserves the retained lifecycle certificate template for either the pure
+// ML-DSA subject or an explicitly requested hybrid transition extension. It
+// never substitutes a classical-only leaf after a PQC proof fails.
+func SignPQCLeafFromCSRWithPreparation(caCertDER []byte, caSigner boundarycrypto.DigestSigner, csrDER []byte, ttl time.Duration, prof boundarycrypto.LeafProfile, prepared boundarycrypto.LeafPreparation) (boundarycrypto.IssuedLeaf, error) {
+	info, pure, err := ParsePureMLDSACSR(csrDER)
+	if err != nil {
+		return boundarycrypto.IssuedLeaf{}, err
+	}
+	if !pure {
+		return SignHybridLeafFromCSRWithPreparation(caCertDER, caSigner, csrDER, ttl, prof, prepared)
+	}
+	opaque, err := boundarycrypto.InspectOpaqueCSR(csrDER)
+	if err != nil {
+		return boundarycrypto.IssuedLeaf{}, err
+	}
+	return boundarycrypto.SignOpaqueLeafFromVerifiedRequestWithPreparation(caCertDER, caSigner, boundarycrypto.OpaqueLeafRequest{
+		Info: info, RawSubject: opaque.RawSubject,
+		SubjectPublicKeyInfoDER: opaque.RawSubjectPublicKeyInfo,
+		SignatureOnly:           true,
+	}, ttl, prof, prepared)
+}
+
 // GenerateInteroperableMLDSAKey derives an ML-DSA key from a fresh 32-byte
 // FIPS 204 seed and returns both a locked signer and an RFC 9881 seed-form
 // PKCS#8 value. The PKCS#8 bytes are intentionally exportable only for the

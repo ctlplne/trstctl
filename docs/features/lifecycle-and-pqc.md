@@ -282,9 +282,10 @@ re-issuance through the outbox toward the selected target algorithm.
 The migration API attaches `POST /api/v1/pqc/migrations` and
 `POST /api/v1/pqc/migrations/{run_id}/rollback` through the attach seam, so those routes
 are not part of the static OpenAPI golden; `trstctl-cli pqc migrations start|rollback`
-drives them, while the `pqc campaigns` commands record operator work and never call them. Completion and rollback
-project through the event log into `crypto_assets`, so posture dashboards and
-`migration_progress` stay derived from replayable state, not hand-edited tables.
+drives them, while the `pqc campaigns` commands record operator work and never call them.
+Run progress comes from retained events. CBOM posture changes only with an
+independent observation or a verified TLS posture receipt; issuing a certificate
+alone does not change the algorithm the endpoint is recorded as serving.
 
 Read `GET /api/v1/pqc/migrations/{run_id}` to distinguish work that was queued,
 issued, applied, failed, or rolled back. The console's **Refresh progress** action
@@ -294,11 +295,13 @@ rebuilt from retained events, including certificate reissues in older runs.
 
 For certificate-key findings, `issued` means the issuer returned a certificate;
 it does not prove installation or that a listener serves it. These findings count
-under `issued`, not `applied`. Historical certificate rollback restores inventory
-and reports `rollback_unverified`, counted separately from `rolled_back`, because
-it carries no endpoint recovery receipt. Exhausted issuance and rollback attempts
+under `issued`, not `applied`. Historical certificate rollback reports
+`rollback_unverified`, counted separately from `rolled_back`, because it carries
+no endpoint recovery receipt. Its event remains in history without rewriting
+observed inventory. A new scan or read-model rebuild corrects inventory previously
+changed by these issuance-only or unverified rollback events. Exhausted issuance and rollback attempts
 report `failed` and `rollback_failed` with a redacted explanation. A missing target
-or deployment proof remains visible; neither a successful issuance nor inventory
+or deployment proof remains visible; neither a successful issuance nor an unverified
 rollback establishes working key custody, renewal, or endpoint recovery.
 
 **Execution status:** served in every build through `internal/pqcmigration`, for CBOM

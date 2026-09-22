@@ -156,7 +156,7 @@ func (a *API) issuanceRequestPreview(ctx context.Context, tenantID string, body 
 	}
 	csrPEM := strings.TrimSpace(body.CSRPEM)
 	if csrPEM != "" {
-		if err := validateSubjectCSRPEM(csrPEM); err != nil {
+		if err := a.validateSubjectCSRPEM(csrPEM); err != nil {
 			return issuanceRequestPreviewResponse{}, errStatus(http.StatusBadRequest, err.Error())
 		}
 	}

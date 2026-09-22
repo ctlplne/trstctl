@@ -33,7 +33,7 @@ func (a *API) executeIdentityTransition(ctx context.Context, tenantID string, pr
 		if state != orchestrator.StateIssued {
 			return 0, nil, errStatus(http.StatusBadRequest, "subject_csr_pem is only meaningful on a transition to issued")
 		}
-		if err := validateSubjectCSRPEM(csrPEM); err != nil {
+		if err := a.validateSubjectCSRPEM(csrPEM); err != nil {
 			// Persist this exact refusal through the bound recorder. No
 			// transition, approval intent or signer/outbox call has run.
 			// A lost reply can retry the SAME key and recover this specific

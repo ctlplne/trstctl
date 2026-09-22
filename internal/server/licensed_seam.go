@@ -5,6 +5,7 @@ package server
 import "trstctl.com/trstctl/internal/editionseam"
 
 type LicensedLeafSigner = editionseam.LicensedLeafSigner
+type PreparedSubjectLeafSigner = editionseam.PreparedSubjectLeafSigner
 type LicensedCSRInspector = editionseam.LicensedCSRInspector
 type LicensedCSRParser = editionseam.LicensedCSRParser
 type LicensedSPIFFESVIDFactory = editionseam.LicensedSPIFFESVIDFactory

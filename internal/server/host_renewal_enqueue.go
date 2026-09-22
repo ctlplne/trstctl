@@ -142,6 +142,10 @@ func (d *issuanceDispatcher) enqueueHostRenewal(
 		return err
 	}
 
+	algorithm, err := hostRenewalSubjectAlgorithm(ident.Attributes)
+	if err != nil {
+		return err
+	}
 	intent := RelayDeployIntent{
 		Connector:                target.Type,
 		Target:                   routed,
@@ -152,6 +156,7 @@ func (d *issuanceDispatcher) enqueueHostRenewal(
 		CredentialRefs:           collectSecretRefs(target.Config),
 		VerifyAddress:            verifyAddress,
 		VerifyServerName:         verifyServerName,
+		SubjectKeyAlgorithm:      algorithm,
 		SubjectCommonName:        commonName,
 		SubjectDNSNames:          dnsNames,
 		PredecessorCertificateID: predecessorCertificateID,

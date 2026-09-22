@@ -377,8 +377,11 @@ type RelayDeployIntent struct {
 	// control plane re-reads them from this payload when the CSR comes back up
 	// and refuses any name outside the set. An agent may generate whatever key
 	// it likes; it may not choose what that key gets to be called.
-	SubjectCommonName string   `json:"subject_common_name,omitempty"`
-	SubjectDNSNames   []string `json:"subject_dns_names,omitempty"`
+	// SubjectKeyAlgorithm pins the reviewed subject choice, independently of
+	// allowed profile algorithms. The signer refuses a different algorithm.
+	SubjectKeyAlgorithm string   `json:"subject_key_algorithm,omitempty"`
+	SubjectCommonName   string   `json:"subject_common_name,omitempty"`
+	SubjectDNSNames     []string `json:"subject_dns_names,omitempty"`
 	// PredecessorCertificateID is the certificate this renewal replaces (B2).
 	//
 	// It travels in the payload because the control plane must know it when the

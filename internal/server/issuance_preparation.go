@@ -62,9 +62,39 @@ func (s leafOperationSigner) SignDigest(digest []byte, opts crypto.SignOptions) 
 // precisely the same digest and receives precisely the same signature. These
 // are receiver bookkeeping records, not a replacement for certificate events.
 func signLifecycleLeaf(ctx context.Context, caDER []byte, signer crypto.DigestSigner, csr []byte, ttl time.Duration, profile crypto.LeafProfile) (crypto.IssuedLeaf, error) {
+	if _, durable := ctx.Value(leafCommandContextKey{}).(leafCommand); !durable {
+		return crypto.SignLeafFromCSRWithValidity(caDER, signer, csr, ttl, profile)
+	}
+	return signLifecycleLeafUsing(ctx, caDER, signer, csr, ttl, profile, crypto.SignLeafFromCSRWithPreparation)
+}
+
+// signSubjectLifecycleLeaf selects only after possession checks. Its selected
+// signer still receives the retained template and operation-bound CA signer;
+// selecting a subject algorithm never bypasses durable issuance bookkeeping.
+func signSubjectLifecycleLeaf(ctx context.Context, caDER []byte, signer crypto.DigestSigner, csr []byte, ttl time.Duration, profile crypto.LeafProfile,
+	parser LicensedCSRParser, inspector LicensedCSRInspector, preparedSigner PreparedSubjectLeafSigner,
+) (crypto.IssuedLeaf, error) {
+	_, pqc, err := inspectSubjectCSR(csr, parser, inspector)
+	if err != nil {
+		return crypto.IssuedLeaf{}, err
+	}
+	if !pqc {
+		return signLifecycleLeaf(ctx, caDER, signer, csr, ttl, profile)
+	}
+	if preparedSigner == nil {
+		return crypto.IssuedLeaf{}, errors.New("server: requested subject algorithm has no prepared signer; no algorithm was substituted")
+	}
+	return signLifecycleLeafUsing(ctx, caDER, signer, csr, ttl, profile, preparedSigner)
+}
+
+func signLifecycleLeafUsing(ctx context.Context, caDER []byte, signer crypto.DigestSigner, csr []byte, ttl time.Duration, profile crypto.LeafProfile, issue PreparedSubjectLeafSigner) (crypto.IssuedLeaf, error) {
 	command, durable := ctx.Value(leafCommandContextKey{}).(leafCommand)
 	if !durable {
-		return crypto.SignLeafFromCSRWithValidity(caDER, signer, csr, ttl, profile)
+		prepared, err := crypto.NewLeafPreparation()
+		if err != nil {
+			return crypto.IssuedLeaf{}, err
+		}
+		return issue(caDER, signer, csr, ttl, profile, prepared)
 	}
 	journal, ok := signer.(journaledLeafSigner)
 	if !ok || command.idem == nil || command.tenantID == "" || command.key == "" {
@@ -98,5 +128,5 @@ func signLifecycleLeaf(ctx context.Context, caDER []byte, signer crypto.DigestSi
 	if err != nil {
 		return crypto.IssuedLeaf{}, err
 	}
-	return crypto.SignLeafFromCSRWithPreparation(caDER, leafOperationSigner{journal, crypto.SHA256Hex(operation)}, csr, ttl, profile, prepared)
+	return issue(caDER, leafOperationSigner{journal, crypto.SHA256Hex(operation)}, csr, ttl, profile, prepared)
 }

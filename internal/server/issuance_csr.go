@@ -78,7 +78,7 @@ func (d *issuanceDispatcher) mintServedLeafForRenewal(
 		if err != nil {
 			return issuedLeafMaterial{}, fmt.Errorf("server: requester renewal requires retained authorized CSR: %w", err)
 		}
-		if err := validateRequesterRenewalCSR([]byte(csr), predecessor); err != nil {
+		if err := validateRequesterRenewalCSRWithInspector([]byte(csr), predecessor, d.inspectSubjectCSR); err != nil {
 			return issuedLeafMaterial{}, err
 		}
 		// The current renewal admission/profile/authority checks still apply.
@@ -96,7 +96,11 @@ func (d *issuanceDispatcher) mintServedLeafForRenewal(
 // SPKI bytes. The opaque parser is used only for public-key extraction AFTER
 // InspectCSR checks proof of possession; it is never signature authorization.
 func validateRequesterRenewalCSR(publicCSR []byte, predecessor store.Certificate) error {
-	der, info, err := crypto.ParsePublicCSRPEM(publicCSR)
+	return validateRequesterRenewalCSRWithInspector(publicCSR, predecessor, crypto.InspectCSR)
+}
+
+func validateRequesterRenewalCSRWithInspector(publicCSR []byte, predecessor store.Certificate, inspect func([]byte) (crypto.CSRInfo, error)) error {
+	der, info, err := crypto.ParsePublicCSRPEMWithInspector(publicCSR, inspect)
 	if err != nil {
 		return err
 	}
@@ -164,7 +168,7 @@ func (d *issuanceDispatcher) mintServedLeafFromCSRForSelection(
 	csrPEM []byte,
 	issuance ...*store.OperationApprovalIssuanceBinding,
 ) (issuedLeafMaterial, error) {
-	csrDER, dnsNames, err := decodeSubjectCSR(csrPEM)
+	csrDER, dnsNames, err := decodeSubjectCSRWithInspector(csrPEM, d.inspectSubjectCSR)
 	if err != nil {
 		return issuedLeafMaterial{}, err
 	}
@@ -193,6 +197,25 @@ func (d *issuanceDispatcher) mintServedLeafFromCSRForSelection(
 	info, err := certinfo.Inspect(blk.Bytes)
 	if err != nil {
 		return issuedLeafMaterial{}, err
+	}
+	// Bind inventory metadata to the actual issued subject, even when the Go
+	// certificate parser cannot name its algorithm. A CA response for another
+	// public key must never be recorded as this request's successful issuance.
+	requested, err := crypto.InspectOpaqueCSR(csrDER)
+	if err != nil {
+		return issuedLeafMaterial{}, err
+	}
+	if crypto.SHA256Hex(requested.RawSubjectPublicKeyInfo) != info.SPKISHA256 {
+		return issuedLeafMaterial{}, errors.New("server: issued certificate subject key differs from the authorized CSR")
+	}
+	if d.parseSubjectCSR != nil {
+		subject, recognized, err := d.parseSubjectCSR(csrDER)
+		if err != nil {
+			return issuedLeafMaterial{}, err
+		}
+		if recognized {
+			info.KeyAlgorithm = subject.KeyAlgorithm
+		}
 	}
 	var ownerPtr *string
 	if ownerID := strings.TrimSpace(ident.OwnerID); ownerID != "" {
@@ -251,7 +274,11 @@ func (d *issuanceDispatcher) recordServerSideKeygenDeprecation(ctx context.Conte
 // unsigned CSR is a caller mistake, and it should come back as one instead of
 // surfacing as an opaque signing failure later in the outbox.
 func decodeSubjectCSR(csrPEM []byte) (der []byte, dnsNames []string, err error) {
-	der, info, err := crypto.ParsePublicCSRPEM(csrPEM)
+	return decodeSubjectCSRWithInspector(csrPEM, crypto.InspectCSR)
+}
+
+func decodeSubjectCSRWithInspector(csrPEM []byte, inspect func([]byte) (crypto.CSRInfo, error)) (der []byte, dnsNames []string, err error) {
+	der, info, err := crypto.ParsePublicCSRPEMWithInspector(csrPEM, inspect)
 	if err != nil {
 		return nil, nil, fmt.Errorf("server: subject CSR is not one valid, self-signed PKCS#10 request: %w", err)
 	}

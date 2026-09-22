@@ -414,7 +414,11 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// D2: the deploy applied. Whether the listener is SERVING it is a different
 	// question, and this is the only moment it can be asked — the redeemed
 	// certificate's life ends when this function returns.
-	outcome, detail, evidence := postDeployVerification(ctx, intent, material)
+	nativeProbe := ""
+	if hostJob {
+		nativeProbe = hostProfile.TLSProbeOpenSSL
+	}
+	outcome, detail, evidence := postDeployVerificationWithNative(ctx, intent, material, nativeProbe)
 
 	// E2: and whether the APPLIANCE agrees. The handshake says what a client
 	// gets; this says what the device thinks it has, and the two together
@@ -605,11 +609,11 @@ func runRollback(ctx context.Context, ch Channel, client *http.Client, hostProfi
 					denied = true
 					return false, errors.New("host rollback capability denied")
 				}
-				outcome, detail, evidence = postDeployVerification(ctx, DeployIntent{
+				outcome, detail, evidence = postDeployVerificationWithNative(ctx, DeployIntent{
 					Connector: intent.Connector, Target: intent.Target, TargetID: intent.TargetID,
 					Fingerprint: intent.PredecessorFingerprint, TargetConfig: intent.TargetConfig,
 					VerifyAddress: intent.VerifyAddress, VerifyServerName: intent.VerifyServerName,
-				}, material)
+				}, material, hostProfile.TLSProbeOpenSSL)
 				return outcome != transport.OutcomeVerifyFailed, nil
 			})
 		switch {

@@ -5270,12 +5270,11 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if pl.RunID == "" || pl.AssetID == "" || pl.Kind == "" || pl.Location == "" || pl.EffectiveAlgorithm == "" {
 			return fmt.Errorf("projections: %s requires run_id, asset_id, kind, location, and effective_algorithm", e.Type)
 		}
-		reasons := []string{"licensed crypto migration run " + pl.RunID + " re-issued through " + pl.Protocol}
-		return p.store.ApplyCryptoAssetMigratedTx(ctx, tx, store.CryptoAsset{
-			ID: pl.AssetID, TenantID: e.TenantID, Kind: pl.Kind, Location: pl.Location,
-			Algorithm: pl.EffectiveAlgorithm, KeyBits: pl.EffectiveKeyBits, Library: pl.OriginalLibrary,
-			Strength: "strong", QuantumVulnerable: false, OutOfPolicy: false, Reasons: reasons,
-		}, e.Sequence, e.Time)
+		// This historical event proves issuance only. It carries neither a
+		// bound deployment target nor an authenticated listener observation.
+		// The progress projection retains the issued certificate; changing the
+		// observed CBOM here would invent a cutover that may never happen.
+		return nil
 	case EventLicensedCryptoMigrationRollbackCompleted:
 		var pl LicensedCryptoMigrationRollbackCompleted
 		if err := decode(e, &pl); err != nil {
@@ -5284,12 +5283,10 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if pl.RunID == "" || pl.AssetID == "" || pl.Kind == "" || pl.Location == "" || pl.Strength == "" {
 			return fmt.Errorf("projections: %s requires run_id, asset_id, kind, location, and strength", e.Type)
 		}
-		return p.store.ApplyCryptoAssetRolledBackTx(ctx, tx, store.CryptoAsset{
-			ID: pl.AssetID, TenantID: e.TenantID, Kind: pl.Kind, Location: pl.Location,
-			Algorithm: pl.Algorithm, KeyBits: pl.KeyBits, Protocol: pl.Protocol,
-			Cipher: pl.Cipher, Library: pl.Library, Strength: pl.Strength,
-			QuantumVulnerable: pl.QuantumVulnerable, OutOfPolicy: pl.OutOfPolicy, Reasons: pl.Reasons,
-		}, e.Sequence, e.Time)
+		// Historical certificate rollback has no receiver evidence either.
+		// Keep its audit/progress fact without restoring invented inventory or
+		// overwriting a later independent observation of the endpoint.
+		return nil
 	case EventConnectorDeliveryRecorded:
 		var pl ConnectorDeliveryRecorded
 		if err := decode(e, &pl); err != nil {

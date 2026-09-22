@@ -12,6 +12,17 @@ import (
 // signature. It rejects skipped, nested or additional PEM blocks before decoding;
 // pem.Decode alone searches past malformed input for a later usable block.
 func ParsePublicCSRPEM(raw []byte) ([]byte, CSRInfo, error) {
+	return ParsePublicCSRPEMWithInspector(raw, InspectCSR)
+}
+
+// ParsePublicCSRPEMWithInspector applies the same bounded, exact PEM envelope
+// contract before calling a trusted algorithm-aware proof verifier. The verifier
+// must check possession of every requested key; extracting fields is insufficient.
+// A nil verifier fails closed and no partial result escapes a verification error.
+func ParsePublicCSRPEMWithInspector(raw []byte, inspect func([]byte) (CSRInfo, error)) ([]byte, CSRInfo, error) {
+	if inspect == nil {
+		return nil, CSRInfo{}, errors.New("crypto: public CSR proof verifier is required")
+	}
 	if len(raw) == 0 || len(raw) > 64*1024 {
 		return nil, CSRInfo{}, errors.New("crypto: public CSR must fit 64 KiB")
 	}
@@ -27,7 +38,7 @@ func ParsePublicCSRPEM(raw []byte) ([]byte, CSRInfo, error) {
 		len(block.Headers) != 0 || len(bytes.TrimSpace(rest)) != 0 {
 		return nil, CSRInfo{}, errors.New("crypto: malformed or additional public CSR data")
 	}
-	info, err := InspectCSR(block.Bytes)
+	info, err := inspect(block.Bytes)
 	if err != nil {
 		return nil, CSRInfo{}, err
 	}

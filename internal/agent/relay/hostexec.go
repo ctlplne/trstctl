@@ -95,6 +95,9 @@ func ExecutesOnHost(name string) bool {
 // argv would expose it in the process table and make it something a deployment
 // system rewrites; putting it in a file makes it something an operator owns.
 type HostProfile struct {
+	// TLSProbeOpenSSL enables a native direct-TLS probe when Go cannot
+	// handshake the served certificate. Only local startup config owns it.
+	TLSProbeOpenSSL string `json:"tls_probe_openssl,omitempty"`
 	// AllowedRoots are the only directories a connector may write into. Every
 	// path is canonicalized and symlinked parents fail closed.
 	AllowedRoots []string `json:"allowed_roots"`
@@ -132,6 +135,11 @@ func LoadHostProfile(path string) (connector.LocalOpsConfig, error) {
 	if len(profile.AllowedRoots) == 0 {
 		return connector.LocalOpsConfig{}, errors.New("relay: host profile names no allowed roots; a profile that permits nothing is safer than one that permits everything, so this is refused rather than defaulted")
 	}
+	if profile.TLSProbeOpenSSL != "" {
+		if err := tlsprobe.ValidateOpenSSLExecutable(profile.TLSProbeOpenSSL); err != nil {
+			return connector.LocalOpsConfig{}, fmt.Errorf("relay: invalid tls_probe_openssl: %w", err)
+		}
+	}
 	actions := make([]connector.LocalAction, 0, len(profile.Actions))
 	for _, action := range profile.Actions {
 		if strings.TrimSpace(action.LogicalName) == "" || strings.TrimSpace(action.Command) == "" {
@@ -147,7 +155,7 @@ func LoadHostProfile(path string) (connector.LocalOpsConfig, error) {
 			Timeout:     timeout,
 		})
 	}
-	return connector.LocalOpsConfig{AllowedRoots: profile.AllowedRoots, Actions: actions}, nil
+	return connector.LocalOpsConfig{AllowedRoots: profile.AllowedRoots, Actions: actions, TLSProbeOpenSSL: profile.TLSProbeOpenSSL}, nil
 }
 
 // HostTargetConfig is the host-side view of a deployment target: the paths and
@@ -377,7 +385,7 @@ func DryRunOnHost(
 		reachability = probeEndpoint(ctx, client, plan.Endpoint)
 	} else {
 		plan.Endpoint = strings.TrimSpace(intent.VerifyAddress)
-		reachability = probeHostListener(ctx, plan.Endpoint, strings.TrimSpace(intent.VerifyServerName), connectorTLSNegotiation(intent.Connector))
+		reachability = probeHostListenerWithNative(ctx, plan.Endpoint, strings.TrimSpace(intent.VerifyServerName), connectorTLSNegotiation(intent.Connector), profile.TLSProbeOpenSSL)
 	}
 	plan.Steps = append(plan.Steps, reachability)
 	if reachability.Status == StepFailed {
@@ -500,13 +508,17 @@ func hostPreflightActions(name string, target HostTargetConfig) ([]connector.Loc
 }
 
 func probeHostListener(ctx context.Context, address, serverName string, negotiate tlsprobe.PreHandshake) PlanStep {
+	return probeHostListenerWithNative(ctx, address, serverName, negotiate, "")
+}
+
+func probeHostListenerWithNative(ctx context.Context, address, serverName string, negotiate tlsprobe.PreHandshake, executable string) PlanStep {
 	if strings.TrimSpace(address) == "" {
 		return PlanStep{Name: "reachability", Status: StepSkipped,
 			Detail: "no verify_address is configured; this deploy can proceed, but trstctl will not claim the certificate is live until a listener address is added and verified"}
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, dryRunProbeTimeout)
 	defer cancel()
-	observed, err := tlsprobe.Probe(probeCtx, address,
+	observed, err := tlsprobe.ProbeWithNativeFallback(probeCtx, executable, address,
 		tlsprobe.WithTimeout(dryRunProbeTimeout), tlsprobe.WithServerName(serverName), tlsprobe.WithPreHandshake(negotiate))
 	if err != nil {
 		return PlanStep{Name: "reachability", Status: StepFailed,
