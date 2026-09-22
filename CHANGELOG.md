@@ -2,6 +2,9 @@
 
 ### Changed
 
+- Managed tenant provisioning now accepts its existing provider metadata under
+  the required event privacy policy, while retaining closed field validation.
+
 - Authority agreement reports now show only the authenticated tenant's
   authorities, counts, resolution metrics and collection status. Reconciliation
   replay keeps witness ownership separate across tenants and rejects conflicting

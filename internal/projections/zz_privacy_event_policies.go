@@ -1454,8 +1454,13 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 // version even when the existing schema was designed to carry no personal data.
 func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPayloadShape {
 	return map[privacyEventPolicyKey]events.PrivacyPayloadShape{
-		{audit.EventTypeArchived, audit.ArchivedEventSchemaVersion}:                 privacyPayloadShape[audit.ArchivedEvent](),
-		{EventTenantRegistered, 1}:                                                  privacyPayloadShape[tenantRegistered](),
+		{audit.EventTypeArchived, audit.ArchivedEventSchemaVersion}: privacyPayloadShape[audit.ArchivedEvent](),
+		// Both producers already emit v1. The required managed_offering field
+		// distinguishes the managed variant; each alternative remains closed.
+		{EventTenantRegistered, 1}: events.PrivacyPayloadShapeOneOf(
+			privacyPayloadShape[tenantRegistered](),
+			privacyPayloadShape[ManagedTenantRegistered](),
+		),
 		{EventTenantOffboarded, 1}:                                                  privacyPayloadShape[tenantOffboarded](),
 		{EventOwnershipReconciled, 1}:                                               privacyPayloadShape[OwnershipReconciled](),
 		{EventCMDBScheduleConfigured, 1}:                                            privacyPayloadShape[CMDBScheduleConfigured](),

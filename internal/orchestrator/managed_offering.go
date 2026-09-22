@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 )
 
 const ManagedOfferingDeploymentModel = "managed_provider"
@@ -45,24 +46,6 @@ type ManagedTenant struct {
 	ProvisionedBy    string    `json:"provisioned_by,omitempty"`
 	CreatedAt        time.Time `json:"created_at"`
 	EventSequence    uint64    `json:"event_sequence"`
-}
-
-type managedTenantRegisteredPayload struct {
-	Name            string                        `json:"name"`
-	ManagedOffering managedTenantOfferingMetadata `json:"managed_offering"`
-}
-
-type managedTenantOfferingMetadata struct {
-	Enabled          bool      `json:"enabled"`
-	DeploymentModel  string    `json:"deployment_model"`
-	ProviderTenantID string    `json:"provider_tenant_id"`
-	Region           string    `json:"region,omitempty"`
-	DataResidency    string    `json:"data_residency,omitempty"`
-	Plan             string    `json:"plan,omitempty"`
-	SupportTier      string    `json:"support_tier,omitempty"`
-	SLOTier          string    `json:"slo_tier,omitempty"`
-	ProvisionedBy    string    `json:"provisioned_by,omitempty"`
-	ProvisionedAt    time.Time `json:"provisioned_at"`
 }
 
 // ProvisionManagedTenant appends the hosted tenant's tenant.registered event and
@@ -109,9 +92,9 @@ func (o *Orchestrator) ProvisionManagedTenant(
 			TenantID: in.TenantID, Name: in.Name, IdempotencyKey: idempotencyKey,
 			RequestMaterial: requestMaterial,
 			PayloadAt: func(eventTime time.Time) ([]byte, error) {
-				return json.Marshal(managedTenantRegisteredPayload{
+				return json.Marshal(projections.ManagedTenantRegistered{
 					Name: in.Name,
-					ManagedOffering: managedTenantOfferingMetadata{
+					ManagedOffering: projections.ManagedOfferingMetadata{
 						Enabled:          true,
 						DeploymentModel:  ManagedOfferingDeploymentModel,
 						ProviderTenantID: providerTenantID,
