@@ -23981,36 +23981,15 @@ export const messages = {
   },
   "posture.pqcMigration.heading": {
     defaultMessage: "PQC migration workflow",
-    description: "Heading for the licensed CBOM-to-migration workflow.",
+    description: "Heading for the core CBOM-to-migration workflow.",
   },
   "posture.pqcMigration.description": {
     defaultMessage: "Select vulnerable CBOM assets, preview the exact plan, then explicitly authorize a rollback-safe migration.",
     description: "Explains the guarded PQC migration workflow.",
   },
-  "posture.pqcMigration.checkingEdition": {
-    defaultMessage: "Checking PQC migration entitlement...",
-    description: "Status while the console reads the offline edition state.",
-  },
-  "posture.pqcMigration.unavailableHeading": {
-    defaultMessage: "Migration execution is unavailable in this edition",
-    description: "Heading for honest PQC edition degradation.",
-  },
-  "posture.pqcMigration.communityBody": {
-    defaultMessage:
-      "Community keeps CBOM discovery and readiness fully usable. The licensed fleet migration engine is not mounted, so this page makes no migration API call.",
-    description: "Community-mode explanation that avoids a dead licensed control.",
-  },
-  "posture.pqcMigration.readOnlyBody": {
-    defaultMessage: "The license is read-only. Existing CBOM evidence remains visible, but new migration plans, runs, and rollbacks are disabled.",
-    description: "Read-only license explanation for PQC migration.",
-  },
-  "posture.pqcMigration.editionsLink": {
-    defaultMessage: "Review editions and license state",
-    description: "Link from the PQC edition boundary to the editions page.",
-  },
   "posture.pqcMigration.noAssets": {
     defaultMessage: "No vulnerable CBOM assets are currently eligible for migration.",
-    description: "Empty state for the licensed migration selector.",
+    description: "Empty state for the core migration selector.",
   },
   "posture.pqcMigration.selectLegend": {
     defaultMessage: "Vulnerable assets",
@@ -24116,8 +24095,8 @@ export const messages = {
   "posture.pqcCampaign.communityHeading": { defaultMessage: "Tracking works in Community", description: "Standalone core capability heading." },
   "posture.pqcCampaign.communityBody": {
     defaultMessage:
-      "Record work performed manually or by any tool. Automated fleet execution is unavailable in this edition, but campaign ownership, readiness, dispositions, and signed closure remain fully usable.",
-    description: "Honest edition boundary for PQC campaigns.",
+      "Track ownership, readiness, and evidence for work performed manually or by any tool. Campaigns do not start migrations automatically. Use the core PQC migration workflow to execute a reviewed plan, then record its evidence here.",
+    description: "Separates campaign tracking from execution of a reviewed migration.",
   },
   "posture.pqcCampaign.createHeading": { defaultMessage: "Create a campaign", description: "PQC campaign creation form heading." },
   "posture.pqcCampaign.name": { defaultMessage: "Campaign name", description: "PQC campaign name field." },

@@ -50,7 +50,6 @@ async function renderPosture() {
   await waitFor(() => expect(apiMock.discoveryFindings).toHaveBeenCalled());
   await waitFor(() => expect(apiMock.ctMonitoring).toHaveBeenCalled());
   await waitFor(() => expect(apiMock.driftRemediation).toHaveBeenCalled());
-  await waitFor(() => expect(apiMock.editions).toHaveBeenCalled());
   return result;
 }
 
@@ -786,42 +785,18 @@ describe("posture collector disclosures", () => {
     expect(screen.queryByRole("button", { name: /run inventory|enable pqc|change algorithm/i })).not.toBeInTheDocument();
   });
 
-  it("keeps Community CBOM useful without calling unavailable migration routes", async () => {
+  it("offers core migration without a removed commercial feature", async () => {
     const user = userEvent.setup();
     await renderPosture();
     await user.click(screen.getByText("Compatibility, PQC policy, and upgrade planning", { exact: true }));
-
     expect(screen.getByRole("heading", { name: "PQC migration workflow" })).toBeInTheDocument();
-    expect(screen.getByText("Migration execution is unavailable in this edition")).toBeInTheDocument();
-    expect(screen.getByText(/Community keeps CBOM discovery and readiness fully usable/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Review editions and license state" })).toHaveAttribute("href", "/admin/editions");
+    expect(screen.getByRole("button", { name: "Preview migration plan" })).toBeDisabled();
+    expect(apiMock.editions).not.toHaveBeenCalled();
     expect(apiMock.planPQCMigration).not.toHaveBeenCalled();
     expect(apiMock.startPQCMigration).not.toHaveBeenCalled();
-    expect(apiMock.getPQCMigrationProgress).not.toHaveBeenCalled();
-    expect(apiMock.rollbackPQCMigration).not.toHaveBeenCalled();
   });
 
-  it("previews, explicitly starts, monitors, and rolls back a licensed migration", async () => {
-    apiMock.editions.mockResolvedValue({
-      tier: "enterprise",
-      state: "active",
-      features: [{ name: "pqc", tier: "enterprise", licensed: true, mode: "enabled" }],
-      fips: { module_active: false, required: false, self_test_passed: true },
-      packaging: {
-        category_label: "",
-        positioning: "",
-        billable_unit: "",
-        provider_billing_unit: "",
-        no_per_certificate_billing: true,
-        no_ephemeral_identity_billing: true,
-        certificate_counters_classification: "",
-        managed_boundary: "",
-        commercial_posture: "",
-        evidence_rail: [],
-        editions: [],
-        meters: [],
-      },
-    });
+  it("previews, explicitly starts, monitors, and rolls back a core migration", async () => {
     apiMock.planPQCMigration.mockResolvedValue({
       reissues: [
         {

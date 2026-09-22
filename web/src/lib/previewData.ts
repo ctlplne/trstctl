@@ -719,7 +719,7 @@ const previewReaders: Record<string, () => unknown> = {
         excepted_count: 0,
         automated_execution_available: false,
         automated_execution_note:
-          "Campaign tracking and evidence work without a license. Automated fleet execution is unavailable in this edition; record work performed manually or by another tool.",
+          "Campaign tracking and evidence work without a license. Campaigns do not start migrations automatically; use the core PQC migration workflow to execute a reviewed plan and record its evidence in the campaign.",
         created_at: generatedAt,
         updated_at: generatedAt,
       },

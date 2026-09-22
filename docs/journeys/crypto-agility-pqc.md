@@ -34,7 +34,7 @@ post-quantum target.
 - The lifecycle, crypto-agility, and PQC-migration model is in
   [Lifecycle & PQC](../features/lifecycle-and-pqc.md); how the key-encryption key and
   secret material are protected is in [Secrets](../features/secrets.md).
-- The licensed shipped path serves three concrete compatibility anchors: pure
+- The shipped Core path serves three concrete compatibility anchors: pure
   ML-DSA-65 leaf enrollment over EST with stock OpenSSL 3.5, a two-entry classical +
   ML-DSA-65 SPIFFE Workload API response, and automatic CBOM TLS protocol/cipher
   remediation through a posture-capable connector with exact rollback. See
@@ -50,7 +50,7 @@ post-quantum target.
    redesign. The detail is in [Lifecycle & PQC](../features/lifecycle-and-pqc.md).
 
 2. Know which post-quantum algorithms are available. Behind that single path,
-   alongside classical RSA and ECDSA/Ed25519, the licensed EE algorithms are
+   alongside classical RSA and ECDSA/Ed25519, the Core algorithms are
    ML-DSA (FIPS 204) and SLH-DSA (FIPS 205) signatures, ML-KEM (FIPS 203) key
    encapsulation, and classical+ML-DSA hybrids — the full catalog, with
    guidance on which suits roots versus high-volume leaves, is in
@@ -117,9 +117,9 @@ post-quantum target.
    certificate was issued under. Profiles are covered in
    [Lifecycle & PQC](../features/lifecycle-and-pqc.md).
 
-5. Start the licensed EE PQC migration for certificate-key assets. Pick the
-   `certificate-key` asset ids from `GET /api/v1/cbom/assets` whose licensed
-   migration target is `ML-DSA-65`, then queue the migration through the EE API:
+5. Start the Core PQC migration for certificate-key assets. Pick the
+   `certificate-key` asset ids from `GET /api/v1/cbom/assets` whose
+   migration target is `ML-DSA-65`, then queue the migration through the API:
 
    ```json
    {
@@ -182,7 +182,7 @@ post-quantum target.
    }
    ```
 
-   Submit that payload to the licensed EE rollback endpoint:
+   Submit that payload to the Core rollback endpoint:
 
    ```sh
    curl -sS \

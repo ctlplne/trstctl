@@ -1,16 +1,22 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n/I18nProvider";
-import {
-  api,
-  type CBOMAsset,
-  type EditionFeature,
-  type PQCMigrationPlan,
-  type PQCMigrationProgress,
-  type PQCMigrationRequest,
-  type PQCMigrationRun,
-} from "@/lib/api";
+import { api, type CBOMAsset, type PQCMigrationPlan, type PQCMigrationProgress, type PQCMigrationRequest, type PQCMigrationRun } from "@/lib/api";
+
+import { useRuntimeOperationExecution, type RuntimeOperationExecutionPosture } from "@/lib/capabilities";
+
+function OperationNotice({ action }: { action: RuntimeOperationExecutionPosture }) {
+  const { t } = useTranslation();
+  if (action.runnable) return null;
+  const detail = action.checking
+    ? t("capabilities.action.checking")
+    : (action.unavailable?.detail ?? (action.state === "denied" ? t("capabilities.action.denied") : t("capabilities.action.unknown")));
+  return (
+    <p role="status" className="text-sm text-muted-foreground">
+      {detail}
+    </p>
+  );
+}
 
 const pqcTargetAlgorithm = "ML-DSA-65";
 
@@ -23,8 +29,10 @@ const requestFor = (assetIds: string[]): PQCMigrationRequest => ({
 
 export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
   const { t } = useTranslation();
-  const [feature, setFeature] = useState<EditionFeature | null>(null);
-  const [editionLoading, setEditionLoading] = useState(true);
+  const planAuthority = useRuntimeOperationExecution("planPQCMigration");
+  const startAuthority = useRuntimeOperationExecution("startPQCMigration");
+  const progressAuthority = useRuntimeOperationExecution("getPQCMigrationProgress");
+  const rollbackAuthority = useRuntimeOperationExecution("rollbackPQCMigration");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [plan, setPlan] = useState<PQCMigrationPlan | null>(null);
   const [run, setRun] = useState<PQCMigrationRun | null>(null);
@@ -37,27 +45,6 @@ export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
 
   const vulnerable = useMemo(() => assets.filter((asset) => asset.quantum_vulnerable || asset.out_of_policy), [assets]);
   const selectedIds = vulnerable.filter((asset) => selected.has(asset.id)).map((asset) => asset.id);
-  const enabled = feature?.licensed === true && feature.mode === "enabled";
-
-  useEffect(() => {
-    let cancelled = false;
-    setEditionLoading(true);
-    void api
-      .editions()
-      .then((info) => {
-        if (!cancelled) setFeature(info.features.find((item) => item.name === "pqc") ?? null);
-      })
-      .catch(() => {
-        if (!cancelled) setFeature(null);
-      })
-      .finally(() => {
-        if (!cancelled) setEditionLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   function toggle(assetId: string) {
     setSelected((current) => {
       const next = new Set(current);
@@ -72,7 +59,7 @@ export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
   }
 
   async function preview() {
-    if (selectedIds.length === 0) return;
+    if (!planAuthority.runnable || selectedIds.length === 0) return;
     setBusy("plan");
     setError(null);
     setResult(null);
@@ -87,7 +74,7 @@ export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
   }
 
   async function start() {
-    if (!plan || !confirmed || selectedIds.length === 0) return;
+    if (!startAuthority.runnable || !plan || !confirmed || selectedIds.length === 0) return;
     setBusy("start");
     setError(null);
     setResult(null);
@@ -104,7 +91,7 @@ export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
   }
 
   async function refresh() {
-    if (!run) return;
+    if (!progressAuthority.runnable || !run) return;
     setBusy("progress");
     setError(null);
     try {
@@ -117,7 +104,7 @@ export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
   }
 
   async function rollback() {
-    if (!run || !rollbackConfirmed || selectedIds.length === 0) return;
+    if (!rollbackAuthority.runnable || !run || !rollbackConfirmed || selectedIds.length === 0) return;
     setBusy("rollback");
     setError(null);
     setResult(null);
@@ -141,23 +128,9 @@ export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
         <p className="mt-1 text-sm text-muted-foreground">{t("posture.pqcMigration.description")}</p>
       </div>
 
-      {editionLoading ? <p role="status">{t("posture.pqcMigration.checkingEdition")}</p> : null}
-
-      {!editionLoading && !enabled ? (
-        <div className="rounded-control border border-border bg-muted/30 p-3" role="note">
-          <p className="font-medium">{t("posture.pqcMigration.unavailableHeading")}</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {feature?.mode === "read_only" ? t("posture.pqcMigration.readOnlyBody") : t("posture.pqcMigration.communityBody")}
-          </p>
-          <Link className="mt-2 inline-block text-sm underline" to="/admin/editions">
-            {t("posture.pqcMigration.editionsLink")}
-          </Link>
-        </div>
-      ) : null}
-
-      {!editionLoading && enabled && vulnerable.length === 0 ? <p className="text-sm text-muted-foreground">{t("posture.pqcMigration.noAssets")}</p> : null}
-
-      {!editionLoading && enabled && vulnerable.length > 0 ? (
+      <OperationNotice action={planAuthority} />
+      {planAuthority.runnable && vulnerable.length === 0 ? <p className="text-sm text-muted-foreground">{t("posture.pqcMigration.noAssets")}</p> : null}
+      {planAuthority.runnable && vulnerable.length > 0 ? (
         <>
           <fieldset className="grid gap-2">
             <legend className="text-sm font-medium">{t("posture.pqcMigration.selectLegend")}</legend>
@@ -185,73 +158,76 @@ export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
             </Button>
             <span className="text-sm text-muted-foreground">{t("posture.pqcMigration.selectedCount", { count: String(selectedIds.length) })}</span>
           </div>
-
-          {plan ? (
-            <section className="grid gap-3 rounded-control border border-border p-3" aria-labelledby="pqc-plan-heading">
-              <h4 id="pqc-plan-heading" className="font-medium">
-                {t("posture.pqcMigration.planHeading")}
-              </h4>
-              <dl className="grid gap-2 text-sm sm:grid-cols-3">
-                <div>
-                  <dt className="text-muted-foreground">{t("posture.pqcMigration.reissues")}</dt>
-                  <dd>{plan.reissue_count}</dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">{t("posture.pqcMigration.tlsRollouts")}</dt>
-                  <dd>{plan.tls_rollout_count}</dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">{t("posture.pqcMigration.residuals")}</dt>
-                  <dd>{plan.residuals.length}</dd>
-                </div>
-              </dl>
-              {plan.residuals.length > 0 ? (
-                <ul className="list-disc pl-5 text-sm">
-                  {plan.residuals.map((item) => (
-                    <li key={item.id}>
-                      {item.id}: {item.reason}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              <label className="flex items-start gap-2 text-sm">
-                <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
-                <span>{t("posture.pqcMigration.startConfirmation")}</span>
-              </label>
-              <Button type="button" onClick={() => void start()} disabled={!confirmed || busy !== null}>
-                {busy === "start" ? t("posture.pqcMigration.starting") : t("posture.pqcMigration.start")}
-              </Button>
-            </section>
-          ) : null}
-
-          {run ? (
-            <section className="grid gap-3 rounded-control border border-border p-3" aria-labelledby="pqc-run-heading">
-              <h4 id="pqc-run-heading" className="font-medium">
-                {t("posture.pqcMigration.progressHeading", { runId: run.run_id })}
-              </h4>
-              <p className="text-sm">
-                {progress
-                  ? t("posture.pqcMigration.progressSummary", {
-                      applied: String(progress.applied),
-                      queued: String(progress.queued),
-                      failed: String(progress.failed),
-                      rolledBack: String(progress.rolled_back),
-                    })
-                  : t("posture.pqcMigration.progressNotLoaded")}
-              </p>
-              <Button type="button" variant="outline" onClick={() => void refresh()} disabled={busy !== null}>
-                {busy === "progress" ? t("posture.pqcMigration.refreshing") : t("posture.pqcMigration.refresh")}
-              </Button>
-              <label className="flex items-start gap-2 text-sm">
-                <input type="checkbox" checked={rollbackConfirmed} onChange={(event) => setRollbackConfirmed(event.target.checked)} />
-                <span>{t("posture.pqcMigration.rollbackConfirmation")}</span>
-              </label>
-              <Button type="button" variant="outline" onClick={() => void rollback()} disabled={!rollbackConfirmed || busy !== null}>
-                {busy === "rollback" ? t("posture.pqcMigration.rollingBack") : t("posture.pqcMigration.rollback")}
-              </Button>
-            </section>
-          ) : null}
         </>
+      ) : null}
+
+      {plan ? (
+        <section className="grid gap-3 rounded-control border border-border p-3" aria-labelledby="pqc-plan-heading">
+          <h4 id="pqc-plan-heading" className="font-medium">
+            {t("posture.pqcMigration.planHeading")}
+          </h4>
+          <dl className="grid gap-2 text-sm sm:grid-cols-3">
+            <div>
+              <dt className="text-muted-foreground">{t("posture.pqcMigration.reissues")}</dt>
+              <dd>{plan.reissue_count}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">{t("posture.pqcMigration.tlsRollouts")}</dt>
+              <dd>{plan.tls_rollout_count}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">{t("posture.pqcMigration.residuals")}</dt>
+              <dd>{plan.residuals.length}</dd>
+            </div>
+          </dl>
+          {plan.residuals.length > 0 ? (
+            <ul className="list-disc pl-5 text-sm">
+              {plan.residuals.map((item) => (
+                <li key={item.id}>
+                  {item.id}: {item.reason}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
+            <span>{t("posture.pqcMigration.startConfirmation")}</span>
+          </label>
+          <OperationNotice action={startAuthority} />
+          <Button type="button" onClick={() => void start()} disabled={!startAuthority.runnable || !confirmed || busy !== null}>
+            {busy === "start" ? t("posture.pqcMigration.starting") : t("posture.pqcMigration.start")}
+          </Button>
+        </section>
+      ) : null}
+
+      {run ? (
+        <section className="grid gap-3 rounded-control border border-border p-3" aria-labelledby="pqc-run-heading">
+          <h4 id="pqc-run-heading" className="font-medium">
+            {t("posture.pqcMigration.progressHeading", { runId: run.run_id })}
+          </h4>
+          <p className="text-sm">
+            {progress
+              ? t("posture.pqcMigration.progressSummary", {
+                  applied: String(progress.applied),
+                  queued: String(progress.queued),
+                  failed: String(progress.failed),
+                  rolledBack: String(progress.rolled_back),
+                })
+              : t("posture.pqcMigration.progressNotLoaded")}
+          </p>
+          <OperationNotice action={progressAuthority} />
+          <Button type="button" variant="outline" onClick={() => void refresh()} disabled={!progressAuthority.runnable || busy !== null}>
+            {busy === "progress" ? t("posture.pqcMigration.refreshing") : t("posture.pqcMigration.refresh")}
+          </Button>
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" checked={rollbackConfirmed} onChange={(event) => setRollbackConfirmed(event.target.checked)} />
+            <span>{t("posture.pqcMigration.rollbackConfirmation")}</span>
+          </label>
+          <OperationNotice action={rollbackAuthority} />
+          <Button type="button" variant="outline" onClick={() => void rollback()} disabled={!rollbackAuthority.runnable || !rollbackConfirmed || busy !== null}>
+            {busy === "rollback" ? t("posture.pqcMigration.rollingBack") : t("posture.pqcMigration.rollback")}
+          </Button>
+        </section>
       ) : null}
 
       {result ? <p role="status">{result}</p> : null}
