@@ -2530,7 +2530,7 @@ func TestSecurityPostureStrengthGuardsStayRequired(t *testing.T) {
 	}
 	webAPI := read(t, "../web/src/lib/api.ts")
 	requireAllContained(t, "SEC-004", "api.ts transport import", webAPI,
-		`import { createPreviewAwareApi, mutate, mutateForAuthenticatedBrowserTenant, req } from "./apiTransport"`,
+		`import { createPreviewAwareApi, mutate, mutateForAuthenticatedBrowserTenant, newIdempotencyKey, req } from "./apiTransport"`,
 		"mutate<Identity>(",
 	)
 	webTransport := read(t, "../web/src/lib/apiTransport.ts")
@@ -3810,7 +3810,7 @@ func TestSurfaceStrengthGuardsStayRequired(t *testing.T) {
 	)
 	apiClient := read(t, "../web/src/lib/api.ts")
 	check("web/src/lib/api.ts", apiClient,
-		`import { createPreviewAwareApi, mutate, mutateForAuthenticatedBrowserTenant, req } from "./apiTransport"`,
+		`import { createPreviewAwareApi, mutate, mutateForAuthenticatedBrowserTenant, newIdempotencyKey, req } from "./apiTransport"`,
 		"no token/secret ever crosses to the client",
 	)
 	apiTransport := read(t, "../web/src/lib/apiTransport.ts")

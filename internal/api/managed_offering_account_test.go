@@ -16,7 +16,7 @@ func TestManagedTenantBrowserCannotOmitReviewedAccount(t *testing.T) {
 		// The normal route guard authenticates before this handler. Presence of
 		// the browser cookie requires a reviewed account even if another auth
 		// header is also present; an old browser must reload, not mutate blindly.
-		r.AddCookie(&http.Cookie{Name: a.browserSessionCookieName(), Value: "synthetic-session"})
+		r.AddCookie(&http.Cookie{Name: a.browserSessionCookieName(), Value: "synthetic-session", Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
 		w := httptest.NewRecorder()
 		a.provisionManagedTenant(w, r)
 		if w.Code != http.StatusConflict {
