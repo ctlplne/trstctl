@@ -24,9 +24,9 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/api"
@@ -42,7 +42,7 @@ import (
 // projection is a compile-time possibility the handler has to answer for rather
 // than a panic at 3am.
 type DriftReader interface {
-	Snapshot() rounds.DriftSnapshot
+	SnapshotForTenant(string) rounds.DriftSnapshot
 }
 
 // AuthorityAgreement is one authority's standing with the others.
@@ -74,7 +74,7 @@ type AgreementReport struct {
 	// number that matters: a resolved witness is history, an open one is a
 	// disagreement nobody has reconciled.
 	OpenWitnesses int `json:"open_witnesses"`
-	// ReplayWatermark is how far the projection has consumed the event log.
+	// ReplayWatermark is the last consumed event sequence belonging to this tenant.
 	// Served because every count below is only as current as this: a projection
 	// lagging the log reports an old world confidently, and an operator reading
 	// zero open witnesses deserves to know whether that is news or silence.
@@ -102,35 +102,41 @@ type AgreementReport struct {
 	Guidance   string `json:"guidance"`
 }
 
-const agreementGuidance = "This reports AGREEMENT between authorities, not their health. An " +
-	"authority nobody has collected from recently is not agreeing — it is silent, and silence " +
-	"counts zero witnesses exactly as perfect agreement does. Read open_witnesses together with " +
-	"replay_watermark and configured: zero open witnesses on an unconfigured deployment, or on " +
-	"one whose projection is lagging the event log, is not a statement that your authorities " +
-	"match."
+const agreementGuidance = "This reports agreement between authorities within your tenant, not their health. " +
+	"An authority that has not been collected from recently has not been verified. Read " +
+	"open_witnesses together with configured and collecting. The replay watermark identifies " +
+	"the last tenant event consumed; it does not show when each authority was last compared. " +
+	"Zero witnesses alone do not prove agreement."
 
 // Service answers the agreement question from the drift projection.
 type Service struct {
 	drift DriftReader
-	// rounds is how many reconciliation schedules exist. Zero means nothing is
-	// looking for divergence, whatever the counts below say.
-	rounds int
+	// rounds counts reconciliation schedules per tenant. Zero means no schedule
+	// is looking for that tenant, whatever the counts below say.
+	rounds map[string]int
 }
 
-// NewService builds the served surface over a drift projection and the number
-// of configured reconciliation schedules.
-func NewService(drift DriftReader, roundsScheduled int) *Service {
-	return &Service{drift: drift, rounds: roundsScheduled}
+// NewService builds the served surface over a tenant-scoped drift projection
+// and each tenant's configured reconciliation schedule count.
+func NewService(drift DriftReader, roundsScheduled map[string]int) *Service {
+	schedules := make(map[string]int, len(roundsScheduled))
+	for tenantID, count := range roundsScheduled {
+		if tenantID = strings.TrimSpace(tenantID); tenantID != "" && count > 0 {
+			schedules[tenantID] += count
+		}
+	}
+	return &Service{drift: drift, rounds: schedules}
 }
 
-// Report renders the current agreement state.
-func (s *Service) Report() AgreementReport {
+// Report renders the current agreement state for one tenant.
+func (s *Service) Report(tenantID string) AgreementReport {
+	tenantID = strings.TrimSpace(tenantID)
 	report := AgreementReport{
 		Authorities: []AuthorityAgreement{},
 		Guidance:    agreementGuidance,
 	}
 	if s == nil || s.drift == nil {
-		// XREC is not attached — an unlicensed or unconfigured deployment.
+		// XREC is not attached on this deployment.
 		// Reported as unconfigured rather than as agreement, because a page
 		// saying "0 open witnesses" over a system that is not looking is the
 		// exact false assurance this epic exists to remove.
@@ -140,9 +146,9 @@ func (s *Service) Report() AgreementReport {
 		return report
 	}
 
-	snapshot := s.drift.Snapshot()
+	snapshot := s.drift.SnapshotForTenant(tenantID)
 	report.Configured = true
-	report.Collecting = s.rounds > 0
+	report.Collecting = s.rounds[tenantID] > 0
 	report.OpenWitnesses = snapshot.OpenWitnesses
 	report.ReplayWatermark = snapshot.ReplayWatermark
 
@@ -233,10 +239,15 @@ func agreementDetail(report AgreementReport) string {
 	}
 }
 
-func (s *Service) handleAgreement(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(s.Report())
-	_ = r
+func (s *Service) handleAgreement(a *api.API) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tenantID, ok := a.Tenant(r)
+		if !ok {
+			a.WriteProblemUnauthorized(w)
+			return
+		}
+		a.WriteJSON(w, http.StatusOK, s.Report(tenantID))
+	}
 }
 
 // Routes declares the XREC agreement surface.
@@ -252,7 +263,7 @@ func Routes(svc *Service) []api.LicensedRoute {
 			Path:           "/api/v1/reconcile/agreement",
 			OperationID:    "getAuthorityAgreement",
 			Summary:        "Report whether the configured authorities agree, and where they do not",
-			Handler:        func(*api.API) http.HandlerFunc { return svc.handleAgreement },
+			Handler:        func(a *api.API) http.HandlerFunc { return svc.handleAgreement(a) },
 			ResponseSchema: "AuthorityAgreementReport",
 			SuccessCode:    "200",
 			Permission:     authz.CertsRead,
@@ -260,8 +271,8 @@ func Routes(svc *Service) []api.LicensedRoute {
 	}
 }
 
-// NewAPIOptionsFactory mounts the agreement surface behind FeatureReconcile.
-func NewAPIOptionsFactory(drift DriftReader, roundsScheduled int) editionseam.LicensedAPIOptionsFactory {
+// NewAPIOptionsFactory mounts the tenant-scoped agreement surface.
+func NewAPIOptionsFactory(drift DriftReader, roundsScheduled map[string]int) editionseam.LicensedAPIOptionsFactory {
 	return func(editionseam.LicensedAPIOptionsDeps) ([]api.Option, error) {
 		svc := NewService(drift, roundsScheduled)
 		return []api.Option{

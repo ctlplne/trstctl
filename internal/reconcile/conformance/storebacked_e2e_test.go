@@ -132,12 +132,16 @@ func TestE2E_StoreBackedAuthoritiesRoundToWitness(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- rt.BackgroundWorkers[0].Run(workerCtx) }()
 	deadline := time.Now().Add(60 * time.Second)
-	for countEventsOfType(t, h.log, witness.EventTypeWitnessRecorded) == 0 {
+	// A witness is durable before its quarantine admission finishes. Wait for
+	// both effects before stopping the worker; otherwise this test can cancel
+	// admission itself and then mistake its own cancellation for a product loss.
+	for countEventsOfType(t, h.log, witness.EventTypeWitnessRecorded) == 0 ||
+		countEventsOfType(t, h.log, quarantine.EventTypeEntered) == 0 {
 		if time.Now().After(deadline) {
 			cancel()
 			<-done
-			t.Fatal("no witness recorded within 60s: the scheduled round never turned the seeded " +
-				"divergence into ledger evidence")
+			t.Fatal("witness recording and quarantine admission did not both complete within 60s " +
+				"after the scheduled round observed seeded divergence")
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
@@ -288,6 +292,7 @@ func TestE2E_StoreBackedAuthoritiesRoundToWitness(t *testing.T) {
 	if presence == 0 || conflicts == 0 {
 		t.Fatalf("drift counts presence=%d conflicts=%d; the served surface must show both classes", presence, conflicts)
 	}
+	assertStoreBackedAgreementTenantBoundary(t, h, rt)
 }
 
 type e2eSignerProvider struct {

@@ -188,7 +188,7 @@ func attachReconcile(cfg *config.Config, log *slog.Logger, deps *server.Deps) er
 	// it, so XREC could detect that two authorities disagreed and had no way to
 	// tell anybody.
 	deps.LicensedAPIOptionsFactory = appendAPIFactory(deps.LicensedAPIOptionsFactory,
-		reconcileapi.NewAPIOptionsFactory(runtime.DriftProjection, runtime.RoundsScheduled))
+		reconcileapi.NewAPIOptionsFactory(runtime.DriftProjection, runtime.RoundsScheduledByTenant))
 	if log != nil {
 		log.Info("XREC reconciliation attached")
 	}

@@ -390,6 +390,52 @@ configured registry ID in the lifecycle preview, and verify actual issuance,
 product deployment and the listener separately. A registry row alone proves none
 of those outcomes.
 
+## Authority agreement
+
+Authority agreement compares the certificate inventory with the internal CA's
+issuance ledger. It helps identify certificates present on only one side or with
+different revocation states. The Posture panel and
+`GET /api/v1/reconcile/agreement` require `certs:read` and return only the
+authenticated tenant's authorities, counts, resolution metrics and schedule status.
+
+Add a schedule to the control plane's configuration file, using the tenant's
+actual ID, then restart the control plane:
+
+```json
+{
+  "reconcile": {
+    "schedules": [{
+      "tenant_id": "YOUR_TENANT_ID",
+      "cadence": "1h",
+      "jitter": "5m",
+      "liveness": "24h",
+      "authorities": [
+        {"authority_id": "trstctl-self"},
+        {"authority_id": "trstctl-ca"}
+      ]
+    }]
+  }
+}
+```
+
+`trstctl-self` reads captured certificates in the inventory; `trstctl-ca` reads
+the internal CA ledger. Both compare certificates within that tenant's internal
+CA jurisdiction. External-CA certificates and inventory entries without captured
+certificate bytes do not participate in this comparison. This schedule does not
+configure a connection to an external CA.
+
+An empty schedule list compares nothing. Each schedule needs a tenant ID and at
+least two authority entries with nonempty IDs; use the two distinct authorities
+above. Missing, invalid or nonpositive duration values use defaults: one hour for
+cadence, five minutes for jitter and 24 hours for liveness. An authority's optional
+`liveness` value inherits the schedule value when omitted.
+
+`collecting` indicates that this tenant has a configured schedule. It does not
+prove that collection succeeded. Check control-plane logs for `xrec round failed`
+when investigating a failed comparison. `replay_watermark` is the last event
+sequence consumed for this tenant; it is not the time of the last comparison.
+Zero open witnesses alone do not establish agreement or current authority health.
+
 ## Notifications
 
 Notification channels are off until an operator configures them. When enabled, lifecycle

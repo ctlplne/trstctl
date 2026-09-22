@@ -2,6 +2,11 @@
 
 ### Changed
 
+- Authority agreement reports now show only the authenticated tenant's
+  authorities, counts, resolution metrics and collection status. Reconciliation
+  replay keeps witness ownership separate across tenants and rejects conflicting
+  event tenants before changing projection state.
+
 - Core PQC migration and rollback remain available after a commercial license
   expires, with tenant authorization and idempotency checks preserved. Edition
   disclosures now place PQC in Free Core and the operator guide reflects the

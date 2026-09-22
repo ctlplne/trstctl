@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/editionseam"
@@ -82,7 +83,9 @@ type Runtime struct {
 	// store-backed authorities observed, digests signed in the isolated signer,
 	// disagreements witnessed into the ledger, quarantine admission updated,
 	// and the drift projection rebuilt from those events.
-	RoundsScheduled          int
+	RoundsScheduled int
+	// RoundsScheduledByTenant scopes the served collection status to its owner.
+	RoundsScheduledByTenant  map[string]int
 	IssuanceAdmission        server.AdmissionHook
 	ProjectionOptions        []projections.Option
 	BackgroundWorkers        []server.BackgroundWorker
@@ -163,6 +166,12 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 	// the first tick and blocked forever — a registered, healthy-looking worker
 	// that compared nothing for the life of the process.
 	roundSchedules := cfg.Schedules
+	schedulesByTenant := make(map[string]int)
+	for _, schedule := range roundSchedules {
+		if tenantID := strings.TrimSpace(schedule.TenantID); tenantID != "" {
+			schedulesByTenant[tenantID]++
+		}
+	}
 
 	var remediationManager *remediation.Manager
 	if cfg.Store != nil {
@@ -184,6 +193,7 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 		QuarantineProjection:     quarantineProjection,
 		DriftProjection:          driftProjection,
 		RoundsScheduled:          len(roundSchedules),
+		RoundsScheduledByTenant:  schedulesByTenant,
 		IssuanceAdmission:        quarantineManager,
 		ProjectionOptions:        []projections.Option{projections.WithEventProjection(quarantineProjection), rounds.WithDriftProjection(driftProjection)},
 		BackgroundWorkers: rounds.NewWorkers(rounds.WorkerOptions{

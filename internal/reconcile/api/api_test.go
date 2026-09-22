@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	coreapi "trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/authz"
 	reconcileapi "trstctl.com/trstctl/internal/reconcile/api"
 	"trstctl.com/trstctl/internal/reconcile/rounds"
 )
@@ -26,12 +28,18 @@ import (
 
 type fakeDrift struct{ snap rounds.DriftSnapshot }
 
-func (f fakeDrift) Snapshot() rounds.DriftSnapshot { return f.snap }
+// Fixtures below belong to tenant-a. An unexpected scope gets an empty view.
+func (f fakeDrift) SnapshotForTenant(tenantID string) rounds.DriftSnapshot {
+	if tenantID != "tenant-a" {
+		return rounds.DriftSnapshot{}
+	}
+	return f.snap
+}
 
 func TestAnUnconfiguredDeploymentIsNotReportedAsAgreeing(t *testing.T) {
 	t.Parallel()
 	// No drift projection: XREC is unlicensed or unattached.
-	report := reconcileapi.NewService(nil, 0).Report()
+	report := reconcileapi.NewService(nil, nil).Report("tenant-a")
 	if report.Configured {
 		t.Fatal("a deployment with no reconciliation runtime reported itself configured")
 	}
@@ -48,7 +56,7 @@ func TestAnUnconfiguredDeploymentIsNotReportedAsAgreeing(t *testing.T) {
 // found nothing" and "we have not looked".
 func TestAColdProjectionSaysItsZerosAreNotYetEvidence(t *testing.T) {
 	t.Parallel()
-	report := reconcileapi.NewService(fakeDrift{}, 1).Report()
+	report := reconcileapi.NewService(fakeDrift{}, map[string]int{"tenant-a": 1}).Report("tenant-a")
 	if !report.Configured {
 		t.Fatal("an attached runtime reported itself unconfigured")
 	}
@@ -74,8 +82,8 @@ func TestDivergenceIsReportedWorstAuthorityFirst(t *testing.T) {
 		CompletionDurations: []rounds.CompletionDuration{
 			{WitnessID: "w1", Seconds: 30}, {WitnessID: "w2", Seconds: 90}, {WitnessID: "w3", Seconds: 600},
 		},
-	}}, 1)
-	report := svc.Report()
+	}}, map[string]int{"tenant-a": 1})
+	report := svc.Report("tenant-a")
 
 	if len(report.Authorities) != 2 {
 		t.Fatalf("authorities = %d, want 2", len(report.Authorities))
@@ -115,12 +123,12 @@ func TestResolvedAndCleanWindowsAreDistinguished(t *testing.T) {
 		WitnessClassCounts: []rounds.WitnessClassCount{
 			{AuthorityID: "adcs-eu", Class: "presence", Count: 1, WindowStart: time.Now().UTC()},
 		},
-	}}, 1).Report()
+	}}, map[string]int{"tenant-a": 1}).Report("tenant-a")
 	if !strings.Contains(resolved.Detail, "did disagree and no longer do") {
 		t.Fatalf("a window whose witnesses all closed must say so; got %q", resolved.Detail)
 	}
 
-	clean := reconcileapi.NewService(fakeDrift{snap: rounds.DriftSnapshot{ReplayWatermark: 10}}, 1).Report()
+	clean := reconcileapi.NewService(fakeDrift{snap: rounds.DriftSnapshot{ReplayWatermark: 10}}, map[string]int{"tenant-a": 1}).Report("tenant-a")
 	if !strings.Contains(clean.Detail, "raised no divergence") {
 		t.Fatalf("a genuinely clean window reads differently from a resolved one; got %q", clean.Detail)
 	}
@@ -134,7 +142,7 @@ func TestTheAgreementRouteIsServedAndReadsTheProjection(t *testing.T) {
 		WitnessClassCounts: []rounds.WitnessClassCount{
 			{AuthorityID: "gcp-cas", Class: "staleness", Count: 5, WindowStart: time.Now().UTC()},
 		},
-	}}, 1)
+	}}, map[string]int{"tenant-a": 1})
 	routes := reconcileapi.Routes(svc)
 	if len(routes) != 1 {
 		t.Fatalf("routes = %d, want exactly one read-only surface", len(routes))
@@ -152,7 +160,14 @@ func TestTheAgreementRouteIsServedAndReadsTheProjection(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	route.Handler(nil)(rec, httptest.NewRequest(http.MethodGet, "/api/v1/reconcile/agreement", nil))
+	h := coreapi.New(nil, nil, nil, coreapi.WithLicensedRoutes(routes...),
+		coreapi.WithInsecureHeaderResolver(),
+		coreapi.WithRoles(authz.Role{Name: "reader", Permissions: []authz.Permission{authz.CertsRead}}))
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/reconcile/agreement", nil)
+	req.Header.Set("X-Tenant-ID", "tenant-a")
+	req.Header.Set("X-Subject", "reader-a")
+	req.Header.Set("X-Roles", "reader")
+	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d", rec.Code)
 	}
@@ -190,7 +205,7 @@ func TestAnAttachedRuntimeWithNoSchedulesSaysNothingIsLooking(t *testing.T) {
 	// Warm projection, no divergence, no schedules.
 	report := reconcileapi.NewService(fakeDrift{snap: rounds.DriftSnapshot{
 		ReplayWatermark: 9_000,
-	}}, 0).Report()
+	}}, nil).Report("tenant-a")
 
 	if !report.Configured {
 		t.Fatal("an attached runtime reported itself unattached")
@@ -215,7 +230,7 @@ func TestAnAttachedRuntimeWithNoSchedulesSaysNothingIsLooking(t *testing.T) {
 // the collecting signal must not swallow the real answer.
 func TestSchedulesConfiguredStillReportsAGenuinelyCleanWindow(t *testing.T) {
 	t.Parallel()
-	report := reconcileapi.NewService(fakeDrift{snap: rounds.DriftSnapshot{ReplayWatermark: 10}}, 3).Report()
+	report := reconcileapi.NewService(fakeDrift{snap: rounds.DriftSnapshot{ReplayWatermark: 10}}, map[string]int{"tenant-a": 3}).Report("tenant-a")
 	if !report.Collecting {
 		t.Fatal("three schedules reported as not collecting")
 	}
