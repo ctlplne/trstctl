@@ -214,6 +214,12 @@ func buildSpec(routes []route, extraSchemas map[string]*Schema) *Document {
 		if r.mutation {
 			op.Parameters = append(op.Parameters, idempotencyHeaderParam())
 		}
+		if r.opID == "provisionManagedTenant" {
+			op.Parameters = append(op.Parameters,
+				Parameter{Name: "X-Tenant-ID", In: "header", Schema: uuid(), Description: "Optional assertion of the provider tenant that reviewed the request; must match the authenticated tenant. Required when X-Trstctl-Expected-Subject is supplied."},
+				Parameter{Name: "X-Trstctl-Expected-Subject", In: "header", Schema: str(), Description: "Percent-encoded authenticated subject that reviewed the request, paired with X-Tenant-ID. Required for requests carrying a browser session cookie; optional for other callers. Missing browser assertions or a changed operator return 409 before mutation or replay; duplicate, empty or malformed values return 400. This assertion does not authenticate the caller."},
+			)
+		}
 		for _, pp := range r.pathParams {
 			op.Parameters = append(op.Parameters, Parameter{Name: pp.name, In: "path", Required: true, Description: pp.desc, Schema: schemaForParam(pp)})
 		}

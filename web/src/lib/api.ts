@@ -10,7 +10,7 @@
 // now-missing field fails `tsc` — the drift cannot ship silently. Regenerate with
 // `npm run gen:api`; `npm run build` runs `gen:api --check` first and fails on drift.
 import { bootstrapApi, type BootstrapApi } from "./bootstrapApi";
-import { createPreviewAwareApi, mutate, mutateForAuthenticatedBrowserTenant, req } from "./apiTransport";
+import { createPreviewAwareApi, mutate, mutateForAuthenticatedBrowserTenant, newIdempotencyKey, req } from "./apiTransport";
 export {
   ApiError,
   UnauthorizedError,
@@ -1466,7 +1466,11 @@ export interface Api {
   sealTenantKeyDomain(): Promise<TenantKeyDomainSealReceipt>;
   unsealTenantKeyDomain(): Promise<TenantKeyDomainStatus>;
   activeActiveIssuance(): Promise<ActiveActiveIssuancePlan>;
-  provisionManagedTenant(input: ManagedTenantProvisionRequest): Promise<ManagedTenant>;
+  provisionManagedTenant(
+    input: ManagedTenantProvisionRequest,
+    idempotencyKey?: string,
+    expectedPrincipal?: Pick<Me, "tenant_id" | "subject">,
+  ): Promise<ManagedTenant>;
   certificates(): Promise<Certificate[]>;
   certificatePage(options?: { limit?: number; cursor?: string; expiringBefore?: string; query?: string; signal?: AbortSignal }): Promise<CertificatePage>;
   certificateHealth(signal?: AbortSignal): Promise<CertificateHealthDashboard>;
@@ -2007,7 +2011,18 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   sealTenantKeyDomain: () => mutate<TenantKeyDomainSealReceipt>("POST", "/api/v1/platform/tenant-key-domain/seal"),
   unsealTenantKeyDomain: () => mutate<TenantKeyDomainStatus>("POST", "/api/v1/platform/tenant-key-domain/unseal"),
   activeActiveIssuance: () => req<ActiveActiveIssuancePlan>("/api/v1/scale/ha-issuance"),
-  provisionManagedTenant: (input) => mutate<ManagedTenant>("POST", "/api/v1/managed-offering/tenants", input),
+  provisionManagedTenant: (input, idempotencyKey = newIdempotencyKey(), expectedPrincipal) =>
+    req<ManagedTenant>("/api/v1/managed-offering/tenants", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": idempotencyKey,
+        ...(expectedPrincipal
+          ? { "X-Tenant-ID": expectedPrincipal.tenant_id, "X-Trstctl-Expected-Subject": encodeURIComponent(expectedPrincipal.subject) }
+          : {}),
+      },
+      body: JSON.stringify(input),
+    }),
   certificatePage: (options) => {
     const qs = new URLSearchParams();
     if (options?.limit != null) qs.set("limit", String(options.limit));

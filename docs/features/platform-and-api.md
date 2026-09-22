@@ -252,7 +252,8 @@ with `GET /api/v1/managed-offering/status` or `trstctl-cli managed-offering stat
 create a hosted tenant with:
 
 ```sh
-trstctl-cli managed-offering tenants provision -f hosted-tenant.json
+trstctl-cli --idempotency-key hosted-acme-create-001 \
+  managed-offering tenants provision -f hosted-tenant.json
 ```
 
 `hosted-tenant.json` carries only non-secret topology facts:
@@ -277,11 +278,37 @@ tenant receives its own PostgreSQL RLS boundary immediately. No managed-service 
 customer secret, or billing credential belongs in this request; those use the normal
 tenant-scoped secret/API-token/session paths.
 
-The web console's **Platform** page shows the same provider-plane status and offers the
-tenant-provisioning form when the operator has `access:write`. The served acceptance test
-boots the same binary composition used by production tests (PostgreSQL, NATS JetStream,
-and the separate signer process) and proves the Provider license gate, tenant projection,
-event metadata, and idempotent replay.
+In the console, open **System health → Exceptions → Managed offering**. An operator
+with `access:write` and an enabled Provider license can review the customer, placement
+and service details before provisioning. Region, residency and service fields record
+metadata; this operation creates the isolated tenant, without deploying or relocating
+customer infrastructure. Configure the customer's access and credentials through the
+[team onboarding journey](../journeys/onboard-a-team.md).
+
+If the result is uncertain, keep the original request and retry key. The console saves
+pending provisioning requests for the signed-in tenant and operator in this browser.
+After a reload, choose the saved request and **Retry unchanged request**. A saved request
+is recovery information; only the server's returned registration event confirms that the
+tenant was created. Changing the account, customer details or retry key does not resume
+the original operation.
+
+For CLI/API retries, preserve the same request body, authenticated operator and
+`Idempotency-Key`. In the example above, retry `hosted-acme-create-001` unchanged. A new
+key can conflict with a registration already in progress. Keep the key with the request
+until its result is confirmed; do not generate a new key for every retry. The console's
+saved requests contain the provisioning metadata and request key, with no session token
+or customer credential. Clearing this site's browser data removes those local records.
+
+The console also sends the reviewed provider tenant as `X-Tenant-ID` and the reviewed
+operator subject as `X-Trstctl-Expected-Subject` (percent-encoded, as with JavaScript
+`encodeURIComponent`). These are assertions, not credentials. A tenant mismatch is
+refused with 403 and an operator mismatch with 409 before creation or cached replay;
+an empty, duplicate or malformed subject assertion is refused with 400. The subject
+assertion requires `X-Tenant-ID`. Requests carrying a browser session cookie must
+include both assertions; an older console receives 409 and must reload. API clients
+without a browser session cookie may omit them and use their normal authenticated
+account. If another browser tab changes the account,
+sign in with the original account before resuming its saved request.
 
 The public packaging boundary has three tiers — Free (self-hosted BUSL-1.1 core),
 Enterprise (the commercial `ee/` set, per control-plane deployment), and

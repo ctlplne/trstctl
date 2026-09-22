@@ -25087,6 +25087,10 @@ export interface operations {
             header: {
                 /** @description Caller-supplied idempotency key; replays return the original mutation result. */
                 "Idempotency-Key": string;
+                /** @description Optional assertion of the provider tenant that reviewed the request; must match the authenticated tenant. Required when X-Trstctl-Expected-Subject is supplied. */
+                "X-Tenant-ID"?: string;
+                /** @description Percent-encoded authenticated subject that reviewed the request, paired with X-Tenant-ID. Required for requests carrying a browser session cookie; optional for other callers. Missing browser assertions or a changed operator return 409 before mutation or replay; duplicate, empty or malformed values return 400. This assertion does not authenticate the caller. */
+                "X-Trstctl-Expected-Subject"?: string;
             };
             path?: never;
             cookie?: never;

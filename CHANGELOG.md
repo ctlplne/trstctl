@@ -2,6 +2,13 @@
 
 ### Changed
 
+- Managed tenant provisioning saves the reviewed request and its original
+  idempotency key before sending it. Operators can recover an uncertain result
+  from the same account after reloading or reopening the browser, without
+  generating a conflicting registration request. The server checks the reviewed
+  tenant and operator before creation or replay so another tab's account switch
+  cannot silently change the account used for provisioning.
+
 - Managed tenant provisioning now accepts its existing provider metadata under
   the required event privacy policy, while retaining closed field validation.
 

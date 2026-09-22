@@ -10,6 +10,95 @@ export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
 
 export const messages = {
+  "managedRecovery.reviewShort": {
+    defaultMessage: "Review",
+    description: "Compact saved-provisioning-request action; the accessible label names its customer.",
+  },
+  "managedRecovery.signIn": { defaultMessage: "Sign in to provision a customer tenant.", description: "Managed customer provisioning and recovery." },
+  "managedRecovery.changed": {
+    defaultMessage: "A saved request already exists for this tenant. Review that request and retry it unchanged before changing its details.",
+    description: "Managed customer provisioning and recovery.",
+  },
+  "managedRecovery.limit": {
+    defaultMessage: "This account has 128 unresolved requests saved in this browser. Finish an existing request before starting another.",
+    description: "Managed customer provisioning and recovery.",
+  },
+  "managedRecovery.invalidRecord": {
+    defaultMessage: "The saved recovery record could not be read safely. Keep it for support; no provisioning request was sent.",
+    description: "Managed customer provisioning and recovery.",
+  },
+  "managedRecovery.invalidRequest": {
+    defaultMessage: "Check the customer ID, name and service details before continuing.",
+    description: "Managed customer provisioning and recovery.",
+  },
+  "managedRecovery.storageUnavailable": {
+    defaultMessage: "This browser could not retain the request for recovery. Allow site storage, then retry. No new provisioning request was sent.",
+    description: "Managed customer provisioning and recovery.",
+  },
+  "managedRecovery.retryNeeded": {
+    defaultMessage: "The result could not be confirmed. Use the original account to review the saved request and retry it unchanged.",
+    description: "Managed customer provisioning and recovery.",
+  },
+  "managedRecovery.unverifiedResponse": {
+    defaultMessage: "The response did not match the saved customer request. The recovery record is retained; review it before retrying.",
+    description: "Managed customer provisioning and recovery.",
+  },
+  "managedRecovery.cleanupFailed": {
+    defaultMessage:
+      "The tenant was created, but this browser could not clear its recovery record. Retrying the saved request will retrieve the original result.",
+    description: "Managed customer provisioning and recovery.",
+  },
+  "managedRecovery.customer": { defaultMessage: "Customer", description: "Managed customer provisioning and recovery." },
+  "managedRecovery.placement": { defaultMessage: "Placement", description: "Managed customer provisioning and recovery." },
+  "managedRecovery.service": { defaultMessage: "Service details", description: "Managed customer provisioning and recovery." },
+  "managedRecovery.review": { defaultMessage: "Review and provision", description: "Managed customer provisioning and recovery." },
+  "managedRecovery.customerHelp": {
+    defaultMessage: "Choose the customer name and its unique tenant ID.",
+    description: "Managed customer provisioning and recovery.",
+  },
+  "managedRecovery.placementHelp": {
+    defaultMessage: "Record the customer region and residency. These labels do not deploy or relocate infrastructure.",
+    description: "Managed customer provisioning and recovery.",
+  },
+  "managedRecovery.serviceHelp": {
+    defaultMessage: "Record the agreed plan, support tier and service target.",
+    description: "Managed customer provisioning and recovery.",
+  },
+  "managedRecovery.reviewHelp": {
+    defaultMessage: "Check the customer details. Provisioning creates the tenant and retains an event receipt.",
+    description: "Managed customer provisioning and recovery.",
+  },
+  "managedRecovery.created": { defaultMessage: "Created customer tenant {name}.", description: "Managed customer provisioning and recovery." },
+  "managedRecovery.event": { defaultMessage: "Registration event:", description: "Managed customer provisioning and recovery." },
+  "managedRecovery.pending": { defaultMessage: "Saved provisioning requests", description: "Managed customer provisioning and recovery." },
+  "managedRecovery.pendingHelp": {
+    defaultMessage: "Saved in this browser for your current account. Review and retry the original request to recover its result.",
+    description: "Managed customer provisioning and recovery.",
+  },
+  "managedRecovery.resume": { defaultMessage: "Review request for {name}", description: "Managed customer provisioning and recovery." },
+  "managedRecovery.progress": { defaultMessage: "Customer tenant provisioning", description: "Managed customer provisioning and recovery." },
+  "managedRecovery.uuidRequired": { defaultMessage: "Enter a tenant ID in UUID format.", description: "Managed customer provisioning and recovery." },
+  "managedRecovery.nameRequired": {
+    defaultMessage: "Enter a customer name using at most 120 UTF-8 bytes.",
+    description: "Managed customer provisioning and recovery.",
+  },
+  "managedRecovery.metadataLimit": { defaultMessage: "Use at most 80 UTF-8 bytes for this field.", description: "Managed customer provisioning and recovery." },
+  "managedRecovery.savedRequest": {
+    defaultMessage: "This is the saved request. Retrying preserves its original details and retrieves or completes the same operation.",
+    description: "Managed customer provisioning and recovery.",
+  },
+  "managedRecovery.retry": { defaultMessage: "Retry unchanged request", description: "Managed customer provisioning and recovery." },
+  "managedRecovery.requestKey": { defaultMessage: "Recovery request key", description: "Managed customer provisioning and recovery." },
+  "managedRecovery.another": { defaultMessage: "Provision another customer", description: "Managed customer provisioning and recovery." },
+  "managedRecovery.refreshFailed": {
+    defaultMessage: "The tenant was created, but the saved-request list could not be refreshed. Reload this page to check the list.",
+    description: "Managed customer provisioning and recovery.",
+  },
+  "managedRecovery.sessionExpired": {
+    defaultMessage: "Your session ended. Sign in with the same account, then review and retry the saved request.",
+    description: "Managed customer provisioning and recovery.",
+  },
+  "managedRecovery.recovery": { defaultMessage: "Recovery", description: "Managed customer provisioning and recovery." },
   "policy.editor.saveFailed": { defaultMessage: "Rule could not be saved", description: "The draft failed, without implying a server outage." },
   "policy.versions.noRollback": {
     defaultMessage: "This version has no earlier rule to restore. Choose another recorded version to activate.",
@@ -22532,10 +22621,6 @@ export const messages = {
   "source.kubernetes.prod.16a7f7e17a": {
     defaultMessage: "kubernetes/prod",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Secrets.tsx.",
-  },
-  "source.last.hosted.tenant.ddd9f6cf68": {
-    defaultMessage: "Last hosted tenant",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Platform.tsx.",
   },
   "source.last.seen.21fd79c7de": {
     defaultMessage: "Last seen",

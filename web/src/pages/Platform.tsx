@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { Building2, ChevronDown, Gauge, Headphones, Network, Plus } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
@@ -17,14 +17,13 @@ import {
   type EditionsInfo,
   type EnterpriseSupportStatus,
   type ManagedOfferingStatus,
-  type ManagedTenant,
-  type ManagedTenantProvisionRequest,
   type PlatformDistributionStatus,
   type ScaleOrchestrationPlan,
   type SystemReadout,
   type DRPosture,
 } from "@/lib/api";
 import { optionalApiCall } from "@/lib/optionalApi";
+import { ManagedTenantProvisioning } from "@/pages/platform/ManagedTenantProvisioning";
 
 export { AdminAccess } from "@/pages/AdminAccess";
 
@@ -160,17 +159,7 @@ export function AdminSystem() {
   const [drError, setDRError] = useState<string | null>(null);
   const [protectionLoading, setProtectionLoading] = useState(true);
   const [protectionError, setProtectionError] = useState<string | null>(null);
-  const [lastManagedTenant, setLastManagedTenant] = useState<ManagedTenant | null>(null);
-  const [systemBusy, setSystemBusy] = useState(false);
   const [systemError, setSystemError] = useState<string | null>(null);
-  const [systemNotice, setSystemNotice] = useState<string | null>(null);
-  const [hostedTenantID, setHostedTenantID] = useState("");
-  const [hostedTenantName, setHostedTenantName] = useState("");
-  const [hostedRegion, setHostedRegion] = useState("us-east-1");
-  const [hostedResidency, setHostedResidency] = useState("US");
-  const [hostedPlan, setHostedPlan] = useState("enterprise");
-  const [hostedSupportTier, setHostedSupportTier] = useState("24x7");
-  const [hostedSLOTier, setHostedSLOTier] = useState("99.95");
   const [systemAttempt, setSystemAttempt] = useState(0);
   const [open, setOpen] = useState({ checks: true, configuration: false, dependencies: false, exceptions: false });
   const packaging = editions?.packaging ?? defaultPackaging;
@@ -251,33 +240,6 @@ export function AdminSystem() {
     };
   }, [open.dependencies]);
 
-  async function provisionHostedTenant(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSystemBusy(true);
-    setSystemError(null);
-    setSystemNotice(null);
-    try {
-      const input: ManagedTenantProvisionRequest = {
-        tenant_id: hostedTenantID.trim(),
-        name: hostedTenantName.trim(),
-        ...(hostedRegion.trim() ? { region: hostedRegion.trim() } : {}),
-        ...(hostedResidency.trim() ? { data_residency: hostedResidency.trim() } : {}),
-        ...(hostedPlan.trim() ? { plan: hostedPlan.trim() } : {}),
-        ...(hostedSupportTier.trim() ? { support_tier: hostedSupportTier.trim() } : {}),
-        ...(hostedSLOTier.trim() ? { slo_tier: hostedSLOTier.trim() } : {}),
-      };
-      const created = await api.provisionManagedTenant(input);
-      setLastManagedTenant(created);
-      setSystemNotice(`Provisioned managed tenant ${created.name}`);
-      setHostedTenantID("");
-      setHostedTenantName("");
-    } catch {
-      setSystemError(t("admin.system.provisionFailed"));
-    } finally {
-      setSystemBusy(false);
-    }
-  }
-
   const dependencies = systemReadout?.dependencies ?? [];
   const dependencyIssues = dependencies.filter((dependency) => !dependency.ready);
   const resultProtectionState = systemReadout?.idempotency_results?.state;
@@ -318,11 +280,6 @@ export function AdminSystem() {
       {systemError && (
         <p role="alert" className="rounded-control border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {systemError}
-        </p>
-      )}
-      {systemNotice && (
-        <p role="status" className="rounded-control border border-status-success/30 bg-status-success/10 px-3 py-2 text-sm text-status-success">
-          {systemNotice}
         </p>
       )}
       <section className="ui-panel grid gap-4 border-s-4 border-s-brand-accent p-comfortable" aria-labelledby="system-health-answer-heading" aria-live="polite">
@@ -835,54 +792,8 @@ export function AdminSystem() {
                     <dt className="font-medium text-muted-foreground">{translateNow("source.mutation.idempotency.e5fe0e928c")}</dt>
                     <dd>{managedOffering?.idempotency_required ? translateNow("source.required.d0a3630555") : "-"}</dd>
                   </div>
-                  {lastManagedTenant && (
-                    <div>
-                      <dt className="font-medium text-muted-foreground">{translateNow("source.last.hosted.tenant.ddd9f6cf68")}</dt>
-                      <dd className="break-all">
-                        {lastManagedTenant.name} · {lastManagedTenant.tenant_id}
-                      </dd>
-                    </div>
-                  )}
                 </dl>
-                <form onSubmit={(event) => void provisionHostedTenant(event)} className="grid gap-3">
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <label className="grid gap-1 text-sm">
-                      <span className="font-medium text-muted-foreground">{translateNow("source.hosted.id.16f3dc88ea")}</span>
-                      <input className="ui-input" value={hostedTenantID} onChange={(event) => setHostedTenantID(event.target.value)} required />
-                    </label>
-                    <label className="grid gap-1 text-sm">
-                      <span className="font-medium text-muted-foreground">{translateNow("source.hosted.name.af1e0d31be")}</span>
-                      <input className="ui-input" value={hostedTenantName} onChange={(event) => setHostedTenantName(event.target.value)} required />
-                    </label>
-                    <label className="grid gap-1 text-sm">
-                      <span className="font-medium text-muted-foreground">{translateNow("source.region.d3a008ef13")}</span>
-                      <input className="ui-input" value={hostedRegion} onChange={(event) => setHostedRegion(event.target.value)} />
-                    </label>
-                    <label className="grid gap-1 text-sm">
-                      <span className="font-medium text-muted-foreground">{translateNow("source.data.residency.4ab08acdfa")}</span>
-                      <input className="ui-input" value={hostedResidency} onChange={(event) => setHostedResidency(event.target.value)} />
-                    </label>
-                    <label className="grid gap-1 text-sm">
-                      <span className="font-medium text-muted-foreground">{translateNow("source.plan.fa8ed0bdab")}</span>
-                      <input className="ui-input" value={hostedPlan} onChange={(event) => setHostedPlan(event.target.value)} />
-                    </label>
-                    <label className="grid gap-1 text-sm">
-                      <span className="font-medium text-muted-foreground">{translateNow("source.support.tier.2dfba0f890")}</span>
-                      <input className="ui-input" value={hostedSupportTier} onChange={(event) => setHostedSupportTier(event.target.value)} />
-                    </label>
-                  </div>
-                  <label className="grid gap-1 text-sm">
-                    <span className="font-medium text-muted-foreground">{translateNow("source.slo.tier.9d31a12006")}</span>
-                    <input className="ui-input" value={hostedSLOTier} onChange={(event) => setHostedSLOTier(event.target.value)} />
-                  </label>
-                  <Button
-                    type="submit"
-                    disabled={systemBusy || !hostedTenantID.trim() || !hostedTenantName.trim() || managedOffering?.provider_plane_mode !== "enabled"}
-                  >
-                    <Plus className="h-4 w-4" aria-hidden="true" />
-                    {translateNow("source.provision.tenant.e6e411f04c")}
-                  </Button>
-                </form>
+                <ManagedTenantProvisioning enabled={managedOffering?.provider_plane_mode === "enabled"} />
               </div>
             </section>
           </div>
