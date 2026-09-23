@@ -79,9 +79,31 @@ group on a shared trstctl deployment.
    export TRSTCTL_AUTH_OIDC_REDIRECT_URI=https://trstctl.example.com/auth/callback
    ```
 
-   -> a user visiting the UI is redirected to your provider, signs in, and returns with
-   a session that authorizes API calls under the same roles as a token. An enabled but
-   incomplete OIDC, SAML, or LDAP block fails closed at startup.
+   Open the console sign-in page and use one of the configured methods:
+
+   - **Continue with SSO** starts OIDC sign-in with your identity provider.
+   - **Continue with SAML** starts SAML sign-in with your identity provider.
+   - **Sign in with LDAP** sends the **Directory username** and **Password**
+     fields to this deployment's configured directory verifier. Enter the directory
+     password, not a trstctl API token. Password whitespace is preserved.
+
+   Only enabled methods appear. A SAML-only or LDAP-only deployment does not need
+   OIDC enabled to offer browser sign-in. Tenant SAML and LDAP require the
+   Enterprise SSO feature; see [Browser SSO](../configuration.md#browser-sso).
+   Use the deployment's HTTPS console URL for browser sign-in.
+
+   -> a successful sign-in creates a session that authorizes API calls under the
+   user's mapped tenant and roles. The LDAP form checks that the session exists
+   before opening the console. An enabled but incomplete OIDC, SAML, or LDAP block
+   fails closed at startup.
+
+   If directory credentials are rejected, check the username and re-enter the
+   password. The form clears the password after each submitted attempt. If too
+   many attempts are reported, wait before retrying. If sign-in still cannot be
+   completed, ask the administrator to check directory connectivity and tenant
+   mapping. A verified directory identity alone does not grant tenant access.
+   When the page says browser sign-in is not configured, an administrator must
+   configure a supported method; a scoped API token is not a browser password.
 
    Open a bookmarked console page while signed out, then complete OIDC sign-in.
    The browser should return to the same page with its query filters and fragment;

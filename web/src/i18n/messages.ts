@@ -581,13 +581,30 @@ export const messages = {
   },
   "app.error.reload": { defaultMessage: "Reload page", description: "Primary application crash recovery action." },
   "auth.browserLoginDisabled.body": {
-    defaultMessage: "This control plane is running, but browser SSO is off. Configure browser SSO and reload, or use a scoped API token with trstctl-cli.",
-    description: "Login guidance when no browser OIDC route is mounted.",
+    defaultMessage:
+      "This control plane is running, but browser sign-in is off. Configure OIDC, SAML, or LDAP and reload, or use a scoped API token with trstctl-cli.",
+    description: "Login guidance when no browser sign-in method is available.",
   },
   "auth.browserLoginDisabled.title": {
     defaultMessage: "Browser sign-in is not configured",
-    description: "Login heading when no browser OIDC route is mounted.",
+    description: "Login heading when no browser sign-in method is available.",
   },
+  "auth.saml.action": { defaultMessage: "Continue with SAML", description: "Starts the configured SAML browser sign-in flow." },
+  "auth.ldap.username": { defaultMessage: "Directory username", description: "LDAP browser login username label." },
+  "auth.ldap.password": { defaultMessage: "Password", description: "LDAP browser login password label." },
+  "auth.ldap.action": { defaultMessage: "Sign in with LDAP", description: "Submits directory credentials to the configured LDAP verifier." },
+  "auth.ldap.usernameRequired": { defaultMessage: "Enter your directory username.", description: "LDAP username validation." },
+  "auth.ldap.passwordRequired": { defaultMessage: "Enter your password.", description: "LDAP password validation." },
+  "auth.ldap.rejected": {
+    defaultMessage: "Your directory username or password was not accepted. Check them and try again.",
+    description: "Safe LDAP authentication failure guidance.",
+  },
+  "auth.ldap.unavailable": {
+    defaultMessage: "Sign-in could not be completed. Try again; if it continues, contact your administrator.",
+    description: "LDAP transport or session verification failure.",
+  },
+  "auth.ldap.rateLimited": { defaultMessage: "Too many sign-in attempts. Wait a moment and try again.", description: "LDAP rate limit recovery." },
+  "auth.ldap.failed": { defaultMessage: "Sign-in failed", description: "LDAP submission error heading." },
   "auth.login.eyebrow": {
     defaultMessage: "Credentials for machines and apps",
     description: "Plain-language product category above the login heading.",

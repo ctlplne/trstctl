@@ -2,6 +2,9 @@
 
 ### Fixed
 
+- The console offers each configured browser sign-in method, including SAML-only
+  and LDAP-only deployments. Directory sign-in has accessible credential fields,
+  safe retry guidance, password clearing and verified-session navigation.
 - SP-initiated SAML browser login now sends its secure correlation cookies on
   the identity provider's cross-site POST. State, request-ID and signature checks
   remain required; OIDC and authenticated session cookie policies are unchanged.

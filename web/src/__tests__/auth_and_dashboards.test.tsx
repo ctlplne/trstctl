@@ -305,7 +305,7 @@ describe("auth + dashboards", () => {
     expect(screen.queryByText(/untrusted-query-message/)).not.toBeInTheDocument();
   });
 
-  it("does not offer a broken SSO link when browser authentication is disabled", async () => {
+  it("does not offer login controls when browser authentication is disabled", async () => {
     const { UnauthorizedError } = await import("@/lib/api");
     apiMock.me.mockRejectedValue(new UnauthorizedError());
     apiMock.authMethods.mockResolvedValue({ oidc: false, saml: false, ldap: false });
@@ -314,7 +314,10 @@ describe("auth + dashboards", () => {
 
     expect(await screen.findByRole("heading", { name: "Browser sign-in is not configured" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Continue with SSO/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/control plane is running.*browser SSO is off/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Continue with SAML/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Sign in with LDAP/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Directory username")).not.toBeInTheDocument();
+    expect(screen.getByText(/control plane is running.*browser sign-in is off/i)).toBeInTheDocument();
     expect(screen.getByText(/scoped API token.*trstctl-cli/i)).toBeInTheDocument();
   });
 

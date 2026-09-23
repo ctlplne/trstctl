@@ -18,6 +18,8 @@ interface AuthState {
   loading: boolean;
   error: string | null;
   oidcAvailable: boolean;
+  samlAvailable: boolean;
+  ldapAvailable: boolean;
   preview: boolean;
   previewAvailable: boolean;
   startPreview: () => void;
@@ -39,6 +41,8 @@ const AuthContext = createContext<AuthState>({
   loading: true,
   error: null,
   oidcAvailable: false,
+  samlAvailable: false,
+  ldapAvailable: false,
   preview: false,
   previewAvailable: false,
   startPreview: () => {},
@@ -56,8 +60,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     demoBuild
       ? // Demo build: land signed-in on the showcase — no /auth/me round-trip,
         // no login click, transport already isolated above.
-        { user: previewUser, loading: false, error: null, oidcAvailable: false, preview: true, previewAvailable: true }
-      : { user: null, loading: true, error: null, oidcAvailable: false, preview: false, previewAvailable: previewAllowed },
+        {
+          user: previewUser,
+          loading: false,
+          error: null,
+          oidcAvailable: false,
+          samlAvailable: false,
+          ldapAvailable: false,
+          preview: true,
+          previewAvailable: true,
+        }
+      : {
+          user: null,
+          loading: true,
+          error: null,
+          oidcAvailable: false,
+          samlAvailable: false,
+          ldapAvailable: false,
+          preview: false,
+          previewAvailable: previewAllowed,
+        },
   );
 
   const startPreview = useCallback(() => {
@@ -71,6 +93,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading: false,
       error: null,
       oidcAvailable: current.oidcAvailable,
+      samlAvailable: current.samlAvailable,
+      ldapAvailable: current.ldapAvailable,
       preview: true,
       previewAvailable: true,
     }));
@@ -86,6 +110,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading: false,
         error: null,
         oidcAvailable: current.oidcAvailable,
+        samlAvailable: current.samlAvailable,
+        ldapAvailable: current.ldapAvailable,
         preview: false,
         previewAvailable: previewAllowed,
       }));
@@ -102,6 +128,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading: false,
         error: null,
         oidcAvailable: current.oidcAvailable,
+        samlAvailable: current.samlAvailable,
+        ldapAvailable: current.ldapAvailable,
         preview: false,
         previewAvailable: previewAllowed,
       }));
@@ -129,6 +157,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           loading: false,
           error: null,
           oidcAvailable: methods.oidc,
+          samlAvailable: methods.saml,
+          ldapAvailable: methods.ldap,
           preview: false,
           previewAvailable: import.meta.env.DEV,
         });
@@ -142,6 +172,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             loading: false,
             error: null,
             oidcAvailable: methods.oidc,
+            samlAvailable: methods.saml,
+            ldapAvailable: methods.ldap,
             preview: false,
             previewAvailable: import.meta.env.DEV,
           });
@@ -151,6 +183,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             loading: false,
             error: String(err),
             oidcAvailable: methods.oidc,
+            samlAvailable: methods.saml,
+            ldapAvailable: methods.ldap,
             preview: false,
             previewAvailable: import.meta.env.DEV,
           });
@@ -173,4 +207,10 @@ export function useAuth(): AuthState {
 export function beginLogin(returnTo?: string) {
   const query = returnTo ? new URLSearchParams({ return_to: returnTo }).toString() : "";
   window.location.assign(query ? `${loginURL}?${query}` : loginURL);
+}
+
+/** beginSAMLLogin starts the configured SAML provider flow. */
+export function beginSAMLLogin(returnTo?: string) {
+  const query = returnTo ? new URLSearchParams({ return_to: returnTo }).toString() : "";
+  window.location.assign(query ? `/auth/saml/login?${query}` : "/auth/saml/login");
 }
