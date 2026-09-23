@@ -48,7 +48,233 @@ function renderPage(timeZone = "UTC") {
   );
 }
 
+function prepareCertificateEvidence(overrides: { identity_ids?: string[]; fingerprint?: string } = {}) {
+  const certificate = {
+    id: "history-leaf",
+    tenant_id: "tenant-1",
+    subject: "CN=history.example.test",
+    fingerprint: "history-fingerprint",
+    status: "superseded",
+    identity_ids: ["history-a"],
+    not_after: "2026-08-30T12:00:00Z",
+    ...overrides,
+  };
+  apiMock.certificatePage.mockResolvedValue({ items: [certificate] });
+  apiMock.getCertificate.mockResolvedValue(certificate);
+  apiMock.identities.mockResolvedValue([{ id: "same-name-decoy", kind: "x509_certificate", name: "history.example.test", status: "deployed" }]);
+  apiMock.connectorDeliveries.mockResolvedValue({ items: [] });
+  apiMock.rotationRuns.mockResolvedValue({ items: [] });
+  return {
+    id: "history-delivery",
+    tenant_id: "tenant-1",
+    identity_id: "history-a",
+    destination: "connector.deploy",
+    connector: "nginx",
+    target: "history-target",
+    fingerprint: "history-fingerprint",
+    status: "delivered",
+    attempts: 4,
+    outbox_id: 42,
+    idempotency_key: "renew:history",
+    detail: "Historical target readback",
+    created_at: "2026-08-24T10:00:00Z",
+    updated_at: "2026-08-24T10:00:01Z",
+  };
+}
+
+async function openCertificateEvidence() {
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+  return screen.findByRole("dialog", { name: "Certificate details" });
+}
+
 describe("Certificate Lifecycle cockpit", () => {
+  it.each([
+    { overrides: { identity_ids: [] }, notice: "No managed identity is linked to this certificate, so its lifecycle evidence cannot be correlated." },
+    { overrides: { fingerprint: "" }, notice: "This certificate has no fingerprint available to correlate lifecycle evidence." },
+  ])("keeps missing correlation distinct from an empty history: $notice", async ({ overrides, notice }) => {
+    prepareCertificateEvidence(overrides);
+    const drawer = await openCertificateEvidence();
+    expect((await within(drawer).findAllByText(notice)).length).toBeGreaterThan(0);
+    expect(within(drawer).queryByText("no connector delivery receipt yet")).not.toBeInTheDocument();
+    // The cockpit may read tenant totals. No scoped lifecycle read may guess
+    // the same-name identity or use a link without an exact fingerprint.
+    expect(apiMock.connectorDeliveries.mock.calls.some(([options]) => options?.identityId)).toBe(false);
+    expect(apiMock.rotationRuns.mock.calls.some(([options]) => options?.identityId)).toBe(false);
+  });
+
+  it("lets the operator choose each actual linked identity without mixing delivery proof", async () => {
+    const receipt = prepareCertificateEvidence({ identity_ids: ["history-a", "history-b", "history-a"] });
+    apiMock.connectorDeliveries.mockImplementation(async (options?: { identityId?: string }) => ({
+      items: options?.identityId ? [{ ...receipt, identity_id: options.identityId, id: `delivery-${options.identityId}`, target: options.identityId }] : [],
+    }));
+    const drawer = await openCertificateEvidence();
+    const selector = await within(drawer).findByRole("combobox", { name: "Lifecycle identity" });
+    expect(within(selector).getAllByRole("option")).toHaveLength(2);
+    expect(await within(drawer).findByText("delivered nginx/history-a after 4 attempts")).toBeInTheDocument();
+    fireEvent.change(selector, { target: { value: "history-b" } });
+    expect(await within(drawer).findByText("delivered nginx/history-b after 4 attempts")).toBeInTheDocument();
+    expect(within(drawer).queryByText("delivered nginx/history-a after 4 attempts")).not.toBeInTheDocument();
+    expect(within(drawer).getByRole("link", { name: "Open selected identity" })).toHaveAttribute("href", "/identities?identity=history-b");
+    expect(apiMock.connectorDeliveries.mock.calls.some(([options]) => options?.identityId === "same-name-decoy")).toBe(false);
+  });
+
+  it("loads older certificate evidence from page two without treating partial history as absence", async () => {
+    const receipt = prepareCertificateEvidence();
+    apiMock.connectorDeliveries.mockImplementation(async (options?: { identityId?: string; cursor?: string }) => {
+      if (!options?.identityId) return { items: [] };
+      if (options.cursor === "older-history") return { items: [receipt] };
+      return { items: [{ ...receipt, id: "newer-leaf-delivery", fingerprint: "newer-leaf", detail: "Newer leaf only" }], next_cursor: "older-history" };
+    });
+    const drawer = await openCertificateEvidence();
+    const more = await within(drawer).findByRole("button", { name: "Load more delivery records" });
+    expect(within(drawer).queryByText("no connector delivery receipt yet")).not.toBeInTheDocument();
+    expect(within(drawer).queryByText("Historical target readback")).not.toBeInTheDocument();
+    fireEvent.click(more);
+    expect(await within(drawer).findByText("Historical target readback")).toBeInTheDocument();
+    expect(within(drawer).queryByText("Newer leaf only")).not.toBeInTheDocument();
+    expect(apiMock.connectorDeliveries).toHaveBeenCalledWith({ identityId: "history-a", limit: 50, cursor: "older-history" });
+  });
+
+  it("reports an unavailable certificate history and recovers through its explicit retry", async () => {
+    const receipt = prepareCertificateEvidence();
+    let unavailable = true;
+    apiMock.connectorDeliveries.mockImplementation(async (options?: { identityId?: string }) => {
+      if (!options?.identityId) return { items: [] };
+      if (unavailable) throw new Error("history dependency unavailable");
+      return { items: [receipt] };
+    });
+    const drawer = await openCertificateEvidence();
+    const retry = await within(drawer).findByRole("button", { name: "Retry delivery history" });
+    expect(within(drawer).queryByText("no connector delivery receipt yet")).not.toBeInTheDocument();
+    expect(within(drawer).queryByText("Historical target readback")).not.toBeInTheDocument();
+    unavailable = false;
+    fireEvent.click(retry);
+    expect(await within(drawer).findByText("Historical target readback")).toBeInTheDocument();
+    expect(within(drawer).queryByRole("button", { name: "Retry delivery history" })).not.toBeInTheDocument();
+  });
+
+  it("hides previously loaded certificate proof when history access is revoked and stops automatic reads", async () => {
+    const receipt = prepareCertificateEvidence();
+    let denied = false;
+    apiMock.connectorDeliveries.mockImplementation(async (options?: { identityId?: string }) => {
+      if (!options?.identityId) return { items: [] };
+      if (denied) throw new ApiError(403, '{"detail":"Certificate history access removed"}');
+      return { items: [receipt] };
+    });
+    const drawer = await openCertificateEvidence();
+    expect(await within(drawer).findByText("Historical target readback")).toBeInTheDocument();
+    denied = true;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_500);
+    });
+    const retry = await within(drawer).findByRole("button", { name: "Retry delivery history" });
+    expect(within(drawer).queryByText("Historical target readback")).not.toBeInTheDocument();
+    expect(within(drawer).queryByText("delivered nginx/history-target after 4 attempts")).not.toBeInTheDocument();
+    expect(within(drawer).queryByText("no connector delivery receipt yet")).not.toBeInTheDocument();
+    const scopedReads = () => apiMock.connectorDeliveries.mock.calls.filter(([options]) => options?.identityId === "history-a").length;
+    const stoppedAt = scopedReads();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_500);
+    });
+    expect(scopedReads()).toBe(stoppedAt);
+    denied = false;
+    fireEvent.click(retry);
+    expect(await within(drawer).findByText("Historical target readback")).toBeInTheDocument();
+    expect(scopedReads()).toBeGreaterThan(stoppedAt);
+  });
+
+  it("rejects a receipt response for another identity even if its fingerprint matches", async () => {
+    const receipt = prepareCertificateEvidence();
+    apiMock.connectorDeliveries.mockImplementation(async (options?: { identityId?: string }) => ({
+      items: options?.identityId ? [{ ...receipt, identity_id: "unrelated-identity", detail: "Wrong identity proof" }] : [],
+    }));
+    const drawer = await openCertificateEvidence();
+    expect(await within(drawer).findByRole("button", { name: "Retry delivery history" })).toBeInTheDocument();
+    expect(within(drawer).queryByText("Wrong identity proof")).not.toBeInTheDocument();
+    expect(within(drawer).queryByText("no connector delivery receipt yet")).not.toBeInTheDocument();
+  });
+
+  it("renders the selected certificate's real delivery and verification evidence in its drawer", async () => {
+    const certificate = {
+      id: "selected-leaf",
+      tenant_id: "tenant-1",
+      subject: "CN=nginx.example.test",
+      fingerprint: "selected-fingerprint",
+      status: "superseded",
+      identity_ids: ["selected-identity"],
+      not_after: "2026-08-30T12:00:00Z",
+    };
+    const receipt = {
+      id: "selected-delivery",
+      tenant_id: "tenant-1",
+      identity_id: "selected-identity",
+      destination: "connector.deploy",
+      connector: "nginx",
+      target: "managed-nginx",
+      fingerprint: "selected-fingerprint",
+      status: "delivered",
+      attempts: 3,
+      outbox_id: 42,
+      idempotency_key: "renew:selected",
+      created_at: "2026-08-24T10:00:00Z",
+      updated_at: "2026-08-24T10:00:01Z",
+      rollback_ref: "restore selected predecessor",
+    };
+    apiMock.certificatePage.mockResolvedValue({ items: [certificate] });
+    apiMock.getCertificate.mockResolvedValue(certificate);
+    apiMock.identities.mockResolvedValue([{ id: "selected-identity", kind: "x509_certificate", name: "nginx.example.test", status: "deployed" }]);
+    apiMock.connectorDeliveries.mockResolvedValue({
+      items: [
+        {
+          ...receipt,
+          id: "newer-delivery",
+          fingerprint: "newer-fingerprint",
+          attempts: 1,
+          updated_at: "2026-08-24T11:00:00Z",
+          idempotency_key: "renew:newer",
+          rollback_ref: "newer-only rollback",
+        },
+        {
+          ...receipt,
+          id: "selected-observation",
+          outbox_id: undefined,
+          status: "verified",
+          attempts: 1,
+          idempotency_key: "renew:selected:verified",
+          updated_at: "2026-08-24T10:00:02Z",
+          detail: "Selected leaf served by NGINX",
+          rollback_ref: "",
+        },
+        receipt,
+      ],
+    });
+    apiMock.rotationRuns.mockResolvedValue({
+      items: [
+        {
+          id: "selected-rotation",
+          tenant_id: "tenant-1",
+          identity_id: "selected-identity",
+          successor_fingerprint: "selected-fingerprint",
+          status: "succeeded",
+          trigger: "scheduler",
+          idempotency_key: "selected-run",
+          created_at: "2026-08-24T10:00:00Z",
+          updated_at: "2026-08-24T10:00:03Z",
+        },
+      ],
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Review" }));
+    const drawer = await screen.findByRole("dialog", { name: "Certificate details" });
+    const timeline = await within(drawer).findByRole("region", { name: "Credential activity timeline" });
+    expect(await within(timeline).findByText("delivered nginx/managed-nginx after 3 attempts")).toBeInTheDocument();
+    expect(within(timeline).getByText("Selected leaf served by NGINX")).toBeInTheDocument();
+    expect(within(timeline).getByText("restore selected predecessor")).toBeInTheDocument();
+    expect(within(timeline).queryByText("newer-only rollback")).not.toBeInTheDocument();
+    expect(within(timeline).queryByText("no connector delivery receipt yet")).not.toBeInTheDocument();
+  });
+
   it("routes a newly issued certificate to its exact identity and exposes revocation without offering renewal", async () => {
     const certificate = {
       id: "fresh-leaf",

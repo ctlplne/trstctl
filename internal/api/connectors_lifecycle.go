@@ -981,6 +981,9 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 	if _, err := a.store.ValidateHostTargetAssignment(ctx, tenantID, target.Connector, target.Config); err != nil {
 		return endpointBindingPreviewResponse{}, errWithStatus(http.StatusUnprocessableEntity, err)
 	}
+	if err := a.validateEndpointExecutionReady(target); err != nil {
+		return endpointBindingPreviewResponse{}, err
+	}
 	if err := validateEndpointBindingVerificationName(req.IdentityName, target.Config); err != nil {
 		return endpointBindingPreviewResponse{}, err
 	}

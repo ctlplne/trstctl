@@ -23690,6 +23690,34 @@ export const messages = {
     defaultMessage: "Evidence sealed",
     description: "S-C17: stepper step for the sealed evidence bundle.",
   },
+  "certificates.evidence.noProducingRotation": {
+    defaultMessage: "No renewal that produced this certificate is recorded.",
+    description: "A certificate timeline does not substitute a later successor's rotation.",
+  },
+  "certificates.evidence.missingFingerprint": {
+    defaultMessage: "This certificate has no fingerprint available to correlate lifecycle evidence.",
+    description: "Unknown evidence is distinct from an empty delivery history.",
+  },
+  "certificates.evidence.missingIdentity": {
+    defaultMessage: "No managed identity is linked to this certificate, so its lifecycle evidence cannot be correlated.",
+    description: "Avoid guessing a lifecycle identity from a duplicate common name.",
+  },
+  "certificates.evidence.historical": {
+    defaultMessage: "Historical evidence for this certificate only. A later renewal may serve a different certificate.",
+    description: "Explains the exact-leaf scope of certificate delivery and verification evidence.",
+  },
+  "certificates.evidence.identity": {
+    defaultMessage: "Lifecycle identity",
+    description: "Select one of the served certificate's linked identities.",
+  },
+  "certificates.evidence.openSelectedIdentity": {
+    defaultMessage: "Open selected identity",
+    description: "Opens the explicitly selected identity when a certificate has multiple retained bindings.",
+  },
+  "certificates.evidence.identityHelp": {
+    defaultMessage: "This certificate is linked to multiple identities. Review their histories separately.",
+    description: "Makes the scope of each exact-certificate history explicit.",
+  },
   "certificates.detail.relatedViews": {
     defaultMessage: "Related views",
     description: "S-C11: accessible name of the cross-link row in the certificate detail drawer.",

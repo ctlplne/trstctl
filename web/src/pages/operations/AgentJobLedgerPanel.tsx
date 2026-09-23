@@ -79,46 +79,50 @@ export function AgentJobLedgerPanel({ posture: providedPosture, unavailable = fa
       ) : null}
 
       {posture?.served && redemptions ? (
-        <dl className="grid gap-2 rounded-md border border-border p-3 text-sm sm:grid-cols-3">
-          <div>
-            <dt className="text-caption text-muted-foreground">{t("operations.jobs.redemptions.live")}</dt>
-            <dd className={redemptions.live > 0 ? "font-medium text-status-warning" : "font-medium"}>{redemptions.live}</dd>
-          </div>
-          <div>
-            <dt className="text-caption text-muted-foreground">{t("operations.jobs.redemptions.total")}</dt>
-            <dd className="font-medium">{redemptions.total}</dd>
-          </div>
-          <div>
-            <dt className="text-caption text-muted-foreground">{t("operations.jobs.redemptions.oldest")}</dt>
-            <dd className="font-medium">
-              {redemptions.oldest_live_seconds ? waitLabel(redemptions.oldest_live_seconds) : t("operations.jobs.redemptions.none")}
-            </dd>
-          </div>
-          <p className="text-caption text-muted-foreground sm:col-span-3">{t("operations.jobs.redemptions.help")}</p>
-        </dl>
+        <div className="grid gap-2 rounded-md border border-border p-3 text-sm">
+          <dl className="grid gap-2 sm:grid-cols-3">
+            <div>
+              <dt className="text-caption text-muted-foreground">{t("operations.jobs.redemptions.live")}</dt>
+              <dd className={redemptions.live > 0 ? "font-medium text-status-warning" : "font-medium"}>{redemptions.live}</dd>
+            </div>
+            <div>
+              <dt className="text-caption text-muted-foreground">{t("operations.jobs.redemptions.total")}</dt>
+              <dd className="font-medium">{redemptions.total}</dd>
+            </div>
+            <div>
+              <dt className="text-caption text-muted-foreground">{t("operations.jobs.redemptions.oldest")}</dt>
+              <dd className="font-medium">
+                {redemptions.oldest_live_seconds ? waitLabel(redemptions.oldest_live_seconds) : t("operations.jobs.redemptions.none")}
+              </dd>
+            </div>
+          </dl>
+          <p className="text-caption text-muted-foreground">{t("operations.jobs.redemptions.help")}</p>
+        </div>
       ) : null}
 
       {posture?.served && receipts ? (
-        <dl className="grid gap-2 rounded-md border border-border p-3 text-sm sm:grid-cols-3">
-          <div>
-            <dt className="text-caption text-muted-foreground">{t("operations.jobs.receipts.verified")}</dt>
-            <dd className="font-medium">{receipts.verified}</dd>
-          </div>
-          <div>
-            <dt className="text-caption text-muted-foreground">{t("operations.jobs.receipts.rejected")}</dt>
-            {/* A refusal is worth an operator's attention even when the queue
+        <div className="grid gap-2 rounded-md border border-border p-3 text-sm">
+          <dl className="grid gap-2 sm:grid-cols-3">
+            <div>
+              <dt className="text-caption text-muted-foreground">{t("operations.jobs.receipts.verified")}</dt>
+              <dd className="font-medium">{receipts.verified}</dd>
+            </div>
+            <div>
+              <dt className="text-caption text-muted-foreground">{t("operations.jobs.receipts.rejected")}</dt>
+              {/* A refusal is worth an operator's attention even when the queue
                 looks healthy: an agent believes it did work this ledger will
                 not record, so that work is neither done nor requeued. */}
-            <dd className={receipts.rejected > 0 ? "font-medium text-status-warning" : "font-medium"}>{receipts.rejected}</dd>
-          </div>
-          <div>
-            <dt className="text-caption text-muted-foreground">{t("operations.jobs.receipts.lastRejected")}</dt>
-            <dd className="font-medium">
-              {receipts.rejected > 0 && receipts.last_rejected_reason ? receipts.last_rejected_reason : t("operations.jobs.receipts.none")}
-            </dd>
-          </div>
-          <p className="text-caption text-muted-foreground sm:col-span-3">{t("operations.jobs.receipts.help")}</p>
-        </dl>
+              <dd className={receipts.rejected > 0 ? "font-medium text-status-warning" : "font-medium"}>{receipts.rejected}</dd>
+            </div>
+            <div>
+              <dt className="text-caption text-muted-foreground">{t("operations.jobs.receipts.lastRejected")}</dt>
+              <dd className="font-medium">
+                {receipts.rejected > 0 && receipts.last_rejected_reason ? receipts.last_rejected_reason : t("operations.jobs.receipts.none")}
+              </dd>
+            </div>
+          </dl>
+          <p className="text-caption text-muted-foreground">{t("operations.jobs.receipts.help")}</p>
+        </div>
       ) : null}
 
       {queues.length > 0 ? (

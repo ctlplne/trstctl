@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/jackc/pgx/v5"
 	"net/http"
+	"strings"
 	"testing"
 
 	"context"
@@ -27,6 +28,8 @@ func TestEndpointEnrollmentHonorsIssuanceAuthority(t *testing.T) {
 			t.Run(route+"/"+scenario, func(t *testing.T) {
 				var changeIdentity func(context.Context) error
 				h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+					withAgentChannel(d)
+					d.AgentClaimableJobKinds = []string{"endpoint.renew", "connector.deploy"}
 					if scenario == "configured profile" || scenario == "profile changed after preview" {
 						d.DefaultProfile = "endpoint-short-life"
 					}
@@ -213,6 +216,25 @@ func proveEndpointApprovalContinuation(t *testing.T, h *servedHarness, requester
 	after, err := h.log.LastSequence(t.Context())
 	if err != nil || after != head {
 		t.Fatalf("pending retry appended work: %d -> %d, %v", head, after, err)
+	}
+	if proveLostResponse {
+		// The first refusal has already retained the review and prepared identity.
+		// Losing the channel must still refuse a durable continuation before
+		// entering issuance, rather than trusting the old successful preview.
+		service := h.srv.agentSvc
+		if service == nil {
+			t.Fatal("host approval fixture requires an assembled agent channel")
+		}
+		h.srv.agentSvc = nil
+		code, body = secretsReqKey(t, h, http.MethodPost, path, requester, key, request)
+		h.srv.agentSvc = service
+		if code != http.StatusServiceUnavailable || !strings.Contains(string(body), "endpoint.renew") {
+			t.Fatalf("cached preparation ignored lost host execution authority: %d %s", code, body)
+		}
+		after, err = h.log.LastSequence(t.Context())
+		if err != nil || after != head {
+			t.Fatalf("unavailable prepared retry appended work: %d -> %d, %v", head, after, err)
+		}
 	}
 	approvalBody := map[string]any{"action": "issue", "request_id": approval.ID, "intent_digest": approval.IntentDigest}
 	approvalPath := "/api/v1/identities/" + approval.ResourceID + "/approvals"

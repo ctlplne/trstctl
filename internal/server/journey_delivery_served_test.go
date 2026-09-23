@@ -190,7 +190,10 @@ func TestEndpointBindingPinsExternalIssuerFromEffectFreePreview(t *testing.T) {
 // that verifies one hostname cannot safely receive a certificate for another:
 // the files may be replaced, but the listener proof will fail after the write.
 func TestEndpointBindingPreviewRejectsTargetHostnameMismatchBeforeMutation(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(*Deps) {})
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		withAgentChannel(d)
+		d.AgentClaimableJobKinds = []string{"endpoint.renew"}
+	})
 	tok := seedScopedToken(t, h.store, h.tenant,
 		"owners:read", "owners:write", "identities:read", "identities:write",
 		"certs:issue", "connectors:read", "connectors:write",

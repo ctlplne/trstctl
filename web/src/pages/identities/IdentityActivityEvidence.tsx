@@ -49,7 +49,7 @@ function isVerificationObservation(receipt: ConnectorDelivery): boolean {
   return receipt.outbox_id == null && (receipt.status === "verified" || receipt.status === "verify_failed");
 }
 
-export function IdentityActivityEvidence({ identity }: { identity: Identity }) {
+export function IdentityActivityEvidence({ identity, certificateFingerprint }: { identity: Pick<Identity, "id" | "name">; certificateFingerprint?: string }) {
   const { t } = useTranslation();
   const [deliveryPages, setDeliveryPages] = useState(1);
   const [rotationPages, setRotationPages] = useState(1);
@@ -71,7 +71,11 @@ export function IdentityActivityEvidence({ identity }: { identity: Identity }) {
   }
   const deliveryNotice = notice(deliveries);
   const rotationNotice = notice(rotations);
-  const delivery = mostRecentlyUpdated(deliveries, (receipt) => !isVerificationObservation(receipt));
+  const delivery = mostRecentlyUpdated(
+    deliveries,
+    (receipt) => !isVerificationObservation(receipt) && (certificateFingerprint === undefined || receipt.fingerprint === certificateFingerprint),
+  );
+  const rotation = mostRecentlyUpdated(rotations, (run) => certificateFingerprint === undefined || run.successor_fingerprint === certificateFingerprint);
   const verification = mostRecentlyUpdated(
     deliveries,
     (receipt) =>
@@ -90,9 +94,9 @@ export function IdentityActivityEvidence({ identity }: { identity: Identity }) {
         credentialLabel={identity.name}
         deliveryReceipt={delivery}
         verificationReceipt={verification}
-        rotationRun={mostRecentlyUpdated(rotations)}
+        rotationRun={rotation}
         deliveryNotice={deliveryNotice}
-        rotationNotice={rotationNotice}
+        rotationNotice={rotationNotice ?? (certificateFingerprint !== undefined && !rotation ? t("certificates.evidence.noProducingRotation") : undefined)}
         rollbackNotice={deliveryNotice || rotationNotice ? t("identities.evidence.incompleteRollback") : undefined}
       />
       <p className="mt-2 text-xs text-muted-foreground">{t("identities.evidence.scanMeaning")}</p>

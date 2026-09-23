@@ -23,7 +23,11 @@ func TestEndpointPreviewValidatesCertificateProfileMetadata(t *testing.T) {
 		{"wrong protocol", "partner-lab.example.com", "acme", "enrollment protocol"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			h := newServedHarness(t, config.Protocols{}, func(d *Deps) { d.DefaultProfile = "endpoint-metadata" })
+			h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+				withAgentChannel(d)
+				d.AgentClaimableJobKinds = []string{"endpoint.renew"}
+				d.DefaultProfile = "endpoint-metadata"
+			})
 			token := seedScopedToken(t, h.store, h.tenant, "owners:write", "profiles:write", "connectors:write", "certs:issue")
 			create := func(path string, request any) string {
 				t.Helper()
@@ -91,7 +95,11 @@ func TestEndpointPreviewValidatesCertificateProfileMetadata(t *testing.T) {
 func TestEndpointEnrollmentSelectsAndRetainsProfile(t *testing.T) {
 	for _, scenario := range []string{"issue and replay", "changed revision", "selected approval", "unknown profile", "existing policy conflict"} {
 		t.Run(scenario, func(t *testing.T) {
-			h := newServedHarness(t, config.Protocols{}, func(d *Deps) { d.DefaultProfile = "mail-only" })
+			h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+				withAgentChannel(d)
+				d.AgentClaimableJobKinds = []string{"endpoint.renew"}
+				d.DefaultProfile = "mail-only"
+			})
 			registerServedTenant(t, h, "endpoint profile selection tenant")
 			token := seedScopedToken(t, h.store, h.tenant, "owners:write", "profiles:write", "connectors:write", "certs:issue", "identities:write")
 			create := func(path string, request any) string {

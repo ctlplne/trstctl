@@ -5,13 +5,16 @@ import { IdentityActivityEvidence } from "@/pages/identities/IdentityActivityEvi
 import type { ConnectorDelivery, Identity } from "@/lib/api";
 import { IntlProvider } from "@/i18n/I18nProvider";
 
-const { deliveries } = vi.hoisted(() => ({ deliveries: vi.fn() }));
+const { deliveries, rotations } = vi.hoisted(() => ({ deliveries: vi.fn(), rotations: vi.fn() }));
 vi.mock("@/lib/api", async (original) => {
   const actual = await original<typeof import("@/lib/api")>();
-  return { ...actual, api: { ...actual.api, connectorDeliveries: deliveries, rotationRuns: vi.fn().mockResolvedValue({ items: [] }) } };
+  return { ...actual, api: { ...actual.api, connectorDeliveries: deliveries, rotationRuns: rotations } };
 });
 afterEach(cleanup);
-beforeEach(() => deliveries.mockReset());
+beforeEach(() => {
+  deliveries.mockReset();
+  rotations.mockReset().mockResolvedValue({ items: [] });
+});
 
 const identity = { id: "jks", name: "payments", kind: "x509_certificate", status: "deployed" } as Identity;
 const delivery: ConnectorDelivery = {
@@ -42,17 +45,90 @@ const verification: ConnectorDelivery = {
   detail: "Listener served the exact leaf",
   rollback_ref: "",
 };
-function show(items: ConnectorDelivery[], next_cursor = "", timeZone = "UTC") {
+function show(items: ConnectorDelivery[], next_cursor = "", timeZone = "UTC", certificateFingerprint?: string) {
   deliveries.mockResolvedValue({ items, next_cursor });
   render(
     <IntlProvider initialLocale="en-US" initialTimeZone={timeZone}>
       <AppQueryProvider>
-        <IdentityActivityEvidence identity={identity} />
+        <IdentityActivityEvidence identity={identity} certificateFingerprint={certificateFingerprint} />
       </AppQueryProvider>
     </IntlProvider>,
   );
 }
 describe("delivery retries and separate endpoint verification", () => {
+  it("keeps an older selected certificate's proof instead of borrowing the newest successor", async () => {
+    const newer = {
+      ...delivery,
+      id: "newer",
+      fingerprint: "newer-leaf",
+      attempts: 1,
+      idempotency_key: "renew:newer",
+      updated_at: "2026-09-13T13:40:00Z",
+      rollback_ref: "newer-only-rollback",
+    };
+    const newerVerification = {
+      ...verification,
+      id: "newer-verification",
+      fingerprint: "newer-leaf",
+      idempotency_key: "renew:newer:verified",
+      updated_at: "2026-09-13T13:40:01Z",
+      detail: "newer-only-observation",
+    };
+    rotations.mockResolvedValue({
+      items: [
+        {
+          id: "produced-selected",
+          identity_id: identity.id,
+          successor_fingerprint: "exact-leaf",
+          predecessor_fingerprint: "earlier-leaf",
+          status: "succeeded",
+          trigger: "scheduler",
+          created_at: "2026-09-13T13:33:00Z",
+          updated_at: "2026-09-13T13:33:52Z",
+          rollback_ref: "selected-only-rollback",
+        },
+        {
+          id: "later-successor",
+          identity_id: identity.id,
+          successor_fingerprint: "newer-leaf",
+          predecessor_fingerprint: "exact-leaf",
+          status: "succeeded",
+          trigger: "scheduler",
+          created_at: "2026-09-13T13:40:00Z",
+          updated_at: "2026-09-13T13:40:02Z",
+          rollback_ref: "newer-only-rollback",
+        },
+      ],
+    });
+    show([newerVerification, newer, verification, delivery], "", "UTC", "exact-leaf");
+    await screen.findByText("delivered java-keystore/payments after 5 attempts");
+    expect(await screen.findByText("succeeded via scheduler; successor exact-leaf")).toBeInTheDocument();
+    expect(screen.getByText("selected-only-rollback")).toBeInTheDocument();
+    expect(screen.getByText("Listener served the exact leaf")).toBeInTheDocument();
+    expect(screen.queryByText("newer-only-observation")).not.toBeInTheDocument();
+    expect(screen.queryByText("newer-only-rollback")).not.toBeInTheDocument();
+  });
+  it("does not turn a rotation away from the selected certificate into its issuance proof", async () => {
+    rotations.mockResolvedValue({
+      items: [
+        {
+          id: "later-successor",
+          identity_id: identity.id,
+          successor_fingerprint: "newer-leaf",
+          predecessor_fingerprint: "exact-leaf",
+          status: "succeeded",
+          trigger: "scheduler",
+          updated_at: "2026-09-13T13:40:02Z",
+          rollback_ref: "newer-only-rollback",
+        },
+      ],
+    });
+    show([verification, delivery], "", "UTC", "exact-leaf");
+    await screen.findByText("No renewal that produced this certificate is recorded.");
+    expect(screen.queryByText("succeeded via scheduler; successor newer-leaf")).not.toBeInTheDocument();
+    expect(screen.getByText("restore predecessor")).toBeInTheDocument();
+  });
+
   it("shows the exact verification observation in the operator's selected time zone", async () => {
     show([verification, delivery], "", "America/New_York");
     await screen.findByText("delivered java-keystore/payments after 5 attempts");

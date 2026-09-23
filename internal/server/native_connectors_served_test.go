@@ -575,6 +575,8 @@ func TestServedEndpointBindingPushesCredentialsCAPLIFE05(t *testing.T) {
 	}
 
 	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		withAgentChannel(d)
+		d.AgentClaimableJobKinds = []string{"connector.deploy"}
 		d.ConnectorRegistry = reg
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, "owners:write", "connectors:read", "connectors:write", "certs:issue")
@@ -602,7 +604,7 @@ func TestServedEndpointBindingPushesCredentialsCAPLIFE05(t *testing.T) {
 		{name: "cap-life-05-azure.served.test", connector: "azure-keyvault", route: azureName},
 		{name: "cap-life-05-kemp.served.test", connector: "kemp", route: kempVS},
 	} {
-		bindingRequest := previewPlatformEndpointBinding(t, h, tok, map[string]any{
+		request := map[string]any{
 			"owner_id":      owner.ID,
 			"identity_name": tc.name,
 			"reason":        "cap-life-05 automated endpoint push",
@@ -614,7 +616,49 @@ func TestServedEndpointBindingPushesCredentialsCAPLIFE05(t *testing.T) {
 					"credential_ref": "secret://connectors/" + tc.connector + "/cap-life-05",
 				},
 			},
-		})
+		}
+		if tc.connector == "kemp" {
+			t.Run("relay requires a mounted delivery channel", func(t *testing.T) {
+				service := h.srv.agentSvc
+				if service == nil {
+					t.Fatal("positive relay fixture must assemble its channel")
+				}
+				h.srv.agentSvc = nil
+				defer func() { h.srv.agentSvc = service }()
+				negative := make(map[string]any, len(request)+2)
+				for key, value := range request {
+					negative[key] = value
+				}
+				negative["issuer"] = map[string]any{"source": "platform", "id": "trstctl-issuing-ca"}
+				negative["preview_fingerprint"] = strings.Repeat("0", 64)
+				head, err := h.log.LastSequence(t.Context())
+				if err != nil {
+					t.Fatal(err)
+				}
+				before, err := orchestrator.NewOutbox(h.store).Pending(t.Context(), h.tenant)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, path := range []string{"/api/v1/lifecycle/endpoint-bindings/preview", "/api/v1/lifecycle/endpoint-bindings"} {
+					code, response := secretsReq(t, h, http.MethodPost, path, tok, negative)
+					if code != http.StatusServiceUnavailable || !strings.Contains(string(response), "connector.deploy") {
+						t.Fatalf("unavailable relay %s: %d %s", path, code, response)
+					}
+				}
+				after, err := h.log.LastSequence(t.Context())
+				if err != nil || after != head {
+					t.Fatalf("relay refusal changed events: %d -> %d %v", head, after, err)
+				}
+				if _, found, err := h.store.FindIdentityByName(t.Context(), h.tenant, tc.name); err != nil || found {
+					t.Fatalf("relay refusal created an identity: %v %v", found, err)
+				}
+				pending, err := orchestrator.NewOutbox(h.store).Pending(t.Context(), h.tenant)
+				if err != nil || len(pending) != len(before) {
+					t.Fatalf("relay refusal changed pending effects: %d -> %d %v", len(before), len(pending), err)
+				}
+			})
+		}
+		bindingRequest := previewPlatformEndpointBinding(t, h, tok, request)
 		status, body = secretsReq(t, h, http.MethodPost, "/api/v1/lifecycle/endpoint-bindings", tok, bindingRequest)
 		if status != http.StatusCreated {
 			t.Fatalf("create %s endpoint binding: status %d body %s", tc.connector, status, body)

@@ -23,6 +23,8 @@ func TestEndpointEnrollmentRetainsExactSubjectAlgorithm(t *testing.T) {
 	for _, algorithm := range []string{"ML-DSA-44", "ML-DSA-65", "ML-DSA-87"} {
 		t.Run(algorithm, func(t *testing.T) {
 			h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+				withAgentChannel(d)
+				d.AgentClaimableJobKinds = []string{"endpoint.renew", "connector.deploy"}
 				d.LicensedCSRParser = pqc.ParsePureMLDSACSR
 				d.LicensedCSRInspector = pqc.InspectHybridCSR
 				d.LicensedLeafSigner = pqc.SignLicensedLeafFromCSRWithProfile
@@ -146,6 +148,8 @@ func TestEndpointSubjectChoiceRefusesUnsupportedAndDisallowedAlgorithms(t *testi
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+				withAgentChannel(d)
+				d.AgentClaimableJobKinds = []string{"endpoint.renew", "connector.deploy"}
 				if tc.denyProfile {
 					d.DefaultProfile = "classical-only"
 				}
@@ -216,7 +220,10 @@ func TestEndpointReplacementRetainsReviewedSubjectAlgorithm(t *testing.T) {
 			name = "omitted-preserves-original"
 		}
 		t.Run(name, func(t *testing.T) {
-			h := newServedHarness(t, config.Protocols{})
+			h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+				withAgentChannel(d)
+				d.AgentClaimableJobKinds = []string{"endpoint.renew"}
+			})
 			token := seedScopedToken(t, h.store, h.tenant, "owners:write", "connectors:write", "certs:issue")
 			owner, err := h.srv.orch.CreateOwner(t.Context(), h.tenant, "workload", "replacement subject owner", "")
 			if err != nil {
@@ -337,7 +344,10 @@ func TestEndpointReplacementRetainsReviewedSubjectAlgorithm(t *testing.T) {
 func TestEndpointPreviewRefusesInvalidSavedSubjectIntent(t *testing.T) {
 	for _, raw := range []string{`{"subject_key_algorithm":null}`, `{"subject_key_algorithm":""}`} {
 		t.Run(raw, func(t *testing.T) {
-			h := newServedHarness(t, config.Protocols{})
+			h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+				withAgentChannel(d)
+				d.AgentClaimableJobKinds = []string{"endpoint.renew"}
+			})
 			token := seedScopedToken(t, h.store, h.tenant, "connectors:write", "certs:issue")
 			owner, err := h.srv.orch.CreateOwner(t.Context(), h.tenant, "workload", "invalid subject owner", "")
 			if err != nil {

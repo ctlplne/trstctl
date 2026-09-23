@@ -136,7 +136,7 @@ func registeredRoleAgentID(t *testing.T, h *roleHarness) string {
 }
 
 func TestHostTargetAssignmentAdmissionIsTenantScopedAndFailClosed(t *testing.T) {
-	h := newRoleHarness(t, []string{mtls.AgentRoleHost}, "connector.test")
+	h := newRoleHarness(t, []string{mtls.AgentRoleHost}, "connector.test", agentJobKindEndpointRenew)
 	ctx := t.Context()
 	hostID := registeredRoleAgentID(t, h)
 	const otherTenant = "22222222-2222-4222-8222-222222222222"

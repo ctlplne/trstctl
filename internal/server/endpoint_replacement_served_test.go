@@ -42,6 +42,9 @@ func TestEndpointReplacementServedPreservesSameOwnerAndExternalCA(t *testing.T) 
 		d.ExternalCAs = []ExternalCA{{ID: "replacement-ca", Type: "digicert", Name: "Replacement CA",
 			CA: digicert.New("replacement-ca", dc.URL(), []byte(dc.APIKey()), digicert.WithHTTPClient(&http.Client{Timeout: 5 * time.Second}))}}
 	})
+	if h.srv.AgentChannelServed() {
+		t.Fatal("control-plane cloud enrollment must be exercised without an agent channel")
+	}
 	originalHandler := h.srv.obHandler
 	h.srv.obHandler = orchestrator.HandlerFunc(func(ctx context.Context, m orchestrator.Message) error {
 		err := originalHandler.Deliver(ctx, m)

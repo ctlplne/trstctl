@@ -1474,6 +1474,7 @@ func (s *Server) appendOperationalReadModels(d Deps, defaults *[]api.Option) {
 	// A1: job-ledger queue depth and claim health, read at request time because
 	// the counters are only useful fresh.
 	*defaults = append(*defaults, api.WithAgentJobPosture(s.agentJobPosture))
+	*defaults = append(*defaults, api.WithAgentJobClaimability(s.agentJobClaimable))
 	// D5/F27: target tests run at the deploy vantage. Host/network targets use an
 	// explicitly enabled connector.test agent; cloud stores use the bounded
 	// control-plane outbox worker. An unavailable agent path keeps the honest

@@ -224,8 +224,12 @@ or operator-managed endpoint config; it never stores passwords, tokens, private 
 or certificate key bytes.
 
 The control-plane operator first enables the native connector. For a local file/reload
-target, the operator also enrolls a host-role agent, enables `connector.deploy` in
-`agent_channel.claimable_job_kinds`, starts the agent with `--relay-claim`, and places
+target, the operator also enrolls a host-role agent and starts an agent channel.
+Enable `endpoint.renew` in `agent_channel.claimable_job_kinds` for host-generated
+keys (`executor: agent`): this kind performs both the first issuance and later
+renewals. `connector.deploy` handles delivery of centrally prepared material and
+does not replace `endpoint.renew`. Enable `connector.test` for target tests and
+`connector.rollback` for supported restores. Start the agent with `--relay-claim`, and place
 the exact roots and executables in the file named by `--host-exec-profile`. The profile
 lives on the target host because an allowlist for `/usr/sbin/nginx` on the control
 plane says nothing about the binary the target host will actually run. Tenant target
@@ -328,6 +332,13 @@ not reset the delivery's attempt count. The console matches the recorded operati
 key, identity, connector, target, and certificate fingerprint before associating
 those receipts. A missing match stays unverified. These are historical observations,
 not a promise that the listener still serves the same certificate now.
+
+The certificate detail drawer limits this history to the selected fingerprint and
+its retained identity links. A later successor's delivery or renewal is not proof
+for the selected certificate. If several identities used that certificate, choose
+one identity at a time. Missing links or a missing fingerprint say that correlation
+is unavailable. Paginated or failed reads remain incomplete until more records are
+loaded or a retry succeeds; they do not prove that no lifecycle work occurred.
 
 `target test` is an effect-free dress rehearsal from the machine or network that
 would perform the real deployment. Enable `connector.test` as a claimable job kind

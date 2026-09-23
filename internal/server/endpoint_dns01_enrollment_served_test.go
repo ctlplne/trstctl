@@ -26,6 +26,9 @@ func TestEndpointDNS01EnrollmentSurvivesDurableReviewAndRechecksConsent(t *testi
 		d.ExternalCAs = []ExternalCA{{ID: "dns01-authority", Type: "digicert", Name: "DNS-01 enrollment authority", UpstreamDNS01: true,
 			CA: digicert.New("dns01-authority", ca.URL(), []byte(ca.APIKey()))}}
 	})
+	if h.srv.AgentChannelServed() {
+		t.Fatal("control-plane cloud enrollment must be exercised without an agent channel")
+	}
 	token := seedScopedToken(t, h.store, h.tenant, "owners:write", "connectors:write", "certs:issue", "issuers:write")
 	request := func(method, path, key string, payload any, want int) map[string]json.RawMessage {
 		t.Helper()

@@ -477,9 +477,12 @@ describe("certificate inventory gap closure", () => {
     expect(dialog).toHaveTextContent("Credential activity timeline");
     expect(dialog).toHaveTextContent(/projected connector and rotation evidence/i);
     expect(dialog).toHaveTextContent("Connector delivery");
-    expect(dialog).toHaveTextContent("no connector delivery receipt yet");
+    // A discovered certificate without a retained identity link cannot prove
+    // absence of lifecycle work; preserve that distinction from an empty read.
+    expect(dialog).toHaveTextContent("No managed identity is linked to this certificate, so its lifecycle evidence cannot be correlated.");
+    expect(dialog).not.toHaveTextContent("no connector delivery receipt yet");
     expect(dialog).toHaveTextContent("Rotation run");
-    expect(dialog).toHaveTextContent("no lifecycle rotation run yet");
+    expect(dialog).not.toHaveTextContent("no lifecycle rotation run yet");
   });
 
   it("ingests a PEM through the served mutation and refreshes the server-filtered inventory", async () => {

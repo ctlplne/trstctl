@@ -30,7 +30,7 @@ import { Dialog } from "@/components/Dialog";
 import { Button } from "@/components/ui/button";
 import { BulkActionBar } from "@/components/bulk";
 import { useToast } from "@/components/ToastProvider";
-import { CredentialActivityTimeline } from "@/components/CredentialActivityTimeline";
+import { CertificateActivityEvidence } from "@/pages/certificates/CertificateActivityEvidence";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -1710,7 +1710,7 @@ function CertificateWorkspace() {
               <div className="md:col-span-2">
                 <dt className="sr-only">{t("certificateCockpit.detail.activity")}</dt>
                 <dd>
-                  <CredentialActivityTimeline credentialLabel={certificateDisplayName(detail)} />
+                  <CertificateActivityEvidence key={detail.id} certificate={detail} />
                 </dd>
               </div>
             </dl>
