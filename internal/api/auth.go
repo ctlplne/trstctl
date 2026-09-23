@@ -120,7 +120,7 @@ type AuthConfig struct {
 	// the generated request ID, so the ACS can correlate the signed response.
 	SAMLLoginRedirect func(relayState string) (redirectURL string, requestID string, err error)
 	// VerifySAMLResponse validates the ACS POST's SAMLResponse and returns claims in
-	// the same shape as OIDC. Production wires auth.SAMLVerifier.Verify.
+	// the same shape as OIDC. Production wires enterpriseauth.SAMLVerifier.Verify.
 	VerifySAMLResponse func(r *http.Request, possibleRequestIDs []string) (auth.Claims, error)
 	// ResolveSAMLTenant maps SAML claims to the tenant/roles for the browser session.
 	ResolveSAMLTenant func(auth.Claims) (tenantID string, roles []string, err error)
@@ -129,7 +129,7 @@ type AuthConfig struct {
 
 	LDAPEnabled bool
 	// VerifyLDAPLogin binds the supplied directory credentials and returns normalized
-	// claims with directory groups. Production wires auth.LDAPVerifier.Verify.
+	// claims with directory groups. Production wires enterpriseauth.LDAPVerifier.Verify.
 	VerifyLDAPLogin func(ctx context.Context, username string, password []byte) (auth.Claims, error)
 	// ResolveLDAPTenant maps LDAP claims/groups to the tenant/roles for the browser
 	// session.

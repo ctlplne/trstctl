@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-package server
+package enterpriseauth
 
 import (
 	"bytes"
@@ -20,6 +20,7 @@ import (
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/server"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -196,7 +197,7 @@ func assertSessionCanReadAccessRoles(t *testing.T, baseURL string, jar http.Cook
 	}
 }
 
-func buildLDAPServer(t *testing.T, ctx context.Context, dsn string, ldapCfg config.LDAP) *Server {
+func buildLDAPServer(t *testing.T, ctx context.Context, dsn string, ldapCfg config.LDAP) *server.Server {
 	t.Helper()
 	phaseStore, err := store.Open(ctx, dsn)
 	if err != nil {
@@ -207,7 +208,7 @@ func buildLDAPServer(t *testing.T, ctx context.Context, dsn string, ldapCfg conf
 		phaseStore.Close()
 		t.Fatalf("open event log: %v", err)
 	}
-	srv, err := Build(ctx, Deps{Store: phaseStore, Log: log, LDAP: ldapCfg})
+	srv, err := server.Build(ctx, server.Deps{TenantAuthFactory: Build, Store: phaseStore, Log: log, LDAP: ldapCfg})
 	if err != nil {
 		_ = log.Close()
 		phaseStore.Close()

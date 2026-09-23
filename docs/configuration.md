@@ -832,6 +832,12 @@ and `Idempotency-Key`; exact retries return the same event result.
 ## Browser SSO
 
 Browser sign-on is optional. Scoped API tokens still work when browser sign-on is off.
+OIDC is available in the Free core. Tenant SAML, LDAP and SCIM require the Enterprise
+SSO feature, included in Enterprise and inherited by Provider. Enabling any of
+those three methods without the licensed implementation refuses startup with
+`SAML, LDAP and SCIM login require an Enterprise licence.` A core-only binary
+cannot load those implementations, even with a license. Provider operator-plane
+authentication uses its separate `provider.*` settings.
 When it is on, each verified OIDC, SAML, or LDAP / Active Directory user must map to
 exactly one trstctl tenant by subject, tenant claim, directory group, or an explicit
 single-tenant fallback. Missing mappings fail the login closed instead of silently
@@ -883,7 +889,7 @@ configured post-login destinations.
 
 ## SCIM provisioning
 
-SCIM 2.0 provisioning is optional and separate from browser sign-on. Enable it when
+SCIM 2.0 provisioning requires Enterprise SSO and is optional and separate from browser sign-on. Enable it when
 your identity provider should push users and groups into trstctl instead of an
 operator maintaining role membership by hand. The served endpoint is `/scim/v2`:
 IdPs use `POST /scim/v2/Users`, `PATCH /scim/v2/Users/{id}`,

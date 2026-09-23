@@ -104,6 +104,25 @@ func TestAttachEEGovernanceRequiresEnterpriseLicense(t *testing.T) {
 	}
 }
 
+func TestAttachEETenantAuthRequiresEnterpriseOrInheritedProvider(t *testing.T) {
+	for _, tier := range []license.Tier{license.TierEnterprise, license.TierProvider} {
+		t.Run(string(tier), func(t *testing.T) {
+			cfg := &config.Config{}
+			cfg.Auth.SAML.Enabled = true
+			cfg.Auth.LDAP.Enabled = true
+			cfg.Auth.SCIM.Enabled = true
+			deps := &server.Deps{}
+			lic := commercialLicense(t, tier)
+			if err := attachEE(context.Background(), cfg, nil, lic, deps); err != nil {
+				t.Fatalf("licensed tenant-auth attachment: %v", err)
+			}
+			if deps.TenantAuthFactory == nil {
+				t.Fatal("licensed tenant SAML/LDAP/SCIM implementation was not attached")
+			}
+		})
+	}
+}
+
 func TestAttachEEProviderLicenseMountsEnterpriseAndProviderSurfaces(t *testing.T) {
 	deps := &server.Deps{}
 	if err := attachEE(context.Background(), &config.Config{}, nil, commercialLicense(t, license.TierProvider), deps); err != nil {

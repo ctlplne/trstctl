@@ -3567,11 +3567,11 @@ func TestSSOIncludesOIDCSAMLLDAPAndIsDisclosed(t *testing.T) {
 	if !strings.Contains(oidc, "saml xml signature verification via internal/crypto/samlsp") {
 		t.Error("internal/auth/oidc.go should state that SAML verification stays behind internal/crypto/samlsp")
 	}
-	if !strings.Contains(read(t, "../internal/server/auth.go"), "buildSAMLAuthConfig") {
-		t.Error("internal/server/auth.go should wire the served SAML auth config")
+	if !strings.Contains(read(t, "../ee/enterpriseauth/builders.go"), "buildSAMLAuthConfig") {
+		t.Error("ee/enterpriseauth/builders.go should wire the served SAML auth config")
 	}
-	if !strings.Contains(read(t, "../internal/server/auth.go"), "buildLDAPAuthConfig") {
-		t.Error("internal/server/auth.go should wire the served LDAP auth config")
+	if !strings.Contains(read(t, "../ee/enterpriseauth/builders.go"), "buildLDAPAuthConfig") {
+		t.Error("ee/enterpriseauth/builders.go should wire the served LDAP auth config")
 	}
 	if !strings.Contains(read(t, "../internal/api/api.go"), `mux.HandleFunc("POST /auth/ldap/login"`) {
 		t.Error("internal/api/api.go should mount the served LDAP login route")
@@ -3603,7 +3603,7 @@ func TestSCIMProvisioningIsServedAndDisclosed(t *testing.T) {
 		}
 	}
 
-	apiRoutes := read(t, "../internal/api/api.go")
+	apiRoutes := read(t, "../ee/enterpriseauth/scim_handler.go")
 	for _, want := range []string{
 		`mux.HandleFunc("GET /scim/v2/ServiceProviderConfig"`,
 		`mux.HandleFunc("POST /scim/v2/Users"`,
@@ -3612,24 +3612,49 @@ func TestSCIMProvisioningIsServedAndDisclosed(t *testing.T) {
 		`mux.HandleFunc("PATCH /scim/v2/Groups/{id}"`,
 	} {
 		if !strings.Contains(apiRoutes, want) {
-			t.Errorf("internal/api/api.go should mount served SCIM route %q", want)
+			t.Errorf("ee/enterpriseauth/scim_handler.go should mount served SCIM route %q", want)
 		}
 	}
-	apiSCIM := read(t, "../internal/api/scim.go")
+	apiSCIM := read(t, "../ee/enterpriseauth/scim_handler.go")
 	for _, want := range []string{"scimMutate", "UpsertTenantMember", "OffboardTenantMember", "ListTenantMembersByRole"} {
 		if !strings.Contains(apiSCIM, want) {
-			t.Errorf("internal/api/scim.go should keep SCIM wired into RBAC membership via %q", want)
+			t.Errorf("ee/enterpriseauth/scim_handler.go should keep SCIM wired into RBAC membership via %q", want)
 		}
 	}
 	server := read(t, "../internal/server/server.go")
 	if !strings.Contains(server, `mux.Handle("/scim/", apiHandler)`) {
 		t.Error("internal/server/server.go should forward /scim/ to the served API handler")
 	}
-	if !strings.Contains(read(t, "../internal/server/scim.go"), "buildSCIMOption") {
-		t.Error("internal/server/scim.go should load tenant-bound SCIM token files")
+	if !strings.Contains(read(t, "../ee/enterpriseauth/scim_config.go"), "buildSCIMConfig") {
+		t.Error("ee/enterpriseauth/scim_config.go should load tenant-bound SCIM token files")
 	}
 	if !strings.Contains(read(t, "../internal/api/api.go"), "mergeRoleNames(roleNames, member.Roles)") {
 		t.Error("session RBAC should merge current tenant-member roles so SCIM group changes affect served authorization")
+	}
+}
+
+// The move must preserve core hooks and enforcement while attaching the actual
+// tenant implementation only through the licensed composition root.
+func TestTenantEnterpriseAuthCompositionBoundary(t *testing.T) {
+	for _, path := range []string{"configuration.md", "limitations.md", "features/platform-and-api.md", "editions.md"} {
+		if !strings.Contains(read(t, path), "Enterprise SSO") {
+			t.Errorf("%s must disclose the tenant authentication edition requirement", path)
+		}
+	}
+	checks := map[string][]string{
+		"../cmd/trstctl/ee_attach.go":          {"lic.Has(license.FeatureEnterpriseSSO)", "deps.TenantAuthFactory = eeenterpriseauth.Build"},
+		"../internal/server/auth.go":           {"buildOIDCAuthConfig", "d.TenantAuthFactory(", "mergeSAMLAuthConfig", "mergeLDAPAuthConfig", "newBrowserSessionIssuer(secret, ttl, d.Store)"},
+		"../internal/api/scim.go":              {"func WithSCIM(", "a.allowSpecialRouteRequest(", "a.scim.NewHandler("},
+		"../internal/api/api.go":               {`mux.Handle("/scim/v2/", handler)`},
+		"../ee/enterpriseauth/scim_handler.go": {"a.idem.DoBound(", "a.idem.LookupBound(", "a.allowRequest(w, r, tenantID, tokenKey)"},
+	}
+	for path, needles := range checks {
+		content := read(t, path)
+		for _, needle := range needles {
+			if !strings.Contains(content, needle) {
+				t.Errorf("%s must preserve %q", path, needle)
+			}
+		}
 	}
 }
 

@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-package server
+package enterpriseauth
 
 import (
 	"bytes"
@@ -13,14 +13,14 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secretfile"
 )
 
-func buildSCIMOption(cfg config.SCIM) (api.Option, error) {
+func buildSCIMConfig(cfg config.SCIM) (*api.SCIMConfig, error) {
 	if !cfg.Enabled {
 		return nil, nil
 	}
 	if err := cfg.ValidateEnabled(); err != nil {
 		return nil, err
 	}
-	out := api.SCIMConfig{Enabled: true}
+	out := api.SCIMConfig{Enabled: true, NewHandler: NewSCIMHandler}
 	seen := map[string]bool{}
 	for i, tok := range cfg.Tokens {
 		raw, err := secretfile.Load(tok.TokenFile)
@@ -40,5 +40,5 @@ func buildSCIMOption(cfg config.SCIM) (api.Option, error) {
 		seen[hash] = true
 		out.Tokens = append(out.Tokens, api.SCIMToken{Name: tok.Name, TenantID: tok.TenantID, TokenHash: hash, SubjectAttribute: tok.SubjectAttribute})
 	}
-	return api.WithSCIM(out), nil
+	return &out, nil
 }

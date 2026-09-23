@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-package api
+package enterpriseauth
 
 import (
 	"bytes"
@@ -15,7 +15,7 @@ import (
 
 func TestSCIMMutationBindsTokenRouteMethodAndRawBody(t *testing.T) {
 	idem := orchestrator.NewMemoryIdempotency()
-	a := New(nil, idem, &orchestrator.Orchestrator{})
+	a := &scimHandler{idem: idem, orch: &orchestrator.Orchestrator{}}
 	const (
 		key      = "shared-scim-sensitive-key"
 		sentinel = "scim-cached-response-sentinel-must-not-leak"

@@ -25,6 +25,7 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
 	"trstctl.com/trstctl/internal/agent/enroll"
 	"trstctl.com/trstctl/internal/aimodel"
 	"trstctl.com/trstctl/internal/api"
@@ -42,6 +43,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/crypto/tlsprobe"
 	"trstctl.com/trstctl/internal/dynsecret"
+	"trstctl.com/trstctl/internal/editionseam"
 	"trstctl.com/trstctl/internal/egress"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/idemgc"
@@ -111,6 +113,8 @@ type IdempotencyResultMigrator interface {
 }
 
 type Deps struct {
+	// TenantAuthFactory is supplied only by the licensed tenant-auth attach seam.
+	TenantAuthFactory editionseam.TenantAuthFactory
 	// CBOMTLSProbeOpenSSL is a trusted local startup path, never tenant-authored.
 	CBOMTLSProbeOpenSSL string
 	// BackupDirectory is the full-backup directory the served DR posture
@@ -909,6 +913,9 @@ func resolveSignTokenProvider(d Deps) signing.SignTokenProvider {
 }
 
 func Build(ctx context.Context, d Deps) (_ *Server, err error) {
+	if err := requireTenantAuthAttachment(d); err != nil {
+		return nil, err
+	}
 	notificationOwner := ensureNotificationChannelOwnership(&d)
 	var s *Server
 	defer func() {
@@ -1252,20 +1259,11 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	// receives the live pool provider instead of permanently capturing the
 	// truthful-but-wrong served=false fallback during startup.
 	s.appendOperationalReadModels(d, &defaults)
-	authOpt, err := buildBrowserAuth(d.OIDC, d.SAML, d.LDAP, d.SecurityHeaders.TLS, d.AuthHTTPClient, d.Store, d.KEK, d.TenantCrypto)
+	authOptions, err := buildBrowserAuth(d)
 	if err != nil {
 		return nil, nil, err
 	}
-	if authOpt != nil {
-		defaults = append(defaults, authOpt)
-	}
-	scimOpt, err := buildSCIMOption(d.SCIM)
-	if err != nil {
-		return nil, nil, fmt.Errorf("server: configure SCIM: %w", err)
-	}
-	if scimOpt != nil {
-		defaults = append(defaults, scimOpt)
-	}
+	defaults = append(defaults, authOptions...)
 	// Effect-free review evidence is a platform primitive, not a native-secret-
 	// store feature. Wire the KEK's keyed-digest seam even when that optional API
 	// is disabled so F38 temporary access remains independently reviewable.

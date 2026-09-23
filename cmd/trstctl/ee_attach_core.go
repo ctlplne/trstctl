@@ -24,8 +24,8 @@ func eeLocalCommand(context.Context, []string, func(string) string, io.Writer, i
 
 // attachEE is the core-only no-op twin. The trstctl_core build links this file
 // instead of ee_attach.go, proving core stands alone with zero ee/ packages.
-func attachEE(context.Context, *config.Config, *slog.Logger, *license.Manager, *server.Deps) error {
-	return nil
+func attachEE(_ context.Context, cfg *config.Config, _ *slog.Logger, _ *license.Manager, deps *server.Deps) error {
+	return requireTenantAuthAttachment(cfg, deps)
 }
 
 func attachEEProjectionOptions(

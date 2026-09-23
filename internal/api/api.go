@@ -69,18 +69,18 @@ type API struct {
 	// lastDrill returns the most recent restore drill, or nil if none has run
 	// (J2). Nil-returning rather than a zero value: "no drill has run" and "a
 	// drill ran and failed" must not render the same way.
-	lastDrill               func() *backup.DrillAttestation
-	restoreDrillKeys        *jose.JWKSet
-	roles                   *authz.Registry
-	principal               func(*http.Request) (authz.Principal, error)
-	audit                   *audit.Service
-	auditTimestamper        auditanchor.Timestamper
-	retirementChecklist     RetirementChecklistSource
-	auth                    *AuthConfig
-	providerPlaneAvailable  bool
-	oidcPreLogin            *oidcPreLoginStore
-	scim                    *SCIMConfig
-	scimTokens              map[string]scimToken
+	lastDrill              func() *backup.DrillAttestation
+	restoreDrillKeys       *jose.JWKSet
+	roles                  *authz.Registry
+	principal              func(*http.Request) (authz.Principal, error)
+	audit                  *audit.Service
+	auditTimestamper       auditanchor.Timestamper
+	retirementChecklist    RetirementChecklistSource
+	auth                   *AuthConfig
+	providerPlaneAvailable bool
+	oidcPreLogin           *oidcPreLoginStore
+	scim                   *SCIMConfig
+
 	agentTokens             BootstrapTokenIssuer
 	agentConnection         agentEnrollmentConnection
 	agentRenewalReady       bool
@@ -498,24 +498,24 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	}
 	specialAbuseLimits := cfg.specialAbuseLimits.withDefaults()
 	a := &API{
-		subjectCSRInspector:         cfg.subjectCSRInspector,
-		tenantServiceCheck:          cfg.tenantServiceCheck,
-		store:                       st,
-		log:                         cfg.eventLog,
-		idem:                        idem,
-		orch:                        orch,
-		tenantFn:                    tenantFromHeader,
-		drVerify:                    backupVerifierFor(cfg.backupDir),
-		lastDrill:                   cfg.lastDrill,
-		restoreDrillKeys:            cfg.restoreDrillKeys,
-		roles:                       reg,
-		audit:                       cfg.audit,
-		auditTimestamper:            cfg.auditTimestamper,
-		retirementChecklist:         cfg.retirementChecklist,
-		auth:                        cfg.auth,
-		providerPlaneAvailable:      cfg.providerPlaneAvailable,
-		scim:                        cfg.scim,
-		scimTokens:                  normalizeSCIM(cfg.scim),
+		subjectCSRInspector:    cfg.subjectCSRInspector,
+		tenantServiceCheck:     cfg.tenantServiceCheck,
+		store:                  st,
+		log:                    cfg.eventLog,
+		idem:                   idem,
+		orch:                   orch,
+		tenantFn:               tenantFromHeader,
+		drVerify:               backupVerifierFor(cfg.backupDir),
+		lastDrill:              cfg.lastDrill,
+		restoreDrillKeys:       cfg.restoreDrillKeys,
+		roles:                  reg,
+		audit:                  cfg.audit,
+		auditTimestamper:       cfg.auditTimestamper,
+		retirementChecklist:    cfg.retirementChecklist,
+		auth:                   cfg.auth,
+		providerPlaneAvailable: cfg.providerPlaneAvailable,
+		scim:                   cfg.scim,
+
 		agentTokens:                 cfg.agentTokens,
 		agentConnection:             cfg.agentConnection,
 		agentRenewalReady:           cfg.agentRenewalReady,
@@ -675,20 +675,10 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	if a.agentEnroller != nil {
 		mux.HandleFunc("POST /enroll/bootstrap", a.enrollBootstrap)
 	}
-	if len(a.scimTokens) > 0 {
-		mux.HandleFunc("GET /scim/v2/ServiceProviderConfig", a.scimServiceProviderConfig)
-		mux.HandleFunc("POST /scim/v2/Users", a.scimCreateUser)
-		mux.HandleFunc("GET /scim/v2/Users", a.scimListUsers)
-		mux.HandleFunc("GET /scim/v2/Users/{id}", a.scimGetUser)
-		mux.HandleFunc("PUT /scim/v2/Users/{id}", a.scimPutUser)
-		mux.HandleFunc("PATCH /scim/v2/Users/{id}", a.scimPatchUser)
-		mux.HandleFunc("DELETE /scim/v2/Users/{id}", a.scimDeleteUser)
-		mux.HandleFunc("POST /scim/v2/Groups", a.scimCreateGroup)
-		mux.HandleFunc("GET /scim/v2/Groups", a.scimListGroups)
-		mux.HandleFunc("GET /scim/v2/Groups/{id}", a.scimGetGroup)
-		mux.HandleFunc("PATCH /scim/v2/Groups/{id}", a.scimPatchGroup)
-		mux.HandleFunc("DELETE /scim/v2/Groups/{id}", a.scimDeleteGroup)
+	if handler := a.buildSCIMHandler(); handler != nil {
+		mux.Handle("/scim/v2/", handler)
 	}
+
 	mux.HandleFunc("/", a.notFound)
 	a.mux = mux
 	a.spec = buildSpec(a.routes(), a.licensedSchemas)

@@ -6,17 +6,17 @@ package main
 
 import (
 	"bytes"
-	"errors"
-	"os"
-	"strings"
-
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
+	"strings"
 
 	_ "trstctl.com/trstctl/ee"
 	eebilling "trstctl.com/trstctl/ee/billing"
+	eeenterpriseauth "trstctl.com/trstctl/ee/enterpriseauth"
 	eefederation "trstctl.com/trstctl/ee/federation"
 	eegovernance "trstctl.com/trstctl/ee/governance"
 	eemanagedkeys "trstctl.com/trstctl/ee/managedkeys"
@@ -87,6 +87,13 @@ func attachEEProjectionOptions(
 }
 
 func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *license.Manager, deps *server.Deps) error {
+	if lic != nil && lic.Has(license.FeatureEnterpriseSSO) {
+		deps.TenantAuthFactory = eeenterpriseauth.Build
+	}
+	if err := requireTenantAuthAttachment(cfg, deps); err != nil {
+		return err
+	}
+
 	if lic != nil && lic.Has(license.FeatureHASupport) {
 		if err := attachFederation(ctx, cfg, log, deps); err != nil {
 			return err

@@ -40,6 +40,7 @@ const (
 	FeatureHASupport       Feature = "ha_support"
 	FeatureBYOK            Feature = "byok"
 	FeatureGovernance      Feature = "governance"
+	FeatureEnterpriseSSO   Feature = "enterprise_sso"
 	FeatureProviderPlane   Feature = "provider_plane"
 	FeatureMetering        Feature = "metering"
 	FeatureWhiteLabel      Feature = "white_label"
@@ -50,7 +51,7 @@ const (
 // families (PCAS, AGID, XREC, VDEC) and PQC are not features: they ship in the
 // BSL core and attach in every build (cmd/trstctl/attach_families.go).
 var tierFeatures = map[Tier][]Feature{
-	TierEnterprise: {FeatureFIPS, FeatureHASupport, FeatureBYOK, FeatureGovernance},
+	TierEnterprise: {FeatureFIPS, FeatureHASupport, FeatureBYOK, FeatureGovernance, FeatureEnterpriseSSO},
 	TierProvider:   {FeatureProviderPlane, FeatureMetering, FeatureWhiteLabel, FeatureSiloedIsolation},
 }
 

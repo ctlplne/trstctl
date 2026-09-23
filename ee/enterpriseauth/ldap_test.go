@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-package auth
+package enterpriseauth
 
 import "testing"
 

@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-package server
+package enterpriseauth
 
 import (
 	"bytes"
@@ -21,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/server"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -54,7 +55,7 @@ func TestServedSCIMProvisioningReflectsRBAC(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}
-	srv, err := Build(ctx, Deps{
+	srv, err := server.Build(ctx, server.Deps{TenantAuthFactory: Build,
 		Store: st,
 		Log:   log,
 		SCIM: config.SCIM{

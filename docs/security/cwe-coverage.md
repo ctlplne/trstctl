@@ -65,10 +65,10 @@ coverage ledger applies to assets, applied to weaknesses.
 | CWE-918 | 5 | [cwe-register.md](cwe-register.md) |
 | CWE-88 | 3 | [cwe-register.md](cwe-register.md) |
 | CWE-? | 3 | [cwe-register.md](cwe-register.md) |
+| CWE-601 | 2 | [cwe-register.md](cwe-register.md) |
 | CWE-664 | 2 | [cwe-register.md](cwe-register.md) |
 | CWE-200 | 1 | [cwe-register.md](cwe-register.md) |
 | CWE-326 | 1 | [cwe-register.md](cwe-register.md) |
-| CWE-601 | 1 | [cwe-register.md](cwe-register.md) |
 
 Every waived site carries its reason inline in source and in the register;
 the dominant classes are test fixtures and operator-configured paths, which

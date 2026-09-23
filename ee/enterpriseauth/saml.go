@@ -1,16 +1,17 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-package auth
+package enterpriseauth
 
 import (
 	"errors"
 	"net/http"
 
+	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/crypto/samlsp"
 )
 
 // SAMLVerifier turns a cryptographically verified SAML assertion into the same
-// Claims shape the OIDC verifier returns, so tenant mapping and session issuance
+// auth.Claims shape the OIDC verifier returns, so tenant mapping and session issuance
 // stay one path.
 type SAMLVerifier struct {
 	Provider *samlsp.ServiceProvider
@@ -39,23 +40,23 @@ func (v SAMLVerifier) MetadataXML() ([]byte, error) {
 }
 
 // Verify validates the ACS request's SAMLResponse and extracts login claims.
-func (v SAMLVerifier) Verify(r *http.Request, possibleRequestIDs []string) (Claims, error) {
+func (v SAMLVerifier) Verify(r *http.Request, possibleRequestIDs []string) (auth.Claims, error) {
 	if v.Provider == nil {
-		return Claims{}, errors.New("auth: SAML provider is not configured")
+		return auth.Claims{}, errors.New("auth: SAML provider is not configured")
 	}
 	assertion, err := v.Provider.VerifyResponse(r, possibleRequestIDs)
 	if err != nil {
-		return Claims{}, err
+		return auth.Claims{}, err
 	}
 	subject := assertion.Subject
 	if v.SubjectAttribute != "" {
 		subject = firstAttribute(assertion.Attributes, v.SubjectAttribute)
 	}
 	if subject == "" {
-		return Claims{}, errors.New("auth: SAML assertion has no subject")
+		return auth.Claims{}, errors.New("auth: SAML assertion has no subject")
 	}
 	email := firstAttribute(assertion.Attributes, v.EmailAttribute, "email", "mail", "urn:oid:0.9.2342.19200300.100.1.3")
-	return Claims{
+	return auth.Claims{
 		Subject: subject,
 		Email:   email,
 		Issuer:  assertion.Issuer,

@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1420 annotated sites across 26 rules. Each row is
+1421 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -81,6 +81,8 @@ not this file.
 | `deploy/helm/helm_test.go:1495` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/helm/helm_test.go:1526` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `deploy/helm/helm_test.go:1528` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `ee/enterpriseauth/scim_served_test.go:34` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `ee/enterpriseauth/scim_subject_binding_served_test.go:38` | fabricated local fixture, not a credential (CWE-798) |
 | `ee/provider/aud58_test.go:173` | deterministic non-deployable test bearer exercises hashing/authentication (CWE-798). |
 | `ee/provider/aud59_test.go:24` | deterministic non-deployable test bearer (CWE-798). |
 | `ee/provider/aud60_test.go:16` | deterministic non-deployable test bearer (CWE-798). |
@@ -340,8 +342,6 @@ not this file.
 | `internal/server/response_integrations_served_test.go:54` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
-| `internal/server/scim_served_test.go:33` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/scim_subject_binding_served_test.go:37` | fabricated local fixture, not a credential (CWE-798) |
 | `internal/server/secret_integrations.go:945` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_third_party_scan_served_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_scan_served_test.go:260` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -673,6 +673,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
+| `ee/enterpriseauth/scim_served_test.go:224` | explicit plaintext loopback fixture; the production TLS cookie remains Secure and __Host-prefixed (CWE-1004) |
 | `ee/provider/saml_authenticator.go:215` | credential cookie is HttpOnly, host-only, strict, and Secure follows the served TLS mode. |
 | `ee/provider/saml_authenticator.go:224` | non-HttpOnly by design for double-submit CSRF; it is not a credential without the HttpOnly session. |
 | `ee/provider/saml_authenticator.go:246` | deletion preserves the HttpOnly, strict, host-only session policy; Secure is false only in explicit loopback development mode (CWE-614). |
@@ -710,7 +711,6 @@ not this file.
 | `internal/connector/netscaler/netscaler.go:272` | cookie on an outbound API request; response-cookie attributes do not apply (CWE-1004) |
 | `internal/projections/auth_resolver_test.go:170` | test cookie against the test's own local server (CWE-1004) |
 | `internal/projections/auth_resolver_test.go:179` | test cookie against the test's own local server (CWE-1004) |
-| `internal/server/scim_served_test.go:223` | explicit plaintext loopback fixture; the production TLS cookie remains Secure and __Host-prefixed (CWE-1004) |
 
 ### G201 — CWE-? (unmapped rule) (1 sites)
 
@@ -774,6 +774,12 @@ not this file.
 | `docs/lint_gate_test.go:39` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `docs/lint_supervision_test.go:19` | fixed supervision regression with owned scanner and child fixtures (CWE-78) |
 | `docs/vuln_gate_test.go:44` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `ee/enterpriseauth/auth_ldap_served_test.go:128` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `ee/enterpriseauth/auth_ldap_served_test.go:133` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `ee/enterpriseauth/auth_ldap_served_test.go:139` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `ee/enterpriseauth/auth_ldap_served_test.go:156` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `ee/enterpriseauth/auth_ldap_served_test.go:167` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `ee/enterpriseauth/auth_ldap_served_test.go:173` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/agent/relay/native_probe_host_test.go:34` | local stock test executable, fixed arguments. |
 | `internal/agent/relay/native_probe_host_test.go:81` | fixed stock command against owned loopback fixtures. |
 | `internal/agent/sshtrust/sshd_live_test.go:61` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -829,12 +835,6 @@ not this file.
 | `internal/server/agent_workload_api_gospiffe_test.go:215` | test executes a fixed local fixture (CWE-78) |
 | `internal/server/audit_export_formats_served_test.go:267` | fixed binary built by this test; arguments are fixed/test-owned paths and enum values (CWE-78) |
 | `internal/server/audit_export_formats_served_test.go:292` | fixed repository binary and test-owned destination (CWE-78) |
-| `internal/server/auth_ldap_served_test.go:127` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/auth_ldap_served_test.go:132` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/auth_ldap_served_test.go:138` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/auth_ldap_served_test.go:155` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/auth_ldap_served_test.go:166` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/auth_ldap_served_test.go:172` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/backup_test.go:802` | fixed repository binary and test-owned destination (CWE-78) |
 | `internal/server/bundled_pg_dependency_test.go:19` | fixed local Go tool and package pattern (CWE-78) |
 | `internal/server/cbom_native_served_test.go:166` | resolved stock OpenSSL, fixed arguments and owned loopback fixture paths (CWE-78). |
@@ -939,7 +939,7 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:189` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/secret_third_party_scan_served_test.go:154` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_rotation_served_test.go:2559` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2343` | served CA certificate directory; the PEM is public material (CWE-276) |
+| `internal/server/server.go:2341` | served CA certificate directory; the PEM is public material (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:24` | the loose mode IS the attack fixture this test defends against (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:56` | the wide mode IS the precondition this test proves gets narrowed (CWE-276) |
 | `internal/tsa/http_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
@@ -1019,8 +1019,8 @@ not this file.
 | `cmd/trstctl/backup_cmd_test.go:64` | test reads its own fixture/tempdir path (CWE-22) |
 | `cmd/trstctl/backup_cmd_test.go:111` | test reads a fixed repository artifact (CWE-22) |
 | `cmd/trstctl/connector.go:207` | the operator explicitly names the public trust-bundle path (CWE-22) |
-| `cmd/trstctl/ee_attach.go:293` | operator-supplied path to their own IdP's JWKS (CWE-22) |
-| `cmd/trstctl/ee_attach.go:321` | operator-pinned local IdP metadata, validated as configuration. |
+| `cmd/trstctl/ee_attach.go:300` | operator-supplied path to their own IdP's JWKS (CWE-22) |
+| `cmd/trstctl/ee_attach.go:328` | operator-pinned local IdP metadata, validated as configuration. |
 | `deploy/demo/aud66_test.go:105` | fixed repository test path (CWE-22) |
 | `deploy/demo/demo_test.go:56` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/deploycheck_test.go:98` | test reads its own fixture/tempdir path (CWE-22) |
@@ -1176,7 +1176,7 @@ not this file.
 | `internal/featureparity/feature_facet_coverage_test.go:140` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/featureparity/mcp_rest_coverage.go:53` | fixed repo-relative catalog path read by tools and tests (CWE-22) |
 | `internal/fsatomic/fsatomic.go:19` | the caller's own state directory (CWE-22) |
-| `internal/license/license.go:350` | operator-supplied license file path (CWE-22) |
+| `internal/license/license.go:351` | operator-supplied license file path (CWE-22) |
 | `internal/notify/response_buffer_guard_test.go:37` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/perf/smoke.go:173` | perf harness reading its own artifact path (CWE-22) |
 | `internal/pluginhost/containment_test.go:122` | test reads its own fixture/tempdir path (CWE-22) |
@@ -1268,8 +1268,8 @@ not this file.
 | `internal/server/serve_test.go:80` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:81` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:125` | test-owned path under t.TempDir (CWE-22) |
-| `internal/server/server.go:2270` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/server.go:2347` | same operator-configured directory as the target certificate (CWE-22) |
+| `internal/server/server.go:2268` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/server.go:2345` | same operator-configured directory as the target certificate (CWE-22) |
 | `internal/signing/design_test.go:30` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/design_test.go:136` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/gated_destruction_journal.go:226` | exact signer-owned journal path. |
@@ -1443,7 +1443,7 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:574` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_scan_served_test.go:27` | isolated executable test fixture |
 | `internal/server/secrets_scan_served_test.go:157` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2353` | served CA certificate PEM is public material (CWE-276) |
+| `internal/server/server.go:2351` | served CA certificate PEM is public material (CWE-276) |
 | `internal/server/signer_authorization_test.go:132` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/ssh_journey_served_test.go:262` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -1659,9 +1659,10 @@ not this file.
 | `internal/server/secrets_sync_served_test.go:1144` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/server/secrets_sync_served_test.go:1254` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 
-### G710 — CWE-601 Open redirect (taint) (1 sites)
+### G710 — CWE-601 Open redirect (taint) (2 sites)
 
 | Location | Reason |
 |---|---|
+| `ee/enterpriseauth/oidc_fixture_test.go:48` | test redirect within its own local server (CWE-601) |
 | `internal/server/auth_served_test.go:66` | test redirect within its own local server (CWE-601) |
 

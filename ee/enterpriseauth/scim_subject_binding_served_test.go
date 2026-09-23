@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-package server
+package enterpriseauth
 
 import (
 	"bytes"
@@ -13,13 +13,14 @@ import (
 	"sync"
 	"testing"
 	"time"
-	"trstctl.com/trstctl/internal/projections"
 
+	"trstctl.com/trstctl/ee/enterpriseauth/scim"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
-	"trstctl.com/trstctl/internal/scim"
+	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/server"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -63,7 +64,7 @@ func TestServedSCIMExplicitSubjectBindingControlsRealSessions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv, err := Build(ctx, Deps{Store: st, Log: log, SCIM: provisioning, APIOptions: []api.Option{api.WithAuth(api.AuthConfig{OIDCEnabled: true, Sessions: sessions})}})
+	srv, err := server.Build(ctx, server.Deps{TenantAuthFactory: Build, Store: st, Log: log, SCIM: provisioning, APIOptions: []api.Option{api.WithAuth(api.AuthConfig{OIDCEnabled: true, Sessions: sessions})}})
 	if err != nil {
 		_ = log.Close()
 		t.Fatal(err)

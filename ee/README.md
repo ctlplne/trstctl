@@ -37,6 +37,11 @@ location does not place the implemented features behind a commercial license.
 
 ## Packages (`ls ee/`)
 
+- `ee/enterpriseauth`: tenant SAML/LDAP verifiers and builders plus tenant SCIM
+  parsing and provisioning handlers, attached under `FeatureEnterpriseSSO`.
+  OIDC, shared sessions, auth hooks, `api.WithSCIM`, tenant isolation and route
+  admission remain core. Provider operator authentication remains a separate plane.
+
 - `ee/clusterfuzz`: isolated test-only bridge packages that let the stock
   ClusterFuzzLite Go helper compile external-package Enterprise fuzz targets
   without weakening the AN-9 core-to-EE import fence.

@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-package auth
+package enterpriseauth
 
 import (
 	"context"
@@ -11,10 +11,12 @@ import (
 	"time"
 
 	ldap "github.com/go-ldap/ldap/v3"
+
+	"trstctl.com/trstctl/internal/auth"
 )
 
 // LDAPVerifier authenticates a human user by LDAP simple bind, then normalizes
-// the directory result into Claims so the existing tenant mapper can bind
+// the directory result into auth.Claims so the existing tenant mapper can bind
 // directory groups to trstctl tenants and roles.
 type LDAPVerifier struct {
 	URL string
@@ -34,16 +36,16 @@ type LDAPVerifier struct {
 }
 
 // Verify binds the supplied username/password to LDAP, reads the user's email
-// and groups, and returns Claims. The password belongs to the caller; Verify
+// and groups, and returns auth.Claims. The password belongs to the caller; Verify
 // never stores it and rejects empty passwords so an LDAP unauthenticated bind
 // cannot become a login.
-func (v LDAPVerifier) Verify(ctx context.Context, username string, password []byte) (Claims, error) {
+func (v LDAPVerifier) Verify(ctx context.Context, username string, password []byte) (auth.Claims, error) {
 	username = strings.TrimSpace(username)
 	if username == "" {
-		return Claims{}, errors.New("auth: LDAP username is required")
+		return auth.Claims{}, errors.New("auth: LDAP username is required")
 	}
 	if len(password) == 0 {
-		return Claims{}, errors.New("auth: LDAP password is required")
+		return auth.Claims{}, errors.New("auth: LDAP password is required")
 	}
 	timeout := v.Timeout
 	if timeout <= 0 {
@@ -51,26 +53,26 @@ func (v LDAPVerifier) Verify(ctx context.Context, username string, password []by
 	}
 	conn, err := ldap.DialURL(v.URL, ldap.DialWithDialer(&net.Dialer{Timeout: timeout}))
 	if err != nil {
-		return Claims{}, fmt.Errorf("auth: LDAP dial: %w", err)
+		return auth.Claims{}, fmt.Errorf("auth: LDAP dial: %w", err)
 	}
 	defer func() { _ = conn.Close() }()
 	conn.SetTimeout(timeout)
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {
-			return Claims{}, err
+			return auth.Claims{}, err
 		}
 	}
 
 	userDN, email, err := v.resolveUser(conn, username)
 	if err != nil {
-		return Claims{}, err
+		return auth.Claims{}, err
 	}
 	if err := bind(conn, userDN, password); err != nil {
-		return Claims{}, fmt.Errorf("auth: LDAP bind failed")
+		return auth.Claims{}, fmt.Errorf("auth: LDAP bind failed")
 	}
 	if v.BindDN != "" {
 		if err := bind(conn, v.BindDN, v.BindPassword); err != nil {
-			return Claims{}, fmt.Errorf("auth: LDAP service rebind for group lookup: %w", err)
+			return auth.Claims{}, fmt.Errorf("auth: LDAP service rebind for group lookup: %w", err)
 		}
 	}
 	if email == "" {
@@ -78,9 +80,9 @@ func (v LDAPVerifier) Verify(ctx context.Context, username string, password []by
 	}
 	groups, err := v.lookupGroups(conn, username, userDN)
 	if err != nil {
-		return Claims{}, err
+		return auth.Claims{}, err
 	}
-	return Claims{
+	return auth.Claims{
 		Subject: userDN,
 		Email:   email,
 		Issuer:  "ldap:" + v.URL,

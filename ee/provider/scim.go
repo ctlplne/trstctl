@@ -15,9 +15,9 @@ import (
 
 	"github.com/google/uuid"
 
+	"trstctl.com/trstctl/ee/enterpriseauth/scim"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
-	"trstctl.com/trstctl/internal/scim"
 )
 
 const providerSCIMMaxBody = 1 << 20

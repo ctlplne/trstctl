@@ -94,6 +94,10 @@ The full route-to-screen map is **[The web console](../web-console.md)**. **Serv
 
 ### OIDC, SAML, and LDAP / Active Directory sign-on (F13)
 
+OIDC stays in the Free core. Tenant SAML and LDAP require Enterprise SSO, which
+Provider inherits. All enabled methods compose into the same tenant-scoped
+session and authorization path; enabling one does not replace another.
+
 People log in through **OIDC** (OpenID Connect), **SAML 2.0**, or **LDAP / Active
 Directory** against a standards-compliant provider. OIDC uses the authorization-code flow with random `state`
 (CSRF protection) and a mandatory `nonce` (replay protection); the returned id*token is
@@ -107,7 +111,8 @@ directory groups, and maps those groups to tenant roles. All three paths mint th
 short-lived, HMAC-signed, `HttpOnly`+`Secure` session cookie and resolve the verified
 subject, tenant claim, or groups through the same per-user tenant-mapping table. CI/CD
 instead uses API tokens (`trst*`-prefixed, only the SHA-256 hash stored). **Served when
-`auth.oidc.enabled`, `auth.saml.enabled`, or `auth.ldap.enabled` is configured.\*\* API
+`auth.oidc.enabled`, `auth.saml.enabled`, or `auth.ldap.enabled` is configured,
+with Enterprise SSO required for SAML and LDAP.** API
 tokens remain the zero-dependency auth path when SSO is disabled; an
 enabled-but-incomplete OIDC, SAML, or LDAP block fails closed at startup.
 
@@ -119,7 +124,7 @@ tenant-scoped credential-store reference for confidential-client secrets.
 
 ### SCIM 2.0 provisioning
 
-Directory provisioning is served under `/scim/v2` when `auth.scim.enabled` is on.
+Directory provisioning requires Enterprise SSO and is served under `/scim/v2` when `auth.scim.enabled` is on.
 An IdP such as Okta or Microsoft Entra sends a tenant-bound bearer token to
 `/scim/v2/Users` and `/scim/v2/Groups`; trstctl hashes the configured token file at
 startup and keeps only the hash in memory. The token chooses the tenant before any
@@ -139,7 +144,7 @@ Group cleanup preserves offboarding; a group addition cannot reactivate an inact
 Browser sessions consult the current tenant-member roles on each API request, so
 SCIM provisioning and deprovisioning change real authorization, beyond an admin list.
 Supported IdP operations are SCIM Users create/get/list/put/patch/delete and Groups
-create/get/list/patch/delete. **Served when `auth.scim.enabled` is configured.**
+create/get/list/patch/delete. **Served with Enterprise SSO and `auth.scim.enabled` configured.**
 
 Home's expanded metrics distinguish loading or unavailable reads from verified
 zero counts. Inventory, alert summaries, certificate charts, renewal trends, and
@@ -443,7 +448,7 @@ TRSTCTL_POSTGRES_MODE=bundled TRSTCTL_NATS_MODE=embedded ./trstctl
 The web console, browser `/auth/login` flow, SCIM `/scim/v2` provisioning surface,
 REST API, and CLI all drive the same served control plane. API tokens are still the
 zero-dependency bootstrap path; OIDC, SCIM, and the ABAC deny overlay turn on only when
-configured. See
+configured; tenant SCIM additionally requires Enterprise SSO. See
 [Current limitations](../limitations.md),
 [Install](../install.md), and [Configuration](../configuration.md) for production setup.
 

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
 
 // Package scim implements the SCIM 2.0 wire types trstctl serves for directory
 // provisioning. It is pure: HTTP handlers map these types onto tenant-member

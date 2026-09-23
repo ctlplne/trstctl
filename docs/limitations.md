@@ -218,7 +218,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Agent roles (host / network relay) | Served: an operator grants host and/or network at enrollment, the CA stamps it into the certificate, and the claim path refuses out-of-role work. Role badges on Agents. Agents redeem credential material just-in-time, once per job attempt. **Connector deploys carry a per-row role demand** stamped at enqueue from the shipped vantage census — an F5 deploy is claimable only by a relay, an nginx deploy only by a host agent, a cloud-store deploy by no agent. The control-plane dispatcher structurally refuses host-stamped and legacy host-family rows before native lookup or I/O, so 14 host families execute only on the enrolled host agent; an unavailable agent leaves pending work, never a control-plane fallback | [Agent roles](#agent-roles-a-vantage-in-the-certificate) |
 | React web console | Served: real embedded Vite build at `/`, generated API types | [The React web console](#the-react-web-console-served-by-the-binary) |
 | OIDC/SAML/LDAP browser login & tenancy | Served behind config flags; each user maps to a real tenant | [Browser login & sessions](#interactive-oidc-saml-and-ldap-active-directory-browser-login-sessions-served-by-the-binary) |
-| SCIM 2.0 + NHI inventory/posture | Served; SCIM Bulk and directory writeback not implemented | [SCIM 2.0 provisioning](#scim-20-provisioning-served-by-the-binary) |
+| SCIM 2.0 + NHI inventory/posture | Tenant SCIM requires Enterprise SSO; SCIM Bulk and directory writeback not implemented | [SCIM 2.0 provisioning](#scim-20-provisioning-served-by-the-binary) |
 | AI / RCA / MCP surface | Served, off by default, air-gapped unless an operator opts in | [AI, RCA, and MCP surface](#ai-rca-and-mcp-surface) |
 | Secrets, identity frameworks, transit/KMIP | Served (six of six frameworks); Vault shim is a partial subset | [Secrets and identity frameworks](#secrets-and-identity-frameworks) |
 | RBAC / ABAC / OPA policy gates | Served, fail-closed, off by default | [Authorization policy gates](#authorization-policy-gates-and-abac-overlays-served-by-the-binary) |
@@ -1124,8 +1124,9 @@ never live in the API process. What you can do end to end against the running bi
   Directory login are served by the binary when their respective `auth.*.enabled`
   flags are set — see "Single sign-on" below — under the same RBAC and per-tenant
   scoping as an API token, with each user mapped to its real tenant. API-token
-  auth remains the default when SSO is disabled.
-- SCIM 2.0 provisioning is served when `auth.scim.enabled` is set — see
+  auth remains the default when SSO is disabled. OIDC stays core; tenant SAML
+  and LDAP require Enterprise SSO, inherited by Provider.
+- SCIM 2.0 provisioning requires Enterprise SSO and `auth.scim.enabled` — see
   "SCIM 2.0 provisioning" below for the route and event detail.
 - Transport security (TLS), idempotency and the outbox, observability
   (`/metrics`, `/readyz`, W3C trace headers), bulkheads plus per-tenant rate
@@ -3022,6 +3023,11 @@ artifact the running binary serves:
 The OIDC authorization-code login, SAML 2.0 Service Provider login, and LDAP /
 Active Directory bind login + sessions are served by the running binary
 (behind `auth.oidc.enabled`, `auth.saml.enabled`, and `auth.ldap.enabled`).
+OIDC remains in the Free core; tenant SAML and LDAP require Enterprise SSO,
+included in Enterprise and inherited by Provider. An enabled tenant SAML, LDAP
+or SCIM configuration without that implementation refuses startup with
+`SAML, LDAP and SCIM login require an Enterprise licence.` Core-only builds
+cannot attach it. The separate Provider operator authentication plane is unchanged.
 OIDC mounts `/auth/login` and `/auth/callback`; SAML mounts
 `/auth/saml/login`, `/auth/saml/acs`, and `/auth/saml/metadata`; LDAP mounts
 `POST /auth/ldap/login`; all three share `/auth/me` and `/auth/logout`. OIDC
@@ -3056,8 +3062,8 @@ at startup**.
 
 ## SCIM 2.0 provisioning: served by the binary
 
-The SCIM 2.0 provisioning surface is served by the running binary behind
-`auth.scim.enabled`. It mounts `GET /scim/v2/ServiceProviderConfig`,
+The SCIM 2.0 provisioning surface requires Enterprise SSO and is served by the
+running binary behind `auth.scim.enabled`. It mounts `GET /scim/v2/ServiceProviderConfig`,
 `/scim/v2/Users`, and `/scim/v2/Groups`; bearer tokens are loaded from
 configured token files, hashed, and bound to one tenant before a request body
 is trusted. SCIM user create/update/PATCH writes the same tenant-member event
@@ -4009,7 +4015,8 @@ acceptance remain external CT log facts.
 ## Single sign-on
 
 trstctl's interactive sign-on is served for OIDC, SAML 2.0, and LDAP / Active
-Directory. OIDC supports the authorization-code flow against Microsoft Entra ID /
+Directory. OIDC is core; tenant SAML and LDAP require Enterprise SSO.
+OIDC supports the authorization-code flow against Microsoft Entra ID /
 Azure AD, Okta, Ping, Google, Auth0, Keycloak, and similar providers. SAML serves a Service Provider with
 SP-initiated login (`/auth/saml/login`), IdP-initiated login through the ACS
 (`/auth/saml/acs`), and SP metadata (`/auth/saml/metadata`). SAML assertion

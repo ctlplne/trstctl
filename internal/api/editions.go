@@ -142,7 +142,7 @@ func editionPackaging() editionPackagingResponse {
 				BuyerFit:        "regulated or scaled operators that need assurance, governance, BYOK, and support",
 				LicenseBoundary: "offline signed Enterprise license",
 				Billing:         "one production control-plane deployment; three explicitly bound non-production deployments included",
-				Included:        []string{"FIPS-capable artifact posture", "BYOK", "governance", "enterprise support"},
+				Included:        []string{"FIPS-capable artifact posture", "BYOK", "governance", "tenant SAML/LDAP/SCIM (Enterprise SSO)", "enterprise support"},
 			},
 			{
 				ID:              "provider",

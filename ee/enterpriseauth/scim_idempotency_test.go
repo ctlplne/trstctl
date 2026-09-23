@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-package api
+package enterpriseauth
 
 import (
 	"context"
@@ -96,7 +96,7 @@ func TestSCIMBoundaryStraddlingRetryIsDeduped(t *testing.T) {
 	current := time.Date(2026, 3, 14, 12, 4, 58, 0, time.UTC)
 	scimNow = func() time.Time { return current }
 
-	a := &API{idem: orchestrator.NewMemoryIdempotency(), orch: &orchestrator.Orchestrator{}}
+	a := &scimHandler{idem: orchestrator.NewMemoryIdempotency(), orch: &orchestrator.Orchestrator{}}
 	tok := scimToken{Name: "okta", TenantID: "tenant-a", TokenHash: "hash-1"}
 	body := []byte(`{"active":false}`)
 

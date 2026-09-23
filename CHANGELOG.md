@@ -2,6 +2,11 @@
 
 ### Changed
 
+- Tenant SAML, LDAP and SCIM now require Enterprise SSO, included in Enterprise
+  and inherited by Provider. Their implementations live under `ee/enterpriseauth`;
+  OIDC, shared session persistence and tenant authorization stay core. Configuring
+  these tenant methods without the attached licensed implementation refuses startup.
+
 - PCAS operator/security guides now live in the public documentation. Edition
   references identify PCAS, AGID, XREC, VDEC, PQC and remediation as core;
   obsolete family-specific gate targets are replaced by direct integration and

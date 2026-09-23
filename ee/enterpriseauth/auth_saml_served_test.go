@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-package server
+package enterpriseauth
 
 import (
 	"context"
@@ -23,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/samltest"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/server"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -312,7 +313,7 @@ func mustParseSAMLURL(t *testing.T, raw string) url.URL {
 	return *u
 }
 
-func buildSAMLServer(t *testing.T, ctx context.Context, dsn string, samlCfg config.SAML) *Server {
+func buildSAMLServer(t *testing.T, ctx context.Context, dsn string, samlCfg config.SAML) *server.Server {
 	t.Helper()
 	phaseStore, err := store.Open(ctx, dsn)
 	if err != nil {
@@ -323,7 +324,7 @@ func buildSAMLServer(t *testing.T, ctx context.Context, dsn string, samlCfg conf
 		phaseStore.Close()
 		t.Fatalf("open event log: %v", err)
 	}
-	srv, err := Build(ctx, Deps{Store: phaseStore, Log: log, SAML: samlCfg})
+	srv, err := server.Build(ctx, server.Deps{TenantAuthFactory: Build, Store: phaseStore, Log: log, SAML: samlCfg})
 	if err != nil {
 		_ = log.Close()
 		phaseStore.Close()
