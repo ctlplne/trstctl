@@ -2883,6 +2883,11 @@ than sending an operator looking for a credential that was never there.
   projection after restart. The console displays signed refusals and downloads the
   complete destruction record for offline verification.
   VDEC attaches in every build and remains fail-closed on missing evidence.
+  If the tenant has no recorded dependency state for the requested key, the
+  checklist returns HTTP 404 with an explanation to verify the key ID and collect
+  dependency evidence. This does not establish whether the key itself exists;
+  another tenant's dependency state is never disclosed. A recorded history whose
+  dependents are all accounted for still returns HTTP 200 with its actual counts.
   A missing dependency report is not an empty outstanding list: an empty list
   reads as "this key has no dependents", which must never authorize an irreversible
   act on evidence nobody gathered. Served on the CA hierarchy console's lifecycle

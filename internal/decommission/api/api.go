@@ -45,9 +45,9 @@ func NewChecklistSource(repo *decstore.Repo, retirementProjection *retirement.Pr
 }
 
 // RetirementChecklist reports the dependents still standing between a key and
-// destruction. A key the ledger has never recorded dependency state for returns
-// an empty checklist with Total 0 — the truthful projection answer; enforcement
-// of the destruction refusal itself lives in the isolated signer, not here.
+// destruction. Missing tenant dependency state returns 404: absent evidence is
+// not evidence that every dependent is accounted for. Enforcement of the
+// destruction refusal itself lives in the isolated signer, not here.
 // DestructionRecord stays empty while the key is alive. Once the outbox worker
 // receives the signer's terminal decision, the immutable event projection makes
 // the signed refusal or full destruction record readable here.
@@ -57,7 +57,8 @@ func (s *ChecklistSource) RetirementChecklist(r *http.Request, tenantID, keyID s
 		return api.RetirementChecklist{}, err
 	}
 	if !found {
-		return api.RetirementChecklist{Outstanding: []api.RetirementDependent{}}, nil
+		return api.RetirementChecklist{}, api.ErrStatus(http.StatusNotFound,
+			"no dependency state is recorded for this key in this tenant; verify the key ID and collect its dependency evidence before assessing retirement")
 	}
 	unaccounted := state.Unaccounted()
 	outstanding := make([]api.RetirementDependent, 0, len(unaccounted))

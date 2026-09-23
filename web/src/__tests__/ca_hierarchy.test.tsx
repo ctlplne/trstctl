@@ -1031,6 +1031,45 @@ describe("CA hierarchy and custody surface", () => {
     expect(apiMock.caAuthorities).toHaveBeenCalledTimes(1);
   });
 
+  it("withholds retirement controls when dependency evidence is missing and recovers on refresh", async () => {
+    const user = userEvent.setup();
+    apiMock.caAuthorities.mockResolvedValue({
+      items: [
+        {
+          id: "ca-untracked",
+          tenant_id: "tenant-1",
+          common_name: "Superseded Root CA",
+          kind: "root",
+          status: "superseded",
+          certificate_pem: "public certificate",
+          signer_handle: "signer-handle-untracked",
+          serial: "43",
+          max_path_len: 1,
+          created_at: "2026-08-12T00:00:00Z",
+        },
+      ],
+    });
+    apiMock.caRetirementChecklist.mockRejectedValueOnce(
+      new ApiError(404, JSON.stringify({ status: 404, detail: "no dependency state is recorded for this key in this tenant" })),
+    );
+
+    renderCAHierarchy("/ca-hierarchy?tab=lifecycle");
+    const panel = await screen.findByRole("region", { name: "Key retirement" });
+    expect(await within(panel).findByRole("alert")).toHaveTextContent("Retirement evidence is unavailable. No destruction decision can be made.");
+    expect(within(panel).queryByText(/Every dependent is accounted for/)).not.toBeInTheDocument();
+    expect(within(panel).queryByRole("button", { name: "Irreversibly retire key" })).not.toBeInTheDocument();
+    expect(within(panel).queryByLabelText("Final dependency epoch")).not.toBeInTheDocument();
+    expect(apiMock.retireCAKey).not.toHaveBeenCalled();
+
+    await user.click(within(panel).getByRole("button", { name: "Refresh retirement evidence" }));
+    expect(await within(panel).findByText("leaf-2")).toBeInTheDocument();
+    expect(within(panel).queryByRole("alert")).not.toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Irreversibly retire key" })).toBeDisabled();
+    expect(apiMock.caRetirementChecklist).toHaveBeenNthCalledWith(1, "ca-untracked");
+    expect(apiMock.caRetirementChecklist).toHaveBeenNthCalledWith(2, "ca-untracked");
+    expect(apiMock.retireCAKey).not.toHaveBeenCalled();
+  });
+
   it("requires explicit confirmation, requests signer-gated retirement, and downloads the projected record", async () => {
     const user = userEvent.setup();
     apiMock.caAuthorities.mockResolvedValue({
