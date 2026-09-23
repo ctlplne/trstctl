@@ -2,6 +2,13 @@
 
 ### Changed
 
+- PCAS operator/security guides now live in the public documentation. Edition
+  references identify PCAS, AGID, XREC, VDEC, PQC and remediation as core;
+  obsolete family-specific gate targets are replaced by direct integration and
+  conformance commands while the core/EE boundary gate remains. The smaller
+  commercial tree measured 70.7% coverage; its enforced floor rises from 65%
+  to 70%. Patent claim traceability remains under `ee/docs/`.
+
 - Managed tenant provisioning saves the reviewed request and its original
   idempotency key before sending it. Operators can recover an uncertain result
   from the same account after reloading or reopening the browser, without

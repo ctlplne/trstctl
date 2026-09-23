@@ -408,8 +408,8 @@ func canonicalInvariantTests() []string {
 // another machine.
 //
 // It FAILS rather than skips when the toolchain cannot be located. This is a
-// conformance gate (pcas-no-skip-gate / vdec equivalent enforce exactly this): a
-// skipped edition check reports green while proving nothing about the boundary
+// conformance check: a skipped edition check would report green while proving
+// nothing about the boundary
 // it exists to police.
 func goRoot(t *testing.T) string {
 	t.Helper()

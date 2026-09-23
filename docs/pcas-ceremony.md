@@ -1,4 +1,6 @@
-# PCAS ceremony & break-glass runbooks (INT-22)
+<!-- SPDX-License-Identifier: BUSL-1.1 -->
+
+# PCAS ceremony & break-glass runbooks
 
 Operational runbooks for the two highest-consequence PCAS procedures: the **HSM key
 ceremony** that stands up (or rotates) an issuing/succession authority key inside a
@@ -6,8 +8,8 @@ hardware module (claim 26), and the **break-glass / emergency succession** used 
 the normal control plane is unavailable or a forced downgrade is required (claims 17 &
 37). Both are rare, irreversible-if-wrong, and quorum-gated.
 
-These runbooks assume the custody model in `pcas-key-custody.md` and the trust
-boundaries in `pcas-threat-model.md`. They describe *procedure and controls*, not key
+These runbooks assume the [key custody model](pcas-key-custody.md) and the
+[trust boundaries](pcas-threat-model.md). They describe *procedure and controls*, not key
 values; no secret material appears here or in any log this process produces.
 
 ---

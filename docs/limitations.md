@@ -574,7 +574,7 @@ never live in the API process. What you can do end to end against the running bi
   authorities agree" shipped except anything doing the checking — the
   `collecting=false` state and its wording exist because of that finding, and
   they still guard the zero-schedule deployment today.
-  Authority agreement (C4, Enterprise `reconcile`): `GET /api/v1/reconcile/agreement`
+  Authority agreement (C4, core reconciliation): `GET /api/v1/reconcile/agreement`
   and a Posture console panel report whether the configured authorities agree about
   what was issued, and where they do not. XREC already built the hard part — canonical
   records per authority, signed Merkle digests over them, and witnesses naming the
@@ -583,7 +583,7 @@ never live in the API process. What you can do end to end against the running bi
   could read it. The system could detect that two authorities disagreed and could not
   tell anybody.
   The design constraint is that SILENCE RENDERS AS AGREEMENT. "0 open witnesses" looks
-  identical whether reconciliation found nothing, is unlicensed, is unconfigured, or
+  identical whether reconciliation found nothing, is unconfigured, or
   has consumed no events yet, so the surface refuses to show a reassuring zero it
   cannot stand behind. A deployment with no reconciliation runtime reports that fact
   and states plainly that it is NOT a report that the authorities agree; a configured
@@ -2209,18 +2209,18 @@ than sending an operator looking for a credential that was never there.
   `task_envelope_base64` (the AGID-05 task envelope) and returns the
   `task_envelope_digest` the credential binds, so an AI/MCP agent badge can be
   scoped to one authorized task instead of standing scope alone. Verification
-  is the licensed AGID gate's: the requester signature is checked over the
+  is the core AGID gate's: the requester signature is checked over the
   envelope's canonical bytes against an **operator-provisioned** requester key
   (the caller cannot supply its own), plus the expiry window, and the bound
   digest is the verified envelope's own — a substituted envelope cannot be
-  bound in place of the signed one. **An envelope supplied to a build with no
-  licensed gate is refused, not ignored**: silently returning an unscoped
+  bound in place of the signed one. **Every build attaches this gate; an
+  unverifiable envelope is refused, not ignored**: silently returning an unscoped
   credential in place of the scoped one the caller asked for would be the
   dangerous outcome. Requests carrying no envelope are the ordinary
   single-hop badge, unchanged.
 - A migration can be reviewed before it runs: `POST
-  /api/v1/pqc/migrations/plan` (and `trstctl-cli migration plan`, Enterprise
-  PQC only) previews the plan — which assets would be re-issued and to what,
+  /api/v1/pqc/migrations/plan` (and `trstctl-cli migration plan`, available
+  in every build) previews the plan — which assets would be re-issued and to what,
   which TLS findings would be rolled out, and the **residuals it will not
   touch** — without queueing a run, minting a run id, or writing an outbox
   row. It calls the same plan builder the start path calls over the same CBOM
@@ -2882,11 +2882,10 @@ than sending an operator looking for a credential that was never there.
   audit head. Both outcomes are immutable events and rebuild the tenant-RLS
   projection after restart. The console displays signed refusals and downloads the
   complete destruction record for offline verification.
-  Licensed under `vdec` and FAIL-CLOSED: an unlicensed deployment returns 501 with
-  a message stating that no answer was produced, rather than an empty outstanding
-  list — an empty list reads as "this key has no dependents", which is permission
-  to perform an irreversible act on evidence nobody gathered; the licensed POST is
-  absent rather than downgraded. Served on the CA hierarchy console's lifecycle
+  VDEC attaches in every build and remains fail-closed on missing evidence.
+  A missing dependency report is not an empty outstanding list: an empty list
+  reads as "this key has no dependents", which must never authorize an irreversible
+  act on evidence nobody gathered. Served on the CA hierarchy console's lifecycle
   tab, where retirement belongs beside rotation. Its selector is populated only
   from served, signer-backed CA authorities already marked `superseded` or
   `revoked`; it sends that authority's exact ID, while the API repeats the same
@@ -2998,7 +2997,7 @@ artifact the running binary serves:
   (`/profiles`), Graph (`/graph`, inventory + blast-radius query), Audit
   (`/audit`, event list + evidence export in JWS/NDJSON/CSV/Splunk-HEC/Sentinel),
   dual-control approvals from the
-  identity table, licensed incident execution (`/incidents` — replacement
+  identity table, core incident execution (`/incidents` — replacement
   issue/deploy, fleet reissuance, revocation queue, connector receipt,
   rollback evidence, remediation playbooks, response dispatch, sealed audit
   bundle), and Product help (`/assistant`) with grounded questions, cause
@@ -4180,30 +4179,28 @@ draft composite public keys on day one. The ACME, EST, SCEP, and CMP
 served enrollment paths all run through that same issuer, and a CSR
 carrying the hybrid proof (a classical ECDSA-P256 CSR with the
 composite-binding extension) issues through all four. Pure ML-DSA CSRs are
-narrower today: EST accepts and issues them (the licensed PKCS#10 parser
+narrower today: EST accepts and issues them (the PQC PKCS#10 parser
 sits behind EST's verifier seam, proven against a stock OpenSSL 3.5
-client), and ACME hands the CSR bytes to the same licensed issuer without
+client), and ACME hands the CSR bytes to the same PQC issuer without
 parsing them first; SCEP and CMP still verify CSRs with the core parser
-before the licensed parser is consulted and therefore reject pure ML-DSA —
+before the PQC parser is consulted and therefore reject pure ML-DSA —
 SCEP additionally cannot deliver its CMS-enveloped reply to a
 signature-only subject key, a protocol limit rather than a code gap. One
 ceiling applies everywhere: the issuing CA key itself remains classical
 ECDSA-P256 (post-quantum keys are subject keys, not issuer keys, in the
 served path). Certificate-profile `allowed_key_algorithms` labels accept
-the post-quantum and hybrid names when PQC is licensed — a pure label
+the post-quantum and hybrid names in every build — a pure label
 matches its exact inspected CSR algorithm, while a hybrid enrollment
 carries a classical subject key and stays governed by its classical family
-label; unlicensed builds keep failing closed on those labels.
+label. The selected profile still controls which algorithms an enrollment may use.
 
-The discovery side knows these algorithms when licensed: the licensed CBOM
-posture recognizes ML-DSA, ML-KEM, and SLH-DSA / SPHINCS+ (and hybrid
-labels) as quantum-safe when it finds them in your estate, while the MPL
-core deliberately names no licensed algorithm and classifies those labels
-as unrecognized. Because all cryptography enters through one isolated
+The core CBOM posture recognizes ML-DSA, ML-KEM, and SLH-DSA / SPHINCS+
+(and hybrid labels) when it finds them in your estate. Algorithm recognition
+and posture classification attach in every build without a commercial license. Because all cryptography enters through one isolated
 path, each scheme is a contained boundary implementation (a CIRCL scheme
 plus known-answer tests), with no ripple into the rest of the system. The
 served CBOM inventory exposes this posture through
-`GET /api/v1/cbom/assets`: with PQC licensed, classical signing algorithms
+`GET /api/v1/cbom/assets`: classical signing algorithms
 are mapped to ML-DSA-65/FIPS 204 targets, key-establishment findings (TLS
 protocols and ciphers) to ML-KEM-768/FIPS 203, deprecated DSA to
 SLH-DSA/FIPS 205, and `migration_progress` shows how much of the observed
@@ -4211,8 +4208,7 @@ estate is already post-quantum-ready — pure post-quantum assets count as
 future-ready, while hybrids stay migration-required until they shed their
 classical component.
 
-The proprietary EE attach serves three former end-to-end residuals behind
-one license boundary: a stock OpenSSL 3.5 client creates an RFC 9881
+The core attach serves three former end-to-end residuals in every build: a stock OpenSSL 3.5 client creates an RFC 9881
 ML-DSA-65 CSR, enrolls it through EST, and verifies the returned pure
 ML-DSA-65 subject leaf; the stock SPIFFE Workload API returns a two-entry
 response for one SPIFFE ID (the normal classical SVID and an ML-DSA-65
@@ -4228,15 +4224,15 @@ Those proofs define the compatibility boundary: they do not claim every
 legacy TLS client or every connector understands ML-DSA. A hybrid-to-pure
 cutover for an existing hybrid certificate remains evidence-gated by
 succession/retirement policy; direct pure ML-DSA enrollment is served
-through EST (and as the SPIFFE Workload API's licensed second SVID), and
-CMP consults the same licensed parser for its carried CSR (PKIMessage
+through EST (and as the SPIFFE Workload API's second SVID), and
+CMP consults the same PQC parser for its carried CSR (PKIMessage
 protection stays classically verified). SCEP cannot by protocol. The direct
 identity API now accepts a caller-supplied CSR — supply `subject_csr_pem`
 on the transition to `issued` and trstctl signs that request rather than
-generating a subject key — so CSR-based enrollment, including licensed
+generating a subject key — so CSR-based enrollment, including post-quantum
 subject algorithms, is no longer confined to the enrollment protocols. See
 [Lifecycle & PQC](features/lifecycle-and-pqc.md) for operator flow and
-license placement.
+compatibility limits.
 
 **Key custody, stated per credential kind.** Whose process created a private
 key and whose disk holds it is answered in one CI-checked table at

@@ -192,6 +192,8 @@ features in `internal/license`.
 This table mirrors `internal/license` exactly. A feature absent from this table is
 Free/Community by default unless a signed license explicitly grants it as an extra.
 Provider inherits every Enterprise row below, then adds the Provider rows.
+PCAS, agent delegation, reconciliation, verifiable decommissioning, PQC and
+remediation are core capabilities and require no commercial feature grant.
 
 | Feature ID | Edition | Product line |
 |---|---|---|
@@ -199,10 +201,6 @@ Provider inherits every Enterprise row below, then adds the Provider rows.
 | `ha_support` | Enterprise | Scale: served enterprise support posture, SLA target catalog, 24x7 production tier, and professional-services packages. |
 | `byok` | Enterprise | Assurance: bring-your-own-key / external custody operations. |
 | `governance` | Enterprise | Governance: advanced approvals, policy, and audit controls. |
-| `pcas` | Enterprise | Proof-carrying algorithm succession. |
-| `agent-delegation` | Enterprise | Chain-bound AI agent identity lifecycle enforcement. |
-| `reconcile` | Enterprise | Cross-plane trust reconciliation rounds and evidence machinery. |
-| `vdec` | Enterprise | Verifiable decommissioning dependency-state re-protection and destruction proof machinery. |
 | `provider_plane` | Provider | Managed-provider control plane features, gated by per-customer delegation (see below). |
 | `metering` | Provider | Provider usage metering, durable per-customer, pullable as invoice evidence (see below). |
 | `white_label` | Provider | Provider branding controls. |

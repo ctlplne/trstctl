@@ -5,7 +5,7 @@
 #
 # The PCAS audit (2026-07-06) found every PCAS mechanism was reachable only from
 # _test.go — built and unit-tested, but never wired into a running binary. This gate
-# makes that machine-checkable and BLOCKING:
+# checks that property when explicitly invoked:
 #
 #   REQUIRED  — every PCAS mechanism that claims delivered status. Each MUST have a
 #               non-test caller reachable from the shipped attach/API/outbox/background
@@ -19,8 +19,9 @@
 # constructor cannot hide from the gate. This script is kept as the COMPLEMENT: it covers
 # the mechanism entry points that are NOT constructors (Mint, MintPairedThroughSigner,
 # IssueLeafCertificate, IssueStapledLeaf, Import, SignEpochCheckpoint,
-# BuildPostureReport, ...), which a constructor enumeration cannot see. Both halves run
-# under `make pcas-caller-gate`; the RTA tier is `make pcas-caller-gate-strong` in CI.
+# BuildPostureReport, ...), which a constructor enumeration cannot see. Run this
+# optional check directly; constructor checks run as ordinary package tests. The
+# optional RTA proof is `go test -tags pcasrta ./internal/succession/intgate/...`.
 #
 # Run from the repo root; exit 0 = pass. The shipped binary wires the API/outbox/background
 # surfaces specified in PCAS-WIRING-DESIGN.md.

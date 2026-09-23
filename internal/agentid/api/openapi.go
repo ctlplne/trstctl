@@ -68,7 +68,7 @@ func OpenAPISpec() map[string]any {
 		"info": map[string]any{
 			"title":       "trstctl AGID API",
 			"version":     "v1",
-			"description": "Agent Identity Lifecycle Enforcement external surface: chain-bound issuance + cascaded revocation (ee/, LicenseRef-trstctl-EE).",
+			"description": "Agent Identity Lifecycle Enforcement: chain-bound issuance and cascaded revocation, included in the BUSL-1.1 core.",
 		},
 		"paths":      paths,
 		"components": map[string]any{"schemas": schemas()},

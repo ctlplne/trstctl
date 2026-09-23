@@ -1,13 +1,13 @@
-<!-- SPDX-License-Identifier: LicenseRef-trstctl-EE -->
+<!-- SPDX-License-Identifier: BUSL-1.1 -->
 
-# PCAS key custody — claims 16 & 26 (INT-07)
+# PCAS key custody — claims 16 & 26
 
 This note maps the patent's key-custody claims to the code, and states what the
 delivered path guarantees versus what a hardware deployment adds.
 
 ## Where succession keys live
 
-Since INT-03, a succession successor key is generated **inside the isolated signer**
+On the isolated-signer succession path, a successor key is generated **inside the isolated signer**
 through the signer's own key factory (`internal/signing.Server.GenerateSuccessorKey`
 → `KeyFactory.GenerateSigningKeyFromProto`), stored in the signer keystore under a
 deterministic per-epoch handle, and used only via the in-signer `DigestSigner`. The
@@ -44,15 +44,14 @@ AN-4 `buf breaking` gate, which would flag an added export RPC.
 Claim 26's hardware embodiment is the same enforcement component (the signer,
 mediating all use) with the key factory backed by a **module-resident** backend, so
 private material never exists outside the module. This plugs in at the existing
-`signing.WithKeyFactory` seam — the same seam the EE build uses for post-quantum
+`signing.WithKeyFactory` seam — the same seam the core signer uses for post-quantum
 algorithms — with no change to the mint path. The PKCS#11 primitives already exist
 in-tree (`internal/kms/pkcs11`, `github.com/miekg/pkcs11`), and
 `internal/succession/minter.SoftHSM` is the software double used to exercise the module
 semantics in unit tests.
 
-What is **not** delivered here is a full integration test against a real module: it
-requires a provisioned SoftHSM2 / PKCS#11 token, which is a deployment/CI resource and
-is not available in this build environment. The module-resident `KeyFactory` adapter
-and its SoftHSM2-backed integration test are tracked for the environment that provides
-a token; the software-locked embodiment (claim 16) is the default and is fully
-delivered and tested.
+The software double does not qualify a physical HSM or a provisioned PKCS#11
+module. Qualification requires the module-resident `KeyFactory` adapter, a token,
+and an integration test proving that generation, signing, restart recovery, and
+destruction stay inside that module. Record the module and firmware tested;
+software-locked custody alone does not prove the hardware embodiment.

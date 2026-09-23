@@ -1,4 +1,6 @@
-# PCAS threat model (INT-22)
+<!-- SPDX-License-Identifier: BUSL-1.1 -->
+
+# PCAS threat model
 
 Proof-Carrying Algorithm Succession (PCAS) lets a non-human identity advance from one
 signing/KEM algorithm to a stronger one across a monotonic **algorithm-epoch**, while
@@ -7,9 +9,9 @@ chain of dual-signed **succession records**. This document is the security threa
 for that feature: what it protects, the boundaries it relies on, the adversaries it
 resists, and the residual risk that is accepted rather than eliminated.
 
-It complements — and does not replace — the product-wide `threat-model.md`, the key
-custody note `pcas-key-custody.md` (claims 16 & 26), and the ceremony/break-glass
-runbooks in `pcas-ceremony.md`.
+It complements — and does not replace — the [product threat model](security/threat-model.md), the
+[key custody note](pcas-key-custody.md) (claims 16 & 26), and the
+[ceremony and break-glass runbooks](pcas-ceremony.md).
 
 ## Assets
 
@@ -34,8 +36,8 @@ semantics on top. The boundaries that carry the most security weight:
   or HTTP server. The control plane can *request* a succession over `MintSuccessor` but
   cannot forge one, because private key material never crosses the boundary — the RPC
   request carries only handles, and the response carries only public keys and the opaque
-  record (claims 1/12/49). Verified by the signer dependency-closure test and the
-  `netexec` linter.
+  record (claims 1/12/49). Checked by the signer dependency-closure and integration tests;
+  AN-4 has no dedicated linter analyzer.
 - **AN-3 — the crypto boundary.** Only `internal/crypto` imports `crypto/*`. Every PCAS
   hash, signature, and X.509 parse (including `LeafExtensionValue`) routes through it, so
   algorithm handling is a compile-time mapping, never a runtime provider registry — this
@@ -44,8 +46,8 @@ semantics on top. The boundaries that carry the most security weight:
   zeroize-on-destroy buffers (claim 16). See `pcas-key-custody.md`.
 - **AN-1 — tenancy.** Every verify/accept path checks tenant (genesis, each chain record,
   staple limbs, recovery/attestation statements).
-- **AN-9 — editions.** Succession lives under `ee/`; core never imports it except through
-  the tagged, licensed attach seams (`cmd/trstctl-signer`, `cmd/trstctl-agent`).
+- **AN-9 — editions.** Succession lives under `internal/` and attaches in every build.
+  The core-only build includes PCAS and links no proprietary `ee/` packages.
 - **The RP boundary.** An RP is *outside* the deployment's trust: it is given a chain and
   verifies it with no network fetch and no negotiation. The security of the whole scheme
   reduces to "can a forged artifact pass RP verification?"
@@ -143,4 +145,4 @@ golden-vector gates, the per-card integration tests (INT-01..INT-19), and the
 security-review regression tests added in INT-22
 (`internal/rpverify/security_hardening_test.go`, the cross-deployment break-glass case in
 `internal/succession/minter/strength_test.go`). The architecture linter (`tools/trstctllint`)
-enforces AN-3/AN-4/AN-9 on every build.
+checks AN-3 and AN-9; dependency-closure and integration tests check AN-4.

@@ -46,7 +46,7 @@ func appendFamilyOptions(opts []signing.ServerOption, floorDir string, wrapper s
 	}
 	// Issuance-precondition gate (AGID-04a seam; AGID-04b verifier). Attached in
 	// every build: the free single-hop issuance path is never gated
-	// -- license/policy gating is the control plane's job (AGID-07), not the signer's --
+	// -- the control plane enforces issuance policy; AGID needs no edition license --
 	// and the AGID-04b verifier ENGAGES only when delegation preconditions, attestation,
 	// or an agent-stack subject are present, verifying each hop's signature+validity, the
 	// per-hop narrowing under the AGID-01 partial order, and the attestation (with the

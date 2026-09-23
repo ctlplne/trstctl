@@ -237,8 +237,8 @@ func TestChaosGateExecutesFaultMatrix(t *testing.T) {
 }
 
 // TestScheduledAndReleaseGatePromotionsAreRequired is the OPS-CI-101..107
-// acceptance: the vdec release gate rides the required build/test/lint job
-// exactly like the xrec/PCAS family (OPS-CI-103/104), reproducible-check gates
+// acceptance: core decommission integration and conformance remain in the
+// required build/test/lint job (OPS-CI-103/104), reproducible-check gates
 // every PR as its own required job (OPS-CI-102), perf-live runs on the nightly
 // schedule (OPS-CI-101), and the scheduled-only verifiers (captured soak, spine
 // burst, live branch-protection drift, perf live) are promoted to REQUIRED via
@@ -248,7 +248,8 @@ func TestChaosGateExecutesFaultMatrix(t *testing.T) {
 func TestScheduledAndReleaseGatePromotionsAreRequired(t *testing.T) {
 	ci := read(t, "../.github/workflows/ci.yml")
 	for _, want := range []string{
-		"run: make vdec-release-gate",
+		"go test -tags integration ./internal/decommission/intwire/... -count=1 -timeout=10m",
+		"go test -tags integration ./internal/decommission/conformance/... -count=1 -timeout=12m",
 		"name: reproducible build (byte-identical rebuild)",
 		"run: make reproducible-check",
 		"name: perf live / served hot-path load gate",

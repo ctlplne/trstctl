@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: BUSL-1.1
-"""Claim -> code -> test traceability extractor for the ee/ patent surface.
+"""Claim -> code -> test traceability extractor for the patent-family source trees.
 
 Target path in repo: scripts/ci/extract-claim-traceability.py
 
-What it does, in one breath: walk ee/, find every patent-claim citation in a Go
+What it does, in one breath: walk the configured core and ee/ trees, find each patent-claim citation in a Go
 comment, group them by patent family, and emit a traceability table plus a set of
 integrity findings — claims implemented but never tested, claims tested but never
 implemented, claims whose whole implementation set is a package doc comment, and claim
 numbers that collide across families without an application qualifier.
 
-Why it exists: 204 ee/ files already cite claim numbers. That is a rare asset and it
-is currently unreadable except by grep. This turns it into a generated artifact that
+Why it exists: the patent-family source files cite claim numbers across core and
+commercial trees. Those references need a reviewable inventory. This turns it into a generated artifact that
 CI can keep honest, the same way the OpenAPI golden and the console bundle are kept
 honest.
 

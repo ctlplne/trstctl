@@ -103,8 +103,8 @@ func attachPCAS(cfg *config.Config, log *slog.Logger, deps *server.Deps) {
 // stage so the seam stays readable (the startup-hotspot ratchet).
 func attachAgentDelegation(cfg *config.Config, log *slog.Logger, deps *server.Deps) {
 	{
-		// AN-9 activation point for Agent Identity Lifecycle Enforcement (AGID, HARNESS
-		// §1.6). This one block gates AGID; it attaches the feature-neutral chain-bound
+		// Core activation point for Agent Identity Lifecycle Enforcement (AGID).
+		// Every build attaches the feature-neutral chain-bound
 		// broker issuance precondition (the internal/agentid delegation gate) via the core
 		// broker.WithIssuancePrecondition seam. The broker consults it ONLY on its
 		// chain-bound issuance path; the free single-hop attested-ephemeral badge
@@ -126,16 +126,16 @@ func attachAgentDelegation(cfg *config.Config, log *slog.Logger, deps *server.De
 		// (requester signature over canonical bytes, resolved through an
 		// operator-provisioned trust store the caller cannot inject into, plus
 		// the expiry window) and returns the digest the credential binds.
-		// Unlicensed builds attach no gate, and the core REFUSES an
-		// envelope-bearing request rather than issuing an unscoped credential
-		// in its place.
+		// Every build attaches this gate. An envelope must pass signature,
+		// trust and expiry checks before the broker can issue a credential
+		// bound to the authorized task.
 		deps.BrokerTaskEnvelopeGate = agentdelegation.NewBrokerTaskEnvelopeGate(
 			agentdelegation.NewDurableTaskEnvelopeTrustStore(cfg.Signer.KeyStoreDir).TrustLookup,
 		)
-		// AGID-INT-CALL: attach the AGID external API + the licensed-outbox worker so the two
+		// AGID-INT-CALL: attach the AGID external API and outbox worker so the two
 		// AGID user journeys are reachable from this control-plane binary and every internal/agentid
-		// mechanism gains a PRODUCTION CALLER (the reachability bar), mirroring the FeaturePCAS
-		// block above. The API (request-issuance / request-revocation + read models) attaches
+		// mechanism gains a PRODUCTION CALLER (the reachability bar), like the core PCAS
+		// stage above. The API (request-issuance / request-revocation + read models) attaches
 		// through the feature-neutral route seam; the worker registers on the outbox dispatcher
 		// (INT-04). A POST to /api/v1/agent-delegation/issuances now enqueues an
 		// agentid.issue-chain-bound message that the worker drains and drives through
@@ -317,7 +317,7 @@ func extraMigrationSources() []fs.FS {
 	}
 }
 
-// appendAPIFactory composes two licensed-API-options factories so multiple gated
+// appendAPIFactory composes API-option factories so core and commercial
 // features can each contribute routes to the single deps.LicensedAPIOptionsFactory
 // field, order-independently. A nil existing factory yields add alone.
 func appendAPIFactory(existing, add editionseam.LicensedAPIOptionsFactory) editionseam.LicensedAPIOptionsFactory {
@@ -337,7 +337,7 @@ func appendAPIFactory(existing, add editionseam.LicensedAPIOptionsFactory) editi
 	}
 }
 
-// appendOutboxFactory composes two licensed-outbox factories so multiple gated
+// appendOutboxFactory composes outbox factories so core and commercial
 // features can each contribute a handler to the single deps.LicensedOutboxFactory
 // field, order-independently. The composed handler tries each in turn: the first that
 // reports the message handled (or errors) wins. A nil existing factory yields add

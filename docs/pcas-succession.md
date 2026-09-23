@@ -1,10 +1,11 @@
-<!-- SPDX-License-Identifier: LicenseRef-trstctl-EE -->
+<!-- SPDX-License-Identifier: BUSL-1.1 -->
 
-# PCAS succession — conformance suite (r11)
+# PCAS succession — conformance suite
 
 This document *describes* the published Proof-Carrying Algorithm Succession (PCAS)
-conformance suite for external relying parties. PCAS itself is a proprietary
-Enterprise feature (`ee/`, `LicenseRef-trstctl-EE`); this document implements nothing.
+conformance suite for external relying parties. PCAS ships in the BUSL-1.1 core
+under `internal/succession`, `internal/rpverify`, and `internal/translog`; it does
+not require an Enterprise or Provider license.
 
 ## Published vectors
 
@@ -32,13 +33,13 @@ tampered one. An external re-implementation should agree likewise.
 chain, and staple parsers; their seed corpora run under `go test` (and
 `make fuzz-smoke`). No input may cause a panic.
 
-## Edition boundary (G6)
+## Edition boundary
 
-`TestEdition_CoreBuildLinksNoPCAS` pins that the core-only (`trstctl_core`) build links
-zero `ee/` packages, and `TestEdition_AllPCASPackagesAreEE` that every PCAS source file
-is under `ee/` and carries the `LicenseRef-trstctl-EE` SPDX header — the same guarantee
-as `make editions-gate`, asserted as tests. No MPL patent grant attaches to the
-relying-party verifier (HARNESS §1.6 decision, 2026-07-05).
+`TestEdition_CoreBuildLinksPCASAndNoEE` checks that the core-only
+(`trstctl_core`) build includes PCAS and links zero `ee/` packages.
+`TestEdition_AllPCASPackagesAreCore` checks that the PCAS package trees live under
+`internal/` and carry the `BUSL-1.1` SPDX header. `make editions-gate` checks the
+build boundary. See [editions and licensing](editions.md) for the applicable terms.
 
 ## End-to-end (claim 1)
 

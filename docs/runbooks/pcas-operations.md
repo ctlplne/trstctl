@@ -28,29 +28,29 @@ Also watch:
 - Outbox lag and timeout metrics for `pcas.*` destinations.
 - Bulkhead metrics for queue depth and rejection spikes.
 
-## SLO
+## Integration checks
 
-The per-PR release gate is intentionally small and deterministic:
+PCAS ships in the core. Run its conformance suite locally:
 
 ```bash
-make pcas-release-gate
+bash scripts/pcas_no_skip_gate.sh
+go test ./internal/succession/conformance -count=1 -timeout=10m
 ```
 
-That target proves:
+The suite includes the real embedded PostgreSQL, NATS/JetStream, cross-process
+signer, and WASM verifier checks. It also exercises a multi-tenant burst, durable
+outbox draining, metrics, and duplicate delivery without a second mint. The
+no-skip check rejects tests that silently bypass missing infrastructure. Missing
+prerequisites must be resolved before treating the run as passed.
 
-- every delivered PCAS mechanism has a non-test production caller;
-- gate tests do not call `t.Skip`;
-- the INT-20 full-stack e2e runs over real embedded PostgreSQL, embedded
-  NATS/JetStream, a cross-process signer, and WASM verifier parity;
-- the INT-21 ops test handles a small multi-tenant burst, drains durable outbox
-  work, emits PCAS feature metrics, and proves duplicate redelivery does not
-  double-mint.
-
-For local investigation, run only the ops gate:
+For a focused operations investigation:
 
 ```bash
 go test ./internal/succession/conformance -run TestINT21_PCASOpsSLOBackpressureAndCrash -count=1 -timeout=10m
 ```
+
+The shared `make test` and `make editions-gate` checks cover the core package and
+edition boundary; there is no separate proprietary PCAS release target.
 
 ## Backpressure Model
 

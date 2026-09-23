@@ -6,7 +6,7 @@
     "`scripts/ci/extract-claim-traceability.py --check` (make claim-traceability-check).",
     "",
     "applications: one entry per filed application, keyed by the family label used in",
-    "  ee/ claim citations. Every family cited anywhere in ee/ source MUST appear here",
+    "  core and ee/ claim citations. Every family cited in the configured source trees MUST appear here",
     "  or the generator refuses to run, so a new family cannot quietly ship without its",
     "  filing data. Fields, all strings:",
     "    subject         short title of the application as filed.",

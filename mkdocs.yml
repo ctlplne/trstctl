@@ -144,6 +144,10 @@ nav:
           - Supply chain: supply-chain.md
           - Branch protection and required checks: branch-protection.md
           - Signing service design: design/signing-service.md
+          - PCAS conformance: pcas-succession.md
+          - PCAS key custody: pcas-key-custody.md
+          - PCAS threat model: pcas-threat-model.md
+          - PCAS ceremonies and break-glass: pcas-ceremony.md
           - SSH trust rewrite design: design/ssh-trust-rewrite.md
           - Discovery coverage model: design/cbom-coverage.md
   - Feature reference:

@@ -77,7 +77,7 @@ exemption, and this page must document every required context.
 | `spiffe workload api conformance (go-spiffe + helper)` | `ci.yml` | Stock go-spiffe fetches/validates X.509-SVID and JWT-SVID from the served Workload API socket; spiffe-helper writes the SVID, key, trust bundle |
 | `compose e2e + PKI conformance (EXC-GATE-01)` | `ci.yml` | Docker Compose stack: real PostgreSQL, JetStream, isolated signer, served issuance/revocation, PKI profile linting |
 | `vault compat (real openbao client)` | `ci.yml` | Vault-compat shim acceptance against a pinned real OpenBao CLI, non-skipped |
-| `ee / unit tests + vdec gates` | `ci.yml` | `make ee-test` (ee/ unit tests + coverage floor) plus VDEC wire/release gates exercise commercial code every PR |
+| `ee / unit tests + vdec gates` | `ci.yml` | `make ee-test` checks commercial code and its coverage floor; direct integration and conformance commands also check the core decommission implementation. The check name is retained for compatibility with existing branch protection |
 | `restore rehearsal / full DR loop` | `ci.yml` | Backup from a populated instance restores via the shipped binary into a fresh instance that boots, reads data, and issues credentials; a corrupted backup fails closed |
 | `reproducible build (byte-identical rebuild)` | `ci.yml` | Shipped binaries and image layers rebuild byte/layer-identical on every PR |
 | `scheduled gates / nightly freshness` | `ci.yml` | Fails closed unless the latest scheduled run is fresh (≤26h), green, and ran every promoted gate — captured soak, spine burst, live branch-protection drift, perf live — making scheduled-only verifiers required in effect |

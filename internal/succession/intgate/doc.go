@@ -1,54 +1,27 @@
 // SPDX-License-Identifier: BUSL-1.1
 
-// Package intgate is the PCAS-INT-CALL production-caller reachability gate for the
-// internal/succession family. It ASSERTS reachability and adds no product logic.
+// Package intgate checks production-caller reachability for the core PCAS family.
+// It adds no product logic. Its default tests enumerate exported constructors in
+// internal/succession and require non-test callers rooted at the unconditional
+// cmd/trstctl/attach_families.go, cmd/trstctl-signer/attach_families.go, or
+// cmd/trstctl-agent/cosign_attach.go seams.
 //
-// WHY. The PCAS audit (2026-07-06) found every PCAS mechanism was reachable only from
-// _test.go -- built and unit-tested, but never wired into a running binary (INT-INV-1:
-// "delivered != tested"). The first remedy, scripts/pcas_prod_caller_gate.sh, pins a
-// HAND-WRITTEN list of mechanism patterns: it proves what is on the list and is blind
-// to everything that is not, so an internal/succession mechanism added later is invisible to
-// it. This package removes that blind spot the way the three sibling families already
-// do (internal/agentid/intgate, internal/reconcile/intgate, internal/decommission/intgate): it ENUMERATES
-// the live AST, so a newly added exported constructor is in scope the moment it is
-// written. The shell gate stays as the complement -- it covers the mechanism entry
-// points that are not constructors (Mint, Import, IssueLeafCertificate, ...), which a
-// constructor enumeration cannot see.
+// The default floor is a lexical AST check. It excludes test files, generated
+// protobuf code, test helpers, and test-only build tags. PendingWiring records
+// existing gaps and may only shrink; entries must disappear when production
+// wiring is added, and a newly unwired constructor fails. The floor
+// runs as an ordinary package test, not through an edition-specific Make target.
 //
-// THREE TIERS, mirroring the siblings.
+// The optional strong check uses a whole-program RTA call graph rooted at the
+// three binary main functions. Run it with:
 //
-//  1. FLOOR (runs in `make lint` via `make pcas-caller-gate`, and as the default
-//     `go test` here). Every exported constructor / factory / Attach* under
-//     internal/succession must have at least one NON-TEST caller. A caller is "non-test" iff
-//     it is a .go reference outside the constructor's own defining function that is not
-//     in a *_test.go file, not under mock/fake/testkit/testdata, not in generated
-//     *.pb.go, and not behind a test-only build tag. This tier is lexical (AST only),
-//     so it needs no whole-program load and always runs.
+//	go test -tags pcasrta ./internal/succession/intgate/... -count=1
 //
-//  2. SEAM. The only sanctioned production roots are the EE attach seams
-//     (cmd/trstctl/ee_attach.go, cmd/trstctl-signer/ee_attach.go and
-//     cmd/trstctl-agent/cosign_attach.go, all three //go:build !trstctl_core). A
-//     constructor made reachable ONLY through a test helper does not satisfy the gate.
+// Without that tag, the named reachability test checks the lexical precondition;
+// it is not a whole-program RTA proof. scripts/pcas_prod_caller_gate.sh remains an
+// optional complementary check for non-constructor mechanism entry points.
 //
-//  3. STRONG (CI, behind //go:build pcasrta). An RTA call graph
-//     (golang.org/x/tools/go/callgraph/rta) seeded from the main.main of cmd/trstctl,
-//     cmd/trstctl-signer and cmd/trstctl-agent, each built WITHOUT -tags trstctl_core so
-//     the seams are linked. Every in-scope constructor must be a reachable node. It
-//     loads the whole program and is heavy, so it is CI-gated; the floor is the
-//     runnable default and TestProdCaller_ReachableFromBinaryMain degrades to a
-//     seam-backed proxy when the pcasrta tag is absent.
-//
-// PendingWiring (pending.go) is a RATCHET, not an allow-list to grow. It names the
-// exported internal/succession constructors that are test-only TODAY, each with the observed
-// gap. It only ever shrinks: TestPendingWiring_NoStaleEntry FAILS the moment a listed
-// constructor gains a production caller, forcing the entry's removal, and any
-// constructor NOT listed must already be wired. A newly added unwired constructor
-// therefore fails the floor immediately -- the property the hand-written pattern list
-// could never have.
-//
-// SCOPE. This gate governs the internal/succession tree. internal/rpverify is the offline
-// relying-party verifier, an external-consumer SDK with no in-repo control-plane caller
-// by construction (the same tier internal/agentid/intgate defers internal/agentid/verify into), and
-// internal/translog is not enumerated here yet; extending the enumeration to internal/translog is
-// tracked separately.
+// Scope is internal/succession. The external-consumer verifier internal/rpverify
+// has no required in-repository control-plane caller, and internal/translog is
+// not enumerated by this package.
 package intgate

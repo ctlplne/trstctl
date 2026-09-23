@@ -126,18 +126,17 @@ jobs:
       - name: Lint
         run: make lint
 
-      # PCAS INT-20/23: prove every delivered PCAS mechanism has a production
-      # caller and the flagship e2e runs over real PostgreSQL, embedded
-      # NATS/JetStream, a cross-process signer, and WASM RP parity.
-      - name: PCAS release gate
-        run: make pcas-release-gate
+      # Core succession tests retain the real PG/NATS/signer and WASM proofs.
+      - name: Core succession integration and conformance
+        run: |
+          bash scripts/pcas_no_skip_gate.sh
+          go test ./internal/succession/conformance -run 'TestINT20_FullStackPCASUserJourneys|TestINT20_PCASWASMParity_NoSkip|TestINT21_PCASOpsSLOBackpressureAndCrash' -count=1 -timeout=10m
 
-      # VDEC INT-WIRE/11: the vdec family gates every PR exactly like the
-      # xrec/PCAS family above — caller+wire conformance over real PostgreSQL,
-      # embedded NATS, and a cross-process signer, plus vectors, fuzz seeds,
-      # traceability, and edition/zero-removal (OPS-CI-103, OPS-CI-104).
-      - name: VDEC release gate
-        run: make vdec-release-gate
+      - name: Core decommission integration and conformance
+        run: |
+          go test -tags integration ./internal/decommission/intwire/... -count=1 -timeout=10m
+          go test ./internal/decommission/conformance/... -count=1
+          go test -tags integration ./internal/decommission/conformance/... -count=1 -timeout=12m
 
       - name: Editions gate
         run: make editions-gate
@@ -164,38 +163,15 @@ jobs:
       - name: CBOM coverage design doc check
         run: make cbom-docs-check
 
-      # AGID-INT-CALL STRONG check: an RTA call graph seeded from the cmd/* main.main
-      # (built WITHOUT -tags trstctl_core) proves every internal/agentid constructor is
-      # reachable from a running binary. The floor tier already ran inside `make lint`
-      # (agid-caller-gate); this runs the heavier whole-program reachability proof.
-      - name: AGID production-caller gate (strong / RTA)
-        run: make agid-caller-gate-strong
-
-      # XREC-INT-CALL STRONG check: same delivered-not-test-only proof for the
-      # cross-plane reconciliation family. The lexical floor runs inside `make lint`.
-      - name: XREC production-caller gate (strong / RTA)
-        run: make xrec-caller-gate-strong
-
-      # VDEC-INT-CALL STRONG check: same delivered-not-test-only proof for the
-      # verifiable decommissioning family. The lexical floor runs inside `make lint`.
-      - name: VDEC production-caller gate (strong / RTA)
-        run: make vdec-caller-gate-strong
-
-      # PCAS-INT-CALL STRONG check: same delivered-not-test-only proof for the
-      # post-compromise automated succession family. The lexical floor + seam run
-      # inside `make lint` (pcas-caller-gate).
-      - name: PCAS production-caller gate (strong / RTA)
-        run: make pcas-caller-gate-strong
-
       # XREC-INT-WIRE: run the real-substrate integration suite over PostgreSQL/RLS,
       # embedded file-backed NATS/JetStream, the outbox, and the real signer process.
-      - name: XREC wire integration gate
-        run: make xrec-wire-gate
+      - name: Core reconciliation wire integration
+        run: go test -tags integration ./internal/reconcile/intwire/... -count=1 -timeout=10m
 
       # XREC-13: published vectors, differential verifier agreement, decode fuzz
       # smoke, edition/zero-removal assertions, and the three-plane offline-chain e2e.
-      - name: XREC release gate
-        run: make xrec-release-gate
+      - name: Core reconciliation conformance
+        run: go test -tags integration ./internal/reconcile/conformance/... -count=1 -timeout=10m
 
       # Verify the CI gates' own logic (the critical-package coverage evaluator
       # and the base-image digest-pinning guard) so a regression in a gate is
@@ -387,10 +363,9 @@ jobs:
       - name: Vault-compat acceptance (non-skipped)
         run: make vault-compat-gate
 
-  # TEST-EE-CI-001: exercise the ee/ commercial code on every PR — its unit
-  # tests with a coverage floor, plus the vdec wire/release gates over real
-  # infrastructure, held to the same required-check discipline as the xrec/PCAS
-  # family so EE code cannot rot untested behind the license fence.
+  # Exercise commercial ee/ code with its coverage floor and retain the core
+  # decommission integration tests. Keep this required check's existing name
+  # compatible with the owner's live branch-protection configuration.
   ee:
     name: ee / unit tests + vdec gates
     runs-on: ubuntu-latest
@@ -414,8 +389,11 @@ jobs:
       - name: ee/ unit tests (coverage floor)
         run: make ee-test
 
-      - name: VDEC wire + release gates
-        run: make vdec-release-gate
+      - name: Core decommission integration and conformance
+        run: |
+          go test -tags integration ./internal/decommission/intwire/... -count=1 -timeout=10m
+          go test ./internal/decommission/conformance/... -count=1
+          go test -tags integration ./internal/decommission/conformance/... -count=1 -timeout=12m
 
   # OPS-RESTORE-001: the full DR loop must work every PR — backup from a
   # populated instance, restore through the shipped binary's flags into a

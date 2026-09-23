@@ -30,9 +30,10 @@ and attach in every build through the untagged `cmd/trstctl/attach_families.go`,
   still decides when the KMIP listener runs).
 - `internal/proptest`: the deterministic pseudo-random source their property tests draw from.
 
-`ee/docs/` still holds the PCAS security docs (key custody, threat model, ceremony and
-break-glass runbooks) and the generated claim-traceability page until they move with the
-next documentation pass.
+PCAS operator and security documents live under `docs/`: succession, key custody,
+threat model and ceremony. `ee/docs/claim-traceability.md` and its human-maintained
+`claim-verification.json` sidecar remain here as patent-support material; their
+location does not place the implemented features behind a commercial license.
 
 ## Packages (`ls ee/`)
 

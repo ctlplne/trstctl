@@ -36,7 +36,7 @@ type Config struct {
 	// signer before successor key generation.
 	Delegation minter.DelegationConstraint
 	// BreakGlassAuthorityPubDER, when set, is the DER public key of the offline
-	// break-glass authority (a key-ceremony artifact, ee/docs/pcas-ceremony.md).
+	// break-glass authority (a key-ceremony artifact, docs/pcas-ceremony.md).
 	// With it, a class DOWNGRADE succession can proceed only when the request
 	// carries a valid, single-use token signed by that authority; single-use
 	// state is durable inside the signer custody dir when FloorDir is set.

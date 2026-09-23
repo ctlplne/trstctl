@@ -68,8 +68,11 @@ jobs:
       - name: Test (race + coverage floors against the tagged ref)
         run: make test
 
-      - name: PCAS release gate
-        run: make pcas-release-gate
+      # Core succession tests retain the real PG/NATS/signer and WASM proofs.
+      - name: Core succession integration and conformance
+        run: |
+          bash scripts/pcas_no_skip_gate.sh
+          go test ./internal/succession/conformance -run 'TestINT20_FullStackPCASUserJourneys|TestINT20_PCASWASMParity_NoSkip|TestINT21_PCASOpsSLOBackpressureAndCrash' -count=1 -timeout=10m
 
   required-checks:
     name: required checks / live CI preflight

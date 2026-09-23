@@ -23,7 +23,7 @@ it cannot drift from the code it describes.
 | VDEC | _[counsel to supply]_ | _[counsel to supply]_ | 2026-07 | 2027-07 |
 | XREC | _[counsel to supply]_ | _[counsel to supply]_ | 2026-07 | 2027-07 |
 
-Citations parsed: **989 qualified**, **0 bare** (bare citations infer their family from the directory — namespace them to remove the guesswork).
+Citations parsed: **988 qualified**, **0 bare** (bare citations infer their family from the directory — namespace them to remove the guesswork).
 
 ## AGID
 
@@ -56,7 +56,7 @@ Citations parsed: **989 qualified**, **0 bare** (bare citations infer their fami
 | 25 | `internal/agentid/reach/engine/engine.go`, `internal/agentid/reach/verdict.go` | `internal/agentid/reach/engine/verdict_test.go` | _[counsel]_ |
 | 26 | `internal/agentid/delegation/attestbind.go`, `internal/agentid/delegation/brokerstore/precondition.go` | `internal/agentid/delegation/brokerstore/precondition_test.go` | _[counsel]_ |
 | 27 | `internal/agentid/agentstack/representation.go`, `internal/agentid/delegation/carriage/carriage.go`, `internal/agentid/delegation/carriage/token.go` _(+2 more)_ | `internal/agentid/delegation/carriage/carriage_test.go` | _[counsel]_ |
-| 28 | `internal/agentid/intgate/doc.go`, `internal/agentid/intgate/inventory.go`, `internal/agentid/verify/doc.go` _(+5 more)_ | `internal/agentid/intgate/floor_test.go`, `internal/agentid/verify/verify_test.go`, `internal/agentid/verify/wasm_parity_test.go` | _[counsel]_ |
+| 28 | `internal/agentid/intgate/inventory.go`, `internal/agentid/verify/doc.go`, `internal/agentid/verify/helpers.go` _(+4 more)_ | `internal/agentid/intgate/floor_test.go`, `internal/agentid/verify/verify_test.go`, `internal/agentid/verify/wasm_parity_test.go` | _[counsel]_ |
 | 29 | `internal/agentid/verify/agentstack_repr.go`, `internal/agentid/verify/doc.go`, `internal/agentid/verify/policy.go` _(+1 more)_ | `internal/agentid/verify/property_test.go`, `internal/agentid/verify/verify_test.go` | _[counsel]_ |
 | 30 | `internal/agentid/delegation/signerwiring.go` | `internal/agentid/delegation/signer_subprocess_test.go` | _[counsel]_ |
 | 31 | `internal/agentid/delegation/bind.go`, `internal/agentid/delegation/brokerstore/precondition.go`, `internal/agentid/delegation/verifier.go` _(+2 more)_ | `internal/agentid/delegation/carriage/carriage_test.go`, `internal/agentid/delegation/taskenvelope_test.go`, `internal/agentid/delegation/verifier_test.go` _(+1 more)_ | _[counsel]_ |
