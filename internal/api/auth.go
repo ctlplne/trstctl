@@ -822,12 +822,17 @@ func (a *API) configuredAuthTenants() []string {
 }
 
 func (a *API) setTransientCookie(w http.ResponseWriter, name, value string) {
-	// SameSite=Lax (not Strict): the OIDC state/nonce cookies must survive the
-	// top-level cross-site redirect back from the identity provider, which Strict
-	// would drop. They are short-lived and unprivileged.
-	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- HttpOnly and SameSite are set; Secure follows the deployment's TLS mode from config, and the CSRF cookie is deliberately script-readable double-submit (SEC-007) (CWE-1004)
+	// OIDC returns by top-level GET, so Lax preserves its correlation cookies.
+	// SAML POST binding needs None on its two HTTPS correlation cookies; Lax
+	// drops them on the cross-site ACS POST. None requires Secure in browsers.
+	// Plaintext development keeps Lax and cannot support cross-site SAML POST.
+	sameSite := http.SameSiteLaxMode
+	if a.auth.Secure && (name == samlStateCookieName || name == samlRequestIDCookieName) {
+		sameSite = http.SameSiteNoneMode
+	}
+	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- short-lived HttpOnly correlation cookies; None is limited to Secure SAML POST state, not authenticated session cookies (CWE-1004)
 		Name: name, Value: value, Path: "/", HttpOnly: true,
-		Secure: a.auth.Secure, SameSite: http.SameSiteLaxMode, MaxAge: 600,
+		Secure: a.auth.Secure, SameSite: sameSite, MaxAge: 600,
 	})
 }
 

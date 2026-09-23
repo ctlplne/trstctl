@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+### Fixed
+
+- SP-initiated SAML browser login now sends its secure correlation cookies on
+  the identity provider's cross-site POST. State, request-ID and signature checks
+  remain required; OIDC and authenticated session cookie policies are unchanged.
+
 ### Changed
 
 - Tenant SAML, LDAP and SCIM now require Enterprise SSO, included in Enterprise

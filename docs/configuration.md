@@ -959,6 +959,14 @@ auth:
 
 Example SAML config:
 
+Use HTTPS for browser SAML login. The identity provider posts its response back
+to `/auth/saml/acs`; the two ten-minute correlation cookies use
+`SameSite=None; Secure; HttpOnly` so the browser includes them on that cross-site
+POST. The ACS still validates the state, request ID and signed assertion. OIDC
+correlation cookies remain `SameSite=Lax`; authenticated session and CSRF cookies
+remain `SameSite=Strict`. Plaintext development retains Lax correlation cookies
+and does not support cross-site SAML POST login.
+
 ```yaml
 auth:
   saml:
