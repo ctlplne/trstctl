@@ -535,9 +535,9 @@ func TestRunAgentBootstrapsOverPinnedHTTPSAndConnectsMTLSChannel(t *testing.T) {
 		t.Fatal(err)
 	}
 	revocationCacheAddr := reservedCacheListener.Addr().String()
-	if err := reservedCacheListener.Close(); err != nil {
-		t.Fatal(err)
-	}
+	// Retain the actual listener: closing and rebinding lets the agent's own
+	// ephemeral enrollment proxy steal this port before the cache starts.
+	t.Cleanup(func() { _ = reservedCacheListener.Close() })
 	options := agentOptions{
 		enrollURL:            "https://" + enrollmentListener.Addr().String(),
 		tokenFile:            tokenPath,
@@ -557,8 +557,10 @@ func TestRunAgentBootstrapsOverPinnedHTTPSAndConnectsMTLSChannel(t *testing.T) {
 		revCacheIssuer:       revocationIssuerPath,
 		revCacheSegment:      "plant-7",
 		revCacheHTTPClient:   revocationUpstream.Client(),
+		revCacheListener:     reservedCacheListener,
 	}
 	runCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	result := make(chan error, 1)
 	go func() { result <- runAgent(runCtx, options) }()
 

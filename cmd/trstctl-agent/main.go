@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -444,6 +445,9 @@ type agentOptions struct {
 	// revCacheHTTPClient is a test-only composition seam. Production flag
 	// assembly leaves it nil and always gets the SSRF-guarded client below.
 	revCacheHTTPClient *http.Client
+	// revCacheListener lets assembled tests retain ownership of an ephemeral
+	// port until the real cache server takes it. Production leaves it nil.
+	revCacheListener net.Listener
 
 	pluginDir       string
 	pluginKeys      string

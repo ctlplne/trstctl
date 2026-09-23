@@ -294,10 +294,13 @@ func startRevocationCache(ctx context.Context, o agentOptions) (func() []revcach
 	if err := manager.RefreshCRLs(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, "trstctl-agent: initial CRL cache refresh:", err)
 	}
-	listener, err := net.Listen("tcp", listen)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "trstctl-agent: revocation cache cannot bind:", err)
-		return nil, func() {}
+	listener := o.revCacheListener
+	if listener == nil {
+		listener, err = net.Listen("tcp", listen)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "trstctl-agent: revocation cache cannot bind:", err)
+			return nil, func() {}
+		}
 	}
 	srv := &http.Server{Handler: manager, ReadHeaderTimeout: 10 * time.Second}
 	refreshCtx, cancelRefresh := context.WithCancel(ctx)
