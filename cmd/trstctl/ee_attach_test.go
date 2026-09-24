@@ -192,3 +192,22 @@ func commercialLicense(t *testing.T, tier license.Tier) *license.Manager {
 	}
 	return mgr
 }
+
+func TestAttachEEAuditComplianceOwnsAnchoringRetentionAndPacks(t *testing.T) {
+	for _, tier := range []license.Tier{license.TierCommunity, license.TierEnterprise, license.TierProvider} {
+		t.Run(string(tier), func(t *testing.T) {
+			lic := license.Community()
+			if tier != license.TierCommunity {
+				lic = commercialLicense(t, tier)
+			}
+			deps := &server.Deps{}
+			if err := attachEE(context.Background(), &config.Config{}, nil, lic, deps); err != nil {
+				t.Fatal(err)
+			}
+			want := tier != license.TierCommunity
+			if (deps.AuditComplianceFactory != nil) != want || (deps.GovernanceFactory != nil) != want {
+				t.Fatalf("audit factory=%t packs=%t want=%t", deps.AuditComplianceFactory != nil, deps.GovernanceFactory != nil, want)
+			}
+		})
+	}
+}

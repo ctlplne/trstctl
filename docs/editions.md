@@ -113,7 +113,7 @@ pins the lab's local identity provider for provider-operator sign-in (see
 | Tenant isolation | PostgreSQL RLS and event spine | Included | Included; shared multi-tenant control plane is the normal shape |
 | Patent-pending families and PQC | Included: PCAS, agent delegation, reconciliation, VDEC, and post-quantum cryptography attach in every build | Included | Included |
 | Remediation | Incident response and guided remediation, subject to authorization and configured targets | Included | Included |
-| Enterprise features | Not included | FIPS artifact posture, HA support, BYOK, governance, and tenant SAML/LDAP/SCIM (Enterprise SSO) | All Enterprise features |
+| Enterprise features | Not included | FIPS artifact posture, HA support, BYOK, governance, tenant SAML/LDAP/SCIM (Enterprise SSO), and audit anchoring/retention/compliance packaging | All Enterprise features |
 | Provider operations | Not included | Not included | Provider plane, metering, white label, and siloed isolation |
 | Product motion and commercial `ee/` rights | Self-hosted core under BUSL-1.1 | Self-hosted commercial feature set | Self-host, managed service, and resale of the commercial feature set |
 | Deployment flexibility | Customer operated | Customer operated | Shared control plane or dedicated customer deployments |
@@ -202,6 +202,7 @@ remediation are core capabilities and require no commercial feature grant.
 | `byok` | Enterprise | Assurance: bring-your-own-key / external custody operations. |
 | `governance` | Enterprise | Governance: advanced approvals, policy, and audit controls. |
 | `enterprise_sso` | Enterprise | Tenant SAML and LDAP sign-in, plus tenant SCIM provisioning. OIDC remains core. |
+| `audit_compliance` | Enterprise | Audit timestamp anchoring, retention, and compliance packaging. Plain signed history export stays core. |
 | `provider_plane` | Provider | Managed-provider control plane features, gated by per-customer delegation (see below). |
 | `metering` | Provider | Provider usage metering, durable per-customer, pullable as invoice evidence (see below). |
 | `white_label` | Provider | Provider branding controls. |

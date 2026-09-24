@@ -91,21 +91,11 @@ func TestSchedulerHistorySanitationClosesAssembledSurfacesAcrossRestoreRetention
 	}
 	assertAuditRecordsSecretFree(t, bundle.Records, runEventID, secretText)
 
-	// Logical retention can prove only archives written after sanitation. Copies
-	// already exported to operator-controlled external storage remain outside the
-	// repository's deletion authority and are disclosed by the signed receipt.
-	time.Sleep(2 * time.Millisecond)
+	// Core must recover history and verify archives after a license downgrade.
+	// Seed the durable output of a licensed retention pass, not an unlicensed
+	// worker. Real worker production/rebuild tests live in ee/auditcompliance.
 	archiveDir := t.TempDir()
-	retention := audit.NewRetentionWorker(
-		auditService, source, audit.DirArchiver{Dir: archiveDir}, st, time.Nanosecond,
-	)
-	summary, err := retention.RunOnce(ctx)
-	if err != nil {
-		t.Fatalf("retention: %v", err)
-	}
-	if summary.RecordsArchived < len(fixtures)+1 || summary.RecordsSourceRetained != summary.RecordsArchived || summary.RecordsPruned != 0 {
-		t.Fatalf("retention summary = %+v", summary)
-	}
+	seedSchedulerHistoryArchive(t, source, st, auditKey, auditService, tenantID, archiveDir, len(fixtures)+1)
 	assertAuditArchivesSecretFree(t, archiveDir, auditService, secretText)
 
 	key := []byte("0123456789abcdef0123456789abcdef")

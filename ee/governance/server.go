@@ -19,7 +19,7 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
-// NewFactory adapts Enterprise governance evidence packs to the core server seam.
+// NewFactory adapts Enterprise audit-compliance evidence packs to the core server seam.
 func NewFactory() server.GovernanceFactory {
 	return func(d server.GovernanceFactoryDeps) (api.ComplianceEvidenceService, error) {
 		if d.Audit == nil || d.Store == nil {

@@ -37,6 +37,10 @@ location does not place the implemented features behind a commercial license.
 
 ## Packages (`ls ee/`)
 
+- `ee/auditcompliance`: timestamp anchoring and retention execution, attached under
+  `FeatureAuditCompliance`. Plain signed export, checkpoint recovery, offline
+  verification, and non-audit privacy retention remain core.
+
 - `ee/enterpriseauth`: tenant SAML/LDAP verifiers and builders plus tenant SCIM
   parsing and provisioning handlers, attached under `FeatureEnterpriseSSO`.
   OIDC, shared sessions, auth hooks, `api.WithSCIM`, tenant isolation and route
@@ -53,8 +57,8 @@ location does not place the implemented features behind a commercial license.
   when `FeatureBYOK` is licensed.
 - `ee/governance`: Enterprise compliance evidence packs and governance-policy
   source. Core keeps audit export, privacy redaction/retention, OPA policy, and
-  the server/API seams; the tagged attach seam supplies reports and policy
-  overrides only when `FeatureGovernance` is licensed.
+  the server/API seams; the tagged attach seam supplies compliance reports under
+  `FeatureAuditCompliance` and policy overrides under `FeatureGovernance`.
 - `ee/provider`: Provider/MSP plane. Core keeps licensing and the HTTP handler
   seam; the tagged attach seam supplies tenant lifecycle, provider audit, tenant
   band enforcement, and consented break-glass only when `FeatureProviderPlane` is

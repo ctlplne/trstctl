@@ -1391,7 +1391,7 @@ func TestPKIGovernanceStrengthGuardsStayRequired(t *testing.T) {
 			t.Errorf("PKIGOV-104: chain.go no longer contains %q; hash-chain evidence weakened", want)
 		}
 	}
-	retention := read(t, "../internal/audit/retention.go")
+	retention := read(t, "../ee/auditcompliance/retention.go")
 	for _, want := range []string{
 		"VerifyRetentionBundle(signed",
 		"SaveAuditCheckpoint",
@@ -1407,11 +1407,14 @@ func TestPKIGovernanceStrengthGuardsStayRequired(t *testing.T) {
 		"TestChainDetectsTampering",
 		"TestEvidenceBundleVerifies",
 		"TestSearchFailsClosedOnEmptyTenant",
-		"TestRetentionWorkerArchivesRetiresViewAndRetainsRebuildSource",
 	} {
 		if !anyTestDeclaresUnder(t, "../internal/audit", testName) {
 			t.Errorf("PKIGOV-104: internal/audit no longer declares %s; audit evidence guard coverage weakened", testName)
 		}
+	}
+
+	if !anyTestDeclaresUnder(t, "../ee/auditcompliance", "TestRetentionWorkerArchivesRetiresViewAndRetainsRebuildSource") {
+		t.Error("PKIGOV-104: licensed retention lost its real archive/verify/checkpoint regression")
 	}
 
 	ctMonitor := read(t, "../internal/discovery/ctmonitor/ctmonitor.go")

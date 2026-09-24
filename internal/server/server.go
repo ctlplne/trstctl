@@ -115,6 +115,8 @@ type IdempotencyResultMigrator interface {
 type Deps struct {
 	// TenantAuthFactory is supplied only by the licensed tenant-auth attach seam.
 	TenantAuthFactory editionseam.TenantAuthFactory
+	// AuditComplianceFactory is attached only for licensed audit compliance.
+	AuditComplianceFactory editionseam.AuditComplianceFactory
 	// CBOMTLSProbeOpenSSL is a trusted local startup path, never tenant-authored.
 	CBOMTLSProbeOpenSSL string
 	// BackupDirectory is the full-backup directory the served DR posture
@@ -180,8 +182,8 @@ type Deps struct {
 	// checkpoints, and advisory locks remain core and free.
 	FederationFactory FederationFactory
 	// GovernanceFactory is supplied only by the tagged EE attach seam when the
-	// Enterprise governance feature is licensed. Nil keeps compliance evidence
-	// routes unmounted; audit/privacy mechanisms stay core.
+	// Enterprise audit-compliance feature is licensed. Nil keeps compliance evidence
+	// routes unmounted; plain history export and privacy mechanisms stay core.
 	GovernanceFactory GovernanceFactory
 	// BrokerIssuancePrecondition is supplied only by the tagged EE attach seam when
 	// the Enterprise agent-delegation feature is licensed. It is the feature-neutral
@@ -281,7 +283,7 @@ type Deps struct {
 	// ComplianceSigner signs served framework evidence-pack exports (COMP-01).
 	// Nil generates a process-local locked ECDSA key when audit + store are wired.
 	ComplianceSigner crypto.DigestSigner
-	AuditRetention   time.Duration // audit retention window (R4.4); >0 with AuditArchiveDir enables the retention worker
+	AuditRetention   time.Duration // licensed audit retention window; >0 with AuditArchiveDir configures the attached worker
 	AuditArchiveDir  string        // cold-storage directory for signed audit archive bundles (R4.4)
 	// PrivacyRetention enables the non-audit PII retention worker (PRIVACY-003).
 	// It emits privacy.retention.enforced events and projects pseudonymization from
@@ -774,7 +776,7 @@ type Server struct {
 	federation FederationWorker
 
 	// Audit retention worker (R4.4); nil unless retention + archive are configured.
-	retention    *audit.RetentionWorker
+	retention    editionseam.AuditRetentionWorker
 	mRetRuns     *observ.Counter
 	mRetArchived *observ.Counter
 	mRetPruned   *observ.Counter
@@ -1366,9 +1368,14 @@ func (s *Server) appendAuditAPIOptions(d Deps, options *[]api.Option) *audit.Ser
 	auditSvc := audit.NewService(d.Log, d.AuditSigningKey, audit.WithCheckpoints(d.Store), audit.WithPrivacyErasures(d.Store))
 	s.audit = auditSvc
 	*options = append(*options, api.WithAudit(auditSvc))
-	// J1: chain heads are countersigned by the served TSA. Resolved lazily —
-	// the protocol mounts are built after this point.
-	*options = append(*options, api.WithAuditTimestamper(auditTimestamper{srv: s}))
+	if d.AuditComplianceFactory != nil {
+		runtime := d.AuditComplianceFactory(editionseam.AuditComplianceDeps{
+			Audit: auditSvc, Log: d.Log, Signer: d.AuditSigningKey, Checkpoints: d.Store,
+			Timestamper: auditTimestamper{srv: s}, Retention: d.AuditRetention, ArchiveDir: d.AuditArchiveDir,
+		})
+		s.retention = runtime.Retention
+		*options = append(*options, api.WithAuditAnchor(runtime.Anchor))
+	}
 	return auditSvc
 }
 
@@ -2096,7 +2103,7 @@ func (s *Server) configureObservability(ctx context.Context, d Deps, proj *proje
 	s.mLifecycleAlerts = s.registry.CounterVec("trstctl_lifecycle_expiry_alerts_queued_total", "Expiry notifications queued by the lifecycle scheduler.", nil).WithLabelValues()
 	s.mLifecycleLastOK = s.registry.Gauge("trstctl_lifecycle_scheduler_last_success_timestamp_seconds", "Unix timestamp of the last successful lifecycle scheduler sweep.")
 	s.mLifecycleFailures = s.registry.CounterVec("trstctl_lifecycle_scheduler_failures_total", "Lifecycle scheduler sweeps that failed.", nil).WithLabelValues()
-	s.configureRetentionWorker(d, auditSvc)
+	s.configureAuditRetentionMetrics()
 	s.configurePrivacyRetentionWorker(d, orch)
 	s.readiness = observ.NewReadiness(s.tracer, s.readinessChecks(ctx, d)...)
 	if s.startedAt.IsZero() {
@@ -2118,11 +2125,10 @@ func (s *Server) configureFederation(ctx context.Context, d Deps, proj *projecti
 	return nil
 }
 
-func (s *Server) configureRetentionWorker(d Deps, auditSvc *audit.Service) {
-	if auditSvc == nil || d.AuditSigningKey == nil || d.AuditRetention <= 0 || d.AuditArchiveDir == "" {
+func (s *Server) configureAuditRetentionMetrics() {
+	if s.retention == nil {
 		return
 	}
-	s.retention = audit.NewRetentionWorker(auditSvc, d.Log, audit.DirArchiver{Dir: d.AuditArchiveDir}, d.Store, d.AuditRetention)
 	s.mRetRuns = s.registry.CounterVec("trstctl_audit_retention_runs_total", "Audit retention runs that archived at least one segment.", nil).WithLabelValues()
 	s.mRetArchived = s.registry.CounterVec("trstctl_audit_records_archived_total", "Audit records archived to cold storage by the retention worker.", nil).WithLabelValues()
 	s.mRetPruned = s.registry.CounterVec("trstctl_audit_records_pruned_total", "Compatibility metric; always zero because logical audit retention never deletes the shared AN-2 source.", nil).WithLabelValues()

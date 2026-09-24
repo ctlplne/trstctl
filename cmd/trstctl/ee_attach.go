@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	_ "trstctl.com/trstctl/ee"
+	eeauditcompliance "trstctl.com/trstctl/ee/auditcompliance"
 	eebilling "trstctl.com/trstctl/ee/billing"
 	eeenterpriseauth "trstctl.com/trstctl/ee/enterpriseauth"
 	eefederation "trstctl.com/trstctl/ee/federation"
@@ -87,6 +88,10 @@ func attachEEProjectionOptions(
 }
 
 func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *license.Manager, deps *server.Deps) error {
+	if lic != nil && lic.Has(license.FeatureAuditCompliance) {
+		deps.AuditComplianceFactory = eeauditcompliance.Build
+		deps.GovernanceFactory = eegovernance.NewFactory()
+	}
 	if lic != nil && lic.Has(license.FeatureEnterpriseSSO) {
 		deps.TenantAuthFactory = eeenterpriseauth.Build
 	}
@@ -146,7 +151,6 @@ func attachEEProviderGovernance(log *slog.Logger, lic *license.Manager, deps *se
 	if lic == nil || !lic.Has(license.FeatureGovernance) {
 		return
 	}
-	deps.GovernanceFactory = eegovernance.NewFactory()
 	deps.GovernancePolicySource = eegovernance.NewPolicySource(nil)
 	if log != nil {
 		log.Info("Enterprise governance support attached", slog.String("feature", string(license.FeatureGovernance)))

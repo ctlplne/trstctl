@@ -696,7 +696,10 @@ endpoints are blocked by the egress guard.
 ## Audit
 
 The audit trail is a projection of the event log; these settings govern its
-evidence **export** and **retention** policy. See [Audit trail &
+evidence **export** and **retention** policy. Plain signed export stays core;
+timestamp anchoring, retention and compliance packaging require Enterprise audit
+compliance (also inherited by Provider). Without that feature, retention settings
+do not start a worker or advance existing checkpoints. See [Audit trail &
 compliance](compliance.md) for the trust model and what trstctl enables vs. what
 you must operate.
 

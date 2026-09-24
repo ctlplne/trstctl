@@ -28,15 +28,14 @@ func WithAudit(svc *audit.Service) Option {
 	return func(c *config) { c.audit = svc }
 }
 
-// WithAuditTimestamper wires the authority that countersigns audit chain heads
-// (epic J1).
-//
-// Optional. Without it exports still work and say plainly that they are
-// unanchored, which is the honest degradation: an audit bundle nobody
-// countersigned is weaker evidence, not invalid evidence, and pretending
-// otherwise either blocks a legitimate export or overstates a weak one.
-func WithAuditTimestamper(ts auditanchor.Timestamper) Option {
-	return func(c *config) { c.auditTimestamper = ts }
+// AuditAnchorFunc is the optional externally anchored evidence capability.
+// The licensed composition root supplies it; ordinary history export remains core.
+type AuditAnchorFunc func(context.Context, string) (auditanchor.Anchor, error)
+
+// WithAuditAnchor supplies the audit anchoring capability. Its absence never
+// blocks an export and reports the missing Enterprise entitlement explicitly.
+func WithAuditAnchor(anchor AuditAnchorFunc) Option {
+	return func(c *config) { c.auditAnchor = anchor }
 }
 
 // WithRetirementChecklist wires the licensed VDEC source for the CA-key

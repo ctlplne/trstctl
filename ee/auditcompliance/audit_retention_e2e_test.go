@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-package projections_test
+package auditcompliance_test
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"trstctl.com/trstctl/ee/auditcompliance"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/events"
@@ -20,14 +21,14 @@ import (
 )
 
 // TestAssembledServerEnforcesAuditRetention is R4.4's wired-into-the-binary
-// acceptance: server.Build with AuditRetention + AuditArchiveDir set constructs the
+// acceptance: licensed server.Build with the audit-compliance factory and retention settings constructs the
 // retention worker; driving it through the assembled server archives audit records
 // older than the window to a signed bundle, seals a checkpoint in the REAL store,
 // retires the prefix from the served audit view, retains the AN-2 source for
 // rebuild, keeps the chain verifiable, and exposes the run on /metrics.
 func TestAssembledServerEnforcesAuditRetention(t *testing.T) {
-	st := newStore(t)
-	log := openLog(t)
+	st := newAuditTestStore(t)
+	log := openTestLog(t)
 	ctx := context.Background()
 
 	auditKey, err := jose.GenerateRSASigningKey("audit-export")
@@ -41,10 +42,12 @@ func TestAssembledServerEnforcesAuditRetention(t *testing.T) {
 	asm, err := server.Build(ctx, server.Deps{
 		Store: st, Log: log, AuditSigningKey: auditKey,
 		AuditRetention: 24 * time.Hour, AuditArchiveDir: archiveDir,
+		AuditComplianceFactory: auditcompliance.Build,
 	})
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
+	t.Cleanup(func() { _ = asm.Shutdown(context.Background()) })
 	ts := httptest.NewServer(asm.Handler())
 	defer ts.Close()
 

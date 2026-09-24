@@ -163,7 +163,7 @@ func (a *API) exportAudit(w http.ResponseWriter, r *http.Request) {
 			a.writeError(w, err)
 			return
 		}
-		anchor, anchorErr := auditanchor.AnchorHead(r.Context(), a.auditTimestamper, bundle.ChainHead)
+		anchor, anchorErr := a.anchorAuditExport(r, bundle.ChainHead)
 		if anchorErr != nil && anchor.Detail == "" {
 			anchor.Detail = "this export could not be externally anchored"
 		}
@@ -188,7 +188,7 @@ func (a *API) exportAudit(w http.ResponseWriter, r *http.Request) {
 	// Best effort, and honest about it: an export from a deployment with no TSA
 	// is unanchored, says so in its own payload, and is still worth having.
 	// Failing the export instead would leave an operator with nothing.
-	anchor, anchorErr := auditanchor.AnchorHead(r.Context(), a.auditTimestamper, head)
+	anchor, anchorErr := a.anchorAuditExport(r, head)
 	if anchorErr != nil && anchor.Detail == "" {
 		anchor.Detail = "this export could not be externally anchored"
 	}
@@ -204,4 +204,11 @@ func (a *API) exportAudit(w http.ResponseWriter, r *http.Request) {
 	// truncated, and knows it from the file itself rather than from a status
 	// code it no longer has access to.
 	_ = auditanchor.WriteRecords(w, format, recs, prevHash, head, anchor)
+}
+
+func (a *API) anchorAuditExport(r *http.Request, head string) (auditanchor.Anchor, error) {
+	if a.auditAnchor == nil {
+		return auditanchor.Anchor{Kind: auditanchor.KindNone, ChainHead: head, Detail: "anchoring requires an Enterprise licence"}, nil
+	}
+	return a.auditAnchor(r.Context(), head)
 }

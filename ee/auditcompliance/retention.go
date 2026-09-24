@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-package audit
+package auditcompliance
 
 import (
 	"context"
@@ -12,22 +12,10 @@ import (
 	"sort"
 	"time"
 
+	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/events"
-)
-
-// EventTypeArchived is the event appended after a retention run, recording that a
-// segment of audit records was archived to cold storage and retired from the live
-// audit-query view. The underlying AN-2 domain-event envelopes stay in JetStream:
-// projection rebuild, privacy rewrite, and disaster recovery still need them.
-const (
-	EventTypeArchived = "audit.archived"
-
-	// ArchivedEventSchemaVersion is version 2 because the original v1 event used
-	// a tenant-local boundary and segment-local count. Those coordinates cannot
-	// reconstruct a global event-log checkpoint after PostgreSQL loss.
-	ArchivedEventSchemaVersion = 2
 )
 
 // Archiver writes a signed, offline-verifiable audit segment to durable cold
@@ -60,26 +48,10 @@ func (a DirArchiver) Archive(_ context.Context, tenantID string, boundarySeq uin
 	return path, nil
 }
 
-// ArchivedEvent is the durable, replayable payload of EventTypeArchived. It uses
-// the global event-stream boundary and cumulative tenant record count so an
-// event-only restore can reconstruct the exact logical audit checkpoint.
-type ArchivedEvent struct {
-	Count                 int    `json:"count"`
-	BoundarySeq           uint64 `json:"boundary_sequence"`
-	BoundaryHash          string `json:"boundary_hash"`
-	ArchiveURI            string `json:"archive_uri"`
-	SourceHistoryRetained bool   `json:"source_history_retained"`
-}
-
-// Summary reports what a retention run did — surfaced as metrics by the server.
-type Summary struct {
-	TenantsProcessed      int
-	SegmentsArchived      int
-	RecordsArchived       int
-	RecordsSourceRetained int
-	// RecordsPruned remains for metrics/API compatibility. It is always zero:
-	// deleting audit records from the shared AN-2 source makes rebuild lossy.
-	RecordsPruned int
+// Checkpoints supplies the same tenant-scoped archive boundary for reads and writes.
+type Checkpoints interface {
+	audit.CheckpointSource
+	audit.CheckpointSink
 }
 
 // RetentionWorker archives audit records older than Retention and advances the
@@ -89,26 +61,28 @@ type Summary struct {
 // chain checkpoint, and emit an audit event. Search starts after the checkpoint,
 // so the segment leaves the served hot view; JetStream retains it for recovery.
 type RetentionWorker struct {
-	svc       *Service
-	log       *events.Log
-	archiver  Archiver
-	sink      CheckpointSink
-	retention time.Duration
-	now       func() time.Time
+	svc         *audit.Service
+	log         *events.Log
+	archiver    Archiver
+	sink        Checkpoints
+	checkpoints audit.CheckpointSource
+	signer      *jose.SigningKey
+	retention   time.Duration
+	now         func() time.Time
 }
 
 // NewRetentionWorker constructs the worker. svc must be the audit service wired
 // with the same checkpoint source as sink, so a run's freshly sealed boundary is
 // the anchor the next query and the next run see.
-func NewRetentionWorker(svc *Service, log *events.Log, archiver Archiver, sink CheckpointSink, retention time.Duration) *RetentionWorker {
-	return &RetentionWorker{svc: svc, log: log, archiver: archiver, sink: sink, retention: retention, now: time.Now}
+func NewRetentionWorker(svc *audit.Service, log *events.Log, archiver Archiver, sink Checkpoints, retention time.Duration, signer *jose.SigningKey) *RetentionWorker {
+	return &RetentionWorker{svc: svc, log: log, archiver: archiver, sink: sink, checkpoints: sink, signer: signer, retention: retention, now: time.Now}
 }
 
 // RunOnce performs one retention pass across all tenants and reports what it did.
 // A nil/zero retention is a no-op. It is bounded by the caller (the server runs it
 // on the AN-7 background cadence, not per request).
-func (w *RetentionWorker) RunOnce(ctx context.Context) (Summary, error) {
-	var sum Summary
+func (w *RetentionWorker) RunOnce(ctx context.Context) (audit.Summary, error) {
+	var sum audit.Summary
 	if w.retention <= 0 {
 		return sum, nil
 	}
@@ -171,13 +145,13 @@ func (w *RetentionWorker) archiveTenantUnderOperation(
 	// checkpoint. Never finish that destructive operation: prove the complete
 	// tenant prefix is still present before advancing retention. Missing source
 	// history is a rebuild/DR blocker and must remain visible.
-	if w.svc.checkpoints != nil {
-		checkpoint, ok, err := w.svc.checkpoints.LatestAuditCheckpoint(ctx, tenantID)
+	if w.checkpoints != nil {
+		checkpoint, ok, err := w.checkpoints.LatestAuditCheckpoint(ctx, tenantID)
 		if err != nil {
 			return 0, err
 		}
 		if ok {
-			if err := VerifyCheckpointSourceRetained(ctx, w.log, checkpoint); err != nil {
+			if err := audit.VerifyCheckpointSourceRetained(ctx, w.log, checkpoint); err != nil {
 				return 0, err
 			}
 			if err := w.ensureArchivedEvent(ctx, checkpoint); err != nil {
@@ -187,8 +161,8 @@ func (w *RetentionWorker) archiveTenantUnderOperation(
 	}
 
 	var (
-		segment  []Record
-		boundary Record
+		segment  []audit.Record
+		boundary audit.Record
 		uri      string
 	)
 	// Pin one shared generation from Search through signed archive durability.
@@ -196,7 +170,7 @@ func (w *RetentionWorker) archiveTenantUnderOperation(
 	// cutting over after this view releases and before the checkpoint is sealed.
 	err := w.log.WithHistoryRead(ctx, func(readCtx context.Context) error {
 		// Survivors past the last sealed boundary, already hash-linked from it.
-		recs, err := w.svc.Search(readCtx, Query{TenantID: tenantID})
+		recs, prevSeed, err := w.svc.SearchWithSeed(readCtx, audit.Query{TenantID: tenantID})
 		if err != nil {
 			return err
 		}
@@ -213,12 +187,6 @@ func (w *RetentionWorker) archiveTenantUnderOperation(
 		segment = recs[:k]
 		boundary = segment[len(segment)-1]
 
-		// The seed the survivors (and thus this segment) were hashed from — the prior
-		// checkpoint's boundary, or genesis.
-		_, prevSeed, _, err := w.svc.searchSeed(readCtx, tenantID)
-		if err != nil {
-			return err
-		}
 		if boundary.StreamSequence == 0 {
 			return errors.New("audit: retention boundary is missing stream sequence")
 		}
@@ -230,7 +198,7 @@ func (w *RetentionWorker) archiveTenantUnderOperation(
 		}
 		// 2) Verify it recovers and its chain checks out BEFORE advancing the
 		// served-view checkpoint.
-		if _, err := VerifyRetentionBundle(signed, w.svc.VerificationKeys()); err != nil {
+		if _, err := audit.VerifyRetentionBundle(signed, w.svc.VerificationKeys()); err != nil {
 			return fmt.Errorf("archived segment failed verification — checkpoint not advanced: %w", err)
 		}
 		uri, err = w.archiver.Archive(readCtx, tenantID, boundary.Sequence, signed)
@@ -242,7 +210,7 @@ func (w *RetentionWorker) archiveTenantUnderOperation(
 	if len(segment) == 0 {
 		return 0, nil
 	}
-	checkpoint := Checkpoint{
+	checkpoint := audit.Checkpoint{
 		TenantID: tenantID, BoundarySeq: boundary.StreamSequence, BoundaryHash: boundary.Hash,
 		RecordCount: int(boundary.Sequence), ArchiveURI: uri, // #nosec G115 -- event sequence/count fits int64 by construction; bounded by the log (CWE-190)
 	}
@@ -265,17 +233,17 @@ func (w *RetentionWorker) archiveTenantUnderOperation(
 	return len(segment), nil
 }
 
-func (w *RetentionWorker) ensureArchivedEvent(ctx context.Context, checkpoint Checkpoint) error {
+func (w *RetentionWorker) ensureArchivedEvent(ctx context.Context, checkpoint audit.Checkpoint) error {
 	found := false
 	if err := w.log.Replay(ctx, checkpoint.BoundarySeq+1, func(event events.Event) error {
-		if event.TenantID != checkpoint.TenantID || event.Type != EventTypeArchived {
+		if event.TenantID != checkpoint.TenantID || event.Type != audit.EventTypeArchived {
 			return nil
 		}
-		var payload ArchivedEvent
+		var payload audit.ArchivedEvent
 		if err := json.Unmarshal(event.Data, &payload); err != nil {
 			return fmt.Errorf("decode audit archive event at sequence %d: %w", event.Sequence, err)
 		}
-		if event.SchemaVersion == ArchivedEventSchemaVersion &&
+		if event.SchemaVersion == audit.ArchivedEventSchemaVersion &&
 			payload.SourceHistoryRetained &&
 			payload.BoundarySeq == checkpoint.BoundarySeq &&
 			payload.BoundaryHash == checkpoint.BoundaryHash &&
@@ -290,7 +258,7 @@ func (w *RetentionWorker) ensureArchivedEvent(ctx context.Context, checkpoint Ch
 	if found {
 		return nil
 	}
-	payload := ArchivedEvent{
+	payload := audit.ArchivedEvent{
 		Count:                 checkpoint.RecordCount,
 		BoundarySeq:           checkpoint.BoundarySeq,
 		BoundaryHash:          checkpoint.BoundaryHash,
@@ -310,9 +278,9 @@ func (w *RetentionWorker) ensureArchivedEvent(ctx context.Context, checkpoint Ch
 	)))
 	if _, err := w.log.Append(ctx, events.Event{
 		ID:            "audit-archive-" + idDigest,
-		Type:          EventTypeArchived,
+		Type:          audit.EventTypeArchived,
 		TenantID:      checkpoint.TenantID,
-		SchemaVersion: ArchivedEventSchemaVersion,
+		SchemaVersion: audit.ArchivedEventSchemaVersion,
 		Data:          data,
 	}); err != nil {
 		return fmt.Errorf("append archive event: %w", err)
@@ -320,61 +288,13 @@ func (w *RetentionWorker) ensureArchivedEvent(ctx context.Context, checkpoint Ch
 	return nil
 }
 
-// VerifyCheckpointSourceRetained proves that the exact tenant-event cardinality
-// covered by a sealed audit checkpoint is still present in the shared AN-2 event
-// source. The checkpoint hash is intentionally not recomputed: an authorized
-// privacy rewrite may pseudonymize the retained hidden prefix while preserving
-// every stream position and envelope identity. Cardinality through the fixed
-// global boundary still detects any legacy physical prune because no later append
-// can occupy an earlier stream position.
-func VerifyCheckpointSourceRetained(
-	ctx context.Context,
-	log *events.Log,
-	checkpoint Checkpoint,
-) error {
-	if log == nil {
-		return errors.New("audit: retained-source verification requires an event log")
-	}
-	if checkpoint.TenantID == "" || checkpoint.BoundarySeq == 0 ||
-		checkpoint.RecordCount <= 0 || checkpoint.BoundaryHash == "" ||
-		checkpoint.ArchiveURI == "" {
-		return errors.New("audit: retained-source verification requires a complete checkpoint")
-	}
-	head, err := log.LastSequence(ctx)
-	if err != nil {
-		return fmt.Errorf("audit: read event head for retained-source verification: %w", err)
-	}
-	if checkpoint.BoundarySeq > head {
-		return fmt.Errorf(
-			"audit: checkpoint boundary %d is outside event head %d",
-			checkpoint.BoundarySeq, head,
-		)
-	}
-	count := 0
-	if err := log.ReplayThrough(ctx, 1, checkpoint.BoundarySeq, func(event events.Event) error {
-		if event.TenantID == checkpoint.TenantID {
-			count++
-		}
-		return nil
-	}); err != nil {
-		return fmt.Errorf("audit: verify retained checkpoint source: %w", err)
-	}
-	if count != checkpoint.RecordCount {
-		return fmt.Errorf(
-			"audit: checkpoint source history is incomplete for tenant %s: retained %d of %d events through sequence %d; refusing lossy retention/rebuild",
-			checkpoint.TenantID, count, checkpoint.RecordCount, checkpoint.BoundarySeq,
-		)
-	}
-	return nil
-}
-
-// signSegment marshals and signs the segment as a continuation Bundle whose
+// signSegment marshals and signs the segment as a continuation audit.Bundle whose
 // PrevHash chains it onto the previous archived segment (or genesis).
-func (w *RetentionWorker) signSegment(tenantID, prevHash, head string, segment []Record) (string, error) {
-	payload, err := json.Marshal(Bundle{
+func (w *RetentionWorker) signSegment(tenantID, prevHash, head string, segment []audit.Record) (string, error) {
+	payload, err := json.Marshal(audit.Bundle{
 		TenantID:    tenantID,
 		GeneratedAt: w.now().UTC(),
-		Query:       Query{TenantID: tenantID},
+		Query:       audit.Query{TenantID: tenantID},
 		Records:     segment,
 		Count:       len(segment),
 		PrevHash:    prevHash,
@@ -383,5 +303,5 @@ func (w *RetentionWorker) signSegment(tenantID, prevHash, head string, segment [
 	if err != nil {
 		return "", err
 	}
-	return w.svc.signer.SignArtifact(jose.ArtifactAuditRetention, payload)
+	return w.signer.SignArtifact(jose.ArtifactAuditRetention, payload)
 }

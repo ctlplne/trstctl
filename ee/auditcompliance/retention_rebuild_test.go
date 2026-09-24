@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-package projections_test
+package auditcompliance_test
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"trstctl.com/trstctl/ee/auditcompliance"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/events"
@@ -22,8 +23,8 @@ import (
 // rebuild erase a still-live owner.
 func TestAuditRetentionPreservesProjectionRebuild(t *testing.T) {
 	ctx := context.Background()
-	st := newStore(t)
-	log := openLog(t)
+	st := newAuditTestStore(t)
+	log := openTestLog(t)
 	projector := projections.New(st)
 
 	old := time.Now().Add(-48 * time.Hour)
@@ -55,12 +56,12 @@ func TestAuditRetentionPreservesProjectionRebuild(t *testing.T) {
 		t.Fatalf("audit signing key: %v", err)
 	}
 	service := audit.NewService(log, key, audit.WithCheckpoints(st))
-	worker := audit.NewRetentionWorker(
+	worker := auditcompliance.NewRetentionWorker(
 		service,
 		log,
-		audit.DirArchiver{Dir: t.TempDir()},
+		auditcompliance.DirArchiver{Dir: t.TempDir()},
 		st,
-		time.Hour,
+		time.Hour, key,
 	)
 	summary, err := worker.RunOnce(ctx)
 	if err != nil {
@@ -98,8 +99,8 @@ func TestAuditRetentionPreservesProjectionRebuild(t *testing.T) {
 
 func TestAuditRetentionRebuildRejectsLostSourceBeforeReadModelMutation(t *testing.T) {
 	ctx := context.Background()
-	st := newStore(t)
-	log := openLog(t)
+	st := newAuditTestStore(t)
+	log := openTestLog(t)
 	projector := projections.New(st)
 	old := time.Now().Add(-48 * time.Hour)
 	if _, err := log.Append(ctx, events.Event{
@@ -123,8 +124,8 @@ func TestAuditRetentionRebuildRejectsLostSourceBeforeReadModelMutation(t *testin
 		t.Fatal(err)
 	}
 	service := audit.NewService(log, key, audit.WithCheckpoints(st))
-	worker := audit.NewRetentionWorker(
-		service, log, audit.DirArchiver{Dir: t.TempDir()}, st, time.Hour,
+	worker := auditcompliance.NewRetentionWorker(
+		service, log, auditcompliance.DirArchiver{Dir: t.TempDir()}, st, time.Hour, key,
 	)
 	if _, err := worker.RunOnce(ctx); err != nil {
 		t.Fatal(err)

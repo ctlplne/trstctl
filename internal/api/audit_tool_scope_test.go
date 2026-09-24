@@ -89,7 +89,9 @@ func TestAuditHTTPToolScopeAndRetainedExportChain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := api.New(nil, nil, nil, api.WithAudit(svc), api.WithAuditTimestamper(stamper), api.WithRoles(role), api.WithPrincipalResolver(func(*http.Request) (authz.Principal, error) { return principal, nil }))
+	handler := api.New(nil, nil, nil, api.WithAudit(svc), api.WithAuditAnchor(func(ctx context.Context, head string) (auditanchor.Anchor, error) {
+		return auditanchor.AnchorHead(ctx, stamper, head)
+	}), api.WithRoles(role), api.WithPrincipalResolver(func(*http.Request) (authz.Principal, error) { return principal, nil }))
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	client := server.Client()

@@ -8,6 +8,13 @@ provides controls and evidence; **certification is yours to obtain with
 your auditor**. Nothing here claims that deploying trstctl makes you
 compliant.
 
+Plain signed history export and offline verification are available in every
+edition. Enterprise audit compliance adds timestamp anchoring, audit retention,
+and framework evidence packaging; Provider inherits these capabilities. Removing
+a license stops new retention runs and timestamp anchoring, while existing signed
+archives, checkpoint recovery, and export of your own history remain available.
+Non-audit privacy retention is independent and stays in the core.
+
 ## What the audit subsystem provides
 
 - Completeness. Every served mutation is an event, reconstructing the full
@@ -46,7 +53,7 @@ longer matches the signed bundle.
 
 This **does** detect alteration, truncation, insertion, or reordering
 relative to a previously signed bundle, and any in-place edit of one (the
-signature fails). With `protocols.tsa` enabled, the saved JWS envelope and every
+signature fails). With Enterprise audit compliance licensed and `protocols.tsa` enabled, the saved JWS envelope and every
 record-stream trailer also carry the complete RFC 3161 token over that exact
 head. Offline verification takes the separately pinned audit JWK set and TSA root,
 recomputes the record chain, checks the timestamp token, and applies the chosen
@@ -240,10 +247,15 @@ trstctl enables the controls below; you operate them:
   response, vendor management, and framework-specific evidence your
   auditor requires.
 
+Unlicensed exports report `anchor.kind=""` with detail
+`anchoring requires an Enterprise licence`. A licensed export whose configured
+TSA fails instead reports that the timestamp authority did not answer. Both keep
+the ordinary signed history export available and visibly unanchored.
+
 ## Audit retention and archive lifecycle
 
-When `TRSTCTL_AUDIT_RETENTION` and `TRSTCTL_AUDIT_ARCHIVE_DIR` are both
-set, a bounded background worker (per tenant, hourly) enforces the served
+When Enterprise audit compliance is licensed and `TRSTCTL_AUDIT_RETENTION` and
+`TRSTCTL_AUDIT_ARCHIVE_DIR` are both set, a bounded background worker (per tenant, hourly) enforces the served
 audit-view policy in four ordered steps:
 
 1. Archive. Records older than the window are signed as a self-contained,

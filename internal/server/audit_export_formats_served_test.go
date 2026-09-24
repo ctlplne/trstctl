@@ -347,7 +347,9 @@ func newAnchoredAuditExportHarnessAUD51(t *testing.T) (*httptest.Server, string,
 	}
 	srv, err := Build(ctx, Deps{
 		Store: st, Log: log, AuditSigningKey: auditKey,
-		APIOptions: []api.Option{api.WithAuditTimestamper(authority)},
+		APIOptions: []api.Option{api.WithAuditAnchor(func(ctx context.Context, head string) (auditanchor.Anchor, error) {
+			return auditanchor.AnchorHead(ctx, authority, head)
+		})},
 	})
 	if err != nil {
 		_ = log.Close()

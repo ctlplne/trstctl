@@ -17,7 +17,6 @@ import (
 
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/audit"
-	"trstctl.com/trstctl/internal/auditanchor"
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/backup"
@@ -74,7 +73,7 @@ type API struct {
 	roles                  *authz.Registry
 	principal              func(*http.Request) (authz.Principal, error)
 	audit                  *audit.Service
-	auditTimestamper       auditanchor.Timestamper
+	auditAnchor            AuditAnchorFunc
 	retirementChecklist    RetirementChecklistSource
 	auth                   *AuthConfig
 	providerPlaneAvailable bool
@@ -205,7 +204,7 @@ type config struct {
 	// not linked into the production build. See WithInsecureHeaderResolver.
 	principalFromReg            func(reg *authz.Registry, fallback func(*http.Request) (authz.Principal, error)) func(*http.Request) (authz.Principal, error)
 	audit                       *audit.Service
-	auditTimestamper            auditanchor.Timestamper
+	auditAnchor                 AuditAnchorFunc
 	retirementChecklist         RetirementChecklistSource
 	auth                        *AuthConfig
 	providerPlaneAvailable      bool
@@ -510,7 +509,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		restoreDrillKeys:       cfg.restoreDrillKeys,
 		roles:                  reg,
 		audit:                  cfg.audit,
-		auditTimestamper:       cfg.auditTimestamper,
+		auditAnchor:            cfg.auditAnchor,
 		retirementChecklist:    cfg.retirementChecklist,
 		auth:                   cfg.auth,
 		providerPlaneAvailable: cfg.providerPlaneAvailable,

@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
 
-package audit_test
+package auditcompliance_test
 
 import (
 	"bytes"
@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"trstctl.com/trstctl/ee/auditcompliance"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/jose"
@@ -169,7 +170,7 @@ func TestRetentionWorkerArchivesRetiresViewAndRetainsRebuildSource(t *testing.T)
 	cp := &memCheckpoints{}
 	archiveDir := t.TempDir()
 	svc := audit.NewService(log, key, audit.WithCheckpoints(cp))
-	worker := audit.NewRetentionWorker(svc, log, audit.DirArchiver{Dir: archiveDir}, cp, 24*time.Hour)
+	worker := auditcompliance.NewRetentionWorker(svc, log, auditcompliance.DirArchiver{Dir: archiveDir}, cp, 24*time.Hour, key)
 
 	const tenant = "11111111-1111-1111-1111-111111111111"
 	now := time.Now()
@@ -314,7 +315,7 @@ func TestRetentionWorkerDoesNothingWithoutWindow(t *testing.T) {
 	}
 	cp := &memCheckpoints{}
 	svc := audit.NewService(log, key, audit.WithCheckpoints(cp))
-	worker := audit.NewRetentionWorker(svc, log, audit.DirArchiver{Dir: t.TempDir()}, cp, 0)
+	worker := auditcompliance.NewRetentionWorker(svc, log, auditcompliance.DirArchiver{Dir: t.TempDir()}, cp, 0, key)
 
 	const tenant = "22222222-2222-2222-2222-222222222222"
 	if _, err := log.Append(ctx, events.Event{Type: "thing.created", TenantID: tenant, Time: time.Now().Add(-1000 * time.Hour)}); err != nil {
@@ -353,9 +354,8 @@ func TestRetentionWorkerKeepsTenantQueryFloorsIndependent(t *testing.T) {
 	}
 	checkpoints := &memCheckpoints{}
 	svc := audit.NewService(log, key, audit.WithCheckpoints(checkpoints))
-	worker := audit.NewRetentionWorker(
-		svc, log, audit.DirArchiver{Dir: t.TempDir()}, checkpoints, time.Hour,
-	)
+	worker := auditcompliance.NewRetentionWorker(
+		svc, log, auditcompliance.DirArchiver{Dir: t.TempDir()}, checkpoints, time.Hour, key)
 	summary, err := worker.RunOnce(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -393,9 +393,8 @@ func TestRetentionWorkerRetryHealsCheckpointWithoutDuplicatingArchivedEvent(t *t
 	base := &memCheckpoints{}
 	checkpoints := &failOnceCheckpoints{memCheckpoints: base}
 	svc := audit.NewService(log, key, audit.WithCheckpoints(checkpoints))
-	worker := audit.NewRetentionWorker(
-		svc, log, audit.DirArchiver{Dir: t.TempDir()}, checkpoints, time.Hour,
-	)
+	worker := auditcompliance.NewRetentionWorker(
+		svc, log, auditcompliance.DirArchiver{Dir: t.TempDir()}, checkpoints, time.Hour, key)
 
 	if _, err := worker.RunOnce(ctx); err == nil ||
 		!strings.Contains(err.Error(), "injected checkpoint write failure") {
@@ -448,9 +447,8 @@ func TestRetentionWorkerRepairsMissingArchivedEventFromRetainedCheckpoint(t *tes
 		t.Fatal(err)
 	}
 	svc := audit.NewService(log, key, audit.WithCheckpoints(checkpoints))
-	worker := audit.NewRetentionWorker(
-		svc, log, audit.DirArchiver{Dir: t.TempDir()}, checkpoints, time.Hour,
-	)
+	worker := auditcompliance.NewRetentionWorker(
+		svc, log, auditcompliance.DirArchiver{Dir: t.TempDir()}, checkpoints, time.Hour, key)
 
 	summary, err := worker.RunOnce(ctx)
 	if err != nil {
@@ -516,7 +514,7 @@ func TestRetentionPinsArchiveAndExcludesRewriteWhileCheckpointCommits(t *testing
 		release:     make(chan struct{}),
 	}
 	svc := audit.NewService(log, key, audit.WithCheckpoints(checkpoints))
-	worker := audit.NewRetentionWorker(svc, log, archiver, checkpoints, time.Hour)
+	worker := auditcompliance.NewRetentionWorker(svc, log, archiver, checkpoints, time.Hour, key)
 	retentionDone := make(chan error, 1)
 	go func() {
 		_, err := worker.RunOnce(ctx)
@@ -682,9 +680,8 @@ func TestRewriteRealRetentionCheckpointRetainsReceiptAndReopens(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc := audit.NewService(log, key, audit.WithCheckpoints(checkpoints))
-	worker := audit.NewRetentionWorker(
-		svc, log, audit.DirArchiver{Dir: t.TempDir()}, checkpoints, time.Nanosecond,
-	)
+	worker := auditcompliance.NewRetentionWorker(
+		svc, log, auditcompliance.DirArchiver{Dir: t.TempDir()}, checkpoints, time.Nanosecond, key)
 	summary, err := worker.RunOnce(ctx)
 	if err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -738,9 +735,8 @@ func TestPrivacyRewriteAfterLogicalRetentionKeepsCheckpointReplayable(t *testing
 		t.Fatal(err)
 	}
 	svc := audit.NewService(log, key, audit.WithCheckpoints(checkpoints))
-	worker := audit.NewRetentionWorker(
-		svc, log, audit.DirArchiver{Dir: t.TempDir()}, checkpoints, time.Hour,
-	)
+	worker := auditcompliance.NewRetentionWorker(
+		svc, log, auditcompliance.DirArchiver{Dir: t.TempDir()}, checkpoints, time.Hour, key)
 	if _, err := worker.RunOnce(ctx); err != nil {
 		t.Fatalf("logical retention: %v", err)
 	}
