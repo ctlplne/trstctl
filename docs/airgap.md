@@ -16,6 +16,24 @@ Air-gap mode also fails closed for product telemetry and cloud AI model egress:
 air-gap is enabled. Local OTLP collectors, local AI runtimes, PostgreSQL, and NATS
 can still be used when they live on private addresses or explicit allowlists.
 
+## What runs inside, and what needs a path out
+
+Air-gap mode denies public destinations by default. The rows below that need a
+path out only work when you allowlist the exact host or CIDR, which keeps every
+outbound dependency explicit and auditable.
+
+| Capability | In an air-gapped install |
+|---|---|
+| Certificate issuance from the built-in CA and your own hierarchy | Runs inside. |
+| The native secret store, policy, audit, and the web and API surface | Runs inside. |
+| License verification | Runs inside: an offline Ed25519 signature check, no license server. |
+| Evidence export and verification | Runs inside; signed exports verify offline with pinned keys (`trstctl-cli audit verify`). |
+| Product telemetry | Rejected under air-gap mode. A local OTLP collector on an allowlisted private host is allowed. |
+| AI assistant | A local model runtime on an allowlisted private host runs inside; cloud model mode is rejected. |
+| Connectors, DNS providers and external authorities that live inside the gap (web servers, appliances, AD CS, EJBCA, Vault, RFC 2136 or acme-dns) | Run inside when their hosts are allowlisted private addresses. |
+| Public ACME authorities, cloud DNS providers, cloud certificate stores, SaaS external authorities | Need a path out: allowlist the exact host, or leave them unconfigured. |
+| Transparency-log monitoring | Needs a path out to the public logs. |
+
 ## Build the transfer bundle
 
 On a connected build host, verify the release image first, then build the bundle:
