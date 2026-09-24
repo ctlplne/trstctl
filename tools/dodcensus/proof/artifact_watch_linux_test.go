@@ -14,9 +14,24 @@ import (
 func TestArtifactMutationWatchRejectsSwapRestoreInputs(t *testing.T) {
 	directory := t.TempDir()
 	path := filepath.Join(directory, "trstctl-signer")
-	if err := os.WriteFile(path, []byte("exact signer"), 0o500); err != nil {
-		t.Fatal(err)
+	staged := filepath.Join(t.TempDir(), "compiler-output")
+	publish := func(contents string) {
+		t.Helper()
+		if err := os.WriteFile(staged, []byte(contents), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := publishShippedExecutable(staged, path); err != nil {
+			t.Fatal(err)
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != 0o500 {
+			t.Fatalf("published executable mode = %04o, want 0500", info.Mode().Perm())
+		}
 	}
+	publish("exact signer")
 	watch, err := newArtifactMutationWatch(directory)
 	if err != nil {
 		t.Fatal(err)
@@ -28,9 +43,7 @@ func TestArtifactMutationWatchRejectsSwapRestoreInputs(t *testing.T) {
 	if err := os.Rename(path, path+".saved"); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte("foreign signer"), 0o500); err != nil {
-		t.Fatal(err)
-	}
+	publish("foreign signer")
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}

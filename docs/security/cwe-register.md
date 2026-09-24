@@ -979,7 +979,7 @@ not this file.
 | `internal/signing/socket_dir_symlink_test.go:59` | deliberately widened so enforceExactSocketDirMode has something to tighten (CWE-276) |
 | `internal/signing/socket_mode_unix_test.go:206` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/tsa/http_test.go:112` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
-| `tools/dodcensus/proof/artifact_watch_linux_test.go:84` | adversarial mutation fixture (CWE-276) |
+| `tools/dodcensus/proof/artifact_watch_linux_test.go:97` | adversarial mutation fixture (CWE-276) |
 | `tools/dodcensus/proof/proof_test.go:712` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/proof/proof_test.go:732` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/proof/proof_test.go:742` | deliberately unsafe fixture mode (CWE-276) |
@@ -1459,8 +1459,8 @@ not this file.
 | `scripts/perf/cmd/soakcapture/main.go:85` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `scripts/perf/cmd/soakgate/main.go:123` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
 | `scripts/perf/cmd/spineburst/main.go:173` | developer tool writing repo/dist artifacts; the mode is intentional (CWE-276) |
-| `tools/dodcensus/proof/artifact_watch_linux_test.go:52` | private test fixture (CWE-276) |
-| `tools/dodcensus/proof/artifact_watch_linux_test.go:78` | private test fixture (CWE-276) |
+| `tools/dodcensus/proof/artifact_watch_linux_test.go:65` | private test fixture (CWE-276) |
+| `tools/dodcensus/proof/artifact_watch_linux_test.go:91` | private test fixture (CWE-276) |
 | `tools/dodcensus/proof/proof_test.go:195` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/proof/proof_test.go:214` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/proof/proof_test.go:244` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |

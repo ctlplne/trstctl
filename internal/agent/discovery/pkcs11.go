@@ -5,7 +5,6 @@ package discovery
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sort"
 	"strings"
 
@@ -120,25 +119,4 @@ func (s *PKCS11Source) Discover(ctx context.Context) ([]Found, error) {
 		})
 	}
 	return out, nil
-}
-
-// trimSpacePadding removes the fixed-width space padding PKCS#11 uses for
-// labels. It lives on this side of the build tag so both readers agree.
-func trimSpacePadding(raw string) string {
-	return strings.TrimRight(strings.TrimSpace(raw), " \x00")
-}
-
-// pkcs11ObjectLabel builds the stable per-object locator the reader keys on.
-func pkcs11ObjectLabel(tokenLabel, objectLabel string, index int) string {
-	token := strings.TrimSpace(tokenLabel)
-	if token == "" {
-		token = "token"
-	}
-	object := strings.TrimSpace(objectLabel)
-	if object == "" {
-		// An unlabeled certificate object is common on smart cards. The index
-		// keeps two of them distinguishable within a token.
-		object = fmt.Sprintf("object-%d", index)
-	}
-	return "pkcs11:" + token + "/" + object
 }

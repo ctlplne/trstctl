@@ -242,7 +242,14 @@ func (d *goTPMDevice) CreateKeyForOperation(operationID string, alg crypto.Algor
 	rangeSize := maxHandle - minHandle + 1
 	start := binary.BigEndian.Uint64(operationTag[:8]) % rangeSize
 	for probe := uint64(0); probe < rangeSize; probe++ {
-		candidate := tpmutil.Handle(minHandle + ((start + probe) % rangeSize))
+		candidateValue := minHandle + ((start + probe) % rangeSize)
+		// ownerOperationHandleRange already confines the probe to owner handles.
+		// Check the wire width at the narrowing boundary too: a future range
+		// change must fail closed instead of wrapping into another handle.
+		if candidateValue > uint64(^uint32(0)) {
+			return "", nil, fmt.Errorf("tpm: operation handle exceeds the 32-bit wire range")
+		}
+		candidate := tpmutil.Handle(candidateValue)
 		if occupied[candidate] {
 			continue
 		}

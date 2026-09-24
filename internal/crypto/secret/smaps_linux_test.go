@@ -9,11 +9,11 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
 	"testing"
-	"unsafe"
 
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
@@ -28,7 +28,9 @@ func TestBufferLockedAndNoDumpLinux(t *testing.T) {
 	}
 	defer b.Destroy()
 
-	addr := uintptr(unsafe.Pointer(&b.Bytes()[0]))
+	// Reflect exposes the slice's backing address without an unsafe conversion;
+	// KeepAlive below still keeps the owning buffer alive through the /proc read.
+	addr := reflect.ValueOf(b.Bytes()).Pointer()
 	flags, err := vmFlagsFor(addr)
 	runtime.KeepAlive(b)
 	if err != nil {
