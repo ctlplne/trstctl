@@ -2,6 +2,9 @@
 
 ### Fixed
 
+- SAML sign-in started from the console resumes the requested local page,
+  including query filters and fragments. A signed, expiring context binds the
+  destination to that login attempt; IdP-initiated login keeps its configured default.
 - The console offers each configured browser sign-in method, including SAML-only
   and LDAP-only deployments. Directory sign-in has accessible credential fields,
   safe retry guidance, password clearing and verified-session navigation.

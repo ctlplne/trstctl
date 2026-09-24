@@ -446,6 +446,10 @@ func (a *API) authSAMLLogin(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusBadGateway, "SAML AuthnRequest failed"))
 		return
 	}
+	if err := a.setSAMLReturnCookies(w, r, state, requestID); err != nil {
+		a.writeError(w, errStatus(http.StatusInternalServerError, "SAML return context could not be created"))
+		return
+	}
 	a.setTransientCookie(w, samlStateCookieName, state)
 	a.setTransientCookie(w, samlRequestIDCookieName, requestID)
 	http.Redirect(w, r, redirectURL, http.StatusFound)
@@ -467,7 +471,8 @@ func (a *API) authSAMLACS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var possibleRequestIDs []string
-	clearCookies := []string{}
+	var returnTo string
+	clearCookies := []string{samlReturnCookie0, samlReturnCookie1}
 	if relayState := r.Form.Get("RelayState"); relayState != "" {
 		stateCookie, err := r.Cookie(samlStateCookieName)
 		if err != nil || stateCookie.Value == "" || stateCookie.Value != relayState {
@@ -480,7 +485,12 @@ func (a *API) authSAMLACS(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		possibleRequestIDs = []string{requestIDCookie.Value}
-		clearCookies = []string{samlStateCookieName, samlRequestIDCookieName}
+		returnTo, err = a.samlReturnPath(r, relayState, requestIDCookie.Value)
+		if err != nil {
+			a.writeError(w, errStatus(http.StatusBadRequest, "invalid or expired SAML return context; restart sign-in"))
+			return
+		}
+		clearCookies = append(clearCookies, samlStateCookieName, samlRequestIDCookieName)
 	}
 	claims, err := a.auth.VerifySAMLResponse(r, possibleRequestIDs)
 	if err != nil {
@@ -496,7 +506,7 @@ func (a *API) authSAMLACS(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problem.New(http.StatusForbidden, "no tenant for this user"))
 		return
 	}
-	a.issueLoginSession(w, r, claims, tenantID, roles, clearCookies...)
+	a.issueLoginSessionWithReturn(w, r, claims, tenantID, roles, returnTo, clearCookies...)
 }
 
 func (a *API) authSAMLMetadata(w http.ResponseWriter, _ *http.Request) {
@@ -574,10 +584,10 @@ func (a *API) issueLoginSessionWithReturn(w http.ResponseWriter, r *http.Request
 	for _, name := range clearCookies {
 		a.clearCookie(w, name)
 	}
-	redirect := safeLoginReturnPath(returnTo)
-	if redirect == "" {
-		redirect = a.auth.LoginRedirect
+	if redirectLoginReturn(w, r, returnTo) {
+		return
 	}
+	redirect := a.auth.LoginRedirect
 	if redirect == "" {
 		redirect = "/"
 	}
@@ -823,11 +833,11 @@ func (a *API) configuredAuthTenants() []string {
 
 func (a *API) setTransientCookie(w http.ResponseWriter, name, value string) {
 	// OIDC returns by top-level GET, so Lax preserves its correlation cookies.
-	// SAML POST binding needs None on its two HTTPS correlation cookies; Lax
+	// SAML POST binding needs None on its HTTPS correlation/return cookies; Lax
 	// drops them on the cross-site ACS POST. None requires Secure in browsers.
 	// Plaintext development keeps Lax and cannot support cross-site SAML POST.
 	sameSite := http.SameSiteLaxMode
-	if a.auth.Secure && (name == samlStateCookieName || name == samlRequestIDCookieName) {
+	if a.auth.Secure && (name == samlStateCookieName || name == samlRequestIDCookieName || name == samlReturnCookie0 || name == samlReturnCookie1) {
 		sameSite = http.SameSiteNoneMode
 	}
 	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- short-lived HttpOnly correlation cookies; None is limited to Secure SAML POST state, not authenticated session cookies (CWE-1004)

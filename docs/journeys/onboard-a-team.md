@@ -105,9 +105,12 @@ group on a shared trstctl deployment.
    When the page says browser sign-in is not configured, an administrator must
    configure a supported method; a scoped API token is not a browser password.
 
-   Open a bookmarked console page while signed out, then complete OIDC sign-in.
-   The browser should return to the same page with its query filters and fragment;
-   a tenant-mapping error keeps that destination available for a later retry.
+   Open a bookmarked console page while signed out, then complete sign-in with
+   each configured method. The browser should return to the same page with its
+   query filters and fragment. OIDC tenant-mapping recovery retains that page for
+   a later retry. For SAML, complete the login within ten minutes; if its return
+   context expires or is rejected, restart from the bookmarked page. Login started
+   directly at the SAML identity provider uses the configured default page.
 
 3. Map each signed-in user to the right tenant so two users in different teams see only
    their own data. Use a configurable id_token/SAML claim, an LDAP group mapping, or an

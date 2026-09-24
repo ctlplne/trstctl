@@ -100,7 +100,8 @@ func TestServedSAMLLoginEndToEndSPAndIDPInitiated(t *testing.T) {
 func assertSAMLSPInitiatedSession(t *testing.T, baseURL string, jar http.CookieJar, wantTenant string) {
 	t.Helper()
 	client := noFollowClient(jar)
-	resp, err := client.Get(baseURL + "/auth/saml/login")
+	const target = "/certificates?expiry=30d&owner=a%20b#inventory"
+	resp, err := client.Get(baseURL + "/auth/saml/login?return_to=" + url.QueryEscape(target))
 	if err != nil {
 		t.Fatalf("GET /auth/saml/login: %v", err)
 	}
@@ -122,7 +123,9 @@ func assertSAMLSPInitiatedSession(t *testing.T, baseURL string, jar http.CookieJ
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("IdP SSO = %d, want HTML POST form: %s", resp.StatusCode, body)
 	}
-	postSAMLForm(t, client, body)
+	if got := postSAMLForm(t, client, body); got != target {
+		t.Fatalf("signed SAML callback destination = %q, want %q", got, target)
+	}
 	assertAuthMeTenant(t, baseURL, jar, wantTenant)
 }
 
@@ -138,11 +141,13 @@ func assertSAMLIDPInitiatedSession(t *testing.T, baseURL string, idp *mockSAMLId
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("IdP-initiated login = %d, want HTML POST form: %s", resp.StatusCode, body)
 	}
-	postSAMLForm(t, client, body)
+	if got := postSAMLForm(t, client, body); got != "/" {
+		t.Fatalf("IdP-initiated callback destination = %q, want configured home", got)
+	}
 	assertAuthMeTenant(t, baseURL, jar, wantTenant)
 }
 
-func postSAMLForm(t *testing.T, client *http.Client, body []byte) {
+func postSAMLForm(t *testing.T, client *http.Client, body []byte) string {
 	t.Helper()
 	action := samlFormAction(t, body)
 	form := url.Values{}
@@ -159,6 +164,7 @@ func postSAMLForm(t *testing.T, client *http.Client, body []byte) {
 	if resp.StatusCode != http.StatusFound {
 		t.Fatalf("POST SAML ACS = %d, want 302 session redirect: %s", resp.StatusCode, respBody)
 	}
+	return resp.Header.Get("Location")
 }
 
 func assertAuthMeTenant(t *testing.T, baseURL string, jar http.CookieJar, wantTenant string) {

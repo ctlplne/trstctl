@@ -884,8 +884,24 @@ that validated destination for the next sign-in attempt.
 The path is limited to 4096 bytes. External URLs, protocol-relative URLs,
 backslashes in the path, control characters, and login or authentication routes
 are ignored. With an absent or invalid destination, OIDC uses its configured
-`auth.oidc.login_redirect`, or `/` when unset. SAML and LDAP retain their existing
-configured post-login destinations.
+`auth.oidc.login_redirect`, or `/` when unset. The LDAP console form resumes its
+validated local destination after confirming the new session.
+
+A console-started SAML login passes the same local `return_to` input to
+`/auth/saml/login`. The server binds its raw value to the random state and SAML
+request ID in a signed, ten-minute browser context. The destination is never sent
+to the identity provider, and ACS query or form parameters cannot replace it.
+Two HttpOnly cookies carry that context, each limited to 3500 value bytes so the
+serialized cookie fits browser limits. The 4096-byte input limit applies before
+URL encoding, including for Unicode paths. Instances using the same browser-session
+secret can validate the context without shared process memory.
+
+Absent or invalid initial destinations, older in-flight logins without either
+context cookie, and IdP-initiated logins use the configured post-login default.
+A partial, duplicate, tampered or expired context in an SP-initiated callback
+returns HTTP 400; restart sign-in. Successful login clears both context cookies.
+This destination binding supplements the existing SAML assertion verification;
+it is not an assertion-replay cache or an authenticated session.
 
 ## SCIM provisioning
 
@@ -960,7 +976,8 @@ auth:
 Example SAML config:
 
 Use HTTPS for browser SAML login. The identity provider posts its response back
-to `/auth/saml/acs`; the two ten-minute correlation cookies use
+to `/auth/saml/acs`; the two ten-minute correlation cookies and the two return
+context cookies (when a valid destination was requested) use
 `SameSite=None; Secure; HttpOnly` so the browser includes them on that cross-site
 POST. The ACS still validates the state, request ID and signed assertion. OIDC
 correlation cookies remain `SameSite=Lax`; authenticated session and CSRF cookies
