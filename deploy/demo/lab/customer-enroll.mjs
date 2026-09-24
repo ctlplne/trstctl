@@ -1,6 +1,6 @@
 // Enrolls a provider customer's own host agent for the lab's customer listener.
 // Run once per customer tenant after the provider has provisioned it:
-//   TRSTCTL_LAB_CUSTOMER_TOKEN_FILE=/secure/acme.token docker compose ... run --rm lab-customer-enroll
+//   TRSTCTL_LAB_CUSTOMER_TOKEN_FILE=/secure/acme.token deploy/demo/lab/enroll-customer.sh
 // The token file holds an API token scoped to the customer tenant (minted with
 // `trstctl token create --tenant <customer tenant id>` on the control plane).
 // The helper mints a one-time agent enrollment token inside that tenant, writes

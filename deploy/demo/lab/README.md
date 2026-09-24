@@ -70,10 +70,20 @@ tenant (`trstctl token create --tenant <customer tenant id> ...`, kept as a 0600
 file) and enroll the customer agent:
 
 ```bash
+TRSTCTL_LAB_PROJECT=your-running-lab \
 TRSTCTL_LAB_CUSTOMER_TOKEN_FILE=/secure/acme-robotics.token \
-docker compose -p <project> -f deploy/demo/docker-compose.yml -f deploy/demo/lab/docker-compose.yml \
-  --profile partner-lab-customer run --rm lab-customer-enroll
+deploy/demo/lab/enroll-customer.sh
 ```
+
+Use the same project name as the original `run.sh` command; omitting it selects
+`trstctl-partner-lab`. The launcher requires that project's control plane and
+front doors to be running. It checks the token file's `0600` or `0400` permissions,
+uses the project's already-built seed image, and runs only the enrollment helper.
+It does not rebuild or restart services, so a licensed lab keeps its installed
+image and license without resupplying the vendor key or licensed overlay. If you
+overrode `TRSTCTL_DEMO_SEED_IMAGE` at startup, supply the same override here.
+The API token stays in its read-only file mount, never a command argument or an
+environment value.
 
 The helper mints a one-time enrollment token inside the customer tenant and
 stages it in the front-door state volume; the front-door entrypoint starts a
