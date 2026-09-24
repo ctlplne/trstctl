@@ -144,6 +144,7 @@ export function Notifications() {
   const [selectedDetail, setDetail] = useState<Notification | null>(null);
   const [channelDialogOpen, setChannelDialogOpen] = useState(false);
   const channelDialogHeadingRef = useRef<HTMLHeadingElement>(null);
+  const detailHeadingRef = useRef<HTMLHeadingElement>(null);
 
   const notificationQuery = useApiQuery(
     notificationPageQueryKey,
@@ -597,12 +598,13 @@ export function Notifications() {
           onClose={() => setDetail(null)}
           titleId="notification-detail-heading"
           descriptionId="notification-detail-description"
+          initialFocusRef={detailHeadingRef}
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           overlayClassName="absolute inset-0 bg-black/55"
           panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-panel border border-border bg-card shadow-elevation2"
         >
           <header className="border-b border-border px-5 py-4">
-            <h2 id="notification-detail-heading" className="text-title font-semibold">
+            <h2 ref={detailHeadingRef} id="notification-detail-heading" className="text-title font-semibold" tabIndex={-1}>
               {translateNow("source.notification.value1.81c16a52a8", { value1: detail.id })}
             </h2>
             <p id="notification-detail-description" className="mt-1 text-sm text-muted-foreground">

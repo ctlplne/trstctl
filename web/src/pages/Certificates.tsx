@@ -1568,7 +1568,7 @@ function CertificateWorkspace() {
                 </Link>
               )}
             </nav>
-            <dl className="grid gap-3 text-sm md:grid-cols-2">
+            <dl className="grid min-w-0 grid-cols-1 gap-3 text-sm [overflow-wrap:anywhere] md:grid-cols-2 [&>div]:min-w-0 [&_dd]:min-w-0">
               <div>
                 <dt className="font-medium text-muted-foreground">{translateNow("source.subject.6897128384")}</dt>
                 <dd className="break-all">{certificateDisplayName(detail)}</dd>
@@ -1621,7 +1621,7 @@ function CertificateWorkspace() {
                   </div>
                 </>
               )}
-              <div className="sm:col-span-2">
+              <div className="md:col-span-2">
                 <dt className="font-medium text-muted-foreground">{translateNow("source.custody.key.b5cust0001")}</dt>
                 <dd className={detail.key_origin === "control_plane" ? "text-status-warning" : undefined}>{detail.custody_summary}</dd>
                 {!detail.key_origin ? (

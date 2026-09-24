@@ -172,13 +172,14 @@ export function EndpointBindingWorkflow({
   const selectedIssuer = issuerOptions.find((issuer) => issuerKey === encodeIssuer(issuer));
   const selectedTarget = targets.find((target) => target.id === targetID);
   const selectedTargetVerificationName = targetVerificationName(selectedTarget);
-  const replacementCandidates = identities.filter(
+  const destinationIdentities = identities.filter(
     (identity) =>
       ["x509_certificate", "x509"].includes(identity.kind) &&
-      ["deployed", "renewal_failed", "revoked"].includes(identity.status) &&
       identity.attributes?.deployment_target_id === targetID &&
       (!selectedTargetVerificationName || identity.name === selectedTargetVerificationName),
   );
+  const replacementCandidates = destinationIdentities.filter((identity) => ["deployed", "renewal_failed", "revoked"].includes(identity.status));
+  const renewingIdentities = destinationIdentities.filter((identity) => identity.status === "renewing");
 
   useEffect(() => {
     setValue("replace_identity_id", "");
@@ -352,6 +353,20 @@ export function EndpointBindingWorkflow({
                   </Select>
                 )}
               </Field>
+            ) : null}
+            {mode === "replace" && renewingIdentities.length > 0 ? (
+              <section aria-label={t("connectors.binding.renewingOriginals")} className="min-w-0 text-sm md:col-span-2">
+                <p>{t("connectors.binding.renewingOriginalHelp")}</p>
+                <ul className="mt-2 grid gap-2">
+                  {renewingIdentities.map((identity) => (
+                    <li key={identity.id}>
+                      <Link className="text-primary underline [overflow-wrap:anywhere]" to={`/identities?identity=${encodeURIComponent(identity.id)}`}>
+                        {t("connectors.binding.reviewRenewingOriginal", { name: identity.name, id: identity.id })}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </section>
             ) : null}
             <Field label={t("connectors.binding.owner")} description={t("connectors.binding.ownerHelp")} error={errors.owner_id?.message} required>
               {(field) => (

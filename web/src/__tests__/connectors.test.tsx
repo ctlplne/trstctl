@@ -569,6 +569,39 @@ describe("connector deployment disclosure surface", () => {
     expect(await screen.findByRole("heading", { name: "Work authorized" })).toBeInTheDocument();
   });
 
+  it("explains an in-flight renewal without allowing concurrent replacement or mixing destinations", async () => {
+    const user = userEvent.setup();
+    const original = { ...(await apiMock.identities())[0], id: "renewing-original", status: "renewing", attributes: { deployment_target_id: "target-1" } };
+    const ready = { ...original, id: "ready-original", status: "deployed" };
+    apiMock.identities.mockResolvedValue([
+      original,
+      ready,
+      { ...original, id: "another-destination", attributes: { deployment_target_id: "target-elsewhere" } },
+      { ...original, id: "another-dns-name", name: "unrelated.example.test" },
+      { ...original, id: "another-kind", kind: "ssh_certificate" },
+    ]);
+    renderConnectors();
+    await screen.findByRole("heading", { name: "Where credentials are installed" });
+    await user.click(screen.getByText("Destinations and safe actions", { exact: true }));
+    await screen.findByRole("heading", { name: "Name the endpoint" });
+    await user.selectOptions(screen.getByLabelText("Certificate action"), "replace");
+    await user.selectOptions(screen.getByLabelText("Destination"), "target-1");
+    const explanation = await screen.findByRole("region", { name: "Identities currently renewing" });
+    expect(explanation).toHaveTextContent("cannot be replaced while renewal is in progress");
+    expect(within(explanation).getByRole("link", { name: /Review renewal for payments.example.test — renewing-original/ })).toHaveAttribute(
+      "href",
+      "/identities?identity=renewing-original",
+    );
+    expect(within(explanation).getAllByRole("link")).toHaveLength(1);
+    const originals = within(screen.getByLabelText("Original identity"));
+    expect(originals.queryByRole("option", { name: /renewing-original/ })).not.toBeInTheDocument();
+    expect(originals.getByRole("option", { name: /ready-original/ })).toBeInTheDocument();
+    expect(apiMock.previewEndpointBinding).not.toHaveBeenCalled();
+    expect(apiMock.createEndpointBinding).not.toHaveBeenCalled();
+    await user.selectOptions(screen.getByLabelText("Certificate action"), "enroll");
+    expect(screen.queryByRole("region", { name: "Identities currently renewing" })).not.toBeInTheDocument();
+  });
+
   it("replaces an exact managed identity while retaining its owner and explicit CA choice", async () => {
     const user = userEvent.setup();
     const original = {

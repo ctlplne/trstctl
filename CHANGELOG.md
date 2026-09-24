@@ -2,6 +2,14 @@
 
 ### Fixed
 
+- Notification delivery details open at the heading, keeping the outcome visible
+  before operators tab through the dialog.
+- Certificate replacement explains when a matching identity is already renewing
+  and links to its lifecycle evidence without allowing concurrent replacement.
+- Certificate detail drawers keep populated lifecycle evidence and metadata
+  inside narrow and intermediate-width viewports.
+- Signer help identifies PCAS succession as core and the license option as the
+  gate for Enterprise managed-key providers.
 - SAML sign-in started from the console resumes the requested local page,
   including query filters and fragments. A signed, expiring context binds the
   destination to that login attempt; IdP-initiated login keeps its configured default.

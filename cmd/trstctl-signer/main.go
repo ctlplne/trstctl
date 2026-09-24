@@ -53,10 +53,9 @@ func main() {
 	mtlsPeerCA := flag.String("mtls-peer-ca", "", "PEM CA bundle that anchors the control plane's client certificate (required with --mtls-listen)")
 	mtlsPeerPin := flag.String("mtls-peer-pin", "", "hex SHA-256 of the control plane client certificate's public key, pinned both ways (required with --mtls-listen)")
 
-	// PCAS succession minting (ee/) is attached only when the license grants the
-	// PCAS feature (INT-02). Fail-closed: no --license, or a license without PCAS,
-	// means the signer mints no successions and MintSuccessor returns UNIMPLEMENTED.
-	licenseFile := flag.String("license", "", "path to the signed license file; enables PCAS succession minting only when the license grants the PCAS feature (fail-closed)")
+	// The tagged Enterprise seam uses the license for managed-key providers.
+	// Core family mechanisms, including PCAS succession, attach independently.
+	licenseFile := flag.String("license", "", "path to the signed license file for Enterprise managed-key providers (BYOK); PCAS succession is included in core")
 	licenseDeploymentID := flag.String("license-deployment-id", "", "stable deployment ID bound by a version 2 license")
 	licenseEnvironment := flag.String("license-environment", "", "licensed deployment environment: production or non_production")
 	flag.Parse()
@@ -94,8 +93,8 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Load the license (if provided) so the EE attach seam can gate PCAS minting on
-	// it. An absent license leaves lic nil => the signer mints no successions.
+	// Verify any supplied license before the Enterprise managed-key attach seam.
+	// An absent license leaves those providers unavailable; core families still attach.
 	var lic *license.Manager
 	if *licenseFile != "" {
 		m, err := loadSignerLicense(*licenseFile, license.DeploymentIdentity{

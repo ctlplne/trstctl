@@ -120,6 +120,15 @@ func TestSignerCLIArgumentBoundary(t *testing.T) {
 			} else if err != nil {
 				t.Fatalf("supported command refused: %v %s", err, stderr.String())
 			}
+			if tc.name == "help" {
+				help := stderr.String()
+				if !strings.Contains(help, "Enterprise managed-key providers (BYOK)") || !strings.Contains(help, "PCAS succession is included in core") {
+					t.Fatalf("help misstates the signer edition boundary: %s", help)
+				}
+				if strings.Contains(help, "license grants the PCAS feature") {
+					t.Fatal("help advertises the removed PCAS license feature")
+				}
+			}
 			entries, err := os.ReadDir(cmd.Dir)
 			if err != nil || len(entries) != 1 || entries[0].Name() != "daemon-test.exe" {
 				t.Fatalf("read-only command wrote files: entries=%v err=%v", entries, err)

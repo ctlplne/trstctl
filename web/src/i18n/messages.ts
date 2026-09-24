@@ -14090,6 +14090,19 @@ export const messages = {
     defaultMessage: "Select the original identity",
     description: "Explicit certificate replacement workflow: selectOriginal.",
   },
+  "connectors.binding.renewingOriginals": {
+    defaultMessage: "Identities currently renewing",
+    description: "Endpoint replacement explains matching identities excluded while renewal is in progress.",
+  },
+  "connectors.binding.renewingOriginalHelp": {
+    defaultMessage:
+      "These identities cannot be replaced while renewal is in progress. Review their current lifecycle work and recovery evidence, then refresh this page after renewal settles.",
+    description: "Safe recovery guidance without authorizing concurrent replacement.",
+  },
+  "connectors.binding.reviewRenewingOriginal": {
+    defaultMessage: "Review renewal for {name} — {id}",
+    description: "Open the exact renewing identity, distinguishing identical DNS names.",
+  },
   "connectors.binding.originalRequired": {
     defaultMessage: "Select the identity to replace.",
     description: "Explicit certificate replacement workflow: originalRequired.",

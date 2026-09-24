@@ -87,6 +87,39 @@ describe("Global Alert Center", () => {
     });
   });
 
+  it("opens delivery evidence at its heading and keeps keyboard focus inside the dialog", async () => {
+    const alert = {
+      id: "10466",
+      tenant_id: "t1",
+      destination: "notification.verification",
+      kind: "endpoint.unreachable",
+      subject: "database.example.test:5432",
+      status: "dead",
+      severity: "warning",
+      attempts: 10,
+      last_error: "notification_receipt_binding_conflict",
+      created_at: "2026-09-15T01:11:31Z",
+    };
+    apiMock.notifications.mockResolvedValue({ items: [alert] });
+    apiMock.notification.mockResolvedValue({ ...alert, deliveries: [] });
+    const user = userEvent.setup();
+    renderNotifications();
+    const opener = await screen.findByRole("button", { name: "Review details" });
+    await user.click(opener);
+    const dialog = await screen.findByRole("dialog", { name: "Notification 10466" });
+    const heading = within(dialog).getByRole("heading", { name: "Notification 10466" });
+    expect(heading).toHaveFocus();
+    expect(within(dialog).getByText("notification_receipt_binding_conflict")).toBeInTheDocument();
+    await user.tab();
+    const close = within(dialog).getByRole("button", { name: "Close" });
+    expect(close).toHaveFocus();
+    await user.tab();
+    expect(close).toHaveFocus();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(opener).toHaveFocus();
+  });
+
   it("makes the five operator jobs first-class and keeps a blank tenant honest", async () => {
     const user = userEvent.setup();
     renderNotifications();
