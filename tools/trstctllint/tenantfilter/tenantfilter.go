@@ -602,6 +602,7 @@ var sessionControlFuncs = []string{
 	"pg_try_advisory_lock_shared",
 	"pg_advisory_xact_lock",
 	"pg_advisory_xact_lock_shared",
+	"pg_try_advisory_xact_lock",
 	"pg_try_advisory_xact_lock_shared",
 	// pg_current_snapshot pins/returns only the current transaction's MVCC
 	// snapshot identifier. It does not read tenant rows.

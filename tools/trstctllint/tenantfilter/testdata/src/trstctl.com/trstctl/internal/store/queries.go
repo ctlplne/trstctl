@@ -39,16 +39,20 @@ const (
 	trySharedLock     = "SELECT pg_try_advisory_lock_shared($1)"
 	sharedXactLock    = "SELECT pg_advisory_xact_lock_shared($1)"
 	trySharedXactLock = "SELECT pg_try_advisory_xact_lock_shared($1)"
+	tryXactLock       = "SELECT pg_try_advisory_xact_lock($1)"
+	tryTenantXactLock = "SELECT pg_try_advisory_xact_lock(hashtextextended($1,0))"
 	snapshotPin       = "SELECT pg_current_snapshot()::text"
 	setTenant         = "SELECT set_config('trstctl.tenant_id', $1, true)"
 	regclass          = "SELECT to_regclass('public.schema_migrations') IS NOT NULL"
 
 	// An arbitrary SELECT function remains subject to AN-1. Exact reviewed
 	// PostgreSQL control functions must never become a generic function bypass.
-	arbitraryFunction     = "SELECT load_secret_without_tenant($1)"                  // want "does not filter on tenant_id"
-	controlNameLookalike  = "SELECT fake_pg_advisory_lock($1)"                       // want "does not filter on tenant_id"
-	snapshotNameLookalike = "SELECT fake_pg_current_snapshot()::text"                // want "does not filter on tenant_id"
-	controlWithTableRead  = "SELECT pg_advisory_lock($1) FROM secrets WHERE id = $2" // want "does not filter on tenant_id"
+	arbitraryFunction     = "SELECT load_secret_without_tenant($1)"                           // want "does not filter on tenant_id"
+	controlNameLookalike  = "SELECT fake_pg_advisory_lock($1)"                                // want "does not filter on tenant_id"
+	snapshotNameLookalike = "SELECT fake_pg_current_snapshot()::text"                         // want "does not filter on tenant_id"
+	controlWithTableRead  = "SELECT pg_advisory_lock($1) FROM secrets WHERE id = $2"          // want "does not filter on tenant_id"
+	tryXactLookalike      = "SELECT fake_pg_try_advisory_xact_lock($1)"                       // want "does not filter on tenant_id"
+	tryXactWithTableRead  = "SELECT pg_try_advisory_xact_lock($1) FROM secrets WHERE id = $2" // want "does not filter on tenant_id"
 
 	// ── Substring-evasion regressions (ARCH-003 / SEC-004 / TENANT-001) ──
 	// tenant_id is present in the TEXT but NOT in a predicate. The old rule
