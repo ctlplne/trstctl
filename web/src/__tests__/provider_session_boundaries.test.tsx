@@ -13,6 +13,9 @@ const beta = { ...alpha, id: "beta", slug: "beta", name: "Beta customer" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 let delayAdminRoster: (() => Promise<Response>) | undefined;
 let rejectProvision = false;
+let rejectSession = false;
+
+const authRecovery = /Your Provider sign-in could not be verified/;
 
 function renderProvider() {
   return render(
@@ -38,6 +41,7 @@ describe("Provider authentication boundaries with the real transport client", ()
     clearProviderToken();
     delayAdminRoster = undefined;
     rejectProvision = false;
+    rejectSession = false;
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string, init?: RequestInit) => {
@@ -47,6 +51,7 @@ describe("Provider authentication boundaries with the real transport client", ()
         if (url === "/provider/v1/auth/methods") return json({ methods: ["oidc"] });
         if (url === "/provider/v1/auth/logout") return new Response(null, { status: 204 });
         if (!token) return json({ detail: "Sign in again" }, 401);
+        if (token === "Bearer invalid" || rejectSession) return json({ detail: "private directory rejection detail" }, 401);
         if (url === "/provider/v1/auth/session")
           return json({
             id: admin ? "admin" : "limited",
@@ -88,6 +93,53 @@ describe("Provider authentication boundaries with the real transport client", ()
     await switchToLimitedOperator();
     expect(screen.queryByRole("option", { name: "Beta customer — beta" })).not.toBeInTheDocument();
     expect(providerToken()).toBe("limited");
+  });
+
+  it("explains a rejected sign-in after credential cleanup, then clears the notice after recovery", async () => {
+    renderProvider();
+    const field = await screen.findByLabelText("Operator bearer token");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    fireEvent.change(field, { target: { value: "invalid" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(authRecovery);
+    expect(screen.getByRole("alert")).toHaveTextContent(/fresh operator token/);
+    expect(screen.getByRole("alert")).toHaveTextContent(/Provider administrator/);
+    expect(screen.getByLabelText("Operator bearer token")).toHaveValue("");
+    expect(providerToken()).toBeNull();
+    expect(screen.queryByText(/private directory rejection detail/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("cell", { name: "Alpha customer" })).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Operator bearer token"), { target: { value: "limited" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    await screen.findByRole("cell", { name: "Alpha customer" });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    await screen.findByLabelText("Operator bearer token");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(providerToken()).toBeNull();
+  });
+
+  it("explains a session refusal while discarding the former operator's customers and credential", async () => {
+    setProviderToken("admin");
+    renderProvider();
+    await screen.findByRole("option", { name: "Beta customer — beta" });
+    rejectSession = true;
+    fireEvent(document, new Event("visibilitychange"));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(authRecovery);
+    expect(await screen.findByLabelText("Operator bearer token")).toHaveValue("");
+    expect(providerToken()).toBeNull();
+    expect(screen.queryByText("Beta customer")).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Beta customer — beta" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/private directory rejection detail/)).not.toBeInTheDocument();
+
+    rejectSession = false;
+    fireEvent.change(screen.getByLabelText("Operator bearer token"), { target: { value: "limited" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    await screen.findByRole("cell", { name: "Alpha customer" });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Beta customer — beta" })).not.toBeInTheDocument();
   });
 
   it("discards a previous operator's roster that finishes after the next operator signs in", async () => {

@@ -55,7 +55,7 @@ Read-only refuses mutations while retaining delegated reads.
 Open the console's **Provider** page (`/provider`). It offers the sign-in methods
 your deployment pinned: SAML redirects to your identity provider; OIDC accepts the
 bearer your identity provider issued to the operator (the lab's local provider shows
-it once on its sign-in page). The token is held in memory only. Signing out clears the Provider query cache, so the next operator cannot inherit customer or workforce records. A refused customer action preserves the current sign-in and form so you can fix delegation or MFA and retry; an expired or invalid credential returns to sign-in. `GET
+it once on its sign-in page). The token is held in memory only. Signing out clears the Provider query cache, so the next operator cannot inherit customer or workforce records. A refused customer action preserves the current sign-in and form so you can fix delegation or MFA and retry; an expired or invalid credential returns to sign-in with a recovery message and an empty token field. Use a fresh operator token or SAML when offered. If sign-in is still refused, ask your Provider administrator to check your access. The message does not expose credential or directory details; successful sign-in clears it, and intentional sign-out does not show it. `GET
 /provider/v1/auth/session` answers who you are and which role and MFA state the
 plane derived from the signed claims. It also reports the current effective
 controls from the license, role, MFA, customer delegation, and attached services.

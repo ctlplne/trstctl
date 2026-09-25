@@ -15173,6 +15173,11 @@ export const messages = {
     defaultMessage: "Operator bearer token",
     description: "L3: provider token field label.",
   },
+  "source.provider.login.refused.f2280001": {
+    defaultMessage:
+      "Your Provider sign-in could not be verified. Sign in again with a fresh operator token, or use SAML if offered. If the problem continues, ask your Provider administrator to check your access.",
+    description: "Generic recovery after rejected Provider sign-in or session expiry; never reveals directory or credential details.",
+  },
   "source.provider.signin.l3prov0004": {
     defaultMessage: "Sign in",
     description: "L3: provider sign-in button.",

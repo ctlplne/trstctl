@@ -178,8 +178,9 @@ export interface ProviderEvidenceVerification {
 }
 
 /** ProviderAuthError is thrown when no operator token is present or the plane
- * refuses the credential — the console renders the login gate rather than an
- * error banner, because "not signed in" is not a failure. */
+ * refuses the credential. An anonymous probe quietly keeps the login gate;
+ * a rejected sign-in or active session returns there with generic recovery
+ * guidance while discarding credentials and the former session cache. */
 export class ProviderAuthError extends Error {}
 
 export class ProviderApiError extends Error {

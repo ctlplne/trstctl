@@ -40,6 +40,17 @@ import {
  */
 export function Provider() {
   const [authed, setAuthed] = useState<boolean>(() => providerToken() !== null);
+  // Keep only the generic recovery reason outside the discarded session cache.
+  // Credentials, customer data and server rejection details never cross it.
+  const [authRefused, setAuthRefused] = useState(false);
+  const signIn = useCallback(() => {
+    setAuthRefused(false);
+    setAuthed(true);
+  }, []);
+  const signOut = useCallback((reason?: "authentication") => {
+    setAuthRefused(reason === "authentication");
+    setAuthed(false);
+  }, []);
   const availability = useApiQuery(["provider", "availability"], providerApi.availability);
 
   if (availability.loading) {
@@ -59,7 +70,7 @@ export function Provider() {
 
   return (
     <ProviderSessionQueries key={authed ? "operator" : "signed-out"}>
-      {authed ? <ProviderConsole onSignOut={() => setAuthed(false)} /> : <ProviderLogin onAuthed={() => setAuthed(true)} />}
+      {authed ? <ProviderConsole onSignOut={signOut} /> : <ProviderLogin onAuthed={signIn} authRefused={authRefused} />}
     </ProviderSessionQueries>
   );
 }
@@ -96,7 +107,7 @@ function ProviderAvailabilityState({ detail }: { detail: string }) {
   );
 }
 
-function ProviderLogin({ onAuthed }: { onAuthed: () => void }) {
+function ProviderLogin({ onAuthed, authRefused }: { onAuthed: () => void; authRefused: boolean }) {
   const [token, setToken] = useState("");
   const methods = useApiQuery(["provider", "auth-methods"], providerApi.authMethods);
   const session = useApiQuery(["provider", "session"], providerApi.session);
@@ -107,6 +118,11 @@ function ProviderLogin({ onAuthed }: { onAuthed: () => void }) {
     <main className="mx-auto max-w-lg p-comfortable">
       <h1 className="text-headline font-semibold">{translateNow("source.provider.console.l3prov0001")}</h1>
       <p className="mt-2 text-caption text-muted-foreground">{translateNow("source.provider.login.intro.l3prov0002")}</p>
+      {authRefused ? (
+        <p role="alert" className="mt-3 text-caption text-status-danger">
+          {translateNow("source.provider.login.refused.f2280001")}
+        </p>
+      ) : null}
       {(methods.data ?? []).includes("saml") ? (
         <Button type="button" className="mt-4 w-full" onClick={() => window.location.assign("/provider/v1/auth/saml/login")}>
           {translateNow("source.provider.saml.signin.aud580020")}
@@ -300,7 +316,7 @@ function BrandEditor({ tenantId, onSaved, onAuthError }: { tenantId: string; onS
   );
 }
 
-function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
+function ProviderConsole({ onSignOut }: { onSignOut: (reason?: "authentication") => void }) {
   const queryClient = useQueryClient();
   const session = useApiQuery(["provider", "session"], providerApi.session, { retry: false, live: { intervalMs: 15_000 } });
   // Never infer grants from the role name or a previous successful operation.
@@ -309,7 +325,7 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
   useEffect(() => {
     if (session.errorValue instanceof ProviderAuthError) {
       clearProviderToken();
-      onSignOut();
+      onSignOut("authentication");
     }
   }, [session.errorValue, onSignOut]);
   // A change in effective authority gets a separate read. A late response
@@ -329,7 +345,7 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
   useEffect(() => {
     if (customers.errorValue instanceof ProviderAuthError || activityQuery.errorValue instanceof ProviderAuthError) {
       clearProviderToken();
-      onSignOut();
+      onSignOut("authentication");
     }
   }, [customers.errorValue, activityQuery.errorValue, onSignOut]);
   const [error, setError] = useState<string | null>(null);
@@ -356,7 +372,7 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
     } catch (err) {
       if (err instanceof ProviderAuthError) {
         clearProviderToken();
-        onSignOut();
+        onSignOut("authentication");
         return;
       }
       setDrill(null);
@@ -376,7 +392,7 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
       } catch (err) {
         if (err instanceof ProviderAuthError) {
           clearProviderToken();
-          onSignOut();
+          onSignOut("authentication");
           return;
         }
         setQuotaView({ id, state: "error" });
@@ -402,7 +418,7 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
       } catch (err) {
         if (err instanceof ProviderAuthError) {
           clearProviderToken();
-          onSignOut();
+          onSignOut("authentication");
           return;
         }
         setError(err instanceof Error ? err.message : String(err));
@@ -460,7 +476,7 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
           canWrite={authority.access_write}
           onAuthError={() => {
             clearProviderToken();
-            onSignOut();
+            onSignOut("authentication");
           }}
         />
       ) : null}
@@ -469,7 +485,7 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
         tenants={tenants ?? []}
         onAuthError={() => {
           clearProviderToken();
-          onSignOut();
+          onSignOut("authentication");
         }}
       />
 
@@ -671,7 +687,7 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
                                 onSaved={(saved) => setQuotaView({ id: tenant.id, state: "ok", data: saved })}
                                 onAuthError={() => {
                                   clearProviderToken();
-                                  onSignOut();
+                                  onSignOut("authentication");
                                 }}
                               />
                             )}
@@ -688,7 +704,7 @@ function ProviderConsole({ onSignOut }: { onSignOut: () => void }) {
                               onSaved={() => setBrandFor(null)}
                               onAuthError={() => {
                                 clearProviderToken();
-                                onSignOut();
+                                onSignOut("authentication");
                               }}
                             />
                           </td>
