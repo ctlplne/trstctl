@@ -20,11 +20,17 @@ import (
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
-func RunGrantCommand(ctx context.Context, dsn string, natsConfig config.NATS, args []string, stdout, stderr io.Writer) error {
+// GrantCommandOptions keeps offline bootstrap aligned with the served identity
+// boundary. SCIM-enabled deployments require a provisioned directory identity.
+type GrantCommandOptions struct {
+	RequireDirectory bool
+}
+
+func RunGrantCommand(ctx context.Context, dsn string, natsConfig config.NATS, args []string, stdout, stderr io.Writer, options ...GrantCommandOptions) error {
 	fs := flag.NewFlagSet("provider-grant", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	var (
-		operator   = fs.String("operator", "", "operator id the grant is for")
+		operator   = fs.String("operator", "", "operator reference: signed IdP subject, SCIM userName, or canonical directory id")
 		customer   = fs.String("customer", "", "customer the grant is over: the tenant id, or the customer slug you will provision (its id is derived from the slug and printed)")
 		operations = fs.String("operations", "", "comma-separated operations: read,provision,suspend,resume,offboard,break-glass")
 		grantedBy  = fs.String("granted-by", "", "who issued this grant, recorded for audit")
@@ -90,10 +96,18 @@ func RunGrantCommand(ctx context.Context, dsn string, natsConfig config.NATS, ar
 	if err := runtime.Bootstrap(ctx); err != nil {
 		return fmt.Errorf("provider-grant: bootstrap authority history: %w", err)
 	}
+	requireDirectory := false
+	for _, option := range options {
+		requireDirectory = requireDirectory || option.RequireDirectory
+	}
+	operatorID, err := resolveGrantOperator(ctx, NewPGAccessStore(st), *operator, requireDirectory, *revoke)
+	if err != nil {
+		return err
+	}
 	mutations := make([]DelegationMutation, 0, len(ops))
 	for _, op := range ops {
 		mutations = append(mutations, DelegationMutation{
-			OperatorID: strings.TrimSpace(*operator), CustomerID: customerID,
+			OperatorID: operatorID, CustomerID: customerID,
 			Operation: op, GrantedBy: strings.TrimSpace(*grantedBy), ExpiresAt: expiry,
 		})
 	}
@@ -114,22 +128,62 @@ func RunGrantCommand(ctx context.Context, dsn string, natsConfig config.NATS, ar
 		typ, verb = EventDelegationRevoked, "revoked"
 	}
 	now := time.Now().UTC()
-	if _, err := runtime.Mutations.Append(ctx, strings.TrimSpace(*idemKey), typ, customerID,
+	canonical, err := runtime.Mutations.Append(ctx, strings.TrimSpace(*idemKey), typ, customerID,
 		AuthorityEvent{Delegations: mutations, EffectiveAt: now,
 			Audit: AuditEvent{Type: typ, TenantID: customerID,
-				OperatorID: strings.TrimSpace(*grantedBy), Subject: "provider-grant", At: now}}); err != nil {
+				OperatorID: strings.TrimSpace(*grantedBy), Subject: "provider-grant", At: now}})
+	if err != nil {
 		return fmt.Errorf("provider-grant: %w", err)
+	}
+	operatorID, err = grantResultOperator(canonical)
+	if err != nil {
+		return err
 	}
 	preposition := "to"
 	if *revoke {
 		preposition = "from"
 	}
 	if derived {
-		_, _ = fmt.Fprintf(stdout, "%s %s on customer %s (id %s, derived from the slug) %s %s\n", verb, *operations, strings.TrimSpace(*customer), customerID, preposition, *operator)
+		_, _ = fmt.Fprintf(stdout, "%s %s on customer %s (id %s, derived from the slug) %s %s\n", verb, *operations, strings.TrimSpace(*customer), customerID, preposition, operatorID)
 	} else {
-		_, _ = fmt.Fprintf(stdout, "%s %s on %s %s %s\n", verb, *operations, customerID, preposition, *operator)
+		_, _ = fmt.Fprintf(stdout, "%s %s on %s %s %s\n", verb, *operations, customerID, preposition, operatorID)
 	}
 	return nil
+}
+
+func resolveGrantOperator(ctx context.Context, directory OperatorDirectory, reference string, required, revoke bool) (string, error) {
+	reference = strings.TrimSpace(reference)
+	identity, err := directory.ResolveOperator(ctx, reference)
+	if errors.Is(err, ErrNotFound) && !required {
+		return reference, nil
+	}
+	if errors.Is(err, ErrNotFound) {
+		return "", fmt.Errorf("provider-grant: operator %q is not provisioned; provision the Provider SCIM identity before granting access: %w", reference, err)
+	}
+	if err != nil {
+		return "", fmt.Errorf("provider-grant: resolve operator: %w", err)
+	}
+	if !identity.Active && !revoke {
+		return "", fmt.Errorf("provider-grant: an inactive operator cannot receive authority: %w", ErrForbidden)
+	}
+	if strings.TrimSpace(identity.ID) == "" {
+		return "", errors.New("provider-grant: directory returned an empty operator id")
+	}
+	return identity.ID, nil
+}
+
+// A retry prints the operator in the original durable result, even if a mutable
+// directory alias has since changed. It never claims a fresh grant was made.
+func grantResultOperator(event events.Event) (string, error) {
+	var result AuthorityEvent
+	if err := json.Unmarshal(event.Data, &result); err != nil {
+		return "", fmt.Errorf("provider-grant: decode recorded authority: %w", err)
+	}
+	delegations := authorityDelegations(result)
+	if len(delegations) == 0 || strings.TrimSpace(delegations[0].OperatorID) == "" {
+		return "", errors.New("provider-grant: recorded authority has no operator")
+	}
+	return delegations[0].OperatorID, nil
 }
 
 // ResolveCustomerRef turns the operator's -customer value into the customer

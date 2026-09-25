@@ -81,8 +81,19 @@ trstctl provider-grant -operator op-1 -customer acme-robotics \
 
 An identical retry returns the same authority event; reusing the key with a
 different grant is refused. Every grant names one customer and the operations it
-covers; there is no wildcard customer. The operator id is the subject your
-identity provider signs (`sub`).
+covers; there is no wildcard customer. Pass the subject your identity provider
+signs (`sub`). When Provider SCIM is enabled, provision that employee first with
+the signed subject as their SCIM `externalId`. The command resolves the subject
+to the directory operator ID used by authentication and prints that effective ID.
+It also accepts the SCIM `userName` or canonical directory ID. Missing or inactive
+employees cannot receive new grants; an unreadable directory fails closed.
+Without SCIM, an unknown subject can still receive the initial bootstrap grant.
+
+Use `-revoke` with the same operator reference, customer and operations and a new
+idempotency key to remove authority. Revocation also works for an inactive
+directory identity. After correcting an older subject-based grant, use a new key
+and check `/provider/v1/auth/session` with that employee's token to confirm the
+intended customer authority.
 
 Retrying an old grant after revocation returns its original event without
 restoring access. Restoring access requires an explicitly authorized new grant

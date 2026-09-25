@@ -61,7 +61,8 @@ func eeLocalCommand(ctx context.Context, args []string, getenv func(string) stri
 	if err != nil {
 		return true, fmt.Errorf("configuration: %w", err)
 	}
-	return true, eeprovider.RunGrantCommand(ctx, cfg.Postgres.DSN, cfg.NATS, args[1:], stdout, stderr)
+	return true, eeprovider.RunGrantCommand(ctx, cfg.Postgres.DSN, cfg.NATS, args[1:], stdout, stderr,
+		eeprovider.GrantCommandOptions{RequireDirectory: cfg.Provider.SCIM.Enabled})
 }
 
 // attachEEProjectionOptions is the one-shot recovery twin of attachEE's
