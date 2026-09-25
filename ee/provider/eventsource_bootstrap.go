@@ -38,6 +38,18 @@ func (r *AuthorityRuntime) Bootstrap(ctx context.Context) error {
 	if r == nil || r.Projection == nil || r.Projection.store == nil || r.Mutations == nil || r.Mutations.log == nil {
 		return fmt.Errorf("provider: authority bootstrap requires store, log, projection, and mutation sink")
 	}
+	return withAuthorityFence(ctx, r.Projection.store, func(ctx context.Context) error {
+		// Capture all legacy rows before replay changes any of them. Capturing a
+		// revoked grant must not briefly project its earlier granted state.
+		captureCtx := context.WithValue(ctx, authorityBootstrapCaptureContext{}, true)
+		if err := r.captureLegacyAuthority(captureCtx); err != nil {
+			return err
+		}
+		return r.Projection.recoverOrdered(captureCtx, r.Mutations.log)
+	})
+}
+
+func (r *AuthorityRuntime) captureLegacyAuthority(ctx context.Context) error {
 	coverage := newAuthorityCoverage()
 	if err := r.Mutations.log.Replay(ctx, 0, func(event events.Event) error {
 		if !providerAuthorityEvent(event.Type) {

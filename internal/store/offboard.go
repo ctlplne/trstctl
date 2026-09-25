@@ -101,6 +101,8 @@ var TenantScopedTables = []string{
 	// revokes that customer's standing grants.
 	"provider_operator_delegations",
 	"provider_operators",
+	"provider_authority_projection_receipts", // same fixed Provider partition; no customer state or secret payload
+	"provider_authority_projection_state",    // upgrade/recovery status for the same fixed partition
 	// Independent tenant-scoped tables (no inbound RESTRICT foreign key).
 	// I2: ownership disagreements reference an owner_id. Listed BEFORE owners so
 	// the order stays correct if that reference ever becomes a real foreign key —

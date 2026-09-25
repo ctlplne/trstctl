@@ -720,6 +720,19 @@ func seedRecoveredFromPostgresTables(
 	// immutable Provider events. A customer-scoped transaction must not be able
 	// to forge or even see this authority.
 	if err := st.WithTenantProjection(ctx, store.ZeroUUID, func(tx pgx.Tx) error {
+		// Core restores the independent Provider snapshot before an EE projector
+		// is attached. Preserve completion identity and unresolved upgrade state,
+		// not just the authority rows or their counts.
+		if _, err := tx.Exec(ctx, `INSERT INTO provider_authority_projection_receipts
+			(tenant_id, event_sequence, event_id, event_digest) VALUES ($1, $2, $3, $4)`,
+			store.ZeroUUID, int64(77), "full-dr-provider-authority", strings.Repeat("7", 64),
+		); err != nil {
+			return fmt.Errorf("seed Provider completion receipt: %w", err)
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO provider_authority_projection_state
+			(tenant_id, needs_rebuild) VALUES ($1, true)`, store.ZeroUUID); err != nil {
+			return fmt.Errorf("seed Provider upgrade uncertainty: %w", err)
+		}
 		if _, err := tx.Exec(ctx, `INSERT INTO provider_operators
 			(tenant_id, id, external_id, user_name, email, display_name, role, active, source, created_at, updated_at)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)`,
@@ -817,6 +830,10 @@ type recoveredProviderState struct {
 	FirstApprover      string
 	SecondApprover     string
 	BreakGlassUseCount int
+	ReceiptSequence    int64
+	ReceiptEventID     string
+	ReceiptDigest      string
+	NeedsRebuild       bool
 }
 
 func providerRecoveryState(t *testing.T, st *store.Store) recoveredProviderState {
@@ -827,7 +844,9 @@ func providerRecoveryState(t *testing.T, st *store.Store) recoveredProviderState
 		        operator.id, operator.user_name, operator.source, operator.active,
 		        delegation.operation, delegation.source,
 		        bg.reason, bg.consented_by,
-		        COALESCE(bg.consented_by_2, ''), bg.use_count
+		        COALESCE(bg.consented_by_2, ''), bg.use_count,
+		        receipt.event_sequence, receipt.event_id, receipt.event_digest,
+		        projection_state.needs_rebuild
 		   FROM provider_tenants AS tenant
 		   JOIN provider_breakglass_grants AS bg ON bg.tenant_id = tenant.tenant_id
 		   JOIN provider_operators AS operator
@@ -836,12 +855,17 @@ func providerRecoveryState(t *testing.T, st *store.Store) recoveredProviderState
 		     ON delegation.tenant_id = $3
 		    AND delegation.operator_id = operator.id
 		    AND delegation.customer_tenant_id = tenant.tenant_id::text
+		   JOIN provider_authority_projection_receipts AS receipt
+		     ON receipt.tenant_id = $3 AND receipt.event_sequence = 77
+		   JOIN provider_authority_projection_state AS projection_state
+		     ON projection_state.tenant_id = $3
 		  WHERE tenant.tenant_id = $1 AND bg.id = $2`,
 		tenantA, "full-dr-breakglass", store.ZeroUUID).Scan(
 		&got.Slug, &got.Name, &got.Status,
 		&got.OperatorID, &got.OperatorUser, &got.OperatorSource, &got.OperatorActive,
 		&got.DelegatedOperation, &got.DelegationSource, &got.Reason,
 		&got.FirstApprover, &got.SecondApprover, &got.BreakGlassUseCount,
+		&got.ReceiptSequence, &got.ReceiptEventID, &got.ReceiptDigest, &got.NeedsRebuild,
 	)
 	if err != nil {
 		t.Fatalf("read provider recovery state: %v", err)

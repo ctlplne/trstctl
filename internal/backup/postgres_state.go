@@ -1225,6 +1225,10 @@ func postgresStateRestoreOrder() ([]string, error) {
 		// plane fails closed on whatever is missing — an absent grant reads as
 		// "request again with two approvers", never as silent emergency access.
 		"provider_breakglass_grants",
+		// Completion proof and legacy uncertainty cross the same atomic restore
+		// as the Provider authority rows they describe, even without EE attached.
+		"provider_authority_projection_receipts",
+		"provider_authority_projection_state",
 	}
 	if err := validatePostgresStateRestoreOrder(parentFirst); err != nil {
 		return nil, err

@@ -154,6 +154,13 @@ var RecoveredFromPostgresBackup = []string{
 	// grants did not come back". Failing safe is not the same as failing
 	// visibly.
 	"provider_operator_delegations",
+	// Provider's licensed projection can rebuild completion receipts and upgrade
+	// state from captured history. A full restore may initially run without that
+	// projection, so preserve them alongside the authority rows: losing receipts
+	// could let an old grant overwrite a restored revocation; losing upgrade
+	// uncertainty could bypass required legacy capture.
+	"provider_authority_projection_receipts",
+	"provider_authority_projection_state",
 	// L3: the durable provider tenant registry. RecoveredFromPostgresBackup, NOT
 	// a log projection — provisioning writes the row directly through the
 	// provider plane's pgstore; no event replays it. This table exists BECAUSE

@@ -84,6 +84,14 @@ different grant is refused. Every grant names one customer and the operations it
 covers; there is no wildcard customer. The operator id is the subject your
 identity provider signs (`sub`).
 
+Retrying an old grant after revocation returns its original event without
+restoring access. Restoring access requires an explicitly authorized new grant
+with a new idempotency key. The same ordering applies to operator deprovisioning
+and customer suspension: replay cannot undo a later decision. After a crash,
+the control plane recovers missing authority updates from retained events in
+sequence and commits the recovered state together with its completion records.
+If that history is unavailable, recovery fails rather than inventing authority.
+
 ### 4. Provision two customers
 
 From the Provider page (or `POST /provider/v1/tenants` with an `Idempotency-Key`),

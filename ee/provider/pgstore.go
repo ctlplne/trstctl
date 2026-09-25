@@ -47,7 +47,7 @@ var _ Store = (*PGStore)(nil)
 // The caller rechecks authority and current status while holding the fence,
 // then appends and projects the event before releasing it.
 func (p *PGStore) WithLifecycleMutation(ctx context.Context, fn func(context.Context) error) error {
-	return p.store.WithProjectionLock(ctx, fn)
+	return withAuthorityFence(ctx, p.store, fn)
 }
 
 func (p *PGStore) CountBillableTenants(ctx context.Context) (int, error) {

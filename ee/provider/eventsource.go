@@ -84,6 +84,7 @@ type MutationSink interface {
 
 type mutationKeyContext struct{}
 type mutationBindingContext struct{}
+type authorityBootstrapCaptureContext struct{}
 
 // ContextWithMutationKey carries the transport's required Idempotency-Key to
 // the provider command side. It stays out of payload structs so a caller cannot
@@ -116,6 +117,7 @@ type AuthorityRuntime struct {
 
 func NewAuthorityRuntime(st *corestore.Store, log *events.Log) *AuthorityRuntime {
 	projection := NewAuthorityProjection(st)
+	projection.log = log
 	return &AuthorityRuntime{
 		Projection:        projection,
 		Mutations:         NewEventMutationSink(log, projection),
@@ -148,9 +150,25 @@ func (s *EventMutationSink) Append(
 	tenantID string,
 	payload AuthorityEvent,
 ) (eventspec.Event, error) {
-	if s == nil || s.log == nil || s.projection == nil {
+	if s == nil || s.log == nil || s.projection == nil || s.projection.store == nil {
 		return eventspec.Event{}, errors.New("provider: durable event mutation sink is not configured")
 	}
+	if capture, _ := ctx.Value(authorityBootstrapCaptureContext{}).(bool); capture {
+		return s.appendLocked(ctx, idempotencyKey, typ, tenantID, payload, false)
+	}
+	var canonical eventspec.Event
+	err := withAuthorityFence(ctx, s.projection.store, func(ctx context.Context) error {
+		var err error
+		canonical, err = s.appendLocked(ctx, idempotencyKey, typ, tenantID, payload, true)
+		return err
+	})
+	return canonical, err
+}
+
+// The deployment projection lock orders concurrent Provider append/apply pairs
+// with bootstrap/rebuild. A source append can still survive a process crash;
+// completion receipts and ordered recovery handle that missing projection.
+func (s *EventMutationSink) appendLocked(ctx context.Context, idempotencyKey, typ, tenantID string, payload AuthorityEvent, project bool) (eventspec.Event, error) {
 	idempotencyKey = strings.TrimSpace(idempotencyKey)
 	tenantID = strings.TrimSpace(tenantID)
 	if idempotencyKey == "" || tenantID == "" || strings.TrimSpace(typ) == "" {
@@ -189,8 +207,17 @@ func (s *EventMutationSink) Append(
 			return eventspec.Event{}, ErrMutationConflict
 		}
 	}
-	if err := s.projection.Apply(ctx, canonical); err != nil {
-		return eventspec.Event{}, fmt.Errorf("%w: project %s: %v", ErrMutationPersistence, typ, err)
+	if project {
+		err := s.projection.Apply(ctx, canonical)
+		if errors.Is(err, ErrAuthorityRebuildRequired) {
+			err = s.projection.recoverOrdered(ctx, s.log)
+			if err == nil {
+				err = s.projection.Apply(ctx, canonical)
+			}
+		}
+		if err != nil {
+			return eventspec.Event{}, fmt.Errorf("%w: project %s: %v", ErrMutationPersistence, typ, err)
+		}
 	}
 	return canonical, nil
 }
@@ -201,6 +228,7 @@ func (s *EventMutationSink) Append(
 // rebuild the licensed views from the same log.
 type AuthorityProjection struct {
 	store *corestore.Store
+	log   *events.Log
 
 	mu        sync.Mutex
 	watermark uint64
@@ -216,12 +244,10 @@ func NewAuthorityProjection(st *corestore.Store) *AuthorityProjection {
 func (p *AuthorityProjection) Name() string { return "provider.authority" }
 
 func (p *AuthorityProjection) ReplayWatermark() uint64 {
-	if p == nil {
-		return 0
-	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.watermark
+	// Inline application can overtake an unrelated event in the tail. Only a
+	// durable per-event receipt proves completion; a process high-water mark
+	// must never cause core to skip an event that this projection has not applied.
+	return 0
 }
 
 // Reset erases only derived provider views. The immutable event history is not
@@ -248,7 +274,12 @@ func (p *AuthorityProjection) ResetTx(ctx context.Context, tx pgx.Tx) error {
 	if p == nil || p.store == nil {
 		return errors.New("provider: authority projection store is not configured")
 	}
+	if err := lockAuthorityProjectionTx(ctx, tx); err != nil {
+		return err
+	}
 	for _, statement := range []string{
+		//trstctl:system-query — completion receipts are derived and reset atomically with the Provider views they prove.
+		`DELETE FROM provider_authority_projection_receipts WHERE tenant_id = '` + providerAuthorityTenant + `'`,
 		//trstctl:system-query — edition projection reset rebuilds every provider customer before a tenant is selected; each table remains tenant-filtered on normal reads.
 		`DELETE FROM provider_operator_delegations WHERE tenant_id = '` + providerAuthorityTenant + `'`,
 		//trstctl:system-query — the fixed Provider authority tenant is restored only from immutable Provider events.
@@ -266,6 +297,11 @@ func (p *AuthorityProjection) ResetTx(ctx context.Context, tx pgx.Tx) error {
 			return err
 		}
 	}
+	//trstctl:system-query — only a reset joined to ordered replay clears the fixed Provider upgrade barrier.
+	if _, err := tx.Exec(ctx, `INSERT INTO provider_authority_projection_state (tenant_id, needs_rebuild)
+		VALUES ($1, false) ON CONFLICT (tenant_id) DO UPDATE SET needs_rebuild = false`, providerAuthorityTenant); err != nil {
+		return err
+	}
 	p.mu.Lock()
 	p.watermark = 0
 	p.mu.Unlock()
@@ -276,6 +312,20 @@ func (p *AuthorityProjection) Apply(ctx context.Context, event eventspec.Event) 
 	if p == nil || p.store == nil {
 		return errors.New("provider: authority projection store is not configured")
 	}
+	err := p.applyOne(ctx, event)
+	if errors.Is(err, ErrAuthorityRebuildRequired) && p.log != nil {
+		// The live tail can encounter an older event whose inline application
+		// crashed. Release its failed transaction before atomically recovering
+		// the retained prefix; never skip an event on a process watermark.
+		if err := p.recoverOrdered(ctx, p.log); err != nil {
+			return err
+		}
+		return p.applyOne(ctx, event)
+	}
+	return err
+}
+
+func (p *AuthorityProjection) applyOne(ctx context.Context, event eventspec.Event) error {
 	tx, err := p.store.SystemPool().Begin(ctx)
 	if err != nil {
 		return err
@@ -321,7 +371,21 @@ func (p *AuthorityProjection) ApplyTx(ctx context.Context, tx pgx.Tx, event even
 	if err := validateAuthorityEvent(event, payload); err != nil {
 		return err
 	}
+	if err := lockAuthorityProjectionTx(ctx, tx); err != nil {
+		return err
+	}
+	digest, err := authorityReceiptDigest(event)
+	if err != nil {
+		return err
+	}
+	completed, err := authorityEventCompletedTx(ctx, tx, event, digest)
+	if err != nil || completed {
+		return err
+	}
 	if err := applyAuthorityEventTx(ctx, tx, event, payload); err != nil {
+		return err
+	}
+	if err := recordAuthorityCompletionTx(ctx, tx, event, digest); err != nil {
 		return err
 	}
 	p.advance(event.Sequence)
