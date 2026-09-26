@@ -159,6 +159,32 @@ Automation uses `POST /provider/v1/tenants/{id}/resume` with its own
 that result without another state change. A new request for a customer that is
 not suspended returns409 `customer_state_conflict` after authorization.
 
+### Offboard a customer
+
+Offboarding deletes the customer's PostgreSQL read state and revokes its Provider
+delegations. It is not a dry run and cannot be undone with Resume. The append-only
+event log and audit archives follow their own retention policy; see the
+[Tenant offboarding boundary](../limitations.md#tenant-offboarding-boundary).
+
+Before deleting a customer, export the history and metering evidence you need,
+complete the intended certificate revocation and workload retirement, and verify
+the external results. Offboarding does not revoke certificates at upstream CAs
+or remove credentials already installed on external workloads. Complete those
+lifecycle actions while the customer still has service access.
+
+An administrator needs current MFA, a writable Provider entitlement, and that
+customer's separate `offboard` delegation. Emergency-access approvals do not authorize deletion.
+A `read`, `suspend`, or `break-glass` grant alone is insufficient.
+
+In **Customers**, choose **Offboard** and read the confirmation before accepting.
+Accepting submits the deletion immediately; the dialog is a confirmation, not a
+server-generated preview or an additional approval workflow. Automation sends
+`POST /provider/v1/tenants/{id}/offboard` with `{}` and an `Idempotency-Key`.
+Keep that key and the request reference for recovery. HTTP 204 records completed
+deletion; in **Recent activity**, check for **Deletion verified**. If work is still
+running or the response is lost, follow the recovery steps below instead of
+assuming that the customer was deleted.
+
 ### Recover an interrupted offboarding request
 
 A suspension or offboard attempt can return HTTP 503 `customer_work_in_progress` while
@@ -353,9 +379,10 @@ operations such as suspend or offboard.
   before any store write.
 - Name the other customer's tenant from an operator not delegated to it: the
   answer is the same refusal with no hint that the tenant exists.
-- An operator whose grant lacks `offboard` cannot offboard; offboarding is
-  preview-only until a break-glass grant is used, and that grant is re-checked at
-  use, not only at request time.
+- An operator whose grant lacks `offboard` cannot offboard, including one who
+  holds emergency-access approval. The server rechecks current lifecycle
+  authority before starting a new deletion. Do not use an authorized offboard
+  request as a harmless permission probe: it deletes the customer.
 - A license bound to a different deployment ID fails startup. An expired license
   retains its existing authority during the 30-day grace period and drops the plane to read-only afterward; neither state
   widens access.
