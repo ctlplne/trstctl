@@ -140,7 +140,7 @@ func TestAIModelFromConfigPIIEgressPolicy(t *testing.T) {
 }
 
 func TestServedAIStatusReportsDisabledAndConfiguredPosture(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "graph:read")
 	statusCode, body := aiReq(t, h, http.MethodGet, "/api/v1/ai/status", tok, nil)
 	if statusCode != http.StatusOK {
@@ -160,7 +160,7 @@ func TestServedAIStatusReportsDisabledAndConfiguredPosture(t *testing.T) {
 		t.Fatalf("bad disabled status: %+v body %s", disabled, body)
 	}
 
-	h = newServedHarness(t, config.Protocols{}, withAIEnabled(), func(d *Deps) {
+	h = newOperatingServedHarness(t, config.Protocols{}, withAIEnabled(), func(d *Deps) {
 		d.AIModel = aimodel.New(servedStatusModel{}, nil)
 		d.AIModelStatus = api.AIModelStatus{
 			Mode:         config.AIModelLocal,

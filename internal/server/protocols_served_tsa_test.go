@@ -26,7 +26,7 @@ import (
 func TestServedTSAOpenSSLTimestampOverHTTP(t *testing.T) {
 	ossl := requireOpenSSLTSServer(t)
 	dir := t.TempDir()
-	h := newServedHarness(t, config.Protocols{
+	h := newOperatingServedHarness(t, config.Protocols{
 		TSA:         config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 		TSACertFile: filepath.Join(dir, "tsa.crt"),
 	})
@@ -109,7 +109,7 @@ func TestServedTSAOpenSSLTimestampOverHTTP(t *testing.T) {
 
 func TestServedTSAQualificationMatchesEvalActivationGate(t *testing.T) {
 	dir := t.TempDir()
-	h := newServedHarness(t, config.Protocols{
+	h := newOperatingServedHarness(t, config.Protocols{
 		TSA:         config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 		TSACertFile: filepath.Join(dir, "tsa.crt"),
 	})

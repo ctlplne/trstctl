@@ -49,10 +49,10 @@ func (o *Orchestrator) RequestFirstIssuanceRetry(ctx context.Context, tenantID, 
 		}
 		// A lost SQL commit after append is completed from the retained grant.
 		// Its original attempt fence prevents a later replay from refunding it.
-		err = o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error { return o.proj.ApplyTx(ctx, tx, retained) })
+		err = o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error { return o.proj.ApplyTx(ctx, tx, retained) })
 		return receipt, err
 	}
-	err = o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err = o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		command, err := o.store.FirstIssuanceRetryCommandTx(ctx, tx, tenantID, identityID, requestKey, true)
 		if err != nil {
 			return err

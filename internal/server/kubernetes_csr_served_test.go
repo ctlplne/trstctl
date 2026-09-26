@@ -104,7 +104,7 @@ func TestServedKubernetesPostureReportUsesAuthenticatedAgentEventProjection(t *t
 }
 
 func TestServedKubernetesCertificateSigningRequestCAPK8S04(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "certs:read")
 
 	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/kubernetes/certificate-signing-requests", tok, nil)

@@ -293,7 +293,21 @@ func (s *Store) ClaimAgentJobs(ctx context.Context, tenantID, agentID string, de
 			}
 			out = append(out, job)
 		}
-		return rows.Err()
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		// Preserve each exact recipient before returning its payload. Lease
+		// reclamation may clear the current holder, but cannot erase authority
+		// to report that this original remote executor has stopped.
+		for _, job := range out {
+			if _, err := tx.Exec(ctx, `INSERT INTO agent_job_attempt_bindings
+			 (tenant_id, job_id, attempt, agent_id, destination) VALUES ($1,$2,$3,$4,$5)`,
+				tenantID, job.ID, job.ClaimAttempts, agentID, job.Destination); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	return out, err
 }

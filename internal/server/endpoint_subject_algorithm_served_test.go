@@ -147,7 +147,7 @@ func TestEndpointSubjectChoiceRefusesUnsupportedAndDisallowedAlgorithms(t *testi
 		{"profile excludes subject", "ML-DSA-65", true, true, http.StatusUnprocessableEntity},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+			h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 				withAgentChannel(d)
 				d.AgentClaimableJobKinds = []string{"endpoint.renew", "connector.deploy"}
 				if tc.denyProfile {
@@ -220,7 +220,7 @@ func TestEndpointReplacementRetainsReviewedSubjectAlgorithm(t *testing.T) {
 			name = "omitted-preserves-original"
 		}
 		t.Run(name, func(t *testing.T) {
-			h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+			h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 				withAgentChannel(d)
 				d.AgentClaimableJobKinds = []string{"endpoint.renew"}
 			})
@@ -344,7 +344,7 @@ func TestEndpointReplacementRetainsReviewedSubjectAlgorithm(t *testing.T) {
 func TestEndpointPreviewRefusesInvalidSavedSubjectIntent(t *testing.T) {
 	for _, raw := range []string{`{"subject_key_algorithm":null}`, `{"subject_key_algorithm":""}`} {
 		t.Run(raw, func(t *testing.T) {
-			h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+			h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 				withAgentChannel(d)
 				d.AgentClaimableJobKinds = []string{"endpoint.renew"}
 			})

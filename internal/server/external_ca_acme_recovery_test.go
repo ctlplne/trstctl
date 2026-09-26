@@ -103,7 +103,7 @@ func TestServedExternalACMERecoveryRequiresUnsubmittedFinalization(t *testing.T)
 				t.Fatal(err)
 			}
 			t.Cleanup(plugin.Destroy)
-			h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+			h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 				d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
 				d.ExternalCAs = []ExternalCA{{ID: "recovery-boundary", Type: "letsencrypt", CA: plugin}}
 			})

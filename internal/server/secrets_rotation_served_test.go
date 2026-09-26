@@ -144,7 +144,7 @@ func TestServedConnectorSecretRotationPreviewF37IsExactAndEffectFree(t *testing.
 // implementation must move those phases behind one durable worker receiver.
 func TestServedManualStaticSecretRotationFailsClosedBeforeProviderEffect(t *testing.T) {
 	rotator := &countingRotationRotator{}
-	h := newServedHarness(t, config.Protocols{},
+	h := newOperatingServedHarness(t, config.Protocols{},
 		withSecretsEnabled(t, nil),
 		func(d *Deps) {
 			d.SecretRotators = map[string]rotation.Rotator{"postgresql": rotator}
@@ -208,7 +208,7 @@ func TestServedScheduledStaticSecretRotationFailsClosedBeforeProviderEffect(t *t
 		t.Fatal(err)
 	}
 
-	h := newServedHarness(t, config.Protocols{},
+	h := newOperatingServedHarness(t, config.Protocols{},
 		withSecretsEnabled(t, nil),
 		func(d *Deps) {
 			d.SecretRotators = map[string]rotation.Rotator{"postgresql": rotator}

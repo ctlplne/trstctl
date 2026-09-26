@@ -76,7 +76,7 @@ func (o *Orchestrator) EnsureEndpointReplacementWithProfile(ctx context.Context,
 	if err := store.ValidateEndpointReplacementSource(reviewed, created.Name, target.ID); err != nil {
 		return store.Identity{}, err
 	}
-	err = o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err = o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		original, currentVersion, err := o.store.IdentityApprovalTargetTx(ctx, tx, tenantID, reviewed.ID, true)
 		if err != nil {
 			return err

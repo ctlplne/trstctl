@@ -35,7 +35,7 @@ func TestServedPartialCloudSecretRunNamesTheFailedProvider(t *testing.T) {
 	t.Setenv("TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY", "SECRET")
 	t.Setenv("TRSTCTL_DISCOVERY_GCP_SM_TOKEN", "gcp-token")
 
-	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
 		d.OutboundEnvCredentialRefs = []string{
 			"env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID",
 			"env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY",

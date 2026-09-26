@@ -12,7 +12,7 @@ import (
 )
 
 func TestServedPolicyDryRunWorkbenchTRACE009(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedTokenSubject(t, h.store, h.tenant, "policy-author@example.test", "policy:write")
 
 	body := map[string]any{

@@ -25,7 +25,7 @@ import (
 // a served test prevents a future storage-only repair from making the same false
 // claim again.
 func TestServedOwnershipDepthRoundTripsAUD44(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	token := seedScopedTokenSubject(t, h.store, h.tenant, "ownership-admin@example.test",
 		"owners:read", "owners:write")
 
@@ -70,7 +70,7 @@ func TestServedOwnershipDepthRoundTripsAUD44(t *testing.T) {
 // cannot see or revoke it, and cold replay reconstructs the evidence.
 func TestServedOwnershipReadinessEnforcementAUD44(t *testing.T) {
 	const cadence = time.Second
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.OwnershipAttestationCadence = cadence
 	})
 	ctx := context.Background()
@@ -200,9 +200,7 @@ func TestServedOwnershipReadinessEnforcementAUD44(t *testing.T) {
 	}
 
 	const tenantB = "22222222-2222-2222-2222-222222222244"
-	if err := h.store.UpsertTenant(ctx, store.Tenant{TenantID: tenantB, Name: "AUD-44 neighbor"}); err != nil {
-		t.Fatal(err)
-	}
+	registerServedTenantID(t, h, tenantB, "AUD-44 neighbor")
 	tokenB := seedScopedTokenSubject(t, h.store, tenantB, "neighbor@example.test", "owners:read", "owners:write")
 	status, body = secretsReqKey(t, h, http.MethodGet,
 		"/api/v1/identities/"+exceptionIdentityID+"/ownership-exceptions", tokenB, "", nil)

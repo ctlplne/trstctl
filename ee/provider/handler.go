@@ -255,6 +255,7 @@ type providerResponseCapture struct {
 	header http.Header
 	status int
 	body   bytes.Buffer
+	err    error
 }
 
 func newProviderResponseCapture() *providerResponseCapture {
@@ -310,12 +311,22 @@ func (h *handler) serveIdempotentMutation(w http.ResponseWriter, r *http.Request
 	ctx := ContextWithMutationKey(r.Context(), key)
 	ctx = contextWithMutationBinding(ctx, binding)
 	idempotencyTenant := h.mutationTenant(r, body)
+	receiptKey := key
+	if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/offboard") {
+		// Offboarding erases customer-scoped idempotency rows. Keep its HTTP
+		// receipt in the fixed Provider partition, namespaced by customer and
+		// raw key. The immutable event receiver still gets the original key.
+		// Never borrow an old customer-scoped status-only response as proof of
+		// a new durable erase; this versioned namespace starts independently.
+		receiptKey = "provider.offboard.result.v1/" + crypto.SHA256Hex([]byte(idempotencyTenant+"\x00"+key))
+		idempotencyTenant = corestore.ZeroUUID
+	}
 	// A key binds its FIRST outcome, refusals included, so an operator who fixes
 	// the cause and retries with the same key gets the recorded refusal back.
 	// Say so: a replayed answer carries Idempotent-Replayed so the operator knows
 	// to retry with a new key instead of re-checking the fix.
 	executed := false
-	encoded, err := h.idem.DoDurableEffectBound(ctx, idempotencyTenant, key, binding,
+	encoded, err := h.idem.DoDurableEffectBound(ctx, idempotencyTenant, receiptKey, binding,
 		func(runCtx context.Context) ([]byte, error) {
 			executed = true
 			request := r.Clone(runCtx)
@@ -327,6 +338,9 @@ func (h *handler) serveIdempotentMutation(w http.ResponseWriter, r *http.Request
 				status = http.StatusOK
 			}
 			if status >= http.StatusInternalServerError {
+				if errors.Is(capture.err, corestore.ErrTenantServiceBusy) || errors.Is(capture.err, corestore.ErrDatastoreBusy) {
+					return nil, capture.err
+				}
 				return nil, fmt.Errorf("%w: handler returned %d: %s", ErrMutationPersistence,
 					status, strings.TrimSpace(capture.body.String()))
 			}
@@ -631,7 +645,25 @@ func (h *handler) updateTenant(w http.ResponseWriter, r *http.Request, status Te
 	case TenantSuspended:
 		err = h.svc.Suspend(r.Context(), op, tenantID)
 	case TenantOffboarded:
-		err = h.svc.Offboard(r.Context(), op, tenantID)
+		var input struct {
+			RequestEventID string `json:"request_event_id"`
+		}
+		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
+		if decodeErr := decoder.Decode(&input); decodeErr != nil && !errors.Is(decodeErr, io.EOF) {
+			writeProviderError(w, decodeErr)
+			return
+		}
+		var trailing any
+		if decodeErr := decoder.Decode(&trailing); !errors.Is(decodeErr, io.EOF) {
+			writeProviderError(w, errors.New("provider: offboard expects one JSON object"))
+			return
+		}
+		if input.RequestEventID != "" {
+			err = h.svc.ContinueOffboard(r.Context(), op, tenantID, input.RequestEventID)
+		} else {
+			err = h.svc.Offboard(r.Context(), op, tenantID)
+		}
 	default:
 		err = ErrForbidden
 	}
@@ -975,9 +1007,15 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 }
 
 func writeProviderError(w http.ResponseWriter, err error) {
+	if capture, ok := w.(*providerResponseCapture); ok {
+		capture.err = err
+	}
 	status := http.StatusBadRequest
 	code := "bad_request"
 	switch {
+	case errors.Is(err, corestore.ErrTenantServiceBusy), errors.Is(err, corestore.ErrDatastoreBusy):
+		status, code = http.StatusServiceUnavailable, "customer_work_in_progress"
+		w.Header().Set("Retry-After", "1")
 	case errors.Is(err, ErrTenantBandExhausted):
 		status, code = http.StatusForbidden, CodeTenantBandExhausted
 	case errors.Is(err, ErrForbidden), errors.Is(err, ErrBreakGlassNotConsented), errors.Is(err, ErrBreakGlassWrongOperator), errors.Is(err, ErrBreakGlassExpired):
@@ -1009,6 +1047,9 @@ func writeProviderError(w http.ResponseWriter, err error) {
 }
 
 func retryAfterSeconds(err error) int {
+	if errors.Is(err, corestore.ErrTenantServiceBusy) || errors.Is(err, corestore.ErrDatastoreBusy) {
+		return 1
+	}
 	if errors.Is(err, ErrTenantBandExhausted) {
 		return 0
 	}

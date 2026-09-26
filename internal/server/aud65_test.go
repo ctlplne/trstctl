@@ -22,7 +22,7 @@ func TestAUD65ServedReadinessActionAndSignedExportShareProductionDataset(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) { d.AuditSigningKey = signingKey })
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) { d.AuditSigningKey = signingKey })
 	ctx := context.Background()
 	projector := projections.New(h.store)
 	base := time.Date(2026, time.August, 13, 13, 15, 0, 0, time.UTC)

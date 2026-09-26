@@ -207,7 +207,7 @@ func TestServedReferenceWASMCAAndConnectorPluginsIssueAndDeploy(t *testing.T) {
 	caDir := writePluginDir(t, "reference-ca", caWASMFor(workdir), sign)
 	connectorDir := writePluginDir(t, "reference-connector", connectorWASMFor(workdir), sign)
 
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
 		d.Plugins = PluginConfig{
 			CADir:           caDir,

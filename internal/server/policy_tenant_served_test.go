@@ -28,9 +28,7 @@ func TestServedPolicyTenantIsolationAndReplicaRecovery(t *testing.T) {
 	owners := map[string]string{}
 	tokens := map[string]string{}
 	for _, tenant := range []string{h.tenant, other} {
-		if err := h.store.UpsertTenant(ctx, store.Tenant{TenantID: tenant, Name: tenant}); err != nil {
-			t.Fatal(err)
-		}
+		registerServedTenantID(t, h, tenant, tenant)
 		storeServerTestProfile(t, h.store, tenant, "tls-server", profile.CertificateProfile{Name: "tls-server", AllowedEKUs: []string{"serverAuth"}, MaxValidity: profile.Duration(24 * time.Hour), AllowedProtocols: []string{"api"}})
 		owner, err := h.store.CreateOwner(ctx, store.Owner{TenantID: tenant, Kind: store.OwnerWorkload, Name: "local-service"})
 		if err != nil {

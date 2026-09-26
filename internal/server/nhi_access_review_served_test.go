@@ -15,7 +15,7 @@ import (
 )
 
 func TestServedNHIAccessReviewCAPGOV02EndToEnd(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedTokenSubject(t, h.store, h.tenant, "iga-reviewer", "access:read", "access:write")
 
 	campaignID := "44444444-4444-4444-8444-444444444444"

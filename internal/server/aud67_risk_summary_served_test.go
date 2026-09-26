@@ -21,7 +21,7 @@ import (
 // discovery is critical, the headline is non-zero, and the same immutable
 // finding creates exactly one operator notification.
 func TestAUD67ServedCanonicalRiskSummaryAndAlert(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	ctx := context.Background()
 	const (
 		sourceID = "00000000-0000-4000-8000-000000006721"
@@ -118,9 +118,7 @@ func TestAUD67ServedCanonicalRiskSummaryAndAlert(t *testing.T) {
 
 	// The exact same routes under another authenticated tenant must not see the
 	// first tenant's critical projection or durable alert (AN-1).
-	if err := h.store.UpsertTenant(ctx, store.Tenant{TenantID: otherID, Name: "Other"}); err != nil {
-		t.Fatalf("create isolation tenant: %v", err)
-	}
+	registerServedTenantID(t, h, otherID, "Other")
 	otherToken := seedScopedToken(t, h.store, otherID, "risk:read", "notifications:read")
 	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/risk/contextual-priorities", otherToken, nil)
 	if status != http.StatusOK {

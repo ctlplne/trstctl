@@ -792,11 +792,25 @@ func incompleteResultError(status string) error {
 	return ErrInProgress
 }
 
+// Internal deletion receivers are created only by the typed core lifecycle
+// command, never by caller-supplied HTTP/protocol keys. Reserving their namespace
+// at every public recorder/lookup boundary prevents an ordinary mutation from
+// forging the admission barrier or borrowing an internal command's result.
+func validateApplicationIdempotencyKey(key string) error {
+	if strings.HasPrefix(key, store.TenantOffboardReceiverKeyPrefix) {
+		return fmt.Errorf("%w: key belongs to an internal lifecycle command", ErrIdempotencyConflict)
+	}
+	return nil
+}
+
 // Do runs fn at most once per (tenantID, key). The first caller for a key claims
 // it, runs fn, and records the result; every later caller — a retry or a
 // concurrent identical request — receives that recorded result. It is the
 // unbound form of DoBound and shares its claim, wait and record protocol.
 func (i *Idempotency) Do(ctx context.Context, tenantID, key string, fn func(context.Context) ([]byte, error)) ([]byte, error) {
+	if err := validateApplicationIdempotencyKey(key); err != nil {
+		return nil, err
+	}
 	if i == nil {
 		return nil, errors.New("orchestrator: idempotency store is not configured")
 	}
@@ -828,6 +842,9 @@ func (i *Idempotency) Do(ctx context.Context, tenantID, key string, fn func(cont
 // the caller then proceeds under its current key, and the underlying claim
 // machinery keeps its own guarantees.
 func (i *Idempotency) LookupBound(ctx context.Context, tenantID, key, binding string) ([]byte, bool, error) {
+	if err := validateApplicationIdempotencyKey(key); err != nil {
+		return nil, false, err
+	}
 	if i == nil || tenantID == "" || key == "" || binding == "" {
 		return nil, false, nil
 	}
@@ -900,6 +917,9 @@ func (i *Idempotency) LookupBound(ctx context.Context, tenantID, key, binding st
 // claim indeterminate instead of releasing it, so a retry cannot re-execute a
 // command whose effect already committed (DP2-049).
 func (i *Idempotency) DoBound(ctx context.Context, tenantID, key, binding string, fn func(context.Context) ([]byte, error)) ([]byte, error) {
+	if err := validateApplicationIdempotencyKey(key); err != nil {
+		return nil, err
+	}
 	if i == nil {
 		return nil, errors.New("orchestrator: idempotency store is not configured")
 	}
@@ -963,6 +983,9 @@ func (i *Idempotency) PrepareTenantRegistrationTx(
 	tx pgx.Tx,
 	tenantID, key, binding, candidateEventID string,
 ) (TenantRegistrationIdempotencyClaim, error) {
+	if err := validateApplicationIdempotencyKey(key); err != nil {
+		return TenantRegistrationIdempotencyClaim{}, err
+	}
 	if i == nil || i.store == nil || tx == nil {
 		return TenantRegistrationIdempotencyClaim{}, errors.New("orchestrator: transactional idempotency store is not configured")
 	}
@@ -1207,6 +1230,9 @@ func (i *Idempotency) doBoundMemory(
 // recording its result. A normal in-process API mutation must keep using Do so its
 // database state and idempotency record commit atomically.
 func (i *Idempotency) DoDurableEffect(ctx context.Context, tenantID, key string, fn func(context.Context) ([]byte, error)) ([]byte, error) {
+	if err := validateApplicationIdempotencyKey(key); err != nil {
+		return nil, err
+	}
 	if i == nil {
 		return nil, errors.New("orchestrator: idempotency store is not configured")
 	}
@@ -1307,6 +1333,9 @@ func (i *Idempotency) DoDurableEffect(ctx context.Context, tenantID, key string,
 // receiver; the receiver must collapse them to one effect. Only the first
 // completed HTTP result becomes authoritative.
 func (i *Idempotency) DoDurableEffectBound(ctx context.Context, tenantID, key, binding string, fn func(context.Context) ([]byte, error)) ([]byte, error) {
+	if err := validateApplicationIdempotencyKey(key); err != nil {
+		return nil, err
+	}
 	if i == nil {
 		return nil, errors.New("orchestrator: idempotency store is not configured")
 	}
@@ -1472,6 +1501,9 @@ func (i *Idempotency) DoPreparedDurableEffectBound(
 	verifyTerminal func(context.Context, pgx.Tx, []byte) error,
 	fn func(context.Context) ([]byte, error),
 ) ([]byte, error) {
+	if err := validateApplicationIdempotencyKey(key); err != nil {
+		return nil, err
+	}
 	if i == nil || i.store == nil {
 		return nil, errors.New("orchestrator: prepared durable idempotency requires PostgreSQL")
 	}
@@ -1591,6 +1623,9 @@ func (i *Idempotency) DoPreparedDurableEffectBound(
 // attempt may release its claim for retry; an uncertain release stays fenced.
 // Generic errors, partial output and process crashes never grant this exception.
 func (i *Idempotency) DoAtMostOnceEffect(ctx context.Context, tenantID, key string, fn func(context.Context) ([]byte, error)) ([]byte, error) {
+	if err := validateApplicationIdempotencyKey(key); err != nil {
+		return nil, err
+	}
 	if i == nil {
 		return nil, errors.New("orchestrator: idempotency store is not configured")
 	}
@@ -1740,6 +1775,9 @@ func (i *Idempotency) DoAtMostOnceEffect(ctx context.Context, tenantID, key stri
 // wait for the outbox worker to complete the external side effect. A row with a
 // non-empty authenticated request binding is deliberately opaque to this method.
 func (i *Idempotency) Result(ctx context.Context, tenantID, key string) ([]byte, error) {
+	if err := validateApplicationIdempotencyKey(key); err != nil {
+		return nil, err
+	}
 	if i == nil {
 		return nil, errors.New("orchestrator: idempotency store is not configured")
 	}
@@ -1827,6 +1865,9 @@ func (i *Idempotency) BoundResultCompleted(
 	ctx context.Context,
 	tenantID, key, binding string,
 ) (bool, error) {
+	if err := validateApplicationIdempotencyKey(key); err != nil {
+		return false, err
+	}
 	if i == nil || tenantID == "" || key == "" || binding == "" {
 		return false, errors.New("orchestrator: bound completion check requires tenant, key, and request binding")
 	}
@@ -1889,6 +1930,9 @@ func (i *Idempotency) BoundResultCompleted(
 // this method never opens a legacy unbound result: callers must consciously pick
 // the replay contract that created the row.
 func (i *Idempotency) BoundResult(ctx context.Context, tenantID, key, binding string) ([]byte, error) {
+	if err := validateApplicationIdempotencyKey(key); err != nil {
+		return nil, err
+	}
 	if i == nil || tenantID == "" || key == "" || binding == "" {
 		return nil, errors.New("orchestrator: bound result requires tenant, key, and request binding")
 	}

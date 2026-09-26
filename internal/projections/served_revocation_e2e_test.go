@@ -34,7 +34,7 @@ func TestServedRevocationOCSPAndCRLReflectsRevocation(t *testing.T) {
 		t.Skip("assembles the control plane with a real signer child; skipped in -short")
 	}
 	st := newStore(t)
-	log := openLog(t)
+	log := openRegisteredTenantLog(t)
 	prov, stop := startSignerChild(t)
 	defer stop()
 
@@ -164,7 +164,7 @@ func TestServedOCSPAndCRLOverHTTP(t *testing.T) {
 		t.Skip("assembles the control plane with a real signer child; skipped in -short")
 	}
 	st := newStore(t)
-	log := openLog(t)
+	log := openRegisteredTenantLog(t)
 	prov, stop := startSignerChild(t)
 	defer stop()
 

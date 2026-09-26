@@ -702,11 +702,9 @@ func report(ctx context.Context, ch Channel, job Job, outcome, detail string) {
 // signed. Every other kind still passes "" — an empty digest means no
 // transcript was kept, which is the honest value for work that produced none.
 func reportWithEvidence(ctx context.Context, ch Channel, job Job, outcome, detail, evidence string) {
-	// A failed report is not retried here: the claim lease is the safety net.
-	// If the control plane never hears, the lease lapses and the work returns.
-	// The outcome of the report is logged, though: a rejected report used to
-	// vanish, and a job whose result is refused every time re-executes on
-	// every poll — for a host issuance that means a new certificate each time.
+	// The shipping channel performs bounded retries of the same signed terminal
+	// report. Log any remaining failure: lease expiry may re-offer the work, but
+	// does not prove that the original external effect stopped or was recorded.
 	accepted, err := ch.ReportJobResult(ctx, job.JobID, job.Attempt, outcome, detail, evidence)
 	logReportOutcome(job, outcome, accepted, err)
 }

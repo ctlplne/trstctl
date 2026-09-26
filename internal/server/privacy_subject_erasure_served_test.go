@@ -246,6 +246,7 @@ func TestBuildAutonomouslyCompletesPreparedPrivacyErasureBeforeRestore(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
+	registerServerTestTenant(t, st, log, tenantID, "privacy-restart")
 	generation, err := log.ActiveGeneration(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -723,6 +724,7 @@ func TestServedPrivacyErasureDurableReceiverSurvivesRacesRetentionAndIdempotency
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}
+	registerServerTestTenant(t, st, log, tenantID, "acme")
 	srv, err := Build(ctx, Deps{Store: st, Log: log, AuditSigningKey: auditKey})
 	if err != nil {
 		_ = log.Close()

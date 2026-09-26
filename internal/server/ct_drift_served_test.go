@@ -27,7 +27,7 @@ import (
 func TestServedCTMonitoringAndDriftWorkers(t *testing.T) {
 	secret := []byte("served-ct-drift-webhook-test-secret")
 	sink := newServedWebhookSink(t, secret)
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.NotificationChannels = []notify.Notifier{
 			webhook.New(sink.URL(), secret, webhook.WithHTTPClient(sink.Client())),
 		}
@@ -103,7 +103,7 @@ func TestServedCTMonitoringAndDriftWorkers(t *testing.T) {
 // contract. Previewing it must not create a source, run, event, or external
 // effect, and an incomplete watched record must fail before work can be queued.
 func TestServedDriftPlanPreviewIsExactAndEffectFree(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(*Deps) {})
+	h := newOperatingServedHarness(t, config.Protocols{}, func(*Deps) {})
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
 	watchedPath := filepath.Join(t.TempDir(), "edge-cert.pem")
 
@@ -180,7 +180,7 @@ func TestServedDriftPlanPreviewIsExactAndEffectFree(t *testing.T) {
 // may read tenant authority, but cannot create a source, run, event, checkpoint,
 // finding, outbox alert, or external CT request.
 func TestServedCTPlanPreviewIsExactAndEffectFree(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(*Deps) {})
+	h := newOperatingServedHarness(t, config.Protocols{}, func(*Deps) {})
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
 
 	beforeEvents := servedDiscoveryEventCount(t, h)
@@ -270,7 +270,7 @@ func servedDiscoveryEventCount(t *testing.T, h *servedHarness) int {
 func TestServedCTMonitoringDashboardConfiguresWatchlistAndFindings(t *testing.T) {
 	secret := []byte("served-ct-monitoring-dashboard-secret")
 	sink := newServedWebhookSink(t, secret)
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.NotificationChannels = []notify.Notifier{
 			webhook.New(sink.URL(), secret, webhook.WithHTTPClient(sink.Client())),
 		}
@@ -385,7 +385,7 @@ func TestServedCTMonitoringDashboardConfiguresWatchlistAndFindings(t *testing.T)
 // watchlist operation. The failed checkpoint remains audit-readable, but only
 // the working RFC 6962 fixture is active and the second aggregate run is green.
 func TestAUD70ServedCTWatchlistReplacementRetiresDeadLogAndRecovers(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", string(authz.PrivateEgress))
 
 	dead := httptest.NewServer(http.NotFoundHandler())
@@ -519,7 +519,7 @@ func TestAUD70ServedCTWatchlistReplacementRetiresDeadLogAndRecovers(t *testing.T
 }
 
 func TestServedDriftRemediationDashboardRecordsOperatorDecision(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
 
 	dir := t.TempDir()
@@ -625,7 +625,7 @@ func TestServedDriftRemediationDashboardRecordsOperatorDecision(t *testing.T) {
 func TestServedRogueCertificateDetectionCAPREV05EndToEnd(t *testing.T) {
 	secret := []byte("served-rogue-cert-webhook-test-secret")
 	sink := newServedWebhookSink(t, secret)
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.NotificationChannels = []notify.Notifier{
 			webhook.New(sink.URL(), secret, webhook.WithHTTPClient(sink.Client())),
 		}

@@ -242,7 +242,7 @@ func TestStockACMEClientCompletesThroughPrimaryAndSecondaryRelayProcesses(t *tes
 		HTTP01: acmesrv.HTTP01Validator{Client: &http.Client{Transport: validatorTransport, Timeout: 5 * time.Second}},
 		DNS01:  acmesrv.DNS01Validator{},
 	}
-	h := newServedHarness(t,
+	h := newOperatingServedHarness(t,
 		config.Protocols{ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}},
 		func(d *Deps) { d.ACMEValidators = &validators },
 	)

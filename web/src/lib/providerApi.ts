@@ -33,7 +33,7 @@ export function clearProviderToken(): void {
   operatorToken = null;
 }
 
-export type ProviderTenantStatus = "active" | "suspended" | "offboarded";
+export type ProviderTenantStatus = "active" | "suspended" | "offboarding" | "offboard_failed" | "offboarded";
 
 export interface ProviderTenant {
   id: string;
@@ -85,6 +85,9 @@ export interface ProviderActivity {
   subject?: string;
   reason?: string;
   at: string;
+  request_event_id?: string;
+  offboard_state?: "pending" | "failed" | "completed";
+  can_continue_offboard?: boolean;
 }
 
 export interface ProviderBreakGlassGrant {
@@ -415,8 +418,11 @@ export const providerApi = {
     providerReq<void>(`/provider/v1/tenants/${encodeURIComponent(id)}/suspend`, { method: "POST", body: JSON.stringify({}) }),
   resumeTenant: (id: string): Promise<void> =>
     providerReq<void>(`/provider/v1/tenants/${encodeURIComponent(id)}/resume`, { method: "POST", body: JSON.stringify({}) }),
-  offboardTenant: (id: string): Promise<void> =>
-    providerReq<void>(`/provider/v1/tenants/${encodeURIComponent(id)}/offboard`, { method: "POST", body: JSON.stringify({}) }),
+  offboardTenant: (id: string, requestEventId?: string): Promise<void> =>
+    providerReq<void>(`/provider/v1/tenants/${encodeURIComponent(id)}/offboard`, {
+      method: "POST",
+      body: JSON.stringify(requestEventId ? { request_event_id: requestEventId } : {}),
+    }),
   getQuota: (id: string): Promise<ProviderQuota> => providerReq<ProviderQuota>(`/provider/v1/tenants/${encodeURIComponent(id)}/quota`),
   setQuota: (id: string, quota: ProviderQuota): Promise<void> =>
     providerReq<void>(`/provider/v1/tenants/${encodeURIComponent(id)}/quota`, { method: "PUT", body: JSON.stringify(quota) }),

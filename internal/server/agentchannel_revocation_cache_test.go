@@ -112,6 +112,7 @@ func TestSignedRevocationCachePostureIsTenantAgentBoundServedAndReplayableAUD39(
 	}
 	assertProjected("after tamper")
 
+	registerServedTenantID(t, h.servedHarness, "22222222-2222-2222-2222-222222222222", "Revocation-cache neighbor")
 	crossTenant, err := transport.SignedRevocationCachePosture(h.identity.Identity(),
 		"22222222-2222-2222-2222-222222222222", h.agent, entries, time.Now().UTC().Unix())
 	if err != nil {

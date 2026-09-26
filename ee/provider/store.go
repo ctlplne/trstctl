@@ -82,9 +82,11 @@ type Operator struct {
 type TenantStatus string
 
 const (
-	TenantActive     TenantStatus = "active"
-	TenantSuspended  TenantStatus = "suspended"
-	TenantOffboarded TenantStatus = "offboarded"
+	TenantActive         TenantStatus = "active"
+	TenantSuspended      TenantStatus = "suspended"
+	TenantOffboarding    TenantStatus = "offboarding"
+	TenantOffboardFailed TenantStatus = "offboard_failed"
+	TenantOffboarded     TenantStatus = "offboarded"
 )
 
 // providerCustomerNamespace names the space customer ids are minted in. A fixed
@@ -235,7 +237,7 @@ func (s *MemStore) CountBillableTenants(context.Context) (int, error) {
 	defer s.mu.Unlock()
 	var n int
 	for _, tenant := range s.tenants {
-		if tenant.Status == TenantActive || tenant.Status == TenantSuspended {
+		if tenant.Status == TenantActive || tenant.Status == TenantSuspended || tenant.Status == TenantOffboarding || tenant.Status == TenantOffboardFailed {
 			n++
 		}
 	}

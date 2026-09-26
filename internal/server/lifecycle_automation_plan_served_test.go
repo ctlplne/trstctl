@@ -18,7 +18,7 @@ import (
 // its exact timing, non-effects, outbox handoffs, and safe run controls without
 // making the browser reconstruct policy from unrelated endpoints.
 func TestServedLifecycleAutomationPlanF6(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.LifecycleRenewBefore = 31 * 24 * time.Hour
 		d.LifecycleAlertBefore = 7 * 24 * time.Hour
 		d.LifecycleInterval = 2 * time.Minute
@@ -82,7 +82,7 @@ func TestServedLifecycleAutomationPlanF6(t *testing.T) {
 }
 
 func TestServedLifecycleAutomationPlanListsDueWorkWithoutTenantLeakage(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.LifecycleRenewBefore = 31 * 24 * time.Hour
 		d.LifecycleAlertBefore = 7 * 24 * time.Hour
 	})
@@ -169,6 +169,7 @@ func TestServedLifecycleAutomationPlanListsDueWorkWithoutTenantLeakage(t *testin
 	}
 
 	const otherTenant = "22222222-2222-4222-8222-222222222222"
+	registerServedTenantID(t, h, otherTenant, "Other lifecycle tenant")
 	if _, err := h.store.CreateOwner(context.Background(), store.Owner{TenantID: otherTenant, Kind: store.OwnerWorkload, Name: "other-tenant"}); err != nil {
 		t.Fatalf("seed other tenant: %v", err)
 	}

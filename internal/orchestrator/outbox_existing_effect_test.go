@@ -9,7 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/store"
 )
 
 type existingEffectOutboxHandler struct {
@@ -79,6 +81,29 @@ func TestExistingAtMostOnceFenceDoesNotFailAuthorityProbe(t *testing.T) {
 			if h.calls["ambiguous"] != 1 {
 				t.Fatal("local fence re-entered the provider")
 			}
+			assertOriginalReceiverHold := func() {
+				t.Helper()
+				if err := s.WithTenant(t.Context(), tenantA, func(tx pgx.Tx) error {
+					var pending int
+					if err := tx.QueryRow(t.Context(), `SELECT cardinality(receiver_pending_ids)
+						FROM outbox WHERE tenant_id=$1 AND id=$2`, tenantA, badID).Scan(&pending); err != nil {
+						return err
+					}
+					if pending != 1 {
+						t.Errorf("local authority probe invented remote work: pending=%d, want only the original uncertain invocation", pending)
+					}
+					return nil
+				}); err != nil {
+					t.Fatal(err)
+				}
+				if err := s.WithTenantServiceBarrier(t.Context(), tenantA, func(ctx context.Context) error {
+					_, err := s.OffboardTenant(ctx, tenantA)
+					return err
+				}); !errors.Is(err, store.ErrTenantServiceBusy) {
+					t.Fatalf("local refusal erased original uncertainty: %v", err)
+				}
+			}
+			assertOriginalReceiverHold()
 			bad, err := ob.Get(t.Context(), tenantA, badID)
 			if err != nil || bad.Attempts != 2 {
 				t.Fatalf("expected second attempt of uncertain command: %+v %v", bad, err)
@@ -107,6 +132,7 @@ func TestExistingAtMostOnceFenceDoesNotFailAuthorityProbe(t *testing.T) {
 			if err != nil || bad.Status != "failed" || bad.Attempts != 3 || h.terminalCalls != 1 || h.calls["ambiguous"] != 1 {
 				t.Fatalf("terminal local refusal: %+v calls=%v terminal=%d error=%v", bad, h.calls, h.terminalCalls, err)
 			}
+			assertOriginalReceiverHold()
 			if _, err := h.idem.DoAtMostOnceEffect(t.Context(), tenantA, "existing-effect:ambiguous", func(context.Context) ([]byte, error) { t.Fatal("uncertain claim was reopened"); return nil, nil }); !errors.Is(err, orchestrator.ErrEffectIndeterminate) {
 				t.Fatalf("uncertain claim lost: %v", err)
 			}

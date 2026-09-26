@@ -158,6 +158,8 @@ func (r *AuthorityRuntime) bootstrapTenants(ctx context.Context, coverage author
 			typ = AuditTenantSuspended
 		case TenantOffboarded:
 			typ = AuditTenantOffboarded
+		case TenantOffboarding, TenantOffboardFailed:
+			return fmt.Errorf("provider: unfinished customer erasure %s has no retained request", tenant.ID)
 		}
 		if _, err := r.Mutations.Append(ctx, "bootstrap:tenant:"+tenant.ID, typ, tenant.ID, AuthorityEvent{
 			Tenant: &tenant, EffectiveAt: tenant.UpdatedAt,

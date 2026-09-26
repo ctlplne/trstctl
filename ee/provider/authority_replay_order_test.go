@@ -11,11 +11,11 @@ import (
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
-func authorityReplayFixture(t *testing.T) (*corestore.Store, *events.Log, *EventMutationSink) {
+func authorityReplayFixture(t *testing.T, options ...events.OpenOption) (*corestore.Store, *events.Log, *EventMutationSink) {
 	t.Helper()
 	st := openProviderStore(t)
 	truncateProviderAuthority(t, st)
-	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true}, options...)
 	if err != nil {
 		t.Fatal(err)
 	}

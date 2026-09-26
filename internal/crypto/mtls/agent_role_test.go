@@ -57,16 +57,18 @@ func TestAgentRoleStampedByCANotCSR(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse role uri: %v", err)
 	}
+	claimedRegistration := &url.URL{Scheme: "https", Host: "trstctl.com", Path: "/agent/tenant-registration/v1/forged"}
+	const grantedRegistration = "https://trstctl.com/agent/tenant-registration/v1/authorized"
 	csrDER, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{
 		Subject: pkix.Name{CommonName: "greedy"},
-		URIs:    []*url.URL{selfClaimed},
+		URIs:    []*url.URL{selfClaimed, claimedRegistration},
 	}, key)
 	if err != nil {
 		t.Fatalf("create csr: %v", err)
 	}
 
 	// The CA is told to grant host only.
-	chainPEM, err := ca.SignClientCSRWithTenant(csrDER, tenant, []string{AgentRoleHost}, time.Hour)
+	chainPEM, err := ca.SignClientCSRWithTenant(csrDER, tenant, []string{AgentRoleHost}, time.Hour, grantedRegistration)
 	if err != nil {
 		t.Fatalf("sign: %v", err)
 	}
@@ -80,6 +82,22 @@ func TestAgentRoleStampedByCANotCSR(t *testing.T) {
 	}
 	if len(roles) != 1 || roles[0] != AgentRoleHost {
 		t.Fatalf("CSR-claimed network role survived into the certificate: got %v, want [host]", roles)
+	}
+	leaf, err := x509.ParseCertificate(leafDER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	granted := 0
+	for _, uri := range leaf.URIs {
+		if uri.String() == claimedRegistration.String() {
+			t.Fatal("CSR-claimed registration survived into the certificate")
+		}
+		if uri.String() == grantedRegistration {
+			granted++
+		}
+	}
+	if granted != 1 {
+		t.Fatalf("CA registration binding count = %d, want 1", granted)
 	}
 }
 

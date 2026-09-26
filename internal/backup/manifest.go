@@ -52,6 +52,9 @@ var RecoveredFromPostgresBackup = []string{
 	// whose receipt history came back empty after a restore. It is restored
 	// from the PostgreSQL dump, honestly, until a projector exists.
 	"agent_job_receipts",
+	// Original agent recipients are operational outbox authority. Neither
+	// lease reclamation nor event replay can reconstruct a lost binding.
+	"agent_job_attempt_bindings",
 	"attestations",
 	// audit_checkpoints is a dual-recovery receiver. The PostgreSQL copy is paired
 	// with the event artifact so full restore can prove hidden tenant prefixes are
@@ -161,12 +164,11 @@ var RecoveredFromPostgresBackup = []string{
 	// uncertainty could bypass required legacy capture.
 	"provider_authority_projection_receipts",
 	"provider_authority_projection_state",
-	// L3: the durable provider tenant registry. RecoveredFromPostgresBackup, NOT
-	// a log projection — provisioning writes the row directly through the
-	// provider plane's pgstore; no event replays it. This table exists BECAUSE
-	// losing the customer list on redeploy was the defect L3 fixed; a restore
-	// that dropped it would reintroduce exactly that loss, this time labeled
-	// "recovered".
+	// L3: the durable provider tenant registry uses the same dual recovery
+	// posture. The licensed projection rebuilds current history, but core-only
+	// restore must retain the PostgreSQL copy, including legacy registry state.
+	// Core service admission honors its persisted restrictions even without a
+	// Provider attachment; dropping it could reopen a suspended customer.
 	"provider_tenants",
 	// L4: the break-glass grant ledger with two-person consent state.
 	// RecoveredFromPostgresBackup — grants, consents, denials, revocations and

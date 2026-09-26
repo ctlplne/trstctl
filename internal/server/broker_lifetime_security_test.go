@@ -18,7 +18,7 @@ import (
 // The ordinary operator's exact lifetime must reach the real signer, not only
 // survive JSON decoding. Verify the actual certificate and the served receipt.
 func TestServedBrokerPreservesRequestedLifetime(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AgentBroker = AgentBrokerConfig{
 			Enabled: true, TrustDomain: "served.test", DefaultTTL: 10 * time.Minute,
 			MaxTTL: time.Hour, PolicyModule: servedBrokerAllowPolicy,
@@ -67,7 +67,7 @@ func TestServedBrokerPreservesRequestedLifetime(t *testing.T) {
 }
 
 func TestServedBrokerRejectsExtraPublicKeyMaterial(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AgentBroker = AgentBrokerConfig{Enabled: true, TrustDomain: "served.test", PolicyModule: servedBrokerAllowPolicy, Attestors: []attest.Attestor{servedBrokerAttestor{}}}
 	})
 	token := seedScopedToken(t, h.store, h.tenant, "certs:issue")
@@ -92,7 +92,7 @@ func TestServedBrokerRejectsExtraPublicKeyMaterial(t *testing.T) {
 // Production config cannot inject in-process test attestors. The enabled broker
 // must boot with tenant-managed public trust and refuse requests until configured.
 func TestServedBrokerBootsWithoutProcessAttestorsAndRefusesMissingTenantTrust(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AgentBroker = AgentBrokerConfig{Enabled: true, TrustDomain: "served.test", PolicyModule: servedBrokerAllowPolicy}
 	})
 	token := seedScopedToken(t, h.store, h.tenant, "certs:issue")

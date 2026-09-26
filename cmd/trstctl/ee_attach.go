@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"strings"
 
@@ -253,13 +254,14 @@ func attachEEProviderAPI(
 	if deps.RestoreDrill != nil {
 		deps.RestoreDrill = server.RestoreDrillRunner(cfg, attachEEProjectionOptions)
 	}
-	deps.ProviderHandler = eeprovider.NewHandler(eeprovider.Config{
+	providerConfig := eeprovider.Config{
 		License:                  lic,
 		Store:                    eeprovider.NewPGStore(deps.Store),
 		Audit:                    eeprovider.NewEventLogAuditSink(deps.Log),
 		Mutations:                authorityMutations,
 		Activity:                 eeprovider.NewEventLogActivitySource(deps.Log),
 		Idempotency:              providerIdempotency,
+		Offboarding:              eeprovider.NewTenantOffboarder(deps.Store, deps.Log, nil, nil),
 		Authenticator:            operatorAuth,
 		Delegations:              delegations,
 		Access:                   access,
@@ -271,7 +273,18 @@ func attachEEProviderAPI(
 		EvidenceVerificationJWKS: billingEvidence.verificationJWKS,
 		Brands:                   providerBrandStore(brandInstall),
 		Drills:                   isolationDrillerAdapter{store: deps.Store, lanes: laneDrillFor(siloInstall, deps.Log)},
-	})
+	}
+	// Preserve the authenticated surface during assembly, but keep destructive
+	// commands unavailable until core supplies its fully assembled projector.
+	deps.ProviderHandler = eeprovider.NewHandler(providerConfig)
+	deps.ProviderHandlerFactory = func(orch *orchestrator.Orchestrator) (http.Handler, error) {
+		if authorityRuntime == nil || orch == nil {
+			return nil, errors.New("provider command surface requires the assembled mutation spine")
+		}
+		configured := providerConfig
+		configured.Offboarding = eeprovider.NewTenantOffboarder(deps.Store, deps.Log, orch, authorityRuntime.Mutations)
+		return eeprovider.NewHandler(configured), nil
+	}
 	if log == nil {
 		return nil
 	}

@@ -17,7 +17,7 @@ import (
 )
 
 func TestServedFirstLeafResultReportsExhaustedDelivery(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	token := seedScopedToken(t, h.store, h.tenant, "owners:write", "identities:write", "certs:read", "certs:issue")
 	owner := servedCreateID(t, h, token, "failed-leaf-owner", "/api/v1/owners", map[string]any{
 		"kind": "workload", "name": "failed-leaf", "email": "owner@example.test",
@@ -92,7 +92,7 @@ func TestServedFirstLeafResultReportsExhaustedDelivery(t *testing.T) {
 }
 
 func TestServedFirstLeafRecordedCertificateSurvivesLateDeliveryFailure(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	token := seedScopedToken(t, h.store, h.tenant, "owners:write", "identities:write", "certs:read", "certs:issue")
 	owner := servedCreateID(t, h, token, "late-failure-owner", "/api/v1/owners", map[string]any{
 		"kind": "workload", "name": "late-failure", "email": "owner@example.test",

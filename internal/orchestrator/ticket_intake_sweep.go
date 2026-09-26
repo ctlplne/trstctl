@@ -57,7 +57,7 @@ func (o *Orchestrator) ResumeTicketIntakeSweep(ctx context.Context, tenantID str
 	if err != nil {
 		return err
 	}
-	return o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	return o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := o.store.ValidateTicketIntakeIntentTx(ctx, tx, tenantID, intent); err != nil {
 			return err
 		}
@@ -138,7 +138,7 @@ func (o *Orchestrator) emitTicketIntakeEventWithContinuation(
 		}
 		continuationEntry = &entry
 	}
-	return o.store.WithTenant(ctx, next.TenantID, func(tx pgx.Tx) error {
+	return o.withTenantCommand(ctx, next.TenantID, func(ctx context.Context, tx pgx.Tx) error {
 		event, err := o.log.Append(ctx, next)
 		if err != nil {
 			return err

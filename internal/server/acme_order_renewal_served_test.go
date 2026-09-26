@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"testing"
+	"time"
 
 	xacme "golang.org/x/crypto/acme"
 
@@ -26,7 +27,9 @@ func TestServedACMERenewalWithIdenticalCSR(t *testing.T) {
 		[]events.OpenOption{events.WithRequiredPrivacyEventPolicies()},
 		func(d *Deps) { d.ACMEValidators = &validators },
 	)
-	ctx := context.Background()
+	registerServedTenant(t, h, "ACME renewal tenant")
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
 	client, err := acmekey.NewRSAClient(h.ts.URL + "/directory")
 	if err != nil {
 		t.Fatal(err)

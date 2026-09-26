@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	trstcrypto "trstctl.com/trstctl/internal/crypto"
@@ -35,6 +36,10 @@ type Message struct {
 	// attempt. Reservation cannot constrain a control-plane handler unless that
 	// handler can see which executor owns the row.
 	RequiredAgentRole string
+	// ReceiverAttemptID identifies this invocation's durable remote-work hold.
+	// Only terminal evidence for this invocation may release it; retries get
+	// different IDs. It is assigned by delivery, never read from the payload.
+	ReceiverAttemptID string
 }
 
 // Entry is a new outbox row to enqueue alongside a state change.
@@ -745,7 +750,20 @@ func (o *Outbox) dispatchClaim(ctx context.Context, h Handler, claim claimedOutb
 			o.releaseUnclaimedHalfOpenProbes(map[circuitKey]*circuitProbe{probe.key: probe}, circuitKey{}, o.clockNow())
 		}()
 	}
-	deliverErr := o.deliver(ctx, h, claim)
+	workCtx, release, admissionErr := o.store.BeginTenantService(ctx, claim.msg.TenantID)
+	var deliverErr error
+	if admissionErr != nil {
+		deliverErr = DeferDelivery(admissionErr)
+	} else {
+		defer release()
+		ctx = workCtx
+		deliverErr = o.deliver(ctx, h, claim)
+	}
+	if errors.Is(deliverErr, errOutboxClaimLost) {
+		// The row was erased or belongs to a newer attempt. This old attempt
+		// must neither contact the receiver nor finalize another worker's claim.
+		return deliverErr
+	}
 	if deliverErr != nil && !IsDeliveryDeferred(deliverErr) && claim.attempts >= claim.attemptLimit(o.maxAttempts) {
 		if terminal, ok := h.(TerminalFailureHandler); ok {
 			if err := terminal.DeliverTerminalFailure(ctx, claim.msg, deliverErr); IsDeliveryDeferred(err) {
@@ -765,15 +783,37 @@ func (o *Outbox) dispatchClaim(ctx context.Context, h Handler, claim claimedOutb
 }
 
 func (o *Outbox) deliver(ctx context.Context, h Handler, claim claimedOutboxEntry) error {
+	attemptID := uuid.NewString()
+	if err := o.beginRemoteDelivery(ctx, claim, attemptID); err != nil {
+		return err
+	}
+	// Check authority after the durable handoff, outside its transaction. The
+	// token now blocks a lifecycle transition even if the session disappears.
+	// A transition that finished before the handoff is observed here. Keeping
+	// this separate also permits a one-connection request pool.
 	if err := o.tenantServiceCheck.Check(ctx, claim.msg.TenantID); err != nil {
-		return DeferDelivery(err)
+		return DeferDelivery(errors.Join(err, o.completeRemoteDelivery(ctx, claim, attemptID)))
 	}
 	deliverCtx := ctx
 	cancel := func() {}
 	if o.deliveryTimeout > 0 {
 		deliverCtx, cancel = context.WithTimeout(ctx, o.deliveryTimeout)
 	}
+	claim.msg.ReceiverAttemptID = attemptID
 	deliverErr := h.Deliver(deliverCtx, claim.msg)
+	// Only this invocation can release its durable hold. A timeout or generic
+	// transport error leaves uncertainty even when a later retry succeeds.
+	// Refusing an existing at-most-once claim proves this invocation never ran
+	// its receiver callback. Release this new probe's hold, keeping every older
+	// unknown invocation intact; ErrEffectIndeterminate alone is not this proof.
+	var existingClaim existingAtMostOnceClaimError
+	if deliverErr == nil || IsDefiniteNoEffect(deliverErr) || IsDeliveryDeferred(deliverErr) || errors.As(deliverErr, &existingClaim) {
+		if err := o.completeRemoteDelivery(ctx, claim, attemptID); err != nil {
+			cancel()
+			destroyDeliveryError(deliverErr)
+			return err
+		}
+	}
 	timedOut := o.deliveryTimeout > 0 &&
 		ctx.Err() == nil &&
 		errors.Is(deliverCtx.Err(), context.DeadlineExceeded) &&
@@ -787,6 +827,8 @@ func (o *Outbox) deliver(ctx context.Context, h Handler, claim claimedOutboxEntr
 	}
 	return deliverErr
 }
+
+var errOutboxClaimLost = errors.New("orchestrator: outbox delivery claim is no longer current")
 
 // claimOne recovers expired leases, then marks one fair due row processing in a
 // short transaction. The external call happens after this transaction commits, so

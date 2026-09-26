@@ -339,7 +339,7 @@ func discoveryRelayEventCounts(t *testing.T, h *roleHarness) map[string]int {
 }
 
 func TestServedNetworkDiscoveryRequiresDeclaredSegmentAUD28(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
 	statusCode, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
 		"name":   "unbound-network",
@@ -416,7 +416,7 @@ func TestServedNetworkDiscoveryRequiresDeclaredSegmentAUD28(t *testing.T) {
 }
 
 func TestServedNetworkDiscoveryPreflightBlocksGhostQueueWithoutRelay(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
 	statusCode, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/discovery/segments", tok,
 		"relay-readiness-segment", map[string]any{

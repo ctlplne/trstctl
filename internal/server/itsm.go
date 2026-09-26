@@ -20,23 +20,23 @@ import (
 func (d *issuanceDispatcher) handleServiceNowTicket(ctx context.Context, m orchestrator.Message) error {
 	var p orchestrator.ServiceNowTicketRequest
 	if err := json.Unmarshal(m.Payload, &p); err != nil {
-		return fmt.Errorf("server: decode ServiceNow ticket payload: %w", err)
+		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: decode ServiceNow ticket payload: %w", err))
 	}
 	table, ok := orchestrator.NormalizeServiceNowTable(p.Table)
 	if !ok {
-		return fmt.Errorf("server: unsupported ServiceNow table %q", p.Table)
+		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: unsupported ServiceNow table %q", p.Table))
 	}
 	endpoint, err := serviceNowTableEndpoint(p.InstanceURL, table)
 	if err != nil {
-		return err
+		return orchestrator.DefiniteNoEffect(err)
 	}
 	client, err := cloudHTTPClient(endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 	if err != nil {
-		return fmt.Errorf("server: ServiceNow endpoint rejected: %w", err)
+		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: ServiceNow endpoint rejected: %w", err))
 	}
 	token, err := resolveDiscoveryCredentialRef(ctx, p.TokenRef)
 	if err != nil {
-		return fmt.Errorf("server: resolve ServiceNow token ref: %w", err)
+		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: resolve ServiceNow token ref: %w", err))
 	}
 	tokenBytes := []byte(token)
 	defer secret.Wipe(tokenBytes)
@@ -58,13 +58,13 @@ func (d *issuanceDispatcher) handleServiceNowTicket(ctx context.Context, m orche
 	}
 	payload, err := json.Marshal(body)
 	if err != nil {
-		return err
+		return orchestrator.DefiniteNoEffect(err)
 	}
 	defer secret.Wipe(payload)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
 	if err != nil {
-		return fmt.Errorf("server: build ServiceNow request: %w", err)
+		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: build ServiceNow request: %w", err))
 	}
 	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", tokenBytes))
 	req.Header.Set("Content-Type", "application/json")
@@ -75,6 +75,8 @@ func (d *issuanceDispatcher) handleServiceNowTicket(ctx context.Context, m orche
 		req.Header.Set("X-Trstctl-Correlation-ID", p.CorrelationID)
 	}
 
+	// From this point, even a transport or HTTP error cannot prove that the
+	// receiver stopped without an effect. Keep those outcomes unclassified.
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("server: deliver ServiceNow ticket: %w", err)

@@ -533,6 +533,7 @@ func TestServedSecretStoreVersionHistoryAndPITR(t *testing.T) {
 	}
 
 	const tenantB = "22222222-2222-2222-2222-222222222222"
+	registerServedTenantID(t, h, tenantB, "Other secret-history tenant")
 	if _, err := h.store.CreateOwner(context.Background(), store.Owner{TenantID: tenantB, Kind: store.OwnerWorkload, Name: "tenant-b-pitr"}); err != nil {
 		t.Fatalf("create tenant B owner: %v", err)
 	}
@@ -801,7 +802,7 @@ func TestServedDynamicSecretLeasesIssueRenewRevokeAndExpire(t *testing.T) {
 // same token fails (single-use). It also asserts the share token is never written to
 // the event log (the GAP-001 fix). It fails on the pre-wiring tree.
 func TestServedSecretShareRedeemOnce(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
 
 	// CREATE share.
@@ -864,7 +865,7 @@ func TestServedSecretShareSurvivesRestart(t *testing.T) {
 		d.KEK = secretKEK
 	}
 
-	h := newServedHarness(t, config.Protocols{}, secretOpt)
+	h := newOperatingServedHarness(t, config.Protocols{}, secretOpt)
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/shares", tok,
@@ -2254,7 +2255,7 @@ func TestApplicationSecretRequiredFenceSurvivesApprovalDisabledRestart(t *testin
 // with no key (the GAP-004 defect) would fail X509KeyPair. It fails on the pre-wiring
 // tree.
 func TestServedPKISecretIssuesUsableKeypair(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/pki", tok,
@@ -2298,7 +2299,7 @@ func TestServedPKISecretIssuesUsableKeypair(t *testing.T) {
 // receives a scoped, tenant-scoped session. It fails on the pre-wiring tree.
 func TestServedMachineLogin(t *testing.T) {
 	authSecret := []byte("super-secret-hmac-key-for-machine-login")
-	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, authSecret))
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, authSecret))
 
 	// Mint a workload token the served TokenMethod will accept (same HMAC secret,
 	// tenant MAC-bound so X-Tenant-ID is only a lookup hint).
@@ -2354,8 +2355,9 @@ func TestServedMachineLogin(t *testing.T) {
 
 func TestServedMachineLoginRejectsCrossTenantHeader(t *testing.T) {
 	authSecret := []byte("super-secret-hmac-key-for-machine-login")
-	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, authSecret))
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, authSecret))
 	tenantB := "22222222-2222-2222-2222-222222222222"
+	registerServedTenantID(t, h, tenantB, "Other machine-login tenant")
 
 	method := authmethod.TokenMethod{Secret: authSecret, TenantID: h.tenant, Scopes: map[string][]string{"workload-1": {"secrets:read"}}}
 	cred, err := method.Issue("workload-1", time.Now().Add(time.Hour))
@@ -2435,7 +2437,7 @@ func TestServedMachineLoginTopMethodsKubernetesSATAndAWSIAM(t *testing.T) {
 			UserID:  "AROATEST:web",
 		},
 	}
-	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
 		d.MachineAuthMethods = func(tenantID string) []authmethod.Method {
 			allowedAWSAccounts := map[string]bool{"210987654321": true}
 			if tenantID == servedTestTenant {
@@ -2465,6 +2467,7 @@ func TestServedMachineLoginTopMethodsKubernetesSATAndAWSIAM(t *testing.T) {
 		}
 	})
 
+	registerServedTenantID(t, h, tenantB, "Other machine-attestation tenant")
 	status, body := servedMachineLogin(t, h, servedTestTenant, "kubernetes", k8sToken)
 	if status != http.StatusOK {
 		t.Fatalf("kubernetes SAT login: status %d body %s", status, body)
@@ -2559,8 +2562,8 @@ func TestServedSecretsCrossTenantDenial(t *testing.T) {
 	const tenantB = "22222222-2222-2222-2222-222222222222"
 	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
 	registerServedTenant(t, h, "tenant A secret-isolation tenant")
-	// Make tenant B a real, distinct tenant by giving it a row of its own (the
-	// established way the other two-tenant tests bring a second tenant into being).
+	// Both callers need independent, event-backed tenant registrations.
+	registerServedTenantID(t, h, tenantB, "Tenant B secret-isolation tenant")
 	if _, err := h.store.CreateOwner(context.Background(), store.Owner{TenantID: tenantB, Kind: store.OwnerWorkload, Name: "tenant-b"}); err != nil {
 		t.Fatalf("create tenant B owner: %v", err)
 	}
@@ -2584,8 +2587,8 @@ func TestServedSecretsCrossTenantDenial(t *testing.T) {
 	// Tenant B MUST NOT see it: a different tenant's read is RLS-isolated -> 404, and
 	// the value never leaks (AN-1).
 	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/secrets/store/tenant-a-only", tokB, nil)
-	if status == http.StatusOK {
-		t.Fatalf("CROSS-TENANT LEAK (AN-1): tenant B read tenant A's secret: %s", body)
+	if status != http.StatusNotFound {
+		t.Fatalf("tenant B read of tenant A secret: status %d body %s, want 404", status, body)
 	}
 	if strings.Contains(string(body), "A-private-value") {
 		t.Fatalf("CROSS-TENANT LEAK (AN-1): tenant B's response contains tenant A's value: %s", body)

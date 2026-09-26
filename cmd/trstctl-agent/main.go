@@ -662,6 +662,22 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 	// would poll forever and be handed nothing, which reads as a stalled fabric
 	// instead of a misconfiguration.
 	relayTimer, relayCh, hostProfile := relayLoopFor(o, a, conn)
+	claimsEnabled := relayCh != nil
+	pendingReports, err := openAgentReportState(o, a.Identity(), caPEM, serverName, claimsEnabled)
+	if err != nil {
+		if relayTimer != nil {
+			relayTimer.Stop()
+		}
+		return fmt.Errorf("initialize pending agent reports: %w", err)
+	}
+	if pendingReports != nil {
+		defer func() { _ = pendingReports.Close() }()
+		reporter := relayChannel{c: ch.c, id: a.Identity, pending: pendingReports, leaseSeconds: int(relayLeaseFor(o.relayPollEvery).Seconds())}
+		relayCh = reporter
+		if relayTimer == nil {
+			relayTimer = time.NewTimer(0)
+		}
+	}
 	var hostRollback *relay.HostRollbackStore
 	if len(hostProfile.AllowedRoots) > 0 {
 		stateDir := strings.TrimSpace(o.hostRollbackDir)
@@ -762,7 +778,9 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 			go func(done chan<- relayResult) {
 				lease := int(relayLeaseFor(o.relayPollEvery).Seconds())
 				var result relayResult
-				if o.relayClaim {
+				if !claimsEnabled {
+					result.err = relayCh.(relayChannel).recoverPendingReport(workCtx)
+				} else if o.relayClaim {
 					result.executed, result.err = relay.RunOnceWithSelfUpgradeAndHostRollback(workCtx, relayCh, relayHTTPClient(), hostProfile, pluginRuntime, selfUp, hostRollback, relayClaimBatch, lease)
 				} else {
 					result.executed, result.err = relay.RunOnceSelfUpgradeOnly(workCtx, relayCh, selfUp, relayClaimBatch, lease)

@@ -131,7 +131,7 @@ func (o *Orchestrator) QueueAuditFeedBatch(
 		ID: "audit-feed-batch:" + batchID, Type: projections.EventAuditFeedBatchQueued,
 		TenantID: tenantID, Data: eventPayload,
 	}
-	err = o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err = o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		ev, err := o.log.Append(ctx, next)
 		if err != nil {
 			return err

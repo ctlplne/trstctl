@@ -106,6 +106,15 @@ func (p *protocolIssuer) IssueProtocolLeaf(ctx context.Context, tenantID, protoc
 }
 
 func (p *protocolIssuer) issueProtocolLeafWithOrigin(ctx context.Context, tenantID, protocolName, idempotencyKey string, csrDER []byte, ttl time.Duration, origin custody.KeyOrigin) ([]byte, error) {
+	var work tenancy.ServiceWork
+	if p.store != nil {
+		work = p.store.BeginTenantService
+	}
+	ctx, release, err := work.Begin(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	if err := p.tenantServiceCheck.Check(ctx, tenantID); err != nil {
 		return nil, err
 	}
@@ -113,7 +122,7 @@ func (p *protocolIssuer) issueProtocolLeafWithOrigin(ctx context.Context, tenant
 		return p.issueProtocolLeaf(ctx, tenantID, protocolName, idempotencyKey, csrDER, ttl, origin)
 	}
 	var leaf []byte
-	err := withTenantCipher(ctx, p.tenantCrypto, nil, tenantID, func(scoped context.Context, _ tenantseal.Cipher) (err error) {
+	err = withTenantCipher(ctx, p.tenantCrypto, nil, tenantID, func(scoped context.Context, _ tenantseal.Cipher) (err error) {
 		leaf, err = p.issueProtocolLeaf(scoped, tenantID, protocolName, idempotencyKey, csrDER, ttl, origin)
 		return err
 	})
@@ -121,6 +130,9 @@ func (p *protocolIssuer) issueProtocolLeafWithOrigin(ctx context.Context, tenant
 }
 
 func (p *protocolIssuer) issueProtocolLeaf(ctx context.Context, tenantID, protocolName, idempotencyKey string, csrDER []byte, ttl time.Duration, origin custody.KeyOrigin) ([]byte, error) {
+	if err := requireACMERequestRegistration(ctx, p.store, p.log, tenantID); err != nil {
+		return nil, err
+	}
 	if p.issue == nil {
 		return nil, errProtocolIssuanceUnavailable
 	}
@@ -283,6 +295,9 @@ func (p *protocolIssuer) RevokeProtocolLeaf(ctx context.Context, tenantID, proto
 }
 
 func (p *protocolIssuer) revokeProtocolLeaf(ctx context.Context, tenantID, protocolName string, fingerprint, serial string, reasonCode int, certDER []byte) error {
+	if err := requireACMERequestRegistration(ctx, p.store, p.log, tenantID); err != nil {
+		return err
+	}
 	if tenantID == "" {
 		return errors.New("server: protocol revocation requires a tenant (AN-1)")
 	}

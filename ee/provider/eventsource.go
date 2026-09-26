@@ -73,6 +73,7 @@ type AuthorityEvent struct {
 	Drill               *IsolationDrillReport `json:"isolation_drill,omitempty"`
 	EffectiveAt         time.Time             `json:"effective_at,omitempty"`
 	RequestBinding      string                `json:"request_binding,omitempty"`
+	Erasure             *TenantErasureRequest `json:"erasure,omitempty"`
 	Audit               AuditEvent            `json:"audit"`
 }
 
@@ -216,7 +217,7 @@ func (s *EventMutationSink) appendLocked(ctx context.Context, idempotencyKey, ty
 			}
 		}
 		if err != nil {
-			return eventspec.Event{}, fmt.Errorf("%w: project %s: %v", ErrMutationPersistence, typ, err)
+			return eventspec.Event{}, fmt.Errorf("%w: project %s: %w", ErrMutationPersistence, typ, err)
 		}
 	}
 	return canonical, nil
@@ -248,6 +249,16 @@ func (p *AuthorityProjection) ReplayWatermark() uint64 {
 	// durable per-event receipt proves completion; a process high-water mark
 	// must never cause core to skip an event that this projection has not applied.
 	return 0
+}
+
+// ProjectsTenantLifecycle opts into the core command's existing transaction.
+// A customer erase and revocation of its Provider grants must commit together.
+func (*AuthorityProjection) ProjectsTenantLifecycle() {}
+
+// ReplayTenantLifecycleTx folds only Provider views. Core tables may already
+// represent a later registration during extension catch-up.
+func (p *AuthorityProjection) ReplayTenantLifecycleTx(ctx context.Context, tx pgx.Tx, event events.Event) error {
+	return p.ApplyTx(ctx, tx, event)
 }
 
 // Reset erases only derived provider views. The immutable event history is not
@@ -349,7 +360,13 @@ func (p *AuthorityProjection) ApplyTx(ctx context.Context, tx pgx.Tx, event even
 			return err
 		}
 	}
-	if !providerAuthorityEvent(event.Type) {
+	if event.Type == projections.EventTenantRegistered {
+		// Core registration neither provisions a Provider customer nor grants
+		// its operators authority. Do not expose transaction-local progress.
+		return nil
+	}
+	coreOffboard := event.Type == projections.EventTenantOffboarded
+	if !providerAuthorityEvent(event.Type) && !coreOffboard {
 		p.advance(event.Sequence)
 		return nil
 	}
@@ -364,28 +381,66 @@ func (p *AuthorityProjection) ApplyTx(ctx context.Context, tx pgx.Tx, event even
 	// table mutation. They cannot rebuild state, but they must not brick an
 	// upgraded deployment. Bootstrap emits complete result events before this
 	// projection is registered; audit-only history is therefore ignored here.
-	if !payload.hasState() {
+	if !coreOffboard && !payload.hasState() {
 		p.advance(event.Sequence)
 		return nil
 	}
-	if err := validateAuthorityEvent(event, payload); err != nil {
-		return err
+	if coreOffboard {
+		// Core deletion is part of the same immutable history. Ignoring it
+		// during Provider-only recovery would restore the customer views and
+		// authority from earlier Provider events. This does not reinterpret
+		// legacy provider.tenant_offboard events as core deletion commands.
+		if err := projections.ValidateSchemaVersion(event); err != nil {
+			return err
+		}
+		if _, err := uuid.Parse(event.TenantID); err != nil {
+			return fmt.Errorf("provider: core tenant offboard has invalid tenant id: %w", err)
+		}
+		var deletion struct {
+			RowsDeleted int `json:"rows_deleted"`
+		}
+		if err := json.Unmarshal(event.Data, &deletion); err != nil {
+			return fmt.Errorf("provider: decode core tenant offboard: %w", err)
+		}
+	} else {
+		if err := validateAuthorityEvent(event, payload); err != nil {
+			return err
+		}
 	}
-	if err := lockAuthorityProjectionTx(ctx, tx); err != nil {
-		return err
+	apply := func() error {
+		if err := lockAuthorityProjectionTx(ctx, tx); err != nil {
+			return err
+		}
+		digest, err := authorityReceiptDigest(event)
+		if err != nil {
+			return err
+		}
+		completed, err := authorityEventCompletedTx(ctx, tx, event, digest)
+		if err != nil || completed {
+			return err
+		}
+		if payload.Tenant != nil && !coreOffboard {
+			if err := p.store.TryTenantLifecycleCommitTx(ctx, tx, event.TenantID); err != nil {
+				return err
+			}
+			if payload.Tenant.Status != TenantActive {
+				if err := p.store.RequireTenantAgentWorkQuiescentTx(ctx, tx, event.TenantID); err != nil {
+					return err
+				}
+			}
+		}
+		if err := applyAuthorityEventTx(ctx, tx, event, payload); err != nil {
+			return err
+		}
+		return recordAuthorityCompletionTx(ctx, tx, event, digest)
 	}
-	digest, err := authorityReceiptDigest(event)
-	if err != nil {
-		return err
+	if coreOffboard || event.Type == AuditUnregisteredTenantOffboarded {
+		// Core calls under the customer's RLS context. Retain that role and
+		// transaction; explicitly scope the fixed Provider partition and then
+		// restore the caller's settings. No separate connection or commit.
+		return withProviderLifecycleScopeTx(ctx, tx, apply)
 	}
-	completed, err := authorityEventCompletedTx(ctx, tx, event, digest)
-	if err != nil || completed {
-		return err
-	}
-	if err := applyAuthorityEventTx(ctx, tx, event, payload); err != nil {
-		return err
-	}
-	if err := recordAuthorityCompletionTx(ctx, tx, event, digest); err != nil {
+	if err := apply(); err != nil {
 		return err
 	}
 	p.advance(event.Sequence)
@@ -424,7 +479,7 @@ func nullTime(t time.Time) any {
 
 func providerAuthorityEvent(typ string) bool {
 	switch typ {
-	case AuditTenantProvisioned, AuditTenantSuspended, AuditTenantResumed, AuditTenantOffboarded,
+	case AuditTenantProvisioned, AuditTenantSuspended, AuditTenantResumed, AuditTenantOffboarded, AuditTenantErasureRequested, AuditUnregisteredTenantOffboarded, AuditTenantErasureFailed, AuditTenantErasureCompleted,
 		EventOperatorUpserted, EventOperatorOffboarded,
 		EventDelegationGranted, EventDelegationRevoked, EventTenantQuotaSet, EventTenantBrandSet,
 		AuditBreakGlassRequested, AuditBreakGlassConsented, AuditBreakGlassDenied, AuditBreakGlassAccessed:
@@ -435,6 +490,26 @@ func providerAuthorityEvent(typ string) bool {
 }
 
 func validateAuthorityEvent(event eventspec.Event, payload AuthorityEvent) error {
+	if event.Type == AuditTenantErasureRequested || event.Type == AuditUnregisteredTenantOffboarded || event.Type == AuditTenantErasureFailed || event.Type == AuditTenantErasureCompleted {
+		status := TenantOffboarding
+		switch event.Type {
+		case AuditUnregisteredTenantOffboarded, AuditTenantErasureCompleted:
+			status = TenantOffboarded
+		case AuditTenantErasureFailed:
+			status = TenantOffboardFailed
+		}
+		if payload.Tenant == nil || payload.Tenant.Status != status || payload.Erasure == nil ||
+			payload.Erasure.Actor.Subject == "" || payload.Erasure.Actor.Subject != payload.Audit.OperatorID || payload.RequestBinding == "" {
+			return errors.New("provider: tenant erasure requires bound registration and actor evidence")
+		}
+		if payload.Erasure.RegistrationAbsent {
+			if payload.Erasure.RegistrationIdentity != "" || payload.Erasure.RegistrationSequence != 0 {
+				return errors.New("provider: absent registration cannot also name a live registration")
+			}
+		} else if event.Type == AuditUnregisteredTenantOffboarded || payload.Erasure.RegistrationIdentity == "" || payload.Erasure.RegistrationSequence == 0 {
+			return errors.New("provider: registered tenant erasure requires its exact registration")
+		}
+	}
 	if payload.Audit.Type != "" && payload.Audit.Type != event.Type {
 		return fmt.Errorf("provider: %s audit type mismatch %q", event.Type, payload.Audit.Type)
 	}
@@ -498,6 +573,36 @@ func validateAuthorityEvent(event eventspec.Event, payload AuthorityEvent) error
 func applyAuthorityEventTx(ctx context.Context, tx pgx.Tx, event eventspec.Event, payload AuthorityEvent) error {
 	effectiveAt := authorityEventTime(event, payload)
 	switch event.Type {
+	case AuditTenantErasureCompleted:
+		// Completion is evidence about an earlier verified transaction. Never
+		// re-delete or restore customer state when this witness is replayed.
+		return nil
+	case projections.EventTenantOffboarded, AuditUnregisteredTenantOffboarded:
+		// This is a projection of an already-retained core deletion, never a
+		// new erase command. Only Provider's derived views are folded here;
+		// core owns its own deletion preflight, lifecycle fence and tables.
+		if _, err := tx.Exec(ctx, `SELECT set_config('trstctl.tenant_id', $1, true)`, event.TenantID); err != nil {
+			return err
+		}
+		for _, statement := range []string{
+			`DELETE FROM provider_breakglass_grants WHERE tenant_id = $1`,
+			`DELETE FROM provider_tenant_quotas WHERE tenant_id = $1`,
+			`DELETE FROM tenant_branding WHERE tenant_id = $1`,
+			`DELETE FROM provider_tenants WHERE tenant_id = $1`,
+		} {
+			if _, err := tx.Exec(ctx, statement, event.TenantID); err != nil {
+				return err
+			}
+		}
+		if _, err := tx.Exec(ctx, `SELECT set_config('trstctl.tenant_id', $1, true)`, providerAuthorityTenant); err != nil {
+			return err
+		}
+		//trstctl:system-query — fixed Provider partition, revoking only the exact erased customer's authority and retaining its history.
+		_, err := tx.Exec(ctx, `UPDATE provider_operator_delegations
+			SET revoked_at = $3, revoked_by = 'system:customer-offboard'
+			WHERE tenant_id = $1 AND customer_tenant_id = $2 AND revoked_at IS NULL`,
+			providerAuthorityTenant, event.TenantID, event.Time.UTC())
+		return err
 	case EventOperatorUpserted, EventOperatorOffboarded:
 		if payload.Operator == nil {
 			return fmt.Errorf("provider: %s needs operator state", event.Type)
@@ -527,7 +632,7 @@ func applyAuthorityEventTx(ctx context.Context, tx pgx.Tx, event eventspec.Event
 				return err
 			}
 		}
-	case AuditTenantProvisioned, AuditTenantSuspended, AuditTenantResumed, AuditTenantOffboarded:
+	case AuditTenantProvisioned, AuditTenantSuspended, AuditTenantResumed, AuditTenantOffboarded, AuditTenantErasureRequested, AuditTenantErasureFailed:
 		if payload.Tenant == nil {
 			return fmt.Errorf("provider: %s needs tenant state", event.Type)
 		}
@@ -668,7 +773,7 @@ func delegationOperationForEvent(eventType string) (Operation, bool) {
 		return OpSuspend, true
 	case AuditTenantResumed:
 		return OpResume, true
-	case AuditTenantOffboarded:
+	case AuditTenantOffboarded, AuditTenantErasureRequested:
 		return OpOffboard, true
 	case AuditBreakGlassRequested, AuditBreakGlassAccessed:
 		return OpBreakGlass, true

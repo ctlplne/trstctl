@@ -30,7 +30,7 @@ func TestComplianceEvidenceRequiresGovernanceFactory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate audit key: %v", err)
 	}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AuditSigningKey = auditKey
 	})
 	auditor := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "external-auditor", []string{
@@ -48,7 +48,7 @@ func TestComplianceEvidenceServedThroughGovernanceFactory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate audit key: %v", err)
 	}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AuditSigningKey = auditKey
 		d.GovernanceFactory = func(deps GovernanceFactoryDeps) (api.ComplianceEvidenceService, error) {
 			if deps.Audit == nil || deps.Store == nil || deps.Signer == nil {
@@ -87,7 +87,7 @@ func TestComplianceEvidenceServesSOC2CAPCMP05(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate audit key: %v", err)
 	}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AuditSigningKey = auditKey
 		d.GovernanceFactory = func(deps GovernanceFactoryDeps) (api.ComplianceEvidenceService, error) {
 			if deps.Audit == nil || deps.Store == nil || deps.Signer == nil {
@@ -118,7 +118,7 @@ func TestComplianceEvidenceServesWebTrustAndETSICAPCMP02(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate audit key: %v", err)
 	}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AuditSigningKey = auditKey
 		d.GovernanceFactory = func(deps GovernanceFactoryDeps) (api.ComplianceEvidenceService, error) {
 			if deps.Audit == nil || deps.Store == nil || deps.Signer == nil {
@@ -157,7 +157,7 @@ func TestComplianceEvidenceServesCABFBaselineRequirementsCAPCMP01(t *testing.T) 
 	if err != nil {
 		t.Fatalf("generate audit key: %v", err)
 	}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AuditSigningKey = auditKey
 		d.GovernanceFactory = func(deps GovernanceFactoryDeps) (api.ComplianceEvidenceService, error) {
 			if deps.Audit == nil || deps.Store == nil || deps.Signer == nil {
@@ -188,7 +188,7 @@ func TestComplianceEvidenceServesFIPSAndCommonCriteriaCAPCMP03(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate audit key: %v", err)
 	}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AuditSigningKey = auditKey
 		d.GovernanceFactory = func(deps GovernanceFactoryDeps) (api.ComplianceEvidenceService, error) {
 			if deps.Audit == nil || deps.Store == nil || deps.Signer == nil {
@@ -227,7 +227,7 @@ func TestComplianceEvidenceServesRegulatoryMappingCAPCMP04(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate audit key: %v", err)
 	}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AuditSigningKey = auditKey
 		d.GovernanceFactory = func(deps GovernanceFactoryDeps) (api.ComplianceEvidenceService, error) {
 			if deps.Audit == nil || deps.Store == nil || deps.Signer == nil {

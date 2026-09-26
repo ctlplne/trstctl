@@ -113,7 +113,7 @@ func (o *Orchestrator) RequestServiceNowTicket(ctx context.Context, tenantID str
 	}
 	var ev events.Event
 	var outboxID int64
-	if err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	if err := o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		var err error
 		ev, err = o.log.Append(ctx, events.Event{Type: EventITSMTicketRequested, TenantID: tenantID, Data: payload})
 		if err != nil {

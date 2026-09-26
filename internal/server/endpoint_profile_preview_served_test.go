@@ -23,7 +23,7 @@ func TestEndpointPreviewValidatesCertificateProfileMetadata(t *testing.T) {
 		{"wrong protocol", "partner-lab.example.com", "acme", "enrollment protocol"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+			h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 				withAgentChannel(d)
 				d.AgentClaimableJobKinds = []string{"endpoint.renew"}
 				d.DefaultProfile = "endpoint-metadata"

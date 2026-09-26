@@ -39,10 +39,12 @@ func TestProviderStatusContainsExistingCustomerCredential(t *testing.T) {
 			slug := "customer-containment-" + operation
 			id := CustomerID(slug)
 			idem := orchestrator.NewIdempotency(st)
-			orch := orchestrator.NewOrchestrator(log, st, orchestrator.NewOutbox(st))
+			projector := projections.New(st, runtime.ProjectionOptions...)
+			orch := orchestrator.NewOrchestrator(log, st, orchestrator.NewOutbox(st), orchestrator.WithProjector(projector))
 			provider := NewHandler(Config{License: providerLicense(t, 10), Store: NewPGStore(st),
 				Mutations: runtime.Mutations, Idempotency: idem, Authenticator: authorityAuthenticator{},
 				Delegations: &mutableDelegations{set: fullyDelegated("op-1", id)},
+				Offboarding: NewTenantOffboarder(st, log, orch, runtime.Mutations),
 			})
 			mutate := func(path, key, body string, want int) {
 				t.Helper()
@@ -60,7 +62,7 @@ func TestProviderStatusContainsExistingCustomerCredential(t *testing.T) {
 			// Reproduce the documented host-local registration used by an existing
 			// deployment. Provisioning must also work without that assistance.
 			payload, _ := json.Marshal(map[string]string{"name": "Customer containment"})
-			_, err = orchestrator.ExecuteTenantRegistration(ctx, log, st, projections.New(st), idem,
+			_, err = orchestrator.ExecuteTenantRegistration(ctx, log, st, projector, idem,
 				orchestrator.TenantRegistrationCommand{TenantID: id, Name: "Customer containment",
 					IdempotencyKey: "customer-bootstrap-" + operation, RequestMaterial: payload,
 					PayloadAt: func(time.Time) ([]byte, error) { return payload, nil },
@@ -115,18 +117,36 @@ func TestProviderStatusContainsExistingCustomerCredential(t *testing.T) {
 			if calls != 0 {
 				t.Fatalf("%s delivered queued work", operation)
 			}
-			if err := st.WithTenant(ctx, id, func(tx pgx.Tx) error {
-				var status string
-				var attempts int
-				if err := tx.QueryRow(ctx, `SELECT status, attempts FROM outbox WHERE tenant_id = $1 AND id = $2`, id, deliveryID).Scan(&status, &attempts); err != nil {
-					return err
+			if operation == "suspend" {
+				if err := st.WithTenant(ctx, id, func(tx pgx.Tx) error {
+					var status string
+					var attempts int
+					if err := tx.QueryRow(ctx, `SELECT status, attempts FROM outbox WHERE tenant_id = $1 AND id = $2`, id, deliveryID).Scan(&status, &attempts); err != nil {
+						return err
+					}
+					if status != "pending" || attempts != 0 {
+						t.Errorf("paused delivery = %s/%d; suspension must not spend retry budget", status, attempts)
+					}
+					return nil
+				}); err != nil {
+					t.Fatal(err)
 				}
-				if status != "pending" || attempts != 0 {
-					t.Errorf("paused delivery = %s/%d; suspension must not spend retry budget", status, attempts)
+			}
+			if operation == "offboard" {
+				// The installed console promises deletion, not merely an admission
+				// flag. Check the actual customer rows and credential independently
+				// of the Provider roster and API refusal above.
+				for _, table := range []string{"tenants", "owners", "api_tokens", "outbox"} {
+					var remaining int
+					if err := st.WithTenant(ctx, id, func(tx pgx.Tx) error {
+						return tx.QueryRow(ctx, "SELECT count(*) FROM "+table+" WHERE tenant_id = $1", id).Scan(&remaining)
+					}); err != nil {
+						t.Fatal(err)
+					}
+					if remaining != 0 {
+						t.Errorf("offboard left %d customer rows in %s; success must complete the promised relational deletion", remaining, table)
+					}
 				}
-				return nil
-			}); err != nil {
-				t.Fatal(err)
 			}
 			if operation == "suspend" {
 				mutate("/provider/v1/tenants/"+id+"/resume", "containment-resume", `{}`, http.StatusNoContent)

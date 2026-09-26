@@ -22,7 +22,7 @@ import (
 // changing the KRL, or calling the signer. Issue then mints exactly one host
 // certificate, and an idempotent replay returns the same certificate.
 func TestServedSSHCertificatePreviewAndIssueF43(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{
+	h := newOperatingServedHarness(t, config.Protocols{
 		SSH: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 	})
 	token := seedScopedToken(t, h.store, h.tenant, "certs:issue", "certs:read")
@@ -191,7 +191,7 @@ func TestServedSSHCertificatePreviewAndIssueF43(t *testing.T) {
 }
 
 func TestServedSSHCertificatePreviewRejectsUnsafeOptions(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{
+	h := newOperatingServedHarness(t, config.Protocols{
 		SSH: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 	})
 	token := seedScopedToken(t, h.store, h.tenant, "certs:issue")

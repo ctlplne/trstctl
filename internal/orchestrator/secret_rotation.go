@@ -164,6 +164,12 @@ func (o *Orchestrator) emitPreparedSecretRotationScheduleRun(
 	ctx context.Context,
 	next events.Event,
 ) (events.Event, error) {
+	ctx, releaseTenant, admissionErr := o.beginTenantCommand(ctx, next.TenantID)
+	if admissionErr != nil {
+		return events.Event{}, admissionErr
+	}
+	defer releaseTenant()
+
 	var ev events.Event
 	err := o.store.WithPrivacyTenantProjectionRepeatableRead(
 		ctx, next.TenantID, "secret rotation scheduler terminal append", func(tx pgx.Tx) error {
@@ -194,6 +200,12 @@ func (o *Orchestrator) reconcileSecretRotationScheduleRun(
 	tenantID, scheduleID, runID, eventID string,
 	dueAt time.Time,
 ) (store.SecretRotationScheduleRun, bool, error) {
+	ctx, releaseTenant, admissionErr := o.beginTenantCommand(ctx, tenantID)
+	if admissionErr != nil {
+		return store.SecretRotationScheduleRun{}, false, admissionErr
+	}
+	defer releaseTenant()
+
 	var (
 		retained store.SecretRotationScheduleRun
 		found    bool

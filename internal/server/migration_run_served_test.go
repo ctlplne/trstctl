@@ -256,6 +256,7 @@ func TestServedMigrationTrustBeforeLeafAndRollbackAUD40(t *testing.T) {
 	assertMigrationOutboxCountAUD40(t, h, started.ID, "issue_successor", 0)
 
 	const tenantB = "22222222-2222-2222-2222-222222222222"
+	registerServedTenantID(t, h.servedHarness, tenantB, "Migration isolation customer")
 	tokenB := seedScopedToken(t, h.store, tenantB, "keys:read")
 	statusCode, _ = secretsReq(t, h.servedHarness, http.MethodGet,
 		"/api/v1/migrations/runs/"+started.ID, tokenB, nil)

@@ -44,6 +44,7 @@ func TestServedABACDenyOverlayEnforcesChangeWindow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}
+	registerServerTestTenant(t, st, log, tenantID, "ABAC operating tenant")
 	srv, err := Build(ctx, Deps{
 		Store:            st,
 		Log:              log,

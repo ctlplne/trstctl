@@ -20,7 +20,7 @@ import (
 )
 
 func TestServedACMEPlanRejectsProfileWithoutUsableValidity(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}})
+	h := newOperatingServedHarness(t, config.Protocols{ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}})
 	token := seedScopedToken(t, h.store, h.tenant, string(authz.IssuersRead))
 	for _, tc := range []struct {
 		name    string
@@ -63,7 +63,7 @@ func TestServedACMEPlanRejectsProfileWithoutUsableValidity(t *testing.T) {
 // promises together.
 func TestServedACMEOperatorPlanIsTenantBoundSecretFreeAndEffectFree(t *testing.T) {
 	hmacKey := bytes.Repeat([]byte{0x5a}, 32)
-	h := newServedHarness(t, config.Protocols{
+	h := newOperatingServedHarness(t, config.Protocols{
 		ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 		ACMEEAB: config.ACMEExternalAccountBinding{
 			Required: true,
@@ -169,13 +169,14 @@ func TestServedACMEOperatorPlanIsTenantBoundSecretFreeAndEffectFree(t *testing.T
 // A tenant that does not own the single served ACME mount gets a useful blocked
 // answer, but none of the owning tenant's EAB counts or policy details.
 func TestServedACMEOperatorPlanDoesNotDescribeAnotherTenantsMount(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{
+	h := newOperatingServedHarness(t, config.Protocols{
 		ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 		ACMEEAB: config.ACMEExternalAccountBinding{Required: true, Keys: []config.ACMEExternalAccountBindingKey{{
 			KeyID: "private-tenant-kid", HMACKey: bytes.Repeat([]byte{0x21}, 32),
 		}}},
 	})
 	otherTenant := "22222222-2222-4222-8222-222222222222"
+	registerServedTenantID(t, h, otherTenant, "Other operator-plan tenant")
 	tok := seedScopedToken(t, h.store, otherTenant, string(authz.IssuersRead))
 	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/acme/operator-plan", tok, nil)
 	if status != http.StatusOK {
@@ -205,7 +206,7 @@ func TestServedACMEOperatorPlanDoesNotDescribeAnotherTenantsMount(t *testing.T) 
 // operator plan may reveal the domain and policy result to an authorized tenant,
 // but never the account URL or challenge token needed to answer the challenge.
 func TestServedACMEOperatorPlanShowsSanitizedRealDomainValidationActivity(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{
+	h := newOperatingServedHarness(t, config.Protocols{
 		ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, string(authz.IssuersRead), string(authz.IssuersWrite))

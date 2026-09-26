@@ -22,7 +22,7 @@ import (
 // request answered 500, the durable tail wedged on the first loser, and /readyz
 // went to 503.
 func TestServedSecondCampaignOpenIsRefusedBeforeAppend(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "agents:read", "agents:write")
 	ctx := t.Context()
 

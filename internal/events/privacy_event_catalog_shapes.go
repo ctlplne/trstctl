@@ -189,6 +189,10 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 			catalogPrivacyShapeOptions{Optional: []string{
 				"/seq", "/order/issuance_key", "/order/auth_mode", "/order/cert_id", "/order/replaces", "/order/attested_key_sha256",
 			}}), true
+	case "agent.job.receipt.reconciled":
+		return shape(`{"agent":"","job_id":1,"kind":"","attempt":1,"outcome":"","current_state_applied":false,"receipt_statement":"","receipt_signature":"","receipt_signer_fingerprint":""}`), true
+	case "agent.job.receipt.conflict":
+		return shape(`{"agent":"","job_id":1,"attempt":1,"reason":""}`), true
 	case "agent.jobs.claimed":
 		return shape(`{"agent":"","count":1,"kinds":[""]}`), true
 	case "agent.jobs.role_refused":

@@ -153,7 +153,7 @@ func TestServedSecretSharePreviewIsEffectFreeAndBindsRecoverableCreate(t *testin
 }
 
 func TestServedSecretSharePreviewRejectsUnsafeTTLWithoutIdempotencyKey(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
 	token := seedScopedToken(t, h.store, h.tenant, "secrets:write")
 	for _, ttl := range []int{-1, 59, 604801} {
 		status, body := secretSharePreviewRequest(t, h, token, ttl)

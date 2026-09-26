@@ -17,7 +17,7 @@ import (
 )
 
 func TestServedEphemeralIdentitiesAndApprovalsAreTenantIsolated(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.EphemeralIssuance = EphemeralIssuanceConfig{Enabled: true, TrustDomain: "served.test", DefaultTTL: time.Minute, MaxTTL: 2 * time.Minute, ApprovalTTL: time.Minute, RequiredApprovals: 1}
 	})
 	const tenantB = "22222222-2222-4222-8222-222222222222"

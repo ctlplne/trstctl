@@ -7,6 +7,7 @@ import { translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 import { formatDateTime } from "@/i18n/format";
 import { Button } from "@/components/ui/button";
+import { DataGrid } from "@/components/DataGrid";
 import { Input } from "@/components/ui/input";
 import { createAppQueryClient, useApiQuery, useQueryClient } from "@/lib/query";
 import { ProviderAccessPanel } from "@/pages/provider/ProviderAccessPanel";
@@ -422,6 +423,9 @@ function ProviderConsole({ onSignOut }: { onSignOut: (reason?: "authentication")
           return;
         }
         setError(err instanceof Error ? err.message : String(err));
+        // A rejected or interrupted response can still have retained an
+        // offboarding request. Show the server's current state immediately.
+        await load();
       } finally {
         setBusy(false);
         void queryClient.invalidateQueries({ queryKey: ["provider", "session"] });
@@ -431,7 +435,7 @@ function ProviderConsole({ onSignOut }: { onSignOut: (reason?: "authentication")
   );
 
   const statusClass = (status: ProviderTenant["status"]) =>
-    status === "active" ? "text-status-success" : status === "suspended" ? "text-status-warning" : "text-status-danger";
+    status === "active" ? "text-status-success" : status === "suspended" || status === "offboarding" ? "text-status-warning" : "text-status-danger";
 
   return (
     <main className="mx-auto max-w-5xl p-comfortable">
@@ -535,6 +539,32 @@ function ProviderConsole({ onSignOut }: { onSignOut: (reason?: "authentication")
                   <span className="ml-2 text-muted-foreground">{item.operator_email || item.subject || item.operator_id}</span>
                   {item.tenant_id ? <span className="ml-2 font-mono text-muted-foreground">{item.tenant_id}</span> : null}
                   {item.reason ? <span className="ml-2 text-muted-foreground">{item.reason}</span> : null}
+                  {item.offboard_state === "pending" || item.offboard_state === "failed" || item.offboard_state === "completed" ? (
+                    <p className="mt-1 text-caption">
+                      {translateNow(
+                        item.offboard_state === "completed"
+                          ? "provider.offboard.completed"
+                          : item.offboard_state === "failed"
+                            ? "provider.offboard.failed"
+                            : "provider.offboard.pending",
+                      )}
+                    </p>
+                  ) : null}
+                  {item.can_continue_offboard === true && item.offboard_state === "pending" && item.request_event_id && item.tenant_id ? (
+                    <Button
+                      type="button"
+                      variant="destructive-outline"
+                      loading={busy}
+                      className="mt-2"
+                      onClick={() => {
+                        if (window.confirm(translateNow("provider.offboard.continueConfirm"))) {
+                          void act(() => providerApi.offboardTenant(item.tenant_id!, item.request_event_id));
+                        }
+                      }}
+                    >
+                      {translateNow("provider.offboard.continue")}
+                    </Button>
+                  ) : null}
                 </div>
                 <div className="flex gap-2 text-muted-foreground">
                   <time dateTime={item.at}>{formatDateTime(item.at)}</time>
@@ -578,145 +608,143 @@ function ProviderConsole({ onSignOut }: { onSignOut: (reason?: "authentication")
 
       <section className="mt-6">
         <h2 className="text-title font-semibold">{translateNow("source.provider.customers.l3prov0011")}</h2>
-        {!tenants ? (
-          <p className="mt-2 text-caption text-muted-foreground">{translateNow("source.loading.4f9d1e0e3a")}</p>
-        ) : tenants.length === 0 ? (
-          <p className="mt-2 text-caption text-muted-foreground">
-            {translateNow(authority?.provision ? "source.provider.none.l3prov0012" : "source.provider.access.none.aud580015")}
-          </p>
-        ) : (
-          <div className="mt-2 overflow-x-auto">
-            <table className="w-full text-caption">
-              <thead>
-                <tr className="text-left text-muted-foreground">
-                  <th className="pr-4 font-medium">{translateNow("source.provider.col.name.l3prov0013")}</th>
-                  <th className="pr-4 font-medium">{translateNow("source.provider.col.slug.l3prov0014")}</th>
-                  <th className="pr-4 font-medium">{translateNow("source.provider.col.status.l3prov0015")}</th>
-                  <th className="pr-4 font-medium">{translateNow("source.provider.col.created.l3prov0016")}</th>
-                  <th className="pr-4 font-medium">{translateNow("source.provider.col.actions.l3prov0017")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tenants
-                  .map((tenant) => (
-                    <tr key={tenant.id} className="border-t border-border/60">
-                      <td className="py-1 pr-4">{tenant.name}</td>
-                      <td className="py-1 pr-4 font-mono text-xs">{tenant.slug}</td>
-                      <td className={`py-1 pr-4 ${statusClass(tenant.status)}`}>{tenant.status}</td>
-                      <td className="py-1 pr-4 text-xs text-muted-foreground">{formatDateTime(tenant.created_at)}</td>
-                      <td className="py-1 pr-4">
-                        {tenant.status === "active" && authority?.customers[tenant.id]?.suspend ? (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            disabled={busy}
-                            onClick={() => {
-                              if (window.confirm(translateNow("source.provider.suspend.confirm.l3prov0018"))) {
-                                void act(() => providerApi.suspendTenant(tenant.id));
-                              }
-                            }}
-                          >
-                            {translateNow("source.provider.suspend.l3prov0019")}
-                          </Button>
-                        ) : null}
-                        {tenant.status === "suspended" && authority?.customers[tenant.id]?.resume ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            disabled={busy}
-                            onClick={() => {
-                              if (window.confirm(translateNow("source.provider.resume.confirm.qa1850001"))) {
-                                void act(() => providerApi.resumeTenant(tenant.id));
-                              }
-                            }}
-                          >
-                            {translateNow("source.provider.resume.action.qa1850002")}
-                          </Button>
-                        ) : null}
-                        {tenant.status !== "offboarded" && authority?.customers[tenant.id]?.offboard ? (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="ml-2"
-                            disabled={busy}
-                            onClick={() => {
-                              if (window.confirm(translateNow("source.provider.offboard.confirm.l3prov0020"))) {
-                                void act(() => providerApi.offboardTenant(tenant.id));
-                              }
-                            }}
-                          >
-                            {translateNow("source.provider.offboard.l3prov0021")}
-                          </Button>
-                        ) : null}
-                        {authority?.customers[tenant.id]?.read_quota ? (
-                          <Button type="button" variant="ghost" className="ml-2" onClick={() => void viewQuota(tenant.id)}>
-                            {translateNow("source.provider.quota.l3prov0022")}
-                          </Button>
-                        ) : null}
-                        {tenant.status !== "offboarded" && authority?.customers[tenant.id]?.write_brand ? (
-                          <Button type="button" variant="ghost" className="ml-2" onClick={() => setBrandFor((cur) => (cur === tenant.id ? null : tenant.id))}>
-                            {translateNow("source.provider.brand.l3prov0030")}
-                          </Button>
-                        ) : null}
-                      </td>
-                    </tr>
-                  ))
-                  /* The quota panel renders as its own row beneath the
-                     customer, so the table layout is unaffected. An UNSET limit
-                     is shown as "unlimited", never zero — a missing cap is the
-                     absence of a limit, not a limit of nothing. */
-                  .flatMap((rowEl, i) => {
-                    const tenant = tenants[i];
-                    const extras = [rowEl];
-                    if (quotaView?.id === tenant.id && authority?.customers[tenant.id]?.read_quota) {
-                      extras.push(
-                        <tr key={`${tenant.id}-quota`} className="bg-muted/30">
-                          <td colSpan={5} className="px-4 py-2 text-xs">
-                            {quotaView.state === "loading" ? (
-                              translateNow("source.loading.4f9d1e0e3a")
-                            ) : quotaView.state === "error" ? (
-                              <span className="text-muted-foreground">{translateNow("source.provider.quota.none.l3prov0023")}</span>
-                            ) : !authority.customers[tenant.id]?.write_quota ? (
-                              <QuotaSummary quota={quotaView.data} />
-                            ) : (
-                              <QuotaEditor
-                                key={tenant.id}
-                                tenantId={tenant.id}
-                                initial={quotaView.data}
-                                onSaved={(saved) => setQuotaView({ id: tenant.id, state: "ok", data: saved })}
-                                onAuthError={() => {
-                                  clearProviderToken();
-                                  onSignOut("authentication");
-                                }}
-                              />
-                            )}
-                          </td>
-                        </tr>,
-                      );
-                    }
-                    if (brandFor === tenant.id && authority?.customers[tenant.id]?.write_brand) {
-                      extras.push(
-                        <tr key={`${tenant.id}-brand`} className="bg-muted/30">
-                          <td colSpan={5} className="px-4 py-2 text-xs">
-                            <BrandEditor
-                              tenantId={tenant.id}
-                              onSaved={() => setBrandFor(null)}
-                              onAuthError={() => {
-                                clearProviderToken();
-                                onSignOut("authentication");
-                              }}
-                            />
-                          </td>
-                        </tr>,
-                      );
-                    }
-                    return extras;
-                  })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <DataGrid
+          ariaLabel={translateNow("source.provider.customers.l3prov0011")}
+          className="mt-2"
+          rows={tenants ?? []}
+          getRowId={(tenant) => tenant.id}
+          state={customers.error ? "error" : !tenants ? "loading" : tenants.length === 0 ? "empty" : "ready"}
+          stateMessage={customers.error || translateNow(authority?.provision ? "source.provider.none.l3prov0012" : "source.provider.access.none.aud580015")}
+          columns={[
+            { id: "name", header: translateNow("source.provider.col.name.l3prov0013"), cell: (tenant) => tenant.name },
+            { id: "slug", header: translateNow("source.provider.col.slug.l3prov0014"), cell: (tenant) => tenant.slug },
+            {
+              id: "status",
+              header: translateNow("source.provider.col.status.l3prov0015"),
+              cell: (tenant) => (
+                <div className="min-w-40 max-w-xs whitespace-normal">
+                  <span className={statusClass(tenant.status)}>
+                    {tenant.status === "offboarding"
+                      ? translateNow("provider.offboard.pending")
+                      : tenant.status === "offboard_failed"
+                        ? translateNow("provider.offboard.failed")
+                        : tenant.status}
+                  </span>
+                  {tenant.status === "offboarding" || tenant.status === "offboard_failed" ? (
+                    <p className="mt-1 text-caption text-muted-foreground">
+                      {translateNow(tenant.status === "offboarding" ? "provider.offboard.pendingHelp" : "provider.offboard.failedHelp")}
+                    </p>
+                  ) : null}
+                </div>
+              ),
+            },
+            { id: "created", header: translateNow("source.provider.col.created.l3prov0016"), cell: (tenant) => formatDateTime(tenant.created_at) },
+            {
+              id: "actions",
+              header: translateNow("source.provider.col.actions.l3prov0017"),
+              cell: (tenant) => (
+                <div className="flex flex-wrap items-center gap-2">
+                  {tenant.status === "active" && authority?.customers[tenant.id]?.suspend ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => {
+                        if (window.confirm(translateNow("source.provider.suspend.confirm.l3prov0018"))) {
+                          void act(() => providerApi.suspendTenant(tenant.id));
+                        }
+                      }}
+                    >
+                      {translateNow("source.provider.suspend.l3prov0019")}
+                    </Button>
+                  ) : null}
+                  {tenant.status === "suspended" && authority?.customers[tenant.id]?.resume ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => {
+                        if (window.confirm(translateNow("source.provider.resume.confirm.qa1850001"))) {
+                          void act(() => providerApi.resumeTenant(tenant.id));
+                        }
+                      }}
+                    >
+                      {translateNow("source.provider.resume.action.qa1850002")}
+                    </Button>
+                  ) : null}
+                  {tenant.status !== "offboarded" && tenant.status !== "offboarding" && authority?.customers[tenant.id]?.offboard ? (
+                    <Button
+                      type="button"
+                      variant="destructive-outline"
+                      className="ml-2"
+                      disabled={busy}
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            translateNow(
+                              tenant.status === "offboard_failed" ? "provider.offboard.reviewConfirm" : "source.provider.offboard.confirm.l3prov0020",
+                            ),
+                          )
+                        ) {
+                          void act(() => providerApi.offboardTenant(tenant.id));
+                        }
+                      }}
+                    >
+                      {translateNow(tenant.status === "offboard_failed" ? "provider.offboard.review" : "source.provider.offboard.l3prov0021")}
+                    </Button>
+                  ) : null}
+                  {authority?.customers[tenant.id]?.read_quota ? (
+                    <Button type="button" variant="ghost" className="ml-2" onClick={() => void viewQuota(tenant.id)}>
+                      {translateNow("source.provider.quota.l3prov0022")}
+                    </Button>
+                  ) : null}
+                  {tenant.status !== "offboarded" && authority?.customers[tenant.id]?.write_brand ? (
+                    <Button type="button" variant="ghost" className="ml-2" onClick={() => setBrandFor((cur) => (cur === tenant.id ? null : tenant.id))}>
+                      {translateNow("source.provider.brand.l3prov0030")}
+                    </Button>
+                  ) : null}
+                </div>
+              ),
+            },
+          ]}
+        />
+        {quotaView && tenants?.some((tenant) => tenant.id === quotaView.id) && authority?.customers[quotaView.id]?.read_quota ? (
+          <section className="mt-3 rounded-md border border-border p-4" aria-label={translateNow("source.provider.quota.l3prov0022")}>
+            <h3 className="font-medium">{tenants.find((tenant) => tenant.id === quotaView.id)?.name}</h3>
+            {quotaView.state === "loading" ? (
+              translateNow("source.loading.4f9d1e0e3a")
+            ) : quotaView.state === "error" ? (
+              <span className="text-muted-foreground">{translateNow("source.provider.quota.none.l3prov0023")}</span>
+            ) : !authority.customers[quotaView.id]?.write_quota ? (
+              <QuotaSummary quota={quotaView.data} />
+            ) : (
+              <QuotaEditor
+                key={quotaView.id}
+                tenantId={quotaView.id}
+                initial={quotaView.data}
+                onSaved={(saved) => setQuotaView({ id: quotaView.id, state: "ok", data: saved })}
+                onAuthError={() => {
+                  clearProviderToken();
+                  onSignOut("authentication");
+                }}
+              />
+            )}
+          </section>
+        ) : null}
+        {brandFor && tenants?.some((tenant) => tenant.id === brandFor) && authority?.customers[brandFor]?.write_brand ? (
+          <section className="mt-3 rounded-md border border-border p-4" aria-label={translateNow("source.provider.brand.l3prov0030")}>
+            <h3 className="font-medium">{tenants.find((tenant) => tenant.id === brandFor)?.name}</h3>
+            <BrandEditor
+              tenantId={brandFor}
+              onSaved={() => setBrandFor(null)}
+              onAuthError={() => {
+                clearProviderToken();
+                onSignOut("authentication");
+              }}
+            />
+          </section>
+        ) : null}
       </section>
     </main>
   );

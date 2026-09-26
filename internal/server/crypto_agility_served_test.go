@@ -19,7 +19,7 @@ import (
 // read API instead of living only in internal crypto tests. Licensed algorithms
 // are validated by their ee/ package tests.
 func TestServedCryptoAgilityProfilesValidateCoreAlgorithms(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, string(authz.ProfilesWrite), string(authz.ProfilesRead))
 
 	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/profiles", tok, "f16-unsupported-profile", map[string]any{

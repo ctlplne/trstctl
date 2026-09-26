@@ -13,7 +13,7 @@ import (
 )
 
 func TestServedKubernetesTrustBundleDistributionCAPK8S07(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "certs:read")
 
 	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/kubernetes/trust-bundles", tok, nil)

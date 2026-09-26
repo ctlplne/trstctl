@@ -36,7 +36,7 @@ func TestEndpointBindingPinsExternalIssuerFromEffectFreePreview(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(dc.Close)
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.LifecycleRenewBefore = 31 * 24 * time.Hour
 		d.ExternalCAs = []ExternalCA{{
 			ID: "corporate-digicert", Type: "digicert", Name: "Corporate DigiCert",
@@ -190,7 +190,7 @@ func TestEndpointBindingPinsExternalIssuerFromEffectFreePreview(t *testing.T) {
 // that verifies one hostname cannot safely receive a certificate for another:
 // the files may be replaced, but the listener proof will fail after the write.
 func TestEndpointBindingPreviewRejectsTargetHostnameMismatchBeforeMutation(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		withAgentChannel(d)
 		d.AgentClaimableJobKinds = []string{"endpoint.renew"}
 	})
@@ -260,7 +260,7 @@ func TestEndpointBindingPreviewRejectsTargetHostnameMismatchBeforeMutation(t *te
 // lifecycle endpoints are 404s, deploy acks were invisible, and renewals did not
 // queue a post-rotation connector.deploy receipt.
 func TestServedDeployAndRotationPublishReceipts(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.LifecycleRenewBefore = 31 * 24 * time.Hour
 	})
 	tok := seedScopedToken(t, h.store, h.tenant,
@@ -385,7 +385,7 @@ func TestServedDeployAndRotationPublishReceipts(t *testing.T) {
 }
 
 func TestServedLifecycleSchedulerUsesARIWindowForRenewal(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{
+	h := newOperatingServedHarness(t, config.Protocols{
 		ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 	}, func(d *Deps) {
 		d.LifecycleRenewBefore = time.Hour
@@ -525,6 +525,7 @@ func TestServedLifecycleSchedulerUsesARIWindowForRenewal(t *testing.T) {
 	}
 
 	const tenantB = "22222222-2222-2222-2222-222222222222"
+	registerServedTenantID(t, h, tenantB, "Other ARI tenant")
 	if _, err := h.store.CreateOwner(context.Background(), store.Owner{
 		TenantID: tenantB, Kind: store.OwnerWorkload, Name: "ari-posture-tenant-b",
 	}); err != nil {
@@ -543,7 +544,7 @@ func TestServedLifecycleSchedulerUsesARIWindowForRenewal(t *testing.T) {
 }
 
 func TestServedWildcardIdentityRequiresAcknowledgementAndRenewsTRACE017(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.LifecycleRenewBefore = 31 * 24 * time.Hour
 	})
 	tok := seedScopedToken(t, h.store, h.tenant,
@@ -687,7 +688,7 @@ func TestServedConnectorTargetJourneyJOURNEY001EndToEnd(t *testing.T) {
 	registry.Register(acm.New("us-east-1", acm.Credentials{
 		AccessKeyID: awsAccessKey, SecretAccessKey: []byte(awsSecretKey),
 	}, acm.WithEndpoint(provider.URL())))
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.LifecycleRenewBefore = 31 * 24 * time.Hour
 		d.ConnectorRegistry = registry
 	})
@@ -886,7 +887,7 @@ func TestServedConnectorTargetJourneyJOURNEY001EndToEnd(t *testing.T) {
 }
 
 func TestServedEndpointBindingAutomationCAPLIFE01(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.LifecycleRenewBefore = 31 * 24 * time.Hour
 	})
 	tok := seedScopedToken(t, h.store, h.tenant,

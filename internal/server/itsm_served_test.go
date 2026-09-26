@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"net/url"
+	"strings"
 	"sync"
 	"testing"
 
@@ -20,7 +21,7 @@ import (
 func TestServedServiceNowITSMTicketCAPDEP04EndToEnd(t *testing.T) {
 	sink := newServiceNowSink(t)
 	t.Setenv("TRSTCTL_SERVICENOW_TOKEN", "servicenow-test-token")
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.ServiceNowBindings = []api.ServiceNowBinding{{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			InstanceURL:          sink.URL(),
 			TokenRef:             "env:TRSTCTL_SERVICENOW_TOKEN",
@@ -102,7 +103,7 @@ func TestServedServiceNowITSMTicketCAPDEP04EndToEnd(t *testing.T) {
 }
 
 func TestServedServiceNowTicketRejectsInlineToken(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "incidents:write")
 
 	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/itsm/servicenow/tickets", tok, "itsm-servicenow-inline-token", map[string]any{
@@ -121,7 +122,7 @@ func TestServedServiceNowTicketRejectsUnapprovedSecretBackedEgress(t *testing.T)
 	unapproved := newServiceNowSink(t)
 	t.Setenv("TRSTCTL_SERVICENOW_TOKEN", "servicenow-test-token")
 	t.Setenv("TRSTCTL_AWS_SECRET_ACCESS_KEY", "do-not-send-this-to-servicenow")
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.ServiceNowBindings = []api.ServiceNowBinding{{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			InstanceURL:          approved.URL(),
 			TokenRef:             "env:TRSTCTL_SERVICENOW_TOKEN",
@@ -179,7 +180,7 @@ func TestServedServiceNowTicketRejectsUnapprovedSecretBackedEgress(t *testing.T)
 func TestServedServiceNowPrivateEndpointRequiresPrivateEgressPermission(t *testing.T) {
 	sink := newServiceNowSink(t)
 	t.Setenv("TRSTCTL_SERVICENOW_TOKEN", "servicenow-test-token")
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.ServiceNowBindings = []api.ServiceNowBinding{{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			InstanceURL:          sink.URL(),
 			TokenRef:             "env:TRSTCTL_SERVICENOW_TOKEN",
@@ -196,7 +197,7 @@ func TestServedServiceNowPrivateEndpointRequiresPrivateEgressPermission(t *testi
 		"short_description":      "private egress needs a separate grant",
 		"allow_private_endpoint": true,
 	})
-	if status != http.StatusForbidden {
+	if status != http.StatusForbidden || !strings.Contains(string(body), "requires "+string(authz.PrivateEgress)) {
 		t.Fatalf("private ServiceNow egress without %s = %d body %s", authz.PrivateEgress, status, body)
 	}
 	if got := serviceNowOutboxCount(t, h); got != 0 {
@@ -207,7 +208,7 @@ func TestServedServiceNowPrivateEndpointRequiresPrivateEgressPermission(t *testi
 func TestServedServiceNowPrivateEndpointRequiresCIDRGrant(t *testing.T) {
 	sink := newServiceNowSink(t)
 	t.Setenv("TRSTCTL_SERVICENOW_TOKEN", "servicenow-test-token")
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.ServiceNowBindings = []api.ServiceNowBinding{{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			InstanceURL:          sink.URL(),
 			TokenRef:             "env:TRSTCTL_SERVICENOW_TOKEN",

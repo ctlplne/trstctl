@@ -193,6 +193,8 @@ func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *t
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	226: true, // TestMigration0226RetainsUncertainRemoteDeliveries
+	225: true, // TestMigration0225PreservesOnlyKnownAgentRecipients
 	224: true, // TestMigration0224PreservesAuthorityWithoutInventingCompletion
 	222: true, // TestMigration0222PreservesUnknownCertificateIdentity
 	210: true, // TestRecentLifecycleMigrationsPreserveTenantEvidence/0210

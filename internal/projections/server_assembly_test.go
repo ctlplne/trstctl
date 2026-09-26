@@ -136,7 +136,7 @@ func TestAssembledControlPlaneServesAndIssues(t *testing.T) {
 		t.Skip("assembles the control plane with a real signer child; skipped in -short")
 	}
 	st := newStore(t)
-	log := openLog(t)
+	log := openRegisteredTenantLog(t)
 	prov, stop := startSignerChild(t)
 	defer stop()
 
@@ -248,7 +248,7 @@ func TestAssembledFailsClosedWhenSignerStops(t *testing.T) {
 // no enqueued external effect is lost (AN-6).
 func TestAssembledShutdownDrainsOutbox(t *testing.T) {
 	st := newStore(t)
-	log := openLog(t)
+	log := openRegisteredTenantLog(t)
 	var delivered int64
 	asm, err := server.Build(context.Background(), server.Deps{
 		Store: st, Log: log,

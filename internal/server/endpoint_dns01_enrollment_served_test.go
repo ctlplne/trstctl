@@ -22,7 +22,7 @@ func TestEndpointDNS01EnrollmentSurvivesDurableReviewAndRechecksConsent(t *testi
 		t.Fatal(err)
 	}
 	t.Cleanup(ca.Close)
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.ExternalCAs = []ExternalCA{{ID: "dns01-authority", Type: "digicert", Name: "DNS-01 enrollment authority", UpstreamDNS01: true,
 			CA: digicert.New("dns01-authority", ca.URL(), []byte(ca.APIKey()))}}
 	})

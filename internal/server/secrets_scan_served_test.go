@@ -40,7 +40,7 @@ func TestServedSecretScanPreviewAndRetryRecoveryF39(t *testing.T) {
 		},
 		failures: 1,
 	}
-	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
 		d.SecretScanner = fake
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:write", "discovery:read")
@@ -158,7 +158,7 @@ func TestServedGitleaksScanDetectsPlantedSecret(t *testing.T) {
 		t.Fatalf("write planted secret fixture: %v", err)
 	}
 
-	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
 		// The real scanner must see only this fixture, not the entire temporary
 		// directory or host filesystem. Production's default root stays closed.
 		d.SecretScanRoots = []string{repo}
@@ -267,7 +267,7 @@ entropy = 3.5
 			}},
 		},
 	}
-	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
 		d.SecretScanner = fake
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:write", "discovery:read")

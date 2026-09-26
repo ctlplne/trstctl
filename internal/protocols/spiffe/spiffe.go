@@ -24,6 +24,7 @@ import (
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/graph"
+	"trstctl.com/trstctl/internal/tenancy"
 )
 
 // ErrNoIdentity is returned when a caller's selectors match no registration
@@ -113,6 +114,9 @@ type RegistrationEntry struct {
 type Config struct {
 	Issuer   Issuer
 	TenantID string
+	// TenantServiceWork brackets each finite issuance operation, including audit
+	// and graph recording. It must not be held for the lifetime of a stream.
+	TenantServiceWork tenancy.ServiceWork
 	// TrustDomain is the SPIFFE trust domain (e.g. "example.org") this server's
 	// SVIDs and bundle belong to. It labels the bundle map in the gRPC Workload API
 	// X509Bundles response. Optional for the library FetchX509SVIDs path.
@@ -182,6 +186,11 @@ func (s *Server) FetchX509SVIDs(ctx context.Context, pubDER []byte, selectors []
 func (s *Server) fetchX509(ctx context.Context, parentID string, pubDER []byte, selectors []string) ([]X509SVID, error) {
 	var out []X509SVID
 	err := s.run(func() error {
+		ctx, release, err := s.cfg.TenantServiceWork.Begin(ctx, s.cfg.TenantID)
+		if err != nil {
+			return err
+		}
+		defer release()
 		entries := s.matchedForParent(selectors, parentID)
 		if len(entries) == 0 {
 			return ErrNoIdentity
@@ -257,6 +266,11 @@ func (s *Server) fetchJWT(ctx context.Context, parentID string, audience, select
 	}
 	var out []JWTSVID
 	err := s.run(func() error {
+		ctx, release, err := s.cfg.TenantServiceWork.Begin(ctx, s.cfg.TenantID)
+		if err != nil {
+			return err
+		}
+		defer release()
 		entries := s.matchedForParent(selectors, parentID)
 		if len(entries) == 0 {
 			return ErrNoIdentity

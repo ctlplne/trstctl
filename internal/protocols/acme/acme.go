@@ -307,6 +307,9 @@ type Server struct {
 	dvPolicy                DomainValidationPolicy
 	deviceAttestationPolicy DeviceAttestationPolicySource
 	deviceAttestNow         func() time.Time
+	stateScopeMu            sync.RWMutex
+	stateScopeSource        StateScopeSource
+	stateScope              StateScope
 	stateLog                eventLog
 	stateTenantID           string
 	eabCredentials          map[string]*eabCredential
@@ -549,7 +552,15 @@ func (s *Server) writeDVPolicyProblem(w http.ResponseWriter, r *http.Request, er
 }
 
 // ServeHTTP implements http.Handler.
-func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.mux.ServeHTTP(w, r) }
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	ctx, release, err := s.beginStateScope(r.Context())
+	if err != nil {
+		http.Error(w, "ACME tenant state is unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	defer release()
+	s.mux.ServeHTTP(w, r.WithContext(ctx))
+}
 
 func baseURL(r *http.Request) string {
 	scheme := "http"
@@ -581,6 +592,9 @@ func addIndexLink(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) nextID() string {
 	s.seq++
+	if s.stateScope.Identity != "" {
+		return crypto.SHA256Hex([]byte(s.stateScope.Identity)) + "-" + fmt.Sprintf("%d", s.seq)
+	}
 	return fmt.Sprintf("%d", s.seq)
 }
 
@@ -1627,6 +1641,11 @@ func (s *Server) MarkEarlyRenewal(certID string) {
 // MarkEarlyRenewalContext is MarkEarlyRenewal with explicit append context for
 // served deployments that persist ACME ARI state through the event log.
 func (s *Server) MarkEarlyRenewalContext(ctx context.Context, certID string) error {
+	ctx, release, err := s.beginStateScope(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.earlyRenew[certID] {

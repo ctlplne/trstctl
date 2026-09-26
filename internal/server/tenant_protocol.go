@@ -9,12 +9,19 @@ import (
 	"trstctl.com/trstctl/internal/tenancy"
 )
 
-// tenantProtocolAdmission is for a protocol with one configured tenant and no
-// per-user principal, such as the timestamp authority. Authentication and tenant
-// attribution for the other protocols remain in their normal adapters.
-func tenantProtocolAdmission(check tenancy.ServiceCheck, tenantID string, next http.Handler) http.Handler {
+// tenantProtocolAdmission protects the full request of a protocol with one
+// configured tenant, including non-signing mutations such as ACME account/order
+// creation. Protocol authentication remains in the normal handler; its service
+// fence also keeps an admitted request ahead of suspension or erasure.
+func tenantProtocolAdmission(work tenancy.ServiceWork, check tenancy.ServiceCheck, tenantID string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := check.Check(r.Context(), tenantID); err != nil {
+		ctx, release, err := work.Begin(r.Context(), tenantID)
+		if err == nil {
+			defer release()
+			r = r.WithContext(ctx)
+			err = check.Check(ctx, tenantID)
+		}
+		if err != nil {
 			code := http.StatusServiceUnavailable
 			if errors.Is(err, tenancy.ErrServiceUnavailable) {
 				code = http.StatusForbidden

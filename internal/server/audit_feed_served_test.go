@@ -28,7 +28,7 @@ const (
 // the proposed configuration is structured, but it is not a mutation: no event,
 // projection, idempotency record, outbox intent, or collector call may occur.
 func TestServedAuditFeedPreviewIsEffectFreeAndExactF9(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.OutboundEnvCredentialRefs = []string{"env:F9_SPLUNK_TOKEN"}
 	})
 	token := seedServedAPIToken(t, t.Context(), h.store, h.tenant, "f9-audit-operator", []string{
@@ -130,7 +130,7 @@ func TestServedAuditFeedsDeliverSplunkAndSentinelWithRetryAUD52(t *testing.T) {
 	t.Setenv("TRSTCTL_AUD52_SPLUNK_TOKEN", "aud52-splunk-token")
 	t.Setenv("TRSTCTL_AUD52_SENTINEL_TOKEN", "aud52-sentinel-token")
 
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.OutboundEnvCredentialRefs = []string{
 			"env:TRSTCTL_AUD52_SPLUNK_TOKEN",
 			"env:TRSTCTL_AUD52_SENTINEL_TOKEN",

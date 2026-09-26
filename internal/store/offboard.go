@@ -8,7 +8,64 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+
+	"trstctl.com/trstctl/internal/tenancy"
 )
+
+// TenantOffboardReceiverKeyPrefix identifies the durable core command receiver.
+// It is committed before deletion is appended and disappears only when the
+// tenant's SQL erase commits. Its presence therefore blocks new service even
+// when an edition projection has already folded the retained deletion event.
+const TenantOffboardReceiverKeyPrefix = "trstctl.internal.tenant-offboard.v1/"
+
+// TenantOffboardReceiverExistsTx reads only the specified tenant under the
+// caller's transaction/RLS context. Unknown receiver states also fail closed.
+func TenantOffboardReceiverExistsTx(ctx context.Context, tx pgx.Tx, tenantID string) (bool, error) {
+	var exists bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM idempotency_keys
+		WHERE tenant_id=$1 AND key LIKE $2)`, tenantID, TenantOffboardReceiverKeyPrefix+"%").Scan(&exists); err != nil {
+		return false, fmt.Errorf("store: inspect tenant offboard receiver: %w", err)
+	}
+	return exists, nil
+}
+
+// RequireLiveTenantService requires a current tenant row, no persisted customer
+// restriction, and no pending erase. Reading an existing restriction is core
+// tenancy enforcement; the licensed plane still owns its management and events.
+// Completed erasure removes its receiver too, so receiver absence alone cannot
+// authorize an old credential. This is independent of editions and does not
+// replace the operation lifetime that excludes concurrent lifecycle changes.
+func (s *Store) RequireLiveTenantService(ctx context.Context, tenantID string) error {
+	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var exists bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM tenants WHERE tenant_id=$1)`, tenantID).Scan(&exists); err != nil {
+			return fmt.Errorf("store: inspect live tenant service: %w", err)
+		}
+		if !exists {
+			return tenancy.ErrServiceUnavailable
+		}
+		// This registry is retained during core-only rebuild and in PostgreSQL
+		// backups. Removing an edition must not restore a suspended or legacy
+		// offboarded customer's access. Ordinary core tenants have no row here;
+		// only an explicit active row is unrestricted when a row does exist.
+		var restricted bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM provider_tenants
+			WHERE tenant_id=$1 AND status IS DISTINCT FROM 'active')`, tenantID).Scan(&restricted); err != nil {
+			return fmt.Errorf("store: inspect persisted tenant restriction: %w", err)
+		}
+		if restricted {
+			return tenancy.ErrServiceUnavailable
+		}
+		pending, err := TenantOffboardReceiverExistsTx(ctx, tx, tenantID)
+		if err != nil {
+			return err
+		}
+		if pending {
+			return tenancy.ErrServiceUnavailable
+		}
+		return nil
+	})
+}
 
 // TenantScopedTables is the authoritative, ordered list of every tenant-scoped
 // table OffboardTenant erases (TENANT-002). Order matters: a child that holds a
@@ -153,6 +210,7 @@ var TenantScopedTables = []string{
 	// material, but they name the tenant's agents and the work they did, which
 	// is tenant history and must leave with the tenant.
 	"agent_job_receipts",
+	"agent_job_attempt_bindings",
 	// C3: declared segments. An operator's own description of the networks
 	// they own is tenant data and leaves with the tenant.
 	"discovery_segments",
@@ -296,7 +354,13 @@ func (s *Store) PreflightTenantOffboardTx(ctx context.Context, tx pgx.Tx, tenant
 	if !privacyOperationShared {
 		return ErrPrivacyHistoryOperationActive
 	}
+	if err := s.TryTenantLifecycleCommitTx(ctx, tx, tenantID); err != nil {
+		return err
+	}
 	if _, err := lockTenantRegistrationForOffboardTx(ctx, tx, tenantID); err != nil {
+		return err
+	}
+	if err := s.RequireTenantAgentWorkQuiescentTx(ctx, tx, tenantID); err != nil {
 		return err
 	}
 	// Revocation also takes lifecycle before certificate metadata. Preserve

@@ -30,6 +30,7 @@ func TestBuiltServerServesConfiguredBulkheadStats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open event log: %v", err)
 	}
+	registerServerTestTenant(t, st, log, "44444444-4444-4444-8444-444444444444", "Bulkhead metrics fixture")
 	set := bulkhead.NewSet(
 		bulkhead.Config{Name: bulkhead.SubsystemAPI, Workers: 3, Queue: 17},
 		bulkhead.Config{Name: bulkhead.SubsystemOutbox, Workers: 2, Queue: 11},

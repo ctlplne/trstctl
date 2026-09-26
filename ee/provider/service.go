@@ -20,17 +20,21 @@ import (
 )
 
 const (
-	AuditTenantProvisioned   = "provider.tenant_provision"
-	AuditTenantSuspended     = "provider.tenant_suspend"
-	AuditTenantResumed       = "provider.tenant_resume"
-	AuditTenantOffboarded    = "provider.tenant_offboard"
-	AuditBreakGlassRequested = "provider.breakglass_request"
-	AuditBreakGlassConsented = "provider.breakglass_consent"
-	AuditBreakGlassDenied    = "provider.breakglass_deny"
-	AuditBreakGlassAccessed  = "provider.breakglass_access"
-	providerAuditTenant      = "provider-control-plane"
-	defaultMaxBreakGlassTTL  = 2 * time.Hour
-	defaultBreakGlassTTL     = 30 * time.Minute
+	AuditTenantProvisioned            = "provider.tenant_provision"
+	AuditTenantSuspended              = "provider.tenant_suspend"
+	AuditTenantResumed                = "provider.tenant_resume"
+	AuditTenantOffboarded             = "provider.tenant_offboard"
+	AuditTenantErasureRequested       = "provider.tenant_erasure.requested"
+	AuditUnregisteredTenantOffboarded = "provider.unregistered_tenant.offboarded"
+	AuditTenantErasureFailed          = "provider.tenant_erasure.failed"
+	AuditTenantErasureCompleted       = "provider.tenant_erasure.completed"
+	AuditBreakGlassRequested          = "provider.breakglass_request"
+	AuditBreakGlassConsented          = "provider.breakglass_consent"
+	AuditBreakGlassDenied             = "provider.breakglass_deny"
+	AuditBreakGlassAccessed           = "provider.breakglass_access"
+	providerAuditTenant               = "provider-control-plane"
+	defaultMaxBreakGlassTTL           = 2 * time.Hour
+	defaultBreakGlassTTL              = 30 * time.Minute
 )
 
 // Config wires the provider service. Core supplies this only through the tagged
@@ -51,6 +55,9 @@ type Config struct {
 	// event receiver. Production supplies the shared PostgreSQL ledger and
 	// tenant-bound result protector; nil is limited to in-memory unit adapters.
 	Idempotency *orchestrator.Idempotency
+	// Offboarding executes the event-bound core erase through the server's
+	// assembled orchestrator. Production supplies it after spine assembly.
+	Offboarding *TenantOffboarder
 	// Authenticator verifies a provider operator credential. NIL MEANS THE
 	// PROVIDER PLANE REFUSES EVERY REQUEST, which is the only safe default.
 	//
@@ -189,6 +196,7 @@ type Service struct {
 	store            Store
 	audit            AuditSink
 	mutations        MutationSink
+	offboarding      *TenantOffboarder
 	activity         ActivitySource
 	authenticator    OperatorAuthenticator
 	delegations      DelegationSource
@@ -234,7 +242,7 @@ func NewService(cfg Config) *Service {
 	// default answer to "which customers may this operator touch", and the only
 	// safe default answer is none.
 	return &Service{license: lic, store: store, audit: audit, authenticator: cfg.Authenticator,
-		mutations: cfg.Mutations, activity: cfg.Activity,
+		mutations: cfg.Mutations, activity: cfg.Activity, offboarding: cfg.Offboarding,
 		delegations: cfg.Delegations, access: cfg.Access, telemetry: telemetry, quotas: cfg.Quotas, brands: cfg.Brands,
 		drills: cfg.Drills, clock: clock, maxBreakGlassTTL: maxTTL}
 }
@@ -276,7 +284,14 @@ func (s *Service) ListActivity(ctx context.Context, actor Operator, limit int) (
 	out := make([]ProviderActivity, 0, maxProviderActivityLimit)
 	for index := len(all) - 1; index >= 0 && len(out) < limit; index-- {
 		item := all[index]
-		if visible[item.TenantID] || (item.TenantID == providerAuditTenant && actor.Role == OperatorAdmin) {
+		// A deletion revokes customer grants. Its original operator must still
+		// be able to recover that exact command's result, just as with the
+		// bound HTTP receipt. This exposes no customer snapshot or other actor's
+		// undelegated activity and does not confer authority for a new command.
+		ownErasure := item.RequestEventID != "" && item.OperatorID == actor.ID
+		item.CanContinueOffboard = ownErasure && item.Type == AuditTenantErasureRequested &&
+			item.OffboardState == "pending" && s.requireMutation(actor, true) == nil
+		if ownErasure || visible[item.TenantID] || (item.TenantID == providerAuditTenant && actor.Role == OperatorAdmin) {
 			out = append(out, item)
 		}
 	}
@@ -445,7 +460,17 @@ func (s *Service) Resume(ctx context.Context, actor Operator, tenantID string) e
 }
 
 func (s *Service) Offboard(ctx context.Context, actor Operator, tenantID string) error {
+	if s.offboarding != nil {
+		return s.offboarding.execute(ctx, s, actor, tenantID)
+	}
 	return s.setTenantStatus(ctx, actor, tenantID, TenantOffboarded, AuditTenantOffboarded)
+}
+
+func (s *Service) ContinueOffboard(ctx context.Context, actor Operator, tenantID, requestID string) error {
+	if s.offboarding == nil || requestID == "" {
+		return ErrMutationConflict
+	}
+	return s.offboarding.continueRequest(ctx, s, actor, tenantID, requestID)
 }
 
 func (s *Service) DirectTenantSnapshot(ctx context.Context, actor Operator, tenantID string) (TenantSnapshot, error) {
@@ -722,6 +747,20 @@ func (s *Service) BreakGlassResults(ctx context.Context, actor Operator, grantID
 }
 
 func (s *Service) setTenantStatus(ctx context.Context, actor Operator, tenantID string, status TenantStatus, auditType string) error {
+	if err := s.authorizeTenantStatus(ctx, actor, tenantID, status); err != nil {
+		return err
+	}
+	if barrier, ok := s.store.(interface {
+		WithCustomerServiceBarrier(context.Context, string, func(context.Context) error) error
+	}); ok {
+		return barrier.WithCustomerServiceBarrier(ctx, tenantID, func(fenced context.Context) error {
+			return s.setTenantStatusUnderServiceBarrier(fenced, actor, tenantID, status, auditType)
+		})
+	}
+	return s.setTenantStatusUnderServiceBarrier(ctx, actor, tenantID, status, auditType)
+}
+
+func (s *Service) setTenantStatusUnderServiceBarrier(ctx context.Context, actor Operator, tenantID string, status TenantStatus, auditType string) error {
 	if locker, ok := s.store.(interface {
 		WithLifecycleMutation(context.Context, func(context.Context) error) error
 	}); ok {
@@ -732,7 +771,7 @@ func (s *Service) setTenantStatus(ctx context.Context, actor Operator, tenantID 
 	return s.setTenantStatusLocked(ctx, actor, tenantID, status, auditType)
 }
 
-func (s *Service) setTenantStatusLocked(ctx context.Context, actor Operator, tenantID string, status TenantStatus, auditType string) error {
+func (s *Service) authorizeTenantStatus(ctx context.Context, actor Operator, tenantID string, status TenantStatus) error {
 	if err := s.requireMutation(actor, true); err != nil {
 		return err
 	}
@@ -758,15 +797,31 @@ func (s *Service) setTenantStatusLocked(ctx context.Context, actor Operator, ten
 	if err := s.authorize(ctx, actor, tenantID, op); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (s *Service) setTenantStatusLocked(ctx context.Context, actor Operator, tenantID string, status TenantStatus, auditType string) error {
+	if err := s.authorizeTenantStatus(ctx, actor, tenantID, status); err != nil {
+		return err
+	}
 	tenant, err := s.store.Tenant(ctx, tenantID)
 	if err != nil {
 		return err
 	}
-	if tenant.Status == TenantOffboarded && status != TenantOffboarded {
+	if tenant.Status == TenantOffboarding || (tenant.Status == TenantOffboarded && status != TenantOffboarded) {
 		return ErrTenantStateConflict
 	}
 	if status == TenantActive && tenant.Status != TenantSuspended {
 		return ErrTenantStateConflict
+	}
+	if status != TenantActive {
+		if guard, ok := s.store.(interface {
+			RequireCustomerWorkQuiescent(context.Context, string) error
+		}); ok {
+			if err := guard.RequireCustomerWorkQuiescent(ctx, tenantID); err != nil {
+				return err
+			}
+		}
 	}
 	now := s.clock()
 	tenant.Status, tenant.UpdatedAt = status, now

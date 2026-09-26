@@ -79,6 +79,7 @@ func TestServedAzureFederatedOutboxTenantIsolationTokenRedaction(t *testing.T) {
 	}
 
 	const tenantB = "22222222-2222-2222-2222-222222222222"
+	registerServedTenantID(t, h, tenantB, "azure federated neighbor")
 	if _, err := h.store.CreateOwner(t.Context(), store.Owner{
 		TenantID: tenantB, Kind: store.OwnerWorkload, Name: "tenant-b-azure-bootstrap",
 	}); err != nil {

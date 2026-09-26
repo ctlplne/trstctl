@@ -38,7 +38,7 @@ func TestServedOTLPExporterStreamsTracesAndAuditEvents(t *testing.T) {
 		t.Fatalf("build OTLP exporter: %v", err)
 	}
 	t.Cleanup(func() { _ = exp.Close() })
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.OTLPExporter = exp
 	})
 	ctx, cancel := context.WithCancel(context.Background())

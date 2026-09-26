@@ -56,6 +56,7 @@ func TestServedInitialHostFailureIsVisibleBeforeCertificateAndAfterRecovery(t *t
 		t.Fatalf("failure was hidden or claimed delivery: %+v", first)
 	}
 	// The receipt is a tenant-scoped projection, not a new cross-tenant route.
+	registerServedTenantID(t, h.servedHarness, "22222222-2222-4222-8222-222222222222", "Host failure neighbor")
 	otherToken := seedScopedToken(t, h.store, "22222222-2222-4222-8222-222222222222", "connectors:read")
 	code, body := secretsReqKey(t, h.servedHarness, http.MethodGet,
 		"/api/v1/connectors/deliveries/"+first["id"].(string), otherToken, "", nil)

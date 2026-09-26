@@ -22,7 +22,7 @@ import (
 
 func TestServedBrokerPreviewIsExactEffectFreeAndNeverVerifiesTaskOrProof(t *testing.T) {
 	attestor := &countingAttestedPreviewAttestor{}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AgentBroker = AgentBrokerConfig{Enabled: true, TrustDomain: "served.test", DefaultTTL: 10 * time.Minute,
 			MaxTTL: time.Hour, PolicyModule: servedBrokerAllowPolicy, Attestors: []attest.Attestor{attestor}}
 	})
@@ -136,7 +136,7 @@ func TestServedBrokerPreviewIsExactEffectFreeAndNeverVerifiesTaskOrProof(t *test
 func TestServedBrokerTenantTrustRotationRevocationAndRequesterCustody(t *testing.T) {
 	first := servedDynamicK8sTrustFixture(t, "broker-tenant-k1")
 	rotated := servedDynamicK8sTrustFixture(t, "broker-tenant-k2")
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AgentBroker = AgentBrokerConfig{Enabled: true, TrustDomain: "served.test", PolicyModule: servedBrokerAllowPolicy}
 	})
 	owner := seedScopedToken(t, h.store, h.tenant, "certs:issue", "certs:read")

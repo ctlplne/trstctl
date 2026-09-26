@@ -105,7 +105,7 @@ func (o *Orchestrator) QueueEnrollmentDiagnosticVerification(
 	}
 	var event events.Event
 	inserted := false
-	err = o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err = o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		event, err = o.log.Append(ctx, events.Event{
 			ID: eventID, Type: projections.EventEnrollmentDiagnosticVerificationQueued,
 			TenantID: tenantID, Data: raw,

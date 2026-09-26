@@ -17,7 +17,6 @@ import (
 
 	agentrelay "trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
-	"trstctl.com/trstctl/internal/app"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/mtls"
@@ -35,11 +34,8 @@ func TestServedHostKeystoreIssuanceAndRenewalRedeemOnlyManagementCredential(t *t
 		d.DefaultProfile = "host-keystore"
 	})
 	ctx := t.Context()
-	registration := app.New(h.log, h.store, nil)
-	t.Cleanup(registration.Close)
-	if err := registration.RegisterTenant(ctx, h.tenant, "host-keystore", "host-keystore-registration"); err != nil {
-		t.Fatal(err)
-	}
+	// The enrolled role agent is bound to the fixture's existing registration.
+	// Reuse it; a second registration would invalidate that authority.
 	const referenceName = "host-keystore-access"
 	sealed, err := h.srv.sealTenantSecretForTest(ctx, h.tenant, referenceName, []byte(canaryPassword))
 	if err != nil {

@@ -23,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenancy"
 )
 
 // TestFullBackupRestoreIncludesPostgresState is the RESIL-001 drill: a full DR
@@ -62,7 +63,14 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("RecordCertificate: %v", err)
 	}
+	if err := src.RequireLiveTenantService(ctx, tenantA); err != nil {
+		t.Fatalf("active source tenant refused: %v", err)
+	}
 	seedRecoveredFromPostgresTables(t, src, registration.ID, registration.Sequence)
+	assertFullDRRemoteDeliveryRetained(t, src)
+	if err := src.RequireLiveTenantService(ctx, tenantA); !errors.Is(err, tenancy.ErrServiceUnavailable) {
+		t.Fatalf("suspended source tenant admitted: %v", err)
+	}
 	srcTick, err := src.GetSecretRotationScheduleTick(ctx, tenantA, "full-dr-idempotency")
 	if err != nil {
 		t.Fatalf("load source scheduled-rotation tick: %v", err)
@@ -125,6 +133,9 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 		t.Errorf("certificates after full restore = %v, want %v", got, srcCerts)
 	}
 	dstCounts := recoveredTableCounts(t, dst)
+	if destination, found, err := dst.AgentJobAttemptBinding(ctx, tenantA, "b9445160-dbc6-48fa-9c13-f078943486a9", 4242, 1); err != nil || !found || destination != "connector.deploy" {
+		t.Fatalf("restored original agent recipient cannot authorize its exact completion: destination=%q found=%v err=%v", destination, found, err)
+	}
 	for _, table := range backup.RecoveredFromPostgresBackup {
 		if dstCounts[table] != srcCounts[table] {
 			t.Errorf("%s restored rows = %d, want %d", table, dstCounts[table], srcCounts[table])
@@ -149,6 +160,15 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 	if got := providerRecoveryState(t, dst); got != srcProviderState {
 		t.Errorf("provider registry and break-glass state after restore = %+v, want %+v", got, srcProviderState)
 	}
+	// Core recovery has no licensed Provider attachment. Preserve the security
+	// consequence of the recovered restriction, not just the registry's bytes.
+	if _, err := dst.GetTenant(ctx, tenantA); err != nil {
+		t.Fatalf("restored core tenant missing: %v", err)
+	}
+	if err := dst.RequireLiveTenantService(ctx, tenantA); !errors.Is(err, tenancy.ErrServiceUnavailable) {
+		t.Fatalf("restored suspended tenant admitted without Provider attachment: %v", err)
+	}
+	assertFullDRRemoteDeliveryRetained(t, dst)
 	restoredFence, err := dst.GetApplicationSecretMutationFence(ctx, tenantA, "app/pending")
 	if err != nil {
 		t.Fatalf("load restored application-secret fence actor: %v", err)
@@ -603,6 +623,7 @@ func seedRecoveredFromPostgresTables(
 			// projector rebuilds it — so a restore that lost it would lose the
 			// record of what agents reported and what was refused.
 			{`INSERT INTO agent_job_receipts (tenant_id, job_id, attempt, agent, kind, outcome, state, reason, signer_fingerprint, statement, signature, observed_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`, []any{tenantA, int64(4242), 1, "edge-relay-1", "connector.deploy", "executed", "verified", "", "full-dr-signer-fp", "full-dr-statement", "ZnVsbC1kci1zaWduYXR1cmU=", now}},
+			{`INSERT INTO agent_job_attempt_bindings (tenant_id, job_id, attempt, agent_id, destination) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, int64(4242), 1, "b9445160-dbc6-48fa-9c13-f078943486a9", "connector.deploy"}},
 			// C3: declared segments. Operator declarations that no replay
 			// rebuilds — a restore that lost them would silently discard real
 			// operator work and make an estate look unmeasured.
@@ -623,7 +644,7 @@ func seedRecoveredFromPostgresTables(
 			{`INSERT INTO issuance_approval_requests (tenant_id, resource, action, requester, required) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, approvalResource, "issue", "requester", 2}},
 			{`INSERT INTO issuance_approvals (tenant_id, resource, action, approver, approved_at) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, approvalResource, "issue", "approver-1", now}},
 			{`INSERT INTO notification_routing_policies (id, tenant_id, name, channels_by_severity, default_channels, created_at, updated_at) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7)`, []any{"00000000-0000-0000-0000-00000000a012", tenantA, "expiry-default", `{"critical":["pagerduty","slack"],"low":["email"]}`, `["email"]`, now, now}},
-			{`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, status, attempts, next_attempt_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`, []any{tenantA, "webhook", []byte(`{"event":"full-dr"}`), "full-dr-outbox", "pending", 0, now}},
+			{`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, status, attempts, next_attempt_at, receiver_pending_ids) VALUES ($1, $2, $3, $4, $5, $6, $7, ARRAY['26cedb75-2fce-4bc7-a134-a5db76e64f74'::uuid])`, []any{tenantA, "webhook", []byte(`{"event":"full-dr"}`), "full-dr-outbox", "pending", 1, now}},
 			{`INSERT INTO policy_bindings (id, tenant_id, name, policy, scope) VALUES ($1, $2, $3, $4, $5::jsonb)`, []any{"00000000-0000-0000-0000-00000000a009", tenantA, "default", "allow", `{"project":"prod"}`}},
 			{`INSERT INTO privacy_subject_erasure_operations
 			        (tenant_id, operation_id, request_binding, event_id, event_sequence,
@@ -903,4 +924,20 @@ func quoteDRTable(table string) string {
 		}
 	}
 	return `"` + table + `"`
+}
+
+func assertFullDRRemoteDeliveryRetained(t *testing.T, st *store.Store) {
+	t.Helper()
+	var tokens []string
+	if err := st.WithTenant(t.Context(), tenantA, func(tx pgx.Tx) error {
+		return tx.QueryRow(t.Context(), `SELECT receiver_pending_ids::text[] FROM outbox WHERE tenant_id=$1 AND idempotency_key='full-dr-outbox'`, tenantA).Scan(&tokens)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(tokens) != 1 || tokens[0] != "26cedb75-2fce-4bc7-a134-a5db76e64f74" {
+		t.Fatalf("DR lost original remote delivery identity: %v", tokens)
+	}
+	if err := st.RequireTenantAgentWorkQuiescent(t.Context(), tenantA); !errors.Is(err, store.ErrTenantServiceBusy) {
+		t.Fatalf("DR turned remote uncertainty into lifecycle permission: %v", err)
+	}
 }

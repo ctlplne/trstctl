@@ -28,7 +28,7 @@ func TestServedPQCFirstLeafRetryDoesNotSignAgainAfterLostRecording(t *testing.T)
 // Real PG/NATS and persistent signing RPC; the fixture signer is in a goroutine,
 // so this is recovery proof, not process-isolation or connector-deployment proof.
 func testPQCFirstLeafLostRecording(t *testing.T, algorithm crypto.Algorithm) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.LicensedCSRParser = pqc.ParsePureMLDSACSR
 		d.LicensedCSRInspector = pqc.InspectHybridCSR
 		d.LicensedLeafSigner = pqc.SignLicensedLeafFromCSRWithProfile

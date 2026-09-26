@@ -17,9 +17,15 @@ type tenantSPIFFEIssuer struct {
 	spiffe.Issuer
 	tenantID string
 	check    tenancy.ServiceCheck
+	work     tenancy.ServiceWork
 }
 
 func (i tenantSPIFFEIssuer) SignX509SVID(ctx context.Context, id string, pub []byte, ttl time.Duration) ([]byte, error) {
+	ctx, release, err := i.work.Begin(ctx, i.tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	if err := i.check.Check(ctx, i.tenantID); err != nil {
 		return nil, err
 	}
@@ -27,6 +33,11 @@ func (i tenantSPIFFEIssuer) SignX509SVID(ctx context.Context, id string, pub []b
 }
 
 func (i tenantSPIFFEIssuer) SignJWTSVID(ctx context.Context, id string, audience []string, ttl time.Duration) (string, error) {
+	ctx, release, err := i.work.Begin(ctx, i.tenantID)
+	if err != nil {
+		return "", err
+	}
+	defer release()
 	if err := i.check.Check(ctx, i.tenantID); err != nil {
 		return "", err
 	}

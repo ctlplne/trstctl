@@ -692,6 +692,17 @@ func TestConnectorDeployRoutingFailuresRemainPendingAndNeverRecordUnrouted(t *te
 		if receipt.Status == "unrouted" || receipt.Reason == "unrouted" {
 			t.Errorf("%s was recorded as an acknowledged unrouted deployment: %+v", tc.key, receipt)
 		}
+		var holds int
+		if err := h.store.SystemPool().QueryRow(ctx, `SELECT cardinality(receiver_pending_ids) FROM outbox WHERE tenant_id=$1 AND id=$2`, h.tenant, id).Scan(&holds); err != nil {
+			t.Fatal(err)
+		}
+		wantHolds := 0
+		if tc.connector == "declined" {
+			wantHolds = 1
+		}
+		if holds != wantHolds {
+			t.Errorf("%s has %d remote holds, want %d for its actual receiver invocation", tc.key, holds, wantHolds)
+		}
 	}
 }
 
@@ -794,10 +805,53 @@ func TestAtMostOnceConnectorRecoversCrashAfterCommittedDeliveryReceipt(t *testin
 	if probe.calls != 1 {
 		t.Fatalf("receipt recovery repeated unsafe receiver: calls=%d", probe.calls)
 	}
+	var unresolved int
+	if err := h.store.SystemPool().QueryRow(ctx, `SELECT cardinality(receiver_pending_ids) FROM outbox WHERE tenant_id=$1 AND id=$2`, h.tenant, outboxID).Scan(&unresolved); err != nil {
+		t.Fatal(err)
+	}
+	if unresolved != 0 {
+		t.Fatalf("committed connector receipt left %d unresolved receiver attempts after recovery, want 0", unresolved)
+	}
 	if pending, err := outbox.Pending(ctx, h.tenant); err != nil {
 		t.Fatalf("Pending: %v", err)
 	} else if len(pending) != 0 {
 		t.Fatalf("reconciled connector row remained pending: %+v", pending)
+	}
+	terminalEvents := 0
+	if err := h.log.Replay(ctx, 0, func(event events.Event) error {
+		if event.Type != projections.EventConnectorDeliveryRecorded {
+			return nil
+		}
+		var recorded projections.ConnectorDeliveryRecorded
+		if err := json.Unmarshal(event.Data, &recorded); err != nil {
+			return err
+		}
+		if recorded.Status == "delivered" {
+			if event.SchemaVersion != projections.ConnectorReceiverCompletionSchemaVersion || recorded.ReceiverAttemptID == "" {
+				t.Errorf("delivered event lacks versioned invocation evidence: %+v", recorded)
+			}
+			terminalEvents++
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if terminalEvents != 1 {
+		t.Fatalf("terminal events=%d, want one original completion", terminalEvents)
+	}
+	actorCtx := events.ContextWithActor(ctx, events.Actor{Subject: "connector-recovery-fixture", Roles: []string{"admin"}})
+	registration, err := orchestrator.ResolveLiveTenantRegistrationAuthority(actorCtx, h.log, h.store, h.tenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.store.WithTenantServiceBarrier(actorCtx, h.tenant, func(work context.Context) error {
+		_, err := h.orch.OffboardTenant(work, orchestrator.TenantOffboardCommand{TenantID: h.tenant, RegistrationIdentity: registration.EventID})
+		return err
+	}); err != nil {
+		t.Fatalf("recovered completion still blocks tenant deletion: %v", err)
+	}
+	if _, err := h.store.GetTenant(ctx, h.tenant); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("tenant not erased: %v", err)
 	}
 }
 

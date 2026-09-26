@@ -36,7 +36,7 @@ func TestServedACMEValidityRefusalPersistsExactDiagnosis(t *testing.T) {
 		DNS01:  acmesrv.DNS01Validator{},
 	}
 
-	h := newServedHarness(t,
+	h := newOperatingServedHarness(t,
 		config.Protocols{ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}},
 		func(d *Deps) { d.ACMEValidators = &validators; d.DefaultProfile = "diagnostic-validity" },
 	)

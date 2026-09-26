@@ -21,7 +21,7 @@ import (
 // real API, resolves tenant-local NHIs, then drives revoke/retire lifecycle
 // events instead of leaving decommissioning as tenant/member offboarding docs.
 func TestServedNHIDecommissionCAPGOV04EndToEnd(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "identities:read", "identities:write", "nhi:read")
 	ctx := context.Background()
 

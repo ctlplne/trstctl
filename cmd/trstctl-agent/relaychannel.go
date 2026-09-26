@@ -7,8 +7,12 @@ import (
 	"errors"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"trstctl.com/trstctl/internal/agent/relay"
+	"trstctl.com/trstctl/internal/agent/reportstate"
 	"trstctl.com/trstctl/internal/agent/transport"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/custody"
 )
@@ -30,6 +34,7 @@ type relayChannel struct {
 	// now is injectable so the receipt's issued-at can be exercised.
 	now          func() time.Time
 	leaseSeconds int
+	pending      *reportstate.Store
 }
 
 func (r relayChannel) ExtendJobClaim(ctx context.Context, jobID int64, attempt int) (time.Time, error) {
@@ -52,6 +57,9 @@ func (r relayChannel) ExtendJobClaim(ctx context.Context, jobID int64, attempt i
 var _ relay.JobLeaseMaintainer = relayChannel{}
 
 func (r relayChannel) ClaimJobs(ctx context.Context, kinds []string, limit, leaseSeconds int) ([]relay.Job, error) {
+	if err := r.recoverPendingReport(ctx); err != nil {
+		return nil, err
+	}
 	resp, err := r.c.ClaimJobs(ctx, &transport.ClaimJobsRequest{
 		Kinds: kinds, Limit: limit, LeaseSeconds: leaseSeconds,
 	})
@@ -84,6 +92,11 @@ func (r relayChannel) RedeemJobCredential(ctx context.Context, jobID int64, atte
 }
 
 func (r relayChannel) ReportJobResult(ctx context.Context, jobID int64, attempt int, outcome, detail, evidenceDigest string) (bool, error) {
+	if terminalReport(outcome) {
+		value := reportstate.Observation{JobID: jobID, Attempt: attempt, Outcome: outcome, Detail: []byte(detail), EvidenceDigest: evidenceDigest}
+		defer value.Destroy()
+		return r.retainAndSendReport(ctx, value)
+	}
 	// The tenant and the name come off the agent's OWN certificate, not off
 	// config: the server rebuilds the signed statement from the certificate it
 	// verified, so anything else would produce a receipt that cannot verify —
@@ -97,11 +110,7 @@ func (r relayChannel) ReportJobResult(ctx context.Context, jobID int64, attempt 
 	if err != nil {
 		return false, err
 	}
-	resp, err := r.c.ReportJobResult(ctx, req)
-	if err != nil {
-		return false, err
-	}
-	return resp.Accepted, nil
+	return r.sendSignedReport(ctx, req)
 }
 
 func (r relayChannel) ReportJobResultWithCustody(ctx context.Context, jobID int64, attempt int,
@@ -113,19 +122,79 @@ func (r relayChannel) ReportJobResultWithCustody(ctx context.Context, jobID int6
 	if record.Origin == custody.OriginHostAgent && record.GeneratedBy == "" {
 		record.GeneratedBy = id.CommonName()
 	}
+	if terminalReport(outcome) {
+		value := reportstate.Observation{JobID: jobID, Attempt: attempt, Outcome: outcome, Detail: []byte(detail), EvidenceDigest: evidenceDigest, CredentialFingerprint: credentialFingerprint, Custody: &record}
+		defer value.Destroy()
+		return r.retainAndSendReport(ctx, value)
+	}
 	req, err := transport.SignedReportWithCustody(id, id.TenantID(), id.CommonName(),
 		jobID, attempt, outcome, detail, evidenceDigest, credentialFingerprint, record, r.clock().Unix())
 	if err != nil {
 		return false, err
 	}
-	resp, err := r.c.ReportJobResult(ctx, req)
-	if err != nil {
-		return false, err
-	}
-	return resp.Accepted, nil
+	return r.sendSignedReport(ctx, req)
 }
 
 var _ relay.CustodyReceiptChannel = relayChannel{}
+
+// sendSignedReport retries only terminal observations, never permission to do
+// more work. Every attempt sends the same signed bytes and original claim
+// generation. A temporary reporting failure must not rerun the external effect.
+// The caller persists terminal observations before sending. This inner loop
+// retains identical signed bytes; later recovery freshly attests the stored facts.
+func (r relayChannel) sendSignedReport(ctx context.Context, req *transport.ReportJobResultRequest) (bool, error) {
+	switch req.Outcome {
+	case transport.JobOutcomeExecuted, transport.JobOutcomeVerified,
+		transport.JobOutcomeVerifyFailed, transport.JobOutcomeFailed:
+	default:
+		resp, err := r.c.ReportJobResult(ctx, req)
+		if err != nil {
+			return false, err
+		}
+		return resp.Accepted, nil
+	}
+
+	// Bound each RPC as well as the whole reporting window so a stuck channel
+	// cannot occupy an agent worker indefinitely. Backoff includes jitter to
+	// avoid synchronized retries when many agents lose the same control plane.
+	reportCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	delay := 250 * time.Millisecond
+	for attempt := 0; ; attempt++ {
+		if err := reportCtx.Err(); err != nil {
+			return false, err
+		}
+		callCtx, endCall := context.WithTimeout(reportCtx, 10*time.Second)
+		resp, err := r.c.ReportJobResult(callCtx, req)
+		endCall()
+		if err == nil {
+			return resp.Accepted || resp.ReceiptRecorded, nil
+		}
+		if ctxErr := reportCtx.Err(); ctxErr != nil {
+			return false, ctxErr
+		}
+		switch status.Code(err) {
+		case codes.Unavailable, codes.DeadlineExceeded, codes.ResourceExhausted:
+		default:
+			return false, err
+		}
+		if attempt == 5 {
+			return false, err
+		}
+		jitter, err := crypto.RandomBytes(1)
+		if err != nil {
+			return false, err
+		}
+		timer := time.NewTimer(delay/2 + time.Duration(jitter[0])*(delay/2)/256)
+		select {
+		case <-reportCtx.Done():
+			timer.Stop()
+			return false, reportCtx.Err()
+		case <-timer.C:
+		}
+		delay = min(2*delay, 4*time.Second)
+	}
+}
 
 func (r relayChannel) clock() time.Time {
 	if r.now != nil {

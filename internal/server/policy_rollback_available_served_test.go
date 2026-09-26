@@ -13,6 +13,7 @@ import (
 
 func TestServedPolicyRollbackAvailabilityFollowsActualPredecessor(t *testing.T) {
 	h := newServedHarnessWithEventOptions(t, config.Protocols{}, []events.OpenOption{events.WithRequiredPrivacyEventPolicies()}, func(d *Deps) { d.EnablePolicyGate = true })
+	registerServedTenant(t, h, "Policy rollback fixture")
 	token := seedScopedTokenSubject(t, h.store, h.tenant, "rollback-reviewer", "policy:read", "policy:write")
 	type version struct {
 		ID        string `json:"id"`

@@ -102,7 +102,7 @@ func (o *Orchestrator) StartPQCMigrationCampaign(ctx context.Context, tenantID s
 	if err != nil {
 		return store.PQCMigrationCampaign{}, err
 	}
-	err = o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err = o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := o.store.LockPQCMigrationCampaignTx(ctx, tx, tenantID, payload.ID); err != nil {
 			return err
 		}
@@ -128,7 +128,7 @@ func (o *Orchestrator) UpdatePQCMigrationCampaign(ctx context.Context, tenantID,
 	if _, err := o.validatePQCMigrationCampaignTopology(ctx, tenantID, campaignID, owner); err != nil {
 		return store.PQCMigrationCampaign{}, err
 	}
-	err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err := o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := o.store.LockPQCMigrationCampaignTx(ctx, tx, tenantID, campaignID); err != nil {
 			return err
 		}
@@ -157,7 +157,7 @@ func (o *Orchestrator) DispositionPQCMigrationFinding(ctx context.Context, tenan
 	if _, err := o.validatePQCMigrationCampaignTopology(ctx, tenantID, campaignID, ""); err != nil {
 		return store.PQCMigrationCampaign{}, err
 	}
-	err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err := o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := o.store.LockPQCMigrationCampaignTx(ctx, tx, tenantID, campaignID); err != nil {
 			return err
 		}
@@ -198,7 +198,7 @@ func (o *Orchestrator) ClosePQCMigrationCampaign(ctx context.Context, tenantID, 
 	if _, err := o.validatePQCMigrationCampaignTopology(ctx, tenantID, campaignID, ""); err != nil {
 		return store.PQCMigrationCampaign{}, err
 	}
-	err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err := o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := o.store.LockPQCMigrationCampaignTx(ctx, tx, tenantID, campaignID); err != nil {
 			return err
 		}

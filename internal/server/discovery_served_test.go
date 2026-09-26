@@ -21,7 +21,7 @@ import (
 )
 
 func TestServedDiscoverySourceUpsertRetryKeepsTenantNameIdentity(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
 	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/discovery/segments", tok,
 		"discovery-name-upsert-segment", map[string]any{
@@ -635,7 +635,7 @@ func TestServedDiscoveryNetworkScanBlocksReservedTargets(t *testing.T) {
 // path as certificate discovery, but for metadata-only non-human identity
 // observations across IdP, cloud, SaaS, on-prem, code, and CI surfaces.
 func TestServedCrossSurfaceNHIDiscoveryCAPNHI01EndToEnd(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
@@ -756,7 +756,7 @@ func TestServedCrossSurfaceNHIDiscoveryCAPNHI01EndToEnd(t *testing.T) {
 // external NHIs. It reads the tenant discovery projection, excludes findings
 // already claimed as managed, and returns metadata-only evidence references.
 func TestServedShadowUnmanagedNHIDetectionCAPNHI05EndToEnd(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "nhi:read")
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
@@ -913,7 +913,7 @@ func TestServedShadowUnmanagedNHIDetectionCAPNHI05EndToEnd(t *testing.T) {
 // cross-surface findings for service accounts, API keys, OAuth apps, tokens/PATs,
 // secrets, IAM roles, SSH keys, webhooks, and workload IDs.
 func TestServedUnifiedNHIInventoryCAPNHI02EndToEnd(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant,
 		"owners:write", "identities:write", "certs:issue", "certs:read",
 		"access:write", "access:read", "discovery:read", "discovery:write",
@@ -1079,7 +1079,7 @@ func TestServedUnifiedNHIInventoryCAPNHI02EndToEnd(t *testing.T) {
 // source config carries references, masked fingerprints, scope/expiry metadata,
 // and evidence refs, never raw credential values.
 func TestServedAPIKeyTokenPATDiscoveryCAPNHI04EndToEnd(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "nhi:read")
 
 	const rawToken = "ghp_INLINE_TOKEN_SHOULD_NOT_BE_ACCEPTED" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
@@ -1314,7 +1314,7 @@ func TestServedAPIKeyTokenPATDiscoveryCAPNHI04EndToEnd(t *testing.T) {
 // each managed or discovered NHI, and it calls out orphaned NHIs instead of
 // treating advertised owner metadata as served governance.
 func TestServedOwnershipAttributionCAPGOV01EndToEnd(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant,
 		"owners:read", "owners:write", "identities:write",
 		"discovery:read", "discovery:write", "nhi:read",
@@ -1492,7 +1492,7 @@ func TestServedOwnershipAttributionCAPGOV01EndToEnd(t *testing.T) {
 // cloud service-account inventory, then projects the findings through the normal
 // tenant-scoped discovery event path.
 func TestServedServiceAccountDiscoveryCAPNHI03EndToEnd(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
@@ -1627,7 +1627,7 @@ func TestServedServiceAccountDiscoveryCAPNHI03EndToEnd(t *testing.T) {
 // CAP-OAUTH-01 is served through the tenant-scoped discovery source/run/finding
 // path for metadata-only OAuth app grants, SaaS-to-SaaS consent, and scopes.
 func TestServedOAuthGrantDiscoveryCAPOAUTH01EndToEnd(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
@@ -1770,7 +1770,7 @@ func TestServedOAuthGrantDiscoveryCAPOAUTH01EndToEnd(t *testing.T) {
 // proof: CAP-ITDR-03 is served through tenant-scoped discovery source/run/finding
 // records for malicious or abused OAuth grants without storing OAuth secrets.
 func TestServedOAuthGrantAbuseDetectionCAPITDR03EndToEnd(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
@@ -1945,7 +1945,7 @@ func TestServedOAuthGrantAbuseDetectionCAPITDR03EndToEnd(t *testing.T) {
 // records for NHI behavior baselines and anomaly detection across IP, geo,
 // user-agent, usage-spike, and off-hours dimensions.
 func TestServedNHIBehaviorAnomalyCAPITDR01EndToEnd(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
@@ -2086,7 +2086,7 @@ func TestServedNHIBehaviorAnomalyCAPITDR01EndToEnd(t *testing.T) {
 // records for stolen-token and compromised-credential evidence, with only
 // credential references and external evidence refs stored in the control plane.
 func TestServedCompromisedCredentialDetectionCAPITDR02EndToEnd(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
@@ -2219,7 +2219,7 @@ func TestServedCompromisedCredentialDetectionCAPITDR02EndToEnd(t *testing.T) {
 // source/run/finding records and mints signer-backed public certificate inventory
 // rows for Kubernetes Ingress and Gateway API TLS resources.
 func TestServedKubernetesIngressGatewayAutoIssuanceCAPK8S03EndToEnd(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "certs:read")
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
@@ -2402,7 +2402,7 @@ func TestServedCloudCertificateDiscoveryACMEndToEnd(t *testing.T) {
 	t.Setenv("TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID", "AKID")
 	t.Setenv("TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY", "SECRET")
 
-	h := newServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs(
+	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs(
 		"env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID",
 		"env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY",
 	))
@@ -2563,7 +2563,7 @@ func TestServedCloudSecretDiscoveryAWSSecretsManagerEndToEnd(t *testing.T) {
 	t.Setenv("TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID", "AKID")
 	t.Setenv("TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY", "SECRET")
 
-	h := newServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs(
+	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs(
 		"env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID",
 		"env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY",
 	))
@@ -2735,7 +2735,7 @@ func TestServedCloudSecretDiscoveryAWSGCPVaultEndToEnd(t *testing.T) {
 	t.Setenv("TRSTCTL_DISCOVERY_GCP_SM_TOKEN", "gcp-token")
 	t.Setenv("TRSTCTL_DISCOVERY_VAULT_TOKEN", "vault-token")
 
-	h := newServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs(
+	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs(
 		"env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID",
 		"env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY",
 		"env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN",

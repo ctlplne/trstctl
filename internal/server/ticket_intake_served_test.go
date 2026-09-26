@@ -26,7 +26,7 @@ import (
 const servedIntakeTokenRef = "secret://itsm/intake-token" // #nosec G101 -- credential reference (secret store pointer), no credential value present (CWE-798)
 
 func TestServedTicketIntakeOpensRequestsIdempotently(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write")
 
 	status, out := secretsReqKey(t, h, http.MethodPut, "/api/v1/issuance-requests/intake-schedule", tok,
@@ -167,7 +167,7 @@ func TestServedTicketIntakeOpensRequestsIdempotently(t *testing.T) {
 
 func TestServedTicketIntakePaginatesBothProvidersWithoutGapsAUD47(t *testing.T) {
 	ctx := t.Context()
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write")
 	configs := []map[string]any{
 		{

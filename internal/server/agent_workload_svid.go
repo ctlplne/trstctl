@@ -34,10 +34,11 @@ import (
 
 // FetchWorkloadSVID issues SVIDs for a workload this agent attested locally.
 func (a *agentService) FetchWorkloadSVID(ctx context.Context, req *transport.FetchWorkloadSVIDRequest) (*transport.FetchWorkloadSVIDResponse, error) {
-	info, err := a.peerInfo(ctx)
+	ctx, info, release, err := a.beginPeerWork(ctx)
 	if err != nil {
 		return nil, err
 	}
+	defer release()
 	if a.issueWorkloadSVID == nil {
 		// Fails closed, like the other agent-facing issuance seams: a control
 		// plane with no workload-identity surface must say so rather than

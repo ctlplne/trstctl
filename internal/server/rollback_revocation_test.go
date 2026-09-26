@@ -11,7 +11,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/agent/transport"
-	"trstctl.com/trstctl/internal/app"
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/mtls"
@@ -22,11 +21,8 @@ import (
 func rollbackRevocationFixture(t *testing.T) (*roleHarness, store.Certificate, orchestrator.ConnectorRollbackRequest) {
 	t.Helper()
 	h := newRoleHarness(t, []string{mtls.AgentRoleNetwork}, "connector.rollback")
-	svc := app.New(h.log, h.store, nil)
-	t.Cleanup(svc.Close)
-	if err := svc.RegisterTenant(t.Context(), h.tenant, "rollback-guard", "rollback-guard-bootstrap"); err != nil {
-		t.Fatal(err)
-	}
+	// The enrolled role agent is bound to the fixture's existing registration.
+	// Reuse it; a second registration would invalidate that authority.
 	issued, err := testExternalCACertificate(ca.IssueRequest{CSR: serverTestCSR(t, "rollback-guard.test", nil), DNSNames: []string{"rollback-guard.test"}}, "Rollback test CA")
 	if err != nil {
 		t.Fatal(err)

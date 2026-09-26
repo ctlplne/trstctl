@@ -88,7 +88,9 @@ func (a *API) AgentRenewalHandler() http.Handler {
 			mux.HandleFunc("POST /enroll/renewal", a.enrollRenewal)
 		}
 	}
-	return mux
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		serveTenantServiceRequest(w, r, mux)
+	})
 }
 
 // enrollBootstrapRequest is the body an agent POSTs to /enroll/bootstrap: the
@@ -226,7 +228,7 @@ func (a *API) enrollRenewal(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		if errors.Is(err, ErrUnauthenticatedAgentRenewal) {
-			a.writeError(w, errStatus(http.StatusUnauthorized, "agent renewal requires a valid verified client certificate"))
+			a.writeError(w, errStatus(http.StatusUnauthorized, "agent renewal requires a valid verified client certificate for the current tenant registration; enroll again with a new authorized bootstrap token if this identity is no longer valid"))
 			return
 		}
 		a.writeError(w, err)

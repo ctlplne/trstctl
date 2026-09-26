@@ -33,7 +33,7 @@ func TestServedCodeSigningKeyBasedAndKeylessSigstore(t *testing.T) {
 	rekor := &rekorFixture{}
 	var ephemeralKeys sync.Map
 
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.CodeSigning = CodeSigningConfig{
 			Keys: codeSigningKeyMap{keys: map[string]crypto.DigestSigner{"release-key": testOperationDigestSigner{DigestSigner: signingKey}}},
 			Attestors: []attest.Attestor{

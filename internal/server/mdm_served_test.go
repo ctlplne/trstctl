@@ -22,7 +22,7 @@ import (
 // them.
 
 func TestServedDeviceTraceNamesTheStepThatBroke(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	observed := time.Now().UTC()
 	if err := h.srv.orch.CorrelateMDMDevice(t.Context(), h.tenant, projections.MDMDeviceCorrelated{
 		MDM: "intune", MDMDeviceID: "dev-1", DeviceName: "laptop-7", SerialNumber: "S1",
@@ -72,7 +72,7 @@ func TestServedDeviceTraceNamesTheStepThatBroke(t *testing.T) {
 }
 
 func TestServedDeviceTraceDoesNotInferSuccessFromCorrelationIDs(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	if err := h.srv.orch.CorrelateMDMDevice(t.Context(), h.tenant, projections.MDMDeviceCorrelated{
 		MDM: "intune", MDMDeviceID: "dev-no-evidence", TransactionID: "txn-only-a-label",
 		IdentityID: "11111111-1111-4111-8111-111111111111", InstallState: "unknown",
@@ -93,7 +93,7 @@ func TestServedDeviceTraceDoesNotInferSuccessFromCorrelationIDs(t *testing.T) {
 }
 
 func TestServedDeviceTraceUsesOnlyDurableSCEPAttemptEvidenceIncludingRenewing(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	serial := "SER-DURABLE"
 	for _, event := range []struct {
 		typ      string
@@ -138,7 +138,7 @@ func TestServedDeviceTraceUsesOnlyDurableSCEPAttemptEvidenceIncludingRenewing(t 
 }
 
 func TestServedDeviceTraceRetainsPreIssuanceChallengeFailure(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	serial, transaction := "SER-CHALLENGE-FAILED", "txn-challenge-failed"
 	for _, event := range []struct {
 		typ      string
@@ -176,7 +176,7 @@ func TestServedDeviceTraceRetainsPreIssuanceChallengeFailure(t *testing.T) {
 }
 
 func TestServedDeviceTraceMarksOfflineRenewalAsUnknownWithRemediation(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	now := time.Now().UTC()
 	serial, transaction := "SER-OFFLINE", "txn-initial-offline"
 	appendServedMDMSCEPAttempt(t, h, serial, transaction, "e9", now.Add(10*24*time.Hour))
@@ -232,7 +232,7 @@ func decodeMDMTraceSteps(t *testing.T, body []byte) []struct {
 // An unobserved device must not be served as a failure, and must be counted
 // apart from one.
 func TestServedUnobservedDeviceIsNotCountedAsFailed(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	observed := time.Now().UTC()
 	for _, d := range []projections.MDMDeviceCorrelated{
 		{MDM: "jamf", MDMDeviceID: "j1", SerialNumber: "S1", TransactionID: "t1",
@@ -265,7 +265,7 @@ func TestServedUnobservedDeviceIsNotCountedAsFailed(t *testing.T) {
 
 // An install state the console cannot render must be refused, not stored.
 func TestServedCorrelationRefusesAnUnrenderableState(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	err := h.srv.orch.CorrelateMDMDevice(t.Context(), h.tenant, projections.MDMDeviceCorrelated{
 		MDM: "intune", MDMDeviceID: "d1", InstallState: "somethingElse",
 	})

@@ -54,6 +54,7 @@ func TestServedPrivacyRetentionWorkerPseudonymizesStalePII(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open history-aware event log: %v", err)
 	}
+	registerServerTestTenant(t, st, log, tenantID, "acme")
 	// Historical certificate metadata needs retained events and ordered receipts.
 	seedRetainedPrivacyCertificate(t, ctx, st, log, tenantID, rawSubject)
 	srv, err := Build(ctx, Deps{

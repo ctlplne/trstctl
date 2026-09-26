@@ -297,12 +297,12 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.handleDiscoveryRun(ctx, m)
 	case destinationACMEDNS01Present, destinationACMEDNS01Cleanup:
 		if d.dns01 == nil {
-			return fmt.Errorf("server: acme dns-01 outbox destination is not configured")
+			return orchestrator.DefiniteNoEffect(fmt.Errorf("server: acme dns-01 outbox destination is not configured"))
 		}
 		return d.dns01.Deliver(ctx, m)
 	case ca.DestinationExternalCAIssue:
 		if d.externalCAs == nil {
-			return fmt.Errorf("server: external CA outbox destination is not configured")
+			return orchestrator.DefiniteNoEffect(fmt.Errorf("server: external CA outbox destination is not configured"))
 		}
 		return d.externalCAs.DeliverExternalCAIssue(ctx, m)
 	case orchestrator.DestinationITSMServiceNow:
@@ -342,7 +342,7 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		}
 		if strings.HasPrefix(m.Destination, "notification.") {
 			if d.notifications == nil {
-				return fmt.Errorf("server: notification outbox destination is not configured")
+				return orchestrator.DefiniteNoEffect(fmt.Errorf("server: notification outbox destination is not configured"))
 			}
 			return d.notifications.DispatchMessage(ctx, notify.DeliveryMessage{
 				TenantID: m.TenantID, Destination: m.Destination,
@@ -352,12 +352,12 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		}
 		if strings.HasPrefix(m.Destination, "transparency.") {
 			if d.transparency == nil {
-				return fmt.Errorf("server: transparency outbox destination is not configured")
+				return orchestrator.DefiniteNoEffect(fmt.Errorf("server: transparency outbox destination is not configured"))
 			}
 			return d.transparency.Deliver(ctx, m)
 		}
 		if strings.HasPrefix(m.Destination, "managedkey.") {
-			return fmt.Errorf("server: managed-key outbox destination is not configured")
+			return orchestrator.DefiniteNoEffect(fmt.Errorf("server: managed-key outbox destination is not configured"))
 		}
 		// An AGENT-CLAIMABLE kind with no control-plane handler is not unknown —
 		// it is work waiting for an agent, and it must wait rather than die.
@@ -385,7 +385,7 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		// This dispatcher is the sole handler passed to every scoped and unscoped
 		// outbox sweep. There is no second worker to own an unknown destination, so
 		// accepting it here would be a global silent ACK.
-		return fmt.Errorf("server: unsupported first-party outbox destination %q", m.Destination)
+		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: unsupported first-party outbox destination %q", m.Destination))
 	}
 }
 
@@ -1293,26 +1293,27 @@ func (d *issuanceDispatcher) handleDeploy(ctx context.Context, m orchestrator.Me
 	}
 	p.TenantID = m.TenantID
 	receipt := connectorDeliveryEvidence{
-		ID:             evidenceID("connector-delivery", m.TenantID, m.IdempotencyKey, m.ID),
-		OutboxID:       outboxPtr(m.ID),
-		IdentityID:     identityID,
-		Destination:    m.Destination,
-		Connector:      nonempty(p.Connector, "unconfigured"),
-		Target:         nonempty(p.Target, "unconfigured"),
-		Fingerprint:    p.Fingerprint,
-		Attempts:       m.Attempts,
-		IdempotencyKey: m.IdempotencyKey,
-		Detail:         detail,
+		ID:                evidenceID("connector-delivery", m.TenantID, m.IdempotencyKey, m.ID),
+		OutboxID:          outboxPtr(m.ID),
+		ReceiverAttemptID: m.ReceiverAttemptID,
+		IdentityID:        identityID,
+		Destination:       m.Destination,
+		Connector:         nonempty(p.Connector, "unconfigured"),
+		Target:            nonempty(p.Target, "unconfigured"),
+		Fingerprint:       p.Fingerprint,
+		Attempts:          m.Attempts,
+		IdempotencyKey:    m.IdempotencyKey,
+		Detail:            detail,
 	}
 	if m.IdempotencyKey == "" {
 		return d.failConnectorDelivery(ctx, m.TenantID, receipt,
 			"missing_idempotency_key", "connector deployment requires a stable idempotency key",
-			errors.New("server: connector.deploy requires an idempotency key"))
+			orchestrator.DefiniteNoEffect(errors.New("server: connector.deploy requires an idempotency key")))
 	}
 	if p.Connector == "" {
 		return d.failConnectorDelivery(ctx, m.TenantID, receipt,
 			"missing_connector", "identity has no connector target configured",
-			errors.New("server: connector.deploy has no configured connector"))
+			orchestrator.DefiniteNoEffect(errors.New("server: connector.deploy has no configured connector")))
 	}
 	// E1: a family through its relay parity gate executes on a relay, and the
 	// control plane must not race the relay for its work.
@@ -1353,12 +1354,12 @@ func (d *issuanceDispatcher) handleDeploy(ctx context.Context, m orchestrator.Me
 		if len(p.CertPEM) == 0 || len(p.KeyPEM) == 0 {
 			return d.failConnectorDelivery(ctx, m.TenantID, receipt,
 				"native_payload_missing_credential", "native connector payload is missing credential material",
-				errors.New("server: native connector payload is missing credential material"))
+				orchestrator.DefiniteNoEffect(errors.New("server: native connector payload is missing credential material")))
 		}
 		if p.Fingerprint == "" {
 			return d.failConnectorDelivery(ctx, m.TenantID, receipt,
 				"native_payload_missing_fingerprint", "native connector payload is missing its public fingerprint",
-				errors.New("server: native connector payload is missing its fingerprint"))
+				orchestrator.DefiniteNoEffect(errors.New("server: native connector payload is missing its fingerprint")))
 		}
 		effect := func(ctx context.Context) ([]byte, error) {
 			if derr := d.connectorRegistry.Deploy(ctx, p); derr != nil {
@@ -1382,12 +1383,12 @@ func (d *issuanceDispatcher) handleDeploy(ctx context.Context, m orchestrator.Me
 	if d.plugins == nil {
 		return d.failConnectorDelivery(ctx, m.TenantID, receipt,
 			"plugin_surface_unconfigured", "no signed connector plugin surface is configured",
-			errors.New("server: signed connector plugin surface is not configured"))
+			orchestrator.DefiniteNoEffect(errors.New("server: signed connector plugin surface is not configured")))
 	}
 	if !d.plugins.Has(p.Connector) {
 		return d.failConnectorDelivery(ctx, m.TenantID, receipt,
 			"plugin_not_loaded", "connector is not owned by a loaded signed plugin",
-			errors.New("server: connector is not owned by a loaded signed plugin"))
+			orchestrator.DefiniteNoEffect(errors.New("server: connector is not owned by a loaded signed plugin")))
 	}
 	// A signed plugin has no enforceable receiver-side idempotency contract. Claim
 	// it before I/O and never guess that replaying its mutation is harmless.
@@ -1499,18 +1500,19 @@ func sameOutboxID(a, b *int64) bool {
 }
 
 type connectorDeliveryEvidence struct {
-	ID             string
-	OutboxID       *int64
-	IdentityID     *string
-	Destination    string
-	Connector      string
-	Target         string
-	Fingerprint    string
-	Attempts       int
-	Reason         string
-	Detail         string
-	RollbackRef    string
-	IdempotencyKey string
+	ReceiverAttemptID string
+	ID                string
+	OutboxID          *int64
+	IdentityID        *string
+	Destination       string
+	Connector         string
+	Target            string
+	Fingerprint       string
+	Attempts          int
+	Reason            string
+	Detail            string
+	RollbackRef       string
+	IdempotencyKey    string
 }
 
 type rotationRunEvidence struct {
@@ -1724,6 +1726,11 @@ func (d *issuanceDispatcher) recordConnectorDelivery(ctx context.Context, tenant
 		Attempts: r.Attempts, Reason: reason, Detail: r.Detail, RollbackRef: r.RollbackRef,
 		IdempotencyKey: r.IdempotencyKey,
 	}
+	if status == "delivered" && r.ReceiverAttemptID != "" {
+		payload.ReceiverAttemptID = r.ReceiverAttemptID
+		return d.appendProjectedVersion(ctx, tenantID, projections.EventConnectorDeliveryRecorded,
+			projections.ConnectorReceiverCompletionSchemaVersion, payload)
+	}
 	return d.appendProjected(ctx, tenantID, projections.EventConnectorDeliveryRecorded, payload)
 }
 
@@ -1749,11 +1756,15 @@ func (d *issuanceDispatcher) recordRotationRun(ctx context.Context, tenantID str
 }
 
 func (d *issuanceDispatcher) appendProjected(ctx context.Context, tenantID, eventType string, payload any) error {
+	return d.appendProjectedVersion(ctx, tenantID, eventType, events.DefaultSchemaVersion, payload)
+}
+
+func (d *issuanceDispatcher) appendProjectedVersion(ctx context.Context, tenantID, eventType string, schemaVersion int, payload any) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-	ev, err := d.log.Append(ctx, events.Event{Type: eventType, TenantID: tenantID, Data: data})
+	ev, err := d.log.Append(ctx, events.Event{Type: eventType, TenantID: tenantID, SchemaVersion: schemaVersion, Data: data})
 	if err != nil {
 		return err
 	}

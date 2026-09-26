@@ -19,6 +19,28 @@ var ErrServiceUnavailable = errors.New("tenant service is suspended or offboarde
 // stopped. Quiescence and erasure need their own receiver evidence.
 type ServiceCheck func(context.Context, string) error
 
+// ServiceWork brackets one operation after its tenant is authenticated. The
+// server supplies the database-backed implementation; standalone authorities
+// may omit it. Release must follow all effects and result recording.
+type ServiceWork func(context.Context, string) (context.Context, func(), error)
+
+func (work ServiceWork) Begin(ctx context.Context, tenantID string) (context.Context, func(), error) {
+	if work == nil {
+		return ctx, func() {}, nil
+	}
+	fenced, release, err := work(ctx, tenantID)
+	if err != nil || fenced == nil || release == nil {
+		if release != nil {
+			release()
+		}
+		if err == nil {
+			err = errors.New("tenant work lifetime is incomplete")
+		}
+		return ctx, nil, err
+	}
+	return fenced, release, nil
+}
+
 func (check ServiceCheck) Check(ctx context.Context, tenantID string) error {
 	if check == nil {
 		return nil

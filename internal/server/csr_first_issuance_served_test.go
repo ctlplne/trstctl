@@ -63,7 +63,7 @@ func tenantEventTypes(t *testing.T, log *events.Log, tenantID string) map[string
 }
 
 func TestServedIssuanceSignsACallerSuppliedCSRAndHoldsNoKey(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	ctx := t.Context()
 	tok := seedScopedToken(t, h.store, h.tenant,
 		"owners:read", "owners:write", "identities:read", "identities:write", "certs:read", "certs:issue")
@@ -146,7 +146,7 @@ func TestServedIssuanceSignsACallerSuppliedCSRAndHoldsNoKey(t *testing.T) {
 // has to be able to find which of their flows still hand key generation to the
 // control plane before that path is removed under them.
 func TestServedIssuanceWithoutACSRStillWorksAndRecordsTheDeprecation(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	ctx := t.Context()
 	tok := seedScopedToken(t, h.store, h.tenant,
 		"owners:read", "owners:write", "identities:read", "identities:write", "certs:read", "certs:issue")
@@ -188,7 +188,7 @@ func TestServedIssuanceWithoutACSRStillWorksAndRecordsTheDeprecation(t *testing.
 // response to the request that caused it, rather than surfacing minutes later as
 // a failed outbox delivery nobody is watching.
 func TestServedIssuanceRejectsAMalformedCSRAtTheEdge(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	ctx := t.Context()
 	tok := seedScopedToken(t, h.store, h.tenant,
 		"owners:read", "owners:write", "identities:read", "identities:write", "certs:read", "certs:issue")
@@ -234,7 +234,7 @@ func TestServedIssuanceRejectsAMalformedCSRAtTheEdge(t *testing.T) {
 // accepted somewhere it would be silently ignored — an accepted-but-inert field
 // is how a caller ends up believing their key was used when it was not.
 func TestServedIssuanceRejectsACSROnANonIssuingTransition(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	ctx := t.Context()
 	tok := seedScopedToken(t, h.store, h.tenant,
 		"owners:read", "owners:write", "identities:read", "identities:write", "certs:read", "certs:issue")

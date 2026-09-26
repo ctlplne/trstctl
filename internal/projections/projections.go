@@ -2453,24 +2453,30 @@ type LicensedCryptoMigrationRollbackCompleted struct {
 	Reason            string   `json:"reason,omitempty"`
 }
 
+// ConnectorReceiverCompletionSchemaVersion binds terminal delivery to one invocation.
+const ConnectorReceiverCompletionSchemaVersion = 2
+
 // ConnectorDeliveryRecorded is the payload of connector.delivery.recorded.
 // It is delivery evidence only: no certificate PEM, key PEM, token, or secret
 // bytes may appear here.
 type ConnectorDeliveryRecorded struct {
-	ID               string  `json:"id"`
-	OutboxID         *int64  `json:"outbox_id,omitempty"`
-	IdentityID       *string `json:"identity_id,omitempty"`
-	RemediationRunID string  `json:"remediation_run_id,omitempty"`
-	Destination      string  `json:"destination"`
-	Connector        string  `json:"connector"`
-	Target           string  `json:"target"`
-	Fingerprint      string  `json:"fingerprint,omitempty"`
-	Status           string  `json:"status"`
-	Attempts         int     `json:"attempts,omitempty"`
-	Reason           string  `json:"reason,omitempty"`
-	Detail           string  `json:"detail,omitempty"`
-	RollbackRef      string  `json:"rollback_ref,omitempty"`
-	IdempotencyKey   string  `json:"idempotency_key,omitempty"`
+	// Optional for historical receipts. A terminal result proves only this
+	// exact receiver invocation has stopped, not any other retry's lifetime.
+	ReceiverAttemptID string  `json:"receiver_attempt_id,omitempty"`
+	ID                string  `json:"id"`
+	OutboxID          *int64  `json:"outbox_id,omitempty"`
+	IdentityID        *string `json:"identity_id,omitempty"`
+	RemediationRunID  string  `json:"remediation_run_id,omitempty"`
+	Destination       string  `json:"destination"`
+	Connector         string  `json:"connector"`
+	Target            string  `json:"target"`
+	Fingerprint       string  `json:"fingerprint,omitempty"`
+	Status            string  `json:"status"`
+	Attempts          int     `json:"attempts,omitempty"`
+	Reason            string  `json:"reason,omitempty"`
+	Detail            string  `json:"detail,omitempty"`
+	RollbackRef       string  `json:"rollback_ref,omitempty"`
+	IdempotencyKey    string  `json:"idempotency_key,omitempty"`
 }
 
 // DeploymentTargetUpserted is the payload of deployment_target.upserted.
@@ -3425,7 +3431,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventDeploymentTargetUpserted:                 {1: true},
 	EventDeploymentTargetDeleted:                  {1: true},
 	EventIdentityConnectorTargetBound:             {1: true, 2: true},
-	EventConnectorDeliveryRecorded:                {1: true},
+	EventConnectorDeliveryRecorded:                {1: true, ConnectorReceiverCompletionSchemaVersion: true},
 	EventLifecycleRotationRecorded:                {1: true},
 	EventOutboxReconciliationConflictRecorded:     {1: true},
 	EventIncidentExecutionRecorded:                {1: true},
@@ -5293,6 +5299,10 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
+		if (e.SchemaVersion == ConnectorReceiverCompletionSchemaVersion) != (pl.ReceiverAttemptID != "") ||
+			(pl.ReceiverAttemptID != "" && pl.Status != "delivered") {
+			return fmt.Errorf("projections: %s receiver completion payload/schema mismatch", e.Type)
+		}
 		if pl.ID == "" || pl.Status == "" {
 			return fmt.Errorf("projections: %s requires id and status", e.Type)
 		}
@@ -5305,6 +5315,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			IdempotencyKey: pl.IdempotencyKey, CreatedAt: e.Time, UpdatedAt: e.Time,
 		}
 		if err := p.store.ApplyConnectorDeliveryRecordedTx(ctx, tx, receipt); err != nil {
+			return err
+		}
+		if err := p.store.ApplyConnectorReceiverCompletedTx(ctx, tx, receipt, pl.ReceiverAttemptID); err != nil {
 			return err
 		}
 		if pl.RemediationRunID == "" {

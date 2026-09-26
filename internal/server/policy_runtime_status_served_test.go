@@ -19,6 +19,7 @@ func TestServedPolicyRuntimeStatusReflectsDeployment(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			h := newServedHarnessWithEventOptions(t, config.Protocols{}, []events.OpenOption{events.WithRequiredPrivacyEventPolicies()}, func(d *Deps) { d.EnablePolicyGate = enabled })
+			registerServedTenant(t, h, "Policy runtime fixture")
 			token := seedScopedTokenSubject(t, h.store, h.tenant, "policy-status-reviewer", "policy:read", "policy:write", "capabilities:read")
 			status, raw := secretsReq(t, h, http.MethodGet, "/api/v1/policy/versions", token, nil)
 			if status != http.StatusOK {

@@ -26,10 +26,11 @@ type boundIdempotentRunner interface {
 // from the verified peer certificate, then one immutable event becomes the sole
 // source for both PostgreSQL posture projections (AN-1/AN-2/AN-5).
 func (a *agentService) ReportKubernetesPosture(ctx context.Context, req *transport.KubernetesPostureRequest) (*transport.KubernetesPostureResponse, error) {
-	info, err := a.peerInfo(ctx)
+	ctx, info, release, err := a.beginPeerWork(ctx)
 	if err != nil {
 		return nil, err
 	}
+	defer release()
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "Kubernetes posture report is required")
 	}

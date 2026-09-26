@@ -24,7 +24,7 @@ import (
 // Real PostgreSQL/NATS and the existing UDS signer harness; not an independent
 // signer-process or browser/stock-client TLS qualification.
 func TestServedFirstLeafResultIsExactPendingIdempotentAndReplayable(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	token := seedScopedToken(t, h.store, h.tenant, "owners:read", "owners:write", "identities:read", "identities:write", "certs:read", "certs:issue", "certs:write")
 	owner := servedCreateID(t, h, token, "first-leaf-owner", "/api/v1/owners", map[string]any{
 		"kind": "workload", "name": "first-leaf", "email": "owner@example.test",
@@ -183,7 +183,7 @@ func TestServedFirstLeafResultIsExactPendingIdempotentAndReplayable(t *testing.T
 }
 
 func TestServedFirstLeafResultRequiresExactTenantIdentityAndReadAuthority(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	token := seedScopedToken(t, h.store, h.tenant, "owners:write", "identities:write", "identities:read", "certs:read", "certs:issue")
 	owner := servedCreateID(t, h, token, "first-result-owner", "/api/v1/owners", map[string]any{"kind": "workload", "name": "shared-owner"})
 	id := servedCreateID(t, h, token, "first-result-id", "/api/v1/identities", map[string]any{"kind": "x509_certificate", "name": "same.example.test", "owner_id": owner})
@@ -200,6 +200,7 @@ func TestServedFirstLeafResultRequiresExactTenantIdentityAndReadAuthority(t *tes
 		}
 	}
 	readerless := seedScopedToken(t, h.store, h.tenant, "identities:read")
+	registerServedTenantID(t, h, "22222222-2222-2222-2222-222222222222", "Neighbor operating tenant")
 	neighbor := seedScopedToken(t, h.store, "22222222-2222-2222-2222-222222222222", "identities:read", "certs:read")
 	for _, tc := range []struct {
 		name, id, key, token string
@@ -223,7 +224,7 @@ func TestServedFirstLeafResultRequiresExactTenantIdentityAndReadAuthority(t *tes
 // Deliberately malformed records are negative fixture inputs, never proof that
 // any caller actually received a valid certificate.
 func TestServedFirstLeafResultRejectsMissingMaterialAndAmbiguousRecords(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	token := seedScopedToken(t, h.store, h.tenant, "owners:write", "identities:write", "identities:read", "certs:read", "certs:issue")
 	owner := servedCreateID(t, h, token, "negative-result-owner", "/api/v1/owners", map[string]any{"kind": "workload", "name": "negative-result"})
 	id := servedCreateID(t, h, token, "negative-result-id", "/api/v1/identities", map[string]any{"kind": "x509_certificate", "name": "negative.example.test", "owner_id": owner})
@@ -250,7 +251,7 @@ func TestServedFirstLeafResultRejectsMissingMaterialAndAmbiguousRecords(t *testi
 // Actual API + PostgreSQL/NATS regression. The malformed PKCS#10 reaches the
 // server; no client envelope double substitutes for its signature/parser gate.
 func TestServedFirstLeafRejectedCSRHasExactReplayableCorrectionDisposition(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	token := seedScopedToken(t, h.store, h.tenant, "owners:write", "identities:write", "identities:read", "certs:issue", "certs:read")
 	owner := servedCreateID(t, h, token, "correction-owner", "/api/v1/owners", map[string]any{"kind": "workload", "name": "correction"})
 	id := servedCreateID(t, h, token, "correction-identity", "/api/v1/identities", map[string]any{"kind": "x509_certificate", "name": "correct.example.test", "owner_id": owner})

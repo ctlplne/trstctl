@@ -32,7 +32,7 @@ func TestServedTenantCrossSurfaceCanaryTENANT003(t *testing.T) {
 		bChannelEndpoint = "https://tenant-b-notifications.example.test/hook"
 	)
 
-	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), withAIEnabled())
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), withAIEnabled())
 	registerServedTenantID(t, h, tenantB, "tenant B cross-surface canary")
 
 	if _, err := h.store.CreateOwner(context.Background(), store.Owner{

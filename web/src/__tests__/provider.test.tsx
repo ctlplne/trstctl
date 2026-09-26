@@ -177,6 +177,90 @@ describe("provider console (L3)", () => {
     expect(screen.queryByRole("button", { name: "Resume" })).not.toBeInTheDocument();
   });
 
+  it("shows pending offboarding without offering another deletion or resume", async () => {
+    providerMock.listTenants.mockResolvedValue([
+      { id: "t-1", slug: "acme", name: "Acme Corp", status: "offboarding", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-03T00:00:00Z" },
+    ]);
+    setProviderToken("operator-bearer");
+    renderProvider();
+    const row = (await screen.findByText("Acme Corp")).closest("tr")!;
+    expect(within(row).getByText("Offboarding pending")).toBeInTheDocument();
+    expect(within(row).getByText(/Customer access remains blocked/)).toBeInTheDocument();
+    expect(within(row).queryByRole("button", { name: /Offboard|Resume/ })).not.toBeInTheDocument();
+  });
+
+  it("continues an original offboarding request from activity after its customer leaves the roster", async () => {
+    const request = {
+      sequence: 10,
+      event_id: "ec39388f-d4d4-51f3-af5c-e768cae9047c",
+      type: "provider.tenant_erasure.requested",
+      request_event_id: "ec39388f-d4d4-51f3-af5c-e768cae9047c",
+      tenant_id: "t-1",
+      operator_id: "test-admin",
+      at: "2026-01-03T00:00:00Z",
+      offboard_state: "pending",
+      can_continue_offboard: true,
+    };
+    providerMock.listTenants.mockResolvedValue([]);
+    providerMock.listActivity.mockResolvedValueOnce([request]).mockResolvedValue([{ ...request, offboard_state: "completed", can_continue_offboard: false }]);
+    providerMock.offboardTenant.mockResolvedValue(undefined);
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    setProviderToken("operator-bearer");
+    renderProvider();
+    const button = await screen.findByRole("button", { name: "Continue offboarding" });
+    fireEvent.click(button);
+    expect(providerMock.offboardTenant).not.toHaveBeenCalled();
+    vi.mocked(window.confirm).mockReturnValue(true);
+    fireEvent.click(button);
+    await waitFor(() => expect(providerMock.offboardTenant).toHaveBeenCalledWith("t-1", request.request_event_id));
+    expect(await screen.findByText("Deletion verified")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Continue offboarding" })).not.toBeInTheDocument();
+  });
+
+  it("does not offer continuation without current server authority", async () => {
+    providerMock.listTenants.mockResolvedValue([]);
+    providerMock.listActivity.mockResolvedValue([
+      {
+        sequence: 10,
+        event_id: "request",
+        type: "provider.tenant_erasure.requested",
+        request_event_id: "request",
+        tenant_id: "t-1",
+        operator_id: "another-operator",
+        at: "2026-01-03T00:00:00Z",
+        offboard_state: "pending",
+        can_continue_offboard: false,
+      },
+    ]);
+    setProviderToken("operator-bearer");
+    renderProvider();
+    expect(await screen.findByText("Offboarding pending")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Continue offboarding" })).not.toBeInTheDocument();
+  });
+
+  it("requires a new confirmation to retry refused offboarding and refreshes after a refusal", async () => {
+    const tenant = { id: "t-1", slug: "acme", name: "Acme Corp", status: "active", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-03T00:00:00Z" };
+    providerMock.listTenants.mockResolvedValueOnce([tenant]).mockResolvedValue([{ ...tenant, status: "offboard_failed" }]);
+    providerMock.offboardTenant.mockRejectedValueOnce(new Error("customer state changed"));
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    setProviderToken("operator-bearer");
+    renderProvider();
+    const row = (await screen.findByText("Acme Corp")).closest("tr")!;
+    fireEvent.click(within(row).getByRole("button", { name: "Offboard" }));
+    expect(await screen.findByText("Offboarding needs review")).toBeInTheDocument();
+    expect(screen.getByText(/Review the customer before submitting a new deletion request/)).toBeInTheDocument();
+    const retry = screen.getByRole("button", { name: "Review offboarding" });
+    expect(screen.queryByRole("button", { name: "Resume" })).not.toBeInTheDocument();
+    vi.mocked(window.confirm).mockReturnValue(false);
+    fireEvent.click(retry);
+    expect(providerMock.offboardTenant).toHaveBeenCalledTimes(1);
+    providerMock.offboardTenant.mockResolvedValue(undefined);
+    vi.mocked(window.confirm).mockReturnValue(true);
+    fireEvent.click(retry);
+    await waitFor(() => expect(providerMock.offboardTenant).toHaveBeenCalledTimes(2));
+    expect(window.confirm).toHaveBeenLastCalledWith(expect.stringContaining("new deletion request"));
+  });
+
   it("shows a customer's quota, rendering an unset limit as unlimited", async () => {
     providerMock.listTenants.mockResolvedValue([
       { id: "t-1", slug: "acme", name: "Acme Corp", status: "active", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" },

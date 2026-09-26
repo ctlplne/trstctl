@@ -70,7 +70,7 @@ func TestServedNativeConnectorRegistryDeploysToACMAndAzureKVEmulators(t *testing
 	}, acm.WithEndpoint(acmSrv.URL())))
 	reg.Register(azurekv.New(kvSrv.URL(), azurekv.StaticToken([]byte(azureToken))))
 
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.ConnectorRegistry = reg
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, "connectors:read")
@@ -143,7 +143,7 @@ func TestServedControlPlaneCloudPreviewUsesOutboxAndChangesNothing(t *testing.T)
 		t.Fatal(err)
 	}
 
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.ConnectorRegistry = reg
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, "connectors:read", "connectors:write")
@@ -210,7 +210,7 @@ func TestServedConnectorDeployOutboxSealsPrivateKeyBeforeDispatch(t *testing.T) 
 	reg := connector.NewRegistry(func(string) connector.Ops { return ops })
 	reg.Register(example.New("/deploy", "reload-service"))
 
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.ConnectorRegistry = reg
 	})
 	ctx := context.Background()
@@ -350,7 +350,7 @@ func TestServedLoadBalancerConnectorBreadthCAPDEP01(t *testing.T) {
 	reg.Register(a10.New(a10Srv.URL(), a10User, []byte(a10Pass)))
 	reg.Register(kemp.New(kempSrv.URL(), []byte(kempToken)))
 
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.ConnectorRegistry = reg
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, "connectors:read", "connectors:write")
@@ -574,7 +574,7 @@ func TestServedEndpointBindingPushesCredentialsCAPLIFE05(t *testing.T) {
 		}
 	}
 
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		withAgentChannel(d)
 		d.AgentClaimableJobKinds = []string{"connector.deploy"}
 		d.ConnectorRegistry = reg

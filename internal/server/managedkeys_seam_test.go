@@ -125,7 +125,7 @@ func projectDualControlManagedKey(t *testing.T, h *servedHarness, key api.Manage
 
 func TestManagedKeysServedThroughEditionFactory(t *testing.T) {
 	var sawSpine bool
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.ManagedKeyFactory = func(md ManagedKeyServiceDeps) (api.ManagedKeyService, error) {
 			if md.Log == nil || md.Idempotency == nil {
 				t.Fatal("managed-key factory did not receive event log and idempotency spine")

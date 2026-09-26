@@ -39,6 +39,12 @@ func NewPGStore(s *corestore.Store) *PGStore {
 	return &PGStore{store: s}
 }
 
+// RequireCustomerWorkQuiescent preserves remote claim evidence independently
+// of the Provider edition. Call only while holding the customer service barrier.
+func (p *PGStore) RequireCustomerWorkQuiescent(ctx context.Context, tenantID string) error {
+	return p.store.RequireTenantAgentWorkQuiescent(ctx, tenantID)
+}
+
 var _ Store = (*PGStore)(nil)
 
 // WithLifecycleMutation serializes rare Provider status commands with each
@@ -50,10 +56,14 @@ func (p *PGStore) WithLifecycleMutation(ctx context.Context, fn func(context.Con
 	return withAuthorityFence(ctx, p.store, fn)
 }
 
+func (p *PGStore) WithCustomerServiceBarrier(ctx context.Context, tenantID string, fn func(context.Context) error) error {
+	return p.store.WithTenantServiceBarrier(ctx, tenantID, fn)
+}
+
 func (p *PGStore) CountBillableTenants(ctx context.Context) (int, error) {
 	var n int
 	err := p.store.SystemPool().QueryRow(ctx,
-		`SELECT count(*) FROM provider_tenants WHERE status IN ('active','suspended')`).Scan(&n)
+		`SELECT count(*) FROM provider_tenants WHERE status IN ('active','suspended','offboarding','offboard_failed')`).Scan(&n)
 	return n, err
 }
 
@@ -109,6 +119,10 @@ func (p *PGStore) DirectTenantSnapshot(ctx context.Context, tenantID string) (Te
 	switch {
 	case tenant.Status == TenantSuspended:
 		health = "suspended"
+	case tenant.Status == TenantOffboarding:
+		health = "offboarding"
+	case tenant.Status == TenantOffboardFailed:
+		health = "offboard_failed"
 	case tenant.Status == TenantOffboarded:
 		health = "offboarded"
 	case active == 0:

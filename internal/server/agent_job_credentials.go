@@ -33,10 +33,11 @@ import (
 // the audit event only, so a caller probing this endpoint cannot map the claim
 // table's state from refusal shapes.
 func (a *agentService) RedeemJobCredential(ctx context.Context, req *transport.RedeemJobCredentialRequest) (*transport.RedeemJobCredentialResponse, error) {
-	info, err := a.peerInfo(ctx)
+	ctx, info, release, err := a.beginPeerWork(ctx)
 	if err != nil {
 		return nil, err
 	}
+	defer release()
 	if a.store == nil {
 		return nil, status.Error(codes.FailedPrecondition, "agent job ledger is not configured")
 	}

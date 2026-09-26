@@ -48,7 +48,7 @@ func TestGeneratedSubjectIssuanceRequiresCredentialSealing(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			st := newStore(t)
-			log := openLog(t)
+			log := openRegisteredTenantLog(t)
 			prov, stop := startSignerChild(t)
 			defer stop()
 			deps := server.Deps{Store: st, Log: log, Signer: prov}

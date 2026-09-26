@@ -175,7 +175,7 @@ func TestServedMintRejectsOutOfProfileRequest(t *testing.T) {
 	// --- Deny case: a profile whose RSA-only key policy the ECDSA mint violates. ---
 	t.Run("out-of-profile is rejected with a deny event", func(t *testing.T) {
 		st := newStore(t)
-		log := openLog(t)
+		log := openRegisteredTenantLog(t)
 		prov, stop := startSignerChild(t)
 		defer stop()
 
@@ -225,7 +225,7 @@ func TestServedMintRejectsOutOfProfileRequest(t *testing.T) {
 	// --- Allow case: a permissive profile lets the served mint through. ---
 	t.Run("in-profile mint succeeds with an allow event", func(t *testing.T) {
 		st := newStore(t)
-		log := openLog(t)
+		log := openRegisteredTenantLog(t)
 		prov, stop := startSignerChild(t)
 		defer stop()
 

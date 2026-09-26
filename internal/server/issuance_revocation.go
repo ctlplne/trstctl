@@ -100,6 +100,17 @@ func (d *issuanceDispatcher) handleRevoke(ctx context.Context, m orchestrator.Me
 	// the unchanged outbox retry must retry it even after inventory is revoked.
 	// Publish confirmed local members even if another member failed upstream.
 	// The platform publisher reads only its own ledger; external serials are absent.
+	// An external-only customer has no platform CRL surface. Consult the durable
+	// issuance ledger, not the identity's mutable current CA selection: a mixed
+	// customer still owes publication even when this command revoked external
+	// leaves or its mutation result was already cached.
+	localSurface, surfaceErr := d.store.HasIssuedCerts(ctx, m.TenantID, IssuingCAID())
+	if surfaceErr != nil {
+		return errors.Join(err, surfaceErr)
+	}
+	if !localSurface {
+		return err
+	}
 	return errors.Join(err, d.publishTenantCRL(ctx, m.TenantID))
 }
 

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	xacme "golang.org/x/crypto/acme"
 
@@ -25,11 +26,12 @@ func TestServedACMEClientPublishedDNSProof(t *testing.T) {
 		t.Run(proof, func(t *testing.T) {
 			dns := newServedDNSWebhookFixture(t, "unused-client-dns-fixture")
 			validators := acmesrv.Validators{DNS01: acmesrv.DNS01Validator{Resolver: dns}}
-			h := newServedHarness(t,
+			h := newOperatingServedHarness(t,
 				config.Protocols{ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}},
 				func(d *Deps) { d.ACMEValidators = &validators },
 			)
-			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+			defer cancel()
 			client, err := acmekey.NewClient(h.ts.URL + "/directory")
 			if err != nil {
 				t.Fatal(err)

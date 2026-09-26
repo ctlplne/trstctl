@@ -36,6 +36,16 @@ type providerTenantAuthorityPayload struct {
 	Audit          provider.AuditEvent `json:"audit"`
 }
 
+// Erasure requests have their own closed wire shape. They never existed as
+// legacy audit-only events and retain the original actor for crash recovery.
+type providerTenantErasurePayload struct {
+	Tenant         *provider.Tenant               `json:"tenant,omitempty"`
+	Erasure        *provider.TenantErasureRequest `json:"erasure,omitempty"`
+	EffectiveAt    time.Time                      `json:"effective_at,omitempty"`
+	RequestBinding string                         `json:"request_binding,omitempty"`
+	Audit          provider.AuditEvent            `json:"audit"`
+}
+
 type providerDelegationAuthorityPayload struct {
 	Delegation     *provider.DelegationMutation  `json:"delegation,omitempty"`
 	Delegations    []provider.DelegationMutation `json:"delegations,omitempty"`
@@ -207,6 +217,13 @@ var licensedProductionPrivacyEventCatalog = func() []licensedPrivacyEventPolicy 
 		licensedPrivacyRule("/tenant/slug", events.PrivacyFieldSubjectToken),
 		licensedPrivacyRule("/tenant/name", events.PrivacyFieldSubjectToken),
 	)
+	erasureRules := []events.PrivacyFieldRule{
+		licensedPrivacyRule("/tenant/slug", events.PrivacyFieldSubjectToken),
+		licensedPrivacyRule("/tenant/name", events.PrivacyFieldSubjectToken),
+		licensedPrivacyRule("/erasure/actor/subject", events.PrivacyFieldIdentityExact),
+	}
+	erasureRules = append(erasureRules, providerAuditPrivacyRules()...)
+	erasurePolicy := typedLicensedPrivacyPolicy[providerTenantErasurePayload](erasureRules...)
 	delegationPolicy := providerPolicy[providerDelegationAuthorityPayload](
 		licensedPrivacyRule("/delegation/operator_id", events.PrivacyFieldIdentityExact),
 		licensedPrivacyRule("/delegation/granted_by", events.PrivacyFieldIdentityExact),
@@ -244,6 +261,10 @@ var licensedProductionPrivacyEventCatalog = func() []licensedPrivacyEventPolicy 
 		entry(provider.AuditTenantSuspended, 1, tenantPolicy),
 		entry(provider.AuditTenantResumed, 1, tenantPolicy),
 		entry(provider.AuditTenantOffboarded, 1, tenantPolicy),
+		entry(provider.AuditTenantErasureRequested, 1, erasurePolicy),
+		entry(provider.AuditUnregisteredTenantOffboarded, 1, erasurePolicy),
+		entry(provider.AuditTenantErasureFailed, 1, erasurePolicy),
+		entry(provider.AuditTenantErasureCompleted, 1, erasurePolicy),
 		entry(provider.EventDelegationGranted, 1, delegationPolicy),
 		entry(provider.EventDelegationRevoked, 1, delegationPolicy),
 		entry(provider.EventOperatorUpserted, 1, operatorPolicy),

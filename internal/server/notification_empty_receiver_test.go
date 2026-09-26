@@ -17,7 +17,7 @@ import (
 )
 
 func TestNotificationWithoutReceiverRemainsUndeliveredUntilConfigured(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	token := seedScopedToken(t, h.store, h.tenant, "notifications:read")
 	payload, err := json.Marshal(notify.Alert{Kind: notify.KindUnexpectedIssuance, TenantID: h.tenant, Subject: "unrouted.served.test", Severity: notify.AlertSeverityCritical})
 	if err != nil {

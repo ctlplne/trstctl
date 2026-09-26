@@ -26,7 +26,7 @@ import (
 // signature whose recording failed must be recoverable after the automatic
 // delivery budget is exhausted, without changing the original command or key.
 func TestServedFirstLeafCanRequestOneAuditedRetry(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	ctx := t.Context()
 	token := seedScopedToken(t, h.store, h.tenant, "owners:read", "owners:write", "identities:read", "identities:write", "certs:read", "certs:issue")
 	owner := servedCreateID(t, h, token, "retry-owner", "/api/v1/owners", map[string]any{
@@ -97,10 +97,11 @@ func TestServedFirstLeafCanRequestOneAuditedRetry(t *testing.T) {
 }
 
 func TestServedFirstLeafRetryRefusesUnsafeRequestsAndNeverRefundsAnAttempt(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	ctx := t.Context()
 	token := seedScopedToken(t, h.store, h.tenant, "owners:read", "owners:write", "identities:read", "identities:write", "certs:read", "certs:issue")
 	reader := seedScopedToken(t, h.store, h.tenant, "identities:read", "certs:read")
+	registerServedTenantID(t, h, "22222222-2222-2222-2222-222222222222", "Other operating tenant")
 	otherTenant := seedScopedToken(t, h.store, "22222222-2222-2222-2222-222222222222", "identities:read", "certs:read", "certs:issue")
 	owner := servedCreateID(t, h, token, "retry-guards-owner", "/api/v1/owners", map[string]any{
 		"kind": "service", "name": "retry-guards-owner", "email": "retry-guards@example.test",

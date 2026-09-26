@@ -37,7 +37,7 @@ func (o *Orchestrator) RecordEndpointVerificationWithEventID(ctx context.Context
 // The SQL projection and notification intent share one commit. NATS retains
 // the signed observation and alert snapshot if that transaction fails.
 func (o *Orchestrator) recordEndpointVerification(ctx context.Context, tenantID, eventID string, observation projections.EndpointVerificationObserved) error {
-	return o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	return o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := o.store.LockCertificateMetadataOrderTx(ctx, tx, tenantID); err != nil {
 			return err
 		}

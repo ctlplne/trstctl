@@ -318,9 +318,9 @@ func newHostRotationResultFixtureWithVerify(t *testing.T, verifyAddress string, 
 	t.Helper()
 	ctx := t.Context()
 	h := newRoleHarnessWithEventOptions(t, []string{mtls.AgentRoleHost}, []string{agentJobKindEndpointRenew}, eventOptions)
-	registration := app.New(h.log, h.store, nil)
-	t.Cleanup(registration.Close)
-	if err := registration.RegisterTenant(ctx, h.tenant, "host-rotation-fixture", "host-rotation-registration"); err != nil {
+	// Agent enrollment already registered this tenant. Preserve that exact
+	// certificate-bound authority instead of registering a second name.
+	if _, err := orchestrator.ResolveLiveTenantRegistrationAuthority(ctx, h.log, h.store, h.tenant); err != nil {
 		t.Fatal(err)
 	}
 	seedRenewalJob(t, ctx, h, "host-rotation-initial", []string{"rotation.example.test"}, "rotation.example.test:443")

@@ -78,7 +78,7 @@ func TestServedUnvaultedSecretPostureCAPSECR07EndToEnd(t *testing.T) {
 	t.Setenv("TRSTCTL_DISCOVERY_AZURE_KV_TOKEN", "azure-token")
 	t.Setenv("TRSTCTL_DISCOVERY_VAULT_TOKEN", "vault-token")
 
-	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
 		d.SecretScanner = fake
 		d.OutboundEnvCredentialRefs = []string{
 			"env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID",

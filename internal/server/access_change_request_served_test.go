@@ -12,7 +12,7 @@ import (
 )
 
 func TestServedAccessChangeRequestCAPGOV05EndToEnd(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	requesterTok := seedScopedTokenSubject(t, h.store, h.tenant, "platform-dev@example.test", "access:read", "access:write")
 	approverTok := seedScopedTokenSubject(t, h.store, h.tenant, "security-reviewer@example.test", "access:read", "access:write")
 	cabTok := seedScopedTokenSubject(t, h.store, h.tenant, "cab@example.test", "access:read", "access:write")
@@ -148,7 +148,7 @@ func TestServedAccessChangeRequestCAPGOV05EndToEnd(t *testing.T) {
 }
 
 func TestServedAccessChangeRequestRejectsUnsafeChangeURLs(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	requesterTok := seedScopedTokenSubject(t, h.store, h.tenant, "platform-dev@example.test", "access:read", "access:write")
 
 	unsafeURLs := []struct {
@@ -179,7 +179,7 @@ func TestServedAccessChangeRequestRejectsUnsafeChangeURLs(t *testing.T) {
 }
 
 func TestServedAccessChangeRequestAllowsSafeChangeURLs(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	requesterTok := seedScopedTokenSubject(t, h.store, h.tenant, "platform-dev@example.test", "access:read", "access:write")
 
 	safeURLs := []struct {

@@ -15,7 +15,7 @@ import (
 // disposition, and the per-CA lifecycle breakdown reads back. This exercises
 // the production callers of adcs.ParseDBRow and adcs.Summarize, which had none.
 func TestServedADCSDatabaseIngestionAndVisibility(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	token := seedServedAPIToken(t, t.Context(), h.store, h.tenant, "adcs-operator", []string{
 		"discovery:read", "discovery:write",
 	})

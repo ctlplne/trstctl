@@ -17,7 +17,7 @@ func TestServedConnectorCatalogReflectsConfiguredNativeRegistry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) { d.ConnectorRegistry = registry })
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) { d.ConnectorRegistry = registry })
 	token := seedScopedToken(t, h.store, h.tenant, "connectors:read")
 	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/connectors/catalog", token, nil)
 	if status != http.StatusOK {

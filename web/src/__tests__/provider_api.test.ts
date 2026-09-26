@@ -38,4 +38,20 @@ describe("Provider public attachment preflight", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network unavailable")));
     await expect(providerApi.availability()).resolves.toBeNull();
   });
+
+  it("binds continuation to the durable request while giving the HTTP attempt its own key", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await providerApi.offboardTenant("customer/one", "request-one");
+    await providerApi.offboardTenant("customer/one", "request-one");
+    const keys = fetchMock.mock.calls.map(([path, init]) => {
+      expect(path).toBe("/provider/v1/tenants/customer%2Fone/offboard");
+      expect(init.method).toBe("POST");
+      expect(JSON.parse(init.body)).toEqual({ request_event_id: "request-one" });
+      return new Headers(init.headers).get("Idempotency-Key");
+    });
+    expect(keys[0]).toBeTruthy();
+    expect(keys[1]).toBeTruthy();
+    expect(keys[0]).not.toBe(keys[1]);
+  });
 });

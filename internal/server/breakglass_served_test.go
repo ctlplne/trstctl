@@ -32,7 +32,7 @@ func TestServedBreakglassReconcileRecordsAuditChain(t *testing.T) {
 		t.Fatalf("generate audit key: %v", err)
 	}
 
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AuditSigningKey = auditKey
 		d.BreakglassCACertDER = caDER
 		d.BreakglassPublicKeyDER = pubDER
@@ -84,7 +84,7 @@ func TestServedBreakglassReconcileRecordsAuditChain(t *testing.T) {
 // still receives an effect-free, machine-readable setup plan. A disabled optional
 // subsystem is a blocked prerequisite, not an empty successful response.
 func TestServedBreakglassPreviewExplainsUnconfiguredCustody(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		// buildRunDeps historically assigned the nil concrete runtime into these
 		// interfaces when online custody was disabled. Preserve that production
 		// shape here so this test catches a typed-nil interface escaping into API
@@ -152,7 +152,7 @@ func TestServedOnlineBreakglassIssueRequiresQuorumAndRecordsAuditChain(t *testin
 	if err != nil {
 		t.Fatalf("generate audit key: %v", err)
 	}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		const handle = "breakglass-served-online"
 		signer, err := d.Signer.Client().GenerateDualControlKeyHandle(context.Background(), crypto.ECDSAP256, handle,
 			[]signing.KeyPurpose{signing.PurposeCASign}, signing.PurposeCASign, d.SignAuthorizer)

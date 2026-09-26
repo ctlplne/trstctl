@@ -247,6 +247,7 @@ func TestServedRevocationHealthSchedulesRelayAndProjectsSignedCRLOCSPAUD38(t *te
 	assertRevocationHealthAPIAUD38(t, h, token, evidenceDigest)
 
 	otherTenant := uuid.NewString()
+	registerServedTenantID(t, h.servedHarness, otherTenant, "Other revocation tenant")
 	otherToken := seedScopedToken(t, h.store, otherTenant, "certs:read")
 	code, body := secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/revocation/health", otherToken, nil)
 	if code != http.StatusOK || bytes.Contains(body, []byte(responders.URL)) || !bytes.Contains(body, []byte(`"observed":false`)) {

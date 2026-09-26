@@ -106,7 +106,7 @@ func TestServedESTEndToEnd(t *testing.T) {
 // pre-wiring (no /scep route) and PASS after.
 func TestServedSCEPEndToEnd(t *testing.T) {
 	intuneCfg, challenge := servedSCEPIntuneChallenge(t, "device-scep-1")
-	h := newServedHarness(t, config.Protocols{
+	h := newOperatingServedHarness(t, config.Protocols{
 		SCEP:                config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 		SCEPIntuneChallenge: intuneCfg,
 	})

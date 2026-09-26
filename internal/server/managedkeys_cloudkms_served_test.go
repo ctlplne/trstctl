@@ -58,7 +58,7 @@ func TestServedCloudKMSManagedKeyLifecycleCAPKEY02(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+			h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 				d.ManagedKeyFactory = func(md ManagedKeyServiceDeps) (api.ManagedKeyService, error) {
 					if md.Log == nil || md.Idempotency == nil {
 						t.Fatal("managed-key cloud KMS factory did not receive event log and idempotency spine")

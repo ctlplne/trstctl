@@ -140,10 +140,183 @@ shows the resulting state; Recent activity records `provider.tenant_resume` with
 the customer and operator. A suspend grant alone cannot reactivate a customer,
 and an offboarded customer cannot be resumed.
 
+Vault/OpenBao-compatible credential routes enforce the same customer restriction,
+including secret reads, PKI issuance, transit operations and cached mutation
+responses. They return HTTP 403 for a missing or restricted customer and HTTP 503
+when current service authority cannot be checked, using the Vault `errors` array.
+An active mutation holds the customer's lifecycle lock through its response, so a
+conflicting suspension or offboarding request must retry after that work finishes.
+
+Removing the Provider license or starting a core-only build does not clear a
+persisted customer restriction. Suspended customers, unfinished offboarding,
+and legacy offboarded customers remain denied. Restore Provider administration
+and use the authorized Resume or offboarding recovery flow; do not delete the
+registry row to regain access. Core-only read-model rebuild preserves this
+registry, and disaster recovery must restore it from the full PostgreSQL backup.
+
 Automation uses `POST /provider/v1/tenants/{id}/resume` with its own
 `Idempotency-Key`. A successful request returns204; its identical retry replays
 that result without another state change. A new request for a customer that is
 not suspended returns409 `customer_state_conflict` after authorization.
+
+### Recover an interrupted offboarding request
+
+A suspension or offboard attempt can return HTTP 503 `customer_work_in_progress` while
+an admitted API mutation or delivery is still running. That refusal preserves
+the customer's current state. Wait for the work to finish, respect the
+`Retry-After` response header, and retry with the same `Idempotency-Key`.
+A busy response does not mean suspension or deletion has been accepted.
+
+If the lifecycle request loses its database connection, a retained suspension
+event does not prove that the customer is suspended. The final state change and
+its replay both exclude admitted work and check unresolved remote attempts.
+Retry the same request after work finishes; do not treat a missing response or a
+retained event alone as successful suspension or erasure.
+
+Control-plane deliveries retain a separate durable token for each receiver
+invocation. The refusal identifies the outbox row, destination and unresolved
+attempt count. The original invocation clears its token only after completed
+delivery or a proven refusal before receiver I/O. Losing the worker process,
+database session, response or lease does not prove that the remote system stopped;
+neither does a successful later retry. Retention and backup/restore preserve that
+uncertainty. Older unfinished deliveries and multi-attempt successes without
+per-attempt evidence remain unknown after upgrade. Do not remove these records
+or treat repeated HTTP503 responses as permission to force deletion. An unknown
+remote outcome needs receiver-specific reconciliation; generic retry alone cannot
+establish it.
+
+A successful control-plane connector deployment records the completing invocation
+in its delivery event. Recovery can replay that event to release the same hold
+without sending the deployment again. The receipt and hold release commit together;
+a failed projection leaves the hold in place. Earlier uncertain invocations and
+historical receipts without this evidence still require reconciliation.
+
+ServiceNow payload validation and missing local environment credentials fail
+before its HTTP request starts. These failures retain the normal queue retry
+count and safe error class while releasing only that invocation's lifecycle
+hold. A transport error or unsuccessful receiver response remains unresolved.
+
+Work already handed to an agent remains in progress until each issued attempt
+has a verified terminal receipt. A lost connection, expired lease, reclaimed job,
+or successful later retry cannot prove that an earlier executor has stopped.
+Queue retention preserves unresolved attempts. Restore reporting from the agent
+and retain the original job and attempt identities; do not delete queue or
+receipt rows to force suspension or erasure. The claim transaction retains each
+attempt's original recipient. A valid late terminal report from that recipient
+records completion of that executor without changing a newer claim, applying
+stale target observations, or granting more access. The receipt is audited as
+`agent.job.receipt.reconciled`; its acknowledgement does not mean the current job or
+target state was updated. Upgrade preserves known holders, including expired
+leases not yet reclaimed, but cannot infer recipients already lost from legacy
+history. If the original binding or report is unavailable, remote completion
+remains unresolved and the lifecycle request stays refused.
+
+For a legacy customer already marked suspended or offboarded while work remained,
+an agent with a valid, unrevoked certificate for the retained tenant registration
+can submit only its original signed terminal receipt. Work claims, lease
+extensions, credential access and live target updates stay refused. Deleted
+tenants, revoked agents and unavailable service authority cannot use this path;
+receipt recovery does not restore customer access.
+
+ACME accounts, orders, authorizations and certificate-serving state belong to one
+retained tenant registration. Suspension refuses the complete request, including
+account and order creation, until service resumes. After erasure, registering a
+new customer with the same tenant UUID does not restore the old ACME accounts or
+orders. Clients must register again under the new customer's configured policy.
+Restart recovery and the operator's validation/renewal views use only the current
+registration. An old in-flight request cannot append ACME state or enter issuance
+or revocation using the replacement registration's authority. Historical events
+remain available under the applicable audit and privacy policy.
+
+Startup recovery may reconstruct a suspended customer's already-recorded queue
+intents so a restart does not lose work needed after an authorized resume. The
+workers still refuse delivery while service is suspended. Recovery skips erased
+customers and intents from an older registration of the same tenant UUID. If a
+lifecycle operation is currently exclusive, recovery stops without advancing past
+that event; retry startup after the operation finishes. Recovering an intent is
+not evidence that its external action ran.
+
+The agent saves each terminal observation in encrypted `pending-reports` state
+beside its identity key before sending it. Preserve that directory and its sealing
+key with the agent identity. It permits only one process to use the directory and
+recovers the pending report before claiming more work, including after restart.
+Disabling job claiming still permits reporting an existing result. A refusal or
+unavailable control plane retains the observation and blocks further claims.
+Corrupt state, a missing sealing key, or a changed server trust, agent identity or
+tenant registration causes an explicit refusal; do not delete the state to bypass it.
+
+A late report receives a receipt acknowledgement, not a renewed claim. The agent
+can clear its saved report, but this does not authorize execution or rollback.
+The recorded terminal facts cannot be overwritten by a conflicting outcome,
+evidence digest, detail digest, or custody statement for the same attempt. A
+fresh signature over the same facts remains retryable after a reporting outage.
+The first reconciled event has a stable ID for that tenant, job and attempt.
+Recovery checks retained history even after the broker's duplicate window has
+expired, and restores the original statement, signature and signer together if
+the database write failed. A conflicting report is refused and audited as
+`agent.job.receipt.conflict`; a retry does not create another completion event.
+These signed records cannot be rewritten without invalidating their evidence.
+Subject erasure that would alter the signed payload is explicitly refused.
+
+Each reporting window permits at most six sends within 30 seconds after temporary
+transport, timeout or capacity failures, with a 10-second limit per RPC and
+jittered backoff. Those retries send identical signed bytes. A later window uses
+the current authenticated identity and signing time to attest the original job,
+attempt, outcome, evidence and custody; it does not rerun the external action or
+weaken the server's signed-receipt time window. Normal certificate renewal retains
+the registration binding. Legacy certificates without that binding retain only
+their exact leaf identity and cannot silently recover across renewal.
+
+This protects a successfully persisted terminal observation. A crash between the
+external action and that local write, or loss of the agent disk, can still leave
+completion unknown; the remote-work hold remains. Windows process restart and
+power-loss durability still require native qualification. A stored report or an
+accepted late receipt does not establish the target's current health.
+
+For a registered customer, core reserves the exact deletion command before the
+Provider request is appended. This durable receiver binds the registration and
+original actor; it denies service even without the Provider attachment. It does
+not itself erase customer data. If the subsequent append or projection fails,
+service may already be denied while the Provider roster still shows its earlier
+state. Retry the original offboard command with its `Idempotency-Key`, signed in
+as the original operator with current authorization. Do not remove the core
+receiver or use Resume to cancel a prepared deletion.
+
+A lost response does not prove that deletion finished. In Recent activity,
+**Continue offboarding** resumes the original request after you sign in again,
+even if the customer has already left the roster. It does not authorize deletion
+of a later customer that reuses the same ID.
+
+The original operator's deletion request and outcome remain visible after the
+operation revokes customer grants. This exception exposes only that operator's
+own operation evidence; it does not restore access to customer data or another
+operator's undelegated activity. Continuation still requires current
+authentication, MFA, an administrator role and a writable Provider entitlement.
+The server reports whether continuation is currently allowed.
+
+For API recovery, take `request_event_id` from the request's activity item and
+send `POST /provider/v1/tenants/{id}/offboard` with
+`{"request_event_id":"REQUEST_EVENT_ID"}` and an `Idempotency-Key` for this HTTP
+attempt. Retrying the same attempt uses that key again. A newly authenticated
+attempt may use a new key while retaining the same request reference. The
+reference is not a credential: a different operator, customer or event type is
+refused. An empty object starts a new authorization rather than a continuation.
+
+`offboard_state` distinguishes `pending`, `failed` and `completed`.
+`provider.tenant_erasure.completed` is recorded only after the deletion command
+verifies completion; the earlier request or erase event alone is insufficient.
+The console then shows **Deletion verified**. A failed request needs review and
+a separately authorized new offboard action. Recent activity defaults to 100 items
+and accepts `limit` up to 250; retain the request reference for older operations.
+No operator credential is saved in browser storage for this recovery.
+
+An older retained registration can still authorize offboarding. If a customer's
+database row cannot be bound to its retained registration, the server returns409
+`customer_state_conflict` before starting deletion and preserves customer data.
+Restore and verify the actual registration history and its read model before a
+new attempt. Rebuilding the read model can recover a lost registration position
+when the original event is retained; it cannot replace missing source history.
+Do not create a new registration merely to bypass this refusal.
 
 ### Request and approve emergency access
 

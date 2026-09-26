@@ -33,7 +33,7 @@ import (
 
 func acmeEABScopedHarness(t *testing.T, keys []config.ACMEExternalAccountBindingKey) *servedHarness {
 	t.Helper()
-	return newServedHarness(t, config.Protocols{
+	return newOperatingServedHarness(t, config.Protocols{
 		ACME:    config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 		ACMEEAB: config.ACMEExternalAccountBinding{Required: true, Keys: keys},
 	})

@@ -27,7 +27,7 @@ func (o *Orchestrator) BindIdentityEndpointAtVersion(ctx context.Context, tenant
 	if target.ID == "" || target.Type == "" || target.Name == "" || len(issuer.PreviewFingerprint) != 64 || len(reviewed) > 1 {
 		return store.Identity{}, fmt.Errorf("%w: destination and exact reviewed identity are required", store.ErrIdentityEnrollmentConflict)
 	}
-	err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err := o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		identity, version, err := o.store.IdentityApprovalTargetTx(ctx, tx, tenantID, identityID, true)
 		if err != nil {
 			return err

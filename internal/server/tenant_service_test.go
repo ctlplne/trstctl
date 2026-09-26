@@ -90,7 +90,7 @@ func TestTenantServiceFixedProtocolAdmission(t *testing.T) {
 		want    int
 	}{{nil, http.StatusNoContent}, {tenancy.ErrServiceUnavailable, http.StatusForbidden}, {errors.New("private database detail"), http.StatusServiceUnavailable}} {
 		calls := 0
-		h := tenantProtocolAdmission(func(_ context.Context, tenant string) error {
+		h := tenantProtocolAdmission(nil, func(_ context.Context, tenant string) error {
 			if tenant != "timestamp-customer" {
 				t.Fatalf("tenant=%q", tenant)
 			}

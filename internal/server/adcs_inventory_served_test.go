@@ -254,8 +254,17 @@ func TestServedADCSSourceSchedulesRelayAndProjectsACLPostureAUD35(t *testing.T) 
 			t.Fatalf("signed AD CS report: %v", err)
 		}
 	}
-	if acceptedCount != 1 {
-		t.Fatalf("concurrent signed AD CS reports accepted=%d, want one", acceptedCount)
+	if acceptedCount < 1 {
+		t.Fatalf("concurrent signed AD CS reports accepted=%d, want a completed original", acceptedCount)
+	}
+	// A contender may lose the live claim race, but each exact terminal retry
+	// must eventually acknowledge the original observation without ingesting it
+	// again. A retained receipt grants no current claim or execution authority.
+	for _, request := range requests {
+		response, err := h.client.ReportJobResult(ctx, request)
+		if err != nil || response == nil || response.Accepted || !response.ReceiptRecorded || response.LeaseExpiresUnix != 0 {
+			t.Fatalf("original AD CS report acknowledgement recovery: %+v %v", response, err)
+		}
 	}
 
 	assertADCSServedProjectionAUD35(t, h, token, source.ID, run.ID)
@@ -265,11 +274,13 @@ func TestServedADCSSourceSchedulesRelayAndProjectsACLPostureAUD35(t *testing.T) 
 		t.Fatal("AD CS receipt did not append lifecycle and posture events")
 	}
 	var sawCompletePostureEvent bool
+	inventoryEvents := 0
 	if err := h.log.Replay(ctx, 0, func(event events.Event) error {
 		if event.TenantID == h.tenant && (bytes.Contains(event.Data, []byte(secretBody)) || bytes.Contains(event.Data, []byte("nTSecurityDescriptor"))) {
 			t.Fatalf("event %s persisted bind material or raw security descriptor", event.Type)
 		}
 		if event.TenantID == h.tenant && event.Type == projections.EventADCSInventoryObserved {
+			inventoryEvents++
 			if event.SchemaVersion != adcsdiscovery.InventoryEventSchemaVersion || !bytes.Contains(event.Data, []byte(`"enrollment_services"`)) {
 				t.Fatalf("AD CS observation is not complete v%d evidence: schema=%d data=%s", adcsdiscovery.InventoryEventSchemaVersion, event.SchemaVersion, event.Data)
 			}
@@ -279,8 +290,8 @@ func TestServedADCSSourceSchedulesRelayAndProjectsACLPostureAUD35(t *testing.T) 
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if !sawCompletePostureEvent {
-		t.Fatal("AD CS receipt emitted no complete posture event")
+	if !sawCompletePostureEvent || inventoryEvents != 1 {
+		t.Fatalf("AD CS receipt did not emit exactly one complete posture event: complete=%v events=%d", sawCompletePostureEvent, inventoryEvents)
 	}
 
 	// Cold replay is the authority. If posture existed only because the warm
@@ -291,6 +302,7 @@ func TestServedADCSSourceSchedulesRelayAndProjectsACLPostureAUD35(t *testing.T) 
 	assertADCSServedProjectionAUD35(t, h, token, source.ID, run.ID)
 
 	otherTenant := uuid.NewString()
+	registerServedTenantID(t, h.servedHarness, otherTenant, "AD CS isolation tenant")
 	otherToken := seedScopedToken(t, h.store, otherTenant, "discovery:read")
 	code, body := secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/posture/adcs", otherToken, nil)
 	if code != http.StatusOK || bytes.Contains(body, []byte("UserAuth")) || bytes.Contains(body, []byte(source.ID)) {
@@ -346,7 +358,7 @@ func assertADCSDriftHistoryAndAlertAUD36(t *testing.T, h *roleHarness, token, ot
 		t.Fatalf("report AUD-36 drift sweep: response=%+v err=%v", response, err)
 	}
 	response, err = h.client.ReportJobResult(ctx, receipt)
-	if err != nil || response == nil || response.Accepted {
+	if err != nil || response == nil || response.Accepted || !response.ReceiptRecorded || response.LeaseExpiresUnix != 0 {
 		t.Fatalf("replay AUD-36 drift receipt: response=%+v err=%v", response, err)
 	}
 

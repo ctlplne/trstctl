@@ -28,7 +28,7 @@ func TestOwnershipEvidenceCannotAuthorizeDifferentIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) { d.OwnershipAttestationCadence = cadence })
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) { d.OwnershipAttestationCadence = cadence })
 	ctx := context.Background()
 	token := seedScopedTokenSubject(t, h.store, h.tenant, "binding-reviewer@example.test",
 		"owners:read", "owners:write", "identities:read", "identities:write", "certs:issue")

@@ -686,7 +686,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 
 // ServeHTTP implements http.Handler.
 func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	a.mux.ServeHTTP(localizedProblemWriter(w, r), r)
+	serveTenantServiceRequest(localizedProblemWriter(w, r), r, a.mux)
 }
 
 func (a *API) routeEnabled(r route) bool {

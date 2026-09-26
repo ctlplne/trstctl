@@ -44,7 +44,7 @@ func TestServedSPIFFEWorkloadAPIEndToEnd(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(socketDir) })
 	socket := filepath.Join(socketDir, "s.sock")
-	h := newServedHarness(t, config.Protocols{
+	h := newOperatingServedHarness(t, config.Protocols{
 		SPIFFE: config.SPIFFEProtocol{
 			Enabled:     true,
 			TenantID:    servedTestTenant,
@@ -144,7 +144,7 @@ func TestServedSPIFFEGoSpiffeClient(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(socketDir) })
 	socket := filepath.Join(socketDir, "s.sock")
-	h := newServedHarness(t, config.Protocols{
+	h := newOperatingServedHarness(t, config.Protocols{
 		SPIFFE: config.SPIFFEProtocol{
 			Enabled:     true,
 			TenantID:    servedTestTenant,
@@ -218,7 +218,7 @@ func TestServedSPIFFEGoSpiffeJWTClient(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(socketDir) })
 	socket := filepath.Join(socketDir, "s.sock")
-	h := newServedHarness(t, config.Protocols{
+	h := newOperatingServedHarness(t, config.Protocols{
 		SPIFFE: config.SPIFFEProtocol{
 			Enabled:     true,
 			TenantID:    servedTestTenant,
@@ -271,7 +271,7 @@ func TestServedSPIFFESpiffeHelperWritesSVID(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(socketDir) })
 	socket := filepath.Join(socketDir, "s.sock")
-	h := newServedHarness(t, config.Protocols{
+	h := newOperatingServedHarness(t, config.Protocols{
 		SPIFFE: config.SPIFFEProtocol{
 			Enabled:     true,
 			TenantID:    servedTestTenant,
@@ -447,7 +447,7 @@ func waitForSocket(t *testing.T, path string, d time.Duration) {
 // the cert/KRL are validated structurally. It MUST fail pre-wiring (no /ssh routes
 // existed) and PASS after.
 func TestServedSSHEndToEnd(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{
+	h := newOperatingServedHarness(t, config.Protocols{
 		SSH: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 	})
 	if !protoContains(h.srv.ServedProtocols(), "ssh") {

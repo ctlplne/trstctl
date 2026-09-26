@@ -8,7 +8,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -139,12 +138,14 @@ func (s *Server) WithStateLog(ctx context.Context, tenantID string, log eventLog
 	defer s.mu.Unlock()
 	s.stateTenantID = tenantID
 	s.stateLog = log
-	if err := log.Replay(ctx, 1, func(ev events.Event) error {
-		if ev.TenantID != tenantID || !strings.HasPrefix(ev.Type, acmeEventPrefix) {
-			return nil
+	if s.stateScopeSource != nil {
+		scope, err := s.stateScopeSource(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("acme: resolve state scope: %w", err)
 		}
-		return s.applyStateEventLocked(ev)
-	}); err != nil {
+		s.stateScope = scope
+	}
+	if err := s.replayStateScopeLocked(ctx); err != nil {
 		s.stateTenantID = ""
 		s.stateLog = nil
 		return nil, fmt.Errorf("acme: replay state: %w", err)

@@ -146,7 +146,7 @@ func TestSSHConsoleDeepLinkDoesNotCollideWithMachineNamespaceAUD75(t *testing.T)
 func TestEnabledProtocolRoutesSurviveNamespaceReservationAUD75(t *testing.T) {
 	dir := t.TempDir()
 	enabled := config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}
-	h := newServedHarness(t, config.Protocols{
+	h := newOperatingServedHarness(t, config.Protocols{
 		ACME: enabled, EST: enabled, SCEP: enabled, CMP: enabled, SSH: enabled, TSA: enabled,
 		TSACertFile: filepath.Join(dir, "tsa.crt"),
 	})

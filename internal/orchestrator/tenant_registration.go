@@ -379,6 +379,10 @@ func (o *Orchestrator) emitTenantOffboard(
 	ctx context.Context,
 	next events.Event,
 ) (events.Event, error) {
+	return o.emitTenantOffboardOperation(ctx, next, false)
+}
+
+func (o *Orchestrator) emitTenantOffboardOperation(ctx context.Context, next events.Event, prepareOnly bool) (events.Event, error) {
 	if o == nil || o.log == nil || o.store == nil || o.proj == nil || next.TenantID == "" {
 		return events.Event{}, errors.New("orchestrator: tenant offboard command is incomplete")
 	}
@@ -447,6 +451,9 @@ func (o *Orchestrator) emitTenantOffboard(
 						return err
 					}
 					recoveredAfterReceiverErase = true
+					if prepareOnly {
+						return nil
+					}
 					return o.proj.ApplyTenantLifecycleTx(readCtx, tx, canonical)
 				}
 				registrationIdentity, err := tenantRegistrationIdentityForOffboard(
@@ -464,7 +471,7 @@ func (o *Orchestrator) emitTenantOffboard(
 			}); err != nil {
 				return err
 			}
-			if recoveredAfterReceiverErase {
+			if recoveredAfterReceiverErase || prepareOnly {
 				return nil
 			}
 
@@ -588,7 +595,7 @@ func prepareTenantOffboardTx(
 	}
 	defer secret.Wipe(anchor)
 	binding := tenantOffboardBinding(next)
-	key := "trstctl.internal.tenant-offboard.v1/" + next.ID
+	key := store.TenantOffboardReceiverKeyPrefix + next.ID
 	var createdAt time.Time
 	err = tx.QueryRow(ctx, `
 		INSERT INTO idempotency_keys
@@ -629,17 +636,7 @@ func tenantOffboardReceiverExistsTx(
 	tx pgx.Tx,
 	tenantID string,
 ) (bool, error) {
-	var exists bool
-	if err := tx.QueryRow(ctx, `
-		SELECT EXISTS (
-			SELECT 1
-			  FROM idempotency_keys
-			 WHERE tenant_id = $1
-			   AND key LIKE 'trstctl.internal.tenant-offboard.v1/%'
-		)`, tenantID).Scan(&exists); err != nil {
-		return false, fmt.Errorf("orchestrator: inspect erased tenant offboard receiver: %w", err)
-	}
-	return exists, nil
+	return store.TenantOffboardReceiverExistsTx(ctx, tx, tenantID)
 }
 
 // recoverErasedTenantOffboard is the one deliberately expensive retry path.

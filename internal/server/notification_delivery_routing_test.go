@@ -18,7 +18,7 @@ import (
 func TestServedRenewalDeliveryRetainsSelectedRouteAfterPolicyDeletion(t *testing.T) {
 	selected := &namedFlakyNotificationChannel{name: "slack"}
 	unselected := &namedFlakyNotificationChannel{name: "webhook"}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.NotificationChannels = []notify.Notifier{selected, unselected}
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, "notifications:read", "notifications:write")

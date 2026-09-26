@@ -19,6 +19,7 @@ func TestServedManagedTenantChecksReviewedAccountBeforeMutationAndReplay(t *test
 	h := newServedHarnessWithEventOptions(t, config.Protocols{}, []events.OpenOption{events.WithRequiredPrivacyEventPolicies()}, func(d *Deps) {
 		d.License = testManagedOfferingLicenseManager(t)
 	})
+	registerServedTenant(t, h, "Reviewed provider account fixture")
 	const subject = "provider-operator+東京"
 	token := seedScopedTokenSubject(t, h.store, h.tenant, subject, "access:read", "access:write")
 	const customer = "77777777-7777-4777-8777-777777777777"

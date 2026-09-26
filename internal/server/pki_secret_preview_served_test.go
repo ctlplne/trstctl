@@ -172,7 +172,7 @@ func TestServedPKISecretPreviewIsExactEffectFreeAndBindsExecution(t *testing.T) 
 }
 
 func TestServedPKISecretPreviewRejectsInvalidConfigurationWithoutIdempotencyKey(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
 	token := seedScopedToken(t, h.store, h.tenant, "secrets:write")
 	for name, input := range map[string]map[string]any{
 		"missing custody":   {"ttl_seconds": 900},

@@ -270,7 +270,7 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 		return store.DiscoveryRun{}, err
 	}
 	var ev events.Event
-	if err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	if err := o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		if in.OnlyIfDue && in.ScheduleID != nil {
 			if _, err := tx.Exec(ctx,
 				`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,

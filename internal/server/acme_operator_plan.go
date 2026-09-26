@@ -44,7 +44,11 @@ func (s *Server) acmeOperatorPlan(ctx context.Context, tenantID string) (api.ACM
 	}
 	plan.TenantBound = true
 	plan.Served = sp.activation == nil || sp.activation.Active()
-	for _, activity := range sp.acme.DomainValidationActivities(12) {
+	activities, err := sp.acme.DomainValidationActivitiesContext(ctx, 12)
+	if err != nil {
+		return api.ACMEOperatorPlan{}, err
+	}
+	for _, activity := range activities {
 		plan.ValidationActivity = append(plan.ValidationActivity, api.ACMEDomainValidationActivity{
 			OrderID: activity.OrderID, Domain: activity.Domain,
 			OrderStatus: activity.OrderStatus, AuthorizationStatus: activity.AuthorizationStatus,

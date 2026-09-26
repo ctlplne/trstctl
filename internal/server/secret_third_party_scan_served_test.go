@@ -27,7 +27,7 @@ func TestServedThirdPartySecretScanningCAPSCAN04EndToEnd(t *testing.T) {
 		"jira":               writeSecretArtifact(t, root, "jira/issues.jsonl", `{"description":"leaked `+rawSecret+`"}`+"\n"),
 	}
 	fake := &fakeThirdPartySecretScanner{called: make(chan string, len(artifacts))}
-	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
 		d.SecretScanner = fake
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write", "discovery:read", "graph:read")

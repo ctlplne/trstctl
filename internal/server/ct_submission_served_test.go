@@ -24,7 +24,7 @@ func TestServedCTSubmissionQueuesPrecertAndCertificateCAPREV06(t *testing.T) {
 	logSrv := ctlogtest.NewServer()
 	t.Cleanup(logSrv.Close)
 
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "certs:write", "certs:read", string(authz.PrivateEgress))
 	body := map[string]any{
 		"certificate_pem":        certPEM,
@@ -144,7 +144,7 @@ func TestServedCTSubmissionDoesNotPersistOutboxWithoutQueuedEvent(t *testing.T) 
 	logSrv := ctlogtest.NewServer()
 	t.Cleanup(logSrv.Close)
 
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "certs:write", "certs:read", string(authz.PrivateEgress))
 	if err := h.log.Close(); err != nil {
 		t.Fatalf("close event log before CT request: %v", err)
@@ -156,8 +156,8 @@ func TestServedCTSubmissionDoesNotPersistOutboxWithoutQueuedEvent(t *testing.T) 
 		"allow_private_endpoint": true,
 		"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, logSrv.URL())},
 	})
-	if status == http.StatusAccepted {
-		t.Fatalf("CT submission accepted with closed event log: status %d body %s", status, raw)
+	if status != http.StatusInternalServerError {
+		t.Fatalf("closed event log must refuse CT submission with 500: status %d body %s", status, raw)
 	}
 	if got := servedOutboxDestinationCount(t, h, "ct.submit"); got != 0 {
 		t.Fatalf("ct.submit outbox rows persisted without queued event = %d, want 0", got)

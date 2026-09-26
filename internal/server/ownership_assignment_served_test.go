@@ -12,7 +12,6 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
-	"trstctl.com/trstctl/internal/store"
 )
 
 // TestServedOwnershipAssignmentIsTenantSafeReplayableAndAuthoritative proves
@@ -21,7 +20,7 @@ import (
 // cold rebuild; a stable retry key cannot append a second decision and a
 // neighboring tenant cannot borrow either the owner or inventory identifiers.
 func TestServedOwnershipAssignmentIsTenantSafeReplayableAndAuthoritative(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	ctx := context.Background()
 	const subject = "ownership-operator@example.test"
 	token := seedScopedTokenSubject(t, h.store, h.tenant, subject,
@@ -113,9 +112,7 @@ func TestServedOwnershipAssignmentIsTenantSafeReplayableAndAuthoritative(t *test
 	}
 
 	const neighborTenant = "22222222-2222-2222-2222-222222222275"
-	if err := h.store.UpsertTenant(ctx, store.Tenant{TenantID: neighborTenant, Name: "Ownership neighbor"}); err != nil {
-		t.Fatal(err)
-	}
+	registerServedTenantID(t, h, neighborTenant, "Ownership neighbor")
 	neighborToken := seedScopedTokenSubject(t, h.store, neighborTenant, "neighbor@example.test", "owners:read", "owners:write")
 	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/ownership/assignments", neighborToken,
 		"ownership-neighbor-borrow", request)

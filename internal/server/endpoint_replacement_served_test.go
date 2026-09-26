@@ -37,7 +37,7 @@ func TestEndpointReplacementServedPreservesSameOwnerAndExternalCA(t *testing.T) 
 		t.Fatal(err)
 	}
 	t.Cleanup(dc.Close)
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.ConnectorRegistry = registry
 		d.ExternalCAs = []ExternalCA{{ID: "replacement-ca", Type: "digicert", Name: "Replacement CA",
 			CA: digicert.New("replacement-ca", dc.URL(), []byte(dc.APIKey()), digicert.WithHTTPClient(&http.Client{Timeout: 5 * time.Second}))}}

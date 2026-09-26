@@ -57,7 +57,7 @@ func (o *Orchestrator) OpenAgentUpgradeCampaign(ctx context.Context, tenantID, t
 	// durable, which wedged the event tail and dropped readiness (DP2-048).
 	next := events.Event{Type: projections.EventAgentUpgradeCampaignOpened, TenantID: tenantID, Data: payload}
 	var ev events.Event
-	err = o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err = o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
 			"agent-upgrade-campaign-open\x1f"+tenantID); err != nil {
 			return fmt.Errorf("orchestrator: lock campaign open: %w", err)
@@ -125,7 +125,7 @@ func (o *Orchestrator) DispatchAgentUpgradeRing(
 		return err
 	}
 	eventID := events.NewID()
-	return o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	return o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		ev, err := o.log.Append(ctx, events.Event{
 			ID: eventID, Type: projections.EventAgentUpgradeRingDispatched,
 			TenantID: tenantID, SchemaVersion: 1, Data: payload,

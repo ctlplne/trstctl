@@ -61,7 +61,7 @@ func TestServedGitHubActionFlowIssuesAndRefusesForeignOwners(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AttestedIssuance = AttestedIssuanceConfig{
 			Enabled: true, TrustDomain: "ci.example.org",
 			DefaultTTL: 10 * time.Minute, MaxTTL: time.Hour,
@@ -113,7 +113,7 @@ func TestShippedGitHubActionRunsAgainstServedDeploymentAUD47(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AttestedIssuance = AttestedIssuanceConfig{
 			Enabled: true, TrustDomain: "ci.example.org", DefaultTTL: 10 * time.Minute, MaxTTL: time.Hour,
 			Attestors: []attest.Attestor{&githuboidc.Attestor{

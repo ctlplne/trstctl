@@ -190,7 +190,7 @@ func resetServerTestStore(t *testing.T, st *store.Store) {
 		          managed_key_operations, managed_keys, code_signing_operations,
 		          operation_approval_decisions, operation_approval_requests,
 		          issuance_approval_requests, issuance_approvals,
-		          agent_job_credential_redemptions, agent_job_receipts, adcs_template_posture,
+		          agent_job_credential_redemptions, agent_job_receipts, agent_job_attempt_bindings, adcs_template_posture,
 		          cmdb_reconcile_schedules, cmdb_ci_inventory, owner_ownership_conflicts,
 		          ticket_intake_schedules, issuance_requests,
 		          enrollment_diagnostic_observations, enrollment_diagnostics,

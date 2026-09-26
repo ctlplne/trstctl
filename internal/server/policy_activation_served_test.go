@@ -22,6 +22,7 @@ func TestServedPolicyVersionActivationAndRollbackTRACE006(t *testing.T) {
 		d.EnablePolicyGate = true
 		d.DefaultProfile = "tls-server"
 	})
+	registerServedTenant(t, h, "Policy activation fixture")
 	storeServerTestProfile(t, h.store, h.tenant, "tls-server", profile.CertificateProfile{
 		Name: "tls-server", AllowedEKUs: []string{"serverAuth"},
 		MaxValidity: profile.Duration(365 * 24 * time.Hour), AllowedProtocols: []string{"api"},

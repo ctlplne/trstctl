@@ -33,7 +33,7 @@ import (
 // queue an external call, or ask the signer to do work.
 func TestServedAttestedPreviewIsExactEffectFreeAndFailClosed(t *testing.T) {
 	attestor := &countingAttestedPreviewAttestor{}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AttestedIssuance = AttestedIssuanceConfig{
 			Enabled: true, TrustDomain: "served.test", DefaultTTL: 10 * time.Minute,
 			MaxTTL: time.Hour, Attestors: []attest.Attestor{attestor},
@@ -127,7 +127,7 @@ func TestServedAttestedPreviewIsExactEffectFreeAndFailClosed(t *testing.T) {
 
 func TestServedAttestedPreviewRejectsMissingPermissionAndMalformedInput(t *testing.T) {
 	fixtures := servedAttestedIssuanceFixtures(t)
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) { d.AttestedIssuance = fixtures.Config })
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) { d.AttestedIssuance = fixtures.Config })
 	owner := seedScopedToken(t, h.store, h.tenant, "certs:issue")
 	reader := seedScopedToken(t, h.store, h.tenant, "certs:read")
 	key := servedAttestedPublicKeyPEM(t)
@@ -173,7 +173,7 @@ func TestAttestedSVIDTTLClampsBeforeDurationConversion(t *testing.T) {
 
 func TestServedAttestedIssuanceRecordsRequesterCustodyWithoutStorageClaims(t *testing.T) {
 	fixtures := servedAttestedIssuanceFixtures(t)
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) { d.AttestedIssuance = fixtures.Config })
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) { d.AttestedIssuance = fixtures.Config })
 	token := seedScopedToken(t, h.store, h.tenant, "certs:issue", "certs:read")
 	publicKey := servedAttestedPublicKeyPEM(t)
 	first := servedAttestedIssue(t, h, token, "f30-custody", "k8s_sat", fixtures.K8sSAT, publicKey, http.StatusCreated)
@@ -205,7 +205,7 @@ func TestServedAttestedIssuanceRecordsRequesterCustodyWithoutStorageClaims(t *te
 // CA, while a forged AWS proof is rejected fail-closed.
 func TestServedAttestedIssuanceEndpointIssuesForK8sAndAWS(t *testing.T) {
 	fixtures := servedAttestedIssuanceFixtures(t)
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AttestedIssuance = fixtures.Config
 	})
 	token := seedScopedToken(t, h.store, h.tenant, "certs:issue", "certs:read")

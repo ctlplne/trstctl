@@ -53,7 +53,7 @@ func TestExternalCAReturnedResultSurvivesRecordingFailure(t *testing.T) {
 	const caID = "returned-result"
 	const key = "returned-before-record-failure"
 	upstream := &returnedResultTestCA{name: caID, minted: make(chan ca.Certificate, 1)}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
 		d.ExternalCAs = []ExternalCA{{ID: caID, Type: "non-replayable-test", CA: upstream}}
 	})
@@ -125,7 +125,7 @@ func TestExternalCAAmbiguousProviderFailureStillRefusesReplay(t *testing.T) {
 	const caID = "ambiguous-return"
 	const key = "ambiguous-provider-result"
 	upstream := &returnedResultTestCA{name: caID, ambiguous: true, minted: make(chan ca.Certificate, 1)}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
 		d.ExternalCAs = []ExternalCA{{ID: caID, Type: "non-replayable-test", CA: upstream}}
 	})

@@ -28,6 +28,7 @@ import (
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/servedstatus"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenancy"
 )
 
 // The served job claim protocol (epic A1).
@@ -198,10 +199,11 @@ const (
 
 // ClaimJobs leases estate-touching work to the calling agent.
 func (a *agentService) ClaimJobs(ctx context.Context, req *transport.ClaimJobsRequest) (*transport.ClaimJobsResponse, error) {
-	info, err := a.peerInfo(ctx)
+	ctx, info, release, err := a.beginPeerWork(ctx)
 	if err != nil {
 		return nil, err
 	}
+	defer release()
 	if a.store == nil {
 		return nil, status.Error(codes.FailedPrecondition, "agent job ledger is not configured")
 	}
@@ -334,15 +336,22 @@ func (a *agentService) startClaimedADCSRun(ctx context.Context, tenantID, agentN
 
 // ReportJobResult records what the claiming agent did.
 //
-// A report from an agent that no longer holds the lease is refused rather than
-// applied. That is the case that matters: the agent stalled, its lease lapsed,
-// another agent took the work and may already have done it. Accepting the late
-// report would mean two agents believing they own the same deploy.
+// Only a current lease can apply observations to live target state. A verified
+// terminal report for a retained original claim may instead record completion
+// of that old executor, without changing a newer claim or renewing any access.
 func (a *agentService) ReportJobResult(ctx context.Context, req *transport.ReportJobResultRequest) (*transport.ReportJobResultResponse, error) {
-	info, err := a.peerInfo(ctx)
+	outcome := strings.TrimSpace(req.Outcome)
+	terminal := outcome == transport.JobOutcomeExecuted || outcome == transport.JobOutcomeVerified ||
+		outcome == transport.JobOutcomeVerifyFailed || outcome == transport.JobOutcomeFailed
+	begin := a.beginPeerWork
+	if terminal {
+		begin = a.beginPeerReceipt
+	}
+	ctx, info, release, err := begin(ctx)
 	if err != nil {
 		return nil, err
 	}
+	defer release()
 	if a.store == nil {
 		return nil, status.Error(codes.FailedPrecondition, "agent job ledger is not configured")
 	}
@@ -352,13 +361,20 @@ func (a *agentService) ReportJobResult(ctx context.Context, req *transport.Repor
 	agentID := agentRowID(info.TenantID, info.CommonName)
 	now := time.Now().UTC()
 
-	outcome := strings.TrimSpace(req.Outcome)
 	// A terminal report is a claim about the world and must be signed. An
 	// "extend" is a lease request that claims nothing, so it is not — see the
 	// note on ReportJobResultRequest.Signature.
 	if outcome != transport.JobOutcomeExtend && outcome != transport.JobOutcomeAuthorizeRollback {
 		if err := a.verifyJobReceipt(ctx, info, req, now); err != nil {
 			return nil, err
+		}
+	}
+	if terminal {
+		if err := a.tenantServiceCheck.Check(ctx, info.TenantID); err != nil {
+			if errors.Is(err, tenancy.ErrServiceUnavailable) {
+				return a.acceptLateTerminalReceipt(ctx, info, agentID, req, now)
+			}
+			return nil, status.Error(codes.Unavailable, "tenant service authority is unavailable")
 		}
 	}
 
@@ -474,7 +490,7 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 		return nil, status.Errorf(codes.Internal, "load agent job claim: %v", err)
 	}
 	if !held {
-		return &transport.ReportJobResultResponse{Accepted: false}, nil
+		return a.acceptLateTerminalReceipt(ctx, info, agentID, req, now)
 	}
 	if a.outbox == nil {
 		return nil, status.Error(codes.Internal, "agent job outbox completion is not configured")
@@ -499,6 +515,9 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 		}
 	}
 
+	if err := a.recordVerifiedReceipt(ctx, info, req, claim.Destination, now); err != nil {
+		return nil, status.Error(codes.Unavailable, "signed job receipt could not be stored; retry the same report")
+	}
 	// Closing the exact claim and retiring its outbox intent is ONE durable
 	// transition. A crash before it leaves the claim retryable; after it, both
 	// claim and delivery are terminal. The outbox also records circuit success.
@@ -521,8 +540,8 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 }
 
 // recordExecutedReportObservations runs only after the exact agent claim has
-// been durably retired. These receipt and verification callbacks preserve the
-// original order; acceptance and its error paths stay in acceptExecutedReport.
+// been durably retired. The verified receipt is already stored before retirement;
+// these callbacks add audit and verification observations.
 func (a *agentService) recordExecutedReportObservations(ctx context.Context, info mtls.PeerCertInfo, agentID string,
 	claim store.AgentJobResultClaim, req *transport.ReportJobResultRequest, now time.Time) {
 	destination, idemKey := claim.Destination, claim.IdempotencyKey
@@ -558,7 +577,6 @@ func (a *agentService) recordExecutedReportObservations(ctx context.Context, inf
 	}
 	a.attachJobReceipt(executed, info, req)
 	a.recordAgentJobEvent(ctx, info.TenantID, "agent.job.executed", executed)
-	a.recordVerifiedReceipt(ctx, info, req, destination, now)
 	// D5: a dry-run's whole output is its plan, and the relay carries it in
 	// Detail. It becomes a delivery receipt an operator can read rather than
 	// an event nobody looks at, and the status distinguishes "a deploy would
@@ -788,6 +806,9 @@ func (a *agentService) ingestExecutedReport(
 func (a *agentService) refuseExecutedReportPermanently(ctx context.Context, info mtls.PeerCertInfo, agentID string,
 	req *transport.ReportJobResultRequest, now time.Time, cause error) (*transport.ReportJobResultResponse, error) {
 	const reason = "lifecycle_transition_refused"
+	if err := a.recordVerifiedReceipt(ctx, info, req, "", now); err != nil {
+		return nil, status.Error(codes.Unavailable, "signed job receipt could not be stored; retry the same report")
+	}
 	if a.logger != nil {
 		a.logger.Warn("host lifecycle job finished on the host but its lifecycle transition was refused; job failed terminally to stop re-execution",
 			slog.String("tenant_id", info.TenantID), slog.Int64("job_id", req.JobID), slog.Any("attempt", req.Attempt),
@@ -804,7 +825,6 @@ func (a *agentService) refuseExecutedReportPermanently(ctx context.Context, info
 		if err := a.recordHostRotationResult(ctx, info.TenantID, req.JobID); err != nil && !errors.Is(err, errHostRotationLookupPending) {
 			return nil, status.Errorf(codes.Internal, "record refused host rotation: %v", err)
 		}
-		a.recordVerifiedReceipt(ctx, info, req, "", now)
 	}
 	return &transport.ReportJobResultResponse{Accepted: ok}, nil
 }
@@ -816,7 +836,7 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 		return nil, status.Errorf(codes.Internal, "load failed agent job claim: %v", err)
 	}
 	if !held {
-		return &transport.ReportJobResultResponse{Accepted: false}, nil
+		return a.acceptLateTerminalReceipt(ctx, info, agentID, req, now)
 	}
 	migrationHandled := false
 	if a.recordMigrationResult == nil {
@@ -883,6 +903,9 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 		dest == "connector.rollback" && transport.RollbackReasonIsPermanent(detail) {
 		permanent = true
 	}
+	if err := a.recordVerifiedReceipt(ctx, info, req, claim.Destination, now); err != nil {
+		return nil, status.Error(codes.Unavailable, "signed job receipt could not be stored; retry the same report")
+	}
 	var ok bool
 	var releaseErr error
 	if permanent {
@@ -913,7 +936,6 @@ func (a *agentService) acceptFailedReport(ctx context.Context, info mtls.PeerCer
 		// record somebody will dispute.
 		a.attachJobReceipt(failed, info, req)
 		a.recordAgentJobEvent(ctx, info.TenantID, "agent.job.failed", failed)
-		a.recordVerifiedReceipt(ctx, info, req, "", now)
 	}
 	return &transport.ReportJobResultResponse{Accepted: ok}, nil
 }
@@ -1065,12 +1087,6 @@ func (a *agentService) attachJobReceipt(payload map[string]any, info mtls.PeerCe
 	payload["receipt_signer_fingerprint"] = info.FingerprintSHA256
 }
 
-// recordVerifiedReceipt stores a receipt that passed verification.
-//
-// It is stored whole — statement, signature, signer fingerprint — so the check
-// can be repeated later by someone who does not trust that it happened. A read
-// model that recorded only "verified: true" would be the control plane vouching
-// for itself again, which is the exact thing the signature exists to replace.
 // recordRollbackFromJob reads the queued job's own payload and records the
 // re-bind result from it.
 //
@@ -1092,20 +1108,29 @@ func (a *agentService) recordRollbackFromJob(ctx context.Context, tenantID, agen
 	a.recordRollback(ctx, tenantID, agentName, jobID, attempt, idemKey, string(payload), outcome, reason)
 }
 
+// recordVerifiedReceipt stores the verified statement, signature and signer
+// fingerprint before a claim is retired or released. A storage failure keeps
+// the same claim retryable; reporting success without this evidence could strand
+// lifecycle operations behind an unresolved remote executor.
 func (a *agentService) recordVerifiedReceipt(ctx context.Context, info mtls.PeerCertInfo,
-	req *transport.ReportJobResultRequest, kind string, now time.Time) {
+	req *transport.ReportJobResultRequest, kind string, now time.Time) error {
+	return a.recordVerifiedReceiptWithAudit(ctx, info, req, kind, now, nil)
+}
+
+func (a *agentService) recordVerifiedReceiptWithAudit(ctx context.Context, info mtls.PeerCertInfo,
+	req *transport.ReportJobResultRequest, kind string, now time.Time, audit func(context.Context, store.AgentJobReceipt) (store.AgentJobReceipt, error)) error {
 	if a.store == nil || len(req.Signature) == 0 {
-		return
+		return errors.New("server: signed job receipt requires storage and a signature")
 	}
 	statement := jobReceiptStatement(info, req)
-	_ = a.store.RecordAgentJobReceipt(ctx, info.TenantID, store.AgentJobReceipt{
+	return a.store.RecordAgentJobReceiptFromEvent(ctx, info.TenantID, store.AgentJobReceipt{
 		JobID: req.JobID, Attempt: req.Attempt, Agent: info.CommonName, Kind: kind,
 		Outcome: strings.TrimSpace(req.Outcome), State: store.AgentJobReceiptVerified,
 		SignerFingerprint: info.FingerprintSHA256,
 		Statement:         string(statement.Canonical()),
 		Signature:         base64.StdEncoding.EncodeToString(req.Signature),
 		ObservedAt:        now,
-	})
+	}, audit)
 }
 
 func (a *agentService) recordCertificateCustodyFromJob(ctx context.Context, info mtls.PeerCertInfo,

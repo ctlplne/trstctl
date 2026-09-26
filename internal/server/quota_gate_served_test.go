@@ -40,7 +40,7 @@ func TestServedIssuanceConsultsTheQuotaGateAndRefuses429(t *testing.T) {
 	usage.SetQuotaChecker(checker)
 	t.Cleanup(func() { usage.SetQuotaChecker(nil) })
 
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant,
 		"owners:read", "owners:write", "identities:read", "identities:write", "certs:issue")
 

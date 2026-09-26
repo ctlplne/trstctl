@@ -24,7 +24,7 @@ func TestEndpointBindingReusesTheIdentityClaimedForTheSameName(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(dc.Close)
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.LifecycleRenewBefore = 31 * 24 * time.Hour
 		d.ExternalCAs = []ExternalCA{{
 			ID: "corporate-digicert", Type: "digicert", Name: "Corporate DigiCert",

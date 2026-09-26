@@ -15,6 +15,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -48,6 +49,7 @@ func TestCoreAuditRetentionConfigurationDoesNotArchiveHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = log.Close() })
+	registerServerTestTenant(t, st, log, tenantID, "core audit retention")
 	key, err := jose.GenerateRSASigningKey("core-retention")
 	if err != nil {
 		t.Fatal(err)
@@ -80,7 +82,15 @@ func TestCoreAuditRetentionConfigurationDoesNotArchiveHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	bundle, err := audit.VerifyBundle(signed, key.JWKS())
-	if err != nil || bundle.Count != 1 || bundle.Records[0].ID != "retained-core-history" {
+	if err != nil || bundle.Count != 2 || len(bundle.Records) != 2 {
 		t.Fatalf("ordinary signed history is unavailable: count=%d err=%v", bundle.Count, err)
+	}
+	var registrationRetained, historyRetained bool
+	for _, record := range bundle.Records {
+		registrationRetained = registrationRetained || record.Type == projections.EventTenantRegistered
+		historyRetained = historyRetained || record.ID == "retained-core-history"
+	}
+	if !registrationRetained || !historyRetained {
+		t.Fatal("core signed export lost registration or retained history")
 	}
 }

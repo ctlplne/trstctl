@@ -20,7 +20,7 @@ import (
 // which let every identical caller execute concurrently against the same locked
 // request row; under a burst one of them answered 500 (cmd-0106 on g307).
 func TestServedIdenticalApprovalDecisionsCoalesce(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.RequireApproval = true
 		d.RequiredApprovals = 1
 	})

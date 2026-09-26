@@ -86,7 +86,7 @@ func TestServedMDMPollerProvesExactIntuneCertificateInstallation(t *testing.T) {
 	defer intune.Close()
 	t.Setenv("TRSTCTL_TEST_GRAPH_TOKEN", "graph-test-token")
 
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write", "issuers:read", "issuers:write", string(authz.PrivateEgress))
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/mdm/scep/policies", tok, map[string]any{
 		"name": "Intune exact readback", "provider": "intune", "scep_profile": "profile-9",
@@ -198,7 +198,7 @@ func TestServedMDMPollerProvesJamfCertificateInstallationAndFailure(t *testing.T
 	defer jamf.Close()
 	t.Setenv("TRSTCTL_TEST_GRAPH_TOKEN", "jamf-test-token")
 
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write", string(authz.PrivateEgress))
 	for _, fact := range []struct {
 		serial, transaction, certificate string
@@ -316,7 +316,7 @@ func TestServedMDMPollerCorrelatesAndFlagsOfflineRenewals(t *testing.T) {
 	defer intune.Close()
 	t.Setenv("TRSTCTL_TEST_GRAPH_TOKEN", "graph-test-token")
 
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write", "owners:write", "owners:read",
 		"issuers:read", "issuers:write", string(authz.PrivateEgress))
 	status, out := secretsReq(t, h, http.MethodPost, "/api/v1/mdm/scep/policies", tok, map[string]any{
@@ -426,7 +426,7 @@ func TestServedMDMPollerCorrelatesAndFlagsOfflineRenewals(t *testing.T) {
 }
 
 func TestServedMDMRelayModeDispatchesOneJobAndIngestsTheReport(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write")
 
 	status, out := secretsReqKey(t, h, http.MethodPut, "/api/v1/mdm/poll-schedule", tok,
@@ -502,7 +502,7 @@ func TestServedMDMRelayModeDispatchesOneJobAndIngestsTheReport(t *testing.T) {
 }
 
 func TestMDMRelayPendingBulkheadIsProviderScoped(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write")
 	for _, provider := range []string{mdm.MDMIntune, mdm.MDMJamf} {
 		status, body := secretsReqKey(t, h, http.MethodPut, "/api/v1/mdm/poll-schedule", tok,

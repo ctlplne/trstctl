@@ -307,7 +307,7 @@ func (o *Orchestrator) QueueOwnershipReattestation(
 		return false, nil
 	}
 	queued := false
-	err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err := o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		now := time.Now().UTC()
 		owner, claim, err := o.store.ClaimOwnershipReattestationCandidateTx(ctx, tx, tenantID, ownerID, now, cadence)
 		if err != nil || !claim {
@@ -479,7 +479,7 @@ func (o *Orchestrator) ResumeCMDBSweep(ctx context.Context, tenantID string, int
 	if err != nil {
 		return err
 	}
-	return o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	return o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := o.store.ValidateCMDBSweepIntentTx(ctx, tx, tenantID, intent); err != nil {
 			return err
 		}
@@ -565,7 +565,7 @@ func (o *Orchestrator) emitCMDBEventWithContinuation(
 		}
 		continuationEntry = &entry
 	}
-	return o.store.WithTenant(ctx, next.TenantID, func(tx pgx.Tx) error {
+	return o.withTenantCommand(ctx, next.TenantID, func(ctx context.Context, tx pgx.Tx) error {
 		event, err := o.log.Append(ctx, next)
 		if err != nil {
 			return err

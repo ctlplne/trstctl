@@ -21,7 +21,7 @@ import (
 func TestJOURNEY001WorkloadOwnerSelfServesAttestedOnboarding(t *testing.T) {
 	first := servedDynamicK8sTrustFixture(t, "journey-k8s-k1")
 	rotated := servedDynamicK8sTrustFixture(t, "journey-k8s-k2")
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AttestedIssuance = AttestedIssuanceConfig{
 			Enabled:     true,
 			TrustDomain: "served.test",
@@ -143,7 +143,7 @@ func TestJOURNEY001WorkloadOwnerSelfServesAttestedOnboarding(t *testing.T) {
 
 func TestWorkloadAttesterTrustSourceDuplicateNameFailsBeforeEventAppend(t *testing.T) {
 	fixture := servedDynamicK8sTrustFixture(t, "duplicate-name-k1")
-	h := newServedHarness(t, config.Protocols{}, func(*Deps) {})
+	h := newOperatingServedHarness(t, config.Protocols{}, func(*Deps) {})
 	token := seedScopedTokenSubject(t, h.store, h.tenant, "trust-admin@example.test", "certs:issue", "certs:read")
 	request := map[string]any{
 		"name": "Payments K8s", "method": "k8s_sat",

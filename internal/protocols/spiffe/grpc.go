@@ -121,6 +121,11 @@ func (s *WorkloadAPIServer) FetchX509SVID(_ *workloadpb.X509SVIDRequest, stream 
 	if err := requireSecurityHeader(ctx); err != nil {
 		return err
 	}
+	ctx, release, err := s.wl.cfg.TenantServiceWork.Begin(ctx, s.wl.cfg.TenantID)
+	if err != nil {
+		return status.Error(codes.Unavailable, "spiffe: tenant service is unavailable")
+	}
+	defer release()
 	resp, err := s.buildX509SVIDResponse(ctx)
 	if err != nil {
 		return err
@@ -153,6 +158,11 @@ func (s *WorkloadAPIServer) recordLocalSocketDeprecation(ctx context.Context, ki
 }
 
 func (s *WorkloadAPIServer) buildX509SVIDResponse(ctx context.Context) (*workloadpb.X509SVIDResponse, error) {
+	ctx, release, err := s.wl.cfg.TenantServiceWork.Begin(ctx, s.wl.cfg.TenantID)
+	if err != nil {
+		return nil, status.Error(codes.Unavailable, "spiffe: tenant service is unavailable")
+	}
+	defer release()
 	// Mint the workload key pair server-side (the Workload API owns the key). It is a
 	// LockedSigner (AN-8) destroyed before we return; only its public key crosses to
 	// the SVID signer and only its PKCS#8 encoding is returned to the local caller.
@@ -275,6 +285,11 @@ func (s *WorkloadAPIServer) FetchJWTSVID(ctx context.Context, req *workloadpb.JW
 			return nil, status.Errorf(codes.InvalidArgument, "spiffe: invalid requested SPIFFE ID: %v", err)
 		}
 	}
+	ctx, release, err := s.wl.cfg.TenantServiceWork.Begin(ctx, s.wl.cfg.TenantID)
+	if err != nil {
+		return nil, status.Error(codes.Unavailable, "spiffe: tenant service is unavailable")
+	}
+	defer release()
 	svids, err := s.wl.FetchJWTSVIDs(ctx, audience, s.selectors)
 	if err != nil {
 		if err == ErrNoIdentity {

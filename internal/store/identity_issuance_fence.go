@@ -40,17 +40,28 @@ func (s *Store) WithIdentityIssuanceFence(ctx context.Context, tenantID, identit
 	if tenantID == "" || identityID == "" || fn == nil {
 		return errors.New("store: identity issuance fence is incomplete")
 	}
+	if service, _ := ctx.Value(tenantServiceFenceKey{}).(*tenantServiceFence); service != nil &&
+		(service.store != s || service.tenantID != tenantID || !service.active.Load()) {
+		return errors.New("store: identity issuance does not match its active tenant service fence")
+	}
 	if s.IdentityIssuanceFenceHeld(ctx, tenantID, identityID) {
 		return fn(ctx)
 	}
 	if ctx.Value(identityIssuanceFenceKey{}) != nil {
 		return errors.New("store: an issuance callback cannot lock another identity")
 	}
-	conn, err := s.lockSessionPool(ctx).Acquire(ctx)
+	conn, release, err := s.borrowTenantServiceSession(ctx)
 	if err != nil {
 		return err
 	}
-	defer conn.Release()
+	defer release()
+	if conn == nil {
+		conn, err = s.lockSessionPool(ctx).Acquire(ctx)
+		if err != nil {
+			return err
+		}
+		defer conn.Release()
+	}
 	name := "identity-issuance\x1f" + tenantID + "\x1f" + identityID
 	var held bool
 	if err := conn.QueryRow(ctx, `SELECT pg_try_advisory_lock(hashtextextended($1,0))`, name).Scan(&held); err != nil {

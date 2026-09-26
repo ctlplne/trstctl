@@ -26,7 +26,7 @@ func (o *Orchestrator) RecordConnectorRollbackResult(ctx context.Context, tenant
 	if r.Status != "rolled_back" && r.Status != "rollback_failed" && r.Status != "rollback_refused" {
 		return errors.New("orchestrator: rollback result has an invalid status")
 	}
-	return o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	return o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		var status string
 		var currentAttempt int
 		var completed, released bool

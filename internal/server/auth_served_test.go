@@ -206,6 +206,8 @@ func TestServedOIDCLoginEndToEnd(t *testing.T) {
 	}
 
 	srv := buildServer(t, ctx, dsn, oidc)
+	registerServerTestTenant(t, srv.store, srv.log, tenantA, "OIDC tenant A")
+	registerServerTestTenant(t, srv.store, srv.log, tenantB, "OIDC tenant B")
 	defer func() { _ = srv.Shutdown(context.Background()) }()
 	httpSrv := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 5 * time.Second}
 	go func() { _ = httpSrv.Serve(ln) }()

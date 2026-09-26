@@ -32,7 +32,7 @@ func (o *Orchestrator) QueueRevocationProbe(ctx context.Context, tenantID string
 	}
 	var ev events.Event
 	inserted := false
-	err = o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err = o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		ev, err = o.log.Append(ctx, events.Event{
 			ID: intent.ID, Type: projections.EventRevocationProbeQueued,
 			TenantID: tenantID, Data: payload,
@@ -81,7 +81,7 @@ func (o *Orchestrator) RecordRevocationHealthObservedWithEventID(
 		return err
 	}
 	var ev events.Event
-	err = o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err = o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		ev, err = o.log.Append(ctx, events.Event{
 			ID: eventID, Type: projections.EventRevocationHealthObserved,
 			TenantID: tenantID, Data: payload,

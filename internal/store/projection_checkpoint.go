@@ -64,12 +64,19 @@ func (s *Store) WithProjectionLock(ctx context.Context, fn func(context.Context)
 		}
 		conn = fence.conn
 	} else {
-		var err error
-		conn, err = s.lockSessionPool(ctx).Acquire(ctx)
+		borrowed, release, err := s.borrowTenantServiceSession(ctx)
 		if err != nil {
-			return fmt.Errorf("store: acquire projection-lock connection: %w", err)
+			return err
 		}
-		defer conn.Release()
+		defer release()
+		conn = borrowed
+		if conn == nil {
+			conn, err = s.lockSessionPool(ctx).Acquire(ctx)
+			if err != nil {
+				return fmt.Errorf("store: acquire projection-lock connection: %w", err)
+			}
+			defer conn.Release()
+		}
 	}
 	if _, err := conn.Exec(ctx, "SELECT pg_advisory_lock($1)", ProjectionAdvisoryLockKey); err != nil {
 		return fmt.Errorf("store: acquire projection lock: %w", err)

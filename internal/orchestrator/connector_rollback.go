@@ -162,7 +162,7 @@ func (o *Orchestrator) requestConnectorRollback(ctx context.Context, tenantID st
 
 	var outboxID int64
 	var queuedNow bool
-	if err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	if err := o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := o.store.CheckConnectorRollbackTx(ctx, tx, tenantID, req.IdentityID, req.PredecessorFingerprint); err != nil {
 			return err
 		}

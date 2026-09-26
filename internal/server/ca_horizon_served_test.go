@@ -143,7 +143,7 @@ func TestServedCAHorizonStaysQuietBeyondTheWidestBand(t *testing.T) {
 // travels on the served authority list, so the CA page no longer has to decide
 // for itself whether a not_after two years out is "healthy".
 func TestServedCAAuthorityAPICarriesTheHorizon(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.LifecycleLeafValidity = 90 * 24 * time.Hour
 	})
 	ctx := t.Context()

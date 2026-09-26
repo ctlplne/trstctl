@@ -28,7 +28,7 @@ func TestServedFirstLeafRetryDoesNotSignAgainAfterLostRecording(t *testing.T) {
 }
 
 func testFirstLeafLostRecording(t *testing.T, requester bool) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	token := seedScopedToken(t, h.store, h.tenant, "owners:write", "identities:write", "certs:read", "certs:issue")
 	owner := servedCreateID(t, h, token, "sign-gap-owner", "/api/v1/owners", map[string]any{
 		"kind": "workload", "name": "sign-gap", "email": "owner@example.test",

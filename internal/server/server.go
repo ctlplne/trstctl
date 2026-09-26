@@ -209,6 +209,10 @@ type Deps struct {
 	// plane is licensed. Nil keeps /provider/* dark with 404 instead of falling
 	// through to the web UI.
 	ProviderHandler http.Handler
+	// ProviderHandlerFactory joins the licensed HTTP surface to the actual
+	// assembled mutation spine, including every lifecycle projection. Core
+	// knows only this factory and never imports the licensed implementation.
+	ProviderHandlerFactory func(*orchestrator.Orchestrator) (http.Handler, error)
 	// TenantServiceCheck admits current tenant work across API, agent, protocol and outbox entry points.
 	TenantServiceCheck tenancy.ServiceCheck
 	// TelemetryReporter is the opt-in usage reporter (COMP-04). Nil means telemetry
@@ -953,10 +957,16 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 	if d.Store == nil || d.Log == nil {
 		return nil, errors.New("server: store and log are required")
 	}
+	licensedTenantCheck := d.TenantServiceCheck
+	d.TenantServiceCheck = func(ctx context.Context, tenantID string) error {
+		if err := d.Store.RequireLiveTenantService(ctx, tenantID); err != nil {
+			return err
+		}
+		return licensedTenantCheck.Check(ctx, tenantID)
+	}
 	if d.RestoreDrill != nil && d.AuditSigningKey == nil {
 		return nil, errors.New("server: restore drill requires the isolated audit-evidence signer")
 	}
-	signProvider := resolveSignTokenProvider(d)
 	s = &Server{
 		tenantServiceCheck:        d.TenantServiceCheck,
 		store:                     d.Store,
@@ -964,7 +974,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 		outboxWake:                make(chan struct{}, 1),
 		signer:                    d.Signer,
 		signerTopology:            d.SignerMode,
-		signAuthz:                 signProvider,
+		signAuthz:                 resolveSignTokenProvider(d),
 		signTO:                    d.SignTimeout,
 		obHandler:                 d.OutboxHandler,
 		leafProfile:               d.LeafProfile,
@@ -1016,6 +1026,9 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := configureProviderCommandSurface(&d, orch); err != nil {
+		return nil, err
+	}
 	if err := s.configureAgentEnrollment(ctx, d); err != nil {
 		return nil, err
 	}
@@ -1044,6 +1057,23 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 	}
 	s.configureRootMux(d, a)
 	return s, nil
+}
+
+// configureProviderCommandSurface attaches Provider commands to the assembled
+// orchestrator so they use the same lifecycle projector as core mutations.
+func configureProviderCommandSurface(d *Deps, orch *orchestrator.Orchestrator) error {
+	if d.ProviderHandlerFactory == nil {
+		return nil
+	}
+	handler, err := d.ProviderHandlerFactory(orch)
+	if err != nil {
+		return fmt.Errorf("server: assemble Provider command surface: %w", err)
+	}
+	if handler == nil {
+		return errors.New("server: Provider handler factory returned no handler")
+	}
+	d.ProviderHandler = handler
+	return nil
 }
 
 // reconcileCrashFences is the startup stage that heals commands a crash left
@@ -1154,6 +1184,7 @@ func (s *Server) configureMutationSpine(
 	)
 	orchOptions := historyRewriteOrchestratorOptions(d.Store, d.AuditSigningKey)
 	orchOptions = append(orchOptions, orchestrator.WithProjector(proj))
+	orchOptions = append(orchOptions, orchestrator.WithTenantCommandService(d.Store.BeginTenantService, d.TenantServiceCheck))
 	if d.EnableAgentChannel {
 		orchOptions = append(orchOptions, orchestrator.WithClaimableAgentJobKinds(d.AgentClaimableJobKinds))
 	}
@@ -1206,9 +1237,9 @@ func (s *Server) configureAgentEnrollment(ctx context.Context, d Deps) error {
 	var authority *enroll.Authority
 	var err error
 	if s.agentCASigner != nil && len(s.agentCACertDER) > 0 {
-		authority, err = enroll.NewAuthorityWithIssuer(agentCAIssuer{caSigner: s.agentCASigner, caCertDER: s.agentCACertDER}, storeTokenStore{st: d.Store}, enroll.WithTenantServiceCheck(d.TenantServiceCheck))
+		authority, err = enroll.NewAuthorityWithIssuer(agentCAIssuer{caSigner: s.agentCASigner, caCertDER: s.agentCACertDER}, storeTokenStore{st: d.Store}, enroll.WithTenantServiceCheck(d.TenantServiceCheck), enroll.WithTenantServiceWork(d.Store.BeginTenantService), enroll.WithClientCertificateBinding(agentCertificateBinding(d.Store, d.Log)))
 	} else {
-		authority, err = enroll.NewAuthority("trstctl Agent Enrollment CA", storeTokenStore{st: d.Store}, enroll.WithTenantServiceCheck(d.TenantServiceCheck))
+		authority, err = enroll.NewAuthority("trstctl Agent Enrollment CA", storeTokenStore{st: d.Store}, enroll.WithTenantServiceCheck(d.TenantServiceCheck), enroll.WithTenantServiceWork(d.Store.BeginTenantService), enroll.WithClientCertificateBinding(agentCertificateBinding(d.Store, d.Log)))
 	}
 	if err != nil {
 		return fmt.Errorf("server: create enrollment authority: %w", err)

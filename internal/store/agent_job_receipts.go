@@ -50,12 +50,52 @@ type AgentJobReceipt struct {
 // report it already sent should not multiply the ledger, and a rejection
 // repeated because the agent keeps retrying with the same bad clock is one
 // ongoing condition rather than a hundred incidents. Re-recording refreshes the
-// timestamp, so "when did this last happen" stays true.
+// timestamp, so "when did this last happen" stays true. A verified terminal
+// observation is immutable: only a fresh attestation of the same facts may
+// refresh it. Conflicting outcomes, evidence and custody are refused.
 func (s *Store) RecordAgentJobReceipt(ctx context.Context, tenantID string, r AgentJobReceipt) error {
+	return s.RecordAgentJobReceiptWithAudit(ctx, tenantID, r, nil)
+}
+
+// RecordAgentJobReceiptWithAudit serializes terminal evidence for one attempt.
+// audit runs after conflict detection and before the ledger commit, while the
+// attempt lock is held. It must not re-enter this receipt writer. A failed audit
+// leaves the ledger unchanged; an uncertain commit is retried with the same facts.
+func (s *Store) RecordAgentJobReceiptWithAudit(ctx context.Context, tenantID string, r AgentJobReceipt, audit func(context.Context) error) error {
+	return s.RecordAgentJobReceiptFromEvent(ctx, tenantID, r, func(ctx context.Context, receipt AgentJobReceipt) (AgentJobReceipt, error) {
+		if audit != nil {
+			if err := audit(ctx); err != nil {
+				return receipt, err
+			}
+		}
+		return receipt, nil
+	})
+}
+
+// RecordAgentJobReceiptFromEvent projects canonical retained evidence while the
+// attempt lock is held. resolve may append the first event or recover an earlier
+// successful append after SQL rollback. It cannot substitute different facts.
+func (s *Store) RecordAgentJobReceiptFromEvent(ctx context.Context, tenantID string, r AgentJobReceipt,
+	resolve func(context.Context, AgentJobReceipt) (AgentJobReceipt, error)) error {
 	if r.ObservedAt.IsZero() {
 		r.ObservedAt = time.Now().UTC()
 	}
 	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if err := preserveTerminalReceipt(ctx, tx, tenantID, r); err != nil {
+			return err
+		}
+		if resolve != nil {
+			canonical, err := resolve(ctx, r)
+			if err != nil {
+				return err
+			}
+			if canonical.JobID != r.JobID || canonical.Attempt != r.Attempt || canonical.Agent != r.Agent ||
+				canonical.State != r.State || canonical.Outcome != r.Outcome || canonical.Kind != r.Kind ||
+				!SameAgentJobReceiptObservation(canonical.Statement, r.Statement) {
+				return ErrAgentJobReceiptConflict
+			}
+			r = canonical
+		}
 		_, err := tx.Exec(ctx,
 			`INSERT INTO agent_job_receipts
 			     (tenant_id, job_id, attempt, agent, kind, outcome, state, reason,

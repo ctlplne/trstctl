@@ -34,7 +34,7 @@ type servedBrokerHistoryPage struct {
 }
 
 func TestServedBrokerHistoryIsDurableBoundedTenantScopedAndReadOnly(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AgentBroker = AgentBrokerConfig{Enabled: true, TrustDomain: "served.test", PolicyModule: servedBrokerAllowPolicy,
 			Attestors: []attest.Attestor{servedBrokerAttestor{}}}
 	})

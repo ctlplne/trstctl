@@ -36,7 +36,7 @@ import (
 func TestServedLifecycleSchedulerDispatchesExpiryWebhookNotification(t *testing.T) {
 	secret := []byte("served-expiry-webhook-test-secret")
 	sink := newServedWebhookSink(t, secret)
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.LifecycleAlertBefore = 7 * 24 * time.Hour
 		d.NotificationChannels = []notify.Notifier{
 			webhook.New(sink.URL(), secret, webhook.WithHTTPClient(sink.Client())),
@@ -165,7 +165,7 @@ func TestServedLifecycleSchedulerDispatchesExpiryWebhookNotification(t *testing.
 func TestServedMultiChannelAlertingCAPOBS05(t *testing.T) {
 	httpSink := newMultiChannelHTTPSink(t)
 	emailSink := &capturingEmailSender{}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.LifecycleAlertBefore = 7 * 24 * time.Hour
 		d.NotificationChannels = []notify.Notifier{
 			notifyemail.New("smtp.example:587", "alerts@example.test", []string{"oncall@example.test"}, notifyemail.WithSender(emailSink)),
@@ -241,7 +241,7 @@ func TestServedMultiChannelAlertingCAPOBS05(t *testing.T) {
 func TestNotificationFanoutReceiptsSurvivePartialRetryAndOutboxAckCrash(t *testing.T) {
 	good := &namedFlakyNotificationChannel{name: "slack"}
 	bad := &namedFlakyNotificationChannel{name: "webhook", err: errors.New("receiver unavailable")}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.NotificationChannels = []notify.Notifier{good, bad}
 	})
 	alert, err := json.Marshal(notify.Alert{
@@ -315,7 +315,7 @@ func forceNotificationOutboxPending(t *testing.T, h *servedHarness, key string) 
 
 func TestServedNotificationRoutingPolicyAuthoringAndChannelTestDESIGN003(t *testing.T) {
 	httpSink := newMultiChannelHTTPSink(t)
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.NotificationChannels = []notify.Notifier{
 			slack.New(httpSink.URL("/slack"), slack.WithHTTPClient(httpSink.Client())),
 			webhook.New(httpSink.URL("/webhook"), []byte("webhook-test-secret"), webhook.WithHTTPClient(httpSink.Client())),
@@ -510,7 +510,7 @@ func TestServedNotificationRoutingPolicyAuthoringAndChannelTestDESIGN003(t *test
 
 func TestNotificationChannelTestDurablyRejectsCallerDriftAndCannotReuseAnotherOutboxCommand(t *testing.T) {
 	channel := &flakyNotificationChannel{}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.NotificationChannels = []notify.Notifier{channel}
 	})
 	firstToken := seedScopedTokenSubject(t, h.store, h.tenant, "notification-operator-a", "notifications:read", "notifications:write")
@@ -623,7 +623,7 @@ func TestNotificationChannelTestDurablyRejectsCallerDriftAndCannotReuseAnotherOu
 
 func TestServedTenantNotificationChannelLifecycleTRACE007(t *testing.T) {
 	httpSink := newMultiChannelHTTPSink(t)
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {})
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {})
 	resolver := notify.NewStoreChannelResolver(h.store)
 	resolver.SetHTTPClient(httpSink.Client())
 	h.srv.notifications.SetChannelResolver(resolver)
@@ -690,7 +690,7 @@ func TestServedTenantNotificationChannelLifecycleTRACE007(t *testing.T) {
 func TestServedExpiryEscalatesToOwnerAndApproversCAPLIFE04(t *testing.T) {
 	secret := []byte("served-expiry-escalation-test-secret")
 	sink := newServedWebhookSink(t, secret)
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.LifecycleAlertBefore = 7 * 24 * time.Hour
 		d.NotificationChannels = []notify.Notifier{
 			webhook.New(sink.URL(), secret, webhook.WithHTTPClient(sink.Client())),
@@ -802,7 +802,7 @@ func TestServedExpiryEscalatesToOwnerAndApproversCAPLIFE04(t *testing.T) {
 
 func TestServedNotificationAPIDeadLetterRequeueAndRead(t *testing.T) {
 	ch := &flakyNotificationChannel{err: errors.New("smtp unavailable")}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.NotificationChannels = []notify.Notifier{ch}
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, "notifications:read", "notifications:write")

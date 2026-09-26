@@ -44,7 +44,7 @@ func TestServedCBOMNativeScanObservesMLDSALeaves(t *testing.T) {
 	}
 	for _, algorithm := range []boundarycrypto.Algorithm{pqc.MLDSA44, pqc.MLDSA65, pqc.MLDSA87} {
 		t.Run(string(algorithm), func(t *testing.T) {
-			h := newServedHarness(t, config.Protocols{}, func(d *Deps) { d.CBOMTLSProbeOpenSSL = executable })
+			h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) { d.CBOMTLSProbeOpenSSL = executable })
 			token := seedScopedToken(t, h.store, h.tenant, "discovery:write", "risk:read")
 			key, err := pqc.GenerateHostMLDSASubjectKey(boundarycrypto.CertificateRequestTemplate{CommonName: "scan.example.test", DNSNames: []string{"scan.example.test"}}, algorithm)
 			if err != nil {

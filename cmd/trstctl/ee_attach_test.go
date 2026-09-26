@@ -134,6 +134,12 @@ func TestAttachEEProviderLicenseMountsEnterpriseAndProviderSurfaces(t *testing.T
 	if deps.ProviderHandler == nil {
 		t.Fatal("Provider license did not mount the Provider control-plane surface")
 	}
+	if deps.ProviderHandlerFactory == nil {
+		t.Fatal("Provider license did not attach the mutation-spine handler factory")
+	}
+	if _, err := deps.ProviderHandlerFactory(nil); err == nil {
+		t.Fatal("Provider command surface accepted a missing mutation spine")
+	}
 }
 
 func TestAUD60AttachEEProviderMountsCustomerHealthRoute(t *testing.T) {

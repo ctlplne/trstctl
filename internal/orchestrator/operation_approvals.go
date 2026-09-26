@@ -95,7 +95,7 @@ func (o *Orchestrator) EnsureOperationApprovalRequest(ctx context.Context, tenan
 	// its replacement request, a cold rebuild observes the same single-live-request
 	// invariant as the warm projection.
 	var result store.OperationApprovalRequest
-	err = o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err = o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		if err := o.store.LockOperationApprovalScopeTx(ctx, tx, tenantID, intent.ResourceKind,
 			intent.ResourceID, intent.Action, intent.Requester); err != nil {
 			return err
@@ -232,7 +232,7 @@ func (o *Orchestrator) RecordOperationApprovalDecision(ctx context.Context, tena
 		terminalErr error
 	)
 	applyDecision := func(ctx context.Context) error {
-		return o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 			var (
 				identity         store.Identity
 				identityVersion  uint64

@@ -37,7 +37,7 @@ import (
 )
 
 func TestDurableCodeSigningCrashReplayReturnsSignerJournalResult(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		remote, err := d.Signer.Client().GenerateConstrainedKeyHandle(context.Background(),
 			crypto.ECDSAP256, "codesign-crash-replay",
 			[]signing.KeyPurpose{signing.PurposeCodeSign}, signing.PurposeCodeSign)
@@ -127,7 +127,7 @@ func TestDurableCodeSigningConcurrentIdenticalBindingSignsOnce(t *testing.T) {
 	}
 	t.Cleanup(inner.Destroy)
 	signer := &countingOperationSigner{DigestSigner: inner}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.CodeSigning = CodeSigningConfig{
 			Keys: codeSigningKeyMap{keys: map[string]crypto.DigestSigner{"release-key": signer}},
 		}
@@ -1075,7 +1075,7 @@ func TestCodeSigningWorkerHoldsNoDatabaseTransactionAroundSigner(t *testing.T) {
 	}
 	t.Cleanup(inner.Destroy)
 	probe := &databaseProbeOperationSigner{DigestSigner: inner, tenantID: servedTestTenant}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		probe.store = d.Store
 		d.CodeSigning = CodeSigningConfig{
 			Keys: codeSigningKeyMap{keys: map[string]crypto.DigestSigner{"release-key": probe}},

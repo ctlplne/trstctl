@@ -20,7 +20,7 @@ import (
 // the public API analyzes managed and discovered NHIs, detects granted-vs-used
 // over-privilege, and returns usage-driven least-privilege recommendations.
 func TestServedNHIOverPrivilegeCAPPOST01EndToEnd(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "nhi:read")
 	ctx := context.Background()
 
@@ -135,7 +135,7 @@ func TestServedNHIOverPrivilegeCAPPOST01EndToEnd(t *testing.T) {
 // rotation cadence, allowed scopes, allowed geographies, expiry, and business
 // purpose without returning raw credential metadata.
 func TestServedNHIPolicyComplianceCAPGOV03EndToEnd(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "nhi:read")
 	ctx := context.Background()
 	now := time.Now().UTC()
@@ -288,7 +288,7 @@ func TestServedNHIPolicyComplianceCAPGOV03EndToEnd(t *testing.T) {
 // the public API detects stale, unused, orphaned, and dormant NHIs from managed
 // and discovered inventory evidence without treating fresh active NHIs as gaps.
 func TestServedNHIStaleDormantCAPPOST02EndToEnd(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "nhi:read")
 	ctx := context.Background()
 	now := time.Now().UTC()
@@ -415,7 +415,7 @@ func TestServedNHIStaleDormantCAPPOST02EndToEnd(t *testing.T) {
 // the public API detects long-lived and static NHI credentials across managed
 // identities and discovered findings while leaving freshly rotated credentials out.
 func TestServedNHIStaticCredentialCAPPOST03EndToEnd(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "nhi:read")
 	ctx := context.Background()
 	now := time.Now().UTC()
@@ -531,7 +531,7 @@ func TestServedNHIStaticCredentialCAPPOST03EndToEnd(t *testing.T) {
 // managed identities and discovery findings without echoing credential material
 // or URL query secrets.
 func TestServedNHIExposureCAPPOST04EndToEnd(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "nhi:read")
 	ctx := context.Background()
 	now := time.Now().UTC()
@@ -690,7 +690,7 @@ func TestServedNHIExposureCAPPOST04EndToEnd(t *testing.T) {
 // NIST CSF 2.0, PCI DSS 4.0, DORA, ISO 27001, FedRAMP, CMMC, eIDAS, and NIS2
 // from tenant inventory and posture evidence without exposing credential material.
 func TestServedNHIComplianceMappingCAPCMP06EndToEnd(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "audit:read")
 	ctx := context.Background()
 	now := time.Now().UTC()

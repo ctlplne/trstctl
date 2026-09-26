@@ -22,7 +22,7 @@ import (
 // signed agent receipt. If evidence cannot be persisted, the job stays leased
 // and is reconsidered after expiry rather than disappearing without a result.
 func (o *Orchestrator) RefuseUnsafeConnectorRollbackClaim(ctx context.Context, tenantID, agentID string, job store.AgentJob, at time.Time) error {
-	return o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	return o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		var payload []byte
 		var jobKey string
 		err := tx.QueryRow(ctx, `SELECT payload, idempotency_key FROM outbox

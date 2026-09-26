@@ -24,7 +24,7 @@ import (
 // JetStream assertions prove the refused command leaves no request, decision, or
 // audit event behind.
 func TestServedApprovalRequiresExistingRequestAUD77(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.RequireApproval = true
 		d.RequiredApprovals = 1
 	})

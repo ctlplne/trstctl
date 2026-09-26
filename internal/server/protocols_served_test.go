@@ -237,7 +237,7 @@ func (h *servedHarness) hasEvent(t *testing.T, eventType string) bool {
 // exposes credential-reference fields only; provider tokens remain in the secret
 // store/outbox path, never in browser/API catalog payloads.
 func TestServedACMEDNS01ProviderCatalogCAPISS02(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read")
 
 	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/acme/dns-01/providers", tok, nil)
@@ -308,7 +308,7 @@ func TestServedACMEDNS01ProviderCatalogCAPISS02(t *testing.T) {
 func TestServedACMEDNS01ProviderConfigAndPreflightTRACE003(t *testing.T) {
 	caaDNS := newServedDNSWebhookFixture(t, "dns-preflight-token")
 	caaDNS.setCAA("example.test", []acmesrv.CAARecord{{Tag: "issuewild", Value: "trstctl.example"}})
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.APIOptions = append(d.APIOptions, api.WithACMEDNS01CAAResolver(caaDNS))
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write")
@@ -455,7 +455,7 @@ func TestServedACMEDNS01ProviderConfigAndPreflightTRACE003(t *testing.T) {
 // retrying that deterministic failure forever. A rejected command must append
 // nothing, and the next valid command must still project normally.
 func TestServedACMEDNS01ProviderConfigDuplicateNameDoesNotPoisonEventTail(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(*Deps) {})
+	h := newOperatingServedHarness(t, config.Protocols{}, func(*Deps) {})
 	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write")
 	configBody := func(name, zone string) map[string]any {
 		return map[string]any{
@@ -862,7 +862,7 @@ func TestServedACMEDNS01ProviderQualificationF69(t *testing.T) {
 // a preflight helper. New orders for a managed domain advertise only the currently
 // allowed DV challenge types, and policy updates take effect on later orders.
 func TestServedACMEDomainValidationPolicyLimitsOrderChallengesTRACE016(t *testing.T) {
-	h := newServedHarness(t,
+	h := newOperatingServedHarness(t,
 		config.Protocols{ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}},
 	)
 	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write")
@@ -1680,7 +1680,7 @@ func TestServedACMEEndToEnd(t *testing.T) {
 		DNS01:  acmesrv.DNS01Validator{},
 	}
 
-	h := newServedHarness(t,
+	h := newOperatingServedHarness(t,
 		config.Protocols{ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}},
 		func(d *Deps) { d.ACMEValidators = &validators },
 	)
@@ -1689,7 +1689,8 @@ func TestServedACMEEndToEnd(t *testing.T) {
 		t.Fatal("ACME is not reported as served — wire-in failed")
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
 
 	// Stock ECDSA-account-key ACME client pointed at the SERVED directory (proves
 	// INTEROP-003 over the served path: a default ECDSA client registers).
@@ -1869,7 +1870,7 @@ func TestServedACMEEndToEnd(t *testing.T) {
 // the configured external account binding.
 func TestServedACMEExternalAccountBindingCAPISS04(t *testing.T) {
 	hmacKey := bytes.Repeat([]byte{0x42}, 32)
-	h := newServedHarness(t, config.Protocols{
+	h := newOperatingServedHarness(t, config.Protocols{
 		ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 		ACMEEAB: config.ACMEExternalAccountBinding{
 			Required: true,
@@ -1931,9 +1932,10 @@ func TestServedACMEStateRebuildsAfterServerRestart(t *testing.T) {
 		DNS01:  acmesrv.DNS01Validator{},
 	}
 	protocols := config.Protocols{ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}}
-	h := newServedHarness(t, protocols, func(d *Deps) { d.ACMEValidators = &validators })
+	h := newOperatingServedHarness(t, protocols, func(d *Deps) { d.ACMEValidators = &validators })
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
 	client, err := acmekey.NewClient(h.ts.URL + "/directory")
 	if err != nil {
 		t.Fatalf("acme client: %v", err)
@@ -2058,7 +2060,7 @@ func TestServedACMEStateRebuildsAfterServerRestart(t *testing.T) {
 }
 
 func TestACMEProtocolQuotaIsIndependentFromAPIRateLimit(t *testing.T) {
-	h := newServedHarness(t,
+	h := newOperatingServedHarness(t,
 		config.Protocols{
 			ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 			ACMEQuota: config.ACMEQuota{

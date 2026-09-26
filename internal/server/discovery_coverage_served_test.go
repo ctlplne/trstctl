@@ -156,7 +156,7 @@ func TestServedDiscoveryCoverageThreeBuckets(t *testing.T) {
 // was never looked at leaves no trace in what was found.
 func TestServedCoverageMeasuresAgainstDeclaredSegments(t *testing.T) {
 	ctx := context.Background()
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
 
 	// Nothing declared: the surface must not claim coverage it cannot support.

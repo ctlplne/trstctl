@@ -39,7 +39,14 @@ func TestServedHTTPEnrollmentRenewalOverRealMTLS(t *testing.T) {
 	baseURL := "https://" + ln.Addr().String()
 
 	current := bootstrapAgentIdentityForHTTPRenewal(t, h, "edge-http-renewal")
-	renewalCSR := newAgentCSR(t, "edge-http-renewal")
+	successor, err := mtls.GenerateAgentKey("edge-http-renewal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	renewalCSR, err := successor.CSR()
+	if err != nil {
+		t.Fatal(err)
+	}
 	body, _ := json.Marshal(map[string]string{"csr": base64.StdEncoding.EncodeToString(renewalCSR)})
 
 	validClient := agentHTTPRenewalClient(t, h, current)
@@ -61,6 +68,15 @@ func TestServedHTTPEnrollmentRenewalOverRealMTLS(t *testing.T) {
 	}
 	if _, err := mtls.FirstCertDER([]byte(out.Certificate)); err != nil {
 		t.Fatalf("renewed certificate chain is not parseable: %v", err)
+	}
+	// Adoption on a new TLS connection proves that renewal retained the signed
+	// tenant-registration authority, rather than merely returning parseable PEM.
+	if err := successor.UseCertificate([]byte(out.Certificate)); err != nil {
+		t.Fatalf("adopt renewed identity: %v", err)
+	}
+	successorClient := agentHTTPRenewalClient(t, h, successor)
+	if status, data, err := postHTTPRenewal(successorClient, baseURL, body); err != nil || status != http.StatusOK {
+		t.Fatalf("renewed identity cannot renew on a new TLS connection: status=%d body=%s err=%v", status, data, err)
 	}
 
 	noCertClient := agentHTTPRenewalClient(t, h, nil)
@@ -84,6 +100,7 @@ func TestServedHTTPEnrollmentRenewalOverRealMTLS(t *testing.T) {
 
 func bootstrapAgentIdentityForHTTPRenewal(t *testing.T, h *servedHarness, cn string) *mtls.AgentIdentity {
 	t.Helper()
+	prepareServedAgentTenant(t, h)
 	id, err := mtls.GenerateAgentKey(cn)
 	if err != nil {
 		t.Fatal(err)

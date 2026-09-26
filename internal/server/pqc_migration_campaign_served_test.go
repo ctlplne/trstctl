@@ -98,7 +98,7 @@ func TestPQCMigrationCampaignServedManualClosureSignedEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate closure signing key: %v", err)
 	}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AuditSigningKey = signingKey
 	})
 	tok := seedScopedTokenSubject(t, h.store, h.tenant, "crypto-owner",
@@ -249,12 +249,13 @@ func TestPQCMigrationCampaignTenantIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate closure signing key: %v", err)
 	}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AuditSigningKey = signingKey
 	})
 	tok := seedScopedTokenSubject(t, h.store, h.tenant, "tenant-a-owner",
 		"risk:read", "discovery:write")
 	tenantB := "22222222-2222-2222-2222-222222222222"
+	registerServedTenantID(t, h, tenantB, "PQC neighboring tenant")
 	foreign, err := h.store.UpsertCryptoAsset(context.Background(), store.CryptoAsset{
 		TenantID: tenantB, Kind: "certificate-key", Location: "foreign.internal:443",
 		Algorithm: "RSA", KeyBits: 2048, Strength: "strong", QuantumVulnerable: true,
@@ -299,7 +300,7 @@ func TestPQCMigrationCampaignConcurrentCloseSerializesSignedEvidence(t *testing.
 	}
 	blockingSigner := newBlockingPQCCampaignSigner(signingKey)
 	defer blockingSigner.unblock()
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AuditSigningKey = signingKey
 		// APIOptions are applied after the normal server defaults, so this test
 		// signer can pause the exact sign-under-lock point.

@@ -23,7 +23,7 @@ import (
 // This test deliberately removes only that disposable fixture row to exercise
 // the certificate's longer-lived recovery path after normal cache retention.
 func TestServedBrokerRetryAfterCacheExpiryCannotRelabelCommand(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AgentBroker = AgentBrokerConfig{Enabled: true, TrustDomain: "served.test", PolicyModule: servedBrokerAllowPolicy,
 			Attestors: []attest.Attestor{servedBrokerAttestor{}}}
 	})
@@ -96,7 +96,7 @@ func expireBrokerTestCache(t *testing.T, h *servedHarness, key string) {
 }
 
 func TestServedBrokerIssuanceEventRetainsPublicCommandFactsOnly(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AgentBroker = AgentBrokerConfig{Enabled: true, TrustDomain: "served.test", PolicyModule: servedBrokerAllowPolicy,
 			Attestors: []attest.Attestor{servedBrokerAttestor{}}}
 	})
@@ -150,7 +150,7 @@ func TestServedBrokerIssuanceEventRetainsPublicCommandFactsOnly(t *testing.T) {
 }
 
 func TestServedBrokerRecoversMissingProjectionButNeverRecreatesErasedFacts(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AgentBroker = AgentBrokerConfig{Enabled: true, TrustDomain: "served.test", PolicyModule: servedBrokerAllowPolicy,
 			Attestors: []attest.Attestor{servedBrokerAttestor{}}}
 	})

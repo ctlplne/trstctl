@@ -15,7 +15,7 @@ import (
 func TestServedBulkRevocationPermitsAuthorizedIdentityAndBindsRetries(t *testing.T) {
 	for _, path := range []string{"/api/v1/identities/bulk-revoke", "/api/v1/certificates/bulk-revoke"} {
 		t.Run(path, func(t *testing.T) {
-			h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+			h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 				d.EnablePolicyGate = true // the real base policy permits revocation
 			})
 			owner, err := h.srv.orch.CreateOwner(t.Context(), h.tenant, "team", "authorized-bulk-lab", "lab@example.test")
@@ -60,7 +60,7 @@ func TestServedBulkRevocationCannotBypassLifecycleGate(t *testing.T) {
 	for _, path := range []string{"/api/v1/identities/bulk-revoke", "/api/v1/certificates/bulk-revoke"} {
 		for _, mode := range []string{"missing_privileged_scope", "policy_denial", "approval_required"} {
 			t.Run(path+"/"+mode, func(t *testing.T) {
-				h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+				h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 					if mode == "policy_denial" {
 						d.EnablePolicyGate = true
 						d.PolicyModule = "package trstctl.policy\ndefault allow := false\n"

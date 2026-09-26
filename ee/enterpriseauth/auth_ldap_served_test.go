@@ -20,6 +20,7 @@ import (
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/server"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -70,7 +71,7 @@ func TestServedLDAPLoginBindsOpenLDAPAndMapsGroupRole(t *testing.T) {
 		},
 	}
 
-	srv := buildLDAPServer(t, ctx, dsn, ldapCfg)
+	srv := buildLDAPServer(t, ctx, dsn, tenantID, ldapCfg)
 	defer func() { _ = srv.Shutdown(context.Background()) }()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -197,7 +198,7 @@ func assertSessionCanReadAccessRoles(t *testing.T, baseURL string, jar http.Cook
 	}
 }
 
-func buildLDAPServer(t *testing.T, ctx context.Context, dsn string, ldapCfg config.LDAP) *server.Server {
+func buildLDAPServer(t *testing.T, ctx context.Context, dsn, tenantID string, ldapCfg config.LDAP) *server.Server {
 	t.Helper()
 	phaseStore, err := store.Open(ctx, dsn)
 	if err != nil {
@@ -207,6 +208,21 @@ func buildLDAPServer(t *testing.T, ctx context.Context, dsn string, ldapCfg conf
 	if err != nil {
 		phaseStore.Close()
 		t.Fatalf("open event log: %v", err)
+	}
+	// Authentication maps directory membership to an already provisioned tenant;
+	// a directory mapping alone must not create tenant service authority.
+	if _, err := log.Append(ctx, events.Event{
+		Type: projections.EventTenantRegistered, TenantID: tenantID,
+		Time: time.Now(), Data: []byte(`{"name":"served LDAP tenant"}`),
+	}); err != nil {
+		_ = log.Close()
+		phaseStore.Close()
+		t.Fatalf("append tenant registration: %v", err)
+	}
+	if err := projections.New(phaseStore).Project(ctx, log); err != nil {
+		_ = log.Close()
+		phaseStore.Close()
+		t.Fatalf("project tenant registration: %v", err)
 	}
 	srv, err := server.Build(ctx, server.Deps{TenantAuthFactory: Build, Store: phaseStore, Log: log, LDAP: ldapCfg})
 	if err != nil {

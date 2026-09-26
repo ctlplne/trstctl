@@ -340,6 +340,7 @@ func (c *CA) SignClientCSRWithTenant(
 	tenantID string,
 	roles []string,
 	ttl time.Duration,
+	authorityURIs ...string,
 ) ([]byte, error) {
 	if strings.TrimSpace(tenantID) == "" {
 		return nil, errors.New("mtls: refusing to sign agent CSR without a tenant attribution")
@@ -380,6 +381,14 @@ func (c *CA) SignClientCSRWithTenant(
 		if strings.TrimSpace(role) != "" && !ValidAgentRole(role) {
 			return nil, fmt.Errorf("mtls: refusing to stamp unknown agent role %q", role)
 		}
+	}
+	// These identifiers come from the enrollment authority, never the CSR.
+	for _, raw := range authorityURIs {
+		u, err := url.Parse(raw)
+		if err != nil || u.Scheme == "" {
+			return nil, errors.New("mtls: invalid authority URI")
+		}
+		uris = append(uris, u)
 	}
 	serial, err := randomSerial()
 	if err != nil {

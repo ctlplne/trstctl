@@ -53,6 +53,10 @@ func fullBinaryProducerPrivacyCoordinates() []events.ProductionPrivacyEventSchem
 		{EventType: provider.AuditTenantSuspended, SchemaVersion: 1},
 		{EventType: provider.AuditTenantResumed, SchemaVersion: 1},
 		{EventType: provider.AuditTenantOffboarded, SchemaVersion: 1},
+		{EventType: provider.AuditTenantErasureRequested, SchemaVersion: 1},
+		{EventType: provider.AuditUnregisteredTenantOffboarded, SchemaVersion: 1},
+		{EventType: provider.AuditTenantErasureFailed, SchemaVersion: 1},
+		{EventType: provider.AuditTenantErasureCompleted, SchemaVersion: 1},
 		{EventType: provider.EventDelegationGranted, SchemaVersion: 1},
 		{EventType: provider.EventDelegationRevoked, SchemaVersion: 1},
 		{EventType: provider.EventOperatorUpserted, SchemaVersion: 1},
@@ -198,6 +202,68 @@ func TestLicensedProviderAuthorityRewriteStillDecodes(t *testing.T) {
 	want := privacyref.Placeholder(privacyref.SubjectRef("tenant-a", subject))
 	if decoded.Audit.OperatorID != want || decoded.Audit.OperatorEmail != want || decoded.Audit.Reason != "" {
 		t.Fatalf("provider audit rewrite = %+v, want placeholder identities and cleared reason", decoded.Audit)
+	}
+}
+
+func TestLicensedProviderErasureRewritePreservesRecoveryBinding(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		eventType string
+		absent    bool
+	}{
+		{"registered request", provider.AuditTenantErasureRequested, false},
+		{"unregistered request", provider.AuditTenantErasureRequested, true},
+		{"unregistered completion", provider.AuditUnregisteredTenantOffboarded, true},
+		{"registered completion", provider.AuditTenantErasureCompleted, false},
+		{"unregistered verified completion", provider.AuditTenantErasureCompleted, true},
+		{"registered refusal", provider.AuditTenantErasureFailed, false},
+		{"unregistered refusal", provider.AuditTenantErasureFailed, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			const subject = "operator@example.test"
+			payload := provider.AuthorityEvent{
+				Tenant: &provider.Tenant{ID: "tenant-a", Slug: "customer-" + subject,
+					Name: "Customer " + subject, Status: provider.TenantOffboarding},
+				Erasure: &provider.TenantErasureRequest{RegistrationIdentity: "registration-1", RegistrationSequence: 42,
+					Actor: events.Actor{Subject: subject, Roles: []string{"admin"}}},
+				RequestBinding: "retained-request-digest",
+				Audit: provider.AuditEvent{Type: tc.eventType, TenantID: "tenant-a",
+					OperatorID: subject, OperatorEmail: subject, Reason: "erase for " + subject},
+			}
+			if tc.absent {
+				payload.Erasure.RegistrationIdentity, payload.Erasure.RegistrationSequence = "", 0
+				payload.Erasure.RegistrationAbsent = true
+			}
+			if tc.eventType == provider.AuditUnregisteredTenantOffboarded || tc.eventType == provider.AuditTenantErasureCompleted {
+				payload.Tenant.Status = provider.TenantOffboarded
+			}
+			if tc.eventType == provider.AuditTenantErasureFailed {
+				payload.Tenant.Status = provider.TenantOffboardFailed
+			}
+			raw, err := json.Marshal(payload)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rewritten, changed, err := events.PseudonymizeEventDataForSubject(raw, "tenant-a", subject, tc.eventType, 1)
+			if err != nil || !changed || bytes.Contains(rewritten, []byte(subject)) {
+				t.Fatalf("erasure rewrite changed=%t err=%v data=%s", changed, err, rewritten)
+			}
+			var decoded provider.AuthorityEvent
+			if err := json.Unmarshal(rewritten, &decoded); err != nil {
+				t.Fatal(err)
+			}
+			want := privacyref.Placeholder(privacyref.SubjectRef("tenant-a", subject))
+			if decoded.Erasure == nil || decoded.Erasure.Actor.Subject != want || decoded.Audit.OperatorID != want ||
+				decoded.Audit.OperatorEmail != want || decoded.Audit.Reason != "" {
+				t.Fatalf("actor and audit lost consistent subject binding: %+v", decoded)
+			}
+			if decoded.Erasure.RegistrationIdentity != payload.Erasure.RegistrationIdentity ||
+				decoded.Erasure.RegistrationSequence != payload.Erasure.RegistrationSequence ||
+				decoded.Erasure.RegistrationAbsent != payload.Erasure.RegistrationAbsent || decoded.RequestBinding != payload.RequestBinding ||
+				len(decoded.Erasure.Actor.Roles) != 1 || decoded.Erasure.Actor.Roles[0] != "admin" {
+				t.Fatalf("rewrite changed retained recovery authority: %+v", decoded)
+			}
+		})
 	}
 }
 

@@ -57,6 +57,13 @@ var testDSN string
 // embedded-postgres version + binaries path mirror the projections package so the
 // supply-chain-pinned binary is reused (deploy/supply-chain/embedded-postgres.json).
 func TestMain(m *testing.M) {
+	// The remote-lifetime regression starts a separate worker against the
+	// parent's owned fixture database so killing it cannot kill that database
+	// or reset another worker's durable delivery record.
+	if dsn := os.Getenv(remoteLifetimeChildDSN); dsn != "" {
+		testDSN = dsn
+		os.Exit(m.Run())
+	}
 	dir, err := os.MkdirTemp("", "trstctl-orch-pg")
 	if err != nil {
 		panic(err)
@@ -104,7 +111,7 @@ func newStore(t *testing.T) *store.Store {
 	// The package shares one database; reset the spine tables between tests.
 	if _, err := s.SystemPool().Exec(ctx,
 		`TRUNCATE secret_rotation_schedule_commands, secret_rotation_schedules, migration_runs,
-		          tenants, idempotency_keys, outbox,
+		          tenants, idempotency_keys, outbox, agent_job_attempt_bindings,
 		          owners, issuers, identities, identity_transitions, deployment_targets, certificates, certificate_metadata_watermarks, certificate_metadata_receipts,
 		          connector_delivery_receipts, lifecycle_rotation_runs
 		 RESTART IDENTITY CASCADE`); err != nil {

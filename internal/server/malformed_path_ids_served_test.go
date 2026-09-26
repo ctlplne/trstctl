@@ -15,7 +15,7 @@ import (
 // never receives a non-uuid string. A well-formed but absent id still resolves
 // to 404 (DP2-047).
 func TestServedMalformedUUIDPathIDsAreBadRequestsEverywhere(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "identities:read", "identities:write", "owners:read", "certs:read")
 
 	routes := []struct {

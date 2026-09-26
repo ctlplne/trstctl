@@ -57,6 +57,8 @@ type MintedToken struct {
 // RedeemedToken is what a TokenStore returns when a token is consumed: the
 // authorizing tenant and any identity the token was pinned to.
 type RedeemedToken struct {
+	// ID identifies the exact durable redemption where the store supports it.
+	ID              string
 	TenantID        string
 	AllowedIdentity string
 	// Roles is the capability grant recorded at mint. The CA stamps these into
@@ -78,6 +80,14 @@ type TokenStore interface {
 	Redeem(ctx context.Context, tokenHash string) (RedeemedToken, error)
 }
 
+// TokenRedemptionValidator is implemented by the served durable store. After
+// acquiring the operation lifetime, the authority rechecks the exact consumed
+// row so deletion/re-registration cannot transfer an old redemption to a new
+// tenant lifecycle. Standalone stores without lifecycle erasure may omit it.
+type TokenRedemptionValidator interface {
+	ValidateRedemption(context.Context, string, RedeemedToken) error
+}
+
 // CAIssuer is the agent CA an Authority signs through. It signs a CSR into a
 // tenant-attributed client-certificate chain (PEM) and exposes its CA bundle (the
 // trust anchor agents pin). Two implementations exist: the in-process *mtls.CA (the
@@ -93,7 +103,9 @@ type CAIssuer interface {
 	// in PEM.
 	// roles are the capability SANs to stamp alongside the identity (epic A2),
 	// taken from the operator's grant and never from the CSR. Empty is host-only.
-	SignClientCSRWithTenant(csrDER []byte, tenantID string, roles []string, ttl time.Duration) ([]byte, error)
+	// authorityURIs are signed registration identifiers supplied by the trusted
+	// enrollment authority. Neither they nor the roles may come from CSR SANs.
+	SignClientCSRWithTenant(csrDER []byte, tenantID string, roles []string, ttl time.Duration, authorityURIs ...string) ([]byte, error)
 	// BundlePEM is the CA certificate (PEM) agents pin and that anchors issued certs.
 	BundlePEM() []byte
 }
@@ -104,6 +116,8 @@ type CAIssuer interface {
 // certificate.
 type Authority struct {
 	tenantServiceCheck tenancy.ServiceCheck
+	tenantServiceWork  tenancy.ServiceWork
+	certificateBinding ClientCertificateBinding
 	ca                 CAIssuer
 	store              TokenStore
 	ttl                time.Duration
@@ -112,11 +126,33 @@ type Authority struct {
 // Option configures admission before the authority is served.
 type Option func(*Authority)
 
+// ClientCertificateBinding supplies CA-controlled registration identifiers.
+// Bootstrap passes no prior certificate; renewal must validate its verified
+// prior certificate before receiving the identifiers for its successor.
+type ClientCertificateBinding func(context.Context, string, []byte) ([]string, error)
+
+func WithClientCertificateBinding(binding ClientCertificateBinding) Option {
+	return func(a *Authority) { a.certificateBinding = binding }
+}
+
+func (a *Authority) certificateAuthorityURIs(ctx context.Context, tenantID string, previous []byte) ([]string, error) {
+	if a.certificateBinding == nil {
+		return nil, nil
+	}
+	return a.certificateBinding(ctx, tenantID, previous)
+}
+
 // WithTenantServiceCheck gates both bootstrap and renewal signing against live
 // tenant authority. A rejected bootstrap token remains consumed, like a CSR
 // identity mismatch: the operator must mint a fresh token after recovery.
 func WithTenantServiceCheck(check tenancy.ServiceCheck) Option {
 	return func(a *Authority) { a.tenantServiceCheck = check }
+}
+
+// WithTenantServiceWork keeps the admitted bootstrap/renewal operation inside
+// the server's lifecycle exclusion until its signing call has returned.
+func WithTenantServiceWork(work tenancy.ServiceWork) Option {
+	return func(a *Authority) { a.tenantServiceWork = work }
 }
 
 // NewAuthority creates an enrollment authority with a fresh IN-PROCESS mTLS CA and a
@@ -231,8 +267,18 @@ func (a *Authority) EnrollBootstrap(ctx context.Context, token []byte, csrDER []
 		}
 		return nil, err
 	}
+	ctx, release, err := a.tenantServiceWork.Begin(ctx, redeemed.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	if err := a.tenantServiceCheck.Check(ctx, redeemed.TenantID); err != nil {
 		return nil, err
+	}
+	if validator, ok := a.store.(TokenRedemptionValidator); ok {
+		if err := validator.ValidateRedemption(ctx, hash, redeemed); err != nil {
+			return nil, err
+		}
 	}
 	if redeemed.AllowedIdentity != "" {
 		matches, err := mtls.CSRMatchesAllowedIdentity(csrDER, redeemed.AllowedIdentity)
@@ -243,7 +289,11 @@ func (a *Authority) EnrollBootstrap(ctx context.Context, token []byte, csrDER []
 			return nil, ErrBadToken
 		}
 	}
-	return a.ca.SignClientCSRWithTenant(csrDER, redeemed.TenantID, redeemed.Roles, mtls.ClientCertTTL)
+	bindings, err := a.certificateAuthorityURIs(ctx, redeemed.TenantID, nil)
+	if err != nil {
+		return nil, err
+	}
+	return a.ca.SignClientCSRWithTenant(csrDER, redeemed.TenantID, redeemed.Roles, mtls.ClientCertTTL, bindings...)
 }
 
 // ErrUnauthenticatedRenewal is returned when a renewal arrives without a verified
@@ -275,6 +325,11 @@ func (a *Authority) EnrollRenewal(ctx context.Context, peerCertsDER [][]byte, cs
 		// identity this CA issued; refuse rather than mint an unattributed cert.
 		return nil, fmt.Errorf("%w: %v", ErrUnauthenticatedRenewal, err)
 	}
+	ctx, release, err := a.tenantServiceWork.Begin(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	if err := a.tenantServiceCheck.Check(ctx, tenantID); err != nil {
 		return nil, err
 	}
@@ -287,7 +342,11 @@ func (a *Authority) EnrollRenewal(ctx context.Context, peerCertsDER [][]byte, cs
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrUnauthenticatedRenewal, err)
 	}
-	return a.ca.SignClientCSRWithTenant(csrDER, tenantID, roles, mtls.ClientCertTTL)
+	bindings, err := a.certificateAuthorityURIs(ctx, tenantID, peerCertsDER[0])
+	if err != nil {
+		return nil, err
+	}
+	return a.ca.SignClientCSRWithTenant(csrDER, tenantID, roles, mtls.ClientCertTTL, bindings...)
 }
 
 // CABundlePEM is the CA certificate (PEM) an agent trusts to verify the control

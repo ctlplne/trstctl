@@ -63,7 +63,7 @@ func TestServedCBOMScanPopulatesMigrationInventory(t *testing.T) {
 		t.Fatalf("write host crypto fixture: %v", err)
 	}
 
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:write", "risk:read")
 	beforePreview, err := h.log.LastSequence(t.Context())
 	if err != nil {

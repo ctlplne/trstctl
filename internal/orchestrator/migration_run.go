@@ -71,7 +71,7 @@ func (o *Orchestrator) RecordMigrationRun(
 	if err != nil {
 		return store.MigrationRun{}, err
 	}
-	err = o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err = o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		ev, err := o.log.Append(ctx, events.Event{
 			ID: eventID, Type: projections.EventMigrationRunRecorded,
 			TenantID: tenantID, Data: payload,
@@ -120,7 +120,7 @@ func (o *Orchestrator) UpdateMigrationRun(
 		if err := validateMigrationEventBinding(canonical, tenantID, runID); err != nil {
 			return store.MigrationRun{}, fmt.Errorf("%w: migration event identity is already bound", store.ErrIdempotencyConflict)
 		}
-		if err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if err := o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 			if err := o.store.LockCertificateMetadataOrderTx(ctx, tx, tenantID); err != nil {
 				return err
 			}
@@ -135,7 +135,7 @@ func (o *Orchestrator) UpdateMigrationRun(
 		return o.store.GetMigrationRun(ctx, tenantID, runID)
 	}
 
-	err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err := o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		// Cover catch-up and rollback decisions before the aggregate row lock;
 		// projection may read successor state before its first certificate write.
 		if err := o.store.LockCertificateMetadataOrderTx(ctx, tx, tenantID); err != nil {
@@ -405,6 +405,9 @@ func (o *Orchestrator) reconcileMigrationRun(ctx context.Context, ev events.Even
 		return 0, err
 	}
 	inserted := 0
+	// Only ReconcileOutbox calls this helper, after retained-registration and
+	// lifetime admission. Restoring the exact queue intent grants no execution
+	// permission and must remain possible while ordinary service is suspended.
 	err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
 		for _, action := range recorded.Actions {
 			entry, err := migrationActionEntry(ev.TenantID, recorded.Run, action)

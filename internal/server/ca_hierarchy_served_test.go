@@ -21,7 +21,7 @@ import (
 )
 
 func TestServedCACeremonyPreviewIsExactEffectFreeAndSecretFree(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	operatorToken := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "ca-preview-operator", []string{
 		"issuers:write", "issuers:read", "certs:issue",
 	})
@@ -105,7 +105,7 @@ func TestServedCACeremonyPreviewIsExactEffectFreeAndSecretFree(t *testing.T) {
 }
 
 func TestCAAuthorityCreateAppendFailureDoesNotCommit(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	operatorToken := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "ca-operator", []string{
 		"issuers:write", "issuers:read", "certs:issue",
 	})
@@ -152,7 +152,7 @@ func TestCAAuthorityCreateAppendFailureDoesNotCommit(t *testing.T) {
 }
 
 func TestOfflineIntermediateCSRAppendFailureDestroysSigner(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	operatorToken := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "ca-operator", []string{
 		"issuers:write", "issuers:read", "certs:issue",
 	})
@@ -223,7 +223,7 @@ func TestOfflineIntermediateCSRAppendFailureDestroysSigner(t *testing.T) {
 }
 
 func TestExternalIntermediateCSRAppendFailureDoesNotConsumeCeremony(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	operatorToken := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "ca-operator", []string{
 		"issuers:write", "issuers:read", "certs:issue",
 	})
@@ -284,7 +284,7 @@ func TestExternalIntermediateCSRAppendFailureDoesNotConsumeCeremony(t *testing.T
 }
 
 func TestServedCAHierarchyCeremonyAndLeafIssuance(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	openerToken := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "ca-operator", []string{
 		"issuers:write", "issuers:read", "certs:issue",
 	})
@@ -458,7 +458,7 @@ func TestServedCAHierarchyCeremonyAndLeafIssuance(t *testing.T) {
 }
 
 func TestServedCARotationWithoutDowntimeCAPCA03(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	operator := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "ca-rotation-operator", []string{
 		"issuers:write", "issuers:read", "certs:issue",
 	})
@@ -607,7 +607,7 @@ func TestServedCARotationWithoutDowntimeCAPCA03(t *testing.T) {
 }
 
 func TestServedCARekeyCAPCA06(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	operator := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "ca-rekey-operator", []string{
 		"issuers:write", "issuers:read", "certs:issue",
 	})
@@ -700,7 +700,7 @@ func TestServedCARekeyCAPCA06(t *testing.T) {
 }
 
 func TestServedCAHierarchySignsExternalIntermediateCSRRequiresCeremony(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	token := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "spire-upstream-operator", []string{
 		"issuers:write", "issuers:read", "certs:issue",
 	})
@@ -824,7 +824,7 @@ func TestServedCAHierarchySignsExternalIntermediateCSRRequiresCeremony(t *testin
 }
 
 func TestServedCAHierarchyOfflineRootWorkflow(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	operator := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "offline-root-operator", []string{
 		"issuers:write", "issuers:read", "certs:issue",
 	})
@@ -950,7 +950,7 @@ func TestServedCAHierarchyOfflineRootWorkflow(t *testing.T) {
 }
 
 func TestServedCAHierarchyImportsExistingSignerBackedChain(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	operator := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "byo-ca-operator", []string{
 		"issuers:write", "issuers:read", "certs:issue",
 	})

@@ -68,6 +68,7 @@ const (
 // than mounted on the HTTP mux.
 type servedProtocols struct {
 	tenantServiceCheck tenancy.ServiceCheck
+	tenantServiceWork  tenancy.ServiceWork
 	acme               *acme.Server
 	est                http.Handler
 	scep               http.Handler
@@ -111,7 +112,7 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 		return nil, nil // no issuing CA → protocols not served (fail closed)
 	}
 	issuer := s.newProtocolIssuer()
-	sp := &servedProtocols{tenantServiceCheck: s.tenantServiceCheck}
+	sp := &servedProtocols{tenantServiceCheck: s.tenantServiceCheck, tenantServiceWork: s.store.BeginTenantService}
 
 	// Protocols run on their own bounded pool (AN-7) so an enrollment burst sheds
 	// rather than starving the API/liveness pools; fall back to the API pool when a
@@ -309,7 +310,8 @@ func (s *Server) buildServedACME(ctx context.Context, cfg config.Protocols, tena
 	if cfg.ACMEQuota.MaxNewOrdersPerAccount > 0 {
 		acmeSrv = acmeSrv.WithAccountOrderLimiter(ratelimit.NewACMEAccountOrders(s.store))
 	}
-	acmeSrv, err = acmeSrv.WithStateLog(ctx, acmeTenant, s.log)
+	state := acmeRegistrationLog{log: s.log, store: s.store, tenantID: acmeTenant}
+	acmeSrv, err = acmeSrv.WithStateScope(state.scope).WithStateLog(ctx, acmeTenant, state)
 	if err != nil {
 		return nil, fmt.Errorf("build served ACME state: %w", err)
 	}
@@ -408,7 +410,7 @@ func (sp *servedProtocols) routes(mux *http.ServeMux, bulk *bulkhead.Set) {
 	}
 	if sp.acme != nil {
 		for _, pattern := range protocolHTTPMountPatterns("acme") {
-			mux.Handle(pattern, wrap(sp.acme))
+			mux.Handle(pattern, wrap(tenantProtocolAdmission(sp.tenantServiceWork, sp.tenantServiceCheck, sp.acmeTenant, sp.acme)))
 		}
 	}
 	if sp.est != nil {
@@ -431,7 +433,7 @@ func (sp *servedProtocols) routes(mux *http.ServeMux, bulk *bulkhead.Set) {
 	}
 	if sp.tsa != nil {
 		for _, pattern := range protocolHTTPMountPatterns("tsa") {
-			mux.Handle(pattern, wrap(tenantProtocolAdmission(sp.tenantServiceCheck, sp.tsaTenant, sp.tsa.Handler())))
+			mux.Handle(pattern, wrap(tenantProtocolAdmission(sp.tenantServiceWork, sp.tenantServiceCheck, sp.tsaTenant, sp.tsa.Handler())))
 		}
 	}
 	if sp.ssh != nil {
@@ -1005,7 +1007,8 @@ func (s *Server) buildSPIFFE(ctx context.Context, cfg config.SPIFFEProtocol, ten
 		Selectors: []string{"unix"},
 	}}
 	wl, err := spiffe.New(spiffe.Config{
-		Issuer: tenantSPIFFEIssuer{Issuer: issuer, tenantID: tenant, check: s.tenantServiceCheck}, TenantID: tenant, TrustDomain: td, Entries: entries, Pool: pool,
+		Issuer: tenantSPIFFEIssuer{Issuer: issuer, tenantID: tenant, check: s.tenantServiceCheck, work: s.store.BeginTenantService}, TenantID: tenant, TrustDomain: td, Entries: entries, Pool: pool,
+		TenantServiceWork: s.store.BeginTenantService,
 		// AN-2: SVID issuance is audited into the event log (the source of truth),
 		// the same adapter the rest of the spine uses.
 		Audit: audit.NewAuditor(s.log),

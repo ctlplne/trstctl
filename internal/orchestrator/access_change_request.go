@@ -58,7 +58,7 @@ func (o *Orchestrator) CreateAccessChangeRequest(ctx context.Context, tenantID s
 		return store.AccessChangeRequest{}, err
 	}
 	var ev events.Event
-	if err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	if err := o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		var err error
 		ev, err = o.log.Append(ctx, events.Event{Type: projections.EventAccessChangeRequestCreated, TenantID: tenantID, Data: evData})
 		if err != nil {
@@ -94,7 +94,7 @@ func (o *Orchestrator) DecideAccessChangeRequest(ctx context.Context, tenantID, 
 		return store.AccessChangeRequest{}, err
 	}
 	var ev events.Event
-	if err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	if err := o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		var err error
 		ev, err = o.log.Append(ctx, events.Event{Type: projections.EventAccessChangeRequestDecided, TenantID: tenantID, Data: evData})
 		if err != nil {

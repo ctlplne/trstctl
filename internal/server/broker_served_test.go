@@ -22,7 +22,7 @@ import (
 // mints a short-lived credential, and the credential appears in the tenant's
 // event-sourced credential graph as owned by the agent workload.
 func TestServedAIAgentBrokerIssuesPolicyGatedCredentialIntoGraph(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.AgentBroker = AgentBrokerConfig{
 			Enabled:      true,
 			TrustDomain:  "served.test",

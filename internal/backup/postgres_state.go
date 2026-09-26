@@ -562,7 +562,11 @@ func RestorePostgresStateWithKey(ctx context.Context, st *store.Store, r io.Read
 // AN-2 state instead of being invented from a generic SQL row.
 func normalizePostgresStateRows(table string, rows []json.RawMessage) ([]json.RawMessage, error) {
 	if table == "outbox" {
-		return normalizeLegacyNonSecretOutboxRows(rows)
+		normalized, err := normalizeLegacyNonSecretOutboxRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		return normalizeRemoteDeliveryLifetime(normalized)
 	}
 	if table != "idempotency_keys" {
 		return rows, nil
@@ -587,6 +591,45 @@ func normalizePostgresStateRows(table string, rows []json.RawMessage) ([]json.Ra
 		encoded, err := json.Marshal(fields)
 		if err != nil {
 			return nil, fmt.Errorf("backup: encode normalized idempotency_keys row %d: %w", index+1, err)
+		}
+		normalized = append(normalized, encoded)
+	}
+	return normalized, nil
+}
+
+// Old backups need the same conservative classification as migration 0226.
+// Never drop a current token, infer completion from lease expiry, or let a
+// successful later invocation stand in for all of its earlier attempts.
+func normalizeRemoteDeliveryLifetime(rows []json.RawMessage) ([]json.RawMessage, error) {
+	normalized := make([]json.RawMessage, 0, len(rows))
+	for index, raw := range rows {
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &fields); err != nil || fields == nil {
+			return nil, fmt.Errorf("backup: invalid outbox lifetime row %d", index+1)
+		}
+		if value, exists := fields["receiver_pending_ids"]; exists && !bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+			normalized = append(normalized, raw)
+			continue
+		}
+		var attempts int
+		var status string
+		if value, exists := fields["attempts"]; exists {
+			if err := json.Unmarshal(value, &attempts); err != nil || attempts < 0 {
+				return nil, fmt.Errorf("backup: invalid outbox attempts in row %d", index+1)
+			}
+		}
+		if value, exists := fields["status"]; exists {
+			if err := json.Unmarshal(value, &status); err != nil {
+				return nil, fmt.Errorf("backup: invalid outbox status in row %d", index+1)
+			}
+		}
+		fields["receiver_pending_ids"] = json.RawMessage(`[]`)
+		if attempts > 0 && (status != "delivered" || attempts > 1) {
+			fields["receiver_pending_ids"] = json.RawMessage(`["00000000-0000-0000-0000-000000000226"]`)
+		}
+		encoded, err := json.Marshal(fields)
+		if err != nil {
+			return nil, err
 		}
 		normalized = append(normalized, encoded)
 	}
@@ -1143,6 +1186,7 @@ func postgresStateRestoreOrder() ([]string, error) {
 		// beside them because the two together are the fabric's memory of what
 		// agents were handed and what they reported back.
 		"agent_job_receipts",
+		"agent_job_attempt_bindings",
 		"attestations",
 		"audit_checkpoints",
 		"credentials",

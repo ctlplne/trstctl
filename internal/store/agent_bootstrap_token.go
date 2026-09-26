@@ -72,6 +72,27 @@ func (s *Store) RedeemBootstrapToken(ctx context.Context, tokenHash string) (Boo
 	return r, err
 }
 
+// ValidateBootstrapTokenRedemption runs after tenant admission is held. It
+// requires the same consumed, unexpired row that authenticated the operation;
+// a tenant UUID alone cannot prove that a pre-erasure redemption is still live.
+func (s *Store) ValidateBootstrapTokenRedemption(ctx context.Context, tenantID, tokenID, tokenHash string) error {
+	if tenantID == "" || tokenID == "" || tokenHash == "" {
+		return pgx.ErrNoRows
+	}
+	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var exists bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM agent_bootstrap_tokens
+			WHERE tenant_id=$1 AND id=$2 AND token_hash=$3 AND used_at IS NOT NULL AND expires_at > now())`,
+			tenantID, tokenID, tokenHash).Scan(&exists); err != nil {
+			return err
+		}
+		if !exists {
+			return pgx.ErrNoRows
+		}
+		return nil
+	})
+}
+
 // roleArray normalizes a grant for storage. A nil slice would be written as SQL
 // NULL against a NOT NULL column; an empty array is the honest representation of
 // "host-only", which is what no grant means.

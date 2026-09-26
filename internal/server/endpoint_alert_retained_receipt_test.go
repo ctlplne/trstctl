@@ -21,7 +21,7 @@ import (
 // for retention. The channel is a recording test double, not OpsGenie proof.
 func TestEndpointAlertRetainedReceiptCannotPoisonNewIncident(t *testing.T) {
 	channel := &flakyNotificationChannel{}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.NotificationChannels = []notify.Notifier{channel}
 	})
 	ctx := t.Context()

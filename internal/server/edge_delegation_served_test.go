@@ -27,7 +27,7 @@ import (
 // exercised as refusals: an un-opted segment and an un-attested host get
 // nothing.
 func TestServedEdgeDelegationEndToEnd(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	ctx := context.Background()
 	operator := seedServedAPIToken(t, ctx, h.store, h.tenant, "edge-operator", []string{
 		"issuers:write", "issuers:read", "certs:issue",

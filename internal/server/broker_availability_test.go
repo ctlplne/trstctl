@@ -13,7 +13,7 @@ import (
 func TestServedBrokerCapabilityUsesRunningServiceNotWrapperPresence(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
 		t.Run(map[bool]string{false: "disabled", true: "enabled-without-tenant-trust"}[enabled], func(t *testing.T) {
-			h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+			h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 				d.AgentBroker = AgentBrokerConfig{Enabled: enabled, TrustDomain: "served.test", PolicyModule: servedBrokerAllowPolicy}
 			})
 			token := seedScopedToken(t, h.store, h.tenant, "certs:issue", "capabilities:read")

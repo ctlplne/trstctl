@@ -21,7 +21,7 @@ func TestRecoveryReplaysServedOwnershipDecision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.OwnershipAttestationCadence = cadence
 	})
 	ctx := context.Background()

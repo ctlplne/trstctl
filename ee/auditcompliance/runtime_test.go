@@ -23,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/editionseam"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/secrettext"
 	"trstctl.com/trstctl/internal/server"
 	"trstctl.com/trstctl/internal/store"
@@ -93,7 +94,16 @@ func TestLicensedAssemblyRetentionSurvivesCoreDowngrade(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "audit downgrade"}); err != nil {
+	// The archived event also establishes the tenant's retained authority, so
+	// downgrade must preserve both signed history and access to that history.
+	if _, err := log.Append(ctx, events.Event{
+		ID: "licensed-old-event", Type: projections.EventTenantRegistered,
+		TenantID: tenantA, Time: time.Now().Add(-48 * time.Hour),
+		Data: tenantRegistered("audit downgrade"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := projections.New(st).Project(ctx, log); err != nil {
 		t.Fatal(err)
 	}
 	raw, hash, err := auth.GenerateAPIToken()
@@ -106,9 +116,6 @@ func TestLicensedAssemblyRetentionSurvivesCoreDowngrade(t *testing.T) {
 	}
 	key, err := jose.GenerateRSASigningKey("downgrade-audit")
 	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := log.Append(ctx, events.Event{ID: "licensed-old-event", Type: "audit.test", TenantID: tenantA, Time: time.Now().Add(-48 * time.Hour), Data: []byte(`{"stage":"licensed"}`)}); err != nil {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()

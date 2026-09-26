@@ -61,7 +61,7 @@ func (o *Orchestrator) StartNHIReviewCampaign(ctx context.Context, tenantID stri
 		return store.NHIReviewCampaign{}, err
 	}
 	var ev events.Event
-	if err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	if err := o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		var err error
 		ev, err = o.log.Append(ctx, events.Event{Type: projections.EventNHIAccessReviewCampaignStarted, TenantID: tenantID, Data: evData})
 		if err != nil {
@@ -95,7 +95,7 @@ func (o *Orchestrator) DecideNHIReviewItem(ctx context.Context, tenantID, campai
 		return store.NHIReviewCampaign{}, err
 	}
 	var ev events.Event
-	if err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	if err := o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		var err error
 		ev, err = o.log.Append(ctx, events.Event{Type: projections.EventNHIAccessReviewItemDecided, TenantID: tenantID, Data: evData})
 		if err != nil {

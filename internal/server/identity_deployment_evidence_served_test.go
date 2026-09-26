@@ -14,7 +14,7 @@ import (
 )
 
 func TestServedIdentityDeploymentEvidencePreservesRestoredAndRevokedLeaf(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(*Deps) {})
+	h := newOperatingServedHarness(t, config.Protocols{}, func(*Deps) {})
 	ctx := t.Context()
 	owner, err := h.store.CreateOwner(ctx, store.Owner{TenantID: h.tenant, Kind: store.OwnerTeam, Name: "evidence owner"})
 	if err != nil {

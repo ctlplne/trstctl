@@ -16,7 +16,7 @@ import (
 )
 
 func TestServedTransitAPIEncryptDecryptRewrap(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	token := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "kms-operator", []string{
 		string(authz.KeysRead), string(authz.KeysWrite),
 	})

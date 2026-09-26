@@ -54,12 +54,13 @@ type licensedCryptoMigrationTLSRollbackRequested struct {
 // transaction. The read model is written only by the projector, so the state and
 // history are reconstructable purely from the event log.
 type Orchestrator struct {
-	log               *events.Log
-	store             *store.Store
-	outbox            *Outbox
-	proj              *projections.Projector
-	durableIdem       *Idempotency
-	tenantDataRewrite []events.TenantDataRewriteOption
+	log                  *events.Log
+	store                *store.Store
+	outbox               *Outbox
+	proj                 *projections.Projector
+	durableIdem          *Idempotency
+	tenantDataRewrite    []events.TenantDataRewriteOption
+	tenantCommandService *tenantCommandService
 	// effectRole classifies a transition side effect's per-row agent-role demand
 	// (epic A3) from its destination and RAW (pre-seal) payload. Injected by the
 	// composition root; nil means every row gets the empty demand, which is the
@@ -319,6 +320,12 @@ func (o *Orchestrator) FailRenewalAttempt(ctx context.Context, tenantID, identit
 }
 
 func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID string, to State, reason string, sideEffectPayload []byte, idempotencyKey, subjectCSRPEM string, transform SideEffectPayloadTransform, approval *store.OperationApprovalUse, issuance *store.OperationApprovalIssuanceBinding, expectedVersion *uint64, completedDestination string, options ...transitionOptions) error {
+	ctx, releaseTenant, admissionErr := o.beginTenantCommand(ctx, tenantID)
+	if admissionErr != nil {
+		return admissionErr
+	}
+	defer releaseTenant()
+
 	if (to == StateRevoked || to == StateRetired) && !o.store.IdentityIssuanceFenceHeld(ctx, tenantID, identityID) {
 		return o.store.WithIdentityIssuanceFence(ctx, tenantID, identityID, func(fenced context.Context) error {
 			return o.transition(fenced, tenantID, identityID, to, reason, sideEffectPayload, idempotencyKey, subjectCSRPEM, transform, approval, issuance, expectedVersion, completedDestination, options...)
@@ -932,6 +939,14 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 		return 0, err
 	}
 	err = log.Replay(ctx, from+1, func(ev events.Event) (reconcileErr error) {
+		ctx, releaseTenant, obsolete, err := o.beginTenantOutboxRecovery(ctx, ev)
+		if err != nil {
+			return err
+		}
+		defer releaseTenant()
+		if obsolete {
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
 		healedBefore := healed
 		defer func() {
 			if reconcileErr == nil {

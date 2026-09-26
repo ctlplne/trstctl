@@ -49,8 +49,9 @@ func assertAUD78Problem(t *testing.T, body []byte, wantDetail string) {
 }
 
 func TestSelfServiceIssuanceRequestOwnerContractAUD78(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	const otherTenant = "22222222-2222-2222-2222-222222222222"
+	registerServedTenantID(t, h, otherTenant, "Self-service neighboring tenant")
 	ownerID := createAUD78Owner(t, h, h.tenant, "Payments platform")
 	otherOwnerID := createAUD78Owner(t, h, otherTenant, "Other tenant")
 	profileAdmin := seedScopedTokenSubject(t, h.store, h.tenant, "profile-admin",

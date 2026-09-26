@@ -37,6 +37,12 @@ type CertificateRevocationChecks struct {
 }
 
 func (o *Orchestrator) BulkRevokeCertificates(ctx context.Context, tenantID, commandKey, requestBinding string, ids []string, reason string, checks CertificateRevocationChecks) (BulkRevokeResult, error) {
+	ctx, releaseTenant, admissionErr := o.beginTenantCommand(ctx, tenantID)
+	if admissionErr != nil {
+		return BulkRevokeResult{}, admissionErr
+	}
+	defer releaseTenant()
+
 	if commandKey == "" || len(requestBinding) != 64 || len(ids) == 0 || len(ids) > projections.MaxCertificateRevocationBatch ||
 		!crypto.IsValidRevocationReason(reason) || reason == "removeFromCRL" || checks.Authorize == nil || checks.Authority == nil {
 		return BulkRevokeResult{}, ErrCertificateRevocationInvalid

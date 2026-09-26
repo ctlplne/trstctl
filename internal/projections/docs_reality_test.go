@@ -43,7 +43,7 @@ func TestDocsFirstCertFlowReallyIssues(t *testing.T) {
 	// Now prove the documented flow behaviorally: create identity -> transition to
 	// issued -> the real outbox handler mints a leaf and records it in inventory.
 	st := newStore(t)
-	log := openLog(t)
+	log := openRegisteredTenantLog(t)
 	prov, stop := startSignerChild(t)
 	defer stop()
 

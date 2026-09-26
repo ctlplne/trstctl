@@ -27,7 +27,7 @@ func TestEndpointEnrollmentHonorsIssuanceAuthority(t *testing.T) {
 			}
 			t.Run(route+"/"+scenario, func(t *testing.T) {
 				var changeIdentity func(context.Context) error
-				h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+				h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 					withAgentChannel(d)
 					d.AgentClaimableJobKinds = []string{"endpoint.renew", "connector.deploy"}
 					if scenario == "configured profile" || scenario == "profile changed after preview" {

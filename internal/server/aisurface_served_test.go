@@ -125,7 +125,7 @@ func seedTenantAIData(t *testing.T, st *store.Store, log *events.Log, tenant, ow
 // tenant's graph + owners returns a grounded answer that CITES the seeded real records,
 // scoped to the caller's tenant. It fails on the pre-wiring tree (the route 503s).
 func TestServedAIQueryGroundedAndScoped(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, withAIEnabled())
+	h := newOperatingServedHarness(t, config.Protocols{}, withAIEnabled())
 	if !h.srv.apiAISurfaceServed() {
 		t.Fatal("AI surface not served by the assembled binary (SURFACE-003 wire-in missing)")
 	}
@@ -169,7 +169,7 @@ func TestServedAIQueryGroundedAndScoped(t *testing.T) {
 // TestServedRCAGroundedAndCited is the F77 grounded-RCA proof: a served RCA question is
 // answered from cited real records gathered through the tenant-scoped query seam.
 func TestServedRCAGroundedAndCited(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, withAIEnabled())
+	h := newOperatingServedHarness(t, config.Protocols{}, withAIEnabled())
 	seedTenantAIData(t, h.store, h.log, h.tenant, "payments-api")
 	tok := seedScopedToken(t, h.store, h.tenant, "graph:read", "owners:read", "risk:read", "audit:read")
 
@@ -204,8 +204,9 @@ func TestServedRCAGroundedAndCited(t *testing.T) {
 // row belonging to tenant A.
 func TestServedAICrossTenantDenial(t *testing.T) {
 	const tenantB = "22222222-2222-2222-2222-222222222222"
-	h := newServedHarness(t, config.Protocols{}, withAIEnabled())
+	h := newOperatingServedHarness(t, config.Protocols{}, withAIEnabled())
 	// Tenant A owns a uniquely-named workload; tenant B is a real, distinct tenant.
+	registerServedTenantID(t, h, tenantB, "AI neighboring tenant")
 	seedTenantAIData(t, h.store, h.log, h.tenant, "tenant-a-secret-workload")
 	if _, err := h.store.CreateOwner(context.Background(), store.Owner{TenantID: tenantB, Kind: store.OwnerWorkload, Name: "tenant-b-workload"}); err != nil {
 		t.Fatalf("create tenant B owner: %v", err)
@@ -244,7 +245,7 @@ func TestServedAICrossTenantDenial(t *testing.T) {
 // data (there is no action path) and the secret material is REDACTED out of the served
 // answer (nothing exfiltrates). It drives the CBOM/compliance evidence kind via RCA.
 func TestServedAIInjectionInertAndRedacted(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, withAIEnabled())
+	h := newOperatingServedHarness(t, config.Protocols{}, withAIEnabled())
 	seedTenantAIData(t, h.store, h.log, h.tenant, "payments-api")
 	tok := seedScopedToken(t, h.store, h.tenant, "graph:read", "owners:read", "risk:read", "audit:read")
 
@@ -276,7 +277,7 @@ func TestServedAIInjectionInertAndRedacted(t *testing.T) {
 // TestServedMCPListsAndInvokesReadOnlyTool is the F78 proof: an MCP client lists the
 // default read-only tools and INVOKES one, getting a grounded, cited result.
 func TestServedMCPListsAndInvokesReadOnlyTool(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, withAIEnabled())
+	h := newOperatingServedHarness(t, config.Protocols{}, withAIEnabled())
 	seedTenantAIData(t, h.store, h.log, h.tenant, "payments-api")
 	tok := seedScopedToken(t, h.store, h.tenant, "graph:read", "owners:read", "risk:read", "audit:read")
 
@@ -356,7 +357,7 @@ func TestServedMCPListsAndInvokesReadOnlyTool(t *testing.T) {
 // explicitly enables guarded write tools an MCP client can issue a certificate through
 // the same served CA hierarchy. The write path is idempotent, RBAC-gated, and audited.
 func TestServedMCPWriteToolsIssueCertificateWhenExplicitlyEnabled(t *testing.T) {
-	disabled := newServedHarness(t, config.Protocols{}, withAIEnabled())
+	disabled := newOperatingServedHarness(t, config.Protocols{}, withAIEnabled())
 	readToken := seedScopedToken(t, disabled.store, disabled.tenant, "graph:read", "certs:issue")
 	status, body := aiReq(t, disabled, http.MethodGet, "/api/v1/mcp/tools", readToken, nil)
 	if status != http.StatusOK {
@@ -380,7 +381,7 @@ func TestServedMCPWriteToolsIssueCertificateWhenExplicitlyEnabled(t *testing.T) 
 		t.Fatalf("disabled write tool call = %d, want 404 fail-closed", status)
 	}
 
-	h := newServedHarness(t, config.Protocols{}, withMCPWriteToolsEnabled())
+	h := newOperatingServedHarness(t, config.Protocols{}, withMCPWriteToolsEnabled())
 	operatorToken := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "mcp-ca-operator", []string{
 		"graph:read", "issuers:write", "issuers:read", "certs:issue",
 	})
@@ -486,7 +487,7 @@ func TestServedMCPWriteToolsIssueCertificateWhenExplicitlyEnabled(t *testing.T) 
 // harness NOT opting in, the AI/MCP routes are reachable (registered) but fail closed
 // (503), and AISurfaceServed reports false. This is the fail-closed default.
 func TestServedAISurfaceDisabledFailsClosed(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}) // no withAIEnabled()
+	h := newOperatingServedHarness(t, config.Protocols{}) // no withAIEnabled()
 	if h.srv.apiAISurfaceServed() {
 		t.Fatal("AI surface reported served when not enabled (must be off by default)")
 	}

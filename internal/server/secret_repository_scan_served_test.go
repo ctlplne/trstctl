@@ -33,7 +33,7 @@ func TestServedRepositorySecretScanWebhookQueuesAndExecutesCAPSCAN01(t *testing.
 			}},
 		},
 	}
-	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
 		d.SecretScanner = fake
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write", "discovery:read", "graph:read")

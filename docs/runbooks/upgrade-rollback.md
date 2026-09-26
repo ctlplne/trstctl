@@ -44,6 +44,42 @@ the old idempotency row: it is the durable proof that the earlier command ran.
 Record the old and new key references in the change ticket. Never place the
 request body or a credential value in either key.
 
+## Agent registration binding across this upgrade
+
+Agent certificates now identify the tenant's registration as well as its UUID.
+Deleting a tenant and registering the same UUID must not give an old agent access
+to the replacement tenant. The CA stamps the retained registration identifier;
+authenticated agent operations and both renewal paths verify it.
+
+Certificates issued before this binding was introduced require authorized
+re-enrollment. A missing, duplicate or different binding is refused even when the
+certificate is otherwise trusted and unexpired. Renewal cannot upgrade that old
+identity: the operator must authorize a new bootstrap token for the intended
+current tenant. The error includes `enroll again` guidance. Plan this interruption
+before upgrading a fleet; existing cached credentials do not migrate automatically.
+
+For each affected agent:
+
+1. Stop that agent's service and retain its exact old certificate/key paths in
+   protected storage for investigation. Do not copy private keys into a ticket.
+2. Using the intended tenant's authenticated CLI context, run
+   `trstctl-cli agents enroll-token` with the intended `allowed_identity` and
+   role grants, as in the [fleet rollout runbook](fleet-rollout.md). Store each
+   single-use token in a separate owner-readable file with mode `0600`.
+3. Keep the agent's verified server address, name, CA bundle and execution
+   settings. Supply `--bootstrap-token-file` and new, unused `--key` and `--cert`
+   paths in a protected directory. Both paths must be unused: an existing cached
+   identity takes precedence over a fresh bootstrap token. Update the service
+   configuration to keep these new paths across restarts.
+4. Start the agent and verify a successful heartbeat, expected inventory and job
+   eligibility. Verify renewal and reconnection with the successor certificate.
+   Preserve failed results; token creation or a TLS handshake alone is insufficient.
+
+Do not disable tenant checks or edit the certificate SANs to recover service.
+An ordinary restart or read-model rebuild retaining the same registration event
+does not authorize a new tenant generation. Missing registration history requires
+source recovery before enrollment can proceed.
+
 ## Commands: preflight
 
 Render the chart with the exact values file and inspect the agent channel and

@@ -279,7 +279,7 @@ func TestServedESTLibestSimpleEnroll(t *testing.T) {
 		t.Fatalf("EST_LIBEST=%q is not executable: %v", bin, err)
 	}
 
-	h := newServedHarness(t, config.Protocols{
+	h := newOperatingServedHarness(t, config.Protocols{
 		EST: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 	})
 	if !protoContains(h.srv.ServedProtocols(), "est") {
@@ -357,7 +357,7 @@ func TestServedSCEPSSCEPClientEnrollment(t *testing.T) {
 	}
 
 	intuneCfg, challenge := servedSCEPIntuneChallenge(t, "sscep-served-device")
-	h := newServedHarness(t, config.Protocols{
+	h := newOperatingServedHarness(t, config.Protocols{
 		SCEP:                config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 		SCEPIntuneChallenge: intuneCfg,
 	})
@@ -443,7 +443,7 @@ func TestServedCMPOpenSSLClientP10CREnrollment(t *testing.T) {
 	// anchor — which is what a deployment enrolling this device would configure.
 	clientCert, clientKey, csrDER := newSCEPClient(t, "openssl-cmp-served-device")
 
-	h := newServedHarness(t, config.Protocols{
+	h := newOperatingServedHarness(t, config.Protocols{
 		CMP:                      config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 		CMPClientTrustAnchorFile: writeCMPAnchorPEM(t, clientCert),
 	})

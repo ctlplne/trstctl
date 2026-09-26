@@ -577,6 +577,11 @@
           "presence": "required"
         },
         {
+          "go_type": "bool",
+          "name": "receipt_recorded",
+          "presence": "optional"
+        },
+        {
           "go_type": "int64",
           "name": "lease_expires_unix",
           "presence": "optional"

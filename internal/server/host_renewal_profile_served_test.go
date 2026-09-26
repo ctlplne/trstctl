@@ -12,7 +12,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/agent/transport"
-	"trstctl.com/trstctl/internal/app"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -34,11 +33,8 @@ func testServedHostRenewalProfile(t *testing.T, changeDefault bool) {
 	h := newRoleHarnessWithDeps(t, []string{mtls.AgentRoleHost}, []string{agentJobKindEndpointRenew}, func(d *Deps) {
 		d.DefaultProfile = "mail-short-life"
 	})
-	registration := app.New(h.log, h.store, nil)
-	t.Cleanup(registration.Close)
-	if err := registration.RegisterTenant(t.Context(), h.tenant, "mail-renewal-fixture", "mail-renewal-registration"); err != nil {
-		t.Fatal(err)
-	}
+	// The enrolled role agent is bound to the fixture's existing registration.
+	// Reuse it; a second registration would invalidate that authority.
 	token := seedScopedToken(t, h.store, h.tenant, "owners:write", "connectors:write", "certs:issue", "profiles:write", "identities:write")
 	post := func(path string, input any, expected int) map[string]json.RawMessage {
 		t.Helper()

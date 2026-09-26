@@ -75,6 +75,9 @@ func (w *Sweeper) Retention() time.Duration { return w.retention }
 // may still write remotely. Migration-derived rows also remain because their
 // negative order cannot be reconstructed from retained AN-2 history. It is safe to
 // call concurrently and is idempotent: a second call right after reclaims nothing.
+// Agent claims additionally require a verified terminal receipt for every issued
+// attempt. A later successful attempt does not establish that an earlier remote
+// executor stopped; keep that unresolved evidence even after the retention age.
 func (w *Sweeper) Sweep(ctx context.Context) (int64, error) {
 	cutoff := time.Now().UTC().Add(-w.retention)
 	tag, err := w.store.SystemPool().Exec(ctx,
@@ -82,6 +85,18 @@ func (w *Sweeper) Sweep(ctx context.Context) (int64, error) {
 		  WHERE queued.status = 'delivered'
 		    AND queued.delivered_at IS NOT NULL
 		    AND queued.delivered_at < $1
+		    AND cardinality(queued.receiver_pending_ids) = 0
+		    AND queued.claim_attempts >= 0
+		    AND (queued.claim_attempts <> 0 OR queued.claimed_by_agent_id IS NULL)
+		    AND queued.claim_attempts = (
+		        SELECT count(*) FROM agent_job_receipts AS receipt
+		         WHERE receipt.tenant_id = queued.tenant_id AND receipt.job_id = queued.id
+		           AND receipt.attempt BETWEEN 1 AND queued.claim_attempts
+		           AND receipt.state = 'verified'
+		           AND receipt.outcome IN ('executed','verified','verify_failed','failed')
+		           AND receipt.statement <> '' AND receipt.signature <> ''
+		           AND receipt.signer_fingerprint <> ''
+		    )
 		    AND (
 		        queued.destination <> 'endpoint.renew'
 		        OR queued.idempotency_key NOT LIKE 'host-renew:renew:%'

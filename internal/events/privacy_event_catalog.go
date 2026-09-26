@@ -117,6 +117,13 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 			catalogPrivacyRule("/authorizations/*/challenges/*/token", opaque),
 			catalogPrivacyRule("/authorizations/*/challenges/*/status", opaque),
 			catalogPrivacyRule("/authorizations/*/challenges/*/authz_id", opaque)),
+		// These canonical bytes carry an agent signature. Rewriting a name
+		// inside the statement would destroy the evidence; subject erasure
+		// must refuse this payload rather than silently invalidate it.
+		rejectingEntry("agent.job.receipt.reconciled"),
+		entry("agent.job.receipt.conflict",
+			catalogPrivacyRule("/agent", exact), catalogPrivacyRule("/job_id", opaque),
+			catalogPrivacyRule("/attempt", opaque), catalogPrivacyRule("/reason", opaque)),
 		entry("agent.jobs.claimed", catalogPrivacyRule("/agent", exact),
 			catalogPrivacyRule("/count", opaque), catalogPrivacyRule("/kinds/*", opaque)),
 		entry("agent.jobs.role_refused", catalogPrivacyRule("/agent", exact),

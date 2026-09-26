@@ -40,7 +40,7 @@ const servedCMDBSecretRef = "secret://itsm/servicenow-token" // #nosec G101 -- c
 // conflict — both reachable over HTTP.
 func TestServedCMDBReconcileFillsUnknownAndRefusesAttested(t *testing.T) {
 	const instanceURL = "https://cmdb.internal.example"
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.ServiceNowBindings = []api.ServiceNowBinding{{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 			InstanceURL: instanceURL,
 			TokenRef:    servedCMDBSecretRef,
@@ -162,34 +162,55 @@ func TestServedCMDBReconcileFillsUnknownAndRefusesAttested(t *testing.T) {
 // A tenant must not be able to aim the control plane's egress at any host it
 // likes by calling it a CMDB.
 func TestServedCMDBScheduleRefusesAnUnapprovedInstance(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.ServiceNowBindings = []api.ServiceNowBinding{{InstanceURL: "https://example.service-now.com", TokenRef: servedCMDBSecretRef}}
+	})
 	tok := seedScopedToken(t, h.store, h.tenant, "owners:write")
 	status, body := secretsReqKey(t, h, http.MethodPut, "/api/v1/owners/cmdb-schedule", tok, "cmdb-schedule-unapproved", map[string]any{
 		"instance_url":     "https://attacker.example.com",
-		"token_ref":        servedCMDBTokenRef,
+		"token_ref":        servedCMDBSecretRef,
 		"interval_seconds": 3600,
 		"enabled":          true,
 	})
-	if status == http.StatusOK {
-		t.Fatalf("an unapproved instance was accepted (status %d, body %s).\n\n"+
-			"That is a tenant pointing the control plane's ServiceNow credential at a host of its "+
-			"choosing", status, body)
+	if status != http.StatusBadRequest || !strings.Contains(string(body), "must match an operator-approved ServiceNow binding") {
+		t.Fatalf("unapproved CMDB instance did not reach the destination guard: status %d body %s", status, body)
+	}
+	if _, found, err := h.store.GetCMDBReconcileSchedule(t.Context(), h.tenant); err != nil || found {
+		t.Fatalf("refused destination saved a schedule: found=%t err=%v", found, err)
+	}
+	status, body = secretsReqKey(t, h, http.MethodPut, "/api/v1/owners/cmdb-schedule", tok, "cmdb-schedule-approved", map[string]any{
+		"instance_url": "https://example.service-now.com", "token_ref": servedCMDBSecretRef,
+		"interval_seconds": 3600, "enabled": true,
+	})
+	if status != http.StatusOK {
+		t.Fatalf("approved CMDB instance refused: status %d body %s", status, body)
 	}
 }
 
 // A poll tighter than the floor buys rate limiting, not freshness.
 func TestServedCMDBScheduleRefusesAHotPoll(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.ServiceNowBindings = []api.ServiceNowBinding{{InstanceURL: "https://example.service-now.com", TokenRef: servedCMDBSecretRef}}
+	})
 	tok := seedScopedToken(t, h.store, h.tenant, "owners:write")
-	status, _ := secretsReqKey(t, h, http.MethodPut, "/api/v1/owners/cmdb-schedule", tok, "cmdb-schedule-hot", map[string]any{
+	status, body := secretsReqKey(t, h, http.MethodPut, "/api/v1/owners/cmdb-schedule", tok, "cmdb-schedule-hot", map[string]any{
 		"instance_url":     "https://example.service-now.com",
-		"token_ref":        servedCMDBTokenRef,
+		"token_ref":        servedCMDBSecretRef,
 		"interval_seconds": 5,
 		"enabled":          true,
 	})
-	if status == http.StatusOK {
-		t.Fatal("a 5-second CMDB poll was accepted; a CMDB's ownership columns change on the order " +
-			"of days")
+	if status != http.StatusBadRequest || !strings.Contains(string(body), "interval_seconds must be at least 300") {
+		t.Fatalf("hot CMDB poll did not reach the interval guard: status %d body %s", status, body)
+	}
+	if _, found, err := h.store.GetCMDBReconcileSchedule(t.Context(), h.tenant); err != nil || found {
+		t.Fatalf("refused interval saved a schedule: found=%t err=%v", found, err)
+	}
+	status, body = secretsReqKey(t, h, http.MethodPut, "/api/v1/owners/cmdb-schedule", tok, "cmdb-schedule-floor", map[string]any{
+		"instance_url": "https://example.service-now.com", "token_ref": servedCMDBSecretRef,
+		"interval_seconds": 300, "enabled": true,
+	})
+	if status != http.StatusOK {
+		t.Fatalf("allowed CMDB interval refused: status %d body %s", status, body)
 	}
 }
 
@@ -197,7 +218,7 @@ func TestServedCMDBScheduleRefusesAHotPoll(t *testing.T) {
 // the served surface: an operator debugging a sync that produced nothing needs
 // to know which one they are looking at.
 func TestServedCMDBScheduleSeparatesUnconfiguredFromPaused(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "owners:read")
 	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/owners/cmdb-schedule", tok, nil)
 	if status != http.StatusOK {
@@ -243,7 +264,7 @@ func TestServedCMDBScheduleRefusesAnUnauthenticatedRead(t *testing.T) {
 // relay's reported records run through the SAME reconcile core — attestation
 // rule included.
 func TestRelayModeCMDBScheduleDispatchesAndIngestsTheReport(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.ServiceNowBindings = []api.ServiceNowBinding{{
 			InstanceURL: "https://cmdb.internal.example",
 			TokenRef:    servedCMDBSecretRef,
@@ -383,7 +404,7 @@ func TestRelayModeCMDBScheduleDispatchesAndIngestsTheReport(t *testing.T) {
 // must be a no-op rather than incrementing coverage or minting another job.
 func TestCMDBSweepContinuesPastFiveHundredAndOnlyTerminalPageSucceedsAUD46(t *testing.T) {
 	const instanceURL = "https://cmdb.internal.example"
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.ServiceNowBindings = []api.ServiceNowBinding{{InstanceURL: instanceURL, TokenRef: servedCMDBSecretRef}}
 	})
 
@@ -536,7 +557,7 @@ func TestCMDBSweepContinuesPastFiveHundredAndOnlyTerminalPageSucceedsAUD46(t *te
 
 func TestCMDBSweepReconcilesChangesAndDeletionsIdempotentlyAUD46(t *testing.T) {
 	const instanceURL = "https://cmdb.internal.example"
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.ServiceNowBindings = []api.ServiceNowBinding{{InstanceURL: instanceURL, TokenRef: servedCMDBSecretRef}}
 	})
 	owner, err := h.store.CreateOwner(t.Context(), store.Owner{
@@ -635,7 +656,7 @@ func TestCMDBSweepDeletionPreservesAttestationAndTenantFenceAUD46(t *testing.T) 
 		instanceURL = "https://cmdb.internal.example"
 		otherTenant = "22222222-2222-4222-8222-222222222246"
 	)
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.ServiceNowBindings = []api.ServiceNowBinding{{InstanceURL: instanceURL, TokenRef: servedCMDBSecretRef}}
 	})
 	owner, err := h.store.CreateOwner(t.Context(), store.Owner{
@@ -731,7 +752,7 @@ func TestCMDBSweepDeletionPreservesAttestationAndTenantFenceAUD46(t *testing.T) 
 
 func TestConcurrentDuplicateCMDBTerminalReportsConvergeAUD46(t *testing.T) {
 	const instanceURL = "https://cmdb.internal.example"
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.ServiceNowBindings = []api.ServiceNowBinding{{InstanceURL: instanceURL, TokenRef: servedCMDBSecretRef}}
 	})
 	owner, err := h.store.CreateOwner(t.Context(), store.Owner{
@@ -822,7 +843,7 @@ func TestCMDBReportCannotClaimAnExpectedTotalBehindItsReadCountAUD46(t *testing.
 
 func TestFailedCMDBPageRetainsAndResumesTheExactCursorAUD46(t *testing.T) {
 	const instanceURL = "https://cmdb.internal.example"
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.ServiceNowBindings = []api.ServiceNowBinding{{InstanceURL: instanceURL, TokenRef: servedCMDBSecretRef}}
 	})
 	tok := seedScopedToken(t, h.store, h.tenant, "owners:write")

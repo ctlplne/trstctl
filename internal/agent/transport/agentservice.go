@@ -590,6 +590,11 @@ type ReportJobResultResponse struct {
 	// lapsed and somebody else took the work. The agent must stop, not retry:
 	// two agents finishing the same deploy is the failure this prevents.
 	Accepted bool `json:"accepted"`
+	// ReceiptRecorded acknowledges only a signed terminal observation for an
+	// original claim. It grants no lease or permission to execute or roll back.
+	// An agent may clear its persisted report when this is true, even when the
+	// old claim can no longer apply observations to current target state.
+	ReceiptRecorded bool `json:"receipt_recorded,omitempty"`
 	// LeaseExpiresUnix is the new lease after an accepted extend.
 	LeaseExpiresUnix int64 `json:"lease_expires_unix,omitempty"`
 }

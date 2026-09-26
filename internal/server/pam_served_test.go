@@ -34,7 +34,7 @@ func TestServedPAMJITBrokersPostgresAndSSHWithAuditAndExpiry(t *testing.T) {
 	defer stopPG()
 	seedPAMPostgresTable(t, pgDSN)
 
-	h := newServedHarness(t,
+	h := newOperatingServedHarness(t,
 		config.Protocols{SSH: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}},
 		func(d *Deps) {
 			d.PAM = PAMConfig{

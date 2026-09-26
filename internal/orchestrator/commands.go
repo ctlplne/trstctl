@@ -241,6 +241,17 @@ func (o *Orchestrator) emitPrepared(ctx context.Context, next events.Event) (eve
 	if next.Type == projections.EventTenantOffboarded {
 		return o.emitTenantOffboard(ctx, next)
 	}
+	// Authorization decisions are audit-only evidence, including refused access
+	// after erasure. They do not grant service or recreate domain state. All
+	// ordinary commands retain admission through append and projection.
+	if next.Type != EventAuthzDecision {
+		fenced, release, err := o.beginTenantCommand(ctx, next.TenantID)
+		if err != nil {
+			return events.Event{}, err
+		}
+		defer release()
+		ctx = fenced
+	}
 	if next.Type == projections.EventCertificateRecorded || next.Type == projections.EventEdgeIssuanceReconciled {
 		return o.emitCertificateRecording(ctx, next)
 	}
@@ -1523,6 +1534,12 @@ func (o *Orchestrator) AttestCertificateCustody(ctx context.Context, tenantID st
 // request ID + digest, so a retry after append or projection returns the one
 // canonical certificate instead of consuming the grant twice.
 func (o *Orchestrator) RecordCertificateWithApproval(ctx context.Context, tenantID string, in store.Certificate, approval store.OperationApprovalUse, binding ephemerallib.ApprovalBinding, requestBindings ...string) (store.Certificate, error) {
+	ctx, releaseTenant, admissionErr := o.beginTenantCommand(ctx, tenantID)
+	if admissionErr != nil {
+		return store.Certificate{}, admissionErr
+	}
+	defer releaseTenant()
+
 	if strings.TrimSpace(tenantID) == "" || strings.TrimSpace(approval.RequestID) == "" ||
 		strings.TrimSpace(approval.IntentDigest) == "" {
 		return store.Certificate{}, fmt.Errorf("orchestrator: approved certificate requires tenant, request id, and intent digest")
@@ -1790,6 +1807,12 @@ func CertificateApprovalEventID(tenantID string, approval store.OperationApprova
 // does not depend on JetStream still remembering the message ID. If restore lost
 // the event, the exact fenced bytes and timestamp are republished.
 func (o *Orchestrator) ProjectApprovedCertificateFence(ctx context.Context, tenantID string, fence store.ApprovedTargetFence) (store.Certificate, error) {
+	ctx, releaseTenant, admissionErr := o.beginTenantCommand(ctx, tenantID)
+	if admissionErr != nil {
+		return store.Certificate{}, admissionErr
+	}
+	defer releaseTenant()
+
 	var result store.Certificate
 	err := o.store.WithPrivacyRecoveryBarrier(ctx, tenantID,
 		"approved-certificate recovery privacy barrier", func(barrierCtx context.Context) error {
@@ -2315,6 +2338,12 @@ func (o *Orchestrator) RecordIncidentExecution(ctx context.Context, tenantID str
 // by the event id so boot reconciliation can recreate a lost right-size intent
 // exactly once.
 func (o *Orchestrator) RecordRemediationPlaybookRun(ctx context.Context, tenantID string, r store.RemediationPlaybookRun, outboxDestination string) (store.RemediationPlaybookRun, error) {
+	ctx, releaseTenant, admissionErr := o.beginTenantCommand(ctx, tenantID)
+	if admissionErr != nil {
+		return store.RemediationPlaybookRun{}, admissionErr
+	}
+	defer releaseTenant()
+
 	if r.ID == "" {
 		r.ID = uuid.NewString()
 	}
@@ -2369,6 +2398,12 @@ func (o *Orchestrator) RecordRemediationPlaybookRun(ctx context.Context, tenantI
 // won the key and compares it with the caller's command, so concurrent changed
 // callers get a conflict and never inherit another caller's response.
 func (o *Orchestrator) RecordConnectorRightSizeOperation(ctx context.Context, tenantID string, r store.RemediationPlaybookRun) (store.RemediationPlaybookRun, error) {
+	ctx, releaseTenant, admissionErr := o.beginTenantCommand(ctx, tenantID)
+	if admissionErr != nil {
+		return store.RemediationPlaybookRun{}, admissionErr
+	}
+	defer releaseTenant()
+
 	identity := ConnectorRightSizeIdentityFor(tenantID, r.IdempotencyKey)
 	if tenantID == "" || r.IdempotencyKey == "" || r.RequestBinding == "" ||
 		r.ID != identity.OperationID || r.ConnectorDeliveryID == nil ||
@@ -2550,7 +2585,7 @@ func (o *Orchestrator) RecordIncidentFleetReissuanceAndEnqueueBatch(
 		return store.IncidentFleetReissuanceRun{}, err
 	}
 	var ev events.Event
-	err = o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	err = o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		ev, err = o.log.Append(ctx, events.Event{
 			Type: projections.EventIncidentFleetReissuanceRecorded, TenantID: tenantID, Data: payload,
 		})

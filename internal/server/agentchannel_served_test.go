@@ -183,6 +183,7 @@ func TestServedAgentSSHInventoryAuthorizedKeysEndToEnd(t *testing.T) {
 	}
 
 	const tenantB = "22222222-2222-2222-2222-222222222222"
+	registerServedTenantID(t, h, tenantB, "SSH inventory neighbor")
 	tokB := seedScopedToken(t, h.store, tenantB, "certs:read")
 	statusCode, body = secretsReq(t, h, http.MethodGet, "/api/v1/ssh/fleet", tokB, nil)
 	if statusCode != http.StatusOK {
@@ -215,6 +216,7 @@ func enrollAgent(t *testing.T, h *servedHarness, cn, serverName string) *agent.A
 // asserting against a hand-built one.
 func enrollAgentWithRoles(t *testing.T, h *servedHarness, cn, serverName string, roles []string) *agent.Agent {
 	t.Helper()
+	prepareServedAgentTenant(t, h)
 	ctx := context.Background()
 	tok, err := h.srv.agentEnroll.IssueBootstrapTokenWithRoles(ctx, h.tenant, "", roles)
 	if err != nil {
@@ -1126,7 +1128,7 @@ func TestServedAgentEndpointDiscoveryCAPDISC02EndToEnd(t *testing.T) {
 // served discovery inventory and the credential graph. Private key material is never
 // read or sent.
 func TestServedTrustStoreCollectorsReportOverAgentChannel(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, withAgentChannel)
+	h := newOperatingServedHarness(t, config.Protocols{}, withAgentChannel)
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)

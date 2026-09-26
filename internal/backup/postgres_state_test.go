@@ -304,8 +304,43 @@ func TestNormalizeLegacyOutboxRowsAddsOnlyNeutralNonSecretAuthorityAUD109(t *tes
 			t.Fatalf("neutral legacy outbox %s=%s, want %s", field, got, want)
 		}
 	}
-	if !bytes.Equal(normalized[1], legacy[1]) {
-		t.Fatalf("secret-sync legacy row was guessed before rebuilt-job reconciliation: got=%s want=%s", normalized[1], legacy[1])
+	var secretBefore, secretAfter map[string]json.RawMessage
+	if err := json.Unmarshal(legacy[1], &secretBefore); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(normalized[1], &secretAfter); err != nil {
+		t.Fatal(err)
+	}
+	delete(secretAfter, "receiver_pending_ids")
+	if !reflect.DeepEqual(secretAfter, secretBefore) {
+		t.Fatalf("secret-sync authority was guessed before rebuilt-job reconciliation: got=%v want=%v", secretAfter, secretBefore)
+	}
+}
+
+func TestRestoreRetainsUnresolvedRemoteDeliveryAttempts(t *testing.T) {
+	for _, tc := range []struct {
+		name, row, want string
+	}{
+		{"unclaimed", `{"attempts":0,"status":"pending"}`, `[]`},
+		{"completed-first", `{"attempts":1,"status":"delivered"}`, `[]`},
+		{"lost-lease", `{"attempts":1,"status":"pending"}`, `["00000000-0000-0000-0000-000000000226"]`},
+		{"multiple-attempts", `{"attempts":2,"status":"delivered"}`, `["00000000-0000-0000-0000-000000000226"]`},
+		{"retained-token", `{"attempts":2,"status":"delivered","receiver_pending_ids":["a9d95fd3-75a0-46a4-adb3-031d2ace937a"]}`, `["a9d95fd3-75a0-46a4-adb3-031d2ace937a"]`},
+		{"known-completion", `{"attempts":2,"status":"delivered","receiver_pending_ids":[]}`, `[]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rows, err := normalizeRemoteDeliveryLifetime([]json.RawMessage{json.RawMessage(tc.row)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var fields map[string]json.RawMessage
+			if err := json.Unmarshal(rows[0], &fields); err != nil {
+				t.Fatal(err)
+			}
+			if got := string(fields["receiver_pending_ids"]); got != tc.want {
+				t.Fatalf("restored unresolved attempts=%s want=%s", got, tc.want)
+			}
+		})
 	}
 }
 

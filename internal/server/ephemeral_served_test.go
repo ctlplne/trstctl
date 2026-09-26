@@ -39,7 +39,7 @@ import (
 // the notification intent through outbox, a distinct approver authorizes it, and
 // a fresh idempotent issue call returns a short-TTL signer-backed credential.
 func TestServedEphemeralPreviewIsExactEffectFreeAndFailClosed(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.EphemeralIssuance = EphemeralIssuanceConfig{
 			Enabled: true, TrustDomain: "served.test", DefaultTTL: 2 * time.Second,
 			MaxTTL: 5 * time.Second, ApprovalTTL: time.Minute, RequiredApprovals: 1,
@@ -115,7 +115,7 @@ func TestServedEphemeralPreviewIsExactEffectFreeAndFailClosed(t *testing.T) {
 
 func TestServedEphemeralUsesTenantOwnedKubernetesTrustSource(t *testing.T) {
 	fixture := servedDynamicK8sTrustFixture(t, "ephemeral-k8s-k1")
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.EphemeralIssuance = EphemeralIssuanceConfig{
 			Enabled: true, TrustDomain: "served.test", DefaultTTL: 2 * time.Minute,
 			MaxTTL: 5 * time.Minute, ApprovalTTL: time.Minute, RequiredApprovals: 1,
@@ -156,7 +156,7 @@ func TestServedEphemeralUsesTenantOwnedKubernetesTrustSource(t *testing.T) {
 }
 
 func TestServedEphemeralJITIssuesAfterAttestationAndApproval(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.EphemeralIssuance = EphemeralIssuanceConfig{
 			Enabled:           true,
 			TrustDomain:       "served.test",
@@ -269,7 +269,7 @@ func TestServedEphemeralJITIssuesAfterAttestationAndApproval(t *testing.T) {
 }
 
 func TestApprovedEphemeralRetryAfterAppendAndSQLRollbackNeverResigns(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.EphemeralIssuance = EphemeralIssuanceConfig{
 			Enabled: true, TrustDomain: "served.test", DefaultTTL: 5 * time.Second,
 			MaxTTL: 5 * time.Second, ApprovalTTL: time.Minute, RequiredApprovals: 1,
@@ -452,7 +452,7 @@ func TestApprovedEphemeralRetryAfterAppendAndSQLRollbackNeverResigns(t *testing.
 }
 
 func TestServedEphemeralApprovalUnknownRequestLeavesZeroState(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.EphemeralIssuance = EphemeralIssuanceConfig{
 			Enabled: true, TrustDomain: "served.test", ApprovalTTL: time.Minute,
 			RequiredApprovals: 1, Attestors: []attest.Attestor{servedEphemeralAttestor{}},
@@ -513,7 +513,7 @@ func TestServedEphemeralApprovalUnknownRequestLeavesZeroState(t *testing.T) {
 // served leaseworker records automatic expiry as api_token.revoked so the bearer
 // token stops working and metadata shows revocation evidence.
 func TestServedEphemeralAPIKeyAutoExpires(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
 		d.DynamicLeaseWorkerInterval = 10 * time.Millisecond
 	})
 	admin := seedScopedTokenSubject(t, h.store, h.tenant, "ephemeral-key-admin", "access:read", "access:write")
@@ -588,7 +588,7 @@ func TestServedEphemeralAPIKeyAutoExpires(t *testing.T) {
 // temporary access token belongs to the access service, but its server-keyed
 // review still uses the deployment KEK without exposing or persisting key bytes.
 func TestServedEphemeralAPIKeyReviewRecoveryAndRevocation(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	admin := seedScopedTokenSubject(t, h.store, h.tenant, "ephemeral-review-admin", "access:read", "access:write")
 	const subject = "ci-reviewed-deploy"
 	request := map[string]any{

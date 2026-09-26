@@ -51,7 +51,7 @@ func (refusingDiagnosticADCS) Issue(context.Context, ca.IssueRequest) (ca.Certif
 // API as the same tenant.
 func TestServedESTAndSCEPRefusalsPersistExactEvidence(t *testing.T) {
 	intuneCfg, _ := servedSCEPIntuneChallenge(t, "unused-valid-device")
-	h := newServedHarness(t, config.Protocols{
+	h := newOperatingServedHarness(t, config.Protocols{
 		EST:                 config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 		SCEP:                config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 		SCEPIntuneChallenge: intuneCfg,
@@ -139,7 +139,7 @@ func TestServedESTAndSCEPRefusalsPersistExactEvidence(t *testing.T) {
 // typed, tenant-scoped row without retaining the upstream status message.
 func TestServedADCSRefusalPersistsSafeExactEvidence(t *testing.T) {
 	const caID = "corp-adcs-aud49"
-	h := newServedHarness(t, config.Protocols{}, func(deps *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(deps *Deps) {
 		deps.ExternalCAs = []ExternalCA{{
 			ID: caID, Type: "adcs", TenantID: servedTestTenant,
 			Endpoint: "https://adcs.example.test/certsrv", CA: refusingDiagnosticADCS{},
@@ -397,7 +397,7 @@ func TestServedEnrollmentDiagnosticProveFixedQueuesAndLinksSignedResult(t *testi
 }
 
 func TestServedEnrollmentDiagnosticWithoutExactRouteRefusesProveFixed(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	diagnosis := enrollmentdiag.Diagnose(enrollmentdiag.ProtocolEST, enrollmentdiag.StepAuthorize,
 		enrollmentdiag.CauseTemplateACLDenied).WithEvidence(enrollmentdiag.Evidence{
 		OperationRef: "est-enroll:aud49-no-route", IdentityRef: "dns:no-route.example.test",
@@ -422,12 +422,10 @@ func TestServedEnrollmentDiagnosticWithoutExactRouteRefusesProveFixed(t *testing
 // a clean replay must all preserve the same boundary.
 func TestServedEnrollmentDiagnosticsAreTenantScopedEvents(t *testing.T) {
 	ctx := context.Background()
-	h := newServedHarness(t, config.Protocols{
+	h := newOperatingServedHarness(t, config.Protocols{
 		ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 	})
-	if err := h.store.UpsertTenant(ctx, store.Tenant{TenantID: servedDiagnosticTenantB, Name: "diagnostic tenant B"}); err != nil {
-		t.Fatalf("seed tenant B: %v", err)
-	}
+	registerServedTenantID(t, h, servedDiagnosticTenantB, "diagnostic tenant B")
 	tokenA := seedScopedToken(t, h.store, h.tenant, "certs:read")
 	tokenB := seedScopedToken(t, h.store, servedDiagnosticTenantB, "certs:read")
 

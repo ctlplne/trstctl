@@ -52,6 +52,7 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
+	"trstctl.com/trstctl/internal/agent/enroll"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/crypto"
@@ -192,6 +193,7 @@ func (i agentCAIssuer) SignClientCSRWithTenant(
 	tenantID string,
 	roles []string,
 	ttl time.Duration,
+	authorityURIs ...string,
 ) ([]byte, error) {
 	cn := ""
 	if parsed, err := mtls.CSRCommonName(csrDER); err == nil {
@@ -205,6 +207,7 @@ func (i agentCAIssuer) SignClientCSRWithTenant(
 	for _, role := range mtls.NormalizeAgentRoles(roles) {
 		roleURIs = append(roleURIs, mtls.AgentRoleSPIFFEID(tenantID, cn, role))
 	}
+	roleURIs = append(roleURIs, authorityURIs...)
 	return crypto.SignAgentClientCSR(i.caCertDER, i.caSigner, csrDER, spiffeURI, roleURIs, ttl)
 }
 
@@ -466,6 +469,36 @@ func peerInfo(ctx context.Context) (mtls.PeerCertInfo, error) {
 // public serial/fingerprint has been revoked for this tenant + agent. This check
 // runs per RPC, so a certificate revoked after a connection is established stops
 // subsequent heartbeat, renewal, and inventory work on that same connection.
+func (a *agentService) beginPeerWork(ctx context.Context) (context.Context, mtls.PeerCertInfo, func(), error) {
+	return a.beginPeerOperation(ctx, a.peerInfo)
+}
+
+// beginPeerOperation holds the tenant lifetime through authentication and all
+// result writes. Receipt-only recovery supplies an identity check that preserves
+// certificate authority while leaving service admission to its terminal handler.
+func (a *agentService) beginPeerOperation(ctx context.Context, check func(context.Context) (mtls.PeerCertInfo, error)) (context.Context, mtls.PeerCertInfo, func(), error) {
+	// Derive the tenant from verified mTLS before acquiring a lifetime. Then
+	// repeat live revocation and service admission under that lifetime so a
+	// lifecycle change cannot cross the admitted RPC's effects/result writes.
+	info, err := peerInfo(ctx)
+	if err != nil {
+		return ctx, mtls.PeerCertInfo{}, nil, err
+	}
+	if a.store == nil {
+		return ctx, mtls.PeerCertInfo{}, nil, status.Error(codes.FailedPrecondition, "agent revocation store is not configured")
+	}
+	work, release, err := a.store.BeginTenantService(ctx, info.TenantID)
+	if err != nil {
+		return ctx, mtls.PeerCertInfo{}, nil, status.Error(codes.Unavailable, "tenant work is in progress; retry later")
+	}
+	info, err = check(work)
+	if err != nil {
+		release()
+		return ctx, mtls.PeerCertInfo{}, nil, err
+	}
+	return work, info, release, nil
+}
+
 func (a *agentService) peerInfo(ctx context.Context) (mtls.PeerCertInfo, error) {
 	info, err := peerInfo(ctx)
 	if err != nil {
@@ -479,6 +512,20 @@ func (a *agentService) peerInfo(ctx context.Context) (mtls.PeerCertInfo, error) 
 			return mtls.PeerCertInfo{}, status.Error(codes.PermissionDenied, err.Error())
 		}
 		return mtls.PeerCertInfo{}, status.Error(codes.Unavailable, "tenant service authority is unavailable")
+	}
+	return a.checkedPeerIdentity(ctx, info)
+}
+
+// checkedPeerIdentity is common to ordinary work and receipt-only recovery.
+// Tenant restriction can stop work without revoking the identity's authority to
+// report completion; certificate revocation/offboarding and registration reuse
+// still invalidate that authority in both paths.
+func (a *agentService) checkedPeerIdentity(ctx context.Context, info mtls.PeerCertInfo) (mtls.PeerCertInfo, error) {
+	if _, err := agentCertificateAuthorityURIs(ctx, a.store, a.log, info.TenantID, info.LeafDER); err != nil {
+		if errors.Is(err, enroll.ErrUnauthenticatedRenewal) || errors.Is(err, store.ErrApplicationSecretTenantEpochMismatch) {
+			return mtls.PeerCertInfo{}, status.Error(codes.PermissionDenied, "agent certificate does not match the current tenant registration; enroll again")
+		}
+		return mtls.PeerCertInfo{}, status.Error(codes.Unavailable, "agent tenant registration authority is unavailable")
 	}
 	agentID := agentRowID(info.TenantID, info.CommonName)
 	revoked, err := a.store.AgentCertRevoked(ctx, info.TenantID, agentID, info.Serial, info.FingerprintSHA256)
@@ -512,10 +559,11 @@ func (a *agentService) Heartbeat(ctx context.Context, req *transport.HeartbeatRe
 }
 
 func (a *agentService) heartbeat(ctx context.Context, req *transport.HeartbeatRequest) (*transport.HeartbeatResponse, error) {
-	info, err := a.peerInfo(ctx)
+	ctx, info, release, err := a.beginPeerWork(ctx)
 	if err != nil {
 		return nil, err
 	}
+	defer release()
 	// The agent id/name is the certificate's common name — the attacker-proof
 	// identity — not the request's AgentID (which is advisory/observability only).
 	name := info.CommonName
@@ -735,10 +783,11 @@ func validatedEnrollmentProxyReport(report *transport.EnrollmentProxyReport) (*p
 // certificate for the wrong key (AN-5). It emits agent.cert.renewed
 // (AN-2). The agent's private key never reaches the control plane; only its CSR does.
 func (a *agentService) Renew(ctx context.Context, req *transport.RenewRequest) (*transport.RenewResponse, error) {
-	info, err := a.peerInfo(ctx)
+	ctx, info, release, err := a.beginPeerWork(ctx)
 	if err != nil {
 		return nil, err
 	}
+	defer release()
 	if len(req.CSRDER) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "renewal requires a CSR")
 	}
@@ -758,6 +807,11 @@ func (a *agentService) Renew(ctx context.Context, req *transport.RenewRequest) (
 	for _, role := range mtls.NormalizeAgentRoles(info.Roles) {
 		roleURIs = append(roleURIs, mtls.AgentRoleSPIFFEID(info.TenantID, info.CommonName, role))
 	}
+	bindings, err := agentCertificateAuthorityURIs(ctx, a.store, a.log, info.TenantID, info.LeafDER)
+	if err != nil {
+		return nil, status.Error(codes.Unavailable, "agent tenant registration authority is unavailable")
+	}
+	roleURIs = append(roleURIs, bindings...)
 	// AN-5: the raw slot is the agent + serial it presented, while the immutable
 	// binding is the exact CSR digest. A byte-identical retry returns the original
 	// chain; a different CSR cannot read those cached public certificate bytes and
@@ -809,10 +863,11 @@ func (a *agentService) Renew(ctx context.Context, req *transport.RenewRequest) (
 // records every valid finding through orchestrator discovery events (AN-2); no
 // read-model table is mutated directly.
 func (a *agentService) ReportInventory(ctx context.Context, req *transport.InventoryRequest) (*transport.InventoryResponse, error) {
-	info, err := a.peerInfo(ctx)
+	ctx, info, release, err := a.beginPeerWork(ctx)
 	if err != nil {
 		return nil, err
 	}
+	defer release()
 	if a.orch == nil {
 		return nil, status.Error(codes.FailedPrecondition, "agent inventory orchestrator is not configured")
 	}

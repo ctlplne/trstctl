@@ -16,7 +16,7 @@ import (
 )
 
 func TestServedPKISecretCSRFirstAndLegacyEvidence(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
 	token := seedScopedToken(t, h.store, h.tenant,
 		"secrets:read", "secrets:write", "audit:read",
 	)
@@ -150,7 +150,7 @@ func TestServedPKISecretCSRFirstAndLegacyEvidence(t *testing.T) {
 }
 
 func TestServedPKISecretRequiresExactlyOneCustodyMode(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
 	token := seedScopedToken(t, h.store, h.tenant, "secrets:write")
 	for name, tc := range map[string]struct {
 		body       any
@@ -176,7 +176,7 @@ func TestServedPKISecretRequiresExactlyOneCustodyMode(t *testing.T) {
 }
 
 func TestServedPKILegacyModeFailsClosedBeforeKeygenWhenEvidenceIsUnavailable(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
 	token := seedScopedToken(t, h.store, h.tenant, "secrets:write")
 	if err := h.log.Close(); err != nil {
 		t.Fatalf("stop event log: %v", err)
@@ -194,7 +194,7 @@ func TestServedPKILegacyModeFailsClosedBeforeKeygenWhenEvidenceIsUnavailable(t *
 }
 
 func TestServedVaultPKISignKeepsRequesterKeyAndIssueRecordsLegacyChoice(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
 	token := seedScopedToken(t, h.store, h.tenant,
 		"secrets:read", "secrets:write", "audit:read", "policy:read", "policy:write",
 	)

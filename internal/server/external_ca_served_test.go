@@ -60,7 +60,7 @@ func TestServedExternalCARegistryIssuesViaConfiguredBackends(t *testing.T) {
 	}
 	t.Cleanup(le.Destroy)
 
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
 		d.ExternalCAs = []ExternalCA{
 			{ID: "digicert", Type: "digicert", CA: digicert.New("digicert", dc.URL(), []byte(dc.APIKey()), digicert.WithHTTPClient(&http.Client{Timeout: 5 * time.Second}))},
@@ -109,7 +109,7 @@ func TestExternalCAResponseWaitsForIssueRecordCommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(dc.Close)
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
 		d.ExternalCAs = []ExternalCA{{
 			ID:   "digicert",
@@ -254,7 +254,7 @@ func TestExternalCAResponseWaitsForIssueRecordCommit(t *testing.T) {
 }
 
 func TestServedDirectCADiscoveryInventoryCAPDISC04(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
 		d.ExternalCAs = []ExternalCA{
 			{ID: "digicert-prod", Type: "digicert", CA: newIdempotentExternalCA("digicert-prod")},
@@ -330,7 +330,7 @@ func TestExternalCAOutboxIntentExistsBeforeProviderIssue(t *testing.T) {
 	guard := &externalCAIntentGuard{
 		key: issueKey,
 	}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
 		guard.store = d.Store
 		d.ExternalCAs = []ExternalCA{{ID: caID, Type: "guarded", CA: guard}}
@@ -363,7 +363,7 @@ func TestExternalCAIssueNeverDrainsUnrelatedWorkOnRequestPath(t *testing.T) {
 	)
 	t.Cleanup(set.Close)
 	blocked := &externalCABlockingProbe{name: unrelatedCA}
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.Bulkhead = set
 		d.ExternalCAs = []ExternalCA{
 			{ID: targetCA, Type: "probe", CA: newIdempotentExternalCA(targetCA)},
@@ -437,7 +437,7 @@ func TestExternalCAOutboxCrashRecovery(t *testing.T) {
 	upstream.requireOutboxWorker = true
 	upstream.tenantID = servedTestTenant
 	upstream.outboxKey = idemKey + ":external-ca:" + caID
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
 		upstream.store = d.Store
 		d.ExternalCAs = []ExternalCA{{ID: caID, Type: "crashy", CA: upstream, ReplaySafety: ca.ExternalIssueReconciled}}
@@ -492,7 +492,7 @@ func TestExternalCARetryDoesNotDoubleMint(t *testing.T) {
 	upstream.requireOutboxWorker = true
 	upstream.tenantID = servedTestTenant
 	upstream.outboxKey = idemKey + ":external-ca:" + caID
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
 		upstream.store = d.Store
 		d.ExternalCAs = []ExternalCA{{ID: caID, Type: "idempotent", CA: upstream}}
@@ -519,7 +519,7 @@ func TestExternalCAReplaySurvivesResponseAndOutboxGCAndRejectsChangedCaller(t *t
 		dnsName = "svc.external-ca-durable-binding.test"
 	)
 	upstream := newIdempotentExternalCA(caID)
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
 		d.ExternalCAs = []ExternalCA{{ID: caID, Type: "test", CA: upstream}}
 	})
@@ -581,7 +581,7 @@ func TestExternalCAReplaySurvivesResponseAndOutboxGCAndRejectsChangedCaller(t *t
 
 func TestExternalCASanitizeUpstreamErrors(t *testing.T) {
 	const caID = "leaky"
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
 		d.ExternalCAs = []ExternalCA{{
 			ID:   caID,

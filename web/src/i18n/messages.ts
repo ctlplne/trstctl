@@ -15271,6 +15271,33 @@ export const messages = {
     defaultMessage: "Offboard this customer? This begins deleting their tenancy and cannot be undone.",
     description: "L3: offboard confirmation.",
   },
+  "provider.offboard.pending": { defaultMessage: "Offboarding pending", description: "Customer deletion has not completed." },
+  "provider.offboard.completed": {
+    defaultMessage: "Deletion verified",
+    description: "The durable completion record confirms the deletion operation finished.",
+  },
+  "provider.offboard.continue": {
+    defaultMessage: "Continue offboarding",
+    description: "Resume the original authorized deletion using its durable request reference.",
+  },
+  "provider.offboard.continueConfirm": {
+    defaultMessage: "Continue this previously authorized deletion? It cannot be undone.",
+    description: "Confirmation for continuing the original deletion, never authorizing a new customer lifecycle.",
+  },
+  "provider.offboard.failed": { defaultMessage: "Offboarding needs review", description: "Customer deletion refused after its authorized state changed." },
+  "provider.offboard.pendingHelp": {
+    defaultMessage: "Customer access remains blocked. Deletion is not yet confirmed. Check recent activity before taking further action.",
+    description: "Pending deletion must not be represented as success.",
+  },
+  "provider.offboard.failedHelp": {
+    defaultMessage: "Customer access remains blocked. Review the customer before submitting a new deletion request.",
+    description: "Refused deletion requires a new authorized decision.",
+  },
+  "provider.offboard.review": { defaultMessage: "Review offboarding", description: "Action for a refused deletion." },
+  "provider.offboard.reviewConfirm": {
+    defaultMessage: "Review this customer before continuing. Submit a new deletion request for its current state? This cannot be undone.",
+    description: "Fresh confirmation after a refused deletion.",
+  },
   "source.provider.offboard.l3prov0021": {
     defaultMessage: "Offboard",
     description: "L3: offboard action.",

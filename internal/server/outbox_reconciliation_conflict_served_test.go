@@ -96,6 +96,8 @@ func TestBuildQuarantinesHistoricalOutboxConflictAndServesRecoveryIncidentAUD97(
 		t.Fatalf("open event log: %v", err)
 	}
 	t.Cleanup(func() { _ = log.Close() })
+	registerServerTestTenant(t, st, log, tenantA, "warehouse")
+	registerServerTestTenant(t, st, log, tenantB, "unrelated")
 
 	oldPayload := aud97TransitionPayload(t, oldID, "issued", "deployed", requestKey)
 	outbox := orchestrator.NewOutbox(st)

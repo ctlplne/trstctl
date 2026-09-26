@@ -16,7 +16,9 @@ import (
 func (p *PGStore) RequireCustomerService(ctx context.Context, tenantID string) error {
 	tenant, err := p.Tenant(ctx, tenantID)
 	if errors.Is(err, ErrNotFound) {
-		return nil
+		// Recovery can fold a retained deletion before core's SQL erase has
+		// completed. Missing Provider metadata must not reopen that customer.
+		return p.store.RequireLiveTenantService(ctx, tenantID)
 	}
 	if err != nil {
 		return err

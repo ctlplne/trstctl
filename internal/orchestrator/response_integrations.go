@@ -118,7 +118,7 @@ func (o *Orchestrator) DispatchResponseIntegrations(ctx context.Context, tenantI
 		ID: req.ID, TenantID: tenantID, Status: "queued",
 		Destinations: make([]ResponseIntegrationQueuedDestination, 0, len(req.Destinations)),
 	}
-	if err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	if err := o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
 		var err error
 		ev, err = o.log.Append(ctx, events.Event{Type: projections.EventResponseIntegrationDispatched, TenantID: tenantID, Data: payload})
 		if err != nil {

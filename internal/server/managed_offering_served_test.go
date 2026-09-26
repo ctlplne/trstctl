@@ -21,6 +21,7 @@ import (
 
 func TestServedManagedOfferingCAPMODEL02EndToEnd(t *testing.T) {
 	community := newServedHarnessWithEventOptions(t, config.Protocols{}, []events.OpenOption{events.WithRequiredPrivacyEventPolicies()})
+	registerServedTenant(t, community, "Core managed offering fixture")
 	communityToken := seedScopedToken(t, community.store, community.tenant, "access:read", "access:write")
 	status, body := doBearer(t, community.ts, http.MethodGet, "/api/v1/managed-offering/status", communityToken, "", nil)
 	if status != http.StatusOK {
@@ -48,6 +49,7 @@ func TestServedManagedOfferingCAPMODEL02EndToEnd(t *testing.T) {
 	provider := newServedHarnessWithEventOptions(t, config.Protocols{}, []events.OpenOption{events.WithRequiredPrivacyEventPolicies()}, func(d *Deps) {
 		d.License = testManagedOfferingLicenseManager(t)
 	})
+	registerServedTenant(t, provider, "Provider managed offering fixture")
 	providerToken := seedScopedTokenSubject(t, provider.store, provider.tenant, "provider-admin", "access:read", "access:write")
 
 	status, body = doBearer(t, provider.ts, http.MethodGet, "/api/v1/managed-offering/status", providerToken, "", nil)

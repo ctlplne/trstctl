@@ -25,7 +25,7 @@ func TestServedExternalCARegistryIssuesViaVenafiTPPMock(t *testing.T) {
 	}
 	t.Cleanup(tpp.Close)
 
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
 		d.ExternalCAs = []ExternalCA{{
 			ID:   "venafi",

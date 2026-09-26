@@ -16,7 +16,7 @@ import (
 // browser session for the same requester recovers that exact command, while a
 // different requester or changed reason cannot inherit its approval authority.
 func TestServedLifecyclePreviewBindsRequesterAndRecoversApprovedCommand(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.RequireApproval = true
 		d.RequiredApprovals = 1
 	})

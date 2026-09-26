@@ -23,7 +23,7 @@ func TestServedCBOMRetainsObservedCertificateFingerprint(t *testing.T) {
 		t.Fatal(err)
 	}
 	expected := crypto.SHA256Hex(endpoint.Certificate().Raw)
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	token := seedScopedToken(t, h.store, h.tenant, "discovery:write", "risk:read")
 	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/cbom/scans", token, "cbom-observed-leaf", map[string]any{"tls_endpoints": []string{address.Host}})
 	if status != http.StatusCreated {

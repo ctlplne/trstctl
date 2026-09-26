@@ -44,6 +44,7 @@ func TestServedLargeAuditExportOffersRecordStreamWithoutRaisingSignerLimit(t *te
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = log.Close() })
+	registerServerTestTenant(t, st, log, tenantID, "bounded export")
 	for n := 0; n < 17; n++ {
 		note := "small public control"
 		if n > 0 {
@@ -79,7 +80,7 @@ func TestServedLargeAuditExportOffersRecordStreamWithoutRaisingSignerLimit(t *te
 	if err := json.Unmarshal(body, &problemBody); err != nil || problemBody.Code != "audit_export_too_large" || problemBody.Status != http.StatusRequestEntityTooLarge {
 		t.Fatalf("unstable size problem: %s error=%v", body, err)
 	}
-	code, body = doBearer(t, ts, http.MethodGet, "/api/v1/audit/export?limit=1", token, "", nil)
+	code, body = doBearer(t, ts, http.MethodGet, "/api/v1/audit/export?limit=2", token, "", nil)
 	if code != http.StatusOK {
 		t.Fatalf("small JWS = %d %s", code, body)
 	}
@@ -88,16 +89,28 @@ func TestServedLargeAuditExportOffersRecordStreamWithoutRaisingSignerLimit(t *te
 		t.Fatal(err)
 	}
 	bundle, err := audit.VerifyBundle(envelope.Bundle, key.JWKS())
-	if err != nil || bundle.Count != 1 {
+	if err != nil || bundle.Count != 2 || len(bundle.Records) != 2 {
 		t.Fatalf("small signed export: count=%d error=%v", bundle.Count, err)
+	}
+	var smallControlRetained bool
+	for _, record := range bundle.Records {
+		if record.Type == "audit.export.size-control" && bytes.Contains(record.Data, []byte(`"ordinal":0`)) {
+			smallControlRetained = true
+		}
+	}
+	if !smallControlRetained {
+		t.Fatal("small signed export omitted the public size-control record")
 	}
 	code, body = doBearer(t, ts, http.MethodGet, "/api/v1/audit/export?limit=10000&format=ndjson", token, "", nil)
 	if code != http.StatusOK {
 		t.Fatalf("full NDJSON = %d %s", code, body)
 	}
 	lines := bytes.Split(bytes.TrimSpace(body), []byte("\n"))
-	if len(lines) != 18 || !bytes.Contains(lines[17], []byte(`"chain_trailer"`)) {
+	if len(lines) != 19 || !bytes.Contains(lines[18], []byte(`"chain_trailer"`)) {
 		t.Fatalf("full stream omitted records or trailer: %d lines", len(lines))
+	}
+	if bytes.Count(body, []byte(`"type":"audit.export.size-control"`)) != 17 {
+		t.Fatal("full stream omitted one of the large-export control records")
 	}
 }
 

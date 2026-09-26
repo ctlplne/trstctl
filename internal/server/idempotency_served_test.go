@@ -15,7 +15,7 @@ import (
 )
 
 func TestServedIssueTransitionBindsOutboxToRequestIdempotencyKey(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
+	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
 	token := seedScopedToken(t, h.store, h.tenant,
 		"owners:write",
 		"issuers:write",
@@ -222,7 +222,7 @@ func TestServedMutationIdempotencyReplayMatrix(t *testing.T) {
 }
 
 func TestServedMutationRequiresIdempotencyKeyHeaderNotWrongHeader(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	token := seedScopedToken(t, h.store, h.tenant, "owners:write")
 	body := map[string]any{"kind": "workload", "name": "arch-002-owner"}
 

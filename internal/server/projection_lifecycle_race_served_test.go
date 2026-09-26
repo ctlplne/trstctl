@@ -23,7 +23,7 @@ import (
 // must converge without a unique-key poison, a process restart, or a stranded
 // unrelated event behind the burst.
 func TestServedDefaultWindowRenewalBurstConvergesWithLiveTail(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.LifecycleRenewBefore = 720 * time.Hour
 	})
 	tok := seedScopedToken(t, h.store, h.tenant,

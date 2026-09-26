@@ -21,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tenancy"
 	"trstctl.com/trstctl/internal/tenantseal"
 )
 
@@ -232,6 +233,14 @@ func (a *API) vaultAuth(perm authz.Permission, h http.HandlerFunc) http.HandlerF
 		}
 		if !tenantHeaderMatchesPrincipal(r, principal) {
 			writeVaultError(w, http.StatusForbidden, "permission denied")
+			return
+		}
+		if err := a.checkTenantService(r, principal.TenantID); err != nil {
+			if errors.Is(err, tenancy.ErrServiceUnavailable) {
+				writeVaultError(w, http.StatusForbidden, "tenant service is suspended or offboarded")
+			} else {
+				writeVaultError(w, http.StatusServiceUnavailable, "tenant service authority is unavailable; retry later")
+			}
 			return
 		}
 		if perm != "" {

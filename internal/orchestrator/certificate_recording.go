@@ -28,6 +28,12 @@ func (o *Orchestrator) RecordCertificateEvent(ctx context.Context, event events.
 }
 
 func (o *Orchestrator) emitCertificateRecording(ctx context.Context, next events.Event) (events.Event, error) {
+	ctx, releaseTenant, admissionErr := o.beginTenantCommand(ctx, next.TenantID)
+	if admissionErr != nil {
+		return events.Event{}, admissionErr
+	}
+	defer releaseTenant()
+
 	material, recording, err := projections.CertificateRecordingMaterial(next)
 	if err != nil {
 		return events.Event{}, err

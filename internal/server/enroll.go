@@ -61,6 +61,8 @@ func (e enrollAuthority) CABundlePEM() []byte { return e.a.CABundlePEM() }
 // maps to enroll.ErrBadToken so the transport returns a coarse 401.
 type storeTokenStore struct{ st *store.Store }
 
+var _ enroll.TokenRedemptionValidator = storeTokenStore{}
+
 func (s storeTokenStore) Save(ctx context.Context, t enroll.MintedToken) error {
 	_, err := s.st.CreateBootstrapToken(ctx, store.BootstrapTokenRecord{
 		TenantID:        t.TenantID,
@@ -84,8 +86,17 @@ func (s storeTokenStore) Redeem(
 		return enroll.RedeemedToken{}, err
 	}
 	return enroll.RedeemedToken{
+		ID:              rec.ID,
 		TenantID:        rec.TenantID,
 		AllowedIdentity: rec.AllowedIdentity,
 		Roles:           rec.GrantedRoles,
 	}, nil
+}
+
+func (s storeTokenStore) ValidateRedemption(ctx context.Context, hash string, redeemed enroll.RedeemedToken) error {
+	err := s.st.ValidateBootstrapTokenRedemption(ctx, redeemed.TenantID, redeemed.ID, hash)
+	if store.IsNotFound(err) {
+		return enroll.ErrBadToken
+	}
+	return err
 }

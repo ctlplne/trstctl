@@ -182,7 +182,7 @@ func TestServedPKCS11ManagedKeyLifecycleCAPKEY01(t *testing.T) {
 	backend := pkcs11.New(session)
 	var lifecycle crypto.RemoteKeyLifecycle = backend
 
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.ManagedKeyFactory = func(md ManagedKeyServiceDeps) (api.ManagedKeyService, error) {
 			if md.Log == nil || md.Idempotency == nil {
 				t.Fatal("managed-key PKCS#11 factory did not receive event log and idempotency spine")
@@ -252,7 +252,7 @@ func TestServedInHSMNonExtractableGenerationCAPKEY04(t *testing.T) {
 	backend := pkcs11.New(session)
 	var lifecycle crypto.RemoteKeyLifecycle = backend
 
-	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.ManagedKeyFactory = func(md ManagedKeyServiceDeps) (api.ManagedKeyService, error) {
 			if md.Log == nil || md.Idempotency == nil {
 				t.Fatal("managed-key PKCS#11 factory did not receive event log and idempotency spine")

@@ -59,7 +59,7 @@ func openRequest(t *testing.T, h *servedHarness, tok, key, subject string) serve
 // A requester must not be able to approve their own request over HTTP. The unit
 // test proves CanDecide refuses; this proves the served path actually calls it.
 func TestServedRequesterCannotApproveTheirOwnRequest(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedTokenSubject(t, h.store, h.tenant, "alice@example.com", "certs:request", "certs:issue")
 	req := openRequest(t, h, tok, "i3-self-approve", "payments.example.com")
 	if req.Requester != "alice@example.com" {
@@ -78,7 +78,7 @@ func TestServedRequesterCannotApproveTheirOwnRequest(t *testing.T) {
 
 // A denial must carry a reason, and must be final.
 func TestServedDenialCarriesAReasonAndIsFinal(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	alice := seedScopedTokenSubject(t, h.store, h.tenant, "alice@example.com", "certs:request")
 	bob := seedScopedTokenSubject(t, h.store, h.tenant, "bob@example.com", "certs:request", "certs:issue")
 	req := openRequest(t, h, alice, "i3-deny", "api.example.com")
@@ -120,7 +120,7 @@ func TestServedDenialCarriesAReasonAndIsFinal(t *testing.T) {
 // Only the requester may withdraw. Somebody else closing it is a denial and has
 // to be recorded as one, with a reason.
 func TestServedOnlyTheRequesterCanCancel(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	alice := seedScopedTokenSubject(t, h.store, h.tenant, "alice@example.com", "certs:request")
 	bob := seedScopedTokenSubject(t, h.store, h.tenant, "bob@example.com", "certs:request", "certs:issue")
 	req := openRequest(t, h, alice, "i3-cancel", "cancel.example.com")
@@ -140,7 +140,7 @@ func TestServedOnlyTheRequesterCanCancel(t *testing.T) {
 
 // The expiry sweep must close overdue requests with NO decider.
 func TestServedExpirySweepClosesWithoutAttributingADecision(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	alice := seedScopedTokenSubject(t, h.store, h.tenant, "alice@example.com", "certs:request")
 	req := openRequest(t, h, alice, "i3-expiry", "expiring.example.com")
 
@@ -175,7 +175,7 @@ func TestServedExpirySweepClosesWithoutAttributingADecision(t *testing.T) {
 // The list surface must serve closed requests too: an auditor asking what was
 // DENIED needs them as much as the queue needs the pending ones.
 func TestServedListIncludesClosedRequestsAndCountsOpenSeparately(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	alice := seedScopedTokenSubject(t, h.store, h.tenant, "alice@example.com", "certs:request", "certs:read")
 	bob := seedScopedTokenSubject(t, h.store, h.tenant, "bob@example.com", "certs:request", "certs:issue")
 	open := openRequest(t, h, alice, "i3-list-open", "open.example.com")
@@ -214,7 +214,7 @@ func TestServedListIncludesClosedRequestsAndCountsOpenSeparately(t *testing.T) {
 // proving that asking the question created no event, projection, idempotency
 // receipt, outbox intent, identity, or certificate.
 func TestServedIssuanceRequestPreviewIsEffectFreeAndMatchesAdmission(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	admin := seedScopedTokenSubject(t, h.store, h.tenant, "preview-admin@example.test",
 		string(authz.OwnersWrite), string(authz.ProfilesWrite))
 	requester := seedScopedTokenSubject(t, h.store, h.tenant, "preview-requester@example.test",
@@ -330,8 +330,9 @@ func TestServedIssuanceRequestPreviewIsEffectFreeAndMatchesAdmission(t *testing.
 }
 
 func TestServedIssuanceRequestPreviewNamesConfigurationBlockersWithoutTenantLeakage(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	const otherTenant = "22222222-2222-2222-2222-222222222222"
+	registerServedTenantID(t, h, otherTenant, "Other operating tenant")
 	otherOwnerID := createAUD78Owner(t, h, otherTenant, "Other tenant")
 	requester := seedScopedTokenSubject(t, h.store, h.tenant, "preview-requester@example.test",
 		string(authz.CertsRequest))
@@ -341,6 +342,10 @@ func TestServedIssuanceRequestPreviewNamesConfigurationBlockersWithoutTenantLeak
 		return secretsReq(t, h, http.MethodPost, "/api/v1/issuance-requests/preview", requester, map[string]any{
 			"subject": "payments-api", "owner_id": ownerID, "profile": profile,
 		})
+	}
+	before, err := h.log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatal(err)
 	}
 	missingOwner := "33333333-3333-4333-8333-333333333333"
 	otherStatus, otherBody := preview(otherOwnerID, "missing-profile:1")
@@ -370,9 +375,9 @@ func TestServedIssuanceRequestPreviewNamesConfigurationBlockersWithoutTenantLeak
 	if status != http.StatusUnprocessableEntity {
 		t.Fatalf("blocked admission: status %d body %s", status, body)
 	}
-	if head, err := h.log.LastSequence(t.Context()); err != nil || head != 1 {
-		// createAUD78Owner appended exactly one event for the other tenant. A
-		// refused request must not append a second one in either tenant.
+	if head, err := h.log.LastSequence(t.Context()); err != nil || head != before {
+		// Both tenants and the foreign owner already exist. Neither preview
+		// nor refused admission may append an event in either tenant.
 		t.Fatalf("blocked admission changed event head: head=%d err=%v", head, err)
 	}
 }
@@ -383,7 +388,7 @@ func TestServedIssuanceRequestPreviewNamesConfigurationBlockersWithoutTenantLeak
 // This drives the complete public path and proves the bridge reuses the normal
 // identity mutation gate, requester-held CSR, outbox, signer, and inventory.
 func TestServedApprovedIssuanceRequestCanBePreparedIssuedAndCompleted(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{})
+	h := newOperatingServedHarness(t, config.Protocols{})
 	admin := seedScopedTokenSubject(t, h.store, h.tenant, "request-admin@example.test",
 		string(authz.OwnersWrite), string(authz.ProfilesWrite))
 	requester := seedScopedTokenSubject(t, h.store, h.tenant, "requester@example.test",

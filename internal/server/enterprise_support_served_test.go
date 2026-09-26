@@ -16,7 +16,7 @@ import (
 )
 
 func TestServedEnterpriseSupportCAPMODEL04EndToEnd(t *testing.T) {
-	community := newServedHarness(t, config.Protocols{})
+	community := newOperatingServedHarness(t, config.Protocols{})
 	communityToken := seedScopedToken(t, community.store, community.tenant, "access:read")
 	status, body := doBearer(t, community.ts, http.MethodGet, "/api/v1/support/enterprise", communityToken, "", nil)
 	if status != http.StatusOK {
@@ -46,7 +46,7 @@ func TestServedEnterpriseSupportCAPMODEL04EndToEnd(t *testing.T) {
 		}
 	}
 
-	enterprise := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+	enterprise := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.License = testEnterpriseSupportLicenseManager(t)
 	})
 	enterpriseToken := seedScopedToken(t, enterprise.store, enterprise.tenant, "access:read")

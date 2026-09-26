@@ -34,7 +34,7 @@ func (s *Server) ACMEARIPosture(
 	}
 
 	var publisher interface {
-		LookupRenewalInfo(string, time.Time) (ari.RenewalInfo, bool)
+		LookupRenewalInfoContext(context.Context, string, time.Time) (ari.RenewalInfo, bool, error)
 	}
 	if s.protocols != nil &&
 		s.protocols.acme != nil &&
@@ -66,7 +66,11 @@ func (s *Server) ACMEARIPosture(
 				item.ARICertificateID = certID
 				item.PublicationStatus = api.ACMEARICertificateNotPublished
 				if publisher != nil {
-					if info, published := publisher.LookupRenewalInfo(certID, at); published {
+					info, published, err := publisher.LookupRenewalInfoContext(ctx, certID, at)
+					if err != nil {
+						return api.ACMEARIPosture{}, "", err
+					}
+					if published {
 						item.PublicationStatus = api.ACMEARICertificatePublished
 						item.SuggestedWindow = &api.ACMEARIWindow{
 							Start: info.SuggestedWindow.Start.UTC(),

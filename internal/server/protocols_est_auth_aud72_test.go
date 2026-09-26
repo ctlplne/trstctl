@@ -12,7 +12,7 @@ import (
 )
 
 func TestServedESTBearerChallengeAUD72(t *testing.T) {
-	h := newServedHarness(t, config.Protocols{
+	h := newOperatingServedHarness(t, config.Protocols{
 		EST: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
 	})
 
