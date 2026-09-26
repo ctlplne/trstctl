@@ -1136,7 +1136,9 @@ func (a *agentService) recordAgentJobEvent(ctx context.Context, tenantID, eventT
 	if err != nil {
 		return
 	}
-	_, _ = a.log.Append(ctx, events.Event{Type: eventType, TenantID: tenantID, Data: body})
+	if _, err := a.log.Append(ctx, events.Event{Type: eventType, TenantID: tenantID, Data: body}); err != nil && a.logger != nil {
+		a.logger.Error("agent job audit event could not be stored", slog.String("tenant_id", tenantID), slog.String("event_type", eventType))
+	}
 }
 
 // GetKinds is the nil-safe read the handler uses.

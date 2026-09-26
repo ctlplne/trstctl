@@ -1999,6 +1999,19 @@ record is one the control plane could not have produced. The statement and the
 signature are stored on the event and in a receipt ledger, so the check can be
 repeated later by someone who does not trust that it happened the first time.
 
+The production event log checks an explicit, closed payload schema for agent
+claims, refusals, signing, credential redemption, workload issuance and terminal
+reports. Unexpected fields or undeclared schema versions are refused. Privacy
+erasure cannot rewrite a signed terminal report: it refuses that rewrite rather
+than changing the bytes covered by the signature.
+
+Agent audit publication is best-effort after the operation's state change. If the
+event append fails, the server logs `agent job audit event could not be stored`
+with the tenant and event type, without the payload. Investigate that error and
+compare the job and retained receipt with the event history; a successful agent
+response alone does not establish that its audit event was retained. Publication
+does not automatically retry a missing event after the operation completes.
+
 Anything that does not verify is refused fail-closed, with an
 `agent.job.receipt.rejected` audit event and a counter on Operations: unsigned,
 signed by a key that is not the connection's certificate, altered after signing,

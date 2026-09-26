@@ -189,6 +189,30 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 			catalogPrivacyShapeOptions{Optional: []string{
 				"/seq", "/order/issuance_key", "/order/auth_mode", "/order/cert_id", "/order/replaces", "/order/attested_key_sha256",
 			}}), true
+	case "agent.jobs.claimed":
+		return shape(`{"agent":"","count":1,"kinds":[""]}`), true
+	case "agent.jobs.role_refused":
+		return shape(`{"agent":"","roles":[""],"refused_kinds":[""]}`), true
+	case "agent.jobs.envelope_refused":
+		return shape(`{"agent":"","job_id":1,"kind":""}`), true
+	case "agent.jobs.csr_signed":
+		return shape(`{"agent":"","job_id":1,"names":[""],"fingerprint":""}`), true
+	case "agent.job.credential.redeemed":
+		return shape(`{"agent":"","job_id":1,"attempt":1,"audit_ref":"","ref_names":[""]}`), true
+	case "agent.job.credential.redemption_refused":
+		return shape(`{"agent":"","job_id":1,"attempt":1,"reason":""}`), true
+	case "agent.job.receipt.rejected":
+		return shape(`{"agent":"","job_id":1,"outcome":"","reason":"","agent_fingerprint":""}`), true
+	case "agent.job.executed":
+		return PrivacyPayloadShapeOneOf(
+			shape(`{"agent":"","job_id":1,"kind":"","evidence_digest":"","receipt_statement":"","receipt_signature":"","receipt_signer_fingerprint":""}`),
+			shape(`{"agent":"","job_id":1,"kind":"","evidence_digest":"","connector":"","target":"","target_id":"","predecessor_fingerprint":"","successor_fingerprint":"","required_agent_id":"","required_agent_role":"","receipt_statement":"","receipt_signature":"","receipt_signer_fingerprint":""}`)), true
+	case "agent.job.failed":
+		return PrivacyPayloadShapeOneOf(
+			shape(`{"agent":"","job_id":1,"detail":"","receipt_statement":"","receipt_signature":"","receipt_signer_fingerprint":""}`),
+			shape(`{"agent":"","job_id":1,"detail":"","outcome":"","receipt_statement":"","receipt_signature":"","receipt_signer_fingerprint":""}`)), true
+	case "spiffe.workload.svid_issued_via_agent":
+		return shape(`{"agent":"","node":"","selectors":[""],"x509":1,"jwt":1}`), true
 	case "agent.identity.issued":
 		return shape(`{"agent_id":"","credential_id":"","subject":""}`), true
 	case "agent.identity.refused":
