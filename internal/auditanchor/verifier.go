@@ -38,19 +38,27 @@ type VerificationOptions struct {
 	AuditKeys      *jose.JWKSet
 	TSARootDER     []byte
 	MaxAnchorDelay time.Duration
+	// AllowUnanchoredJWS permits signature-and-chain verification of a plain
+	// JWS export only when no TSA root or anchor-delay policy was supplied.
+	// The default remains strict timestamp verification. This never permits
+	// unsigned record streams or fallback after a timestamp verification error.
+	AllowUnanchoredJWS bool
 }
 
 // VerificationResult is the stable, non-secret receipt printed by the offline
 // CLI. It states exactly what was checked, not merely that parsing succeeded.
 type VerificationResult struct {
-	Format         Format    `json:"format"`
-	TenantID       string    `json:"tenant_id,omitempty"`
-	RecordCount    int       `json:"record_count"`
-	PrevHash       string    `json:"prev_hash,omitempty"`
-	ChainHead      string    `json:"chain_head"`
-	AnchorKind     Kind      `json:"anchor_kind"`
-	AnchoredAt     time.Time `json:"anchored_at"`
-	NewestRecordAt time.Time `json:"newest_record_at,omitempty"`
+	Format                 Format    `json:"format"`
+	TenantID               string    `json:"tenant_id,omitempty"`
+	RecordCount            int       `json:"record_count"`
+	PrevHash               string    `json:"prev_hash,omitempty"`
+	ChainHead              string    `json:"chain_head"`
+	AnchorKind             Kind      `json:"anchor_kind"`
+	AnchoredAt             time.Time `json:"anchored_at"`
+	NewestRecordAt         time.Time `json:"newest_record_at,omitempty"`
+	AuditSignatureVerified bool      `json:"audit_signature_verified"`
+	AnchorVerified         bool      `json:"anchor_verified"`
+	AnchorDetail           string    `json:"anchor_detail,omitempty"`
 }
 
 // VerifyArtifact verifies any saved format served by /api/v1/audit/export.
@@ -77,7 +85,7 @@ func VerifyArtifact(raw []byte, opts VerificationOptions) (VerificationResult, e
 	if _, err := ParseFormat(string(format)); err != nil {
 		return VerificationResult{}, err
 	}
-	if len(opts.TSARootDER) == 0 {
+	if len(opts.TSARootDER) == 0 && (format != FormatJWS || !opts.AllowUnanchoredJWS || opts.MaxAnchorDelay != 0) {
 		return VerificationResult{}, errors.New("auditanchor: a separately pinned TSA root certificate is required")
 	}
 
@@ -115,27 +123,35 @@ func verifyJWSEvidence(raw []byte, opts VerificationOptions) (VerificationResult
 	if opts.AuditKeys == nil {
 		return VerificationResult{}, errors.New("auditanchor: JWS verification requires a separately pinned audit JWK set")
 	}
-	bundle, err := VerifyEvidenceEnvelope(raw, opts.AuditKeys, opts.TSARootDER, opts.MaxAnchorDelay)
+	bundle, envelope, err := verifySignedEvidenceEnvelope(raw, opts.AuditKeys)
 	if err != nil {
 		return VerificationResult{}, err
 	}
-	if bundle.Count != len(bundle.Records) || bundle.TenantID == "" || bundle.Query.TenantID != bundle.TenantID {
-		return VerificationResult{}, errors.New("auditanchor: signed bundle count or tenant scope does not match its records")
-	}
-	for _, record := range bundle.Records {
-		if record.TenantID != bundle.TenantID {
-			return VerificationResult{}, errors.New("auditanchor: signed bundle contains a record from a different tenant")
+	plain := envelope.Anchor.Kind == KindNone && opts.AllowUnanchoredJWS && len(opts.TSARootDER) == 0 && opts.MaxAnchorDelay == 0
+	if plain {
+		if envelope.Anchor.Token != nil || !envelope.Anchor.AnchoredAt.IsZero() || envelope.Anchor.ChainHead != bundle.ChainHead {
+			return VerificationResult{}, errors.New("auditanchor: plain evidence contains conflicting timestamp or chain-head metadata")
+		}
+	} else {
+		if len(opts.TSARootDER) == 0 {
+			return VerificationResult{}, errors.New("auditanchor: a separately pinned TSA root certificate is required for timestamp verification")
+		}
+		if err := verifyEvidenceAnchor(bundle, envelope.Anchor, opts.TSARootDER, opts.MaxAnchorDelay); err != nil {
+			return VerificationResult{}, err
 		}
 	}
-	var envelope EvidenceEnvelope
-	if err := decodeExactJSON(raw, &envelope); err != nil {
-		return VerificationResult{}, fmt.Errorf("auditanchor: decode evidence envelope: %w", err)
-	}
-	return VerificationResult{
+	result := VerificationResult{
 		Format: FormatJWS, TenantID: bundle.TenantID, RecordCount: len(bundle.Records),
 		PrevHash: bundle.PrevHash, ChainHead: bundle.ChainHead, AnchorKind: envelope.Anchor.Kind,
 		AnchoredAt: envelope.Anchor.AnchoredAt.UTC(), NewestRecordAt: newestRecordTime(bundle.Records),
-	}, nil
+		AuditSignatureVerified: true, AnchorVerified: !plain,
+	}
+	if plain {
+		// Detail in the artifact is unauthenticated explanatory metadata. The
+		// verifier states its own proof limit rather than repeating that claim.
+		result.AnchorDetail = "Audit signature and exported record chain verified; no external timestamp was verified."
+	}
+	return result, nil
 }
 
 func detectArtifactFormat(raw []byte) (Format, error) {
@@ -339,5 +355,6 @@ func resultFor(format Format, records []auditchain.Record, proof trailer) Verifi
 		Format: format, TenantID: tenantID, RecordCount: len(records), PrevHash: proof.PrevHash,
 		ChainHead: proof.ChainHead, AnchorKind: proof.Anchor.Kind,
 		AnchoredAt: proof.Anchor.AnchoredAt.UTC(), NewestRecordAt: newestRecordTime(records),
+		AnchorVerified: true,
 	}
 }

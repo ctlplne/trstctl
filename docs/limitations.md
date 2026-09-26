@@ -1244,7 +1244,14 @@ never live in the API process. What you can do end to end against the running bi
   before anchoring was never in the chain — and detecting that needs continuous
   anchoring at a known cadence, which is not served. A deployment without a TSA
   exports successfully and says in the payload that it is unanchored; that is a
-  weaker claim, not an invalid one, and the export states which it is. Translog
+  weaker claim, not an invalid one, and the export states which it is. The CLI
+  verifies a plain signed JWS using separately pinned `--audit-jwks`, reporting
+  `audit_signature_verified: true` and `anchor_verified: false`. It checks the
+  signed slice's tenant, count, archived-prefix chain and head, without claiming
+  an independent time or complete tenant history. `--require-anchor`, a supplied
+  TSA root, or a positive maximum anchor delay refuses unanchored evidence.
+  Timestamp failures never fall back to plain verification, and unsigned record
+  streams still require TSA trust. Translog
   inclusion proofs (`internal/translog`) are not wired into this path.
 - Signed invoice evidence (L2): `GET /api/v1/provider/usage-evidence` (`trstctl
   usage evidence`, Platform console panel) serves a per-customer, per-period

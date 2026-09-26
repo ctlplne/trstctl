@@ -25,6 +25,7 @@ func runAuditVerify(args []string, stdin io.Reader, stdout, stderr io.Writer) in
 	formatName := fs.String("format", string(auditanchor.FormatAuto), "artifact format: auto, jws, ndjson, csv, splunk-hec, or sentinel")
 	auditJWKSPath := fs.String("audit-jwks", "", "separately pinned audit signing public JWK set (required for jws)")
 	tsaRootPath := fs.String("tsa-root", "", "separately pinned TSA root certificate in PEM or DER form")
+	requireAnchor := fs.Bool("require-anchor", false, "require an independently verified external timestamp; needs --tsa-root")
 	maxAnchorDelay := fs.Duration("max-anchor-delay", 0, "optional maximum delay between the newest record and its authority timestamp")
 	fs.Usage = func() { auditVerifyUsage(stderr) }
 	if err := fs.Parse(args); err != nil {
@@ -38,8 +39,21 @@ func runAuditVerify(args []string, stdin io.Reader, stdout, stderr io.Writer) in
 		_, _ = fmt.Fprintln(stderr, "error: --max-anchor-delay cannot be negative")
 		return 2
 	}
-	if strings.TrimSpace(*tsaRootPath) == "" {
-		_, _ = fmt.Fprintln(stderr, "error: --tsa-root is required; never trust a TSA root supplied only by the artifact")
+	// An explicitly configured trust file must not become optional when an
+	// environment variable expands to an empty value. Only omission selects
+	// the plain-JWS path; an invalid supplied path remains a configuration error.
+	tsaRootSupplied := false
+	fs.Visit(func(option *flag.Flag) {
+		if option.Name == "tsa-root" {
+			tsaRootSupplied = true
+		}
+	})
+	if tsaRootSupplied && strings.TrimSpace(*tsaRootPath) == "" {
+		_, _ = fmt.Fprintln(stderr, "error: --tsa-root must name a separately pinned TSA root certificate; an explicitly supplied path cannot be empty")
+		return 2
+	}
+	if strings.TrimSpace(*tsaRootPath) == "" && (*requireAnchor || *maxAnchorDelay > 0) {
+		_, _ = fmt.Fprintln(stderr, "error: --tsa-root is required by the requested timestamp policy; never trust a TSA root supplied only by the artifact")
 		return 2
 	}
 
@@ -57,13 +71,16 @@ func runAuditVerify(args []string, stdin io.Reader, stdout, stderr io.Writer) in
 	if err != nil {
 		return auditVerifyFailure(stderr, err)
 	}
-	tsaRootRaw, err := readAuditVerifyFile(*tsaRootPath, auditVerifyTrustFileLimit)
-	if err != nil {
-		return auditVerifyFailure(stderr, fmt.Errorf("read TSA root: %w", err))
-	}
-	tsaRootDER, err := crypto.NormalizeCertificateDER(tsaRootRaw)
-	if err != nil {
-		return auditVerifyFailure(stderr, fmt.Errorf("parse TSA root: %w", err))
+	var tsaRootDER []byte
+	if strings.TrimSpace(*tsaRootPath) != "" {
+		tsaRootRaw, err := readAuditVerifyFile(*tsaRootPath, auditVerifyTrustFileLimit)
+		if err != nil {
+			return auditVerifyFailure(stderr, fmt.Errorf("read TSA root: %w", err))
+		}
+		tsaRootDER, err = crypto.NormalizeCertificateDER(tsaRootRaw)
+		if err != nil {
+			return auditVerifyFailure(stderr, fmt.Errorf("parse TSA root: %w", err))
+		}
 	}
 	var auditKeys *jose.JWKSet
 	if strings.TrimSpace(*auditJWKSPath) != "" {
@@ -79,6 +96,7 @@ func runAuditVerify(args []string, stdin io.Reader, stdout, stderr io.Writer) in
 
 	result, err := auditanchor.VerifyArtifact(artifact, auditanchor.VerificationOptions{
 		Format: format, AuditKeys: auditKeys, TSARootDER: tsaRootDER, MaxAnchorDelay: *maxAnchorDelay,
+		AllowUnanchoredJWS: !*requireAnchor && len(tsaRootDER) == 0 && *maxAnchorDelay == 0,
 	})
 	if err != nil {
 		return auditVerifyFailure(stderr, err)
@@ -136,7 +154,9 @@ func auditVerifyFailure(stderr io.Writer, err error) int {
 }
 
 func auditVerifyUsage(w io.Writer) {
-	_, _ = fmt.Fprintln(w, "Usage: trstctl audit verify --artifact <file|-> --tsa-root <root.pem|root.der> [--audit-jwks <audit.jwks.json>] [--format auto|jws|ndjson|csv|splunk-hec|sentinel] [--max-anchor-delay 24h]")
+	_, _ = fmt.Fprintln(w, "Usage: trstctl audit verify --artifact <file|-> [--tsa-root <root.pem|root.der>] [--require-anchor] [--audit-jwks <audit.jwks.json>] [--format auto|jws|ndjson|csv|splunk-hec|sentinel] [--max-anchor-delay 24h]")
 	_, _ = fmt.Fprintln(w, "\nVerify a saved audit export completely offline. The TSA root may be PEM or DER. The audit JWK set and TSA root are external trust inputs; keys carried only by an artifact are never trusted.")
+	_, _ = fmt.Fprintln(w, "\nPlain JWS exports need --audit-jwks and report signature/chain verification without an external timestamp. Timestamped exports and record streams require --tsa-root. --require-anchor, a supplied TSA root, or a positive --max-anchor-delay refuses unanchored evidence; timestamp failures never fall back to signature-only verification.")
+	_, _ = fmt.Fprintln(w, "\nPlain export: trstctl audit verify --artifact audit.jws.json --audit-jwks audit.jwks.json")
 	_, _ = fmt.Fprintln(w, "\nExample: trstctl audit verify --artifact audit.jws.json --audit-jwks audit.jwks.json --tsa-root tsa-root.pem --max-anchor-delay 24h")
 }

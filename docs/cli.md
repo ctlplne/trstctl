@@ -116,22 +116,45 @@ range or record limit. The product never silently truncates the requested JWS
 range or changes its format. Pin TSA trust for an independently verifiable
 record stream, as described below.
 
-Bootstrap trust **before disconnecting** from the deployment:
+Bootstrap trust **before disconnecting** from the deployment. A plain signed JWS
+export needs the separately authenticated audit public key. An export with an
+external timestamp also needs the TSA root from a trusted channel:
 
 ```bash
 # This authenticated read returns only the current audit signer's public RSA JWK.
 trstctl-cli audit verification-keys > audit.jwks.json
 
-# Obtain this out of band from the deployment PKI operator. Use the root CA that
+# For timestamp verification, obtain this out of band from the PKI operator.
+# Use the root CA that
 # issued the configured TSA certificate, not the TSA leaf carried by an export.
 cp /trusted/pki/trstctl-tsa-root.pem tsa-root.pem
 ```
 
-Pin those two files in the auditor's trust inventory. The verification command
+Pin the applicable files in the auditor's trust inventory. The verification command
 never trusts a JWK, TSA root, or replacement authority supplied only by the saved
 artifact: an attacker who can replace evidence could replace embedded trust too.
 The TSA root may be PEM or DER. The JWK set is required for `jws`; record-stream
 formats rely on the hash chain plus the separately trusted RFC 3161 authority.
+
+Verify a plain signed export without configuring an unrelated timestamp service:
+
+```bash
+trstctl-cli audit export --format jws > audit.jws.json
+trstctl-cli audit verify --artifact audit.jws.json --audit-jwks audit.jwks.json
+```
+
+For an unanchored JWS, success reports `audit_signature_verified: true` and
+`anchor_verified: false`. It checks the signature, tenant scope, record count,
+record chain and signed head. It does not establish an independent time or prove
+that the selected export contains every tenant event. The verifier supplies its
+own `anchor_detail`; explanatory text carried by the file is not a trust input.
+The unsigned CSV/JSON record streams cannot use this signature-only path.
+
+Use `--require-anchor` when your workflow requires timestamp evidence. Supplying
+`--tsa-root` or a positive `--max-anchor-delay` also requires an anchor. An explicitly
+provided empty or whitespace-only TSA root path is a configuration error. A present
+timestamp must verify under separately pinned TSA trust: a missing root, damaged
+token or wrong authority fails rather than falling back to signature-only success.
 
 Download any served shape while the control plane is online, then verify it after
 the server is gone:
@@ -148,6 +171,7 @@ trstctl-cli audit verify \
   --format auto \
   --audit-jwks audit.jwks.json \
   --tsa-root tsa-root.pem \
+  --require-anchor \
   --max-anchor-delay 24h
 
 # A record stream does not use the audit JWK, but gets the same chain/TSA checks.
@@ -164,11 +188,16 @@ an empty or otherwise ambiguous JSON stream. Verification starts from the traile
 or signed bundle's `prev_hash`, so a live suffix after an archived prefix is checked
 as a continuation rather than incorrectly treated as a new genesis. It recomputes
 every record link and chain head, verifies the audit JWS domain where applicable,
-verifies the domain-separated RFC 3161 timestamp imprint and TSA chain, and applies
-the optional maximum anchor delay from the newest record to authority time.
+and, for anchored evidence, verifies the domain-separated RFC 3161 timestamp
+imprint and TSA chain. It applies the optional maximum anchor delay from the
+newest record to authority time.
 
 Success prints a non-secret JSON receipt with format, tenant when present, record
 count, archived-prefix hash, chain head, anchor kind/time, and newest-record time.
+`audit_signature_verified` identifies a verified JWS signature;
+`anchor_verified` identifies a verified timestamp. Record streams have no JWS
+signature and therefore report the former as false even when their timestamp
+verification succeeds. An unanchored result reports no verified timestamp.
 Malformed input, duplicate authority fields, tamper, truncation, wrong trust, head
 mismatch, cross-tenant records, excessive input, or a delay-policy violation returns
 exit code 1 and writes a stable `audit verification failed` diagnostic to stderr.

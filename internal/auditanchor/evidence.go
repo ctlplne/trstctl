@@ -35,55 +35,70 @@ type EvidenceEnvelope struct {
 // are trust inputs held outside the artifact; accepting roots carried only by
 // the file would let an attacker mint their own authority.
 func VerifyEvidenceEnvelope(raw []byte, keys *jose.JWKSet, tsaRootDER []byte, tolerance time.Duration) (audit.Bundle, error) {
+	bundle, envelope, err := verifySignedEvidenceEnvelope(raw, keys)
+	if err != nil {
+		return audit.Bundle{}, err
+	}
+	if err := verifyEvidenceAnchor(bundle, envelope.Anchor, tsaRootDER, tolerance); err != nil {
+		return audit.Bundle{}, err
+	}
+	return bundle, nil
+}
+
+// verifySignedEvidenceEnvelope is shared by strict timestamp verification and
+// explicitly requested plain-JWS verification. Both paths keep the same shape,
+// signature, tenant scope, count, archived-prefix and record-chain checks.
+func verifySignedEvidenceEnvelope(raw []byte, keys *jose.JWKSet) (audit.Bundle, EvidenceEnvelope, error) {
 	var envelope EvidenceEnvelope
 	if err := decodeExactJSON(raw, &envelope); err != nil {
-		return audit.Bundle{}, fmt.Errorf("auditanchor: decode evidence envelope: %w", err)
+		return audit.Bundle{}, EvidenceEnvelope{}, fmt.Errorf("auditanchor: decode evidence envelope: %w", err)
 	}
 	if envelope.SchemaVersion != EvidenceEnvelopeSchemaVersion {
-		return audit.Bundle{}, fmt.Errorf("auditanchor: unsupported evidence envelope schema %d", envelope.SchemaVersion)
+		return audit.Bundle{}, EvidenceEnvelope{}, fmt.Errorf("auditanchor: unsupported evidence envelope schema %d", envelope.SchemaVersion)
 	}
 	if envelope.Format != FormatJWS || strings.TrimSpace(envelope.Bundle) == "" || strings.TrimSpace(envelope.ChainHead) == "" {
-		return audit.Bundle{}, errors.New("auditanchor: evidence envelope requires jws format, bundle, and chain head")
+		return audit.Bundle{}, EvidenceEnvelope{}, errors.New("auditanchor: evidence envelope requires jws format, bundle, and chain head")
 	}
 	if keys == nil {
-		return audit.Bundle{}, errors.New("auditanchor: audit verification JWK set is required")
+		return audit.Bundle{}, EvidenceEnvelope{}, errors.New("auditanchor: audit verification JWK set is required")
 	}
 	payload, err := keys.VerifyArtifact(envelope.Bundle, jose.ArtifactAuditExport)
 	if err != nil {
-		return audit.Bundle{}, fmt.Errorf("auditanchor: verify signed evidence bundle: %w", err)
+		return audit.Bundle{}, EvidenceEnvelope{}, fmt.Errorf("auditanchor: verify signed evidence bundle: %w", err)
 	}
 	var bundle audit.Bundle
 	if err := decodeExactJSON(payload, &bundle); err != nil {
-		return audit.Bundle{}, fmt.Errorf("auditanchor: decode signed evidence bundle: %w", err)
+		return audit.Bundle{}, EvidenceEnvelope{}, fmt.Errorf("auditanchor: decode signed evidence bundle: %w", err)
 	}
 	if len(bundle.Records) > maxArtifactRecords {
-		return audit.Bundle{}, fmt.Errorf("auditanchor: signed bundle exceeds the %d-record limit", maxArtifactRecords)
+		return audit.Bundle{}, EvidenceEnvelope{}, fmt.Errorf("auditanchor: signed bundle exceeds the %d-record limit", maxArtifactRecords)
 	}
 	if bundle.Count != len(bundle.Records) || bundle.TenantID == "" || bundle.Query.TenantID != bundle.TenantID {
-		return audit.Bundle{}, errors.New("auditanchor: signed bundle count or tenant scope does not match its records")
+		return audit.Bundle{}, EvidenceEnvelope{}, errors.New("auditanchor: signed bundle count or tenant scope does not match its records")
 	}
 	for _, record := range bundle.Records {
 		if record.TenantID != bundle.TenantID {
-			return audit.Bundle{}, errors.New("auditanchor: signed bundle contains a record from a different tenant")
+			return audit.Bundle{}, EvidenceEnvelope{}, errors.New("auditanchor: signed bundle contains a record from a different tenant")
 		}
 	}
 	head, err := audit.VerifyChainFrom(bundle.PrevHash, bundle.Records)
 	if err != nil {
-		return audit.Bundle{}, fmt.Errorf("auditanchor: verify signed evidence chain: %w", err)
+		return audit.Bundle{}, EvidenceEnvelope{}, fmt.Errorf("auditanchor: verify signed evidence chain: %w", err)
 	}
 	if head != bundle.ChainHead {
-		return audit.Bundle{}, errors.New("auditanchor: signed bundle chain head does not match its records")
+		return audit.Bundle{}, EvidenceEnvelope{}, errors.New("auditanchor: signed bundle chain head does not match its records")
 	}
 	if bundle.ChainHead != envelope.ChainHead {
-		return audit.Bundle{}, errors.New("auditanchor: signed bundle and evidence envelope name different chain heads")
+		return audit.Bundle{}, EvidenceEnvelope{}, errors.New("auditanchor: signed bundle and evidence envelope name different chain heads")
 	}
-	if err := Verify(envelope.Anchor, envelope.ChainHead, tsaRootDER); err != nil {
-		return audit.Bundle{}, err
+	return bundle, envelope, nil
+}
+
+func verifyEvidenceAnchor(bundle audit.Bundle, anchor Anchor, tsaRootDER []byte, tolerance time.Duration) error {
+	if err := Verify(anchor, bundle.ChainHead, tsaRootDER); err != nil {
+		return err
 	}
-	if err := VerifyNotBackdated(envelope.Anchor, newestRecordTime(bundle.Records), tolerance); err != nil {
-		return audit.Bundle{}, err
-	}
-	return bundle, nil
+	return VerifyNotBackdated(anchor, newestRecordTime(bundle.Records), tolerance)
 }
 
 func decodeExactJSON(raw []byte, out any) error {
