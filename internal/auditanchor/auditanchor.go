@@ -141,6 +141,11 @@ func Verify(anchor Anchor, recomputedHead string, tsaRootDER []byte) error {
 	if err := tsa.Verify(*anchor.Token, headImprint(recomputedHead), tsaRootDER); err != nil {
 		return fmt.Errorf("auditanchor: the timestamp does not attest this chain head: %w", err)
 	}
+	// The outer display time is not signed. Bind it to the authenticated token
+	// before any verifier can report it as an attested time.
+	if !anchor.AnchoredAt.Equal(anchor.Token.Info.GenTime) {
+		return errors.New("auditanchor: the anchor time does not match the signed timestamp")
+	}
 	return nil
 }
 

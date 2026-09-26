@@ -189,8 +189,10 @@ or signed bundle's `prev_hash`, so a live suffix after an archived prefix is che
 as a continuation rather than incorrectly treated as a new genesis. It recomputes
 every record link and chain head, verifies the audit JWS domain where applicable,
 and, for anchored evidence, verifies the domain-separated RFC 3161 timestamp
-imprint and TSA chain. It applies the optional maximum anchor delay from the
-newest record to authority time.
+imprint and TSA chain. The outer anchor time must match the signed timestamp;
+different timezone offsets are accepted when they represent the same instant.
+Contradictory or missing outer times are rejected. It applies the optional maximum
+anchor delay from the newest record to authority time.
 
 Success prints a non-secret JSON receipt with format, tenant when present, record
 count, archived-prefix hash, chain head, anchor kind/time, and newest-record time.
