@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"trstctl.com/trstctl/internal/app"
 	"trstctl.com/trstctl/internal/backup"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
@@ -28,6 +29,15 @@ func TestBackupRestoreDRDrillReproducesState(t *testing.T) {
 	tenant := tenantA
 
 	// Seed the source control plane through the real command path.
+	svc := app.New(srcLog, st, nil)
+	defer svc.Close()
+	if err := svc.RegisterTenant(ctx, tenant, "DR source customer", "dr-source-registration"); err != nil {
+		t.Fatalf("RegisterTenant: %v", err)
+	}
+	srcTenant, err := st.GetTenant(ctx, tenant)
+	if err != nil {
+		t.Fatal(err)
+	}
 	orch := orchestrator.NewOrchestrator(srcLog, st, orchestrator.NewOutbox(st))
 	o1, err := orch.CreateOwner(ctx, tenant, "workload", "payments", "")
 	if err != nil {
@@ -76,6 +86,9 @@ func TestBackupRestoreDRDrillReproducesState(t *testing.T) {
 	}
 
 	// The recovered state matches the source.
+	if got, err := st.GetTenant(ctx, tenant); err != nil || got.TenantID != srcTenant.TenantID || got.Name != srcTenant.Name || got.EventSeq != srcTenant.EventSeq || !got.CreatedAt.Equal(srcTenant.CreatedAt) {
+		t.Errorf("tenant registration after restore = %+v, error=%v, want %+v", got, err, srcTenant)
+	}
 	if got := ownerNames(t, st, tenant); !sameStrings(got, srcOwners) {
 		t.Errorf("owners after restore = %v, want %v", got, srcOwners)
 	}

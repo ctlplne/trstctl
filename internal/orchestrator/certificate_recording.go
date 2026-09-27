@@ -104,7 +104,14 @@ func (o *Orchestrator) catchUpCertificateRecordingAndLookupTx(ctx context.Contex
 	if head.Sequence > through {
 		return events.Event{}, false, errors.New("orchestrator: certificate recording cursor is beyond retained log head")
 	}
+	lifetimeFloor, err := o.certificateRecordingLifetimeFloorTx(ctx, tx, tenantID, through)
+	if err != nil {
+		return events.Event{}, false, err
+	}
 	from := head.Sequence + 1
+	if from <= lifetimeFloor {
+		from = lifetimeFloor + 1
+	}
 	if from == 0 {
 		return events.Event{}, false, errors.New("orchestrator: certificate recording cursor overflow")
 	}
@@ -180,7 +187,62 @@ func (o *Orchestrator) catchUpCertificateRecordingAndLookupTx(ctx context.Contex
 	if err := flush(); err != nil {
 		return events.Event{}, false, err
 	}
+	if found && retained.Sequence <= lifetimeFloor {
+		return events.Event{}, false, fmt.Errorf("%w: certificate command belongs to an earlier tenant registration", store.ErrIdempotencyConflict)
+	}
 	return retained, found, nil
+}
+
+// The caller already holds the certificate relation/metadata fence. Offboard
+// must acquire that same fence before erasing the tenant; registration cannot
+// replace an existing row. Read without a row/lifecycle lock: taking either here
+// would invert offboard's lifecycle -> certificate order. The privacy barrier
+// outside the transaction keeps the retained history generation fixed.
+func (o *Orchestrator) certificateRecordingLifetimeFloorTx(ctx context.Context, tx pgx.Tx, tenantID string, through uint64) (uint64, error) {
+	var registration int64
+	var name string
+	if err := tx.QueryRow(ctx, `SELECT event_seq,name FROM tenants WHERE tenant_id=$1`, tenantID).Scan(&registration, &name); err != nil {
+		return 0, fmt.Errorf("%w: certificate recording requires a live tenant: %v", store.ErrCertificateRecordingRebuildRequired, err)
+	}
+	if registration < 0 {
+		return 0, fmt.Errorf("%w: tenant registration is outside retained history", store.ErrCertificateRecordingRebuildRequired)
+	}
+	registrationSequence := uint64(registration)
+	if registrationSequence > through {
+		return 0, fmt.Errorf("%w: tenant registration is outside retained history", store.ErrCertificateRecordingRebuildRequired)
+	}
+	if registrationSequence > 0 {
+		event, found, err := o.log.EventAtSequence(ctx, registrationSequence)
+		if err != nil {
+			return 0, err
+		}
+		if !found || event.Type != projections.EventTenantRegistered || !sameCertificateRecordingTenant(event.TenantID, tenantID) ||
+			projections.ValidateSchemaVersion(event) != nil || validateTenantRegistrationPayload(event.Data, name) != nil {
+			return 0, fmt.Errorf("%w: tenant registration has no matching retained envelope", store.ErrCertificateRecordingRebuildRequired)
+		}
+		if isDurableTenantRegistrationIdentity(event.ID) {
+			return registrationSequence, nil
+		}
+	}
+	// Legacy tenant.registered events also represented renames. Their latest
+	// row sequence is not necessarily the beginning of a customer lifetime, so
+	// retain same-lifetime recovery and locate the last explicit erase instead.
+	// A zero-sequence SQL bootstrap is supported only without retained erasure.
+	var floor uint64
+	err := o.log.ReplayThrough(ctx, 1, through, func(event events.Event) error {
+		if !sameCertificateRecordingTenant(event.TenantID, tenantID) || event.Type != projections.EventTenantOffboarded {
+			return nil
+		}
+		if err := projections.ValidateSchemaVersion(event); err != nil {
+			return err
+		}
+		if registrationSequence == 0 || event.Sequence >= registrationSequence {
+			return fmt.Errorf("%w: retained offboard has no later live registration", store.ErrCertificateRecordingRebuildRequired)
+		}
+		floor = event.Sequence
+		return nil
+	})
+	return floor, err
 }
 
 // SQL tenant keys are UUIDs. Recovery must compare the same UUID domain as the

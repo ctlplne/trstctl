@@ -55,6 +55,14 @@ committing their projections in the opposite order. It does not repair an
 already interrupted event: preserve the retained history and follow the rebuild
 procedure below when the ordering guard refuses incremental recovery.
 
+Offboarding ends that customer's registration, even if a later customer receives
+the same tenant UUID. Certificate recording recovery uses only the current
+registration's history and rejects retries of the erased customer's commands.
+Legacy registration events that renamed a live customer still permit recovery
+within that customer's lifetime. A missing or mismatched registration anchor
+requires the retained-event rebuild below; recovery does not guess which
+customer owns the certificate history.
+
 Agent endpoint-verification reports use the same admission path. A successful
 report can supersede a discovered certificate, so ingestion records and projects
 the observation under the metadata lock before returning. This prevents a

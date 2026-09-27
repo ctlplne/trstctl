@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/app"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -27,6 +28,11 @@ func esServer(t *testing.T) (*httptest.Server, *store.Store, *events.Log) {
 	t.Helper()
 	s := newStore(t)
 	log := openLog(t)
+	svc := app.New(log, s, nil)
+	t.Cleanup(svc.Close)
+	if err := svc.RegisterTenant(t.Context(), tenantA, "Served customer", "served-customer-registration"); err != nil {
+		t.Fatalf("RegisterTenant: %v", err)
+	}
 	a := api.New(s, orchestrator.NewIdempotency(s), orchestrator.NewOrchestrator(log, s, orchestrator.NewOutbox(s)), api.WithInsecureHeaderResolver())
 	srv := httptest.NewServer(a)
 	t.Cleanup(srv.Close)
@@ -52,6 +58,10 @@ func leafPEM(t *testing.T, dnsName string) string {
 func readModelSnapshot(t *testing.T, s *store.Store) string {
 	t.Helper()
 	ctx := context.Background()
+	tenant, err := s.GetTenant(ctx, tenantA)
+	if err != nil {
+		t.Fatal(err)
+	}
 	owners, err := s.ListOwners(ctx, tenantA)
 	if err != nil {
 		t.Fatal(err)
@@ -73,11 +83,12 @@ func readModelSnapshot(t *testing.T, s *store.Store) string {
 	sort.Slice(idents, func(i, j int) bool { return idents[i].ID < idents[j].ID })
 	sort.Slice(certs, func(i, j int) bool { return certs[i].ID < certs[j].ID })
 	b, err := json.MarshalIndent(struct {
+		Tenant     store.Tenant
 		Owners     []store.Owner
 		Issuers    []store.Issuer
 		Identities []store.Identity
 		Certs      []store.Certificate
-	}{owners, issuers, idents, certs}, "", "  ")
+	}{tenant, owners, issuers, idents, certs}, "", "  ")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,6 +218,7 @@ func TestEveryServedMutationEmitsExactlyOneEvent(t *testing.T) {
 
 	counts := countEventTypes(t, ctx, log)
 	want := map[string]int{
+		"tenant.registered":    1,
 		"owner.created":        2,
 		"owner.updated":        1,
 		"issuer.created":       1,
