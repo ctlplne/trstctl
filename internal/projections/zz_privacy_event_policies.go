@@ -98,6 +98,31 @@ type privacyADCSTemplateDriftV1 struct {
 	Worsened  bool                            `json:"worsened"`
 }
 
+// Hierarchy issuance has always retained the public subject and, on its two
+// routing paths, the exact authority decision. The responder-only serial shape
+// cannot describe those payloads. Keep the producer variants closed and retain
+// the existing fail-closed subject-erasure policy for certificate evidence.
+type privacyHierarchySerialIssuedV1 struct {
+	CAID   string `json:"ca_id"`
+	Serial string `json:"serial"`
+}
+
+type privacyHierarchyLeafIssuedV1 struct {
+	privacyHierarchySerialIssuedV1
+	Subject string `json:"subject"`
+}
+
+type privacyHierarchyMigrationLeafIssuedV1 struct {
+	privacyHierarchyLeafIssuedV1
+	MigrationExactAuthority bool `json:"migration_exact_authority"`
+}
+
+type privacyHierarchyRoutedLeafIssuedV1 struct {
+	privacyHierarchyLeafIssuedV1
+	RequestedCAID  string `json:"requested_ca_id"`
+	RotationRouted bool   `json:"rotation_routed"`
+}
+
 func privacyRules(rules ...events.PrivacyFieldRule) events.PrivacyEventPolicy {
 	return events.PrivacyEventPolicy{Rules: rules}
 }
@@ -1532,8 +1557,14 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 			privacyPayloadShape[privacyLegacyCAIntermediateCreatedWithSigner](),
 			privacyPayloadShape[privacyLegacyOfflineCAIntermediateCreated](),
 		),
-		{EventCAIntermediateCreated, CAAuthorityCreatedEventSchemaVersion}:         privacyPayloadShape[CAAuthorityCreated](),
-		{EventCAEndEntityIssued, 1}:                                                privacyPayloadShape[CAIssuedCertificate](),
+		{EventCAIntermediateCreated, CAAuthorityCreatedEventSchemaVersion}: privacyPayloadShape[CAAuthorityCreated](),
+		{EventCAEndEntityIssued, 1}: events.PrivacyPayloadShapeOneOf(
+			privacyPayloadShape[CAIssuedCertificate](),
+			privacyPayloadShape[privacyHierarchySerialIssuedV1](),
+			privacyPayloadShape[privacyHierarchyLeafIssuedV1](),
+			privacyPayloadShape[privacyHierarchyMigrationLeafIssuedV1](),
+			privacyPayloadShape[privacyHierarchyRoutedLeafIssuedV1](),
+		),
 		{EventCAAuthorityRotated, 1}:                                               privacyPayloadShape[CAAuthorityRotated](),
 		{EventCAAuthorityRekeyed, 1}:                                               privacyPayloadShape[CAAuthorityRekeyed](),
 		{EventCACrossSigned, 1}:                                                    privacyPayloadShape[BreakglassCeremonyCompleted](),

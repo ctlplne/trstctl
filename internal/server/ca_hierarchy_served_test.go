@@ -17,6 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/signing"
 )
 
@@ -284,7 +285,8 @@ func TestExternalIntermediateCSRAppendFailureDoesNotConsumeCeremony(t *testing.T
 }
 
 func TestServedCAHierarchyCeremonyAndLeafIssuance(t *testing.T) {
-	h := newOperatingServedHarness(t, config.Protocols{})
+	h := newServedHarnessWithEventOptions(t, config.Protocols{}, []events.OpenOption{events.WithRequiredPrivacyEventPolicies()})
+	registerServedTenant(t, h, "Operating tenant fixture")
 	openerToken := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "ca-operator", []string{
 		"issuers:write", "issuers:read", "certs:issue",
 	})
