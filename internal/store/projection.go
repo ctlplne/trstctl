@@ -898,10 +898,14 @@ func (s *Store) UpsertTenantTx(ctx context.Context, tx pgx.Tx, t Tenant) error {
 	if t.TenantID == "" {
 		return fmt.Errorf("store: tenant registration requires a tenant id")
 	}
+	var createdAt *time.Time
+	if !t.CreatedAt.IsZero() {
+		createdAt = &t.CreatedAt
+	}
 	_, err := tx.Exec(ctx,
-		`INSERT INTO tenants (tenant_id, name, event_seq) VALUES ($1, $2, $3)
+		`INSERT INTO tenants (tenant_id, name, event_seq, created_at) VALUES ($1, $2, $3, COALESCE($4::timestamptz, CURRENT_TIMESTAMP))
 		 ON CONFLICT (tenant_id) DO UPDATE SET name = EXCLUDED.name, event_seq = EXCLUDED.event_seq`,
-		t.TenantID, t.Name, int64(t.EventSeq)) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
+		t.TenantID, t.Name, int64(t.EventSeq), createdAt) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 	return err
 }
 
@@ -916,10 +920,14 @@ func (s *Store) RegisterTenantTx(ctx context.Context, tx pgx.Tx, t Tenant) error
 		return err
 	}
 	eventSequence := int64(t.EventSeq) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
+	var createdAt *time.Time
+	if !t.CreatedAt.IsZero() {
+		createdAt = &t.CreatedAt
+	}
 	tag, err := tx.Exec(ctx,
-		`INSERT INTO tenants (tenant_id, name, event_seq) VALUES ($1, $2, $3)
+		`INSERT INTO tenants (tenant_id, name, event_seq, created_at) VALUES ($1, $2, $3, COALESCE($4::timestamptz, CURRENT_TIMESTAMP))
 		 ON CONFLICT (tenant_id) DO NOTHING`,
-		t.TenantID, t.Name, eventSequence)
+		t.TenantID, t.Name, eventSequence, createdAt)
 	if err != nil {
 		return err
 	}

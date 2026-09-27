@@ -3068,7 +3068,7 @@ func (p *Projector) applyCore(ctx context.Context, e events.Event) error {
 			return fmt.Errorf("projections: decode %s: %w", e.Type, err)
 		}
 		return p.store.UpsertTenant(ctx, store.Tenant{
-			TenantID: e.TenantID, Name: payload.Name, EventSeq: e.Sequence,
+			TenantID: e.TenantID, Name: payload.Name, EventSeq: e.Sequence, CreatedAt: e.Time,
 		})
 	}
 	if e.Type == EventTenantOffboarded {
@@ -3564,7 +3564,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return fmt.Errorf("projections: decode %s: %w", e.Type, err)
 		}
 		return p.store.RegisterTenantTx(ctx, tx, store.Tenant{
-			TenantID: e.TenantID, Name: payload.Name, EventSeq: e.Sequence,
+			TenantID: e.TenantID, Name: payload.Name, EventSeq: e.Sequence, CreatedAt: e.Time,
 		})
 	case EventTenantOffboarded:
 		var payload tenantOffboarded
@@ -7317,7 +7317,7 @@ func (p *Projector) applyForRebuild(ctx context.Context, tx pgx.Tx, e events.Eve
 			return fmt.Errorf("projections: decode %s: %w", e.Type, err)
 		}
 		return p.store.UpsertTenantTx(ctx, tx, store.Tenant{
-			TenantID: e.TenantID, Name: payload.Name, EventSeq: e.Sequence,
+			TenantID: e.TenantID, Name: payload.Name, EventSeq: e.Sequence, CreatedAt: e.Time,
 		})
 	case EventTenantOffboarded:
 		if err := ValidateSchemaVersion(e); err != nil {

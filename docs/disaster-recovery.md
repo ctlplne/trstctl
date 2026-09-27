@@ -36,6 +36,12 @@ tenant. Earlier formats are discarded because their covered checkpoint can skip
 the registration event. An installation already affected by a previous restore
 still needs the explicit retained-event rebuild described below.
 
+Tenant creation times come from the original `tenant.registered` event. Replaying
+that event preserves the time, and a legacy rename keeps the first registration's
+creation time. Older versions stamped the database clock instead: a full rebuild
+corrects those historical rows to the retained event time. A warm restart or a
+snapshot restore preserves the existing row and does not perform that correction.
+
 ## Certificate replay after an interrupted write
 
 A certificate event can reach JetStream before its PostgreSQL transaction fails.

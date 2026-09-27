@@ -578,8 +578,8 @@ not this file.
 | `internal/store/pam.go:73` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:695` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:757` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:904` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:918` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:908` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:922` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:162` | event sequence fits the PostgreSQL bigint used by the event log (CWE-190) |
 | `internal/store/projection_checkpoint.go:218` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:239` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
