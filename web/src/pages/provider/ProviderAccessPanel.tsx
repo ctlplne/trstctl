@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: BUSL-1.1
 
+import { useEffect, useState } from "react";
+import { DataGrid } from "@/components/DataGrid";
+import { DetailDrawer } from "@/components/DetailDrawer";
+import { CredentialChip } from "@/components/CredentialChip";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -25,6 +29,36 @@ export function ProviderAccessPanel({ onAuthError, canWrite }: { onAuthError: ()
   const access = useApiQuery(["provider", "operator-access"], providerApi.listOperatorAccess, { live: { intervalMs: 15_000 } });
   const customers = useApiQuery(["provider", "access-customers"], providerApi.listAccessCustomers, { live: { intervalMs: 15_000 } });
   const queryClient = useQueryClient();
+  const [selectedOperatorId, setSelectedOperatorId] = useState<string | null>(null);
+  const [firstGrantId, setFirstGrantId] = useState<string | null>(null);
+  // Resolve details from current served rows. Never retain a copied grant across
+  // refreshes or after its operator disappears from the current authority view.
+  const selectedOperator = access.error ? undefined : access.data?.find((row) => row.identity.id === selectedOperatorId);
+  useEffect(() => {
+    if (selectedOperatorId && (access.error || (access.data && !access.data.some((row) => row.identity.id === selectedOperatorId)))) {
+      setSelectedOperatorId(null);
+      setFirstGrantId(null);
+    }
+  }, [access.data, access.error, selectedOperatorId]);
+  const grants = selectedOperator?.delegations ?? [];
+  const grantId = (grant: ProviderOperatorAccess["delegations"][number]) => `${grant.customer_id}:${grant.operation}`;
+  const grantStart =
+    grants.length > 10 && firstGrantId
+      ? Math.max(
+          0,
+          grants.findIndex((grant) => grantId(grant) === firstGrantId),
+        )
+      : 0;
+  const grantPage = grants.slice(grantStart, grantStart + 10);
+  useEffect(() => {
+    if (
+      selectedOperator &&
+      firstGrantId &&
+      (selectedOperator.delegations.length <= 10 || !selectedOperator.delegations.some((grant) => `${grant.customer_id}:${grant.operation}` === firstGrantId))
+    ) {
+      setFirstGrantId(null);
+    }
+  }, [selectedOperator, firstGrantId]);
   const form = useForm<GrantForm>({
     resolver: zodResolver(grantSchema),
     defaultValues: { operatorId: "", customerId: "", operation: "read", expiresAt: "" },
@@ -132,100 +166,169 @@ export function ProviderAccessPanel({ onAuthError, canWrite }: { onAuthError: ()
       ) : null}
       {form.formState.errors.root?.message ? <p className="mt-2 text-caption text-status-danger">{form.formState.errors.root.message}</p> : null}
 
-      {access.loading ? (
-        <p className="mt-3 text-caption text-muted-foreground">{translateNow("source.loading.4f9d1e0e3a")}</p>
-      ) : access.error ? (
-        <p className="mt-3 text-caption text-status-danger">{access.error}</p>
-      ) : (access.data ?? []).length === 0 ? (
-        <p className="mt-3 text-caption text-muted-foreground">{translateNow("source.provider.access.empty.aud580008")}</p>
-      ) : (
-        <div className="mt-3 overflow-x-auto">
-          <table className="w-full text-caption">
-            <thead>
-              <tr className="text-left text-muted-foreground">
-                <th className="pr-3 font-medium">{translateNow("source.provider.access.identity.aud580009")}</th>
-                <th className="pr-3 font-medium">{translateNow("source.provider.access.role.aud580010")}</th>
-                <th className="pr-3 font-medium">{translateNow("source.provider.access.source.aud580011")}</th>
-                <th className="pr-3 font-medium">{translateNow("source.provider.access.scope.aud580012")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(access.data ?? []).map((row) => (
-                <tr key={row.identity.id} className="border-t border-border/60 align-top">
-                  <td className="py-3 pr-3">
-                    <span className="font-medium">{row.identity.display_name || row.identity.user_name}</span>
-                    <span className="block text-muted-foreground">{row.identity.email}</span>
-                    <span className={row.identity.active ? "text-status-success" : "text-status-danger"}>
-                      {row.identity.active
-                        ? translateNow("source.provider.access.active.aud580013")
-                        : translateNow("source.provider.access.inactive.aud580014")}
+      <DataGrid
+        ariaLabel={translateNow("source.provider.access.title.aud580001")}
+        className="mt-3"
+        rows={access.data ?? []}
+        getRowId={(row) => row.identity.id}
+        state={access.error ? "error" : access.loading ? "loading" : access.data?.length ? "ready" : "empty"}
+        stateMessage={access.error || translateNow("source.provider.access.empty.aud580008")}
+        columns={[
+          {
+            id: "identity",
+            header: translateNow("source.provider.access.identity.aud580009"),
+            cell: (row) => (
+              <div className="grid gap-1">
+                <span className="font-medium">{row.identity.display_name || row.identity.user_name}</span>
+                <span className="text-muted-foreground">{row.identity.email}</span>
+                <span className={row.identity.active ? "text-status-success" : "text-status-danger"}>
+                  {translateNow(row.identity.active ? "source.provider.access.active.aud580013" : "source.provider.access.inactive.aud580014")}
+                </span>
+              </div>
+            ),
+          },
+          {
+            id: "role",
+            header: translateNow("source.provider.access.role.aud580010"),
+            cell: (row) =>
+              canWrite ? (
+                <Select
+                  aria-label={translateNow("source.provider.access.role.aud580010")}
+                  value={row.identity.role}
+                  disabled={!row.identity.active}
+                  onChange={(event) => void setRole(row, event.target.value as ProviderOperatorRole)}
+                >
+                  <option value="admin">{translateNow("source.provider.access.role.admin.aud580021")}</option>
+                  <option value="operator">{translateNow("source.provider.access.role.operator.aud580022")}</option>
+                </Select>
+              ) : (
+                <span>{row.identity.role}</span>
+              ),
+          },
+          {
+            id: "source",
+            header: translateNow("source.provider.access.source.aud580011"),
+            cell: (row) => <span className="font-mono">{row.identity.source}</span>,
+          },
+          {
+            id: "scope",
+            header: translateNow("source.provider.access.scope.aud580012"),
+            cell: (row) =>
+              row.delegations.length === 0 ? (
+                <span className="text-muted-foreground">{translateNow("source.provider.access.none.aud580015")}</span>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setFirstGrantId(null);
+                    setSelectedOperatorId(row.identity.id);
+                  }}
+                >
+                  {translateNow("provider.access.delegations.open", { count: row.delegations.length })}
+                </Button>
+              ),
+          },
+        ]}
+      />
+      <DetailDrawer
+        open={!!selectedOperator}
+        title={translateNow("provider.access.delegations.title", {
+          operator: selectedOperator?.identity.display_name || selectedOperator?.identity.user_name || "",
+        })}
+        description={translateNow("provider.access.delegations.description")}
+        onClose={() => setSelectedOperatorId(null)}
+      >
+        <DataGrid
+          ariaLabel={translateNow("source.provider.access.scope.aud580012")}
+          rows={grantPage}
+          getRowId={grantId}
+          stateMessage={translateNow("source.provider.access.none.aud580015")}
+          pagination={
+            grants.length > 10 ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={grantStart === 0}
+                  onClick={() => {
+                    const row = grantStart > 10 ? grants[grantStart - 10] : undefined;
+                    setFirstGrantId(row ? grantId(row) : null);
+                  }}
+                >
+                  {translateNow("provider.access.delegations.previous")}
+                </Button>
+                <span className="text-caption text-muted-foreground" aria-live="polite">
+                  {translateNow("provider.access.delegations.range", { start: grantStart + 1, end: grantStart + grantPage.length, total: grants.length })}
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={grantStart + grantPage.length >= grants.length}
+                  onClick={() => {
+                    const row = grants[grantStart + 10];
+                    setFirstGrantId(row ? grantId(row) : null);
+                  }}
+                >
+                  {translateNow("provider.access.delegations.next")}
+                </Button>
+              </div>
+            ) : undefined
+          }
+          columns={[
+            {
+              id: "customer",
+              header: translateNow("source.provider.access.customer.aud580004"),
+              cell: (grant) => <CredentialChip value={grant.customer_id} fullValue label={translateNow("source.provider.access.customer.aud580004")} />,
+            },
+            { id: "operation", header: translateNow("source.provider.access.operation.aud580005"), cell: (grant) => grant.operation },
+            { id: "source", header: translateNow("source.provider.access.source.aud580011"), cell: (grant) => grant.source },
+            {
+              id: "evidence",
+              header: translateNow("provider.access.delegations.evidence"),
+              cell: (grant) => (
+                <div className="grid gap-1 whitespace-nowrap text-muted-foreground">
+                  <span>
+                    {translateNow("provider.access.delegations.granted")}: {formatDateTime(grant.granted_at)}
+                  </span>
+                  {grant.expires_at ? (
+                    <span>
+                      {translateNow("source.provider.access.expires.aud580016")}: {formatDateTime(grant.expires_at)}
                     </span>
-                  </td>
-                  <td className="py-3 pr-3">
-                    {canWrite ? (
-                      <Select
-                        aria-label={translateNow("source.provider.access.role.aud580010")}
-                        value={row.identity.role}
-                        disabled={!row.identity.active}
-                        onChange={(event) => void setRole(row, event.target.value as ProviderOperatorRole)}
-                      >
-                        <option value="admin">{translateNow("source.provider.access.role.admin.aud580021")}</option>
-                        <option value="operator">{translateNow("source.provider.access.role.operator.aud580022")}</option>
-                      </Select>
-                    ) : (
-                      <span>{row.identity.role}</span>
-                    )}
-                  </td>
-                  <td className="py-3 pr-3 font-mono">{row.identity.source}</td>
-                  <td className="py-3 pr-3">
-                    {row.delegations.length === 0 ? (
-                      <span className="text-muted-foreground">{translateNow("source.provider.access.none.aud580015")}</span>
-                    ) : (
-                      <ul className="space-y-2">
-                        {row.delegations.map((delegation) => {
-                          const active = !delegation.revoked_at && (!delegation.expires_at || Date.parse(delegation.expires_at) > Date.now());
-                          return (
-                            <li key={`${delegation.customer_id}:${delegation.operation}`} className="rounded-control border border-border/60 p-2">
-                              <span className="font-mono">{delegation.customer_id}</span>
-                              <span className="ml-2 font-medium">{delegation.operation}</span>
-                              <span className="ml-2 text-muted-foreground">{delegation.source}</span>
-                              {delegation.expires_at ? (
-                                <span className="block text-muted-foreground">
-                                  {translateNow("source.provider.access.expires.aud580016")}: {formatDateTime(delegation.expires_at)}
-                                </span>
-                              ) : null}
-                              {delegation.last_used_at ? (
-                                <span className="block text-muted-foreground">
-                                  {translateNow("source.provider.access.lastused.aud580017")}: {formatDateTime(delegation.last_used_at)}
-                                </span>
-                              ) : null}
-                              {delegation.revoked_at ? (
-                                <span className="block text-status-danger">
-                                  {translateNow("source.provider.access.revoked.aud580018")}: {formatDateTime(delegation.revoked_at)}
-                                </span>
-                              ) : active && canWrite ? (
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  className="mt-1"
-                                  onClick={() => void revoke(row, delegation.customer_id, delegation.operation)}
-                                >
-                                  {translateNow("source.provider.access.revoke.aud580019")}
-                                </Button>
-                              ) : null}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+                  ) : null}
+                  {grant.last_used_at ? (
+                    <span>
+                      {translateNow("source.provider.access.lastused.aud580017")}: {formatDateTime(grant.last_used_at)}
+                    </span>
+                  ) : null}
+                  {grant.revoked_at ? (
+                    <span className="text-status-danger">
+                      {translateNow("source.provider.access.revoked.aud580018")}: {formatDateTime(grant.revoked_at)}
+                    </span>
+                  ) : null}
+                </div>
+              ),
+            },
+            {
+              id: "actions",
+              header: translateNow("source.provider.col.actions.l3prov0017"),
+              cell: (grant) =>
+                selectedOperator && canWrite && !grant.revoked_at && (!grant.expires_at || Date.parse(grant.expires_at) > Date.now()) ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="destructive-outline"
+                    onClick={() => void revoke(selectedOperator, grant.customer_id, grant.operation)}
+                  >
+                    {translateNow("source.provider.access.revoke.aud580019")}
+                  </Button>
+                ) : null,
+            },
+          ]}
+        />
+      </DetailDrawer>
     </section>
   );
 }

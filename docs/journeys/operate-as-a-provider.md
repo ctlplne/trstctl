@@ -65,6 +65,15 @@ allowed. Missing or unreadable authority leaves controls unavailable; **Check
 again** retries that read without discarding a valid sign-in. The server repeats
 its checks for every action, even when the button was available a moment ago.
 
+Customers is the first working list. Pending or failed deletion work appears in
+Offboarding needs attention, including requests whose customer has left the
+roster. Recent activity shows ten returned records at a time; use Older activity
+and Newer activity to move through them.
+Under Operator access, choose View delegations for an operator to inspect active,
+expired and revoked grants. Use Next delegations and Previous delegations to
+reach every returned grant. Closing the details returns to that operator's row;
+retained evidence is not removed when a grant stops authorizing access.
+
 ### 3. Bootstrap delegation once
 
 Authority over customers is never granted through the API by someone who does not
@@ -308,7 +317,7 @@ state. Retry the original offboard command with its `Idempotency-Key`, signed in
 as the original operator with current authorization. Do not remove the core
 receiver or use Resume to cancel a prepared deletion.
 
-A lost response does not prove that deletion finished. In Recent activity,
+A lost response does not prove that deletion finished. In Offboarding needs attention,
 **Continue offboarding** resumes the original request after you sign in again,
 even if the customer has already left the roster. It does not authorize deletion
 of a later customer that reuses the same ID.

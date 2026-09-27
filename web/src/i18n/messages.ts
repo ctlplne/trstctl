@@ -10,6 +10,52 @@ export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
 
 export const messages = {
+  "provider.access.delegations.open": {
+    defaultMessage: "View delegations ({count})",
+    description: "Provider customer operations and retained delegation or activity evidence.",
+  },
+  "provider.access.delegations.title": {
+    defaultMessage: "Delegations for {operator}",
+    description: "Provider customer operations and retained delegation or activity evidence.",
+  },
+  "provider.access.delegations.description": {
+    defaultMessage: "Review active, expired and revoked customer grants. Retained records remain available after access ends.",
+    description: "Provider customer operations and retained delegation or activity evidence.",
+  },
+  "provider.access.delegations.evidence": {
+    defaultMessage: "Grant history",
+    description: "Provider customer operations and retained delegation or activity evidence.",
+  },
+  "provider.access.delegations.granted": {
+    defaultMessage: "Granted",
+    description: "Provider customer operations and retained delegation or activity evidence.",
+  },
+  "provider.offboard.attention": {
+    defaultMessage: "Offboarding needs attention",
+    description: "Provider customer operations and retained delegation or activity evidence.",
+  },
+  "provider.activity.event": { defaultMessage: "Event", description: "Provider customer operations and retained delegation or activity evidence." },
+  "provider.activity.result": { defaultMessage: "Result", description: "Provider customer operations and retained delegation or activity evidence." },
+  "provider.activity.time": { defaultMessage: "Time", description: "Provider customer operations and retained delegation or activity evidence." },
+  "provider.activity.sequence": { defaultMessage: "Sequence", description: "Provider customer operations and retained delegation or activity evidence." },
+  "provider.activity.newer": { defaultMessage: "Newer activity", description: "Provider customer operations and retained delegation or activity evidence." },
+  "provider.activity.older": { defaultMessage: "Older activity", description: "Provider customer operations and retained delegation or activity evidence." },
+  "provider.activity.range": {
+    defaultMessage: "{start}–{end} of {total} recent events",
+    description: "Provider customer operations and retained delegation or activity evidence.",
+  },
+  "provider.access.delegations.previous": {
+    defaultMessage: "Previous delegations",
+    description: "Provider customer operations and retained delegation or activity evidence.",
+  },
+  "provider.access.delegations.next": {
+    defaultMessage: "Next delegations",
+    description: "Provider customer operations and retained delegation or activity evidence.",
+  },
+  "provider.access.delegations.range": {
+    defaultMessage: "{start}–{end} of {total} delegations",
+    description: "Provider customer operations and retained delegation or activity evidence.",
+  },
   "managedRecovery.reviewShort": {
     defaultMessage: "Review",
     description: "Compact saved-provisioning-request action; the accessible label names its customer.",

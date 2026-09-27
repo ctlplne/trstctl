@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { createAppQueryClient, useApiQuery, useQueryClient } from "@/lib/query";
 import { ProviderAccessPanel } from "@/pages/provider/ProviderAccessPanel";
 import { ProviderBillingPanel } from "@/pages/provider/ProviderBillingPanel";
+import { ProviderActivityPanel, ProviderOffboardingAttention } from "@/pages/provider/ProviderActivityPanel";
 import {
   providerApi,
   providerToken,
@@ -361,7 +362,7 @@ function ProviderConsole({ onSignOut }: { onSignOut: (reason?: "authentication")
   // round-trip.
   const [brandFor, setBrandFor] = useState<string | null>(null);
   // The last isolation-drill result, or "running" while one is in flight. The
-  // drill is deployment-wide, not per-customer, so it lives above the table.
+  // drill is deployment-wide, not per-customer, so it stays in its own section.
   const [drill, setDrill] = useState<ProviderDrillReport | "running" | null>(null);
 
   const runDrill = useCallback(async () => {
@@ -475,137 +476,6 @@ function ProviderConsole({ onSignOut }: { onSignOut: (reason?: "authentication")
           </Button>
         </div>
       ) : null}
-      {authority?.access_read ? (
-        <ProviderAccessPanel
-          canWrite={authority.access_write}
-          onAuthError={() => {
-            clearProviderToken();
-            onSignOut("authentication");
-          }}
-        />
-      ) : null}
-
-      <ProviderBillingPanel
-        tenants={tenants ?? []}
-        onAuthError={() => {
-          clearProviderToken();
-          onSignOut("authentication");
-        }}
-      />
-
-      {authority?.provision ? (
-        <section className="mt-5">
-          <h2 className="text-title font-semibold">{translateNow("source.provider.provision.l3prov0007")}</h2>
-          <form
-            className="mt-2 flex flex-wrap items-end gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (slug.trim() && name.trim()) {
-                void act(async () => {
-                  await providerApi.provisionTenant({ slug: slug.trim(), name: name.trim() });
-                  setSlug("");
-                  setName("");
-                });
-              }
-            }}
-          >
-            <label className="grid gap-1">
-              <span className="text-caption font-medium">{translateNow("source.provider.slug.l3prov0008")}</span>
-              <Input value={slug} onChange={(e) => setSlug(e.target.value)} aria-label={translateNow("source.provider.slug.l3prov0008")} />
-            </label>
-            <label className="grid gap-1">
-              <span className="text-caption font-medium">{translateNow("source.provider.name.l3prov0009")}</span>
-              <Input value={name} onChange={(e) => setName(e.target.value)} aria-label={translateNow("source.provider.name.l3prov0009")} />
-            </label>
-            <Button type="submit" disabled={busy || !slug.trim() || !name.trim()}>
-              {translateNow("source.provider.provision.action.l3prov0010")}
-            </Button>
-          </form>
-        </section>
-      ) : null}
-
-      <section className="mt-6">
-        <h2 className="text-title font-semibold">{translateNow("source.recent.activity.6cb44b5633")}</h2>
-        {activity === null ? (
-          <p className="mt-2 text-caption text-muted-foreground">{translateNow("source.loading.4f9d1e0e3a")}</p>
-        ) : activity.length === 0 ? (
-          <p className="mt-2 text-caption text-muted-foreground">{translateNow("dashboard.recentActivity.empty")}</p>
-        ) : (
-          <ol className="mt-2 divide-y divide-border/60 rounded-md border border-border/60">
-            {activity.map((item) => (
-              <li key={item.event_id} className="grid gap-1 px-3 py-2 text-xs sm:grid-cols-[1fr_auto]">
-                <div>
-                  <span className="font-mono font-medium">{item.type}</span>
-                  <span className="ml-2 text-muted-foreground">{item.operator_email || item.subject || item.operator_id}</span>
-                  {item.tenant_id ? <span className="ml-2 font-mono text-muted-foreground">{item.tenant_id}</span> : null}
-                  {item.reason ? <span className="ml-2 text-muted-foreground">{item.reason}</span> : null}
-                  {item.offboard_state === "pending" || item.offboard_state === "failed" || item.offboard_state === "completed" ? (
-                    <p className="mt-1 text-caption">
-                      {translateNow(
-                        item.offboard_state === "completed"
-                          ? "provider.offboard.completed"
-                          : item.offboard_state === "failed"
-                            ? "provider.offboard.failed"
-                            : "provider.offboard.pending",
-                      )}
-                    </p>
-                  ) : null}
-                  {item.can_continue_offboard === true && item.offboard_state === "pending" && item.request_event_id && item.tenant_id ? (
-                    <Button
-                      type="button"
-                      variant="destructive-outline"
-                      loading={busy}
-                      className="mt-2"
-                      onClick={() => {
-                        if (window.confirm(translateNow("provider.offboard.continueConfirm"))) {
-                          void act(() => providerApi.offboardTenant(item.tenant_id!, item.request_event_id));
-                        }
-                      }}
-                    >
-                      {translateNow("provider.offboard.continue")}
-                    </Button>
-                  ) : null}
-                </div>
-                <div className="flex gap-2 text-muted-foreground">
-                  <time dateTime={item.at}>{formatDateTime(item.at)}</time>
-                  <span className="font-mono">#{item.sequence}</span>
-                </div>
-              </li>
-            ))}
-          </ol>
-        )}
-      </section>
-
-      {authority?.isolation_drill ? (
-        <section className="mt-6">
-          <h2 className="text-title font-semibold">{translateNow("source.provider.drill.title.l3prov0036")}</h2>
-          <p className="mt-1 text-caption text-muted-foreground">{translateNow("source.provider.drill.intro.l3prov0037")}</p>
-          <div className="mt-2 flex items-center gap-3">
-            <Button type="button" variant="outline" disabled={drill === "running"} onClick={() => void runDrill()}>
-              {translateNow("source.provider.drill.run.l3prov0038")}
-            </Button>
-            {drill === "running" ? (
-              <span className="text-caption text-muted-foreground">{translateNow("source.loading.4f9d1e0e3a")}</span>
-            ) : drill ? (
-              <span className={`text-caption ${drill.passed ? "text-status-success" : "text-status-danger"}`}>
-                {translateNow(drill.passed ? "source.provider.drill.pass.l3prov0039" : "source.provider.drill.fail.l3prov0040")}
-              </span>
-            ) : null}
-          </div>
-          {drill && drill !== "running" && !drill.passed ? (
-            <ul className="mt-2 list-disc pl-5 text-xs text-muted-foreground">
-              {(drill.checks ?? [])
-                .filter((c) => !c.passed)
-                .map((c) => (
-                  <li key={c.name}>
-                    <span className="font-mono">{c.name}</span>: {c.detail}
-                  </li>
-                ))}
-            </ul>
-          ) : null}
-        </section>
-      ) : null}
-
       <section className="mt-6">
         <h2 className="text-title font-semibold">{translateNow("source.provider.customers.l3prov0011")}</h2>
         <DataGrid
@@ -746,6 +616,97 @@ function ProviderConsole({ onSignOut }: { onSignOut: (reason?: "authentication")
           </section>
         ) : null}
       </section>
+
+      <ProviderOffboardingAttention
+        activity={activity}
+        busy={busy}
+        onContinue={(customerId, requestId) => {
+          if (window.confirm(translateNow("provider.offboard.continueConfirm"))) {
+            void act(() => providerApi.offboardTenant(customerId, requestId));
+          }
+        }}
+      />
+
+      {authority?.access_read ? (
+        <ProviderAccessPanel
+          canWrite={authority.access_write}
+          onAuthError={() => {
+            clearProviderToken();
+            onSignOut("authentication");
+          }}
+        />
+      ) : null}
+
+      <ProviderBillingPanel
+        tenants={tenants ?? []}
+        onAuthError={() => {
+          clearProviderToken();
+          onSignOut("authentication");
+        }}
+      />
+
+      {authority?.provision ? (
+        <section className="mt-5">
+          <h2 className="text-title font-semibold">{translateNow("source.provider.provision.l3prov0007")}</h2>
+          <form
+            className="mt-2 flex flex-wrap items-end gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (slug.trim() && name.trim()) {
+                void act(async () => {
+                  await providerApi.provisionTenant({ slug: slug.trim(), name: name.trim() });
+                  setSlug("");
+                  setName("");
+                });
+              }
+            }}
+          >
+            <label className="grid gap-1">
+              <span className="text-caption font-medium">{translateNow("source.provider.slug.l3prov0008")}</span>
+              <Input value={slug} onChange={(e) => setSlug(e.target.value)} aria-label={translateNow("source.provider.slug.l3prov0008")} />
+            </label>
+            <label className="grid gap-1">
+              <span className="text-caption font-medium">{translateNow("source.provider.name.l3prov0009")}</span>
+              <Input value={name} onChange={(e) => setName(e.target.value)} aria-label={translateNow("source.provider.name.l3prov0009")} />
+            </label>
+            <Button type="submit" disabled={busy || !slug.trim() || !name.trim()}>
+              {translateNow("source.provider.provision.action.l3prov0010")}
+            </Button>
+          </form>
+        </section>
+      ) : null}
+
+      <ProviderActivityPanel activity={activity} />
+
+      {authority?.isolation_drill ? (
+        <section className="mt-6">
+          <h2 className="text-title font-semibold">{translateNow("source.provider.drill.title.l3prov0036")}</h2>
+          <p className="mt-1 text-caption text-muted-foreground">{translateNow("source.provider.drill.intro.l3prov0037")}</p>
+          <div className="mt-2 flex items-center gap-3">
+            <Button type="button" variant="outline" disabled={drill === "running"} onClick={() => void runDrill()}>
+              {translateNow("source.provider.drill.run.l3prov0038")}
+            </Button>
+            {drill === "running" ? (
+              <span className="text-caption text-muted-foreground">{translateNow("source.loading.4f9d1e0e3a")}</span>
+            ) : drill ? (
+              <span className={`text-caption ${drill.passed ? "text-status-success" : "text-status-danger"}`}>
+                {translateNow(drill.passed ? "source.provider.drill.pass.l3prov0039" : "source.provider.drill.fail.l3prov0040")}
+              </span>
+            ) : null}
+          </div>
+          {drill && drill !== "running" && !drill.passed ? (
+            <ul className="mt-2 list-disc pl-5 text-xs text-muted-foreground">
+              {(drill.checks ?? [])
+                .filter((c) => !c.passed)
+                .map((c) => (
+                  <li key={c.name}>
+                    <span className="font-mono">{c.name}</span>: {c.detail}
+                  </li>
+                ))}
+            </ul>
+          ) : null}
+        </section>
+      ) : null}
     </main>
   );
 }

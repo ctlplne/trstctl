@@ -234,7 +234,8 @@ describe("provider console (L3)", () => {
     ]);
     setProviderToken("operator-bearer");
     renderProvider();
-    expect(await screen.findByText("Offboarding pending")).toBeInTheDocument();
+    expect(within(await screen.findByRole("table", { name: "Offboarding needs attention" })).getByText("Offboarding pending")).toBeInTheDocument();
+    expect(within(await screen.findByRole("table", { name: "Recent activity" })).getByText("Offboarding pending")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Continue offboarding" })).not.toBeInTheDocument();
   });
 
@@ -427,8 +428,10 @@ describe("provider console (L3)", () => {
     renderProvider();
 
     expect(await screen.findByRole("heading", { name: "Operator access" })).toBeInTheDocument();
-    expect(await screen.findByText("Casey")).toBeInTheDocument();
+    const operatorRow = (await screen.findByText("Casey")).closest("tr")!;
     expect(screen.getByText("scim:entra")).toBeInTheDocument();
+    fireEvent.click(within(operatorRow).getByRole("button", { name: /View delegations/i }));
+    await screen.findByRole("dialog", { name: /Casey/ });
     expect(screen.getByText("tenant-acme")).toBeInTheDocument();
     expect(screen.getByText(/Last used/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
@@ -577,5 +580,337 @@ describe("provider console (L3)", () => {
     expect(await screen.findByText(/Health unavailable: customer health is unavailable/)).toBeInTheDocument();
     expect(screen.getByText("Not billable")).toBeInTheDocument();
     expect(screen.queryByText(/^0$/)).not.toBeInTheDocument();
+  });
+
+  it("keeps routine customer work before access history, billing, provisioning and activity", async () => {
+    providerMock.listTenants.mockResolvedValue([
+      { id: "t-1", slug: "acme", name: "Acme Corp", status: "active", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" },
+    ]);
+    setProviderToken("operator-bearer");
+    renderProvider();
+    await screen.findByText("Acme Corp");
+    const customers = screen.getByRole("heading", { name: /^Customers$/ });
+    const main = screen.getByRole("main");
+    const headings = within(main).getAllByRole("heading", { level: 2 });
+    expect(headings[0]).toBe(customers);
+    for (const heading of headings.slice(1)) {
+      expect(customers.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    }
+    expect(within(screen.getByRole("table", { name: "Customers" })).getByRole("button", { name: "Suspend" })).toBeVisible();
+  });
+
+  it("keeps interrupted offboarding recovery visible outside bounded historical activity", async () => {
+    const request = {
+      sequence: 101,
+      event_id: "pending-erasure",
+      type: "provider.tenant_erasure.requested",
+      request_event_id: "pending-erasure",
+      tenant_id: "removed-customer",
+      operator_id: "test-admin",
+      at: "2026-01-03T00:00:00Z",
+      offboard_state: "pending",
+      can_continue_offboard: true,
+    };
+    providerMock.listTenants.mockResolvedValue([]);
+    providerMock.listActivity.mockResolvedValue([
+      request,
+      ...Array.from({ length: 60 }, (_, index) => ({
+        sequence: index + 1,
+        event_id: `older-event-${index}`,
+        type: "provider.operator.role.set",
+        operator_id: "test-admin",
+        at: "2026-01-01T00:00:00Z",
+      })),
+    ]);
+    providerMock.offboardTenant.mockResolvedValue(undefined);
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    setProviderToken("operator-bearer");
+    renderProvider();
+    const continuation = await screen.findByRole("button", { name: "Continue offboarding" });
+    expect(continuation).toBeVisible();
+    expect(continuation.closest("details:not([open])")).toBeNull();
+    fireEvent.click(continuation);
+    expect(providerMock.offboardTenant).not.toHaveBeenCalled();
+    vi.mocked(window.confirm).mockReturnValue(true);
+    fireEvent.click(continuation);
+    await waitFor(() => expect(providerMock.offboardTenant).toHaveBeenCalledWith("removed-customer", "pending-erasure"));
+    expect(screen.getAllByRole("button", { name: "Continue offboarding" })).toHaveLength(1);
+  });
+
+  it("opens every retained delegation without expanding the operator roster and restores keyboard focus", async () => {
+    const delegations = Array.from({ length: 30 }, (_, index) => ({
+      operator_id: "op-retained",
+      customer_id: `retained-customer-${index}`,
+      operation: "read",
+      source: "console",
+      granted_by: "test-admin",
+      granted_at: "2020-01-01T00:00:00Z",
+      ...(index % 3 === 1 ? { expires_at: "2020-02-01T00:00:00Z" } : {}),
+      ...(index % 3 === 2 ? { revoked_at: "2020-03-01T00:00:00Z", revoked_by: "test-admin" } : {}),
+    }));
+    providerMock.listTenants.mockResolvedValue([]);
+    providerMock.listOperatorAccess.mockResolvedValue([
+      {
+        identity: {
+          id: "op-retained",
+          user_name: "retained",
+          email: "retained@example.test",
+          display_name: "Retained Operator",
+          role: "operator",
+          active: true,
+          source: "scim:test",
+          created_at: "2020-01-01T00:00:00Z",
+          updated_at: "2020-01-01T00:00:00Z",
+        },
+        delegations,
+      },
+    ]);
+    setProviderToken("operator-bearer");
+    renderProvider();
+    const operatorRow = (await screen.findByText("Retained Operator")).closest("tr")!;
+    expect(within(operatorRow).queryByText("retained-customer-29")).not.toBeInTheDocument();
+    const opener = within(operatorRow).getByRole("button", { name: /View delegations/i });
+    opener.focus();
+    fireEvent.click(opener);
+    const drawer = await screen.findByRole("dialog", { name: /Retained Operator/ });
+    let activeActions = 0;
+    for (let page = 0; page < 3; page += 1) {
+      for (const grant of delegations.slice(page * 10, (page + 1) * 10)) expect(within(drawer).getByText(grant.customer_id)).toBeVisible();
+      activeActions += within(drawer).getAllByRole("button", { name: /^Revoke$/ }).length;
+      const next = within(drawer).getByRole("button", { name: "Next delegations" });
+      if (page < 2) fireEvent.click(next);
+      else expect(next).toBeDisabled();
+    }
+    expect(activeActions).toBe(10);
+    fireEvent.click(within(drawer).getByRole("button", { name: "Previous delegations" }));
+    expect(within(drawer).getByText("retained-customer-10")).toBeVisible();
+    fireEvent.keyDown(drawer, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(opener).toHaveFocus();
+  });
+
+  it("keeps all returned delegations visible when refresh shrinks an anchored page", async () => {
+    const delegations = Array.from({ length: 21 }, (_, index) => ({
+      operator_id: "op-shrink",
+      customer_id: `shrink-customer-${index}`,
+      operation: "read",
+      source: "console",
+      granted_by: "test-admin",
+      granted_at: "2020-01-01T00:00:00Z",
+    }));
+    const row = {
+      identity: {
+        id: "op-shrink",
+        user_name: "shrink",
+        email: "shrink@example.test",
+        display_name: "Shrink Operator",
+        role: "operator",
+        active: true,
+        source: "scim:test",
+        created_at: "2020-01-01T00:00:00Z",
+        updated_at: "2020-01-01T00:00:00Z",
+      },
+      delegations,
+    };
+    providerMock.listOperatorAccess.mockResolvedValue([row]);
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    try {
+      setProviderToken("operator-bearer");
+      renderProvider();
+      const operatorRow = (await screen.findByText("Shrink Operator")).closest("tr")!;
+      fireEvent.click(within(operatorRow).getByRole("button", { name: /View delegations/i }));
+      const drawer = await screen.findByRole("dialog", { name: /Shrink Operator/ });
+      fireEvent.click(within(drawer).getByRole("button", { name: "Next delegations" }));
+      expect(within(drawer).getByText("shrink-customer-10")).toBeVisible();
+      const remaining = [delegations[0], delegations[10], delegations[20]];
+      providerMock.listOperatorAccess.mockResolvedValue([{ ...row, delegations: remaining }]);
+      fireEvent(document, new Event("visibilitychange"));
+      await waitFor(() => expect(within(drawer).getByText("shrink-customer-0")).toBeVisible());
+      for (const grant of remaining) expect(within(drawer).getByText(grant.customer_id)).toBeVisible();
+      expect(within(drawer).queryByRole("button", { name: "Previous delegations" })).not.toBeInTheDocument();
+      providerMock.listOperatorAccess.mockResolvedValue([row]);
+      fireEvent(document, new Event("visibilitychange"));
+      await within(drawer).findByRole("button", { name: "Next delegations" });
+      expect(within(drawer).getByText("shrink-customer-0")).toBeVisible();
+      expect(within(drawer).queryByText("shrink-customer-10")).not.toBeInTheDocument();
+      expect(providerMock.revokeOperatorAccess).not.toHaveBeenCalled();
+    } finally {
+      visibility.mockRestore();
+    }
+  });
+
+  it("refreshes an open delegation drawer from current authority and closes it when the operator disappears", async () => {
+    const grant = {
+      operator_id: "op-live",
+      customer_id: "customer-live",
+      operation: "read",
+      source: "console",
+      granted_by: "test-admin",
+      granted_at: "2020-01-01T00:00:00Z",
+    };
+    const row = {
+      identity: {
+        id: "op-live",
+        user_name: "live",
+        email: "live@example.test",
+        display_name: "Live Operator",
+        role: "operator",
+        active: true,
+        source: "scim:test",
+        created_at: "2020-01-01T00:00:00Z",
+        updated_at: "2020-01-01T00:00:00Z",
+      },
+      delegations: [grant],
+    };
+    providerMock.listTenants.mockResolvedValue([]);
+    providerMock.listOperatorAccess.mockResolvedValue([row]);
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    try {
+      setProviderToken("operator-bearer");
+      renderProvider();
+      const operatorRow = (await screen.findByText("Live Operator")).closest("tr")!;
+      fireEvent.click(within(operatorRow).getByRole("button", { name: /View delegations/i }));
+      const drawer = await screen.findByRole("dialog", { name: /Live Operator/ });
+      expect(within(drawer).getByRole("button", { name: /^Revoke$/ })).toBeVisible();
+      providerMock.listOperatorAccess.mockResolvedValue([
+        { ...row, delegations: [{ ...grant, revoked_at: "2020-02-01T00:00:00Z", revoked_by: "another-admin" }] },
+      ]);
+      fireEvent(document, new Event("visibilitychange"));
+      await waitFor(() => expect(within(drawer).queryByRole("button", { name: /^Revoke$/ })).not.toBeInTheDocument());
+      expect(within(drawer).getByText("customer-live")).toBeVisible();
+      expect(within(drawer).getByText(/Revoked/)).toBeVisible();
+      providerMock.listOperatorAccess.mockResolvedValue([]);
+      fireEvent(document, new Event("visibilitychange"));
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: /Live Operator/ })).not.toBeInTheDocument());
+      providerMock.listOperatorAccess.mockResolvedValue([row]);
+      fireEvent(document, new Event("visibilitychange"));
+      await screen.findByText("Live Operator");
+      expect(screen.queryByRole("dialog", { name: /Live Operator/ })).not.toBeInTheDocument();
+      expect(providerMock.revokeOperatorAccess).not.toHaveBeenCalled();
+    } finally {
+      visibility.mockRestore();
+    }
+  });
+
+  it("removes delegation actions when authority changes and closes unreadable details without reopening them", async () => {
+    const row = {
+      identity: {
+        id: "op-current",
+        user_name: "current",
+        email: "current@example.test",
+        display_name: "Current Operator",
+        role: "operator",
+        active: true,
+        source: "scim:test",
+        created_at: "2020-01-01T00:00:00Z",
+        updated_at: "2020-01-01T00:00:00Z",
+      },
+      delegations: [
+        {
+          operator_id: "op-current",
+          customer_id: "current-customer",
+          operation: "read",
+          source: "console",
+          granted_by: "test-admin",
+          granted_at: "2020-01-01T00:00:00Z",
+        },
+      ],
+    };
+    providerMock.listOperatorAccess.mockResolvedValue([row]);
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    try {
+      setProviderToken("operator-bearer");
+      renderProvider();
+      const operatorRow = (await screen.findByText("Current Operator")).closest("tr")!;
+      fireEvent.click(within(operatorRow).getByRole("button", { name: /View delegations/i }));
+      const drawer = await screen.findByRole("dialog", { name: /Current Operator/ });
+      expect(within(drawer).getByRole("button", { name: /^Revoke$/ })).toBeVisible();
+      // The unchanged admin label does not authorize writes after the served
+      // capability is withdrawn. Keep the readable evidence available.
+      providerMock.session.mockResolvedValue({
+        id: "test-admin",
+        role: "admin",
+        mfa: true,
+        authority: {
+          available: true,
+          access_read: true,
+          access_write: false,
+          provision: false,
+          isolation_drill: false,
+          customers: {},
+        },
+      });
+      fireEvent(document, new Event("visibilitychange"));
+      await waitFor(() => expect(within(drawer).queryByRole("button", { name: /^Revoke$/ })).not.toBeInTheDocument());
+      expect(within(drawer).getByText("current-customer")).toBeVisible();
+      providerMock.listOperatorAccess.mockRejectedValue(new Error("Current delegation evidence unavailable"));
+      fireEvent(document, new Event("visibilitychange"));
+      // Allow the query layer's existing one retry; do not change its policy.
+      await screen.findByText("Current delegation evidence unavailable", {}, { timeout: 3000 });
+      expect(screen.queryByRole("dialog", { name: /Current Operator/ })).not.toBeInTheDocument();
+      providerMock.listOperatorAccess.mockResolvedValue([row]);
+      fireEvent(document, new Event("visibilitychange"));
+      await screen.findByText("Current Operator");
+      expect(screen.queryByRole("dialog", { name: /Current Operator/ })).not.toBeInTheDocument();
+      expect(providerMock.revokeOperatorAccess).not.toHaveBeenCalled();
+      expect(providerMock.grantOperatorAccess).not.toHaveBeenCalled();
+      expect(providerMock.setOperatorRole).not.toHaveBeenCalled();
+    } finally {
+      visibility.mockRestore();
+    }
+  });
+
+  it("keeps every returned activity row reachable and preserves the viewed event through live refresh", async () => {
+    const rows = Array.from({ length: 23 }, (_, index) => ({
+      sequence: 100 - index,
+      event_id: `recent-${index}`,
+      type: "provider.operator.role.set",
+      operator_id: "test-admin",
+      reason: `unique-reason-${index} ` + "long explanation ".repeat(20).trimEnd(),
+      at: "2026-01-03T00:00:00Z",
+    }));
+    providerMock.listActivity.mockResolvedValue(rows);
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    try {
+      setProviderToken("operator-bearer");
+      renderProvider();
+      const table = await screen.findByRole("table", { name: "Recent activity" });
+      expect(within(table).getByText(rows[0].reason)).toBeVisible();
+      expect(within(table).queryByText(rows[10].reason)).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Older activity" }));
+      for (const row of rows.slice(10, 20)) expect(within(table).getByText(row.reason)).toBeVisible();
+      providerMock.listActivity.mockResolvedValue([{ ...rows[0], sequence: 101, event_id: "new-live-event", reason: "Newly received event" }, ...rows]);
+      fireEvent(document, new Event("visibilitychange"));
+      await screen.findByText("12–21 of 24 recent events");
+      for (const row of rows.slice(10, 20)) expect(within(table).getByText(row.reason)).toBeVisible();
+      fireEvent.click(screen.getByRole("button", { name: "Older activity" }));
+      for (const row of rows.slice(20)) expect(within(table).getByText(row.reason)).toBeVisible();
+      expect(screen.getByRole("button", { name: "Older activity" })).toBeDisabled();
+      fireEvent.click(screen.getByRole("button", { name: "Newer activity" }));
+      expect(within(table).getByText(rows[10].reason)).toBeVisible();
+      // Keep the current anchor but shrink below a page: no earlier row may
+      // become hidden behind pagination that is no longer rendered.
+      providerMock.listActivity.mockResolvedValue([rows[0], rows[10], rows[20]]);
+      fireEvent(document, new Event("visibilitychange"));
+      await waitFor(() => expect(within(table).getByText(rows[0].reason)).toBeVisible());
+      for (const row of [rows[10], rows[20]]) expect(within(table).getByText(row.reason)).toBeVisible();
+      expect(screen.queryByRole("button", { name: "Newer activity" })).not.toBeInTheDocument();
+      providerMock.listActivity.mockResolvedValue(rows);
+      fireEvent(document, new Event("visibilitychange"));
+      await screen.findByText("1–10 of 23 recent events");
+      expect(within(table).getByText(rows[0].reason)).toBeVisible();
+      fireEvent.click(screen.getByRole("button", { name: "Older activity" }));
+      providerMock.listActivity.mockResolvedValue(rows.slice(0, 2));
+      fireEvent(document, new Event("visibilitychange"));
+      await waitFor(() => expect(within(table).queryByText(rows[10].reason)).not.toBeInTheDocument());
+      expect(within(table).getByText(rows[0].reason)).toBeVisible();
+      providerMock.listActivity.mockResolvedValue(rows);
+      fireEvent(document, new Event("visibilitychange"));
+      await screen.findByText("1–10 of 23 recent events");
+      expect(within(table).getByText(rows[0].reason)).toBeVisible();
+      expect(within(table).queryByText(rows[10].reason)).not.toBeInTheDocument();
+    } finally {
+      visibility.mockRestore();
+    }
   });
 });
