@@ -145,7 +145,9 @@ import (
 // Version 43 retains the exact observed CBOM leaf fingerprint. Earlier
 // snapshots lack this column and must replay observations rather than skip
 // their covered history with an incomplete certificate identity.
-const SnapshotFormatVersion = 43
+// Version 44 includes each live tenant registration, including its event sequence.
+// Older snapshots erase this row and cannot resume after their capture offset.
+const SnapshotFormatVersion = 44
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -172,13 +174,12 @@ type snapshotSetQuerier interface {
 
 // snapshotTables are the read-model tables captured in a per-tenant snapshot, in
 // dependency order (parents before children) so a restore's inserts never trip a
-// foreign key. It is exactly ReadModelTables minus the cross-tenant `tenants` row
-// (which the boot restore re-seeds separately, like the rebuild path), arranged so
-// owners precede the identities/certificates that reference them and
+// foreign key. It includes every ReadModelTables entry, arranged so the tenant
+// registration is restored first and owners precede the identities/certificates that reference them and
 // identity_transitions (which references identities) comes last. The revocation
 // responder tables have no foreign keys, but they are pure projections too, so
 // snapshots carry them with the rest of the tenant read model.
-var snapshotTables = []string{"owners", "ownership_assignments", "issuers", "certificate_profiles", "acme_dns01_provider_configs", "acme_upstream_authorizations", "endpoint_verifications", "revocation_endpoint_health", "migration_runs", "mdm_scep_policies", "workload_attester_trust_sources", "secret_sync_workload_identity_sources", "tenant_key_domains", "identities", "ownership_readiness_exceptions", "certificates", "certificate_metadata_watermarks", "certificate_metadata_receipts", "crypto_assets", "pqc_migration_campaigns", "pqc_migration_campaign_findings", "agents", "kubernetes_controller_posture", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_segments", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "discovery_coverage", "notification_channels", "notification_routing_policies", "notification_reads", "notification_threshold_deliveries", "notification_test_operations", "notification_delivery_receipts", "connector_delivery_receipts", "lifecycle_rotation_runs", "outbox_reconciliation_conflicts", "incident_executions", "incident_fleet_reissuance_runs", "remediation_playbook_runs", "pam_sessions", "compliance_report_schedules", "secret_rotation_schedules", "dynamic_secret_operations", "dynamic_secret_leases", "secret_sync_jobs", "managed_key_operations", "managed_keys", "code_signing_operations", "privacy_subject_erasures", "privacy_retention_runs", "privacy_archive_erasure_attestations", "nhi_access_review_campaigns", "nhi_access_review_items", "access_change_requests", "access_change_request_decisions", "machine_sessions", "machine_auth_method_overrides", "identity_transitions",
+var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "issuers", "certificate_profiles", "acme_dns01_provider_configs", "acme_upstream_authorizations", "endpoint_verifications", "revocation_endpoint_health", "migration_runs", "mdm_scep_policies", "workload_attester_trust_sources", "secret_sync_workload_identity_sources", "tenant_key_domains", "identities", "ownership_readiness_exceptions", "certificates", "certificate_metadata_watermarks", "certificate_metadata_receipts", "crypto_assets", "pqc_migration_campaigns", "pqc_migration_campaign_findings", "agents", "kubernetes_controller_posture", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_segments", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "discovery_coverage", "notification_channels", "notification_routing_policies", "notification_reads", "notification_threshold_deliveries", "notification_test_operations", "notification_delivery_receipts", "connector_delivery_receipts", "lifecycle_rotation_runs", "outbox_reconciliation_conflicts", "incident_executions", "incident_fleet_reissuance_runs", "remediation_playbook_runs", "pam_sessions", "compliance_report_schedules", "secret_rotation_schedules", "dynamic_secret_operations", "dynamic_secret_leases", "secret_sync_jobs", "managed_key_operations", "managed_keys", "code_signing_operations", "privacy_subject_erasures", "privacy_retention_runs", "privacy_archive_erasure_attestations", "nhi_access_review_campaigns", "nhi_access_review_items", "access_change_requests", "access_change_request_decisions", "machine_sessions", "machine_auth_method_overrides", "identity_transitions",
 	// Format 13. EIGHT tables sat in ReadModelTables without entering this
 	// list or the capture payload — and the restore truncates the WHOLE read
 	// model, then reloads only what snapshots carry, so any restore erased
@@ -461,6 +462,7 @@ SELECT jsonb_build_object(
   'audit_feed_destinations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM audit_feed_destinations t),
   'audit_feed_deliveries', (SELECT coalesce(jsonb_agg(to_jsonb(t.*) ORDER BY t.queued_at, t.batch_id), '[]'::jsonb) FROM audit_feed_deliveries t)
 ) || jsonb_build_object(
+  'tenants',               (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM tenants t),
   '_trstctl_snapshot_set', jsonb_build_object(
     'id', $1::text,
     'covered_seq', $2::bigint,
@@ -513,7 +515,7 @@ func readCompleteSnapshotSet(
 ) (completeSnapshotSet, error) {
 	//trstctl:system-query — cross-tenant read of reconstructible snapshot metadata; tenant IDs are used only to prove the exact complete capture set before a system restore (AN-1 exemption).
 	rows, err := querier.Query(ctx, `SELECT tenant_id::text, covered_seq,
-		payload -> $2
+		payload -> $2, payload -> 'tenants'
 		FROM read_model_snapshots
 		WHERE format_version = $1
 		ORDER BY tenant_id`, SnapshotFormatVersion, snapshotSetPayloadKey)
@@ -526,12 +528,23 @@ func readCompleteSnapshotSet(
 	seen := make(map[string]struct{})
 	for rows.Next() {
 		var (
-			tenantID   string
-			coveredSeq int64
-			raw        []byte
+			tenantID        string
+			coveredSeq      int64
+			raw             []byte
+			registrationRaw []byte
 		)
-		if err := rows.Scan(&tenantID, &coveredSeq, &raw); err != nil {
+		if err := rows.Scan(&tenantID, &coveredSeq, &raw, &registrationRaw); err != nil {
 			return completeSnapshotSet{}, err
+		}
+		// A complete capture contains exactly its own live registration. An
+		// absent/empty array otherwise inserts zero rows without a SQL error,
+		// permanently losing service authority below the captured checkpoint.
+		var registrations []struct {
+			TenantID string `json:"tenant_id"`
+		}
+		if err := json.Unmarshal(registrationRaw, &registrations); err != nil ||
+			len(registrations) != 1 || registrations[0].TenantID != tenantID {
+			return completeSnapshotSet{}, ErrNoSnapshot
 		}
 		if coveredSeq < 0 || len(raw) == 0 {
 			return completeSnapshotSet{}, ErrNoSnapshot
@@ -585,9 +598,9 @@ func readCompleteSnapshotSet(
 // tenant_id), so AN-1 holds. Restoring is atomic with the truncate: a failure rolls
 // back to the prior read model rather than leaving a half-loaded inventory.
 //
-// The `tenants` table is NOT restored here: the tail replay re-seeds it from
-// tenant.registered events (and the boot path sets the checkpoint accordingly),
-// matching how the rebuild path treats the tenants projection. Each per-table reload
+// The live tenant registration is restored with its original event sequence.
+// Its registration event normally precedes the covered offset, so tail replay
+// cannot reconstruct it. Later offboard events still erase it. Each per-table reload
 // uses jsonb_populate_recordset against the table's own row type, so every column
 // type (text[], timestamptz, jsonb, derived status columns) is reconstructed exactly.
 func (s *Store) RestoreSnapshotsTx(ctx context.Context, tx pgx.Tx) (restored int, err error) {

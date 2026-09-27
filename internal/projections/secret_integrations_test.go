@@ -398,6 +398,14 @@ func TestLateLegacySecretSyncTerminalIsInertInEveryReplayModeAUD109(t *testing.T
 	if _, err := s.GetSecretSyncJob(ctx, tenantA, jobID); !store.IsNotFound(err) {
 		t.Fatalf("snapshot-tail resurrected late legacy terminal: %v", err)
 	}
+	if current, err := s.GetTenant(ctx, tenantA); err != nil || current.EventSeq != reregistered.Sequence || current.Name != "new" {
+		t.Fatalf("snapshot-tail lost current registration: %+v error=%v", current, err)
+	}
+	// Project is explicitly a from-scratch replay, not an overlay over a later
+	// customer lifetime. Previously the broken snapshot left tenants empty and
+	// accidentally supplied that precondition. Make the fixture explicit while
+	// retaining every replay-mode assertion about the late legacy completion.
+	truncateReadModelAndCheckpoint(t, s)
 	if err := projector.Project(ctx, log); err != nil {
 		t.Fatalf("full project late legacy terminal: %v", err)
 	}

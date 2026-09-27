@@ -264,11 +264,6 @@ func TestEndpointVerificationsUseEventRecoveryAndSnapshots(t *testing.T) {
 // entry missing from snapshotTables fails here by name.
 func TestEveryTruncatedReadModelTableIsRestoredBySnapshots(t *testing.T) {
 	for _, table := range ReadModelTables {
-		if table == "tenants" {
-			// The tail replay re-seeds tenants from tenant.registered events;
-			// RestoreSnapshotsTx documents this exclusion.
-			continue
-		}
 		if !containsRecoveryTable(snapshotTables, table) {
 			t.Errorf("%s is truncated by snapshot restore but never reloaded; every restore "+
 				"silently empties it while the covered offset skips its history", table)

@@ -28,6 +28,14 @@ automatic repair of that upgrade path remains unresolved. This cache repair does
 not replace the full backup set or establish that an operator's backup is complete.
 Retain the event history needed for recovery.
 
+Snapshot format 44 preserves each live tenant registration, including its original
+registration event sequence. A cold restore brings that row back with the tenant's
+inventory; events after the snapshot can still offboard that tenant. Restore
+rejects a snapshot whose registration is absent, duplicated or belongs to another
+tenant. Earlier formats are discarded because their covered checkpoint can skip
+the registration event. An installation already affected by a previous restore
+still needs the explicit retained-event rebuild described below.
+
 ## Certificate replay after an interrupted write
 
 A certificate event can reach JetStream before its PostgreSQL transaction fails.
@@ -54,8 +62,8 @@ Each receipt commits with the whole event transaction and binds its immutable
 envelope. A repeated completed event is inert, including a duplicate retained
 after JetStream's deduplication window expires. A sequence watermark or old
 recording cursor alone cannot establish that completion. Snapshot format 40 added
-these receipts; earlier snapshots and legacy rows cannot supply them. Current format
-41 also retains the nullable certificate validity anchor added by migration 0209.
+these receipts; earlier snapshots and legacy rows cannot supply them. Format
+41 added the nullable certificate validity anchor introduced by migration 0209.
 This is the actual local signing constructor's timestamp, bound to the signed leaf
 and preserved through observations, event replay and snapshot recovery. Historical
 and external rows are not backfilled with guessed issuance times. The current
