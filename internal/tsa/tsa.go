@@ -222,44 +222,21 @@ func Verify(tok Token, hashedMessage, tsaRootDER []byte) error {
 	return nil
 }
 
-// verifyDERBinding ties Token.DER to the fields the checks above actually
-// verified.
-//
-// Everything before this point validates the JSON manifest: Info, Signature and
-// TSACertDER. But DER is the RFC 3161 artifact — the bytes a recipient feeds to
-// `openssl ts -verify` or archives as the durable proof — and nothing checked
-// it. Token is JSON-tagged and travels inside export bundles, so a bundle whose
-// manifest is intact can carry a DER lifted from an unrelated token; the
-// recipient's Verify returns nil and they hand those bytes on as proven.
-//
-// The binding requires the token to embed the certificate that was just profile-
-// checked and chained, and the imprint the caller demanded. A DER taken from any
-// other token carries a different imprint (and usually a different TSA
-// certificate), so substitution is caught.
-//
-// Residual, stated plainly: this is a containment check, not a CMS verification.
-// Fully validating DER means parsing the SignedData and checking its signature
-// over the encapsulated TSTInfo, which needs a CMS parser behind the crypto
-// boundary (AN-3) that does not exist yet. An exact re-encode comparison is not
-// available either — the DER TSTInfo may carry a nonce (http.go passes the
-// client's), and TSTInfo does not record it, so the manifest cannot reproduce
-// those bytes.
-//
-// An absent DER is not an error. Tokens predating the RFC 3161 wire format
-// (INTEROP-005) carry only the manifest, which is independently signed and was
-// verified above. Stripping the DER removes the artifact an attacker would want
-// to forge rather than smuggling one through.
+// verifyDERBinding authenticates present CMS and binds its signed fields to
+// the already verified manifest. Historical manifest-only tokens remain valid;
+// a malformed present artifact must never fall back to that compatibility path.
 func verifyDERBinding(tok Token) error {
 	if len(tok.DER) == 0 {
 		return nil
 	}
-	if !bytes.Contains(tok.DER, tok.TSACertDER) {
-		return fmt.Errorf("tsa: the RFC 3161 token does not embed the verified TSA certificate; " +
-			"the manifest and the DER token come from different issuances")
+	if tok.Info.Version != 1 || tok.Info.HashAlgorithm != "SHA-256" {
+		return fmt.Errorf("tsa: timestamp manifest has unsupported version or hash algorithm")
 	}
-	if !bytes.Contains(tok.DER, tok.Info.HashedMessage) {
-		return fmt.Errorf("tsa: the RFC 3161 token does not carry the verified message imprint; " +
-			"the manifest attests this data but the DER token attests something else")
+	if err := crypto.VerifyTimeStampToken(tok.DER, tok.TSACertDER, crypto.TSTInfoParams{
+		PolicyOID: tok.Info.Policy, HashedMessage: tok.Info.HashedMessage,
+		SerialNumber: tok.Info.SerialNumber, GenTime: tok.Info.GenTime,
+	}); err != nil {
+		return fmt.Errorf("tsa: RFC 3161 artifact verification failed: %w", err)
 	}
 	return nil
 }

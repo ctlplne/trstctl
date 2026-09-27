@@ -194,12 +194,25 @@ different timezone offsets are accepted when they represent the same instant.
 Contradictory or missing outer times are rejected. It applies the optional maximum
 anchor delay from the newest record to authority time.
 
+When a CMS timestamp artifact is present, verification checks its actual signature,
+the exact TSA signer, signed content type and certificate identifiers, and the
+TSTInfo imprint, policy, serial and time. Malformed, substituted or contradictory
+CMS fails; it never falls back to manifest-only verification. Historical tokens
+may omit CMS and retain their independently signed timestamp manifest. The
+historical encoder stores whole seconds in CMS while its signed manifest can
+retain nanoseconds; verification accepts only that exact precision mapping or an
+exact matching fractional CMS time, not a general time tolerance.
+
 Success prints a non-secret JSON receipt with format, tenant when present, record
 count, archived-prefix hash, chain head, anchor kind/time, and newest-record time.
 `audit_signature_verified` identifies a verified JWS signature;
 `anchor_verified` identifies a verified timestamp. Record streams have no JWS
 signature and therefore report the former as false even when their timestamp
-verification succeeds. An unanchored result reports no verified timestamp.
+verification succeeds. `timestamp_artifact_verified` separately identifies a
+verified CMS artifact. A legacy manifest-only token reports it as false and
+explains the missing artifact in `anchor_detail`; an unanchored result reports
+both timestamp flags as false. These receipts do not establish TSA revocation
+status or complete long-term validation evidence.
 Malformed input, duplicate authority fields, tamper, truncation, wrong trust, head
 mismatch, cross-tenant records, excessive input, or a delay-policy violation returns
 exit code 1 and writes a stable `audit verification failed` diagnostic to stderr.

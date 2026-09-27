@@ -75,10 +75,11 @@ func TestEveryUntrustedParserIsFuzzed(t *testing.T) {
 	// were left unfuzzed (FUZZ-001/002). Require those CMS boundary targets by
 	// NAME so dropping one trips this guard, not just deleting the whole file.
 	requireFuzzFuncByName(t, ".", map[string]string{
-		"FuzzParsePublicKeyPEM":  "exact single public-key PEM used by broker and workload issuance (verify.go)",
-		"FuzzParseSCEPRequest":   "SCEP pkiMessage CMS (scep.go ParseSCEPRequest)",
-		"FuzzParseSCEPResponse":  "SCEP CertRep CMS (scep.go ParseSCEPResponse) — shares the FUZZ-001 decoder",
-		"FuzzVerifyCMSSignature": "cloud IID CMS (verify.go VerifyCMSSignature) — parses untrusted bytes pre-verification",
+		"FuzzParsePublicKeyPEM":      "exact single public-key PEM used by broker and workload issuance (verify.go)",
+		"FuzzParseSCEPRequest":       "SCEP pkiMessage CMS (scep.go ParseSCEPRequest)",
+		"FuzzParseSCEPResponse":      "SCEP CertRep CMS (scep.go ParseSCEPResponse) — shares the FUZZ-001 decoder",
+		"FuzzVerifyCMSSignature":     "cloud IID CMS (verify.go VerifyCMSSignature) — parses untrusted bytes pre-verification",
+		"FuzzVerifyRFC3161Timestamp": "RFC 3161 CMS signature, signed attributes and complete TSTInfo (tsa_verify.go)",
 		// CMP (RFC 4210) PKIMessage parsing is another untrusted-ASN.1 boundary
 		// (cmp.go ParseCMPRequest) that shares the CMS/PKCS7 decoder family. Pin it by
 		// name so the SCEP/CMP/EST denominator the guard claims to police is complete

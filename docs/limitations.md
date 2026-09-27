@@ -1235,7 +1235,12 @@ never live in the API process. What you can do end to end against the running bi
   verifier never promotes the TSA leaf embedded in evidence into a root. It
   reconstructs the archived-prefix-aware chain, verifies the domain-separated
   RFC 3161 imprint, and can enforce a maximum anchor delay with
-  `--max-anchor-delay`. This independently pinned trust is what makes a
+  `--max-anchor-delay`. A present CMS artifact must verify its own signature,
+  exact signer and signed fields against the authenticated manifest. The receipt's
+  `timestamp_artifact_verified` flag distinguishes that proof from historical
+  manifest-only tokens, which remain verifiable but have no portable CMS artifact.
+  This does not establish TSA revocation status or a complete long-term evidence
+  bundle. This independently pinned trust is what makes a
   BACK-DATED head detectable: a chain rebuilt to
   remove a record hashes differently, so no earlier token exists for it, and a
   freshly-taken token is dated long after the events the bundle describes.

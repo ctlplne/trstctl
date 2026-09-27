@@ -48,17 +48,18 @@ type VerificationOptions struct {
 // VerificationResult is the stable, non-secret receipt printed by the offline
 // CLI. It states exactly what was checked, not merely that parsing succeeded.
 type VerificationResult struct {
-	Format                 Format    `json:"format"`
-	TenantID               string    `json:"tenant_id,omitempty"`
-	RecordCount            int       `json:"record_count"`
-	PrevHash               string    `json:"prev_hash,omitempty"`
-	ChainHead              string    `json:"chain_head"`
-	AnchorKind             Kind      `json:"anchor_kind"`
-	AnchoredAt             time.Time `json:"anchored_at"`
-	NewestRecordAt         time.Time `json:"newest_record_at,omitempty"`
-	AuditSignatureVerified bool      `json:"audit_signature_verified"`
-	AnchorVerified         bool      `json:"anchor_verified"`
-	AnchorDetail           string    `json:"anchor_detail,omitempty"`
+	Format                    Format    `json:"format"`
+	TenantID                  string    `json:"tenant_id,omitempty"`
+	RecordCount               int       `json:"record_count"`
+	PrevHash                  string    `json:"prev_hash,omitempty"`
+	ChainHead                 string    `json:"chain_head"`
+	AnchorKind                Kind      `json:"anchor_kind"`
+	AnchoredAt                time.Time `json:"anchored_at"`
+	NewestRecordAt            time.Time `json:"newest_record_at,omitempty"`
+	AuditSignatureVerified    bool      `json:"audit_signature_verified"`
+	AnchorVerified            bool      `json:"anchor_verified"`
+	TimestampArtifactVerified bool      `json:"timestamp_artifact_verified"`
+	AnchorDetail              string    `json:"anchor_detail,omitempty"`
 }
 
 // VerifyArtifact verifies any saved format served by /api/v1/audit/export.
@@ -145,11 +146,14 @@ func verifyJWSEvidence(raw []byte, opts VerificationOptions) (VerificationResult
 		PrevHash: bundle.PrevHash, ChainHead: bundle.ChainHead, AnchorKind: envelope.Anchor.Kind,
 		AnchoredAt: envelope.Anchor.AnchoredAt.UTC(), NewestRecordAt: newestRecordTime(bundle.Records),
 		AuditSignatureVerified: true, AnchorVerified: !plain,
+		TimestampArtifactVerified: !plain && envelope.Anchor.Token != nil && len(envelope.Anchor.Token.DER) > 0,
 	}
 	if plain {
 		// Detail in the artifact is unauthenticated explanatory metadata. The
 		// verifier states its own proof limit rather than repeating that claim.
 		result.AnchorDetail = "Audit signature and exported record chain verified; no external timestamp was verified."
+	} else if !result.TimestampArtifactVerified {
+		result.AnchorDetail = "Signed legacy timestamp manifest verified; no RFC 3161 CMS artifact was present."
 	}
 	return result, nil
 }
@@ -351,10 +355,15 @@ func resultFor(format Format, records []auditchain.Record, proof trailer) Verifi
 	if len(records) > 0 {
 		tenantID = records[0].TenantID
 	}
-	return VerificationResult{
+	result := VerificationResult{
 		Format: format, TenantID: tenantID, RecordCount: len(records), PrevHash: proof.PrevHash,
 		ChainHead: proof.ChainHead, AnchorKind: proof.Anchor.Kind,
 		AnchoredAt: proof.Anchor.AnchoredAt.UTC(), NewestRecordAt: newestRecordTime(records),
-		AnchorVerified: true,
+		AnchorVerified:            true,
+		TimestampArtifactVerified: proof.Anchor.Token != nil && len(proof.Anchor.Token.DER) > 0,
 	}
+	if !result.TimestampArtifactVerified {
+		result.AnchorDetail = "Signed legacy timestamp manifest verified; no RFC 3161 CMS artifact was present."
+	}
+	return result
 }
