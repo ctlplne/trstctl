@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -389,6 +391,20 @@ func TestServedCAHierarchyCeremonyAndLeafIssuance(t *testing.T) {
 		t.Fatalf("lookup hierarchy issued serial: %v", err)
 	} else if !found || rec.Revoked() {
 		t.Fatalf("hierarchy issued serial row = found %v %+v, want active ca_issued_certs row", found, rec)
+	}
+
+	// The served endpoint returned a verified leaf. Its immutable issuance fact
+	// must be available to usage reconciliation as well as the CA serial index.
+	var mintFacts int
+	if err := h.store.WithTenant(t.Context(), h.tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(t.Context(), `SELECT count(*) FROM certificate_metadata_receipts
+			WHERE tenant_id=$1 AND issuance_status='mint' AND issuance_fingerprint=$2`,
+			h.tenant, info.SHA256Fingerprint).Scan(&mintFacts)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if mintFacts != 1 {
+		t.Errorf("served hierarchy leaf has %d immutable mint facts, want 1 for the independently verified certificate", mintFacts)
 	}
 
 	storedInter, err := h.store.GetCAAuthority(context.Background(), h.tenant, inter.ID)

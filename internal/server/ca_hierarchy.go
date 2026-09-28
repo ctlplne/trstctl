@@ -232,8 +232,9 @@ func (h *caHierarchyService) issueLeafForExactAuthorityWithValidity(
 	if err != nil {
 		return crypto.IssuedLeaf{}, nil, "", err
 	}
-	ev, err := h.appendEvent(ctx, tenantID, projections.EventCAEndEntityIssued, map[string]any{
+	ev, err := h.appendVersionedEvent(ctx, tenantID, projections.EventCAEndEntityIssued, projections.CAIssuedCertificateEvidenceSchemaVersion, map[string]any{
 		"ca_id": authority.ID, "serial": info.SerialNumber, "subject": info.Subject,
+		"certificate_der": issued.DER, "fingerprint": info.SHA256Fingerprint,
 		"migration_exact_authority": true,
 	})
 	if err != nil {
@@ -764,13 +765,14 @@ func (h *caHierarchyService) IssueLeaf(ctx context.Context, tenantID, caID strin
 	out = append(out, []byte(ca.CertificatePEM)...)
 	event := map[string]any{
 		"ca_id": caID, "serial": info.SerialNumber, "subject": info.Subject,
+		"certificate_der": leafDER, "fingerprint": info.SHA256Fingerprint,
 	}
 	if requestedCA.ID != ca.ID {
 		event["ca_id"] = ca.ID
 		event["requested_ca_id"] = requestedCA.ID
 		event["rotation_routed"] = true
 	}
-	ev, err := h.appendEvent(ctx, tenantID, projections.EventCAEndEntityIssued, event)
+	ev, err := h.appendVersionedEvent(ctx, tenantID, projections.EventCAEndEntityIssued, projections.CAIssuedCertificateEvidenceSchemaVersion, event)
 	if err != nil {
 		return api.CAIssuedLeaf{}, err
 	}

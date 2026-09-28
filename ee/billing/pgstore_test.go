@@ -24,7 +24,7 @@ import (
 )
 
 // The durable half of L2, against real PostgreSQL: quotas that survive,
-// recounts that come from the transitions projection, and the full
+// recounts that come from immutable certificate event receipts, and the full
 // meter-vs-log agreement gate in front of the signature.
 
 const (
@@ -211,6 +211,7 @@ func seedIssuedTransition(t *testing.T, cs *corestore.Store, tenantID string, se
 func TestEvidenceSignsOnlyWhenMeterAndLogAgree(t *testing.T) {
 	pgStore, cs := newBillingStoreOn(t, "billing_reconcile")
 	ctx := context.Background()
+	_, _, orch := billingHistory(t, cs)
 
 	period := billing.EvidencePeriod{
 		CustomerID: quotaTenant,
@@ -219,17 +220,17 @@ func TestEvidenceSignsOnlyWhenMeterAndLogAgree(t *testing.T) {
 	}
 	mid := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 
-	// Three issuances: three meter increments and three transitions.
+	// Three issuances: three meter increments and three real certificate facts.
 	if err := pgStore.AddCounters(ctx, []billing.CounterDelta{
 		{TenantID: quotaTenant, Meter: usage.MeterCertificatesIssued, Period: mid, Delta: 3},
 	}); err != nil {
 		t.Fatal(err)
 	}
 	for i := range 3 {
-		seedIssuedTransition(t, cs, quotaTenant, int64(i+1), mid.Add(time.Duration(i)*time.Minute))
+		billingRecordAt(t, orch, quotaTenant, mid.Add(time.Duration(i)*time.Minute))
 	}
 	// A neighboring tenant's issuance must not leak into the recount.
-	seedIssuedTransition(t, cs, otherTenant, 1, mid)
+	billingRecordAt(t, orch, otherTenant, mid)
 	// Coverage must span the period or MaySign refuses before reconciliation.
 	if err := pgStore.AddCounters(ctx, []billing.CounterDelta{
 		{TenantID: quotaTenant, Meter: usage.MeterCertificatesIssued, Period: period.Start.Add(-time.Hour), Delta: 1},

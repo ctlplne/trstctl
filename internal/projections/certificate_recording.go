@@ -28,7 +28,7 @@ func CertificateRecordingMaterial(e events.Event) (store.Certificate, bool, erro
 			return store.Certificate{}, true, err
 		}
 		return store.Certificate{
-			Fingerprint: p.Fingerprint, ReplacesID: p.ReplacesID, Source: p.Source,
+			Fingerprint: p.Fingerprint, ReplacesID: p.ReplacesID, Source: p.Source, ObservationOnly: p.ObservationOnly,
 			NotBefore: p.NotBefore, NotAfter: p.NotAfter, ValidityAnchor: p.ValidityAnchor,
 			CertificateDER: p.CertificateDER, CertificatePEM: p.CertificatePEM,
 			IssuanceIdempotencyKey: p.IssuanceIdempotencyKey, IssuanceRequestBinding: p.IssuanceRequestBinding,
@@ -58,6 +58,13 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 	// certificate trigger records their actual sequence when they touch a leaf;
 	// a later ownership/privacy/migration write cannot go unnoticed by recovery.
 	return p.store.WithCertificateProjectionOrderTx(ctx, tx, e.TenantID, e.Sequence, func() error {
+		if e.Type == EventCAEndEntityIssued || e.Type == EventCAIssuedCertificate {
+			return p.store.WithResponderIssuanceReceiptTx(ctx, tx, e, func() error {
+				return p.applyCoreEventTx(ctx, tx, e)
+			}, func() (store.CertificateIssuanceReceipt, error) {
+				return certificateIssuanceReceipt(e)
+			})
+		}
 		dependent, err := CertificateMetadataEvent(e)
 		if err != nil {
 			return err
@@ -65,6 +72,8 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		if dependent {
 			return p.store.WithCertificateMetadataEventTx(ctx, tx, e, func() error {
 				return p.applyCertificateOrderedEventTx(ctx, tx, e)
+			}, func() (store.CertificateIssuanceReceipt, error) {
+				return certificateIssuanceReceipt(e)
 			})
 		}
 		return p.applyCertificateOrderedEventTx(ctx, tx, e)

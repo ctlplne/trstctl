@@ -28,6 +28,7 @@ import (
 	"trstctl.com/trstctl/internal/authmethod"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/kek"
 	cryptoseal "trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -2255,7 +2256,8 @@ func TestApplicationSecretRequiredFenceSurvivesApprovalDisabledRestart(t *testin
 // with no key (the GAP-004 defect) would fail X509KeyPair. It fails on the pre-wiring
 // tree.
 func TestServedPKISecretIssuesUsableKeypair(t *testing.T) {
-	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
+	h := newServedHarnessWithEventOptions(t, config.Protocols{}, []events.OpenOption{events.WithRequiredPrivacyEventPolicies()}, withSecretsEnabled(t, nil))
+	registerServedTenant(t, h, "Dynamic PKI tenant fixture")
 	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/pki", tok,
@@ -2285,6 +2287,22 @@ func TestServedPKISecretIssuesUsableKeypair(t *testing.T) {
 	if err := crypto.VerifyLeafSignedByCA(leaf, caCertDER(t, h.caPEM)); err != nil {
 		t.Fatalf("dynamic PKI secret leaf does not verify against the served CA: %v", err)
 	}
+	info, err := certinfo.Inspect(leaf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mintFacts int
+	if err := h.store.WithTenant(t.Context(), h.tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(t.Context(), `SELECT count(*) FROM certificate_metadata_receipts
+			WHERE tenant_id=$1 AND issuance_status='mint' AND issuance_fingerprint=$2`,
+			h.tenant, info.SHA256Fingerprint).Scan(&mintFacts)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if mintFacts != 1 {
+		t.Errorf("served dynamic PKI leaf has %d immutable mint facts, want 1", mintFacts)
+	}
+
 	// Event-sourced (AN-2): issuance was recorded; the private key is never in the log.
 	if !h.hasEvent(t, "pkisecret.issued") {
 		t.Error("no pkisecret.issued event — the served dynamic PKI secret was not event-sourced (AN-2)")

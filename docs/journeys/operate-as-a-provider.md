@@ -140,6 +140,39 @@ Changing the invoice customer or period clears the displayed health and evidence
 Pull the newly selected period before downloading it; a response from an earlier
 selection cannot populate the new customer or mark its signature as verified.
 
+The issuance recount counts each distinct managed X.509 leaf once, including
+renewals, direct CA-hierarchy issuance and dynamic PKI secrets. It uses the first
+successful issuance event. Recording the same leaf through more than one path
+still counts it once. Import, rediscovery and revocation do not add another
+issuance or move that original event time. An import's source label remains an
+operator label; it cannot assert that the platform minted the certificate. For an
+offline edge issuer, this is the time the issuance entered the control plane's
+verified history. This certificate volume is operational telemetry, not an extra
+pricing unit.
+
+Older completion receipts are backfilled only from matching retained events.
+Missing history or an unverifiable public certificate keeps reconciliation
+unknown and prevents signing; upgrading does not invent a zero or erase current
+inventory to reconstruct an invoice. Counters still have to agree with those
+facts, and the period must also pass the coverage and closed-period checks.
+
+Deployments with pre-upgrade CA serial records start with unverified responder
+history. A warm restart does not reset that status. An older snapshot lacking
+that status is also unverified. The [full event-log rebuild](../disaster-recovery.md)
+can reconstruct the evidence only from retained source events: a serial-only
+issuance without its public leaf remains unverifiable. No history is marked
+complete merely because an upgrade or restart finished. Previously measured
+counters remain available when recovery cannot verify them. Each CA serial also
+retains the event that first recorded it. A rolled-back writer that omits this
+proof makes the history unverified; a later observation of the same serial
+cannot fill that gap or turn a partial count into verified evidence.
+
+The collector reconstructs hourly issuance totals from durable facts after a
+restart and retries failed refreshes without adding the same mint twice. This
+recovers counts, not proof of continuous observation during an outage. Deleting
+a customer erases its counts and receipts; reusing that customer's UUID does not
+inherit its old issuance history.
+
 ### Pause and resume a customer
 
 An administrator with that customer's `suspend` grant can choose **Suspend** in

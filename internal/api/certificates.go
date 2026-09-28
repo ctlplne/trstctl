@@ -250,7 +250,7 @@ func (a *API) ingestCertificate(w http.ResponseWriter, r *http.Request) {
 			OwnerID: ownerID, Subject: info.Subject, SANs: sansOf(info),
 			Issuer: info.Issuer, Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
 			KeyAlgorithm: info.KeyAlgorithm, NotBefore: &notBefore, NotAfter: &notAfter,
-			DeploymentLocation: req.DeploymentLocation, Source: source,
+			DeploymentLocation: req.DeploymentLocation, Source: source, ObservationOnly: true,
 		})
 		a.observeFeature("inventory", "ingest", start, err)
 		if err != nil {

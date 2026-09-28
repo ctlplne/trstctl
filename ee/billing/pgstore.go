@@ -183,27 +183,39 @@ func (p *PGStore) QuotaFor(ctx context.Context, tenantID string) (Quota, error) 
 	return out, err
 }
 
-// IssuedInPeriod recounts the period's issuances from the identity_transitions
-// projection of the event log — the independent record ReconcileEvidence
-// checks the meter against. ok is always true here: a durable deployment
-// always has the projection, and an empty count is a real zero, not an absent
-// source.
+// IssuedInPeriod recounts immutable managed-leaf mint facts. A renewed leaf
+// counts once, even though its identity did not enter issued again. Observing
+// or revoking that leaf later cannot change its original mint time. Legacy
+// receipts without source classification are unknown, not a confirmed zero.
 func (p *PGStore) IssuedInPeriod(ctx context.Context, tenantID string, from, to time.Time) (int64, bool, error) {
 	if p == nil || p.store == nil || tenantID == "" {
 		return 0, false, nil
 	}
 	var n int64
+	var known bool
 	err := p.tx(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
-			`SELECT count(*) FROM identity_transitions
-			  WHERE tenant_id = $1 AND to_state = 'issued'
-			    AND occurred_at >= $2 AND occurred_at < $3`,
-			tenantID, from, to).Scan(&n)
+			`SELECT
+			  (SELECT count(*) FROM (
+			    SELECT DISTINCT ON (issuance_fingerprint) issuance_time AS minted_at
+			    FROM certificate_metadata_receipts
+			    WHERE tenant_id=$1 AND issuance_status='mint'
+			    ORDER BY issuance_fingerprint,event_sequence
+			  ) mints WHERE minted_at >= $2 AND minted_at < $3),
+			  EXISTS (SELECT 1 FROM tenants WHERE tenant_id=$1 AND responder_issuance_history_known IS TRUE)
+			  AND NOT EXISTS (SELECT 1 FROM certificate_metadata_receipts
+			    WHERE tenant_id=$1 AND (issuance_status IS NULL OR issuance_status='unverifiable'))
+			  AND NOT EXISTS (SELECT 1 FROM ca_issued_certs c WHERE c.tenant_id=$1
+			    AND (c.issuance_event_id IS NULL OR
+			      (c.issuance_event_type <> 'edge.delegation.issued' AND NOT EXISTS (
+			        SELECT 1 FROM certificate_metadata_receipts r
+			        WHERE r.tenant_id=$1 AND r.event_id=c.issuance_event_id))))`,
+			tenantID, from, to).Scan(&n, &known)
 	})
 	if err != nil {
 		return 0, false, err
 	}
-	return n, true, nil
+	return n, known, nil
 }
 
 // tx runs against the SYSTEM pool, not a tenant context. These meters are the

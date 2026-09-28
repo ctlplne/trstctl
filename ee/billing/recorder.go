@@ -8,15 +8,25 @@ import (
 	"log/slog"
 	"sync"
 	"time"
+
+	"trstctl.com/trstctl/internal/usage"
 )
 
 type Recorder struct {
-	store Store
-	log   *slog.Logger
-	now   func() time.Time
+	store         Store
+	log           *slog.Logger
+	now           func() time.Time
+	refreshIssued func(context.Context) error
 
+	flushMu sync.Mutex
 	mu      sync.Mutex
 	pending map[recordKey]int64
+}
+
+func newDurableRecorder(store *PGStore, log *slog.Logger) *Recorder {
+	r := NewRecorder(store, log)
+	r.refreshIssued = store.RefreshIssuedCounters
+	return r
 }
 
 func NewRecorder(store Store, log *slog.Logger) *Recorder {
@@ -37,6 +47,11 @@ func (r *Recorder) Record(tenantID, meter string, delta int64) {
 	if r == nil || tenantID == "" || meter == "" || delta <= 0 {
 		return
 	}
+	if meter == usage.MeterCertificatesIssued && r.refreshIssued != nil {
+		// The committed certificate event owns both identity and time. An
+		// unkeyed process hint cannot safely add another count or select its hour.
+		return
+	}
 	k := recordKey{tenant: tenantID, meter: meter, period: PeriodStart(r.now())}
 	r.mu.Lock()
 	r.pending[k] += delta
@@ -47,11 +62,9 @@ func (r *Recorder) Flush(ctx context.Context) error {
 	if r == nil || r.store == nil {
 		return nil
 	}
+	r.flushMu.Lock()
+	defer r.flushMu.Unlock()
 	r.mu.Lock()
-	if len(r.pending) == 0 {
-		r.mu.Unlock()
-		return nil
-	}
 	batch := r.pending
 	r.pending = map[recordKey]int64{}
 	r.mu.Unlock()
@@ -75,12 +88,22 @@ func (r *Recorder) Flush(ctx context.Context) error {
 			failures = append(failures, err)
 		}
 	}
+	if r.refreshIssued != nil {
+		if err := r.refreshIssued(ctx); err != nil {
+			failures = append(failures, err)
+		}
+	}
 	return errors.Join(failures...)
 }
 
 func (r *Recorder) Run(ctx context.Context, interval time.Duration) {
 	if interval <= 0 {
 		interval = time.Minute
+	}
+	if r.refreshIssued != nil {
+		if err := r.Flush(ctx); err != nil && r.log != nil {
+			r.log.Warn("initial issuance metering refresh failed; source facts retained for retry", slog.String("error", err.Error()))
+		}
 	}
 	t := time.NewTicker(interval)
 	defer t.Stop()

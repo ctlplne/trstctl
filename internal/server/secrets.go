@@ -14,6 +14,7 @@ import (
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/events"
@@ -178,18 +179,39 @@ func secretSyncAAD(tenantID, target, id, key string) []byte {
 // RecordIssued notes that the CA issued a serial so OCSP can answer "good" rather
 // than "unknown" and a later revoke has a row to flip (idempotent in the store).
 func (s *secretRevocationSink) RecordIssued(ctx context.Context, tenantID, caID, serial string) error {
+	return s.RecordIssuedCertificate(ctx, tenantID, caID, serial, nil)
+}
+
+// RecordIssuedCertificate persists only public material, never a subject key.
+func (s *secretRevocationSink) RecordIssuedCertificate(ctx context.Context, tenantID, caID, serial string, der []byte) error {
+	fingerprint := ""
+	if len(der) != 0 {
+		info, err := certinfo.Inspect(der)
+		if err != nil {
+			return fmt.Errorf("server: inspect PKI issuance evidence: %w", err)
+		}
+		if info.SerialNumber != serial || info.IsCA {
+			return errors.New("server: PKI issuance evidence does not match leaf serial")
+		}
+		fingerprint = info.SHA256Fingerprint
+	}
 	issuedAt := time.Now().UTC()
 	if s.log == nil {
 		return errors.New("server: secret revocation sink requires an event log")
 	}
 	payload, err := json.Marshal(projections.CAIssuedCertificate{
 		CAID: caID, Serial: serial, IssuedAt: issuedAt, Source: "pkisecret",
+		CertificateDER: der, Fingerprint: fingerprint,
 	})
 	if err != nil {
 		return err
 	}
+	schemaVersion := 1
+	if len(der) != 0 {
+		schemaVersion = projections.CAIssuedCertificateEvidenceSchemaVersion
+	}
 	return s.appendAndProject(ctx, events.Event{
-		Type: projections.EventCAIssuedCertificate, TenantID: tenantID, Data: payload,
+		Type: projections.EventCAIssuedCertificate, TenantID: tenantID, SchemaVersion: schemaVersion, Data: payload,
 	})
 }
 

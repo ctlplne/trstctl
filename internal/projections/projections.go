@@ -151,7 +151,9 @@ const (
 	CertificateApprovalEventSchemaVersion = 3
 	// CertificateValidityEventSchemaVersion adds the actual mint-time validity anchor.
 	// Old inventory and approval schemas remain closed and independently replayable.
-	CertificateValidityEventSchemaVersion         = 4
+	CertificateValidityEventSchemaVersion = 4
+	// CertificateObservationEventSchemaVersion records imports without claiming a mint.
+	CertificateObservationEventSchemaVersion      = 5
 	EventCertificateRevoked                       = "certificate.revoked"
 	EventCertificateSuperseded                    = "certificate.superseded"
 	EventCAIssuedCertificate                      = "ca.certificate.issued"
@@ -955,6 +957,7 @@ type CertificateRecorded struct {
 	ValidityAnchor         *time.Time            `json:"validity_anchor,omitempty"`
 	DeploymentLocation     string                `json:"deployment_location"`
 	Source                 string                `json:"source"`
+	ObservationOnly        bool                  `json:"observation_only,omitempty"`
 	ReplacesID             *string               `json:"replaces_id,omitempty"`
 	CertificateDER         []byte                `json:"certificate_der,omitempty"`
 	CertificatePEM         []byte                `json:"certificate_pem,omitempty"`
@@ -1501,14 +1504,19 @@ type AccessChangeRequestDecided struct {
 	DecidedAt            time.Time `json:"decided_at,omitempty"`
 }
 
+// CAIssuedCertificateEvidenceSchemaVersion declares retained public leaf proof.
+const CAIssuedCertificateEvidenceSchemaVersion = 2
+
 // CAIssuedCertificate is a responder-only issued-serial event. It is used by
 // issuance surfaces that do not create an inventory certificate row (for example
 // dynamic PKI secrets) but still need OCSP/CRL to answer from the event log.
 type CAIssuedCertificate struct {
-	CAID     string    `json:"ca_id"`
-	Serial   string    `json:"serial"`
-	IssuedAt time.Time `json:"issued_at,omitempty"`
-	Source   string    `json:"source,omitempty"`
+	CAID           string    `json:"ca_id"`
+	Serial         string    `json:"serial"`
+	IssuedAt       time.Time `json:"issued_at,omitempty"`
+	Source         string    `json:"source,omitempty"`
+	CertificateDER []byte    `json:"certificate_der,omitempty"`
+	Fingerprint    string    `json:"fingerprint,omitempty"`
 }
 
 // CACertificateRevoked is a responder-only revocation event. Reason is kept for
@@ -3360,19 +3368,19 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventIdentityRenewalFailed:                    {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true},
 	EventIdentityRenewalRecovered:                 {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true, LifecycleOwnershipReadinessEventSchemaVersion: true},
 	EventIdentityRetired:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true},
-	EventCertificateRecorded:                      {1: true, CertificateApprovalEventSchemaVersion: true, CertificateValidityEventSchemaVersion: true},
+	EventCertificateRecorded:                      {1: true, CertificateApprovalEventSchemaVersion: true, CertificateValidityEventSchemaVersion: true, CertificateObservationEventSchemaVersion: true},
 	EventCertificateCustodyAttested:               {1: true},
 	EventCertificateRevoked:                       {1: true},
 	EventCertificateRevocationBatchApplied:        {1: true, CertificateExternalRevocationSchemaVersion: true},
 	EventCertificateSuperseded:                    {1: true},
-	EventCAIssuedCertificate:                      {1: true},
+	EventCAIssuedCertificate:                      {1: true, CAIssuedCertificateEvidenceSchemaVersion: true},
 	EventCACertificateRevoked:                     {1: true},
 	EventCACeremonyStarted:                        {1: true},
 	EventCACeremonyApproved:                       {1: true},
 	EventCARootCreated:                            {1: true, CAAuthorityCreatedEventSchemaVersion: true},
 	EventCAAuthorityImported:                      {1: true, CAAuthorityCreatedEventSchemaVersion: true},
 	EventCAIntermediateCreated:                    {1: true, CAAuthorityCreatedEventSchemaVersion: true},
-	EventCAEndEntityIssued:                        {1: true},
+	EventCAEndEntityIssued:                        {1: true, CAIssuedCertificateEvidenceSchemaVersion: true},
 	EventCAAuthorityRotated:                       {1: true},
 	EventCAAuthorityRekeyed:                       {1: true},
 	EventCACrossSigned:                            {1: true},
@@ -3868,7 +3876,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		// The delegated CA's certificate is an issuance OF THE PARENT CA, so it
 		// joins the parent's issued ledger: OCSP answers for it and revoking
 		// the delegation from the brain rides the existing CRL machinery.
-		return p.store.RecordIssuedCertTx(ctx, tx, e.TenantID, pl.CAID, pl.Serial, e.Time)
+		return p.store.RecordIssuedCertEventTx(ctx, tx, e, pl.CAID, pl.Serial, e.Time)
 	case EventEdgeDelegationRevoked:
 		var pl EdgeDelegationRevoked
 		if err := decode(e, &pl); err != nil {
@@ -4065,6 +4073,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
+		if (schemaVersionOf(e) == CertificateObservationEventSchemaVersion) != pl.ObservationOnly {
+			return fmt.Errorf("projections: %s observation marker/schema mismatch", e.Type)
+		}
 		anchoredSchema := schemaVersionOf(e) == CertificateValidityEventSchemaVersion
 		if (pl.ValidityAnchor != nil) != anchoredSchema {
 			return fmt.Errorf("projections: %s validity anchor/schema mismatch", e.Type)
@@ -4105,7 +4116,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return err
 		}
 		if pl.CAID != "" && pl.Serial != "" {
-			if err := p.store.RecordIssuedCertTx(ctx, tx, e.TenantID, pl.CAID, pl.Serial, e.Time); err != nil {
+			if err := p.store.RecordIssuedCertEventTx(ctx, tx, e, pl.CAID, pl.Serial, e.Time); err != nil {
 				return err
 			}
 		}
@@ -4174,7 +4185,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if issuedAt.IsZero() {
 			issuedAt = e.Time
 		}
-		return p.store.RecordIssuedCertTx(ctx, tx, e.TenantID, pl.CAID, pl.Serial, issuedAt)
+		return p.store.RecordIssuedCertEventTx(ctx, tx, e, pl.CAID, pl.Serial, issuedAt)
 	case EventCAEndEntityIssued:
 		var pl CAIssuedCertificate
 		if err := decode(e, &pl); err != nil {
@@ -4187,7 +4198,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if issuedAt.IsZero() {
 			issuedAt = e.Time
 		}
-		return p.store.RecordIssuedCertTx(ctx, tx, e.TenantID, pl.CAID, pl.Serial, issuedAt)
+		return p.store.RecordIssuedCertEventTx(ctx, tx, e, pl.CAID, pl.Serial, issuedAt)
 	case EventCACertificateRevoked:
 		var pl CACertificateRevoked
 		if err := decode(e, &pl); err != nil {
@@ -6940,6 +6951,9 @@ func (p *Projector) projectCatchUpWithPrivacyBarrier(ctx context.Context, log *e
 					"projections: checkpoint %d is beyond event history head %d",
 					from, replayHead,
 				)
+			}
+			if err := p.backfillCertificateIssuanceReceipts(readCtx, log, replayHead); err != nil {
+				return fmt.Errorf("projections: backfill retained issuance facts: %w", err)
 			}
 			secretAuthority, err := classifySecretSyncLifecycleThrough(readCtx, log, replayHead)
 			if err != nil {

@@ -45,6 +45,13 @@ func TestHistoricalIndexMigrationRetryKeepsApplicationWritesAvailable(t *testing
 			 VALUES ($1,$2,'original member',ARRAY['operator'],'manual','active',now(),now())`,
 			write: `UPDATE tenant_members SET display_name=display_name || ' updated' WHERE tenant_id=$1 AND subject=$2`,
 		},
+		{
+			version: 229, index: "certificate_receipt_issuance_origin",
+			seed: `INSERT INTO certificate_metadata_receipts
+			 (event_id,tenant_id,event_sequence,event_digest,issuance_status,issuance_fingerprint,issuance_time)
+			 VALUES ($1,$2,1,repeat('a',64),'mint','retained-leaf',now())`,
+			write: `UPDATE certificate_metadata_receipts SET event_digest=repeat('b',64) WHERE tenant_id=$1 AND event_id=$2`,
+		},
 	} {
 		t.Run(fmt.Sprint(tc.version), func(t *testing.T) {
 			ctx := t.Context()
@@ -85,11 +92,11 @@ func TestHistoricalIndexMigrationRetryKeepsApplicationWritesAvailable(t *testing
 					statements = append(statements, statement)
 				}
 			}
-			if tc.version == 221 {
-				// SCIM expansion is already committed by migration 0220. The
+			if tc.version == 221 || tc.version == 229 {
+				// Column expansion is already committed by the prefix. The
 				// separate online migration must not hold a transaction open.
 				if !target.noTx {
-					t.Fatal("SCIM index must be a no-transaction migration")
+					t.Fatal("index must be a no-transaction migration")
 				}
 			} else {
 				if len(statements) != 2 || !strings.Contains(statements[0].sql, "ADD COLUMN") {

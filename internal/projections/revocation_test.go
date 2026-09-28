@@ -14,6 +14,8 @@ import (
 	"trstctl.com/trstctl/internal/ca/revocation"
 	"trstctl.com/trstctl/internal/crypto"
 	cryptoca "trstctl.com/trstctl/internal/crypto/ca"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -50,7 +52,17 @@ func internalCA(t *testing.T, cn string) (*cryptoca.CA, []byte, []byte, string) 
 func revocationService(t *testing.T, s *store.Store, caObj *cryptoca.CA, opts ...revocation.Option) *revocation.Service {
 	t.Helper()
 	lookup := func(_, _ string) (*cryptoca.CA, error) { return caObj, nil }
-	svc := revocation.New(s, openLog(t), lookup, opts...)
+	log := openLog(t)
+	for _, tenant := range []string{tenantA, tenantB} {
+		e, err := log.Append(t.Context(), events.Event{Type: projections.EventTenantRegistered, TenantID: tenant, Data: []byte(`{"name":"revocation-fixture"}`)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := projections.New(s).Apply(t.Context(), e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	svc := revocation.New(s, log, lookup, opts...)
 	t.Cleanup(svc.Close)
 	return svc
 }

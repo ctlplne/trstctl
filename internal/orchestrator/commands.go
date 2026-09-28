@@ -1957,7 +1957,7 @@ func certificateRecordedPayload(id string, in store.Certificate, approval *store
 		ID: id, CAID: in.CAID, OwnerID: in.OwnerID, Subject: in.Subject, SANs: sans, Issuer: in.Issuer, Serial: in.Serial,
 		Fingerprint: in.Fingerprint, KeyAlgorithm: in.KeyAlgorithm, NotBefore: in.NotBefore, NotAfter: in.NotAfter,
 		ValidityAnchor:     in.ValidityAnchor,
-		DeploymentLocation: in.DeploymentLocation, Source: in.Source,
+		DeploymentLocation: in.DeploymentLocation, Source: in.Source, ObservationOnly: in.ObservationOnly,
 		CertificateDER:         in.CertificateDER,
 		CertificatePEM:         in.CertificatePEM,
 		IssuanceIdempotencyKey: in.IssuanceIdempotencyKey,
@@ -2638,7 +2638,7 @@ func (o *Orchestrator) RecordSuccessorCertificate(ctx context.Context, tenantID 
 		ID: id, CAID: in.CAID, OwnerID: in.OwnerID, Subject: in.Subject, SANs: sans, Issuer: in.Issuer, Serial: in.Serial,
 		Fingerprint: in.Fingerprint, KeyAlgorithm: in.KeyAlgorithm, NotBefore: in.NotBefore, NotAfter: in.NotAfter,
 		ValidityAnchor:     in.ValidityAnchor,
-		DeploymentLocation: in.DeploymentLocation, Source: in.Source, ReplacesID: &rep,
+		DeploymentLocation: in.DeploymentLocation, Source: in.Source, ObservationOnly: in.ObservationOnly, ReplacesID: &rep,
 		CertificateDER:         in.CertificateDER,
 		CertificatePEM:         in.CertificatePEM,
 		IssuanceIdempotencyKey: in.IssuanceIdempotencyKey,
@@ -2657,6 +2657,9 @@ func (o *Orchestrator) RecordSuccessorCertificate(ctx context.Context, tenantID 
 }
 
 func certificateRecordingSchema(in store.Certificate) int {
+	if in.ObservationOnly {
+		return projections.CertificateObservationEventSchemaVersion
+	}
 	if in.ValidityAnchor != nil {
 		return projections.CertificateValidityEventSchemaVersion
 	}

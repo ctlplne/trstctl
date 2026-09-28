@@ -197,7 +197,7 @@ func canonicalCertificateMetadataEvent(e eventspec.Event) (eventspec.Event, erro
 // decision reads and zero-row branches. A receipt commits atomically with every
 // effect; a rolled-back event leaves no receipt. An unknown older event must
 // rebuild in source order, never be reinterpreted against newer SQL state.
-func (s *Store) WithCertificateMetadataEventTx(ctx context.Context, tx pgx.Tx, e eventspec.Event, apply func() error) error {
+func (s *Store) WithCertificateMetadataEventTx(ctx context.Context, tx pgx.Tx, e eventspec.Event, apply func() error, summarize func() (CertificateIssuanceReceipt, error)) error {
 	if e.Sequence > math.MaxInt64 {
 		return errors.New("store: certificate metadata sequence exceeds PostgreSQL bigint")
 	}
@@ -226,11 +226,18 @@ func (s *Store) WithCertificateMetadataEventTx(ctx context.Context, tx pgx.Tx, e
 	if err := apply(); err != nil {
 		return err
 	}
+	summary, err := summarize()
+	if err != nil {
+		return err
+	}
 	digest, err := certificateMetadataEventDigest(e)
 	if err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO certificate_metadata_receipts(tenant_id,event_sequence,event_id,event_digest) VALUES($1,$2,$3,$4)`, e.TenantID, int64(e.Sequence), e.ID, digest); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO certificate_metadata_receipts
+		(tenant_id,event_sequence,event_id,event_digest,issuance_status,issuance_fingerprint,issuance_time)
+		VALUES($1,$2,$3,$4,$5,$6,$7)`, e.TenantID, int64(e.Sequence), e.ID, digest,
+		summary.Status, summary.Fingerprint, summary.Time); err != nil {
 		return err
 	}
 	_, err = tx.Exec(ctx, `INSERT INTO certificate_metadata_watermarks(tenant_id,latest_sequence,unknown_write) VALUES($1,$2,false)

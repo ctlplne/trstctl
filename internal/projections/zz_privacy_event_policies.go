@@ -123,6 +123,38 @@ type privacyHierarchyRoutedLeafIssuedV1 struct {
 	RotationRouted bool   `json:"rotation_routed"`
 }
 
+// Public leaf evidence is new in schema two. Do not widen the historical
+// responder shape when the current decoder gains fields for the new version.
+type privacyCAIssuedSerialV1 struct {
+	CAID     string    `json:"ca_id"`
+	Serial   string    `json:"serial"`
+	IssuedAt time.Time `json:"issued_at,omitempty"`
+	Source   string    `json:"source,omitempty"`
+}
+
+type privacyCAIssuedEvidenceV2 struct {
+	privacyCAIssuedSerialV1
+	CertificateDER []byte `json:"certificate_der"`
+	Fingerprint    string `json:"fingerprint"`
+}
+
+type privacyHierarchyLeafIssuedV2 struct {
+	privacyHierarchyLeafIssuedV1
+	CertificateDER []byte `json:"certificate_der"`
+	Fingerprint    string `json:"fingerprint"`
+}
+
+type privacyHierarchyMigrationLeafIssuedV2 struct {
+	privacyHierarchyLeafIssuedV2
+	MigrationExactAuthority bool `json:"migration_exact_authority"`
+}
+
+type privacyHierarchyRoutedLeafIssuedV2 struct {
+	privacyHierarchyLeafIssuedV2
+	RequestedCAID  string `json:"requested_ca_id"`
+	RotationRouted bool   `json:"rotation_routed"`
+}
+
 func privacyRules(rules ...events.PrivacyFieldRule) events.PrivacyEventPolicy {
 	return events.PrivacyEventPolicy{Rules: rules}
 }
@@ -265,6 +297,8 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 	)
 	anchoredCertificate := certificateRecorded
 	anchoredCertificate.Rules = append(append([]events.PrivacyFieldRule{}, certificateRecorded.Rules...), privacyRule("/validity_anchor", opaque))
+	observedCertificate := certificateRecorded
+	observedCertificate.Rules = append(append([]events.PrivacyFieldRule{}, certificateRecorded.Rules...), privacyRule("/observation_only", opaque))
 	certificateCustodyAttested := privacyRules(
 		privacyRule("/fingerprint", opaque), privacyRule("/key_origin", opaque),
 		privacyRule("/key_storage", opaque), privacyRule("/key_exportable", opaque),
@@ -817,6 +851,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		{EventCertificateRecorded, 1}:                                                certificateRecorded,
 		{EventCertificateRecorded, CertificateApprovalEventSchemaVersion}:            approvedCertificate,
 		{EventCertificateRecorded, CertificateValidityEventSchemaVersion}:            anchoredCertificate,
+		{EventCertificateRecorded, CertificateObservationEventSchemaVersion}:         observedCertificate,
 		{EventCertificateCustodyAttested, 1}:                                         certificateCustodyAttested,
 		{EventPrivacySubjectErased, 1}:                                               privacyErasedV1,
 		{EventPrivacySubjectErased, PrivacySubjectErasedOperationEventSchemaVersion}: privacyErasedV2,
@@ -1150,6 +1185,11 @@ type privacyCertificateRecordedV4 struct {
 	KeyGeneratedBy         string                `json:"key_generated_by,omitempty"`
 }
 
+type privacyCertificateObservedV5 struct {
+	privacyCertificateRecordedV1
+	ObservationOnly bool `json:"observation_only"`
+}
+
 type privacySubjectErasedV1 struct {
 	SubjectRef     string                        `json:"subject_ref"`
 	RequestedByRef string                        `json:"requested_by_ref,omitempty"`
@@ -1465,6 +1505,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventCertificateRecorded, 1}:                                                privacyPayloadShape[privacyCertificateRecordedV1](),
 		{EventCertificateRecorded, CertificateApprovalEventSchemaVersion}:            privacyPayloadShape[privacyCertificateRecordedV3](),
 		{EventCertificateRecorded, CertificateValidityEventSchemaVersion}:            privacyPayloadShape[privacyCertificateRecordedV4](),
+		{EventCertificateRecorded, CertificateObservationEventSchemaVersion}:         privacyPayloadShape[privacyCertificateObservedV5](),
 		{EventCertificateCustodyAttested, 1}:                                         privacyPayloadShape[CertificateCustodyAttested](),
 		{EventPrivacySubjectErased, 1}:                                               privacyPayloadShape[privacySubjectErasedV1](),
 		{EventPrivacySubjectErased, PrivacySubjectErasedOperationEventSchemaVersion}: privacyPayloadShape[privacySubjectErasedV2](),
@@ -1498,6 +1539,13 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 // version even when the existing schema was designed to carry no personal data.
 func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPayloadShape {
 	return map[privacyEventPolicyKey]events.PrivacyPayloadShape{
+		{EventCAIssuedCertificate, CAIssuedCertificateEvidenceSchemaVersion}: privacyPayloadShape[privacyCAIssuedEvidenceV2](),
+		{EventCAEndEntityIssued, CAIssuedCertificateEvidenceSchemaVersion}: events.PrivacyPayloadShapeOneOf(
+			privacyPayloadShape[privacyCAIssuedEvidenceV2](),
+			privacyPayloadShape[privacyHierarchyLeafIssuedV2](),
+			privacyPayloadShape[privacyHierarchyMigrationLeafIssuedV2](),
+			privacyPayloadShape[privacyHierarchyRoutedLeafIssuedV2](),
+		),
 		{audit.EventTypeArchived, audit.ArchivedEventSchemaVersion}: privacyPayloadShape[audit.ArchivedEvent](),
 		// Both producers already emit v1. The required managed_offering field
 		// distinguishes the managed variant; each alternative remains closed.
@@ -1540,7 +1588,7 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventAgentUpgradeRingDispatched, 1}:                                        privacyPayloadShape[AgentUpgradeRingDispatched](),
 		{EventIssuerCreated, 1}:                                                     privacyPayloadShape[IssuerCreated](),
 		{EventCertificateSuperseded, 1}:                                             privacyPayloadShape[CertificateSuperseded](),
-		{EventCAIssuedCertificate, 1}:                                               privacyPayloadShape[CAIssuedCertificate](),
+		{EventCAIssuedCertificate, 1}:                                               privacyPayloadShape[privacyCAIssuedSerialV1](),
 		{EventCACertificateRevoked, 1}:                                              privacyPayloadShape[CACertificateRevoked](),
 		{EventCACeremonyStarted, 1}:                                                 privacyPayloadShape[CACeremonyStarted](),
 		{EventCACeremonyApproved, 1}:                                                privacyPayloadShape[CACeremonyApproved](),
@@ -1559,7 +1607,7 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		),
 		{EventCAIntermediateCreated, CAAuthorityCreatedEventSchemaVersion}: privacyPayloadShape[CAAuthorityCreated](),
 		{EventCAEndEntityIssued, 1}: events.PrivacyPayloadShapeOneOf(
-			privacyPayloadShape[CAIssuedCertificate](),
+			privacyPayloadShape[privacyCAIssuedSerialV1](),
 			privacyPayloadShape[privacyHierarchySerialIssuedV1](),
 			privacyPayloadShape[privacyHierarchyLeafIssuedV1](),
 			privacyPayloadShape[privacyHierarchyMigrationLeafIssuedV1](),

@@ -12,8 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-
 	"trstctl.com/trstctl/ee/billing"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
@@ -205,24 +203,11 @@ func TestAUD59ProviderEvidenceReturnsVerifiableJSONAndFinanceCSV(t *testing.T) {
 	}
 }
 
-func aud59SeedIssuedTransition(t *testing.T, store *corestore.Store, tenantID string, sequence int64, at time.Time) {
-	t.Helper()
-	if err := store.WithTenant(t.Context(), tenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(t.Context(),
-			`INSERT INTO identity_transitions
-			 (tenant_id, identity_id, seq, from_state, to_state, event_type, occurred_at)
-			 VALUES ($1, gen_random_uuid(), $2, 'pending', 'issued', 'identity.issued', $3)`,
-			tenantID, sequence, at)
-		return err
-	}); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestAUD59ProviderEvidenceSurvivesRestartAndRefusesReconciliationDivergence(t *testing.T) {
 	ctx := t.Context()
 	tenantID := CustomerID("aud59-restart-customer")
 	firstStore := openProviderStore(t)
+	recordIssued := aud59IssuanceRecorder(t, firstStore, tenantID)
 	firstBilling := billing.NewPGStore(firstStore)
 	midpoint := aud59PeriodStart.Add(14 * 24 * time.Hour)
 	if err := firstBilling.AddCounters(ctx, []billing.CounterDelta{
@@ -233,7 +218,7 @@ func TestAUD59ProviderEvidenceSurvivesRestartAndRefusesReconciliationDivergence(
 		t.Fatal(err)
 	}
 	for sequence := int64(1); sequence <= 3; sequence++ {
-		aud59SeedIssuedTransition(t, firstStore, tenantID, sequence, midpoint.Add(time.Duration(sequence)*time.Minute))
+		recordIssued(midpoint.Add(time.Duration(sequence) * time.Minute))
 	}
 	firstStore.Close()
 

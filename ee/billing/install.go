@@ -21,6 +21,8 @@ type Installation struct {
 	Durable bool
 	// PG is the durable store when there is one, for coverage queries.
 	PG *PGStore
+	// Stopped closes after the recorder's bounded final flush completes.
+	Stopped <-chan struct{}
 }
 
 func InstallInMemory(ctx context.Context, log *slog.Logger, count TenantCounter) *Installation {
@@ -29,8 +31,7 @@ func InstallInMemory(ctx context.Context, log *slog.Logger, count TenantCounter)
 	checker := NewQuotaChecker(store, count, time.Minute)
 	usage.SetRecorder(recorder)
 	usage.SetQuotaChecker(checker)
-	go recorder.Run(ctx, time.Minute)
-	return &Installation{Store: store, Recorder: recorder, QuotaChecker: checker, Durable: false}
+	return &Installation{Store: store, Recorder: recorder, QuotaChecker: checker, Durable: false, Stopped: runRecorder(ctx, recorder)}
 }
 
 // InstallDurable wires metering to PostgreSQL (L2).
@@ -50,10 +51,18 @@ func InstallDurable(ctx context.Context, log *slog.Logger, count TenantCounter, 
 		return inst
 	}
 	store := NewPGStore(st)
-	recorder := NewRecorder(store, log)
+	recorder := newDurableRecorder(store, log)
 	checker := NewQuotaChecker(store, count, time.Minute)
 	usage.SetRecorder(recorder)
 	usage.SetQuotaChecker(checker)
-	go recorder.Run(ctx, time.Minute)
-	return &Installation{Recorder: recorder, QuotaChecker: checker, Durable: true, PG: store}
+	return &Installation{Recorder: recorder, QuotaChecker: checker, Durable: true, PG: store, Stopped: runRecorder(ctx, recorder)}
+}
+
+func runRecorder(ctx context.Context, recorder *Recorder) <-chan struct{} {
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		recorder.Run(ctx, time.Minute)
+	}()
+	return stopped
 }

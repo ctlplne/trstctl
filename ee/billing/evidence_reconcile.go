@@ -19,9 +19,9 @@ import (
 // the signable gate exists to keep off invoices.
 //
 // Not every meter has an independent source. certificates_issued does: every
-// mint appends a lifecycle transition to `issued`, and the identity_transitions
-// projection is that history made queryable (rebuilt from the log on demand,
-// which is what makes it usable as a check rather than a copy). A gauge
+// managed-leaf mint records a certificate event. Its immutable completion receipt
+// retains the mint's fingerprint and event time, including renewals. Replaying
+// the source log rebuilds those facts independently of usage counters. A gauge
 // sampled from live state has no event to recount, and the honest document
 // says so per line instead of implying every number was cross-checked.
 
@@ -50,7 +50,7 @@ type ReconciliationLine struct {
 	Note   string `json:"note,omitempty"`
 }
 
-const transitionsSource = "identity_transitions projection of the event log (to_state=issued, occurred_at within the period)"
+const issuanceSource = "certificate event completion receipts (distinct managed-leaf fingerprints, first mint event time within the period)"
 
 // ReconcileEvidence cross-checks the period's metered lines.
 //
@@ -78,11 +78,11 @@ func ReconcileEvidence(ctx context.Context, rec EvidenceReconciler, p EvidencePe
 		EventHistory: events,
 		Checked:      ok,
 		Matches:      ok && metered == events,
-		Source:       transitionsSource,
+		Source:       issuanceSource,
 	}}
 	if !ok {
 		out[0].Source = ""
-		out[0].Note = "no event-history source is attached on this deployment; the metered value stands alone"
+		out[0].Note = "issuance history is unavailable or unverified, including older issuer records containing only serial numbers; the measured value is retained, not treated as a verified zero"
 	}
 	for _, l := range lines {
 		if l.Meter == usage.MeterCertificatesIssued {

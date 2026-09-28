@@ -66,6 +66,13 @@ type RevocationSink interface {
 	Revoke(ctx context.Context, tenantID, caID, serial string, reasonCode int) error
 }
 
+// PublicIssuanceSink retains the exact public leaf in the issuance event. The
+// served sink implements this in addition to serial-only revocation support.
+// A recording error prevents returning a credential with unrecorded issuance.
+type PublicIssuanceSink interface {
+	RecordIssuedCertificate(ctx context.Context, tenantID, caID, serial string, certificateDER []byte) error
+}
+
 // reasonCessationOfOperation is the RFC 5280 CRLReason used for a leased
 // certificate revoked because its lease ended or was explicitly revoked.
 const reasonCessationOfOperation = 5
@@ -302,16 +309,19 @@ func (p *PKIProvider) signAndRecord(ctx context.Context, cn string, csrDER []byt
 		return dynsecret.Credential{}, fmt.Errorf("pkisecret: inspect issued cert: %w", err)
 	}
 	serial := issuedInfo.SerialNumber
+	if p.sink != nil {
+		if recorder, ok := p.sink.(PublicIssuanceSink); ok {
+			err = recorder.RecordIssuedCertificate(ctx, p.tenantID, p.caID, serial, certDER)
+		} else {
+			err = p.sink.RecordIssued(ctx, p.tenantID, p.caID, serial)
+		}
+		if err != nil {
+			return dynsecret.Credential{}, fmt.Errorf("pkisecret: record issued certificate: %w", err)
+		}
+	}
 	p.mu.Lock()
 	p.live[serial] = true
 	p.mu.Unlock()
-	// Track the issued serial on the revocation pipeline so OCSP can answer
-	// "good" (issued, not revoked) rather than "unknown", and so a later Revoke has
-	// a record to flip (AN-2). Best-effort: a recorder failure must not fail
-	// issuance of an otherwise-valid certificate.
-	if p.sink != nil {
-		_ = p.sink.RecordIssued(ctx, p.tenantID, p.caID, serial)
-	}
 	bundle := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
 	return dynsecret.Credential{
 		BackendRef: serial,

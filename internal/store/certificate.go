@@ -35,8 +35,11 @@ type Certificate struct {
 	ValidityAnchor     *time.Time
 	DeploymentLocation string
 	Source             string
-	CertificateDER     []byte
-	CertificatePEM     []byte
+	// ObservationOnly binds an import operation independently of its operator-
+	// supplied source label. It travels in the event, not the inventory row.
+	ObservationOnly bool
+	CertificateDER  []byte
+	CertificatePEM  []byte
 	// IssuanceEventID is the immutable lifecycle certificate event. Source is
 	// current observation provenance and may legitimately become import.
 	IssuanceEventID        string
