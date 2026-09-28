@@ -5,6 +5,7 @@ package billing
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -57,21 +58,22 @@ func (p *PGStore) AddCounters(ctx context.Context, deltas []CounterDelta) error 
 
 func (p *PGStore) addForTenant(ctx context.Context, tenantID string, deltas []CounterDelta) error {
 	return p.tx(ctx, tenantID, func(tx pgx.Tx) error {
-		for _, d := range deltas {
-			if _, err := tx.Exec(ctx,
-				`INSERT INTO provider_usage_meters (tenant_id, meter, period_start, kind, value)
+		return addCounterRows(ctx, tx, deltas)
+	})
+}
+
+func addCounterRows(ctx context.Context, tx pgx.Tx, deltas []CounterDelta) error {
+	for _, d := range deltas {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO provider_usage_meters (tenant_id, meter, period_start, kind, value)
 				 VALUES ($1, $2, $3, 'counter', $4)
 				 ON CONFLICT (tenant_id, meter, period_start)
 				 DO UPDATE SET value = provider_usage_meters.value + EXCLUDED.value, updated_at = now()`,
-				d.TenantID, d.Meter, d.Period, d.Delta); err != nil {
-				return err
-			}
-			if err := p.widenCoverage(ctx, tx, d.TenantID, d.Period); err != nil {
-				return err
-			}
+			d.TenantID, d.Meter, d.Period, d.Delta); err != nil {
+			return err
 		}
-		return nil
-	})
+	}
+	return nil
 }
 
 // SetGauge overwrites. A gauge is a level, not a delta.
@@ -88,25 +90,76 @@ func (p *PGStore) SetGauge(ctx context.Context, tenantID, meter string, period t
 			tenantID, meter, period, value); err != nil {
 			return err
 		}
-		return p.widenCoverage(ctx, tx, tenantID, period)
+		return nil
 	})
 }
 
-// widenCoverage records that the store was watching at this instant.
-//
-// This is what makes evidence signable. Without it, a period with no rows is
-// indistinguishable from a period the store was not running for — and the
-// second one must never be signed as zero usage.
-func (p *PGStore) widenCoverage(ctx context.Context, tx pgx.Tx, tenantID string, at time.Time) error {
-	_, err := tx.Exec(ctx,
-		`INSERT INTO provider_usage_coverage (tenant_id, observed_from, observed_to)
-		 VALUES ($1, $2, $2)
-		 ON CONFLICT (tenant_id) DO UPDATE SET
-		   observed_from = LEAST(provider_usage_coverage.observed_from, EXCLUDED.observed_from),
-		   observed_to   = GREATEST(provider_usage_coverage.observed_to, EXCLUDED.observed_to),
-		   updated_at = now()`,
-		tenantID, at)
-	return err
+// FlushObservedCounters commits one recorder's counters and observed interval
+// together. A point write through AddCounters or SetGauge proves no interval.
+// PostgreSQL merges overlapping/adjacent ranges but preserves every gap.
+func (p *PGStore) FlushObservedCounters(ctx context.Context, tenantID, registration string, from, to time.Time, deltas []CounterDelta) error {
+	if p == nil || p.store == nil || tenantID == "" || registration == "" || to.Before(from) {
+		return fmt.Errorf("billing: invalid recorder observation interval")
+	}
+	for _, delta := range deltas {
+		if delta.TenantID != tenantID {
+			return fmt.Errorf("billing: counter does not belong to observation tenant")
+		}
+	}
+	return p.tx(ctx, tenantID, func(tx pgx.Tx) error {
+		current, err := p.observationRegistrationTx(ctx, tx, tenantID)
+		if err != nil {
+			return err
+		}
+		if current != registration {
+			return errObservationRegistration
+		}
+		if err := addCounterRows(ctx, tx, deltas); err != nil {
+			return err
+		}
+		if from.IsZero() || to.Equal(from) {
+			return nil
+		}
+		_, err = tx.Exec(ctx,
+			`INSERT INTO provider_usage_coverage (tenant_id, observed_from, observed_to, observed_ranges)
+			 VALUES ($1, $2, $3, tstzmultirange(tstzrange($2, $3, '[)')))
+			 ON CONFLICT (tenant_id) DO UPDATE SET
+			   observed_from = LEAST(provider_usage_coverage.observed_from, EXCLUDED.observed_from),
+			   observed_to = GREATEST(provider_usage_coverage.observed_to, EXCLUDED.observed_to),
+			   observed_ranges = COALESCE(provider_usage_coverage.observed_ranges, '{}'::tstzmultirange) + EXCLUDED.observed_ranges,
+			   updated_at = now()`, tenantID, from, to)
+		return err
+	})
+}
+
+// ObservationRegistration identifies the exact live tenant lifecycle before a
+// delta enters the recorder's queue. Flush takes the same lifecycle fence and
+// checks this identity again, so erasure cannot cross the database write.
+func (p *PGStore) ObservationRegistration(ctx context.Context, tenantID string) (string, error) {
+	if p == nil || p.store == nil || tenantID == "" {
+		return "", errObservationRegistration
+	}
+	var registration string
+	err := p.tx(ctx, tenantID, func(tx pgx.Tx) error {
+		var err error
+		registration, err = p.observationRegistrationTx(ctx, tx, tenantID)
+		return err
+	})
+	return registration, err
+}
+
+func (p *PGStore) observationRegistrationTx(ctx context.Context, tx pgx.Tx, tenantID string) (string, error) {
+	snapshot, err := p.store.LockLiveTenantRegistrationSnapshotTx(ctx, tx, tenantID)
+	if errors.Is(err, corestore.ErrApplicationSecretTenantEpochMismatch) {
+		return "", errObservationRegistration
+	}
+	if err != nil {
+		return "", err
+	}
+	if snapshot.EventSeq > 0 {
+		return fmt.Sprintf("event:%d", snapshot.EventSeq), nil
+	}
+	return fmt.Sprintf("%d/%s/%s", snapshot.EventSeq, snapshot.CreatedAt.UTC().Format(time.RFC3339Nano), snapshot.Name), nil
 }
 
 // CoverageFor reports what the store can vouch for, for MaySign.
@@ -118,17 +171,29 @@ func (p *PGStore) CoverageFor(ctx context.Context, tenantID string) (Coverage, e
 		return Coverage{}, nil
 	}
 	err := p.tx(ctx, tenantID, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx,
-			`SELECT observed_from, observed_to FROM provider_usage_coverage WHERE tenant_id = $1`,
-			tenantID).Scan(&out.ObservedFrom, &out.ObservedTo)
+		rows, err := tx.Query(ctx,
+			`SELECT lower(observed), upper(observed)
+			 FROM provider_usage_coverage, LATERAL unnest(observed_ranges) AS observed
+			 WHERE tenant_id = $1 ORDER BY lower(observed)`, tenantID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var interval ObservationInterval
+			if err := rows.Scan(&interval.From, &interval.To); err != nil {
+				return err
+			}
+			out.Intervals = append(out.Intervals, interval)
+		}
+		return rows.Err()
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		// No coverage row means the store never observed this customer. Zero
-		// times make MaySign refuse, which is the correct answer.
-		return Coverage{Durable: true}, nil
-	}
 	if err != nil {
 		return Coverage{}, err
+	}
+	if len(out.Intervals) > 0 {
+		out.ObservedFrom = out.Intervals[0].From
+		out.ObservedTo = out.Intervals[len(out.Intervals)-1].To
 	}
 	return out, nil
 }
@@ -218,10 +283,6 @@ func (p *PGStore) IssuedInPeriod(ctx context.Context, tenantID string, from, to 
 	return n, known, nil
 }
 
-// tx runs against the SYSTEM pool, not a tenant context. These meters are the
-// provider plane's record of what to bill a customer; a tenant must not be able
-// to read or write the meter that bills them, so this deliberately does not go
-// through WithTenant.
 // tx runs under the TENANT's RLS context. Not the system pool: these tables
 // carry tenant_id and are FORCE-RLS, so every write is confined by the same
 // policy that confines a read (AN-1).

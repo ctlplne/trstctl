@@ -11,9 +11,10 @@ import (
 )
 
 type recordKey struct {
-	tenant string
-	meter  string
-	period time.Time
+	tenant       string
+	meter        string
+	period       time.Time
+	registration string
 }
 
 type MemStore struct {

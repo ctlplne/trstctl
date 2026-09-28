@@ -18,7 +18,7 @@ var (
 
 func period() EvidencePeriod { return EvidencePeriod{CustomerID: "bank-a", Start: pStart, End: pEnd} }
 func fullDurable() Coverage {
-	return Coverage{ObservedFrom: pStart, ObservedTo: pEnd, Durable: true}
+	return Coverage{ObservedFrom: pStart, ObservedTo: pEnd, Durable: true, Intervals: []ObservationInterval{{From: pStart, To: pEnd}}}
 }
 
 // The defect this epic exists to fix: in-memory metering loses usage SILENTLY.

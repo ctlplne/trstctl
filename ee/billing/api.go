@@ -166,6 +166,10 @@ func ServeEvidenceForCustomer(w http.ResponseWriter, r *http.Request, deps Evide
 		writeEvidenceError(w, http.StatusBadRequest, "period_end must be after period_start")
 		return
 	}
+	if !start.Equal(PeriodStart(start)) || !end.Equal(PeriodStart(end)) {
+		writeEvidenceError(w, http.StatusBadRequest, "usage evidence requires whole UTC hour boundaries; partial-hour totals are not available")
+		return
+	}
 	if reader == nil {
 		// No metering store attached. Refusing beats answering zero: a document
 		// reporting no usage would be indistinguishable from a customer who did

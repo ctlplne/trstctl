@@ -97,6 +97,18 @@ func newBillingStoreOn(t *testing.T, dbName string) (*billing.PGStore, *corestor
 	return billing.NewPGStore(cs), cs
 }
 
+func seedBillingRegistration(t *testing.T, store *corestore.Store, tenantID string) {
+	t.Helper()
+	// Read-model fixture only; Provider event/registration replay is covered
+	// in ee/provider. The recorder must bind a real registration even in tests.
+	if err := store.UpsertTenant(t.Context(), corestore.Tenant{
+		TenantID: tenantID, Name: "billing-fixture", EventSeq: 1,
+		CreatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // seedQuota writes a read-model fixture under the tenant's RLS context. Quota
 // command/projection behavior is proved in ee/provider/eventsource_test.go;
 // this package owns only durable quota reads and enforcement.
@@ -220,24 +232,23 @@ func TestEvidenceSignsOnlyWhenMeterAndLogAgree(t *testing.T) {
 	}
 	mid := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 
-	// Three issuances: three meter increments and three real certificate facts.
-	if err := pgStore.AddCounters(ctx, []billing.CounterDelta{
-		{TenantID: quotaTenant, Meter: usage.MeterCertificatesIssued, Period: mid, Delta: 3},
-	}); err != nil {
+	// A recorder that was running before the period commits its counters and
+	// covered intervals together. Point observations on either side are not
+	// evidence that the intervening month was watched.
+	nowObserved := period.Start.Add(-time.Hour)
+	recorder := billing.NewRecorder(pgStore, nil).WithClock(func() time.Time { return nowObserved })
+	recorder.Record(quotaTenant, usage.MeterCertificatesIssued, 1)
+	if err := recorder.Flush(ctx); err != nil {
 		t.Fatal(err)
 	}
+	nowObserved = mid
+	recorder.Record(quotaTenant, usage.MeterCertificatesIssued, 3)
 	for i := range 3 {
 		billingRecordAt(t, orch, quotaTenant, mid.Add(time.Duration(i)*time.Minute))
 	}
-	// A neighboring tenant's issuance must not leak into the recount.
 	billingRecordAt(t, orch, otherTenant, mid)
-	// Coverage must span the period or MaySign refuses before reconciliation.
-	if err := pgStore.AddCounters(ctx, []billing.CounterDelta{
-		{TenantID: quotaTenant, Meter: usage.MeterCertificatesIssued, Period: period.Start.Add(-time.Hour), Delta: 1},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := pgStore.SetGauge(ctx, quotaTenant, usage.MeterAgents, period.End.Add(time.Hour), 2); err != nil {
+	nowObserved = period.End
+	if err := recorder.Flush(ctx); err != nil {
 		t.Fatal(err)
 	}
 
@@ -337,7 +348,8 @@ func TestSignableCoverageWithoutReconcilerIsServedUnsignable(t *testing.T) {
 		End:        time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
 	}
 	coverage := billing.Coverage{Durable: true,
-		ObservedFrom: period.Start.Add(-time.Hour), ObservedTo: period.End.Add(time.Hour)}
+		ObservedFrom: period.Start.Add(-time.Hour), ObservedTo: period.End.Add(time.Hour),
+		Intervals: []billing.ObservationInterval{{From: period.Start, To: period.End}}}
 	doc, err := billing.BuildSignedEvidence(context.Background(), period, coverage, nil,
 		nil, &billing.AuditKeySigner{Key: key}, period.End.Add(time.Hour))
 	if err != nil {

@@ -600,7 +600,11 @@ func seedRecoveredFromPostgresTables(
 			// period, and the coverage row is exactly what would have told them
 			// the figure was short.
 			{`INSERT INTO provider_usage_meters (tenant_id, meter, period_start, kind, value) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, "certificates.issued", now.Truncate(time.Hour), "counter", int64(17)}},
-			{`INSERT INTO provider_usage_coverage (tenant_id, observed_from, observed_to) VALUES ($1, $2, $3)`, []any{tenantA, now.Add(-time.Hour), now}},
+			// Preserve the gap as well as the outer bounds; a restore must not
+			// promote two separated observations into continuous coverage.
+			{`INSERT INTO provider_usage_coverage (tenant_id, observed_from, observed_to, observed_ranges)
+			  VALUES ($1, $2, $3, tstzmultirange(tstzrange($2, $4, '[)'), tstzrange($5, $3, '[)')))`,
+				[]any{tenantA, now.Add(-time.Hour), now, now.Add(-40 * time.Minute), now.Add(-20 * time.Minute)}},
 			// L2: a customer's cap. Losing it fails OPEN — the customer creates
 			// freely again — which is the pre-durability defect a restore must
 			// not reintroduce.

@@ -19,7 +19,9 @@ import (
 // the batch must neither lose the second tenant nor count the first one twice.
 func TestRecorderRetriesPartialTenantCommitWithoutDuplicatingUsage(t *testing.T) {
 	const database = "billing_partial_tenant_retry"
-	store, _ := newBillingStoreOn(t, database)
+	store, connection := newBillingStoreOn(t, database)
+	seedBillingRegistration(t, connection, quotaTenant)
+	seedBillingRegistration(t, connection, otherTenant)
 	ctx := t.Context()
 	admin, err := pgx.Connect(ctx, strings.TrimSuffix(billingTestDSN, "/postgres")+"/"+database)
 	if err != nil {

@@ -718,7 +718,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:3094` | closed test table list above |
+| `internal/store/migration_content_test.go:3095` | closed test table list above |
 
 ### G203 — CWE-? (unmapped rule) (2 sites)
 

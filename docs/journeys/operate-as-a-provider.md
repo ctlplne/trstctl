@@ -136,6 +136,14 @@ partner lab that is the customer listener on port 10449
 the provider evidence endpoints) as invoice evidence; the verification keys for
 that evidence are published at `/provider/v1/evidence/verification-keys`.
 
+Choose closed periods whose start and end fall on a whole UTC hour. Usage is
+stored in hourly buckets, so a partial-hour request is refused rather than
+rounded or signed with observations outside the requested window. Evidence
+requires continuous durable observation, as well as agreement with the event
+history. Isolated counter or gauge writes do not prove that the time between
+them was observed. A recorder restart leaves any unflushed interval uncovered;
+historical first/last timestamps are retained but cannot fill that gap.
+
 Changing the invoice customer or period clears the displayed health and evidence.
 Pull the newly selected period before downloading it; a response from an earlier
 selection cannot populate the new customer or mark its signature as verified.

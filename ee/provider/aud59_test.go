@@ -42,6 +42,7 @@ func (s *aud59EvidenceStore) CoverageFor(_ context.Context, tenantID string) (bi
 		Durable:      true,
 		ObservedFrom: aud59PeriodStart.Add(-time.Hour),
 		ObservedTo:   aud59PeriodEnd.Add(time.Hour),
+		Intervals:    []billing.ObservationInterval{{From: aud59PeriodStart, To: aud59PeriodEnd}},
 	}, nil
 }
 
@@ -210,13 +211,19 @@ func TestAUD59ProviderEvidenceSurvivesRestartAndRefusesReconciliationDivergence(
 	recordIssued := aud59IssuanceRecorder(t, firstStore, tenantID)
 	firstBilling := billing.NewPGStore(firstStore)
 	midpoint := aud59PeriodStart.Add(14 * 24 * time.Hour)
-	if err := firstBilling.AddCounters(ctx, []billing.CounterDelta{
-		{TenantID: tenantID, Meter: usage.MeterCertificatesIssued, Period: aud59PeriodStart.Add(-time.Hour), Delta: 0},
-		{TenantID: tenantID, Meter: usage.MeterCertificatesIssued, Period: midpoint, Delta: 3},
-		{TenantID: tenantID, Meter: usage.MeterCertificatesIssued, Period: aud59PeriodEnd.Add(time.Hour), Delta: 0},
-	}); err != nil {
+	nowObserved := aud59PeriodStart.Add(-time.Hour)
+	recorder := billing.NewRecorder(firstBilling, nil).WithClock(func() time.Time { return nowObserved })
+	recorder.Record(tenantID, usage.MeterCertificatesIssued, 1)
+	if err := recorder.Flush(ctx); err != nil {
 		t.Fatal(err)
 	}
+	nowObserved = midpoint
+	recorder.Record(tenantID, usage.MeterCertificatesIssued, 3)
+	nowObserved = aud59PeriodEnd
+	if err := recorder.Flush(ctx); err != nil {
+		t.Fatal(err)
+	}
+
 	for sequence := int64(1); sequence <= 3; sequence++ {
 		recordIssued(midpoint.Add(time.Duration(sequence) * time.Minute))
 	}

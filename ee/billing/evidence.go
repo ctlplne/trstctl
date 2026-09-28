@@ -4,15 +4,15 @@ package billing
 
 import (
 	"fmt"
+	"sort"
 	"time"
 )
 
 // When a metering period may be signed as invoice evidence (epic L2).
 //
-// Metering is in-memory today. That does not merely lose data on restart — it
-// loses it SILENTLY. A provider pulls a number, invoices from it, and never
-// learns the number was short; the customer is under-billed and the provider's
-// revenue quietly disappears into a process restart nobody correlated.
+// Durable counters alone do not prove that a whole period was observed. A
+// pending increment can disappear on restart, and isolated observations can
+// surround an outage. The document must retain that uncertainty.
 //
 // So the question this file answers is not "what did we count" but "may we sign
 // what we counted". Signing is a claim that the figure is complete, and a
@@ -29,10 +29,13 @@ type EvidencePeriod struct {
 
 // Coverage is what the metering store can actually vouch for over a period.
 type Coverage struct {
-	// ObservedFrom and ObservedTo bound what the store actually holds. If they
-	// do not span the whole period, the figure is short by an unknown amount.
+	// ObservedFrom and ObservedTo bound the proven intervals. These diagnostic
+	// bounds are necessary but not sufficient: Intervals must leave no gaps.
 	ObservedFrom time.Time
 	ObservedTo   time.Time
+	// Intervals are the actual durably flushed observation windows. Bounds
+	// alone never prove continuity: a restart can leave a gap between them.
+	Intervals []ObservationInterval
 	// RestartsWithin counts process restarts inside the period. With in-memory
 	// metering each one is an unknown quantity of lost usage; with a durable
 	// store it is merely a fact.
@@ -41,6 +44,13 @@ type Coverage struct {
 	// in-memory store cannot vouch for anything across a restart, and saying so
 	// is the difference between evidence and a guess.
 	Durable bool
+}
+
+// ObservationInterval is a half-open interval [From, To) whose pending
+// counters were committed before the store recorded it as covered.
+type ObservationInterval struct {
+	From time.Time
+	To   time.Time
 }
 
 // EvidenceDecision is whether a period may be signed, and why not.
@@ -68,6 +78,9 @@ func MaySign(p EvidencePeriod, c Coverage, now time.Time) EvidenceDecision {
 	if p.CustomerID == "" || !p.End.After(p.Start) {
 		return EvidenceDecision{Reason: "The period is not a real window; there is nothing to attest."}
 	}
+	if !p.Start.Equal(PeriodStart(p.Start)) || !p.End.Equal(PeriodStart(p.End)) {
+		return EvidenceDecision{Reason: "Usage is stored in whole-hour buckets. Choose period boundaries on a UTC hour; partial-hour totals cannot be attested."}
+	}
 	if now.Before(p.End) {
 		return EvidenceDecision{Reason: fmt.Sprintf(
 			"The period has not closed yet (ends %s). Usage is still accruing, and signing now "+
@@ -85,6 +98,24 @@ func MaySign(p EvidencePeriod, c Coverage, now time.Time) EvidenceDecision {
 			"The metering store only covers %s to %s, which does not span the period. The figure "+
 				"is short by an unknown amount.",
 			c.ObservedFrom.UTC().Format(time.RFC3339), c.ObservedTo.UTC().Format(time.RFC3339))}
+	}
+	intervals := append([]ObservationInterval(nil), c.Intervals...)
+	sort.Slice(intervals, func(i, j int) bool { return intervals[i].From.Before(intervals[j].From) })
+	cursor := p.Start
+	for _, interval := range intervals {
+		if !interval.To.After(interval.From) || !interval.To.After(cursor) {
+			continue
+		}
+		if interval.From.After(cursor) {
+			break
+		}
+		cursor = interval.To
+		if !cursor.Before(p.End) {
+			break
+		}
+	}
+	if cursor.Before(p.End) {
+		return EvidenceDecision{Reason: fmt.Sprintf("Durable observation has a gap starting at %s. First and last usage records do not prove continuous coverage; choose a fully observed closed period.", cursor.UTC().Format(time.RFC3339))}
 	}
 	if c.RestartsWithin > 0 && !c.Durable {
 		return EvidenceDecision{Reason: fmt.Sprintf(
