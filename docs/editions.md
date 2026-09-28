@@ -381,7 +381,13 @@ break-glass access: after the exact `read` delegation succeeds,
 `DirectTenantSnapshot` enters that customer's PostgreSQL RLS identity and
 counts only active certificate rows for that tenant. The response distinguishes
 healthy, suspended, offboarded, and no-active-certificate states. A customer
-that does not exist returns 404; a storage failure returns 503; and the console
+whose workspace is not initialized reports `setup_required` and
+`workspace_initialized: false`; an initialized workspace reports `true` even
+when its certificate inventory is empty. This field confirms workspace
+registration, not token availability, successful sign-in or agent enrollment.
+The Provider console's **View setup** explains the administrator's first-token
+command and rechecks this state without treating missing evidence as success.
+A customer that does not exist returns 404; a storage failure returns 503; and the console
 renders both as unknown/unavailable rather than showing zero as if it were a
 measured fact. **Customer health** and **Invoice evidence** therefore name the
 same selected customer while keeping lifecycle/count truth separate from the

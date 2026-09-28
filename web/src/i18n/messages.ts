@@ -10,6 +10,53 @@ export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
 
 export const messages = {
+  "provider.setup.fieldRequired": { defaultMessage: "This field is required.", description: "Required Provider provisioning field." },
+  "provider.setup.open": { defaultMessage: "View setup", description: "Inspect the selected customer's access setup." },
+  "provider.setup.title": { defaultMessage: "Customer setup: {customer}", description: "Setup panel bound to one delegated customer." },
+  "provider.setup.serviceHelp": {
+    defaultMessage: "Active means the customer's service is permitted to run. Access setup and agent enrollment are separate steps.",
+    description: "Distinguish service state from onboarding completion.",
+  },
+  "provider.setup.required": { defaultMessage: "Initialize customer workspace", description: "The customer workspace has not been initialized." },
+  "provider.setup.configured": { defaultMessage: "Customer workspace is initialized", description: "The server verified a customer registration." },
+  "provider.setup.unknown": { defaultMessage: "Workspace setup could not be verified", description: "Missing or unavailable setup evidence." },
+  "provider.setup.unknownHelp": {
+    defaultMessage: "Check again before creating credentials. If this continues, ask the deployment administrator to check customer access.",
+    description: "Safe recovery from unavailable customer setup evidence.",
+  },
+  "provider.setup.inactive": {
+    defaultMessage: "This customer's service is not active. Resolve its service state before continuing setup; this view does not resume service.",
+    description: "Do not instruct credential creation for a suspended or retiring customer.",
+  },
+  "provider.setup.adminHelp": {
+    defaultMessage:
+      "Ask the deployment administrator to run this command on the control-plane host with the same configuration as the running service. It creates the first customer-scoped API token; a Provider sign-in cannot perform this host-admin step.",
+    description: "Explain the existing custody-authorized customer bootstrap.",
+  },
+  "provider.setup.command": { defaultMessage: "Administrator command", description: "Disclosure containing an exact customer-bound command." },
+  "provider.setup.commandLabel": { defaultMessage: "setup command", description: "Copy label for the administrator bootstrap command." },
+  "provider.setup.fileHelp": {
+    defaultMessage:
+      "The command writes the token to a private file in the current directory and refuses to overwrite an existing file. Transfer it securely to the customer's administrator. Do not paste the token into this Provider page.",
+    description: "Protect the newly created customer credential.",
+  },
+  "provider.setup.metering": {
+    defaultMessage:
+      "Metering starts after the customer workspace is initialized. Provisioning alone does not prove observed usage. Check setup again after the administrator finishes.",
+    description: "Explain when automatic collection can begin.",
+  },
+  "provider.setup.next": {
+    defaultMessage:
+      "Use a session authenticated for this customer to configure customer access, choose the issuer and enroll that customer's agent. The Provider sign-in is not a customer credential. This workspace check does not verify a usable sign-in, agent enrollment or certificate deployment. If token creation failed, ask the deployment administrator to finish that step.",
+    description: "Customer-bound next steps after registration.",
+  },
+  "provider.setup.coverage": {
+    defaultMessage:
+      "Automatic resource collection runs each minute. Signed usage evidence still requires a complete observed period and successful reconciliation; workspace initialization is not proof of billable coverage.",
+    description: "Separate access readiness from verified metering.",
+  },
+  "provider.setup.refresh": { defaultMessage: "Check setup again", description: "Refresh setup from the server." },
+  "provider.setup.close": { defaultMessage: "Close setup", description: "Close the customer setup panel." },
   "provider.access.delegations.open": {
     defaultMessage: "View delegations ({count})",
     description: "Provider customer operations and retained delegation or activity evidence.",
@@ -15286,11 +15333,11 @@ export const messages = {
     description: "L3: table column.",
   },
   "source.provider.col.status.l3prov0015": {
-    defaultMessage: "Status",
+    defaultMessage: "Service state",
     description: "L3: table column.",
   },
   "source.provider.col.created.l3prov0016": {
-    defaultMessage: "Onboarded",
+    defaultMessage: "Provisioned",
     description: "L3: table column.",
   },
   "source.provider.col.actions.l3prov0017": {

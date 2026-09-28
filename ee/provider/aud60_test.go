@@ -118,13 +118,16 @@ func TestAUD60ProviderHealthAuthorizesBeforeCustomerRLSRead(t *testing.T) {
 
 func TestAUD60ProviderHealthSurvivesRestartAndIsolatesCertificateCounts(t *testing.T) {
 	ctx := t.Context()
-	firstStore := openProviderStore(t)
+	firstStore, log, _ := authorityReplayFixture(t)
 	alpha := CustomerID("aud60-alpha")
 	bravo := CustomerID("aud60-bravo")
 	other := CustomerID("aud60-other")
 	projectTenantFixture(t, firstStore, Tenant{ID: alpha, Slug: "aud60-alpha", Name: "Alpha", Status: TenantActive})
 	projectTenantFixture(t, firstStore, Tenant{ID: bravo, Slug: "aud60-bravo", Name: "Bravo", Status: TenantSuspended})
 	projectTenantFixture(t, firstStore, Tenant{ID: other, Slug: "aud60-other", Name: "Other", Status: TenantActive})
+	for _, id := range []string{alpha, bravo, other} {
+		registerCoreCustomerFixture(t, firstStore, log, id)
+	}
 	seedCert(t, firstStore, alpha, "aud60-alpha-active-a", "active")
 	seedCert(t, firstStore, alpha, "aud60-alpha-active-b", "active")
 	seedCert(t, firstStore, alpha, "aud60-alpha-revoked", "revoked")

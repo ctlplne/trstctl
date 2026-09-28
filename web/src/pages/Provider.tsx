@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { useForm, useWatch } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Link } from "react-router-dom";
 import { translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
@@ -9,9 +12,11 @@ import { formatDateTime } from "@/i18n/format";
 import { Button } from "@/components/ui/button";
 import { DataGrid } from "@/components/DataGrid";
 import { Input } from "@/components/ui/input";
+import { Field } from "@/components/ui/field";
 import { createAppQueryClient, useApiQuery, useQueryClient } from "@/lib/query";
 import { ProviderAccessPanel } from "@/pages/provider/ProviderAccessPanel";
 import { ProviderBillingPanel } from "@/pages/provider/ProviderBillingPanel";
+import { ProviderSetupPanel } from "@/pages/provider/ProviderSetupPanel";
 import { ProviderActivityPanel, ProviderOffboardingAttention } from "@/pages/provider/ProviderActivityPanel";
 import {
   providerApi,
@@ -352,8 +357,18 @@ function ProviderConsole({ onSignOut }: { onSignOut: (reason?: "authentication")
   }, [customers.errorValue, activityQuery.errorValue, onSignOut]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [slug, setSlug] = useState("");
-  const [name, setName] = useState("");
+  const provision = useForm<{ slug: string; name: string }>({
+    resolver: zodResolver(
+      z.object({
+        slug: z.string().trim().min(1, translateNow("provider.setup.fieldRequired")),
+        name: z.string().trim().min(1, translateNow("provider.setup.fieldRequired")),
+      }),
+    ),
+    defaultValues: { slug: "", name: "" },
+  });
+  const [slug, name] = useWatch({ control: provision.control, name: ["slug", "name"] });
+  const [setupCustomerId, setSetupCustomerId] = useState<string | null>(null);
+  const setupCustomer = tenants?.find((tenant) => tenant.id === setupCustomerId);
   // The customer whose quota is expanded, as a discriminated union so the
   // render narrows cleanly between loading, a load failure, and a value.
   const [quotaView, setQuotaView] = useState<QuotaViewState | null>(null);
@@ -380,7 +395,7 @@ function ProviderConsole({ onSignOut }: { onSignOut: (reason?: "authentication")
       setDrill(null);
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [onSignOut, queryClient]);
+  }, [onSignOut, queryClient, setError]);
 
   const viewQuota = useCallback(
     async (id: string) => {
@@ -514,6 +529,9 @@ function ProviderConsole({ onSignOut }: { onSignOut: (reason?: "authentication")
               header: translateNow("source.provider.col.actions.l3prov0017"),
               cell: (tenant) => (
                 <div className="flex flex-wrap items-center gap-2">
+                  <Button type="button" variant="outline" onClick={() => setSetupCustomerId(tenant.id)}>
+                    {translateNow("provider.setup.open")}
+                  </Button>
                   {tenant.status === "active" && authority?.customers[tenant.id]?.suspend ? (
                     <Button
                       type="button"
@@ -637,6 +655,19 @@ function ProviderConsole({ onSignOut }: { onSignOut: (reason?: "authentication")
         />
       ) : null}
 
+      {setupCustomer ? (
+        <ProviderSetupPanel
+          key={setupCustomer.id}
+          tenant={setupCustomer}
+          authorityKey={[session.data?.id, authority]}
+          onAuthError={() => {
+            clearProviderToken();
+            onSignOut("authentication");
+          }}
+          onClose={() => setSetupCustomerId(null)}
+        />
+      ) : null}
+
       <ProviderBillingPanel
         tenants={tenants ?? []}
         onAuthError={() => {
@@ -650,26 +681,27 @@ function ProviderConsole({ onSignOut }: { onSignOut: (reason?: "authentication")
           <h2 className="text-title font-semibold">{translateNow("source.provider.provision.l3prov0007")}</h2>
           <form
             className="mt-2 flex flex-wrap items-end gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (slug.trim() && name.trim()) {
-                void act(async () => {
-                  await providerApi.provisionTenant({ slug: slug.trim(), name: name.trim() });
-                  setSlug("");
-                  setName("");
+            onSubmit={(event) => {
+              void provision.handleSubmit(async (values) => {
+                await act(async () => {
+                  const created = await providerApi.provisionTenant(values);
+                  queryClient.setQueryData<ProviderTenant[]>(["provider", "customers", session.data?.id, authority ?? null], (current) => [
+                    ...(current ?? []).filter((tenant) => tenant.id !== created.id),
+                    created,
+                  ]);
+                  setSetupCustomerId(created.id);
+                  provision.reset();
                 });
-              }
+              })(event);
             }}
           >
-            <label className="grid gap-1">
-              <span className="text-caption font-medium">{translateNow("source.provider.slug.l3prov0008")}</span>
-              <Input value={slug} onChange={(e) => setSlug(e.target.value)} aria-label={translateNow("source.provider.slug.l3prov0008")} />
-            </label>
-            <label className="grid gap-1">
-              <span className="text-caption font-medium">{translateNow("source.provider.name.l3prov0009")}</span>
-              <Input value={name} onChange={(e) => setName(e.target.value)} aria-label={translateNow("source.provider.name.l3prov0009")} />
-            </label>
-            <Button type="submit" disabled={busy || !slug.trim() || !name.trim()}>
+            <Field label={translateNow("source.provider.slug.l3prov0008")} error={provision.formState.errors.slug?.message}>
+              {(control) => <Input {...control} {...provision.register("slug")} />}
+            </Field>
+            <Field label={translateNow("source.provider.name.l3prov0009")} error={provision.formState.errors.name?.message}>
+              {(control) => <Input {...control} {...provision.register("name")} />}
+            </Field>
+            <Button type="submit" loading={busy} disabled={busy || !slug.trim() || !name.trim()}>
               {translateNow("source.provider.provision.action.l3prov0010")}
             </Button>
           </form>

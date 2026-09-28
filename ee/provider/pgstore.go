@@ -109,12 +109,22 @@ func (p *PGStore) DirectTenantSnapshot(ctx context.Context, tenantID string) (Te
 		return TenantSnapshot{}, err
 	}
 	var active int
+	var registration *int64
 	if err := p.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
-			`SELECT count(*) FROM certificates WHERE tenant_id = $1 AND status = 'active'`, tenantID).Scan(&active)
+			`SELECT (SELECT event_seq FROM tenants WHERE tenant_id = $1),
+			        (SELECT count(*) FROM certificates WHERE tenant_id = $1 AND status = 'active')`,
+			tenantID).Scan(&registration, &active)
 	}); err != nil {
 		return TenantSnapshot{}, err
 	}
+	// Read access and inventory in one RLS-confined statement, so a concurrent
+	// registration or erase cannot combine two different database snapshots.
+	// A malformed registration is unavailable, not a request to bootstrap over it.
+	if registration != nil && *registration <= 0 {
+		return TenantSnapshot{}, errors.New("provider: customer registration has no event sequence")
+	}
+	configured := registration != nil
 	health := "healthy"
 	switch {
 	case tenant.Status == TenantSuspended:
@@ -125,10 +135,12 @@ func (p *PGStore) DirectTenantSnapshot(ctx context.Context, tenantID string) (Te
 		health = "offboard_failed"
 	case tenant.Status == TenantOffboarded:
 		health = "offboarded"
+	case !configured:
+		health = "setup_required"
 	case active == 0:
 		health = "no_certificates"
 	}
-	return TenantSnapshot{TenantID: tenantID, Health: health, ActiveCertificates: active}, nil
+	return TenantSnapshot{TenantID: tenantID, Health: health, ActiveCertificates: active, WorkspaceInitialized: &configured}, nil
 }
 
 // TenantSnapshot is the break-glass telemetry reader twin. It deliberately

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
+import { act, render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { IntlProvider } from "@/i18n/I18nProvider";
 import { AppQueryProvider } from "@/lib/query";
@@ -76,7 +76,7 @@ describe("provider console (L3)", () => {
           provision: true,
           isolation_drill: true,
           customers: Object.fromEntries(
-            ["t-1", "t-2", "tenant-alpha", "tenant-bravo", "tenant-acme"].map((id) => [
+            ["t-1", "t-2", "tenant-alpha", "tenant-bravo", "tenant-acme", "4054b878-56cb-5591-ba98-71aa09012048"].map((id) => [
               id,
               { read_quota: true, write_quota: true, write_brand: true, suspend: true, resume: true, offboard: true },
             ]),
@@ -96,6 +96,135 @@ describe("provider console (L3)", () => {
     renderProvider();
     expect(await screen.findByLabelText("Operator bearer token")).toBeInTheDocument();
     expect(providerMock.listTenants).not.toHaveBeenCalled();
+  });
+
+  it("shows customer access setup separately from an active service and verifies refresh", async () => {
+    const tenant = {
+      id: "4054b878-56cb-5591-ba98-71aa09012048",
+      slug: "setup-pending",
+      name: "Setup customer",
+      status: "active",
+      created_at: "2026-09-28T00:00:00Z",
+      updated_at: "2026-09-28T00:00:00Z",
+    };
+    providerMock.listTenants.mockResolvedValue([tenant]);
+    providerMock.customerHealth.mockResolvedValue({ tenant_id: tenant.id, health: "setup_required", active_certificates: 0, workspace_initialized: false });
+    setProviderToken("operator-bearer");
+    renderProvider();
+    fireEvent.click(await screen.findByRole("button", { name: "View setup" }));
+    expect(await screen.findByText("Initialize customer workspace")).toBeInTheDocument();
+    expect(screen.getByText(/trstctl token create/)).toHaveTextContent(`--tenant '${tenant.id}'`);
+    expect(screen.getByText(/Metering starts after the customer workspace is initialized/)).toBeInTheDocument();
+    expect(screen.queryByText("Customer workspace is initialized")).not.toBeInTheDocument();
+
+    providerMock.customerHealth.mockResolvedValue({ tenant_id: tenant.id, health: "no_certificates", active_certificates: 0, workspace_initialized: true });
+    fireEvent.click(screen.getByRole("button", { name: "Check setup again" }));
+    expect(await screen.findByText("Customer workspace is initialized")).toBeInTheDocument();
+    expect(screen.queryByText(/trstctl token create/)).not.toBeInTheDocument();
+    expect(providerMock.customerHealth).toHaveBeenCalledWith(tenant.id);
+  });
+
+  it("does not infer customer access from healthy inventory when setup evidence is absent", async () => {
+    providerMock.listTenants.mockResolvedValue([
+      {
+        id: "4054b878-56cb-5591-ba98-71aa09012048",
+        slug: "unknown",
+        name: "Unknown setup",
+        status: "active",
+        created_at: "2026-09-28T00:00:00Z",
+        updated_at: "2026-09-28T00:00:00Z",
+      },
+    ]);
+    providerMock.customerHealth.mockResolvedValue({ tenant_id: "4054b878-56cb-5591-ba98-71aa09012048", health: "healthy", active_certificates: 4 });
+    setProviderToken("operator-bearer");
+    renderProvider();
+    fireEvent.click(await screen.findByRole("button", { name: "View setup" }));
+    expect(await screen.findByText("Workspace setup could not be verified")).toBeInTheDocument();
+    expect(screen.queryByText("Customer workspace is initialized")).not.toBeInTheDocument();
+    expect(screen.queryByText(/trstctl token create/)).not.toBeInTheDocument();
+  });
+
+  it("carries a provisioned customer into setup without asking the operator to retype its ID", async () => {
+    const tenant = {
+      id: "4054b878-56cb-5591-ba98-71aa09012048",
+      slug: "new-customer",
+      name: "O'Brian",
+      status: "active",
+      created_at: "2026-09-28T00:00:00Z",
+      updated_at: "2026-09-28T00:00:00Z",
+    };
+    providerMock.listTenants.mockResolvedValue([]);
+    providerMock.provisionTenant.mockImplementation(async () => {
+      providerMock.listTenants.mockResolvedValue([tenant]);
+      return tenant;
+    });
+    providerMock.customerHealth.mockResolvedValue({ tenant_id: tenant.id, health: "setup_required", active_certificates: 0, workspace_initialized: false });
+    setProviderToken("operator-bearer");
+    renderProvider();
+    fireEvent.change(await screen.findByLabelText("Slug"), { target: { value: " new-customer " } });
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: " O'Brian " } });
+    fireEvent.click(screen.getByRole("button", { name: "Provision" }));
+    expect(await screen.findByText("Initialize customer workspace")).toBeInTheDocument();
+    expect(providerMock.provisionTenant).toHaveBeenCalledWith({ slug: "new-customer", name: "O'Brian" });
+    expect(screen.getByText(/trstctl token create/)).toHaveTextContent("--tenant-name 'O'\\''Brian'");
+    expect(screen.getByRole("region", { name: "Customer setup: O'Brian" })).toHaveFocus();
+  });
+
+  it("discards a customer setup verdict when refresh fails", async () => {
+    const tenant = {
+      id: "4054b878-56cb-5591-ba98-71aa09012048",
+      slug: "refresh",
+      name: "Refresh customer",
+      status: "active",
+      created_at: "2026-09-28T00:00:00Z",
+      updated_at: "2026-09-28T00:00:00Z",
+    };
+    providerMock.listTenants.mockResolvedValue([tenant]);
+    providerMock.customerHealth.mockResolvedValue({ tenant_id: tenant.id, health: "no_certificates", active_certificates: 0, workspace_initialized: true });
+    setProviderToken("operator-bearer");
+    renderProvider();
+    fireEvent.click(await screen.findByRole("button", { name: "View setup" }));
+    await screen.findByText("Customer workspace is initialized");
+    providerMock.customerHealth.mockRejectedValue(new Error("Unavailable"));
+    fireEvent.click(screen.getByRole("button", { name: "Check setup again" }));
+    expect(await screen.findByText("Workspace setup could not be verified")).toBeInTheDocument();
+    expect(screen.queryByText("Customer workspace is initialized")).not.toBeInTheDocument();
+    expect(screen.queryByText(/trstctl token create/)).not.toBeInTheDocument();
+  });
+
+  it("does not display a late customer setup response under a different customer", async () => {
+    const alpha = {
+      id: "4054b878-56cb-5591-ba98-71aa09012048",
+      slug: "alpha",
+      name: "Alpha setup",
+      status: "active",
+      created_at: "2026-09-28T00:00:00Z",
+      updated_at: "2026-09-28T00:00:00Z",
+    };
+    const beta = { ...alpha, id: "t-2", slug: "beta", name: "Beta setup" };
+    let resolveAlpha!: (value: unknown) => void;
+    const delayed = new Promise((resolve) => {
+      resolveAlpha = resolve;
+    });
+    providerMock.listTenants.mockResolvedValue([alpha, beta]);
+    providerMock.customerHealth.mockImplementation((id: string) =>
+      id === alpha.id ? delayed : Promise.resolve({ tenant_id: beta.id, health: "no_certificates", active_certificates: 0, workspace_initialized: true }),
+    );
+    setProviderToken("operator-bearer");
+    renderProvider();
+    const alphaRow = (await screen.findByRole("cell", { name: alpha.name })).closest("tr")!;
+    fireEvent.click(within(alphaRow).getByRole("button", { name: "View setup" }));
+    await waitFor(() => expect(providerMock.customerHealth).toHaveBeenCalledWith(alpha.id));
+    const betaRow = screen.getByRole("cell", { name: beta.name }).closest("tr")!;
+    fireEvent.click(within(betaRow).getByRole("button", { name: "View setup" }));
+    await screen.findByText("Customer workspace is initialized");
+    await act(async () => {
+      resolveAlpha({ tenant_id: alpha.id, health: "setup_required", active_certificates: 0, workspace_initialized: false });
+      await delayed;
+    });
+    expect(screen.getByRole("region", { name: "Customer setup: Beta setup" })).toHaveTextContent("Customer workspace is initialized");
+    expect(screen.queryByText("Initialize customer workspace")).not.toBeInTheDocument();
+    expect(screen.queryByText(/trstctl token create/)).not.toBeInTheDocument();
   });
 
   it("does not probe the dark Provider API when the plane is unattached", async () => {

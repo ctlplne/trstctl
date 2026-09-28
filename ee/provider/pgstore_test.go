@@ -18,6 +18,8 @@ import (
 	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
 
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/projections"
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
@@ -125,6 +127,17 @@ func projectTenantFixture(t *testing.T, st *corestore.Store, tenant Tenant) {
 	})
 }
 
+func registerCoreCustomerFixture(t *testing.T, st *corestore.Store, log *events.Log, id string) {
+	t.Helper()
+	payload := []byte(`{"name":"Snapshot customer"}`)
+	_, err := orchestrator.ExecuteTenantRegistration(t.Context(), log, st, projections.New(st), orchestrator.NewIdempotency(st),
+		orchestrator.TenantRegistrationCommand{TenantID: id, Name: "Snapshot customer", IdempotencyKey: "snapshot-register-" + id,
+			RequestMaterial: payload, PayloadAt: func(time.Time) ([]byte, error) { return payload, nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func projectGrantFixture(t *testing.T, st *corestore.Store, typ string, grant BreakGlassGrant) {
 	t.Helper()
 	projectAuthorityFixture(t, st, typ, grant.TenantID, AuthorityEvent{
@@ -223,13 +236,18 @@ func TestBreakGlassDualConsentIsDurable(t *testing.T) {
 // a per-tenant read confined exactly like any other.
 func TestDirectTenantSnapshotCountsActiveCertificatesUnderRLS(t *testing.T) {
 	ctx := context.Background()
-	s := openProviderStore(t)
+	s, log, _ := authorityReplayFixture(t)
 	store := NewPGStore(s)
+	register := func(id string) {
+		t.Helper()
+		registerCoreCustomerFixture(t, s, log, id)
+	}
 
-	beta := CustomerID("beta")
-	other := CustomerID("other")
+	beta := CustomerID("snapshot-beta")
+	other := CustomerID("snapshot-other")
 	for _, id := range []string{beta, other} {
 		projectTenantFixture(t, s, Tenant{ID: id, Slug: id, Name: id, Status: TenantActive})
+		register(id)
 	}
 	// beta: two active certificates and one revoked. other: one active cert
 	// that must NOT leak into beta's count.
@@ -251,7 +269,7 @@ func TestDirectTenantSnapshotCountsActiveCertificatesUnderRLS(t *testing.T) {
 
 	// A customer with a registry status of suspended reports degraded, whatever
 	// their certificate count.
-	gamma := CustomerID("gamma")
+	gamma := CustomerID("snapshot-gamma")
 	projectTenantFixture(t, s, Tenant{ID: gamma, Slug: "gamma", Name: "gamma", Status: TenantSuspended})
 	if snap, err := store.DirectTenantSnapshot(ctx, gamma); err != nil || snap.Health != "suspended" {
 		t.Fatalf("gamma snapshot = %+v (err %v), want health suspended", snap, err)
@@ -259,8 +277,9 @@ func TestDirectTenantSnapshotCountsActiveCertificatesUnderRLS(t *testing.T) {
 
 	// An active customer with no certificates is reported as "no certificates",
 	// not silently healthy.
-	delta := CustomerID("delta")
+	delta := CustomerID("snapshot-delta")
 	projectTenantFixture(t, s, Tenant{ID: delta, Slug: "delta", Name: "delta", Status: TenantActive})
+	register(delta)
 	if snap, err := store.DirectTenantSnapshot(ctx, delta); err != nil || snap.Health != "no_certificates" || snap.ActiveCertificates != 0 {
 		t.Fatalf("delta snapshot = %+v (err %v), want no_certificates/0", snap, err)
 	}

@@ -81,6 +81,18 @@ describe("provider API idempotency", () => {
     await expect(providerApi.customerHealth("tenant-alpha")).rejects.toThrow("does not match the requested customer");
   });
 
+  it("preserves explicit workspace initialization and refuses an ambiguous value", async () => {
+    for (const workspace_initialized of [false, true]) {
+      const snapshot = { tenant_id: "tenant-alpha", health: "no_certificates", active_certificates: 0, workspace_initialized };
+      vi.mocked(fetch).mockResolvedValueOnce(response(200, snapshot));
+      await expect(providerApi.customerHealth("tenant-alpha")).resolves.toEqual(snapshot);
+    }
+    vi.mocked(fetch).mockResolvedValueOnce(
+      response(200, { tenant_id: "tenant-alpha", health: "healthy", active_certificates: 0, workspace_initialized: "false" }),
+    );
+    await expect(providerApi.customerHealth("tenant-alpha")).rejects.toThrow("does not match the requested customer");
+  });
+
   it("pulls customer-path invoice evidence and public verification keys without a tenant session", async () => {
     const evidence = {
       customer_id: "tenant/acme",

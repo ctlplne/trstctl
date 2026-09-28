@@ -117,12 +117,50 @@ If that history is unavailable, recovery fails rather than inventing authority.
 From the Provider page (or `POST /provider/v1/tenants` with an `Idempotency-Key`),
 provision two customers with distinct slugs. A refused request stays bound to
 its `Idempotency-Key` (the replay carries `Idempotent-Replayed: true`), so after
-fixing a delegation retry with a new key. Each becomes an isolated tenant with
-its own row-level-security boundary, quota, health view, ownership, delegation
-list, issuer selection, and alert routing. `GET /provider/v1/tenants` returns
+fixing a delegation retry with a new key. Provisioning reserves the customer's
+identity and Provider service state; it does not create customer credentials or
+enroll an agent. **Active** means service is permitted, not that setup is complete.
+`GET /provider/v1/tenants` returns
 only the customers delegated to the signed-in operator; the full roster is the
 provider's commercial information and is never listed to an operator who is not
 delegated to all of it.
+
+Choose **View setup** beside the customer. A newly provisioned customer opens
+this view automatically. The server distinguishes an uninitialized workspace
+from an initialized customer with no certificates. An unavailable read stays
+unknown; it must not become a green status or an instruction to create credentials.
+
+The deployment administrator initializes customer access on the control-plane
+host, using the running service's configuration. The setup view supplies a command
+bound to the selected customer. The equivalent command below uses the customer ID
+returned by provisioning as `CUSTOMER_ID`:
+
+```bash
+(umask 077; set -C; trstctl token create \
+  --tenant "$CUSTOMER_ID" --tenant-name "Acme Robotics" \
+  --subject customer-bootstrap-admin > ./acme-robotics.token)
+```
+
+This command records a new workspace registration through the event log and
+creates the first customer-scoped token. It creates a private output file and
+refuses to overwrite one that already exists. Transfer the token securely to the
+customer administrator; never paste it into the Provider sign-in field. The
+default bootstrap scopes exclude certificate issuance and separately delegated
+high-risk operations. Grant only the permissions needed for the customer's work.
+
+Choose **Check setup again** after the command finishes. Initialized confirms
+workspace registration, not a usable token or successful sign-in: if token
+creation failed after registration, resolve that error and retry with a new
+private output filename. Agent enrollment is still a separate step. Each customer
+uses its own row-level-security boundary, quota, ownership, delegation, issuer
+selection and alert routing. Provider authentication does not become a customer
+credential.
+
+Automatic metering starts after workspace registration. It does not manufacture
+observations for the earlier Provider-only period. A configured workspace still
+needs complete observed hours and successful reconciliation before usage evidence
+can be signed. Metadata-only customers can still be offboarded without inventing
+a core registration.
 
 ### 5. Run one customer-scoped lifecycle
 

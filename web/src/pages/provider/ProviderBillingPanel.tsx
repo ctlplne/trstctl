@@ -38,6 +38,8 @@ function healthLabel(health: string): string {
       return translateNow("source.provider.health.offboarded.aud600006");
     case "no_certificates":
       return translateNow("source.provider.health.noCertificates.aud600007");
+    case "setup_required":
+      return translateNow("provider.setup.required");
     default:
       return translateNow("source.provider.health.unknown.aud600003");
   }

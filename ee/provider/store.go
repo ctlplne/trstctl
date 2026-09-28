@@ -116,12 +116,15 @@ type Tenant struct {
 	UpdatedAt time.Time    `json:"updated_at"`
 }
 
-// TenantSnapshot is the narrow tenant-data payload returned only by an active,
-// consented break-glass grant.
+// TenantSnapshot is the narrow tenant-data payload returned by a delegated
+// health read or an active, consented break-glass grant.
 type TenantSnapshot struct {
 	TenantID           string `json:"tenant_id"`
 	Health             string `json:"health"`
 	ActiveCertificates int    `json:"active_certificates"`
+	// WorkspaceInitialized distinguishes Provider metadata from a registered core
+	// tenant. Nil means the reader did not establish this fact, never false.
+	WorkspaceInitialized *bool `json:"workspace_initialized,omitempty"`
 }
 
 // GrantState is the derived state of a break-glass grant.

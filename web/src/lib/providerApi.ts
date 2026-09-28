@@ -105,6 +105,7 @@ export interface ProviderTenantSnapshot {
   tenant_id: string;
   health: string;
   active_certificates: number;
+  workspace_initialized?: boolean;
 }
 
 export type ProviderOperatorRole = "admin" | "operator";
@@ -341,7 +342,8 @@ async function providerCustomerHealth(customerId: string): Promise<ProviderTenan
     typeof snapshot.health !== "string" ||
     snapshot.health.trim() === "" ||
     !Number.isSafeInteger(snapshot.active_certificates) ||
-    snapshot.active_certificates < 0
+    snapshot.active_certificates < 0 ||
+    (snapshot.workspace_initialized !== undefined && typeof snapshot.workspace_initialized !== "boolean")
   ) {
     // A mismatched or malformed count is UNKNOWN, never another customer's
     // health displayed under the selected customer's label.
