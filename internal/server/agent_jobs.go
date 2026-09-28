@@ -1326,6 +1326,12 @@ func (a *agentService) projectClaimedJobPayload(job store.AgentJob) ([]byte, err
 // flows through redaction as before.
 func (a *agentService) agentDetailForHistory(ctx context.Context, tenantID, agentID string, req *transport.ReportJobResultRequest) string {
 	if a.store != nil {
+		if req.Outcome == transport.JobOutcomeFailed && req.Detail == transport.CSRValidityRefusalDetail {
+			kind, err := a.store.AgentJobDestination(ctx, tenantID, req.JobID)
+			if err == nil && kind == agentJobKindEndpointRenew {
+				return "signing: the host reports a certificate-profile validity refusal; review the pinned profile and its NotBefore backdate before scheduling a new issuance or replacement; changing the active profile does not rewrite this job"
+			}
+		}
 		// Old and current host agents send this exact static phrase when the
 		// signing RPC returns no usable result. The CA may already have issued
 		// a leaf, so do not claim that no certificate was minted. Require the

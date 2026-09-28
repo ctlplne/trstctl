@@ -4,12 +4,44 @@ package server
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/profile"
 	"trstctl.com/trstctl/internal/store"
 )
+
+// Recovery checks the command's pinned revision without emitting a policy
+// decision, creating key material, or switching to a newer active profile.
+func (d *issuanceDispatcher) recoveryLeafProfile(ctx context.Context, tenantID string, trigger transitionTrigger) (crypto.LeafProfile, error) {
+	binding, err := issuanceBindingForTrigger(trigger)
+	if err != nil {
+		return crypto.LeafProfile{}, err
+	}
+	var record store.ProfileRecord
+	if binding != nil && binding.ProfileName != "" {
+		record, err = d.store.GetProfileVersion(ctx, tenantID, binding.ProfileName, binding.ProfileVersion)
+		if err == nil && (record.ID != binding.ProfileID || store.ProfileSpecDigest(record.Spec) != binding.ProfileSpecDigest) {
+			return crypto.LeafProfile{}, fmt.Errorf("server: recovery profile revision evidence differs")
+		}
+	} else if binding != nil && d.defaultProfile != "" {
+		return crypto.LeafProfile{}, fmt.Errorf("server: recovery command did not bind the configured profile")
+	} else if d.defaultProfile != "" {
+		record, err = d.store.GetActiveProfile(ctx, tenantID, d.defaultProfile)
+	} else {
+		return d.leafProfile, nil
+	}
+	if err != nil {
+		return crypto.LeafProfile{}, err
+	}
+	var policy profile.CertificateProfile
+	if err := json.Unmarshal(record.Spec, &policy); err != nil {
+		return crypto.LeafProfile{}, err
+	}
+	return leafProfileForCertificateProfile(d.leafProfile, policy, nil), nil
+}
 
 // Renewals use the identity's selected policy when admitted work carries no
 // explicit issuance binding. Resolve its current revision before host handoff, so delayed CSR signing

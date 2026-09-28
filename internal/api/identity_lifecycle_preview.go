@@ -89,6 +89,19 @@ func (a *API) previewIdentityTransition(w http.ResponseWriter, r *http.Request) 
 		a.writeError(w, &orchestrator.TransitionError{IdentityID: id, From: orchestrator.State(identity.Status), To: to})
 		return
 	}
+	if to == orchestrator.StateIssued && identity.Kind == store.KindX509Certificate {
+		requirement, err := a.orch.ProfileApprovalRequirement(r.Context(), tenantID, id)
+		if err == nil && requirement.ProfileName == "" && a.gate.Profile != "" {
+			requirement, err = a.orch.ProfileApprovalRequirementByName(r.Context(), tenantID, a.gate.Profile)
+		}
+		if err == nil {
+			err = a.validateIdentityProfileLifetime(r.Context(), tenantID, identity, requirement)
+		}
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
+	}
 	if to == orchestrator.StateRenewing {
 		pending, err := a.store.IdentityRenewalWorkPending(r.Context(), tenantID, id)
 		if err != nil {

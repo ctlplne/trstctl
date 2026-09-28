@@ -29,6 +29,25 @@ ambiguous retained issuance evidence stops renewal instead of choosing another
 default. Permission and approval checks remain separate from these certificate
 constraints; the original issuance approval cannot authorize a new operation.
 
+For the platform CA and signer-backed private CAs, `max_validity` covers the
+entire signed interval, including the NotBefore backdate used for clock skew.
+With the default five-minute backdate, a two-minute or five-minute ceiling leaves
+no usable certificate lifetime. Endpoint enrollment and identity issuance reject
+these profiles during preview and again before queuing issuance. Choose a ceiling
+that also leaves enough time to deploy and renew the certificate, then preview
+again. A seven-minute ceiling leaves at most about two minutes after issuance;
+it is a diagnostic example, not a recommended operating lifetime. External CAs
+apply their own backdating rules; this local admission check does not qualify an
+external CA's certificate validity or delivery.
+
+Previously accepted jobs keep their original profile revision. A local signing
+refusal records the fixed `certificate_profile_validity_refused` class. Updated
+host agents report a typed validity refusal without copying signing error text
+into permanent history. If a failed first issuance is pinned to an unusable
+profile, retry readiness explains why a new reviewed issuance or replacement is
+required. Editing the active profile does not rewrite that command, and a retry
+cannot bypass its original validity ceiling.
+
 ## The registration-authority (RA) separation
 
 The RA role model separates **who may request** a certificate from **who may

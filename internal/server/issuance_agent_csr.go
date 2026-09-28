@@ -200,11 +200,8 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 		usage.Record(tenantID, usage.MeterCertificatesIssued, 1)
 		return marshalAgentCSRResult(recorded.Fingerprint, material)
 	})
-	if errors.Is(err, ca.ErrExternalIssuePending) || errors.Is(err, orchestrator.ErrInProgress) {
-		return nil, transport.CSRPendingError()
-	}
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "issue against agent csr: %v", err)
+		return nil, agentCSRSigningError(err)
 	}
 
 	fingerprint, certPEM, chainPEM, ok := splitAgentCSRResult(out)
@@ -222,6 +219,18 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 		ChainPEM:       append([]byte(nil), chainPEM...),
 		Fingerprint:    fingerprint,
 	}, nil
+}
+
+// Keep retryable pending work distinct from a permanent validity refusal at
+// the RPC boundary. Never infer a validity diagnosis from free-form error text.
+func agentCSRSigningError(err error) error {
+	if errors.Is(err, ca.ErrExternalIssuePending) || errors.Is(err, orchestrator.ErrInProgress) {
+		return transport.CSRPendingError()
+	}
+	if crypto.IsLeafValidityViolation(err) {
+		return transport.CSRValidityRefusalError()
+	}
+	return status.Errorf(codes.Internal, "issue against agent csr: %v", err)
 }
 
 // checkAgentCSRRequestBinding permits replay of this request's result, including

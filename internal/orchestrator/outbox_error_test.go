@@ -24,6 +24,13 @@ func TestPersistedDeliveryErrorAcceptsOnlyClosedSafeClasses(t *testing.T) {
 	if got := persistedDeliveryError(classifiedOutboxTestError{class: "external_ca_finalize_failed"}); got != "external_ca_finalize_failed" {
 		t.Fatalf("known safe class = %q", got)
 	}
+	if got := persistedDeliveryError(errors.New("crypto: leaf profile violation: profile maximum validity leaves no usable lifetime")); got != "external_delivery_failed" {
+		t.Fatal("error prose impersonated local validity refusal")
+	}
+	if got := persistedDeliveryError(classifiedOutboxTestError{class: "certificate_profile_validity_refused"}); got != "external_delivery_failed" {
+		t.Fatal("untrusted classifier impersonated typed local refusal")
+	}
+
 	if got := persistedDeliveryError(classifiedOutboxTestError{class: "attacker-controlled detail"}); got != "external_delivery_failed" {
 		t.Fatalf("untrusted class was persisted as %q", got)
 	}

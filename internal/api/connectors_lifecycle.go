@@ -1050,7 +1050,7 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 	if err != nil {
 		return endpointBindingPreviewResponse{}, err
 	}
-	if err := a.validateEndpointProfileMetadata(ctx, tenantID, req.IdentityName, profileRequirement, subjectAlgorithm); err != nil {
+	if err := a.validateEndpointProfileMetadata(ctx, tenantID, req.IdentityName, issuer.Source, profileRequirement, subjectAlgorithm); err != nil {
 		return endpointBindingPreviewResponse{}, err
 	}
 	fingerprintInput := struct {

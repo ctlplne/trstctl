@@ -62,7 +62,7 @@ func (a *API) endpointIssuanceRequirement(ctx context.Context, tenantID string, 
 	return a.orch.ProfileApprovalRequirementByName(ctx, tenantID, a.gate.Profile)
 }
 
-func (a *API) validateEndpointProfileMetadata(ctx context.Context, tenantID, dnsName string, requirement orchestrator.ProfileApprovalRequirement, subjectAlgorithm ...string) error {
+func (a *API) validateEndpointProfileMetadata(ctx context.Context, tenantID, dnsName, issuerSource string, requirement orchestrator.ProfileApprovalRequirement, subjectAlgorithm ...string) error {
 	if requirement.ProfileName == "" {
 		return nil
 	}
@@ -90,7 +90,7 @@ func (a *API) validateEndpointProfileMetadata(ctx context.Context, tenantID, dns
 	if err := validate(request); err != nil {
 		return errStatus(http.StatusUnprocessableEntity, err.Error()+"; choose a certificate profile that permits this endpoint before authorizing issuance; nothing was queued")
 	}
-	return nil
+	return validateProfileSigningLifetime(record.Name, time.Duration(policy.MaxValidity), issuerSource)
 }
 
 func requireEndpointIssuancePermission(ctx context.Context, tenantID string) error {

@@ -52,7 +52,7 @@ func (c *controlledRenewalChannel) SignJobCSR(ctx context.Context, job int64, at
 // Exercise the real locked subject key and file connector. The allowlisted
 // subprocess is the test binary, not a Caddy service qualification.
 func TestHostRenewalPendingRecoveryAndAuthorityBoundaries(t *testing.T) {
-	for _, mode := range []string{"late-success", "transport-recovery", "claim-lost-during-signing", "claim-lost-before-install", "cancelled", "permanent-refusal"} {
+	for _, mode := range []string{"late-success", "transport-recovery", "claim-lost-during-signing", "claim-lost-before-install", "cancelled", "permanent-refusal", "profile-validity-refusal"} {
 		t.Run(mode, func(t *testing.T) {
 			dir := t.TempDir()
 			certPath, keyPath := filepath.Join(dir, "cert.pem"), filepath.Join(dir, "key.pem")
@@ -78,6 +78,9 @@ func TestHostRenewalPendingRecoveryAndAuthorityBoundaries(t *testing.T) {
 				return time.Now().Add(300 * time.Millisecond), ctx.Err()
 			}
 			c.sign = func(ctx context.Context, csr []byte, call int) ([]byte, []byte, string, error) {
+				if mode == "profile-validity-refusal" {
+					return nil, nil, "", transport.CSRValidityRefusalError()
+				}
 				if mode == "permanent-refusal" {
 					return nil, nil, "", status.Error(codes.PermissionDenied, "refused")
 				}
@@ -120,6 +123,9 @@ func TestHostRenewalPendingRecoveryAndAuthorityBoundaries(t *testing.T) {
 			executed, err := relay.RunOnceWithHost(ctx, c, http.DefaultClient, profile, 1, 60)
 			if err != nil {
 				t.Fatal(err)
+			}
+			if mode == "profile-validity-refusal" && (len(c.reports) != 1 || c.reports[0].detail != transport.CSRValidityRefusalDetail) {
+				t.Fatalf("profile refusal lost safe report: %+v", c.reports)
 			}
 			wantInstalled := mode == "late-success" || mode == "transport-recovery"
 			if wantInstalled {

@@ -89,6 +89,9 @@ func (a *API) executeIdentityTransition(ctx context.Context, tenantID string, pr
 			}
 			profileReq = configured
 		}
+		if err := a.validateIdentityProfileLifetime(ctx, tenantID, identity, profileReq); err != nil {
+			return 0, nil, err
+		}
 		gate = gateWithProfileApproval(gate, profileReq)
 	}
 	var issuanceBinding *store.OperationApprovalIssuanceBinding

@@ -1273,6 +1273,10 @@ func (o *Outbox) CompleteByKey(ctx context.Context, tenantID, destination, idemp
 // arbitrary err.Error() would turn that attacker-controlled body into an
 // unwipeable Go string and durable PostgreSQL secret leak (AN-8).
 func safePersistableDeliveryClass(err error) (string, bool) {
+	// Classify only the typed local constraint, never attacker-controlled prose.
+	if trstcrypto.IsLeafValidityViolation(err) {
+		return "certificate_profile_validity_refused", true
+	}
 	// A subsystem may attach one of these closed, credential-free classes while
 	// retaining its raw cause only in short-lived memory. Accept only this local
 	// allowlist: an untrusted connector can implement the same method, but it

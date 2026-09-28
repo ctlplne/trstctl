@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
@@ -91,6 +92,15 @@ func (d *issuanceDispatcher) qualifyFirstIssuanceRetry(ctx context.Context, tena
 	selection, err := endpointIssuingAuthority(command.Identity.Attributes)
 	if err != nil {
 		return refuse("The original issuer selection must be restored before recovery.")
+	}
+	if selection.Source == "platform" || selection.Source == "private" {
+		profile, err := d.recoveryLeafProfile(ctx, tenantID, trigger)
+		if err != nil {
+			return refuse("The original certificate profile revision cannot be verified. Restore its exact evidence before retrying; a newer profile cannot replace a pinned revision.")
+		}
+		if profile.MaxValidity > 0 && profile.MaxValidity <= crypto.IssuanceBackdateSkew() {
+			return refuse("The pinned certificate profile leaves no usable lifetime after the NotBefore backdate. Editing the active profile does not change this accepted command. Review a new issuance or replacement with a usable profile and retain this failed request for audit; do not repeat this signing attempt.")
+		}
 	}
 	ctx = withLeafCommand(ctx, d.idem, tenantID, command.OutboxKey)
 	if strings.TrimSpace(trigger.SubjectCSRPEM) == "" && subjectCSRFromIdentity(command.Identity) == "" {

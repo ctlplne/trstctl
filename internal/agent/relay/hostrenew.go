@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/custody"
@@ -130,6 +131,10 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 
 	certPEM, chainPEM, fingerprint, err := signHostCSR(ctx, signer, job, key.CSRDER, claim != nil)
 	if err != nil {
+		if transport.IsCSRValidityRefusal(err) {
+			report(ctx, ch, job, OutcomeFailed, transport.CSRValidityRefusalDetail)
+			return false
+		}
 		// The control plane holds the reason — a name outside the binding, a
 		// profile refusal, a lapsed lease — and has already recorded it.
 		// Guessing here would put a second, less accurate account into the
