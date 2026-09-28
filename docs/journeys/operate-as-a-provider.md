@@ -144,6 +144,22 @@ history. Isolated counter or gauge writes do not prove that the time between
 them was observed. A recorder restart leaves any unflushed interval uncovered;
 historical first/last timestamps are retained but cannot fill that gap.
 
+Resource collection starts automatically with durable Provider metering and
+samples each customer once per minute, including customers with no new issuance.
+Each hourly gauge is the latest sampled level in that hour, not a sum or peak.
+The counts use the same definitions as quotas: agents excluding offboarded agents,
+certificates excluding revoked certificates, and stored credentials. A customer's
+tenant gauge is one; it never includes another customer's inventory.
+
+Counts and their observation interval are saved together. A failed sample,
+restart, changed customer registration, or gap exceeding two minutes starts a new
+interval; a later healthy sample does not fill the missing time. Collection uses
+one bounded sweep with a five-second limit per customer and a 45-second limit
+for the sweep. An unavailable customer does not stop later customers from being
+sampled within that limit. Issuance reconciliation must also succeed before the
+evidence can be signed. After a new installation or interruption, choose a whole
+closed UTC hour observed after collection resumed.
+
 Changing the invoice customer or period clears the displayed health and evidence.
 Pull the newly selected period before downloading it; a response from an earlier
 selection cannot populate the new customer or mark its signature as verified.

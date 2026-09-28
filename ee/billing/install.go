@@ -21,7 +21,7 @@ type Installation struct {
 	Durable bool
 	// PG is the durable store when there is one, for coverage queries.
 	PG *PGStore
-	// Stopped closes after the recorder's bounded final flush completes.
+	// Stopped closes after collection stops and the bounded final flush completes.
 	Stopped <-chan struct{}
 }
 
@@ -55,7 +55,15 @@ func InstallDurable(ctx context.Context, log *slog.Logger, count TenantCounter, 
 	checker := NewQuotaChecker(store, count, time.Minute)
 	usage.SetRecorder(recorder)
 	usage.SetQuotaChecker(checker)
-	return &Installation{Recorder: recorder, QuotaChecker: checker, Durable: true, PG: store, Stopped: runRecorder(ctx, recorder)}
+	collector := NewCollector(store, store.resourceTenants, nil, log)
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		recorderStopped := runRecorder(ctx, recorder)
+		collector.Run(ctx, time.Minute)
+		<-recorderStopped
+	}()
+	return &Installation{Recorder: recorder, QuotaChecker: checker, Durable: true, PG: store, Stopped: stopped}
 }
 
 func runRecorder(ctx context.Context, recorder *Recorder) <-chan struct{} {

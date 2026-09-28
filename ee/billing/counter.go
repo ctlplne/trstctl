@@ -32,25 +32,33 @@ func StoreTenantCounter(s *corestore.Store) TenantCounter {
 		}
 		out := TenantCounts{}
 		err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-			for resource, query := range map[string]string{
-				usage.MeterAgents: `SELECT count(*) FROM agents
-				  WHERE tenant_id = $1 AND status <> 'offboarded'`,
-				usage.MeterCertificatesStored: `SELECT count(*) FROM certificates
-				  WHERE tenant_id = $1 AND status <> 'revoked'`,
-				usage.MeterSecretsStored: `SELECT count(*) FROM credentials
-				  WHERE tenant_id = $1`,
-			} {
-				var n int64
-				if err := tx.QueryRow(ctx, query, tenantID).Scan(&n); err != nil {
-					return err
-				}
-				out[resource] = n
-			}
-			return nil
+			var err error
+			out, err = countTenantResources(ctx, tx, tenantID)
+			return err
 		})
 		if err != nil {
 			return nil, err
 		}
 		return out, nil
 	}
+}
+
+// The durable collector uses the same queries inside its observation transaction.
+func countTenantResources(ctx context.Context, tx pgx.Tx, tenantID string) (TenantCounts, error) {
+	out := TenantCounts{}
+	for resource, query := range map[string]string{
+		usage.MeterAgents: `SELECT count(*) FROM agents
+				  WHERE tenant_id = $1 AND status <> 'offboarded'`,
+		usage.MeterCertificatesStored: `SELECT count(*) FROM certificates
+				  WHERE tenant_id = $1 AND status <> 'revoked'`,
+		usage.MeterSecretsStored: `SELECT count(*) FROM credentials
+				  WHERE tenant_id = $1`,
+	} {
+		var n int64
+		if err := tx.QueryRow(ctx, query, tenantID).Scan(&n); err != nil {
+			return nil, err
+		}
+		out[resource] = n
+	}
+	return out, nil
 }
