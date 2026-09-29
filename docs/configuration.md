@@ -858,6 +858,7 @@ dropping a user into the wrong tenant.
 | `TRSTCTL_AUTH_OIDC_TOKEN_ENDPOINT` | unset | The IdP's token endpoint the callback exchanges the authorization code at. Required. |
 | `TRSTCTL_AUTH_OIDC_REDIRECT_URI` | unset | External callback URL, usually `https://trstctl.example.com/auth/callback`. |
 | `TRSTCTL_AUTH_OIDC_JWKS_FILE` / `TRSTCTL_AUTH_OIDC_JWKS_JSON` | unset | IdP signing keys used for offline id_token verification. |
+| `TRSTCTL_AUTH_OIDC_DEFAULT_ROLES` | unset | Comma-separated roles for an OIDC session whose tenant mapping names none. A tenant member record that names roles replaces them (see [session roles](#session-roles)). |
 | `TRSTCTL_AUTH_SAML_ENABLED` | `false` | Enables the served SAML 2.0 SP. |
 | `TRSTCTL_AUTH_SAML_ENTITY_ID` | unset | Stable SP entity ID, often the metadata URL. |
 | `TRSTCTL_AUTH_SAML_METADATA_URL` | unset | External URL for `/auth/saml/metadata`. |
@@ -866,6 +867,7 @@ dropping a user into the wrong tenant.
 | `TRSTCTL_AUTH_SAML_SESSION_SECRET_FILE` | unset | HMAC secret file used to sign browser sessions. |
 | `TRSTCTL_AUTH_SAML_TENANT_CLAIM` | unset | SAML attribute whose value feeds tenant mapping. |
 | `TRSTCTL_AUTH_SAML_GROUPS_CLAIM` | unset | SAML attribute whose values feed group-to-tenant mapping. |
+| `TRSTCTL_AUTH_SAML_DEFAULT_ROLES` | unset | Roles for a SAML session whose tenant mapping names none; member roles replace them as for OIDC. |
 | `TRSTCTL_AUTH_LDAP_ENABLED` | `false` | Enables served LDAP / Active Directory login at `POST /auth/ldap/login`. |
 | `TRSTCTL_AUTH_LDAP_URL` | unset | Directory URL. Use `ldaps://` for production; `ldap://` is accepted only on loopback. |
 | `TRSTCTL_AUTH_LDAP_USER_DN_TEMPLATE` | unset | Direct-bind DN template such as `uid={username},ou=people,dc=example,dc=org`. |
@@ -874,6 +876,7 @@ dropping a user into the wrong tenant.
 | `TRSTCTL_AUTH_LDAP_GROUP_SEARCH_BASE_DN` / `TRSTCTL_AUTH_LDAP_GROUP_FILTER` | unset | Group lookup; `{user_dn}` and `{username}` are escaped before search. |
 | `TRSTCTL_AUTH_LDAP_GROUP_NAME_ATTRIBUTE` | unset | Group attribute mapped to `tenant_mappings[].group`, usually `cn`. |
 | `TRSTCTL_AUTH_LDAP_SESSION_SECRET_FILE` | unset | HMAC secret file used to sign browser sessions. |
+| `TRSTCTL_AUTH_LDAP_DEFAULT_ROLES` | unset | Roles for an LDAP session whose tenant mapping names none; member roles replace them as for OIDC. |
 
 An OIDC login started from a protected console page returns to that page after
 sign-in, including its query filters and fragment. This also works when opening
@@ -905,6 +908,18 @@ A partial, duplicate, tampered or expired context in an SP-initiated callback
 returns HTTP 400; restart sign-in. Successful login clears both context cookies.
 This destination binding supplements the existing SAML assertion verification;
 it is not an assertion-replay cache or an authenticated session.
+
+### Session roles
+
+A browser session starts with the roles of the tenant mapping that matched
+(`tenant_mappings[].roles`), or with `default_roles` when that mapping names none.
+When the signed-in person has a tenant member record that names roles, set in
+**Operations → People and roles**, through `PUT /api/v1/access/members/{subject}` or
+by SCIM, those roles replace the sign-in roles on every request. A member record that
+names no roles keeps the sign-in roles, and an offboarded member has none.
+`GET /auth/me` returns the roles the session holds. The evaluation compose files set
+`default_roles` to `admin` so the first operator can sign in; in production, leave it
+unset or use a read-only role and grant more through member records or mappings.
 
 ## SCIM provisioning
 
@@ -1647,6 +1662,9 @@ actionable error naming the field to set:
   (the binary was built with `GOFIPS140=v1.0.0` / `make fips-build`, or run with
   `GODEBUG=fips140=on`).
 
+In `regulated` mode, CA key ceremonies also need at least two custodian approvals
+besides the opener, whatever the request asks for (see `ca.ceremony_min_approvals`).
+
 A **complete** regulated config boots normally. The default posture
 (`ca.governance_mode` unset, or `standard`) imposes no coupling, so existing
 single-node deployments are unaffected.
@@ -1655,6 +1673,7 @@ single-node deployments are unaffected.
 | --- | --- | --- |
 | `TRSTCTL_CA_GOVERNANCE_MODE` | `standard` | `standard` (or unset): the controls are independent. `regulated`: fail startup unless the policy gate, four-eyes dual control, a bound default profile, revocation publication, and any declared FIPS requirement are **all** present together. |
 | `TRSTCTL_CA_REQUIRE_FIPS` | `false` | In `regulated` mode, additionally require the FIPS 140-3 module to be active (build with `GOFIPS140=v1.0.0` or run with `GODEBUG=fips140=on`); otherwise startup fails closed. Ignored outside regulated mode. |
+| `TRSTCTL_CA_CEREMONY_MIN_APPROVALS` | `0` (floor of 1) | Fewest custodian approvals, besides the opener, that a CA key ceremony (root, intermediate, rekey, cross-sign, import) may require. A ceremony request may ask for more but never fewer; preview and start both refuse a lower `threshold` with 422. `regulated` mode raises the floor to at least 2. |
 
 ## Served AI surface and model adapter
 

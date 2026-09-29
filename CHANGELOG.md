@@ -8,6 +8,15 @@
 - The built-in `viewer` and `mcp` roles no longer include `secrets:read`, which
   revealed application secret values in plaintext. Grant it deliberately through
   `operator`, `cli`, `admin` or a custom role.
+- Roles set on a tenant member now decide that person's session. Before, sign-in
+  roles from a tenant mapping or `default_roles` were added to them, so a member
+  set to `viewer` could still hold `admin`. A member record without roles keeps
+  the sign-in roles.
+- Only a caller that holds every permission can grant the `admin` role. An
+  `operator` or a role-provisioning token can still assign every other role.
+- `ca.ceremony_min_approvals` (`TRSTCTL_CA_CEREMONY_MIN_APPROVALS`) sets the
+  fewest custodian approvals a CA key ceremony may require; requests can raise
+  the threshold but not lower it, and `regulated` governance requires at least 2.
 - Notification delivery details open at the heading, keeping the outcome visible
   before operators tab through the dialog.
 - Certificate replacement explains when a matching identity is already renewing

@@ -154,3 +154,34 @@ func assertRegulatedStartupError(t *testing.T, c *Config, wantSubstr string) {
 		t.Fatalf("regulated startup error did not mention %q; got: %v", wantSubstr, err)
 	}
 }
+
+// F264: the CA key-ceremony approval floor comes from deployment config, never
+// from the request. Default 1; ca.ceremony_min_approvals raises it; regulated
+// governance raises it to at least 2; a negative value is refused at startup.
+func TestCeremonyApprovalFloorComesFromConfig(t *testing.T) {
+	c := Default()
+	if got := c.CA.CeremonyApprovalFloor(); got != 1 {
+		t.Fatalf("default ceremony floor = %d, want 1", got)
+	}
+	env := map[string]string{"TRSTCTL_CA_CEREMONY_MIN_APPROVALS": "3"}
+	loaded, err := Load(func(k string) string { return env[k] })
+	if err != nil {
+		t.Fatalf("load with a ceremony floor: %v", err)
+	}
+	if got := loaded.CA.CeremonyApprovalFloor(); got != 3 {
+		t.Fatalf("configured ceremony floor = %d, want 3", got)
+	}
+	regulated := regulatedConfig()
+	if got := regulated.CA.CeremonyApprovalFloor(); got != 2 {
+		t.Fatalf("regulated ceremony floor = %d, want 2", got)
+	}
+	regulated.CA.CeremonyMinApprovals = 4
+	if got := regulated.CA.CeremonyApprovalFloor(); got != 4 {
+		t.Fatalf("regulated floor with ca.ceremony_min_approvals=4 = %d, want 4", got)
+	}
+	negative := Default()
+	negative.CA.CeremonyMinApprovals = -1
+	if err := negative.Validate(); err == nil || !strings.Contains(err.Error(), "ca.ceremony_min_approvals must not be negative") {
+		t.Fatalf("negative ceremony floor validation = %v, want a refusal naming ca.ceremony_min_approvals", err)
+	}
+}

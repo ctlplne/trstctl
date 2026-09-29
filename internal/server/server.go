@@ -238,6 +238,9 @@ type Deps struct {
 	CAPublicCertFile          string             // optional certificate-only mirror for clients outside the private data volume
 	LeafProfile               crypto.LeafProfile // served-leaf RFC 5280/BR profile: CDP/AIA/policy + constraints (PKIGOV-001/002)
 	DefaultProfile            string             // certificate-profile name enforced on the served mint when it resolves (PKIGOV-002); empty = none
+	// CACeremonyMinApprovals is the CA key-ceremony approval floor (config
+	// ca.ceremony_min_approvals, raised to 2 by regulated governance; F264).
+	CACeremonyMinApprovals int
 	// PolicyModule is the OPA/Rego policy document gating the served issue/deploy/
 	// revoke path (EXC-WIRE-03). Empty uses policy.BaseModule (default-deny, permit
 	// revoke, require a bound profile to issue/deploy). The engine is fail-closed,

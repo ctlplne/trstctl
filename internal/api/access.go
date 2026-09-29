@@ -239,6 +239,20 @@ func (a *API) authorizeRoleAssignment(ctx context.Context, tenantID, subject str
 		}
 		return errStatus(http.StatusForbidden, reason)
 	}
+	// Only a caller that holds every permission may grant a role that holds every
+	// permission, so an operator or a role-provisioning token cannot create an
+	// administrator (F266). Other roles stay assignable with access:role.assign.
+	if !principal.Can(authz.Wildcard, target) {
+		for _, name := range roles {
+			if role, ok := a.roles.Role(strings.TrimSpace(name)); ok && role.Allows(authz.Wildcard) {
+				reason := "only an administrator can grant the " + role.Name + " role, which holds every permission"
+				if err := a.recordRoleAssignDecision(ctx, tenantID, principal, subject, roles, "deny", reason); err != nil {
+					return err
+				}
+				return errStatus(http.StatusForbidden, reason)
+			}
+		}
+	}
 	return a.recordRoleAssignDecision(ctx, tenantID, principal, subject, roles, "allow", "")
 }
 

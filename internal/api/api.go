@@ -1659,11 +1659,27 @@ func (a *API) sessionRoleNames(ctx context.Context, sess auth.Session) []string 
 			if member.Status == "offboarded" {
 				roleNames = nil
 			} else {
+				// A member record that names roles decides the session's roles, so
+				// People and roles, the access API and SCIM can narrow access as well
+				// as widen it. Sign-in roles (a tenant mapping or default_roles) apply
+				// only while the member record names none.
+				if namesRole(member.Roles) {
+					roleNames = nil
+				}
 				roleNames = mergeRoleNames(roleNames, member.Roles)
 			}
 		}
 	}
 	return roleNames
+}
+
+func namesRole(roles []string) bool {
+	for _, role := range roles {
+		if strings.TrimSpace(role) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func mergeRoleNames(base, extra []string) []string {

@@ -187,6 +187,12 @@ group on a shared trstctl deployment.
    certificate-issuance permission. Do not add these permissions to the default
    bootstrap token or use a wildcard scope.
 
+   It can grant every role except `admin`: only a caller that already holds every
+   permission can create an administrator, so an `operator` cannot either. Make the
+   tenant's first administrator through the step 3 mapping, for example a subject
+   or group mapping with `roles: [admin]`; that administrator can then grant
+   `admin` to others in **People and roles**.
+
    Obtain the new member's exact subject from the configured identity provider.
    An email address is correct only if that provider uses it as the subject. The
    member's tenant must match the claim or mapping from step 3. Create the member
@@ -200,9 +206,13 @@ group on a shared trstctl deployment.
    ```
 
    Use `admin` only for the person explicitly authorized to administer the team.
+   Roles set on a member replace the roles that person would otherwise receive at
+   sign-in from a tenant mapping or `default_roles`, and a change applies on their
+   next request. A member record without roles keeps the sign-in roles.
    Verify the member through `GET /api/v1/access/members`, then have that person
-   sign in with the configured identity provider. A successful member creation
-   does not itself prove the sign-in subject and tenant mapping are correct.
+   sign in with the configured identity provider; `GET /auth/me` in that session
+   returns the roles it actually holds. A successful member creation does not
+   itself prove the sign-in subject and tenant mapping are correct.
 
    If SSO verifies the account but no tenant mapping matches, the browser returns
    to sign-in with an explanation. Check the exact IdP subject, tenant mapping and

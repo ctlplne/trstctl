@@ -230,6 +230,8 @@ services:
       TRSTCTL_AUTH_OIDC_LOGIN_REDIRECT: /
       TRSTCTL_AUTH_OIDC_TENANT_CLAIM: tenant
       TRSTCTL_AUTH_OIDC_CLAIM_IS_TENANT: "true"
+      # Every local-IdP session starts as admin; a member record that names roles
+      # (People and roles) replaces this for that person. Production: unset or read-only.
       TRSTCTL_AUTH_OIDC_DEFAULT_ROLES: admin
     volumes:
       - signersock:/run/trstctl   # reach the signer over the shared UDS

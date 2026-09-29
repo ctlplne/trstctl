@@ -165,8 +165,8 @@ not this file.
 | `internal/config/audit_test.go:31` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:66` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:79` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/config.go:2260` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/config/config.go:2958` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:2281` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:2985` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/config/config_test.go:64` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:173` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:357` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -941,7 +941,7 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:189` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/secret_third_party_scan_served_test.go:154` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_rotation_served_test.go:2559` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2378` | served CA certificate directory; the PEM is public material (CWE-276) |
+| `internal/server/server.go:2381` | served CA certificate directory; the PEM is public material (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:24` | the loose mode IS the attack fixture this test defends against (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:56` | the wide mode IS the precondition this test proves gets narrowed (CWE-276) |
 | `internal/tsa/http_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
@@ -1145,7 +1145,7 @@ not this file.
 | `internal/cli/cli_test.go:1810` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/cli/doctor/doctor_test.go:98` | test reads its own tempdir receipt (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/config/config.go:2333` | the config loader reading the operator's own config file (CWE-22) |
+| `internal/config/config.go:2354` | the config loader reading the operator's own config file (CWE-22) |
 | `internal/connector/device_proof_census_test.go:46` | fixed in-tree path derived from the census (CWE-22) |
 | `internal/connector/localops.go:224` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
 | `internal/connector/localops.go:291` | clean is confined to operator-approved local roots above (CWE-22) |
@@ -1270,8 +1270,8 @@ not this file.
 | `internal/server/serve_test.go:80` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:81` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:125` | test-owned path under t.TempDir (CWE-22) |
-| `internal/server/server.go:2305` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/server.go:2382` | same operator-configured directory as the target certificate (CWE-22) |
+| `internal/server/server.go:2308` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/server.go:2385` | same operator-configured directory as the target certificate (CWE-22) |
 | `internal/signing/design_test.go:30` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/design_test.go:136` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/gated_destruction_journal.go:226` | exact signer-owned journal path. |
@@ -1445,7 +1445,7 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:574` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_scan_served_test.go:27` | isolated executable test fixture |
 | `internal/server/secrets_scan_served_test.go:157` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2388` | served CA certificate PEM is public material (CWE-276) |
+| `internal/server/server.go:2391` | served CA certificate PEM is public material (CWE-276) |
 | `internal/server/signer_authorization_test.go:132` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/ssh_journey_served_test.go:262` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |

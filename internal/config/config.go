@@ -2095,6 +2095,13 @@ type CA struct {
 	// the regulated config so the requirement travels with the deployment. Ignored
 	// outside regulated mode.
 	RequireFIPS bool `json:"require_fips,omitempty"`
+
+	// CeremonyMinApprovals is the fewest custodian approvals a CA key ceremony may
+	// ask for, in addition to its opener (F264). A request may raise the threshold
+	// but never lower it below this floor. 0 keeps the default floor of 1 (two
+	// people: the opener and one approver); regulated governance raises the floor
+	// to at least 2.
+	CeremonyMinApprovals int `json:"ceremony_min_approvals,omitempty"`
 }
 
 // AgentChannel configures the served agent ↔ control-plane steady-state mTLS gRPC
@@ -2197,6 +2204,20 @@ func (c CA) GovernanceModeValue() string {
 		return GovernanceStandard
 	}
 	return m
+}
+
+// CeremonyApprovalFloor is the effective minimum custodian approvals for a CA key
+// ceremony: at least 1, at least 2 under regulated governance, and never below
+// the operator's ceremony_min_approvals (F264).
+func (c CA) CeremonyApprovalFloor() int {
+	floor := 1
+	if c.GovernanceModeValue() == GovernanceRegulated {
+		floor = 2
+	}
+	if c.CeremonyMinApprovals > floor {
+		floor = c.CeremonyMinApprovals
+	}
+	return floor
 }
 
 // Default returns the built-in configuration: a self-contained single-node
@@ -2444,12 +2465,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_SIGNER_MTLS_KEY_FILE", &c.Signer.MTLSKeyFile)
 	setString(getenv, "TRSTCTL_SIGNER_MTLS_PEER_CA_FILE", &c.Signer.MTLSPeerCAFile)
 	setString(getenv, "TRSTCTL_SIGNER_MTLS_PEER_PIN", &c.Signer.MTLSPeerPin)
-	setString(getenv, "TRSTCTL_CA_CERT_FILE", &c.CA.CertFile)
-	setString(getenv, "TRSTCTL_CA_PUBLIC_CERT_FILE", &c.CA.PublicCertFile)
-	// Regulated CA-governance posture (PKIGOV-003): the single coherent switch and
-	// its declared FIPS requirement, operator-settable via env.
-	setString(getenv, "TRSTCTL_CA_GOVERNANCE_MODE", &c.CA.GovernanceMode)
-	setBool(getenv, "TRSTCTL_CA_REQUIRE_FIPS", &c.CA.RequireFIPS)
+	applyCAEnv(getenv, &c.CA)
 	applyAgentChannelEnv(getenv, &c.AgentChannel)
 	applyWorkloadIdentityEnv(getenv, &c.AttestedIssuance)
 	applyEphemeralIssuanceEnv(getenv, &c.EphemeralIssuance)
@@ -2495,6 +2511,17 @@ func (c *Config) applyEnv(getenv func(string) string) {
 // container-first deployment model as the served protocol endpoints. The mint
 // remains off by default; operators must opt in and name the trust domain and
 // lifetime boundaries explicitly.
+// applyCAEnv overlays the issuing-CA files, the regulated CA-governance posture
+// (PKIGOV-003: the single coherent switch and its declared FIPS requirement) and
+// the CA key-ceremony approval floor.
+func applyCAEnv(getenv func(string) string, ca *CA) {
+	setString(getenv, "TRSTCTL_CA_CERT_FILE", &ca.CertFile)
+	setString(getenv, "TRSTCTL_CA_PUBLIC_CERT_FILE", &ca.PublicCertFile)
+	setString(getenv, "TRSTCTL_CA_GOVERNANCE_MODE", &ca.GovernanceMode)
+	setBool(getenv, "TRSTCTL_CA_REQUIRE_FIPS", &ca.RequireFIPS)
+	setInt(getenv, "TRSTCTL_CA_CEREMONY_MIN_APPROVALS", &ca.CeremonyMinApprovals)
+}
+
 func applyWorkloadIdentityEnv(getenv func(string) string, a *AttestedIssuance) {
 	setBool(getenv, "TRSTCTL_ATTESTED_ISSUANCE_ENABLED", &a.Enabled)
 	setString(getenv, "TRSTCTL_ATTESTED_ISSUANCE_TRUST_DOMAIN", &a.TrustDomain)
@@ -3921,17 +3948,20 @@ var fipsActive = crypto.FIPSEnabled
 // Each missing piece yields an actionable error naming the field to set. A complete
 // regulated config returns no error and boots.
 func validateGovernanceConfig(c *Config) []error {
+	var errs []error
+	if c.CA.CeremonyMinApprovals < 0 {
+		errs = append(errs, errors.New("ca.ceremony_min_approvals must not be negative; 0 keeps the default floor of 1 approval"))
+	}
 	mode := c.CA.GovernanceModeValue()
 	switch mode {
 	case GovernanceStandard:
-		return nil
+		return errs
 	case GovernanceRegulated:
 		// fall through to the coherence checks below.
 	default:
-		return []error{fmt.Errorf("ca.governance_mode %q is invalid (want %q or %q)", c.CA.GovernanceMode, GovernanceStandard, GovernanceRegulated)}
+		return append(errs, fmt.Errorf("ca.governance_mode %q is invalid (want %q or %q)", c.CA.GovernanceMode, GovernanceStandard, GovernanceRegulated))
 	}
 
-	var errs []error
 	if !c.CA.Policy.Enabled {
 		errs = append(errs, errors.New("ca.governance_mode=regulated requires the OPA policy gate (set ca.policy.enabled=true / TRSTCTL_CA_POLICY_ENABLED=true)"))
 	}

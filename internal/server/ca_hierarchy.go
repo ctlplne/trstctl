@@ -50,6 +50,8 @@ type caHierarchyService struct {
 	signer                    SignerProvider
 	signAuthz                 signing.SignTokenProvider
 	leafProfile               crypto.LeafProfile
+	// minApprovals is the configured ceremony threshold floor (F264).
+	minApprovals int
 
 	mu      sync.Mutex
 	signers map[string]*signing.RemoteSigner
@@ -64,12 +66,26 @@ func (s *Server) buildCAHierarchyService(d Deps) api.CAHierarchyService {
 		preparedSubjectLeafSigner: d.PreparedSubjectLeafSigner,
 		store:                     d.Store, log: d.Log, signer: d.Signer, signAuthz: s.signAuthz,
 		leafProfile: d.LeafProfile, signers: map[string]*signing.RemoteSigner{},
+		minApprovals: d.CACeremonyMinApprovals,
 	}
 }
 
+// ceremonyThresholdFloor refuses a threshold below the configured floor, so a
+// requester cannot choose how many other people must agree (F264).
+func (h *caHierarchyService) ceremonyThresholdFloor(threshold int) error {
+	floor := h.minApprovals
+	if floor < 1 {
+		floor = 1
+	}
+	if threshold < floor {
+		return fmt.Errorf("%w: threshold must be at least %d (ca.ceremony_min_approvals)", api.ErrCAHierarchyInvalid, floor)
+	}
+	return nil
+}
+
 func (h *caHierarchyService) PreviewCeremony(ctx context.Context, tenantID string, req api.CACeremonyStartRequest) (api.CACeremonyPlanPreview, error) {
-	if req.Threshold < 1 {
-		return api.CACeremonyPlanPreview{}, fmt.Errorf("%w: threshold must be at least 1", api.ErrCAHierarchyInvalid)
+	if err := h.ceremonyThresholdFloor(req.Threshold); err != nil {
+		return api.CACeremonyPlanPreview{}, err
 	}
 	purpose, err := hierarchyPurposeFromStartRequest(req)
 	if err != nil {
@@ -247,8 +263,8 @@ func (h *caHierarchyService) issueLeafForExactAuthorityWithValidity(
 }
 
 func (h *caHierarchyService) StartCeremony(ctx context.Context, tenantID string, req api.CACeremonyStartRequest) (api.CAKeyCeremony, error) {
-	if req.Threshold < 1 {
-		return api.CAKeyCeremony{}, fmt.Errorf("%w: threshold must be at least 1", api.ErrCAHierarchyInvalid)
+	if err := h.ceremonyThresholdFloor(req.Threshold); err != nil {
+		return api.CAKeyCeremony{}, err
 	}
 	purpose, err := hierarchyPurposeFromStartRequest(req)
 	if err != nil {
