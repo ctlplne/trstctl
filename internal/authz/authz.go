@@ -153,9 +153,12 @@ func (r Role) Allows(p Permission) bool {
 // BuiltinRoles returns the platform's built-in roles: human/operator roles plus
 // machine-actor roles for enrolled agents, MCP automation, and CLI users.
 func BuiltinRoles() map[string]Role {
-	readOnly := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, PrivacyRead, GraphRead, RiskRead, AgentsRead, DiscoveryRead, NHIRead, PolicyRead, NotificationsRead, ConnectorsRead, LifecycleRead, IncidentsRead, CapabilitiesRead, AccessRead, ProfilesRead, SecretsRead, KeysRead}
+	// Read-only and automation roles see metadata, never secret values: secrets:read
+	// reveals plaintext (GET /api/v1/secrets/store/{name}), so it is granted only
+	// deliberately, through operator, cli, admin or a custom role.
+	readOnly := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, PrivacyRead, GraphRead, RiskRead, AgentsRead, DiscoveryRead, NHIRead, PolicyRead, NotificationsRead, ConnectorsRead, LifecycleRead, IncidentsRead, CapabilitiesRead, AccessRead, ProfilesRead, KeysRead}
 	agent := []Permission{CertsRead, AgentsHeartbeat, AgentsJobPoll, AgentsJobComplete, AgentsJobReport, DiscoveryWrite}
-	mcp := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, AuditRead, PrivacyRead, GraphRead, RiskRead, AgentsRead, DiscoveryRead, DiscoveryWrite, NHIRead, PolicyRead, NotificationsRead, ConnectorsRead, LifecycleRead, IncidentsRead, CapabilitiesRead, AccessRead, ProfilesRead, CertsRequest, SecretsRead, KeysRead}
+	mcp := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, AuditRead, PrivacyRead, GraphRead, RiskRead, AgentsRead, DiscoveryRead, DiscoveryWrite, NHIRead, PolicyRead, NotificationsRead, ConnectorsRead, LifecycleRead, IncidentsRead, CapabilitiesRead, AccessRead, ProfilesRead, CertsRequest, KeysRead}
 	// The CLI machine role is broad but not sovereign. AccessRoleAssign is withheld
 	// because a CLI token that can hand out roles can hand itself more. A2's
 	// AgentsGrantRelay is withheld on the same reasoning: it authorizes placing an

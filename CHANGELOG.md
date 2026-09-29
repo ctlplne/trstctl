@@ -2,6 +2,12 @@
 
 ### Fixed
 
+- Restarting the control plane during an incident fleet re-issuance no longer
+  lets the legacy batch worker revoke a wave's certificates before their
+  replacements exist; revocation always waits for a verified successor.
+- The built-in `viewer` and `mcp` roles no longer include `secrets:read`, which
+  revealed application secret values in plaintext. Grant it deliberately through
+  `operator`, `cli`, `admin` or a custom role.
 - Notification delivery details open at the heading, keeping the outcome visible
   before operators tab through the dialog.
 - Certificate replacement explains when a matching identity is already renewing

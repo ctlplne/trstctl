@@ -162,9 +162,9 @@ group on a shared trstctl deployment.
    The required permission is checked on every route and returns `403` on failure. See
    [Policy & governance](../features/policy-and-governance.md).
 
-   -> a `viewer` can read inventory but not mint; an `ra-officer` can request a
-   certificate but cannot issue it — the registration-authority separation, enforced,
-   not assumed.
+   -> a `viewer` can read inventory but not mint or read secret values; an
+   `ra-officer` can request a certificate but cannot issue it — the
+   registration-authority separation, enforced, not assumed.
 
    The default bootstrap token from step 1 cannot assign member roles. It lacks
    `access:role.assign`; trying to add even a viewer returns 403. An administrator

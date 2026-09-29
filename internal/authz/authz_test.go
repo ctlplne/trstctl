@@ -288,7 +288,6 @@ func TestMachineBuiltinRolesPinned(t *testing.T) {
 			authz.AccessRead,
 			authz.ProfilesRead,
 			authz.CertsRequest,
-			authz.SecretsRead,
 			authz.KeysRead,
 		},
 		"cli": {
@@ -358,4 +357,21 @@ func sortedPermissions(in []authz.Permission) []authz.Permission {
 	out := append([]authz.Permission(nil), in...)
 	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
 	return out
+}
+
+// secrets:read reveals plaintext secret values, so the read-only human role and the
+// AI/automation role must not carry it; roles that manage secrets still do.
+func TestReadOnlyAndAutomationRolesCannotRevealSecrets(t *testing.T) {
+	roles := authz.BuiltinRoles()
+	for _, name := range []string{"viewer", "mcp", "auditor", "agent", "ra-officer"} {
+		role := roles[name]
+		if role.Allows(authz.SecretsRead) || role.Allows(authz.SecretsWrite) {
+			t.Errorf("built-in role %q can read or write secret values", name)
+		}
+	}
+	for _, name := range []string{"admin", "operator", "cli"} {
+		if !roles[name].Allows(authz.SecretsRead) {
+			t.Errorf("built-in role %q lost secrets:read", name)
+		}
+	}
 }
