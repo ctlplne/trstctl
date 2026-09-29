@@ -48,6 +48,29 @@ profile, retry readiness explains why a new reviewed issuance or replacement is
 required. Editing the active profile does not rewrite that command, and a retry
 cannot bypass its original validity ceiling.
 
+## Recovering an approved request with an unusable rule
+
+An approved request keeps the rule version its approver reviewed. If that version
+leaves no usable lifetime, approving it again or changing the active version does
+not repair the request. Its original approval remains part of the audit history.
+
+In Operations, open **Requests waiting for approval**, expand the issuance request
+history, and read the refusal. The original requester can withdraw the request and
+use **Start a new request**. The console carries the known credential name, a still
+visible owner, and purpose into a new form. Select a usable rule explicitly and
+supply a requester-generated CSR; the console does not copy the old rule, CSR or
+approval. Preview the exact request, submit it, and have a different approver review
+it before issuance. An approver acting for someone else must ask that requester to
+open the new request. Withdrawal preserves the old request's history.
+
+The local lifetime refusal is HTTP `422` with problem extensions
+`"retryable": false` and `"recovery_required": "new_issuance_request"`. These
+extensions distinguish this permanent refusal from a temporary issuance failure.
+The console offers **Retry safely** for ordinary retryable failures, reusing the
+saved request identity and issuance key. Other explicit recovery prerequisites are
+shown as **Retry after recovery**; resolve the reported prerequisite first. Error
+wording alone never authorizes a replacement or changes the approved rule.
+
 ## The registration-authority (RA) separation
 
 The RA role model separates **who may request** a certificate from **who may

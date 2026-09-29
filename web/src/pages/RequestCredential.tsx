@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Send } from "lucide-react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { DataGrid, type DataGridColumn, type DataGridState } from "@/components/DataGrid";
 import { EmptyState } from "@/components/EmptyState";
@@ -109,6 +109,13 @@ function formatDate(value?: string): string {
 
 export function RequestCredential() {
   const { user } = useAuth();
+  const [params] = useSearchParams();
+  const replacementID = params.get("from_request") ?? "";
+  return <RequestCredentialForm key={JSON.stringify([user?.tenant_id, user?.subject, user?.email, replacementID])} replacementID={replacementID} />;
+}
+
+function RequestCredentialForm({ replacementID }: { replacementID: string }) {
+  const { user } = useAuth();
   const { t } = useTranslation();
   const [step, setStep] = useState(0);
   const [profiles, setProfiles] = useState<Profile[] | null>(null);
@@ -118,6 +125,14 @@ export function RequestCredential() {
   const [ownerQuery, setOwnerQuery] = useState("");
   const [requests, setRequests] = useState<IssuanceRequest[] | null>(null);
   const [requestError, setRequestError] = useState<string | null>(null);
+  const formSchema = useMemo(
+    () =>
+      requestFormSchema.refine((values) => !replacementID || Boolean(values.subjectCSRPEM.trim()), {
+        path: ["subjectCSRPEM"],
+        message: t("request.recovery.csrRequired"),
+      }),
+    [replacementID, t],
+  );
   const {
     control,
     register,
@@ -126,7 +141,7 @@ export function RequestCredential() {
     reset,
     formState: { errors },
   } = useForm<RequestFormValues>({
-    resolver: zodResolver(requestFormSchema),
+    resolver: zodResolver(formSchema),
     mode: "onTouched",
     defaultValues: { profileKey: "", name: "", ownerId: "", purpose: "", subjectCSRPEM: "" },
   });
@@ -146,6 +161,29 @@ export function RequestCredential() {
   const [previewError, setPreviewError] = useState<string | null>(null);
   const requester = requesterFor(user);
   const requesterLabel = user?.email || requester;
+  const replacementSource = replacementID
+    ? requests?.find(
+        (request) =>
+          request.id === replacementID &&
+          request.tenant_id === user?.tenant_id &&
+          request.requester === requester &&
+          (request.status === "approved" || request.status === "cancelled"),
+      )
+    : undefined;
+  const replacementApplied = useRef(false);
+  const replacementBlocked = Boolean(replacementID && (!requests || !owners || requestError || ownerError || !replacementSource));
+
+  useEffect(() => {
+    if (replacementApplied.current || !replacementSource || !owners || ownerError) return;
+    replacementApplied.current = true;
+    reset({
+      profileKey: "",
+      name: replacementSource.subject,
+      ownerId: owners.some((owner) => owner.id === replacementSource.owner_id) ? (replacementSource.owner_id ?? "") : "",
+      purpose: replacementSource.justification ?? "",
+      subjectCSRPEM: "",
+    });
+  }, [ownerError, owners, replacementSource, reset]);
 
   const loadProfiles = useCallback(async () => {
     try {
@@ -187,8 +225,8 @@ export function RequestCredential() {
   const activeProfiles = useMemo(() => (profiles ?? []).filter((profile) => profile.active !== false).sort((a, b) => a.name.localeCompare(b.name)), [profiles]);
 
   useEffect(() => {
-    if (!selectedProfileKey && activeProfiles.length > 0) setValue("profileKey", profileKey(activeProfiles[0]));
-  }, [activeProfiles, selectedProfileKey, setValue]);
+    if (!replacementID && !selectedProfileKey && activeProfiles.length > 0) setValue("profileKey", profileKey(activeProfiles[0]));
+  }, [activeProfiles, replacementID, selectedProfileKey, setValue]);
 
   const selectedProfile = activeProfiles.find((profile) => profileKey(profile) === selectedProfileKey) ?? null;
   const selectedOwner = (owners ?? []).find((owner) => owner.id === ownerId) ?? null;
@@ -203,7 +241,7 @@ export function RequestCredential() {
   );
 
   const exactPreviewInput = useMemo<IssuanceRequestInput | null>(() => {
-    if (!selectedProfile || !selectedOwner || !name.trim()) return null;
+    if (replacementBlocked || (replacementID && !subjectCSRPEM.trim()) || !selectedProfile || !selectedOwner || !name.trim()) return null;
     return requestInput(
       {
         profileKey: profileKey(selectedProfile),
@@ -214,7 +252,7 @@ export function RequestCredential() {
       },
       selectedProfile,
     );
-  }, [name, purpose, selectedOwner, selectedProfile, subjectCSRPEM]);
+  }, [name, purpose, replacementBlocked, replacementID, selectedOwner, selectedProfile, subjectCSRPEM]);
   const exactPreviewKey = exactPreviewInput ? JSON.stringify(exactPreviewInput) : "";
 
   useEffect(() => {
@@ -284,6 +322,10 @@ export function RequestCredential() {
   const submit = handleSubmit(async (values) => {
     setSubmitError(null);
     setNotice(null);
+    if (replacementBlocked) {
+      setSubmitError(t("request.recovery.prepareNew"));
+      return;
+    }
     if (!selectedProfile) {
       setSubmitError("Choose an issuance profile.");
       return;
@@ -320,7 +362,9 @@ export function RequestCredential() {
     { id: "details", label: t("request.wizard.details.label"), description: t("request.wizard.details.description") },
     { id: "review", label: t("request.wizard.review.label"), description: t("request.wizard.review.description") },
   ];
-  const nextDisabled = step === 0 ? !selectedProfile : step === 1 ? !name.trim() || !selectedOwner : true;
+  const nextDisabled =
+    replacementBlocked ||
+    (step === 0 ? !selectedProfile : step === 1 ? !name.trim() || !selectedOwner || Boolean(replacementID && !subjectCSRPEM.trim()) : true);
   const nextLabel = step === 0 ? t("request.wizard.nextDetails") : t("request.wizard.nextReview");
 
   const requestGridState: DataGridState = requestError ? "error" : requests == null ? "loading" : myRequests.length ? "ready" : "empty";
@@ -333,6 +377,12 @@ export function RequestCredential() {
         description="Choose a rule, name the machine, and submit for approval. A request cannot approve or mint its own certificate."
         technicalDetails="Exact evidence includes the selected profile version, owner, requester subject, CSR fingerprint, policy decision, approval events, Idempotency-Key, issuance event, and certificate chain. When you supply a CSR, the private key stays with the requester."
       />
+
+      {replacementID && (
+        <p role="status" className="text-body text-muted-foreground">
+          {t(replacementBlocked ? (!requests || !owners ? "request.recovery.loading" : "request.recovery.unavailable") : "request.recovery.prepareNew")}
+        </p>
+      )}
 
       {notice && (
         <p role="status" className="rounded-control border border-status-success/30 bg-status-success/10 px-3 py-2 text-body text-status-success">
@@ -367,6 +417,7 @@ export function RequestCredential() {
                   <Field className="max-w-xl" label={translateNow("source.profile.d696a35bdd")} required>
                     {(control) => (
                       <Select {...control} {...register("profileKey")} disabled={activeProfiles.length === 0} required>
+                        {replacementID && <option value="">{t("request.recovery.chooseRule")}</option>}
                         {activeProfiles.map((profile) => (
                           <option key={profileKey(profile)} value={profileKey(profile)}>
                             {translateNow("source.value1.v.value2.value3.b49c34f739", {
@@ -457,7 +508,12 @@ export function RequestCredential() {
                       channel — the operator never touches key material. The help
                       text says so, so this form is not mistaken for the
                       destination. */}
-                  <Field label={t("request.csr.label")} description={t("request.csr.help")} error={errors.subjectCSRPEM?.message}>
+                  <Field
+                    label={t("request.csr.label")}
+                    description={t("request.csr.help")}
+                    error={errors.subjectCSRPEM?.message}
+                    required={Boolean(replacementID)}
+                  >
                     {(control) => (
                       <Textarea
                         {...control}
@@ -473,7 +529,7 @@ export function RequestCredential() {
                     <code className="break-all font-mono text-xs">
                       {translateNow("source.openssl.req.new.newkey.ec.pkeyopt.ec.param.c1a1d7efe2", { value1: name.trim() || "service" })}
                     </code>
-                    <span className="text-muted-foreground">{t("request.csr.omitted")}</span>
+                    <span className="text-muted-foreground">{t(replacementID ? "request.recovery.csrRequired" : "request.csr.omitted")}</span>
                   </div>
                 </div>
               )}

@@ -1,6 +1,8 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
+import { ApiError } from "@/lib/api";
 import { IssuanceRequestsPanel } from "@/components/IssuanceRequestsPanel";
 import { AppQueryProvider, useApiQuery } from "@/lib/query";
 import { approvalRequestsQueryKey } from "@/lib/approvalQueue";
@@ -310,5 +312,99 @@ describe("ticket-intake relay visibility", () => {
 
     expect(apiMock.denyIssuanceRequest).toHaveBeenCalledWith("request-4", "Name does not match the approved service inventory.");
     expect(await screen.findByRole("status")).toHaveTextContent("Request denied for unsafe-name");
+  });
+  it("replaces a permanently refused pinned profile instead of offering the same failed retry", async () => {
+    const request = {
+      id: "request-permanent",
+      tenant_id: "tenant-1",
+      subject: "permanent.example.test",
+      owner_id: "owner-1",
+      profile: "short:1",
+      requester: "requester",
+      decided_by: "reviewer",
+      status: "approved" as const,
+      expires_at: "2026-10-05T00:00:00Z",
+      created_at: "2026-09-28T00:00:00Z",
+    };
+    apiMock.issuanceRequests.mockResolvedValue({ items: [request], open: 0, guidance: "Approval is not issuance." });
+    apiMock.prepareIssuanceRequest.mockResolvedValue({
+      request,
+      identity: { id: "identity-permanent", status: "requested" },
+      issue_idempotency_key: "fixed-key",
+      csr_pem: "public CSR",
+    });
+    apiMock.transitionIdentity.mockRejectedValue(
+      new ApiError(422, JSON.stringify({ detail: "The pinned rule has no usable lifetime.", retryable: false, recovery_required: "new_issuance_request" })),
+    );
+    apiMock.cancelIssuanceRequest.mockResolvedValue({ ...request, status: "cancelled" });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <AppQueryProvider>
+          <IssuanceRequestsPanel currentPrincipal={{ subject: "requester", permissions: ["certs:issue", "identities:write", "certs:request"] }} />
+        </AppQueryProvider>
+      </MemoryRouter>,
+    );
+    await user.click(await screen.findByRole("button", { name: "Issue certificate for permanent.example.test" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("The pinned rule has no usable lifetime.");
+    expect(screen.queryByRole("button", { name: "Retry safely for permanent.example.test" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Start a new request for permanent.example.test" })).toHaveAttribute(
+      "href",
+      "/request?from_request=request-permanent",
+    );
+    expect(screen.getByRole("button", { name: "Withdraw permanent.example.test" })).toBeEnabled();
+    expect(apiMock.transitionIdentity).toHaveBeenCalledTimes(1);
+    expect(apiMock.completeIssuanceRequest).not.toHaveBeenCalled();
+    expect(apiMock.cancelIssuanceRequest).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Withdraw permanent.example.test" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Request withdrawn for permanent.example.test");
+    expect(screen.getByRole("link", { name: "Start a new request for permanent.example.test" })).toHaveAttribute(
+      "href",
+      "/request?from_request=request-permanent",
+    );
+    expect(screen.queryByRole("button", { name: "Issue certificate for permanent.example.test" })).not.toBeInTheDocument();
+  });
+  it("retains each refusal when another request succeeds and never copies another requester's approval", async () => {
+    const rows = ["first", "second", "third"].map((id) => ({
+      id,
+      tenant_id: "tenant-1",
+      subject: `${id}.example.test`,
+      requester: id === "second" ? "other-person" : "requester",
+      status: "approved" as const,
+      decided_by: "reviewer",
+      profile: "short:1",
+      expires_at: "2026-10-05T00:00:00Z",
+      created_at: "2026-09-28T00:00:00Z",
+    }));
+    apiMock.issuanceRequests.mockResolvedValue({ items: rows, open: 0, guidance: "" });
+    apiMock.prepareIssuanceRequest.mockImplementation(async (id: string) => ({
+      request: rows.find((row) => row.id === id),
+      identity: { id, status: "requested" },
+      issue_idempotency_key: `${id}-key`,
+      csr_pem: "public CSR",
+    }));
+    apiMock.transitionIdentity
+      .mockRejectedValueOnce(new ApiError(422, JSON.stringify({ retryable: false, recovery_required: "new_issuance_request" })))
+      .mockRejectedValueOnce(new ApiError(422, JSON.stringify({ retryable: false, recovery_required: "new_issuance_request" })))
+      .mockResolvedValueOnce({ id: "third", status: "issued" });
+    apiMock.completeIssuanceRequest.mockResolvedValue({ ...rows[2], status: "issued" });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <AppQueryProvider>
+          <IssuanceRequestsPanel currentPrincipal={{ subject: "requester", permissions: ["certs:issue", "identities:write", "certs:request"] }} />
+        </AppQueryProvider>
+      </MemoryRouter>,
+    );
+    await user.click(await screen.findByRole("button", { name: "Issue certificate for first.example.test" }));
+    await screen.findByRole("link", { name: "Start a new request for first.example.test" });
+    await user.click(screen.getByRole("button", { name: "Issue certificate for second.example.test" }));
+    expect(await screen.findByText(/Ask the original requester/)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Start a new request for second.example.test" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Issue certificate for third.example.test" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Certificate issued for third.example.test");
+    expect(screen.getByRole("link", { name: "Start a new request for first.example.test" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /(?:Issue certificate|Retry safely) for (?:first|second)/ })).not.toBeInTheDocument();
+    expect(apiMock.completeIssuanceRequest).toHaveBeenCalledExactlyOnceWith("third");
   });
 });

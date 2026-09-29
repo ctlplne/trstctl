@@ -6270,6 +6270,50 @@ export const messages = {
     defaultMessage: "Configure certificate authorities",
     description: "Link from request review to certificate authority configuration.",
   },
+  "request.recovery.replace": {
+    defaultMessage:
+      "This request keeps its original rule and approval for audit. That rule cannot issue this certificate. Withdraw the old request and submit a new request with a usable rule; changing the active rule does not rewrite this request.",
+    description: "Permanent pinned-profile refusal recovery.",
+  },
+  "request.recovery.startNew": {
+    defaultMessage: "Start a new request for {subject}",
+    description: "Action carrying owned request metadata to a fresh review.",
+  },
+  "request.recovery.askRequester": {
+    defaultMessage: "Ask the original requester to withdraw this request and open a new one with a usable rule.",
+    description: "No impersonation or implicit permission for a distinct approver.",
+  },
+  "request.recovery.repair": {
+    defaultMessage:
+      "The server requires recovery before another attempt. Resolve the reported prerequisite, then retry this same request. Its saved approval and issuance key remain unchanged.",
+    description: "Explicit prerequisite recovery is distinct from an immediate retry.",
+  },
+  "request.recovery.afterRepair": {
+    defaultMessage: "Retry after recovery for {subject}",
+    description: "Operator-triggered retry after prerequisite repair.",
+  },
+  "request.recovery.prepareNew": {
+    defaultMessage:
+      "The known name and purpose are carried forward; the owner is selected only if still available. Choose a usable rule and supply a requester-generated CSR. The old request stays unchanged; this new request needs fresh independent approval.",
+    description: "Fresh replacement request preserves custody and approval boundaries.",
+  },
+  "request.recovery.loading": {
+    defaultMessage: "Loading the original request and its owner list before preparing a new request.",
+    description: "Replacement request prerequisite loading.",
+  },
+  "request.recovery.csrRequired": {
+    defaultMessage: "A requester-generated CSR is required for this new request. Keep the private key on the workload.",
+    description: "Explicit key custody requirement for a replacement request.",
+  },
+  "request.recovery.unavailable": {
+    defaultMessage:
+      "The original request or its owner list is unavailable, or this request does not belong to you. Return to the request list; no details or approval will be copied.",
+    description: "Fail-closed replacement lookup, including unknown and foreign request IDs.",
+  },
+  "request.recovery.chooseRule": {
+    defaultMessage: "Choose a new certificate rule",
+    description: "Requires explicit fresh rule selection for replacement requests.",
+  },
   "request.recovery.retry": {
     defaultMessage: "Retry safely for {subject}",
     description: "Action for retrying an approved issuance request with its stable request and mint identity.",

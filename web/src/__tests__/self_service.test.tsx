@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useNavigate } from "react-router-dom";
 import { axe } from "vitest-axe";
 import { ApiError } from "@/lib/api";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -34,12 +34,18 @@ vi.mock("@/lib/api", async (orig) => {
   return { ...actual, api: apiMock };
 });
 
-function renderAt(path: string) {
+function RecoveryNavigation() {
+  const navigate = useNavigate();
+  return <button onClick={() => navigate("/request")}>Leave recovery</button>;
+}
+
+function renderAt(path: string, recoveryNavigation = false) {
   return render(
     <ThemeProvider>
       <AuthProvider>
         <MemoryRouter initialEntries={[path]}>
           <AppRoutes />
+          {recoveryNavigation && <RecoveryNavigation />}
         </MemoryRouter>
       </AuthProvider>
     </ThemeProvider>,
@@ -72,6 +78,20 @@ const otherOwner = {
   id: "22222222-2222-4222-8222-222222222229",
   name: "Data platform",
   email: "data@example.test",
+};
+
+const recoveryRequest = {
+  id: "old-request",
+  tenant_id: "t1",
+  subject: "known.example.test",
+  owner_id: selectedOwner.id,
+  profile: "unusable:1",
+  requester: "dev-1",
+  justification: "Known purpose",
+  status: "approved",
+  decided_by: "reviewer",
+  expires_at: "2026-10-05T00:00:00Z",
+  created_at: "2026-09-28T00:00:00Z",
 };
 
 describe("self-service credential requests", () => {
@@ -313,5 +333,93 @@ describe("self-service credential requests", () => {
     await screen.findByRole("heading", { name: "Request a certificate" });
     await waitFor(() => expect(screen.getByLabelText("Profile")).toHaveDisplayValue("web-server v2 active"));
     expect(await axe(container)).toHaveNoViolations();
+  });
+  it("carries an owned request into a fresh review without copying its pinned rule or approval", async () => {
+    apiMock.issuanceRequests.mockResolvedValue({ items: [recoveryRequest], open: 0, guidance: "" });
+    apiMock.createIssuanceRequest.mockResolvedValue({
+      ...recoveryRequest,
+      id: "new-request",
+      profile: "web-server:2",
+      status: "requested",
+      decided_by: undefined,
+    });
+    const user = userEvent.setup();
+    renderAt("/request?from_request=old-request");
+    await screen.findByRole("heading", { name: "Request a certificate" });
+    await screen.findByRole("option", { name: "web-server v2 active" });
+    expect(screen.getByLabelText("Profile")).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Next: name it" })).toBeDisabled();
+    await user.selectOptions(screen.getByLabelText("Profile"), "web-server:2");
+    await user.click(screen.getByRole("button", { name: "Next: name it" }));
+    expect(screen.getByLabelText("Credential name")).toHaveValue("known.example.test");
+    expect(screen.getByLabelText("Owner")).toHaveValue(selectedOwner.id);
+    expect(screen.getByLabelText("Business purpose")).toHaveValue("Known purpose");
+    expect(apiMock.createIssuanceRequest).not.toHaveBeenCalled();
+    expect(apiMock.createIdentity).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Certificate signing request (PKCS#10)")).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Next: review" })).toBeDisabled();
+    const csr = "-----BEGIN CERTIFICATE REQUEST-----\nNEW PUBLIC CSR\n-----END CERTIFICATE REQUEST-----";
+    await user.type(screen.getByLabelText("Certificate signing request (PKCS#10)"), csr);
+    await user.click(screen.getByRole("button", { name: "Next: review" }));
+    expect(await screen.findByRole("status", { name: "Request preview ready" })).toHaveTextContent("Independent approval");
+    await user.click(screen.getByRole("button", { name: "Submit request" }));
+    await waitFor(() =>
+      expect(apiMock.createIssuanceRequest).toHaveBeenCalledWith({
+        subject: recoveryRequest.subject,
+        owner_id: selectedOwner.id,
+        profile: "web-server:2",
+        justification: recoveryRequest.justification,
+        origin: "console",
+        csr_pem: csr,
+      }),
+    );
+    expect(await screen.findByRole("row", { name: /known.example.test.*web-server:2.*Awaiting approval.*requested/i })).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /known.example.test.*unusable:1.*Approved.*approved/i })).toBeInTheDocument();
+    expect(apiMock.createIdentity).not.toHaveBeenCalled();
+  });
+  it.each([
+    ["missing request", []],
+    ["another tenant", [{ ...recoveryRequest, tenant_id: "other-tenant" }]],
+    ["another requester", [{ ...recoveryRequest, requester: "other-person" }]],
+    ["already issued request", [{ ...recoveryRequest, status: "issued" }]],
+  ])("refuses to carry details from %s", async (_name, items) => {
+    apiMock.issuanceRequests.mockResolvedValue({ items, open: 0, guidance: "" });
+    const user = userEvent.setup();
+    renderAt("/request?from_request=old-request");
+    await screen.findByRole("option", { name: "web-server v2 active" });
+    expect(await screen.findByText(/The original request or its owner list is unavailable/)).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Profile"), "web-server:2");
+    expect(screen.getByRole("button", { name: "Next: name it" })).toBeDisabled();
+    expect(apiMock.previewIssuanceRequest).not.toHaveBeenCalled();
+    expect(apiMock.createIssuanceRequest).not.toHaveBeenCalled();
+  });
+
+  it("carries a withdrawn request while leaving a missing owner for explicit selection", async () => {
+    apiMock.issuanceRequests.mockResolvedValue({ items: [{ ...recoveryRequest, status: "cancelled", owner_id: "removed-owner" }], open: 0, guidance: "" });
+    const user = userEvent.setup();
+    renderAt("/request?from_request=old-request");
+    await screen.findByRole("option", { name: "web-server v2 active" });
+    await user.selectOptions(screen.getByLabelText("Profile"), "web-server:2");
+    await user.click(screen.getByRole("button", { name: "Next: name it" }));
+    expect(screen.getByLabelText("Credential name")).toHaveValue(recoveryRequest.subject);
+    expect(screen.getByLabelText("Owner")).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Next: review" })).toBeDisabled();
+  });
+  it("clears carried details and CSR when leaving the recovery URL", async () => {
+    apiMock.issuanceRequests.mockResolvedValue({ items: [recoveryRequest], open: 0, guidance: "" });
+    const user = userEvent.setup();
+    renderAt("/request?from_request=old-request", true);
+    await screen.findByRole("option", { name: "web-server v2 active" });
+    await user.selectOptions(screen.getByLabelText("Profile"), "web-server:2");
+    await user.click(screen.getByRole("button", { name: "Next: name it" }));
+    await user.type(screen.getByLabelText("Certificate signing request (PKCS#10)"), "-----BEGIN CERTIFICATE REQUEST-----\nPUBLIC CSR");
+    await user.click(screen.getByRole("button", { name: "Leave recovery" }));
+    await screen.findByRole("option", { name: "web-server v2 active" });
+    await user.click(screen.getByRole("button", { name: "Next: name it" }));
+    expect(screen.getByLabelText("Credential name")).toHaveValue("");
+    expect(screen.getByLabelText("Owner")).toHaveValue("");
+    expect(screen.getByLabelText("Business purpose")).toHaveValue("");
+    expect(screen.getByLabelText("Certificate signing request (PKCS#10)")).toHaveValue("");
+    expect(apiMock.createIssuanceRequest).not.toHaveBeenCalled();
   });
 });

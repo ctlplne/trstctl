@@ -90,11 +90,13 @@ func TestEndpointPreviewAndEnrollmentRejectUnusablePlatformLifetime(t *testing.T
 				if code != http.StatusUnprocessableEntity || !strings.Contains(string(body), tc.denial) || !strings.Contains(string(body), "NotBefore backdate") || !strings.Contains(string(body), "nothing was queued") {
 					t.Fatalf("preview must refuse %s before issuance: %d %s", tc.denial, code, body)
 				}
+				assertUnusableProfileRecoveryProblem(t, body)
 				request["preview_fingerprint"] = strings.Repeat("0", 64)
 				code, body = secretsReq(t, h, http.MethodPost, "/api/v1/lifecycle/endpoint-bindings", token, request)
 				if code != http.StatusUnprocessableEntity || !strings.Contains(string(body), tc.denial) || !strings.Contains(string(body), "NotBefore backdate") || !strings.Contains(string(body), "nothing was queued") {
 					t.Fatalf("direct execution must also refuse %s: %d %s", tc.denial, code, body)
 				}
+				assertUnusableProfileRecoveryProblem(t, body)
 			}
 			if _, found, err := h.store.FindIdentityByName(context.Background(), h.tenant, "java.partner-lab.example.com"); err != nil || found {
 				t.Fatalf("preview/refusal created an identity: found=%v err=%v", found, err)
@@ -152,6 +154,8 @@ func TestRequesterIssuanceRejectsUnusableProfileBeforeQueue(t *testing.T) {
 				if code != http.StatusUnprocessableEntity || !strings.Contains(string(body), "leaves no usable lifetime") {
 					t.Fatalf("unusable requester profile accepted: %d %s", code, body)
 				}
+				assertUnusableProfileRecoveryProblem(t, previewBody)
+				assertUnusableProfileRecoveryProblem(t, body)
 				after, err := h.log.LastSequence(t.Context())
 				if err != nil || after != before {
 					t.Fatalf("refusal appended work: %d -> %d %v", before, after, err)
@@ -224,5 +228,19 @@ func TestRequesterIssuanceRejectsUnusableProfileBeforeQueue(t *testing.T) {
 				t.Fatalf("usable profile produced no certificate: %d %s", code, body)
 			}
 		})
+	}
+}
+
+func assertUnusableProfileRecoveryProblem(t *testing.T, raw []byte) {
+	t.Helper()
+	var p struct {
+		Retryable *bool  `json:"retryable"`
+		Recovery  string `json:"recovery_required"`
+	}
+	if err := json.Unmarshal(raw, &p); err != nil {
+		t.Fatal(err)
+	}
+	if p.Retryable == nil || *p.Retryable || p.Recovery != "new_issuance_request" {
+		t.Fatalf("permanently pinned lifetime refusal lacks machine-readable recovery: %s", raw)
 	}
 }

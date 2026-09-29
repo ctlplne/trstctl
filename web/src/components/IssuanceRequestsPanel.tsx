@@ -1,4 +1,7 @@
 import { useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
+import { Card } from "@/components/ui/card";
+import { issuanceRequestRecovery, type IssuanceRequestRecovery } from "@/lib/issuanceRequestRecovery";
 import { api, ApiError, type IssuanceRequest, type IssuanceRequestList, type TicketIntakeSchedule } from "@/lib/api";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 import { optionalApiCall } from "@/lib/optionalApi";
@@ -54,7 +57,7 @@ export function IssuanceRequestsPanel({ currentPrincipal }: IssuanceRequestsPane
   const [denyReason, setDenyReason] = useState("");
   const [decisionNotice, setDecisionNotice] = useState<string | null>(null);
   const [decisionError, setDecisionError] = useState<string | null>(null);
-  const [recoverableRequestID, setRecoverableRequestID] = useState<string | null>(null);
+  const [recovery, setRecovery] = useState<Record<string, IssuanceRequestRecovery>>({});
   const canDecideRequests = hasPermission(currentPrincipal, "certs:issue");
   const canRequestCertificates = hasPermission(currentPrincipal, "certs:request");
   const canFulfillRequests = canDecideRequests && hasPermission(currentPrincipal, "identities:write");
@@ -144,10 +147,14 @@ export function IssuanceRequestsPanel({ currentPrincipal }: IssuanceRequestsPane
       }
       if (!completed) throw lastError ?? new Error("certificate evidence did not arrive");
       retainDecision(completed);
-      setRecoverableRequestID(null);
+      setRecovery((current) => {
+        const next = { ...current };
+        delete next[`${item.tenant_id}:${item.id}`];
+        return next;
+      });
       setDecisionNotice(translateNow("source.issuance.requests.issued.i3req00023", { value1: item.subject }));
     } catch (err) {
-      setRecoverableRequestID(item.id);
+      setRecovery((current) => ({ ...current, [`${item.tenant_id}:${item.id}`]: issuanceRequestRecovery(err) }));
       setDecisionError(apiProblemMessage(err, translateNow("source.issuance.requests.issuefailed.i3req00024")));
     } finally {
       setBusyRequestID(null);
@@ -158,7 +165,7 @@ export function IssuanceRequestsPanel({ currentPrincipal }: IssuanceRequestsPane
   }
 
   return (
-    <section aria-labelledby="issuance-requests-heading" className="ui-panel space-y-3 p-comfortable">
+    <Card aria-labelledby="issuance-requests-heading" className="space-y-3 p-comfortable">
       <h2 id="issuance-requests-heading" className="text-title font-semibold">
         {translateNow("source.issuance.requests.heading.i3req00001")}
       </h2>
@@ -229,6 +236,7 @@ export function IssuanceRequestsPanel({ currentPrincipal }: IssuanceRequestsPane
           <ul className="space-y-2 text-sm">
             {items.slice(0, 25).map((item) => {
               const ownRequest = requesterMatchesCurrentPrincipal(item.requester, currentPrincipal);
+              const recoveryMode = recovery[`${item.tenant_id}:${item.id}`];
               const canWithdraw = ownRequest && canRequestCertificates && (item.status === "requested" || item.status === "approved");
               return (
                 <li key={item.id} className="border-b border-border pb-3 last:border-0">
@@ -282,13 +290,30 @@ export function IssuanceRequestsPanel({ currentPrincipal }: IssuanceRequestsPane
                   {item.status === "requested" && !ownRequest && currentPrincipal && !canDecideRequests ? (
                     <p className="mt-2 text-caption text-muted-foreground">{translateNow("source.issuance.requests.readonly.i3req00021")}</p>
                   ) : null}
-                  {item.status === "approved" && canFulfillRequests ? (
+                  {(item.status === "approved" || item.status === "cancelled") && recoveryMode === "replace" ? (
                     <div className="mt-2 space-y-2">
-                      {recoverableRequestID === item.id ? <p className="text-caption text-muted-foreground">{translateNow("request.recovery.safe")}</p> : null}
+                      <p className="text-caption text-muted-foreground">{translateNow("request.recovery.replace")}</p>
+                      {ownRequest && canRequestCertificates ? (
+                        <Link className="text-sm font-medium underline underline-offset-4" to={`/request?from_request=${encodeURIComponent(item.id)}`}>
+                          {translateNow("request.recovery.startNew", { subject: item.subject })}
+                        </Link>
+                      ) : (
+                        <p className="text-caption text-muted-foreground">{translateNow("request.recovery.askRequester")}</p>
+                      )}
+                    </div>
+                  ) : item.status === "approved" && canFulfillRequests ? (
+                    <div className="mt-2 space-y-2">
+                      {recoveryMode ? (
+                        <p className="text-caption text-muted-foreground">
+                          {translateNow(recoveryMode === "repair" ? "request.recovery.repair" : "request.recovery.safe")}
+                        </p>
+                      ) : null}
                       <Button type="button" size="sm" disabled={busyRequestID === item.id} onClick={() => void fulfill(item)}>
-                        {recoverableRequestID === item.id
-                          ? translateNow("request.recovery.retry", { subject: item.subject })
-                          : translateNow("source.issuance.requests.issue.i3req00022", { value1: item.subject })}
+                        {recoveryMode === "repair"
+                          ? translateNow("request.recovery.afterRepair", { subject: item.subject })
+                          : recoveryMode === "retry"
+                            ? translateNow("request.recovery.retry", { subject: item.subject })
+                            : translateNow("source.issuance.requests.issue.i3req00022", { value1: item.subject })}
                       </Button>
                     </div>
                   ) : null}
@@ -339,7 +364,7 @@ export function IssuanceRequestsPanel({ currentPrincipal }: IssuanceRequestsPane
           <p className="text-caption text-muted-foreground">{requests.data?.guidance}</p>
         </>
       ) : null}
-    </section>
+    </Card>
   );
 }
 

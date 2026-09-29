@@ -24,8 +24,10 @@ func validateProfileSigningLifetime(name string, maximum time.Duration, issuerSo
 	}
 	skew := crypto.IssuanceBackdateSkew()
 	if maximum > 0 && maximum <= skew {
-		return errStatus(http.StatusUnprocessableEntity, fmt.Sprintf(
+		refusal := errStatus(http.StatusUnprocessableEntity, fmt.Sprintf(
 			"certificate profile %q maximum validity %s leaves no usable lifetime after the %s NotBefore backdate; choose a profile whose full signed validity includes this clock-skew allowance plus time for deployment and automatic renewal; preview again before authorizing issuance; nothing was queued", name, maximum, skew))
+		refusal.ext = map[string]any{"retryable": false, "recovery_required": "new_issuance_request"}
+		return refusal
 	}
 	return nil
 }
