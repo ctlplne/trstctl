@@ -2548,6 +2548,10 @@ func (o *Orchestrator) RecordIncidentFleetReissuanceAndEnqueueBatch(
 	if batchIndex <= 0 {
 		return store.IncidentFleetReissuanceRun{}, errors.New("orchestrator: fleet batch index must be positive")
 	}
+	if r.MigrationRunID != "" {
+		return store.IncidentFleetReissuanceRun{}, fmt.Errorf(
+			"orchestrator: incident run %s is driven by migration run %s; the legacy fleet batch lane does not apply", r.ID, r.MigrationRunID)
+	}
 	if r.ID == "" {
 		r.ID = uuid.NewString()
 	}

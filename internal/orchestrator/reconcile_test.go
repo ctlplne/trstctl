@@ -372,6 +372,53 @@ func TestReconcileOutboxHealsFleetCursorCrashGapExactlyOnce(t *testing.T) {
 	}
 }
 
+// A running incident snapshot backed by a migration run mirrors that run, and
+// the migration lane owns its waves. Restart recovery must not recreate a
+// legacy batch command for it: that lane would read a wave whose successors do
+// not exist yet as verified and revoke the identities hosts still serve. The
+// legacy enqueue path refuses such a run outright.
+func TestReconcileOutboxLeavesMigrationBackedIncidentRunToMigrationLane(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	ctx := context.Background()
+	orch := orchestrator.NewOrchestrator(log, s, orchestrator.NewOutbox(s))
+
+	const runID = "aaaaaaaa-bbbb-cccc-dddd-ffffffffffff"
+	outboxKey := orchestrator.FleetReissuanceBatchIdempotencyKey(runID, 1)
+	payload, err := json.Marshal(projections.IncidentFleetReissuanceRecorded{
+		ID: runID, MigrationRunID: runID, Status: "running", Phase: "wave_1_started", NextBatchIndex: 1,
+		Batches: []projections.FleetReissuanceBatch{
+			{Index: 1, Status: "waiting_verification", IdentityIDs: []string{"11111111-2222-4333-8444-555555555555"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("encode migration-backed incident event: %v", err)
+	}
+	if _, err := log.Append(ctx, events.Event{
+		Type: projections.EventIncidentFleetReissuanceRecorded, TenantID: tenantA, Data: payload,
+	}); err != nil {
+		t.Fatalf("append migration-backed incident event: %v", err)
+	}
+
+	healed, err := orch.ReconcileOutbox(ctx, log)
+	if err != nil {
+		t.Fatalf("ReconcileOutbox migration-backed incident: %v", err)
+	}
+	if healed != 0 || countOutbox(t, ctx, s.SystemPool(), tenantA, outboxKey) != 0 {
+		t.Fatalf("migration-backed incident reconcile healed=%d rows=%d, want 0/0",
+			healed, countOutbox(t, ctx, s.SystemPool(), tenantA, outboxKey))
+	}
+
+	if _, err := orch.RecordIncidentFleetReissuanceAndEnqueueBatch(ctx, tenantA, store.IncidentFleetReissuanceRun{
+		ID: runID, MigrationRunID: runID, Status: "running", NextBatchIndex: 1,
+	}, 1); err == nil {
+		t.Fatal("legacy enqueue accepted a migration-backed incident run")
+	}
+	if got := countOutbox(t, ctx, s.SystemPool(), tenantA, outboxKey); got != 0 {
+		t.Fatalf("legacy batch rows after refused enqueue = %d, want 0", got)
+	}
+}
+
 func TestReconcileOutboxHealsCTSubmissionCrashGapExactlyOnce(t *testing.T) {
 	s := newStore(t)
 	log := openLog(t)

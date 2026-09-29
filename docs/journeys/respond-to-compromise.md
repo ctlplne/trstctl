@@ -102,7 +102,9 @@ Each wave installs replacement trust, requires signed host readback, issues from
 host-generated CSR, deploys the successor, and requires signed live-listener proof
 before revoking the exact predecessor. Revocation receipts must arrive before the
 next wave starts. A failed proof gate restores the current unrevoked wave; completed
-waves with revoked predecessors are not rolled back to those credentials.
+waves with revoked predecessors are not rolled back to those credentials. A
+control-plane restart resumes the run from its recorded wave; it never revokes a
+predecessor whose successor has not passed these proofs.
 
 The served CLI family is `trstctl-cli incidents fleet-reissuance
 start|list|get|pause|resume|rollback|evidence`. For its request fields, game-day

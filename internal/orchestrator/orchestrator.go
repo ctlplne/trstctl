@@ -1254,7 +1254,10 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			}
 			// Paused, halted, rolled-back, and completed snapshots deliberately
 			// publish nothing. A running snapshot names its one durable cursor.
-			if pl.Status == "running" && pl.NextBatchIndex > 0 && pl.NextBatchIndex <= len(pl.Batches) {
+			// A snapshot backed by a migration run is a mirror of that run: the
+			// migration lane owns its waves, so the legacy batch lane never
+			// drives it (its batches carry replacements only once they exist).
+			if pl.MigrationRunID == "" && pl.Status == "running" && pl.NextBatchIndex > 0 && pl.NextBatchIndex <= len(pl.Batches) {
 				body, err := json.Marshal(FleetReissuanceBatchCommand{RunID: pl.ID, BatchIndex: pl.NextBatchIndex})
 				if err != nil {
 					return err

@@ -29,6 +29,13 @@ func (d *issuanceDispatcher) handleFleetReissuanceBatch(ctx context.Context, m o
 	if err != nil {
 		return err
 	}
+	// A run backed by a migration run is driven only by that run's waves. A
+	// legacy command for it (for example one queued before an upgrade) is
+	// obsolete: acting on it would revoke identities whose successors the
+	// migration has not issued yet.
+	if run.MigrationRunID != "" {
+		return nil
+	}
 	if run.Status == "executed" || run.Status == "rollback_recorded" || command.BatchIndex < run.NextBatchIndex {
 		return nil
 	}
@@ -66,6 +73,13 @@ func (d *issuanceDispatcher) handleFleetReissuanceBatch(ctx context.Context, m o
 		return orchestrator.DeferDelivery(fmt.Errorf("server: fleet batch %d waits for signed endpoint verification", command.BatchIndex))
 	}
 
+	// Revocation needs one verified replacement per compromised identity. An
+	// empty or short replacement list summarizes as zero pending receipts, which
+	// must never read as "all replacements verified".
+	if len(batch.ReplacementIdentityIDs) != len(batch.IdentityIDs) {
+		return fmt.Errorf("server: fleet batch %d has %d replacement(s) for %d compromised identities; refusing to revoke without a complete replacement plan",
+			command.BatchIndex, len(batch.ReplacementIdentityIDs), len(batch.IdentityIDs))
+	}
 	outcome, err := d.store.SummarizeFleetVerification(ctx, m.TenantID, batch.ReplacementIdentityIDs)
 	if err != nil {
 		return err
