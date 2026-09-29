@@ -81,8 +81,14 @@ func TestOutboxDeliveryTimeoutMetricIsLabeledByTenantAndDestination(t *testing.T
 	if err := srv.registry.WriteProm(&buf); err != nil {
 		t.Fatalf("WriteProm: %v", err)
 	}
-	want := `trstctl_outbox_delivery_timeouts_total{tenant_id="11111111-1111-1111-1111-111111111111",destination="connector.deploy"} 1`
+	// The name of this test is historical: the metric used to carry tenant_id.
+	// /metrics is unauthenticated, so F270 labels it by destination only, and no
+	// series may name the tenant.
+	want := `trstctl_outbox_delivery_timeouts_total{destination="connector.deploy"} 1`
 	if !strings.Contains(buf.String(), want) {
 		t.Fatalf("timeout metric missing %q from:\n%s", want, buf.String())
+	}
+	if strings.Contains(buf.String(), tenantID) {
+		t.Fatalf("metrics name tenant %s:\n%s", tenantID, buf.String())
 	}
 }

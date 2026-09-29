@@ -138,9 +138,14 @@ func main() {
 	// --workload-cosign-listen is set, the agent holds the workload's predecessor key
 	// and serves the succession co-sign RPC so the control plane can mint a
 	// workload-held succession without the platform ever holding the leaf key. It is a
-	// self-contained mode (no enrollment settings needed) and requires the enterprise
-	// build.
-	workloadCoSignListen := flag.String("workload-cosign-listen", "", "serve the workload-held predecessor co-sign service at this address (\"unix:/path\" or \"host:port\"); enterprise build only")
+	// self-contained mode (no enrollment settings needed) in every build. A host:port
+	// listener requires pinned mutual TLS; a unix socket is owner-only (F261).
+	workloadCoSignListen := flag.String("workload-cosign-listen", "", "serve the workload-held predecessor co-sign service at this address: \"unix:/path\" for an owner-only local socket, or \"host:port\" with the pinned mutual-TLS flags below")
+	workloadCoSignTLSCert := flag.String("workload-cosign-tls-cert", "", "co-sign listener certificate (PEM); required for a host:port listener")
+	workloadCoSignTLSKey := flag.String("workload-cosign-tls-key", "", "co-sign listener private key (PEM); required for a host:port listener")
+	workloadCoSignPeerCA := flag.String("workload-cosign-peer-ca", "", "CA bundle (PEM) that anchors the calling control plane's client certificate; required for a host:port listener")
+	workloadCoSignPeerPin := flag.String("workload-cosign-peer-pin", "", "hex SHA-256 of the calling control plane's certificate public key (SPKI); only that key may request co-signatures")
+	workloadCoSignPeerUID := flag.Int("workload-cosign-peer-uid", -1, "uid allowed to connect to a unix co-sign socket (default: the agent's own uid)")
 	workloadIdentity := flag.String("workload-identity", "", "workload identity id the agent co-signs successions for")
 	workloadTenant := flag.String("workload-tenant", "", "workload tenant id for the co-sign binding")
 	workloadDeployment := flag.String("workload-deployment", "", "workload deployment scope for the co-sign binding")
@@ -283,6 +288,11 @@ func main() {
 			IdentityID:         *workloadIdentity,
 			TenantID:           *workloadTenant,
 			PredecessorKeyPath: *workloadPredecessorKey,
+			TLSCertFile:        *workloadCoSignTLSCert,
+			TLSKeyFile:         *workloadCoSignTLSKey,
+			PeerCAFile:         *workloadCoSignPeerCA,
+			PeerPinHex:         *workloadCoSignPeerPin,
+			PeerUID:            *workloadCoSignPeerUID,
 		}); err != nil {
 			fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
 			os.Exit(1)

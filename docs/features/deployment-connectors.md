@@ -94,7 +94,7 @@ Retries use capped backoff with jitter, and a tenant/destination circuit breaker
 after repeated failures, skipping new claims until a half-open probe succeeds.
 Operators inspect live state with `GET /api/v1/connectors/outbox-circuits`; Prometheus
 exposes transitions through
-`trstctl_outbox_circuit_transitions_total{tenant_id,destination,from,to}`.
+`trstctl_outbox_circuit_transitions_total{destination,from,to}` (circuits stay per tenant and destination; the metric names no tenant because `/metrics` is unauthenticated).
 
 ### The initial connector set (F7)
 

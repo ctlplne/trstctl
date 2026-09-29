@@ -137,8 +137,9 @@ func TestEnrollRenewalRequiresVerifiedClientCert(t *testing.T) {
 	}
 
 	// Establish a current identity under tenantA via bootstrap, then renew presenting
-	// that cert as the verified peer: the renewed cert must keep tenantA, even though
-	// the renewal CSR names an attacker-chosen common name.
+	// that cert as the verified peer: the renewed cert must keep tenantA. A renewal
+	// CSR that names an attacker-chosen common name is refused outright (F271):
+	// renewal rotates the key of the same agent and never changes its name.
 	tok, err := a.IssueBootstrapToken(ctx, tenantA, "")
 	if err != nil {
 		t.Fatal(err)
@@ -149,7 +150,10 @@ func TestEnrollRenewalRequiresVerifiedClientCert(t *testing.T) {
 	}
 	peerLeaf := leafDER(t, current)
 
-	renewed, err := a.EnrollRenewal(ctx, [][]byte{peerLeaf}, newCSR(t, "attacker-renamed"))
+	if _, err := a.EnrollRenewal(ctx, [][]byte{peerLeaf}, newCSR(t, "attacker-renamed")); !errors.Is(err, enroll.ErrRenewalIdentityChange) {
+		t.Fatalf("renewal CSR naming another agent = %v, want ErrRenewalIdentityChange", err)
+	}
+	renewed, err := a.EnrollRenewal(ctx, [][]byte{peerLeaf}, newCSR(t, "agent-01"))
 	if err != nil {
 		t.Fatalf("authenticated renewal failed: %v", err)
 	}

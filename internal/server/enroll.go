@@ -6,9 +6,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"trstctl.com/trstctl/internal/agent/enroll"
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -19,7 +21,12 @@ import (
 // single-use through the durable store (WIRE-003). The authority's CA is
 // in-process today (see internal/agent/enroll); custodying its key in the signer
 // (AN-4) is a follow-up (WIRE-004/EXC-WIRE).
-type enrollAuthority struct{ a *enroll.Authority }
+type enrollAuthority struct {
+	a *enroll.Authority
+	// peerCheck applies the agent channel's revocation and offboarding checks to
+	// the HTTP renewal listener (F269). It must be set wherever renewal is served.
+	peerCheck func(context.Context, mtls.PeerCertInfo) error
+}
 
 func (e enrollAuthority) IssueBootstrapToken(
 	ctx context.Context,
@@ -45,11 +52,55 @@ func (e enrollAuthority) EnrollBootstrap(ctx context.Context, token []byte, csrD
 }
 
 func (e enrollAuthority) EnrollRenewal(ctx context.Context, peerCertsDER [][]byte, csrDER []byte) ([]byte, error) {
+	if len(peerCertsDER) == 0 || len(peerCertsDER[0]) == 0 {
+		return nil, fmt.Errorf("%w", api.ErrUnauthenticatedAgentRenewal)
+	}
+	info, err := mtls.PeerCertInfoFromDER(peerCertsDER[0])
+	if err != nil {
+		return nil, fmt.Errorf("%w", api.ErrUnauthenticatedAgentRenewal)
+	}
+	// A revoked certificate or an offboarded agent must not mint itself a fresh,
+	// unrevoked identity (F269). Fail closed when the check is not wired.
+	if e.peerCheck == nil {
+		return nil, fmt.Errorf("%w: agent revocation checks are not configured", api.ErrAgentRenewalRefused)
+	}
+	if err := e.peerCheck(ctx, info); err != nil {
+		return nil, err
+	}
 	chain, err := e.a.EnrollRenewal(ctx, peerCertsDER, csrDER)
+	if errors.Is(err, enroll.ErrRenewalIdentityChange) {
+		return nil, fmt.Errorf("%w: %s", api.ErrAgentRenewalRefused, strings.TrimPrefix(err.Error(), enroll.ErrRenewalIdentityChange.Error()+": "))
+	}
 	if errors.Is(err, enroll.ErrUnauthenticatedRenewal) {
 		return nil, fmt.Errorf("%w", api.ErrUnauthenticatedAgentRenewal)
 	}
 	return chain, err
+}
+
+// agentRenewalPeerCheck refuses renewal for a revoked agent certificate or an
+// offboarded agent, the same checks the agent channel applies to every RPC.
+func agentRenewalPeerCheck(st *store.Store) func(context.Context, mtls.PeerCertInfo) error {
+	return func(ctx context.Context, info mtls.PeerCertInfo) error {
+		if st == nil {
+			return fmt.Errorf("%w: agent revocation store is not configured", api.ErrAgentRenewalRefused)
+		}
+		agentID := agentRowID(info.TenantID, info.CommonName)
+		revoked, err := st.AgentCertRevoked(ctx, info.TenantID, agentID, info.Serial, info.FingerprintSHA256)
+		if err != nil {
+			return fmt.Errorf("check agent certificate revocation: %w", err)
+		}
+		if revoked {
+			return fmt.Errorf("%w: this agent certificate has been revoked", api.ErrAgentRenewalRefused)
+		}
+		offboarded, err := st.AgentOffboarded(ctx, info.TenantID, agentID)
+		if err != nil {
+			return fmt.Errorf("check agent offboarding: %w", err)
+		}
+		if offboarded {
+			return fmt.Errorf("%w: this agent has been offboarded", api.ErrAgentRenewalRefused)
+		}
+		return nil
+	}
 }
 
 func (e enrollAuthority) CABundlePEM() []byte { return e.a.CABundlePEM() }

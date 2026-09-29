@@ -98,6 +98,11 @@ Mapped to the claim / invariant that carries the mitigation.
   own predecessor key, and only over a commitment it **reconstructs itself** from
   structured fields — never attacker-supplied opaque bytes (claim 19; FIG. 5). Enforced
   server-side whether the co-sign arrives in-process or over the transport (INT-16).
+  Those rules constrain what is signed, not who may ask: the fields they check are
+  public. The transport therefore authenticates the caller. A `host:port` co-sign
+  listener requires pinned mutual TLS, and a `unix:` socket is created owner-only and
+  admits only the configured uid (F261). The service is off by default, and no
+  shipped control-plane flow calls it yet.
 - **Escape a delegated-authority constraint.** A succession whose target epoch is below
   the effective ancestor floor is refused inside the signer before keygen, and the
   delegation path is bound in the commitment (claim 33; INT-13).

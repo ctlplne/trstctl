@@ -66,7 +66,7 @@ The control plane emits, at minimum:
   "API/UI might be old" gauge).
 - `trstctl_outbox_reconciliation_lag_events` — how far boot reconciliation is
   behind the event-log head.
-- `trstctl_outbox_delivery_timeouts_total{tenant_id,destination}` — outbox
+- `trstctl_outbox_delivery_timeouts_total{destination}` — outbox
   deliveries that exceeded their per-message execution timeout.
 - `trstctl_read_model_snapshots_written_total`,
   `trstctl_read_model_snapshot_last_success_timestamp_seconds`, and
@@ -253,4 +253,6 @@ histograms would make those SLO alerts more exact without weakening AN-4.
 | `TRSTCTL_LOG_FORMAT` | `json` | `json` or `text`. |
 
 `/metrics` and `/readyz` are always served and unauthenticated; restrict them at
-your ingress / network policy if you do not want them publicly reachable.
+your ingress / network policy if you do not want them publicly reachable. No metric
+carries a tenant label: the metrics registry refuses one at registration, so
+per-tenant detail stays behind the authenticated, tenant-scoped API.

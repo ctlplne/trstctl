@@ -303,6 +303,11 @@ func (a *Authority) EnrollBootstrap(ctx context.Context, token []byte, csrDER []
 // (WIRE-006).
 var ErrUnauthenticatedRenewal = errors.New("enroll: renewal requires a verified client certificate")
 
+// ErrRenewalIdentityChange is returned when a renewal CSR names a different agent
+// than the certificate presenting it (F271). Renewal rotates a key; changing which
+// agent a certificate names is a new enrollment.
+var ErrRenewalIdentityChange = errors.New("enroll: renewal keeps the agent's name")
+
 // EnrollRenewal signs a rotation CSR into a fresh client certificate chain. The
 // caller MUST already be authenticated by its current mTLS client certificate:
 // peerCertsDER is the verified peer chain (leaf first), as produced by the TLS
@@ -341,6 +346,17 @@ func (a *Authority) EnrollRenewal(ctx context.Context, peerCertsDER [][]byte, cs
 	roles, err := mtls.AgentRolesFromClientCert(peerCertsDER[0])
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrUnauthenticatedRenewal, err)
+	}
+	// A renewal keeps the presenting agent's name (F271): the CSR's common name
+	// becomes the new certificate's identity, so it must be the same agent.
+	peer, err := mtls.PeerCertInfoFromDER(peerCertsDER[0])
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrUnauthenticatedRenewal, err)
+	}
+	if csrName, err := mtls.CSRCommonName(csrDER); err != nil {
+		return nil, fmt.Errorf("%w: renewal CSR: %v", ErrRenewalIdentityChange, err)
+	} else if csrName != peer.CommonName {
+		return nil, fmt.Errorf("%w: the CSR names %q but this certificate belongs to %q", ErrRenewalIdentityChange, csrName, peer.CommonName)
 	}
 	bindings, err := a.certificateAuthorityURIs(ctx, tenantID, peerCertsDER[0])
 	if err != nil {

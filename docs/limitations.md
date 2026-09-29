@@ -1352,6 +1352,29 @@ spine with explicit residual work. The matrix above is the authority for whether
 the running binary serves a capability; this section records the operator-facing
 edges and follow-up integration work.
 
+### Workload-held co-sign mode (off by default)
+
+`trstctl-agent --workload-cosign-listen` serves the PCAS workload-held predecessor
+co-sign RPC with the workload's predecessor key. No shipped control-plane flow calls it
+yet. The listener authenticates callers:
+
+- `host:port` requires pinned mutual TLS (`--workload-cosign-tls-cert`,
+  `--workload-cosign-tls-key`, `--workload-cosign-peer-ca`, `--workload-cosign-peer-pin`).
+  Without them the agent refuses to start and never reads the key.
+- `unix:/path` creates the socket `0600` in a `0700` directory and admits only
+  `--workload-cosign-peer-uid` (default: the agent's own uid). Platforms that cannot report
+  a peer's uid, such as Windows, refuse a unix socket; use a pinned-mTLS listener there.
+- Requests are limited to 64 KiB, 16 concurrent streams and 8 in-flight calls, with a
+  10-second deadline.
+
+### Agent certificate renewal keeps revocation and identity
+
+Both renewal paths, `POST /enroll/renewal` on the agent mTLS listener and the agent
+channel's `Renew`, refuse a revoked agent certificate, an offboarded agent, and a CSR
+that names a different agent than the presenting certificate. Renewal rotates a key; it
+never restores a revoked identity or changes which agent a certificate names. Such
+agents get 403 with the reason and must be enrolled again with a new bootstrap token.
+
 ### The CA calendar: year-scale hierarchy expiry
 
 Leaf expiry alerting runs on 7/30/90-day windows. That is the right clock for a

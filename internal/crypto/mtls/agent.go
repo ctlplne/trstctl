@@ -534,7 +534,18 @@ func PeerCertInfoFromAuthInfo(authInfo credentials.AuthInfo) (PeerCertInfo, erro
 	if len(state.PeerCertificates) == 0 || state.PeerCertificates[0] == nil {
 		return PeerCertInfo{}, errors.New("mtls: no verified peer certificate on the agent channel")
 	}
-	leaf := state.PeerCertificates[0]
+	return PeerCertInfoFromDER(state.PeerCertificates[0].Raw)
+}
+
+// PeerCertInfoFromDER derives the same agent identity from a verified leaf in DER
+// form, for callers that hold the chain rather than a gRPC AuthInfo (the HTTP
+// renewal listener reads mtls.VerifiedPeerCertsDERFromTLS). Both served renewal
+// paths therefore identify an agent the same way.
+func PeerCertInfoFromDER(der []byte) (PeerCertInfo, error) {
+	leaf, err := x509.ParseCertificate(der)
+	if err != nil {
+		return PeerCertInfo{}, fmt.Errorf("mtls: parse agent certificate: %w", err)
+	}
 	tenantID, err := TenantFromClientCert(leaf.Raw)
 	if err != nil {
 		return PeerCertInfo{}, err

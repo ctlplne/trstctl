@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
@@ -27,6 +28,19 @@ var ErrInvalidBootstrapToken = errors.New("api: invalid or already-used bootstra
 // ErrUnauthenticatedAgentRenewal is what a renewal-capable enroller returns when a
 // request is not authenticated by a verified current agent client certificate.
 var ErrUnauthenticatedAgentRenewal = errors.New("api: agent renewal requires a verified client certificate")
+
+// ErrAgentRenewalRefused is a renewal from an authenticated agent that the
+// control plane refuses: its certificate was revoked, the agent was offboarded
+// (F269), or the CSR names a different agent (F271). The wrapped message says
+// which, so the operator knows to re-enroll rather than retry.
+var ErrAgentRenewalRefused = errors.New("api: agent renewal refused")
+
+// agentRenewalRefusalDetail is the operator-facing reason for a refusal: the text
+// after the sentinel, followed by the recovery.
+func agentRenewalRefusalDetail(err error) string {
+	reason := strings.TrimPrefix(err.Error(), ErrAgentRenewalRefused.Error()+": ")
+	return "agent renewal refused: " + reason + "; enroll the host again with a new bootstrap token if it should keep working"
+}
 
 // BootstrapTokenIssuer mints one-time agent bootstrap tokens (S5.1) bound to the
 // authorizing tenant (WIRE-003/AN-1). The web first-run wizard (S7.3) uses it to
@@ -227,6 +241,10 @@ func (a *API) enrollRenewal(w http.ResponseWriter, r *http.Request) {
 		chain, err = signRenewal(r.Context())
 	}
 	if err != nil {
+		if errors.Is(err, ErrAgentRenewalRefused) {
+			a.writeError(w, errStatus(http.StatusForbidden, agentRenewalRefusalDetail(err)))
+			return
+		}
 		if errors.Is(err, ErrUnauthenticatedAgentRenewal) {
 			a.writeError(w, errStatus(http.StatusUnauthorized, "agent renewal requires a valid verified client certificate for the current tenant registration; enroll again with a new authorized bootstrap token if this identity is no longer valid"))
 			return

@@ -19,6 +19,16 @@
   not token names.
 - API tokens minted through the API expire after 90 days by default and cannot be
   given a longer expiry (`auth.api_tokens.max_lifetime`; `0` opts out).
+- Agent renewal over HTTP now refuses revoked certificates and offboarded agents,
+  as the agent channel already did; before, one renewal call undid a revocation.
+- Agent renewal, over HTTP and over the agent channel, can no longer change which
+  agent a certificate names; a CSR naming another agent is refused with 403.
+- The workload co-sign listener requires pinned mutual TLS on `host:port`, creates
+  `unix:` sockets owner-only with a peer uid check, and bounds request size and
+  concurrency. Before, any process that reached it could obtain co-signatures.
+- `/metrics` no longer names tenants: the outbox dead-letter, delivery-timeout and
+  circuit metrics are labeled by destination only, and the metrics registry now
+  refuses any tenant label.
 - `ca.ceremony_min_approvals` (`TRSTCTL_CA_CEREMONY_MIN_APPROVALS`) sets the
   fewest custodian approvals a CA key ceremony may require; requests can raise
   the threshold but not lower it, and `regulated` governance requires at least 2.

@@ -791,6 +791,15 @@ func (a *agentService) Renew(ctx context.Context, req *transport.RenewRequest) (
 	if len(req.CSRDER) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "renewal requires a CSR")
 	}
+	// Renewal rotates the key of the agent that authenticated; it never changes
+	// which agent the certificate names (F271). The served channel identifies an
+	// agent by its certificate's common name, so a CSR naming another agent would
+	// let this one report as, and claim the work of, that agent.
+	if csrName, err := mtls.CSRCommonName(req.CSRDER); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "renewal CSR is not a valid certificate request")
+	} else if csrName != info.CommonName {
+		return nil, status.Errorf(codes.PermissionDenied, "renewal keeps the agent's name: the CSR names %q but this certificate belongs to %q", csrName, info.CommonName)
+	}
 	if a.caSigner == nil || len(a.caCertDER) == 0 {
 		return nil, status.Error(codes.FailedPrecondition, "agent CA is not provisioned")
 	}

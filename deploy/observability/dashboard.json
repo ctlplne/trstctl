@@ -447,7 +447,7 @@
       },
       "targets": [
         {
-          "expr": "sum(trstctl_outbox_deadletter_depth) by (tenant_id, destination)",
+          "expr": "sum(trstctl_outbox_deadletter_depth) by (destination)",
           "legendFormat": "{{tenant_id}}/{{destination}}"
         }
       ]

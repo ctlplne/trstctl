@@ -1160,22 +1160,22 @@ func (s *Server) configureMutationSpine(
 	}
 	s.mOutboxDeliveryTimeouts = s.registry.CounterVec(
 		"trstctl_outbox_delivery_timeouts_total",
-		"Outbox deliveries that exceeded their per-message deadline.",
-		[]string{"tenant_id", "destination"},
+		"Outbox deliveries that exceeded their per-message deadline, per destination (no tenant label: /metrics is unauthenticated).",
+		[]string{"destination"},
 	)
 	s.mOutboxCircuitTransitions = s.registry.CounterVec(
 		"trstctl_outbox_circuit_transitions_total",
-		"Outbox tenant/destination circuit breaker state transitions.",
-		[]string{"tenant_id", "destination", "from", "to"},
+		"Outbox circuit breaker state transitions, per destination (circuits are per tenant and destination; no tenant label: /metrics is unauthenticated).",
+		[]string{"destination", "from", "to"},
 	)
 	s.outbox = orchestrator.NewOutbox(d.Store,
 		orchestrator.WithTenantServiceCheck(d.TenantServiceCheck),
 		orchestrator.WithDeliveryTimeout(d.OutboxDeliveryTimeout),
 		orchestrator.WithDeliveryTimeoutObserver(func(m orchestrator.Message) {
-			s.mOutboxDeliveryTimeouts.WithLabelValues(m.TenantID, m.Destination).Inc()
+			s.mOutboxDeliveryTimeouts.WithLabelValues(m.Destination).Inc()
 		}),
 		orchestrator.WithCircuitObserver(func(tr orchestrator.CircuitTransition) {
-			s.mOutboxCircuitTransitions.WithLabelValues(tr.TenantID, tr.Destination, string(tr.From), string(tr.To)).Inc()
+			s.mOutboxCircuitTransitions.WithLabelValues(tr.Destination, string(tr.From), string(tr.To)).Inc()
 			// An opened circuit means repeated external failures that the
 			// console only shows on the connector health page. Log it so an
 			// operator tailing the control plane sees the stall without
@@ -1255,7 +1255,7 @@ func (s *Server) configureAgentEnrollment(ctx context.Context, d Deps) error {
 }
 
 func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orchestrator.Idempotency) (*api.API, *audit.Service, error) {
-	ea := enrollAuthority{s.agentEnroll}
+	ea := enrollAuthority{a: s.agentEnroll, peerCheck: agentRenewalPeerCheck(d.Store)}
 	// Per-feature telemetry (COVER-009): register the feature metrics on the shared
 	// registry (set in Build before this runs) and wire the served API to emit a
 	// non-sensitive feature/action/outcome signal on each high-risk feature operation.
@@ -2100,7 +2100,10 @@ func (s *Server) configureObservability(ctx context.Context, d Deps, proj *proje
 	s.mStorePool = s.registry.GaugeVec("trstctl_store_pool_connections", "PostgreSQL connections per store pool and state (max, total, acquired, idle).", []string{"pool", "state"})
 	s.tailWorker = projections.NewTailWorker(d.Log, proj, s.mProjLag.Set, 0)
 	s.mOutboxReconcileLag = s.registry.Gauge("trstctl_outbox_reconciliation_lag_events", "Number of events after the last boot reconciliation checkpoint.")
-	s.mOutboxDeadLetter = s.registry.GaugeVec("trstctl_outbox_deadletter_depth", "Dead-lettered (permanently failed) outbox rows awaiting operator sweep or replay.", []string{"tenant_id", "destination"})
+	// /metrics is unauthenticated on the API listener, so no series names a tenant
+	// (F270): the gauge sums tenants per destination, and the per-tenant rows stay
+	// behind the authenticated, tenant-scoped API and the runbook's system query.
+	s.mOutboxDeadLetter = s.registry.GaugeVec("trstctl_outbox_deadletter_depth", "Dead-lettered (permanently failed) outbox rows awaiting operator sweep or replay, summed across tenants per destination.", []string{"destination"})
 	s.outboxDeadLetterSeen = map[string][2]string{}
 	s.mEventLogReplicasDesired = s.registry.Gauge("trstctl_event_log_replicas_desired", "Configured JetStream replica count required for the source-of-truth event stream.")
 	s.mEventLogReplicasActual = s.registry.Gauge("trstctl_event_log_replicas_actual", "Observed JetStream replica count on the source-of-truth event stream.")
@@ -3108,15 +3111,18 @@ func (s *Server) sampleOutboxDeadLetterDepth(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	current := map[string][2]string{}
+	byDestination := map[string]float64{}
 	for _, d := range depths {
-		key := d.TenantID + "\x1f" + d.Destination
-		current[key] = [2]string{d.TenantID, d.Destination}
-		s.mOutboxDeadLetter.WithLabelValues(d.TenantID, d.Destination).Set(float64(d.Depth))
+		byDestination[d.Destination] += float64(d.Depth)
+	}
+	current := map[string][2]string{}
+	for destination, depth := range byDestination {
+		current[destination] = [2]string{"", destination}
+		s.mOutboxDeadLetter.WithLabelValues(destination).Set(depth)
 	}
 	for key, labels := range s.outboxDeadLetterSeen {
 		if _, ok := current[key]; !ok {
-			s.mOutboxDeadLetter.WithLabelValues(labels[0], labels[1]).Set(0)
+			s.mOutboxDeadLetter.WithLabelValues(labels[1]).Set(0)
 		}
 	}
 	s.outboxDeadLetterSeen = current

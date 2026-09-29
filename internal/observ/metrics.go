@@ -33,6 +33,20 @@ type Registry struct {
 // NewRegistry returns an empty registry.
 func NewRegistry() *Registry { return &Registry{} }
 
+// refuseTenantLabels panics when a vector would label its series by tenant. The
+// registry renders to the unauthenticated /metrics endpoint, so a tenant label
+// would publish every tenant's identifier to anyone who can reach the listener
+// (F270). Per-tenant detail belongs behind the authenticated, tenant-scoped API.
+// Label names are fixed at registration, so this fails the first test that
+// constructs the component rather than a running deployment.
+func refuseTenantLabels(name string, labels []string) {
+	for _, l := range labels {
+		if strings.Contains(strings.ToLower(l), "tenant") {
+			panic(fmt.Sprintf("observ: metric %s: label %q would publish tenant identifiers on the unauthenticated /metrics endpoint", name, l))
+		}
+	}
+}
+
 // CounterVec is a set of monotonically increasing counters partitioned by a label
 // tuple. Registering the same name twice returns the existing vector.
 type CounterVec struct {
@@ -67,6 +81,7 @@ func (c *Counter) value() float64 { return math.Float64frombits(c.bits.Load()) }
 
 // CounterVec registers (or returns) a counter vector.
 func (r *Registry) CounterVec(name, help string, labels []string) *CounterVec {
+	refuseTenantLabels(name, labels)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, cv := range r.counters {
@@ -131,6 +146,7 @@ type GaugeVec struct {
 
 // GaugeVec registers (or returns) a gauge vector.
 func (r *Registry) GaugeVec(name, help string, labels []string) *GaugeVec {
+	refuseTenantLabels(name, labels)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, gv := range r.gaugeVecs {
@@ -178,6 +194,7 @@ type Histogram struct {
 
 // HistogramVec registers (or returns) a histogram vector.
 func (r *Registry) HistogramVec(name, help string, buckets []float64, labels []string) *HistogramVec {
+	refuseTenantLabels(name, labels)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, hv := range r.histos {

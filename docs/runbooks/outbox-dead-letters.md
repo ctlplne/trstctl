@@ -1,11 +1,12 @@
 # Runbook: outbox dead letters (OPS-DLQ-001)
 
 **Alert:** `TrstctlOutboxDeadLetterDepth` — `trstctl_outbox_deadletter_depth > 0 for 15m`,
-labeled by `tenant_id` and `destination`.
+labeled by `destination`. `/metrics` is unauthenticated, so it names no tenant; list
+the affected tenants with the query in triage step 1.
 
 An outbox row is dead-lettered when it exhausts its delivery attempts: its
 `status` becomes `failed`, it is never dispatched again, and — per AN-6 — it is
-never silently deleted. The gauge counts those rows per tenant/destination; the
+never silently deleted. The gauge counts those rows per destination, summed across tenants; the
 retention sweeper (`internal/outboxgc`) reclaims only eligible `delivered` rows,
 so a dead letter stays visible until an operator acts. A delivered event-derived
 secret-sync outbox row may also age out: its immutable queued/terminal events and
@@ -15,7 +16,10 @@ evidence remains visible.
 
 ## Triage
 
-1. Identify the bucket from the alert labels (`tenant_id`, `destination`).
+1. Take `destination` from the alert labels and list the affected tenants
+   (system operation, RLS-bypassing):
+   `SELECT tenant_id, count(*) FROM outbox WHERE status = 'failed' AND destination = $1
+    GROUP BY tenant_id ORDER BY count(*) DESC;`
 2. Inspect the rows' `last_error` (system operation, RLS-bypassing):
    `SELECT id, idempotency_key, attempts, last_error, created_at FROM outbox
     WHERE status = 'failed' AND tenant_id = $1 AND destination = $2

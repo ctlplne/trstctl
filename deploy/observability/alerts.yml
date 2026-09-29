@@ -601,13 +601,13 @@ groups:
           description: "Boot reconciliation is more than 1000 events behind the event-log head; external side effects may not be caught up. See docs/observability.md."
 
       - alert: TrstctlOutboxDeadLetterDepth
-        expr: sum(trstctl_outbox_deadletter_depth) by (tenant_id, destination) > 0
+        expr: sum(trstctl_outbox_deadletter_depth) by (destination) > 0
         for: 15m
         labels:
           severity: warning
         annotations:
           summary: "trstctl outbox has dead-lettered deliveries"
-          description: "Permanently failed outbox rows are waiting for an operator: inspect last_error, then replay (notifications: POST /api/v1/notifications/{id}/requeue) or sweep per docs/runbooks/outbox-dead-letters.md. The gauge is per tenant/destination."
+          description: "Permanently failed outbox rows are waiting for an operator: inspect last_error, then replay (notifications: POST /api/v1/notifications/{id}/requeue) or sweep per docs/runbooks/outbox-dead-letters.md. The gauge is per destination; /metrics names no tenant, so list the affected tenants with the runbook query."
 
       - alert: TrstctlOutboxDeliveryTimeouts
         expr: sum(increase(trstctl_outbox_delivery_timeouts_total[15m])) > 0

@@ -198,7 +198,7 @@ unrelated tenants wait behind it.
 Each delivery also has a per-message deadline. If a connector, plugin, webhook, or
 notification target does not return before that deadline, the row is marked
 pending again through the normal retry/backoff path, and the served binary increments
-`trstctl_outbox_delivery_timeouts_total{tenant_id,destination}`. That counter is the
+`trstctl_outbox_delivery_timeouts_total{destination}`. That counter is the
 operator's direct signal that one destination is timing out without starving the
 rest of the outbox.
 
