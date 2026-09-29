@@ -24,6 +24,10 @@ type APITokenRecord struct {
 	RevokedAt        *time.Time
 	RevokedBy        string
 	RevocationReason string
+	// Delegated is true when someone other than Subject minted the token through
+	// the served API (F262). Rows projected before migration 0231, and rows
+	// seeded outside the event log, read as false.
+	Delegated bool
 }
 
 // CreateAPIToken inserts a token in its tenant context (RLS-enforced), with a
@@ -55,8 +59,8 @@ func (s *Store) ApplyAPITokenCreatedTx(ctx context.Context, tx pgx.Tx, r APIToke
 		return err
 	}
 	_, err := tx.Exec(ctx,
-		`INSERT INTO api_tokens (id, tenant_id, token_hash, subject, subject_ref, scopes, expires_at, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		`INSERT INTO api_tokens (id, tenant_id, token_hash, subject, subject_ref, scopes, expires_at, created_at, delegated)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		 ON CONFLICT (id) DO UPDATE
 		    SET token_hash = EXCLUDED.token_hash,
 		        subject = EXCLUDED.subject,
@@ -64,10 +68,11 @@ func (s *Store) ApplyAPITokenCreatedTx(ctx context.Context, tx pgx.Tx, r APIToke
 		        scopes = EXCLUDED.scopes,
 		        expires_at = EXCLUDED.expires_at,
 		        created_at = EXCLUDED.created_at,
+		        delegated = EXCLUDED.delegated,
 		        revoked_at = NULL,
 		        revoked_by = '',
 		        revocation_reason = ''`,
-		r.ID, r.TenantID, r.TokenHash, r.Subject, privacy.SubjectRef(r.TenantID, r.Subject), scopes, r.ExpiresAt, r.CreatedAt)
+		r.ID, r.TenantID, r.TokenHash, r.Subject, privacy.SubjectRef(r.TenantID, r.Subject), scopes, r.ExpiresAt, r.CreatedAt, r.Delegated)
 	return err
 }
 
@@ -195,8 +200,8 @@ func (s *Store) LookupAPITokenByHash(ctx context.Context, hash string) (APIToken
 	err := s.pool.QueryRow(ctx,
 		//trstctl:system-query — auth runs before any tenant is known; the lookup is keyed by the globally-unique, high-entropy token hash and returns the owning tenant. Cross-tenant by design; runs on the pool, not under RLS (AN-1 exemption).
 		`SELECT id::text, tenant_id::text, token_hash, subject, scopes, expires_at, created_at,
-		        revoked_at, revoked_by, revocation_reason
+		        revoked_at, revoked_by, revocation_reason, COALESCE(delegated, false)
 		   FROM api_tokens WHERE token_hash = $1 AND revoked_at IS NULL`, hash).
-		Scan(&r.ID, &r.TenantID, &r.TokenHash, &r.Subject, &r.Scopes, &r.ExpiresAt, &r.CreatedAt, &r.RevokedAt, &r.RevokedBy, &r.RevocationReason)
+		Scan(&r.ID, &r.TenantID, &r.TokenHash, &r.Subject, &r.Scopes, &r.ExpiresAt, &r.CreatedAt, &r.RevokedAt, &r.RevokedBy, &r.RevocationReason, &r.Delegated)
 	return r, err
 }

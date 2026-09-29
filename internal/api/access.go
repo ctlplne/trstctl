@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -345,6 +346,18 @@ func (a *API) createAPIToken(w http.ResponseWriter, r *http.Request) {
 		if err := a.authorizeTokenScopeGrant(ctx, tenantID, req.Scopes); err != nil {
 			return 0, nil, err
 		}
+		// A served token expires (F267): without expires_at it gets the deployment's
+		// maximum lifetime, and a later expiry is refused.
+		if limit := a.apiTokenMaxLifetime; limit > 0 {
+			latest := time.Now().Add(limit)
+			if req.ExpiresAt == nil {
+				req.ExpiresAt = &latest
+			} else if req.ExpiresAt.After(latest) {
+				return 0, nil, errStatus(http.StatusUnprocessableEntity, fmt.Sprintf(
+					"expires_at is later than the maximum API token lifetime of %s (auth.api_tokens.max_lifetime); ask for an earlier expiry",
+					formatTokenLifetime(limit)))
+			}
+		}
 		rec, raw, err := a.orch.CreateAPIToken(ctx, tenantID, req.Subject, req.Scopes, req.ExpiresAt)
 		if err != nil {
 			return 0, nil, err
@@ -455,4 +468,16 @@ func accessCursor(c string) (string, error) {
 
 func encodeAccessCursor(v string) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(v))
+}
+
+// formatTokenLifetime renders a lifetime in whole days when it is one.
+func formatTokenLifetime(d time.Duration) string {
+	if d%(24*time.Hour) == 0 {
+		days := int(d / (24 * time.Hour))
+		if days == 1 {
+			return "1 day"
+		}
+		return fmt.Sprintf("%d days", days)
+	}
+	return d.String()
 }

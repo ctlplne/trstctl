@@ -44,6 +44,14 @@ issue/deploy/revoke transition, the RA scope split (`certs:request` ≠ `certs:i
 stops a requester from self-issuing, and `ca.policy.require_approval` requires a distinct
 approver — self-approval is rejected.
 
+Approvals count people, not token names. An API token that one person mints through the
+API for a different subject can do that subject's work, but every approval and denial
+route (identity, issuance-request, access-change, secret, managed-key, profile and
+ephemeral approvals, and CA key-ceremony approvals, including break-glass quorums)
+refuses it with 403. Approve with your own sign-in or with a token you minted for
+yourself. Tokens a deployment administrator creates with `trstctl token create` sit
+inside that administrator's custody boundary and are not treated as delegated.
+
 The active rule is read from that tenant's immutable policy events before a
 mutation decision. Compiled rules are cached, but a cache is never permission:
 a restart or another server instance reads the same active version. Activating or

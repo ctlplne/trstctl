@@ -105,14 +105,21 @@ func TestServedAccessAdminOnboardsAndOffboardsDistinctApprover(t *testing.T) {
 
 	requesterToken := createServedToken(t, ts, adminToken, "requester", []string{string(authz.IdentitiesWrite), string(authz.CertsRequest)})
 	issuerToken := createServedToken(t, ts, adminToken, "issuer", []string{string(authz.IdentitiesWrite), string(authz.CertsIssue), string(authz.CertsRequest)})
-	approverOneToken := createServedToken(t, ts, adminToken, "approver-one", []string{string(authz.CertsIssue)})
-	approverTwoToken := createServedToken(t, ts, adminToken, "approver-two", []string{string(authz.CertsIssue)})
+	// Approvers approve with their own credentials (F262): here tokens issued in
+	// deployment custody. A token the admin mints for an approver still works for
+	// the approver's other tasks but can never cast the approver's vote.
+	approverOneToken := seedServedAPIToken(t, ctx, st, tenantID, "approver-one", []string{string(authz.CertsIssue)})
+	approverTwoToken := seedServedAPIToken(t, ctx, st, tenantID, "approver-two", []string{string(authz.CertsIssue)})
+	adminMintedForApprover := createServedToken(t, ts, adminToken, "approver-two", []string{string(authz.CertsIssue)})
 
 	identID := createIdentityWithToken(t, ts, requesterToken, owner.ID)
 	if code, body := transitionIdentityWithToken(t, ts, issuerToken, identID, "issued", "issuer-first-attempt"); code != http.StatusForbidden {
 		t.Fatalf("issue before distinct approvals = %d, want 403; body=%s", code, body)
 	}
 	approval := approvalForIdentityWithToken(t, ts, approverOneToken, identID, "issue")
+	if code, body := approveIdentityWithToken(t, ts, adminMintedForApprover, identID, "approve-admin-minted", approval); code != http.StatusForbidden {
+		t.Fatalf("approval with an admin-minted approver token = %d, want 403 (F262); body=%s", code, body)
+	}
 	if code, body := approveIdentityWithToken(t, ts, approverOneToken, identID, "approve-one", approval); code != http.StatusOK {
 		t.Fatalf("first distinct approval = %d, want 200; body=%s", code, body)
 	}

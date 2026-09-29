@@ -371,11 +371,43 @@ type Plugins struct {
 // carries the OIDC and SAML browser-login + session bridges; scoped API tokens
 // always authenticate the binary regardless of this block.
 type Auth struct {
-	OIDC OIDC `json:"oidc"`
-	SAML SAML `json:"saml"`
-	LDAP LDAP `json:"ldap"`
-	SCIM SCIM `json:"scim"`
-	ABAC ABAC `json:"abac"`
+	OIDC      OIDC      `json:"oidc"`
+	SAML      SAML      `json:"saml"`
+	LDAP      LDAP      `json:"ldap"`
+	SCIM      SCIM      `json:"scim"`
+	ABAC      ABAC      `json:"abac"`
+	APITokens APITokens `json:"api_tokens,omitempty"`
+}
+
+// DefaultAPITokenMaxLifetime is the longest a served API token lives when the
+// operator sets no auth.api_tokens.max_lifetime (F267).
+const DefaultAPITokenMaxLifetime = 90 * 24 * time.Hour
+
+// APITokens bounds bearer tokens minted through the served API (F267). Tokens a
+// deployment administrator creates with `trstctl token create` stay inside that
+// custody boundary and are not limited here.
+type APITokens struct {
+	// MaxLifetime is the longest lifetime a served API token may have, and the
+	// expiry a token gets when its request names none. Go duration syntax (for
+	// example "720h"). Empty means 90 days; "0" means unlimited, an explicit
+	// opt-out.
+	MaxLifetime string `json:"max_lifetime,omitempty"`
+}
+
+// MaxLifetimeValue returns the served API token lifetime limit; 0 means unlimited.
+func (t APITokens) MaxLifetimeValue() (time.Duration, error) {
+	raw := strings.TrimSpace(t.MaxLifetime)
+	if raw == "" {
+		return DefaultAPITokenMaxLifetime, nil
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, fmt.Errorf("auth.api_tokens.max_lifetime %q is invalid: %w", t.MaxLifetime, err)
+	}
+	if d < 0 {
+		return 0, fmt.Errorf("auth.api_tokens.max_lifetime %q must not be negative; use 0 for unlimited", t.MaxLifetime)
+	}
+	return d, nil
 }
 
 // OIDC configures the served browser single-sign-on flow (EXC-WIRE-01, closing
@@ -2711,6 +2743,7 @@ func applyManagedKeysEnv(getenv func(string) string, m *ManagedKeys) {
 // TenantMappings tables are file-only (lists of objects); scalar knobs overlay from
 // the environment like the rest of the config.
 func applyAuthEnv(getenv func(string) string, a *Auth) {
+	setString(getenv, "TRSTCTL_AUTH_API_TOKEN_MAX_LIFETIME", &a.APITokens.MaxLifetime)
 	setBool(getenv, "TRSTCTL_AUTH_OIDC_ENABLED", &a.OIDC.Enabled)
 	setString(getenv, "TRSTCTL_AUTH_OIDC_ISSUER", &a.OIDC.Issuer)
 	setBool(getenv, "TRSTCTL_AUTH_OIDC_AUTHORIZATION_RESPONSE_ISS_PARAMETER_SUPPORTED", &a.OIDC.AuthorizationResponseIssParamSupported)
@@ -3686,6 +3719,9 @@ func validateServedSurfaces(c *Config) []error {
 	}
 	if c.Auth.ABAC.Enabled {
 		errs = append(errs, c.Auth.ABAC.validate()...)
+	}
+	if _, err := c.Auth.APITokens.MaxLifetimeValue(); err != nil {
+		errs = append(errs, err)
 	}
 	if c.Breakglass.Enabled || c.Breakglass.OnlineEnabled {
 		errs = append(errs, c.Breakglass.validate()...)

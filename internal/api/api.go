@@ -71,6 +71,7 @@ type API struct {
 	lastDrill              func() *backup.DrillAttestation
 	restoreDrillKeys       *jose.JWKSet
 	roles                  *authz.Registry
+	apiTokenMaxLifetime    time.Duration // served API token lifetime limit; 0 = unlimited (F267)
 	principal              func(*http.Request) (authz.Principal, error)
 	audit                  *audit.Service
 	auditAnchor            AuditAnchorFunc
@@ -186,6 +187,9 @@ type API struct {
 type Option func(*config)
 
 type config struct {
+	// apiTokenMaxLifetime bounds served API tokens (F267); nil means the
+	// product default, 0 means unlimited.
+	apiTokenMaxLifetime *time.Duration
 	subjectCSRInspector func([]byte) (crypto.CSRInfo, error)
 	tenantServiceCheck  tenancy.ServiceCheck
 	// backupDir is the full-backup directory this API reports DR posture on
@@ -508,6 +512,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		lastDrill:              cfg.lastDrill,
 		restoreDrillKeys:       cfg.restoreDrillKeys,
 		roles:                  reg,
+		apiTokenMaxLifetime:    apiTokenMaxLifetimeFrom(cfg.apiTokenMaxLifetime),
 		audit:                  cfg.audit,
 		auditAnchor:            cfg.auditAnchor,
 		retirementChecklist:    cfg.retirementChecklist,
@@ -627,6 +632,9 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		}
 		if !r.handlerOwnsPathIDs {
 			handler = a.requireUUIDPathParams(r.pathParams, handler)
+		}
+		if r.approval {
+			handler = a.refuseDelegatedApproval(r.perm, handler)
 		}
 		mux.HandleFunc(r.method+" "+r.path, a.guard(r.perm, r.scope, handler))
 	}
@@ -819,6 +827,7 @@ type route struct {
 	mutation           bool
 	readOnly           bool // explicit contract for a reviewed read using a write-shaped HTTP method
 	sensitiveResponse  bool
+	approval           bool             // records an approval or denial that counts toward dual control; delegated tokens are refused (F262)
 	perm               authz.Permission // required permission; "" means public
 	scope              routeScope
 }
@@ -1057,7 +1066,7 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/ca/ceremonies/preview", opID: "previewCACeremony", summary: "Validate and explain an exact CA key ceremony without writing state, creating keys, or contacting an authority", handler: a.previewCACeremony, reqSchema: "CACeremonyStartRequest", resSchema: "CACeremonyPlanPreview", successCode: "200", perm: authz.IssuersWrite},
 		{method: "POST", path: "/api/v1/ca/ceremonies", opID: "createCACeremony", summary: "Start an m-of-n CA key ceremony", handler: a.createCACeremony, reqSchema: "CACeremonyStartRequest", resSchema: "CAKeyCeremony", successCode: "201", mutation: true, perm: authz.IssuersWrite},
 		{method: "GET", path: "/api/v1/ca/ceremonies/{id}", opID: "getCACeremony", summary: "Get a CA key ceremony", handler: a.getCACeremony, pathParams: caCeremonyPath, resSchema: "CAKeyCeremony", successCode: "200", perm: authz.IssuersRead},
-		{method: "POST", path: "/api/v1/ca/ceremonies/{id}/approvals", opID: "approveCACeremony", summary: "Approve a CA key ceremony", handler: a.approveCACeremony, pathParams: caCeremonyPath, resSchema: "CAKeyCeremony", successCode: "200", mutation: true, perm: authz.IssuersWrite},
+		{method: "POST", path: "/api/v1/ca/ceremonies/{id}/approvals", opID: "approveCACeremony", summary: "Approve a CA key ceremony", handler: a.approveCACeremony, pathParams: caCeremonyPath, resSchema: "CAKeyCeremony", successCode: "200", mutation: true, approval: true, perm: authz.IssuersWrite},
 		{method: "GET", path: "/api/v1/ca/discovery", opID: "listCADiscoveryInventory", summary: "List public and private CA discovery inventory", handler: a.listCADiscoveryInventory, resSchema: "CADiscoveryInventory", successCode: "200", perm: authz.IssuersRead},
 		{method: "GET", path: "/api/v1/ca/authorities", opID: "listCAAuthorities", summary: "List served CA authorities", handler: a.listCAAuthorities, resSchema: "CAAuthorityList", successCode: "200", perm: authz.IssuersRead},
 		{method: "POST", path: "/api/v1/ca/authorities/roots", opID: "createRootCA", summary: "Create a signer-backed root CA after ceremony quorum", handler: a.createRootCA, reqSchema: "CACreateRootRequest", resSchema: "CAAuthority", successCode: "201", mutation: true, perm: authz.IssuersWrite},
@@ -1134,22 +1143,22 @@ func (a *API) routes() []route {
 		}, mutation: true, perm: authz.CertsRequest},
 		{method: "POST", path: "/api/v1/ephemeral/api-keys/preview", opID: "previewEphemeralAPIKey", summary: "Review one exact short-TTL API key without minting or storing a bearer", handler: a.previewEphemeralAPIKey, reqSchema: "EphemeralAPIKeyRequest", resSchema: "EphemeralAPIKeyPreview", successCode: "200", perm: authz.AccessWrite},
 		{method: "POST", path: "/api/v1/ephemeral/api-keys", opID: "issueEphemeralAPIKey", summary: "Mint a short-TTL API key for machine workflows", handler: a.issueEphemeralAPIKey, reqSchema: "EphemeralAPIKeyRequest", resSchema: "EphemeralAPIKey", successCode: "201", mutation: true, sensitiveResponse: true, perm: authz.AccessWrite},
-		{method: "POST", path: "/api/v1/ephemeral/{id}/approvals", opID: "approveEphemeralCredential", summary: "Approve a pending ephemeral JIT credential request", handler: a.approveEphemeralCredential, pathParams: ephemeralRequestPath, handlerOwnsPathIDs: true, reqSchema: "EphemeralApprovalRequest", resSchema: "EphemeralApproval", successCode: "200", mutation: true, perm: authz.CertsIssue},
+		{method: "POST", path: "/api/v1/ephemeral/{id}/approvals", opID: "approveEphemeralCredential", summary: "Approve a pending ephemeral JIT credential request", handler: a.approveEphemeralCredential, pathParams: ephemeralRequestPath, handlerOwnsPathIDs: true, reqSchema: "EphemeralApprovalRequest", resSchema: "EphemeralApproval", successCode: "200", mutation: true, approval: true, perm: authz.CertsIssue},
 
 		{method: "GET", path: "/api/v1/approval-requests", opID: "listApprovalRequests", summary: "List immutable operation approval requests in authorized review domains", handler: a.listApprovalRequests, query: []param{
 			{name: "status", typ: "string", desc: "request status filter: pending, approved, denied, expired, superseded, or consumed"},
 			{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
 			{name: "cursor", typ: "string", desc: "opaque newest-first pagination cursor from a prior page"},
 		}, resSchema: "ApprovalRequestList", successCode: "200", perm: authz.ApprovalsReview},
-		{method: "POST", path: "/api/v1/approval-requests/{id}/approvals", opID: "approveApprovalRequest", summary: "Approve one exact immutable operation request", handler: a.approveApprovalRequest, pathParams: idPath, handlerOwnsPathIDs: true, reqSchema: "ApprovalDecisionInput", resSchema: "ApprovalDecision", successCode: "200", mutation: true, perm: authz.ApprovalsReview},
-		{method: "POST", path: "/api/v1/approval-requests/{id}/denials", opID: "denyApprovalRequest", summary: "Deny one exact immutable operation request without mutating its target", handler: a.denyApprovalRequest, pathParams: idPath, handlerOwnsPathIDs: true, reqSchema: "ApprovalDenialInput", resSchema: "ApprovalDecision", successCode: "200", mutation: true, perm: authz.ApprovalsReview},
+		{method: "POST", path: "/api/v1/approval-requests/{id}/approvals", opID: "approveApprovalRequest", summary: "Approve one exact immutable operation request", handler: a.approveApprovalRequest, pathParams: idPath, handlerOwnsPathIDs: true, reqSchema: "ApprovalDecisionInput", resSchema: "ApprovalDecision", successCode: "200", mutation: true, approval: true, perm: authz.ApprovalsReview},
+		{method: "POST", path: "/api/v1/approval-requests/{id}/denials", opID: "denyApprovalRequest", summary: "Deny one exact immutable operation request without mutating its target", handler: a.denyApprovalRequest, pathParams: idPath, handlerOwnsPathIDs: true, reqSchema: "ApprovalDenialInput", resSchema: "ApprovalDecision", successCode: "200", mutation: true, approval: true, perm: authz.ApprovalsReview},
 		{method: "POST", path: "/api/v1/identities", opID: "createIdentity", summary: "Create an identity", handler: a.createIdentity, reqSchema: "IdentityRequest", resSchema: "Identity", successCode: "201", mutation: true, perm: authz.IdentitiesWrite},
 		{method: "GET", path: "/api/v1/identities", opID: "listIdentities", summary: "List identities", handler: a.listIdentities, query: page, resSchema: "IdentityList", successCode: "200", perm: authz.IdentitiesRead},
 		{method: "POST", path: "/api/v1/identities/bulk-revoke", opID: "bulkRevokeIdentities", summary: "Bulk revoke identities by id or criteria", handler: a.bulkRevoke, reqSchema: "BulkRevokeRequest", resSchema: "BulkRevokeResult", successCode: "200", mutation: true, perm: authz.IdentitiesWrite},
 		{method: "GET", path: "/api/v1/identities/{id}", opID: "getIdentity", summary: "Get an identity", handler: a.getIdentity, pathParams: idPath, resSchema: "Identity", successCode: "200", perm: authz.IdentitiesRead},
 		{method: "POST", path: "/api/v1/identities/{id}/transitions/preview", opID: "previewIdentityTransition", summary: "Explain and validate an exact lifecycle transition without writing state or contacting an external system", handler: a.previewIdentityTransition, pathParams: idPath, reqSchema: "TransitionRequest", resSchema: "IdentityTransitionPreview", successCode: "200", perm: authz.IdentitiesWrite},
 		{method: "POST", path: "/api/v1/identities/{id}/transitions", opID: "transitionIdentity", summary: "Apply a lifecycle transition", handler: a.transitionIdentity, pathParams: idPath, reqSchema: "TransitionRequest", resSchema: "Identity", successCode: "200", mutation: true, perm: authz.IdentitiesWrite},
-		{method: "POST", path: "/api/v1/identities/{id}/approvals", opID: "approveIdentityAction", summary: "Approve a pending privileged action (dual control)", handler: a.approveIdentityAction, pathParams: idPath, reqSchema: "ApprovalRequest", resSchema: "Approval", successCode: "200", mutation: true, perm: authz.CertsIssue},
+		{method: "POST", path: "/api/v1/identities/{id}/approvals", opID: "approveIdentityAction", summary: "Approve a pending privileged action (dual control)", handler: a.approveIdentityAction, pathParams: idPath, reqSchema: "ApprovalRequest", resSchema: "Approval", successCode: "200", mutation: true, approval: true, perm: authz.CertsIssue},
 		{method: "GET", path: "/api/v1/nhi/inventory", opID: "listNHIInventory", summary: "List the unified non-human identity inventory across first-party and discovered credentials", handler: a.listNHIInventory, resSchema: "NHIInventory", successCode: "200", perm: authz.NHIRead},
 		{method: "GET", path: "/api/v1/nhi/posture/shadow", opID: "listNHIShadowPosture", summary: "List shadow, unmanaged, and unregistered NHI posture findings", handler: a.listNHIShadowPosture, resSchema: "NHIShadowPosture", successCode: "200", perm: authz.NHIRead},
 		{method: "GET", path: "/api/v1/nhi/policy/compliance", opID: "listNHIPolicyCompliance", summary: "List NHI policy compliance violations for rotation, scope, geography, expiry, and business purpose", handler: a.listNHIPolicyCompliance, resSchema: "NHIPolicyCompliance", successCode: "200", perm: authz.NHIRead},
@@ -1290,7 +1299,7 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/access/requests", opID: "createAccessChangeRequest", summary: "Create an NHI access-change request with PR/change evidence", handler: a.createAccessChangeRequest, reqSchema: "AccessChangeRequestCreateRequest", resSchema: "AccessChangeRequest", successCode: "201", mutation: true, perm: authz.AccessWrite},
 		{method: "GET", path: "/api/v1/access/requests", opID: "listAccessChangeRequests", summary: "List NHI access-change requests", handler: a.listAccessChangeRequests, query: page, resSchema: "AccessChangeRequestList", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/access/requests/{id}", opID: "getAccessChangeRequest", summary: "Get an NHI access-change request", handler: a.getAccessChangeRequest, pathParams: idPath, resSchema: "AccessChangeRequest", successCode: "200", perm: authz.AccessRead},
-		{method: "POST", path: "/api/v1/access/requests/{id}/decisions", opID: "decideAccessChangeRequest", summary: "Approve or deny an NHI access-change request", handler: a.decideAccessChangeRequest, pathParams: idPath, reqSchema: "AccessChangeDecisionRequest", resSchema: "AccessChangeRequest", successCode: "200", mutation: true, perm: authz.AccessWrite},
+		{method: "POST", path: "/api/v1/access/requests/{id}/decisions", opID: "decideAccessChangeRequest", summary: "Approve or deny an NHI access-change request", handler: a.decideAccessChangeRequest, pathParams: idPath, reqSchema: "AccessChangeDecisionRequest", resSchema: "AccessChangeRequest", successCode: "200", mutation: true, approval: true, perm: authz.AccessWrite},
 		{method: "POST", path: "/api/v1/access/reviews", opID: "startNHIReviewCampaign", summary: "Start an NHI access certification campaign", handler: a.startNHIReviewCampaign, reqSchema: "NHIReviewCampaignStartRequest", resSchema: "NHIReviewCampaign", successCode: "201", mutation: true, perm: authz.AccessWrite},
 		{method: "GET", path: "/api/v1/access/reviews", opID: "listNHIReviewCampaigns", summary: "List NHI access certification campaigns", handler: a.listNHIReviewCampaigns, query: page, resSchema: "NHIReviewCampaignList", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/access/reviews/{id}", opID: "getNHIReviewCampaign", summary: "Get an NHI access certification campaign", handler: a.getNHIReviewCampaign, pathParams: idPath, resSchema: "NHIReviewCampaign", successCode: "200", perm: authz.AccessRead},
@@ -1417,7 +1426,7 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/secrets/scans/third-party/{provider}/ingest", opID: "ingestThirdPartySecretScan", summary: "Queue a third-party artifact secret scan", handler: a.ingestThirdPartySecretScan, pathParams: []param{{name: "provider", typ: "string", desc: "cicd_log, container_registry, slack, or jira"}}, reqSchema: "ThirdPartySecretScanIngestRequest", resSchema: "ThirdPartySecretScanReceipt", successCode: "202", mutation: true, perm: authz.SecretsWrite},
 		{method: "POST", path: "/api/v1/secrets/scans/preview", opID: "previewSecretScan", summary: "Review an exact effect-free Gitleaks scan plan", handler: a.previewSecretScan, reqSchema: "SecretScanRequest", resSchema: "SecretScanPreview", successCode: "200", perm: authz.SecretsWrite},
 		{method: "POST", path: "/api/v1/secrets/scans", opID: "scanSecrets", summary: "Run a Gitleaks secret scan and record redacted findings", handler: a.scanSecrets, reqSchema: "SecretScanRequest", resSchema: "SecretScan", successCode: "201", mutation: true, perm: authz.SecretsWrite},
-		{method: "POST", path: "/api/v1/secrets/store/approvals/{name...}", opID: "approveSecretChange", summary: "Approve a pending sensitive secret-store change", handler: a.approveSecretChange, pathParams: secretNamePath, reqSchema: "SecretApprovalRequest", resSchema: "SecretApproval", successCode: "200", mutation: true, perm: authz.SecretsWrite},
+		{method: "POST", path: "/api/v1/secrets/store/approvals/{name...}", opID: "approveSecretChange", summary: "Approve a pending sensitive secret-store change", handler: a.approveSecretChange, pathParams: secretNamePath, reqSchema: "SecretApprovalRequest", resSchema: "SecretApproval", successCode: "200", mutation: true, approval: true, perm: authz.SecretsWrite},
 		{method: "GET", path: "/api/v1/secrets/store/{name...}", opID: "getSecret", summary: "Read an application secret value", handler: a.getSecret, pathParams: secretNamePath, query: []param{{name: "resolve", typ: "boolean", desc: "expand ${secret.path} references in the returned value"}}, resSchema: "SecretValue", successCode: "200", sensitiveResponse: true, perm: authz.SecretsRead},
 		{method: "PUT", path: "/api/v1/secrets/store/{name...}", opID: "rotateSecret", summary: "Rotate an application secret (new value, bumped version)", handler: a.rotateSecret, pathParams: secretNamePath, reqSchema: "SecretRotateRequest", resSchema: "SecretMeta", successCode: "200", mutation: true, perm: authz.SecretsWrite},
 		{method: "DELETE", path: "/api/v1/secrets/store/{name...}", opID: "deleteSecret", summary: "Delete an application secret", handler: a.deleteSecret, pathParams: secretNamePath, successCode: "204", mutation: true, perm: authz.SecretsWrite},
@@ -1475,7 +1484,7 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/managed-keys/custody", opID: "getManagedKeyCustody", summary: "Get the secret-free HSM/KMS custody readiness and provider configuration plan", handler: a.getManagedKeyCustody, resSchema: "ManagedKeyCustodyPlan", successCode: "200", perm: authz.KeysRead},
 		{method: "POST", path: "/api/v1/managed-keys/preview", opID: "previewManagedKeyGeneration", summary: "Preview HSM/KMS key generation without contacting the provider or changing state", handler: a.previewManagedKeyGeneration, reqSchema: "ManagedKeyGenerationPreviewRequest", resSchema: "ManagedKeyGenerationPreview", successCode: "200", perm: authz.KeysWrite},
 		{method: "POST", path: "/api/v1/managed-keys", opID: "generateManagedKey", summary: "Generate a BYOK/HSM-resident managed key (private material stays in the provider)", handler: a.generateManagedKey, reqSchema: "ManagedKeyGenerateRequest", resSchema: "ManagedKey", successCode: "201", mutation: true, perm: authz.KeysWrite},
-		{method: "POST", path: "/api/v1/managed-keys/approvals", opID: "approveManagedKeyAction", summary: "Approve an exact managed-key rotate, revoke, or zeroize action", handler: a.approveManagedKeyAction, reqSchema: "ManagedKeyApprovalRequest", resSchema: "ManagedKeyApproval", successCode: "200", mutation: true, perm: authz.KeysApprove},
+		{method: "POST", path: "/api/v1/managed-keys/approvals", opID: "approveManagedKeyAction", summary: "Approve an exact managed-key rotate, revoke, or zeroize action", handler: a.approveManagedKeyAction, reqSchema: "ManagedKeyApprovalRequest", resSchema: "ManagedKeyApproval", successCode: "200", mutation: true, approval: true, perm: authz.KeysApprove},
 		{method: "POST", path: "/api/v1/managed-keys/rotate", opID: "rotateManagedKey", summary: "Rotate a managed key (mint a successor; requires dual-control approval)", handler: a.rotateManagedKey, reqSchema: "ManagedKeyActionRequest", resSchema: "ManagedKey", successCode: "200", mutation: true, perm: authz.KeysWrite},
 		{method: "POST", path: "/api/v1/managed-keys/revoke", opID: "revokeManagedKey", summary: "Revoke a managed key at the provider (requires dual-control approval)", handler: a.revokeManagedKey, reqSchema: "ManagedKeyActionRequest", resSchema: "ManagedKey", successCode: "200", mutation: true, perm: authz.KeysWrite},
 		{method: "POST", path: "/api/v1/managed-keys/zeroize", opID: "zeroizeManagedKey", summary: "Zeroize a managed key's material at the provider (requires dual-control approval)", handler: a.zeroizeManagedKey, reqSchema: "ManagedKeyActionRequest", resSchema: "ManagedKey", successCode: "200", mutation: true, perm: authz.KeysWrite},
@@ -1626,7 +1635,7 @@ func (a *API) resolvePrincipal(r *http.Request) (authz.Principal, error) {
 			if rec.ExpiresAt != nil && !rec.ExpiresAt.After(time.Now()) {
 				return authz.Principal{}, errors.New("api: expired api token")
 			}
-			return auth.APIToken{TenantID: rec.TenantID, Subject: rec.Subject, Scopes: rec.Scopes}.Principal(), nil
+			return auth.APIToken{TenantID: rec.TenantID, Subject: rec.Subject, Scopes: rec.Scopes, Delegated: rec.Delegated}.Principal(), nil
 		}
 	}
 	if a.auth != nil {

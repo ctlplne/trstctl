@@ -250,6 +250,10 @@ type Principal struct {
 	TenantID string
 	Subject  string
 	Grants   []Grant
+	// Delegated marks an API token that one person minted for another subject
+	// (F262). It may do that subject's work, but approval routes refuse it so a
+	// minter cannot cast a second person's vote.
+	Delegated bool
 }
 
 // Can reports whether the principal may perform perm on a target scope. It

@@ -14,6 +14,11 @@
   the sign-in roles.
 - Only a caller that holds every permission can grant the `admin` role. An
   `operator` or a role-provisioning token can still assign every other role.
+- An API token minted for another subject can no longer approve or deny on that
+  subject's behalf; every approval route refuses it. Approvals now count people,
+  not token names.
+- API tokens minted through the API expire after 90 days by default and cannot be
+  given a longer expiry (`auth.api_tokens.max_lifetime`; `0` opts out).
 - `ca.ceremony_min_approvals` (`TRSTCTL_CA_CEREMONY_MIN_APPROVALS`) sets the
   fewest custodian approvals a CA key ceremony may require; requests can raise
   the threshold but not lower it, and `regulated` governance requires at least 2.

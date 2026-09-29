@@ -241,6 +241,9 @@ type Deps struct {
 	// CACeremonyMinApprovals is the CA key-ceremony approval floor (config
 	// ca.ceremony_min_approvals, raised to 2 by regulated governance; F264).
 	CACeremonyMinApprovals int
+	// APITokenMaxLifetime bounds served API tokens (auth.api_tokens.max_lifetime,
+	// F267). nil uses the product default of 90 days; 0 means unlimited.
+	APITokenMaxLifetime *time.Duration
 	// PolicyModule is the OPA/Rego policy document gating the served issue/deploy/
 	// revoke path (EXC-WIRE-03). Empty uses policy.BaseModule (default-deny, permit
 	// revoke, require a bound profile to issue/deploy). The engine is fail-closed,
@@ -1459,7 +1462,16 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		api.WithTenantKeyDomainLifecycle(d.TenantKeyDomains),
 		api.WithTenantCrypto(d.TenantCrypto),
 		api.WithOwnershipAttestationCadence(d.OwnershipAttestationCadence),
+		api.WithAPITokenMaxLifetime(apiTokenMaxLifetime(d)),
 	}
+}
+
+// apiTokenMaxLifetime resolves the served API token lifetime limit (F267).
+func apiTokenMaxLifetime(d Deps) time.Duration {
+	if d.APITokenMaxLifetime == nil {
+		return config.DefaultAPITokenMaxLifetime
+	}
+	return *d.APITokenMaxLifetime
 }
 
 // appendOperationalReadModels attaches the read-only operator views (the B-1…B-6

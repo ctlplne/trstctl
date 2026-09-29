@@ -89,7 +89,7 @@ func (a *API) profileEditApprovalRoutes() []route {
 	return []route{
 		{method: "GET", path: "/api/v1/profiles/approvals", opID: "listProfileEditApprovals", summary: "List parked profile create/edit approval requests (dual control)", handler: a.listProfileEditApprovals, resSchema: "ProfileEditApprovalList", successCode: "200", perm: authz.ProfilesRead},
 		{method: "GET", path: "/api/v1/profiles/approvals/{id}", opID: "getProfileEditApproval", summary: "Get one parked profile create/edit approval request", handler: a.getProfileEditApproval, pathParams: approvalIDPath, resSchema: "ProfileEditApprovalRecord", successCode: "200", perm: authz.ProfilesRead},
-		{method: "POST", path: "/api/v1/profiles/approvals/{id}/approvals", opID: "approveProfileEdit", summary: "Approve a parked profile create/edit as a distinct reviewer; quorum applies the queued spec", handler: a.approveProfileEdit, pathParams: approvalIDPath, reqSchema: "ProfileEditApprovalDecisionRequest", reqOptional: true, resSchema: "ProfileEditApprovalRecord", successCode: "200", mutation: true, perm: authz.ProfilesWrite},
+		{method: "POST", path: "/api/v1/profiles/approvals/{id}/approvals", opID: "approveProfileEdit", summary: "Approve a parked profile create/edit as a distinct reviewer; quorum applies the queued spec", handler: a.approveProfileEdit, pathParams: approvalIDPath, reqSchema: "ProfileEditApprovalDecisionRequest", reqOptional: true, resSchema: "ProfileEditApprovalRecord", successCode: "200", mutation: true, approval: true, perm: authz.ProfilesWrite},
 	}
 }
 

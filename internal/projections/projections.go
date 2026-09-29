@@ -2985,6 +2985,19 @@ type APITokenCreated struct {
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 }
 
+// apiTokenMintedForAnother reports whether an authenticated person minted a
+// token for a different subject (F262). The flag comes from the event's
+// authenticated actor, so a rebuild recovers it for all retained history. A
+// deployment-local system actor ("trstctl:" prefix, the custody-bound
+// `trstctl token create`) and an absent actor are not delegation.
+func apiTokenMintedForAnother(actor *events.Actor, subject string) bool {
+	if actor == nil {
+		return false
+	}
+	minter := strings.TrimSpace(actor.Subject)
+	return minter != "" && !strings.HasPrefix(minter, "trstctl:") && minter != subject
+}
+
 // APITokenRevoked is the payload of an api_token.revoked event.
 type APITokenRevoked struct {
 	ID        string `json:"id"`
@@ -5736,6 +5749,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return p.store.ApplyAPITokenCreatedTx(ctx, tx, store.APITokenRecord{
 			ID: pl.ID, TenantID: e.TenantID, TokenHash: pl.TokenHash, Subject: pl.Subject,
 			Scopes: pl.Scopes, ExpiresAt: pl.ExpiresAt, CreatedAt: e.Time,
+			Delegated: apiTokenMintedForAnother(e.Actor, pl.Subject),
 		})
 	case EventAPITokenRevoked:
 		var pl APITokenRevoked

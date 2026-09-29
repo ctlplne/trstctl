@@ -23,6 +23,9 @@ type APIToken struct {
 	Subject   string
 	Scopes    []string
 	ExpiresAt time.Time
+	// Delegated is true when someone other than Subject minted the token through
+	// the served API (F262); approval routes refuse delegated tokens.
+	Delegated bool
 }
 
 // GenerateAPIToken creates a new opaque API token. The raw token is returned as
@@ -67,8 +70,9 @@ func (t APIToken) Principal() authz.Principal {
 	}
 	role := authz.Role{Name: "api-token", Permissions: perms}
 	return authz.Principal{
-		TenantID: t.TenantID,
-		Subject:  t.Subject,
-		Grants:   []authz.Grant{{Role: role, Scope: authz.Scope{TenantID: t.TenantID}}},
+		TenantID:  t.TenantID,
+		Subject:   t.Subject,
+		Grants:    []authz.Grant{{Role: role, Scope: authz.Scope{TenantID: t.TenantID}}},
+		Delegated: t.Delegated,
 	}
 }

@@ -353,3 +353,24 @@ type ConnectorTestEnqueuer func(ctx context.Context, tenantID string, target sto
 func WithConnectorTestEnqueuer(enqueue ConnectorTestEnqueuer) Option {
 	return func(c *config) { c.enqueueConnectorTest = enqueue }
 }
+
+// WithAPITokenMaxLifetime bounds bearer tokens minted through the served API
+// (F267, auth.api_tokens.max_lifetime): a request without expires_at gets this
+// lifetime and a later expiry is refused. 0 means unlimited, an explicit
+// operator opt-out. Without this option the product default applies.
+func WithAPITokenMaxLifetime(d time.Duration) Option {
+	return func(c *config) { c.apiTokenMaxLifetime = &d }
+}
+
+func apiTokenMaxLifetimeFrom(configured *time.Duration) time.Duration {
+	if configured == nil {
+		return defaultAPITokenMaxLifetime
+	}
+	if *configured < 0 {
+		return 0
+	}
+	return *configured
+}
+
+// defaultAPITokenMaxLifetime matches config.DefaultAPITokenMaxLifetime: 90 days.
+const defaultAPITokenMaxLifetime = 90 * 24 * time.Hour

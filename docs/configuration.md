@@ -909,6 +909,16 @@ returns HTTP 400; restart sign-in. Successful login clears both context cookies.
 This destination binding supplements the existing SAML assertion verification;
 it is not an assertion-replay cache or an authenticated session.
 
+### API tokens
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TRSTCTL_AUTH_API_TOKEN_MAX_LIFETIME` | `2160h` (90 days) | Longest lifetime of a token minted through `POST /api/v1/access/api-tokens`, and the expiry a token gets when its request names none. A later `expires_at` is refused with 422. `0` means unlimited, an explicit opt-out. Tokens from `trstctl token create` (deployment custody) and short-TTL ephemeral keys are not affected. |
+
+A token minted through the API for a different subject is delegated: it works with its
+subject's scopes, but approval and denial routes refuse it (see
+[Policy & governance](features/policy-and-governance.md)).
+
 ### Session roles
 
 A browser session starts with the roles of the tenant mapping that matched

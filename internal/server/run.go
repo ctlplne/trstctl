@@ -660,7 +660,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		OutboundEnvCredentialRefs: append([]string(nil), cfg.OutboundEnvCredentialRefs...),
 		TelemetryReporter:         outbound.telemetryReporter,
 		APIOptions:                []api.Option{kubernetesCSRPostureFromConfig(st), kubernetesTrustBundlePostureFromConfig(st)},
-		CACertFile:                cfg.CA.CertFile, CAPublicCertFile: cfg.CA.PublicCertFile, LeafProfile: leafProfileFromConfig(cfg), CACeremonyMinApprovals: cfg.CA.CeremonyApprovalFloor(), DefaultProfile: cfg.CA.DefaultProfile,
+		CACertFile:                cfg.CA.CertFile, CAPublicCertFile: cfg.CA.PublicCertFile, LeafProfile: leafProfileFromConfig(cfg), CACeremonyMinApprovals: cfg.CA.CeremonyApprovalFloor(), APITokenMaxLifetime: apiTokenMaxLifetimeFromConfig(cfg), DefaultProfile: cfg.CA.DefaultProfile,
 		PolicyModule: cfg.CA.Policy.Module, EnablePolicyGate: cfg.CA.Policy.Enabled,
 		ABACModule: cfg.Auth.ABAC.Module, EnableABAC: cfg.Auth.ABAC.Enabled, ABACEnvironment: cfg.Auth.ABAC.Environment,
 		BreakglassCACertDER: breakglassCACertDER, BreakglassPublicKeyDER: breakglassPublicKeyDER,
@@ -1578,4 +1578,14 @@ func parseMaintenanceWindows(specs []string) (lifecycle.WindowSet, error) {
 		out = append(out, w)
 	}
 	return out, nil
+}
+
+// apiTokenMaxLifetimeFromConfig reads auth.api_tokens.max_lifetime (validated at
+// startup) for the served API token mint (F267).
+func apiTokenMaxLifetimeFromConfig(cfg *config.Config) *time.Duration {
+	d, err := cfg.Auth.APITokens.MaxLifetimeValue()
+	if err != nil {
+		d = config.DefaultAPITokenMaxLifetime
+	}
+	return &d
 }
