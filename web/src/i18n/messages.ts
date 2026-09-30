@@ -4243,8 +4243,8 @@ export const messages = {
     description: "Heading for the identity decommission workflow section.",
   },
   "request.csr.generate": {
-    defaultMessage: "Generate one on that host:",
-    description: "B1: introduces the copyable openssl command that produces a CSR on the requester's own machine.",
+    defaultMessage: "Generate one on that host. This example uses the credential name as its DNS name; change the SAN if clients connect using another name:",
+    description: "B1: introduces the CSR command and explains that its DNS SAN must match the name clients use.",
   },
   "request.csr.help": {
     defaultMessage:
@@ -20871,7 +20871,7 @@ export const messages = {
   },
   "source.openssl.req.new.newkey.ec.pkeyopt.ec.param.c1a1d7efe2": {
     defaultMessage:
-      'openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -pkeyopt ec_param_enc:named_curve -nodes -keyout {value1}.key -out {value1}.csr -subj "/CN={value1}"',
+      'openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -pkeyopt ec_param_enc:named_curve -nodes -keyout {value1}.key -out {value1}.csr -subj "/CN={value1}" -addext "subjectAltName=DNS:{value1}"',
     description: "B1: the command that generates a keypair and CSR on the requester's own host. Technical identifiers stay byte-identical in every locale.",
   },
   "source.operate.58c3939c4c": {
