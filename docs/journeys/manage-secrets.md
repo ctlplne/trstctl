@@ -467,7 +467,12 @@ today (see [Current limitations](../limitations.md) and
    Manager, Azure Key Vault, GitHub Actions, GitLab CI/CD variables, Vercel project
    environment variables, generic CI JSON endpoints, and Kubernetes Secrets. Use
    `GET /api/v1/secrets/syncs/targets` to see which targets are configured on the
-   current control plane.
+   current control plane. A deployment administrator first adds a tenant-bound
+   `secret_integrations.sync_targets` entry to the [deployment configuration](../configuration.md#secrets-credentials-at-rest),
+   supplies its provider-specific fields and `file:` or `secret://` credential
+   references, and restarts the control plane. The Secrets console then lists that
+   configured target. Operations → **Where credentials are installed** manages
+   certificate deployment connectors; it does not register secret sync targets.
 
    ```sh
    curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \

@@ -1129,7 +1129,7 @@ describe("secrets surface", () => {
       ["/secrets/sharing", "One-time secret sharing", "What can be viewed once, by whom, and until when.", "Create one-time share"],
       ["/secrets/engines", "Automatic secret sources", "Which systems can create short-lived credentials on demand.", "Add source"],
       ["/secrets/scanning", "Find leaked secrets in code", "Which repositories were checked and what needs removal.", "Connect repository"],
-      ["/secrets/sync", "Send secrets to systems", "Where secrets are copied and whether each destination is current.", "Add destination"],
+      ["/secrets/sync", "Send secrets to systems", "Where secrets are copied and whether each destination is current.", "Set up secret sync"],
     ] as const;
 
     for (const [path, title, answer, action] of routes) {
@@ -1225,6 +1225,7 @@ describe("secrets surface", () => {
   });
 
   it("refuses to imply delivery when no secret destination is configured", async () => {
+    const user = userEvent.setup();
     const catalog = syncTargetCatalogFixture();
     apiMock.secretSyncTargets.mockResolvedValueOnce({
       ...catalog,
@@ -1237,6 +1238,11 @@ describe("secrets surface", () => {
     expect(await screen.findByText("No destination is set up yet")).toBeInTheDocument();
     expect(screen.getByText(/will not accept a made-up target name/i)).toBeInTheDocument();
     expect(screen.queryByRole("form", { name: "Sync stored secret" })).not.toBeInTheDocument();
+    await user.click(within(screen.getByRole("group", { name: "Do next" })).getByRole("button", { name: "Set up secret sync" }));
+    const setup = screen.getByRole("region", { name: "Secret sync setup" });
+    expect(setup).toHaveFocus();
+    expect(within(setup).getByText(/secret_integrations.sync_targets/)).toBeInTheDocument();
+    expect(within(setup).getByText(/Restart the control plane/)).toBeInTheDocument();
   });
 
   it("lists metadata, creates, reveals, rotates, and deletes native secrets without storage writes", async () => {

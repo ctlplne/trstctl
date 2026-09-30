@@ -148,7 +148,7 @@ const secretsRouteUX = {
     answerKey: "secrets.route.syncAnswer",
     detailKey: "secrets.route.syncDetails",
     actionKey: "secrets.route.syncAction",
-    destination: "/connectors",
+    focusID: "secret-sync-setup",
   },
 } as const;
 

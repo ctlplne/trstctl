@@ -198,11 +198,24 @@ export function SecretSyncWorkflow({
   ];
 
   if (catalog && configuredTargets.length === 0) {
-    return <UnavailableState title={t("secrets.sync.noDestinationTitle")}>{t("secrets.sync.noDestinationBody")}</UnavailableState>;
+    return (
+      <section id="secret-sync-setup" aria-label={t("secrets.sync.setupTitle")} tabIndex={-1}>
+        <UnavailableState title={t("secrets.sync.noDestinationTitle")}>
+          <p>{t("secrets.sync.noDestinationBody")}</p>
+          <ol className="mt-2 list-decimal space-y-1 ps-5">
+            <li>{t("secrets.sync.setupConfig")}</li>
+            <li>{t("secrets.sync.setupCredential")}</li>
+            <li>{t("secrets.sync.setupRestart")}</li>
+          </ol>
+        </UnavailableState>
+      </section>
+    );
   }
 
   return (
     <form
+      id="secret-sync-setup"
+      tabIndex={-1}
       aria-label={t("secrets.sync.formLabel")}
       className="-order-1 grid gap-4"
       onSubmit={(event) => {

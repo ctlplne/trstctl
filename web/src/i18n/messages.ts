@@ -3303,7 +3303,7 @@ export const messages = {
       "Connector configuration, queue attempts, version mapping, workload delivery, retries, rollback, and value-zeroization controls remain available below.",
     description: "Secret delivery technical-details summary.",
   },
-  "secrets.route.syncAction": { defaultMessage: "Add destination", description: "Secret delivery primary action." },
+  "secrets.route.syncAction": { defaultMessage: "Set up secret sync", description: "Secret delivery primary action." },
   "secrets.sync.evidenceSummary": {
     defaultMessage: "Destination coverage and delivery evidence",
     description: "Collapsed secret-delivery provider and workload evidence summary.",
@@ -3317,8 +3317,24 @@ export const messages = {
     description: "Secret delivery empty state when no configured target can safely accept a value.",
   },
   "secrets.sync.noDestinationBody": {
-    defaultMessage: "Add a destination first. trstctl will not accept a made-up target name or pretend a delivery was queued.",
+    defaultMessage:
+      "A deployment administrator must configure a secret sync target first. trstctl will not accept a made-up target name or pretend a delivery was queued.",
     description: "Secret delivery empty-state guidance and honesty boundary.",
+  },
+  "secrets.sync.setupTitle": { defaultMessage: "Secret sync setup", description: "Accessible name for the empty sync setup steps." },
+  "secrets.sync.setupConfig": {
+    defaultMessage:
+      "Add a tenant-bound entry under secret_integrations.sync_targets in the deployment configuration. Set its id, type, endpoint, and required provider fields; see docs/configuration.md for each target type.",
+    description: "First deployment-owned secret sync setup step.",
+  },
+  "secrets.sync.setupCredential": {
+    defaultMessage: "Store target credentials in a file: or secret:// reference. Certificate deployment connectors cannot configure these secret sync targets.",
+    description: "Secret sync authority and connector distinction.",
+  },
+  "secrets.sync.setupRestart": {
+    defaultMessage:
+      "Restart the control plane after changing its configuration, then select Refresh here. The configured target will appear in the delivery form.",
+    description: "Final secret sync setup and readback step.",
   },
   "secrets.sync.required": { defaultMessage: "This field is required.", description: "Secret-sync required-field validation." },
   "secrets.sync.formLabel": { defaultMessage: "Sync stored secret", description: "Accessible label for the exact secret-sync workflow." },
