@@ -17,10 +17,10 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
 FROM scratch AS patches
 ADD --checksum=sha256:161223a16f042b8e469e9441291e071464fd91d4f4bbe6f496ee8d0abd4e0701 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libcrypto3-3.5.8-r0.apk /amd64/libcrypto3-3.5.8-r0.apk
 ADD --checksum=sha256:aca521e5ae4a321322a9d47ed64a1775f5ab1ffd215d1e9fc0433c58f7bfd037 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libssl3-3.5.8-r0.apk /amd64/libssl3-3.5.8-r0.apk
-ADD --checksum=sha256:cd7752154d0fa628a5f7360218e9e8e83edf31f7fa26f58ee42d26b507bd0372 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/ca-certificates-bundle-20260611-r0.apk /amd64/ca-certificates-bundle-20260611-r0.apk
+ADD --checksum=sha256:a35f8cf2366d90294d0bb089af565fd17f3fa03721e61bcc7f02ed3d8334e7ea https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/ca-certificates-bundle-20260909-r0.apk /amd64/ca-certificates-bundle-20260909-r0.apk
 ADD --checksum=sha256:35b892813c23664a3592e4fc8c12a03538a22c579057655361c7043305272a9a https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libcrypto3-3.5.8-r0.apk /arm64/libcrypto3-3.5.8-r0.apk
 ADD --checksum=sha256:d6ec970cc10e01539e41626f720c4e0ac69016eaa2079a10ef776ffd3243db5b https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libssl3-3.5.8-r0.apk /arm64/libssl3-3.5.8-r0.apk
-ADD --checksum=sha256:bc5d3ae0b602748852e0bc601a4348cabc4f654f12f27578919cbf3c810f1c1e https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/ca-certificates-bundle-20260611-r0.apk /arm64/ca-certificates-bundle-20260611-r0.apk
+ADD --checksum=sha256:81a2c508dcdb3295196e6a8987274e3bc3487f99ad8d18e985f20bb2c336b5e6 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/ca-certificates-bundle-20260909-r0.apk /arm64/ca-certificates-bundle-20260909-r0.apk
 
 # Keep Alpine's small HTTP health probe. Package installation is offline and
 # content-pinned on both platforms. /data retains the existing Compose ownership.
