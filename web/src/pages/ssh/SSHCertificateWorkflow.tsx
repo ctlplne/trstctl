@@ -365,6 +365,9 @@ function PlanList({ title, items, empty }: { title: string; items: string[]; emp
 }
 
 function durationLabel(t: I18nContextValue["t"], seconds: number): string {
+  if (seconds === 3600) return t("sshTrust.certificate.hour");
+  if (seconds === 60) return t("sshTrust.certificate.minute");
+  if (seconds === 1) return t("sshTrust.certificate.second");
   if (seconds > 0 && seconds % 3600 === 0) return t("sshTrust.certificate.hours", { count: seconds / 3600 });
   if (seconds > 0 && seconds % 60 === 0) return t("sshTrust.certificate.minutes", { count: seconds / 60 });
   return t("sshTrust.certificate.seconds", { count: seconds });

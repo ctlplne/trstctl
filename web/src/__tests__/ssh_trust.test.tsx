@@ -291,6 +291,45 @@ describe("SSH trust served workflow surface", () => {
     expect(screen.getByLabelText("Key ID")).toHaveValue("edge-1.internal");
   });
 
+  it("uses singular units for a one-hour host-certificate preview", async () => {
+    apiMock.previewSSHCertificate.mockResolvedValueOnce({
+      ready: true,
+      effect_free: true,
+      certificate_type: "host",
+      key_id: "edge-1.internal",
+      principals: ["edge-1.internal"],
+      requested_ttl_seconds: 3600,
+      effective_ttl_seconds: 3600,
+      ttl_defaulted: false,
+      ttl_clamped: false,
+      public_key_type: "ssh-ed25519",
+      public_key_fingerprint: "SHA256:subject",
+      authority_fingerprint: "SHA256:authority",
+      critical_options: {},
+      extensions: {},
+      preview_writes: [],
+      preview_external_effects: [],
+      preview_signer_calls: [],
+      issuance_writes: ["append ssh.cert.issued audit event"],
+      issuance_external_effects: [],
+      issuance_signer_calls: ["sign one SSH host certificate"],
+      blockers: [],
+      recovery_steps: [],
+      secret_data_handling: [],
+    });
+
+    const user = userEvent.setup();
+    renderSSHTrust();
+    const chooser = (await screen.findByRole("heading", { name: "Choose what you want to do" })).closest("section") as HTMLElement;
+    await user.click(within(chooser).getByRole("button", { name: "Issue host or user certificate" }));
+    await user.type(screen.getByLabelText("SSH public key"), "ssh-ed25519 AAAATEST edge-1");
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+
+    expect(await screen.findByRole("heading", { name: "Ready to issue" })).toBeInTheDocument();
+    expect(screen.getByText("1 hour")).toBeInTheDocument();
+    expect(screen.queryByText("1 hours")).not.toBeInTheDocument();
+  });
+
   it("reveals user-only restrictions and sends them in the exact preview", async () => {
     apiMock.previewSSHCertificate.mockResolvedValueOnce({
       ready: true,
