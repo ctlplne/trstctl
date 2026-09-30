@@ -241,9 +241,31 @@ mutation stays in the operator-confirmed agent path.
    The displayed count measures distinct serial and key-ID entries, not affected
    certificates. A newly issued certificate defaults to serial-only revocation.
 
-   Publishing updates the KRL; it does not distribute it or terminate existing
-   SSH sessions. Install the current list on every relying host (`RevokedKeys`)
-   and client (`RevokedHostKeys`). Before expiry, verify the original public
+   Publishing updates the KRL; it does not yet enqueue automatic host delivery
+   or terminate existing SSH sessions. On each relying host, configure sshd's
+   `RevokedKeys` to name an existing, valid binary KRL file, then download the
+   current artifact through a TLS-verified connection and pin its exact digest.
+   Run the downloadable `trstctl-agent` on that host with the explicit update
+   operation below. Keep the rollback directory on persistent, private storage.
+   The health command must test a known-good login on this host; a config-only
+   check is insufficient.
+
+   ```sh
+   curl -fsS --cacert "$TRSTCTL_CA_FILE" "$TRSTCTL_URL/ssh/krl" -o trstctl.krl
+   sha256sum trstctl.krl
+   trstctl-agent --ssh-krl-apply --ssh-krl-confirm \
+     --ssh-krl-file "$PWD/trstctl.krl" \
+     --ssh-krl-sha256 '<sha256-from-reviewed-download>' \
+     --ssh-krl-target /etc/ssh/revoked_keys \
+     --ssh-krl-sshd-config /etc/ssh/sshd_config \
+     --ssh-krl-rollback-dir /var/lib/trstctl/ssh-krl-rollback \
+     --ssh-krl-reload-cmd 'systemctl reload sshd' \
+     --ssh-krl-health-cmd '/usr/local/bin/check-known-good-ssh-login'
+   ssh-keygen -Q -l -f /etc/ssh/revoked_keys
+   ```
+
+   Install the current list on SSH clients (`RevokedHostKeys`) separately. Before
+   expiry, verify the original public
    certificate with `ssh-keygen -Q -f trstctl.krl original-cert.pub`: it must
    explicitly report `REVOKED` and exit 1. Prove a new connection is refused,
    then prove replacement access works. After key-ID revocation, use a different

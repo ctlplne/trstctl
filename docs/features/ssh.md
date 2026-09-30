@@ -249,8 +249,15 @@ trstctl ssh retire-host --host edge-1.internal --reason 'replaced'
   see [Current limitations](../limitations.md).
 - **Short TTLs require renewal.** That's the security benefit, but plan the renewal path
   for long-running sessions.
-- **KRL distribution is push-based.** Revoking a certificate means distributing the
-  updated KRL to hosts — budget for that propagation.
+- **KRL enforcement requires host delivery.** Publishing a revocation updates
+  `/ssh/krl`, but does not yet enqueue automatic delivery to relying hosts. The
+  agent's explicit `--ssh-krl-apply` operation installs a pinned, newer KRL at
+  an already configured `RevokedKeys` path. It validates the KRL with OpenSSH,
+  checks sshd's effective path and config, retains the predecessor, reloads,
+  and runs an operator-supplied health probe; a failed probe restores the old
+  file. Budget for fetching the new artifact and running that operation on
+  every host until automatic fleet rollout is available. Existing SSH sessions
+  are not terminated by a KRL update.
 
 ## Reference
 

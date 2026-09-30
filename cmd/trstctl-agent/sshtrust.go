@@ -3,8 +3,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -159,15 +161,24 @@ func (r *sshdReloader) HealthCheck(ctx context.Context) error {
 // Operator-provided reload/health commands are intentionally simple command
 // lines; shell pipelines and expansions are rejected so trust rewrites cannot
 // become a command-injection surface.
-func runCommandLine(ctx context.Context, line string) error {
+func runCommandLine(ctx context.Context, line string, stdout ...io.Writer) error {
 	argv, err := parseCommandLine(line)
 	if err != nil {
 		return err
 	}
+	if len(stdout) > 1 {
+		return fmt.Errorf("only one stdout destination is allowed")
+	}
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...) // #nosec G204 -- operator-configured sshd reload command; running it is the feature (CWE-78)
-	out, err := cmd.CombinedOutput()
+	cmd.Stdout = io.Discard
+	if len(stdout) == 1 && stdout[0] != nil {
+		cmd.Stdout = stdout[0]
+	}
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	err = cmd.Run()
 	if err != nil {
-		return fmt.Errorf("%q failed: %v: %s", line, err, string(out))
+		return fmt.Errorf("%q failed: %v: %s", line, err, stderr.String())
 	}
 	return nil
 }

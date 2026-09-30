@@ -134,6 +134,15 @@ func main() {
 	sshTrustReloadCmd := flag.String("ssh-trust-reload-cmd", "", "validated argv command line to reload sshd after a validated config change (e.g. \"systemctl reload sshd\"); shell metacharacters are rejected; required for --ssh-trust-add-ca")
 	sshTrustValidateCmd := flag.String("ssh-trust-validate-cmd", "sshd -t", "validated argv command line that validates sshd config before reload; shell metacharacters are rejected")
 	sshTrustHealthCmd := flag.String("ssh-trust-health-cmd", "", "validated argv command line that proves sshd is healthy after reload (for example, a localhost SSH handshake); shell metacharacters are rejected; required for --ssh-trust-add-ca")
+	sshKRLApply := flag.Bool("ssh-krl-apply", false, "install a newer pinned OpenSSH KRL at an already configured RevokedKeys path, with durable predecessor and rollback")
+	sshKRLConfirm := flag.Bool("ssh-krl-confirm", false, "explicit confirmation required to update this host's active SSH revocation list")
+	sshKRLFile := flag.String("ssh-krl-file", "", "local OpenSSH binary KRL fetched over a verified control-plane channel")
+	sshKRLSHA256 := flag.String("ssh-krl-sha256", "", "expected SHA-256 hex digest of the exact KRL artifact")
+	sshKRLTarget := flag.String("ssh-krl-target", "", "absolute existing KRL path that sshd's effective RevokedKeys must name")
+	sshKRLConfig := flag.String("ssh-krl-sshd-config", "/etc/ssh/sshd_config", "sshd_config whose effective RevokedKeys path must match the target")
+	sshKRLRollbackDir := flag.String("ssh-krl-rollback-dir", "", "private durable directory for the previous KRL; required for --ssh-krl-apply")
+	sshKRLReloadCmd := flag.String("ssh-krl-reload-cmd", "", "validated argv command to reload sshd after KRL replacement")
+	sshKRLHealthCmd := flag.String("ssh-krl-health-cmd", "", "validated argv command that proves sshd still accepts a known-good login")
 	// Workload-held predecessor co-sign (PCAS claim 19, INT-16) — DEFAULT OFF. When
 	// --workload-cosign-listen is set, the agent holds the workload's predecessor key
 	// and serves the succession co-sign RPC so the control plane can mint a
@@ -239,6 +248,10 @@ func main() {
 	// explicitly-confirmed one-shot op that does NOT need the enroll/connection
 	// settings, so it runs (and exits) before the steady-state agent loop. With the
 	// flag off this is a no-op and the agent proceeds normally.
+	if *sshTrustAddCA && *sshKRLApply {
+		fmt.Fprintln(os.Stderr, "trstctl-agent: choose one SSH one-shot operation at a time")
+		os.Exit(2)
+	}
 	sshCtx, sshStop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	if handled, err := runSSHTrustAddCA(sshCtx, sshTrustOptions{
 		addCA: *sshTrustAddCA, confirm: *sshTrustConfirm, caKeyPath: *sshTrustCAKey,
@@ -253,6 +266,20 @@ func main() {
 		return
 	}
 	sshStop()
+	krlCtx, krlStop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	if handled, err := runSSHKRLApply(krlCtx, sshKRLOptions{
+		apply: *sshKRLApply, confirm: *sshKRLConfirm, file: *sshKRLFile, sha256: *sshKRLSHA256,
+		target: *sshKRLTarget, sshdConfig: *sshKRLConfig, rollbackDir: *sshKRLRollbackDir,
+		reloadCmd: *sshKRLReloadCmd, healthCmd: *sshKRLHealthCmd,
+	}, sshdKRLChecks{reloadCmd: *sshKRLReloadCmd, healthCmd: *sshKRLHealthCmd}); handled {
+		krlStop()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
+			os.Exit(1)
+		}
+		return
+	}
+	krlStop()
 
 	if *secretInject {
 		mappings, err := secretinject.ParseMappings(*secretInjectMap)

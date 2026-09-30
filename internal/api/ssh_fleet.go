@@ -35,12 +35,12 @@ type SSHFleetHost struct {
 
 // SSHFleetInventory is the served answer plus the counts worth acting on.
 type SSHFleetInventory struct {
-	Hosts            []SSHFleetHost `json:"hosts"`
+	Hosts []SSHFleetHost `json:"hosts"`
 	// HostCount is a legacy wire name for the number of reported key locations.
-	HostCount        int            `json:"host_count"`
-	KeyCount         int            `json:"key_count"`
-	StandingKeyCount int            `json:"standing_key_count"`
-	OrphanedKeyCount int            `json:"orphaned_key_count"`
+	HostCount        int `json:"host_count"`
+	KeyCount         int `json:"key_count"`
+	StandingKeyCount int `json:"standing_key_count"`
+	OrphanedKeyCount int `json:"orphaned_key_count"`
 }
 
 // SSHFleetProvider is the server-side seam over the store aggregate.
