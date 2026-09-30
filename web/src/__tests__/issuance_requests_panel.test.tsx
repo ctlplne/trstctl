@@ -69,6 +69,7 @@ describe("ticket-intake relay visibility", () => {
       subject: "qa-design-partner-mtls",
       owner_id: "owner-1",
       profile: "service-mtls-30d:1",
+      issuer: { source: "external" as const, id: "request-external-ca", name: "Request test DigiCert" },
       requester: "demo-admin",
       status: "requested" as const,
       expires_at: "2026-08-21T00:00:00Z",
@@ -83,6 +84,8 @@ describe("ticket-intake relay visibility", () => {
         <IssuanceRequestsPanel currentPrincipal={{ subject: "se-demo-operator", email: "se-demo-operator@trstctl.local", permissions: ["certs:issue"] }} />
       </AppQueryProvider>,
     );
+
+    expect(await screen.findByText(/Certificate authority: Request test DigiCert \(external:request-external-ca\)/)).toBeInTheDocument();
 
     await user.click(await screen.findByRole("button", { name: "Approve qa-design-partner-mtls" }));
 

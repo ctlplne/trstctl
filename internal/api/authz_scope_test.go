@@ -100,6 +100,38 @@ func TestIssuerScopedGuardUsesPathIssuer(t *testing.T) {
 	}
 }
 
+func TestIssuerScopedRequestUsesSelectedBodyIssuer(t *testing.T) {
+	role := authz.Role{Name: "scoped-requester", Permissions: []authz.Permission{authz.CertsRequest}}
+	a := New(nil, nil, nil, WithInsecureHeaderResolver(), WithRoles(role))
+	reached := false
+	handler := a.guard(authz.CertsRequest, scopeIssuanceRequestIssuer, func(w http.ResponseWriter, r *http.Request) {
+		reached = true
+		body, err := io.ReadAll(r.Body)
+		if err != nil || !strings.Contains(string(body), `"id":"allowed-ca"`) {
+			t.Fatalf("request body was not preserved after issuer scope check: %v %s", err, body)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	call := func(issuer string) int {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/issuance-requests/preview",
+			strings.NewReader(`{"issuer":{"source":"external","id":"`+issuer+`"}}`))
+		req.Header.Set("X-Tenant-ID", "tenant-1")
+		req.Header.Set("X-Subject", "requester")
+		req.Header.Set("X-Roles", "scoped-requester")
+		req.Header.Set("X-Role-Issuer", "allowed-ca")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	if got := call("other-ca"); got != http.StatusForbidden || reached {
+		t.Fatalf("request for unauthorized CA reached handler: status=%d reached=%v", got, reached)
+	}
+	if got := call("allowed-ca"); got != http.StatusNoContent || !reached {
+		t.Fatalf("request for allowed CA refused: status=%d reached=%v", got, reached)
+	}
+}
+
 func TestCARotationRequiresSuccessorIssuerScope(t *testing.T) {
 	role := authz.Role{Name: "issuer-manager", Permissions: []authz.Permission{authz.IssuersWrite}}
 	predecessorOnly := authz.Principal{

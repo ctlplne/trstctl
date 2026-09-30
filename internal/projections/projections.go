@@ -544,6 +544,9 @@ type IssuanceRequestOpened struct {
 	Subject       string    `json:"subject"`
 	OwnerID       string    `json:"owner_id,omitempty"`
 	Profile       string    `json:"profile,omitempty"`
+	IssuerSource  string    `json:"issuer_source,omitempty"`
+	IssuerID      string    `json:"issuer_id,omitempty"`
+	IssuerName    string    `json:"issuer_name,omitempty"`
 	CSRPEM        string    `json:"csr_pem,omitempty"`
 	Requester     string    `json:"requester"`
 	Justification string    `json:"justification,omitempty"`
@@ -3963,6 +3966,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		return p.store.ApplyIssuanceRequestOpenedTx(ctx, tx, store.IssuanceRequest{
 			ID: pl.ID, TenantID: e.TenantID, Subject: pl.Subject, Profile: pl.Profile,
+			IssuerSource: pl.IssuerSource, IssuerID: pl.IssuerID, IssuerName: pl.IssuerName,
 			OwnerID: pl.OwnerID, CSRPEM: pl.CSRPEM, Requester: pl.Requester, Justification: pl.Justification,
 			Origin: pl.Origin, TicketRef: pl.TicketRef, ExpiresAt: pl.ExpiresAt, CreatedAt: e.Time,
 		})

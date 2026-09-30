@@ -72,6 +72,16 @@ func (o *Orchestrator) openIssuanceRequest(ctx context.Context, tenantID string,
 			"orchestrator: issuance request needs a requester; without one the self-approval check " +
 				"has nothing to compare and would pass by accident")
 	}
+	if in.IssuerSource == "" && in.IssuerID == "" {
+		// Ticket and older API clients can omit the choice. Persist the
+		// compatibility default so later retries have one exact authority.
+		in.IssuerSource, in.IssuerID, in.IssuerName = "platform", "trstctl-issuing-ca", "trstctl built-in issuing CA"
+	}
+	if (in.IssuerSource == "platform" && in.IssuerID != "trstctl-issuing-ca") ||
+		(in.IssuerSource != "platform" && in.IssuerSource != "private" && in.IssuerSource != "external") ||
+		strings.TrimSpace(in.IssuerID) == "" {
+		return store.IssuanceRequest{}, fmt.Errorf("orchestrator: incomplete or unsupported issuing authority; no CA was substituted")
+	}
 	if in.ID == "" {
 		in.ID = uuid.NewString()
 	}
@@ -95,6 +105,7 @@ func (o *Orchestrator) openIssuanceRequest(ctx context.Context, tenantID string,
 	}
 	return store.IssuanceRequest{
 		ID: in.ID, TenantID: tenantID, Subject: in.Subject, Profile: in.Profile,
+		IssuerSource: in.IssuerSource, IssuerID: in.IssuerID, IssuerName: in.IssuerName,
 		OwnerID: in.OwnerID, CSRPEM: in.CSRPEM, Requester: in.Requester, Justification: in.Justification,
 		Origin: in.Origin, TicketRef: in.TicketRef, Status: issuancerequest.StateRequested,
 		ExpiresAt: in.ExpiresAt, CreatedAt: ev.Time,
@@ -177,11 +188,13 @@ func (o *Orchestrator) PrepareIssuanceRequest(ctx context.Context, tenantID, id,
 			return err
 		}
 		attrs, err := json.Marshal(map[string]any{
-			"issuance_request_id": current.ID,
-			"profile_name":        profileName,
-			"profile_version":     profileVersion,
-			"purpose":             current.Justification,
-			"requester":           current.Requester,
+			"issuance_request_id":      current.ID,
+			"profile_name":             profileName,
+			"profile_version":          profileVersion,
+			"purpose":                  current.Justification,
+			"requester":                current.Requester,
+			"issuing_authority_source": current.IssuerSource,
+			"issuing_authority_id":     current.IssuerID,
 		})
 		if err != nil {
 			return err
@@ -279,11 +292,14 @@ func validatePreparedIssuanceIdentity(request store.IssuanceRequest, identity st
 		RequestID      string `json:"issuance_request_id"`
 		ProfileName    string `json:"profile_name"`
 		ProfileVersion int    `json:"profile_version"`
+		IssuerSource   string `json:"issuing_authority_source"`
+		IssuerID       string `json:"issuing_authority_id"`
 	}
 	if err := json.Unmarshal(identity.Attributes, &attrs); err != nil {
 		return fmt.Errorf("%w: decode linked identity attributes: %v", ErrIssuanceRequestNotReady, err)
 	}
-	if attrs.RequestID != request.ID || attrs.ProfileName != profileName || attrs.ProfileVersion != profileVersion {
+	if attrs.RequestID != request.ID || attrs.ProfileName != profileName || attrs.ProfileVersion != profileVersion ||
+		attrs.IssuerSource != request.IssuerSource || attrs.IssuerID != request.IssuerID {
 		return fmt.Errorf("%w: linked identity %s does not match request and profile revision",
 			ErrIssuanceRequestNotReady, identity.ID)
 	}
@@ -303,6 +319,8 @@ func (o *Orchestrator) validateCompletedIssuanceIdentity(ctx context.Context, te
 		RequestID      string `json:"issuance_request_id"`
 		ProfileName    string `json:"profile_name"`
 		ProfileVersion int    `json:"profile_version"`
+		IssuerSource   string `json:"issuing_authority_source"`
+		IssuerID       string `json:"issuing_authority_id"`
 	}
 	if err := json.Unmarshal(identity.Attributes, &attrs); err != nil {
 		return fmt.Errorf("%w: decode linked identity attributes: %v", ErrIssuanceRequestNotReady, err)
@@ -315,7 +333,8 @@ func (o *Orchestrator) validateCompletedIssuanceIdentity(ctx context.Context, te
 	if requestedName != "" && requestedVersion == 0 {
 		profileMatches = attrs.ProfileName == requestedName && attrs.ProfileVersion > 0
 	}
-	if attrs.RequestID != request.ID || !profileMatches {
+	if attrs.RequestID != request.ID || !profileMatches ||
+		attrs.IssuerSource != request.IssuerSource || attrs.IssuerID != request.IssuerID {
 		return fmt.Errorf("%w: linked identity %s does not match request and historical profile revision",
 			ErrIssuanceRequestNotReady, identity.ID)
 	}

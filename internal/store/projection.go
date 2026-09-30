@@ -224,12 +224,12 @@ func (s *Store) ApplyAgentUpgradeRingAssignedTx(ctx context.Context, tx pgx.Tx, 
 func (s *Store) ApplyIssuanceRequestOpenedTx(ctx context.Context, tx pgx.Tx, r IssuanceRequest) error {
 	_, err := tx.Exec(ctx,
 		`INSERT INTO issuance_requests
-		   (id, tenant_id, subject, owner_id, profile, csr_pem, requester, justification, origin,
-		    ticket_ref, status, expires_at, created_at)
-		 VALUES ($1, $2, $3, nullif($4, '')::uuid, $5, $6, $7, $8, $9, $10, 'requested', $11, $12)
+		   (id, tenant_id, subject, owner_id, profile, issuer_source, issuer_id, issuer_name,
+		    csr_pem, requester, justification, origin, ticket_ref, status, expires_at, created_at)
+		 VALUES ($1, $2, $3, nullif($4, '')::uuid, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'requested', $14, $15)
 		 ON CONFLICT (id) DO NOTHING`,
-		r.ID, r.TenantID, r.Subject, r.OwnerID, r.Profile, r.CSRPEM, r.Requester, r.Justification,
-		r.Origin, r.TicketRef, r.ExpiresAt, r.CreatedAt)
+		r.ID, r.TenantID, r.Subject, r.OwnerID, r.Profile, r.IssuerSource, r.IssuerID, r.IssuerName,
+		r.CSRPEM, r.Requester, r.Justification, r.Origin, r.TicketRef, r.ExpiresAt, r.CreatedAt)
 	return err
 }
 

@@ -15,6 +15,7 @@ const { apiMock } = vi.hoisted(() => ({
     profiles: vi.fn(),
     owners: vi.fn(),
     issuanceRequests: vi.fn(),
+    issuanceRequestIssuers: vi.fn(),
     previewIssuanceRequest: vi.fn(),
     createIssuanceRequest: vi.fn(),
     // Kept until the failing-first assertion proves the page still uses the
@@ -80,12 +81,16 @@ const otherOwner = {
   email: "data@example.test",
 };
 
+const platformIssuer = { source: "platform" as const, id: "trstctl-issuing-ca", name: "trstctl built-in issuing CA", type: "x509", availability: "available" };
+const externalIssuer = { source: "external" as const, id: "request-external-ca", name: "External test CA", type: "digicert", availability: "available" };
+
 const recoveryRequest = {
   id: "old-request",
   tenant_id: "t1",
   subject: "known.example.test",
   owner_id: selectedOwner.id,
   profile: "unusable:1",
+  issuer: platformIssuer,
   requester: "dev-1",
   justification: "Known purpose",
   status: "approved",
@@ -102,33 +107,37 @@ describe("self-service credential requests", () => {
     apiMock.profiles.mockResolvedValue([activeProfile]);
     apiMock.owners.mockResolvedValue([otherOwner, selectedOwner]);
     apiMock.issuanceRequests.mockResolvedValue({ items: [], open: 0, guidance: "" });
-    apiMock.previewIssuanceRequest.mockImplementation(async (input: { subject: string; owner_id: string; profile?: string; csr_pem?: string }) => ({
-      ready: true,
-      subject: input.subject,
-      owner_id: input.owner_id,
-      owner_name: selectedOwner.name,
-      owner_kind: selectedOwner.kind,
-      profile: input.profile,
-      profile_name: "web-server",
-      profile_version: 2,
-      requester: "dev-1",
-      csr_supplied: Boolean(input.csr_pem),
-      key_origin: input.csr_pem ? "requester_csr" : "deprecated_control_plane_generation",
-      approval_required: true,
-      approval_permission: "certs:issue",
-      issuance_permissions: ["identities:write", "certs:issue"],
-      preview_writes: [],
-      preview_external_effects: [],
-      submission_effects: [
-        "Append one tenant-scoped issuance request event.",
-        "Create one requested work item for an independent approver.",
-        "Mint no certificate until a later approved issuance step.",
-      ],
-      steps: ["Submit request", "Independent approval", "Signer-backed issuance", "Durable certificate evidence"],
-      warnings: input.csr_pem ? [] : ["No CSR was supplied; requester-held keys are safer."],
-      blockers: [],
-      guidance: "This preview performed no write and contacted no certificate authority.",
-    }));
+    apiMock.issuanceRequestIssuers.mockResolvedValue({ items: [platformIssuer, externalIssuer] });
+    apiMock.previewIssuanceRequest.mockImplementation(
+      async (input: { subject: string; owner_id: string; profile?: string; csr_pem?: string; issuer?: typeof platformIssuer }) => ({
+        ready: true,
+        subject: input.subject,
+        owner_id: input.owner_id,
+        owner_name: selectedOwner.name,
+        owner_kind: selectedOwner.kind,
+        profile: input.profile,
+        profile_name: "web-server",
+        profile_version: 2,
+        issuer: input.issuer?.id === platformIssuer.id ? platformIssuer : externalIssuer,
+        requester: "dev-1",
+        csr_supplied: Boolean(input.csr_pem),
+        key_origin: input.csr_pem ? "requester_csr" : "deprecated_control_plane_generation",
+        approval_required: true,
+        approval_permission: "certs:issue",
+        issuance_permissions: ["identities:write", "certs:issue"],
+        preview_writes: [],
+        preview_external_effects: [],
+        submission_effects: [
+          "Append one tenant-scoped issuance request event.",
+          "Create one requested work item for an independent approver.",
+          "Mint no certificate until a later approved issuance step.",
+        ],
+        steps: ["Submit request", "Independent approval", "Signer-backed issuance", "Durable certificate evidence"],
+        warnings: input.csr_pem ? [] : ["No CSR was supplied; requester-held keys are safer."],
+        blockers: [],
+        guidance: "This preview performed no write and contacted no certificate authority.",
+      }),
+    );
     apiMock.identities.mockResolvedValue([]);
   });
 
@@ -139,6 +148,7 @@ describe("self-service credential requests", () => {
       owner_id: selectedOwner.id,
       subject: "payments-api",
       profile: "web-server:2",
+      issuer: externalIssuer,
       requester: "dev-1",
       justification: "staging TLS",
       status: "requested",
@@ -154,6 +164,9 @@ describe("self-service credential requests", () => {
 
     // Step 1 — choose the issuance profile.
     await waitFor(() => expect(screen.getByLabelText("Profile")).toHaveDisplayValue("web-server v2 active"));
+    expect(screen.getByRole("button", { name: "Next: name it" })).toBeDisabled();
+    await screen.findByRole("option", { name: /External test CA/ });
+    await user.selectOptions(screen.getByLabelText("Certificate authority"), "external:request-external-ca");
     await user.click(screen.getByRole("button", { name: "Next: name it" }));
 
     // Step 2 — a session subject is never guessed to be an owner UUID. The
@@ -174,6 +187,7 @@ describe("self-service credential requests", () => {
       expect(apiMock.previewIssuanceRequest).toHaveBeenCalledWith({
         subject: "payments-api",
         profile: "web-server:2",
+        issuer: { source: "external", id: "request-external-ca" },
         owner_id: selectedOwner.id,
         justification: "staging TLS",
         origin: "console",
@@ -182,6 +196,7 @@ describe("self-service credential requests", () => {
     expect(await screen.findByRole("status", { name: "Request preview ready" })).toHaveTextContent(
       "This preview performed no write and contacted no certificate authority.",
     );
+    expect(screen.getByRole("status", { name: "Request preview ready" })).toHaveTextContent("External test CA");
     expect(screen.getByText(/Mint no certificate until a later approved issuance step/i)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Submit request" }));
 
@@ -189,6 +204,7 @@ describe("self-service credential requests", () => {
       expect(apiMock.createIssuanceRequest).toHaveBeenCalledWith({
         subject: "payments-api",
         profile: "web-server:2",
+        issuer: { source: "external", id: "request-external-ca" },
         owner_id: selectedOwner.id,
         justification: "staging TLS",
         origin: "console",
@@ -198,6 +214,8 @@ describe("self-service credential requests", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(
       "Request accepted for payments-api. It is awaiting approval; no certificate has been minted yet.",
     );
+    expect(screen.getByLabelText("Certificate authority")).toHaveDisplayValue("Choose a certificate authority");
+    expect(screen.getByRole("button", { name: "Next: name it" })).toBeDisabled();
     expect(screen.getByRole("row", { name: /payments-api.*web-server:2.*Awaiting approval.*requested/i })).toBeInTheDocument();
     expect(screen.queryByText(/has been issued/i)).not.toBeInTheDocument();
   });
@@ -220,6 +238,8 @@ describe("self-service credential requests", () => {
     renderAt("/request");
 
     await waitFor(() => expect(screen.getByLabelText("Profile")).toHaveDisplayValue("web-server v2 active"));
+    await screen.findByRole("option", { name: /trstctl built-in issuing CA/ });
+    await user.selectOptions(screen.getByLabelText("Certificate authority"), "platform:trstctl-issuing-ca");
     await user.click(screen.getByRole("button", { name: "Next: name it" }));
     await user.selectOptions(screen.getByLabelText("Owner"), selectedOwner.id);
     await user.type(screen.getByLabelText("Credential name"), "  payments-api  ");
@@ -234,6 +254,7 @@ describe("self-service credential requests", () => {
       expect(apiMock.createIssuanceRequest).toHaveBeenCalledWith({
         subject: "payments-api",
         profile: "web-server:2",
+        issuer: { source: "platform", id: "trstctl-issuing-ca" },
         owner_id: selectedOwner.id,
         justification: "staging TLS",
         origin: "console",
@@ -249,6 +270,8 @@ describe("self-service credential requests", () => {
     renderAt("/request");
 
     await waitFor(() => expect(screen.getByLabelText("Profile")).toHaveDisplayValue("web-server v2 active"));
+    await screen.findByRole("option", { name: /trstctl built-in issuing CA/ });
+    await user.selectOptions(screen.getByLabelText("Certificate authority"), "platform:trstctl-issuing-ca");
     await user.click(screen.getByRole("button", { name: "Next: name it" }));
     await user.selectOptions(screen.getByLabelText("Owner"), selectedOwner.id);
     await user.type(screen.getByLabelText("Credential name"), "payments-api");
@@ -350,6 +373,7 @@ describe("self-service credential requests", () => {
     expect(screen.getByLabelText("Profile")).toHaveValue("");
     expect(screen.getByRole("button", { name: "Next: name it" })).toBeDisabled();
     await user.selectOptions(screen.getByLabelText("Profile"), "web-server:2");
+    await waitFor(() => expect(screen.getByLabelText("Certificate authority")).toHaveValue("platform:trstctl-issuing-ca"));
     await user.click(screen.getByRole("button", { name: "Next: name it" }));
     expect(screen.getByLabelText("Credential name")).toHaveValue("known.example.test");
     expect(screen.getByLabelText("Owner")).toHaveValue(selectedOwner.id);
@@ -368,6 +392,7 @@ describe("self-service credential requests", () => {
         subject: recoveryRequest.subject,
         owner_id: selectedOwner.id,
         profile: "web-server:2",
+        issuer: { source: "platform", id: "trstctl-issuing-ca" },
         justification: recoveryRequest.justification,
         origin: "console",
         csr_pem: csr,
@@ -415,6 +440,7 @@ describe("self-service credential requests", () => {
     await user.type(screen.getByLabelText("Certificate signing request (PKCS#10)"), "-----BEGIN CERTIFICATE REQUEST-----\nPUBLIC CSR");
     await user.click(screen.getByRole("button", { name: "Leave recovery" }));
     await screen.findByRole("option", { name: "web-server v2 active" });
+    await user.selectOptions(screen.getByLabelText("Certificate authority"), "platform:trstctl-issuing-ca");
     await user.click(screen.getByRole("button", { name: "Next: name it" }));
     expect(screen.getByLabelText("Credential name")).toHaveValue("");
     expect(screen.getByLabelText("Owner")).toHaveValue("");

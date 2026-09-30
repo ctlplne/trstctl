@@ -3124,6 +3124,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/issuance-requests/issuers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List issuer choices visible to a certificate requester without disclosing issuer configuration */
+        get: operations["listIssuanceRequestIssuers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/issuance-requests/preview": {
         parameters: {
             query?: never;
@@ -10709,6 +10726,7 @@ export interface components {
             identity_id?: string;
             issued_at?: string;
             issued_by?: string;
+            issuer?: components["schemas"]["IssuanceRequestIssuer"];
             justification?: string;
             origin?: string;
             /** Format: uuid */
@@ -10724,6 +10742,7 @@ export interface components {
         };
         IssuanceRequestInput: {
             csr_pem?: string;
+            issuer?: components["schemas"]["EndpointIssuer"];
             justification?: string;
             origin?: string;
             /** Format: uuid */
@@ -10731,6 +10750,15 @@ export interface components {
             profile?: string;
             subject: string;
             ticket_ref?: string;
+        };
+        IssuanceRequestIssuer: {
+            id: string;
+            name: string;
+            /** @enum {string} */
+            source: "platform" | "private" | "external";
+        };
+        IssuanceRequestIssuerList: {
+            items: components["schemas"]["EndpointIssuer"][];
         };
         IssuanceRequestList: {
             guidance: string;
@@ -10750,6 +10778,7 @@ export interface components {
             csr_supplied: boolean;
             guidance: string;
             issuance_permissions: string[];
+            issuer?: components["schemas"]["EndpointIssuer"];
             /** @enum {string} */
             key_origin: "requester_csr" | "deprecated_control_plane_generation";
             /** Format: uuid */
@@ -23975,6 +24004,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TicketIntakeSchedule"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listIssuanceRequestIssuers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssuanceRequestIssuerList"];
                 };
             };
             /** @description client error */

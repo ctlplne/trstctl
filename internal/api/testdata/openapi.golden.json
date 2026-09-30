@@ -16076,6 +16076,9 @@
           "issued_by": {
             "type": "string"
           },
+          "issuer": {
+            "$ref": "#/components/schemas/IssuanceRequestIssuer"
+          },
           "justification": {
             "type": "string"
           },
@@ -16130,6 +16133,9 @@
           "csr_pem": {
             "type": "string"
           },
+          "issuer": {
+            "$ref": "#/components/schemas/EndpointIssuer"
+          },
           "justification": {
             "type": "string"
           },
@@ -16153,6 +16159,44 @@
         "required": [
           "subject",
           "owner_id"
+        ],
+        "type": "object"
+      },
+      "IssuanceRequestIssuer": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "platform",
+              "private",
+              "external"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "IssuanceRequestIssuerList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EndpointIssuer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
         ],
         "type": "object"
       },
@@ -16225,6 +16269,9 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "issuer": {
+            "$ref": "#/components/schemas/EndpointIssuer"
           },
           "key_origin": {
             "enum": [
@@ -45995,6 +46042,53 @@
         ],
         "summary": "Configure bounded ServiceNow or Jira ticket intake with durable relay paging",
         "x-trstctl-permission": "certs:write"
+      }
+    },
+    "/api/v1/issuance-requests/issuers": {
+      "get": {
+        "operationId": "listIssuanceRequestIssuers",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssuanceRequestIssuerList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List issuer choices visible to a certificate requester without disclosing issuer configuration",
+        "x-trstctl-permission": "certs:request"
       }
     },
     "/api/v1/issuance-requests/preview": {

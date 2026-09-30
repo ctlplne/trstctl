@@ -840,6 +840,33 @@ func scopeIssuerPath(name string) routeScope {
 	}
 }
 
+func scopeIssuanceRequestIssuer(r *http.Request) (authz.Scope, error) {
+	// A requester scoped to one CA must not open a request for a different CA.
+	// Keep the body intact for the handler after route admission reads it.
+	if r.Body == nil {
+		return authz.Scope{Issuer: endpointPlatformCAID}, nil
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, defaultRESTJSONBodyLimit+1))
+	_ = r.Body.Close()
+	r.Body = io.NopCloser(bytes.NewReader(body))
+	if err != nil || len(body) > defaultRESTJSONBodyLimit {
+		return authz.Scope{}, errStatus(http.StatusBadRequest, "invalid or oversized request body")
+	}
+	var payload struct {
+		Issuer endpointIssuerRequest `json:"issuer"`
+	}
+	if len(body) > 0 {
+		if err := json.Unmarshal(body, &payload); err != nil {
+			return authz.Scope{}, errStatus(http.StatusBadRequest, "invalid JSON body")
+		}
+	}
+	id := strings.TrimSpace(payload.Issuer.ID)
+	if id == "" && payload.Issuer.Source == "" {
+		id = endpointPlatformCAID
+	}
+	return authz.Scope{Issuer: id}, nil
+}
+
 func scopeProfilePath(name string) routeScope {
 	return func(r *http.Request) (authz.Scope, error) {
 		return authz.Scope{Profile: strings.TrimSpace(r.PathValue(name))}, nil

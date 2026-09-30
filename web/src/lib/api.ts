@@ -37,6 +37,7 @@ import type {
   IssuanceRequestList,
   IssuanceRequestPreparation,
   IssuanceRequestPreview,
+  IssuanceRequestIssuerList,
   MDMDeviceList,
   MDMDeviceTrace,
   MDMPollScheduleList,
@@ -1499,6 +1500,7 @@ export interface Api {
   cmdbSchedule(): Promise<CMDBReconcileSchedule>;
   /** I3: the request queue, including the denied and expired rows an audit needs. */
   issuanceRequests(): Promise<IssuanceRequestList>;
+  issuanceRequestIssuers(): Promise<IssuanceRequestIssuerList>;
   /** I3/AUD-78: open a request without pretending it is already an identity. */
   createIssuanceRequest(input: IssuanceRequestInput): Promise<IssuanceRequest>;
   /** F4: validate and normalize the exact request without writing state or contacting a CA. */
@@ -1997,6 +1999,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     }),
   cmdbSchedule: () => req<CMDBReconcileSchedule>("/api/v1/owners/cmdb-schedule"),
   issuanceRequests: () => req<IssuanceRequestList>("/api/v1/issuance-requests"),
+  issuanceRequestIssuers: () => req<IssuanceRequestIssuerList>("/api/v1/issuance-requests/issuers"),
   previewIssuanceRequest: (input) => postRead<IssuanceRequestPreview>("/api/v1/issuance-requests/preview", input),
   createIssuanceRequest: (input) => mutate<IssuanceRequest>("POST", "/api/v1/issuance-requests", input),
   approveIssuanceRequest: (id) => mutate<IssuanceRequest>("POST", `/api/v1/issuance-requests/${encodeURIComponent(id)}/approve`),

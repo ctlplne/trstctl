@@ -5390,6 +5390,7 @@ IssuanceRequest = TypedDict(
         'identity_id': str,
         'issued_at': str,
         'issued_by': str,
+        'issuer': dict[str, Any],
         'justification': str,
         'origin': str,
         'owner_id': str,
@@ -5407,12 +5408,31 @@ IssuanceRequestInput = TypedDict(
     'IssuanceRequestInput',
     {
         'csr_pem': str,
+        'issuer': dict[str, Any],
         'justification': str,
         'origin': str,
         'owner_id': str,
         'profile': str,
         'subject': str,
         'ticket_ref': str,
+    },
+    total=False,
+)
+
+IssuanceRequestIssuer = TypedDict(
+    'IssuanceRequestIssuer',
+    {
+        'id': str,
+        'name': str,
+        'source': str,
+    },
+    total=False,
+)
+
+IssuanceRequestIssuerList = TypedDict(
+    'IssuanceRequestIssuerList',
+    {
+        'items': list[dict[str, Any]],
     },
     total=False,
 )
@@ -5447,6 +5467,7 @@ IssuanceRequestPreview = TypedDict(
         'csr_supplied': bool,
         'guidance': str,
         'issuance_permissions': list[str],
+        'issuer': dict[str, Any],
         'key_origin': str,
         'owner_id': str,
         'owner_kind': str,

@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
 import { api, ApiError, type IssuanceRequest, type IssuanceRequestInput, type IssuanceRequestPreview, type Owner, type Profile } from "@/lib/api";
+import type { EndpointIssuer } from "@/lib/api-types.gen";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 
@@ -37,7 +38,15 @@ function profileKey(profile: Profile): string {
   return `${profile.name}:${profile.version}`;
 }
 
-function requestInput(values: RequestFormValues, profile: Profile): IssuanceRequestInput {
+function issuerKey(issuer: Pick<EndpointIssuer, "source" | "id">): string {
+  return `${issuer.source}:${issuer.id}`;
+}
+
+function issuerAvailable(issuer: EndpointIssuer): boolean {
+  return issuer.source === "private" ? issuer.availability === "active" : issuer.availability === "available";
+}
+
+function requestInput(values: RequestFormValues, profile: Profile, issuer: EndpointIssuer): IssuanceRequestInput {
   // Build one canonical payload for both preview and submit. useWatch exposes
   // the exact textarea value while zod returns trimmed values to handleSubmit;
   // without normalizing here, an ordinary pasted CSR with a trailing newline
@@ -47,6 +56,7 @@ function requestInput(values: RequestFormValues, profile: Profile): IssuanceRequ
   return {
     subject: values.name.trim(),
     profile: `${profile.name}:${profile.version}`,
+    issuer: { source: issuer.source, id: issuer.id },
     owner_id: values.ownerId.trim(),
     justification: values.purpose.trim(),
     origin: "console",
@@ -60,6 +70,7 @@ function requestInput(values: RequestFormValues, profile: Profile): IssuanceRequ
  * trimmed values. API failures stay separate in submitError. */
 const requestFormSchema = z.object({
   profileKey: z.string().min(1, "Choose an issuance profile."),
+  issuerKey: z.string().min(1, translateNow("request.wizard.issuerRequired")),
   name: z.string().trim().min(1, "Credential name is required."),
   ownerId: z.string().uuid("Choose an owner."),
   purpose: z.string().trim(),
@@ -120,6 +131,8 @@ function RequestCredentialForm({ replacementID }: { replacementID: string }) {
   const [step, setStep] = useState(0);
   const [profiles, setProfiles] = useState<Profile[] | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [issuers, setIssuers] = useState<EndpointIssuer[] | null>(null);
+  const [issuerError, setIssuerError] = useState<string | null>(null);
   const [owners, setOwners] = useState<Owner[] | null>(null);
   const [ownerError, setOwnerError] = useState<string | null>(null);
   const [ownerQuery, setOwnerQuery] = useState("");
@@ -143,11 +156,12 @@ function RequestCredentialForm({ replacementID }: { replacementID: string }) {
   } = useForm<RequestFormValues>({
     resolver: zodResolver(formSchema),
     mode: "onTouched",
-    defaultValues: { profileKey: "", name: "", ownerId: "", purpose: "", subjectCSRPEM: "" },
+    defaultValues: { profileKey: "", issuerKey: "", name: "", ownerId: "", purpose: "", subjectCSRPEM: "" },
   });
   // useWatch (not useForm's watch) is the subscription-safe read the React
   // Compiler lint accepts — each field re-renders on its own changes only.
   const selectedProfileKey = useWatch({ control, name: "profileKey" });
+  const selectedIssuerKey = useWatch({ control, name: "issuerKey" });
   const name = useWatch({ control, name: "name" });
   const ownerId = useWatch({ control, name: "ownerId" });
   const purpose = useWatch({ control, name: "purpose" });
@@ -178,6 +192,7 @@ function RequestCredentialForm({ replacementID }: { replacementID: string }) {
     replacementApplied.current = true;
     reset({
       profileKey: "",
+      issuerKey: replacementSource.issuer ? issuerKey(replacementSource.issuer) : "",
       name: replacementSource.subject,
       ownerId: owners.some((owner) => owner.id === replacementSource.owner_id) ? (replacementSource.owner_id ?? "") : "",
       purpose: replacementSource.justification ?? "",
@@ -192,6 +207,16 @@ function RequestCredentialForm({ replacementID }: { replacementID: string }) {
     } catch (err) {
       setProfiles([]);
       setProfileError(problemMessage(err, "Could not load profiles"));
+    }
+  }, []);
+
+  const loadIssuers = useCallback(async () => {
+    try {
+      setIssuers((await api.issuanceRequestIssuers()).items);
+      setIssuerError(null);
+    } catch (err) {
+      setIssuers([]);
+      setIssuerError(problemMessage(err, "Could not load certificate authorities"));
     }
   }, []);
 
@@ -218,9 +243,10 @@ function RequestCredentialForm({ replacementID }: { replacementID: string }) {
 
   useEffect(() => {
     void loadProfiles();
+    void loadIssuers();
     void loadOwners();
     void loadRequests();
-  }, [loadOwners, loadProfiles, loadRequests]);
+  }, [loadIssuers, loadOwners, loadProfiles, loadRequests]);
 
   const activeProfiles = useMemo(() => (profiles ?? []).filter((profile) => profile.active !== false).sort((a, b) => a.name.localeCompare(b.name)), [profiles]);
 
@@ -229,6 +255,7 @@ function RequestCredentialForm({ replacementID }: { replacementID: string }) {
   }, [activeProfiles, replacementID, selectedProfileKey, setValue]);
 
   const selectedProfile = activeProfiles.find((profile) => profileKey(profile) === selectedProfileKey) ?? null;
+  const selectedIssuer = (issuers ?? []).find((issuer) => issuerKey(issuer) === selectedIssuerKey && issuerAvailable(issuer)) ?? null;
   const selectedOwner = (owners ?? []).find((owner) => owner.id === ownerId) ?? null;
   const matchingOwners = useMemo(() => {
     const query = ownerQuery.trim().toLocaleLowerCase();
@@ -241,18 +268,20 @@ function RequestCredentialForm({ replacementID }: { replacementID: string }) {
   );
 
   const exactPreviewInput = useMemo<IssuanceRequestInput | null>(() => {
-    if (replacementBlocked || (replacementID && !subjectCSRPEM.trim()) || !selectedProfile || !selectedOwner || !name.trim()) return null;
+    if (replacementBlocked || (replacementID && !subjectCSRPEM.trim()) || !selectedProfile || !selectedIssuer || !selectedOwner || !name.trim()) return null;
     return requestInput(
       {
         profileKey: profileKey(selectedProfile),
+        issuerKey: issuerKey(selectedIssuer),
         name,
         ownerId: selectedOwner.id,
         purpose,
         subjectCSRPEM,
       },
       selectedProfile,
+      selectedIssuer,
     );
-  }, [name, purpose, replacementBlocked, replacementID, selectedOwner, selectedProfile, subjectCSRPEM]);
+  }, [name, purpose, replacementBlocked, replacementID, selectedOwner, selectedIssuer, selectedProfile, subjectCSRPEM]);
   const exactPreviewKey = exactPreviewInput ? JSON.stringify(exactPreviewInput) : "";
 
   useEffect(() => {
@@ -301,6 +330,14 @@ function RequestCredentialForm({ replacementID }: { replacementID: string }) {
         cell: (request) => request.profile || "—",
       },
       {
+        id: "issuer",
+        header: t("request.wizard.issuerLabel"),
+        cell: (request) =>
+          request.issuer
+            ? t("request.wizard.issuerSummary", { name: request.issuer.name, source: request.issuer.source, id: request.issuer.id })
+            : t("request.wizard.issuerLegacy"),
+      },
+      {
         id: "stage",
         header: "Request stage",
         cell: (request) => requestStage(request),
@@ -316,7 +353,7 @@ function RequestCredentialForm({ replacementID }: { replacementID: string }) {
         cell: (request) => formatDate(request.created_at),
       },
     ],
-    [],
+    [t],
   );
 
   const submit = handleSubmit(async (values) => {
@@ -326,12 +363,12 @@ function RequestCredentialForm({ replacementID }: { replacementID: string }) {
       setSubmitError(t("request.recovery.prepareNew"));
       return;
     }
-    if (!selectedProfile) {
-      setSubmitError("Choose an issuance profile.");
+    if (!selectedProfile || !selectedIssuer) {
+      setSubmitError(t(selectedProfile ? "request.wizard.issuerRequired" : "request.wizard.profileRequired"));
       return;
     }
 
-    const exactInput = requestInput(values, selectedProfile);
+    const exactInput = requestInput(values, selectedProfile, selectedIssuer);
     const exactKey = JSON.stringify(exactInput);
     if (!preview?.ready || previewFor !== exactKey) {
       setSubmitError(t("request.preview.stale"));
@@ -348,7 +385,7 @@ function RequestCredentialForm({ replacementID }: { replacementID: string }) {
         return [created, ...rows.filter((request) => request.id !== created.id)];
       });
       setNotice(`Request accepted for ${created.subject}. It is awaiting approval; no certificate has been minted yet.`);
-      reset({ profileKey: values.profileKey, ownerId: values.ownerId, name: "", purpose: "", subjectCSRPEM: "" });
+      reset({ profileKey: values.profileKey, issuerKey: "", ownerId: values.ownerId, name: "", purpose: "", subjectCSRPEM: "" });
       setStep(0);
     } catch (err) {
       setSubmitError(problemMessage(err, "Could not submit request"));
@@ -364,7 +401,7 @@ function RequestCredentialForm({ replacementID }: { replacementID: string }) {
   ];
   const nextDisabled =
     replacementBlocked ||
-    (step === 0 ? !selectedProfile : step === 1 ? !name.trim() || !selectedOwner || Boolean(replacementID && !subjectCSRPEM.trim()) : true);
+    (step === 0 ? !selectedProfile || !selectedIssuer : step === 1 ? !name.trim() || !selectedOwner || Boolean(replacementID && !subjectCSRPEM.trim()) : true);
   const nextLabel = step === 0 ? t("request.wizard.nextDetails") : t("request.wizard.nextReview");
 
   const requestGridState: DataGridState = requestError ? "error" : requests == null ? "loading" : myRequests.length ? "ready" : "empty";
@@ -450,6 +487,30 @@ function RequestCredentialForm({ replacementID }: { replacementID: string }) {
                       </div>
                     </dl>
                   )}
+                  {issuerError && <ErrorState title={t("request.wizard.issuerUnavailable")}>{issuerError}</ErrorState>}
+                  {issuers == null && !issuerError && <LoadingState>{t("request.wizard.issuerLoading")}</LoadingState>}
+                  <Field
+                    className="max-w-xl"
+                    label={t("request.wizard.issuerLabel")}
+                    description={t("request.wizard.issuerHint")}
+                    error={errors.issuerKey?.message}
+                    required
+                  >
+                    {(control) => (
+                      <Select {...control} {...register("issuerKey")} disabled={issuers == null || Boolean(issuerError)} required>
+                        <option value="">{t("request.wizard.issuerPlaceholder")}</option>
+                        {(issuers ?? []).map((issuer) => (
+                          <option key={issuerKey(issuer)} value={issuerKey(issuer)} disabled={!issuerAvailable(issuer)}>
+                            {t("request.wizard.issuerOption", {
+                              name: issuer.name || issuer.id,
+                              source: issuer.source,
+                              availability: issuer.availability || "unknown",
+                            })}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                  </Field>
                 </div>
               )}
 
@@ -546,6 +607,13 @@ function RequestCredentialForm({ replacementID }: { replacementID: string }) {
                       </dd>
                     </div>
                     <div className="flex items-center justify-between gap-3">
+                      <dt className="text-caption text-muted-foreground">{t("request.wizard.issuerLabel")}</dt>
+                      <dd className="text-end">
+                        {selectedIssuer?.name || "—"}
+                        {selectedIssuer && <code className="block font-mono text-xs text-muted-foreground">{issuerKey(selectedIssuer)}</code>}
+                      </dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
                       <dt className="text-caption text-muted-foreground">{translateNow("source.credential.name.911c43d9f0")}</dt>
                       <dd className="font-medium">{name.trim() || "—"}</dd>
                     </div>
@@ -585,6 +653,12 @@ function RequestCredentialForm({ replacementID }: { replacementID: string }) {
                       <h3 className="font-semibold text-status-success">{t("request.preview.readyTitle")}</h3>
                       <p>{preview.guidance}</p>
                       <dl className="grid gap-2 border-t border-border pt-3">
+                        <div>
+                          <dt className="text-caption text-muted-foreground">{t("request.wizard.issuerLabel")}</dt>
+                          <dd>
+                            {preview.issuer?.name || "—"} {preview.issuer && <code className="font-mono text-xs">({issuerKey(preview.issuer)})</code>}
+                          </dd>
+                        </div>
                         <div>
                           <dt className="text-caption text-muted-foreground">{t("request.preview.keyCustody")}</dt>
                           <dd>{t(preview.key_origin === "requester_csr" ? "request.preview.requesterCSR" : "request.preview.legacyKey")}</dd>

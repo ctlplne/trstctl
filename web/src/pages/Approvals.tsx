@@ -685,6 +685,14 @@ function IssuanceRequestSummary({ request }: { request: IssuanceRequest }) {
         <ReviewFact label={t("approvals.design.why")} value={request.justification || t("approvals.design.noReason")} />
         <ReviewFact label={t("approvals.design.consequence")} value={t("approvals.design.consequence.issue")} />
         <ReviewFact label={t("approvals.design.requester")} value={request.requester} />
+        <ReviewFact
+          label={t("request.wizard.issuerLabel")}
+          value={
+            request.issuer
+              ? t("request.wizard.issuerSummary", { name: request.issuer.name, source: request.issuer.source, id: request.issuer.id })
+              : t("request.wizard.issuerLegacy")
+          }
+        />
       </dl>
       <p className="text-caption text-muted-foreground">{t("approvals.design.expiresOn", { date: formatDate(request.expires_at) })}</p>
     </section>

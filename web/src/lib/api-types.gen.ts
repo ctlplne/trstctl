@@ -3898,6 +3898,7 @@ export interface IssuanceRequest {
   identity_id?: string;
   issued_at?: string;
   issued_by?: string;
+  issuer?: IssuanceRequestIssuer;
   justification?: string;
   origin?: string;
   owner_id?: string;
@@ -3911,12 +3912,23 @@ export interface IssuanceRequest {
 
 export interface IssuanceRequestInput {
   csr_pem?: string;
+  issuer?: EndpointIssuer;
   justification?: string;
   origin?: string;
   owner_id: string;
   profile?: string;
   subject: string;
   ticket_ref?: string;
+}
+
+export interface IssuanceRequestIssuer {
+  id: string;
+  name: string;
+  source: "platform" | "private" | "external";
+}
+
+export interface IssuanceRequestIssuerList {
+  items: EndpointIssuer[];
 }
 
 export interface IssuanceRequestList {
@@ -3939,6 +3951,7 @@ export interface IssuanceRequestPreview {
   csr_supplied: boolean;
   guidance: string;
   issuance_permissions: string[];
+  issuer?: EndpointIssuer;
   key_origin: "requester_csr" | "deprecated_control_plane_generation";
   owner_id: string;
   owner_kind?: string;

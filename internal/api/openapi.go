@@ -4792,9 +4792,14 @@ func componentSchemas() map[string]*Schema {
 		}, "steps", "summary"),
 		"guidance": str(),
 	}, "trace", "guidance")
+	issuanceRequestIssuer := object(map[string]*Schema{
+		"source": {Type: "string", Enum: []string{endpointIssuerPlatform, endpointIssuerPrivate, endpointIssuerExternal}},
+		"id":     str(), "name": str(),
+	}, "source", "id", "name")
 	issuanceRequestSchema := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "subject": str(), "owner_id": uuid(), "profile": str(),
 		"requester": str(), "justification": str(), "origin": str(), "ticket_ref": str(),
+		"issuer": ref("IssuanceRequestIssuer"),
 		// status is an enum drawn from issuancerequest.States, the same list the
 		// server validates against — a hand-copied second enum drifts, and the
 		// one that drifts accepts a state the other rejects.
@@ -4805,11 +4810,12 @@ func componentSchemas() map[string]*Schema {
 	}, "id", "tenant_id", "subject", "requester", "status", "expires_at", "created_at")
 	issuanceRequestInput := object(map[string]*Schema{
 		"subject": str(), "owner_id": uuid(), "profile": str(), "csr_pem": str(), "justification": str(),
-		"origin": str(), "ticket_ref": str(),
+		"origin": str(), "ticket_ref": str(), "issuer": ref("EndpointIssuer"),
 	}, "subject", "owner_id")
 	issuanceRequestPreview := object(map[string]*Schema{
 		"ready": {Type: "boolean"}, "subject": str(), "owner_id": uuid(),
 		"owner_name": str(), "owner_kind": str(), "profile": str(), "profile_name": str(),
+		"issuer":          ref("EndpointIssuer"),
 		"profile_version": {Type: "integer"}, "requester": str(), "csr_supplied": {Type: "boolean"},
 		"key_origin":        {Type: "string", Enum: []string{"requester_csr", "deprecated_control_plane_generation"}},
 		"approval_required": {Type: "boolean"}, "approval_permission": str(),
@@ -4831,6 +4837,9 @@ func componentSchemas() map[string]*Schema {
 		// queue needs attention or is merely long with history.
 		"open": {Type: "integer"}, "guidance": str(),
 	}, "items", "open", "guidance")
+	issuanceRequestIssuerList := object(map[string]*Schema{
+		"items": {Type: "array", Items: ref("EndpointIssuer")},
+	}, "items")
 	issuanceRequestPreparation := object(map[string]*Schema{
 		"request": ref("IssuanceRequest"), "identity": ref("Identity"),
 		"csr_pem": str(), "issue_idempotency_key": str(),
@@ -6563,7 +6572,9 @@ func componentSchemas() map[string]*Schema {
 		"MDMTraceStep":                             mdmTraceStepSchema,
 		"MDMDeviceTrace":                           mdmDeviceTraceSchema,
 		"IssuanceRequestInput":                     issuanceRequestInput,
+		"IssuanceRequestIssuer":                    issuanceRequestIssuer,
 		"IssuanceRequestPreview":                   issuanceRequestPreview,
+		"IssuanceRequestIssuerList":                issuanceRequestIssuerList,
 		"IssuanceDecisionInput":                    issuanceDecisionInput,
 		"IssuanceRequestList":                      issuanceRequestListSchema,
 		"IssuanceRequestPreparation":               issuanceRequestPreparation,

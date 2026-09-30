@@ -401,6 +401,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"issuance-requests", "open"}, Method: "POST", Path: "/api/v1/issuance-requests", Body: bodyFile, Summary: "Open an issuance request with a real lifecycle"},
 	{Name: []string{"issuance-requests", "preview"}, Method: "POST", Path: "/api/v1/issuance-requests/preview", Body: bodyFile, Summary: "Validate and normalize an exact request without writing state or contacting a certificate authority"},
 	{Name: []string{"issuance-requests", "list"}, Method: "GET", Path: "/api/v1/issuance-requests", Summary: "List issuance requests, including the denied and expired ones an audit needs"},
+	{Name: []string{"issuance-requests", "issuers"}, Method: "GET", Path: "/api/v1/issuance-requests/issuers", Summary: "List the certificate authorities this requester can select for a new issuance request"},
 	{Name: []string{"issuance-requests", "approve"}, Method: "POST", Path: "/api/v1/issuance-requests/{id}/approve", Summary: "Approve a request; the requester can never approve their own"},
 	{Name: []string{"issuance-requests", "deny"}, Method: "POST", Path: "/api/v1/issuance-requests/{id}/deny", Body: bodyFile, Summary: "Deny a request with a reason the requester can act on"},
 	{Name: []string{"issuance-requests", "intake-schedule", "set"}, Method: "PUT", Path: "/api/v1/issuance-requests/intake-schedule", Body: bodyFile, Summary: "Configure bounded ServiceNow or Jira ticket intake with durable relay paging"},

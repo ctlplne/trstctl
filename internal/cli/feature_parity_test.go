@@ -283,8 +283,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// F4's issuance-result read completes asynchronous certificate retrieval.
 	// F4's bounded issuance retry and F6's historical deployment evidence
 	// complete the headless recovery and post-retirement inspection paths.
-	if len(out) != 454 {
-		t.Fatalf("CLI commands = %d, want 454", len(out))
+	// The requester-visible issuer roster adds one read-only command to F33.
+	if len(out) != 455 {
+		t.Fatalf("CLI commands = %d, want 455", len(out))
 	}
 	return out
 }

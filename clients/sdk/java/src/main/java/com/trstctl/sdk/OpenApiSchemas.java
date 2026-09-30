@@ -387,6 +387,8 @@ public final class OpenApiSchemas {
       "IssuanceRegion",
       "IssuanceRequest",
       "IssuanceRequestInput",
+      "IssuanceRequestIssuer",
+      "IssuanceRequestIssuerList",
       "IssuanceRequestList",
       "IssuanceRequestPreparation",
       "IssuanceRequestPreview",

@@ -13970,6 +13970,7 @@
             ],
             "source_backend": [
                 "/api/v1/issuance-requests/preview",
+                "/api/v1/issuance-requests/issuers",
                 "/api/v1/issuance-requests",
                 "/api/v1/issuance-requests/{id}/approve",
                 "/api/v1/issuance-requests/{id}/deny",
@@ -13995,6 +13996,7 @@
             "notes": "Qualified as a complete F33 vertical slice on implementation candidate 6f5cb9e4abffa7350f3cdbb8e0c7fa12df0305c8. The requester gets an effect-free exact preview and cannot approve or mint their own request. A distinct approver reviews the bound owner, profile, purpose, decision window, immutable request ID, and audit link in one dialog; approval itself mints nothing and reveals the separate deterministic prepare/issue/complete path. A failed issue remains approved and retries under the same identity and idempotency key. The attested ephemeral path separately proves m-of-n approval, transactional notification intent, bounded TTL, and one-time short-lived issuance.",
             "api_surface": [
                 "previewIssuanceRequest",
+                "listIssuanceRequestIssuers",
                 "openIssuanceRequest",
                 "listIssuanceRequests",
                 "approveIssuanceRequest",
@@ -14019,6 +14021,7 @@
             "api_na": "",
             "cli_surface": [
                 "issuance-requests preview",
+                "issuance-requests issuers",
                 "issuance-requests open",
                 "issuance-requests list",
                 "issuance-requests approve",

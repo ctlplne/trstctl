@@ -698,13 +698,21 @@ offers requeue only for failed delivery. Toasts report real success and failure.
   `issuance.request.opened` lifecycle object, so the requester and approver read the
   same event-projected request instead of two independently inferred views. The exact
   preview is effect-free and submission cannot proceed when it is unavailable or stale.
+  The first step also requires an explicit CA choice. It lists only requestable
+  authority names and availability, even for a requester without issuer inventory
+  permission. The preview, request record, approval view, and prepared identity
+  retain that exact CA source and ID. An unavailable or unknown CA blocks opening
+  the request; retries do not switch to the built-in CA. Older API clients that
+  omit `issuer` receive an explicit platform-CA warning in preview and a pinned
+  platform choice in the new request. Historical requests without a recorded CA
+  remain labeled unknown rather than being rewritten as deliberate selections.
 - **Requests waiting for approval** opens with the complete pending count and the
   next independently reviewable change. It states the reason, consequence,
   requester, and decision expiry before offering one **Review request** action. The
   bounded review shows the server-owned policy result, immutable request ID, bound
   target version and intent digest, evidence references, approval threshold, and
   audit history. A first-class certificate request uses the same direct action and
-  shows its owner, profile, purpose, requester, and seven-day decision expiry instead
+  shows its owner, profile, selected CA, purpose, requester, and seven-day decision expiry instead
   of dropping the operator into a long history section. Approve and reject record decisions only; neither performs the
   requested issue, rotate, revoke, create, sign, recovery, or delete operation.
   Rejection requires a reason, and self-approval stays disabled with an explicit

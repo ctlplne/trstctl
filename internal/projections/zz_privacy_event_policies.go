@@ -328,6 +328,8 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/id", opaque), privacyRule("/subject", token),
 		privacyRule("/owner_id", opaque),
 		privacyRule("/profile", opaque), privacyRule("/csr_pem", opaque),
+		privacyRule("/issuer_source", opaque), privacyRule("/issuer_id", opaque),
+		privacyRule("/issuer_name", token),
 		privacyRule("/requester", exact), privacyRule("/justification", clear),
 		privacyRule("/origin", opaque), privacyRule("/ticket_ref", opaque),
 		privacyRule("/expires_at", opaque),

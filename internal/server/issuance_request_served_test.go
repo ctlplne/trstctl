@@ -7,10 +7,13 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/ca/digicert"
+	"trstctl.com/trstctl/internal/ca/digicert/digicertfake"
 	"trstctl.com/trstctl/internal/config"
 	trstcrypto "trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/issuancerequest"
@@ -236,6 +239,7 @@ func TestServedIssuanceRequestPreviewIsEffectFreeAndMatchesAdmission(t *testing.
 	input := map[string]any{
 		"subject": "payments-api", "owner_id": ownerID,
 		"profile": "service-mtls-30d", "justification": "staging mTLS", "origin": "console",
+		"issuer": map[string]any{"source": "platform", "id": "trstctl-issuing-ca"},
 	}
 	eventHeadBefore, err := h.log.LastSequence(t.Context())
 	if err != nil {
@@ -258,13 +262,17 @@ func TestServedIssuanceRequestPreviewIsEffectFreeAndMatchesAdmission(t *testing.
 		t.Fatalf("preview request: status %d body %s", status, body)
 	}
 	var preview struct {
-		Ready                  bool     `json:"ready"`
-		Subject                string   `json:"subject"`
-		OwnerID                string   `json:"owner_id"`
-		OwnerName              string   `json:"owner_name"`
-		Profile                string   `json:"profile"`
-		ProfileName            string   `json:"profile_name"`
-		ProfileVersion         int      `json:"profile_version"`
+		Ready          bool   `json:"ready"`
+		Subject        string `json:"subject"`
+		OwnerID        string `json:"owner_id"`
+		OwnerName      string `json:"owner_name"`
+		Profile        string `json:"profile"`
+		ProfileName    string `json:"profile_name"`
+		ProfileVersion int    `json:"profile_version"`
+		Issuer         struct {
+			Source string `json:"source"`
+			ID     string `json:"id"`
+		} `json:"issuer"`
 		Requester              string   `json:"requester"`
 		KeyOrigin              string   `json:"key_origin"`
 		ApprovalPermission     string   `json:"approval_permission"`
@@ -279,6 +287,7 @@ func TestServedIssuanceRequestPreviewIsEffectFreeAndMatchesAdmission(t *testing.
 	if !preview.Ready || preview.Subject != "payments-api" || preview.OwnerID != ownerID ||
 		preview.OwnerName != "Payments platform" || preview.Profile != "service-mtls-30d:1" ||
 		preview.ProfileName != "service-mtls-30d" || preview.ProfileVersion != 1 ||
+		preview.Issuer.Source != "platform" || preview.Issuer.ID != "trstctl-issuing-ca" ||
 		preview.Requester != "preview-requester@example.test" ||
 		preview.KeyOrigin != "deprecated_control_plane_generation" ||
 		preview.ApprovalPermission != string(authz.CertsIssue) || len(preview.Blockers) != 0 ||
@@ -315,17 +324,144 @@ func TestServedIssuanceRequestPreviewIsEffectFreeAndMatchesAdmission(t *testing.
 		t.Fatalf("create after green preview: status %d body %s", status, body)
 	}
 	var created struct {
-		Subject   string `json:"subject"`
-		OwnerID   string `json:"owner_id"`
-		Profile   string `json:"profile"`
+		Subject string `json:"subject"`
+		OwnerID string `json:"owner_id"`
+		Profile string `json:"profile"`
+		Issuer  struct {
+			Source string `json:"source"`
+			ID     string `json:"id"`
+		} `json:"issuer"`
 		Requester string `json:"requester"`
 	}
 	if err := json.Unmarshal(body, &created); err != nil {
 		t.Fatalf("decode created request: %v body=%s", err, body)
 	}
 	if created.Subject != preview.Subject || created.OwnerID != preview.OwnerID ||
-		created.Profile != preview.Profile || created.Requester != preview.Requester {
+		created.Profile != preview.Profile || created.Requester != preview.Requester ||
+		created.Issuer != preview.Issuer {
 		t.Fatalf("admitted request = %+v, preview = %+v", created, preview)
+	}
+}
+
+// A request's selected CA must survive every durable boundary. A green preview
+// alone proves nothing if approval or the signer worker later uses the default.
+func TestServedIssuanceRequestPinsExternalCAThroughCompletion(t *testing.T) {
+	dc, err := digicertfake.NewServer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(dc.Close)
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.ExternalCAs = []ExternalCA{{
+			ID: "request-external-ca", Type: "digicert", Name: "Request test DigiCert",
+			CA: digicert.New("request-external-ca", dc.URL(), []byte(dc.APIKey()),
+				digicert.WithHTTPClient(&http.Client{Timeout: 5 * time.Second})),
+		}}
+	})
+	admin := seedScopedTokenSubject(t, h.store, h.tenant, "request-ca-admin@example.test",
+		string(authz.OwnersWrite), string(authz.ProfilesWrite))
+	requester := seedScopedTokenSubject(t, h.store, h.tenant, "request-ca-user@example.test",
+		string(authz.CertsRequest), string(authz.CertsRead))
+	reviewer := seedScopedTokenSubject(t, h.store, h.tenant, "request-ca-reviewer@example.test", string(authz.CertsIssue))
+	issuer := seedScopedTokenSubject(t, h.store, h.tenant, "request-ca-issuer@example.test",
+		string(authz.IdentitiesWrite), string(authz.CertsIssue), string(authz.CertsRead))
+	ownerID := servedCreateID(t, h, admin, "request-ca-owner", "/api/v1/owners", map[string]any{
+		"kind": "workload", "name": "request-ca-owner",
+	})
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/profiles", admin,
+		"request-ca-profile", map[string]any{
+			"name": "request-ca-profile",
+			"spec": map[string]any{
+				"subject":         map[string]any{"common_name": "request-ca.payments.test"},
+				"max_ttl_seconds": 2_592_000,
+			},
+		})
+	if status != http.StatusCreated {
+		t.Fatalf("create request profile: %d %s", status, body)
+	}
+	hostKey, err := trstcrypto.GenerateHostSubjectKey("request-ca.payments.test", []string{"request-ca.payments.test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hostKey.Destroy()
+	csrPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: hostKey.CSRDER}))
+	input := map[string]any{
+		"subject": "request-ca.payments.test", "owner_id": ownerID,
+		"profile": "request-ca-profile:1", "csr_pem": csrPEM,
+		"issuer":        map[string]any{"source": "external", "id": "request-external-ca"},
+		"justification": "prove exact request CA selection", "origin": "console",
+	}
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/issuance-requests/issuers", requester, nil)
+	if status != http.StatusOK || !jsonContains(t, body, "request-external-ca") {
+		t.Fatalf("requester cannot see the configured CA choice: %d %s", status, body)
+	}
+	badInput := map[string]any{}
+	for key, value := range input {
+		badInput[key] = value
+	}
+	badInput["issuer"] = map[string]any{"source": "external", "id": "not-configured"}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/issuance-requests/preview", requester, badInput)
+	if status != http.StatusOK || !jsonContains(t, body, `"ready":false`) ||
+		!jsonContains(t, body, "no CA was substituted") {
+		t.Fatalf("unknown selected CA was not refused in preview: %d %s", status, body)
+	}
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/issuance-requests", requester,
+		"request-unknown-ca-open", badInput)
+	if status != http.StatusUnprocessableEntity || !jsonContains(t, body, "no CA was substituted") {
+		t.Fatalf("unknown selected CA was not refused at admission: %d %s", status, body)
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/issuance-requests/preview", requester, input)
+	if status != http.StatusOK || !jsonContains(t, body, `"ready":true`) || !jsonContains(t, body, `"id":"request-external-ca"`) {
+		t.Fatalf("selected external CA preview: %d %s", status, body)
+	}
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/issuance-requests", requester, "request-external-open", input)
+	if status != http.StatusCreated || !jsonContains(t, body, `"id":"request-external-ca"`) {
+		t.Fatalf("selected external CA admission: %d %s", status, body)
+	}
+	var opened servedRequest
+	if err := json.Unmarshal(body, &opened); err != nil || opened.ID == "" {
+		t.Fatalf("decode selected CA request: %v %s", err, body)
+	}
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/issuance-requests/"+opened.ID+"/approve",
+		reviewer, "request-external-approve", nil)
+	if status != http.StatusOK {
+		t.Fatalf("approve selected CA request: %d %s", status, body)
+	}
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/issuance-requests/"+opened.ID+"/prepare",
+		issuer, "request-external-prepare", nil)
+	if status != http.StatusOK {
+		t.Fatalf("prepare selected CA request: %d %s", status, body)
+	}
+	var prepared struct {
+		Identity struct {
+			ID         string          `json:"id"`
+			Attributes json.RawMessage `json:"attributes"`
+		} `json:"identity"`
+	}
+	if err := json.Unmarshal(body, &prepared); err != nil || prepared.Identity.ID == "" ||
+		!jsonContains(t, prepared.Identity.Attributes, `"issuing_authority_source":"external"`) ||
+		!jsonContains(t, prepared.Identity.Attributes, `"issuing_authority_id":"request-external-ca"`) {
+		t.Fatalf("prepared identity lost selected CA: %v %s", err, body)
+	}
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/identities/"+prepared.Identity.ID+"/transitions",
+		issuer, "issuance-request-issue:"+opened.ID, map[string]any{
+			"to": "issued", "reason": "fulfill exact external CA request", "subject_csr_pem": csrPEM,
+		})
+	if status != http.StatusOK {
+		t.Fatalf("issue selected CA request: %d %s", status, body)
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain selected CA issuance: %v", err)
+	}
+	certs, err := h.store.ListActiveIssuedCertificatesForIdentity(t.Context(), h.tenant, ownerID, "request-ca.payments.test")
+	if err != nil || len(certs) != 1 || !strings.Contains(strings.ToLower(certs[0].Issuer), "digicert") {
+		t.Fatalf("selected CA did not sign the leaf: certs=%+v err=%v", certs, err)
+	}
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/issuance-requests/"+opened.ID+"/complete",
+		issuer, "issuance-request-complete:"+opened.ID, nil)
+	if status != http.StatusOK || !jsonContains(t, body, `"status":"issued"`) ||
+		!jsonContains(t, body, `"id":"request-external-ca"`) {
+		t.Fatalf("selected CA completion: %d %s", status, body)
 	}
 }
 

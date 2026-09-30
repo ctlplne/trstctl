@@ -18,11 +18,12 @@ import (
 )
 
 type issuanceRequestBody struct {
-	Subject       string `json:"subject"`
-	OwnerID       string `json:"owner_id"`
-	Profile       string `json:"profile"`
-	CSRPEM        string `json:"csr_pem"`
-	Justification string `json:"justification"`
+	Subject       string                `json:"subject"`
+	OwnerID       string                `json:"owner_id"`
+	Profile       string                `json:"profile"`
+	CSRPEM        string                `json:"csr_pem"`
+	Issuer        endpointIssuerRequest `json:"issuer"`
+	Justification string                `json:"justification"`
 	// Origin and TicketRef let a ticket-driven intake say where it came from.
 	// An unrecorded origin stays empty rather than defaulting to "api": as with
 	// owner provenance, absence must not be dressed up as an answer.
@@ -35,25 +36,32 @@ type issuanceDecisionBody struct {
 	IdentityID string `json:"identity_id"`
 }
 
+type issuanceRequestIssuer struct {
+	Source string `json:"source"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+}
+
 type issuanceRequestResponse struct {
-	ID             string `json:"id"`
-	TenantID       string `json:"tenant_id"`
-	Subject        string `json:"subject"`
-	OwnerID        string `json:"owner_id,omitempty"`
-	Profile        string `json:"profile,omitempty"`
-	Requester      string `json:"requester"`
-	Justification  string `json:"justification,omitempty"`
-	Origin         string `json:"origin,omitempty"`
-	TicketRef      string `json:"ticket_ref,omitempty"`
-	Status         string `json:"status"`
-	DecidedBy      string `json:"decided_by,omitempty"`
-	DecisionReason string `json:"decision_reason,omitempty"`
-	DecidedAt      string `json:"decided_at,omitempty"`
-	IdentityID     string `json:"identity_id,omitempty"`
-	IssuedBy       string `json:"issued_by,omitempty"`
-	IssuedAt       string `json:"issued_at,omitempty"`
-	ExpiresAt      string `json:"expires_at"`
-	CreatedAt      string `json:"created_at"`
+	ID             string                 `json:"id"`
+	TenantID       string                 `json:"tenant_id"`
+	Subject        string                 `json:"subject"`
+	OwnerID        string                 `json:"owner_id,omitempty"`
+	Profile        string                 `json:"profile,omitempty"`
+	Issuer         *issuanceRequestIssuer `json:"issuer,omitempty"`
+	Requester      string                 `json:"requester"`
+	Justification  string                 `json:"justification,omitempty"`
+	Origin         string                 `json:"origin,omitempty"`
+	TicketRef      string                 `json:"ticket_ref,omitempty"`
+	Status         string                 `json:"status"`
+	DecidedBy      string                 `json:"decided_by,omitempty"`
+	DecisionReason string                 `json:"decision_reason,omitempty"`
+	DecidedAt      string                 `json:"decided_at,omitempty"`
+	IdentityID     string                 `json:"identity_id,omitempty"`
+	IssuedBy       string                 `json:"issued_by,omitempty"`
+	IssuedAt       string                 `json:"issued_at,omitempty"`
+	ExpiresAt      string                 `json:"expires_at"`
+	CreatedAt      string                 `json:"created_at"`
 }
 
 type issuanceRequestPreparationResponse struct {
@@ -68,27 +76,28 @@ type issuanceRequestPreparationResponse struct {
 // metadata. A CSR is public, but echoing it would add no decision value and would
 // expand browser/evidence exposure, so only its presence and custody mode appear.
 type issuanceRequestPreviewResponse struct {
-	Ready                  bool     `json:"ready"`
-	Subject                string   `json:"subject"`
-	OwnerID                string   `json:"owner_id"`
-	OwnerName              string   `json:"owner_name,omitempty"`
-	OwnerKind              string   `json:"owner_kind,omitempty"`
-	Profile                string   `json:"profile,omitempty"`
-	ProfileName            string   `json:"profile_name,omitempty"`
-	ProfileVersion         int      `json:"profile_version,omitempty"`
-	Requester              string   `json:"requester"`
-	CSRSupplied            bool     `json:"csr_supplied"`
-	KeyOrigin              string   `json:"key_origin"`
-	ApprovalRequired       bool     `json:"approval_required"`
-	ApprovalPermission     string   `json:"approval_permission"`
-	IssuancePermissions    []string `json:"issuance_permissions"`
-	PreviewWrites          []string `json:"preview_writes"`
-	PreviewExternalEffects []string `json:"preview_external_effects"`
-	SubmissionEffects      []string `json:"submission_effects"`
-	Steps                  []string `json:"steps"`
-	Warnings               []string `json:"warnings"`
-	Blockers               []string `json:"blockers"`
-	Guidance               string   `json:"guidance"`
+	Ready                  bool                   `json:"ready"`
+	Subject                string                 `json:"subject"`
+	OwnerID                string                 `json:"owner_id"`
+	OwnerName              string                 `json:"owner_name,omitempty"`
+	OwnerKind              string                 `json:"owner_kind,omitempty"`
+	Profile                string                 `json:"profile,omitempty"`
+	ProfileName            string                 `json:"profile_name,omitempty"`
+	ProfileVersion         int                    `json:"profile_version,omitempty"`
+	Issuer                 *endpointIssuerSummary `json:"issuer,omitempty"`
+	Requester              string                 `json:"requester"`
+	CSRSupplied            bool                   `json:"csr_supplied"`
+	KeyOrigin              string                 `json:"key_origin"`
+	ApprovalRequired       bool                   `json:"approval_required"`
+	ApprovalPermission     string                 `json:"approval_permission"`
+	IssuancePermissions    []string               `json:"issuance_permissions"`
+	PreviewWrites          []string               `json:"preview_writes"`
+	PreviewExternalEffects []string               `json:"preview_external_effects"`
+	SubmissionEffects      []string               `json:"submission_effects"`
+	Steps                  []string               `json:"steps"`
+	Warnings               []string               `json:"warnings"`
+	Blockers               []string               `json:"blockers"`
+	Guidance               string                 `json:"guidance"`
 }
 
 type issuanceRequestList struct {
@@ -97,6 +106,65 @@ type issuanceRequestList struct {
 	// operator whether the queue needs attention or is just long with history.
 	Open     int    `json:"open"`
 	Guidance string `json:"guidance"`
+}
+
+type issuanceRequestIssuerList struct {
+	Items []endpointIssuerSummary `json:"items"`
+}
+
+// listIssuanceRequestIssuers exposes only choices needed to request a
+// certificate. It does not disclose upstream configuration or signer handles.
+// A certs:request principal need not have issuers:read to choose an authority.
+func (a *API) listIssuanceRequestIssuers(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	principal, _ := r.Context().Value(principalCtxKey).(authz.Principal)
+	allowed := func(id string) bool {
+		target := authz.Scope{TenantID: tenantID, Issuer: id}
+		return principal.Can(authz.CertsRequest, target) &&
+			a.checkABAC(r.Context(), r, principal, authz.CertsRequest, target) == nil
+	}
+	out := issuanceRequestIssuerList{Items: []endpointIssuerSummary{}}
+	if allowed(endpointPlatformCAID) {
+		out.Items = append(out.Items, endpointIssuerSummary{
+			Source: endpointIssuerPlatform, ID: endpointPlatformCAID,
+			Name: "trstctl built-in issuing CA", Type: "x509", Availability: "available",
+		})
+	}
+	if a.externalCAs != nil {
+		items, err := a.externalCAs.ListExternalCAs(r.Context(), tenantID)
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
+		for _, item := range items {
+			if allowed(item.ID) {
+				out.Items = append(out.Items, endpointIssuerSummary{
+					Source: endpointIssuerExternal, ID: item.ID, Name: item.Name,
+					Type: item.Type, Availability: item.Status,
+				})
+			}
+		}
+	}
+	if a.caHierarchy != nil {
+		items, err := a.caHierarchy.ListAuthorities(r.Context(), tenantID)
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
+		for _, item := range items {
+			if allowed(item.ID) {
+				out.Items = append(out.Items, endpointIssuerSummary{
+					Source: endpointIssuerPrivate, ID: item.ID, Name: item.CommonName,
+					Type: item.Kind, Availability: item.Status,
+				})
+			}
+		}
+	}
+	a.writeJSON(w, http.StatusOK, out)
 }
 
 const issuanceRequestGuidance = "A request has a real lifecycle: requested, then approved, denied, " +
@@ -118,6 +186,9 @@ func toIssuanceRequestResponse(r store.IssuanceRequest) issuanceRequestResponse 
 		IssuedBy:  r.IssuedBy,
 		ExpiresAt: r.ExpiresAt.UTC().Format(time.RFC3339),
 		CreatedAt: r.CreatedAt.UTC().Format(time.RFC3339),
+	}
+	if r.IssuerSource != "" && r.IssuerID != "" {
+		out.Issuer = &issuanceRequestIssuer{Source: r.IssuerSource, ID: r.IssuerID, Name: r.IssuerName}
 	}
 	if r.DecidedAt != nil {
 		out.DecidedAt = r.DecidedAt.UTC().Format(time.RFC3339)
@@ -180,6 +251,21 @@ func (a *API) issuanceRequestPreview(ctx context.Context, tenantID string, body 
 		},
 		Warnings: []string{}, Blockers: []string{},
 		Guidance: "This preview performed no write and contacted no certificate authority. Submitting opens a request only; it does not approve or mint a certificate.",
+	}
+	issuerRequest := body.Issuer
+	if issuerRequest.Source == "" && issuerRequest.ID == "" {
+		// Existing API and ticket clients predate explicit selection. Pin their
+		// documented platform default in the immutable event and tell them what
+		// it means; the console requires an operator to choose explicitly.
+		issuerRequest = endpointIssuerRequest{Source: endpointIssuerPlatform, ID: endpointPlatformCAID}
+		preview.Warnings = append(preview.Warnings,
+			"No CA was selected. This compatibility request will pin the trstctl built-in issuing CA; set issuer.source and issuer.id to choose another CA.")
+	}
+	issuer, err := a.resolveEndpointIssuer(ctx, tenantID, issuerRequest)
+	if err != nil {
+		preview.Blockers = append(preview.Blockers, issuanceRequestBlocker(err))
+	} else {
+		preview.Issuer = &issuer
 	}
 	if csrPEM == "" {
 		preview.KeyOrigin = "deprecated_control_plane_generation"
@@ -263,6 +349,7 @@ func (a *API) createIssuanceRequest(w http.ResponseWriter, r *http.Request) {
 		}
 		out, err := a.orch.OpenIssuanceRequest(ctx, tenantID, projections.IssuanceRequestOpened{
 			Subject: preview.Subject, OwnerID: preview.OwnerID, Profile: preview.Profile,
+			IssuerSource: preview.Issuer.Source, IssuerID: preview.Issuer.ID, IssuerName: preview.Issuer.Name,
 			CSRPEM: strings.TrimSpace(body.CSRPEM), Requester: preview.Requester,
 			Justification: strings.TrimSpace(body.Justification),
 			Origin:        strings.TrimSpace(body.Origin), TicketRef: strings.TrimSpace(body.TicketRef),

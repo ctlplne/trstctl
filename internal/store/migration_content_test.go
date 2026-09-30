@@ -19,6 +19,49 @@ import (
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
+// Historical requests did not record a selected CA. The upgrade must preserve
+// their decision evidence without implying that anyone chose the platform CA.
+func TestMigration0232PreservesLegacyRequestsWithoutInventingIssuerChoice(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 232)
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect fresh content database: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+
+	for _, row := range []struct{ tenant, id, subject string }{
+		{tenantA, "23200000-0000-4000-8000-000000000001", "legacy-a.example.test"},
+		{tenantB, "23200000-0000-4000-8000-000000000002", "legacy-b.example.test"},
+	} {
+		if _, err := pool.Exec(ctx, `INSERT INTO tenants (tenant_id, name) VALUES ($1, $2) ON CONFLICT (tenant_id) DO NOTHING`, row.tenant, row.subject); err != nil {
+			t.Fatalf("seed tenant: %v", err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO issuance_requests (id, tenant_id, subject, requester, expires_at)
+			VALUES ($1, $2, $3, 'legacy-requester', '2026-10-01T00:00:00Z')`, row.id, row.tenant, row.subject); err != nil {
+			t.Fatalf("seed legacy request %s: %v", row.id, err)
+		}
+	}
+	const stable = `SELECT id::text, tenant_id::text, subject, requester, status, expires_at::text
+		FROM issuance_requests ORDER BY tenant_id, id`
+	beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, stable)
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	afterCount, afterChecksum := checksumQuery(t, ctx, pool, stable)
+	if afterCount != beforeCount || afterChecksum != beforeChecksum {
+		t.Fatalf("0232 changed legacy request evidence: %d/%s before, %d/%s after", beforeCount, beforeChecksum, afterCount, afterChecksum)
+	}
+	var total, unpinned int
+	if err := pool.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE issuer_source = '' AND issuer_id = '' AND issuer_name = '')
+		FROM issuance_requests`).Scan(&total, &unpinned); err != nil {
+		t.Fatalf("inspect legacy CA defaults: %v", err)
+	}
+	if total != 2 || unpinned != 2 {
+		t.Fatalf("0232 legacy requests total=%d unpinned=%d, want 2/2", total, unpinned)
+	}
+}
+
 func TestMigration0199PreservesDiscoveryDeclarationsAndAddsEventOrder(t *testing.T) {
 	ctx := context.Background()
 	prefix, target := splitMigrationsAtVersion(t, 199)
@@ -193,6 +236,7 @@ func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *t
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	232: true, // TestMigration0232PreservesLegacyRequestsWithoutInventingIssuerChoice
 	227: true, // TestMigration0227PreservesUnknownIssuanceReceipts
 	228: true, // TestMigration0228PreservesMissingIssuerEventProvenance
 	230: true, // TestMigration0230PreservesLegacyObservationsWithoutInventingContinuity

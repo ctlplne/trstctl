@@ -252,6 +252,12 @@ export function IssuanceRequestsPanel({ currentPrincipal }: IssuanceRequestsPane
                         })
                       : item.requester}
                   </span>
+                  <span className="mt-1 block text-caption text-muted-foreground">
+                    {translateNow("request.wizard.issuerLabel")}:{" "}
+                    {item.issuer
+                      ? translateNow("request.wizard.issuerSummary", { name: item.issuer.name, source: item.issuer.source, id: item.issuer.id })
+                      : translateNow("request.wizard.issuerLegacy")}
+                  </span>
                   {item.justification ? (
                     <span className="mt-1 block text-caption text-muted-foreground">
                       {translateNow("source.issuance.requests.purpose.i3req00005", { value1: item.justification })}

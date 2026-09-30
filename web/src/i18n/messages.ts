@@ -6169,6 +6169,46 @@ export const messages = {
     defaultMessage: "Next: review",
     description: "Request-credential wizard button from step 2 to step 3.",
   },
+  "request.wizard.profileRequired": {
+    defaultMessage: "Choose an issuance profile.",
+    description: "Request wizard submission refuses a missing certificate rule.",
+  },
+  "request.wizard.issuerLabel": {
+    defaultMessage: "Certificate authority",
+    description: "The exact authority chosen for an issuance request.",
+  },
+  "request.wizard.issuerHint": {
+    defaultMessage: "Choose the CA that will sign this certificate. The choice is shown to the approver and kept for retries and renewal.",
+    description: "Explains why a requester must explicitly choose an authority.",
+  },
+  "request.wizard.issuerPlaceholder": {
+    defaultMessage: "Choose a certificate authority",
+    description: "Unselected authority in the request wizard.",
+  },
+  "request.wizard.issuerOption": {
+    defaultMessage: "{name} — {source} ({availability})",
+    description: "Authority name, source, and current availability in the request wizard.",
+  },
+  "request.wizard.issuerLoading": {
+    defaultMessage: "Loading certificate authorities…",
+    description: "Loading state for the narrow requester issuer roster.",
+  },
+  "request.wizard.issuerSummary": {
+    defaultMessage: "{name} ({source}:{id})",
+    description: "Exact selected authority name, source, and stable identifier in request and approval evidence.",
+  },
+  "request.wizard.issuerUnavailable": {
+    defaultMessage: "Certificate authority list unavailable",
+    description: "Error title when requester authority choices cannot be loaded.",
+  },
+  "request.wizard.issuerRequired": {
+    defaultMessage: "Choose a certificate authority before submitting.",
+    description: "Request wizard submission refuses a missing authority choice.",
+  },
+  "request.wizard.issuerLegacy": {
+    defaultMessage: "Not recorded (older request)",
+    description: "Historical request whose issuing authority was not recorded.",
+  },
   "request.wizard.ownerHint": {
     defaultMessage: "Choose the tenant owner accountable for this credential.",
     description: "Hint under the owner selector in the request wizard.",
