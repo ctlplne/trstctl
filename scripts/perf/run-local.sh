@@ -40,3 +40,6 @@ if [[ -n "$out" ]]; then
 fi
 
 go run "${args[@]}"
+if [[ "$profile" == "live" || "$profile" == "live-load" ]] && [[ -n "$out" ]]; then
+	python3 scripts/perf/live-baseline.py stamp "$out"
+fi

@@ -222,12 +222,12 @@ func TestMakeTestBoundsMainGraphAndSerializesRealPerformancePackages(t *testing.
 		"parallelism=\"$$(scripts/ci/go-package-parallelism.sh)\"",
 		"$(GO) test -race -count=1 -p=$$parallelism -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_MAIN) $$pkgs",
 		"$(GO) test -race -count=1 -p=1 -skip '$(LIVE_PERF_SLO_TEST)' -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF) $(LIVE_PERF_PACKAGES)",
-		"$(GO) test -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF_SLO) ./internal/perf",
-		"$(GO) test -race -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' ./internal/perf",
+		"$(GO_BUILD) -o $(PERF_SIGNER_BIN) ./cmd/trstctl-signer",
+		"TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) TRSTCTL_PERF_INSTRUMENTED_TIMEOUT=4m $(GO) test -race",
+		"TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) $(GO) test -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' ./internal/perf",
 		"$(GO) test -tags trstctl_core $(GO_TEST_EXACT_FLAG) -p=$$parallelism $$pkgs",
 		"$(GO) test -tags trstctl_core $(GO_TEST_EXACT_FLAG) -p=1 $(LIVE_PERF_PACKAGES)",
 		"tail -n +2 $(COVERPROFILE_LIVE_PERF)",
-		"tail -n +2 $(COVERPROFILE_LIVE_PERF_SLO)",
 	} {
 		if !strings.Contains(mk, want) {
 			t.Errorf("Makefile performance test topology missing %q", want)
@@ -241,7 +241,7 @@ func TestMakeTestBoundsMainGraphAndSerializesRealPerformancePackages(t *testing.
 	}
 }
 
-func TestMakeTestDoesNotMeasureLiveSLOUnderCombinedRaceAndCoverage(t *testing.T) {
+func TestMakeTestMeasuresLiveSLOWithoutInstrumentation(t *testing.T) {
 	mk := read(t, "../Makefile")
 	testStart := strings.Index(mk, ".PHONY: test\n")
 	wallStart := strings.Index(mk, ".PHONY: perf-live-wall\n")
@@ -251,18 +251,18 @@ func TestMakeTestDoesNotMeasureLiveSLOUnderCombinedRaceAndCoverage(t *testing.T)
 	testBlock := mk[testStart:wallStart]
 	for _, want := range []string{
 		"-race -count=1 -p=1 -skip '$(LIVE_PERF_SLO_TEST)' -covermode=atomic",
-		"-count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' -covermode=atomic",
-		"-race -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' ./internal/perf",
+		"TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) $(GO) test -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' ./internal/perf",
 	} {
 		if !strings.Contains(testBlock, want) {
-			t.Errorf("split live SLO instrumentation contract missing %q", want)
+			t.Errorf("uninstrumented live SLO contract missing %q", want)
 		}
 	}
-	if strings.Contains(testBlock, "-race -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' -covermode") {
-		t.Fatal("live SLO measurement recombined race and coverage instrumentation")
+	if strings.Contains(testBlock, "-race -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)'") ||
+		strings.Contains(testBlock, "-covermode=atomic -run '$(LIVE_PERF_SLO_TEST)'") {
+		t.Fatal("live SLO measurement gained race or coverage instrumentation")
 	}
-	if got := strings.Count(testBlock, "-run '$(LIVE_PERF_SLO_TEST)'"); got != 2 {
-		t.Fatalf("live SLO exact measurement lanes = %d, want race-only plus coverage-only", got)
+	if got := strings.Count(testBlock, "-run '$(LIVE_PERF_SLO_TEST)'"); got != 1 {
+		t.Fatalf("live SLO exact measurement lanes = %d, want one uninstrumented run", got)
 	}
 }
 
@@ -330,7 +330,10 @@ func TestLivePerformanceSLOWallIsDedicatedAndSerialized(t *testing.T) {
 	}
 	for _, want := range []string{
 		"perf-live-wall:",
-		"$(GO) test -count=1 -p=1 ./scripts/perf/cmd/perfgate -run '^TestPerfGateRunsLiveProfile$$'",
+		"PERF_LIVE_BASELINE:?Set PERF_LIVE_BASELINE to a stored receipt from this quiet machine",
+		"$(GO_BUILD) -o $(PERF_SIGNER_BIN) ./cmd/trstctl-signer",
+		"scripts/perf/run-local.sh --profile live --out",
+		"scripts/perf/live-baseline.py compare",
 	} {
 		if !strings.Contains(wallBlock, want) {
 			t.Errorf("dedicated live SLO wall missing %q", want)

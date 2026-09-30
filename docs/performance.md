@@ -45,16 +45,28 @@ The live profile is still a local eval-stack receipt, not a promise that one ven
 SKU will satisfy every production tenant shape; customer capacity reviews should run
 the same profile against their chosen datastore, signer placement, and connector mix.
 
-`make test` keeps correctness instrumentation separate from performance truth. The
-serial live packages run under race detection plus whole-repository atomic coverage,
-while the exact live mutation SLO runs again in a race-only process and a
-coverage-only process. Both exact runs retain the unchanged latency, throughput,
-error, queue, and lag assertions. Combining race and whole-repository coverage in
-the same measurement process is intentionally forbidden because the two
-instrumenters multiply request wall time and can become the measured bottleneck.
-The release-candidate SLO authority remains the uncached, uninstrumented
-`make perf-live-wall` / `make perf-live` run; CI executes `make perf-live` on its
-scheduled performance runner and retains the JSON receipt.
+`make test` builds the isolated signer before timed live work. The serial live
+packages keep race detection and whole-repository atomic coverage for correctness;
+their harness has four minutes for instrumented startup and completion. The exact
+live mutation SLO test then runs once without race or coverage instrumentation,
+with its original 90-second deadline and unchanged latency, throughput, error,
+queue, and lag assertions. Instrumented timings are never release performance
+evidence. Run the uncached `make perf-live-wall` release gate alone on a quiet
+machine against a stored baseline from that same machine and configuration:
+
+```sh
+PERF_LIVE_OUT=/path/on/this/host/live-baseline.json make perf-live
+PERF_LIVE_BASELINE=/path/on/this/host/live-baseline.json \
+  PERF_LIVE_OUT=/path/on/this/host/live-candidate.json make perf-live-wall
+```
+
+The first command saves the baseline only if the existing absolute SLOs pass.
+Both receipts carry a hashed machine fingerprint. The second command fails on a
+different host, incompatible phase/sample set, or an absolute SLO failure, and
+prints p99 and throughput side by side; it adds no new relative SLO budget. Record
+the two receipts and the host configuration with the release decision. CI's
+scheduled `make perf-live` receipt is supplemental when its runner differs from
+the baseline host.
 
 The shipped Prometheus alert pack mirrors this table. The
 `trstctl-slo-hot-paths` rule group in `deploy/observability/alerts.yml` records p99

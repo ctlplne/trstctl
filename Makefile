@@ -54,10 +54,9 @@ GO_PACKAGE_DIRS ?= $(GO_PACKAGES)
 # These packages boot real embedded PostgreSQL/JetStream spines. Run them in a
 # serial lane so the all-package race/coverage gate does not make independent
 # database bootstraps contend for the same host resources. The live mutation
-# latency/throughput test is still run under both race and coverage, but in two
-# separate processes: combining both instrumenters changes the measured wall
-# time enough to turn the instrumentation into the bottleneck. No assertion or
-# production SLO is skipped or lowered.
+# latency/throughput test runs uninstrumented after the signer is built. The
+# remaining live-package correctness tests retain race and atomic coverage with
+# a longer harness deadline for instrumented startup. No production SLO is lowered.
 LIVE_PERF_PACKAGES := ./internal/perf ./scripts/perf/cmd/capacitycalibrate ./scripts/perf/cmd/perfgate ./scripts/perf/cmd/soakcapture ./scripts/perf/cmd/spineburst
 LIVE_PERF_IMPORT_RE := $(MODULE)/(internal/perf|scripts/perf/cmd/(capacitycalibrate|perfgate|soakcapture|spineburst))
 LIVE_PERF_SLO_TEST := ^TestPerfLiveMutationHotPathsMeetSLOFromFreshStack$$
@@ -98,7 +97,7 @@ COVERPROFILE_MAIN := $(COVERPROFILE).main
 COVERPROFILE_SERVER := $(COVERPROFILE).server
 COVERPROFILE_SERVER_ROTATION_CURSOR := $(COVERPROFILE).server-rotation-cursor
 COVERPROFILE_LIVE_PERF := $(COVERPROFILE).liveperf
-COVERPROFILE_LIVE_PERF_SLO := $(COVERPROFILE).liveperf-slo
+PERF_SIGNER_BIN := $(abspath $(BIN_DIR)/trstctl-signer-perf)
 AUDIT_OUTPUTS ?= ../trustctl-audit/outputs
 
 # Minimum coverage (percent) for the assembled control plane's core lifecycle
@@ -187,6 +186,7 @@ fips-build: ## Build all binaries with the Go FIPS 140-3 Cryptographic Module en
 .PHONY: test
 test: ## Run all tests (race + coverage) and enforce the coverage minimum
 	@PYTHONDONTWRITEBYTECODE=1 python3 scripts/ci/server-test-shards_selftest.py
+	@PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf/live-baseline_selftest.py
 	@echo ">> go test (race + merged first-party coverage)"
 	@set -euo pipefail; parallelism="$$(scripts/ci/go-package-parallelism.sh)"; \
 	pkgs="$$( $(GO) list $(GO_PACKAGES) | grep -v -E '^$(LIVE_PERF_IMPORT_RE)$$' | grep -v -E '^$(SERVER_IMPORT)$$' )"; \
@@ -196,12 +196,12 @@ test: ## Run all tests (race + coverage) and enforce the coverage minimum
 	@echo ">> go test internal/server row-501 fairness shard (race + merged first-party coverage)"
 	@$(GO) test -race -count=1 -p=1 -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_SERVER_ROTATION_CURSOR) -run '$(SERVER_ROTATION_CURSOR_TEST)' -timeout=10m ./internal/server
 	@echo ">> go test live perf packages (serial race + coverage correctness lane)"
-	@$(GO) test -race -count=1 -p=1 -skip '$(LIVE_PERF_SLO_TEST)' -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF) $(LIVE_PERF_PACKAGES)
-	@echo ">> go test live mutation SLO (coverage-only measurement lane)"
-	@$(GO) test -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF_SLO) ./internal/perf
-	@echo ">> go test live mutation SLO (race-only measurement lane)"
-	@$(GO) test -race -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' ./internal/perf
-	@{ head -n 1 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_SERVER); tail -n +2 $(COVERPROFILE_SERVER_ROTATION_CURSOR); tail -n +2 $(COVERPROFILE_LIVE_PERF); tail -n +2 $(COVERPROFILE_LIVE_PERF_SLO); } > $(COVERPROFILE)
+	@mkdir -p $(BIN_DIR)
+	@$(GO_BUILD) -o $(PERF_SIGNER_BIN) ./cmd/trstctl-signer
+	@TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) TRSTCTL_PERF_INSTRUMENTED_TIMEOUT=4m $(GO) test -race -count=1 -p=1 -skip '$(LIVE_PERF_SLO_TEST)' -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -coverprofile=$(COVERPROFILE_LIVE_PERF) $(LIVE_PERF_PACKAGES)
+	@echo ">> go test live mutation SLO (uninstrumented measurement lane)"
+	@TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) $(GO) test -count=1 -p=1 -run '$(LIVE_PERF_SLO_TEST)' ./internal/perf
+	@{ head -n 1 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_MAIN); tail -n +2 $(COVERPROFILE_SERVER); tail -n +2 $(COVERPROFILE_SERVER_ROTATION_CURSOR); tail -n +2 $(COVERPROFILE_LIVE_PERF); } > $(COVERPROFILE)
 	@set -euo pipefail; grep -v -E '\.pb\.go:' $(COVERPROFILE) | scripts/ci/coverage-normalize.sh - $(COVERPROFILE).nogen
 	@total=$$($(GO) tool cover -func=$(COVERPROFILE).nogen | awk '/^total:/ {print $$3}' | tr -d '%'); \
 	echo ">> coverage: $$total% (minimum $(COVERAGE_MIN)%, generated *.pb.go excluded)"; \
@@ -218,7 +218,12 @@ test: ## Run all tests (race + coverage) and enforce the coverage minimum
 .PHONY: perf-live-wall
 perf-live-wall: ## Run the serialized live-performance SLO wall for iteration tips, batch tips, and release candidates
 	@echo ">> live performance SLO wall (serial, uninstrumented, uncached)"
-	@$(GO) test -count=1 -p=1 ./scripts/perf/cmd/perfgate -run '^TestPerfGateRunsLiveProfile$$'
+	@set -euo pipefail; baseline="$${PERF_LIVE_BASELINE:?Set PERF_LIVE_BASELINE to a stored receipt from this quiet machine}"; \
+	 out="$${PERF_LIVE_OUT:-$${TMPDIR:-/tmp}/trstctl-perf-live-wall.json}"; \
+	 mkdir -p $(BIN_DIR); \
+	 $(GO_BUILD) -o $(PERF_SIGNER_BIN) ./cmd/trstctl-signer; \
+	 env -u TRSTCTL_PERF_INSTRUMENTED_TIMEOUT TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) scripts/perf/run-local.sh --profile live --out "$$out"; \
+	 python3 scripts/perf/live-baseline.py compare "$$baseline" "$$out"
 
 .PHONY: coverage-critical
 coverage-critical: ## Enforce the per-package coverage floor on security-critical packages (consumes cover.out.nogen from `make test`)
@@ -311,9 +316,11 @@ perf-smoke: ## Run the committed hot-path performance SLO smoke gate (PERF-001/0
 
 .PHONY: perf-live
 perf-live: ## Run the served hot-path live load gate with realistic and peak phases (PERF-001)
-	@out="$${PERF_LIVE_OUT:-$${TMPDIR:-/tmp}/trstctl-perf-live.json}"; \
+	@set -euo pipefail; out="$${PERF_LIVE_OUT:-$${TMPDIR:-/tmp}/trstctl-perf-live.json}"; \
 	echo ">> perf-live ($$out)"; \
-	scripts/perf/run-local.sh --profile live --out "$$out"
+	mkdir -p $(BIN_DIR); \
+	$(GO_BUILD) -o $(PERF_SIGNER_BIN) ./cmd/trstctl-signer; \
+	env -u TRSTCTL_PERF_INSTRUMENTED_TIMEOUT TRSTCTL_PERF_SIGNER_BIN=$(PERF_SIGNER_BIN) scripts/perf/run-local.sh --profile live --out "$$out"
 
 .PHONY: perf-capacity
 perf-capacity: ## Recompute the measured capacity and cost calibration artifact (PERF-004)

@@ -82,7 +82,11 @@ func RunLiveLoadWithObservations(profile string, samples int, observations map[s
 	if err := validateObservations(observations); err != nil {
 		return Report{}, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	timeout, err := liveHarnessTimeout()
+	if err != nil {
+		return Report{}, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	stack, err := startLiveEvalStack(ctx)
 	if err != nil {
@@ -143,6 +147,20 @@ func RunLiveLoadWithObservations(profile string, samples int, observations map[s
 	}
 	report.ComponentResources = componentResources
 	return report, nil
+}
+
+// liveHarnessTimeout permits extra startup time only in explicitly instrumented
+// correctness lanes. The uninstrumented release wall keeps the original 90s.
+func liveHarnessTimeout() (time.Duration, error) {
+	raw := strings.TrimSpace(os.Getenv("TRSTCTL_PERF_INSTRUMENTED_TIMEOUT"))
+	if raw == "" {
+		return 90 * time.Second, nil
+	}
+	timeout, err := time.ParseDuration(raw)
+	if err != nil || timeout < 90*time.Second {
+		return 0, fmt.Errorf("perf live: invalid instrumented harness timeout %q", raw)
+	}
+	return timeout, nil
 }
 
 func defaultEventSpineBurstEvidence() *EventSpineBurstEvidence {
