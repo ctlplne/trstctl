@@ -18,6 +18,7 @@ const (
 	bodyIntentDigest                       // one positional digest wrapped as {"intent_digest": ...}
 	bodyIntentDigestReason                 // digest + denial reason wrapped as an immutable decision
 	bodyApprovalFile                       // exact legacy approval JSON from -f, including request ID + digest
+	bodyCertificateFile                    // PEM certificate or JSON ingest body from -f
 )
 
 // Command maps a CLI invocation to one API operation, so the command set is
@@ -198,7 +199,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"policy", "versions", "rollback"}, Method: "POST", Path: "/api/v1/policy/versions/{id}/rollback", Body: bodyFile, Summary: "Rollback the active lifecycle policy version"},
 	{Name: []string{"policy", "dry-run"}, Method: "POST", Path: "/api/v1/policy/dry-run", Body: bodyFile, Summary: "Validate and dry-run a candidate policy module with a bounded decision trace"},
 
-	{Name: []string{"certificates", "ingest"}, Method: "POST", Path: "/api/v1/certificates", Body: bodyFile, Summary: "Ingest a certificate"},
+	{Name: []string{"certificates", "ingest"}, Method: "POST", Path: "/api/v1/certificates", Body: bodyCertificateFile, Summary: "Ingest a PEM certificate or JSON import request"},
 	{Name: []string{"certificates", "list"}, Method: "GET", Path: "/api/v1/certificates", Query: []string{"limit", "cursor", "expiring_before"}, Summary: "Query the certificate inventory"},
 	{Name: []string{"certificates", "health"}, Method: "GET", Path: "/api/v1/certificates/health", Summary: "Show estate-wide certificate expiry and source health"},
 	{Name: []string{"revocation", "crls"}, Method: "GET", Path: "/api/v1/revocation/crls", Summary: "List published full, sharded, and delta CRL distribution artifacts"},

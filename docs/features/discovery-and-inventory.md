@@ -477,7 +477,12 @@ trstctl-cli certificates ingest -f ./server.pem
 
 Those map to the served REST routes `GET /api/v1/certificates`,
 `GET /api/v1/certificates/health`, and `POST /api/v1/certificates` (the latter
-requires an `Idempotency-Key` header).
+requires an `Idempotency-Key` header). For `certificates ingest`, `-f` accepts a
+PEM certificate directly as shown above. To set an owner, deployment location,
+or source during import, pass a JSON file with `pem`, `owner_id`,
+`deployment_location`, and `source` fields instead. The CLI supplies a fresh
+idempotency key for either form; repeat an exact request with the same explicit
+key when recovering from an uncertain response.
 
 Network discovery is live too:
 

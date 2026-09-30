@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"flag"
 	"fmt"
@@ -396,13 +397,19 @@ func buildRequest(cmd Command, args []string, stdin io.Reader) (path string, que
 		path = strings.Replace(path, "{"+p+"}", url.PathEscape(positionals[i]), 1)
 	}
 
-	if cmd.Body == bodyFile || cmd.Body == bodyApprovalFile {
+	if cmd.Body == bodyFile || cmd.Body == bodyApprovalFile || cmd.Body == bodyCertificateFile {
 		if bodyFilePath == "" {
 			return "", nil, nil, false, fmt.Errorf("%s needs a request body: -f <file> or -f - for stdin", strings.Join(cmd.Name, " "))
 		}
 		body, err = readBody(bodyFilePath, stdin)
 		if err != nil {
 			return "", nil, nil, false, err
+		}
+		if cmd.Body == bodyCertificateFile {
+			body, err = certificateIngestBody(body)
+			if err != nil {
+				return "", nil, nil, false, err
+			}
 		}
 		if cmd.Body == bodyApprovalFile {
 			if err := validateExactApprovalBody(cmd, body); err != nil {
@@ -429,6 +436,30 @@ func buildRequest(cmd Command, args []string, stdin io.Reader) (path string, que
 		}
 	}
 	return path, query, body, force, nil
+}
+
+// certificateIngestBody preserves the API's JSON form for owner/source metadata
+// while making the documented -f server.pem path work without hand-built JSON.
+func certificateIngestBody(body []byte) ([]byte, error) {
+	trimmed := bytes.TrimSpace(body)
+	if bytes.HasPrefix(trimmed, []byte("-----BEGIN")) {
+		remaining := trimmed
+		for len(remaining) > 0 {
+			if !bytes.HasPrefix(remaining, []byte("-----BEGIN CERTIFICATE-----")) {
+				return nil, errors.New("certificate ingest PEM may contain only public CERTIFICATE blocks")
+			}
+			block, rest := pem.Decode(remaining)
+			if block == nil || block.Type != "CERTIFICATE" || len(block.Headers) != 0 {
+				return nil, errors.New("certificate ingest expects unencrypted public CERTIFICATE blocks")
+			}
+			remaining = bytes.TrimSpace(rest)
+		}
+		return json.Marshal(map[string]string{"pem": string(body)})
+	}
+	if json.Valid(trimmed) {
+		return body, nil
+	}
+	return nil, errors.New("certificate ingest expects a PEM certificate or JSON request body")
 }
 
 func validateExactApprovalBody(cmd Command, body []byte) error {
@@ -592,7 +623,7 @@ func commandUsage(w io.Writer, cmd Command) {
 	for _, p := range cmd.pathParams() {
 		_, _ = fmt.Fprintf(w, " <%s>", p)
 	}
-	if cmd.Body == bodyFile || cmd.Body == bodyApprovalFile {
+	if cmd.Body == bodyFile || cmd.Body == bodyApprovalFile || cmd.Body == bodyCertificateFile {
 		_, _ = fmt.Fprint(w, " -f <file|->")
 	}
 	if cmd.Body == bodyIntentDigest {
@@ -626,6 +657,9 @@ func commandExample(cmd Command) string {
 	}
 	if cmd.Body == bodyFile || cmd.Body == bodyApprovalFile {
 		parts = append(parts, "-f", "request.json")
+	}
+	if cmd.Body == bodyCertificateFile {
+		parts = append(parts, "-f", "server.pem")
 	}
 	if cmd.Body == bodyIntentDigest {
 		parts = append(parts, "<intent_digest>")
