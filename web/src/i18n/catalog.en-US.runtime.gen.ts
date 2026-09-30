@@ -15035,7 +15035,7 @@ export const defaultMessageValues = [
   "Open CA hierarchy and issuer catalog",
   "Open task search",
   "Open the self-service request workflow",
-  "openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout {value1}.key -out {value1}.csr -subj \"/CN={value1}\"",
+  "openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -pkeyopt ec_param_enc:named_curve -nodes -keyout {value1}.key -out {value1}.csr -subj \"/CN={value1}\"",
   "Operate",
   "Organization ID",
   "Orphaned credentials",

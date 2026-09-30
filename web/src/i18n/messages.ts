@@ -20870,7 +20870,8 @@ export const messages = {
     description: "DA-14 sweep: migrated hardcoded copy from src/components/CommandPalette.tsx.",
   },
   "source.openssl.req.new.newkey.ec.pkeyopt.ec.param.c1a1d7efe2": {
-    defaultMessage: 'openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout {value1}.key -out {value1}.csr -subj "/CN={value1}"',
+    defaultMessage:
+      'openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -pkeyopt ec_param_enc:named_curve -nodes -keyout {value1}.key -out {value1}.csr -subj "/CN={value1}"',
     description: "B1: the command that generates a keypair and CSR on the requester's own host. Technical identifiers stay byte-identical in every locale.",
   },
   "source.operate.58c3939c4c": {
