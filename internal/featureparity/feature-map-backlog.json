@@ -17077,6 +17077,7 @@
                 "deleteSecretSyncWorkloadIdentitySource",
                 "previewSecretSync",
                 "syncSecret",
+                "getSecretSyncJob",
                 "getKubernetesSecretOperator",
                 "getSecretWorkloadInjection",
                 "getUnvaultedSecretPosture"
@@ -17086,6 +17087,7 @@
                 "secrets cloud-secret-managers",
                 "secrets syncs preview",
                 "secrets syncs run",
+                "secrets syncs status",
                 "secrets syncs targets",
                 "secrets syncs workload-identities create",
                 "secrets syncs workload-identities list",

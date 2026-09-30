@@ -238,9 +238,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// Exact identity deployment evidence adds getIdentityDeploymentEvidence,
 	// mapped to F7 alongside connector deployment and live verification.
 	// Includes the bounded, audited recovery of an exhausted first issuance.
+	// F68's durable secret-sync delivery receipt adds one read-only operation.
 	// The requester-visible issuer roster adds one read-only operation to F33.
-	if len(out) != 443 {
-		t.Fatalf("OpenAPI operationIds = %d, want 443", len(out))
+	if len(out) != 444 {
+		t.Fatalf("OpenAPI operationIds = %d, want 444", len(out))
 	}
 	return out
 }

@@ -542,8 +542,11 @@ steps, verification steps, and a caller-bound request fingerprint.
 `POST /api/v1/secrets/syncs` reads the stored secret only after the operator submits
 that reviewed fingerprint, writes a sealed
 outbox row in the same tenant-scoped transaction, delivers through the configured
-pusher, and returns metadata only (`name`, `target`, `remote_key`, enqueued/delivered
-flags). `GET /api/v1/secrets/syncs/targets` lists the catalog and marks which targets
+pusher, and returns metadata only (`job_id`, `name`, `target`, `remote_key`,
+enqueued/delivered flags). `GET /api/v1/secrets/syncs/{id}` reads the exact job's
+tenant-scoped pending, delivered, or failed projection; `delivered` records the
+worker's target receipt, so independently read the target to verify its value.
+`GET /api/v1/secrets/syncs/targets` lists the catalog and marks which targets
 are configured. Shipped concrete pushers: AWS Secrets Manager, GCP Secret Manager,
 Azure Key Vault, GitHub Actions, GitLab CI, Vercel, Kubernetes, Terraform Cloud/OpenTofu,
 HashiCorp Vault/OpenBao KV v2, and a generic CI/JSON endpoint.
@@ -946,6 +949,10 @@ cat > reviewed-secret-sync.json <<'JSON'
 {"name":"sync/source","target":"github-actions","remote_key":"DB_PASSWORD","preview_fingerprint":"sha256:<copy-from-preview>"}
 JSON
 trstctl-cli --idempotency-key sync-db-password-1 secrets syncs run -f reviewed-secret-sync.json
+
+# Use the job_id returned by run; repeat this read after reconnecting to see the
+# durable worker outcome. A delivered receipt still needs target readback.
+trstctl-cli secrets syncs status <job_id>
 
 curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   "$TRSTCTL_URL/api/v1/secrets/syncs/targets"

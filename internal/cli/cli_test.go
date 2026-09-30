@@ -1650,6 +1650,20 @@ func TestSecretSyncPreviewCommandIsEffectFreeRead(t *testing.T) {
 	}
 }
 
+func TestSecretSyncStatusReadsExactJobWithoutMutation(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, http.StatusOK, `{"job_id":"sync-123","status":"delivered","attempts":1}`, &cap)
+	code, stdout, stderr := run(t, []string{"secrets", "syncs", "status", "sync-123"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, "")
+	if code != 0 || stderr != "" || !strings.Contains(stdout, `"status": "delivered"`) {
+		t.Fatalf("status result = exit %d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if cap.Method != http.MethodGet || cap.Path != "/api/v1/secrets/syncs/sync-123" ||
+		cap.Header.Get("Idempotency-Key") != "" || len(cap.Body) != 0 {
+		t.Fatalf("status request = %s %s key=%q body=%s", cap.Method, cap.Path,
+			cap.Header.Get("Idempotency-Key"), cap.Body)
+	}
+}
+
 func TestSecretScanCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 201, `{"run_id":"1f95f7db-4a45-40fe-bb8f-9b7dfc8f6ad8","scanner":"gitleaks","engine_version":"v8.27.2","rules_active":213,"findings_count":1,"findings":[]}`, &cap)

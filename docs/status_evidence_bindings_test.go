@@ -138,6 +138,7 @@ var servedEvidenceBindings = []EvidenceBinding{
 	evidence("SecretApproval", "status", operationApprovalPredicate, "internal/api/approvals.go:approvalResponseFor"),
 	evidence("SecretRepositoryWebhookReceipt", "status", protocolPredicate, "internal/api/secrets_scanning.go:API.receiveSecretRepoWebhook"),
 	evidence("SecretRotationScheduleRun", "status", eventProjectionPredicate, "internal/orchestrator/secret_rotation.go:Orchestrator.RecordSecretRotationScheduleRun"),
+	evidence("SecretSyncJob", "status", predicate(evidenceEventProjection, "pending requires the tenant's immutable secret.sync.queued event; delivered or failed requires the exact canonical terminal event projected for that job. The status does not prove independent external readback or relying-party use"), "internal/store/secret_sync_job.go:Store.ApplySecretSyncTerminalEventTx"),
 	evidence("SecretSyncWorkloadIdentitySource", "status", observationPredicate, "internal/api/secret_sync_workload_identity.go:toSecretSyncWorkloadIdentitySourceResponse"),
 	evidence("SecretWorkloadInjectionCRD", "status", observationPredicate, "internal/api/secrets_posture.go:buildSecretWorkloadInjection"),
 	evidence("ThirdPartySecretScanReceipt", "status", observationPredicate, "internal/api/secrets_scanning.go:API.ingestThirdPartySecretScan"),
