@@ -193,7 +193,8 @@ set -eu
 umask 077
 mkdir trstctl-first-certificate
 cd trstctl-first-certificate
-openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes \
+openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 \
+  -pkeyopt ec_param_enc:named_curve -nodes \
   -keyout payments.key -out payments.csr \
   -subj '/CN=payments.svc' -addext 'subjectAltName=DNS:payments.svc'
 openssl req -in payments.csr -noout -verify -subject
@@ -203,6 +204,9 @@ cat payments.csr
 
 The subshell stops if the directory already exists and leaves your terminal in
 the repository root. Files are under `trstctl-first-certificate/`.
+The named-curve option keeps the P-256 curve identifier in the CSR; an
+explicit-parameter encoding is rejected by the certificate parser before
+issuance begins.
 `payments.key` is the private key; `umask 077` makes new files readable only by
 your user. Keep that key on this machine. `payments.csr` is public and is the only
 file to paste into the wizard. A real deployment must request the DNS name its
