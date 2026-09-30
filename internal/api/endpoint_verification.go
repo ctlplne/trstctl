@@ -75,17 +75,17 @@ type EndpointVerificationList struct {
 	Guidance string `json:"guidance"`
 }
 
-// EndpointVerificationSummary rolls the per-vantage rows up per endpoint.
+// EndpointVerificationSummary rolls the last recorded observation from each
+// vantage up per endpoint. It is historical evidence, not a live health check.
 type EndpointVerificationSummary struct {
 	Endpoints int `json:"endpoints"`
-	// Verified counts endpoints serving what they should from EVERY vantage
-	// that looked. Strict on purpose: an endpoint whose relay probe fails while
-	// its local check passes is not verified, because a client cannot get it.
+	// Verified counts endpoints whose last recorded observations matched from
+	// every vantage that looked. An endpoint can change after those checks.
 	Verified    int `json:"verified"`
 	Diverged    int `json:"diverged"`
 	Unreachable int `json:"unreachable"`
-	// VerifiedPercent is the dashboard headline. It is a percentage OF OBSERVED
-	// ENDPOINTS, not of the estate: endpoints nobody has configured a listener
+	// VerifiedPercent is the percentage whose last observations matched. It is
+	// a percentage OF OBSERVED ENDPOINTS, not of the estate: endpoints without a listener
 	// address for are not counted, because counting them as unverified would
 	// punish operators for the parts they have not reached yet, and counting
 	// them as verified would be a lie.
@@ -93,7 +93,9 @@ type EndpointVerificationSummary struct {
 }
 
 const endpointVerificationGuidance = "Every row here is a TLS handshake somebody actually performed, not a record " +
-	"of what this control plane did. That distinction is the point: a renewal can succeed at the CA, be delivered by " +
+	"of what this control plane did. The status and verified percentage describe the last recorded checks, not " +
+	"what a listener is serving now; compare last_checked_at and independently re-probe before relying on a prior pass. " +
+	"A renewal can succeed at the CA, be delivered by " +
 	"a connector, and never reach the listener, and every delivery record stays truthfully green while clients keep " +
 	"getting the old certificate. 'unreachable' is not a pass and not a divergence — it means nothing was observed. " +
 	"An endpoint with no configured listener address never appears here at all, which is the honest answer rather " +

@@ -72,6 +72,13 @@ func TestEndpointDNS01EnrollmentSurvivesDurableReviewAndRechecksConsent(t *testi
 		t.Fatalf("enrollment lost its exact external CA: %s (%v)", created["issuer"], err)
 	}
 	// Runtime-only metadata must still enforce current DNS consent after review.
+	// Use a distinct destination: the first identity already owns its target,
+	// and the endpoint ownership guard must not mask the consent check.
+	secondTarget := request(http.MethodPost, "/api/v1/connectors/targets", "dns01-target-second", map[string]any{
+		"name": "dns01-enrollment-second", "connector": "aws-acm", "enabled": true,
+		"config": map[string]any{"region": "us-east-1", "access_key_id": "AKIDTESTONLY", "secret_access_key_ref": "secret://connectors/dns01-test"},
+	}, http.StatusCreated)
+	body["target_id"] = text(secondTarget["id"])
 	body["identity_name"] = "second.dns01-enrollment.test"
 	delete(body, "preview_fingerprint")
 	preview = request(http.MethodPost, endpoint+"/preview", "dns01-preview-second", body, http.StatusOK)

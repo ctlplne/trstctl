@@ -3434,6 +3434,10 @@ func (s *Server) runLifecycleOnceAt(ctx context.Context, renewalAt time.Time) (i
 						return queued, err
 					}
 					if err := s.orch.TransitionWithSideEffectPayload(ctx, tenant, ident.ID, orchestrator.StateRenewing, reason, payload); err != nil {
+						if errors.Is(err, store.ErrIdentityEnrollmentConflict) {
+							s.logger.Warn("lifecycle renewal held by destination binding conflict", slog.String("tenant_id", tenant), slog.String("identity_id", ident.ID), slog.String("reason", err.Error()))
+							continue
+						}
 						if errors.Is(err, orchestrator.ErrInvalidTransition) || errors.Is(err, orchestrator.ErrRenewalWorkPending) {
 							continue
 						}

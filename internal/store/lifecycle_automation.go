@@ -29,6 +29,8 @@ type LifecycleAutomationInventory struct {
 	LatestRunStatus           string
 	RollbackRef               string
 	PendingRenewal            bool
+	TargetID                  string
+	PredecessorID             string
 }
 
 // LifecycleAutomationOutboxSummary reports only aggregate command state for the
@@ -56,6 +58,8 @@ func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID s
 			       cert.id::text, cert.not_before, cert.not_after, cert.validity_anchor,
 			       cert.created_at, cert.issuance_idempotency_key,
 			       coalesce(run.id::text, ''), coalesce(run.status, ''), coalesce(run.rollback_ref, ''),
+			       coalesce(i.attributes->>'deployment_target_id', ''),
+			       coalesce(i.attributes->>'endpoint_replaces_identity_id', ''),
 			       EXISTS (SELECT 1 FROM outbox job WHERE job.tenant_id = $1 AND job.tenant_id = i.tenant_id
 			         AND job.status IN ('pending', 'processing')
 			         AND CASE WHEN job.destination IN ('ca.renew', 'endpoint.renew')
@@ -83,7 +87,11 @@ func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID s
 			        WHERE c.tenant_id = $1
 			          AND c.tenant_id = i.tenant_id
 			          AND ((deployed.fingerprint IS NOT NULL AND c.fingerprint = deployed.fingerprint)
-			            OR (deployed.fingerprint IS NULL AND c.status = 'active' AND c.owner_id = i.owner_id AND i.name = ANY(c.sans)))
+			            OR (deployed.fingerprint IS NULL AND NOT EXISTS (
+			                  SELECT 1 FROM connector_delivery_receipts prior
+			                   WHERE prior.tenant_id = $1 AND prior.tenant_id = i.tenant_id
+			                     AND prior.identity_id = i.id)
+			                AND c.status = 'active' AND c.owner_id = i.owner_id AND i.name = ANY(c.sans)))
 			          AND c.source = 'issued'
 			          AND c.status IN ('active', 'superseded')
 			        ORDER BY c.not_after DESC NULLS LAST, c.created_at DESC, c.id
@@ -119,6 +127,7 @@ func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID s
 				&item.CertificateStart, &item.CertificateEnd, &item.CertificateValidityAnchor,
 				&item.CertificateCreatedAt, &item.CertificateIssuanceKey,
 				&item.LatestRunID, &item.LatestRunStatus, &item.RollbackRef,
+				&item.TargetID, &item.PredecessorID,
 				&item.PendingRenewal,
 			); err != nil {
 				return err

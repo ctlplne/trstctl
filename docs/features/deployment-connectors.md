@@ -218,6 +218,21 @@ that successor before starting another replacement. Reviewing or retrying the sa
 unchanged request remains safe and recovers its existing identity; execution still
 rechecks the original and successor while holding the original's database lock.
 
+One destination has one active certificate writer. Enrollment and replacement
+review name a competing identity and return HTTP 409 before queuing issuance;
+execution checks again while locking that destination. A legacy destination with
+multiple active bindings also holds automatic renewal so different CAs cannot keep
+overwriting one listener. Retire or move the competing identity, check the live
+listener independently, then confirm the automation plan has no target blocker.
+For another replacement of a verified successor, the reviewed replacement chain
+may retain older ancestors in `deployed` state while their revocation is resolved.
+Those ancestors are not independent writers; an active identity outside that
+exact chain still blocks the new request. Each replacement must name its direct
+predecessor, and the live listener must be checked before retiring older records.
+Resolve the conflict before the served certificate expires: a held renewal does
+not extend its validity. A historical `deployed` label or verified receipt does
+not establish what the listener serves now.
+
 Tenant operators create non-secret deployment targets through the served API, CLI, or
 console. A target names the connector, the route name, and references to credentials
 or operator-managed endpoint config; it never stores passwords, tokens, private keys,

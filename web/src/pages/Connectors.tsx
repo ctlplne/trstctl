@@ -12,7 +12,7 @@ import { useToast } from "@/components/ToastProvider";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Select } from "@/components/ui/select";
-import { formatDateTime, formatDateTime as formatDateTimePolicy } from "@/i18n/format";
+import { formatDateTime } from "@/i18n/format";
 import {
   api,
   type ConnectorCatalogItem,
@@ -49,7 +49,7 @@ import { newIdempotencyKey } from "@/lib/apiTransport";
 
 export function Connectors() {
   const deployAttempt = useRef<{ body: string; key: string } | null>(null);
-  const { t } = useTranslation();
+  const { locale, timeZone, t } = useTranslation();
   const [catalog, setCatalog] = useState<ConnectorCatalogItem[] | null>(null);
   const [relayPlugins, setRelayPlugins] = useState<RelayPluginRuntime[] | null>(null);
   const [relayPluginsCursor, setRelayPluginsCursor] = useState<string | undefined>(undefined);
@@ -245,6 +245,13 @@ export function Connectors() {
   const targetActionBlocked = !selectedTargetRecord || !selectedTargetRecord.enabled;
   const identityActionBlocked = targetActionBlocked || !selectedIdentityRecord || connectorMismatch;
   const reasonActionBlocked = identityActionBlocked || !reason.trim();
+  const deployActionBlocked = reasonActionBlocked || selectedIdentityRecord?.status !== "requested";
+  const deployStateMessage =
+    selectedIdentityRecord?.status === "deployed"
+      ? t("connectors.deploy.alreadyDeployed")
+      : selectedIdentityRecord && selectedIdentityRecord.status !== "requested"
+        ? t("connectors.deploy.requiresRequested")
+        : null;
   const actionSafetyMessage = !selectedTargetRecord
     ? null
     : !selectedTargetRecord.enabled
@@ -309,11 +316,11 @@ export function Connectors() {
         setPreviewReceipt(receipt);
         setActionResult(null);
       } else if (action === "deploy") {
-        if (!selectedIdentity) return;
+        if (!selectedIdentity || selectedIdentityRecord?.status !== "requested") return;
         const body = JSON.stringify([selectedTarget, selectedIdentity, reason.trim()]);
         if (deployAttempt.current?.body !== body) deployAttempt.current = { body, key: newIdempotencyKey() };
-        const identity = await api.deployConnectorTarget(selectedTarget, { identity_id: selectedIdentity, reason: reason.trim() }, deployAttempt.current.key);
-        setActionResult(`deploy:${identity.status}`);
+        await api.deployConnectorTarget(selectedTarget, { identity_id: selectedIdentity, reason: reason.trim() }, deployAttempt.current.key);
+        setActionResult(t("connectors.deploy.accepted"));
       } else {
         setRecoveryReceipt(null);
         const receipt = await api.rollbackConnectorTarget(selectedTarget, { identity_id: selectedIdentity, reason: reason.trim() });
@@ -445,9 +452,12 @@ export function Connectors() {
 
   const configuredTargetIDs = new Set((targets ?? []).map((target) => target.id));
   const configuredConnectorNames = new Set((targets ?? []).map((target) => target.connector));
-  const verifiedTargetCount = new Set(
-    endpointVerifications.filter((row) => row.status === "verified" && configuredTargetIDs.has(row.endpoint_id)).map((row) => row.endpoint_id),
-  ).size;
+  const recordedMatches = endpointVerifications.filter((row) => row.status === "verified" && configuredTargetIDs.has(row.endpoint_id));
+  const verifiedTargetCount = new Set(recordedMatches.map((row) => row.endpoint_id)).size;
+  const oldestMatchTime = recordedMatches
+    .map((row) => Date.parse(row.last_checked_at || ""))
+    .filter((time) => Number.isFinite(time))
+    .reduce<number | null>((oldest, time) => (oldest === null ? time : Math.min(oldest, time)), null);
   const rollbackConnectorCount = new Set(
     (catalog ?? []).filter((connector) => connector.executes_rollback && configuredConnectorNames.has(connector.name)).map((connector) => connector.name),
   ).size;
@@ -489,6 +499,13 @@ export function Connectors() {
                   ? t("connectors.design.rollbackOne")
                   : t("connectors.design.rollbackMany", { connectors: String(rollbackConnectorCount) })}
               </p>
+              {verifiedTargetCount > 0 && (
+                <p>
+                  {t("connectors.design.recordedCheckBoundary", {
+                    checked: oldestMatchTime === null ? t("connectors.design.unknownCheckTime") : formatDateTime(oldestMatchTime, { locale, timeZone }),
+                  })}
+                </p>
+              )}
               {verifiedTargetCount < targets.length && <p>{t("connectors.design.verificationBoundary")}</p>}
             </div>
           )}
@@ -664,6 +681,14 @@ export function Connectors() {
                     {actionSafetyMessage}
                   </p>
                 ) : null}
+                {deployStateMessage ? (
+                  <p
+                    role="status"
+                    className="rounded-control border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm text-foreground md:col-span-3"
+                  >
+                    {deployStateMessage}
+                  </p>
+                ) : null}
                 <div className="flex flex-wrap gap-2 md:col-span-3">
                   <Button
                     type="button"
@@ -685,7 +710,7 @@ export function Connectors() {
                   <Button
                     type="button"
                     onClick={() => runTargetAction("deploy")}
-                    disabled={reasonActionBlocked || Boolean(targetActionBusy)}
+                    disabled={deployActionBlocked || Boolean(targetActionBusy)}
                     loading={targetActionBusy === "deploy"}
                   >
                     {translateNow("source.deploy.4c236daafb")}
@@ -1171,12 +1196,12 @@ export function Connectors() {
                         recently", and it reads as one. */}
                             <td>
                               {row.last_good_at ? (
-                                formatDateTimePolicy(row.last_good_at)
+                                formatDateTime(row.last_good_at, { locale, timeZone })
                               ) : (
                                 <span className="font-medium text-destructive">{translateNow("source.never.verified.d2ver00017")}</span>
                               )}
                             </td>
-                            <td className="text-muted-foreground">{row.last_checked_at ? formatDateTimePolicy(row.last_checked_at) : "-"}</td>
+                            <td className="text-muted-foreground">{row.last_checked_at ? formatDateTime(row.last_checked_at, { locale, timeZone }) : "-"}</td>
                           </tr>
                         ))}
                       </tbody>

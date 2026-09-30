@@ -207,7 +207,7 @@ func (s *Server) dryRunReceipt(ctx context.Context, tenantID, agentName, idempot
 	if plan.Ready {
 		receiptStatus = servedstatus.ConnectorTestPlanned
 		reason = "dry_run_planned"
-		detail = "a real deploy would proceed. It would: " + strings.Join(plan.WouldMutate, "; ")
+		detail = "target path is ready for a future credential-bearing action. That action would: " + strings.Join(plan.WouldMutate, "; ") + ". This target preview does not check whether a selected identity can supply fresh key material"
 	}
 
 	if _, err := s.orch.RecordConnectorDelivery(ctx, tenantID, store.ConnectorDeliveryReceipt{

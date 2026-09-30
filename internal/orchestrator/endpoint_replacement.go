@@ -92,6 +92,16 @@ func (o *Orchestrator) EnsureEndpointReplacementWithProfile(ctx context.Context,
 		if currentVersion != version || !bytes.Equal(got, want) {
 			return fmt.Errorf("%w: original identity changed after preview; preview again", store.ErrIdentityEnrollmentConflict)
 		}
+		if err := o.store.LockTargetBindingTx(ctx, tx, tenantID, target.ID); err != nil {
+			return err
+		}
+		conflicts, err := o.store.ConflictingTargetBindingsTx(ctx, tx, tenantID, target.ID, id, original.ID, true)
+		if err != nil {
+			return err
+		}
+		if len(conflicts) != 0 {
+			return fmt.Errorf("%w: destination %s has competing active identity %s; retire or move it before replacement", store.ErrIdentityEnrollmentConflict, target.ID, conflicts[0])
+		}
 		active, err := o.store.ActiveEndpointReplacementTx(ctx, tx, tenantID, original.ID)
 		if err != nil {
 			return err
@@ -185,6 +195,16 @@ func (o *Orchestrator) validateEndpointReplacementIssuanceTx(ctx context.Context
 	}
 	if err := store.ValidateEndpointReplacementSource(original, identity.Name, attrs["deployment_target_id"]); err != nil {
 		return err
+	}
+	if err := o.store.LockTargetBindingTx(ctx, tx, tenantID, attrs["deployment_target_id"]); err != nil {
+		return err
+	}
+	conflicts, err := o.store.ConflictingTargetBindingsTx(ctx, tx, tenantID, attrs["deployment_target_id"], identity.ID, original.ID, false)
+	if err != nil {
+		return err
+	}
+	if len(conflicts) != 0 {
+		return fmt.Errorf("%w: destination has competing active identity %s; retire or move it before replacement issuance", store.ErrIdentityEnrollmentConflict, conflicts[0])
 	}
 	active, err := o.store.ActiveEndpointReplacementTx(ctx, tx, tenantID, original.ID)
 	if err != nil {

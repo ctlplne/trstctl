@@ -130,6 +130,62 @@ func TestLifecycleAutomationUsesIdentityBoundServedCertificate(t *testing.T) {
 	}
 }
 
+// A revoked served leaf must not make a different identity's active certificate
+// with the same owner and SAN look like this identity's renewal source.
+func TestLifecycleAutomationDoesNotBorrowCertificateAfterServedLeafRevoked(t *testing.T) {
+	s := newStore(t)
+	ctx := t.Context()
+	owner, err := s.CreateOwner(ctx, store.Owner{TenantID: tenantA, Kind: store.OwnerTeam, Name: "revoked shared service owner"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	var identities []store.Identity
+	var certs []store.Certificate
+	for i, lifetime := range []time.Duration{10 * time.Minute, 30 * 24 * time.Hour} {
+		identity, err := s.CreateIdentity(ctx, store.Identity{TenantID: tenantA,
+			Kind: store.KindX509Certificate, Name: "revoked-shared.example.test", OwnerID: owner.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		identity.Status = "deployed"
+		if err := s.UpsertIdentity(ctx, identity); err != nil {
+			t.Fatal(err)
+		}
+		end := now.Add(lifetime)
+		cert, err := s.UpsertCertificate(ctx, store.Certificate{TenantID: tenantA, OwnerID: &owner.ID,
+			Subject: "CN=revoked-shared.example.test", SANs: []string{identity.Name}, Issuer: fmt.Sprintf("CA %d", i),
+			Serial: fmt.Sprint(i + 11), Fingerprint: strings.Repeat(fmt.Sprint(i+3), 64),
+			Source: "issued", Status: "active", NotBefore: &now, NotAfter: &end})
+		if err != nil {
+			t.Fatal(err)
+		}
+		identities, certs = append(identities, identity), append(certs, cert)
+		if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+			return s.ApplyConnectorDeliveryRecordedTx(ctx, tx, store.ConnectorDeliveryReceipt{
+				ID: fmt.Sprintf("55555555-5555-4555-8555-%012d", i+1), TenantID: tenantA,
+				IdentityID: &identity.ID, Destination: "connector.deploy", Connector: "nginx", Target: "same-target",
+				Fingerprint: cert.Fingerprint, Status: "verified", IdempotencyKey: fmt.Sprintf("revoked-delivery-%d", i),
+				CreatedAt: now, UpdatedAt: now,
+			})
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return s.SetCertificateRevokedTx(ctx, tx, tenantA, certs[1].Fingerprint, "keyCompromise", now.Add(time.Second))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := s.ListLifecycleAutomationInventory(ctx, tenantA, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].IdentityID != identities[0].ID || rows[0].CertificateID != certs[0].ID {
+		t.Fatalf("revoked identity borrowed another identity's certificate: rows=%+v", rows)
+	}
+}
+
 func TestLifecycleAutomationPlanExcludesIdentityWithActiveEndpointReplacement(t *testing.T) {
 	s := newStore(t)
 	ctx := t.Context()

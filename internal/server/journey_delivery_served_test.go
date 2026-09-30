@@ -827,12 +827,16 @@ func TestServedConnectorTargetJourneyJOURNEY001EndToEnd(t *testing.T) {
 			provider.Calls(), provider.PreviewCalls(), writesBeforePreview, previewsBefore+1)
 	}
 
+	deployJobsBefore := connectorTargetOutboxRows(t, h)
 	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets/"+target.ID+"/deploy", tok, map[string]any{
 		"identity_id": ident.ID,
 		"reason":      "journey-001 deploy action",
 	})
-	if status != http.StatusOK || !jsonContains(t, body, `"status":"deployed"`) {
-		t.Fatalf("deploy target action: status %d body %s", status, body)
+	if status != http.StatusConflict || !jsonContains(t, body, "historical state does not prove what the target serves now") || !jsonContains(t, body, "nothing was queued or changed") {
+		t.Fatalf("historical deployed state claimed another deploy: status %d body %s", status, body)
+	}
+	if got := connectorTargetOutboxRows(t, h); got != deployJobsBefore {
+		t.Fatalf("deployed-state retry queued work: before=%d after=%d", deployJobsBefore, got)
 	}
 	if err := h.srv.Drain(t.Context()); err != nil {
 		t.Fatalf("drain deploy: %v", err)

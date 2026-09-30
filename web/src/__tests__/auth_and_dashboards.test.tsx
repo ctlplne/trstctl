@@ -1160,7 +1160,7 @@ describe("auth + dashboards", () => {
     expect(within(dash).queryByText(/endpoints verified/i)).toBeNull();
   });
 
-  it("shows the verified percentage and leads with divergence once endpoints are observed", async () => {
+  it("labels the verified percentage as the last recorded check and leads with divergence", async () => {
     apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1" });
     // A non-empty tenant, so the dashboard renders its KPI row rather than the
     // first-run wizard.
@@ -1175,10 +1175,10 @@ describe("auth + dashboards", () => {
     renderAt("/");
     const dash = await screen.findByRole("region", { name: "Home" });
 
-    expect(await within(dash).findByText(/endpoints verified/i)).toBeInTheDocument();
+    expect(await within(dash).findByText(/endpoint matches at last check/i)).toBeInTheDocument();
     expect(within(dash).getByText("75")).toBeInTheDocument();
     // The divergence count is the subtitle, because one endpoint serving the
     // wrong certificate is the thing to act on — not the 75%.
-    expect(within(dash).getByText("1 diverged")).toBeInTheDocument();
+    expect(within(dash).getByText(/1 diverged · oldest check time unavailable/)).toBeInTheDocument();
   });
 });

@@ -148,7 +148,9 @@ describe("route 031 decision-first deployment destination design", () => {
 
     expect(await screen.findByRole("heading", { level: 1, name: "Where credentials are installed" })).toBeInTheDocument();
     expect(screen.getByText("Which destinations trstctl can update and whether they are healthy.", { exact: true })).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { level: 2, name: "1 destination is configured and verified" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 2, name: "1 destination has a matching listener check on record" })).toBeInTheDocument();
+    expect(screen.getByText(/Oldest matching check:.*A past check does not confirm what the listener serves now/)).toBeInTheDocument();
+    expect(screen.queryByText("1 destination is configured and verified")).not.toBeInTheDocument();
     expect(screen.getByText("1 connector type can execute rollback for this deployment.", { exact: true })).toBeInTheDocument();
 
     const actions = screen.getByTestId("page-depth-operate");
@@ -177,6 +179,7 @@ describe("route 031 decision-first deployment destination design", () => {
 
     await user.click(screen.getByText("Destinations and safe actions", { exact: true }));
     await waitFor(() => expect(apiMock.identities).toHaveBeenCalledTimes(1));
+    expect(screen.getByText(/Review the last listener check and verify again/)).toBeInTheDocument();
     expect(await screen.findByRole("table", { name: "Configured deployment destinations" })).toHaveTextContent("payments edge");
     expect(screen.getByRole("button", { name: "Deploy" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Review restore" })).toBeInTheDocument();

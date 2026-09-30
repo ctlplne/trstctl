@@ -67,6 +67,66 @@ func (s *Store) ActiveEndpointReplacementTx(ctx context.Context, tx pgx.Tx, tena
 	return id, err
 }
 
+// ConflictingTargetBindings returns active identities that can write to the
+// same configured destination. A reviewed replacement may coexist with its
+// exact predecessor and its same-target replacement ancestors until the
+// operator retires them; any unrelated writer is a conflict. Requested
+// identities are included because issuance can still deploy after this read.
+func (s *Store) ConflictingTargetBindings(ctx context.Context, tenantID, targetID, identityID, predecessorID string, includeRequested bool) ([]string, error) {
+	var conflicts []string
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var err error
+		conflicts, err = s.ConflictingTargetBindingsTx(ctx, tx, tenantID, targetID, identityID, predecessorID, includeRequested)
+		return err
+	})
+	return conflicts, err
+}
+
+func (s *Store) ConflictingTargetBindingsTx(ctx context.Context, tx pgx.Tx, tenantID, targetID, identityID, predecessorID string, includeRequested bool) ([]string, error) {
+	if targetID == "" {
+		return nil, nil
+	}
+	rows, err := tx.Query(ctx, `WITH RECURSIVE predecessors(id) AS (
+		SELECT $4::text WHERE $4 <> ''
+		UNION
+		SELECT parent.id::text FROM identities current
+		JOIN predecessors ON current.id::text = predecessors.id
+		JOIN identities parent ON parent.tenant_id = $1
+		  AND parent.id::text = current.attributes->>'endpoint_replaces_identity_id'
+		  AND parent.attributes->>'deployment_target_id' = $2
+		WHERE current.tenant_id = $1 AND current.attributes->>'deployment_target_id' = $2
+	)
+	SELECT id::text FROM identities
+		WHERE tenant_id = $1 AND kind IN ('x509_certificate', 'x509')
+		AND attributes->>'deployment_target_id' = $2
+		AND id::text <> $3 AND id::text NOT IN (SELECT id FROM predecessors)
+		AND (status IN ('issued', 'deployed', 'renewing', 'renewal_failed')
+		  OR ($5 AND status = 'requested'))
+		ORDER BY id LIMIT 20`, tenantID, targetID, identityID, predecessorID, includeRequested)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var conflicts []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		conflicts = append(conflicts, id)
+	}
+	return conflicts, rows.Err()
+}
+
+// LockTargetBindingTx serializes competing enrollment and renewal decisions
+// for one physical destination. Call before ConflictingTargetBindingsTx in a
+// mutating command so two requests cannot both observe an empty destination.
+func (s *Store) LockTargetBindingTx(ctx context.Context, tx pgx.Tx, tenantID, targetID string) error {
+	var id string
+	return tx.QueryRow(ctx, `SELECT id::text FROM deployment_targets
+		WHERE tenant_id = $1 AND id::text = $2 FOR UPDATE`, tenantID, targetID).Scan(&id)
+}
+
 // EndpointReplacementWorkPendingTx refuses to start while earlier issuance,
 // renewal, deployment, or rollback can still write to the listener. Payload
 // identity_id and target lanes are public routing metadata, outside key seals.

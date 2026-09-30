@@ -108,6 +108,18 @@ func (s *Server) LifecycleAutomationPlan(ctx context.Context, tenantID string, a
 			explanation = "Renewal is already queued or running."
 			blockers = append(blockers, "The existing renewal is still queued or running; follow its retry evidence before starting another renewal.")
 		}
+		if row.TargetID != "" {
+			conflicts, err := s.store.ConflictingTargetBindings(ctx, tenantID, row.TargetID, row.IdentityID, row.PredecessorID, false)
+			if err != nil {
+				return api.LifecycleAutomationPlan{}, err
+			}
+			if len(conflicts) != 0 {
+				due = false
+				source = "target_conflict"
+				explanation = "Renewal is held because another active identity can write this destination."
+				blockers = append(blockers, "Destination "+row.TargetID+" also has active identity "+strings.Join(conflicts, ", ")+". Retire or move the competing identity, then verify the served certificate before resuming renewal.")
+			}
+		}
 		if deferral != "" && due {
 			blockers = append(blockers, deferral)
 		}

@@ -38,6 +38,16 @@ func (o *Orchestrator) BindIdentityEndpointAtVersion(ctx context.Context, tenant
 		if expectedVersion != nil && version != *expectedVersion {
 			return fmt.Errorf("%w: identity changed after preview; preview again", store.ErrIdentityEnrollmentConflict)
 		}
+		if err := o.store.LockTargetBindingTx(ctx, tx, tenantID, target.ID); err != nil {
+			return err
+		}
+		conflicts, err := o.store.ConflictingTargetBindingsTx(ctx, tx, tenantID, target.ID, identityID, "", true)
+		if err != nil {
+			return err
+		}
+		if len(conflicts) != 0 {
+			return fmt.Errorf("%w: deployment target %s already has active identity %s; retire or move it before enrollment", store.ErrIdentityEnrollmentConflict, target.ID, conflicts[0])
+		}
 		wanted := identity
 		if len(reviewed) == 1 {
 			wanted = reviewed[0]

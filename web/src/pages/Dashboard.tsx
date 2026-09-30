@@ -277,7 +277,7 @@ function servedExpiryBands(certificates: Certificate[]): Array<{ label: string; 
  * shapes; previewData supplies those shapes only in the explicit demo build. */
 export function Dashboard() {
   const { preview } = useAuth();
-  const { formatNumber, t } = useTranslation();
+  const { formatNumber, locale, timeZone, t } = useTranslation();
   const secretsList = useCapabilityExecution("F63", "listSecrets");
   const incidentList = useCapabilityExecution("F31", "listIncidentExecutions");
   // S-C5 live tiles: Home's answers poll while the tab is visible (30s for
@@ -411,16 +411,21 @@ export function Dashboard() {
   // Nothing observed means no tile. A verified percentage over an estate
   // nobody has probed would read as an all-clear that nothing earned.
   const summary = verifications.data?.summary;
+  const oldestCheckTime = (verifications.data?.items ?? [])
+    .map((row) => Date.parse(row.last_checked_at || ""))
+    .filter((time) => Number.isFinite(time))
+    .reduce<number | null>((oldest, time) => (oldest === null ? time : Math.min(oldest, time)), null);
   const verificationTile =
     summary && summary.endpoints > 0
       ? {
           percent: summary.verified_percent,
           sub:
-            summary.diverged > 0
+            (summary.diverged > 0
               ? `${summary.diverged} diverged`
               : summary.unreachable > 0
                 ? `${summary.unreachable} unreachable`
-                : `${summary.verified}/${summary.endpoints} serving`,
+                : `${summary.verified}/${summary.endpoints} matched at last check`) +
+            ` · oldest check ${oldestCheckTime === null ? "time unavailable" : formatDateTime(oldestCheckTime, { locale, timeZone })}`,
           tone: summary.diverged > 0 ? ("crit" as const) : summary.unreachable > 0 ? ("warn" as const) : undefined,
         }
       : null;
@@ -710,7 +715,7 @@ export function Dashboard() {
             {verificationTile ? (
               <Kpi
                 icon={<ShieldCheck className="h-4 w-4" />}
-                label="Endpoints verified"
+                label="Endpoint matches at last check"
                 value={verificationTile.percent}
                 valueSuffix="%"
                 sub={verificationTile.sub}

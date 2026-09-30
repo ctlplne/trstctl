@@ -571,6 +571,27 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 				if replacement != "" {
 					return fmt.Errorf("%w: identity has active replacement %s; complete or revoke that replacement before renewing the original", store.ErrIdentityEnrollmentConflict, replacement)
 				}
+				var binding struct {
+					TargetID      string `json:"deployment_target_id"`
+					PredecessorID string `json:"endpoint_replaces_identity_id"`
+				}
+				if len(locked.Attributes) != 0 {
+					if err := json.Unmarshal(locked.Attributes, &binding); err != nil {
+						return fmt.Errorf("%w: invalid deployment binding: %v", store.ErrIdentityEnrollmentConflict, err)
+					}
+				}
+				if binding.TargetID != "" {
+					if err := o.store.LockTargetBindingTx(ctx, tx, tenantID, binding.TargetID); err != nil {
+						return err
+					}
+					conflicts, err := o.store.ConflictingTargetBindingsTx(ctx, tx, tenantID, binding.TargetID, identityID, binding.PredecessorID, false)
+					if err != nil {
+						return err
+					}
+					if len(conflicts) != 0 {
+						return fmt.Errorf("%w: deployment target %s has competing active identity %s; retire or move it before renewal", store.ErrIdentityEnrollmentConflict, binding.TargetID, conflicts[0])
+					}
+				}
 			}
 			if State(locked.Status) != from {
 				if approval != nil {

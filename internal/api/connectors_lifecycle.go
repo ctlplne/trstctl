@@ -762,7 +762,8 @@ func (a *API) deployConnectorTarget(w http.ResponseWriter, r *http.Request) {
 				return 0, nil, errStatus(http.StatusConflict,
 					"this identity is already deployed to a different target, and trstctl does not retain its private key for copying elsewhere; bind the new target and renew/reissue first; nothing was queued or changed")
 			}
-			// Already converged by the issuer's credential-bearing deploy path.
+			return 0, nil, errStatus(http.StatusConflict,
+				"this identity was deployed before, but that historical state does not prove what the target serves now; trstctl does not retain its private key for another deploy. Bind the target and renew or reissue to deliver fresh credential material, then independently verify the listener; nothing was queued or changed")
 		default:
 			return 0, nil, errStatus(http.StatusConflict,
 				"this identity state cannot safely produce a credential-bearing deployment; issue or renew it after binding the target; nothing was queued or changed")
@@ -1072,6 +1073,24 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 		return endpointBindingPreviewResponse{}, err
 	}
 	fingerprint := crypto.SHA256Hex(raw)
+	if target.ID != "" {
+		identityID, predecessorID := "", ""
+		if existingResp != nil {
+			identityID = existingResp.ID
+		}
+		if replacedResp != nil {
+			predecessorID = replaced.ID
+			identityID = orchestrator.EndpointReplacementIdentityID(tenantID, replaced.ID, fingerprint)
+		}
+		conflicts, err := a.store.ConflictingTargetBindings(ctx, tenantID, target.ID, identityID, predecessorID, true)
+		if err != nil {
+			return endpointBindingPreviewResponse{}, err
+		}
+		if len(conflicts) != 0 {
+			return endpointBindingPreviewResponse{}, errStatus(http.StatusConflict,
+				"destination is already bound to another active identity "+strings.Join(conflicts, ", ")+"; retire or move the competing identity before issuing to this destination; nothing was queued or changed")
+		}
+	}
 	if replacedResp != nil {
 		active, err := a.store.ActiveEndpointReplacement(ctx, tenantID, replaced.ID)
 		if err != nil {

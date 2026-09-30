@@ -100,7 +100,7 @@ func TestSDKGeneratorAdvisoriesStayRemediated(t *testing.T) {
 	for path, want := range map[string]string{
 		"node_modules/@redocly/openapi-core": "1.34.20",
 		"node_modules/js-yaml":               "4.3.2",
-		"node_modules/brace-expansion":       "2.1.4",
+		"node_modules/brace-expansion":       "2.1.7",
 	} {
 		if got := lock.Packages[path].Version; got != want {
 			t.Errorf("%s version = %q, want remediated %q", path, got, want)

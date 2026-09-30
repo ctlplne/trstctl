@@ -116,11 +116,11 @@ export function LifecycleAutomationPanel({ identities, onReviewRenewal }: Props)
             <p>{t("identities.automation.cancelLimit")}</p>
           </div>
 
-          {plan.items.some((item) => item.due || item.identity_status === "renewal_failed") ? (
+          {plan.items.some((item) => item.due || item.identity_status === "renewal_failed" || item.blockers.length > 0) ? (
             <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
               <h3 className="text-sm font-semibold">{t("identities.automation.pendingHeading")}</h3>
               {plan.items
-                .filter((item) => item.due || item.identity_status === "renewal_failed")
+                .filter((item) => item.due || item.identity_status === "renewal_failed" || item.blockers.length > 0)
                 .map((item) => {
                   const identity = identityByID.get(item.identity_id);
                   const retry = item.identity_status === "renewal_failed";

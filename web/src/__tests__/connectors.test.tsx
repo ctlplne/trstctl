@@ -236,7 +236,8 @@ describe("connector deployment disclosure surface", () => {
       connector: "nginx",
       target: "edge/prod/payments",
       status: "dry_run_planned",
-      detail: "a real deploy would proceed. It would: replace the certificate files; reload nginx",
+      detail:
+        "target path is ready for a future credential-bearing action. That action would: replace the certificate files; reload nginx. This target preview does not check whether a selected identity can supply fresh key material",
       idempotency_key: "connector-test:target-1:preview-1",
     });
     apiMock.deployConnectorTarget.mockReset().mockResolvedValue({ id: "identity-1", status: "deployed" });
@@ -700,6 +701,7 @@ describe("connector deployment disclosure surface", () => {
   it("creates and operates a served connector target", async () => {
     const binding = await apiMock.createEndpointBinding.getMockImplementation()?.();
     apiMock.getIdentity.mockResolvedValue(binding.identity);
+    apiMock.identities.mockResolvedValue([{ ...(await apiMock.identities())[0], status: "requested" }]);
     const user = userEvent.setup();
     renderConnectors();
 
@@ -781,7 +783,7 @@ describe("connector deployment disclosure surface", () => {
     await user.click(screen.getByRole("button", { name: "Preview changes (no writes)" }));
     await waitFor(() => expect(apiMock.testConnectorTarget).toHaveBeenCalledWith("target-1"));
     expect(await screen.findByRole("heading", { name: "Target path ready — no changes made" })).toBeInTheDocument();
-    expect(screen.getByText("a real deploy would proceed. It would: replace the certificate files; reload nginx")).toBeInTheDocument();
+    expect(screen.getByText(/target path is ready for a future credential-bearing action/)).toBeInTheDocument();
     expect(screen.getByText("Preview never installs a certificate, writes a target file, runs a reload, or changes a binding.")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Deploy" }));
@@ -795,6 +797,9 @@ describe("connector deployment disclosure surface", () => {
         expect.any(String),
       ),
     );
+    expect(
+      screen.getByText("Issuance and delivery requested. Check the exact delivery receipt and live listener before treating this as deployed."),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Review restore" }));
     expect(apiMock.rollbackConnectorTarget).not.toHaveBeenCalled();
@@ -1016,6 +1021,23 @@ describe("connector deployment disclosure surface", () => {
     expect(screen.queryByRole("button", { name: "Check preview result" })).not.toBeInTheDocument();
     expect(screen.getByText(/console will not guess which result belongs to it/i)).toBeInTheDocument();
     expect(apiMock.connectorDeliveries).not.toHaveBeenCalled();
+  });
+
+  it("does not present an old deployed state or target preview as a new deployment", async () => {
+    const identity = (await apiMock.identities())[0];
+    apiMock.identities.mockResolvedValue([{ ...identity, status: "deployed", attributes: { deployment_target_id: "target-1" } }]);
+    const user = userEvent.setup();
+    renderConnectors();
+    await screen.findByRole("heading", { name: "Where credentials are installed" });
+    await user.click(screen.getByText("Destinations and safe actions", { exact: true }));
+    await user.selectOptions(screen.getByLabelText("Target"), "target-1");
+    await user.selectOptions(screen.getByLabelText("Identity"), "identity-1");
+    await user.type(screen.getByLabelText("Reason"), "recover a listener after restart");
+    expect(screen.getByText(/This identity was deployed earlier, but that does not prove what the listener serves now/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Deploy" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Preview changes (no writes)" }));
+    expect(await screen.findByText("Target path ready (nothing changed)")).toBeInTheDocument();
+    expect(apiMock.deployConnectorTarget).not.toHaveBeenCalled();
   });
 
   it("keeps prepared destinations inert until an operator explicitly enables them", async () => {

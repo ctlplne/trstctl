@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -167,6 +168,40 @@ func TestServedLifecycleAutomationPlanListsDueWorkWithoutTenantLeakage(t *testin
 	if item.IdentityID != identity.ID || item.IdentityName != "checkout.internal" || item.OwnerName != "payments-platform" || !item.Due || item.RenewalSource != "ari" {
 		t.Fatalf("due item = %+v", item)
 	}
+	// Reproduce a legacy dual binding as relational state: both records can
+	// schedule against the same destination, so the public plan must show a
+	// named blocker rather than promising another certificate rotation.
+	const sharedTarget = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+	first, err := h.store.GetIdentity(t.Context(), h.tenant, identity.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.Attributes = json.RawMessage(`{"deployment_target_id":"` + sharedTarget + `"}`)
+	if err := h.store.UpsertIdentity(t.Context(), first); err != nil {
+		t.Fatal(err)
+	}
+	competitor, err := h.store.CreateIdentity(t.Context(), store.Identity{TenantID: h.tenant, Kind: store.KindX509Certificate,
+		Name: first.Name, OwnerID: owner.ID, Attributes: first.Attributes})
+	if err != nil {
+		t.Fatal(err)
+	}
+	competitor.Status = "deployed"
+	if err := h.store.UpsertIdentity(t.Context(), competitor); err != nil {
+		t.Fatal(err)
+	}
+	conflicted, err := h.srv.LifecycleAutomationPlan(t.Context(), h.tenant, cert.ValidityAnchor.Add(21*24*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if conflicted.Summary.DueNow != 0 || len(conflicted.Items) != 2 {
+		t.Fatalf("competing target remained due: %+v", conflicted)
+	}
+	for _, row := range conflicted.Items {
+		if row.Due || row.RenewalSource != "target_conflict" || len(row.Blockers) == 0 ||
+			!strings.Contains(row.Blockers[0], sharedTarget) {
+			t.Fatalf("target conflict hidden from operator: %+v", row)
+		}
+	}
 
 	const otherTenant = "22222222-2222-4222-8222-222222222222"
 	registerServedTenantID(t, h, otherTenant, "Other lifecycle tenant")
@@ -193,10 +228,11 @@ type apiLifecycleAutomationPlanTestResponse struct {
 		DueNow    int `json:"due_now"`
 	} `json:"summary"`
 	Items []struct {
-		IdentityID    string `json:"identity_id"`
-		IdentityName  string `json:"identity_name"`
-		OwnerName     string `json:"owner_name"`
-		Due           bool   `json:"due"`
-		RenewalSource string `json:"renewal_source"`
+		IdentityID    string   `json:"identity_id"`
+		IdentityName  string   `json:"identity_name"`
+		OwnerName     string   `json:"owner_name"`
+		Due           bool     `json:"due"`
+		RenewalSource string   `json:"renewal_source"`
+		Blockers      []string `json:"blockers"`
 	} `json:"items"`
 }

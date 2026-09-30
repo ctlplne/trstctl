@@ -245,6 +245,20 @@ func TestEndpointReplacementServedPreservesSameOwnerAndExternalCA(t *testing.T) 
 	if got := eventCount(t, h.log, h.tenant, projections.EventIdentityCreated); got != before+1 {
 		t.Fatal("conflicting preview changed identities")
 	}
+	// A second replacement can use the exact deployed successor even while
+	// its grandparent remains in the historical deployed state. Preview must
+	// stay effect-free; an unrelated active writer is covered by the target
+	// conflict tests and still blocks issuance.
+	request["replace_identity_id"] = replacement.ID
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/lifecycle/endpoint-bindings/preview", tok, request)
+	if status != http.StatusOK || !strings.Contains(string(body), `"ready":true`) ||
+		!strings.Contains(string(body), `"effect_free":true`) || !strings.Contains(string(body), replacement.ID) {
+		t.Fatalf("nested replacement did not safely preview direct successor: %d %s", status, body)
+	}
+	if got := eventCount(t, h.log, h.tenant, projections.EventIdentityCreated); got != before+1 {
+		t.Fatal("nested replacement preview created an identity")
+	}
+	request["replace_identity_id"] = original.ID
 	request["reason"] = acceptedReason
 	got, err := h.store.GetIdentity(t.Context(), h.tenant, original.ID)
 	if err != nil || got.Status != "deployed" {

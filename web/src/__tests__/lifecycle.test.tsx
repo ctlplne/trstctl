@@ -1378,6 +1378,49 @@ describe("lifecycle actions from the UI", () => {
     expect(row).not.toHaveTextContent("plugin_not_loaded");
   });
 
+  it("shows a destination conflict even when renewal is held and not due", async () => {
+    apiMock.identities.mockResolvedValue([{ id: "owner-identity", name: "payments.svc", kind: "x509_certificate", status: "deployed" }]);
+    apiMock.lifecycleAutomationPlan.mockResolvedValue({
+      capability: "lifecycle_automation",
+      ready: true,
+      generated_at: "2026-09-30T19:30:00Z",
+      scheduler: {
+        status: "running",
+        renew_before: "10m0s",
+        alert_before: "5m0s",
+        interval: "1m0s",
+        ari_first: true,
+        maintenance_window_status: "open",
+      },
+      summary: { monitored: 1, due_now: 0, renewal_failed: 0, outbox_pending: 0, outbox_processing: 0, outbox_failed: 0 },
+      items: [
+        {
+          identity_id: "owner-identity",
+          identity_name: "payments.svc",
+          identity_status: "deployed",
+          owner_id: "own-1",
+          owner_name: "team",
+          certificate_id: "cert-1",
+          due: false,
+          renewal_source: "target_conflict",
+          reason: "Renewal is held because another active identity can write this destination.",
+          blockers: ["Destination target-1 also has active identity competitor-2. Retire or move the competing identity."],
+        },
+      ],
+      controls: [],
+      preview_writes: [],
+      preview_external_effects: [],
+      execution_writes: [],
+      execution_external_effects: [],
+      verification_steps: [],
+    });
+    renderIdentities();
+
+    expect(await screen.findByText(/Destination target-1 also has active identity competitor-2/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Renewals to review or unblock" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Review renewal now" })).toBeDisabled();
+  });
+
   it("renders the server-owned lifecycle automation plan with safe controls, scheduler evidence, and narrow-screen containment", async () => {
     const longIdentityName = "checkout-39e37caa-8171-426c-a311-5b7c9fd87bb7.qa.trstctl.test";
     apiMock.identities.mockResolvedValue([{ id: "ren-1", name: longIdentityName, kind: "x509_certificate", status: "deployed" }]);

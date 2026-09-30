@@ -14190,16 +14190,25 @@ export const messages = {
     description: "Recovery guidance for an empty deployment estate.",
   },
   "connectors.design.statusOneVerified": {
-    defaultMessage: "1 destination is configured and verified",
-    description: "Opening status for one configured destination with served listener verification.",
+    defaultMessage: "1 destination has a matching listener check on record",
+    description: "A past listener check matched; it does not prove what the listener serves now.",
   },
   "connectors.design.statusAllVerified": {
-    defaultMessage: "All {targets} configured destinations have verification evidence",
-    description: "Opening status when every configured destination has served verification evidence.",
+    defaultMessage: "All {targets} configured destinations have matching listener checks on record",
+    description: "Opening status for historical matching listener observations.",
   },
   "connectors.design.statusPartial": {
-    defaultMessage: "{verified} of {targets} configured destinations have verification evidence",
-    description: "Opening status when destination verification evidence is incomplete.",
+    defaultMessage: "{verified} of {targets} configured destinations have matching listener checks on record",
+    description: "Opening status when historical matching listener observations are incomplete.",
+  },
+  "connectors.design.recordedCheckBoundary": {
+    defaultMessage:
+      "Oldest matching check: {checked}. A past check does not confirm what the listener serves now; verify it again before relying on this result.",
+    description: "Shows the observation age and prevents a stored pass from becoming a current-health claim.",
+  },
+  "connectors.design.unknownCheckTime": {
+    defaultMessage: "time unavailable",
+    description: "A historical matching result with no usable observation time cannot establish freshness.",
   },
   "connectors.design.rollbackOne": {
     defaultMessage: "1 connector type can execute rollback for this deployment.",
@@ -14248,7 +14257,7 @@ export const messages = {
   "connectors.identities.loadingMore": { defaultMessage: "Loading more identities…", description: "Next identity page is loading." },
   "connectors.design.bindHelp": {
     defaultMessage:
-      "Choose an enabled, independently verified destination. This reviewed action creates the identity and queues issuance and deployment together; it does not create or enable a destination.",
+      "Choose an enabled destination. Review the last listener check and verify again if its state may have changed. This reviewed action creates the identity and queues issuance and deployment together; it does not create or enable a destination.",
     description: "Safety explanation for the compound endpoint-binding action.",
   },
   "connectors.binding.required": {
@@ -14494,6 +14503,20 @@ export const messages = {
   "connectors.preview.action": {
     defaultMessage: "Preview changes (no writes)",
     description: "Effect-free connector target preview action.",
+  },
+  "connectors.deploy.alreadyDeployed": {
+    defaultMessage:
+      "This identity was deployed earlier, but that does not prove what the listener serves now. Its private key is not retained for another Deploy action. Renew or reissue with this destination bound, then verify the listener.",
+    description: "Prevent a historical deployed state from being mistaken for a fresh connector delivery.",
+  },
+  "connectors.deploy.requiresRequested": {
+    defaultMessage:
+      "Deploy can issue and deliver only a requested identity. For an issued or renewing identity, wait for its bound delivery or start a fresh renewal or replacement; no new work was queued here.",
+    description: "Explain why a non-requested identity cannot be sent as a new credential-bearing deployment.",
+  },
+  "connectors.deploy.accepted": {
+    defaultMessage: "Issuance and delivery requested. Check the exact delivery receipt and live listener before treating this as deployed.",
+    description: "The deploy response acknowledges a request rather than proving an external effect.",
   },
   "connectors.preview.ready": {
     defaultMessage: "Target path ready — no changes made",
@@ -16135,7 +16158,7 @@ export const messages = {
   },
   "source.endpoint.verification.help.d2ver00002": {
     defaultMessage:
-      "Every row is a TLS handshake somebody performed, not a record of what this control plane did. A renewal can succeed at the CA, be delivered by a connector, and never reach the listener \u2014 and every delivery receipt stays green while clients keep getting the old certificate.",
+      "Every row is a past TLS handshake, not a live reading. Check Last checked before relying on it: a listener can change after a successful check. A renewal can succeed at the CA, be delivered by a connector, and never reach the listener.",
     description: "D2: explains why this section is separate from delivery receipts.",
   },
   "source.endpoint.verification.caption.d2ver00003": {
@@ -16171,8 +16194,8 @@ export const messages = {
     description: "D2: a network agent probed it as a client would; the only witness for appliances.",
   },
   "source.verified.d2ver00011": {
-    defaultMessage: "Serving the expected certificate",
-    description: "D2: the handshake matched what was deployed.",
+    defaultMessage: "Matched when checked",
+    description: "D2: the recorded handshake matched what was deployed at its check time.",
   },
   "source.unreachable.d2ver00012": {
     defaultMessage: "Could not connect",
@@ -25397,8 +25420,8 @@ export const messages = {
     description: "D5: relay-executed dry-run outcome labels on the connector delivery receipt badge.",
   },
   "source.dry.run.planned.d5dry00002": {
-    defaultMessage: "Deploy would succeed (nothing changed)",
-    description: "D5: relay-executed dry-run outcome labels on the connector delivery receipt badge.",
+    defaultMessage: "Target path ready (nothing changed)",
+    description: "D5: target-vantage dry run checks a path, not the selected identity or future delivery.",
   },
   "source.dry.run.blocked.d5dry00003": {
     defaultMessage: "Deploy would fail (nothing changed)",
@@ -26900,7 +26923,7 @@ export const messages = {
     description: "Honest lifecycle cancellation limit.",
   },
   "lifecycle.status.cancelled": { defaultMessage: "Cancelled", description: "Queued lifecycle work stopped by identity revocation or retirement." },
-  "identities.automation.pendingHeading": { defaultMessage: "Renewals to review", description: "Heading above due renewal actions." },
+  "identities.automation.pendingHeading": { defaultMessage: "Renewals to review or unblock", description: "Heading above due or blocked renewals." },
   "identities.automation.expires": { defaultMessage: " · expires {time}", description: "Certificate expiry in lifecycle plan." },
   "identities.automation.startAction": { defaultMessage: "Review renewal now", description: "Open effect-free review for a due renewal." },
   "identities.automation.retryAction": { defaultMessage: "Review retry", description: "Open effect-free review for a failed renewal." },
