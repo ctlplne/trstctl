@@ -3,13 +3,16 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
+	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
-	"trstctl.com/trstctl/internal/protocols/est"
 	"trstctl.com/trstctl/internal/protocols/ssh"
 )
 
@@ -29,61 +32,92 @@ func newTestSSHCA(t *testing.T) *ssh.CA {
 	return ca
 }
 
-// denyAllSSHAuth stands in for the real bearer authenticator: it refuses every
-// request, which is what an anonymous caller sees.
-type denyAllSSHAuth struct{ calls int }
-
-func (d *denyAllSSHAuth) Authenticate(*http.Request) est.AuthenticationResult {
-	d.calls++
-	return est.AuthenticationResult{StatusCode: http.StatusUnauthorized, Challenge: `Bearer realm="ssh"`}
+// recordingSSHGuard stands in for the API mutation guard: it records the
+// permission each route asks for and either refuses (what an anonymous caller
+// sees) or runs the mutation for tenant-a.
+type recordingSSHGuard struct {
+	allow bool
+	perms []authz.Permission
 }
 
-// allowAllSSHAuth stands in for a bearer token that carries certs:issue.
-type allowAllSSHAuth struct{ calls int }
-
-func (a *allowAllSSHAuth) Authenticate(*http.Request) est.AuthenticationResult {
-	a.calls++
-	return est.AuthenticationResult{Allowed: true}
+func (g *recordingSSHGuard) guard(perm authz.Permission, fn api.ProtocolMutationFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		g.perms = append(g.perms, perm)
+		if !g.allow {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="trstctl"`)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		status, _, err := fn(r.Context(), "tenant-a", r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(status)
+	}
 }
 
-// TestServedSSHMutatingRoutesRequireAuthentication is the regression guard for
-// the served SSH CA's anonymous-issuance defect. POST /ssh/issue/user,
-// /ssh/issue/host and /ssh/revoke were mounted with no authenticator at all, so
-// any client that could reach the listener could mint an SSH user certificate
-// naming `root` — ssh.Profile carries no principal allowlist, and issue() checks
-// only that principals are non-empty and the TTL is within MaxTTL. Any host
-// configured with this CA in TrustedUserCAKeys was fully compromised.
-//
-// The test drives the real mux, so it fails if a route is ever registered
-// without the wrapper.
-func TestServedSSHMutatingRoutesRequireAuthentication(t *testing.T) {
-	deny := &denyAllSSHAuth{}
-	p, err := newSSHProtocol(newTestSSHCA(t), "tenant-a", deny)
+// stubSSHWorkflow records what the raw routes delegate to the product workflow.
+type stubSSHWorkflow struct {
+	issued  []api.SSHCertificateRequest
+	revoked []api.SSHRevokeCertificateRequest
+}
+
+func (s *stubSSHWorkflow) IssueSSHCertificate(_ context.Context, _, _ string, req api.SSHCertificateRequest) (api.SSHCertificate, error) {
+	s.issued = append(s.issued, req)
+	return api.SSHCertificate{Certificate: "cert", Serial: 1, KeyID: req.KeyID}, nil
+}
+
+func (s *stubSSHWorkflow) RevokeSSHCertificate(_ context.Context, _, _ string, req api.SSHRevokeCertificateRequest) (api.SSHStatus, error) {
+	s.revoked = append(s.revoked, req)
+	return api.SSHStatus{}, nil
+}
+
+func newUnitSSHProtocol(t *testing.T, g *recordingSSHGuard, wf *stubSSHWorkflow) *sshProtocol {
+	t.Helper()
+	p, err := newSSHProtocol(newTestSSHCA(t), "tenant-a", g.guard, wf)
 	if err != nil {
 		t.Fatal(err)
 	}
+	return p
+}
+
+// TestServedSSHMutatingRoutesRequireTheAPIGuard is the regression guard for the
+// served SSH CA's anonymous-issuance defect and for RV-08g: every mutating route
+// is served through the API mutation guard, issuance under certs:issue and
+// revocation under certs:write. The test drives the real mux, so it fails if a
+// route is ever registered without the guard or under the wrong permission.
+func TestServedSSHMutatingRoutesRequireTheAPIGuard(t *testing.T) {
+	g := &recordingSSHGuard{}
+	wf := &stubSSHWorkflow{}
+	p := newUnitSSHProtocol(t, g, wf)
 
 	body := `{"public_key":"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","key_id":"x","principals":["root"],"ttl_seconds":3600}`
-	for _, route := range []struct{ method, path, payload string }{
-		{http.MethodPost, "/ssh/issue/user", body},
-		{http.MethodPost, "/ssh/issue/host", body},
-		{http.MethodPost, "/ssh/revoke", `{"serial":1}`},
+	for _, route := range []struct {
+		path, payload string
+		perm          authz.Permission
+	}{
+		{"/ssh/issue/user", body, authz.CertsIssue},
+		{"/ssh/issue/host", body, authz.CertsIssue},
+		{"/ssh/revoke", `{"serial":1}`, authz.CertsWrite},
 	} {
 		t.Run(route.path, func(t *testing.T) {
-			before := deny.calls
+			before := len(g.perms)
 			rec := httptest.NewRecorder()
-			p.ServeHTTP(rec, httptest.NewRequest(route.method, route.path, strings.NewReader(route.payload)))
+			p.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, route.path, strings.NewReader(route.payload)))
 			if rec.Code != http.StatusUnauthorized {
-				t.Fatalf("anonymous %s %s = %d, want 401 — the SSH CA mints to unauthenticated callers",
-					route.method, route.path, rec.Code)
+				t.Fatalf("anonymous POST %s = %d, want 401", route.path, rec.Code)
 			}
-			if deny.calls == before {
-				t.Fatalf("%s %s never consulted the authenticator; the route is not gated", route.method, route.path)
+			if len(g.perms) != before+1 || g.perms[before] != route.perm {
+				t.Fatalf("POST %s consulted the guard for %v, want %s", route.path, g.perms[before:], route.perm)
 			}
 			if got := rec.Header().Get("WWW-Authenticate"); got == "" {
 				t.Error("denial must carry an authentication challenge")
 			}
 		})
+	}
+	if len(wf.issued)+len(wf.revoked) != 0 {
+		t.Fatalf("refused requests reached the workflow: %d issued, %d revoked", len(wf.issued), len(wf.revoked))
 	}
 }
 
@@ -93,11 +127,8 @@ func TestServedSSHMutatingRoutesRequireAuthentication(t *testing.T) {
 // RevokedKeys), exactly like a CRL distribution point. Gating those would break
 // every host bootstrap, so the fix must not over-reach.
 func TestServedSSHTrustMaterialStaysPublic(t *testing.T) {
-	deny := &denyAllSSHAuth{}
-	p, err := newSSHProtocol(newTestSSHCA(t), "tenant-a", deny)
-	if err != nil {
-		t.Fatal(err)
-	}
+	g := &recordingSSHGuard{}
+	p := newUnitSSHProtocol(t, g, &stubSSHWorkflow{})
 	for _, path := range []string{"/ssh/ca", "/ssh/krl"} {
 		rec := httptest.NewRecorder()
 		p.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
@@ -105,36 +136,38 @@ func TestServedSSHTrustMaterialStaysPublic(t *testing.T) {
 			t.Errorf("GET %s must stay public: a host fetches it before it can authenticate", path)
 		}
 	}
-	if deny.calls != 0 {
-		t.Errorf("public trust routes consulted the authenticator %d times", deny.calls)
+	if len(g.perms) != 0 {
+		t.Errorf("public trust routes consulted the guard %d times", len(g.perms))
 	}
 }
 
-// TestServedSSHRefusesConstructionWithoutAuthenticator makes the fail-closed
-// construction explicit: a nil authenticator must not silently produce an open
-// CA, which is how the original defect would return.
-func TestServedSSHRefusesConstructionWithoutAuthenticator(t *testing.T) {
-	if _, err := newSSHProtocol(newTestSSHCA(t), "tenant-a", nil); err == nil {
-		t.Fatal("newSSHProtocol accepted a nil authenticator; the served SSH CA would be anonymous again")
+// TestServedSSHRefusesConstructionWithoutGuardOrWorkflow makes the fail-closed
+// construction explicit: without the guard the CA would be anonymous again, and
+// without the workflow a revocation would not be recorded.
+func TestServedSSHRefusesConstructionWithoutGuardOrWorkflow(t *testing.T) {
+	g := &recordingSSHGuard{}
+	if _, err := newSSHProtocol(newTestSSHCA(t), "tenant-a", nil, &stubSSHWorkflow{}); err == nil {
+		t.Fatal("newSSHProtocol accepted a nil guard; the served SSH CA would be anonymous again")
+	}
+	if _, err := newSSHProtocol(newTestSSHCA(t), "tenant-a", g.guard, nil); err == nil {
+		t.Fatal("newSSHProtocol accepted a nil workflow; raw revocations would not be recorded")
 	}
 }
 
-// TestServedSSHAuthenticatedRequestReachesHandler proves the gate is not a
-// blanket denial: an authorized caller passes the wrapper and reaches the
-// handler. (Issuance itself then fails on the nil CA, which is fine — what is
-// asserted here is that the request was let through.)
-func TestServedSSHAuthenticatedRequestReachesHandler(t *testing.T) {
-	allow := &allowAllSSHAuth{}
-	p, err := newSSHProtocol(newTestSSHCA(t), "tenant-a", allow)
-	if err != nil {
-		t.Fatal(err)
-	}
+// TestServedSSHGuardedRequestReachesTheWorkflow proves the gate is not a blanket
+// denial and that raw requests go through the product workflow with their fields.
+func TestServedSSHGuardedRequestReachesTheWorkflow(t *testing.T) {
+	g := &recordingSSHGuard{allow: true}
+	wf := &stubSSHWorkflow{}
+	p := newUnitSSHProtocol(t, g, wf)
 	rec := httptest.NewRecorder()
-	p.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/ssh/revoke", strings.NewReader(`{"serial":1}`)))
-	if rec.Code == http.StatusUnauthorized {
-		t.Fatal("an authorized caller was refused; the gate rejects everything")
+	p.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/ssh/revoke", strings.NewReader(`{"serial":1,"key_id":"k"}`)))
+	if rec.Code != http.StatusNoContent || len(wf.revoked) != 1 || wf.revoked[0].Serial != 1 || wf.revoked[0].KeyID != "k" {
+		t.Fatalf("guarded revoke = %d, workflow saw %+v", rec.Code, wf.revoked)
 	}
-	if allow.calls != 1 {
-		t.Fatalf("authenticator consulted %d times, want 1", allow.calls)
+	rec = httptest.NewRecorder()
+	p.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/ssh/issue/host", strings.NewReader(`{"public_key":"k","key_id":"h","principals":["web-1"]}`)))
+	if rec.Code != http.StatusOK || len(wf.issued) != 1 || wf.issued[0].CertificateType != "host" || !slices.Equal(wf.issued[0].Principals, []string{"web-1"}) {
+		t.Fatalf("guarded host issue = %d, workflow saw %+v", rec.Code, wf.issued)
 	}
 }

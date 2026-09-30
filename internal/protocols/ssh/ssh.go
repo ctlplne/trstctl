@@ -163,13 +163,13 @@ func (ca *CA) issue(ctx context.Context, profile Profile, req IssueRequest, cert
 		for k, v := range req.Extensions {
 			ext[k] = v
 		}
-		validBefore := now.Add(ttl)
+		validAfter, validBefore := now.Add(-time.Minute), now.Add(ttl)
 		certB, err := crypto.SignSSHCertificate(ca.cfg.Signer, crypto.SSHCertParams{
 			SubjectPublicKey: req.SubjectPublicKey,
 			KeyID:            req.KeyID,
 			Principals:       req.Principals,
 			CertType:         certType,
-			ValidAfter:       now.Add(-time.Minute),
+			ValidAfter:       validAfter,
 			ValidBefore:      validBefore,
 			CriticalOptions:  req.CriticalOptions,
 			Extensions:       ext,
@@ -187,13 +187,26 @@ func (ca *CA) issue(ctx context.Context, profile Profile, req IssueRequest, cert
 		// string syntax, not JSON — a KeyID carrying a control byte or invalid
 		// UTF-8 renders as \x1b or \xff, which no JSON parser accepts, so the
 		// audit record for that issuance becomes unreadable.
+		// principals stays the count earlier events carried; principal_names and
+		// the validity window say which logins the certificate grants and when,
+		// so the record answers "who could log in as root, until when" (RV-08f).
+		// The event actor is attached by the event log from ctx.
 		payload, marshalErr := json.Marshal(struct {
-			Type       string `json:"type"`
-			KeyID      string `json:"key_id"`
-			Serial     uint64 `json:"serial"`
-			Principals int    `json:"principals"`
-			Profile    string `json:"profile"`
-		}{Type: kind, KeyID: req.KeyID, Serial: serial, Principals: len(req.Principals), Profile: profile.Name})
+			Type           string   `json:"type"`
+			KeyID          string   `json:"key_id"`
+			Serial         uint64   `json:"serial"`
+			Principals     int      `json:"principals"`
+			PrincipalNames []string `json:"principal_names"`
+			ValidAfter     string   `json:"valid_after"`
+			ValidBefore    string   `json:"valid_before"`
+			Profile        string   `json:"profile"`
+		}{
+			Type: kind, KeyID: req.KeyID, Serial: serial, Principals: len(req.Principals),
+			PrincipalNames: append([]string{}, req.Principals...),
+			ValidAfter:     validAfter.UTC().Format(time.RFC3339),
+			ValidBefore:    validBefore.UTC().Format(time.RFC3339),
+			Profile:        profile.Name,
+		})
 		if marshalErr == nil {
 			_ = auditsink.Emit(ctx, ca.cfg.Audit, nil, "ssh.cert.issued", ca.cfg.TenantID, payload)
 		}

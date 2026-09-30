@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -39,6 +40,9 @@ func (s *Server) SSHStatus(ctx context.Context, tenantID string) (api.SSHStatus,
 	sp, err := s.sshWorkflowProtocol(tenantID)
 	if err != nil {
 		return api.SSHStatus{}, err
+	}
+	if err := sp.syncRevocations(ctx, false); err != nil {
+		return api.SSHStatus{}, fmt.Errorf("%w: the revocation list cannot be brought up to date: %v", api.ErrSSHWorkflowUnavailable, err)
 	}
 	key, err := sp.AuthorityKey()
 	if err != nil {
@@ -213,6 +217,23 @@ func (s *Server) IssueSSHCertificate(ctx context.Context, tenantID, idempotencyK
 	}, nil
 }
 
+// allowUserPrincipals enforces protocols.ssh_user_principals for a direct user
+// certificate (F259). A certificate's principals are the login names sshd will
+// accept it for, so without a list any certs:issue caller could mint `root` for
+// every host that trusts this CA. Matching is exact; an empty list refuses direct
+// user certificates and says how to enable them.
+func (p *sshProtocol) allowUserPrincipals(principals []string) error {
+	if len(p.userPrincipals) == 0 {
+		return fmt.Errorf("%w: direct SSH user certificates are disabled until protocols.ssh_user_principals (TRSTCTL_PROTOCOLS_SSH_USER_PRINCIPALS) lists the login names this CA may certify; attested user certificates are unaffected", api.ErrSSHWorkflowRejected)
+	}
+	for _, principal := range principals {
+		if !slices.Contains(p.userPrincipals, principal) {
+			return fmt.Errorf("%w: principal %q is not listed in protocols.ssh_user_principals", api.ErrSSHWorkflowRejected, principal)
+		}
+	}
+	return nil
+}
+
 func (s *Server) normalizeSSHCertificate(tenantID string, req api.SSHCertificateRequest) (normalizedSSHCertificate, *sshProtocol, error) {
 	sp, err := s.sshWorkflowProtocol(tenantID)
 	if err != nil {
@@ -256,6 +277,11 @@ func (s *Server) normalizeSSHCertificate(tenantID string, req api.SSHCertificate
 	for _, principal := range principals {
 		if len(principal) > 256 {
 			return normalizedSSHCertificate{}, nil, fmt.Errorf("%w: each principal must be at most 256 characters", api.ErrSSHWorkflowInvalid)
+		}
+	}
+	if typ == "user" {
+		if err := sp.allowUserPrincipals(principals); err != nil {
+			return normalizedSSHCertificate{}, nil, err
 		}
 	}
 
@@ -704,14 +730,23 @@ func (s *Server) RevokeSSHCertificate(ctx context.Context, tenantID, idempotency
 	if strings.TrimSpace(idempotencyKey) == "" {
 		return api.SSHStatus{}, fmt.Errorf("%w: idempotency key is required", api.ErrSSHWorkflowInvalid)
 	}
-	if req.Serial == 0 && strings.TrimSpace(req.KeyID) == "" {
+	req.KeyID = strings.TrimSpace(req.KeyID)
+	if req.Serial == 0 && req.KeyID == "" {
 		return api.SSHStatus{}, fmt.Errorf("%w: serial or key_id is required", api.ErrSSHWorkflowInvalid)
 	}
-	data, _ := json.Marshal(req)
+	data, err := json.Marshal(req)
+	if err != nil {
+		return api.SSHStatus{}, fmt.Errorf("%w: encode revocation: %v", api.ErrSSHWorkflowInvalid, err)
+	}
+	// Record first: the KRL is a read model of these events, so a revocation is
+	// published only once the event log holds it, and it survives restart and
+	// reaches every replica. This replica applies it at once.
 	if _, err := s.appendSSHWorkflowEvent(ctx, tenantID, eventSSHCertRevoked, data); err != nil {
 		return api.SSHStatus{}, err
 	}
-	sp.Revoke(req.Serial, strings.TrimSpace(req.KeyID))
+	if err := sp.syncRevocations(ctx, true); err != nil {
+		return api.SSHStatus{}, fmt.Errorf("%w: the revocation is recorded and will be listed once the event log is readable: %v", api.ErrSSHWorkflowUnavailable, err)
+	}
 	return s.SSHStatus(ctx, tenantID)
 }
 

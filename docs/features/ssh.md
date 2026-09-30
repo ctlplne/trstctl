@@ -50,7 +50,18 @@ and effective TTL (default 1 hour, hard maximum 24 hours), deduplicated principa
 public-key and authority fingerprints, applied options/extensions, the one future signer
 call, and the revocation path. `POST /api/v1/ssh/certificates` revalidates the same
 contract and issues exactly one certificate behind an `Idempotency-Key`; a stable retry
-returns the first result instead of signing again.
+returns the first result instead of signing again. The protocol routes
+`POST /ssh/issue/user`, `POST /ssh/issue/host` and `POST /ssh/revoke` run the same
+workflow under the same guard: they need an `Idempotency-Key`, ABAC deny rules and the
+per-tenant rate limit apply, issuance needs `certs:issue`, revocation needs `certs:write`,
+and errors come back as `application/problem+json`.
+
+Direct user certificates may carry only the login names listed in
+`protocols.ssh_user_principals` (`TRSTCTL_PROTOCOLS_SSH_USER_PRINCIPALS`,
+comma-separated). Matching is exact, so `root` is allowed only if you list it. With the
+list empty, direct user certificates are refused with a message saying how to enable
+them. Host certificates and attested user certificates, whose principals are bound to
+verified evidence, are unaffected. The eval profile defaults the list to `eval-user`.
 
 The direct user-certificate path allowlists only `source-address` and `force-command`
 critical options plus known OpenSSH session extensions. Host certificates reject all
@@ -60,7 +71,10 @@ return its private key. Status and revocation remain available at
 an immutable, tenant-scoped `ssh.cert.revoked` event before publishing the updated KRL
 snapshot. On every control-plane start, trstctl rebuilds the KRL from those events before
 serving SSH. A malformed matching event stops startup instead of publishing a partial or
-empty revocation list.
+empty revocation list. Before answering `GET /ssh/krl`, each replica catches up with the
+event log (at most once every two seconds), so a revocation recorded on any replica is
+listed within about two seconds. If it cannot catch up, it answers 503 and the host keeps
+its last KRL.
 
 ### SSH deployment & trust configuration (F44)
 
@@ -151,6 +165,7 @@ trusted identity source:
 ```sh
 TRSTCTL_PROTOCOLS_SSH_ENABLED=true
 TRSTCTL_PROTOCOLS_SSH_TENANT_ID=11111111-1111-4111-8111-111111111111
+TRSTCTL_PROTOCOLS_SSH_USER_PRINCIPALS=deploy,oncall
 TRSTCTL_ATTESTED_ISSUANCE_ENABLED=true
 TRSTCTL_ATTESTED_ISSUANCE_TRUST_DOMAIN=example.org
 TRSTCTL_ATTESTED_ISSUANCE_DEFAULT_TTL=10m
@@ -251,7 +266,10 @@ trstctl ssh retire-host --host edge-1.internal --reason 'replaced'
 - **Agent config:** `SSHDConfigPath`, `TrustedUserCAKeysPath`,
   `AllowUnconfirmedRemoval` (default false).
 - **Attested issuance:** `AttestedUserCertIssuer.Issue` (method+payload → cert).
-- **Events:** `ssh.cert.issued`, `ssh.attested_cert.issued`, `ssh.trust.added`,
+- **Configuration:** `protocols.ssh.enabled`, `protocols.ssh.tenant_id`,
+  `protocols.ssh_user_principals`.
+- **Events:** `ssh.cert.issued` (key ID, serial, principal names, validity window and
+  the calling actor), `ssh.cert.revoked`, `ssh.attested_cert.issued`, `ssh.trust.added`,
   `ssh.trust.removed`, `ssh.trust.rolled_back`, `ssh.trust.rollback_failed`.
 - **Standard:** OpenSSH certificate format (`PROTOCOL.certkeys`).
 - **Design deep-dive:** [SSH trust-rewrite design](../design/ssh-trust-rewrite.md).

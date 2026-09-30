@@ -9,12 +9,14 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
+	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/protocols/bodylimit"
-	"trstctl.com/trstctl/internal/protocols/est"
 	"trstctl.com/trstctl/internal/protocols/spiffe"
 	"trstctl.com/trstctl/internal/protocols/ssh"
 )
@@ -31,69 +33,86 @@ type sshProtocol struct {
 	tenantID string
 	mux      *http.ServeMux
 
-	// auth gates the three MUTATING routes. Issuance and revocation are not
+	// guard serves the three MUTATING routes. Issuance and revocation are not
 	// public: an SSH user certificate names its own principals, so an anonymous
 	// caller could otherwise mint `root` for any host that trusts this CA, and an
-	// anonymous revoker could poison the KRL. The two GET routes stay public
-	// because they serve trust material a host must fetch before it can
-	// authenticate anything (the CA public key and the binary KRL), exactly like
-	// a CRL distribution point.
-	auth sshAuthenticator
+	// anonymous revoker could poison the KRL. The guard is the API's own mutation
+	// guard (authentication, RBAC, the ABAC deny overlay, the per-tenant rate
+	// limit, the event actor and Idempotency-Key replay), so the raw routes cannot
+	// drift from /api/v1/ssh/certificates. The two GET routes stay public because
+	// they serve trust material a host must fetch before it can authenticate
+	// anything (the CA public key and the binary KRL), exactly like a CRL
+	// distribution point.
+	guard sshMutationGuard
+
+	// workflow is the product SSH workflow the raw routes delegate to, so a raw
+	// request gets the same normalization, principal allowlist, option checks and
+	// durable revocation record as the product API.
+	workflow sshRawWorkflow
+
+	// userPrincipals is protocols.ssh_user_principals: the only login names a
+	// direct (non-attested) user certificate may carry. Empty refuses direct user
+	// certificates.
+	userPrincipals []string
 
 	// krlVersion is the monotonic OpenSSH KRL version a host uses to reject an older
-	// KRL; it increments each time the served KRL is regenerated.
+	// KRL; it counts the tenant revocation events applied, so replicas at the same
+	// log position serve the same version.
 	krlVersion atomic.Uint64
+
+	// The served KRL is a read model of the tenant's ssh.cert.revoked events
+	// (AN-2). syncMu serializes catch-up; applied is the highest event sequence
+	// read; syncedFrom is when the last successful catch-up started.
+	log        *events.Log
+	syncMu     sync.Mutex
+	applied    uint64
+	syncedFrom time.Time
 }
 
-// sshAuthenticator decides whether a request may mint or revoke an SSH
-// certificate. It is deliberately the same credential path the served EST
-// endpoint uses, so there is one audited token implementation rather than a
-// second, SSH-shaped one.
-type sshAuthenticator interface {
-	Authenticate(r *http.Request) est.AuthenticationResult
+// sshMutationGuard wraps a raw SSH mutation in the API mutation guard for perm.
+type sshMutationGuard func(perm authz.Permission, fn api.ProtocolMutationFunc) http.HandlerFunc
+
+// sshRawWorkflow is the slice of the product SSH workflow the raw routes use.
+type sshRawWorkflow interface {
+	IssueSSHCertificate(ctx context.Context, tenantID, idempotencyKey string, req api.SSHCertificateRequest) (api.SSHCertificate, error)
+	RevokeSSHCertificate(ctx context.Context, tenantID, idempotencyKey string, req api.SSHRevokeCertificateRequest) (api.SSHStatus, error)
 }
+
+// sshKRLSyncTimeout bounds how long a KRL read waits to catch up with the event
+// log before it reports 503 and the host keeps its last KRL.
+const sshKRLSyncTimeout = 5 * time.Second
+
+// sshKRLSyncInterval bounds how often an unauthenticated KRL read may trigger a
+// catch-up. A replay currently re-reads history before it starts (RV-12.2), so
+// public reads cost at most one catch-up per interval per process; a revocation
+// recorded on another replica is listed within about this long.
+const sshKRLSyncInterval = 2 * time.Second
 
 // newSSHProtocol wires the served SSH CA surface over a built ssh.CA. A fresh KRL is
 // attached so revocations published through it render as a binary KRL sshd consumes.
 //
-// auth must be non-nil: a nil authenticator would restore the anonymous-issuance
-// defect, so construction fails closed rather than serving an open CA.
-func newSSHProtocol(ca *ssh.CA, tenantID string, auth sshAuthenticator) (*sshProtocol, error) {
-	if auth == nil {
-		return nil, fmt.Errorf("server: served SSH CA requires an authenticator")
+// guard and workflow must be non-nil: without them the mutating routes would be
+// anonymous or unrecorded, so construction fails closed rather than serving an
+// open CA.
+func newSSHProtocol(ca *ssh.CA, tenantID string, guard sshMutationGuard, workflow sshRawWorkflow) (*sshProtocol, error) {
+	if guard == nil {
+		return nil, fmt.Errorf("server: served SSH CA requires the API mutation guard")
 	}
-	p := &sshProtocol{ca: ca, krl: ssh.NewKRL(), tenantID: tenantID, auth: auth}
+	if workflow == nil {
+		return nil, fmt.Errorf("server: served SSH CA requires the SSH workflow")
+	}
+	p := &sshProtocol{ca: ca, krl: ssh.NewKRL(), tenantID: tenantID, guard: guard, workflow: workflow}
 	mux := http.NewServeMux()
 	// Public trust material — a host must read these before it can trust anything.
 	mux.HandleFunc("GET /ssh/ca", p.authorityKey)
 	mux.HandleFunc("GET /ssh/krl", p.serveKRL)
-	// Mutating routes: authenticated and authorized for certs:issue.
-	mux.HandleFunc("POST /ssh/issue/user", p.authenticated(p.issue(true)))
-	mux.HandleFunc("POST /ssh/issue/host", p.authenticated(p.issue(false)))
-	mux.HandleFunc("POST /ssh/revoke", p.authenticated(p.revoke))
+	// Mutating routes: issuance needs certs:issue; revocation needs certs:write,
+	// the authority the product revoke route requires.
+	mux.HandleFunc("POST /ssh/issue/user", guard(authz.CertsIssue, p.issue("user")))
+	mux.HandleFunc("POST /ssh/issue/host", guard(authz.CertsIssue, p.issue("host")))
+	mux.HandleFunc("POST /ssh/revoke", guard(authz.CertsWrite, p.revoke))
 	p.mux = mux
 	return p, nil
-}
-
-// authenticated wraps a mutating handler with the credential check. Denials
-// carry the authenticator's fixed RFC 6750 challenge and never reflect a token,
-// a store error, or whether the credential merely lacked authority.
-func (p *sshProtocol) authenticated(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		result := p.auth.Authenticate(r)
-		if !result.Allowed {
-			status := result.StatusCode
-			if status == 0 {
-				status = http.StatusUnauthorized
-			}
-			if result.Challenge != "" {
-				w.Header().Set("WWW-Authenticate", result.Challenge)
-			}
-			http.Error(w, "ssh: unauthorized", status)
-			return
-		}
-		next(w, r)
-	}
 }
 
 // ServeHTTP implements http.Handler.
@@ -131,67 +150,49 @@ type sshIssueResponse struct {
 
 const maxSSHJSONBody = 1 << 16
 
-// issue mints an SSH user or host certificate through the signer-backed SSH CA.
-func (p *sshProtocol) issue(userCert bool) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		body, err := bodylimit.ReadAll(r.Body, maxSSHJSONBody)
-		if err == bodylimit.ErrTooLarge {
-			http.Error(w, "ssh: request body too large", http.StatusRequestEntityTooLarge)
-			return
-		}
-		if err != nil {
-			http.Error(w, "ssh: cannot read body", http.StatusBadRequest)
-			return
-		}
+// readSSHJSON reads a bounded raw SSH request body into v.
+func readSSHJSON(r *http.Request, v any) error {
+	body, err := bodylimit.ReadAll(r.Body, maxSSHJSONBody)
+	if errors.Is(err, bodylimit.ErrTooLarge) {
+		return api.ProtocolRequestError(http.StatusRequestEntityTooLarge, "ssh: request body too large")
+	}
+	if err != nil {
+		return api.ProtocolRequestError(http.StatusBadRequest, "ssh: cannot read body")
+	}
+	if err := json.Unmarshal(body, v); err != nil {
+		return api.ProtocolRequestError(http.StatusBadRequest, "ssh: malformed request")
+	}
+	return nil
+}
+
+// issue mints an SSH user or host certificate through the product SSH workflow:
+// the same normalization (TTL clamp, deduplicated principals, host certificates
+// without user permit-* defaults or critical options), the principal allowlist
+// for user certificates, and the audited signer-backed issuance.
+func (p *sshProtocol) issue(certificateType string) api.ProtocolMutationFunc {
+	return func(ctx context.Context, tenantID string, r *http.Request) (int, any, error) {
 		var req sshIssueRequest
-		if err := json.Unmarshal(body, &req); err != nil {
-			http.Error(w, "ssh: malformed request", http.StatusBadRequest)
-			return
+		if err := readSSHJSON(r, &req); err != nil {
+			return 0, nil, err
 		}
-		ttl := time.Duration(req.TTLSeconds) * time.Second
-		if ttl <= 0 {
-			ttl = time.Hour
-		}
-		// A permissive served profile: principals/TTL come from the request and are
-		// bounded by a max TTL; default extensions enable interactive use. Per-tenant
-		// SSH profiles (force-command, source-address) are a profile-model follow-up.
-		profile := ssh.Profile{
-			Name:           "served-ssh",
-			MaxTTL:         24 * time.Hour,
-			AllowUserCerts: userCert,
-			AllowHostCerts: !userCert,
-			DefaultExtensions: map[string]string{
-				"permit-pty":              "",
-				"permit-user-rc":          "",
-				"permit-port-forwarding":  "",
-				"permit-agent-forwarding": "",
-			},
-		}
-		issReq := ssh.IssueRequest{
-			SubjectPublicKey: []byte(req.PublicKey),
-			KeyID:            req.KeyID,
-			Principals:       req.Principals,
-			TTL:              ttl,
-			CriticalOptions:  req.CriticalOptions,
-			Extensions:       req.Extensions,
-		}
-		var issued ssh.Issued
-		if userCert {
-			issued, err = p.ca.IssueUserCert(r.Context(), profile, issReq)
-		} else {
-			issued, err = p.ca.IssueHostCert(r.Context(), profile, issReq)
-		}
+		issued, err := p.workflow.IssueSSHCertificate(ctx, tenantID, r.Header.Get("Idempotency-Key"), api.SSHCertificateRequest{
+			CertificateType: certificateType,
+			PublicKey:       req.PublicKey,
+			KeyID:           req.KeyID,
+			Principals:      req.Principals,
+			TTLSeconds:      req.TTLSeconds,
+			CriticalOptions: req.CriticalOptions,
+			Extensions:      req.Extensions,
+		})
 		if err != nil {
-			http.Error(w, "ssh: issuance refused: "+err.Error(), http.StatusBadRequest)
-			return
+			return 0, nil, err
 		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(sshIssueResponse{
-			Certificate: string(issued.Certificate),
+		return http.StatusOK, sshIssueResponse{
+			Certificate: issued.Certificate,
 			Serial:      issued.Serial,
 			KeyID:       issued.KeyID,
-			ValidBefore: issued.ValidBefore.UTC().Format(time.RFC3339),
-		})
+			ValidBefore: issued.ValidBefore,
+		}, nil
 	}
 }
 
@@ -201,24 +202,22 @@ type sshRevokeRequest struct {
 	KeyID  string `json:"key_id,omitempty"`
 }
 
-// revoke records an SSH cert revocation in the KRL so the next /ssh/krl reflects it.
-func (p *sshProtocol) revoke(w http.ResponseWriter, r *http.Request) {
-	body, err := bodylimit.ReadAll(r.Body, maxSSHJSONBody)
-	if err == bodylimit.ErrTooLarge {
-		http.Error(w, "ssh: request body too large", http.StatusRequestEntityTooLarge)
-		return
-	}
-	if err != nil {
-		http.Error(w, "ssh: cannot read body", http.StatusBadRequest)
-		return
-	}
+// revoke records an SSH certificate revocation through the product workflow: the
+// tenant's ssh.cert.revoked event is appended first, and the served KRL is a read
+// model of those events, so the revocation survives restart and reaches every
+// replica.
+func (p *sshProtocol) revoke(ctx context.Context, tenantID string, r *http.Request) (int, any, error) {
 	var req sshRevokeRequest
-	if err := json.Unmarshal(body, &req); err != nil || (req.Serial == 0 && req.KeyID == "") {
-		http.Error(w, "ssh: malformed revoke request", http.StatusBadRequest)
-		return
+	if err := readSSHJSON(r, &req); err != nil {
+		return 0, nil, err
 	}
-	p.Revoke(req.Serial, req.KeyID)
-	w.WriteHeader(http.StatusNoContent)
+	if _, err := p.workflow.RevokeSSHCertificate(ctx, tenantID, r.Header.Get("Idempotency-Key"), api.SSHRevokeCertificateRequest{
+		Serial: req.Serial,
+		KeyID:  req.KeyID,
+	}); err != nil {
+		return 0, nil, err
+	}
+	return http.StatusNoContent, nil, nil
 }
 
 func (p *sshProtocol) Revoke(serial uint64, keyID string) {
@@ -232,11 +231,11 @@ func (p *sshProtocol) Revoke(serial uint64, keyID string) {
 }
 
 // restoreRevocations rebuilds the served in-memory KRL from its tenant's
-// immutable events before the HTTP surface is exposed. The event log remains
-// the source of truth (AN-2); without this replay, every control-plane restart
-// would briefly publish an empty KRL and could let a revoked certificate work
-// again. Malformed matching history fails startup closed instead of serving a
-// partial revocation view.
+// immutable events before the HTTP surface is exposed, and keeps the log so
+// later reads can catch up. The event log remains the source of truth (AN-2);
+// without this replay, every control-plane restart would briefly publish an
+// empty KRL and could let a revoked certificate work again. Malformed matching
+// history fails startup closed instead of serving a partial revocation view.
 func (p *sshProtocol) restoreRevocations(ctx context.Context, log *events.Log) error {
 	if p == nil || p.krl == nil {
 		return errors.New("server: SSH protocol is unavailable during revocation replay")
@@ -244,10 +243,43 @@ func (p *sshProtocol) restoreRevocations(ctx context.Context, log *events.Log) e
 	if log == nil {
 		return errors.New("server: SSH revocation replay requires the event log")
 	}
-	if err := log.Replay(ctx, 0, func(event events.Event) error {
-		if event.Type != eventSSHCertRevoked || event.TenantID != p.tenantID {
+	p.syncMu.Lock()
+	p.log = log
+	p.syncMu.Unlock()
+	return p.syncRevocations(ctx, true)
+}
+
+// syncRevocations applies every tenant ssh.cert.revoked event appended since the
+// last one this process read, whichever replica appended it. Catch-ups are
+// serialized and coalesced: a caller that arrives while another catch-up is
+// running waits for it, and skips its own when a catch-up that started after it
+// arrived already succeeded, so at most one replay runs at a time. Unless force
+// is set (startup, or right after this process recorded a revocation), a caller
+// also skips when the last catch-up started less than sshKRLSyncInterval ago.
+func (p *sshProtocol) syncRevocations(ctx context.Context, force bool) error {
+	arrived := time.Now()
+	p.syncMu.Lock()
+	defer p.syncMu.Unlock()
+	if p.log == nil {
+		return errors.New("server: SSH revocation sync requires the event log")
+	}
+	if !p.syncedFrom.IsZero() {
+		if p.syncedFrom.After(arrived) || (!force && arrived.Sub(p.syncedFrom) < sshKRLSyncInterval) {
 			return nil
 		}
+	}
+	started := time.Now()
+	if err := p.log.Replay(ctx, p.applied+1, p.applyRevocationEvent); err != nil {
+		return fmt.Errorf("server: replay SSH revocations: %w", err)
+	}
+	p.syncedFrom = started
+	return nil
+}
+
+// applyRevocationEvent applies one event under syncMu. Every event advances the
+// read position; only this tenant's ssh.cert.revoked events change the KRL.
+func (p *sshProtocol) applyRevocationEvent(event events.Event) error {
+	if event.Type == eventSSHCertRevoked && event.TenantID == p.tenantID {
 		var req sshRevokeRequest
 		if err := json.Unmarshal(event.Data, &req); err != nil {
 			return fmt.Errorf("decode ssh.cert.revoked event %d: %w", event.Sequence, err)
@@ -257,9 +289,9 @@ func (p *sshProtocol) restoreRevocations(ctx context.Context, log *events.Log) e
 			return fmt.Errorf("decode ssh.cert.revoked event %d: serial or key_id is required", event.Sequence)
 		}
 		p.Revoke(req.Serial, req.KeyID)
-		return nil
-	}); err != nil {
-		return fmt.Errorf("server: replay SSH revocations: %w", err)
+	}
+	if event.Sequence > p.applied {
+		p.applied = event.Sequence
 	}
 	return nil
 }
@@ -274,7 +306,17 @@ func (p *sshProtocol) RevokedCount() int {
 // serveKRL emits the current KRL in the OpenSSH BINARY KRL format (PROTOCOL.krl) —
 // the artifact sshd's RevokedKeys directive consumes and `ssh-keygen -Qf` reads
 // (INTEROP-009). The JSON snapshot sshd cannot load is deliberately not served here.
-func (p *sshProtocol) serveKRL(w http.ResponseWriter, _ *http.Request) {
+// It first catches up with the event log (at most once per sshKRLSyncInterval), so
+// a KRL from any replica lists every revocation recorded more than that long
+// before the request; if it cannot, it answers 503 and the host keeps its last
+// KRL rather than loading an incomplete one.
+func (p *sshProtocol) serveKRL(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), sshKRLSyncTimeout)
+	defer cancel()
+	if err := p.syncRevocations(ctx, false); err != nil {
+		http.Error(w, "ssh: the revocation list cannot be brought up to date; keep the last KRL and retry", http.StatusServiceUnavailable)
+		return
+	}
 	der := p.krl.DistributeKRL(p.krlVersion.Load())
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", `attachment; filename="trstctl.krl"`)

@@ -416,7 +416,10 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 		return shape(`{"key_id":"","serial":1,"method":"","subject":"","approver":"","principals":[""],"critical_options":{"key":""}}`,
 			catalogPrivacyShapeOptions{DynamicObject: []string{"/critical_options"}, Nullable: []string{"/critical_options"}}), true
 	case "ssh.cert.issued":
-		return shape(`{"type":"","key_id":"","serial":1,"principals":1,"profile":""}`), true
+		// principal_names and the validity window were added later; earlier
+		// history carries only the principal count.
+		return shape(`{"type":"","key_id":"","serial":1,"principals":1,"principal_names":[""],"valid_after":"","valid_before":"","profile":""}`,
+			catalogPrivacyShapeOptions{Optional: []string{"/principal_names", "/valid_after", "/valid_before"}}), true
 	case "ssh.cert.revoked":
 		return shape(`{"serial":1,"key_id":"","reason":""}`,
 			catalogPrivacyShapeOptions{Optional: []string{"/serial", "/key_id", "/reason"}}), true

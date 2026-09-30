@@ -38,7 +38,7 @@ func TestSSHProtocolRestoresTenantRevocationsFromEventLog(t *testing.T) {
 		}
 	}
 
-	p, err := newSSHProtocol(newTestSSHCA(t), "tenant-a", &allowAllSSHAuth{})
+	p, err := newSSHProtocol(newTestSSHCA(t), "tenant-a", (&recordingSSHGuard{}).guard, &stubSSHWorkflow{})
 	if err != nil {
 		t.Fatalf("new SSH protocol: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestSSHProtocolFailsClosedOnMalformedRevocationHistory(t *testing.T) {
 		t.Fatalf("append malformed fixture: %v", err)
 	}
 
-	p, err := newSSHProtocol(newTestSSHCA(t), "tenant-a", &allowAllSSHAuth{})
+	p, err := newSSHProtocol(newTestSSHCA(t), "tenant-a", (&recordingSSHGuard{}).guard, &stubSSHWorkflow{})
 	if err != nil {
 		t.Fatalf("new SSH protocol: %v", err)
 	}

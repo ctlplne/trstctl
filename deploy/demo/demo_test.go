@@ -269,6 +269,7 @@ func TestDemoComposeIsSeparatePrepopulatedStack(t *testing.T) {
 		"TRSTCTL_EPHEMERAL_ISSUANCE_REQUIRED_APPROVALS":    "1",
 		"TRSTCTL_PROTOCOLS_SSH_ENABLED":                    "true",
 		"TRSTCTL_PROTOCOLS_SSH_TENANT_ID":                  "11111111-1111-4111-8111-111111111111",
+		"TRSTCTL_PROTOCOLS_SSH_USER_PRINCIPALS":            "demo",
 		"TRSTCTL_SERVER_TLS_INTERNAL_TRUST_FILE":           "/public-trust/control-plane.crt",
 	} {
 		if got := stringValue(cp.Environment[k]); got != want {

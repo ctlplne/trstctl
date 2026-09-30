@@ -448,7 +448,8 @@ func waitForSocket(t *testing.T, path string, d time.Duration) {
 // existed) and PASS after.
 func TestServedSSHEndToEnd(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{
-		SSH: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
+		SSH:               config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
+		SSHUserPrincipals: []string{"alice"},
 	})
 	if !protoContains(h.srv.ServedProtocols(), "ssh") {
 		t.Fatal("SSH is not reported as served — wire-in failed")
@@ -474,13 +475,14 @@ func TestServedSSHEndToEnd(t *testing.T) {
 	// Issuance requires certs:issue: an SSH user certificate names its own
 	// principals, so minting one is an issuance decision and the served route is
 	// authenticated (it was anonymous, which let any caller mint `root`).
-	sshToken := seedServedAPIToken(t, t.Context(), h.store, h.tenant, "ssh-operator", []string{"certs:issue"})
+	sshToken := seedServedAPIToken(t, t.Context(), h.store, h.tenant, "ssh-operator", []string{"certs:issue", "certs:write"})
 	issueReq, err := http.NewRequest(http.MethodPost, h.ts.URL+"/ssh/issue/user", bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
 	issueReq.Header.Set("Content-Type", "application/json")
 	issueReq.Header.Set("Authorization", "Bearer "+sshToken)
+	issueReq.Header.Set("Idempotency-Key", "served-ssh-e2e-issue")
 	resp, err := h.ts.Client().Do(issueReq)
 	if err != nil {
 		t.Fatalf("POST /ssh/issue/user: %v", err)
@@ -543,6 +545,7 @@ func TestServedSSHEndToEnd(t *testing.T) {
 	}
 	revokeReq.Header.Set("Content-Type", "application/json")
 	revokeReq.Header.Set("Authorization", "Bearer "+sshToken)
+	revokeReq.Header.Set("Idempotency-Key", "served-ssh-e2e-revoke")
 	rresp, err := h.ts.Client().Do(revokeReq)
 	if err != nil {
 		t.Fatalf("POST /ssh/revoke: %v", err)

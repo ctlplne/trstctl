@@ -23,7 +23,8 @@ import (
 // certificate, and an idempotent replay returns the same certificate.
 func TestServedSSHCertificatePreviewAndIssueF43(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{
-		SSH: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
+		SSH:               config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
+		SSHUserPrincipals: []string{"ops", "deployer"},
 	})
 	token := seedScopedToken(t, h.store, h.tenant, "certs:issue", "certs:read")
 	publicKey := string(genSSHKey(t, filepath.Join(t.TempDir(), "ssh_host_ed25519_key")))
@@ -192,7 +193,8 @@ func TestServedSSHCertificatePreviewAndIssueF43(t *testing.T) {
 
 func TestServedSSHCertificatePreviewRejectsUnsafeOptions(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{
-		SSH: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
+		SSH:               config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
+		SSHUserPrincipals: []string{"ops", "deployer"},
 	})
 	token := seedScopedToken(t, h.store, h.tenant, "certs:issue")
 	publicKey := string(genSSHKey(t, filepath.Join(t.TempDir(), "id_ed25519")))

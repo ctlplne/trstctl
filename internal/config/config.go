@@ -18,6 +18,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -766,6 +768,14 @@ type Protocols struct {
 	TSACertFile          string         `json:"tsa_cert_file,omitempty"`
 	SPIFFE               SPIFFEProtocol `json:"spiffe"`
 	SSH                  ProtocolToggle `json:"ssh"`
+	// SSHUserPrincipals lists the only login names a direct (non-attested) SSH
+	// user certificate may carry (F259). A certificate's principals are the
+	// accounts sshd accepts it for, so without a list any certs:issue caller
+	// could mint `root` for every host that trusts the CA. Matching is exact;
+	// empty refuses direct user certificates. Host certificates and attested user
+	// certificates (principals bound to verified evidence) are unaffected. The
+	// eval profile defaults it to DefaultEvalSSHUserPrincipal.
+	SSHUserPrincipals []string `json:"ssh_user_principals,omitempty"`
 	// SCEPIntuneChallenge pins Microsoft Intune Connector challenge-signing
 	// certificates. Served SCEP always wires this validator; without anchors the
 	// validator fails closed rather than accepting unauthenticated CSRs.
@@ -779,6 +789,9 @@ const (
 	ProtocolProfileEval = "eval"
 	// DefaultEvalSPIFFETrustDomain is intentionally non-public and evaluation-only.
 	DefaultEvalSPIFFETrustDomain = "eval.trstctl.local"
+	// DefaultEvalSSHUserPrincipal is the one login name the eval profile lets a
+	// direct SSH user certificate carry when protocols.ssh_user_principals is unset.
+	DefaultEvalSSHUserPrincipal = "eval-user"
 )
 
 // Effective returns the protocol configuration the server must assemble. The
@@ -802,6 +815,9 @@ func (p Protocols) Effective() (Protocols, error) {
 		p.CMP = ProtocolToggle{Enabled: true, TenantID: tenantID}
 		p.TSA = ProtocolToggle{Enabled: true, TenantID: tenantID}
 		p.SSH = ProtocolToggle{Enabled: true, TenantID: tenantID}
+		if len(p.SSHUserPrincipals) == 0 {
+			p.SSHUserPrincipals = []string{DefaultEvalSSHUserPrincipal}
+		}
 		p.SPIFFE.Enabled = true
 		p.SPIFFE.TenantID = tenantID
 		if trustDomain := strings.TrimSpace(p.EvalSPIFFETrustDomain); trustDomain != "" {
@@ -2876,6 +2892,7 @@ func applyProtocolsEnv(getenv func(string) string, p *Protocols) {
 	setString(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_TRUST_DOMAIN", &p.SPIFFE.TrustDomain)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_SSH_ENABLED", &p.SSH.Enabled)
 	setString(getenv, "TRSTCTL_PROTOCOLS_SSH_TENANT_ID", &p.SSH.TenantID)
+	setCSV(getenv, "TRSTCTL_PROTOCOLS_SSH_USER_PRINCIPALS", &p.SSHUserPrincipals)
 }
 
 // applyBackupEnv is the DR/backup stage of the environment overlay. Every
@@ -3699,6 +3716,35 @@ func validateSignerConfig(c *Config) []error {
 	return errs
 }
 
+// maxSSHUserPrincipals bounds protocols.ssh_user_principals; each certificate
+// may carry at most 64 principals and the list is compared on every issuance.
+const maxSSHUserPrincipals = 256
+
+// validateSSHUserPrincipals refuses entries sshd would not match literally: blank,
+// padded, over-long, containing whitespace, commas, control characters or the
+// wildcard characters * and ?, and duplicates.
+func validateSSHUserPrincipals(principals []string) []error {
+	var errs []error
+	if len(principals) > maxSSHUserPrincipals {
+		errs = append(errs, fmt.Errorf("protocols.ssh_user_principals lists %d names; at most %d are allowed", len(principals), maxSSHUserPrincipals))
+	}
+	seen := make(map[string]bool, len(principals))
+	for i, principal := range principals {
+		switch {
+		case principal == "" || strings.TrimSpace(principal) != principal:
+			errs = append(errs, fmt.Errorf("protocols.ssh_user_principals[%d] must be a non-empty login name without surrounding spaces", i))
+		case len(principal) > 256 || !utf8.ValidString(principal):
+			errs = append(errs, fmt.Errorf("protocols.ssh_user_principals[%d] must be valid UTF-8 of at most 256 bytes", i))
+		case strings.ContainsAny(principal, ",*?") || strings.IndexFunc(principal, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) >= 0:
+			errs = append(errs, fmt.Errorf("protocols.ssh_user_principals[%d] %q must be one literal login name: no spaces, commas, control characters or wildcards", i, principal))
+		case seen[principal]:
+			errs = append(errs, fmt.Errorf("protocols.ssh_user_principals lists %q more than once", principal))
+		}
+		seen[principal] = true
+	}
+	return errs
+}
+
 func validateServedSurfaces(c *Config) []error {
 	var errs []error
 	errs = append(errs, validateEphemeralIssuance(c.EphemeralIssuance)...)
@@ -3762,6 +3808,7 @@ func validateServedSurfaces(c *Config) []error {
 	} else {
 		errs = append(errs, effectiveProtocols.ValidateTenantBindings("")...)
 	}
+	errs = append(errs, validateSSHUserPrincipals(c.Protocols.SSHUserPrincipals)...)
 	errs = append(errs, c.Protocols.ACMEQuota.validate()...)
 	errs = append(errs, validateACMEEAB(c.Protocols.ACMEEAB)...)
 	// Served plugin surface (EXC-WIRE-05; ARCH-007/SUPPLY-004): when enabled it must

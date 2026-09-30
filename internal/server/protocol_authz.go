@@ -77,15 +77,16 @@ func ProtocolAuthzManifest() []ProtocolAuthzEntry {
 			// GET /ssh/ca and GET /ssh/krl remain public: they are the trust
 			// material a host must fetch before it can authenticate anything,
 			// exactly like a CRL distribution point. The three MUTATING routes
-			// require certs:issue. They were previously public on the rationale
-			// that "principals are constrained by the served SSH profile" — that
-			// was not true (ssh.Profile carries no principal allowlist and
-			// issue() checks only non-empty + TTL), so an anonymous caller could
-			// mint a `root` user certificate.
+			// run under the API mutation guard: the two issue routes require
+			// certs:issue and /ssh/revoke requires certs:write, as the product
+			// revoke route does. They were once public on the rationale that
+			// "principals are constrained by the served SSH profile", which was
+			// not true; direct user certificates are now limited to
+			// protocols.ssh_user_principals.
 			Permission:          authz.CertsIssue,
-			TenantMapping:       "tenant is fixed by protocols.ssh.tenant_id or the server default tenant when the signer-backed SSH CA is built; the bearer token must belong to that same tenant.",
-			PrincipalMapping:    "principal is the trstctl API token subject, which must grant " + string(authz.CertsIssue) + "; the SSH subject public key, key id and principals are recorded in the certificate/KRL operation.",
-			EnablementAuthority: "operator/admin configuration enables the mount; issuance and revocation require " + string(authz.CertsIssue) + ".",
+			TenantMapping:       "tenant is fixed by protocols.ssh.tenant_id or the server default tenant when the signer-backed SSH CA is built; the authenticated caller must belong to that same tenant.",
+			PrincipalMapping:    "principal is the authenticated trstctl caller (API token or session), which must grant " + string(authz.CertsIssue) + " to issue and " + string(authz.CertsWrite) + " to revoke; ABAC deny rules and the per-tenant rate limit apply, direct user certificate principals must be listed in protocols.ssh_user_principals, and the ssh.cert.issued and ssh.cert.revoked events record the caller as actor with the principal names and validity.",
+			EnablementAuthority: "operator/admin configuration enables the mount; issuance requires " + string(authz.CertsIssue) + " and revocation requires " + string(authz.CertsWrite) + ".",
 			DefaultDenyTest:     "internal/server/protocols_served_spiffe_ssh_test.go",
 		},
 		{

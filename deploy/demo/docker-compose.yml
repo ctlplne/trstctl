@@ -301,6 +301,9 @@ services:
       TRSTCTL_EPHEMERAL_ISSUANCE_REQUIRED_APPROVALS: "1"
       TRSTCTL_PROTOCOLS_SSH_ENABLED: "true"
       TRSTCTL_PROTOCOLS_SSH_TENANT_ID: "11111111-1111-4111-8111-111111111111"
+      # Direct SSH user certificates may name only these logins; `demo` is a
+      # non-privileged account for trying the flow. List real logins in production.
+      TRSTCTL_PROTOCOLS_SSH_USER_PRINCIPALS: "demo"
     volumes:
       - signersock:/run/trstctl
       - secrets:/data/secrets

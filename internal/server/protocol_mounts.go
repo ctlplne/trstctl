@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -186,7 +187,7 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 
 	if cfg.SSH.Enabled {
 		sshTenant := firstNonEmpty(cfg.SSH.TenantID, tenantFallback)
-		sshCA, err := s.buildSSHCA(ctx, sshTenant, pool)
+		sshCA, err := s.buildSSHCA(ctx, sshTenant, pool, cfg.SSHUserPrincipals)
 		if err != nil {
 			return nil, fmt.Errorf("server: build SSH CA: %w", err)
 		}
@@ -933,8 +934,10 @@ func decodeProtocolTransportKey(b []byte) (certDER, keyPKCS8 []byte, err error) 
 }
 
 // buildSSHCA provisions the SSH CA key in the signer (its own handle, constrained to
-// PurposeSSHCert) and returns the served SSH protocol surface.
-func (s *Server) buildSSHCA(ctx context.Context, tenantID string, pool *bulkhead.Pool) (*sshProtocol, error) {
+// PurposeSSHCert) and returns the served SSH protocol surface. userPrincipals is
+// protocols.ssh_user_principals, the only login names a direct user certificate
+// may carry.
+func (s *Server) buildSSHCA(ctx context.Context, tenantID string, pool *bulkhead.Pool, userPrincipals []string) (*sshProtocol, error) {
 	c := s.signer.Client()
 	if c == nil {
 		return nil, fmt.Errorf("server: signer unavailable for SSH CA")
@@ -947,20 +950,25 @@ func (s *Server) buildSSHCA(ctx context.Context, tenantID string, pool *bulkhead
 	if err != nil {
 		return nil, err
 	}
-	// The mutating SSH routes require certs:issue, the authority the protocol
-	// authz manifest already names for this surface. It is deliberately the
-	// ISSUE authority rather than EST's REQUEST authority: an SSH user
-	// certificate names its own principals, so minting one is an issuance
-	// decision, not a request for someone else to approve.
-	protocol, err := newSSHProtocol(ca, tenantID, servedEnrollAuth{
-		tenantServiceCheck: s.tenantServiceCheck,
-		store:              s.store,
-		tenantID:           tenantID,
-		perm:               authz.CertsIssue,
-	})
+	// The mutating SSH routes run under the API's own mutation guard: issuance
+	// requires certs:issue (an SSH user certificate names its own principals, so
+	// minting one is an issuance decision, not a request for someone else to
+	// approve) and revocation requires certs:write, as on the product route. The
+	// API is resolved per request because it is assembled after the protocols.
+	guard := func(perm authz.Permission, fn api.ProtocolMutationFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if s.api == nil {
+				http.Error(w, "ssh: the control-plane API is not ready", http.StatusServiceUnavailable)
+				return
+			}
+			s.api.ProtocolMutation(perm, fn)(w, r)
+		}
+	}
+	protocol, err := newSSHProtocol(ca, tenantID, guard, s)
 	if err != nil {
 		return nil, err
 	}
+	protocol.userPrincipals = slices.Clone(userPrincipals)
 	if err := protocol.restoreRevocations(ctx, s.log); err != nil {
 		return nil, err
 	}

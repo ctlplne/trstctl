@@ -895,6 +895,7 @@ func dodEvalIssueSSH(t *testing.T, client *http.Client, baseURL, bearer string) 
 	}
 	issueRequest.Header.Set("Content-Type", "application/json")
 	issueRequest.Header.Set("Authorization", "Bearer "+bearer)
+	issueRequest.Header.Set("Idempotency-Key", "dod-eval-ssh-user")
 	response, err := client.Do(issueRequest)
 	if err != nil {
 		t.Fatalf("issue SSH user certificate: %v", err)

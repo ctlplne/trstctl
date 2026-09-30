@@ -2,6 +2,12 @@
 
 ### Fixed
 
+- Raw SSH revocations now survive control-plane restarts and reach other replicas
+  through the event-backed KRL. Raw SSH mutations use the API guard, including
+  tenant admission, permissions, rate limits, ABAC and idempotent replay.
+- Direct SSH user certificate issuance requires an explicit principal allowlist;
+  host certificates reject user options. SSH issuance events record the caller,
+  principal names and validity window.
 - Restarting the control plane during an incident fleet re-issuance no longer
   lets the legacy batch worker revoke a wave's certificates before their
   replacements exist; revocation always waits for a verified successor.
