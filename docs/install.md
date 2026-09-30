@@ -277,9 +277,43 @@ cert-manager, install the trstctl
 file so it is never placed in pod arguments or environment variables. See
 `deploy/kubernetes/README.md` for the exact env and Secret wiring.
 
+## Download a Linux or macOS host agent
+
+Tagged releases publish exact-commit `trstctl-agent` archives for
+`linux_amd64`, `linux_arm64`, `darwin_amd64`, and `darwin_arm64`. Choose the
+platform of the **host that runs the agent**. The single control-plane container
+image also contains the agent for container and Kubernetes deployments; a
+container does not give a macOS host connector access to the host keychain or
+Apache files.
+
+```bash
+version=1.2.3                    # replace with the release tag you selected
+platform=darwin_arm64            # or linux_amd64, linux_arm64, darwin_amd64
+base="https://github.com/ctlplne/trstctl/releases/download/v${version}"
+archive="trstctl-agent_${version}_${platform}.tar.gz"
+sums="trstctl-agent_${version}_SHA256SUMS"
+manifest="trstctl-agent_${version}_manifest.json"
+mkdir -p trstctl-agent-download && cd trstctl-agent-download
+for asset in "$archive" "$sums" "$manifest"; do
+  curl --fail --location --proto '=https' --tlsv1.2 --output "$asset" "$base/$asset"
+done
+awk -v asset="$archive" '$2 == asset {print}' "$sums" | shasum -a 256 -c -
+awk -v asset="$manifest" '$2 == asset {print}' "$sums" | shasum -a 256 -c -
+tar -xzf "$archive"
+./trstctl-agent --version      # compare its full commit with source_commit in the manifest
+sudo install -m 0755 trstctl-agent /usr/local/bin/trstctl-agent
+```
+
+The release also publishes `trstctl-agent-unix.intoto.jsonl` provenance for
+the archives and checksum manifest. Validate its source tag and commit against
+the selected release before installing in a managed environment. No enrollment
+token, private key, or CA trust bundle is in the archive. The macOS archive is
+currently not Apple notarized; this download path does not claim Gatekeeper or
+enterprise MDM approval.
+
 ## Linux (control plane or agent)
 
-Install from a release binary or build from source.
+Install the host agent from the verified release above, or build from source.
 
 **From source** (requires Go 1.26.6+):
 
@@ -322,7 +356,8 @@ sudo systemctl enable --now trstctl-agent
 
 ## macOS (agent)
 
-Build the agent (or download the macOS release) and run it as a `launchd` agent.
+Download and verify the macOS host-agent archive above, or build it from source,
+then run it as a `launchd` agent. For a source build:
 
 ```bash
 make build

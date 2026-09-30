@@ -279,6 +279,82 @@ jobs:
       upload-assets: true
       upload-tag-name: ${{ github.ref_name }}
 
+  agent-unix:
+    name: host agent / Linux and macOS exact-candidate publish
+    if: ${{ github.ref_type == 'tag' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: [test, required-checks, release-evidence]
+    permissions:
+      contents: write
+    outputs:
+      slsa_subjects: ${{ steps.slsa_subjects.outputs.encoded }}
+    steps:
+      - name: Checkout exact release tag
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Build exact-commit Linux and macOS agent archives
+        run: scripts/release/agent-assets.sh "$GITHUB_REF_NAME" dist/agent
+
+      - name: Verify checksum manifest and executable commit
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          install_dir="${RUNNER_TEMP}/trstctl-agent-smoke"
+          mkdir -p "$install_dir"
+          tar -xzf "dist/agent/trstctl-agent_${version}_linux_amd64.tar.gz" -C "$install_dir"
+          "$install_dir/trstctl-agent" --version | grep -F "commit $(git rev-parse HEAD)"
+          test -f "dist/agent/trstctl-agent_${version}_darwin_arm64.tar.gz"
+          ( cd dist/agent && sha256sum -c "trstctl-agent_${version}_SHA256SUMS" )
+
+      - name: Compute agent SLSA subjects
+        id: slsa_subjects
+        run: |
+          set -euo pipefail
+          mapfile -t assets < <(find dist/agent -maxdepth 1 -type f -print | sort)
+          scripts/release/slsa-subjects.sh files "${RUNNER_TEMP}/trstctl-agent-unix.subjects" "${assets[@]}"
+          echo "encoded=$(scripts/release/slsa-subjects.sh encode "${RUNNER_TEMP}/trstctl-agent-unix.subjects")" >> "$GITHUB_OUTPUT"
+
+      - name: Publish Unix host-agent assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes "trstctl $GITHUB_REF_NAME"
+          gh release upload "$GITHUB_REF_NAME" dist/agent/* --clobber
+          published="$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name')"
+          for asset in dist/agent/*; do
+            grep -qx "$(basename "$asset")" <<<"$published" || {
+              echo "::error::GitHub Release is missing agent asset $(basename "$asset")"
+              exit 1
+            }
+          done
+
+  agent-unix-provenance:
+    name: slsa / Linux and macOS agent provenance
+    needs: [agent-unix]
+    if: ${{ github.ref_type == 'tag' }}
+    permissions:
+      contents: write
+      id-token: write
+      actions: read
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a # v2.1.0
+    with:
+      base64-subjects: ${{ needs.agent-unix.outputs.slsa_subjects }}
+      provenance-name: trstctl-agent-unix.intoto.jsonl
+      upload-assets: true
+      upload-tag-name: ${{ github.ref_name }}
+
   github-action:
     name: GitHub Action / package + publish
     if: ${{ github.ref_type == 'tag' }}
