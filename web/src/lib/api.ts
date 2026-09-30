@@ -432,6 +432,7 @@ import type {
   SecretScanPreview,
   SecretScanRequest,
   SecretSync,
+  SecretSyncJob,
   SecretSyncPreview,
   SecretSyncRequest,
   SecretSyncTargetCatalog,
@@ -1070,6 +1071,7 @@ export type {
   SecretScanPreview,
   SecretScanRequest,
   SecretSync,
+  SecretSyncJob,
   SecretSyncPreview,
   SecretSyncRequest,
   SecretSyncTargetCatalog,
@@ -1882,6 +1884,7 @@ export interface Api {
   scanSecrets(input: SecretScanRequest, idempotencyKey?: string): Promise<SecretScan>;
   previewSecretSync(input: SecretSyncRequest): Promise<SecretSyncPreview>;
   syncSecret(input: SecretSyncRequest, idempotencyKey?: string): Promise<SecretSync>;
+  secretSyncJob(id: string): Promise<SecretSyncJob>;
   cloudSecretManagers(): Promise<CloudSecretManagerIntegration>;
   secretSyncTargets(): Promise<SecretSyncTargetCatalog>;
   secretSyncWorkloadIdentitySources(): Promise<SecretSyncWorkloadIdentitySourceList>;
@@ -2490,6 +2493,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   scanSecrets: (input, idempotencyKey) => mutate<SecretScan>("POST", "/api/v1/secrets/scans", input, idempotencyKey),
   previewSecretSync: (input) => postRead<SecretSyncPreview>("/api/v1/secrets/syncs/preview", input),
   syncSecret: (input, idempotencyKey) => mutate<SecretSync>("POST", "/api/v1/secrets/syncs", input, idempotencyKey),
+  secretSyncJob: (id) => req<SecretSyncJob>(`/api/v1/secrets/syncs/${encodeURIComponent(id)}`),
   cloudSecretManagers: () => req<CloudSecretManagerIntegration>("/api/v1/secrets/cloud-secret-managers"),
   secretSyncTargets: () => req<SecretSyncTargetCatalog>("/api/v1/secrets/syncs/targets"),
   secretSyncWorkloadIdentitySources: () => req<SecretSyncWorkloadIdentitySourceList>("/api/v1/secrets/syncs/workload-identity-sources"),

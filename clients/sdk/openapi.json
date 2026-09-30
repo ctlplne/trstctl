@@ -30151,6 +30151,9 @@
           "enqueued": {
             "type": "boolean"
           },
+          "job_id": {
+            "type": "string"
+          },
           "name": {
             "type": "string"
           },
@@ -30162,11 +30165,66 @@
           }
         },
         "required": [
+          "job_id",
           "name",
           "target",
           "remote_key",
           "enqueued",
           "delivered"
+        ],
+        "type": "object"
+      },
+      "SecretSyncJob": {
+        "properties": {
+          "attempts": {
+            "type": "integer"
+          },
+          "delivered_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "remote_key": {
+            "type": "string"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "secret_version": {
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "delivered",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "name",
+          "secret_version",
+          "target",
+          "remote_key",
+          "status",
+          "attempts",
+          "requested_at",
+          "updated_at"
         ],
         "type": "object"
       },
@@ -58249,6 +58307,64 @@
         ],
         "summary": "Replace a tenant secret-sync workload-identity source",
         "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/syncs/{id}": {
+      "get": {
+        "operationId": "getSecretSyncJob",
+        "parameters": [
+          {
+            "description": "durable secret-sync job id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretSyncJob"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read tenant-scoped projected delivery status for a secret-sync job",
+        "x-trstctl-permission": "secrets:read"
       }
     },
     "/api/v1/secrets/unvaulted": {

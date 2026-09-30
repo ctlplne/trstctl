@@ -78,11 +78,27 @@ type secretSyncRequest struct {
 }
 
 type secretSyncResponse struct {
+	JobID     string `json:"job_id"`
 	Name      string `json:"name"`
 	Target    string `json:"target"`
 	RemoteKey string `json:"remote_key"`
 	Enqueued  bool   `json:"enqueued"`
 	Delivered bool   `json:"delivered"`
+}
+
+// A delivery receipt is a projection of the event-backed sync job. Keep the
+// sealed payload, value digest, retry key, and target error outside this API.
+type secretSyncJobResponse struct {
+	JobID         string `json:"job_id"`
+	Name          string `json:"name"`
+	SecretVersion int64  `json:"secret_version"`
+	Target        string `json:"target"`
+	RemoteKey     string `json:"remote_key"`
+	Status        string `json:"status"`
+	Attempts      int    `json:"attempts"`
+	RequestedAt   string `json:"requested_at"`
+	UpdatedAt     string `json:"updated_at"`
+	DeliveredAt   string `json:"delivered_at,omitempty"`
 }
 
 type secretSyncPreviewResponse struct {
@@ -443,7 +459,7 @@ func (a *API) syncSecret(w http.ResponseWriter, r *http.Request) {
 			// exact public result even if the source has since rotated or the
 			// background worker has since delivered the original version.
 			return http.StatusOK, secretSyncResponse{
-				Name: existing.SecretName, Target: existing.Target, RemoteKey: existing.RemoteKey,
+				JobID: existing.ID, Name: existing.SecretName, Target: existing.Target, RemoteKey: existing.RemoteKey,
 				Enqueued: true, Delivered: false,
 			}, nil
 		case !store.IsNotFound(lookupErr):
@@ -482,10 +498,42 @@ func (a *API) syncSecret(w http.ResponseWriter, r *http.Request) {
 		}
 		a.auditSecret(ctx, "secret.sync.requested", tenantID, req.Name, rec.Version)
 		return http.StatusOK, secretSyncResponse{
-			Name: req.Name, Target: req.Target, RemoteKey: req.RemoteKey,
+			JobID: store.DurableSecretSyncJobIDForEpoch(tenantID, tenantEpoch, idempotencyKey),
+			Name:  req.Name, Target: req.Target, RemoteKey: req.RemoteKey,
 			Enqueued: true, Delivered: false,
 		}, nil
 	})
+}
+
+func (a *API) getSecretSyncJob(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	job, err := a.secrets.be.Store.GetSecretSyncJob(r.Context(), tenantID, r.PathValue("id"))
+	if store.IsNotFound(err) {
+		a.writeError(w, errStatus(http.StatusNotFound, "secret sync job not found"))
+		return
+	}
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	response := secretSyncJobResponse{
+		JobID: job.ID, Name: job.SecretName, SecretVersion: job.SecretVersion,
+		Target: job.Target, RemoteKey: job.RemoteKey, Status: string(job.Status),
+		Attempts: job.Attempts, RequestedAt: job.RequestedAt.UTC().Format(time.RFC3339),
+		UpdatedAt: job.UpdatedAt.UTC().Format(time.RFC3339),
+	}
+	if job.DeliveredAt != nil {
+		response.DeliveredAt = job.DeliveredAt.UTC().Format(time.RFC3339)
+	}
+	a.writeJSON(w, http.StatusOK, response)
 }
 
 func secretSyncRequestBinding(principal string, req secretSyncRequest) (string, error) {

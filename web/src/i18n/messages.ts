@@ -3413,6 +3413,21 @@ export const messages = {
   "secrets.sync.notQueued": { defaultMessage: "Not queued", description: "Secret-sync not-queued state." },
   "secrets.sync.delivered": { defaultMessage: "Delivered", description: "Secret-sync delivered state." },
   "secrets.sync.notDelivered": { defaultMessage: "Not delivered", description: "Secret-sync not-yet-delivered state." },
+  "secrets.sync.deliveryPending": { defaultMessage: "Pending delivery", description: "Secret-sync worker has not recorded delivery yet." },
+  "secrets.sync.deliveryFailed": { defaultMessage: "Delivery failed", description: "Secret-sync worker recorded a terminal failure." },
+  "secrets.sync.checkingDelivery": { defaultMessage: "Checking delivery", description: "Secret-sync delivery read is loading." },
+  "secrets.sync.statusUnavailable": { defaultMessage: "Delivery status unavailable", description: "Secret-sync delivery read failed." },
+  "secrets.sync.failedRecovery": {
+    defaultMessage: "Check the target and audit events, then review and queue a new sync after fixing the cause.",
+    description: "Recovery guidance after terminal secret-sync failure.",
+  },
+  "secrets.sync.statusRecovery": {
+    defaultMessage: "Refresh this receipt to check the latest delivery status before changing the target.",
+    description: "Recovery guidance when secret-sync status cannot be read.",
+  },
+  "secrets.sync.jobID": { defaultMessage: "Job ID", description: "Durable secret-sync receipt identifier." },
+  "secrets.sync.attempts": { defaultMessage: "Delivery attempts: {count}", description: "Number of durable secret-sync worker attempts." },
+  "secrets.sync.refreshDelivery": { defaultMessage: "Refresh delivery", description: "Manually re-read a secret-sync delivery receipt." },
   "nav.group.secretsAccess": {
     defaultMessage: "Access & sharing",
     description: "Secrets space navigation group: machine access and one-time shares.",

@@ -7341,9 +7341,23 @@ export interface SecretStoreCreatePreview {
 export interface SecretSync {
   delivered: boolean;
   enqueued: boolean;
+  job_id: string;
   name: string;
   remote_key: string;
   target: string;
+}
+
+export interface SecretSyncJob {
+  attempts: number;
+  delivered_at?: string;
+  job_id: string;
+  name: string;
+  remote_key: string;
+  requested_at: string;
+  secret_version: number;
+  status: "pending" | "delivered" | "failed";
+  target: string;
+  updated_at: string;
 }
 
 export interface SecretSyncPreview {

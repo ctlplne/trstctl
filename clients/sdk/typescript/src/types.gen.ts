@@ -6064,6 +6064,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/syncs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read tenant-scoped projected delivery status for a secret-sync job */
+        get: operations["getSecretSyncJob"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/unvaulted": {
         parameters: {
             query?: never;
@@ -14384,9 +14401,26 @@ export interface components {
         SecretSync: {
             delivered: boolean;
             enqueued: boolean;
+            job_id: string;
             name: string;
             remote_key: string;
             target: string;
+        };
+        SecretSyncJob: {
+            attempts: number;
+            /** Format: date-time */
+            delivered_at?: string;
+            job_id: string;
+            name: string;
+            remote_key: string;
+            /** Format: date-time */
+            requested_at: string;
+            secret_version: number;
+            /** @enum {string} */
+            status: "pending" | "delivered" | "failed";
+            target: string;
+            /** Format: date-time */
+            updated_at: string;
         };
         SecretSyncPreview: {
             blockers: string[];
@@ -32527,6 +32561,47 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getSecretSyncJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description durable secret-sync job id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretSyncJob"];
+                };
             };
             /** @description client error */
             "4XX": {

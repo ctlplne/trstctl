@@ -39,6 +39,7 @@ const { apiMock } = vi.hoisted(() => ({
     previewSecretScan: vi.fn(),
     scanSecrets: vi.fn(),
     syncSecret: vi.fn(),
+    secretSyncJob: vi.fn(),
   },
 }));
 
@@ -497,11 +498,24 @@ describe("WIRE-09 secret scanning and sync wiring", () => {
       ],
     });
     apiMock.syncSecret.mockResolvedValue({
+      job_id: "sync-wire-job",
       name: "app/db/password",
       target: "github-actions",
       remote_key: "Secret/payments-db/password",
       enqueued: true,
       delivered: false,
+    });
+    apiMock.secretSyncJob.mockResolvedValue({
+      job_id: "sync-wire-job",
+      name: "app/db/password",
+      secret_version: 3,
+      target: "github-actions",
+      remote_key: "Secret/payments-db/password",
+      status: "delivered",
+      attempts: 1,
+      requested_at: "2026-09-30T00:00:00Z",
+      updated_at: "2026-09-30T00:00:01Z",
+      delivered_at: "2026-09-30T00:00:01Z",
     });
   });
 
@@ -605,7 +619,8 @@ describe("WIRE-09 secret scanning and sync wiring", () => {
       ),
     );
     expect(await screen.findByText("Queued")).toBeInTheDocument();
-    expect(screen.getByText("Not delivered")).toBeInTheDocument();
+    expect(await screen.findByText("Delivered")).toBeInTheDocument();
+    expect(apiMock.secretSyncJob).toHaveBeenCalledWith("sync-wire-job");
     expect(screen.getAllByText("Secret/payments-db/password").length).toBeGreaterThan(0);
     expect(screen.queryByText(/ghp_plaintext_secret|BEGIN .* PRIVATE KEY|raw target token/i)).not.toBeInTheDocument();
     expect(storageSpy).not.toHaveBeenCalled();

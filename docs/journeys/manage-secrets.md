@@ -484,8 +484,16 @@ today (see [Current limitations](../limitations.md) and
    trstctl-cli --idempotency-key sync-db-password-1 secrets syncs run -f secret-sync.json
    ```
 
-   -> the response returns only metadata and delivery flags; it never echoes the
-   secret value.
+   -> the response returns `job_id` and queue metadata; `delivered:false` means
+   the request returned before the worker ran. Keep the job ID and read
+   `GET /api/v1/secrets/syncs/{job_id}` with `secrets:read` for the current
+   `pending`, `delivered`, or `failed` result, attempt count, and timestamps.
+   The console polls this receipt while visible and puts `job_id` in the URL so
+   an operator can reopen it. A failed receipt calls for checking target
+   configuration and audit events before reviewing and queueing a new sync.
+   Neither response contains the secret value, digest, or target error. Confirm
+   the destination with its own read interface before treating delivery as
+   independently verified.
 
    Four read-only posture commands map the wider sync/injection estate before
    you rely on it: `trstctl-cli secrets cloud-secret-managers` (cloud

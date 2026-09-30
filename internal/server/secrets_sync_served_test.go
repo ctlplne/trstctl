@@ -211,6 +211,29 @@ func TestDurableSecretSyncReplayDoesNotReadRotatedSourceAfterRecorderGC(t *testi
 		t.Fatalf("first durable sync status=%d body=%s", status, original)
 	}
 	jobID := currentSecretSyncJobIDForTest(t, h.store, h.tenant, rawKey)
+	var receipt struct {
+		JobID string `json:"job_id"`
+	}
+	if err := json.Unmarshal(original, &receipt); err != nil || receipt.JobID != jobID {
+		t.Fatalf("sync receipt job ID=%q err=%v, want %q", receipt.JobID, err, jobID)
+	}
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/secrets/syncs/"+jobID, token, nil)
+	if status != http.StatusOK || !bytes.Contains(body, []byte(`"status":"pending"`)) ||
+		bytes.Contains(body, []byte("source-v1")) || bytes.Contains(body, []byte(`"value_digest"`)) ||
+		bytes.Contains(body, []byte(`"idempotency_key"`)) || bytes.Contains(body, []byte(`"last_error"`)) {
+		t.Fatalf("tenant sync status is missing or exposes private fields: status=%d body=%s", status, body)
+	}
+	status, _ = secretsReq(t, h, http.MethodGet, "/api/v1/secrets/syncs/unknown-job", token, nil)
+	if status != http.StatusNotFound {
+		t.Fatalf("unknown sync job status=%d, want 404", status)
+	}
+	const otherTenant = "b44094ae-6243-4eb7-8301-e963b4678ae4"
+	registerServedTenantID(t, h, otherTenant, "other secret sync tenant")
+	otherToken := seedScopedTokenSubject(t, h.store, otherTenant, "other-sync-reader", "secrets:read")
+	status, _ = secretsReq(t, h, http.MethodGet, "/api/v1/secrets/syncs/"+jobID, otherToken, nil)
+	if status != http.StatusNotFound {
+		t.Fatalf("cross-tenant sync job status=%d, want 404", status)
+	}
 	job, err := h.store.GetSecretSyncJob(context.Background(), h.tenant, jobID)
 	if err != nil || job.SecretVersion != 1 || job.RequestBinding == "" {
 		t.Fatalf("durable original job=%+v err=%v", job, err)
@@ -425,6 +448,11 @@ func TestServedSecretSyncPushesBroadCatalogCAPSECR03(t *testing.T) {
 		if err != nil || job.Status != store.SecretSyncJobDelivered {
 			outboxRecord, outboxErr := h.srv.outbox.Get(t.Context(), h.tenant, job.OutboxID)
 			t.Fatalf("%s durable sync job = status %q err %v, outbox=%+v outbox_err=%v, want delivered", tc.target, job.Status, err, outboxRecord, outboxErr)
+		}
+		status, body = secretsReq(t, h, http.MethodGet, "/api/v1/secrets/syncs/"+job.ID, tok, nil)
+		if status != http.StatusOK || !bytes.Contains(body, []byte(`"status":"delivered"`)) ||
+			bytes.Contains(body, []byte("sync-v1")) || bytes.Contains(body, []byte(`"value_digest"`)) {
+			t.Fatalf("%s delivered receipt status=%d body=%s", tc.target, status, body)
 		}
 		if got := tc.read(); got != "sync-v1" {
 			t.Fatalf("%s destination readback = %q, want sync-v1", tc.target, got)

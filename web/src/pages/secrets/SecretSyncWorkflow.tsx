@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ShieldCheck } from "lucide-react";
 import { useForm, useWatch } from "react-hook-form";
+import { useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import { CredentialChip } from "@/components/CredentialChip";
 import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
@@ -16,6 +17,7 @@ import { useTranslation } from "@/i18n/I18nProvider";
 import { ApiError, api, type SecretSync, type SecretSyncPreview, type SecretSyncRequest, type SecretSyncTargetCatalog } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
 import { useCapabilities, useCapabilityAction } from "@/lib/capabilities";
+import { useApiQuery } from "@/lib/query";
 
 type SecretSyncForm = {
   name: string;
@@ -85,6 +87,14 @@ export function SecretSyncWorkflow({
   const [error, setError] = useState<string | null>(null);
   const [retryable, setRetryable] = useState(false);
   const [result, setResult] = useState<SecretSync | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const jobID = result?.job_id ?? searchParams.get("job_id") ?? "";
+  const jobQuery = useApiQuery(["secret-sync-job", jobID], () => api.secretSyncJob(jobID), {
+    enabled: Boolean(jobID),
+    live: { intervalMs: 5_000 },
+    retry: false,
+  });
+  const receipt = jobQuery.data ?? result;
 
   const schema = useMemo(
     () =>
@@ -127,6 +137,11 @@ export function SecretSyncWorkflow({
     setIdempotencyKey(null);
     setRetryable(false);
     setResult(null);
+    if (searchParams.has("job_id")) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("job_id");
+      setSearchParams(next, { replace: true });
+    }
     setError(null);
     setStep(0);
   }
@@ -136,6 +151,11 @@ export function SecretSyncWorkflow({
     setError(null);
     setRetryable(false);
     setResult(null);
+    if (searchParams.has("job_id")) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("job_id");
+      setSearchParams(next, { replace: true });
+    }
     const nextRequest = normalizedRequest(values);
     try {
       const plan = await api.previewSecretSync(nextRequest);
@@ -163,7 +183,13 @@ export function SecretSyncWorkflow({
     setExecuteBusy(true);
     setError(null);
     try {
-      setResult(await api.syncSecret({ ...currentReview.request, preview_fingerprint: currentReview.plan.request_fingerprint }, idempotencyKey));
+      const queued = await api.syncSecret({ ...currentReview.request, preview_fingerprint: currentReview.plan.request_fingerprint }, idempotencyKey);
+      setResult(queued);
+      if (queued.job_id) {
+        const next = new URLSearchParams(searchParams);
+        next.set("job_id", queued.job_id);
+        setSearchParams(next, { replace: true });
+      }
       setRetryable(false);
     } catch (failure) {
       if (failure instanceof ApiError && failure.status === 409) {
@@ -330,7 +356,7 @@ export function SecretSyncWorkflow({
           </Button>
         </div>
       ) : null}
-      {result ? (
+      {receipt ? (
         <Card aria-live="polite">
           <CardHeader>
             <CardTitle>{t("secrets.sync.receiptTitle")}</CardTitle>
@@ -338,23 +364,43 @@ export function SecretSyncWorkflow({
           <CardContent className="grid gap-3 text-sm md:grid-cols-2 xl:grid-cols-5">
             <div>
               <p className="text-muted-foreground">{t("secrets.sync.secretName")}</p>
-              <p>{result.name}</p>
+              <p>{receipt.name}</p>
             </div>
             <div>
               <p className="text-muted-foreground">{t("secrets.sync.target")}</p>
-              <p>{result.target}</p>
+              <p>{receipt.target}</p>
             </div>
             <div>
               <p className="text-muted-foreground">{t("secrets.sync.remoteKey")}</p>
-              <p className="break-all font-mono text-xs">{result.remote_key}</p>
+              <p className="break-all font-mono text-xs">{receipt.remote_key}</p>
             </div>
             <div>
               <p className="text-muted-foreground">{t("secrets.sync.queue")}</p>
-              <p>{result.enqueued ? t("secrets.sync.queued") : t("secrets.sync.notQueued")}</p>
+              <p>{result?.enqueued === false ? t("secrets.sync.notQueued") : t("secrets.sync.queued")}</p>
             </div>
             <div>
               <p className="text-muted-foreground">{t("secrets.sync.delivery")}</p>
-              <p>{result.delivered ? t("secrets.sync.delivered") : t("secrets.sync.notDelivered")}</p>
+              <p>
+                {jobQuery.data?.status === "delivered"
+                  ? t("secrets.sync.delivered")
+                  : jobQuery.data?.status === "failed"
+                    ? t("secrets.sync.deliveryFailed")
+                    : jobQuery.error
+                      ? t("secrets.sync.statusUnavailable")
+                      : jobQuery.data?.status === "pending"
+                        ? t("secrets.sync.deliveryPending")
+                        : t("secrets.sync.checkingDelivery")}
+              </p>
+            </div>
+            <div className="md:col-span-2 xl:col-span-5">
+              <p className="text-muted-foreground">{t("secrets.sync.jobID")}</p>
+              <p className="break-all font-mono text-xs">{jobID}</p>
+              {jobQuery.data ? <p>{t("secrets.sync.attempts", { count: jobQuery.data.attempts })}</p> : null}
+              {jobQuery.data?.status === "failed" ? <p>{t("secrets.sync.failedRecovery")}</p> : null}
+              {jobQuery.error ? <p>{t("secrets.sync.statusRecovery")}</p> : null}
+              <Button type="button" variant="outline" onClick={jobQuery.refetch}>
+                {t("secrets.sync.refreshDelivery")}
+              </Button>
             </div>
           </CardContent>
         </Card>

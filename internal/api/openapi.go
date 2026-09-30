@@ -5448,9 +5448,16 @@ func componentSchemas() map[string]*Schema {
 		"required_permission", "blockers", "preview_reads", "preview_writes", "preview_external_effects",
 		"execute_writes", "execute_external_effects", "recovery_steps", "verification_steps", "cli_argv", "secret_data_handling")
 	secretSync := object(map[string]*Schema{
-		"name": str(), "target": str(), "remote_key": str(),
+		"job_id": str(), "name": str(), "target": str(), "remote_key": str(),
 		"enqueued": {Type: "boolean"}, "delivered": {Type: "boolean"},
-	}, "name", "target", "remote_key", "enqueued", "delivered")
+	}, "job_id", "name", "target", "remote_key", "enqueued", "delivered")
+	secretSyncJob := object(map[string]*Schema{
+		"job_id": str(), "name": str(), "secret_version": {Type: "integer"},
+		"target": str(), "remote_key": str(),
+		"status":   {Type: "string", Enum: []string{"pending", "delivered", "failed"}},
+		"attempts": {Type: "integer"}, "requested_at": timestamp(),
+		"updated_at": timestamp(), "delivered_at": timestamp(),
+	}, "job_id", "name", "secret_version", "target", "remote_key", "status", "attempts", "requested_at", "updated_at")
 	secretSyncTarget := object(map[string]*Schema{
 		"id": str(), "name": str(), "platform": str(),
 		"configured":      {Type: "boolean"},
@@ -6789,6 +6796,7 @@ func componentSchemas() map[string]*Schema {
 		"SecretSyncRequest":                  secretSyncReq,
 		"SecretSyncPreview":                  secretSyncPreview,
 		"SecretSync":                         secretSync,
+		"SecretSyncJob":                      secretSyncJob,
 		"SecretSyncTarget":                   secretSyncTarget,
 		"SecretSyncTargetCatalog":            secretSyncTargetCatalog,
 		"CloudSecretManagerProvider":         cloudSecretManagerProvider,

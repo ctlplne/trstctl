@@ -66,6 +66,7 @@ const { apiMock } = vi.hoisted(() => ({
     previewSecretScan: vi.fn(),
     scanSecrets: vi.fn(),
     syncSecret: vi.fn(),
+    secretSyncJob: vi.fn(),
     identities: vi.fn(),
     apiTokens: vi.fn(),
     createAPIToken: vi.fn(),
@@ -722,11 +723,24 @@ function primeSecretsMocks() {
     findings: [{ rule_id: "generic-api-key", file: "config/ci.yml", line: 42, credential_ref: "sha256:6e5a...91bb" }],
   });
   apiMock.syncSecret.mockResolvedValue({
+    job_id: "sync-test-job",
     name: "app/db/password",
     target: "github-actions",
     remote_key: "Secret/payments-db/password",
     enqueued: true,
     delivered: false,
+  });
+  apiMock.secretSyncJob.mockResolvedValue({
+    job_id: "sync-test-job",
+    name: "app/db/password",
+    secret_version: 3,
+    target: "github-actions",
+    remote_key: "Secret/payments-db/password",
+    status: "delivered",
+    attempts: 1,
+    requested_at: "2026-09-30T00:00:00Z",
+    updated_at: "2026-09-30T00:00:01Z",
+    delivered_at: "2026-09-30T00:00:01Z",
   });
 }
 
@@ -2038,13 +2052,33 @@ describe("secrets surface", () => {
       ),
     );
     expect(await screen.findByText("Queued")).toBeInTheDocument();
-    expect(screen.getByText("Not delivered")).toBeInTheDocument();
+    expect(await screen.findByText("Delivered")).toBeInTheDocument();
+    expect(apiMock.secretSyncJob).toHaveBeenCalledWith("sync-test-job");
     expect(screen.getAllByText("Secret/payments-db/password").length).toBeGreaterThan(0);
     expect(screen.queryByText(/raw target token|BEGIN .* PRIVATE KEY/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /push|rollback/i })).not.toBeInTheDocument();
     expect(storageSpy).not.toHaveBeenCalled();
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
+  });
+
+  it("reopens a secret-sync receipt from its URL and explains terminal failure", async () => {
+    apiMock.secretSyncJob.mockResolvedValue({
+      job_id: "sync-test-job",
+      name: "app/db/password",
+      secret_version: 3,
+      target: "github-actions",
+      remote_key: "Secret/payments-db/password",
+      status: "failed",
+      attempts: 2,
+      requested_at: "2026-09-30T00:00:00Z",
+      updated_at: "2026-09-30T00:00:01Z",
+    });
+    renderSecrets("/secrets/sync?job_id=sync-test-job");
+    expect(await screen.findByText("Delivery failed")).toBeInTheDocument();
+    expect(screen.getByText(/Check the target and audit events/)).toBeInTheDocument();
+    expect(apiMock.secretSyncJob).toHaveBeenCalledWith("sync-test-job");
+    expect(apiMock.syncSecret).not.toHaveBeenCalled();
   });
 
   it("fails F68 closed when the server describes a preview with effects", async () => {

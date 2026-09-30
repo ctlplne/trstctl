@@ -10089,9 +10089,27 @@ SecretSync = TypedDict(
     {
         'delivered': bool,
         'enqueued': bool,
+        'job_id': str,
         'name': str,
         'remote_key': str,
         'target': str,
+    },
+    total=False,
+)
+
+SecretSyncJob = TypedDict(
+    'SecretSyncJob',
+    {
+        'attempts': int,
+        'delivered_at': str,
+        'job_id': str,
+        'name': str,
+        'remote_key': str,
+        'requested_at': str,
+        'secret_version': int,
+        'status': str,
+        'target': str,
+        'updated_at': str,
     },
     total=False,
 )

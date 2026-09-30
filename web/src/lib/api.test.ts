@@ -1922,6 +1922,12 @@ describe("secrets contract", () => {
       remote_key: "DB_PASSWORD",
       preview_fingerprint: "sha256:f68-plan",
     });
+
+    mockFetch(200, JSON.stringify({ job_id: "sync-test-job", status: "delivered" }));
+    await api.secretSyncJob("sync-test-job");
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/syncs/sync-test-job");
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBeUndefined();
+    expect(sentHeaders()["Idempotency-Key"]).toBeUndefined();
   });
 
   it("previews F50 without mutation headers and preserves the reviewed recovery key", async () => {
