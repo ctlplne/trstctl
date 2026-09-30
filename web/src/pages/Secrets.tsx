@@ -1560,7 +1560,13 @@ export function Secrets() {
                   </div>
                 </dl>
               )}
-              {detailSecret && <VersionHistory name={detailSecret.name} latestVersion={detailSecret.version} />}
+              {detailSecret && (
+                <VersionHistory
+                  name={detailSecret.name}
+                  latestVersion={detailSecret.version}
+                  onRecovered={(meta) => setItems((current) => current.map((item) => (item.name === meta.name ? { ...item, ...meta } : item)))}
+                />
+              )}
             </DetailDrawer>
           </section>
 

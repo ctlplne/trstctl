@@ -205,7 +205,7 @@ export function EnvDiffPanel({ secrets }: { secrets: SecretMeta[] }) {
   );
 }
 
-export function VersionHistory({ name, latestVersion }: { name: string; latestVersion: number }) {
+export function VersionHistory({ name, latestVersion, onRecovered }: { name: string; latestVersion: number; onRecovered?: (meta: SecretMeta) => void }) {
   const [revealed, setRevealed] = useState<{ version: number; value: string } | null>(null);
   const [at, setAt] = useState("");
   const [note, setNote] = useState<string | null>(null);
@@ -227,6 +227,7 @@ export function VersionHistory({ name, latestVersion }: { name: string; latestVe
     setRevealed(null);
     try {
       const meta = await api.recoverSecret(name, { at: at.trim() });
+      onRecovered?.(meta);
       setNote(`Recovered to version ${meta.version}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

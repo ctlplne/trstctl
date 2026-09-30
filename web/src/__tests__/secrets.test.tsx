@@ -16,6 +16,7 @@ const { apiMock } = vi.hoisted(() => ({
     createSecret: vi.fn(),
     getSecret: vi.fn(),
     getSecretWithToken: vi.fn(),
+    recoverSecret: vi.fn(),
     rotateSecret: vi.fn(),
     previewSecretRotation: vi.fn(),
     runSecretRotation: vi.fn(),
@@ -1391,6 +1392,33 @@ describe("secrets surface", () => {
     expect(storageSpy).not.toHaveBeenCalled();
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
+  });
+
+  it("updates the open metadata drawer and history immediately after recovery", async () => {
+    const user = userEvent.setup();
+    apiMock.recoverSecret.mockResolvedValueOnce({
+      name: "app/db/password",
+      owner_id: "11111111-1111-4111-8111-111111111111",
+      version: 4,
+      created_at: "2026-06-18T10:00:00Z",
+      updated_at: "2026-06-19T11:00:00Z",
+    });
+    renderSecrets();
+
+    const row = await screen.findByRole("row", { name: /app\/db\/password/i });
+    await user.click(within(row).getByRole("button", { name: /view metadata for app\/db\/password/i }));
+    let drawer = screen.getByRole("dialog", { name: "Secret metadata" });
+    expect(within(drawer).getByText("v3")).toBeInTheDocument();
+    await user.type(within(drawer).getByRole("textbox", { name: "Recover to (timestamp)" }), "2026-06-19T10:30:00Z");
+    await user.click(within(drawer).getByRole("button", { name: "Recover" }));
+
+    expect(await within(drawer).findByText("Recovered to version 4.")).toBeInTheDocument();
+    expect(within(drawer).getByText("v4")).toBeInTheDocument();
+    expect(within(drawer).getByText("version 4")).toBeInTheDocument();
+    await user.click(within(drawer).getByRole("button", { name: "Close" }));
+    await user.click(within(row).getByRole("button", { name: /view metadata for app\/db\/password/i }));
+    drawer = screen.getByRole("dialog", { name: "Secret metadata" });
+    expect(within(drawer).getByText("v4")).toBeInTheDocument();
   });
 
   it("keeps manual and scheduled rotation scope truthful and clears stale deferred evidence", async () => {
