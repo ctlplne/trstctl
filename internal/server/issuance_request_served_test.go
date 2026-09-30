@@ -128,11 +128,17 @@ func TestServedOnlyTheRequesterCanCancel(t *testing.T) {
 	bob := seedScopedTokenSubject(t, h.store, h.tenant, "bob@example.com", "certs:request", "certs:issue")
 	req := openRequest(t, h, alice, "i3-cancel", "cancel.example.com")
 
-	status, _ := secretsReqKey(t, h, http.MethodPost,
+	status, rejected := secretsReqKey(t, h, http.MethodPost,
 		"/api/v1/issuance-requests/"+req.ID+"/cancel", bob, "i3-cancel-bob", nil)
-	if status == http.StatusOK {
-		t.Fatal("bob withdrew alice's request. Someone else closing a request is a DENIAL and " +
-			"must be recorded as one, with a reason the requester can act on")
+	if status != http.StatusForbidden {
+		t.Fatalf("another principal cancelling a request returned %d, want an actionable 403 denial", status)
+	}
+	if !strings.Contains(string(rejected), "only the requester can withdraw") {
+		t.Fatalf("wrong-requester denial omitted the required recovery guidance: %s", rejected)
+	}
+	beforeOwnCancel, err := h.store.GetIssuanceRequest(t.Context(), h.tenant, req.ID)
+	if err != nil || beforeOwnCancel.Status != issuancerequest.StateRequested {
+		t.Fatalf("rejected cancellation changed request state: status=%q err=%v", beforeOwnCancel.Status, err)
 	}
 	status, body := secretsReqKey(t, h, http.MethodPost,
 		"/api/v1/issuance-requests/"+req.ID+"/cancel", alice, "i3-cancel-alice", nil)

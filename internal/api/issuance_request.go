@@ -419,6 +419,10 @@ func (a *API) decideIssuanceRequest(to string) http.HandlerFunc {
 			out, err := a.orch.DecideIssuanceRequest(ctx, tenantID, r.PathValue("id"), to,
 				principalSubject(ctx), strings.TrimSpace(body.Reason), strings.TrimSpace(body.IdentityID))
 			if err != nil {
+				if errors.Is(err, orchestrator.ErrIssuanceRequestWrongRequester) {
+					return 0, nil, errStatus(http.StatusForbidden,
+						"only the requester can withdraw this request; an independent reviewer can deny it with a reason")
+				}
 				return 0, nil, err
 			}
 			return http.StatusOK, toIssuanceRequestResponse(out), nil

@@ -32,6 +32,10 @@ const defaultIssuanceRequestTTL = 7 * 24 * time.Hour
 // maps this to 409 so the console can explain the exact next step.
 var ErrIssuanceRequestNotReady = errors.New("orchestrator: issuance request is not ready")
 
+// ErrIssuanceRequestWrongRequester is a caller authorization failure, not a
+// server fault. The API maps it to 403 while retaining the request unchanged.
+var ErrIssuanceRequestWrongRequester = errors.New("orchestrator: only the requester may withdraw their own issuance request")
+
 // IssuanceRequestIssueIdempotencyKey is the stable mint identity shared by the
 // preparation response, browser client, certificate record, and completion
 // verifier. Retrying the same approved request can never mint under a new key.
@@ -137,9 +141,7 @@ func (o *Orchestrator) DecideIssuanceRequest(ctx context.Context, tenantID, id, 
 	}
 	// Canceling is the requester's own right, and only theirs.
 	if to == issuancerequest.StateCancelled && decidedBy != current.Requester {
-		return store.IssuanceRequest{}, fmt.Errorf(
-			"orchestrator: only %s can withdraw their own request; someone else closing it is a "+
-				"denial and must be recorded as one", current.Requester)
+		return store.IssuanceRequest{}, ErrIssuanceRequestWrongRequester
 	}
 	at := time.Now().UTC()
 	payload, err := json.Marshal(projections.IssuanceRequestDecided{
