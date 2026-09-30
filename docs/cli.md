@@ -387,6 +387,9 @@ trstctl-cli run --resolve --secret DATABASE_URL=app/db/dsn -- ./payments-api
   variable name, and `secret/path` may contain `/` path segments.
 - `--resolve` maps to `?resolve=true`, so referenced values such as
   `${secret.app/db/password}` expand only when the caller asks for it.
+- `run` uses `TRSTCTL_TOKEN` to fetch the requested secrets but does not pass that
+  API bearer to the child. If the application needs its own credential, map a
+  separately scoped stored secret to an environment variable explicitly.
 - trstctl never logs injected values and wipes its byte-backed fetched copies after
   the child exits. The operating-system environment is still a string boundary, so
   use this with trusted commands and avoid debug commands that print all env vars

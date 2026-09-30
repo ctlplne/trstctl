@@ -1836,6 +1836,7 @@ func TestRunInjectsFetchedSecretsIntoChildEnvWithoutLoggingValues(t *testing.T) 
 	if err != nil {
 		t.Skip("env command not available")
 	}
+	t.Setenv("TRSTCTL_TOKEN", "qa-test-parent-bearer")
 	var cap capture
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
@@ -1864,6 +1865,9 @@ func TestRunInjectsFetchedSecretsIntoChildEnvWithoutLoggingValues(t *testing.T) 
 	}
 	if !strings.Contains(stdout, "DB_PASSWORD=s3cr3t") {
 		t.Fatalf("stdout does not include injected secret env var:\n%s", stdout)
+	}
+	if strings.Contains(stdout, "TRSTCTL_TOKEN=") {
+		t.Fatal("child inherited the CLI authentication bearer")
 	}
 	if strings.Contains(stderr, "s3cr3t") {
 		t.Fatalf("stderr leaked secret material: %q", stderr)

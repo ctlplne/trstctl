@@ -37,6 +37,19 @@ func TestInjectPutsSecretInEnvNotDisk(t *testing.T) {
 	}
 }
 
+func TestInjectAllowsExplicitTokenMapping(t *testing.T) {
+	t.Setenv("TRSTCTL_TOKEN", "parent-bearer")
+	cli := New("t1", &memClient{m: map[string][]byte{}}, &auditsink.Recorder{})
+	out, err := cli.InjectBytes(context.Background(), map[string][]byte{"TRSTCTL_TOKEN": []byte("mapped-value")},
+		[]string{"sh", "-c", `printf %s "$TRSTCTL_TOKEN"`})
+	if err != nil {
+		t.Fatalf("InjectBytes: %v", err)
+	}
+	if string(out) != "mapped-value" {
+		t.Error("child did not receive the explicitly mapped value")
+	}
+}
+
 func TestFetchSetRoundTrip(t *testing.T) {
 	rec := &auditsink.Recorder{}
 	cli := New("t1", &memClient{m: map[string][]byte{}}, rec)
