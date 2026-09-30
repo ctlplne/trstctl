@@ -143,6 +143,12 @@ func main() {
 	sshKRLRollbackDir := flag.String("ssh-krl-rollback-dir", "", "private durable directory for the previous KRL; required for --ssh-krl-apply")
 	sshKRLReloadCmd := flag.String("ssh-krl-reload-cmd", "", "validated argv command to reload sshd after KRL replacement")
 	sshKRLHealthCmd := flag.String("ssh-krl-health-cmd", "", "validated argv command that proves sshd still accepts a known-good login")
+	sshKRLWatch := flag.Bool("ssh-krl-watch", false, "continuously pull this tenant's KRL over pinned HTTPS and install newer versions on this host; requires --ssh-krl-confirm")
+	sshKRLURL := flag.String("ssh-krl-url", "", "exact https://control-plane/ssh/krl endpoint used by --ssh-krl-watch")
+	sshKRLTenant := flag.String("ssh-krl-tenant", "", "tenant expected in the served KRL response; refuses cross-tenant artifacts")
+	sshKRLServerName := flag.String("ssh-krl-server-name", "", "optional TLS server identity when --ssh-krl-url uses a private address or alias")
+	sshKRLWatchEvery := flag.Duration("ssh-krl-watch-every", 30*time.Second, "poll interval for unattended SSH KRL updates; minimum 5s")
+	sshKRLAllowPrivateCIDRs := flag.String("ssh-krl-allow-private-cidrs", "", "comma-separated exact private CIDRs allowed for the KRL HTTPS endpoint; metadata, link-local, and loopback stay blocked")
 	// Workload-held predecessor co-sign (PCAS claim 19, INT-16) — DEFAULT OFF. When
 	// --workload-cosign-listen is set, the agent holds the workload's predecessor key
 	// and serves the succession co-sign RPC so the control plane can mint a
@@ -248,8 +254,8 @@ func main() {
 	// explicitly-confirmed one-shot op that does NOT need the enroll/connection
 	// settings, so it runs (and exits) before the steady-state agent loop. With the
 	// flag off this is a no-op and the agent proceeds normally.
-	if *sshTrustAddCA && *sshKRLApply {
-		fmt.Fprintln(os.Stderr, "trstctl-agent: choose one SSH one-shot operation at a time")
+	if (*sshTrustAddCA && (*sshKRLApply || *sshKRLWatch)) || (*sshKRLApply && *sshKRLWatch) {
+		fmt.Fprintln(os.Stderr, "trstctl-agent: choose one SSH operation mode at a time")
 		os.Exit(2)
 	}
 	sshCtx, sshStop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -280,6 +286,27 @@ func main() {
 		return
 	}
 	krlStop()
+	if *sshKRLWatch {
+		privateCIDRs, err := parseKRLPrivateCIDRs(*sshKRLAllowPrivateCIDRs)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
+			os.Exit(2)
+		}
+		watchCtx, watchStop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		_, err = runSSHKRLWatch(watchCtx, sshKRLWatchOptions{
+			Enabled: true, Confirm: *sshKRLConfirm, URL: *sshKRLURL, CAFile: *caBundle,
+			ServerName: *sshKRLServerName, TenantID: *sshKRLTenant,
+			AllowPrivateCIDRs: privateCIDRs, PollEvery: *sshKRLWatchEvery,
+			TargetPath: *sshKRLTarget, SSHDConfigPath: *sshKRLConfig,
+			RollbackDir: *sshKRLRollbackDir, ReloadCmd: *sshKRLReloadCmd, HealthCmd: *sshKRLHealthCmd,
+		}, sshdKRLChecks{reloadCmd: *sshKRLReloadCmd, healthCmd: *sshKRLHealthCmd})
+		watchStop()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	if *secretInject {
 		mappings, err := secretinject.ParseMappings(*secretInjectMap)

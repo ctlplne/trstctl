@@ -241,8 +241,8 @@ mutation stays in the operator-confirmed agent path.
    The displayed count measures distinct serial and key-ID entries, not affected
    certificates. A newly issued certificate defaults to serial-only revocation.
 
-   Publishing updates the KRL; it does not yet enqueue automatic host delivery
-   or terminate existing SSH sessions. On each relying host, configure sshd's
+   Publishing updates the KRL; it does not terminate existing SSH sessions. On
+   each relying host, configure sshd's
    `RevokedKeys` to name an existing, valid binary KRL file, then download the
    current artifact through a TLS-verified connection and pin its exact digest.
    Run the downloadable `trstctl-agent` on that host with the explicit update
@@ -263,6 +263,32 @@ mutation stays in the operator-confirmed agent path.
      --ssh-krl-health-cmd '/usr/local/bin/check-known-good-ssh-login'
    ssh-keygen -Q -l -f /etc/ssh/revoked_keys
    ```
+
+   For unattended propagation on that host, run the same downloadable agent
+   as a persistent service. This watcher is a standalone host mode; it does not
+   require an enrollment token. Use the same target, rollback, reload, and
+   known-good login paths reviewed for the one-shot operation:
+
+   ```sh
+   trstctl-agent --ssh-krl-watch --ssh-krl-confirm \
+     --ssh-krl-url https://cp.example/ssh/krl \
+     --ca-bundle /etc/trstctl/control-plane-ca.pem \
+     --ssh-krl-tenant '<expected-tenant-id>' \
+     --ssh-krl-target /etc/ssh/revoked_keys \
+     --ssh-krl-sshd-config /etc/ssh/sshd_config \
+     --ssh-krl-rollback-dir /var/lib/trstctl/ssh-krl-rollback \
+     --ssh-krl-reload-cmd 'systemctl reload sshd' \
+     --ssh-krl-health-cmd '/usr/local/bin/check-known-good-ssh-login'
+   ```
+
+   The default interval is 30 seconds (minimum 5 seconds). A private
+   control-plane address needs an explicit, narrow
+   `--ssh-krl-allow-private-cidrs` grant; if its TLS certificate names a stable
+   DNS identity instead of that address, set `--ssh-krl-server-name`. The watcher
+   refuses redirects and a mismatched tenant, retries fetch failures without
+   replacing the last good KRL, and skips reload when the artifact is unchanged.
+   Configure it on every relying host: there is not yet a control-plane fleet
+   push or a central per-host receipt.
 
    Install the current list on SSH clients (`RevokedHostKeys`) separately. Before
    expiry, verify the original public

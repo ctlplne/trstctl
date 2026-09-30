@@ -82,6 +82,12 @@ func sshKRL(t *testing.T, ts *httptest.Server) []byte {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET /ssh/krl = %d", resp.StatusCode)
 	}
+	if got := resp.Header.Get("X-Trstctl-Tenant-ID"); got != servedTestTenant {
+		t.Fatalf("GET /ssh/krl tenant header = %q, want %q", got, servedTestTenant)
+	}
+	if got := resp.Header.Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("GET /ssh/krl cache policy = %q, want no-store", got)
+	}
 	krl, _ := io.ReadAll(resp.Body)
 	return krl
 }

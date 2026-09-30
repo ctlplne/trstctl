@@ -311,6 +311,8 @@ func (p *sshProtocol) RevokedCount() int {
 // before the request; if it cannot, it answers 503 and the host keeps its last
 // KRL rather than loading an incomplete one.
 func (p *sshProtocol) serveKRL(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Trstctl-Tenant-ID", p.tenantID)
 	ctx, cancel := context.WithTimeout(r.Context(), sshKRLSyncTimeout)
 	defer cancel()
 	if err := p.syncRevocations(ctx, false); err != nil {

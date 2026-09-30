@@ -40,6 +40,10 @@ type Config struct {
 	SSHDConfigPath string
 	RollbackDir    string
 	Checks         Checks
+	// SkipReloadOnUnchanged is for a continuous watcher: still validate the
+	// effective path, existing KRL, sshd config, and known-good login, but do
+	// not restart sshd every time the upstream KRL has the same bytes.
+	SkipReloadOnUnchanged bool
 }
 
 type Result struct {
@@ -120,7 +124,7 @@ func Apply(ctx context.Context, cfg Config, next []byte, expectedSHA256 string) 
 	}
 	result := Result{PreviousVersion: previousVersion, Version: nextVersion, SHA256: crypto.SHA256Hex(next)}
 	if bytes.Equal(previous, next) {
-		if err := verifyRuntime(ctx, cfg); err != nil {
+		if err := verifyUnchangedRuntime(ctx, cfg); err != nil {
 			return Result{}, fmt.Errorf("sshkrl: unchanged KRL failed runtime verification; files unchanged: %w", err)
 		}
 		return result, nil
@@ -157,6 +161,19 @@ func Apply(ctx context.Context, cfg Config, next []byte, expectedSHA256 string) 
 	}
 	result.Changed = true
 	return result, nil
+}
+
+func verifyUnchangedRuntime(ctx context.Context, cfg Config) error {
+	if !cfg.SkipReloadOnUnchanged {
+		return verifyRuntime(ctx, cfg)
+	}
+	if err := cfg.Checks.ValidateSSHD(ctx, cfg.SSHDConfigPath); err != nil {
+		return fmt.Errorf("validate sshd: %w", err)
+	}
+	if err := cfg.Checks.Health(ctx); err != nil {
+		return fmt.Errorf("health-check sshd: %w", err)
+	}
+	return nil
 }
 
 func verifyRuntime(ctx context.Context, cfg Config) error {

@@ -250,14 +250,16 @@ trstctl ssh retire-host --host edge-1.internal --reason 'replaced'
 - **Short TTLs require renewal.** That's the security benefit, but plan the renewal path
   for long-running sessions.
 - **KRL enforcement requires host delivery.** Publishing a revocation updates
-  `/ssh/krl`, but does not yet enqueue automatic delivery to relying hosts. The
-  agent's explicit `--ssh-krl-apply` operation installs a pinned, newer KRL at
-  an already configured `RevokedKeys` path. It validates the KRL with OpenSSH,
-  checks sshd's effective path and config, retains the predecessor, reloads,
-  and runs an operator-supplied health probe; a failed probe restores the old
-  file. Budget for fetching the new artifact and running that operation on
-  every host until automatic fleet rollout is available. Existing SSH sessions
-  are not terminated by a KRL update.
+  `/ssh/krl`. An opted-in host agent can poll that endpoint with
+  `--ssh-krl-watch`, check the served tenant over pinned HTTPS, and install a
+  newer version at an already configured `RevokedKeys` path. The explicit
+  `--ssh-krl-apply` operation handles a single, digest-pinned artifact. Both
+  paths validate the KRL with OpenSSH, check sshd's effective path and config,
+  retain the predecessor, and run a known-good login probe; a failed update
+  restores the old file. The watcher skips reload on an unchanged list. Configure it on
+  every relying host. The control plane does not yet enqueue a fleet push or
+  collect central per-host delivery receipts. Existing SSH sessions are not
+  terminated by a KRL update.
 
 ## Reference
 

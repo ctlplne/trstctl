@@ -135,6 +135,9 @@ func TestServedSSHTrustMaterialStaysPublic(t *testing.T) {
 		if rec.Code == http.StatusUnauthorized {
 			t.Errorf("GET %s must stay public: a host fetches it before it can authenticate", path)
 		}
+		if path == "/ssh/krl" && rec.Header().Get("X-Trstctl-Tenant-ID") != "tenant-a" {
+			t.Errorf("GET /ssh/krl tenant header = %q, want served tenant", rec.Header().Get("X-Trstctl-Tenant-ID"))
+		}
 	}
 	if len(g.perms) != 0 {
 		t.Errorf("public trust routes consulted the guard %d times", len(g.perms))
