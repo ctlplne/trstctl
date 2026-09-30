@@ -10,9 +10,9 @@ import (
 )
 
 // LifecycleAutomationInventory is the bounded, public-metadata-only read model
-// behind the lifecycle automation plan. It deliberately excludes certificate DER,
-// outbox payloads, and idempotency keys: the console needs to know what will run,
-// not receive the credential-bearing command.
+// behind the lifecycle automation plan. The issuance key remains server-internal:
+// it proves a first issuance receipt for the same scheduler decision and is never
+// serialized to the console. Certificate DER and outbox payloads are excluded.
 type LifecycleAutomationInventory struct {
 	IdentityID                string
 	IdentityName              string
@@ -23,6 +23,8 @@ type LifecycleAutomationInventory struct {
 	CertificateStart          *time.Time
 	CertificateEnd            *time.Time
 	CertificateValidityAnchor *time.Time
+	CertificateCreatedAt      time.Time
+	CertificateIssuanceKey    string
 	LatestRunID               string
 	LatestRunStatus           string
 	RollbackRef               string
@@ -52,6 +54,7 @@ func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID s
 		rows, err := tx.Query(ctx, `
 			SELECT i.id::text, i.name, i.status, i.owner_id::text, o.name,
 			       cert.id::text, cert.not_before, cert.not_after, cert.validity_anchor,
+			       cert.created_at, cert.issuance_idempotency_key,
 			       coalesce(run.id::text, ''), coalesce(run.status, ''), coalesce(run.rollback_ref, ''),
 			       EXISTS (SELECT 1 FROM outbox job WHERE job.tenant_id = $1 AND job.tenant_id = i.tenant_id
 			         AND job.status IN ('pending', 'processing')
@@ -74,7 +77,8 @@ func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID s
 			        ORDER BY receipt.updated_at DESC, receipt.id DESC LIMIT 1
 			  ) AS deployed ON true
 			  JOIN LATERAL (
-			       SELECT c.id, c.not_before, c.not_after, c.validity_anchor
+			       SELECT c.id, c.not_before, c.not_after, c.validity_anchor,
+			              c.created_at, c.issuance_idempotency_key
 			         FROM certificates AS c
 			        WHERE c.tenant_id = $1
 			          AND c.tenant_id = i.tenant_id
@@ -97,6 +101,10 @@ func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID s
 			 WHERE i.tenant_id = $1
 			   AND i.kind = 'x509_certificate'
 			   AND i.status IN ('deployed', 'renewing', 'renewal_failed')
+			   AND NOT EXISTS (SELECT 1 FROM identities replacement
+			     WHERE replacement.tenant_id = $1 AND replacement.tenant_id = i.tenant_id
+			       AND replacement.attributes->>'endpoint_replaces_identity_id' = i.id::text
+			       AND replacement.status IN ('issued', 'deployed', 'renewing', 'renewal_failed'))
 			 ORDER BY cert.not_after ASC NULLS LAST, i.id
 			 LIMIT $2`, tenantID, limit)
 		if err != nil {
@@ -109,6 +117,7 @@ func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID s
 				&item.IdentityID, &item.IdentityName, &item.IdentityStatus,
 				&item.OwnerID, &item.OwnerName, &item.CertificateID,
 				&item.CertificateStart, &item.CertificateEnd, &item.CertificateValidityAnchor,
+				&item.CertificateCreatedAt, &item.CertificateIssuanceKey,
 				&item.LatestRunID, &item.LatestRunStatus, &item.RollbackRef,
 				&item.PendingRenewal,
 			); err != nil {

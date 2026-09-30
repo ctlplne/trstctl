@@ -13193,7 +13193,7 @@ export const defaultMessageValues = [
   "Review or create profiles in another tab",
   "{name} · version {version}",
   "Platform default",
-  "Certificate validity",
+  "Requested certificate lifetime (CA may issue shorter)",
   "{seconds} seconds",
   "Issuance requires independent approvals. The first attempt prepares the identity and opens a review. Issuance waits for approval.",
   "Keep this review open while reviewers approve in another tab, then retry here. Retries use the same request.",

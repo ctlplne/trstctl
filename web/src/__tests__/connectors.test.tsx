@@ -509,10 +509,11 @@ describe("connector deployment disclosure surface", () => {
     await user.click(screen.getByRole("button", { name: "Build safe preview" }));
     await user.click(await screen.findByRole("button", { name: "Authorize issuance and deployment" }));
     expect(await screen.findByText(/endpoint issuer changed after review; preview again/)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Request awaiting completion" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Authorize issuance and deployment" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Open approvals in another tab" })).not.toBeInTheDocument();
     expect(screen.queryByText(/Keep this review open while reviewers approve/)).not.toBeInTheDocument();
     const originalKey = apiMock.createEndpointBinding.mock.calls[0]?.[1];
-    await user.click(screen.getByRole("button", { name: "Previous" }));
     await user.click(await screen.findByRole("button", { name: "Build safe preview" }));
     await user.click(await screen.findByRole("button", { name: "Authorize issuance and deployment" }));
     await waitFor(() => expect(apiMock.createEndpointBinding).toHaveBeenCalledTimes(2));
@@ -552,6 +553,7 @@ describe("connector deployment disclosure surface", () => {
     await user.selectOptions(screen.getByLabelText("Certificate key algorithm"), "ML-DSA-65");
     await user.click(screen.getByRole("button", { name: "Build safe preview" }));
     expect(await screen.findByText("mail-short-life · version 3")).toBeInTheDocument();
+    expect(screen.getByText("Requested certificate lifetime (CA may issue shorter)")).toBeInTheDocument();
     expect(screen.getByText("720 seconds")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Authorize issuance and deployment" }));
     const retry = await screen.findByRole("button", { name: "Retry this request" });

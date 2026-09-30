@@ -276,6 +276,16 @@ export function EndpointBindingWorkflow({
     } catch (error) {
       setActionError(error instanceof Error ? error.message : String(error));
       if (error instanceof ApiError) {
+        // A conflict means the reviewed plan was refused. Keep the inputs but
+        // require a fresh server preview and request key before another write.
+        if (error.status === 409) {
+          setPreview(null);
+          setRequestKey(null);
+          setAttempted(false);
+          setApprovalPending(false);
+          setStep(1);
+          return;
+        }
         try {
           const problem = JSON.parse(error.body) as { code?: string; approval_status?: string };
           setApprovalPending(problem.code === "identity_approval_required" && problem.approval_status === "pending");

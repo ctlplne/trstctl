@@ -129,3 +129,46 @@ func TestLifecycleAutomationUsesIdentityBoundServedCertificate(t *testing.T) {
 		t.Fatalf("foreign tenant resolved certificate=%q found=%v error=%v", fingerprint, found, err)
 	}
 }
+
+func TestLifecycleAutomationPlanExcludesIdentityWithActiveEndpointReplacement(t *testing.T) {
+	s := newStore(t)
+	ctx := t.Context()
+	owner, err := s.CreateOwner(ctx, store.Owner{TenantID: tenantA, Kind: store.OwnerTeam, Name: "replacement plan owner"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, err := s.CreateIdentity(ctx, store.Identity{TenantID: tenantA, Kind: store.KindX509Certificate,
+		Name: "replacement-plan.example.test", OwnerID: owner.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	original.Status = "deployed"
+	if err := s.UpsertIdentity(ctx, original); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	nb, na := now.Add(-5*time.Minute), now.Add(10*time.Minute)
+	if _, err := s.UpsertCertificate(ctx, store.Certificate{TenantID: tenantA, OwnerID: &owner.ID,
+		Subject: "CN=replacement-plan.example.test", SANs: []string{original.Name}, Issuer: "old external CA",
+		Serial: "01", Fingerprint: strings.Repeat("a", 64), Source: "issued", Status: "active", NotBefore: &nb, NotAfter: &na}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := s.ListLifecycleAutomationInventory(ctx, tenantA, 100)
+	if err != nil || len(rows) != 1 || rows[0].IdentityID != original.ID {
+		t.Fatalf("before replacement plan rows=%+v error=%v", rows, err)
+	}
+	replacement, err := s.CreateIdentity(ctx, store.Identity{TenantID: tenantA, Kind: store.KindX509Certificate,
+		Name: original.Name, OwnerID: owner.ID,
+		Attributes: []byte(fmt.Sprintf(`{"endpoint_replaces_identity_id":%q}`, original.ID))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	replacement.Status = "issued"
+	if err := s.UpsertIdentity(ctx, replacement); err != nil {
+		t.Fatal(err)
+	}
+	rows, err = s.ListLifecycleAutomationInventory(ctx, tenantA, 100)
+	if err != nil || len(rows) != 0 {
+		t.Fatalf("plan offered obsolete predecessor for renewal after replacement: rows=%+v error=%v", rows, err)
+	}
+}

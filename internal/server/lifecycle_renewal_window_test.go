@@ -43,6 +43,27 @@ func TestLifecycleRenewalWindowDoesNotRequeueFreshLeaves(t *testing.T) {
 	}
 }
 
+func TestLifecycleRenewalWindowDoesNotLoopOnObservedExternalIssuance(t *testing.T) {
+	issued := time.Date(2026, 9, 30, 6, 0, 0, 0, time.UTC)
+	nb, na := issued.Add(-5*time.Minute), issued.Add(12*time.Minute)
+	cert := store.Certificate{
+		NotBefore: &nb, NotAfter: &na, CreatedAt: issued.Add(4 * time.Second),
+		Source: "issued", IssuanceIdempotencyKey: "agentcsr:107:1:issued",
+	}
+	if reason, due := lifecycleRenewalReason(cert, issued.Add(time.Minute), issued.Add(30*24*time.Hour)); due {
+		t.Fatalf("fresh externally issued leaf renewed again before its signed ARI window: %s", reason)
+	}
+	ariStart := na.Add(-na.Sub(nb) / 3)
+	if reason, due := lifecycleRenewalReason(cert, ariStart.Add(time.Second), ariStart.Add(30*24*time.Hour)); !due || !strings.HasPrefix(reason, lifecycleARIRenewalReasonPrefix) {
+		t.Fatalf("short external leaf lost its signed renewal window: %t %q", due, reason)
+	}
+	legacy := cert
+	legacy.IssuanceIdempotencyKey = ""
+	if reason, due := lifecycleRenewalReason(legacy, issued.Add(time.Minute), issued.Add(30*24*time.Hour)); !due || !strings.HasPrefix(reason, lifecycleFixedRenewalReasonPrefix) {
+		t.Fatalf("unattributed inventory observation was treated as issuance: %t %q", due, reason)
+	}
+}
+
 func TestLifecycleRenewalWindowPreservesRealDeadlinesAndARI(t *testing.T) {
 	issued := time.Date(2026, 9, 10, 13, 0, 40, 0, time.UTC)
 	for _, tc := range []struct {

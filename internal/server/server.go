@@ -3558,12 +3558,19 @@ func lifecycleRenewalReason(cert store.Certificate, now, fixedCutoff time.Time) 
 				info.SuggestedWindow.Start.Format(time.RFC3339),
 				info.SuggestedWindow.End.Format(time.RFC3339)), true
 		}
-		// A lead covering the leaf's whole minted lifetime is already open at
-		// issuance. Reapplying it to each fresh successor creates an endless
-		// renewal loop. Use the existing ARI window in that overlapping case.
-		// First inventory observation is not issuance; legacy and external
-		// leaves without an actual constructor anchor retain the fixed fallback.
-		if anchor := cert.ValidityAnchor; anchor != nil &&
+		// A lead covering the leaf's whole remaining lifetime at issuance is
+		// already open for each fresh successor. Reapplying it would loop.
+		// The constructor anchor is exact for our own CA. For a selected external
+		// CA, the first immutable issuance record is a receipt, not the CA's
+		// constructor clock. Its time is still enough to prove this leaf was
+		// returned during an issuance command, unlike an inventory scan. The
+		// signed ARI window continues to decide when it actually renews.
+		anchor := cert.ValidityAnchor
+		if anchor == nil && cert.Source == "issued" && cert.IssuanceIdempotencyKey != "" &&
+			!cert.CreatedAt.IsZero() {
+			anchor = &cert.CreatedAt
+		}
+		if anchor != nil &&
 			!anchor.Before(notBefore) && anchor.Before(notAfter) &&
 			fixedCutoff.Sub(now) >= notAfter.Sub(*anchor) {
 			return "", false

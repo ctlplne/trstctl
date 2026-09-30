@@ -14343,7 +14343,10 @@ export const messages = {
   },
   "connectors.binding.profileVersion": { defaultMessage: "{name} · version {version}", description: "Endpoint issuance authority and approval continuation." },
   "connectors.binding.defaultProfile": { defaultMessage: "Platform default", description: "Endpoint issuance authority and approval continuation." },
-  "connectors.binding.validity": { defaultMessage: "Certificate validity", description: "Endpoint issuance authority and approval continuation." },
+  "connectors.binding.validity": {
+    defaultMessage: "Requested certificate lifetime (CA may issue shorter)",
+    description: "The reviewed duration is the requested lifetime; an external authority may return a shorter signed lifetime.",
+  },
   "connectors.binding.validitySeconds": { defaultMessage: "{seconds} seconds", description: "Endpoint issuance authority and approval continuation." },
   "connectors.binding.approvalHelp": {
     defaultMessage: "Issuance requires independent approvals. The first attempt prepares the identity and opens a review. Issuance waits for approval.",

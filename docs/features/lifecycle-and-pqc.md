@@ -82,9 +82,13 @@ three signals, tenant-isolated at the database layer:
 
   A fallback longer than the certificate's entire lifetime must not cause renewal on
   every sweep. New endpoint leaves issued by the platform or a selected private CA
-  retain the actual signing constructor's validity timestamp. When `renew_before` is
-  at least the interval from that timestamp to signed expiry, the scheduler waits for
-  the ARI window. Thus a new 30-day leaf with a 30-day lead does not immediately renew.
+  retain the actual signing constructor's validity timestamp. For a selected external
+  CA, the immutable first issuance receipt proves when trstctl received that leaf;
+  it does not claim to know the CA's signing clock. When `renew_before` already covers
+  the remaining signed lifetime at that issuance receipt, the scheduler waits for the
+  signed ARI window. Thus a newly received 12-minute external leaf with a 30-day lead
+  does not renew again on the next one-minute sweep. The CA may sign a shorter lifetime
+  than the reviewed profile requests; inspect the returned certificate and listener.
   A 47-day leaf with a 30-day lead still becomes due around day 17; this repair does
   not shorten the configured lead or postpone that deadline. The automation plan uses
   the same decision as the scheduler.
@@ -181,8 +185,11 @@ completed restore moves that deadline back to the predecessor; queued or failed
 restores do not change it. Issuance history may still call that predecessor
 `superseded`; a completed restore proves it is serving again, so its earlier
 deadline still applies. Revoked certificates are never made renewable by a
-restore receipt. A replacement with the same owner and
-DNS name cannot inherit its predecessor's longer lifetime. Identities without
+restore receipt. A replacement with the same owner and DNS name cannot inherit
+its predecessor's longer lifetime. An active endpoint replacement holds the
+predecessor's automatic renewal; the plan omits that predecessor from its watched
+and due counts just as the scheduler does. Verify the replacement at the listener
+before any revocation or retirement of the original. Identities without
 delivery evidence retain the legacy owner-and-name inventory match; that match
 alone does not prove which certificate a listener serves.
 
@@ -372,14 +379,15 @@ every build through `internal/pqcmigration`.
 - **ARI-driven renewal** covers trstctl-issued deployed X.509 identities. Rows discovered
   from an outside CA stay visible for expiry/risk, but renewing them needs an issuer or
   connector path that can actually replace that external certificate.
-- **Unknown issuance time remains unknown.** Older records, external CA responses and
-  protocol issuance paths that do not retain the constructor timestamp still use the
-  existing fixed fallback alongside ARI. Discovery time and the backdated X.509
+- **Unknown issuance time remains unknown.** Inventory discoveries and protocol
+  issuance paths without a constructor timestamp or authenticated issuance receipt
+  still use the fixed fallback alongside ARI. Discovery time and the backdated X.509
   `notBefore` are not substituted for issuance time. An older local leaf can therefore
-  renew once before its new endpoint successor gains this protection; external
-  successors without the timestamp can still repeat. This change covers the served
-  identity scheduler and its plan, not the separate fixed-threshold
-  `lifecycle.Manager.RenewExpiring` library method.
+  renew once before its new endpoint successor gains this protection. The selected
+  external-CA endpoint path uses its retained first issuance receipt to prevent a
+  repeated immediate renewal; it cannot assert the upstream CA's construction time.
+  This decision covers the served identity scheduler and its plan, not the
+  separate fixed-threshold `lifecycle.Manager.RenewExpiring` library method.
 - **PQC execution** is core scope since 2026-09-20: PQC algorithms, automated fleet
   execution and the standalone `pqc campaigns` API/CLI/UI all attach in every build.
 - **Former PQC end-to-end residuals** are served in every build.

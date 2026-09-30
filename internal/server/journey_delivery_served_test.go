@@ -167,9 +167,36 @@ func TestEndpointBindingPinsExternalIssuerFromEffectFreePreview(t *testing.T) {
 		t.Fatalf("selected external CA intent rows = %d, want 1", got)
 	}
 	firstSerial := certs[0].Serial
+	if certs[0].ValidityAnchor != nil || certs[0].CreatedAt.IsZero() || certs[0].IssuanceIdempotencyKey == "" {
+		t.Fatalf("external result lacks a durable issuance receipt: %+v", certs[0])
+	}
+	plan, err := h.srv.LifecycleAutomationPlan(t.Context(), h.tenant, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("load external-CA automation plan: %v", err)
+	}
+	var planned bool
+	for _, item := range plan.Items {
+		if item.IdentityID == binding.Identity.ID {
+			planned = true
+			if item.Due || item.RenewalSource != "not_due" {
+				t.Fatalf("plan falsely marks fresh external leaf due: %+v", item)
+			}
+		}
+	}
+	if !planned {
+		t.Fatal("automation plan omitted externally issued endpoint")
+	}
 	queued, err := h.srv.RunLifecycleOnce(t.Context())
+	if err != nil || queued != 0 {
+		t.Fatalf("fresh external-CA result must wait for its signed ARI window: queued=%d err=%v", queued, err)
+	}
+	if certs[0].NotBefore == nil || certs[0].NotAfter == nil {
+		t.Fatalf("external certificate has no signed validity bounds: %+v", certs[0])
+	}
+	ariStart := certs[0].NotAfter.Add(-certs[0].NotAfter.Sub(*certs[0].NotBefore) / 3)
+	queued, err = h.srv.runLifecycleOnceAt(t.Context(), ariStart.Add(time.Second))
 	if err != nil || queued != 1 {
-		t.Fatalf("schedule pinned external-CA renewal: queued=%d err=%v", queued, err)
+		t.Fatalf("schedule pinned external-CA renewal in signed window: queued=%d err=%v", queued, err)
 	}
 	if err := h.srv.Drain(t.Context()); err != nil {
 		t.Fatalf("drain pinned external-CA renewal: %v", err)
