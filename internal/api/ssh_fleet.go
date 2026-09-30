@@ -14,12 +14,11 @@ import (
 // the question an operator actually has: which hosts still have standing
 // key-based access that certificate rotation cannot reach.
 //
-// Every row behind this view is a RAW key: a certificate minted by the SSH CA
-// is not stored as an ssh_key. So a host appearing here is, by construction,
-// not under the CA for that access path. The endpoint says that plainly
-// instead of making the reader infer it from an absence.
+// The rows identify key locations and standing grants. A raw public key can
+// also be the key inside a CA-signed host certificate, so key inventory alone
+// cannot establish whether the host trusts or serves an SSH CA certificate.
 
-// SSHFleetHost is one host's standing key-based access.
+// SSHFleetHost is one discovered SSH key location and its grant counts.
 type SSHFleetHost struct {
 	Location string `json:"location"`
 	Keys     int    `json:"keys"`
@@ -32,19 +31,16 @@ type SSHFleetHost struct {
 	Sources       []string  `json:"sources"`
 	FirstObserved time.Time `json:"first_observed"`
 	LastObserved  time.Time `json:"last_observed"`
-	// UnderCA is always false in this view and is returned explicitly so a
-	// client never has to infer the claim from the endpoint's name.
-	UnderCA bool `json:"under_ca"`
 }
 
 // SSHFleetInventory is the served answer plus the counts worth acting on.
 type SSHFleetInventory struct {
 	Hosts            []SSHFleetHost `json:"hosts"`
+	// HostCount is a legacy wire name for the number of reported key locations.
 	HostCount        int            `json:"host_count"`
 	KeyCount         int            `json:"key_count"`
 	StandingKeyCount int            `json:"standing_key_count"`
 	OrphanedKeyCount int            `json:"orphaned_key_count"`
-	HostsNotUnderCA  int            `json:"hosts_not_under_ca"`
 }
 
 // SSHFleetProvider is the server-side seam over the store aggregate.
@@ -67,7 +63,6 @@ func (a *API) getSSHFleet(w http.ResponseWriter, r *http.Request) {
 	}
 	inventory := SSHFleetInventory{Hosts: []SSHFleetHost{}}
 	for _, host := range hosts {
-		host.UnderCA = false
 		if host.KeyTypes == nil {
 			host.KeyTypes = []string{}
 		}
@@ -80,8 +75,5 @@ func (a *API) getSSHFleet(w http.ResponseWriter, r *http.Request) {
 		inventory.OrphanedKeyCount += host.OrphanedKeys
 	}
 	inventory.HostCount = len(inventory.Hosts)
-	// Every host in this view is outside the CA by construction; the count is
-	// carried so a dashboard does not have to restate the invariant.
-	inventory.HostsNotUnderCA = inventory.HostCount
 	a.writeJSON(w, http.StatusOK, inventory)
 }

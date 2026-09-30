@@ -3248,20 +3248,19 @@ func componentSchemas() map[string]*Schema {
 		"total": {Type: "integer"}, "verified_count": {Type: "integer"},
 		"not_published_count": {Type: "integer"},
 	}, "items", "total", "verified_count", "not_published_count")
-	// B-2: hosts with standing SSH key access that is not under the CA.
+	// B-2: observed SSH key locations and standing grants. Key inventory does
+	// not prove whether a host trusts or serves a CA-signed certificate.
 	sshFleetHost := object(map[string]*Schema{
 		"location": str(), "keys": {Type: "integer"},
 		"standing_keys": {Type: "integer"}, "orphaned_keys": {Type: "integer"},
 		"key_types": {Type: "array", Items: str()}, "sources": {Type: "array", Items: str()},
 		"first_observed": timestamp(), "last_observed": timestamp(),
-		"under_ca": {Type: "boolean"},
-	}, "location", "keys", "standing_keys", "orphaned_keys", "key_types", "sources", "first_observed", "last_observed", "under_ca")
+	}, "location", "keys", "standing_keys", "orphaned_keys", "key_types", "sources", "first_observed", "last_observed")
 	sshFleetInventory := object(map[string]*Schema{
 		"hosts":      {Type: "array", Items: ref("SSHFleetHost")},
 		"host_count": {Type: "integer"}, "key_count": {Type: "integer"},
 		"standing_key_count": {Type: "integer"}, "orphaned_key_count": {Type: "integer"},
-		"hosts_not_under_ca": {Type: "integer"},
-	}, "hosts", "host_count", "key_count", "standing_key_count", "orphaned_key_count", "hosts_not_under_ca")
+	}, "hosts", "host_count", "key_count", "standing_key_count", "orphaned_key_count")
 	// B-5: running build, uptime, signer topology, and spine reachability.
 	systemDependency := object(map[string]*Schema{
 		"name": str(), "ready": {Type: "boolean"}, "error": str(),

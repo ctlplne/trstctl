@@ -78,11 +78,10 @@ func (s *Store) ApplySSHKeyDiscoveredTx(ctx context.Context, tx pgx.Tx, k SSHKey
 	return err
 }
 
-// SSHFleetHost aggregates a host's discovered SSH key material. Every row in
-// ssh_keys is a RAW key — a certificate issued by the SSH CA is not stored
-// here — so a host appearing in this view has key-based access that does not
-// go through the CA. That is the finding: standing keys are the access path
-// certificate rotation cannot reach.
+// SSHFleetHost aggregates one discovered SSH key location. Standing grants are
+// the access path certificate rotation cannot reach; a raw host public key can
+// also be the key inside a CA-signed host certificate, so this view does not
+// establish a machine's CA trust posture.
 type SSHFleetHost struct {
 	Location      string
 	Keys          int
@@ -94,10 +93,9 @@ type SSHFleetHost struct {
 	LastObserved  time.Time
 }
 
-// SSHFleetInventory groups the tenant's discovered SSH keys by host, worst
-// first (most standing access, then most orphaned, then most keys), so the
-// hosts that most need bringing under the CA sort to the top. limit bounds one
-// read; 0 uses a sane default.
+// SSHFleetInventory groups the tenant's discovered SSH keys by location, worst
+// first (most standing access, then most orphaned, then most keys). limit
+// bounds one read; 0 uses a sane default.
 func (s *Store) SSHFleetInventory(ctx context.Context, tenantID string, limit int) ([]SSHFleetHost, error) {
 	if limit <= 0 {
 		limit = 200

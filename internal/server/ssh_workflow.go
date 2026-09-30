@@ -848,10 +848,8 @@ func compactStrings(in []string) []string {
 	return out
 }
 
-// SSHFleetInventory answers B-2: which hosts still carry standing SSH key
-// access. Every ssh_keys row is a raw key — a CA-minted certificate is not
-// stored there — so this view IS the not-under-CA list, and the API layer
-// says so explicitly rather than leaving the reader to infer it.
+// SSHFleetInventory answers B-2: which discovered key locations still carry
+// standing SSH access. It does not infer CA trust from raw key presence.
 func (s *Server) SSHFleetInventory(ctx context.Context, tenantID string) ([]api.SSHFleetHost, error) {
 	if s.store == nil {
 		return nil, nil

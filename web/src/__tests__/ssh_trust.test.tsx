@@ -54,14 +54,12 @@ describe("SSH trust served workflow surface", () => {
           sources: ["ssh-authorized-keys"],
           first_observed: "2026-06-27T09:00:00Z",
           last_observed: "2026-06-27T09:00:00Z",
-          under_ca: false,
         },
       ],
       host_count: 1,
       key_count: 1,
       standing_key_count: 1,
       orphaned_key_count: 1,
-      hosts_not_under_ca: 1,
     });
     apiMock.recordSSHTrustRollout.mockResolvedValue({
       id: "evt-rollout",
@@ -180,7 +178,7 @@ describe("SSH trust served workflow surface", () => {
     expect(screen.getByRole("heading", { name: "SSH access" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Choose what you want to do" })).toBeInTheDocument();
     expect(screen.getByRole("table", { name: "SSH standing access inventory" })).toHaveTextContent("/home/alice/.ssh/authorized_keys");
-    expect(screen.getAllByText(/1 standing.*1 orphaned/)).toHaveLength(2);
+    expect(screen.getByText(/1 standing.*1 orphaned/)).toBeInTheDocument();
     expect(screen.queryByRole("form", { name: "Record SSH trust rollout" })).not.toBeInTheDocument();
 
     const technicalDetails = screen.getByText("Show SSH technical status").closest("details") as HTMLDetailsElement;
@@ -216,7 +214,6 @@ describe("SSH trust served workflow surface", () => {
       key_count: 0,
       standing_key_count: 0,
       orphaned_key_count: 0,
-      hosts_not_under_ca: 0,
     });
 
     renderSSHTrust();
@@ -239,6 +236,13 @@ describe("SSH trust served workflow surface", () => {
 
     expect(await screen.findByText("Revocation entries: 1 · Proof methods: 0")).toBeInTheDocument();
     expect(screen.queryByText("1 revoked certificates · 0 proof methods available")).not.toBeInTheDocument();
+  });
+
+  it("uses labeled inventory counts when one standing grant is reported", async () => {
+    renderSSHTrust();
+
+    expect(await screen.findByText("Locations: 1 · Standing grants: 1 · Orphaned: 1")).toBeInTheDocument();
+    expect(screen.queryByText("1 standing grants")).not.toBeInTheDocument();
   });
 
   it("previews the exact host-certificate plan before issuing and hides raw material by default", async () => {

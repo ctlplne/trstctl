@@ -27965,9 +27965,6 @@
           },
           "standing_keys": {
             "type": "integer"
-          },
-          "under_ca": {
-            "type": "boolean"
           }
         },
         "required": [
@@ -27978,8 +27975,7 @@
           "key_types",
           "sources",
           "first_observed",
-          "last_observed",
-          "under_ca"
+          "last_observed"
         ],
         "type": "object"
       },
@@ -27993,9 +27989,6 @@
               "$ref": "#/components/schemas/SSHFleetHost"
             },
             "type": "array"
-          },
-          "hosts_not_under_ca": {
-            "type": "integer"
           },
           "key_count": {
             "type": "integer"
@@ -28012,8 +28005,7 @@
           "host_count",
           "key_count",
           "standing_key_count",
-          "orphaned_key_count",
-          "hosts_not_under_ca"
+          "orphaned_key_count"
         ],
         "type": "object"
       },
@@ -58927,7 +58919,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "List hosts with standing SSH key access not under the CA",
+        "summary": "List discovered SSH key locations and standing access grants",
         "x-trstctl-permission": "certs:read"
       }
     },

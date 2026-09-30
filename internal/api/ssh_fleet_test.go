@@ -61,21 +61,46 @@ func TestSSHFleetInventoryRollsUpStandingKeyAccess(t *testing.T) {
 	if body.HostCount != 2 || body.KeyCount != 5 || body.StandingKeyCount != 3 || body.OrphanedKeyCount != 1 {
 		t.Fatalf("rollup = %+v", body)
 	}
-	// The whole point: every host here is outside the CA, and the response
-	// states it rather than leaving the reader to infer it.
-	if body.HostsNotUnderCA != 2 {
-		t.Fatalf("hosts_not_under_ca = %d, want 2", body.HostsNotUnderCA)
-	}
-	for _, host := range body.Hosts {
-		if host.UnderCA {
-			t.Fatalf("host %s claims to be under the CA", host.Location)
-		}
-	}
 	if body.Hosts[0].Location != "db-01:22" || body.Hosts[0].StandingKeys != 3 {
 		t.Fatalf("worst host = %+v, want db-01:22 first", body.Hosts[0])
 	}
 	if !body.Hosts[0].LastObserved.After(body.Hosts[0].FirstObserved) {
 		t.Fatal("observation window did not survive the round trip")
+	}
+}
+
+func TestSSHFleetDoesNotInferCATrustFromKeyLocations(t *testing.T) {
+	handler := api.New(nil, nil, nil,
+		api.WithInsecureHeaderResolver(),
+		api.WithSSHFleet(func(context.Context, string) ([]api.SSHFleetHost, error) {
+			return []api.SSHFleetHost{{Location: "/etc/ssh/ssh_host_ed25519_key.pub", Keys: 1, Sources: []string{"ssh-host-key"}}}, nil
+		}),
+	)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/ssh/fleet", nil)
+	req.Header.Set("X-Tenant-ID", connectorTenantA)
+	req.Header.Set("X-Roles", "admin")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if _, present := body["hosts_not_under_ca"]; present {
+		t.Fatal("raw host-key location was reported as a host outside CA trust without sshd evidence")
+	}
+	hosts, ok := body["hosts"].([]any)
+	if !ok || len(hosts) != 1 {
+		t.Fatalf("hosts = %#v", body["hosts"])
+	}
+	host, ok := hosts[0].(map[string]any)
+	if !ok {
+		t.Fatalf("host = %#v", hosts[0])
+	}
+	if _, present := host["under_ca"]; present {
+		t.Fatal("raw host-key location was given a CA trust status without sshd evidence")
 	}
 }
 
@@ -91,7 +116,7 @@ func TestSSHFleetInventoryEmptyEstate(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("status = %d", code)
 	}
-	if body.Hosts == nil || body.HostCount != 0 || body.HostsNotUnderCA != 0 {
+	if body.Hosts == nil || body.HostCount != 0 {
 		t.Fatalf("empty estate = %+v", body)
 	}
 }

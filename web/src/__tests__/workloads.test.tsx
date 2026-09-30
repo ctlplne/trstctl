@@ -87,7 +87,6 @@ describe("workload identity disclosure surface", () => {
     apiMock.sshFleet.mockReset().mockResolvedValue({
       host_count: 8,
       hosts: [],
-      hosts_not_under_ca: 3,
       key_count: 12,
       orphaned_key_count: 2,
       standing_key_count: 4,
@@ -126,7 +125,7 @@ describe("workload identity disclosure surface", () => {
     expect(within(health).getByRole("link", { name: "2 registered identities" })).toHaveAttribute("href", "/identities");
     expect(screen.getByRole("link", { name: "Browse issued certificates" })).toHaveAttribute("href", "/certificates");
     expect(within(health).getByRole("link", { name: /1 agent needs attention/i })).toHaveAttribute("href", "/agents");
-    expect(within(health).getByRole("link", { name: /3 hosts outside the ssh ca/i })).toHaveAttribute("href", "/ssh");
+    expect(within(health).getByRole("link", { name: /4 standing SSH grants/i })).toHaveAttribute("href", "/ssh");
     expect(within(health).getByRole("link", { name: /1 failed workload delivery/i })).toHaveAttribute("href", "/connectors");
 
     expect(apiMock.kubernetesCSRSupport).not.toHaveBeenCalled();
@@ -137,12 +136,29 @@ describe("workload identity disclosure surface", () => {
     expect(apiMock.kubernetesTrustBundles).toHaveBeenCalledTimes(1);
   });
 
+  it("bases SSH urgency on observed standing grants, not an unobserved CA posture", async () => {
+    apiMock.sshFleet.mockResolvedValueOnce({
+      host_count: 2,
+      key_count: 2,
+      standing_key_count: 1,
+      orphaned_key_count: 0,
+      hosts: [],
+    });
+    renderWorkloads();
+
+    expect(screen.getByText(/where standing SSH keys remain/)).toBeInTheDocument();
+    const health = await screen.findByRole("list", { name: "Machine and workload health" });
+    expect(within(health).getByRole("link", { name: "1 standing SSH grant" })).toHaveAttribute("href", "/ssh");
+    expect(screen.getByText("1 standing grant remains; it can bypass short-lived certificate checks.")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /outside the SSH CA/i })).not.toBeInTheDocument();
+  });
+
   it("renders missing overview evidence as unknown instead of safe zeroes", async () => {
     apiMock.agents.mockResolvedValueOnce([]);
     apiMock.identities.mockRejectedValueOnce(new Error("identity read unavailable"));
     apiMock.contextualRiskPriorities.mockResolvedValueOnce({ priorities: [] });
     apiMock.sshStatus.mockResolvedValueOnce({ served: true });
-    apiMock.sshFleet.mockResolvedValueOnce({ hosts_not_under_ca: 0, hosts: [] });
+    apiMock.sshFleet.mockResolvedValueOnce({ standing_key_count: 0, hosts: [] });
     apiMock.connectorDeliveries.mockResolvedValueOnce({ items: [] });
     apiMock.rotationRuns.mockResolvedValueOnce({ items: [] });
 

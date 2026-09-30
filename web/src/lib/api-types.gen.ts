@@ -6806,13 +6806,11 @@ export interface SSHFleetHost {
   orphaned_keys: number;
   sources: string[];
   standing_keys: number;
-  under_ca: boolean;
 }
 
 export interface SSHFleetInventory {
   host_count: number;
   hosts: SSHFleetHost[];
-  hosts_not_under_ca: number;
   key_count: number;
   orphaned_key_count: number;
   standing_key_count: number;

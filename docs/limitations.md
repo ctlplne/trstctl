@@ -2286,14 +2286,13 @@ than sending an operator looking for a credential that was never there.
   row *is* a verified entry. The view reads no sealed command bytes, so the
   plaintext identity assertion and the artifact digest never leave the signer
   boundary through it.
-- The SSH estate outside the CA is readable: `GET /api/v1/ssh/fleet` (and
-  `trstctl-cli ssh fleet`) rolls the tenant's discovered SSH keys up per host
+- The SSH key estate is readable: `GET /api/v1/ssh/fleet` (and
+  `trstctl-cli ssh fleet`) rolls the tenant's discovered SSH key locations up
   with standing-access and orphaned counts, key types, and the observation
-  window, worst host first. Every row behind it is a **raw** key — a
-  certificate minted by the SSH CA is not stored as an `ssh_key` — so the
-  view is by construction the not-under-CA list, and each host carries
-  `under_ca: false` explicitly rather than leaving a reader to infer the
-  claim from an absence. It reports metadata only (fingerprints, key types,
+  window, worst location first. A raw public key can also be the key inside a
+  CA-signed host certificate. This inventory does not inspect a host's sshd
+  trust configuration or served certificate, so it does not assert whether a
+  host is under the SSH CA. It reports metadata only (fingerprints, key types,
   locations); no private key material is read or stored by discovery.
 - The connector catalog reports sandbox truth, not description: each row in
   `GET /api/v1/connectors/catalog` carries `native` (this build has a native

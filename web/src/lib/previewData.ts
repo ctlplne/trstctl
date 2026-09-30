@@ -748,14 +748,12 @@ const previewReaders: Record<string, () => unknown> = {
     key_count: 19,
     standing_key_count: 5,
     orphaned_key_count: 1,
-    hosts_not_under_ca: 1,
     hosts: [
       {
         location: "bastion.preview-lab.example",
         keys: 12,
         standing_keys: 3,
         orphaned_keys: 1,
-        under_ca: true,
         key_types: ["ssh-ed25519", "sk-ssh-ed25519"],
         sources: ["agent", "authorized_keys"],
         first_observed: "2026-05-01T00:00:00Z",
@@ -766,7 +764,6 @@ const previewReaders: Record<string, () => unknown> = {
         keys: 7,
         standing_keys: 2,
         orphaned_keys: 0,
-        under_ca: false,
         key_types: ["ssh-rsa"],
         sources: ["network-scan"],
         first_observed: "2026-06-10T00:00:00Z",

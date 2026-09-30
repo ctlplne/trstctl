@@ -6241,7 +6241,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List hosts with standing SSH key access not under the CA */
+        /** List discovered SSH key locations and standing access grants */
         get: operations["getSSHFleet"];
         put?: never;
         post?: never;
@@ -13829,12 +13829,10 @@ export interface components {
             orphaned_keys: number;
             sources: string[];
             standing_keys: number;
-            under_ca: boolean;
         };
         SSHFleetInventory: {
             host_count: number;
             hosts: components["schemas"]["SSHFleetHost"][];
-            hosts_not_under_ca: number;
             key_count: number;
             orphaned_key_count: number;
             standing_key_count: number;

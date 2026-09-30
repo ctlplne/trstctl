@@ -2,6 +2,11 @@
 
 ### Fixed
 
+- SSH fleet and Workloads no longer label every discovered raw host key as
+  outside SSH CA trust. The inventory reports observed key locations and
+  standing grants; proving CA posture requires sshd trust and served-certificate
+  evidence. The unsupported `under_ca` and `hosts_not_under_ca` fields were
+  removed from the API and generated clients.
 - Raw SSH revocations now survive control-plane restarts and reach other replicas
   through the event-backed KRL. Raw SSH mutations use the API guard, including
   tenant admission, permissions, rate limits, ABAC and idempotent replay.

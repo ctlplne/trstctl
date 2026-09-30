@@ -436,11 +436,13 @@ export function Workloads() {
       action: t("workloads.overview.reviewDelivery"),
     });
   }
-  if ((overview.sshFleet?.hosts_not_under_ca ?? 0) > 0) {
+  if ((overview.sshFleet?.standing_key_count ?? 0) > 0) {
     attentionRows.push({
-      id: "ssh:outside-ca",
+      id: "ssh:standing-grants",
       name: t("workloads.overview.sshOutsideName"),
-      detail: t("workloads.overview.sshOutsideDetail", { count: String(overview.sshFleet?.hosts_not_under_ca ?? 0) }),
+      detail: t((overview.sshFleet?.standing_key_count ?? 0) === 1 ? "workloads.overview.sshOutsideDetailOne" : "workloads.overview.sshOutsideDetail", {
+        count: String(overview.sshFleet?.standing_key_count ?? 0),
+      }),
       owner: t("workloads.overview.sshOutsideConsequence"),
       to: "/ssh",
       action: t("workloads.overview.reviewSSH"),
@@ -540,12 +542,12 @@ export function Workloads() {
                 icon={<Network className="h-4 w-4" aria-hidden="true" />}
                 label={
                   sshHealthAvailable
-                    ? t((overview.sshFleet?.hosts_not_under_ca ?? 0) === 1 ? "workloads.overview.sshOne" : "workloads.overview.sshMany", {
-                        count: String(overview.sshFleet?.hosts_not_under_ca ?? 0),
+                    ? t((overview.sshFleet?.standing_key_count ?? 0) === 1 ? "workloads.overview.sshOne" : "workloads.overview.sshMany", {
+                        count: String(overview.sshFleet?.standing_key_count ?? 0),
                       })
                     : t("workloads.overview.sshUnavailable")
                 }
-                urgent={sshHealthAvailable && ((overview.sshFleet?.hosts_not_under_ca ?? 0) > 0 || overview.ssh?.served === false)}
+                urgent={sshHealthAvailable && ((overview.sshFleet?.standing_key_count ?? 0) > 0 || overview.ssh?.served === false)}
               />
               <WorkloadHealthLink
                 to="/connectors"

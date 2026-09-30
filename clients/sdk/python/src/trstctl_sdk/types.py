@@ -9354,7 +9354,6 @@ SSHFleetHost = TypedDict(
         'orphaned_keys': int,
         'sources': list[str],
         'standing_keys': int,
-        'under_ca': bool,
     },
     total=False,
 )
@@ -9364,7 +9363,6 @@ SSHFleetInventory = TypedDict(
     {
         'host_count': int,
         'hosts': list[dict[str, Any]],
-        'hosts_not_under_ca': int,
         'key_count': int,
         'orphaned_key_count': int,
         'standing_key_count': int,

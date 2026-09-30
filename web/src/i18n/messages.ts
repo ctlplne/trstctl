@@ -10053,8 +10053,8 @@ export const messages = {
     description: "Safety description for the SSH fleet inventory.",
   },
   "sshTrust.fleet.hostsOutsideCA": {
-    defaultMessage: "Hosts outside SSH CA trust",
-    description: "SSH fleet metric for hosts still using raw keys.",
+    defaultMessage: "Reported key locations",
+    description: "SSH fleet metric for observed key locations; CA trust is not inferred from a raw key.",
   },
   "sshTrust.fleet.standingGrants": {
     defaultMessage: "Standing grants",
@@ -10069,7 +10069,7 @@ export const messages = {
     description: "Empty state for SSH fleet inventory.",
   },
   "sshTrust.fleet.summary": {
-    defaultMessage: "{hosts} locations reported · {standing} standing grants · {orphaned} orphaned",
+    defaultMessage: "Locations: {hosts} · Standing grants: {standing} · Orphaned: {orphaned}",
     description: "Compact SSH inventory summary that replaces three equally weighted metric cards.",
   },
   "sshTrust.fleet.tableLabel": {
@@ -18143,12 +18143,12 @@ export const messages = {
     description: "Plain-language workload identity answer when an attester is enabled.",
   },
   "workloads.overview.answer": {
-    defaultMessage: "See which machine identities may stop working, which agents are stale, what sits outside SSH trust, and where delivery failed.",
+    defaultMessage: "See which machine identities may stop working, which agents are stale, where standing SSH keys remain, and where delivery failed.",
     description: "Machine and Workload Trust workspace opening answer.",
   },
   "workloads.overview.details": {
     defaultMessage:
-      "Counts come from tenant-scoped identities, contextual risk, agent heartbeats, SSH fleet posture, lifecycle runs, and connector delivery receipts. Attestation payloads and private keys never enter this overview.",
+      "Counts come from tenant-scoped identities, contextual risk, agent heartbeats, reported SSH key locations, lifecycle runs, and connector delivery receipts. Attestation payloads and private keys never enter this overview.",
     description: "Technical evidence summary for the Machine and Workload Trust overview.",
   },
   "workloads.overview.loading": {
@@ -18186,7 +18186,7 @@ export const messages = {
   },
   "workloads.overview.healthTitle": { defaultMessage: "Workspace health", description: "Machine and Workload Trust health heading." },
   "workloads.overview.healthHelp": {
-    defaultMessage: "Current counts come from identities, agents, SSH hosts, rotations, and deliveries. Open one to inspect the matching items.",
+    defaultMessage: "Current counts come from identities, agents, reported SSH keys, rotations, and deliveries. Open one to inspect the matching items.",
     description: "Explanation of Machine and Workload Trust health counts.",
   },
   "workloads.overview.healthPartialHelp": {
@@ -18240,8 +18240,8 @@ export const messages = {
   },
   "workloads.overview.agentsOne": { defaultMessage: "1 agent needs attention", description: "Single unhealthy or stale agent count." },
   "workloads.overview.agentsMany": { defaultMessage: "{count} agents need attention", description: "Unhealthy or stale agent count." },
-  "workloads.overview.sshOne": { defaultMessage: "1 host outside the SSH CA", description: "Single host outside SSH certificate trust." },
-  "workloads.overview.sshMany": { defaultMessage: "{count} hosts outside the SSH CA", description: "Hosts outside SSH certificate trust." },
+  "workloads.overview.sshOne": { defaultMessage: "1 standing SSH grant", description: "Single observed persistent SSH grant." },
+  "workloads.overview.sshMany": { defaultMessage: "{count} standing SSH grants", description: "Observed persistent SSH grants." },
   "workloads.overview.deliveriesOne": { defaultMessage: "1 failed workload delivery", description: "Single workload lifecycle or delivery failure." },
   "workloads.overview.deliveriesMany": { defaultMessage: "{count} failed workload deliveries", description: "Workload lifecycle or delivery failures." },
   "workloads.overview.deadlineUnknown": { defaultMessage: "Expiry is not recorded", description: "Workload identity missing-expiry state." },
@@ -18265,13 +18265,20 @@ export const messages = {
   },
   "workloads.overview.reviewDelivery": { defaultMessage: "Review delivery", description: "Action opening workload delivery receipts." },
   "workloads.overview.sshOutsideName": {
-    defaultMessage: "SSH hosts outside certificate trust",
-    description: "Action-row name for SSH hosts outside the tenant CA.",
+    defaultMessage: "Standing SSH grants",
+    description: "Action-row name for observed persistent SSH access.",
   },
-  "workloads.overview.sshOutsideDetail": { defaultMessage: "{count} hosts still rely on standing keys.", description: "SSH host coverage gap detail." },
+  "workloads.overview.sshOutsideDetailOne": {
+    defaultMessage: "1 standing grant remains; it can bypass short-lived certificate checks.",
+    description: "Single observed persistent SSH grant detail.",
+  },
+  "workloads.overview.sshOutsideDetail": {
+    defaultMessage: "{count} standing grants remain; they can bypass short-lived certificate checks.",
+    description: "Multiple observed persistent SSH grants detail.",
+  },
   "workloads.overview.sshOutsideConsequence": {
-    defaultMessage: "A copied or orphaned key may remain valid until each host is changed.",
-    description: "Plain consequence of hosts outside SSH certificate trust.",
+    defaultMessage: "A copied or orphaned key may remain valid until the relying host is changed.",
+    description: "Plain consequence of persistent SSH access.",
   },
   "workloads.overview.reviewSSH": { defaultMessage: "Review SSH trust", description: "Action opening SSH trust coverage." },
   "workloads.page.answerNeedsTrust": {

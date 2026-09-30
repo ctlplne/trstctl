@@ -228,7 +228,7 @@ func TestSSHCLIUsesServedJourneyAPI(t *testing.T) {
 		case "/api/v1/ssh/status":
 			_, _ = io.WriteString(w, `{"served":true,"krl_version":0,"revoked_count":0}`)
 		case "/api/v1/ssh/fleet":
-			_, _ = io.WriteString(w, `{"hosts":[],"host_count":0,"key_count":0,"standing_key_count":0,"orphaned_key_count":0,"hosts_not_under_ca":0}`)
+			_, _ = io.WriteString(w, `{"hosts":[],"host_count":0,"key_count":0,"standing_key_count":0,"orphaned_key_count":0}`)
 		case "/api/v1/ssh/certificates/preview":
 			_, _ = io.WriteString(w, `{"ready":true,"effect_free":true,"certificate_type":"host","key_id":"edge-1"}`)
 		case "/api/v1/ssh/certificates":
