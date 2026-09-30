@@ -271,18 +271,33 @@ dialing a loopback Envoy endpoint on its own machine. The host executor accepts 
 network egress from the agent host.
 
 A tenant with `connectors:write` then creates the target with the connector's strict
-schema and drives its lifecycle:
+schema and drives its lifecycle. Replace the paths and listener address with the
+service's actual values; the verification name must match the requested identity's
+DNS name:
 
 ```sh
-trstctl connector target create \
-  --name edge/prod/payments \
-  --connector nginx \
-  --config-json '{"profile":"nginx-prod","cert_path":"/etc/nginx/tls/payments.crt","key_path":"/etc/nginx/tls/payments.key"}'
-
-trstctl connector target bind --identity "$IDENTITY_ID" --target "$TARGET_ID"
-trstctl connector target test --target "$TARGET_ID"
-trstctl connector target deploy --identity "$IDENTITY_ID" --target "$TARGET_ID"
-trstctl connector target rollback --identity "$IDENTITY_ID" --target "$TARGET_ID"
+: "${AGENT_ID:?Set this to the enrolled host agent UUID shown by agents list}"
+: "${IDENTITY_ID:?Set this to a requested X.509 identity UUID}"
+TARGET_ID=$(jq -n --arg agent "$AGENT_ID" '{
+  name:"edge/prod/payments", connector:"nginx", enabled:true,
+  config:{profile:"nginx-prod",cert_path:"/etc/nginx/tls/payments.crt",
+    key_path:"/etc/nginx/tls/payments.key",executor:"agent",
+    required_agent_role:"host",required_agent_id:$agent,
+    verify_address:"127.0.0.1:443",verify_server_name:"payments.svc"}
+}' | trstctl-cli --idempotency-key payments-target-create \
+  connector target create -f - | jq -er .id)
+jq -n --arg target "$TARGET_ID" '{target_id:$target}' |
+  trstctl-cli --idempotency-key payments-target-bind \
+    connector target bind "$IDENTITY_ID" -f -
+trstctl-cli --idempotency-key payments-target-test \
+  connector target test "$TARGET_ID"
+jq -n --arg identity "$IDENTITY_ID" '{identity_id:$identity}' |
+  trstctl-cli --idempotency-key payments-target-deploy \
+    connector target deploy "$TARGET_ID" -f -
+# After a later rotation leaves a proven predecessor, rollback uses the same body:
+jq -n --arg identity "$IDENTITY_ID" '{identity_id:$identity}' |
+  trstctl-cli --idempotency-key payments-target-rollback \
+    connector target rollback "$TARGET_ID" -f -
 ```
 
 `target deploy` is not a private-key recovery command. For a `requested` identity,
