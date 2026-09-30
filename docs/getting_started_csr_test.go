@@ -35,17 +35,33 @@ func TestGettingStartedOpenSSLCSRPassesIssuanceParser(t *testing.T) {
 	if len(command) == 0 {
 		t.Fatal("getting-started.md has no first-certificate OpenSSL CSR command")
 	}
+	documentedArgs := strings.Fields(strings.ReplaceAll(strings.Join(command, " "), "\\", ""))
+	for i := range documentedArgs {
+		documentedArgs[i] = strings.Trim(documentedArgs[i], "'")
+	}
+	wantArgs := []string{
+		"openssl", "req", "-new", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256",
+		"-pkeyopt", "ec_param_enc:named_curve", "-nodes", "-keyout", "payments.key",
+		"-out", "payments.csr", "-subj", "/CN=payments.svc", "-addext", "subjectAltName=DNS:payments.svc",
+	}
+	if !slices.Equal(documentedArgs, wantArgs) {
+		t.Fatalf("documented CSR command changed: got %q, want %q", documentedArgs, wantArgs)
+	}
 
 	dir := t.TempDir()
-	cmd := exec.Command("sh", "-c", "umask 077\n"+strings.Join(command, "\n"))
+	cmd := exec.Command("openssl", "req", "-new", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256",
+		"-pkeyopt", "ec_param_enc:named_curve", "-nodes", "-keyout", "payments.key", "-out", "payments.csr",
+		"-subj", "/CN=payments.svc", "-addext", "subjectAltName=DNS:payments.svc")
 	cmd.Dir = dir
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("documented CSR command failed: %v: %s", err, output)
 	}
 
-	csr, err := os.ReadFile(filepath.Join(dir, "payments.csr"))
+	inspect := exec.Command("openssl", "req", "-in", "payments.csr", "-outform", "PEM")
+	inspect.Dir = dir
+	csr, err := inspect.CombinedOutput()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("read generated public CSR: %v: %s", err, csr)
 	}
 	_, info, err := crypto.ParsePublicCSRPEM(csr)
 	if err != nil {
