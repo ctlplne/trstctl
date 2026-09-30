@@ -48,7 +48,7 @@ func (s *Server) certificateRevocationAuthority(ctx context.Context, certificate
 			origin := origins[certificate.Fingerprint]
 			if origin.ExternalID != "" {
 				entry, found := dispatcher.externalCAs.byID[origin.ExternalID]
-				if !found || entry.revocationCA == nil || (entry.tenantID != "" && entry.tenantID != certificate.TenantID) {
+				if !found || !entry.canRevoke() || (entry.tenantID != "" && entry.tenantID != certificate.TenantID) {
 					return "", orchestrator.ErrCertificateRevocationUnsupported
 				}
 				return orchestrator.ExternalCertificateAuthorityPrefix + origin.ExternalID, nil

@@ -133,6 +133,27 @@ type externalCAEntry struct {
 	revocationCA ca.CA
 }
 
+// A factory wrapper exposes Revoke even when its real adapter cannot revoke.
+// Use the shipped kind matrix for factories without constructing a credentialed
+// client during a read-only preview. Direct plugins can report their own backend
+// capability, including catemplate's optional RevokingBackend.
+func (e externalCAEntry) canRevoke() bool {
+	if e.revocationCA == nil {
+		return false
+	}
+	if capable, ok := e.revocationCA.(interface{ CanRevoke() bool }); ok {
+		return capable.CanRevoke()
+	}
+	if _, ok := e.revocationCA.(factoryExternalCA); ok {
+		return ca.CanRevoke(e.meta.Type)
+	}
+	if _, ok := e.revocationCA.(diagnosticExternalCA); ok {
+		return ca.CanRevoke(e.meta.Type)
+	}
+	_, ok := e.revocationCA.(ca.Revoker)
+	return ok
+}
+
 func (s *Server) buildExternalCAService(d Deps, idem *orchestrator.Idempotency) (api.ExternalCAService, error) {
 	externalCAs := append([]ExternalCA(nil), d.ExternalCAs...)
 	if s.plugins != nil {

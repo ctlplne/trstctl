@@ -206,6 +206,39 @@ func (a *API) previewIdentityTransition(w http.ResponseWriter, r *http.Request) 
 				"No requester-generated CSR is attached. The deprecated compatibility path may generate a subject key inside the control plane.")
 		}
 	}
+	if to == orchestrator.StateRevoked && identity.Kind == store.KindX509Certificate {
+		certs, err := a.store.IdentityRevocationCertificates(r.Context(), tenantID, id, 101)
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
+		if len(certs) > 100 {
+			plan.Ready = false
+			plan.Warnings = append(plan.Warnings,
+				"More than 100 exact certificates need revocation. This preview cannot confirm every issuing CA in one bounded read; review the certificate inventory and revocation receipts.")
+		}
+		for _, cert := range certs {
+			if a.certRevocationAuthority == nil {
+				plan.Ready = false
+				plan.Warnings = append(plan.Warnings,
+					"The issuing CA revocation capability is unavailable for certificate "+cert.ID+". Confirm revocation with its issuing CA.")
+				continue
+			}
+			if _, err := a.certRevocationAuthority(r.Context(), cert); err != nil {
+				if !errors.Is(err, orchestrator.ErrCertificateRevocationUnsupported) {
+					a.writeError(w, err)
+					return
+				}
+				plan.Ready = false
+				plan.Warnings = append(plan.Warnings,
+					"trstctl cannot confirm revocation through the issuing CA for exact certificate "+cert.ID+". Revoke it with its issuing CA and verify upstream CRL or OCSP status; a local identity state change does not revoke the certificate.")
+			}
+		}
+		if len(certs) != 0 {
+			plan.VerificationSteps = append(plan.VerificationSteps,
+				"Confirm every exact certificate with its issuing CA and verify upstream revocation evidence; identity status alone is not certificate revocation.")
+		}
+	}
 	a.writeJSON(w, http.StatusOK, plan)
 }
 

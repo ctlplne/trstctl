@@ -4666,9 +4666,13 @@ nobody has implemented is a plan rather than a capability. AD CS revocation runs
 through the CA's own management interface, and Azure Key Vault disables
 certificates rather than revoking them.
 
-**No silent no-ops.** A revocation request to an authority that cannot revoke
-returns `ErrRevocationUnsupported`, and the console disables the path rather
-than offering it. This is the specific failure the epic exists to remove: an
+**No silent no-ops.** Exact-certificate revocation against an authority that
+cannot revoke through this build returns a failed item with the unsupported
+reason and queues no upstream effect. The X.509 identity-transition preview
+marks complete revocation not ready and names the affected certificate, even
+though a privileged operator can still record the local identity transition to
+stop automation. That local state does not revoke a leaf at the external CA.
+This is the specific failure the epic exists to remove: an
 operator revoking a compromised key and being told it worked, while the
 authority still considers the certificate valid, is worse off than one told
 plainly that trstctl cannot do it — the second sends them to the vendor console,

@@ -468,8 +468,9 @@ evidence binds the exact public certificate to its configured CA adapter. The
 request queues that authority's revocation command through the outbox. Its item
 status is `queued`, counted in `total_queued`; it is not counted in `total_revoked`.
 Missing verified authority or an unavailable adapter returns an explicit per-item
-unsupported result. HTTP 200 can contain queued or failed items, so always inspect
-the returned counts and items.
+unsupported result. An adapter that cannot revoke through trstctl also fails that
+exact item before an upstream outbox command is queued. HTTP 200 can contain queued
+or failed items, so always inspect the returned counts and items.
 
 One retained `certificate.revocation.batch.applied` command records the exact
 selection and outcome. Its projection updates certificate inventory, the CA's
@@ -505,6 +506,16 @@ be reviewed again. After success, the center links directly to the immutable
 `identity.revoked` audit evidence and the affected-systems graph. The lifecycle event
 and outbox remain the only mutation authority; the console does not invent a second
 browser-only revocation path.
+
+For an X.509 identity, the preview checks the exact unrevoked certificates tied to
+its issuance or verified deployment, including superseded leaves that could be
+restored. If their recorded issuing CA cannot revoke through this integration,
+`ready` is `false` and the warning names the certificate ID and directs the
+operator to that CA. An identity transition can still stop local automation, but
+an `identity.revoked` state does not prove that the external CA revoked any leaf.
+Confirm the exact serial upstream and verify signed revocation evidence before
+calling the incident contained. The preview checks one bounded page of
+certificates; a selection above 100 is marked not ready for complete verification.
 
 External distribution health is monitored separately from trstctl's own
 publication state. An hourly leader derives distinct CDP and AIA OCSP URLs from
