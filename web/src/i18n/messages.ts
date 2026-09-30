@@ -3285,7 +3285,7 @@ export const messages = {
     defaultMessage: "Scanner rules, redacted evidence locations, provider webhooks, artifact ingestion, suppressions, and run history remain available below.",
     description: "Secret scanning technical-details summary.",
   },
-  "secrets.route.scanningAction": { defaultMessage: "Connect repository", description: "Secret scanning primary action." },
+  "secrets.route.scanningAction": { defaultMessage: "Start a scan", description: "Secret scanning primary action." },
   "secrets.scan.advancedSummary": {
     defaultMessage: "Scanner setup and exact evidence",
     description: "Collapsed secret-scanning provider and artifact controls summary.",

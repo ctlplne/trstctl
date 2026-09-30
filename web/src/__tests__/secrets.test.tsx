@@ -1128,7 +1128,7 @@ describe("secrets surface", () => {
       ],
       ["/secrets/sharing", "One-time secret sharing", "What can be viewed once, by whom, and until when.", "Create one-time share"],
       ["/secrets/engines", "Automatic secret sources", "Which systems can create short-lived credentials on demand.", "Add source"],
-      ["/secrets/scanning", "Find leaked secrets in code", "Which repositories were checked and what needs removal.", "Connect repository"],
+      ["/secrets/scanning", "Find leaked secrets in code", "Which repositories were checked and what needs removal.", "Start a scan"],
       ["/secrets/sync", "Send secrets to systems", "Where secrets are copied and whether each destination is current.", "Set up secret sync"],
     ] as const;
 
@@ -1139,6 +1139,17 @@ describe("secrets surface", () => {
       expect(within(screen.getByRole("group", { name: "Do next" })).getByRole("button", { name: action })).toBeInTheDocument();
       cleanup();
     }
+  });
+
+  it("takes the scanning primary action to the runnable local scan form", async () => {
+    const user = userEvent.setup();
+    renderSecrets("/secrets/scanning");
+
+    expect(await screen.findByRole("heading", { name: "Find leaked secrets in code" })).toBeInTheDocument();
+    await user.click(within(screen.getByRole("group", { name: "Do next" })).getByRole("button", { name: "Start a scan" }));
+    expect(screen.getByRole("textbox", { name: "Path" })).toHaveFocus();
+    expect(screen.getByRole("form", { name: "Run secret scan" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Discover" })).not.toBeInTheDocument();
   });
 
   it("opens with a served secrets risk cockpit instead of navigation-only KPI links", async () => {

@@ -9522,7 +9522,7 @@ export const defaultMessageValues = [
   "Open certificate request",
   "Which repositories were checked and what needs removal.",
   "Scanner rules, redacted evidence locations, provider webhooks, artifact ingestion, suppressions, and run history remain available below.",
-  "Connect repository",
+  "Start a scan",
   "Scanner setup and exact evidence",
   "Webhooks, artifact imports, capability IDs, rules, and release gates",
   "Where secrets are copied and whether each destination is current.",

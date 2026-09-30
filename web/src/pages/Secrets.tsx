@@ -141,7 +141,7 @@ const secretsRouteUX = {
     answerKey: "secrets.route.scanningAnswer",
     detailKey: "secrets.route.scanningDetails",
     actionKey: "secrets.route.scanningAction",
-    destination: "/discovery?kind=secret_repo",
+    focusID: "secret-scan-path",
   },
   sync: {
     titleKey: "secrets.route.sync",
