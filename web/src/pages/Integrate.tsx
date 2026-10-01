@@ -27,8 +27,12 @@ const sdks: Array<{ name: string; reference: string; statusKey: MessageKey }> = 
   { name: "Java SDK", reference: "mvn -f ./trstctl/clients/sdk/java/pom.xml install", statusKey: "integrate.sdks.sourceReady" },
 ];
 
-const iac = [
-  { name: "Terraform provider", reference: 'terraform { required_providers { trstctl = { source = "trstctl/trstctl" } } }' },
+const iac: Array<{ name: string; reference: string; statusKey?: MessageKey }> = [
+  {
+    name: "Terraform provider",
+    reference: './scripts/install-terraform-provider-local.sh "$HOME/.local/share/trstctl/terraform-provider"',
+    statusKey: "integrate.iac.terraformSourceReady",
+  },
   { name: "cert-manager issuer", reference: "kind: ClusterIssuer  # external-issuer: trstctl-acme" },
   { name: "SPIRE upstream authority", reference: 'UpstreamAuthority "trstctl" { ... }' },
 ];
@@ -97,10 +101,8 @@ function CopyRef({ value }: { value: string }) {
   );
 }
 
-/** Integrate is the one place to wire trstctl into a stack: copy the served
- * ACME/EST/SCEP enrollment URLs, use a source-ready SDK, or drop in the Terraform /
- * cert-manager / SPIRE integration. Each entry states whether it is a served
- * endpoint or a repository-local artifact; no unpublished package is implied. */
+/** Integrate routes operators to the served endpoints and source-ready clients.
+ * The Terraform entry uses a local mirror until a Registry release is published. */
 export function Integrate() {
   const { locale, t } = useTranslation();
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -278,6 +280,7 @@ export function Integrate() {
                 <li key={entry.name} className="grid gap-1">
                   <span className="text-sm font-medium">{entry.name}</span>
                   <CopyRef value={entry.reference} />
+                  {entry.statusKey && <span className="text-caption text-muted-foreground">{t(entry.statusKey)}</span>}
                 </li>
               ))}
             </ul>

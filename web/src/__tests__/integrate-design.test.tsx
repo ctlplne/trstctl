@@ -75,6 +75,9 @@ describe("Route 037 Connect other tools hierarchy", () => {
     expect(screen.getByText("ACME", { exact: true })).toBeInTheDocument();
     expect(screen.getByText("Python SDK", { exact: true })).toBeInTheDocument();
     expect(screen.getByText("Terraform provider", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText(/The provider is source-ready; no public Registry package is published/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Copy \.\/scripts\/install-terraform-provider-local\.sh/i })).toBeInTheDocument();
+    expect(screen.queryByText('terraform { required_providers { trstctl = { source = "trstctl/trstctl" } } }')).not.toBeInTheDocument();
     expect(apiMock.profiles).not.toHaveBeenCalled();
 
     await user.click(screen.getByText("GitOps declarations and drift", { exact: true }));

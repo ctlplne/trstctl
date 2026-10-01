@@ -632,8 +632,9 @@ and Java SDKs, Terraform provider, cert-manager issuer, SPIRE upstream authority
 live GitOps manifest generation, policy dry-run, and drift comparison. GitOps live
 state is not fetched until that section opens. The permissions and delivery section
 explains API scopes, signed webhooks, plugin capability grants, and outbox-backed
-retries with receipts in plain language. Every reference points at a served
-surface. See
+retries with receipts in plain language. The Terraform provider is source-ready;
+the hub offers a local installer because no public Registry package is
+published. See
 [Enrollment protocols](features/enrollment-protocols.md),
 [Client SDKs](features/client-sdks.md), and
 [Terraform provider](terraform-provider.md).

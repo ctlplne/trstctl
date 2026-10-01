@@ -28,22 +28,32 @@ exercised, not claimed. Registry publication requires the
 registered with that key's public half, install from the Release assets or
 build locally.
 
-Build the provider with the normal release target:
+For a source checkout, the local installer builds the provider for your native
+OS and architecture and writes an isolated filesystem mirror, CLI configuration,
+and valid `required_providers` example. It does not change global Terraform
+configuration:
+
+```bash
+./scripts/install-terraform-provider-local.sh "$HOME/.local/share/trstctl/terraform-provider"
+```
+
+Copy the generated `required_providers.tf.example` into your Terraform project,
+then run `terraform init` with `TF_CLI_CONFIG_FILE` set to the generated
+`trstctl.tfrc`, as printed by the installer. OpenTofu can use the same mirror
+and configuration with `tofu init`. The provider address is
+`registry.terraform.io/trstctl/trstctl`; the local CLI configuration resolves it
+without a Registry request. A plain `terraform init` without that configuration
+cannot install the provider until its Registry namespace is published.
+
+The normal release target also builds the provider alongside the other binaries:
 
 ```bash
 make build
 ```
 
-For local Terraform development, place the binary where Terraform's development
-override can find it:
-
-```bash
-mkdir -p ~/.terraform.d/plugins/registry.terraform.io/trstctl/trstctl/0.1.0/darwin_arm64
-cp bin/terraform-provider-trstctl \
-  ~/.terraform.d/plugins/registry.terraform.io/trstctl/trstctl/0.1.0/darwin_arm64/
-```
-
-Use the matching OS/architecture directory for Linux CI runners.
+For a source install, use the installer above instead of copying a binary by
+hand. It selects the native platform directory and gives the binary the versioned
+filename that Terraform and OpenTofu expect.
 
 ## Provider configuration
 

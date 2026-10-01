@@ -19576,6 +19576,11 @@ export const messages = {
     defaultMessage: "Declare trstctl trust the same way you declare the rest of your platform.",
     description: "Integrate route infrastructure-as-code section description.",
   },
+  "integrate.iac.terraformSourceReady": {
+    defaultMessage:
+      "The provider is source-ready; no public Registry package is published. Run this command from a trstctl checkout, then follow its generated Terraform/OpenTofu setup instructions.",
+    description: "Truthful local-install status and next step for the Terraform provider.",
+  },
   "privacy.title": {
     defaultMessage: "Evidence privacy",
     description: "Privacy route page title.",
