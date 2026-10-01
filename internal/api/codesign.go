@@ -277,7 +277,7 @@ func (a *API) previewCodeSigning(w http.ResponseWriter, r *http.Request, mode, k
 	if mode == "keyless" {
 		operation = "sign_code_artifact_keyless"
 		cli = []string{"trstctl-cli", "code-signing", "keyless-preview", "-f", "code-signing.json"}
-		dataHandling = "The identity proof is used only in wipeable request and keyed-MAC buffers during preview. It is never echoed, logged, persisted, attested, sent to Fulcio, or sent to Rekor until reviewed execution. Artifact bytes and private keys never enter the API process."
+		dataHandling = "During preview, the identity proof stays in wipeable request and keyed-MAC buffers; preview never logs, persists, attests, or sends it. During execution, trstctl seals the proof in the tenant-bound command and verifies it against the configured OIDC trust source. The proof is not sent to Fulcio or Rekor. Artifact bytes and private keys never enter the API process."
 	}
 	a.writeJSON(w, http.StatusOK, CodeSigningPreview{
 		Capability: "F50", Operation: operation, Mode: mode, Ready: status.Ready,

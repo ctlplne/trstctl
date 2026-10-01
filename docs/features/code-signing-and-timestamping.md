@@ -46,10 +46,10 @@ works for anything from a 4 KB manifest to a 4 GB image. Two modes:
 - **Keyless signing (Sigstore/Fulcio style).** Instead of a long-lived key, the caller
   presents a verified [attestation](workload-identity.md) — for example, a CI job's
   OIDC identity — sealed inside the command, never plaintext in the event log,
-  PostgreSQL, or outbox. The outbox worker verifies that proof through the configured
-  Fulcio-style attestor, creates a deterministic ephemeral signer handle, and signs the
-  digest. The bound Fulcio SAN/issuer come from the verified attestation, never
-  caller-supplied strings: a claim that contradicts the attestation is refused
+  PostgreSQL, or outbox. The outbox worker verifies that proof with the configured,
+  locally pinned OIDC public keys, creates a deterministic ephemeral signer handle,
+  and signs the digest. The bound Fulcio SAN/issuer come from the verified
+  attestation, never caller-supplied strings: a claim that contradicts it is refused
   (`codesign.keyless.refused`), and no verified attestation is rejected outright.
   Completion atomically queues both the Rekor bundle and a durable `codesign.cleanup`
   command; the handle derives deterministically from the operation ID even if a crash
@@ -57,8 +57,9 @@ works for anything from a 4 KB manifest to a 4 GB image. Two modes:
   `codesign.ephemeral.destroyed`, so a crash cannot strand an ephemeral handle.
   The service records the verified OIDC issuer and identity as Fulcio binding
   metadata. It does not request a Fulcio certificate or return a portable
-  attestation of that identity. A relying party can verify the signature with
-  the returned public key; independent identity verification needs a separate
+  attestation of that identity. The proof itself is not sent to Fulcio or Rekor.
+  A relying party can verify the signature with the returned public key;
+  independent identity verification needs a separate
   portable certificate or attestation workflow.
 
 Verification (`Verify`, `VerifyKeyless`) routes through the same signer boundary, with

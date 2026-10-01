@@ -176,6 +176,9 @@ func TestServedCodeSigningKeyBasedAndKeylessSigstore(t *testing.T) {
 	if err := json.Unmarshal(body, &keylessPlan); err != nil || !keylessPlan.Ready || !keylessPlan.EffectFree || keylessPlan.RequestFingerprint == "" {
 		t.Fatalf("keyless preview = %+v, %v; body=%s", keylessPlan, err, body)
 	}
+	if !strings.Contains(keylessPlan.DataHandling, "not sent to Fulcio or Rekor") || !strings.Contains(keylessPlan.DataHandling, "seals the proof") {
+		t.Fatalf("keyless preview misstates identity-proof handling: %q", keylessPlan.DataHandling)
+	}
 	keylessPreviewRequest["preview_fingerprint"] = keylessPlan.RequestFingerprint
 	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/code-signing/keyless", token, "clm-06-keyless-sign", keylessPreviewRequest)
 	if code != http.StatusOK {
