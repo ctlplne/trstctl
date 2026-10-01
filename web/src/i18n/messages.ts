@@ -19610,7 +19610,7 @@ export const messages = {
     description: "Subject erasure section title.",
   },
   "privacy.erasure.description": {
-    defaultMessage: "Right to be forgotten - erase every credential and record tied to a data subject.",
+    defaultMessage: "Erases matched direct operational data for this subject; record backup and signed audit archive evidence separately.",
     description: "Subject erasure section description.",
   },
   "privacy.erasure.subjectLabel": {
@@ -19662,7 +19662,7 @@ export const messages = {
     description: "Subject export section title.",
   },
   "privacy.export.description": {
-    defaultMessage: "Access and portability workflow for every cataloged record tied to a data subject.",
+    defaultMessage: "Review direct-record counts, then download the full JSON export for this subject.",
     description: "Subject export section description.",
   },
   "privacy.export.subjectLabel": {
@@ -19676,6 +19676,10 @@ export const messages = {
   "privacy.export.submit": {
     defaultMessage: "Export subject",
     description: "Button label for submitting a subject export.",
+  },
+  "privacy.export.download": {
+    defaultMessage: "Download export JSON",
+    description: "Download the complete subject export returned by the privacy API.",
   },
   "privacy.export.failed": {
     defaultMessage: "Subject export failed",

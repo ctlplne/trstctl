@@ -888,6 +888,11 @@ func (o *Orchestrator) rewriteLifecycleOutboxFromCanonicalHistory(ctx context.Co
 		if err := json.Unmarshal(ev.Data, &payload); err != nil {
 			return fmt.Errorf("orchestrator: privacy decode %s (seq %d): %w", ev.Type, ev.Sequence, err)
 		}
+		// A completed side effect records a remote action that already happened.
+		// It has no executable outbox command to rewrite or re-create.
+		if payload.SideEffect != nil && payload.SideEffect.Completed {
+			return nil
+		}
 		destination, ok := retainedLifecycleSideEffectFor(payload)
 		if !ok {
 			return nil

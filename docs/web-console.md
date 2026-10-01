@@ -516,6 +516,13 @@ catalog](privacy-data-catalog.md). Backed by
 `/api/v1/privacy/archive-erasure-attestations`,
 `/api/v1/privacy/retention-runs`, their `/preview` routes, and
 `/api/v1/privacy/catalog`.
+The subject-rights section distinguishes direct operational erasure from signed
+audit archives and backups, whose disposition needs separate evidence. A subject
+export first shows counts, then offers a full JSON download named with the
+tenant-bound subject reference rather than the raw subject. Keep that local
+download under the same access and retention controls as other personal-data
+exports. Privacy timestamps follow the console's selected time zone; API values
+remain UTC.
 
 ### Trust Operations and Software Trust (`/trust-operations`, `/incidents`, `/codesign`)
 

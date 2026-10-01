@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ToastProvider } from "@/components/ToastProvider";
 import { Privacy } from "@/pages/Privacy";
+import { IntlProvider } from "@/i18n/I18nProvider";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -25,16 +26,17 @@ vi.mock("@/lib/api", async (original) => {
   return { ...actual, api: { ...actual.api, ...apiMock } };
 });
 
-function renderPrivacy() {
-  return render(
+function renderPrivacy(initialTimeZone?: string) {
+  const page = (
     <MemoryRouter initialEntries={["/privacy"]}>
       <ToastProvider>
         <main>
           <Privacy />
         </main>
       </ToastProvider>
-    </MemoryRouter>,
+    </MemoryRouter>
   );
+  return render(initialTimeZone ? <IntlProvider initialTimeZone={initialTimeZone}>{page}</IntlProvider> : page);
 }
 
 describe("Route 036 evidence-privacy hierarchy", () => {
@@ -161,6 +163,55 @@ describe("Route 036 evidence-privacy hierarchy", () => {
     await waitFor(() => expect(apiMock.privacyRetentionRuns).toHaveBeenCalledTimes(1));
     expect(await screen.findByRole("table", { name: "Retention runs" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Retention runs scroll area" })).toHaveAttribute("tabindex", "0");
+  });
+
+  it("states the direct erasure boundary and offers a portable export in the selected time zone", async () => {
+    const user = userEvent.setup();
+    apiMock.exportPrivacySubject.mockResolvedValue({
+      subject: "qa-viewer",
+      subject_ref: "subject-ref-qa-viewer",
+      tenant_id: "tenant-qa",
+      generated_at: "2026-10-01T07:43:00Z",
+      counts: { tenant_members: 1, api_tokens: 1 },
+      tenant_members: [{ subject: "qa-viewer", status: "offboarded" }],
+      api_tokens: [{ subject: "qa-viewer", scopes: ["access:read"] }],
+    });
+    renderPrivacy("America/New_York");
+    await user.click(await screen.findByText("Subject rights", { exact: true }));
+    expect(screen.getByText(/direct operational data.*archive evidence separately/i)).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Export data subject"), "qa-viewer");
+    await user.click(screen.getByRole("button", { name: "Export subject" }));
+    expect(await screen.findByText("Oct 1, 2026, 3:43 AM")).toBeInTheDocument();
+    const createObjectURL = vi.fn().mockReturnValue("blob:subject-export");
+    const revokeObjectURL = vi.fn();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    const previousCreate = URL.createObjectURL;
+    const previousRevoke = URL.revokeObjectURL;
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectURL });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: revokeObjectURL });
+    try {
+      await user.click(screen.getByRole("button", { name: "Download export JSON" }));
+      expect(click).toHaveBeenCalledTimes(1);
+      expect(createObjectURL).toHaveBeenCalledTimes(1);
+      const blob = createObjectURL.mock.calls[0][0] as Blob;
+      const payload = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsText(blob);
+      });
+      const downloaded = JSON.parse(payload);
+      expect(downloaded.tenant_members).toEqual([{ subject: "qa-viewer", status: "offboarded" }]);
+      expect(downloaded.api_tokens).toEqual([{ subject: "qa-viewer", scopes: ["access:read"] }]);
+      expect((click.mock.instances[0] as HTMLAnchorElement).download).toBe("trstctl-subject-export-subject-ref-qa-v.json");
+      await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith("blob:subject-export"));
+    } finally {
+      click.mockRestore();
+      if (previousCreate) Object.defineProperty(URL, "createObjectURL", { configurable: true, value: previousCreate });
+      else Reflect.deleteProperty(URL, "createObjectURL");
+      if (previousRevoke) Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: previousRevoke });
+      else Reflect.deleteProperty(URL, "revokeObjectURL");
+    }
   });
 
   it("contains long evidence fields inside each disclosure instead of widening the page", async () => {

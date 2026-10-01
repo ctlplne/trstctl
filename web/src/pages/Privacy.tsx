@@ -22,7 +22,6 @@ import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useToast } from "@/components/ToastProvider";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
-import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 
 function countTotal(counts: Record<string, unknown>): number {
   return Object.values(counts).reduce<number>((sum, value) => sum + (typeof value === "number" ? value : 0), 0);
@@ -94,44 +93,46 @@ function attestationActionTone(action: PrivacyArchiveErasureAttestation["action"
   return "info";
 }
 
-const attestationColumns: DataGridColumn<PrivacyArchiveErasureAttestation>[] = [
-  { id: "attested", header: "Attested", cell: (attestation) => formatDateTimePolicy(attestation.attested_at) },
-  {
-    id: "subject",
-    header: "Subject",
-    cell: (attestation) => (
-      <span className="block max-w-[16rem] truncate font-mono text-xs" title={attestation.subject_ref}>
-        {attestation.subject_ref}
-      </span>
-    ),
-  },
-  {
-    id: "action",
-    header: "Action",
-    cell: (attestation) => (
-      <StatusBadge value={attestation.action} label={attestation.action.replace(/_/g, " ")} tone={attestationActionTone(attestation.action)} />
-    ),
-  },
-  { id: "artifactType", header: "Artifact type", cell: (attestation) => attestation.artifact_type.replace(/_/g, " ") },
-  {
-    id: "artifactUri",
-    header: "Artifact URI",
-    cell: (attestation) =>
-      attestation.artifact_uri ? (
-        <span className="block max-w-[16rem] truncate font-mono text-xs" title={attestation.artifact_uri}>
-          {attestation.artifact_uri}
+function attestationColumns(formatDateTime: (value: string) => string): DataGridColumn<PrivacyArchiveErasureAttestation>[] {
+  return [
+    { id: "attested", header: "Attested", cell: (attestation) => formatDateTime(attestation.attested_at) },
+    {
+      id: "subject",
+      header: "Subject",
+      cell: (attestation) => (
+        <span className="block max-w-[16rem] truncate font-mono text-xs" title={attestation.subject_ref}>
+          {attestation.subject_ref}
         </span>
-      ) : (
-        <span className="text-muted-foreground">-</span>
       ),
-  },
-];
+    },
+    {
+      id: "action",
+      header: "Action",
+      cell: (attestation) => (
+        <StatusBadge value={attestation.action} label={attestation.action.replace(/_/g, " ")} tone={attestationActionTone(attestation.action)} />
+      ),
+    },
+    { id: "artifactType", header: "Artifact type", cell: (attestation) => attestation.artifact_type.replace(/_/g, " ") },
+    {
+      id: "artifactUri",
+      header: "Artifact URI",
+      cell: (attestation) =>
+        attestation.artifact_uri ? (
+          <span className="block max-w-[16rem] truncate font-mono text-xs" title={attestation.artifact_uri}>
+            {attestation.artifact_uri}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        ),
+    },
+  ];
+}
 
 /** Privacy answers the evidence boundary first, then loads each exact policy or
  * subject-control surface only when the operator asks for it. Every disclosed
  * panel still reads or writes a real /privacy endpoint; nothing is a mock. */
 export function Privacy() {
-  const { t } = useTranslation();
+  const { t, formatDateTime } = useTranslation();
   const { toast } = useToast();
   const [catalog, setCatalog] = useState<PrivacyCatalogEntry[]>([]);
   const [erasures, setErasures] = useState<PrivacySubjectErasure[]>([]);
@@ -345,6 +346,19 @@ export function Privacy() {
     }
   }
 
+  function downloadSubjectExport() {
+    if (!subjectExport) return;
+    const blob = new Blob([JSON.stringify(subjectExport, null, 2) + "\n"], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `trstctl-subject-export-${subjectExport.subject_ref.slice(0, 16)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
   return (
     <section aria-labelledby="privacy-heading" className="grid min-w-0 gap-6">
       <PageHeader
@@ -473,7 +487,7 @@ export function Privacy() {
                           <td className="py-2 font-mono text-caption">{erasure.subject_ref}</td>
                           <td className="py-2 tabular-nums">{countSubjectRecords(erasure.counts)}</td>
                           <td className="py-2 text-muted-foreground">{erasure.reason || "—"}</td>
-                          <td className="py-2 text-muted-foreground">{formatDateTimePolicy(erasure.erased_at)}</td>
+                          <td className="py-2 text-muted-foreground">{formatDateTime(erasure.erased_at)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -488,7 +502,10 @@ export function Privacy() {
                   <input
                     id="privacy-export-subject"
                     value={exportSubject}
-                    onChange={(event) => setExportSubject(event.target.value)}
+                    onChange={(event) => {
+                      setExportSubject(event.target.value);
+                      setSubjectExport(null);
+                    }}
                     placeholder={t("privacy.subjectPlaceholder")}
                     className="rounded-md border border-border bg-background px-3 py-2 text-sm"
                   />
@@ -501,17 +518,17 @@ export function Privacy() {
               {subjectExport ? (
                 <div className="mt-4 grid gap-3">
                   <dl className="grid gap-3 text-sm md:grid-cols-3">
-                    <div>
+                    <div className="min-w-0">
                       <dt className="text-caption text-muted-foreground">{t("privacy.subjectColumn")}</dt>
-                      <dd className="font-mono text-xs">{subjectExport.subject}</dd>
+                      <dd className="break-all font-mono text-xs">{subjectExport.subject}</dd>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <dt className="text-caption text-muted-foreground">{t("privacy.export.subjectRef")}</dt>
-                      <dd className="font-mono text-xs">{subjectExport.subject_ref}</dd>
+                      <dd className="break-all font-mono text-xs">{subjectExport.subject_ref}</dd>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <dt className="text-caption text-muted-foreground">{t("privacy.export.generated")}</dt>
-                      <dd className="text-sm">{formatDateTimePolicy(subjectExport.generated_at)}</dd>
+                      <dd className="text-sm">{formatDateTime(subjectExport.generated_at)}</dd>
                     </div>
                   </dl>
                   <div className="overflow-x-auto" role="region" aria-label={t("privacy.design.exportScrollArea")} tabIndex={0}>
@@ -533,6 +550,9 @@ export function Privacy() {
                     </table>
                   </div>
                   <p className="text-caption text-muted-foreground">{t("privacy.export.summary", { count: countSubjectRecords(subjectExport.counts) })}</p>
+                  <Button type="button" variant="outline" onClick={downloadSubjectExport}>
+                    {t("privacy.export.download")}
+                  </Button>
                 </div>
               ) : null}
             </SectionCard>
@@ -573,7 +593,7 @@ export function Privacy() {
               <DataGrid
                 ariaLabel="Archive erasure attestations"
                 rows={attestations}
-                columns={attestationColumns}
+                columns={attestationColumns(formatDateTime)}
                 getRowId={(attestation) => attestation.attestation_id}
                 pagination={
                   attestationCursor ? (
@@ -624,7 +644,7 @@ export function Privacy() {
                         <td className="py-2 font-mono text-caption">{run.run_id}</td>
                         <td className="py-2 tabular-nums">{countTotal(run.counts)}</td>
                         <td className="py-2 text-muted-foreground">{run.requested_by_ref || translateNow("source.system.bbc5e661e1")}</td>
-                        <td className="py-2 text-muted-foreground">{formatDateTimePolicy(run.enforced_at)}</td>
+                        <td className="py-2 text-muted-foreground">{formatDateTime(run.enforced_at)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -789,7 +809,7 @@ function PrivacyReviewDialog({
   title: string;
   titleId: string;
 }) {
-  const { t } = useTranslation();
+  const { t, formatDateTime } = useTranslation();
   const countEntries = Object.entries(preview.counts).filter(([, count]) => typeof count === "number" && count > 0);
   const isErasure = "subject_ref" in preview;
   const cutoffEntries = "cutoffs" in preview ? Object.entries(preview.cutoffs) : [];
@@ -828,7 +848,7 @@ function PrivacyReviewDialog({
           {isErasure ? (
             <PrivacyFact label={t("privacy.review.activeLegalHolds")} value={`${preview.active_legal_holds} ${t("privacy.review.activeLegalHolds")}`} />
           ) : null}
-          {"reviewed_at" in preview ? <PrivacyFact label={t("privacy.review.reviewedAt")} value={formatDateTimePolicy(preview.reviewed_at)} /> : null}
+          {"reviewed_at" in preview ? <PrivacyFact label={t("privacy.review.reviewedAt")} value={formatDateTime(preview.reviewed_at)} /> : null}
           <PrivacyFact label={t("policy.reporting.permission")} value={preview.required_permission} />
         </dl>
 
@@ -857,7 +877,7 @@ function PrivacyReviewDialog({
               {cutoffEntries.map(([name, value]) => (
                 <div key={name} className="min-w-0 text-xs">
                   <dt className="text-muted-foreground">{name.replace(/_/g, " ")}</dt>
-                  <dd className="break-all font-mono">{typeof value === "string" ? formatDateTimePolicy(value) : String(value)}</dd>
+                  <dd className="break-all font-mono">{typeof value === "string" ? formatDateTime(value) : String(value)}</dd>
                 </div>
               ))}
             </dl>

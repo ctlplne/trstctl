@@ -412,6 +412,37 @@ func lifecycleRewriteProofOptions(st *store.Store) []events.TenantDataRewriteOpt
 	}
 }
 
+func TestPrivacyErasureSkipsCompletedLifecycleReceiptOutbox(t *testing.T) {
+	st := newStore(t)
+	log := lifecycleRewriteLog(t,
+		events.WithHistoryRewriteCoordinator(store.NewHistoryRewriteCoordinator(st)))
+	const subject = "completed-receipt-privacy@example.test"
+	fixture := newLifecycleAuthorityFixture(t, st, log, "privacy-completed-receipt", "",
+		"issue for "+subject, subject)
+	ctx := context.Background()
+	if err := fixture.orch.TransitionWithSubjectCSRAndApproval(ctx, tenantA, fixture.identity.ID,
+		orchestrator.StateIssued, fixture.reason, fixture.key, fixture.csr, fixture.use); err != nil {
+		t.Fatal(err)
+	}
+	if err := fixture.orch.TransitionAfterCompletedSideEffect(ctx, tenantA, fixture.identity.ID,
+		orchestrator.StateDeployed, "agent already served the credential", "connector.deploy"); err != nil {
+		t.Fatal(err)
+	}
+	privacyOrch := orchestrator.NewOrchestrator(log, st, orchestrator.NewOutbox(st),
+		orchestrator.WithTenantDataRewriteOptions(lifecycleRewriteProofOptions(st)...))
+	if _, err := privacyOrch.ErasePrivacySubject(ctx, tenantA, subject, "erase completed receipt actor"); err != nil {
+		t.Fatalf("erase subject with completed side-effect receipt: %v", err)
+	}
+	var queued int
+	if err := st.SystemPool().QueryRow(ctx,
+		`SELECT count(*) FROM outbox WHERE tenant_id = $1 AND destination = 'connector.deploy'`, tenantA).Scan(&queued); err != nil {
+		t.Fatal(err)
+	}
+	if queued != 0 {
+		t.Fatalf("privacy rewrite requeued %d already completed deployments", queued)
+	}
+}
+
 func TestApprovedLifecyclePrivacyRewriteRebuildAndRecoveryContainNoRawSubject(t *testing.T) {
 	const subject = "alice.lifecycle@example.test"
 	st := newStore(t)
