@@ -168,6 +168,7 @@ a problem:
   records and exposes edit, re-attest, and exact-name-confirmed delete controls. The
   application ID, service, business unit, environment, escalation recipients, and
   provenance show whether the precise application/environment model is current.
+  Review due dates and source observation dates use the console's selected time zone.
 - **Coverage gaps and temporary exceptions** separates missing, incomplete,
   never-attested, and stale ownership. Operators fix the owner record first. A
   reasoned exception is available only for urgent work and must expire within 30

@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { AppRoutes } from "@/App";
+import { IntlProvider } from "@/i18n/I18nProvider";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -30,14 +31,15 @@ vi.mock("@/lib/api", async (original) => {
   return { ...actual, api: apiMock };
 });
 
-function renderOwners() {
+function renderOwners(timeZone?: string) {
+  const routes = (
+    <MemoryRouter initialEntries={["/owners"]}>
+      <AppRoutes />
+    </MemoryRouter>
+  );
   return render(
     <ThemeProvider>
-      <AuthProvider>
-        <MemoryRouter initialEntries={["/owners"]}>
-          <AppRoutes />
-        </MemoryRouter>
-      </AuthProvider>
+      <AuthProvider>{timeZone ? <IntlProvider initialTimeZone={timeZone}>{routes}</IntlProvider> : routes}</AuthProvider>
     </ThemeProvider>,
   );
 }
@@ -135,6 +137,32 @@ describe("route 029 decision-first ownership design", () => {
     await user.click(screen.getByText("Sources, disagreements, and review history", { exact: true }));
     expect(await screen.findByRole("table", { name: "NHI ownership attribution" })).toHaveTextContent("unowned deployer token");
     expect(screen.getByText(/Human attestation is never overwritten by an import/, { exact: false })).toBeInTheDocument();
+  });
+
+  it("shows the same selected-zone date in the hierarchy and owner record", async () => {
+    const user = userEvent.setup();
+    apiMock.owners.mockResolvedValueOnce([
+      {
+        id: "owner-platform",
+        name: "Platform team",
+        kind: "team",
+        application_id: "APP-29",
+        environment: "production",
+        ownership_complete: true,
+        ownership_attested: true,
+        ownership_current: true,
+        ownership_attestation_due_at: "2026-12-29T01:23:38Z",
+        ownership_source: "service-now",
+        ownership_source_observed_at: "2026-12-29T01:23:38Z",
+      },
+    ]);
+    renderOwners("America/New_York");
+    const hierarchy = within(await screen.findByRole("region", { name: "Accountability hierarchy" }));
+    expect(hierarchy.getByText("Current until Dec 28, 2026")).toBeInTheDocument();
+    await user.click(screen.getByText("Owner records, inheritance, and attestations", { exact: true }));
+    const record = within(screen.getByRole("table", { name: "Credential owners" })).getByRole("row", { name: /Platform team/ });
+    expect(record).toHaveTextContent("Current until Dec 28, 2026");
+    expect(record).toHaveTextContent("service-now, last seen Dec 28, 2026");
   });
 
   it("attests a new owner as part of creating it, so deployments are not refused later", async () => {

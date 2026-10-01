@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { AppRoutes } from "@/App";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { IntlProvider } from "@/i18n/I18nProvider";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -35,9 +36,11 @@ function renderOwners() {
   return render(
     <ThemeProvider>
       <AuthProvider>
-        <MemoryRouter initialEntries={["/owners"]}>
-          <AppRoutes />
-        </MemoryRouter>
+        <IntlProvider initialTimeZone="UTC">
+          <MemoryRouter initialEntries={["/owners"]}>
+            <AppRoutes />
+          </MemoryRouter>
+        </IntlProvider>
       </AuthProvider>
     </ThemeProvider>,
   );
@@ -124,7 +127,7 @@ describe("AUD-44 ownership readiness console", () => {
     const updatedRow = within(table).getByRole("row", { name: /Payments team/ });
     await user.click(within(updatedRow).getByRole("button", { name: "Attest" }));
     expect(apiMock.attestOwner).toHaveBeenCalledWith("owner-payments");
-    expect(await within(updatedRow).findByText("Current until 2026-11-10")).toBeInTheDocument();
+    expect(await within(updatedRow).findByText("Current until Nov 10, 2026")).toBeInTheDocument();
   });
 
   it("grants an attributed exception with an explicit bounded expiry", async () => {

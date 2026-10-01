@@ -178,7 +178,7 @@ function UnownedQueuePanel() {
 }
 
 export function Owners() {
-  const { t } = useTranslation();
+  const { t, formatDate } = useTranslation();
   const [searchParams] = useSearchParams();
   const [query, setQuery] = useState(() => searchParams.get("owner") ?? searchParams.get("q") ?? "");
   const [kind, setKind] = useState(() => searchParams.get("kind") ?? "all");
@@ -348,7 +348,7 @@ export function Owners() {
         <span className={owner.ownership_current ? "text-status-success" : "text-risk-critical"}>
           {owner.ownership_current
             ? owner.ownership_attestation_due_at
-              ? t("owners.readiness.current", { date: owner.ownership_attestation_due_at.slice(0, 10) })
+              ? t("owners.readiness.current", { date: formatDate(owner.ownership_attestation_due_at) })
               : t("owners.readiness.currentNoDate")
             : owner.ownership_complete
               ? owner.ownership_attested
@@ -370,7 +370,7 @@ export function Owners() {
             {owner.ownership_source_observed_at
               ? translateNow("source.ownership.source.observed.i2own00008", {
                   value1: owner.ownership_source,
-                  value2: owner.ownership_source_observed_at.slice(0, 10),
+                  value2: formatDate(owner.ownership_source_observed_at),
                 })
               : owner.ownership_source}
           </span>
