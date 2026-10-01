@@ -8,6 +8,7 @@ import { GraphView, canonicalGraphEdgeTypes, canonicalGraphNodeKinds, graphNodeK
 import { PageHeader } from "@/components/PageHeader";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { EdgeEvidenceTable, GraphLegend, GraphQuery, NodeDetail, NodeInventory, ReachablePanel, RelationshipPaths } from "@/pages/GraphExpert";
@@ -25,6 +26,7 @@ export function Graph() {
     error: null,
   });
   const [selected, setSelected] = useState(requestedNode);
+  const [credentialSearch, setCredentialSearch] = useState("");
   const [inspected, setInspected] = useState(requestedNode);
   const [search, setSearch] = useState("");
   const [kindFilter, setKindFilter] = useState("all");
@@ -33,7 +35,7 @@ export function Graph() {
   const [impact, setImpact] = useState<GraphImpact | null>(null);
   const [reachable, setReachable] = useState<GraphReachable | null>(null);
   const [trustStores, setTrustStores] = useState<GraphTrustStores | null>(null);
-  const [queryText, setQueryText] = useState("MATCH (a)-[e]->(b) RETURN a,b");
+  const [queryText, setQueryText] = useState("MATCH (a)-[:DEPLOYED_TO]->(b) RETURN a,b");
   const [queryResult, setQueryResult] = useState<GraphQueryResult | null>(null);
   const [blastError, setBlastError] = useState<string | null>(null);
   const [reachableError, setReachableError] = useState<string | null>(null);
@@ -45,6 +47,20 @@ export function Graph() {
 
   const nodeByID = useMemo(() => new Map((data?.nodes ?? []).map((node) => [node.id, node])), [data]);
   const credentialNodes = useMemo(() => (data?.nodes ?? []).filter((node) => node.kind === "credential"), [data]);
+  const credentialNameCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const node of credentialNodes) counts.set(node.name, (counts.get(node.name) ?? 0) + 1);
+    return counts;
+  }, [credentialNodes]);
+  const matchingCredentials = useMemo(() => {
+    const query = credentialSearch.trim().toLowerCase();
+    if (!query) return credentialNodes;
+    return credentialNodes.filter((node) => [node.name, node.id, JSON.stringify(node.attrs ?? {})].some((value) => value.toLowerCase().includes(query)));
+  }, [credentialNodes, credentialSearch]);
+  const credentialChoices = useMemo(() => {
+    const current = credentialNodes.find((node) => node.id === selected);
+    return current && !matchingCredentials.some((node) => node.id === selected) ? [current, ...matchingCredentials] : matchingCredentials;
+  }, [credentialNodes, matchingCredentials, selected]);
   const kinds = useMemo(() => Array.from(new Set((data?.nodes ?? []).map((node) => node.kind))).sort(), [data]);
   const edgeTypes = useMemo(() => Array.from(new Set((data?.edges ?? []).map((edge) => edge.type))).sort(), [data]);
   const legendNodeKinds = useMemo(() => mergeCanonical(canonicalGraphNodeKinds, kinds), [kinds]);
@@ -185,7 +201,7 @@ export function Graph() {
   const exportEvidence = impact
     ? {
         selected_credential: impact.node,
-        known_affected_systems: impact.affected,
+        known_affected_targets: impact.affected,
         affected_by_kind: impact.by_kind,
         paths: impact.paths,
         reachable_nodes: reachable?.nodes ?? [],
@@ -217,26 +233,36 @@ export function Graph() {
         <>
           <div className="ui-panel grid gap-4 p-comfortable">
             <div className="grid grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-[minmax(16rem,32rem)]">
-              <label className="grid min-w-0 max-w-full gap-1 text-sm font-medium" htmlFor="impact-credential">
-                {t("graph.design.credentialLabel")}
-                <Select
-                  className="min-w-0 max-w-full overflow-hidden text-ellipsis"
-                  id="impact-credential"
-                  value={selected}
-                  disabled={credentialNodes.length === 0}
-                  onChange={(event) => selectNode(event.target.value)}
-                >
-                  {selected && !credentialNodes.some((node) => node.id === selected) ? (
-                    <option value={selected}>{nodeByID.get(selected)?.name || selected}</option>
-                  ) : null}
-                  {credentialNodes.length === 0 ? <option value="">{translateNow("operations.jobs.redemptions.none")}</option> : null}
-                  {credentialNodes.map((node) => (
-                    <option key={node.id} value={node.id}>
-                      {node.name || graphNodeKindLabel(node.kind)} · {graphNodeKindLabel(node.kind)}
-                    </option>
-                  ))}
-                </Select>
-              </label>
+              <Field label={t("graph.design.searchCredential")} description={t("graph.design.searchHint")} className="min-w-0 max-w-full">
+                {(control) => <Input {...control} value={credentialSearch} onChange={(event) => setCredentialSearch(event.target.value)} />}
+              </Field>
+              <Field label={t("graph.design.credentialLabel")} controlId="impact-credential" className="min-w-0 max-w-full">
+                {(control) => (
+                  <Select
+                    {...control}
+                    className="min-w-0 max-w-full overflow-hidden text-ellipsis"
+                    value={selected}
+                    disabled={credentialNodes.length === 0}
+                    onChange={(event) => selectNode(event.target.value)}
+                  >
+                    {selected && !credentialNodes.some((node) => node.id === selected) ? (
+                      <option value={selected}>{nodeByID.get(selected)?.name || selected}</option>
+                    ) : null}
+                    {credentialNodes.length === 0 ? <option value="">{translateNow("operations.jobs.redemptions.none")}</option> : null}
+                    {credentialChoices.map((node) => (
+                      <option key={node.id} value={node.id}>
+                        {node.name || graphNodeKindLabel(node.kind)} · {graphNodeKindLabel(node.kind)}
+                        {(credentialNameCounts.get(node.name) ?? 0) > 1 ? t("graph.design.duplicateCredentialId", { id: node.id }) : ""}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+              {credentialSearch.trim() && matchingCredentials.length === 0 ? (
+                <p role="status" className="text-caption text-muted-foreground">
+                  {t("graph.design.noCredentialMatches")}
+                </p>
+              ) : null}
             </div>
 
             {emptyGraph ? (
@@ -289,7 +315,7 @@ export function Graph() {
                 {exportEvidence ? (
                   <a
                     className="inline-flex items-center rounded-md border border-border px-3 py-2 text-sm font-medium underline"
-                    download={`blast-radius-${downloadSlug(impact?.node.name || impact?.node.id || "selected")}.json`}
+                    download={`blast-radius-${downloadSlug(impact?.node.name || "selected")}-${downloadSlug(impact?.node.id || "unknown")}.json`}
                     href={`data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(exportEvidence, null, 2))}`}
                   >
                     {t("graph.design.export")}

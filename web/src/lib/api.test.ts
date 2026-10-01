@@ -2587,12 +2587,12 @@ describe("graph contract", () => {
     document.cookie = "trstctl_csrf=csrf-token-graph; path=/";
     mockFetch(200, JSON.stringify({ rows: [{ name: "payments" }] }));
 
-    await api.graphQuery("MATCH (a)-[e]->(b) RETURN a,b");
+    await api.graphQuery("MATCH (a)-[:DEPLOYED_TO]->(b) RETURN a,b");
 
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/graph/query");
     expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("POST");
     expect(JSON.parse(vi.mocked(fetch).mock.calls[0][1]?.body as string)).toEqual({
-      query: "MATCH (a)-[e]->(b) RETURN a,b",
+      query: "MATCH (a)-[:DEPLOYED_TO]->(b) RETURN a,b",
     });
     expect((vi.mocked(fetch).mock.calls[0][1]?.headers as Record<string, string>)["X-CSRF-Token"]).toBe("csrf-token-graph");
     expect((vi.mocked(fetch).mock.calls[0][1]?.headers as Record<string, string>)["Idempotency-Key"]).toBeUndefined();

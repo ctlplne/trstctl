@@ -123,7 +123,7 @@ describe("POL-01 graph polish", () => {
     expect(screen.getByLabelText("Cypher-style query")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Run graph query" }));
 
-    await waitFor(() => expect(apiMock.graphQuery).toHaveBeenCalledWith("MATCH (a)-[e]->(b) RETURN a,b"));
+    await waitFor(() => expect(apiMock.graphQuery).toHaveBeenCalledWith("MATCH (a)-[:DEPLOYED_TO]->(b) RETURN a,b"));
     expect(await screen.findByRole("link", { name: "Export query rows" })).toHaveAttribute("download", "graph-query-results.json");
   });
 

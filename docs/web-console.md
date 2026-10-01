@@ -417,19 +417,25 @@ event-sourced batch command exists.
 
 ### What could be affected (`/graph`)
 
-This screen first answers one question: **Which systems depend on a selected
-credential?** Choose a credential and select **Explore impact**. The answer lists
-only systems reached through relationships trstctl currently knows. It always warns
-that missing discovery coverage can make the real impact larger; zero known systems
+This screen first answers one question: **Which known targets depend on a selected
+credential?** Search by name, serial, fingerprint, or graph ID when many renewals
+share the same certificate name; repeated names show distinct IDs. Choose the exact
+credential and select **Explore impact**. The answer counts known resource targets,
+which can be services or files, and labels each target's actual kind. It always warns
+that missing discovery coverage can make the real impact larger; zero known targets
 is not presented as proof of zero impact.
 
 The relationship map, filters, node inventory, exact attributes, read-only query,
 and raw edge table remain available under three named disclosures. Each served edge
 can include its evidence source and confidence: foreign-key relationships are
 authoritative, inventory and discovery observations are observed, name correlation
-is inferred, and subject-only trust candidates are unverified. A blast-radius JSON
-download keeps the selected node, known affected nodes, reachable nodes, relevant
-edges, evidence labels, and coverage warning together.
+is inferred, and subject-only trust candidates are unverified. The prefilled expert
+query uses the server's typed-edge syntax to list `DEPLOYED_TO` relationships;
+operators can edit it before running a read-only query. A blast-radius JSON
+download keeps the selected node, `known_affected_targets`, reachable nodes,
+relevant edges, evidence labels, and coverage warning together. Its filename
+includes the exact graph ID so same-name certificate renewals do not overwrite
+each other's evidence.
 
 Selecting an X.509 issuer also shows trust stores and distinct hosts whose discovered
 anchor has the exact certificate fingerprint or SPKI public-key identity.

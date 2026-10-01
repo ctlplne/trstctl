@@ -10184,7 +10184,7 @@ export const messages = {
     description: "Primary navigation item. Matches the impact-first graph page heading.",
   },
   "graph.design.answer": {
-    defaultMessage: "Which systems depend on a selected credential.",
+    defaultMessage: "Which known targets depend on a selected credential.",
     description: "Plain-language answer provided by the graph page.",
   },
   "graph.design.technicalDetails": {
@@ -10198,6 +10198,22 @@ export const messages = {
   "graph.design.credentialLabel": {
     defaultMessage: "Credential to explore",
     description: "Graph credential selector label.",
+  },
+  "graph.design.searchCredential": {
+    defaultMessage: "Find a credential",
+    description: "Search input for a credential in the impact graph.",
+  },
+  "graph.design.searchHint": {
+    defaultMessage: "Search by name, serial, fingerprint, or ID. Repeated names show their distinct IDs.",
+    description: "Explains how to disambiguate graph credentials.",
+  },
+  "graph.design.noCredentialMatches": {
+    defaultMessage: "No matching credentials. The current selection remains available; try another name or ID.",
+    description: "Empty graph credential search result.",
+  },
+  "graph.design.duplicateCredentialId": {
+    defaultMessage: " · ID {id}",
+    description: "Distinguishes credentials that share the same display name.",
   },
   "graph.design.coverage": {
     defaultMessage: "Only relationships currently known to trstctl are counted. Missing discovery coverage can make the real impact larger.",
@@ -10220,23 +10236,23 @@ export const messages = {
     description: "Graph evidence download link.",
   },
   "graph.design.resultOne": {
-    defaultMessage: "1 known system could be affected",
-    description: "Graph impact result for one known downstream system.",
+    defaultMessage: "1 known target could be affected",
+    description: "Graph impact result for one known downstream target.",
   },
   "graph.design.resultMany": {
-    defaultMessage: "{count} known systems could be affected",
-    description: "Graph impact result for zero or multiple known downstream systems.",
+    defaultMessage: "{count} known targets could be affected",
+    description: "Graph impact result for zero or multiple known downstream targets.",
   },
   "graph.design.confidence": {
     defaultMessage: "Confidence",
     description: "Graph relationship evidence confidence column.",
   },
   "graph.design.pathHeading": {
-    defaultMessage: "Why these systems are connected",
+    defaultMessage: "Why these targets are connected",
     description: "Heading for server-owned graph relationship paths.",
   },
   "graph.design.pathHelp": {
-    defaultMessage: "Each chain is the shortest relationship path confirmed by the server. It explains how the selected credential reaches that system.",
+    defaultMessage: "Each chain is the shortest relationship path confirmed by the server. It explains how the selected credential reaches that target.",
     description: "Safety explanation for graph relationship paths.",
   },
   "graph.design.pathTo": {

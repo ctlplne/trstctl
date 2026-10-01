@@ -41,8 +41,39 @@ describe("route 027 impact-first graph design", () => {
     renderGraph();
     await screen.findByRole("combobox", { name: "Credential to explore" });
     await userEvent.setup().click(screen.getByRole("button", { name: "Explore impact" }));
-    expect(await screen.findByRole("heading", { name: "1 known system could be affected" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "1 known target could be affected" })).toBeInTheDocument();
     expect(screen.getByText("Bound service identity")).toBeInTheDocument();
+  });
+  it("lets an operator find and distinguish repeated certificate names by serial or ID", async () => {
+    apiMock.graph.mockResolvedValue({
+      nodes: [
+        { id: "cert:renewal-a", kind: "credential", name: "CN=payments.svc", attrs: { serial: "serial-a" } },
+        { id: "cert:renewal-b", kind: "credential", name: "CN=payments.svc", attrs: { serial: "serial-b" } },
+        { id: "res:apache", kind: "resource", name: "apache-payments", attrs: {} },
+      ],
+      edges: [{ from: "cert:renewal-a", to: "res:apache", type: "DEPLOYED_TO", source: "agent", confidence: "observed" }],
+    });
+    const user = userEvent.setup();
+    renderGraph();
+    const picker = await screen.findByRole("combobox", { name: "Credential to explore" });
+    const labels = within(picker)
+      .getAllByRole("option")
+      .map((option) => option.textContent);
+    expect(new Set(labels).size).toBe(2);
+    expect(labels).toEqual(expect.arrayContaining([expect.stringContaining("cert:renewal-a"), expect.stringContaining("cert:renewal-b")]));
+    await user.type(screen.getByRole("textbox", { name: "Find a credential" }), "serial-b");
+    expect(within(picker).getByRole("option", { name: /cert:renewal-b/ })).toBeInTheDocument();
+    await user.selectOptions(picker, "cert:renewal-b");
+    await user.click(screen.getByRole("button", { name: "Explore impact" }));
+    expect(apiMock.graphBlastRadius).toHaveBeenCalledWith("cert:renewal-b");
+  });
+  it("prefills an executable graph query instead of an unsupported untyped edge", async () => {
+    const user = userEvent.setup();
+    renderGraph();
+    await user.click(await screen.findByText("Node inventory, exact attributes, and advanced query", { exact: true }));
+    expect(screen.getByRole("textbox", { name: "Cypher-style query" })).toHaveValue("MATCH (a)-[:DEPLOYED_TO]->(b) RETURN a,b");
+    await user.click(screen.getByRole("button", { name: "Run graph query" }));
+    expect(apiMock.graphQuery).toHaveBeenCalledWith("MATCH (a)-[:DEPLOYED_TO]->(b) RETURN a,b");
   });
   it("analyzes the exact deep-linked certificate instead of the default credential", async () => {
     apiMock.graph.mockResolvedValue({
@@ -142,12 +173,12 @@ describe("route 027 impact-first graph design", () => {
     renderGraph();
 
     expect(await screen.findByRole("heading", { level: 1, name: "What could be affected" })).toBeInTheDocument();
-    expect(screen.getByText("Which systems depend on a selected credential.", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText("Which known targets depend on a selected credential.", { exact: true })).toBeInTheDocument();
     const credentialSelector = screen.getByLabelText("Credential to explore");
     await waitFor(() => expect(credentialSelector).toHaveValue("cert:payments"));
     expect(credentialSelector).toHaveClass("min-w-0", "max-w-full", "overflow-hidden", "text-ellipsis");
-    expect(credentialSelector.closest("label")).toHaveClass("min-w-0", "max-w-full");
-    expect(credentialSelector.closest("label")?.parentElement).toHaveClass("grid-cols-[minmax(0,1fr)]");
+    expect(credentialSelector.parentElement).toHaveClass("min-w-0", "max-w-full");
+    expect(credentialSelector.parentElement?.parentElement).toHaveClass("grid-cols-[minmax(0,1fr)]");
     expect(within(credentialSelector).getAllByRole("option")).toHaveLength(1);
     expect(within(credentialSelector).queryByRole("option", { name: /payments-db/ })).not.toBeInTheDocument();
 
@@ -169,22 +200,23 @@ describe("route 027 impact-first graph design", () => {
     await user.click(explore);
     await waitFor(() => expect(apiMock.graphBlastRadius).toHaveBeenCalledWith("cert:payments"));
     expect(apiMock.graphReachable).toHaveBeenCalledWith("cert:payments");
-    expect(await screen.findByRole("heading", { name: "1 known system could be affected" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "1 known target could be affected" })).toBeInTheDocument();
     expect(screen.getByText("payments-db", { exact: true })).toBeInTheDocument();
     expect(screen.getByText(/Only relationships currently known to trstctl are counted/)).toBeInTheDocument();
 
     await user.click(screen.getByText("Graph edges, sources, confidence, and blast-radius export", { exact: true }));
     expect(screen.getByText("discovery source source-7", { exact: true })).toBeInTheDocument();
     expect(screen.getByText("Observed", { exact: true })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Why these systems are connected" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Why these targets are connected" })).toBeInTheDocument();
     const paths = screen.getByTestId("graph-relationship-paths");
     expect(within(paths).getByText("payments-cert", { exact: true })).toBeInTheDocument();
     expect(within(paths).getByText("Grants access", { exact: true })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open payments-db in risk" })).toHaveAttribute("href", "/risk?node=res%3Adb");
     expect(screen.getByRole("link", { name: "Open payments-db lifecycle" })).toHaveAttribute("href", "/identities?node=res%3Adb");
     expect(screen.getByRole("link", { name: "Open payments-db audit evidence" })).toHaveAttribute("href", "/audit?node=res%3Adb");
-    expect(screen.getByRole("link", { name: "Export blast-radius evidence" })).toHaveAttribute("download", "blast-radius-payments-cert.json");
+    expect(screen.getByRole("link", { name: "Export blast-radius evidence" })).toHaveAttribute("download", "blast-radius-payments-cert-cert-payments.json");
     const exported = decodeURIComponent(screen.getByRole("link", { name: "Export blast-radius evidence" }).getAttribute("href") ?? "");
+    expect(exported).toContain('"known_affected_targets"');
     expect(exported).toContain('"paths"');
     expect(exported).toContain('"GRANTS_ACCESS"');
 
@@ -215,7 +247,7 @@ describe("route 027 impact-first graph design", () => {
     renderGraph();
     await user.click(await screen.findByRole("button", { name: "Explore impact" }));
 
-    expect(await screen.findByRole("heading", { name: "0 known systems could be affected" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "0 known targets could be affected" })).toBeInTheDocument();
     expect(screen.getByText(/Only relationships currently known to trstctl are counted/)).toBeInTheDocument();
   });
 });

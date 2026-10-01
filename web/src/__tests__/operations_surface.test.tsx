@@ -722,7 +722,7 @@ describe("operational console surface", () => {
 
     await user.click(screen.getByRole("button", { name: "Explore impact" }));
     await waitFor(() => expect(apiMock.graphBlastRadius).toHaveBeenCalledWith("cert:1"));
-    expect(screen.getByRole("heading", { name: "1 known system could be affected" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "1 known target could be affected" })).toBeInTheDocument();
   });
 
   it("renders graph nodes and edges, filters by kind, and opens URL-safe node detail links", async () => {
@@ -801,7 +801,7 @@ describe("operational console surface", () => {
     await user.click(screen.getByRole("button", { name: "Explore impact" }));
     await waitFor(() => expect(apiMock.graphBlastRadius).toHaveBeenCalledWith("cert:payments"));
     expect(apiMock.graphReachable).toHaveBeenCalledWith("cert:payments");
-    expect(await screen.findByRole("heading", { name: "1 known system could be affected" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "1 known target could be affected" })).toBeInTheDocument();
     expect(screen.getAllByText("Resource").length).toBeGreaterThan(0);
     expect(screen.getAllByText("payments-db").length).toBeGreaterThan(0);
     await user.click(screen.getByText("Graph edges, sources, confidence, and blast-radius export"));
@@ -809,10 +809,10 @@ describe("operational console surface", () => {
 
     await user.click(screen.getByText("Node inventory, exact attributes, and advanced query"));
     fireEvent.change(screen.getByLabelText("Cypher-style query"), {
-      target: { value: "MATCH (a)-[e]->(b) RETURN a,b" },
+      target: { value: "MATCH (a)-[:DEPLOYED_TO]->(b) RETURN a,b" },
     });
     await user.click(screen.getByRole("button", { name: "Run graph query" }));
-    await waitFor(() => expect(apiMock.graphQuery).toHaveBeenCalledWith("MATCH (a)-[e]->(b) RETURN a,b"));
+    await waitFor(() => expect(apiMock.graphQuery).toHaveBeenCalledWith("MATCH (a)-[:DEPLOYED_TO]->(b) RETURN a,b"));
     expect((await screen.findAllByText(/payments-db/)).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: "Export query rows" })).toHaveAttribute("download", "graph-query-results.json");
   });
