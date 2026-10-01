@@ -100,10 +100,25 @@ func TestServedSSHAtScaleJourneyJOURNEY002EndToEnd(t *testing.T) {
 		"public_key":       string(pubAuthorizedKeys),
 		"key_id":           "deployer@edge-1",
 		"ttl_seconds":      600,
-		"approver":         "ssh-approver",
 		"principals":       []string{"web"},
 		"source_addresses": []string{"10.0.0.0/24"},
 		"force_command":    "/usr/local/bin/deploy",
+	}
+	spoofedApprover := make(map[string]any, len(attestedRequest)+1)
+	for key, value := range attestedRequest {
+		spoofedApprover[key] = value
+	}
+	spoofedApprover["approver"] = "ssh-approver"
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/ssh/attested-user-certs/preview", token, "", spoofedApprover)
+	if status != http.StatusForbidden || !bytes.Contains(body, []byte("authenticated issuer")) {
+		t.Fatalf("caller-chosen approver was accepted by SSH preview: status %d body %s", status, body)
+	}
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/ssh/attested-user-certs", token, "journey-002-spoofed-approver", spoofedApprover)
+	if status != http.StatusForbidden || !bytes.Contains(body, []byte("authenticated issuer")) {
+		t.Fatalf("caller-chosen approver was accepted by SSH issue: status %d body %s", status, body)
+	}
+	if h.hasEvent(t, "ssh.attested_cert.issued") {
+		t.Fatal("spoofed approver issued an SSH certificate")
 	}
 	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/ssh/attested-user-certs/preview", token, "", attestedRequest)
 	if status != http.StatusOK {
@@ -133,7 +148,7 @@ func TestServedSSHAtScaleJourneyJOURNEY002EndToEnd(t *testing.T) {
 	if err := json.Unmarshal(body, &preview); err != nil {
 		t.Fatalf("decode attested SSH preview: %v (%s)", err, body)
 	}
-	if preview.Capability != "F45" || !preview.Ready || !preview.EffectFree || preview.Method != "k8s_sat" || preview.Approver != "ssh-approver" {
+	if preview.Capability != "F45" || !preview.Ready || !preview.EffectFree || preview.Method != "k8s_sat" || preview.Approver != "secrets-test" {
 		t.Fatalf("bad attested SSH preview: %+v", preview)
 	}
 	if preview.RequestedTTLSeconds != 600 || preview.EffectiveTTLSeconds != 600 || preview.AttestationVerification != "execution_only" {
@@ -169,7 +184,7 @@ func TestServedSSHAtScaleJourneyJOURNEY002EndToEnd(t *testing.T) {
 	if issued.Certificate == "" || issued.Serial == 0 || issued.Subject == "" {
 		t.Fatalf("bad issued SSH cert response: %+v", issued)
 	}
-	if issued.Approver != "ssh-approver" || len(issued.Principals) != 1 || issued.Principals[0] != "web" {
+	if issued.Approver != "secrets-test" || len(issued.Principals) != 1 || issued.Principals[0] != "web" {
 		t.Fatalf("attested SSH response did not preserve approver/principal constraints: %+v", issued)
 	}
 	if len(issued.SourceAddresses) != 1 || issued.SourceAddresses[0] != "10.0.0.0/24" || issued.ForceCommand != "/usr/local/bin/deploy" {
@@ -217,14 +232,14 @@ func TestServedSSHAtScaleJourneyJOURNEY002EndToEnd(t *testing.T) {
 		t.Fatalf("expired SSH attestation should be rejected: status %d body %s", status, body)
 	}
 
-	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/ssh/attested-user-certs", token, "journey-002-self-approval", map[string]any{
+	selfToken := seedScopedTokenSubject(t, h.store, h.tenant, issued.Subject, "certs:issue")
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/ssh/attested-user-certs", selfToken, "journey-002-self-approval", map[string]any{
 		"method":         "k8s_sat",
 		"payload_base64": base64.StdEncoding.EncodeToString([]byte(trust.SAT)),
 		"public_key":     string(pubAuthorizedKeys),
 		"key_id":         "deployer@edge-1-self",
-		"approver":       issued.Subject,
 	})
-	if status != http.StatusForbidden {
+	if status != http.StatusForbidden || !bytes.Contains(body, []byte("distinct")) {
 		t.Fatalf("self-approved SSH attestation should be rejected: status %d body %s", status, body)
 	}
 

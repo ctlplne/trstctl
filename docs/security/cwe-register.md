@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1446 annotated sites across 26 rules. Each row is
+1449 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -957,7 +957,7 @@ not this file.
 | `tools/trstctllint/eventsource/eventsource_test.go:98` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/trstctllint/idempotency/idempotency_test.go:198` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G302 — CWE-276 Incorrect default permissions (chmod) (34 sites)
+### G302 — CWE-276 Incorrect default permissions (chmod) (35 sites)
 
 | Location | Reason |
 |---|---|
@@ -965,6 +965,7 @@ not this file.
 | `cmd/trstctl-agent/main.go:548` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
 | `cmd/trstctl-agent/tomcat_reload_test.go:80` | deliberately public disposable password fixture must be rejected before any request (CWE-276). |
 | `cmd/trstctl-license/main_test.go:147` | regression fixture deliberately starts with an insecure mode to prove signing repairs it (CWE-276) |
+| `cmd/trstctl/ssh_request_file_test.go:49` | deliberately public test fixture must be rejected by the private-file gate |
 | `internal/agent/destination/fs_unix_test.go:82` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/drift/drift_unix_test.go:28` | deliberately loosens the fixture key's mode; detecting exactly this is what the test proves (CWE-276) |
 | `internal/agent/drift/drift_unix_test.go:53` | deliberately loosens the fixture key's mode; detecting exactly this is what the test proves (CWE-276) |
@@ -996,7 +997,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (394 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (395 sites)
 
 | Location | Reason |
 |---|---|
@@ -1031,9 +1032,10 @@ not this file.
 | `cmd/trstctl/backup_cmd_test.go:46` | test reads its own fixture/tempdir path (CWE-22) |
 | `cmd/trstctl/backup_cmd_test.go:64` | test reads its own fixture/tempdir path (CWE-22) |
 | `cmd/trstctl/backup_cmd_test.go:111` | test reads a fixed repository artifact (CWE-22) |
-| `cmd/trstctl/connector.go:207` | the operator explicitly names the public trust-bundle path (CWE-22) |
+| `cmd/trstctl/connector.go:208` | the operator explicitly names the public trust-bundle path (CWE-22) |
 | `cmd/trstctl/ee_attach.go:318` | operator-supplied path to their own IdP's JWKS (CWE-22) |
 | `cmd/trstctl/ee_attach.go:346` | operator-pinned local IdP metadata, validated as configuration. |
+| `cmd/trstctl/ssh.go:193` | operator-selected local proof file is matched to the checked private regular inode before reading |
 | `deploy/demo/aud66_test.go:105` | fixed repository test path (CWE-22) |
 | `deploy/demo/demo_test.go:56` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/deploycheck_test.go:98` | test reads its own fixture/tempdir path (CWE-22) |
@@ -1465,7 +1467,7 @@ not this file.
 | `internal/server/server.go:2406` | served CA certificate PEM is public material (CWE-276) |
 | `internal/server/signer_authorization_test.go:132` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
-| `internal/server/ssh_journey_served_test.go:262` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/ssh_journey_served_test.go:277` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/signing/keystore_test.go:244` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/signing/signauth_secret_test.go:47` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/testutil/openssltest/openssltest_test.go:14` | fake openssl shim must be executable; 0700 is the minimum that runs (CWE-276) |
@@ -1583,11 +1585,13 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1142` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:888` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (70 sites)
+### G703 — CWE-22 Path traversal (taint) (72 sites)
 
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-license/main.go:151` | vendor operator explicitly selects the local CLI output path (CWE-22) |
+| `cmd/trstctl/ssh.go:186` | operator-selected local proof file is checked for regular type and private permissions before reading |
+| `cmd/trstctl/ssh.go:193` | operator-selected local proof file is matched to the checked private regular inode before reading |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `internal/agent/relay/hostrollback.go:309` | both paths are inside the validated agent-local state directory (CWE-22) |
 | `internal/agent/sshkrl/install.go:245` | staged path is created in the bound target directory by CreateTemp |
@@ -1662,8 +1666,8 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `cmd/trstctl/connector.go:250` | CLI calling the operator-specified connector base URL; their own target (CWE-918) |
-| `cmd/trstctl/connector.go:270` | CLI calling the operator-specified connector base URL; their own target (CWE-918) |
+| `cmd/trstctl/connector.go:252` | CLI calling the operator-specified connector base URL; their own target (CWE-918) |
+| `cmd/trstctl/connector.go:272` | CLI calling the operator-specified connector base URL; their own target (CWE-918) |
 | `internal/agent/enrollproxy/proxy.go:207` | the destination host is the operator-configured upstream, |
 | `internal/discovery/cloudcert/httpfetch.go:42` | fetches the cloud provider endpoint declared by the operator's discovery source (CWE-918) |
 | `tools/dodcensus/proof/launched.go:1751` | developer tool calling the endpoint it was pointed at (CWE-918) |

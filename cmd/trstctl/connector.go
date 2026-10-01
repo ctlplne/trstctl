@@ -19,6 +19,7 @@ import (
 
 	internalcrypto "trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/netsec"
 )
 
@@ -245,6 +246,7 @@ func connectorCLIRequest(ctx context.Context, stdout io.Writer, cfg connectorCLI
 		if err != nil {
 			return err
 		}
+		defer secret.Wipe(raw)
 		rdr = bytes.NewReader(raw)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, cfg.baseURL+path, rdr) // #nosec G704 -- CLI calling the operator-specified connector base URL; their own target (CWE-918)

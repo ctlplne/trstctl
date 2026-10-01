@@ -6736,7 +6736,7 @@ export interface SSHAttestedUserCertPreview {
 }
 
 export interface SSHAttestedUserCertRequest {
-  approver: string;
+  approver?: string;
   force_command?: string;
   key_id?: string;
   method: "aws_iid" | "azure_imds" | "gcp_iit" | "github_oidc" | "k8s_sat" | "tpm";

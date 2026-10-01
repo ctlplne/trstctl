@@ -4,13 +4,18 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"runtime"
 	"strconv"
 	"strings"
+
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 func runSSH(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) error {
@@ -92,23 +97,46 @@ func runSSH(ctx context.Context, args []string, getenv func(string) string, stdo
 		command := args[0]
 		fs := flag.NewFlagSet("trstctl ssh "+command, flag.ContinueOnError)
 		fs.SetOutput(stderr)
+		requestFile := fs.String("f", "", "private JSON request file; keeps the attestation proof out of process arguments")
 		method := fs.String("method", "", "attestation method")
 		payload := fs.String("payload-base64", "", "attestation payload as standard base64")
 		publicKey := fs.String("public-key", "", "subject SSH public key in authorized_keys form")
 		keyID := fs.String("key-id", "", "SSH certificate key id")
 		ttl := fs.Int64("ttl-seconds", 0, "requested TTL in seconds")
-		approver := fs.String("approver", "", "distinct approver identity")
+		approver := fs.String("approver", "", "optional assertion of this credential's authenticated issuer subject; a different identity is rejected")
 		principals := fs.String("principals", "", "comma-separated principals that must be bound to the verified attestation")
 		sourceAddresses := fs.String("source-addresses", "", "comma-separated source IP addresses or CIDRs")
 		forceCommand := fs.String("force-command", "", "command the SSH server must force for this certificate")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
-		body := map[string]any{
-			"method": *method, "payload_base64": *payload, "public_key": *publicKey,
-			"key_id": *keyID, "ttl_seconds": *ttl, "approver": *approver,
-			"principals": splitCSV(*principals), "source_addresses": splitCSV(*sourceAddresses),
-			"force_command": *forceCommand,
+		if fs.NArg() != 0 {
+			return errors.New("unexpected SSH attested request argument")
+		}
+		var body any
+		if *requestFile != "" {
+			mixed := false
+			fs.Visit(func(f *flag.Flag) { mixed = mixed || f.Name != "f" })
+			if mixed {
+				return errors.New("-f cannot be combined with inline SSH attestation fields")
+			}
+			raw, err := readPrivateSSHAttestedRequest(*requestFile)
+			if err != nil {
+				return err
+			}
+			defer secret.Wipe(raw)
+			body = json.RawMessage(raw)
+		} else {
+			inline := map[string]any{
+				"method": *method, "payload_base64": *payload, "public_key": *publicKey,
+				"key_id": *keyID, "ttl_seconds": *ttl,
+				"principals": splitCSV(*principals), "source_addresses": splitCSV(*sourceAddresses),
+				"force_command": *forceCommand,
+			}
+			if *approver != "" {
+				inline["approver"] = *approver
+			}
+			body = inline
 		}
 		path := "/api/v1/ssh/attested-user-certs"
 		mutation := true
@@ -151,6 +179,35 @@ func runSSH(ctx context.Context, args []string, getenv func(string) string, stdo
 	default:
 		return fmt.Errorf("unknown ssh command %q", args[0])
 	}
+}
+
+func readPrivateSSHAttestedRequest(path string) ([]byte, error) {
+	const maxBytes = 256 << 10
+	selected, err := os.Lstat(path) // #nosec G703 -- operator-selected local proof file is checked for regular type and private permissions before reading
+	if err != nil {
+		return nil, fmt.Errorf("SSH attestation request file: %w", err)
+	}
+	if !selected.Mode().IsRegular() || selected.Size() <= 0 || selected.Size() > maxBytes {
+		return nil, errors.New("SSH attestation request file must be a bounded regular file, not a symlink")
+	}
+	f, err := os.Open(path) // #nosec G304 G703 -- operator-selected local proof file is matched to the checked private regular inode before reading
+	if err != nil {
+		return nil, fmt.Errorf("open SSH attestation request file: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+	opened, err := f.Stat()
+	if err != nil || !os.SameFile(selected, opened) {
+		return nil, errors.New("SSH attestation request file changed while opening")
+	}
+	if runtime.GOOS != "windows" && opened.Mode().Perm()&0o077 != 0 {
+		return nil, errors.New("SSH attestation request file must be private (mode 0600)")
+	}
+	raw, err := io.ReadAll(io.LimitReader(f, maxBytes+1))
+	if err != nil || len(raw) == 0 || len(raw) > maxBytes || !json.Valid(raw) {
+		secret.Wipe(raw)
+		return nil, errors.New("SSH attestation request file is unreadable, oversized, or invalid JSON")
+	}
+	return raw, nil
 }
 
 func splitCSV(s string) []string {

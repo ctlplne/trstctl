@@ -516,13 +516,13 @@ describe("SSH trust served workflow surface", () => {
           payload_base64: "eyJzdWIiOiJzYSJ9",
           public_key: "ssh-ed25519 AAAATEST user@example.test",
           ttl_seconds: 900,
-          approver: "ssh-approver",
           principals: ["web"],
           source_addresses: ["10.0.0.0/24"],
           force_command: "/usr/local/bin/deploy",
         }),
       ),
     );
+    expect(apiMock.previewAttestedSSHUserCert.mock.calls[0][0]).not.toHaveProperty("approver");
     expect(apiMock.issueAttestedSSHUserCert).not.toHaveBeenCalled();
     expect(await screen.findByRole("heading", { name: "Ready to verify and issue" })).toBeInTheDocument();
     expect(screen.getByText("No writes, external calls, audit events, or signer calls happened during this review.")).toBeInTheDocument();
@@ -537,7 +537,6 @@ describe("SSH trust served workflow surface", () => {
           payload_base64: "eyJzdWIiOiJzYSJ9",
           public_key: "ssh-ed25519 AAAATEST user@example.test",
           ttl_seconds: 900,
-          approver: "ssh-approver",
           principals: ["web"],
           source_addresses: ["10.0.0.0/24"],
           force_command: "/usr/local/bin/deploy",
@@ -545,10 +544,11 @@ describe("SSH trust served workflow surface", () => {
         expect.any(String),
       ),
     );
+    expect(apiMock.issueAttestedSSHUserCert.mock.calls[0][0]).not.toHaveProperty("approver");
     expect(screen.getByLabelText("Attestation payload base64")).toHaveValue("");
     expect(screen.getByLabelText("SSH public key")).toHaveValue("");
     expect(await screen.findByLabelText("Issued SSH certificate")).toHaveValue("ssh-rsa-cert-v01@openssh.com AAAA");
-    expect(screen.getByText(/approver ssh-approver/)).toBeInTheDocument();
+    expect(screen.getByText(/issuer ssh-approver/)).toBeInTheDocument();
     await user.click(within(chooser).getByRole("button", { name: "Remove access" }));
     expect(screen.getByLabelText("Certificate serial")).toHaveValue("42");
     expect(screen.getByLabelText("Revocation scope")).toHaveValue("serial");

@@ -4150,11 +4150,11 @@ func componentSchemas() map[string]*Schema {
 		"public_key":       str(),
 		"key_id":           str(),
 		"ttl_seconds":      {Type: "integer"},
-		"approver":         str(),
+		"approver":         {Type: "string", Description: "Optional assertion of the authenticated issuer's subject. When omitted the server derives it from the credential; a different value is rejected. This request does not record a separate person's approval."},
 		"principals":       {Type: "array", Items: str()},
 		"source_addresses": {Type: "array", Items: str()},
 		"force_command":    str(),
-	}, "method", "payload_base64", "public_key", "approver")
+	}, "method", "payload_base64", "public_key")
 	sshAttestedUserCertPreview := object(map[string]*Schema{
 		"capability":                 str(),
 		"ready":                      {Type: "boolean"},
@@ -4162,7 +4162,7 @@ func componentSchemas() map[string]*Schema {
 		"method":                     str(),
 		"supported_methods":          {Type: "array", Items: str()},
 		"key_id":                     str(),
-		"approver":                   str(),
+		"approver":                   {Type: "string", Description: "Authenticated issuer subject that this request will record; this is not a separate two-person approval."},
 		"principals":                 {Type: "array", Items: str()},
 		"source_addresses":           {Type: "array", Items: str()},
 		"force_command":              str(),
@@ -4197,7 +4197,7 @@ func componentSchemas() map[string]*Schema {
 		"subject":          str(),
 		"principals":       {Type: "array", Items: str()},
 		"valid_before":     timestamp(),
-		"approver":         str(),
+		"approver":         {Type: "string", Description: "Authenticated issuer subject recorded for this certificate, not an independently approved identity."},
 		"source_addresses": {Type: "array", Items: str()},
 		"force_command":    str(),
 		"attestation":      ref("Attestation"),

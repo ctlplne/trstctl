@@ -13699,6 +13699,7 @@ export interface components {
             recovery?: string;
         };
         SSHAttestedUserCert: {
+            /** @description Authenticated issuer subject recorded for this certificate, not an independently approved identity. */
             approver: string;
             attestation: components["schemas"]["Attestation"];
             certificate: string;
@@ -13712,6 +13713,7 @@ export interface components {
             valid_before: string;
         };
         SSHAttestedUserCertPreview: {
+            /** @description Authenticated issuer subject that this request will record; this is not a separate two-person approval. */
             approver: string;
             /** @enum {string} */
             attestation_verification: "execution_only";
@@ -13744,7 +13746,8 @@ export interface components {
             ttl_defaulted: boolean;
         };
         SSHAttestedUserCertRequest: {
-            approver: string;
+            /** @description Optional assertion of the authenticated issuer's subject. When omitted the server derives it from the credential; a different value is rejected. This request does not record a separate person's approval. */
+            approver?: string;
             force_command?: string;
             key_id?: string;
             /** @enum {string} */

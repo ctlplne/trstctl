@@ -507,6 +507,14 @@ func (s *Server) normalizeAttestedSSHUserCert(ctx context.Context, tenantID stri
 	if s.attestedIssuance == nil {
 		return normalizedAttestedSSHUserCert{}, fmt.Errorf("%w: attestors are not configured", api.ErrSSHWorkflowUnavailable)
 	}
+	actor, ok := events.ActorFromContext(ctx)
+	if !ok || strings.TrimSpace(actor.Subject) == "" {
+		return normalizedAttestedSSHUserCert{}, fmt.Errorf("%w: authenticated issuer is required", api.ErrSSHWorkflowRejected)
+	}
+	if requested := strings.TrimSpace(req.Approver); requested != "" && requested != actor.Subject {
+		return normalizedAttestedSSHUserCert{}, fmt.Errorf("%w: approver must match the authenticated issuer; a separate approval is not recorded by this request", api.ErrSSHWorkflowRejected)
+	}
+	plan.approver = actor.Subject
 	plan.supportedMethods, err = s.sshWorkflowAttestorMethods(ctx, tenantID)
 	if err != nil {
 		return normalizedAttestedSSHUserCert{}, fmt.Errorf("%w: list attester trust sources: %v", api.ErrSSHWorkflowUnavailable, err)
@@ -549,9 +557,8 @@ func (s *Server) normalizeAttestedSSHUserCert(ctx context.Context, tenantID stri
 	if plan.keyID != "" && !validAttestedSSHText(plan.keyID, 256) {
 		plan.blockers = append(plan.blockers, "Key ID must be at most 256 characters and contain no control characters.")
 	}
-	plan.approver = strings.TrimSpace(req.Approver)
 	if !validAttestedSSHText(plan.approver, 256) {
-		plan.blockers = append(plan.blockers, "Name a distinct approver using at most 256 characters and no control characters.")
+		plan.blockers = append(plan.blockers, "Authenticated issuer identity must be at most 256 characters and contain no control characters.")
 	}
 	principals, principalErr := normalizeAttestedSSHList(req.Principals, 64, 256)
 	if principalErr != nil {

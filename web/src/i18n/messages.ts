@@ -9745,7 +9745,7 @@ export const messages = {
   },
   "sshTrust.attested.description": {
     defaultMessage:
-      "Short-lived SSH user certs require attestation evidence, an approver, principal constraints, TTL, source-address, and force-command policy. Self-approval blocked is a hard rule, not a UI hint.",
+      "Short-lived SSH user certs require attestation evidence and an authenticated issuer with certs:issue. The issuer must differ from the verified subject. This flow does not collect a separate person's approval.",
     description: "Description for the attestation-gated SSH user certificate form.",
   },
   "sshTrust.page.answerReady": {
@@ -9957,8 +9957,8 @@ export const messages = {
     description: "Disclosure label for the exact SSH CA public key.",
   },
   "sshTrust.attested.approver": {
-    defaultMessage: "Approver",
-    description: "Field label for the distinct approver required for attested SSH user certificate issuance.",
+    defaultMessage: "Authenticated issuer",
+    description: "The signed-in issuer whose identity is recorded with an attested SSH user certificate; this is not a separate approval ceremony.",
   },
   "sshTrust.attested.boundPrincipals": {
     defaultMessage: "Bound principals",
@@ -9973,7 +9973,7 @@ export const messages = {
     description: "Field label for the OpenSSH force-command critical option.",
   },
   "sshTrust.attested.resultConstraints": {
-    defaultMessage: "approver {approver} | principals {principals} | source {source} | force {force}",
+    defaultMessage: "issuer {approver} | principals {principals} | source {source} | force {force}",
     description: "Summary of applied constraints returned with an issued attested SSH user certificate.",
   },
   "sshTrust.attested.previewAction": {

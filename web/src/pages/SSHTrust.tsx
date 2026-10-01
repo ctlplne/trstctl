@@ -113,7 +113,6 @@ export function SSHTrust() {
   const [publicKey, setPublicKey] = useState("");
   const [keyId, setKeyId] = useState("jit-deployer");
   const [ttlSeconds, setTTLSeconds] = useState("900");
-  const [approver, setApprover] = useState("ssh-approver");
   const [principals, setPrincipals] = useState("web");
   const [sourceAddresses, setSourceAddresses] = useState("10.0.0.0/24");
   const [forceCommand, setForceCommand] = useState("/usr/local/bin/deploy");
@@ -173,16 +172,15 @@ export function SSHTrust() {
       public_key: publicKey.trim(),
       key_id: keyId.trim() || undefined,
       ttl_seconds: numericOrUndefined(ttlSeconds),
-      approver: approver.trim(),
       principals: splitHosts(principals),
       source_addresses: splitHosts(sourceAddresses),
       force_command: forceCommand.trim() || undefined,
     }),
-    [approver, forceCommand, keyId, method, payloadBase64, principals, publicKey, sourceAddresses, ttlSeconds],
+    [forceCommand, keyId, method, payloadBase64, principals, publicKey, sourceAddresses, ttlSeconds],
   );
   const attestedRequestKey = JSON.stringify(attestedRequest);
   const exactAttestedPlan = attestedReview?.requestKey === attestedRequestKey ? attestedReview.plan : null;
-  const attestedInputValid = Boolean(attestedRequest.payload_base64 && attestedRequest.public_key && attestedRequest.approver && attestors.length > 0);
+  const attestedInputValid = Boolean(attestedRequest.payload_base64 && attestedRequest.public_key && attestors.length > 0);
 
   const recordRollout = async (event: FormEvent) => {
     event.preventDefault();
@@ -564,10 +562,6 @@ export function SSHTrust() {
                     value={ttlSeconds}
                     onChange={(event) => setTTLSeconds(event.target.value)}
                   />
-                </div>
-                <div className="grid gap-1 text-sm">
-                  <label htmlFor="ssh-attested-approver">{t("sshTrust.attested.approver")}</label>
-                  <input id="ssh-attested-approver" className="ui-input" value={approver} onChange={(event) => setApprover(event.target.value)} required />
                 </div>
                 <div className="grid gap-1 text-sm">
                   <label htmlFor="ssh-attested-principals">{t("sshTrust.attested.boundPrincipals")}</label>

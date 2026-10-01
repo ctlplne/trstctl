@@ -185,32 +185,21 @@ mutation stays in the operator-confirmed agent path.
 5. Issue a short-lived user certificate tied to a verified identity, not handed to
    anyone who asks. The attested issuer runs an attestation check first and only then
    derives the certificate's principals from the verified result, defaulting to a short
-   TTL. Every issuance is an immutable `ssh.attested_cert.issued` event. See [SSH](../features/ssh.md).
+   TTL. The authenticated `certs:issue` operator is recorded as issuer and must
+   differ from the verified subject; this step does not ask a second person to
+   approve. Every issuance is an immutable `ssh.attested_cert.issued` event. See [SSH](../features/ssh.md).
+
+   Create a mode-0600 `ssh-attested-user.json` with the projected token,
+   requester public key, intended principals, and session constraints using
+   the [private-file example](../features/ssh.md#use-it). Keep the proof out of
+   process arguments and shell environment.
 
    ```sh
    export TRSTCTL_IDEMPOTENCY_KEY="ssh-jit-deployer-$(date -u +%Y%m%dT%H%M%SZ)"
-   trstctl ssh preview-attested-user \
-     --method k8s_sat \
-     --payload-base64 "$K8S_SAT_B64" \
-     --public-key "$(cat ~/.ssh/id_ed25519.pub)" \
-     --key-id jit-deployer \
-     --ttl-seconds 900 \
-     --approver ssh-approver \
-     --principals web \
-     --source-addresses 10.0.0.0/24 \
-     --force-command /usr/local/bin/deploy
+   trstctl ssh preview-attested-user -f ssh-attested-user.json
 
    # After reviewing the exact effect-free plan, execute the same body.
-   trstctl ssh issue-attested-user \
-     --method k8s_sat \
-     --payload-base64 "$K8S_SAT_B64" \
-     --public-key "$(cat ~/.ssh/id_ed25519.pub)" \
-     --key-id jit-deployer \
-     --ttl-seconds 900 \
-     --approver ssh-approver \
-     --principals web \
-     --source-addresses 10.0.0.0/24 \
-     --force-command /usr/local/bin/deploy
+   trstctl ssh issue-attested-user -f ssh-attested-user.json
    ```
 
    -> the user connects normally and `sshd` validates the certificate against

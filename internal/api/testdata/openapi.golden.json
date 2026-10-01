@@ -27420,6 +27420,7 @@
       "SSHAttestedUserCert": {
         "properties": {
           "approver": {
+            "description": "Authenticated issuer subject recorded for this certificate, not an independently approved identity.",
             "type": "string"
           },
           "attestation": {
@@ -27472,6 +27473,7 @@
       "SSHAttestedUserCertPreview": {
         "properties": {
           "approver": {
+            "description": "Authenticated issuer subject that this request will record; this is not a separate two-person approval.",
             "type": "string"
           },
           "attestation_verification": {
@@ -27634,6 +27636,7 @@
       "SSHAttestedUserCertRequest": {
         "properties": {
           "approver": {
+            "description": "Optional assertion of the authenticated issuer's subject. When omitted the server derives it from the credential; a different value is rejected. This request does not record a separate person's approval.",
             "type": "string"
           },
           "force_command": {
@@ -27678,8 +27681,7 @@
         "required": [
           "method",
           "payload_base64",
-          "public_key",
-          "approver"
+          "public_key"
         ],
         "type": "object"
       },

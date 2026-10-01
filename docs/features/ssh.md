@@ -126,7 +126,9 @@ edits happen only inside the operator-confirmed agent path.
 The most powerful pattern: issue an SSH user certificate only to a caller who proves
 identity first. This issuer runs an [attestation](workload-identity.md) check (the same
 chain used for workload identity), then derives principals from the verified attestation
-and calls the SSH CA. It requires an approver distinct from the attested subject, rejects
+and calls the SSH CA. The authenticated `certs:issue` caller is recorded as the issuer
+and must differ from the attested subject. This request does not collect a second
+person's approval. It rejects
 unbound principals, supports OpenSSH `source-address` and `force-command` critical
 options, fails closed on attestation failure, defaults to a 15-minute TTL (capped by the
 profile), and binds the attestation via an immutable `ssh.attested_cert.issued` event:
@@ -136,7 +138,7 @@ keys.
 Review the exact request first with
 `POST /api/v1/ssh/attested-user-certs/preview` or
 `trstctl ssh preview-attested-user`. The preview reads tenant trust, validates and
-normalizes the public key, approver, principals, lifetime, source addresses, and
+normalizes the public key, authenticated issuer, principals, lifetime, source addresses, and
 forced command, then returns proof and key fingerprints, the isolated-signer action,
 and recovery instructions. It performs no proof verification, write, external call,
 audit emission, or signer call; proof verification remains execution-only because a
@@ -144,7 +146,7 @@ proof may contain one-time evidence.
 
 Execution is served at `POST /api/v1/ssh/attested-user-certs` and by `trstctl ssh
 issue-attested-user`; the request carries an attestation method, base64 payload, SSH
-public key, approver, optional key ID, principals, TTL, source-address allowlist, and
+public key, optional key ID, principals, TTL, source-address allowlist, and
 force-command policy. The response is the certificate plus serial, key ID, expiry,
 constraints, and the attestation record — the private key never crosses the API or UI.
 The console retains one request-scoped idempotency key after an uncertain response;
@@ -214,22 +216,34 @@ trstctl ssh trust-rollout \
   --rollback-plan 'restore backup, reload sshd' \
   --status health_passed \
   --confirm
-cat > ssh-attested-user.json <<EOF
-{
-  "method": "k8s_sat",
-  "payload_base64": "$K8S_SAT_B64",
-  "public_key": "$(cat ~/.ssh/id_ed25519.pub)",
-  "approver": "ssh-approver",
-  "principals": ["web"],
-  "source_addresses": ["10.0.0.0/24"],
-  "force_command": "/usr/local/bin/deploy",
-  "ttl_seconds": 900
+umask 077
+python3 - <<'PY'
+import base64, json, pathlib
+proof = pathlib.Path('/var/run/trstctl-proof/token').read_bytes().strip()
+public_key = (pathlib.Path.home() / '.ssh/id_ed25519.pub').read_text().strip()
+request = {
+    'method': 'k8s_sat',
+    'payload_base64': base64.b64encode(proof).decode('ascii'),
+    'public_key': public_key,
+    'principals': ['web'],
+    'source_addresses': ['10.0.0.0/24'],
+    'force_command': '/usr/local/bin/deploy',
+    'ttl_seconds': 900,
 }
-EOF
+with pathlib.Path('ssh-attested-user.json').open('x') as out:
+    json.dump(request, out)
+PY
+trstctl ssh preview-attested-user -f ssh-attested-user.json
 trstctl ssh issue-attested-user -f ssh-attested-user.json
 trstctl ssh revoke --serial 42 --reason 'revoked'
 trstctl ssh retire-host --host edge-1.internal --reason 'replaced'
 ```
+
+Run the attested example where the projected token and requester key are
+available. The CLI refuses a group- or world-readable request file on Unix,
+and `-f` keeps the proof out of process arguments. The `approver` response
+field names the authenticated issuer; callers cannot name somebody else.
+Use a separate approval workflow if your policy requires two people.
 
 ## Pitfalls & limits
 
