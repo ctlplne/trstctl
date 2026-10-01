@@ -113,25 +113,63 @@ func requireSecurityHeader(ctx context.Context) error {
 // FetchX509SVID streams X.509-SVIDs to the caller (SPIFFE Workload API). It mints a
 // fresh key pair per SVID, signs the SVID over it through the issuing CA in the
 // signer, and returns the leaf, its PKCS#8 key, and the trust bundle — the response a
-// go-spiffe client validates and a spiffe-helper writes to disk. The stream sends one
-// response now; a production server also re-sends ahead of expiry (rotation), which
-// the client drives via NeedsRotation.
+// go-spiffe client validates and a spiffe-helper writes to disk. Keep the stream
+// open and re-send only when the delivered certificate approaches expiry. Ending
+// after one response makes stock clients reconnect and mint a new SVID every second.
 func (s *WorkloadAPIServer) FetchX509SVID(_ *workloadpb.X509SVIDRequest, stream workloadpb.SpiffeWorkloadAPI_FetchX509SVIDServer) error {
 	ctx := stream.Context()
 	if err := requireSecurityHeader(ctx); err != nil {
 		return err
 	}
+	for {
+		expiresAt, err := s.sendX509SVIDResponse(stream)
+		if err != nil {
+			return err
+		}
+		remaining := time.Until(expiresAt)
+		if remaining <= time.Second {
+			return status.Error(codes.Internal, "spiffe: issued X509-SVID lifetime is too short to rotate")
+		}
+		wait := remaining * 2 / 3
+		if wait < time.Second {
+			wait = time.Second
+		}
+		timer := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil
+		case <-timer.C:
+		}
+	}
+}
+
+// sendX509SVIDResponse holds the tenant-service barrier only while a new SVID
+// is issued and sent. The stream can wait for most of a certificate lifetime
+// without keeping a transaction or service lease open.
+func (s *WorkloadAPIServer) sendX509SVIDResponse(stream workloadpb.SpiffeWorkloadAPI_FetchX509SVIDServer) (time.Time, error) {
+	ctx := stream.Context()
 	ctx, release, err := s.wl.cfg.TenantServiceWork.Begin(ctx, s.wl.cfg.TenantID)
 	if err != nil {
-		return status.Error(codes.Unavailable, "spiffe: tenant service is unavailable")
+		return time.Time{}, status.Error(codes.Unavailable, "spiffe: tenant service is unavailable")
 	}
 	defer release()
 	resp, err := s.buildX509SVIDResponse(ctx)
 	if err != nil {
-		return err
+		return time.Time{}, err
 	}
 	defer destroyX509SVIDResponse(resp)
-	return stream.Send(resp)
+	if len(resp.Svids) == 0 {
+		return time.Time{}, status.Error(codes.Internal, "spiffe: X509-SVID response is empty")
+	}
+	_, expiresAt, err := crypto.CertValidity(resp.Svids[0].X509Svid)
+	if err != nil {
+		return time.Time{}, status.Errorf(codes.Internal, "spiffe: inspect issued X509-SVID lifetime: %v", err)
+	}
+	if err := stream.Send(resp); err != nil {
+		return time.Time{}, err
+	}
+	return expiresAt, nil
 }
 
 // buildX509SVIDResponse mints the SVID set for the caller's selectors and assembles

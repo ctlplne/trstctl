@@ -318,6 +318,12 @@ JWT-SVIDs use the signer-backed JWT handle and validate against the served JWT b
 The Workload-API gRPC/protobuf contract is vendored verbatim from go-spiffe, so the
 wire format is byte-identical.
 
+The X.509-SVID stream stays open after its first response. The server sends a
+fresh key and certificate after roughly two thirds of the current certificate's
+remaining lifetime, before expiry. A stock go-spiffe source can consume those
+updates without reconnecting for every certificate. The workload must keep the
+socket available; a one-shot fetch alone does not prove unattended renewal.
+
 The default Workload API response contains one classical X.509-SVID. A second
 ML-DSA-65 SVID is available in core when `protocols.spiffe.hybrid_svids: true`
 or `TRSTCTL_PROTOCOLS_SPIFFE_HYBRID_SVIDS_ENABLED=true` is set before startup.

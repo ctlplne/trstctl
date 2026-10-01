@@ -208,6 +208,10 @@ needs access, and gets a pass (an SVID) that expires in minutes.
    key and rejects the whole response. PQC is available in core; the explicit
    setting protects clients that need the classical wire format.
 
+   Keep the Workload API socket mounted while the workload runs. Its X.509 stream
+   sends another key and certificate before the current SVID expires; confirm that
+   a long-running client receives the update rather than relying on a one-shot fetch.
+
 9. Confirm there is no static secret to steal. Because the SVID is short-lived
    and minted only after attestation, there is nothing long-lived in the pod to leak,
    and even a captured credential is useless within minutes. A `NeedsRotation` helper

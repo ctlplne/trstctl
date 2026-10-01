@@ -105,7 +105,9 @@ func TestTenantServiceSPIFFEResponseIncludesAdditionalIssuerAndSend(t *testing.T
 				return spiffe.AdditionalX509SVID{CertificateDER: der, PrivateKeyPKCS8: pk, Hint: "qa-second-key"}, nil
 			})
 			api := spiffe.NewWorkloadAPIServer(wl, []string{"unix"}, spiffe.WithAdditionalX509SVIDIssuer(additional))
-			request := metadata.NewIncomingContext(ctx, metadata.Pairs(spiffe.SecurityHeaderKey, spiffe.SecurityHeaderValue))
+			requestCtx, stop := context.WithCancel(ctx)
+			defer stop()
+			request := metadata.NewIncomingContext(requestCtx, metadata.Pairs(spiffe.SecurityHeaderKey, spiffe.SecurityHeaderValue))
 			if strings.HasPrefix(lane, "x509") {
 				var sent *workloadpb.X509SVIDResponse
 				sendFailure := errors.New("controlled send failure")
@@ -126,6 +128,7 @@ func TestTenantServiceSPIFFEResponseIncludesAdditionalIssuerAndSend(t *testing.T
 					if lane == "x509-send-failure" {
 						return sendFailure
 					}
+					stop()
 					return nil
 				}}
 				err := api.FetchX509SVID(&workloadpb.X509SVIDRequest{}, stream)
