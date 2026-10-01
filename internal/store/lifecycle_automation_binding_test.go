@@ -116,11 +116,14 @@ func TestLifecycleAutomationUsesIdentityBoundServedCertificate(t *testing.T) {
 			t.Fatalf("after %s/%s scheduler selected %q found=%v error=%v; want %q", step.destination, step.status, fingerprint, found, err, certs[step.want].Fingerprint)
 		}
 		rows, err := s.ListLifecycleAutomationInventory(ctx, tenantA, 100)
-		if err != nil || len(rows) != 2 {
+		// Identity 0 has only a superseded leaf and no proved restore. It must
+		// leave the renewable inventory, while identity 1 stays bound to its
+		// exact served leaf through each pending, failed, and proved step.
+		if err != nil || len(rows) != 1 {
 			t.Fatalf("after restore inventory count=%d error=%v", len(rows), err)
 		}
 		for _, row := range rows {
-			if row.IdentityID == identities[1].ID && (row.CertificateID != certs[step.want].ID || !row.CertificateEnd.Equal(*certs[step.want].NotAfter)) {
+			if row.IdentityID != identities[1].ID || row.CertificateID != certs[step.want].ID || !row.CertificateEnd.Equal(*certs[step.want].NotAfter) {
 				t.Fatalf("after %s/%s plan selected %s expiring %v; want %s expiring %v", step.destination, step.status, row.CertificateID, row.CertificateEnd, certs[step.want].ID, certs[step.want].NotAfter)
 			}
 		}
