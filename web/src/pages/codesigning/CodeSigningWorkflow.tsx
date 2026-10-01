@@ -537,6 +537,9 @@ function SignatureReceipt({ signature }: { signature: CodeSigningSignature }) {
             <dd className="break-all font-mono text-xs">{signature.public_key_der}</dd>
           </div>
         </dl>
+        {signature.fulcio_issuer || signature.fulcio_san ? (
+          <p className="mt-3 text-sm text-muted-foreground">{t("codesign.workflow.noFulcioCertificate")}</p>
+        ) : null}
       </CardContent>
     </Card>
   );

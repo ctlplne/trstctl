@@ -73,6 +73,7 @@ beforeEach(() => {
     algorithm: "ECDSA-P256",
     artifact_type: "container",
     fulcio_issuer: "https://oauth2.example",
+    fulcio_san: "goal/release/.github/workflows/sign.yml@refs/heads/main",
     public_key_der: "BASE64DER",
     signature: "BASE64SIG",
   });
@@ -306,6 +307,10 @@ describe("code signing console", () => {
     expect(apiMock.previewCodeKeyless.mock.calls[0]?.[0]).toMatchObject({ identity_payload: "c2Vuc2l0aXZlLW9pZGMtcHJvb2Y=" });
     expect(screen.queryByText("sensitive-oidc-proof")).not.toBeInTheDocument();
     expect(await screen.findByText("This exact signing request is ready")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Sign this reviewed digest" }));
+    expect(await screen.findByText("OIDC issuer (Fulcio binding)")).toBeInTheDocument();
+    expect(screen.getByText("Verified identity (Fulcio SAN binding)")).toBeInTheDocument();
+    expect(screen.getByText(/no Fulcio certificate or portable identity attestation is included/i)).toBeInTheDocument();
   });
 
   it("puts failed signing, approvals, timestamping, and recent outcomes before the signing control", async () => {

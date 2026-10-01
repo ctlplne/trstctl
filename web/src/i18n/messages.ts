@@ -4930,8 +4930,8 @@ export const messages = {
     description: "Placeholder showing the required code-signing artifact digest format.",
   },
   "codesign.receipt.fulcioSAN": {
-    defaultMessage: "Verified Fulcio SAN",
-    description: "Code-signing receipt label for the verified Fulcio identity SAN.",
+    defaultMessage: "Verified identity (Fulcio SAN binding)",
+    description: "Code-signing receipt label for the attested identity that Fulcio would bind into a certificate.",
   },
   "codesign.receipt.transparencyDestination": {
     defaultMessage: "Transparency destination",
@@ -5125,7 +5125,15 @@ export const messages = {
     description: "F50 capability block help.",
   },
   "codesign.workflow.receiptTitle": { defaultMessage: "Signature receipt", description: "F50 signature receipt title." },
-  "codesign.workflow.fulcioIssuer": { defaultMessage: "Verified Fulcio issuer", description: "F50 Fulcio issuer label." },
+  "codesign.workflow.fulcioIssuer": {
+    defaultMessage: "OIDC issuer (Fulcio binding)",
+    description: "F50 verified OIDC issuer label; no Fulcio certificate is issued.",
+  },
+  "codesign.workflow.noFulcioCertificate": {
+    defaultMessage:
+      "The verified OIDC identity is recorded with this signing operation. No Fulcio certificate or portable identity attestation is included in this receipt.",
+    description: "F50 keyless receipt limit: identity metadata is recorded, but this response contains no Fulcio certificate or portable attestation.",
+  },
   "codesign.workflow.publicKey": { defaultMessage: "Public key (DER, base64)", description: "F50 public key label." },
   "operations.jobs.description": {
     defaultMessage:

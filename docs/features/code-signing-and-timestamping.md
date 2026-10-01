@@ -55,6 +55,11 @@ works for anything from a 4 KB manifest to a 4 GB image. Two modes:
   command; the handle derives deterministically from the operation ID even if a crash
   loses the in-memory value first. Cleanup is idempotent and records
   `codesign.ephemeral.destroyed`, so a crash cannot strand an ephemeral handle.
+  The service records the verified OIDC issuer and identity as Fulcio binding
+  metadata. It does not request a Fulcio certificate or return a portable
+  attestation of that identity. A relying party can verify the signature with
+  the returned public key; independent identity verification needs a separate
+  portable certificate or attestation workflow.
 
 Verification (`Verify`, `VerifyKeyless`) routes through the same signer boundary, with
 each tenant's data isolated at the database layer and digests/signatures held as
@@ -77,7 +82,7 @@ verifiable.
 ### In the console
 
 Open **Software Trust → Software signing**. The `/codesign` screen offers key-backed
-and keyless (Fulcio) signing: it submits only
+and keyless (OIDC-bound) signing: it submits only
 the artifact digest and renders the returned signature receipt, so private keys and
 artifact bytes never enter the browser. See [The web console](../web-console.md).
 
@@ -135,8 +140,10 @@ trstctl-cli --idempotency-key release-keyless-2026-06-25 code-signing keyless -f
 
 Both responses return `algorithm`, `signature`, `public_key_der`, `artifact_type`, and
 `transparency_destination` (base64 JSON bytes for the key fields); key-based responses
-also include `key_id`, keyless responses the verified `fulcio_san`/`fulcio_issuer`. The
-outbox worker submits an official Rekor v1 HashedRekord, confirms it binds the digest,
+also include `key_id`, keyless responses the verified `fulcio_san`/`fulcio_issuer`
+binding values. Those names describe what Fulcio would certify; the response
+does not include a Fulcio certificate. The outbox worker submits an official
+Rekor v1 HashedRekord, confirms it binds the digest,
 signature, and public key, and checks the signed-entry timestamp against the
 operator-pinned log key before acknowledging delivery — on an idempotent `409` it
 instead follows the same-origin Rekor `Location` and re-verifies the existing entry.
