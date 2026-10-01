@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { axe } from "vitest-axe";
 import { Agents } from "@/pages/Agents";
 import { ToastProvider } from "@/components/ToastProvider";
+import { IntlProvider } from "@/i18n/I18nProvider";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -191,6 +192,48 @@ describe("agent fleet surface", () => {
     expect(screen.getByRole("button", { name: "Refresh fleet" })).toBeInTheDocument();
   });
 
+  it("renders heartbeat, service, and queue evidence in the selected console time zone", async () => {
+    apiMock.agents.mockResolvedValueOnce([
+      {
+        id: "ag-time-zone",
+        name: "edge-time-zone",
+        status: "active",
+        version: "0.4.0",
+        last_seen_at: "2026-10-01T09:34:31Z",
+        presence: { state: "online", online: true, evaluated_at: "2026-10-01T09:34:35Z", detail: "Fresh heartbeat." },
+        workload_api: { state: "serving", detail: "Serving", svids_issued: 1, reported_at: "2026-10-01T09:34:31Z" },
+        enrollment_proxy: { state: "serving", detail: "Serving", reported_at: "2026-10-01T09:34:31Z" },
+      },
+    ]);
+    apiMock.agentJobPosture.mockResolvedValueOnce({
+      served: true,
+      claimable_kinds: [],
+      generated_at: "2026-10-01T09:34:31Z",
+      queues: [],
+      redemptions: { total: 0, live: 0 },
+      receipts: { verified: 0, rejected: 0 },
+    });
+    render(
+      <IntlProvider initialTimeZone="America/New_York">
+        <MemoryRouter>
+          <ToastProvider>
+            <Agents />
+          </ToastProvider>
+        </MemoryRouter>
+      </IntlProvider>,
+    );
+
+    await screen.findByRole("heading", { name: /1 of 1 active agents/i });
+    fireEvent.click(screen.getByText("Fleet status and safe actions"));
+    await screen.findByRole("table", { name: "Registered in-network agents" });
+    expect(screen.getAllByText("Oct 1, 2026, 5:34 AM")).toHaveLength(2);
+    expect(screen.getAllByText("Reported Oct 1, 2026, 5:34 AM")).toHaveLength(2);
+    expect(screen.queryByText("Oct 1, 2026, 9:34 AM")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Versions, queues, and diagnostics"));
+    expect(await screen.findByText("Measured Oct 1, 2026, 5:34 AM")).toBeInTheDocument();
+  });
+
   it("derives online presence from the served active lifecycle and a fresh heartbeat", async () => {
     apiMock.agents.mockResolvedValueOnce([
       {
@@ -250,6 +293,29 @@ describe("agent fleet surface", () => {
     expect((await screen.findAllByText("endpoint.renew")).length).toBeGreaterThan(0);
     expect(screen.getByText(/2 pending/i)).toBeInTheDocument();
     expect(screen.getAllByText(/No rollout is active/i).length).toBeGreaterThan(0);
+  });
+
+  it("refreshes queue and receipt evidence without reloading the fleet page", async () => {
+    renderAgents();
+    await screen.findByText("Fleet status and safe actions");
+    fireEvent.click(screen.getByText("Versions, queues, and diagnostics"));
+    expect(await screen.findByText(/Receipts: 8 verified/i)).toBeInTheDocument();
+    expect(apiMock.agentJobPosture).toHaveBeenCalledTimes(1);
+
+    apiMock.agentJobPosture.mockResolvedValueOnce({
+      served: true,
+      claimable_kinds: ["endpoint.renew"],
+      generated_at: "2026-08-21T10:05:00Z",
+      queues: [{ kind: "endpoint.renew", enabled: true, pending: 0, claimed: 0 }],
+      redemptions: { total: 3, live: 1 },
+      receipts: { verified: 9, rejected: 0 },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Refresh diagnostics" }));
+
+    expect(await screen.findByText(/Receipts: 9 verified/i)).toBeInTheDocument();
+    expect(screen.getByText(/0 pending/i)).toBeInTheDocument();
+    expect(apiMock.agentJobPosture).toHaveBeenCalledTimes(2);
+    expect(apiMock.agentUpgradeCampaign).toHaveBeenCalledTimes(2);
   });
 
   it("keeps the calm default and Add agent dialog free of automated accessibility violations", async () => {

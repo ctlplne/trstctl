@@ -12757,6 +12757,11 @@ export const messages = {
     description: "Safety guidance above the agent fleet table.",
   },
   "agents.design.refresh": { defaultMessage: "Refresh fleet", description: "Secondary refresh action inside the fleet disclosure." },
+  "agents.design.refreshDiagnostics": {
+    defaultMessage: "Refresh diagnostics",
+    description: "Refresh the served agent rollout, queue, and receipt evidence without reloading the page.",
+  },
+  "agents.design.offboardedAt": { defaultMessage: "Offboarded {date}", description: "Agent tombstone date in the selected console time zone." },
   "agents.design.noFleet": { defaultMessage: "No agent records yet", description: "Fleet disclosure empty-state title." },
   "agents.design.noFleetHelp": {
     defaultMessage: "Use Add agent to mint the one-time token needed for first enrollment.",

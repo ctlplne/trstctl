@@ -200,7 +200,9 @@ connection receipt: `online`, `stale`, `unreported`, `offboarded`, or
 heartbeat intervals—the same rule used by the fleet alert—not “the status string
 happened to say online.” The receipt includes `evaluated_at`, `fresh_until` when a
 valid heartbeat exists, and an ELI5 technical reason so API, console, and alerting explain
-the same result. An impossible future heartbeat fails closed as clock skew.
+the same result. An impossible future heartbeat fails closed as clock skew. Fleet
+heartbeat, service-report, queue-measurement, revocation, and offboarding times use
+the console's selected time zone; API timestamps remain exact UTC values.
 
 The only default action is **Add agent**. It opens a viewport-bounded dialog that
 chooses host and/or network-relay capability, mints one bootstrap token, and shows
@@ -220,7 +222,9 @@ Exact work remains in three closed disclosures:
 - **Versions, queues, and diagnostics** loads only when opened. It shows the active
   upgrade target and version histogram, rollout rings, pending and claimed agent
   work, verified/rejected receipts, live credential redemptions, and the exact work
-  kinds this build lets agents claim. Selected-agent diagnostics also show the
+  kinds this build lets agents claim. Use **Refresh diagnostics** to remeasure the
+  rollout, queues, and receipts without reloading the fleet page. Selected-agent
+  diagnostics also show the
   served endpoint-discovery census, Workload API posture, and enrollment-proxy
   upstream/request evidence. Discovery capabilities come from the running build's
   compiled census (including build-dependent sources) and remain metadata-only;

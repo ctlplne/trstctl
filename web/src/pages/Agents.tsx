@@ -14,7 +14,6 @@ import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { api, type Agent, type AgentJobPosture, type AgentUpgradeCampaign, type EnrollmentPlanPreview, type EnrollmentToken } from "@/lib/api";
 import { optionalApiCall } from "@/lib/optionalApi";
 import { buildAgentInstallPlan } from "@/lib/agentInstall";
-import { formatDate as formatDatePolicy, formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 
@@ -64,7 +63,7 @@ function AgentRoleBadges({ agent }: { agent: Agent }) {
 }
 
 export function Agents() {
-  const { t } = useTranslation();
+  const { t, formatDateTime: formatAgentTime, formatDate: formatAgentDate } = useTranslation();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -132,8 +131,8 @@ export function Agents() {
   const enrollmentPlanAllowsMint =
     currentEnrollmentPlan?.ready === true && currentEnrollmentPlan.side_effects === false && currentEnrollmentPlan.blocked_reasons.length === 0;
 
-  async function loadOperationsEvidence() {
-    if (operationsLoaded || operationsLoading) return;
+  async function loadOperationsEvidence(force = false) {
+    if ((operationsLoaded && !force) || operationsLoading) return;
     setOperationsLoading(true);
     setOperationsError(null);
     try {
@@ -274,7 +273,7 @@ export function Agents() {
       toast({
         kind: "success",
         title: `Certificate revoked for ${revokeTarget.name}`,
-        description: `Revoked at ${formatDate(revocation.revoked_at)}.`,
+        description: `Revoked at ${formatAgentTime(revocation.revoked_at)}.`,
       });
       setRevokeTarget(null);
     } catch (err) {
@@ -300,7 +299,7 @@ export function Agents() {
         if (isOffboarded(agent)) {
           return (
             <>
-              <p>{formatOffboarded(agent.offboarded_at)}</p>
+              <p>{t("agents.design.offboardedAt", { date: formatAgentDate(agent.offboarded_at) })}</p>
               <p className="text-xs text-muted-foreground">{agent.offboard_reason || translateNow("source.terminal.tombstone.f332513267")}</p>
             </>
           );
@@ -308,7 +307,7 @@ export function Agents() {
         const presence = agentPresence(agent);
         return (
           <>
-            <p>{formatDate(agent.last_seen_at)}</p>
+            <p>{formatAgentTime(agent.last_seen_at)}</p>
             <p className={presence.online ? "text-xs text-muted-foreground" : "text-xs font-medium text-status-warning"}>{presence.detail}</p>
           </>
         );
@@ -459,6 +458,12 @@ export function Agents() {
           if (value) void loadOperationsEvidence();
         }}
       >
+        <div className="mb-3 flex justify-end">
+          <Button type="button" size="sm" variant="outline" disabled={operationsLoading} onClick={() => void loadOperationsEvidence(true)}>
+            {operationsLoading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
+            {t("agents.design.refreshDiagnostics")}
+          </Button>
+        </div>
         <AgentOperationsEvidence campaign={campaign} posture={jobPosture} loading={operationsLoading} error={operationsError} />
       </AgentDetails>
 
@@ -805,7 +810,7 @@ function AgentOperationsEvidence({
   loading: boolean;
   error: string | null;
 }) {
-  const { t } = useTranslation();
+  const { t, formatDateTime: formatAgentTime } = useTranslation();
   if (loading) return <LoadingState>{t("agents.design.operationsLoading")}</LoadingState>;
   if (error) return <ErrorState title={t("agents.design.operationsError")}>{error}</ErrorState>;
   if (!campaign || !posture) return <p className="text-sm text-muted-foreground">{t("agents.design.operationsWaiting")}</p>;
@@ -889,14 +894,16 @@ function AgentOperationsEvidence({
             {t("agents.design.claimableKinds")} <span className="font-mono">{posture.claimable_kinds.join(", ")}</span>
           </p>
         )}
-        {posture.generated_at && <p className="text-xs text-muted-foreground">{t("agents.design.measuredAt", { date: formatDate(posture.generated_at) })}</p>}
+        {posture.generated_at && (
+          <p className="text-xs text-muted-foreground">{t("agents.design.measuredAt", { date: formatAgentTime(posture.generated_at) })}</p>
+        )}
       </section>
     </div>
   );
 }
 
 function AgentDetail({ agent }: { agent: Agent }) {
-  const { t } = useTranslation();
+  const { t, formatDateTime: formatAgentTime } = useTranslation();
   // Capability comes from the served response only. The console used to fall back
   // to its own hardcoded list — which named PKCS#11, the Windows certificate
   // store, and Kubernetes Secrets, none of which the agent binary can collect —
@@ -962,13 +969,13 @@ function AgentDetail({ agent }: { agent: Agent }) {
         </div>
         <div>
           <dt className="font-medium text-muted-foreground">{translateNow("source.last.seen.21fd79c7de")}</dt>
-          <dd>{formatDate(agent.last_seen_at)}</dd>
+          <dd>{formatAgentTime(agent.last_seen_at)}</dd>
         </div>
         {isOffboarded(agent) && (
           <>
             <div>
               <dt className="font-medium text-muted-foreground">{translateNow("source.offboarded.bc5f0c93d1")}</dt>
-              <dd>{formatDate(agent.offboarded_at)}</dd>
+              <dd>{formatAgentTime(agent.offboarded_at)}</dd>
             </div>
             {agent.offboarded_by && (
               <div>
@@ -1044,7 +1051,7 @@ function AgentDetail({ agent }: { agent: Agent }) {
             <p className="mt-1 text-muted-foreground">{agent.workload_api.detail}</p>
             <p className="mt-1 text-xs text-muted-foreground">{t("agents.design.svidsIssued", { count: String(agent.workload_api.svids_issued) })}</p>
             {agent.workload_api.reported_at && (
-              <p className="mt-1 text-xs text-muted-foreground">{t("agents.design.reportedAt", { date: formatDate(agent.workload_api.reported_at) })}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{t("agents.design.reportedAt", { date: formatAgentTime(agent.workload_api.reported_at) })}</p>
             )}
           </div>
         ) : (
@@ -1072,7 +1079,9 @@ function AgentDetail({ agent }: { agent: Agent }) {
               })}
             </p>
             {agent.enrollment_proxy.reported_at && (
-              <p className="mt-1 text-xs text-muted-foreground">{t("agents.design.reportedAt", { date: formatDate(agent.enrollment_proxy.reported_at) })}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t("agents.design.reportedAt", { date: formatAgentTime(agent.enrollment_proxy.reported_at) })}
+              </p>
             )}
           </div>
         ) : (
@@ -1091,18 +1100,6 @@ function agentPresence(agent: Agent): Agent["presence"] {
     evaluated_at: "",
     detail: translateNow("source.no.heartbeat.timestamp.7c01a4e0ea"),
   };
-}
-
-function formatDate(value?: string): string {
-  return formatDateTimePolicy(value);
-}
-
-function formatDateOnly(value?: string): string {
-  return formatDatePolicy(value);
-}
-
-function formatOffboarded(value?: string): string {
-  return `Offboarded ${formatDateOnly(value)}`;
 }
 
 function isOffboarded(agent: Agent): boolean {

@@ -75,10 +75,16 @@ describe("central locale/timezone/plural policy (PRODUCT-004)", () => {
   });
 
   it("routes representative pages through the central format helpers", () => {
-    for (const page of ["Certificates.tsx", "Secrets.tsx", "Risk.tsx", "Discovery.tsx", "Identities.tsx", "Agents.tsx", "RequestCredential.tsx"]) {
+    for (const page of ["Certificates.tsx", "Secrets.tsx", "Risk.tsx", "Discovery.tsx", "Identities.tsx", "RequestCredential.tsx"]) {
       const source = readFileSync(path.join(SRC, "pages", page), "utf8");
       expect(source, `${page} should import the central format policy`).toMatch(/from "@\/i18n\/format"/);
     }
+    // Agents must use the provider's selected time zone. Its provider formatters
+    // call the same central helpers with the active locale and zone policy.
+    const agents = readFileSync(path.join(SRC, "pages", "Agents.tsx"), "utf8");
+    expect(agents).toMatch(/from "@\/i18n\/I18nProvider"/);
+    expect(agents).toMatch(/formatDateTime: formatAgentTime/);
+    expect(agents).toMatch(/formatDate: formatAgentDate/);
     const dashboard = readFileSync(path.join(SRC, "pages", "Dashboard.tsx"), "utf8");
     expect(dashboard).toMatch(/from "@\/i18n\/format"/);
     const platform = readFileSync(path.join(SRC, "pages", "Platform.tsx"), "utf8");
