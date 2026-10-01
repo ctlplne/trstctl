@@ -4067,6 +4067,22 @@ export const messages = {
     description: "L2 invoice-evidence panel description.",
   },
   "platform.usageEvidence.loading": { defaultMessage: "Loading usage evidence.", description: "L2 evidence loading state." },
+  "platform.usageEvidence.checking": {
+    defaultMessage: "Checking whether this build serves usage evidence.",
+    description: "Usage evidence operation preflight loading state.",
+  },
+  "platform.usageEvidence.notAttached": {
+    defaultMessage: "This running build does not serve usage and invoice evidence. There is no invoice to pull from this panel.",
+    description: "Honest state when provider usage evidence is not attached.",
+  },
+  "platform.usageEvidence.denied": {
+    defaultMessage: "Your role cannot read usage evidence. Ask an administrator for audit read access.",
+    description: "Usage evidence permission-blocked state.",
+  },
+  "platform.usageEvidence.unknown": {
+    defaultMessage: "Usage evidence availability could not be checked. Refresh this page before trying again.",
+    description: "Usage evidence preflight failure state.",
+  },
   "platform.usageEvidence.requestFailed": {
     defaultMessage: "Usage evidence could not be loaded. Check the dates, your access, and the connection, then try again.",
     description: "Generic usage-evidence request failure that does not expose backend details.",

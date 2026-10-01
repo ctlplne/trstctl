@@ -373,7 +373,6 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
   it("keeps backend request details out of lazy custody evidence failures", async () => {
     const user = userEvent.setup();
     apiMock.tenantKeyDomain.mockRejectedValue(new Error("secret /var/lib/trstctl trace=deadbeef"));
-    apiMock.usageEvidence.mockRejectedValue(new Error("postgresql://operator:password@db/internal"));
 
     renderAt("/admin/system");
     await user.click(await screen.findByText("Configuration evidence", { exact: true }));
@@ -382,11 +381,7 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
     expect(screen.getByText("Check your access and connection, then refresh the status.")).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/secret|\/var\/lib\/trstctl|deadbeef/i);
 
-    await user.click(screen.getByRole("button", { name: "Pull evidence" }));
-    expect(
-      await screen.findByText("Usage evidence could not be loaded. Check the dates, your access, and the connection, then try again."),
-    ).toBeInTheDocument();
-    expect(document.body.textContent).not.toMatch(/postgresql|operator:password|\/internal/i);
+    expect(screen.queryByRole("button", { name: "Pull evidence" })).not.toBeInTheDocument();
   });
 
   it("keeps editions and commercial framing off Access and System (S-A3 re-asserted per route)", async () => {

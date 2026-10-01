@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { api, type SystemReadout, type TenantKeyDomainStatus, type UsageEvidence } from "@/lib/api";
+import { useRuntimeOperationExecution } from "@/lib/capabilities";
 import type { StatusTone } from "@/lib/statusVocab";
 
 // The default window is the previous whole calendar month: the only period a
@@ -430,6 +431,7 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
 // the answer is no.
 export function UsageEvidencePanel() {
   const { t } = useTranslation();
+  const operation = useRuntimeOperationExecution("getUsageEvidence");
   const [doc, setDoc] = useState<UsageEvidence | null>(null);
   const [loading, setLoading] = useState(false);
   const [requestFailed, setRequestFailed] = useState(false);
@@ -438,6 +440,7 @@ export function UsageEvidencePanel() {
 
   async function pull(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!operation.runnable) return;
     setLoading(true);
     setRequestFailed(false);
     try {
@@ -457,30 +460,44 @@ export function UsageEvidencePanel() {
       </h2>
       <p className="mt-1 max-w-3xl text-caption text-muted-foreground">{t("platform.usageEvidence.description")}</p>
 
-      <form className="mt-4 flex flex-wrap items-end gap-3" onSubmit={pull}>
-        <label className="flex flex-col gap-1 text-caption">
-          {t("platform.usageEvidence.periodStart")}
-          <input
-            type="date"
-            value={periodStart}
-            onChange={(e) => setPeriodStart(e.target.value)}
-            className="rounded-control border border-border bg-background px-2 py-1"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-caption">
-          {t("platform.usageEvidence.periodEnd")}
-          <input
-            type="date"
-            value={periodEnd}
-            onChange={(e) => setPeriodEnd(e.target.value)}
-            className="rounded-control border border-border bg-background px-2 py-1"
-          />
-        </label>
-        <Button type="submit" disabled={loading}>
-          {loading ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-          {t("platform.usageEvidence.pull")}
-        </Button>
-      </form>
+      {operation.enforced && !operation.runnable ? (
+        <p className="mt-3 rounded-control border border-border bg-muted/40 px-3 py-2 text-sm" role="status">
+          {operation.checking
+            ? t("platform.usageEvidence.checking")
+            : operation.state === "unavailable"
+              ? t("platform.usageEvidence.notAttached")
+              : operation.state === "denied"
+                ? t("platform.usageEvidence.denied")
+                : t("platform.usageEvidence.unknown")}
+        </p>
+      ) : null}
+
+      {operation.runnable ? (
+        <form className="mt-4 flex flex-wrap items-end gap-3" onSubmit={pull}>
+          <label className="flex flex-col gap-1 text-caption">
+            {t("platform.usageEvidence.periodStart")}
+            <input
+              type="date"
+              value={periodStart}
+              onChange={(e) => setPeriodStart(e.target.value)}
+              className="rounded-control border border-border bg-background px-2 py-1"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-caption">
+            {t("platform.usageEvidence.periodEnd")}
+            <input
+              type="date"
+              value={periodEnd}
+              onChange={(e) => setPeriodEnd(e.target.value)}
+              className="rounded-control border border-border bg-background px-2 py-1"
+            />
+          </label>
+          <Button type="submit" disabled={loading}>
+            {loading ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+            {t("platform.usageEvidence.pull")}
+          </Button>
+        </form>
+      ) : null}
 
       {loading && <p className="mt-3 text-caption text-muted-foreground">{t("platform.usageEvidence.loading")}</p>}
       {requestFailed && (

@@ -344,6 +344,10 @@ be read across tenancies.
 
 `GET /api/v1/provider/usage-evidence` (CLI: `trstctl usage evidence`, console:
 Platform → Usage & invoice evidence) returns the evidence document for a period.
+The System health panel first checks the running API's operation registry. Core
+builds without Provider metering show that invoice evidence is unavailable and
+do not offer a pull action that would return 404. An attached route still checks
+the caller's audit-read permission at execution.
 Two properties of that document matter more than the totals:
 
 - **The tenant route is scoped to the caller's own tenancy.** A `customer_id`
