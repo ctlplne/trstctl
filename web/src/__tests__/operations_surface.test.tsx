@@ -38,6 +38,7 @@ const { apiMock } = vi.hoisted(() => ({
     denyApprovalRequest: vi.fn(),
     agentJobPosture: vi.fn(),
     bulkheadStats: vi.fn(),
+    renewalSLO: vi.fn(),
     approveIdentityAction: vi.fn(),
     transitionIdentity: vi.fn(),
   },
@@ -88,6 +89,17 @@ describe("operational console surface", () => {
     });
     apiMock.agentJobPosture.mockResolvedValue({ served: true, generated_at: "2026-06-19T17:00:00Z", claimable_kinds: [], queues: [] });
     apiMock.bulkheadStats.mockResolvedValue({ served: true, pools: [] });
+    apiMock.renewalSLO.mockResolvedValue({
+      window_days: 30,
+      target_percent: 99,
+      observed_percent: 100,
+      succeeded: 0,
+      failed: 0,
+      total: 0,
+      breached: false,
+      budget_remaining_percent: 100,
+      guidance: "No renewal runs in the window.",
+    });
     apiMock.nhiPolicyCompliance.mockResolvedValue(emptyNHIPolicyCompliance());
     apiMock.nhiOverPrivilegePosture.mockResolvedValue(emptyNHIOverPrivilegePosture());
     apiMock.nhiStalePosture.mockResolvedValue(emptyNHIStalePosture());
@@ -96,6 +108,34 @@ describe("operational console surface", () => {
     apiMock.contextualRiskPriorities.mockResolvedValue(emptyContextualRiskPriorities());
     apiMock.approveIdentityAction.mockResolvedValue({ resource: "req-1", action: "issue", approver: "ra", approvals: 1 });
     apiMock.transitionIdentity.mockResolvedValue({ id: "req-1", name: "requested-svc", status: "retired" });
+  });
+
+  it("does not present an empty renewal window as a measured 100% success rate", async () => {
+    renderAt("/operations");
+
+    const renewal = await screen.findByRole("region", { name: "Renewal reliability" });
+    expect(await within(renewal).findByText("No completed renewals in the last 30 days.")).toBeInTheDocument();
+    expect(within(renewal).queryByText("100% success")).not.toBeInTheDocument();
+  });
+
+  it("shows the served renewal denominator and failed count with the observed rate", async () => {
+    apiMock.renewalSLO.mockResolvedValue({
+      window_days: 30,
+      target_percent: 99,
+      observed_percent: 90,
+      succeeded: 9,
+      failed: 1,
+      total: 10,
+      breached: true,
+      budget_remaining_percent: 0,
+      guidance: "Review failed renewal runs.",
+    });
+    renderAt("/operations");
+
+    const renewal = await screen.findByRole("region", { name: "Renewal reliability" });
+    expect(await within(renewal).findByText("90% success")).toBeInTheDocument();
+    expect(within(renewal).getByText("9 succeeded · 1 failed · 10 total in 30 days")).toBeInTheDocument();
+    expect(within(renewal).getByText("Below the 99% target")).toBeInTheDocument();
   });
 
   it("opens the exact linked run outside the loaded page and retains current host retry evidence", async () => {

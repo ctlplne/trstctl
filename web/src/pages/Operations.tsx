@@ -3,7 +3,7 @@ import { AlertTriangle, CheckCircle2, ExternalLink, RefreshCw, XCircle } from "l
 import { Link, useSearchParams } from "react-router-dom";
 import { Num } from "@/components/typography";
 import { approvalRequestsQueryKey, approvalRows, type ApprovalQueueRow } from "@/lib/approvalQueue";
-import { api, ApiError, type BulkheadStats, type ConnectorDelivery, type PendingApprovalRequest, type RotationRun } from "@/lib/api";
+import { api, ApiError, type BulkheadStats, type ConnectorDelivery, type PendingApprovalRequest, type RenewalSLO, type RotationRun } from "@/lib/api";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 import { formatDateTime } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
@@ -92,6 +92,7 @@ export function Operations() {
   const approvals = useApiQuery(approvalRequestsQueryKey, api.approvalRequests, { live: { intervalMs: 10_000 } });
   const jobPosture = useApiQuery(["agent-job-posture"], () => api.agentJobPosture(), { live: { intervalMs: 10_000 } });
   const bulkheads = useApiQuery(["bulkhead-stats"], () => api.bulkheadStats(), { live: { intervalMs: 10_000 } });
+  const renewalSLO = useApiQuery(["renewal-slo"], () => api.renewalSLO(), { live: { intervalMs: 30_000 } });
   const [error, setError] = useState<Notice | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -263,6 +264,8 @@ export function Operations() {
         ) : null}
       </section>
 
+      <RenewalReliability data={renewalSLO.data} loading={renewalSLO.loading} error={renewalSLO.error} />
+
       <TechnicalDisclosure title={t("operations.disclosure.pools")}>
         <BulkheadEvidence stats={bulkheads.data} loading={bulkheads.loading} error={bulkheads.error} />
         <AgentJobLedgerPanel posture={jobPosture.data ?? null} unavailable={jobPosture.error !== null} />
@@ -314,6 +317,7 @@ export function Operations() {
                 approvals.refetch();
                 jobPosture.refetch();
                 bulkheads.refetch();
+                renewalSLO.refetch();
               }}
               disabled={loading}
             >
@@ -353,6 +357,43 @@ export function Operations() {
       {runId && <RotationRunDetailDialog id={runId} onClose={() => openRun(null)} />}
       {detailTarget && <OperationDetailDialog row={detailTarget} onClose={() => setDetailTarget(null)} />}
     </div>
+  );
+}
+
+function RenewalReliability({ data, loading, error }: { data: RenewalSLO | null; loading: boolean; error: string | null }) {
+  const { t } = useTranslation();
+  return (
+    <section aria-labelledby="renewal-reliability-heading" className="ui-panel grid gap-2 p-comfortable">
+      <h2 id="renewal-reliability-heading" className="text-title font-semibold">
+        {t("operations.renewal.heading")}
+      </h2>
+      {loading ? (
+        <p className="text-sm text-muted-foreground">{t("operations.renewal.loading")}</p>
+      ) : error || !data ? (
+        <p className="text-sm text-status-warning">{t("operations.renewal.unavailable")}</p>
+      ) : data.total === 0 ? (
+        <p className="text-sm text-muted-foreground">{t("operations.renewal.empty", { days: data.window_days })}</p>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="font-semibold">{t("operations.renewal.rate", { percent: data.observed_percent })}</p>
+            <StatusBadge
+              value={data.breached ? "failed" : "succeeded"}
+              label={
+                data.breached
+                  ? t("operations.renewal.breached", { percent: data.target_percent })
+                  : t("operations.renewal.met", { percent: data.target_percent })
+              }
+              tone={data.breached ? "critical" : "success"}
+            />
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {t("operations.renewal.counts", { succeeded: data.succeeded, failed: data.failed, total: data.total, days: data.window_days })}
+          </p>
+          {data.breached && data.guidance ? <p className="text-sm">{data.guidance}</p> : null}
+        </>
+      )}
+    </section>
   );
 }
 

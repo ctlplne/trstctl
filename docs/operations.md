@@ -37,6 +37,15 @@ a retry.
 
 ## Investigating a failed renewal attempt
 
+The **Renewal reliability** panel on **Jobs and queues** reads the tenant's
+`GET /api/v1/operations/renewal-slo` result. It shows the measurement window,
+successful and failed rotation counts, the denominator, and whether the measured
+rate meets the configured target. An empty window says no renewals completed;
+the server's empty-window percentage is not presented as a measured success
+rate. If the read fails, the panel reports that reliability is unavailable.
+Use the exact rotation run and its host-job evidence below to investigate a
+failure; an aggregate rate does not prove any one target was deployed.
+
 A failed renewal warning records the host job and attempt that failed. Open
 **Open exact run and current retry status** to see whether that same run is still
 working, recovered, failed, or was canceled. The historical warning does not

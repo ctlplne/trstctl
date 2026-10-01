@@ -5349,6 +5349,38 @@ export const messages = {
     defaultMessage: "Recent job history is unavailable, so trstctl cannot confirm that nothing failed.",
     description: "Fail-closed attention summary when a core operations history read cannot be loaded.",
   },
+  "operations.renewal.heading": {
+    defaultMessage: "Renewal reliability",
+    description: "Visible operations summary of measured certificate renewal outcomes.",
+  },
+  "operations.renewal.loading": {
+    defaultMessage: "Checking renewal outcomes…",
+    description: "Loading state for the renewal SLO read.",
+  },
+  "operations.renewal.unavailable": {
+    defaultMessage: "Renewal reliability is unavailable. Check the renewal SLO endpoint or recent rotation runs.",
+    description: "Do not present stale or fabricated renewal reliability after a failed read.",
+  },
+  "operations.renewal.empty": {
+    defaultMessage: "No completed renewals in the last {days} days.",
+    description: "Zero denominator cannot prove a renewal success rate.",
+  },
+  "operations.renewal.rate": {
+    defaultMessage: "{percent}% success",
+    description: "Measured renewal success percentage for a nonempty window.",
+  },
+  "operations.renewal.met": {
+    defaultMessage: "At or above the {percent}% target",
+    description: "Server-reported renewal SLO meets its configured target.",
+  },
+  "operations.renewal.breached": {
+    defaultMessage: "Below the {percent}% target",
+    description: "Server-reported renewal SLO is breached.",
+  },
+  "operations.renewal.counts": {
+    defaultMessage: "{succeeded} succeeded · {failed} failed · {total} total in {days} days",
+    description: "Denominator and outcome counts beside the renewal percentage.",
+  },
   "operations.disclosure.pools": {
     defaultMessage: "Worker pools and queue limits",
     description: "Disclosure containing bounded-worker and agent-ledger evidence.",
