@@ -170,5 +170,7 @@ func (e *LeaseElector) expired(lease leaseObject) bool {
 }
 
 func (e *LeaseElector) timestamp() string {
-	return e.now().UTC().Format(time.RFC3339Nano)
+	// coordination.k8s.io Lease uses metav1.MicroTime on the wire. Kubernetes
+	// rejects a bare RFC3339 timestamp and nanosecond precision here.
+	return e.now().UTC().Format("2006-01-02T15:04:05.000000Z07:00")
 }

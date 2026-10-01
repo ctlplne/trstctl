@@ -811,6 +811,12 @@ func TestLeaderElectionAllowsExactlyOneActiveReplica(t *testing.T) {
 	if !leaderA || leaderB {
 		t.Fatalf("fresh lease leaders: operator-a=%v operator-b=%v, want exactly operator-a", leaderA, leaderB)
 	}
+	// Kubernetes decodes Lease times as metav1.MicroTime. A bare RFC3339
+	// timestamp or nanoseconds is rejected before either replica can lead.
+	leaseSpec, _ := f.leases["trstctl-operator"]["spec"].(map[string]any)
+	if got := leaseSpec["acquireTime"]; got != "2026-06-25T12:00:00.000000Z" {
+		t.Fatalf("created Lease acquireTime = %v, want six-digit Kubernetes MicroTime", got)
+	}
 
 	now = now.Add(5 * time.Second)
 	leaderA, err = a.TryAcquireOrRenew(context.Background())
@@ -822,6 +828,10 @@ func TestLeaderElectionAllowsExactlyOneActiveReplica(t *testing.T) {
 	}
 	if f.leasePatches == 0 {
 		t.Fatal("leader renewal did not patch the Kubernetes Lease")
+	}
+	leaseSpec, _ = f.leases["trstctl-operator"]["spec"].(map[string]any)
+	if got := leaseSpec["renewTime"]; got != "2026-06-25T12:00:05.000000Z" {
+		t.Fatalf("renewed Lease renewTime = %v, want six-digit Kubernetes MicroTime", got)
 	}
 }
 
