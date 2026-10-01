@@ -30,6 +30,22 @@ const explorerSpec = {
   openapi: "3.1.0",
   info: { title: "trstctl API", version: "v1" },
   paths: {
+    "/api/v1/brand": {
+      get: {
+        operationId: "getBrand",
+        summary: "Resolve public login branding",
+        "x-trstctl-public-rationale": "Public presentation only.",
+        responses: { "200": { description: "Brand" } },
+      },
+    },
+    "/api/v1/editions": {
+      get: {
+        operationId: "getEditions",
+        summary: "Edition and license posture",
+        "x-trstctl-public-rationale": "Public global license posture without tenant data or credential material.",
+        responses: { "200": { content: { "application/json": { schema: { $ref: "#/components/schemas/EditionsInfo" } } } } },
+      },
+    },
     "/api/v1/graph/query": {
       post: {
         operationId: "graphQuery",
@@ -197,7 +213,7 @@ describe("DESIGN-002 answer-first API playground", () => {
     expect(screen.getByText("OpenAPI schema, headers, idempotency, raw payload and error.", { exact: true })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 2, name: "What happens when you try a request" })).toBeInTheDocument();
     expect(screen.getByText("Start with a read", { exact: true })).toBeInTheDocument();
-    expect(screen.getByText("Use temporary access", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText("Use only needed access", { exact: true })).toBeInTheDocument();
     expect(screen.getByText("Read the answer", { exact: true })).toBeInTheDocument();
 
     const actions = screen.getByTestId("page-depth-operate");
@@ -210,6 +226,9 @@ describe("DESIGN-002 answer-first API playground", () => {
 
     await openPlayground(user);
     expect(screen.getByText("Safe starting point", { exact: true })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Edition and license posture" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run request" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Generate test key" })).not.toBeInTheDocument();
     expect(screen.getByText("All contract operations", { exact: true }).closest("details")).not.toHaveAttribute("open");
     expect(screen.getByText("Headers, body, and exact request", { exact: true }).closest("details")).not.toHaveAttribute("open");
     expect(screen.getByText("OpenAPI schema and code examples", { exact: true }).closest("details")).not.toHaveAttribute("open");
@@ -246,6 +265,58 @@ describe("DESIGN-002 answer-first API playground", () => {
     expect(screen.getAllByText("createIdentity", { exact: true }).length).toBeGreaterThan(0);
     expect(screen.getByRole("checkbox", { name: /I reviewed this exact mutation request/ })).not.toBeChecked();
     expect(screen.getByRole("button", { name: "Run request" })).toBeDisabled();
+    expect(apiMock.createAPIToken).not.toHaveBeenCalled();
+  });
+
+  it("runs a public GET without minting a key or sending session credentials", async () => {
+    const user = userEvent.setup();
+    vi.mocked(globalThis.fetch).mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/v1/openapi.json") {
+        return new Response(JSON.stringify(explorerSpec), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      expect(String(input)).toBe("/api/v1/editions");
+      expect(init?.method).toBe("GET");
+      expect(init?.credentials).toBe("omit");
+      expect((init?.headers as Record<string, string>).Authorization).toBeUndefined();
+      return new Response(JSON.stringify({ state: "community" }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    renderRoute();
+    await openPlayground(user);
+    await selectOperation(user, /getEditions/i);
+
+    expect(screen.getByText("Public — no test key needed")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Generate test key" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run request" })).toBeEnabled();
+    expect(screen.getByRole("region", { name: "Request preview" })).not.toHaveTextContent("Authorization");
+    expect(screen.getByText("This public request sends no bearer key or browser session cookie.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Run request" }));
+    expect(await screen.findByText("The request worked.")).toBeInTheDocument();
+    expect(apiMock.createAPIToken).not.toHaveBeenCalled();
+  });
+
+  it("keeps a conflicting auth-marked GET behind a scoped key", async () => {
+    const user = userEvent.setup();
+    const guardedSpec = {
+      ...explorerSpec,
+      paths: {
+        ...explorerSpec.paths,
+        "/api/v1/editions": {
+          get: {
+            ...explorerSpec.paths["/api/v1/editions"].get,
+            security: [{ BearerAuth: [] }],
+            "x-trstctl-permission": "access:read",
+          },
+        },
+      },
+    };
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify(guardedSpec), { status: 200, headers: { "Content-Type": "application/json" } }));
+    renderRoute();
+    await openPlayground(user);
+    await selectOperation(user, /getEditions/i);
+
+    expect(screen.getByRole("button", { name: "Generate test key" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run request" })).toBeDisabled();
+    expect(screen.getByRole("region", { name: "Request preview" })).toHaveTextContent("Authorization: Bearer [scoped test key hidden]");
     expect(apiMock.createAPIToken).not.toHaveBeenCalled();
   });
 

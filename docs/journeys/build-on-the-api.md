@@ -34,8 +34,9 @@ in lockstep.
 
 1. Start in **API playground** at `/integrate/api` if you want a guided first
    request. The overview runs nothing. Choose **Try request** to begin with a
-   read-only operation, create a 15-minute key scoped only to that operation, review
-   the exact request, and send it explicitly. The result is explained in plain
+   public read when one is served, review the exact request, and send it explicitly
+   without a key. Protected operations instead require a 15-minute key scoped only
+   to the selected operation. The result is explained in plain
    language before status, problem details, and the raw response.
 
    Use **All contract operations** to search every served operation without loading

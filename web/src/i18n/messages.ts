@@ -18809,12 +18809,12 @@ export const messages = {
     description: "Explains the safe starting API operation.",
   },
   "apiExplorer.design.accessLabel": {
-    defaultMessage: "Use temporary access",
-    description: "Second safe API playground step.",
+    defaultMessage: "Use only needed access",
+    description: "Second safe API playground step, including public reads.",
   },
   "apiExplorer.design.accessValue": {
-    defaultMessage: "A 15-minute test key gets only the permission required by the selected request.",
-    description: "Explains least-privilege temporary API access.",
+    defaultMessage: "Public reads need no key. Protected requests use a 15-minute key with only the required permission.",
+    description: "Explains public reads and least-privilege temporary API access.",
   },
   "apiExplorer.design.answerLabel": {
     defaultMessage: "Read the answer",
@@ -18831,6 +18831,10 @@ export const messages = {
   "apiExplorer.workspaceDescription": {
     defaultMessage: "The read-only starting point is selected for you. Creating access and sending the request are separate, explicit steps.",
     description: "Safety explanation at the start of the API request workspace.",
+  },
+  "apiExplorer.publicWorkspaceDescription": {
+    defaultMessage: "A public read is selected. Review the exact request, then choose whether to send it without creating a key.",
+    description: "Safety explanation for the credential-free starting request.",
   },
   "apiExplorer.safeStartingPoint": {
     defaultMessage: "Safe starting point",
@@ -18908,6 +18912,10 @@ export const messages = {
     defaultMessage: "Permission",
     description: "Label for selected operation permission scope.",
   },
+  "apiExplorer.publicAccess": {
+    defaultMessage: "Public — no test key needed",
+    description: "Access label for an explicitly public read-only API route.",
+  },
   "apiExplorer.required": {
     defaultMessage: "required",
     description: "Badge for required API parameters.",
@@ -18980,6 +18988,14 @@ export const messages = {
     defaultMessage: "Create a least-privilege test key, review the request, then send it. The key expires after 15 minutes.",
     description: "Explains the runner's temporary access and explicit-send boundary.",
   },
+  "apiExplorer.publicRunner": {
+    defaultMessage: "Run public read",
+    description: "Heading for a public GET that needs no test key.",
+  },
+  "apiExplorer.publicRunnerHelp": {
+    defaultMessage: "Review the request, then send it. This public GET sends no bearer key or browser session cookie.",
+    description: "Explains the credential-free request boundary.",
+  },
   "apiExplorer.subject": {
     defaultMessage: "Token subject",
     description: "Label for the test token subject input.",
@@ -19031,6 +19047,10 @@ export const messages = {
   "apiExplorer.previewSecretNote": {
     defaultMessage: "This is the exact request; only the bearer secret is hidden.",
     description: "Explains the one redaction in the exact final request preview.",
+  },
+  "apiExplorer.publicPreviewNote": {
+    defaultMessage: "This public request sends no bearer key or browser session cookie.",
+    description: "Explains the credential-free exact request preview.",
   },
   "apiExplorer.fixValidation": {
     defaultMessage: "Fix validation errors to build the final request.",

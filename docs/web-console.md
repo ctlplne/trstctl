@@ -642,25 +642,29 @@ surface. See
 
 API playground first answers one question: how to try a safe request and understand
 the response. Its default screen runs nothing. It explains the three-step path —
-start with a read-only operation, create temporary least-privilege access, then read
+start with a read-only operation, use only the access that operation needs, then read
 a plain-language result — and exposes one **Try request** action. Opening the
-workspace selects a read-only operation that has no required inputs when the API
-lists one. Creating access and sending the request remain separate,
-explicit actions.
+workspace prefers an explicitly public GET with no required inputs. That first read
+runs without minting a key; protected requests still require an explicit scoped
+key, and sending any request remains a separate action.
 
 The full OpenAPI surface remains reachable without putting hundreds of operations
 on the first screen. **All contract operations** searches by name, path, summary, or
 permission and renders at most 12 matches at once. **Headers, body, and exact
 request** preserves every served path, query, and header parameter; JSON body;
 recursive validation rule; idempotency header; and the exact normalized preview
-with only the bearer secret hidden. **OpenAPI schema and code examples** links to
+with the bearer secret hidden only on protected operations. Public reads show no
+Authorization header. **OpenAPI schema and code examples** links to
 the served contract and keeps matching curl and SDK snippets copyable. Keyboard
 users can focus every scrollable code region. A link containing
 `?operation=<operationId>` opens the real workspace on that exact operation without
 creating access or sending it.
 
-The runner uses a self-service 15-minute token scoped only to the selected
-operation. A write cannot run until its draft validates and the operator confirms
+Only GET operations with an explicit served public rationale and no OpenAPI
+security or permission requirement run without a test key. The runner omits browser
+cookies as well as bearer headers for those reads. Other operations use a
+self-service 15-minute token scoped only to the selected operation. A write cannot
+run until its draft validates and the operator confirms
 the exact mutation preview; changing any input clears that confirmation. In-flight
 requests can be canceled, expired tokens fail closed in the browser, and a live
 token can be revoked immediately. The response starts with a plain-language answer,

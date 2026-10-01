@@ -65,6 +65,7 @@ interface OpenAPIOperation {
   responses?: Record<string, OpenAPIResponse>;
   security?: Array<Record<string, string[]>>;
   "x-trstctl-permission"?: string;
+  "x-trstctl-public-rationale"?: string;
   "x-trstctl-sensitive-response"?: boolean;
   "x-trstctl-read-only"?: boolean;
 }
@@ -72,6 +73,7 @@ interface OpenAPIOperation {
 export interface OpenAPIDocument {
   openapi: string;
   info?: { title?: string; version?: string };
+  security?: Array<Record<string, string[]>>;
   paths: Record<string, Partial<Record<HTTPMethod, OpenAPIOperation>>>;
   components?: { schemas?: Record<string, JSONSchema> };
 }
@@ -82,6 +84,7 @@ export interface OperationEntry {
   path: string;
   operation: OpenAPIOperation;
   permission: string;
+  publicRead: boolean;
   examplePath: string;
   sampleBody: unknown;
 }
@@ -131,6 +134,18 @@ function methodLabel(method: HTTPMethod): string {
 function isUnsafe(entry: OperationEntry): boolean {
   // Only an explicit server contract can classify a non-GET operation as a read.
   return entry.method !== "get" && entry.operation["x-trstctl-read-only"] !== true;
+}
+
+function isPublicRead(method: HTTPMethod, operation: OpenAPIOperation, spec: OpenAPIDocument): boolean {
+  // Require an explicit server rationale and no operation or document auth.
+  // A missing permission alone is not evidence that a route is public.
+  return (
+    method === "get" &&
+    !operation.security?.length &&
+    !spec.security?.length &&
+    !operation["x-trstctl-permission"] &&
+    Boolean(operation["x-trstctl-public-rationale"]?.trim())
+  );
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -400,7 +415,7 @@ function prepareRequest(entry: OperationEntry, spec: OpenAPIDocument, draft: Req
     // The scoped test key and response contract are runner-owned. A future
     // OpenAPI header parameter cannot replace either one with operator text.
     Accept: "application/json",
-    Authorization: "Bearer [scoped test key hidden]",
+    ...(entry.publicRead ? {} : { Authorization: "Bearer [scoped test key hidden]" }),
   };
   const preview = [
     `${methodLabel(entry.method)} ${finalPath}`,
@@ -436,12 +451,14 @@ export function buildOperations(spec: OpenAPIDocument): OperationEntry[] {
       if (!operation?.operationId) continue;
       const parameters = operation.parameters ?? [];
       const examplePath = `${replacePathParameters(path, parameters)}${queryString(parameters)}`;
+      const publicRead = isPublicRead(method, operation, spec);
       entries.push({
         key: `${method}:${path}`,
         method,
         path,
         operation,
-        permission: operation["x-trstctl-permission"] ?? "access:read",
+        permission: publicRead ? "" : (operation["x-trstctl-permission"] ?? "access:read"),
+        publicRead,
         examplePath,
         sampleBody: requestBodySample(operation, spec),
       });
@@ -468,7 +485,7 @@ function responseNames(operation: OpenAPIOperation): string[] {
 function curlExample(entry: OperationEntry): string {
   const lines = [
     `curl -sS -X ${methodLabel(entry.method)} https://control-plane.example${entry.examplePath}`,
-    `  -H 'Authorization: Bearer $TRSTCTL_DOCS_TOKEN'`,
+    ...(entry.publicRead ? [] : [`  -H 'Authorization: Bearer $TRSTCTL_DOCS_TOKEN'`]),
     `  -H 'Accept: application/json'`,
   ];
   if (isUnsafe(entry)) lines.push(`  -H 'Idempotency-Key: ${newIdempotencyKey()}'`);
@@ -557,10 +574,12 @@ function CodeBlock({ value, labelledBy }: { value: string; labelledBy?: string }
 }
 
 function safeStartingOperation(operations: OperationEntry[]): OperationEntry | undefined {
+  const noRequiredInputs = (entry: OperationEntry) => !(entry.operation.parameters ?? []).some((parameter) => parameter.in === "path" || parameter.required);
   return (
-    operations.find(
-      (entry) => entry.method === "get" && !(entry.operation.parameters ?? []).some((parameter) => parameter.in === "path" || parameter.required),
-    ) ?? operations.find((entry) => entry.method === "get")
+    operations.find((entry) => entry.publicRead && entry.operation.operationId === "getEditions" && noRequiredInputs(entry)) ??
+    operations.find((entry) => entry.publicRead && noRequiredInputs(entry)) ??
+    operations.find((entry) => entry.method === "get" && noRequiredInputs(entry)) ??
+    operations.find((entry) => entry.method === "get")
   );
 }
 
@@ -760,7 +779,7 @@ export function ApiExplorer() {
 
   async function mintTestKey(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selected) return;
+    if (!selected || selected.publicRead) return;
     setKeyBusy(true);
     setKeyError(null);
     const expiresAt = new Date(Date.now() + docsTokenTTLMinutes * 60 * 1000).toISOString();
@@ -800,15 +819,15 @@ export function ApiExplorer() {
   }
 
   async function runRequest() {
-    if (!selected || !testKey || !prepared.request || tokenExpired || keyRevoked || (isUnsafe(selected) && !mutationConfirmed)) return;
+    if (!selected || !prepared.request || (!selected.publicRead && !keyUsable) || (isUnsafe(selected) && !mutationConfirmed)) return;
     setRunBusy(true);
     setRunError(null);
     setResponse(null);
     const headers: Record<string, string> = {
       ...prepared.request.headers,
       Accept: "application/json",
-      Authorization: `Bearer ${testKey.token}`,
     };
+    if (!selected.publicRead && testKey) headers.Authorization = `Bearer ${testKey.token}`;
     const controller = new AbortController();
     runController.current = controller;
     try {
@@ -817,6 +836,7 @@ export function ApiExplorer() {
         headers,
         body: prepared.request.body,
         signal: controller.signal,
+        credentials: selected.publicRead ? "omit" : "same-origin",
       });
       const nextResponse = await readExplorerResponse(res);
       if (!controller.signal.aborted) setResponse(nextResponse);
@@ -841,7 +861,7 @@ export function ApiExplorer() {
   const tokenExpiry = testKey?.expires_at ? Date.parse(testKey.expires_at) : Number.NaN;
   const tokenExpired = Boolean(testKey && (!Number.isFinite(tokenExpiry) || tokenExpiry <= tokenNow));
   const keyUsable = Boolean(testKey && !tokenExpired && !keyRevoked && testKey.scopes.includes(selected?.permission ?? ""));
-  const canRun = Boolean(prepared.request && keyUsable && !runBusy && (!selected || !isUnsafe(selected) || mutationConfirmed));
+  const canRun = Boolean(prepared.request && (selected?.publicRead || keyUsable) && !runBusy && (!selected || !isUnsafe(selected) || mutationConfirmed));
   const curl = selected ? curlExample(selected) : "";
   const sdk = selected ? sdkExample(selected) : "";
 
@@ -932,7 +952,9 @@ export function ApiExplorer() {
             <h2 ref={workspaceHeading} id="api-workspace-heading" tabIndex={-1} className="text-title font-semibold outline-none">
               {t("apiExplorer.workspaceTitle")}
             </h2>
-            <p className="max-w-3xl text-sm text-muted-foreground">{t("apiExplorer.workspaceDescription")}</p>
+            <p className="max-w-3xl text-sm text-muted-foreground">
+              {t(selected.publicRead ? "apiExplorer.publicWorkspaceDescription" : "apiExplorer.workspaceDescription")}
+            </p>
           </div>
 
           <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)]">
@@ -959,7 +981,7 @@ export function ApiExplorer() {
                   </div>
                   <div>
                     <dt className="font-medium text-muted-foreground">{t("apiExplorer.permission")}</dt>
-                    <dd className="break-all font-mono text-xs">{selected.permission}</dd>
+                    <dd className="break-all font-mono text-xs">{selected.publicRead ? t("apiExplorer.publicAccess") : selected.permission}</dd>
                   </div>
                   <div>
                     <dt className="font-medium text-muted-foreground">{t("apiExplorer.response")}</dt>
@@ -1082,7 +1104,9 @@ export function ApiExplorer() {
                     <h3 id="api-request-preview-heading" className="mb-2 text-body font-semibold">
                       {t("apiExplorer.requestPreview")}
                     </h3>
-                    <p className="mb-2 text-caption text-muted-foreground">{t("apiExplorer.previewSecretNote")}</p>
+                    <p className="mb-2 text-caption text-muted-foreground">
+                      {t(selected.publicRead ? "apiExplorer.publicPreviewNote" : "apiExplorer.previewSecretNote")}
+                    </p>
                     <CodeBlock
                       labelledBy="api-request-preview-heading"
                       value={prepared.request?.preview ?? `${methodLabel(selected.method)} ${selected.path}\n\n${t("apiExplorer.fixValidation")}`}
@@ -1123,23 +1147,25 @@ export function ApiExplorer() {
               <section className="ui-panel min-w-0 p-comfortable" aria-labelledby="api-runner-heading">
                 <Eyebrow as="p">{t("apiExplorer.stepTwo")}</Eyebrow>
                 <h3 id="api-runner-heading" className="mt-1 text-title font-semibold">
-                  {t("apiExplorer.runner")}
+                  {t(selected.publicRead ? "apiExplorer.publicRunner" : "apiExplorer.runner")}
                 </h3>
-                <p className="mt-1 text-sm text-muted-foreground">{t("apiExplorer.runnerHelp")}</p>
-                <form onSubmit={(event) => void mintTestKey(event)} className="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3">
-                  <label className="grid gap-1 text-sm">
-                    <span className="font-medium text-muted-foreground">{t("apiExplorer.subject")}</span>
-                    <Input value={tokenSubject} onChange={(event) => setTokenSubject(event.target.value)} required />
-                  </label>
-                  <div className="grid gap-1 text-sm">
-                    <span className="font-medium text-muted-foreground">{t("apiExplorer.tokenScope")}</span>
-                    <code className="rounded-control bg-muted px-2 py-1 text-xs">{selected.permission}</code>
-                  </div>
-                  <Button type="submit" disabled={keyBusy || !tokenSubject.trim()}>
-                    {keyBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
-                    {keyBusy ? t("apiExplorer.generating") : t("apiExplorer.testKey")}
-                  </Button>
-                </form>
+                <p className="mt-1 text-sm text-muted-foreground">{t(selected.publicRead ? "apiExplorer.publicRunnerHelp" : "apiExplorer.runnerHelp")}</p>
+                {!selected.publicRead && (
+                  <form onSubmit={(event) => void mintTestKey(event)} className="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3">
+                    <label className="grid gap-1 text-sm">
+                      <span className="font-medium text-muted-foreground">{t("apiExplorer.subject")}</span>
+                      <Input value={tokenSubject} onChange={(event) => setTokenSubject(event.target.value)} required />
+                    </label>
+                    <div className="grid gap-1 text-sm">
+                      <span className="font-medium text-muted-foreground">{t("apiExplorer.tokenScope")}</span>
+                      <code className="rounded-control bg-muted px-2 py-1 text-xs">{selected.permission}</code>
+                    </div>
+                    <Button type="submit" disabled={keyBusy || !tokenSubject.trim()}>
+                      {keyBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
+                      {keyBusy ? t("apiExplorer.generating") : t("apiExplorer.testKey")}
+                    </Button>
+                  </form>
+                )}
                 {keyError && (
                   <p role="alert" className="mt-3 rounded-control border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                     {t("apiExplorer.keyFailed")} {keyError}
@@ -1206,7 +1232,7 @@ export function ApiExplorer() {
                       </Button>
                     )}
                   </div>
-                  {!testKey && <p className="text-sm text-muted-foreground">{t("apiExplorer.needsKey")}</p>}
+                  {!selected.publicRead && !testKey && <p className="text-sm text-muted-foreground">{t("apiExplorer.needsKey")}</p>}
                 </div>
               </section>
 
