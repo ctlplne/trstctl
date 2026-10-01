@@ -1035,7 +1035,7 @@ not this file.
 | `cmd/trstctl/connector.go:208` | the operator explicitly names the public trust-bundle path (CWE-22) |
 | `cmd/trstctl/ee_attach.go:318` | operator-supplied path to their own IdP's JWKS (CWE-22) |
 | `cmd/trstctl/ee_attach.go:346` | operator-pinned local IdP metadata, validated as configuration. |
-| `cmd/trstctl/ssh.go:193` | operator-selected local proof file is matched to the checked private regular inode before reading |
+| `cmd/trstctl/ssh.go:196` | operator-selected local proof file is matched to the checked private regular inode before reading |
 | `deploy/demo/aud66_test.go:105` | fixed repository test path (CWE-22) |
 | `deploy/demo/demo_test.go:56` | test reads its own fixture/tempdir path (CWE-22) |
 | `deploy/deploycheck_test.go:98` | test reads its own fixture/tempdir path (CWE-22) |
@@ -1590,8 +1590,8 @@ not this file.
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-license/main.go:151` | vendor operator explicitly selects the local CLI output path (CWE-22) |
-| `cmd/trstctl/ssh.go:186` | operator-selected local proof file is checked for regular type and private permissions before reading |
-| `cmd/trstctl/ssh.go:193` | operator-selected local proof file is matched to the checked private regular inode before reading |
+| `cmd/trstctl/ssh.go:189` | operator-selected local proof file is checked for regular type and private permissions before reading |
+| `cmd/trstctl/ssh.go:196` | operator-selected local proof file is matched to the checked private regular inode before reading |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `internal/agent/relay/hostrollback.go:309` | both paths are inside the validated agent-local state directory (CWE-22) |
 | `internal/agent/sshkrl/install.go:245` | staged path is created in the bound target directory by CreateTemp |
