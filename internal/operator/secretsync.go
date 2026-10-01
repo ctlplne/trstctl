@@ -378,6 +378,9 @@ func (r *Reconciler) updateSecretSyncStatus(ctx context.Context, namespace, name
 	}
 	if message != "" {
 		status["message"] = message
+	} else {
+		// A merge patch must send null to remove an earlier failure reason.
+		status["message"] = nil
 	}
 	st, body, err := r.client.do(ctx, http.MethodPatch, tssItemPath(namespace, name)+"/status", "application/merge-patch+json", map[string]any{"status": status})
 	if err != nil {

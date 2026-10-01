@@ -723,6 +723,34 @@ func TestReconcileTrstctlSecretInjectionPatchesWorkloadCAPSECR05(t *testing.T) {
 	}
 }
 
+func TestRecoveredSecretOperatorStatusClearsOldError(t *testing.T) {
+	f := newFakeCluster()
+	srv := httptest.NewServer(f.handler())
+	defer srv.Close()
+	r := reconcilerForCluster(srv)
+	ctx := context.Background()
+
+	if err := r.updateSecretSyncStatus(ctx, "trstctl-system", "sync", "Error", "target", 0, "", nil, "expired token"); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.updateSecretSyncStatus(ctx, "trstctl-system", "sync", "Ready", "target", 1, "hash", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if message, ok := f.secretStatusSet["sync"]["message"]; !ok || message != nil {
+		t.Fatalf("recovered SecretSync must clear the old message with merge-patch null, got %v (present %v)", message, ok)
+	}
+
+	if err := r.updateSecretInjectionStatus(ctx, "trstctl-system", "inject", "Error", "source", "", nil, "missing source"); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.updateSecretInjectionStatus(ctx, "trstctl-system", "inject", "Ready", "source", "hash", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if message, ok := f.injectStatusSet["inject"]["message"]; !ok || message != nil {
+		t.Fatalf("recovered SecretInjection must clear the old message with merge-patch null, got %v (present %v)", message, ok)
+	}
+}
+
 // TestReconcilePatchesDriftedDeployment proves the convergence action: when a
 // Deployment exists but its replicas/image drifted from the spec, the operator
 // PATCHes it back (it does not recreate) and marks the CR Reconciling.
