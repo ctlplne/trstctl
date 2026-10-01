@@ -602,7 +602,7 @@ func TestRenewalSLOClampsBudgetBurn(t *testing.T) {
 	// A 99% target over ten runs allows 0.1 failures; five failures is a very
 	// deep breach.
 	for i := 0; i < 5; i++ {
-		run("completed")
+		run("succeeded")
 	}
 	for i := 0; i < 5; i++ {
 		run("failed")
@@ -612,8 +612,8 @@ func TestRenewalSLOClampsBudgetBurn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("summarize: %v", err)
 	}
-	if got.Total != 10 || got.Failed != 5 {
-		t.Fatalf("counts = %d total / %d failed, want 10/5", got.Total, got.Failed)
+	if got.Total != 10 || got.Succeeded != 5 || got.Failed != 5 {
+		t.Fatalf("counts = %d total / %d succeeded / %d failed, want 10/5/5", got.Total, got.Succeeded, got.Failed)
 	}
 	if !got.Breached() {
 		t.Error("a 50% success rate against a 99% target did not report as breached")
@@ -652,7 +652,7 @@ func TestRenewalSLOExcludesRunsStillInFlight(t *testing.T) {
 			t.Fatalf("seed run: %v", err)
 		}
 	}
-	run("completed")
+	run("succeeded")
 	run("executing")
 	run("queued")
 

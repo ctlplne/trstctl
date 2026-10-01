@@ -1065,6 +1065,8 @@ func (s *Store) SummarizeRenewalSLO(ctx context.Context, tenantID string, window
 	}
 	out := RenewalSLO{WindowDays: windowDays, TargetPercent: targetPercent, ObservedPercent: 100, BudgetRemainingPercent: 100}
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		// Rotation result events project success as "succeeded", never "completed".
+		// Keep this denominator aligned with the real event vocabulary.
 		// The tenant scope is applied in the CTE, before any aggregate. Written
 		// this way on purpose: with FILTER (WHERE ...) clauses in the select
 		// list, the tenant predicate stops being the first WHERE a reader — or
@@ -1078,8 +1080,8 @@ func (s *Store) SummarizeRenewalSLO(ctx context.Context, tenantID string, window
 			      AND updated_at >= now() - make_interval(days => $2)
 			 )
 			 SELECT
-			   count(*) FILTER (WHERE status IN ('completed', 'failed')),
-			   count(*) FILTER (WHERE status = 'completed'),
+			   count(*) FILTER (WHERE status IN ('succeeded', 'failed')),
+			   count(*) FILTER (WHERE status = 'succeeded'),
 			   count(*) FILTER (WHERE status = 'failed')
 			 FROM scoped`,
 			tenantID, windowDays).Scan(&out.Total, &out.Succeeded, &out.Failed)
