@@ -504,6 +504,7 @@ describe("dedicated approvals inbox", () => {
           type: "identity.approval",
           q: "jit-1 issue",
           limit: 50,
+          window: "latest",
         },
         expect.any(AbortSignal),
       ),

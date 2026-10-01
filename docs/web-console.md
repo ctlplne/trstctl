@@ -452,9 +452,9 @@ also shows signed certificate-custody totals and the exact fingerprint/fields fo
 every incomplete custody row, the CAP-OBS-02 inventory report, report schedules, and
 the dry-run workbench.
 
-**Change history** opens with a bounded event window and answers who changed what,
-when, and whether the last event shown records a result. It does not call that window
-the newest or complete history. **Search activity** opens the filters, event rows, and
+**Change history** opens with the newest 50 matching tenant events and answers who
+changed what, when, and whether the last event shown records a result. It does not
+call that window the complete history. **Search activity** opens the filters, event rows, and
 exact event detail. Signatures and export, plus collector delivery, remain in two
 separate closed sections until requested. This keeps the default page calm without
 removing tenant-scoped evidence or operational controls.
@@ -463,7 +463,8 @@ The tool chip is a server-side filter, not a word search. Workloads & Machines
 includes trust configuration, attestation, issuance, SPIFFE, SSH, agents, and
 related workload-certificate lifecycle events; it does not mean “contains ssh.”
 The tool, feature ID, action, text, time window and as-of sequence intersect
-before the result limit. Search, signed bundles and all file-export formats use
+before selecting the newest or earliest matching events and applying the 1–100
+event limit. Search, signed bundles and all file-export formats use
 the same applied filters. Clearing the tool keeps other filters; Reset removes
 all filters, and browser Back restores the previous URL and scope. A failed or
 still-loading search cannot export an older successful scope. Changing scope

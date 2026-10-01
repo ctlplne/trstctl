@@ -62,7 +62,7 @@ describe("Route 035 change-history hierarchy", () => {
     expect(await screen.findByRole("heading", { level: 2, name: "1 change is ready to search" })).toBeInTheDocument();
     expect(
       screen.getByText(
-        "This is a 1-event window, not a claim about the newest or complete history. Search or export an exact window before making an audit decision.",
+        "Showing the newest matching records (1) within the selected filters, not the complete history. Search or export an exact window before making an audit decision.",
         { exact: true },
       ),
     ).toBeInTheDocument();

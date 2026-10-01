@@ -66,6 +66,7 @@ type Query struct {
 	AfterSequence       uint64    `json:"after_sequence,omitempty"`        // exclusive tenant-local cursor for durable stream consumers
 	Contains            string    `json:"contains,omitempty"`              // case-insensitive substring match on type, redacted actor, or data
 	Limit               int       `json:"limit,omitempty"`                 // cap on records returned (0 = all)
+	Latest              bool      `json:"latest,omitempty"`                // choose the newest matching records after all tenant and query filters
 }
 
 // featureActionTypes resolves the query's feature_id/action selector to the event
@@ -265,7 +266,11 @@ func (s *Service) search(ctx context.Context, q Query) ([]Record, string, error)
 		return nil, "", err
 	}
 	if q.Limit > 0 && len(out) > q.Limit {
-		out = out[:q.Limit]
+		if q.Latest {
+			out = out[len(out)-q.Limit:]
+		} else {
+			out = out[:q.Limit]
+		}
 	}
 	// Hash-link the returned records (R2.1), seeded from the sealed boundary so the
 	// chain attests to exactly this slice as a continuation of the archived prefix;

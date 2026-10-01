@@ -109,6 +109,33 @@ func TestSearchFiltersByTenantAndType(t *testing.T) {
 	}
 }
 
+func TestSearchLatestWindowKeepsTenantScopeAndSignedExport(t *testing.T) {
+	log := openLog(t)
+	ctx := context.Background()
+	for _, typ := range []string{"identity.issued", "identity.deployed", "identity.renewed", "identity.verified"} {
+		appendEvent(t, log, tenantA, typ)
+	}
+	appendEvent(t, log, tenantB, "identity.revoked")
+	svc := newService(t, log)
+	oldest, err := svc.Search(ctx, audit.Query{TenantID: tenantA, Limit: 2})
+	if err != nil || len(oldest) != 2 || oldest[0].Sequence != 1 || oldest[1].Sequence != 2 {
+		t.Fatalf("default oldest window = %+v, %v", oldest, err)
+	}
+	query := audit.Query{TenantID: tenantA, Limit: 2, Latest: true}
+	latest, err := svc.Search(ctx, query)
+	if err != nil || len(latest) != 2 || latest[0].Sequence != 3 || latest[1].Sequence != 4 {
+		t.Fatalf("latest tenant window = %+v, %v", latest, err)
+	}
+	for _, record := range latest {
+		if record.TenantID != tenantA {
+			t.Fatalf("cross-tenant record in latest window: %+v", record)
+		}
+	}
+	if _, err := audit.VerifyChain(latest); err != nil {
+		t.Fatalf("latest window chain: %v", err)
+	}
+}
+
 // TestSearchContainsMatchesVisibleActor is the Change history search contract:
 // an operator who copies the visible actor or one of its authorization roles
 // into the search box must get that event back. The actor has already passed

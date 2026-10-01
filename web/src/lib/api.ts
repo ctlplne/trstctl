@@ -1176,6 +1176,7 @@ export interface AuditQuery {
   asOf?: number;
   q?: string;
   limit?: number;
+  window?: "earliest" | "latest";
 }
 
 export interface RiskQuery {

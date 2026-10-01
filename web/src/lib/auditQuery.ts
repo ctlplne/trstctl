@@ -5,6 +5,7 @@ import type { AuditQuery } from "./api";
 export function auditQueryParams(options?: AuditQuery): URLSearchParams {
   const params = new URLSearchParams();
   params.set("limit", String(options?.limit ?? 50));
+  if (options?.window) params.set("window", options.window);
   if (options?.tool) params.set("tool", options.tool);
   if (options?.type) params.set("type", options.type);
   if (options?.featureID) params.set("feature_id", options.featureID);

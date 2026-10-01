@@ -17426,6 +17426,8 @@ export interface operations {
                 q?: string;
                 /** @description maximum records to return */
                 limit?: number;
+                /** @description earliest (default) or latest matching records after tenant and query filters, before the result limit */
+                window?: string;
                 /** @description export encoding: jws (default, signed bundle; 512 KiB serialized payload maximum), ndjson, csv, splunk-hec, sentinel. Oversized JWS downloads return 413 audit_export_too_large; use a record stream or a smaller query. */
                 format?: string;
             };
@@ -17485,6 +17487,8 @@ export interface operations {
                 q?: string;
                 /** @description maximum records to return */
                 limit?: number;
+                /** @description earliest (default) or latest matching records after tenant and query filters, before the result limit */
+                window?: string;
                 /** @description export encoding: jws (default, signed bundle; 512 KiB serialized payload maximum), ndjson, csv, splunk-hec, sentinel. Oversized JWS downloads return 413 audit_export_too_large; use a record stream or a smaller query. */
                 format?: string;
             };

@@ -89,7 +89,7 @@ describe("audit module scope (S-B4)", () => {
     renderAt("/audit?module=secrets");
 
     await screen.findByRole("heading", { level: 1, name: "Change history" });
-    await waitFor(() => expect(apiMock.auditEvents.mock.calls.at(-1)?.[0]).toEqual({ tool: "secrets", limit: 50 }));
+    await waitFor(() => expect(apiMock.auditEvents.mock.calls.at(-1)?.[0]).toEqual({ tool: "secrets", limit: 50, window: "latest" }));
 
     // A visible, clearable chip names the scope.
     const chip = screen.getByTestId("audit-module-scope");
@@ -112,16 +112,18 @@ describe("audit module scope (S-B4)", () => {
     ["platform", "operations"],
   ])("maps %s to the explicit %s server predicate", async (module, tool) => {
     renderAt(`/audit?module=${module}&q=payments`);
-    await waitFor(() => expect(apiMock.auditEvents.mock.calls.at(-1)?.[0]).toEqual({ tool, q: "payments", limit: 50 }));
+    await waitFor(() => expect(apiMock.auditEvents.mock.calls.at(-1)?.[0]).toEqual({ tool, q: "payments", limit: 50, window: "latest" }));
   });
 
   it("clears only the tool, preserves other filters, and restores the scope on browser back", async () => {
     const user = userEvent.setup();
     renderAt("/audit?module=workload&q=payments&type=attestation.verified&limit=2");
-    const expected = { tool: "workloads_machines", q: "payments", type: "attestation.verified", limit: 2 };
+    const expected = { tool: "workloads_machines", q: "payments", type: "attestation.verified", limit: 2, window: "latest" };
     await waitFor(() => expect(apiMock.auditEvents.mock.calls.at(-1)?.[0]).toEqual(expected));
     await user.click(screen.getByRole("button", { name: /Clear module scope/i }));
-    await waitFor(() => expect(apiMock.auditEvents.mock.calls.at(-1)?.[0]).toEqual({ q: "payments", type: "attestation.verified", limit: 2 }));
+    await waitFor(() =>
+      expect(apiMock.auditEvents.mock.calls.at(-1)?.[0]).toEqual({ q: "payments", type: "attestation.verified", limit: 2, window: "latest" }),
+    );
     expect(screen.getByTestId("audit-location")).not.toHaveTextContent("module=");
     await user.click(screen.getByRole("button", { name: "Back in audit history" }));
     await waitFor(() => expect(screen.getByTestId("audit-module-scope")).toHaveTextContent("Workloads"));
@@ -132,7 +134,7 @@ describe("audit module scope (S-B4)", () => {
     renderAt("/audit?module=workload&q=payments&limit=2");
     await screen.findByRole("button", { name: "Reset" });
     await userEvent.setup().click(screen.getByRole("button", { name: "Reset" }));
-    await waitFor(() => expect(apiMock.auditEvents.mock.calls.at(-1)?.[0]).toEqual({ limit: 50 }));
+    await waitFor(() => expect(apiMock.auditEvents.mock.calls.at(-1)?.[0]).toEqual({ limit: 50, window: "latest" }));
     expect(screen.queryByTestId("audit-module-scope")).not.toBeInTheDocument();
     expect(screen.getByTestId("audit-location")).toBeEmptyDOMElement();
   });
@@ -140,7 +142,7 @@ describe("audit module scope (S-B4)", () => {
   it("uses the same applied tool, text and as-of boundary for signed and stream exports", async () => {
     const user = userEvent.setup();
     renderAt("/audit?module=workload&q=payments&as_of=12&limit=2");
-    const expected = { tool: "workloads_machines", q: "payments", asOf: 12, limit: 2 };
+    const expected = { tool: "workloads_machines", q: "payments", asOf: 12, limit: 2, window: "latest" };
     await waitFor(() => expect(apiMock.auditEvents.mock.calls.at(-1)?.[0]).toEqual(expected));
     await user.click(screen.getByText("Signatures and evidence export"));
     await user.click(screen.getByRole("button", { name: "Export evidence" }));
@@ -167,7 +169,7 @@ describe("audit module scope (S-B4)", () => {
     renderAt("/audit?module=workload");
     await screen.findByTestId("audit-module-scope");
     // The scope chip renders from the URL before the deferred query starts.
-    await waitFor(() => expect(apiMock.auditEvents).toHaveBeenCalledWith({ tool: "workloads_machines", limit: 50 }, expect.any(AbortSignal)));
+    await waitFor(() => expect(apiMock.auditEvents).toHaveBeenCalledWith({ tool: "workloads_machines", limit: 50, window: "latest" }, expect.any(AbortSignal)));
     const oldSignal = apiMock.auditEvents.mock.calls[0][1] as AbortSignal;
     await userEvent.setup().click(screen.getByRole("button", { name: "Clear module scope" }));
     await screen.findByText("secret.rotate");

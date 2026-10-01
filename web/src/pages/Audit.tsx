@@ -33,6 +33,7 @@ interface FilterState {
   asOf: string;
   q: string;
   limit: string;
+  window: "earliest" | "latest";
 }
 
 const defaultFilters: FilterState = {
@@ -44,6 +45,7 @@ const defaultFilters: FilterState = {
   asOf: "",
   q: "",
   limit: "50",
+  window: "latest",
 };
 
 export function Audit() {
@@ -112,6 +114,7 @@ function AuditWorkspace() {
       if (searchParams.has("tool")) params.set("tool", searchParams.get("tool") ?? "");
     }
     if (params.get("limit") === "50") params.delete("limit");
+    if (params.get("window") === "latest") params.delete("window");
     if (params.toString() === searchParams.toString()) result.refetch();
     else setSearchParams(params);
   }
@@ -171,7 +174,7 @@ function AuditWorkspace() {
       ? t("audit.design.summaryUnavailableBody")
       : events?.length === 0
         ? t("audit.design.summaryEmptyBody")
-        : t("audit.design.summaryWindowBoundary", { count: String(events?.length ?? 0) });
+        : t(applied.window === "latest" ? "audit.design.summaryLatestBoundary" : "audit.design.summaryWindowBoundary", { count: String(events?.length ?? 0) });
 
   const auditColumns = useMemo<Array<DataGridColumn<AuditEvent>>>(
     () => [
@@ -362,7 +365,16 @@ function AuditWorkspace() {
                         onChange={(value) => updateFilter("limit", value)}
                         min="1"
                         max="100"
+                        description={t("audit.filter.limitRange")}
                       />
+                      <Field label={t("audit.filter.window")} description={t("audit.filter.windowHelp")}>
+                        {(control) => (
+                          <Select {...control} value={filters.window} onChange={(event) => updateFilter("window", event.target.value)}>
+                            <option value="latest">{t("audit.filter.windowLatest")}</option>
+                            <option value="earliest">{t("audit.filter.windowEarliest")}</option>
+                          </Select>
+                        )}
+                      </Field>
                     </>
                   }
                   columnChooser={columnChooser}
@@ -468,6 +480,7 @@ function SummaryFact({ label, value }: { label: string; value: string }) {
 }
 
 function AuditFilterInput({
+  description,
   id,
   label,
   max,
@@ -477,6 +490,7 @@ function AuditFilterInput({
   type = "text",
   value,
 }: {
+  description?: string;
   id: string;
   label: string;
   max?: string;
@@ -487,7 +501,7 @@ function AuditFilterInput({
   value: string;
 }) {
   return (
-    <Field label={label}>
+    <Field label={label} description={description}>
       {(control) => (
         <Input
           {...control}
@@ -570,11 +584,12 @@ function filtersFromSearchParams(searchParams: URLSearchParams): FilterState {
     asOf: searchParams.get("as_of") ?? "",
     q: searchParams.get("q") ?? "",
     limit: searchParams.get("limit") ?? "50",
+    window: searchParams.get("window") === "earliest" ? "earliest" : "latest",
   };
 }
 
 function hasExplicitAuditScope(searchParams: URLSearchParams): boolean {
-  return ["module", "tool", "feature_id", "action", "type", "since", "until", "as_of", "q", "limit"].some((key) => searchParams.has(key));
+  return ["module", "tool", "feature_id", "action", "type", "since", "until", "as_of", "q", "limit", "window"].some((key) => searchParams.has(key));
 }
 
 function lastAuditEventShown(events: AuditEvent[] | null): AuditEvent | null {
@@ -592,6 +607,13 @@ function readableEventType(type: string): string {
 
 function eventResultKey(event: AuditEvent): MessageKey {
   const data = event.data ?? {};
+  if (event.type === "endpoint.verification.observed") {
+    if (data.superseded_expectation === true) return "audit.design.result.superseded";
+    if (data.reached === false) return "audit.design.result.unreachable";
+    if (data.reached === true && typeof data.expected_fingerprint === "string" && typeof data.observed_fingerprint === "string") {
+      return data.expected_fingerprint === data.observed_fingerprint ? "audit.design.result.matched" : "audit.design.result.mismatched";
+    }
+  }
   const raw = [data.result, data.status, data.outcome, data.decision].find((value) => typeof value === "string") as string | undefined;
   const normalized = raw?.trim().toLowerCase();
   if (normalized === "succeeded" || normalized === "success" || normalized === "completed" || normalized === "ok") return "audit.design.result.succeeded";
@@ -701,7 +723,7 @@ function affectedResourceLinks(event: AuditEvent): Array<{ label: MessageKey; to
 }
 
 function toAuditQuery(state: FilterState, tool?: string): AuditQuery {
-  const query: AuditQuery = { limit: clampLimit(state.limit) };
+  const query: AuditQuery = { limit: clampLimit(state.limit), window: state.window };
   if (tool) query.tool = tool;
   if (state.featureID.trim()) query.featureID = state.featureID.trim();
   if (state.action.trim()) query.action = state.action.trim();

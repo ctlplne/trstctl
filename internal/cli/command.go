@@ -364,8 +364,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"profiles", "approvals", "get"}, Method: "GET", Path: "/api/v1/profiles/approvals/{id}", Summary: "Get one parked profile create/edit approval request"},
 	{Name: []string{"profiles", "approvals", "approve"}, Method: "POST", Path: "/api/v1/profiles/approvals/{id}/approvals", Body: bodyOptionalFile, Summary: "Approve a parked profile create/edit as a distinct reviewer; quorum applies the queued spec"},
 
-	{Name: []string{"audit", "events"}, Method: "GET", Path: "/api/v1/audit/events", Query: []string{"tool", "feature_id", "action", "type", "since", "until", "as_of", "q", "limit"}, Summary: "Query the audit log"},
-	{Name: []string{"audit", "export"}, Method: "GET", Path: "/api/v1/audit/export", Query: []string{"tool", "feature_id", "action", "type", "since", "until", "as_of", "q", "limit", "format"}, Summary: "Export a signed audit bundle or record stream"},
+	{Name: []string{"audit", "events"}, Method: "GET", Path: "/api/v1/audit/events", Query: []string{"tool", "feature_id", "action", "type", "since", "until", "as_of", "q", "limit", "window"}, Summary: "Query the audit log"},
+	{Name: []string{"audit", "export"}, Method: "GET", Path: "/api/v1/audit/export", Query: []string{"tool", "feature_id", "action", "type", "since", "until", "as_of", "q", "limit", "window", "format"}, Summary: "Export a signed audit bundle or record stream"},
 	{Name: []string{"audit", "verification-keys"}, Method: "GET", Path: "/api/v1/audit/verification-keys", Summary: "Download and pin public keys for offline audit verification"},
 	{Name: []string{"audit", "feeds", "set"}, Method: "PUT", Path: "/api/v1/audit/feeds/{id}", Body: bodyFile, Summary: "Configure a durable native Splunk HEC or Sentinel audit feed"},
 	{Name: []string{"audit", "feeds", "preview"}, Method: "POST", Path: "/api/v1/audit/feeds/{id}/preview", Body: bodyFile, ReadOnly: true, Summary: "Validate and explain an exact audit feed without writing state or contacting the collector"},

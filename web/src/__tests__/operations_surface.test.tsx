@@ -508,7 +508,7 @@ describe("operational console surface", () => {
     await user.click(screen.getByRole("button", { name: /Export evidence/i }));
     expect(await screen.findByText("jws: sealed.bundle")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Download signed bundle" })).toHaveAttribute("download", "audit-evidence.jws.json");
-    expect(apiMock.exportAudit).toHaveBeenCalledWith({ limit: 50 }, expect.any(AbortSignal));
+    expect(apiMock.exportAudit).toHaveBeenCalledWith({ limit: 50, window: "latest" }, expect.any(AbortSignal));
   });
 
   it("filters audit events through served params and opens the event detail drawer", async () => {
@@ -547,6 +547,7 @@ describe("operational console surface", () => {
           since: "2026-06-17T00:00:00Z",
           q: "payments",
           limit: 25,
+          window: "latest",
         },
         expect.any(AbortSignal),
       ),
@@ -559,6 +560,29 @@ describe("operational console surface", () => {
     expect(screen.getAllByText("sha256:abcdef0123456789").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/approved by second RA/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/ra@example.test/).length).toBeGreaterThan(0);
+  });
+
+  it("shows a current endpoint observation and lets the operator inspect the earliest window", async () => {
+    apiMock.auditEvents.mockResolvedValue([
+      {
+        sequence: 420,
+        id: "evt-endpoint",
+        type: "endpoint.verification.observed",
+        tenant_id: "t1",
+        time: "2026-10-01T06:08:35Z",
+        data: { reached: true, expected_fingerprint: "sha256:match", observed_fingerprint: "sha256:match" },
+      },
+    ]);
+    const user = userEvent.setup();
+    renderAt("/audit");
+    expect(await screen.findByText("Certificate at endpoint matched the expected fingerprint")).toBeInTheDocument();
+    expect(screen.getByText(/newest matching records \(1\)/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Search activity" }));
+    await user.click(screen.getByRole("button", { name: "Filters" }));
+    expect(screen.getByText("1–100 events")).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Result window"), "earliest");
+    await user.click(screen.getByRole("button", { name: "Apply filters" }));
+    await waitFor(() => expect(apiMock.auditEvents).toHaveBeenLastCalledWith({ limit: 50, window: "earliest" }, expect.any(AbortSignal)));
   });
 
   it("shows audit empty and permission-denied states without leaking tenant details", async () => {

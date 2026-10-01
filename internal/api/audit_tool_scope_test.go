@@ -129,6 +129,22 @@ func TestAuditHTTPToolScopeAndRetainedExportChain(t *testing.T) {
 		t.Fatalf("scoped HTTP records=%s err=%v", raw, err)
 	}
 	for _, path := range []string{"events", "export"} {
+		get("/api/v1/audit/"+path+"?window=unknown", "", 400)
+	}
+	if err := json.Unmarshal(get("/api/v1/audit/events?window=latest&limit=2", "", 200), &response); err != nil || len(response.Events) != 2 || response.Events[0].Sequence != 3 || response.Events[1].Sequence != 4 {
+		t.Fatalf("latest HTTP window=%+v err=%v", response.Events, err)
+	}
+	var latestSigned struct {
+		Bundle string `json:"bundle"`
+	}
+	if err := json.Unmarshal(get("/api/v1/audit/export?window=latest&limit=2", "", 200), &latestSigned); err != nil {
+		t.Fatal(err)
+	}
+	latestBundle, err := audit.VerifyBundle(latestSigned.Bundle, svc.VerificationKeys())
+	if err != nil || latestBundle.Count != 2 || !latestBundle.Query.Latest {
+		t.Fatalf("latest signed window=%+v err=%v", latestBundle, err)
+	}
+	for _, path := range []string{"events", "export"} {
 		get("/api/v1/audit/"+path+"?tool=not-a-tool", "", 400)
 		get("/api/v1/audit/"+path+"?"+scope, other, 403)
 	}

@@ -36290,6 +36290,14 @@
             }
           },
           {
+            "description": "earliest (default) or latest matching records after tenant and query filters, before the result limit",
+            "in": "query",
+            "name": "window",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "description": "export encoding: jws (default, signed bundle; 512 KiB serialized payload maximum), ndjson, csv, splunk-hec, sentinel. Oversized JWS downloads return 413 audit_export_too_large; use a record stream or a smaller query.",
             "in": "query",
             "name": "format",
@@ -36416,6 +36424,14 @@
             "name": "limit",
             "schema": {
               "type": "integer"
+            }
+          },
+          {
+            "description": "earliest (default) or latest matching records after tenant and query filters, before the result limit",
+            "in": "query",
+            "name": "window",
+            "schema": {
+              "type": "string"
             }
           },
           {

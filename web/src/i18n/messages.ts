@@ -10907,8 +10907,13 @@ export const messages = {
   },
   "audit.design.summaryWindowBoundary": {
     defaultMessage:
-      "This is a {count}-event window, not a claim about the newest or complete history. Search or export an exact window before making an audit decision.",
+      "This is the earliest {count} matching events in this bounded window, not the complete history. Search or export an exact window before making an audit decision.",
     description: "Safety boundary explaining that the default recent event list is bounded.",
+  },
+  "audit.design.summaryLatestBoundary": {
+    defaultMessage:
+      "Showing the newest matching records ({count}) within the selected filters, not the complete history. Search or export an exact window before making an audit decision.",
+    description: "Explains the bounded newest-first selection while preserving the ascending event display order.",
   },
   "audit.design.lastChangeShown": {
     defaultMessage: "Last change shown",
@@ -10946,6 +10951,27 @@ export const messages = {
     defaultMessage: "Recorded; no success result in this event",
     description: "Truthful audit event outcome when the envelope does not state success or failure.",
   },
+  "audit.design.result.matched": {
+    defaultMessage: "Certificate at endpoint matched the expected fingerprint",
+    description: "Independent endpoint observation found the expected certificate.",
+  },
+  "audit.design.result.mismatched": {
+    defaultMessage: "Certificate at endpoint differed from the expected fingerprint",
+    description: "Independent endpoint observation found a different certificate.",
+  },
+  "audit.design.result.unreachable": {
+    defaultMessage: "Endpoint was not reached",
+    description: "Independent endpoint observation could not reach the endpoint.",
+  },
+  "audit.design.result.superseded": {
+    defaultMessage: "Older expectation; check the current certificate",
+    description: "Historical endpoint observation was superseded by a newer expected certificate.",
+  },
+  "audit.filter.limitRange": { defaultMessage: "1–100 events", description: "Allowed limit for one audit search or export." },
+  "audit.filter.window": { defaultMessage: "Result window", description: "Choose the newest or earliest matching audit events." },
+  "audit.filter.windowHelp": { defaultMessage: "Applied after tenant and search filters, before the limit.", description: "Order of audit window selection." },
+  "audit.filter.windowLatest": { defaultMessage: "Newest matching events", description: "Latest audit event window." },
+  "audit.filter.windowEarliest": { defaultMessage: "Earliest matching events", description: "Earliest audit event window." },
   "audit.design.disclosure.search": {
     defaultMessage: "Search and inspect activity",
     description: "Progressive disclosure for exact audit-event search, filters, rows, and detail.",

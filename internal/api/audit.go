@@ -49,6 +49,7 @@ func auditQueryParams() []param {
 		{name: "as_of", typ: "integer", desc: "point-in-time: only tenant-local audit events with sequence <= this"},
 		{name: "q", typ: "string", desc: "case-insensitive substring match on event type, privacy-filtered actor subject or role, or event data"},
 		{name: "limit", typ: "integer", desc: "maximum records to return"},
+		{name: "window", typ: "string", desc: "earliest (default) or latest matching records after tenant and query filters, before the result limit"},
 		{name: "format", typ: "string", desc: "export encoding: jws (default, signed bundle; 512 KiB serialized payload maximum), ndjson, csv, splunk-hec, sentinel. Oversized JWS downloads return 413 audit_export_too_large; use a record stream or a smaller query."},
 	}
 }
@@ -103,6 +104,13 @@ func (a *API) auditQueryFromRequest(r *http.Request, tenantID string) (audit.Que
 			return audit.Query{}, errStatus(http.StatusBadRequest, "limit must be a positive integer")
 		}
 		q.Limit = n
+	}
+	switch r.URL.Query().Get("window") {
+	case "", "earliest":
+	case "latest":
+		q.Latest = true
+	default:
+		return audit.Query{}, errStatus(http.StatusBadRequest, "window must be earliest or latest")
 	}
 	return q, nil
 }

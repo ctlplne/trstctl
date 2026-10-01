@@ -14,7 +14,7 @@ func TestAuditCommandsPreserveToolFeatureActionAndAsOf(t *testing.T) {
 		t.Run(command, func(t *testing.T) {
 			var captured capture
 			server := mockServer(t, http.StatusOK, `{"events":[]}`, &captured)
-			args := []string{"audit", command, "--tool", "workloads_machines", "--feature_id", "F30", "--action", "upsert_trust", "--as_of", "12", "--q", "payments", "--limit", "2"}
+			args := []string{"audit", command, "--tool", "workloads_machines", "--feature_id", "F30", "--action", "upsert_trust", "--as_of", "12", "--q", "payments", "--limit", "2", "--window", "latest"}
 			code, _, stderr := run(t, args, cli.Env{Server: server.URL, HTTPClient: server.Client()}, "")
 			if code != 0 {
 				t.Fatalf("audit %s: code=%d stderr=%s", command, code, stderr)
@@ -23,7 +23,7 @@ func TestAuditCommandsPreserveToolFeatureActionAndAsOf(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for k, want := range map[string]string{"tool": "workloads_machines", "feature_id": "F30", "action": "upsert_trust", "as_of": "12", "q": "payments", "limit": "2"} {
+			for k, want := range map[string]string{"tool": "workloads_machines", "feature_id": "F30", "action": "upsert_trust", "as_of": "12", "q": "payments", "limit": "2", "window": "latest"} {
 				if got := params.Get(k); got != want {
 					t.Errorf("%s %s=%q want %q", command, k, got, want)
 				}

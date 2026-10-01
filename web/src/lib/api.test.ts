@@ -2557,10 +2557,11 @@ describe("audit contract", () => {
       asOf: 42,
       q: "payments",
       limit: 25,
+      window: "latest",
     });
 
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe(
-      "/api/v1/audit/events?limit=25&type=identity.issued&since=2026-06-17T00%3A00%3A00Z&until=2026-06-18T00%3A00%3A00Z&as_of=42&q=payments",
+      "/api/v1/audit/events?limit=25&window=latest&type=identity.issued&since=2026-06-17T00%3A00%3A00Z&until=2026-06-18T00%3A00%3A00Z&as_of=42&q=payments",
     );
   });
 
