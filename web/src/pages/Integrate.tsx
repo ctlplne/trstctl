@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { formatMessage, useTranslation } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 import { api, ApiError, type DiscoverySource, type NotificationRoutingPolicy, type PolicyDryRun, type Profile } from "@/lib/api";
+import gitOpsValidationModule from "@/policies/gitops-validation.rego?raw";
 
 const protocols = [
   { name: "ACME", reference: "/acme/{profile}/directory", note: "RFC 8555 — cert-manager, Caddy, certbot, Traefik." },
@@ -63,21 +64,12 @@ const manifestTypes: Array<{ value: ManifestType; labelKey: MessageKey }> = [
   { value: "install-values", labelKey: "integrate.gitops.manifest.installValues" },
 ];
 
-const gitOpsValidationModule = `package trstctl.gitops
-
-default allow := false
-default deny := false
-
-allow if {
-  input.action == "gitops.validate"
-  input.declaration.apiVersion == "trstctl.com/v1"
-  input.declaration_kind != ""
+function gitOpsResultMessage(result: PolicyDryRun): MessageKey {
+  if (!result.valid) return "integrate.gitops.moduleInvalid";
+  if (result.deny) return "integrate.gitops.envelopeDenied";
+  if (result.allow) return "integrate.gitops.envelopeAccepted";
+  return "integrate.gitops.noDecision";
 }
-
-deny if {
-  input.declaration_kind == ""
-}
-`;
 
 function CopyRef({ value }: { value: string }) {
   const { t } = useTranslation();
@@ -394,10 +386,16 @@ export function Integrate() {
                 {validationResult && (
                   <section className="rounded-md border border-border p-3 text-sm" role="status" aria-label={t("integrate.gitops.validationResult")}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="font-medium">{validationResult.valid ? t("integrate.gitops.valid") : t("integrate.gitops.invalid")}</p>
+                      <p className="font-medium">{t(gitOpsResultMessage(validationResult))}</p>
                       <span className="font-mono text-xs text-muted-foreground">{validationResult.audit_event}</span>
                     </div>
+                    {validationResult.reason && <p className="mt-2 text-sm text-muted-foreground">{validationResult.reason}</p>}
+                    {validationResult.error && <p className="mt-2 text-sm text-destructive">{validationResult.error}</p>}
                     <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <Metric
+                        label={t("integrate.gitops.moduleStatus")}
+                        value={validationResult.valid ? t("integrate.gitops.valid") : t("integrate.gitops.invalid")}
+                      />
                       <Metric label={t("integrate.gitops.decision")} value={validationResult.allow ? "allow" : validationResult.deny ? "deny" : "none"} />
                       <Metric label={t("integrate.gitops.moduleDigest")} value={validationResult.module_sha256} mono />
                       <Metric label={t("integrate.gitops.query")} value={validationResult.query} mono />

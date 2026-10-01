@@ -19508,6 +19508,26 @@ export const messages = {
     defaultMessage: "GitOps validation result",
     description: "Accessible label for the GitOps validation result panel.",
   },
+  "integrate.gitops.envelopeAccepted": {
+    defaultMessage: "Declaration envelope accepted",
+    description: "GitOps dry-run accepted the declaration envelope, not a full apply.",
+  },
+  "integrate.gitops.envelopeDenied": {
+    defaultMessage: "Declaration envelope denied",
+    description: "GitOps dry-run denied the declaration envelope.",
+  },
+  "integrate.gitops.moduleInvalid": {
+    defaultMessage: "Policy module invalid",
+    description: "GitOps candidate policy did not compile or evaluate.",
+  },
+  "integrate.gitops.noDecision": {
+    defaultMessage: "No declaration decision",
+    description: "GitOps dry-run gave no allow or deny result.",
+  },
+  "integrate.gitops.moduleStatus": {
+    defaultMessage: "Policy module",
+    description: "Label separating policy compilation from declaration acceptance.",
+  },
   "integrate.gitops.valid": {
     defaultMessage: "Valid",
     description: "GitOps validation status for a valid declaration.",

@@ -74,8 +74,8 @@ describe("DESIGN-003 GitOps workflow", () => {
       deny: false,
       valid: true,
       kind: "abac",
-      package: "trstctl.gitops",
-      query: "data.trstctl.gitops.allow",
+      package: "trstctl.abac",
+      query: "data.trstctl.abac",
       module_sha256: "sha256-gitops",
       audit_event: "policy.dry_run.evaluated",
       idempotency_key: "idem-gitops",
@@ -137,6 +137,7 @@ describe("DESIGN-003 GitOps workflow", () => {
     expect(apiMock.policyDryRun).toHaveBeenCalledWith(
       expect.objectContaining({
         kind: "abac",
+        module: expect.stringContaining("package trstctl.abac"),
         input: expect.objectContaining({
           action: "gitops.validate",
           subject: "server-tls",
@@ -144,9 +145,34 @@ describe("DESIGN-003 GitOps workflow", () => {
         }),
       }),
     );
+    expect(await screen.findByText("Declaration envelope accepted")).toBeInTheDocument();
     expect(await screen.findByText("policy.dry_run.evaluated")).toBeInTheDocument();
     expect(screen.getByText("sha256-gitops")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Export declaration" })).toHaveAttribute("download", "trstctl-gitops-profile.json");
     expect(screen.getByRole("link", { name: "Open in API playground" })).toHaveAttribute("href", "/integrate/api?operation=dryRunPolicy");
+  });
+
+  it("shows an applicable denial and its reason instead of calling it valid", async () => {
+    apiMock.policyDryRun.mockResolvedValueOnce({
+      allow: false,
+      deny: true,
+      valid: true,
+      kind: "abac",
+      package: "trstctl.abac",
+      query: "data.trstctl.abac",
+      reason: "Declaration does not match the GitOps envelope.",
+      module_sha256: "sha256-denied",
+      audit_event: "policy.dry_run.evaluated",
+      idempotency_key: "idem-denied",
+      input_summary: { action: "gitops.validate", actor: "operator@example.test", subject: "server-tls", tenant_id: "tenant-1" },
+      trace: [],
+    });
+    const user = userEvent.setup();
+    renderIntegrate();
+    await user.click(screen.getByText("GitOps declarations and drift", { exact: true }));
+    await waitFor(() => expect(apiMock.profiles).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByRole("button", { name: "Validate declaration" }));
+    expect(await screen.findByText("Declaration envelope denied")).toBeInTheDocument();
+    expect(screen.getByText("Declaration does not match the GitOps envelope.")).toBeInTheDocument();
   });
 });

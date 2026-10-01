@@ -629,8 +629,10 @@ configuration screen.
 The detailed enrollment and developer surfaces remain available in three closed
 sections. They preserve copyable ACME/EST/SCEP URLs, the Go, TypeScript, Python,
 and Java SDKs, Terraform provider, cert-manager issuer, SPIRE upstream authority,
-live GitOps manifest generation, policy dry-run, and drift comparison. GitOps live
-state is not fetched until that section opens. The permissions and delivery section
+live GitOps manifest generation, policy dry-run, and drift comparison. The GitOps
+dry-run checks the declaration envelope and shows its allow/deny decision separately
+from whether the policy module compiled. It does not apply a declaration or validate
+every resource field. GitOps live state is not fetched until that section opens. The permissions and delivery section
 explains API scopes, signed webhooks, plugin capability grants, and outbox-backed
 retries with receipts in plain language. The Terraform provider is source-ready;
 the hub offers a local installer because no public Registry package is
