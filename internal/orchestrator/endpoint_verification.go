@@ -41,9 +41,19 @@ func (o *Orchestrator) recordEndpointVerification(ctx context.Context, tenantID,
 		if err := o.store.LockCertificateMetadataOrderTx(ctx, tx, tenantID); err != nil {
 			return err
 		}
+		superseded := false
+		if observation.Vantage == "relay" {
+			currentFingerprint, currentAddress, err := o.store.CurrentLocalEndpointExpectationTx(ctx, tx, tenantID, observation.EndpointID)
+			if err != nil {
+				return err
+			}
+			superseded = currentFingerprint != "" &&
+				(currentFingerprint != observation.ExpectedFingerprint || currentAddress != observation.Address)
+		}
 		candidate := projections.EndpointVerificationObservedWithAlert{
 			EndpointVerificationObserved: observation,
-			AlertRequired:                !observation.Reached || observation.Mismatch != "",
+			SupersededExpectation:        superseded,
+			AlertRequired:                !superseded && (!observation.Reached || observation.Mismatch != ""),
 		}
 		if candidate.AlertRequired {
 			lastGood, err := o.store.EndpointVerificationLastGoodTx(ctx, tx, tenantID, observation.EndpointID, observation.Vantage)
@@ -77,7 +87,7 @@ func (o *Orchestrator) recordEndpointVerification(ctx context.Context, tenantID,
 // first event's snapshot, and require every signed observation field to match.
 func retainedEndpointVerification(ev events.Event, tenantID, eventID string, expected projections.EndpointVerificationObserved) (projections.EndpointVerificationObservedWithAlert, error) {
 	var retained projections.EndpointVerificationObservedWithAlert
-	if (eventID != "" && ev.ID != eventID) || ev.TenantID != tenantID || ev.Type != projections.EventEndpointVerified || ev.SchemaVersion != projections.EndpointVerificationAlertEventSchemaVersion {
+	if (eventID != "" && ev.ID != eventID) || ev.TenantID != tenantID || ev.Type != projections.EventEndpointVerified || (ev.SchemaVersion != 2 && ev.SchemaVersion != projections.EndpointVerificationAlertEventSchemaVersion) {
 		return retained, fmt.Errorf("%w: endpoint observation event binding differs", store.ErrIdempotencyConflict)
 	}
 	if err := json.Unmarshal(ev.Data, &retained); err != nil {

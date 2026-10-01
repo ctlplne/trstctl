@@ -73,7 +73,7 @@ func (o *Orchestrator) reconcileEndpointVerificationAlert(ctx context.Context, e
 	}
 	// Legacy observations did not authorize a durable notification. Do not
 	// invent historical alerts during an upgrade or projection reconstruction.
-	if ev.SchemaVersion != projections.EndpointVerificationAlertEventSchemaVersion {
+	if ev.SchemaVersion != 2 && ev.SchemaVersion != projections.EndpointVerificationAlertEventSchemaVersion {
 		return 0, nil
 	}
 	var observed projections.EndpointVerificationObservedWithAlert

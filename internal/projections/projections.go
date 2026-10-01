@@ -3432,7 +3432,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventACMEDNS01RecordPresented:                 {1: true},
 	EventACMEDNS01RecordCleaned:                   {1: true},
 	EventACMEUpstreamAuthorizationObserved:        {1: true},
-	EventEndpointVerified:                         {1: true, EndpointVerificationAlertEventSchemaVersion: true},
+	EventEndpointVerified:                         {1: true, endpointVerificationAlertEventSchemaVersionV2: true, EndpointVerificationAlertEventSchemaVersion: true},
 	EventMDMSCEPPolicyUpserted:                    {1: true},
 	EventMDMSCEPPolicyDeleted:                     {1: true},
 	EventMDMSCEPChallengeRotated:                  {1: true},
@@ -4931,7 +4931,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		return p.store.ApplyACMEDNS01ProviderConfigDeletedTx(ctx, tx, e.TenantID, pl.ID)
 	case EventEndpointVerified:
-		pl, err := decodeEndpointVerificationObserved(e)
+		pl, superseded, err := decodeEndpointVerificationObservedWithDecision(e)
 		if err != nil {
 			return err
 		}
@@ -4945,6 +4945,12 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		// it earlier, with the event type in the error.
 		if !pl.Reached && (pl.Mismatch != "" || pl.CheckedSANs || pl.CheckedChain || pl.ObservedFingerprint != "") {
 			return fmt.Errorf("projections: %s reports an unreached probe that claims an observation", e.Type)
+		}
+		// The signed transcript remains in the event log and job receipt. It
+		// cannot overwrite today's endpoint state or raise a historical alert
+		// when a later deployment changed the comparison identity.
+		if superseded {
+			return nil
 		}
 		observedAt := pl.ObservedAt
 		if observedAt.IsZero() {

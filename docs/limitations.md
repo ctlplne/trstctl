@@ -4591,6 +4591,12 @@ backup. Sweeps run hourly by default (`EndpointVerificationInterval`), batched a
 expectation comes from the control plane's own record of what should be there,
 never from the last observation — re-probing against what was last *seen* would
 re-verify a divergence as correct on the next sweep and silence its own alarm.
+When a queued relay sweep returns after a host deployment has changed that
+endpoint's expected fingerprint or address, its signed transcript and job
+receipt remain historical evidence. The obsolete comparison does not replace
+the current endpoint row or send a divergence alert. A fresh network check is
+still needed to prove the replacement from the relay's vantage; the next
+scheduled sweep obtains the latest local deployment expectation.
 
 **Divergence alerts route by severity, not by finding score.** A served-identity
 divergence is `critical`; an unreachable endpoint is `warning`, because a probe

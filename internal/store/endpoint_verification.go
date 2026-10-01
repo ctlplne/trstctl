@@ -10,6 +10,19 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// CurrentLocalEndpointExpectationTx reads the latest host deployment decision
+// under the caller's certificate metadata fence. An absent local vantage leaves
+// relay-only appliances to the normal relay comparison path.
+func (s *Store) CurrentLocalEndpointExpectationTx(ctx context.Context, tx pgx.Tx, tenantID, endpointID string) (string, string, error) {
+	var fingerprint, address string
+	err := tx.QueryRow(ctx, `SELECT expected_fingerprint, address FROM endpoint_verifications
+	 WHERE tenant_id=$1 AND endpoint_id=$2 AND vantage='local'`, tenantID, endpointID).Scan(&fingerprint, &address)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", nil
+	}
+	return fingerprint, address, err
+}
+
 // EndpointVerificationLastGoodTx snapshots the control plane's own observation
 // history while the caller holds certificate metadata admission. An absent row
 // means the endpoint has never been verified; database errors are not absence.

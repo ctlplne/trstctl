@@ -73,3 +73,43 @@ func TestEndpointVerificationAlertSnapshotKeepsClosedVersionedShape(t *testing.T
 		t.Fatal("projector accepted a failed observation with a contradictory alert decision")
 	}
 }
+
+func TestEndpointVerificationHistoricalAlertVersionAndSupersededDecision(t *testing.T) {
+	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()}, events.WithRequiredPrivacyEventPolicies())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	observed := EndpointVerificationObservedWithAlert{
+		EndpointVerificationObserved: EndpointVerificationObserved{
+			EndpointID: "renewed-listener", Address: "127.0.0.1:18443", Vantage: "relay",
+			Reached: true, Mismatch: "fingerprint", ExpectedFingerprint: "old", ObservedFingerprint: "new",
+		},
+		AlertRequired: true,
+	}
+	oldWire, err := json.Marshal(endpointVerificationObservedWithAlertV2{EndpointVerificationObserved: observed.EndpointVerificationObserved, AlertRequired: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	old, err := log.Append(t.Context(), events.Event{ID: "historical-v2", TenantID: "11111111-1111-4111-8111-111111111111", Type: EventEndpointVerified, SchemaVersion: endpointVerificationAlertEventSchemaVersionV2, Data: oldWire})
+	if err != nil {
+		t.Fatalf("schema-two evidence rejected after upgrade: %v", err)
+	}
+	_, superseded, err := decodeEndpointVerificationObservedWithDecision(old)
+	if err != nil || superseded {
+		t.Fatalf("historical alert decision changed: superseded=%v error=%v", superseded, err)
+	}
+	observed.AlertRequired, observed.SupersededExpectation = false, true
+	newWire, err := json.Marshal(observed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newEvent, err := log.Append(t.Context(), events.Event{ID: "superseded-v3", TenantID: old.TenantID, Type: EventEndpointVerified, SchemaVersion: EndpointVerificationAlertEventSchemaVersion, Data: newWire})
+	if err != nil {
+		t.Fatalf("signed superseded evidence rejected: %v", err)
+	}
+	_, superseded, err = decodeEndpointVerificationObservedWithDecision(newEvent)
+	if err != nil || !superseded {
+		t.Fatalf("superseded decision lost on replay: superseded=%v error=%v", superseded, err)
+	}
+}
