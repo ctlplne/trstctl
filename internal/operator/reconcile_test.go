@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -640,8 +641,8 @@ func TestReconcileTrstctlSecretSyncCreatesSecretAndReloadsWorkloadCAPSECR04(t *t
 // a TrstctlSecretInjection CRD patches a live workload with the shipped
 // trstctl-agent secret-injection sidecar, app-container file mount, optional env
 // valueFrom references, content-hash rollout annotations, status, and idempotence.
-// The operator reads only source Secret metadata; the patch body must not contain
-// raw or base64-encoded secret values.
+// The operator reads source Secret metadata and key names; the patch body must
+// not contain raw or base64-encoded secret values.
 func TestReconcileTrstctlSecretInjectionPatchesWorkloadCAPSECR05(t *testing.T) {
 	f := newFakeCluster()
 	f.secretInjections = []map[string]any{secretInjectionObjectFixture("payments-runtime")}
@@ -748,6 +749,31 @@ func TestRecoveredSecretOperatorStatusClearsOldError(t *testing.T) {
 	}
 	if message, ok := f.injectStatusSet["inject"]["message"]; !ok || message != nil {
 		t.Fatalf("recovered SecretInjection must clear the old message with merge-patch null, got %v (present %v)", message, ok)
+	}
+}
+
+func TestSecretInjectionRejectsMissingSourceKeyBeforeWorkloadPatch(t *testing.T) {
+	f := newFakeCluster()
+	cr := secretInjectionObjectFixture("payments-runtime")
+	spec := cr["spec"].(map[string]any)
+	spec["items"] = []any{map[string]any{"key": "missing", "path": "db/password"}}
+	f.secretInjections = []map[string]any{cr}
+	f.secrets["payments-db"] = liveSyncedSecret("payments-db", "hash-v1")
+	f.deployments["payments-api"] = liveReloadDeployment("payments-api")
+	srv := httptest.NewServer(f.handler())
+	defer srv.Close()
+
+	r := reconcilerForCluster(srv)
+	_, err := r.ReconcileSecretInjectionNamespace(context.Background(), "trstctl-system")
+	if err == nil || !strings.Contains(err.Error(), `key "missing"`) {
+		t.Fatalf("missing source key must fail before patching workload, got %v", err)
+	}
+	if len(f.patched) != 0 {
+		t.Fatalf("missing source key patched workload %d times", len(f.patched))
+	}
+	status := f.injectStatusSet["payments-runtime"]
+	if status["phase"] != "Error" || !strings.Contains(fmt.Sprint(status["message"]), `key "missing"`) {
+		t.Fatalf("missing source key status = %+v, want actionable Error", status)
 	}
 }
 

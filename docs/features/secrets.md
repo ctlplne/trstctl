@@ -686,9 +686,12 @@ metadata only.
 the `TrstctlSecretInjection` CRD consumes a namespace-local Kubernetes Secret and
 patches `Deployment`/`StatefulSet`/`DaemonSet` pod templates with a memory-backed
 shared volume, app-container mounts, optional `valueFrom.secretKeyRef` env entries,
-and the `trstctl-agent --secret-inject` sidecar; the operator reads only
-metadata/content hash, and the sidecar copies volume files as byte slices and wipes
-buffers.
+and the `trstctl-agent --secret-inject` sidecar; the operator checks source
+Secret key names before patching, reads its metadata/content hash, and discards
+the Kubernetes response bytes. The sidecar copies volume files as byte slices
+and wipes buffers. A missing requested key sets the CR to `Error` before a
+workload rollout. `Ready` reports a successful template patch; check workload
+pod readiness separately for sidecar runtime failures.
 
 `GET /api/v1/secrets/unvaulted` / `trstctl-cli secrets unvaulted`: repository and
 third-party scanning sources, redacted `leaked_secret` finding counts, cloud-secret

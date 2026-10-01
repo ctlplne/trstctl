@@ -230,16 +230,16 @@ not this file.
 | `internal/notify/notify.go:79` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/notify/webhook/webhook_test.go:23` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/operator/client.go:37` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/operator/reconcile_test.go:312` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/operator/secretinjection.go:22` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/operator/reconcile_test.go:313` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/operator/secretinjection.go:23` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/operator/secretinjection.go:24` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/operator/secretinjection.go:25` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/operator/secretinjection.go:27` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/operator/secretinjection.go:26` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/operator/secretinjection.go:28` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/operator/secretinjection.go:29` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/operator/secretinjection.go:30` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/operator/secretinjection.go:31` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/operator/secretinjection.go:32` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/operator/secretsync.go:26` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/operator/secretsync.go:27` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/operator/secretsync.go:28` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -1681,7 +1681,7 @@ not this file.
 | `internal/ca/letsencrypt/acmefake/acmefake.go:303` | test-support package compiled only into test binaries (CWE-79) |
 | `internal/connector/fortigate/fortigatetest/fortigatetest.go:219` | test-support package compiled only into test binaries (CWE-79) |
 | `internal/dns/akamai/akamai_test.go:131` | test writes fixture bytes to its own recorder/local server (CWE-79) |
-| `internal/operator/reconcile_test.go:217` | test writes fixture bytes to its own recorder/local server (CWE-79) |
+| `internal/operator/reconcile_test.go:218` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/secretstore/access.go:86` | the secret read API returns the secret by contract; served as octet-stream with nosniff, never an HTML context (CWE-79) |
 | `internal/secretstore/access.go:97` | fixed-shape JSON carrying only an integer version, served as application/json with nosniff (CWE-79) |
 | `internal/secretstore/access.go:113` | fixed-shape JSON carrying only an integer version, served as application/json with nosniff (CWE-79) |

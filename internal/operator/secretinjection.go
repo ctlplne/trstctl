@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 const (
@@ -32,8 +33,8 @@ const (
 )
 
 // SecretInjectionSpec declares no-code workload secret injection. The operator
-// patches the selected workloads; it reads only Kubernetes Secret metadata and
-// never reads Secret.data values.
+// patches the selected workloads; it reads Kubernetes Secret metadata and key
+// names, but never retains Secret.data values.
 type SecretInjectionSpec struct {
 	SourceSecretName       string                       `json:"sourceSecretName"`
 	Workloads              []SecretInjectionWorkloadRef `json:"workloads"`
@@ -65,7 +66,14 @@ type secretInjectionObject struct {
 
 type sourceSecretState struct {
 	contentHash string
+	keys        map[string]ignoredSecretValue
 }
+
+// UnmarshalJSON discards each Secret.data value while preserving the map key.
+// The Kubernetes response body itself is wiped after parsing.
+type ignoredSecretValue struct{}
+
+func (ignoredSecretValue) UnmarshalJSON([]byte) error { return nil }
 
 type workloadTemplateState struct {
 	Spec struct {
@@ -135,6 +143,14 @@ func (r *Reconciler) ReconcileSecretInjection(ctx context.Context, namespace str
 		_ = r.updateSecretInjectionStatus(ctx, namespace, cr.Metadata.Name, "Error", cr.Spec.SourceSecretName, "", nil, err.Error())
 		return ActionNone, err
 	}
+	for _, item := range cr.Spec.Items {
+		key := strings.TrimSpace(item.Key)
+		if _, ok := source.keys[key]; !ok {
+			err := fmt.Errorf("operator: source Secret %s/%s missing key %q", namespace, cr.Spec.SourceSecretName, key)
+			_ = r.updateSecretInjectionStatus(ctx, namespace, cr.Metadata.Name, "Error", cr.Spec.SourceSecretName, "", nil, err.Error())
+			return ActionNone, err
+		}
+	}
 	contentHash := secretInjectionContentHash(cr.Spec, source.contentHash)
 	injected, err := r.patchInjectionWorkloads(ctx, namespace, cr, contentHash)
 	if err != nil {
@@ -193,6 +209,7 @@ func (r *Reconciler) observeInjectionSourceSecret(ctx context.Context, namespace
 	if err != nil {
 		return sourceSecretState{}, err
 	}
+	defer secret.Wipe(body)
 	if st == http.StatusNotFound {
 		return sourceSecretState{}, fmt.Errorf("operator: source Secret %s/%s not found", namespace, name)
 	}
@@ -204,6 +221,7 @@ func (r *Reconciler) observeInjectionSourceSecret(ctx context.Context, namespace
 			ResourceVersion string            `json:"resourceVersion"`
 			Annotations     map[string]string `json:"annotations"`
 		} `json:"metadata"`
+		Data map[string]ignoredSecretValue `json:"data"`
 	}
 	if err := json.Unmarshal(body, &obj); err != nil {
 		return sourceSecretState{}, fmt.Errorf("operator: decode injection source Secret %s/%s: %w", namespace, name, err)
@@ -215,7 +233,7 @@ func (r *Reconciler) observeInjectionSourceSecret(ctx context.Context, namespace
 	if hash == "rv:" {
 		hash = "present"
 	}
-	return sourceSecretState{contentHash: hash}, nil
+	return sourceSecretState{contentHash: hash, keys: obj.Data}, nil
 }
 
 func secretInjectionContentHash(spec SecretInjectionSpec, sourceHash string) string {

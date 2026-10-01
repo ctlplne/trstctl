@@ -3403,9 +3403,10 @@ reload); `GET /api/v1/secrets/workload-injection` (CAP-SECR-05 —
 `TrstctlSecretInjection` patches `Deployment`/`StatefulSet`/`DaemonSet` pod
 templates with the shipped `trstctl-agent --secret-inject` sidecar, a
 memory-backed shared volume, app mounts, optional `valueFrom.secretKeyRef`
-entries, and status/content-hash annotations; the operator reads only Secret
-metadata, and secret bytes never appear in API/status/audit/pod-template
-metadata); and `GET /api/v1/secrets/unvaulted` (CAP-SECR-07 — combines
+entries, and status/content-hash annotations; the operator reads Secret
+metadata and key names but does not retain values; secret bytes never appear
+in API/status/audit/pod-template metadata); and
+`GET /api/v1/secrets/unvaulted` (CAP-SECR-07 — combines
 configured repository/third-party scan sources, redacted `leaked_secret`
 findings, AWS/GCP/Azure/Vault discovery visibility, and vault-augmentation
 sync targets). Arbitrary webhooks intentionally remain the generic JSON
@@ -4754,7 +4755,8 @@ as the default, a default-deny `NetworkPolicy`, and TLS.
   resources it resolves values through the served secret-store API, writes
   `Secret.data`, records `status.contentHash`, and patches pod-template
   annotations instead of deleting pods. For SecretInjection resources it
-  reads source Secret metadata only, patches the shipped
+  reads source Secret metadata and key names, rejects missing requested keys
+  before patching, then patches the shipped
   `trstctl-agent --secret-inject` sidecar, app mounts, and optional env
   references, and records `status.injectedWorkloads`. It is a real,
   level-based reconcile loop (poll, diff, converge), not a stub; it speaks
