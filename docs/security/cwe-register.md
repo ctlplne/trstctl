@@ -555,9 +555,9 @@ not this file.
 | `internal/store/discovery_segments.go:107` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
 | `internal/store/discovery_segments.go:138` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
 | `internal/store/discovery_segments.go:199` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
-| `internal/store/endpoint_verification.go:132` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/endpoint_verification.go:176` | non-negative by construction (CWE-190) |
-| `internal/store/endpoint_verification.go:217` | constrained positive database sequence (CWE-190) |
+| `internal/store/endpoint_verification.go:145` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/endpoint_verification.go:189` | non-negative by construction (CWE-190) |
+| `internal/store/endpoint_verification.go:230` | constrained positive database sequence (CWE-190) |
 | `internal/store/enrollment_diagnostics.go:95` | JetStream sequence fits positive bigint (CWE-190) |
 | `internal/store/enrollment_diagnostics.go:234` | JetStream/PostgreSQL sequences share the signed-bigint storage bound (CWE-190) |
 | `internal/store/enrollment_diagnostics.go:275` | JetStream/PostgreSQL sequences share the signed-bigint storage bound (CWE-190) |

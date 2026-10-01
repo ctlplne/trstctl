@@ -13371,6 +13371,9 @@
           "endpoints": {
             "type": "integer"
           },
+          "not_checked": {
+            "type": "integer"
+          },
           "unreachable": {
             "type": "integer"
           },
@@ -13386,6 +13389,7 @@
           "verified",
           "diverged",
           "unreachable",
+          "not_checked",
           "verified_percent"
         ],
         "type": "object"

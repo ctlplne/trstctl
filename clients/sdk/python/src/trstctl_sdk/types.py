@@ -4485,6 +4485,7 @@ EndpointVerificationSummary = TypedDict(
     {
         'diverged': int,
         'endpoints': int,
+        'not_checked': int,
         'unreachable': int,
         'verified': int,
         'verified_percent': int,

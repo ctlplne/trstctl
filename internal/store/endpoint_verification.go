@@ -238,10 +238,9 @@ func (s *Store) GetEndpointVerification(ctx context.Context, tenantID, endpointI
 type EndpointVerificationSummary struct {
 	// Endpoints is the number of distinct endpoints with any observation.
 	Endpoints int
-	// Verified is how many are currently serving what they should from EVERY
-	// vantage that has looked. Deliberately strict: an endpoint whose relay
-	// probe fails while its local check passes is NOT verified, because a
-	// client cannot get to it.
+	// Verified counts endpoints whose last observation from every vantage
+	// matched the same current local deployment generation. It does not assert
+	// that the listener is still serving that identity now.
 	Verified int
 	// Diverged is how many have a mismatch from any vantage.
 	Diverged int
@@ -249,31 +248,42 @@ type EndpointVerificationSummary struct {
 	// diverged because the operator response differs — a network problem is not
 	// a certificate problem.
 	Unreachable int
+	// NotChecked counts endpoints whose latest relay check compared a
+	// predecessor after a newer local deployment changed the expectation.
+	NotChecked int
 }
 
 // SummarizeEndpointVerifications rolls the per-vantage rows up per endpoint.
 func (s *Store) SummarizeEndpointVerifications(ctx context.Context, tenantID string) (EndpointVerificationSummary, error) {
 	var out EndpointVerificationSummary
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		// The roll-up is per endpoint, and an endpoint counts as verified only
-		// when no vantage found a problem. bool_and over the vantages is what
-		// makes "verified" mean verified everywhere somebody looked, rather
-		// than verified somewhere.
+		// A local renewal invalidates a predecessor relay comparison. Keep
+		// that historical row but exclude it from today's pass/fail counts.
 		return tx.QueryRow(ctx,
-			`SELECT count(*),
-			        count(*) FILTER (WHERE ok),
+			`WITH observations AS (
+			     SELECT endpoint_id, address, vantage, reached, mismatch, expected_fingerprint,
+			            max(expected_fingerprint) FILTER (WHERE vantage='local') OVER (PARTITION BY endpoint_id) AS local_expected,
+			            max(address) FILTER (WHERE vantage='local') OVER (PARTITION BY endpoint_id) AS local_address
+			       FROM endpoint_verifications WHERE tenant_id=$1
+			   ), vantages AS (
+			     SELECT endpoint_id, reached, mismatch,
+			            vantage='relay' AND coalesce(local_expected, '') <> '' AND
+			              (expected_fingerprint <> local_expected OR address <> local_address) AS pending
+			       FROM observations
+			   ), rolled AS (
+			     SELECT endpoint_id,
+			            bool_and(NOT pending AND reached AND mismatch='') AS ok,
+			            bool_or(NOT pending AND mismatch <> '') AS diverged,
+			            bool_or(NOT pending AND NOT reached) AS unreachable,
+			            bool_or(pending) AS not_checked
+			       FROM vantages GROUP BY endpoint_id
+			   )
+			 SELECT count(*), count(*) FILTER (WHERE ok),
 			        count(*) FILTER (WHERE diverged),
-			        count(*) FILTER (WHERE unreachable)
-			   FROM (
-			      SELECT endpoint_id,
-			             bool_and(reached AND mismatch = '') AS ok,
-			             bool_or(mismatch <> '')             AS diverged,
-			             bool_or(NOT reached)                AS unreachable
-			        FROM endpoint_verifications
-			       WHERE tenant_id = $1
-			       GROUP BY endpoint_id
-			   ) rolled`,
-			tenantID).Scan(&out.Endpoints, &out.Verified, &out.Diverged, &out.Unreachable)
+			        count(*) FILTER (WHERE unreachable),
+			        count(*) FILTER (WHERE not_checked)
+			   FROM rolled`,
+			tenantID).Scan(&out.Endpoints, &out.Verified, &out.Diverged, &out.Unreachable, &out.NotChecked)
 	})
 	return out, err
 }

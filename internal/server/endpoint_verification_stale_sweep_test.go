@@ -4,6 +4,7 @@ package server
 
 import (
 	"encoding/json"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +18,66 @@ import (
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
+
+func TestServedRenewalMakesOldRelayCheckNotCheckedForCurrentIdentity(t *testing.T) {
+	h := newRoleHarness(t, []string{mtls.AgentRoleNetwork}, relay.KindEndpointVerify)
+	ctx := t.Context()
+	const endpoint = "04570000-0000-4000-8000-000000000001"
+	address := "127.0.0.1:18443"
+	oldFingerprint, replacement := strings.Repeat("a", 64), strings.Repeat("b", 64)
+	for _, observation := range []projections.EndpointVerificationObserved{
+		{EndpointID: endpoint, Address: address, Vantage: "local", Reached: true, ExpectedFingerprint: oldFingerprint, ObservedFingerprint: oldFingerprint},
+		{EndpointID: endpoint, Address: address, Vantage: "relay", Reached: true, ExpectedFingerprint: oldFingerprint, ObservedFingerprint: oldFingerprint},
+		{EndpointID: endpoint, Address: address, Vantage: "local", Reached: true, ExpectedFingerprint: replacement, ObservedFingerprint: replacement},
+	} {
+		observation.ObservedAt = time.Now().UTC()
+		if err := h.srv.orch.RecordEndpointVerification(ctx, h.tenant, observation); err != nil {
+			t.Fatal(err)
+		}
+	}
+	token := seedScopedToken(t, h.store, h.tenant, "certs:read")
+	status, body := secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/endpoints/verifications", token, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list verification status=%d body=%s", status, body)
+	}
+	var list struct {
+		Items []struct {
+			EndpointID string `json:"endpoint_id"`
+			Vantage    string `json:"vantage"`
+			Status     string `json:"status"`
+			Detail     string `json:"detail"`
+		} `json:"items"`
+		Summary struct {
+			Verified   int `json:"verified"`
+			Diverged   int `json:"diverged"`
+			NotChecked int `json:"not_checked"`
+		} `json:"summary"`
+	}
+	if err := json.Unmarshal(body, &list); err != nil {
+		t.Fatal(err)
+	}
+	if list.Summary.Verified != 0 || list.Summary.Diverged != 0 || list.Summary.NotChecked != 1 {
+		t.Fatalf("mixed-generation endpoint earned a current verdict: %+v", list.Summary)
+	}
+	var relayItem *struct {
+		EndpointID string `json:"endpoint_id"`
+		Vantage    string `json:"vantage"`
+		Status     string `json:"status"`
+		Detail     string `json:"detail"`
+	}
+	for i := range list.Items {
+		if list.Items[i].EndpointID == endpoint && list.Items[i].Vantage == "relay" {
+			relayItem = &list.Items[i]
+		}
+	}
+	if relayItem == nil || relayItem.Status != "not_checked" || !strings.Contains(relayItem.Detail, "superseded") {
+		t.Fatalf("old relay result still claimed current verification: %+v", relayItem)
+	}
+	status, body = secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/endpoints/verifications/"+endpoint, token, nil)
+	if status != http.StatusOK || !jsonContains(t, body, "not_checked") || !jsonContains(t, body, "superseded") {
+		t.Fatalf("exact relay read disagrees with list: status=%d body=%s", status, body)
+	}
+}
 
 // A relay can return an hourly sweep after renewal has changed the identity
 // expected by the host. Its signed measurement is historical evidence, but

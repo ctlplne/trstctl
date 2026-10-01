@@ -259,7 +259,7 @@ describe("auth + dashboards", () => {
     apiMock.endpointVerifications.mockReset();
     apiMock.endpointVerifications.mockResolvedValue({
       items: [],
-      summary: { endpoints: 0, verified: 0, diverged: 0, unreachable: 0, verified_percent: 0 },
+      summary: { endpoints: 0, verified: 0, diverged: 0, unreachable: 0, not_checked: 0, verified_percent: 0 },
       guidance: "",
     });
     apiMock.codeSigningIdentities.mockReset();
@@ -1169,7 +1169,7 @@ describe("auth + dashboards", () => {
     ]);
     apiMock.endpointVerifications.mockResolvedValue({
       items: [],
-      summary: { endpoints: 4, verified: 3, diverged: 1, unreachable: 0, verified_percent: 75 },
+      summary: { endpoints: 4, verified: 3, diverged: 1, unreachable: 0, not_checked: 0, verified_percent: 75 },
       guidance: "",
     });
     renderAt("/");
@@ -1180,5 +1180,21 @@ describe("auth + dashboards", () => {
     // The divergence count is the subtitle, because one endpoint serving the
     // wrong certificate is the thing to act on — not the 75%.
     expect(within(dash).getByText(/1 diverged · oldest check time unavailable/)).toBeInTheDocument();
+  });
+
+  it("names a predecessor relay check as awaiting recheck", async () => {
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1" });
+    apiMock.certificates.mockResolvedValue([
+      { id: "c1", tenant_id: "t1", subject: "CN=api.example.test", issuer: "CN=CA", status: "active", fingerprint: "fp1" },
+    ]);
+    apiMock.endpointVerifications.mockResolvedValue({
+      items: [],
+      summary: { endpoints: 2, verified: 1, diverged: 0, unreachable: 0, not_checked: 1, verified_percent: 50 },
+      guidance: "",
+    });
+    renderAt("/");
+    const dash = await screen.findByRole("region", { name: "Home" });
+    expect(await within(dash).findByText(/1 awaiting relay recheck/)).toBeInTheDocument();
+    expect(within(dash).getByText("50")).toBeInTheDocument();
   });
 });

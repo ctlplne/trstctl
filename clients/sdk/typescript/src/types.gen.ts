@@ -10054,6 +10054,7 @@ export interface components {
         EndpointVerificationSummary: {
             diverged: number;
             endpoints: number;
+            not_checked: number;
             unreachable: number;
             verified: number;
             verified_percent: number;

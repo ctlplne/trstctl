@@ -324,9 +324,9 @@ const (
 	// NOT a divergence: a network problem and a certificate problem send an
 	// operator to different people, and it must never read as verified.
 	EndpointUnreachable = "unreachable"
-	// EndpointNotChecked is the honest default for an endpoint nothing has
-	// probed — including every endpoint for which no operator has configured a
-	// listener address. Absence of a check is not absence of a problem.
+	// EndpointNotChecked means no probe established the current expected
+	// identity from this vantage. An older relay probe is historical evidence
+	// after a newer local deployment, not a pass for the replacement.
 	EndpointNotChecked = "not_checked"
 )
 
@@ -353,7 +353,7 @@ var EndpointVerification = Registry{
 		},
 		{
 			Value:   EndpointNotChecked,
-			Meaning: "No verification has been performed for this endpoint from this vantage. An endpoint with no configured listener address stays here permanently, which is the honest answer rather than a passing one.",
+			Meaning: "No verification has established the current expected identity from this vantage. A predecessor relay check remains historical evidence after renewal. An endpoint with no configured listener address stays here permanently.",
 		},
 	},
 }

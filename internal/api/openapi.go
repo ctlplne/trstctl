@@ -1995,9 +1995,9 @@ func componentSchemas() map[string]*Schema {
 	}, "endpoint_id", "address", "vantage", "status", "checked_sans", "checked_chain")
 	endpointVerificationSummary := object(map[string]*Schema{
 		"endpoints": {Type: "integer"}, "verified": {Type: "integer"},
-		"diverged": {Type: "integer"}, "unreachable": {Type: "integer"},
+		"diverged": {Type: "integer"}, "unreachable": {Type: "integer"}, "not_checked": {Type: "integer"},
 		"verified_percent": {Type: "integer"},
-	}, "endpoints", "verified", "diverged", "unreachable", "verified_percent")
+	}, "endpoints", "verified", "diverged", "unreachable", "not_checked", "verified_percent")
 	endpointVerificationList := object(map[string]*Schema{
 		"items":    {Type: "array", Items: ref("EndpointVerification")},
 		"summary":  ref("EndpointVerificationSummary"),

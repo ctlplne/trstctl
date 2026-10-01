@@ -79,11 +79,15 @@ type EndpointVerificationList struct {
 // vantage up per endpoint. It is historical evidence, not a live health check.
 type EndpointVerificationSummary struct {
 	Endpoints int `json:"endpoints"`
-	// Verified counts endpoints whose last recorded observations matched from
-	// every vantage that looked. An endpoint can change after those checks.
+	// Verified counts endpoints whose last recorded observations matched the
+	// same current deployment generation at every vantage that looked. A
+	// listener can change after those checks.
 	Verified    int `json:"verified"`
 	Diverged    int `json:"diverged"`
 	Unreachable int `json:"unreachable"`
+	// NotChecked means a relay's last observation used a predecessor expectation
+	// after a newer local deployment. A fresh relay check is still required.
+	NotChecked int `json:"not_checked"`
 	// VerifiedPercent is the percentage whose last observations matched. It is
 	// a percentage OF OBSERVED ENDPOINTS, not of the estate: endpoints without a listener
 	// address for are not counted, because counting them as unverified would
@@ -92,9 +96,10 @@ type EndpointVerificationSummary struct {
 	VerifiedPercent int `json:"verified_percent"`
 }
 
-const endpointVerificationGuidance = "Every row here is a TLS handshake somebody actually performed, not a record " +
-	"of what this control plane did. The status and verified percentage describe the last recorded checks, not " +
-	"what a listener is serving now; compare last_checked_at and independently re-probe before relying on a prior pass. " +
+const endpointVerificationGuidance = "Every row here contains the last TLS handshake somebody actually performed, not merely a record " +
+	"of what this control plane did. Status and verified percentage reconcile those checks with the latest local deployment expectation; they are not " +
+	"a live listener claim. Compare last_checked_at and independently re-probe before relying on a prior pass. " +
+	"When a local deployment changes the expected fingerprint, an older relay check reads not_checked until a relay checks that generation. " +
 	"A renewal can succeed at the CA, be delivered by " +
 	"a connector, and never reach the listener, and every delivery record stays truthfully green while clients keep " +
 	"getting the old certificate. 'unreachable' is not a pass and not a divergence — it means nothing was observed. " +
@@ -131,39 +136,20 @@ func (a *API) listEndpointVerifications(w http.ResponseWriter, r *http.Request) 
 			Verified:    summary.Verified,
 			Diverged:    summary.Diverged,
 			Unreachable: summary.Unreachable,
+			NotChecked:  summary.NotChecked,
 		},
 	}
 	if summary.Endpoints > 0 {
 		out.Summary.VerifiedPercent = summary.Verified * 100 / summary.Endpoints
 	}
+	latestLocal := make(map[string]store.EndpointVerification)
 	for _, rec := range rows {
-		item := EndpointVerification{
-			EndpointID: rec.EndpointID, Address: rec.Address, Vantage: rec.Vantage,
-			Status:              endpointVerificationStatus(rec),
-			Mismatch:            rec.Mismatch,
-			CheckedSANs:         rec.CheckedSANs,
-			CheckedChain:        rec.CheckedChain,
-			ExpectedFingerprint: rec.ExpectedFingerprint,
-			ObservedFingerprint: rec.ObservedFingerprint,
-			Detail:              rec.Detail,
-			EvidenceDigest:      rec.EvidenceDigest,
-			AgentCommonName:     rec.AgentCommonName,
+		if rec.Vantage == "local" {
+			latestLocal[rec.EndpointID] = rec
 		}
-		if !rec.NotAfter.IsZero() {
-			item.NotAfter = rec.NotAfter.UTC().Format(time.RFC3339)
-		}
-		if !rec.LastCheckedAt.IsZero() {
-			item.LastCheckedAt = rec.LastCheckedAt.UTC().Format(time.RFC3339)
-		}
-		if !rec.LastGoodAt.IsZero() {
-			item.LastGoodAt = rec.LastGoodAt.UTC().Format(time.RFC3339)
-			stale := int64(now.Sub(rec.LastGoodAt).Seconds())
-			if stale < 0 {
-				stale = 0
-			}
-			item.StaleForSeconds = &stale
-		}
-		out.Items = append(out.Items, item)
+	}
+	for _, rec := range rows {
+		out.Items = append(out.Items, endpointVerificationDTO(rec, now, relayExpectationSuperseded(rec, latestLocal[rec.EndpointID])))
 	}
 	a.writeJSON(w, http.StatusOK, out)
 }
@@ -187,16 +173,31 @@ func (a *API) getEndpointVerification(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	a.writeJSON(w, http.StatusOK, endpointVerificationDTO(record, time.Now().UTC()))
+	local, err := a.store.GetEndpointVerification(r.Context(), tenantID, record.EndpointID, "local")
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, endpointVerificationDTO(record, time.Now().UTC(), relayExpectationSuperseded(record, local)))
 }
 
-func endpointVerificationDTO(rec store.EndpointVerification, now time.Time) EndpointVerification {
+func relayExpectationSuperseded(rec, local store.EndpointVerification) bool {
+	return rec.Vantage == "relay" && local.Vantage == "local" && local.ExpectedFingerprint != "" &&
+		(rec.ExpectedFingerprint != local.ExpectedFingerprint || rec.Address != local.Address)
+}
+
+func endpointVerificationDTO(rec store.EndpointVerification, now time.Time, superseded bool) EndpointVerification {
 	item := EndpointVerification{
 		EndpointID: rec.EndpointID, Address: rec.Address, Vantage: rec.Vantage,
 		Status: endpointVerificationStatus(rec), Mismatch: rec.Mismatch,
 		CheckedSANs: rec.CheckedSANs, CheckedChain: rec.CheckedChain,
 		ExpectedFingerprint: rec.ExpectedFingerprint, ObservedFingerprint: rec.ObservedFingerprint,
 		Detail: rec.Detail, EvidenceDigest: rec.EvidenceDigest, AgentCommonName: rec.AgentCommonName,
+	}
+	if superseded {
+		item.Status = servedstatus.EndpointNotChecked
+		item.Mismatch = ""
+		item.Detail = "Relay observation used a superseded deployment expectation; recheck from the relay before treating the current certificate as verified. " + rec.Detail
 	}
 	if !rec.NotAfter.IsZero() {
 		item.NotAfter = rec.NotAfter.UTC().Format(time.RFC3339)

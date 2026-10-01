@@ -3241,6 +3241,7 @@ export interface EndpointVerificationList {
 export interface EndpointVerificationSummary {
   diverged: number;
   endpoints: number;
+  not_checked: number;
   unreachable: number;
   verified: number;
   verified_percent: number;

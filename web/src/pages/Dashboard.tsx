@@ -424,9 +424,11 @@ export function Dashboard() {
               ? `${summary.diverged} diverged`
               : summary.unreachable > 0
                 ? `${summary.unreachable} unreachable`
-                : `${summary.verified}/${summary.endpoints} matched at last check`) +
+                : summary.not_checked > 0
+                  ? `${summary.not_checked} awaiting relay recheck`
+                  : `${summary.verified}/${summary.endpoints} matched at last check`) +
             ` · oldest check ${oldestCheckTime === null ? "time unavailable" : formatDateTime(oldestCheckTime, { locale, timeZone })}`,
-          tone: summary.diverged > 0 ? ("crit" as const) : summary.unreachable > 0 ? ("warn" as const) : undefined,
+          tone: summary.diverged > 0 ? ("crit" as const) : summary.unreachable > 0 || summary.not_checked > 0 ? ("warn" as const) : undefined,
         }
       : null;
 
