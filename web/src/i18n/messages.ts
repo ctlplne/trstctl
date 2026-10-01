@@ -12928,6 +12928,13 @@ export const messages = {
   "owners.cockpit.queue.empty": { defaultMessage: "No ownership gaps are visible in the known inventory.", description: "Empty ownership action queue." },
   "owners.cockpit.queue.noMatches": { defaultMessage: "No assets match these queue filters.", description: "Ownership queue empty filter result." },
   "owners.cockpit.queue.ariaLabel": { defaultMessage: "Ownership action queue", description: "Accessible label for the ownership action table." },
+  "owners.cockpit.queue.search": { defaultMessage: "Find an asset", description: "Search the ownership action queue by asset name, ID, kind, or owner." },
+  "owners.cockpit.queue.pageSummary": {
+    defaultMessage: "Showing {start}–{end} of {total} assets",
+    description: "Ownership action queue range and filtered result count.",
+  },
+  "owners.cockpit.queue.previous": { defaultMessage: "Previous page", description: "Show the preceding ownership action queue page." },
+  "owners.cockpit.queue.next": { defaultMessage: "Next page", description: "Show the following ownership action queue page." },
   "owners.cockpit.queue.scope": { defaultMessage: "Assets shown", description: "Ownership queue scope selector label." },
   "owners.cockpit.queue.scope.gaps": { defaultMessage: "Needs an owner", description: "Ownership queue scope for current gaps." },
   "owners.cockpit.queue.scope.all": { defaultMessage: "All known assets", description: "Ownership queue scope for assignment and reassignment." },
@@ -12968,6 +12975,10 @@ export const messages = {
   "owners.cockpit.assignment.body": {
     defaultMessage: "This changes the effective owner for {count} assets. Native identity and certificate owner fields change in the same event projection.",
     description: "Security and persistence explanation in assignment dialog.",
+  },
+  "owners.cockpit.assignment.body.one": {
+    defaultMessage: "This changes the effective owner for 1 asset. Native identity and certificate owner fields change in the same event projection.",
+    description: "Security and persistence explanation for a single-asset assignment.",
   },
   "owners.cockpit.assignment.owner": { defaultMessage: "Accountable owner", description: "Owner selector label in assignment dialog." },
   "owners.cockpit.assignment.reason": { defaultMessage: "Why is this ownership correct?", description: "Attributed reason field for ownership assignment." },

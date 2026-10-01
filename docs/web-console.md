@@ -156,6 +156,9 @@ browser sends one idempotency-protected command; the server appends one immutabl
 and certificates, the native lifecycle owner changes in that same projection, so
 admission checks and the browser cannot disagree. Retrying the same command returns
 the first result rather than writing a second decision.
+The queue searches by asset name, exact inventory ID, kind, or current owner, and
+shows 25 rows per page with the filtered result count and page controls. A gap
+beyond the first page remains reachable for individual or bulk assignment.
 
 The exact machinery remains available in three closed disclosures so a first-time
 operator does not have to decode two large tables before learning whether there is

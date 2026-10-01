@@ -5,6 +5,7 @@ import { useToast } from "@/components/ToastProvider";
 import { Dialog } from "@/components/Dialog";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Eyebrow } from "@/components/typography";
 import { useTranslation } from "@/i18n/I18nProvider";
@@ -19,6 +20,8 @@ interface OwnershipCockpitProps {
   onAttestOwner: (owner: Owner) => void;
   attestingID: string | null;
 }
+
+const queuePageSize = 25;
 
 function routeFor(owner: Owner): string[] {
   return [owner.email?.trim() ?? "", ...(owner.escalation_chain ?? []).map((entry) => entry.trim())].filter(Boolean);
@@ -55,6 +58,8 @@ export function OwnershipCockpit(props: OwnershipCockpitProps) {
   const [assignmentError, setAssignmentError] = useState<string | null>(null);
   const [queueScope, setQueueScope] = useState<"gaps" | "all">("gaps");
   const [queueOwner, setQueueOwner] = useState("all");
+  const [queueSearch, setQueueSearch] = useState("");
+  const [queuePage, setQueuePage] = useState(0);
 
   const items = useMemo(() => props.attribution.items ?? [], [props.attribution.items]);
   const gaps = useMemo(() => items.filter((item) => item.attribution_status === "orphaned"), [items]);
@@ -79,10 +84,17 @@ export function OwnershipCockpit(props: OwnershipCockpitProps) {
   const readinessByIdentityID = useMemo(() => new Map((props.readiness?.items ?? []).map((item) => [item.identity_id, item])), [props.readiness?.items]);
   const queueItems = useMemo(() => {
     const scoped = queueScope === "gaps" ? gaps : items;
-    if (queueOwner === "all") return scoped;
-    if (queueOwner === "unowned") return scoped.filter((item) => !item.owner);
-    return scoped.filter((item) => item.owner?.id === queueOwner);
-  }, [gaps, items, queueOwner, queueScope]);
+    const byOwner =
+      queueOwner === "all" ? scoped : queueOwner === "unowned" ? scoped.filter((item) => !item.owner) : scoped.filter((item) => item.owner?.id === queueOwner);
+    const query = queueSearch.trim().toLocaleLowerCase();
+    return query
+      ? byOwner.filter((item) => [item.display_name, item.id, item.kind, item.owner?.name ?? ""].some((value) => value.toLocaleLowerCase().includes(query)))
+      : byOwner;
+  }, [gaps, items, queueOwner, queueScope, queueSearch]);
+  const lastQueuePage = Math.max(0, Math.ceil(queueItems.length / queuePageSize) - 1);
+  const visibleQueuePage = Math.min(queuePage, lastQueuePage);
+  const queueStart = visibleQueuePage * queuePageSize;
+  const visibleQueueItems = queueItems.slice(queueStart, queueStart + queuePageSize);
   const selectedItems = items.filter((item) => selected.has(item.id));
   const selectedIncludesReassignment = selectedItems.some((item) => item.owner);
 
@@ -245,6 +257,19 @@ export function OwnershipCockpit(props: OwnershipCockpitProps) {
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("owners.cockpit.queue.body")}</p>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
+            <label className="grid gap-1 text-caption font-medium sm:col-span-2" htmlFor="ownership-queue-search">
+              {t("owners.cockpit.queue.search")}
+              <Input
+                id="ownership-queue-search"
+                type="search"
+                value={queueSearch}
+                onChange={(event) => {
+                  setQueueSearch(event.target.value);
+                  setQueuePage(0);
+                  setSelected(new Set());
+                }}
+              />
+            </label>
             <label className="grid gap-1 text-caption font-medium" htmlFor="ownership-queue-scope">
               {t("owners.cockpit.queue.scope")}
               <Select
@@ -253,6 +278,7 @@ export function OwnershipCockpit(props: OwnershipCockpitProps) {
                 value={queueScope}
                 onChange={(event) => {
                   setQueueScope(event.target.value as "gaps" | "all");
+                  setQueuePage(0);
                   setSelected(new Set());
                 }}
               >
@@ -268,6 +294,7 @@ export function OwnershipCockpit(props: OwnershipCockpitProps) {
                 value={queueOwner}
                 onChange={(event) => {
                   setQueueOwner(event.target.value);
+                  setQueuePage(0);
                   setSelected(new Set());
                 }}
               >
@@ -293,59 +320,86 @@ export function OwnershipCockpit(props: OwnershipCockpitProps) {
         </div>
         {queueItems.length === 0 ? (
           <p className="px-4 pb-4 text-sm text-muted-foreground">
-            {queueScope === "gaps" && queueOwner === "all" ? t("owners.cockpit.queue.empty") : t("owners.cockpit.queue.noMatches")}
+            {queueScope === "gaps" && queueOwner === "all" && !queueSearch.trim() ? t("owners.cockpit.queue.empty") : t("owners.cockpit.queue.noMatches")}
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[50rem] text-left text-sm" aria-label={t("owners.cockpit.queue.ariaLabel")}>
-              <thead className="border-y border-border bg-muted/50 text-caption text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-2 font-medium">{t("owners.cockpit.queue.select")}</th>
-                  <th className="px-3 py-2 font-medium">{t("owners.attribution.nhi")}</th>
-                  <th className="px-3 py-2 font-medium">{t("owners.attribution.kind")}</th>
-                  <th className="px-3 py-2 font-medium">{t("owners.cockpit.queue.reason")}</th>
-                  <th className="px-4 py-2 font-medium">{t("owners.cockpit.queue.action")}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {queueItems.slice(0, 25).map((item) => {
-                  const identityID = item.id.startsWith("identity/") ? item.id.slice("identity/".length) : "";
-                  const readiness = readinessByIdentityID.get(identityID);
-                  const reason = item.owner ? t("owners.cockpit.reason.currentOwner", { owner: item.owner.name }) : t(readinessLabelKey(readiness?.reason));
-                  return (
-                    <tr key={item.id}>
-                      <td className="px-4 py-3">
-                        <input
-                          type="checkbox"
-                          className="size-4 accent-brand-accent"
-                          aria-label={t("owners.cockpit.queue.selectAsset", { name: item.display_name })}
-                          checked={selected.has(item.id)}
-                          onChange={(event) => {
-                            setSelected((current) => {
-                              const next = new Set(current);
-                              if (event.target.checked) next.add(item.id);
-                              else next.delete(item.id);
-                              return next;
-                            });
-                          }}
-                        />
-                      </td>
-                      <th scope="row" className="px-3 py-3 font-medium">
-                        {item.display_name}
-                      </th>
-                      <td className="px-3 py-3">{item.kind}</td>
-                      <td className="px-3 py-3 text-risk-critical">{reason}</td>
-                      <td className="px-4 py-3">
-                        <Button type="button" size="sm" variant="outline" onClick={() => openAssignment([item])}>
-                          {item.owner ? t("owners.cockpit.assignment.reassign") : t("owners.design.assign")}
-                        </Button>
-                      </td>
-                    </tr>
-                  );
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[50rem] text-left text-sm" aria-label={t("owners.cockpit.queue.ariaLabel")}>
+                <thead className="border-y border-border bg-muted/50 text-caption text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-2 font-medium">{t("owners.cockpit.queue.select")}</th>
+                    <th className="px-3 py-2 font-medium">{t("owners.attribution.nhi")}</th>
+                    <th className="px-3 py-2 font-medium">{t("owners.attribution.kind")}</th>
+                    <th className="px-3 py-2 font-medium">{t("owners.cockpit.queue.reason")}</th>
+                    <th className="px-4 py-2 font-medium">{t("owners.cockpit.queue.action")}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {visibleQueueItems.map((item) => {
+                    const identityID = item.id.startsWith("identity/") ? item.id.slice("identity/".length) : "";
+                    const readiness = readinessByIdentityID.get(identityID);
+                    const reason = item.owner ? t("owners.cockpit.reason.currentOwner", { owner: item.owner.name }) : t(readinessLabelKey(readiness?.reason));
+                    return (
+                      <tr key={item.id}>
+                        <td className="px-4 py-3">
+                          <input
+                            type="checkbox"
+                            className="size-4 accent-brand-accent"
+                            aria-label={t("owners.cockpit.queue.selectAsset", { name: item.display_name })}
+                            checked={selected.has(item.id)}
+                            onChange={(event) => {
+                              setSelected((current) => {
+                                const next = new Set(current);
+                                if (event.target.checked) next.add(item.id);
+                                else next.delete(item.id);
+                                return next;
+                              });
+                            }}
+                          />
+                        </td>
+                        <th scope="row" className="px-3 py-3 font-medium">
+                          {item.display_name}
+                        </th>
+                        <td className="px-3 py-3">{item.kind}</td>
+                        <td className="px-3 py-3 text-risk-critical">{reason}</td>
+                        <td className="px-4 py-3">
+                          <Button type="button" size="sm" variant="outline" onClick={() => openAssignment([item])}>
+                            {item.owner ? t("owners.cockpit.assignment.reassign") : t("owners.design.assign")}
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 pb-4 text-caption text-muted-foreground">
+              <span aria-live="polite">
+                {t("owners.cockpit.queue.pageSummary", {
+                  start: String(queueStart + 1),
+                  end: String(queueStart + visibleQueueItems.length),
+                  total: String(queueItems.length),
                 })}
-              </tbody>
-            </table>
-          </div>
+              </span>
+              {queueItems.length > queuePageSize && (
+                <div className="flex gap-2">
+                  <Button type="button" size="sm" variant="outline" disabled={visibleQueuePage === 0} onClick={() => setQueuePage(visibleQueuePage - 1)}>
+                    {t("owners.cockpit.queue.previous")}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={visibleQueuePage === lastQueuePage}
+                    onClick={() => setQueuePage(visibleQueuePage + 1)}
+                  >
+                    {t("owners.cockpit.queue.next")}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </>
         )}
       </section>
 
@@ -369,7 +423,11 @@ export function OwnershipCockpit(props: OwnershipCockpitProps) {
               <h2 id="ownership-assignment-title" className="text-title font-semibold">
                 {t("owners.cockpit.assignment.title")}
               </h2>
-              <p className="mt-1 text-sm text-muted-foreground">{t("owners.cockpit.assignment.body", { count: String(selectedItems.length) })}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {selectedItems.length === 1
+                  ? t("owners.cockpit.assignment.body.one")
+                  : t("owners.cockpit.assignment.body", { count: String(selectedItems.length) })}
+              </p>
             </div>
             {props.owners.length === 0 ? (
               <div className="rounded-control border border-dashed border-border p-4 text-sm">

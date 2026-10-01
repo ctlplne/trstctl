@@ -250,4 +250,56 @@ describe("ownership operations cockpit", () => {
     });
     expect(await screen.findByText("1 asset now belongs to Mobile MDM")).toBeInTheDocument();
   });
+
+  it("makes ownership gaps beyond the first 25 reachable and searchable", async () => {
+    const user = userEvent.setup();
+    apiMock.ownershipAttribution.mockResolvedValueOnce({
+      generated_at: "2026-08-24T12:00:00Z",
+      summary: { total: 29, attributed: 0, orphaned: 29 },
+      coverage: ["orphaned"],
+      items: Array.from({ length: 29 }, (_, index) => ({
+        id: `agent/agent-${index + 1}`,
+        tenant_id: "tenant-1",
+        kind: "agent",
+        source: "agent_fleet",
+        display_name: `qa-agent-${String(index + 1).padStart(2, "0")}`,
+        attribution_status: "orphaned",
+        attribution_source: "unattributed",
+        attribution_evidence: [],
+        created_at: "2026-08-24T10:00:00Z",
+      })),
+    });
+
+    renderOwners();
+    const cockpit = within(await screen.findByRole("region", { name: "Ownership operations" }));
+    const queue = cockpit.getByRole("table", { name: "Ownership action queue" });
+    expect(within(queue).getAllByRole("checkbox")).toHaveLength(25);
+    expect(cockpit.getByText("Showing 1–25 of 29 assets")).toBeInTheDocument();
+    await user.click(cockpit.getByRole("button", { name: "Next page" }));
+    expect(within(queue).getAllByRole("checkbox")).toHaveLength(4);
+    expect(within(queue).getByRole("checkbox", { name: "Select qa-agent-29" })).toBeInTheDocument();
+    expect(cockpit.getByText("Showing 26–29 of 29 assets")).toBeInTheDocument();
+
+    await user.type(cockpit.getByRole("searchbox", { name: "Find an asset" }), "agent-29");
+    expect(within(queue).getAllByRole("checkbox")).toHaveLength(1);
+    expect(within(queue).getByRole("checkbox", { name: "Select qa-agent-29" })).toBeInTheDocument();
+    expect(cockpit.getByText("Showing 1–1 of 1 assets")).toBeInTheDocument();
+
+    apiMock.assignOwnership.mockResolvedValueOnce({
+      owner_id: "owner-platform",
+      assigned: ["agent/agent-29"],
+      assigned_at: "2026-08-24T12:20:00Z",
+      assigned_by: "operator-ownership",
+    });
+    await user.click(within(queue).getByRole("button", { name: "Assign owner" }));
+    const dialog = screen.getByRole("dialog", { name: "Assign accountable owner" });
+    expect(within(dialog).getByText(/effective owner for 1 asset\./)).toBeInTheDocument();
+    await user.type(within(dialog).getByLabelText("Why is this ownership correct?"), "Platform Trust owns this agent.");
+    await user.click(within(dialog).getByRole("button", { name: "Assign owner" }));
+    expect(apiMock.assignOwnership).toHaveBeenCalledWith({
+      owner_id: "owner-platform",
+      inventory_ids: ["agent/agent-29"],
+      reason: "Platform Trust owns this agent.",
+    });
+  });
 });
