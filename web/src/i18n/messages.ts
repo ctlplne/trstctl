@@ -17972,6 +17972,86 @@ export const messages = {
     defaultMessage: "Residuals",
     description: "Heading for native Kubernetes CSR residual shortfalls.",
   },
+  "workloads.kubernetesLive.heading": {
+    defaultMessage: "Live controller result",
+    description: "Heading for a Kubernetes controller's authenticated report and observed objects.",
+  },
+  "workloads.kubernetesLive.evidenceFor": {
+    defaultMessage: "Live evidence for {name}",
+    description: "Accessible label for one Kubernetes controller evidence group.",
+  },
+  "workloads.kubernetesLive.reportedControllers": {
+    defaultMessage: "{complete} of {total} controllers completed their last reported pass.",
+    description: "Kubernetes controller completion summary from authenticated reports.",
+  },
+  "workloads.kubernetesLive.noReport": {
+    defaultMessage: "No live controller report is available",
+    description: "Honest state when an older or unavailable API does not provide controller evidence.",
+  },
+  "workloads.kubernetesLive.noReportDetail": {
+    defaultMessage: "Check the agent connection and controller status before treating this capability as ready.",
+    description: "Remedy when Kubernetes controller evidence is absent.",
+  },
+  "workloads.kubernetesLive.lastSync": {
+    defaultMessage: "Last controller sync: {time}",
+    description: "Timestamp of the last authenticated Kubernetes controller report.",
+  },
+  "workloads.kubernetesLive.refresh": {
+    defaultMessage: "Refresh controller result",
+    description: "Manually re-read Kubernetes controller posture from the API.",
+  },
+  "workloads.kubernetesLive.counts": {
+    defaultMessage: "Reported object and stale-controller counts",
+    description: "Accessible label for Kubernetes posture counts.",
+  },
+  "workloads.kubernetesLive.ready": {
+    defaultMessage: "Ready objects",
+    description: "Number of Kubernetes objects reported ready.",
+  },
+  "workloads.kubernetesLive.pending": {
+    defaultMessage: "Pending objects",
+    description: "Number of Kubernetes objects still pending.",
+  },
+  "workloads.kubernetesLive.failed": {
+    defaultMessage: "Failed objects",
+    description: "Number of Kubernetes objects reported failed.",
+  },
+  "workloads.kubernetesLive.stale": {
+    defaultMessage: "Stale controllers",
+    description: "Number of Kubernetes controllers whose reports are overdue.",
+  },
+  "workloads.kubernetesLive.objectsFor": {
+    defaultMessage: "Observed objects for {name}",
+    description: "Accessible label for one Kubernetes posture object grid.",
+  },
+  "workloads.kubernetesLive.noObjects": {
+    defaultMessage: "No objects observed",
+    description: "Empty state after a controller completes a pass with no matching objects.",
+  },
+  "workloads.kubernetesLive.noObjectsDetail": {
+    defaultMessage: "The controller reported no matching objects in its last pass.",
+    description: "Clarifies that zero objects is an observed empty state.",
+  },
+  "workloads.kubernetesLive.object": {
+    defaultMessage: "Object",
+    description: "Kubernetes object name column.",
+  },
+  "workloads.kubernetesLive.qualifiedObject": {
+    defaultMessage: "{namespace}/{name}",
+    description: "Namespace-qualified Kubernetes object name.",
+  },
+  "workloads.kubernetesLive.state": {
+    defaultMessage: "State",
+    description: "Kubernetes object readiness state column.",
+  },
+  "workloads.kubernetesLive.reason": {
+    defaultMessage: "Reason",
+    description: "Kubernetes controller's per-object reason column.",
+  },
+  "workloads.kubernetesLive.publicHash": {
+    defaultMessage: "Public content hash",
+    description: "Hash of a public Kubernetes CSR or CA bundle, never secret material.",
+  },
   "workloads.trustBundles.heading": {
     defaultMessage: "Kubernetes trust-bundle distribution",
     description: "Heading for Kubernetes trust-bundle distribution posture on the Workloads page.",

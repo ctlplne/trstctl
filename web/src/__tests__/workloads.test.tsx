@@ -3,6 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Workloads } from "@/pages/Workloads";
+import { kubernetesControllerBadgeValue } from "@/pages/workloads/KubernetesControllerState";
 import { AppQueryProvider } from "@/lib/query";
 import { brokerHistoryPage } from "./support/brokerIdentity";
 
@@ -151,6 +152,27 @@ describe("workload identity disclosure surface", () => {
     expect(within(health).getByRole("link", { name: "1 standing SSH grant" })).toHaveAttribute("href", "/ssh");
     expect(screen.getByText("1 standing grant remains; it can bypass short-lived certificate checks.")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /outside the SSH CA/i })).not.toBeInTheDocument();
+  });
+
+  it("shows authenticated Kubernetes report counts and exact object state", async () => {
+    renderWorkloads();
+    await userEvent.setup().click(screen.getByText("Kubernetes controller evidence"));
+
+    const trustObjects = await screen.findByRole("table", { name: "Observed objects for Kubernetes trust-bundle distribution" });
+    expect(within(trustObjects).getByText("qa-j5-agent-ca")).toBeInTheDocument();
+    expect(within(trustObjects).getByText("distributed")).toBeInTheDocument();
+    expect(within(trustObjects).getByText("324c0a9b75…82608f")).toBeInTheDocument();
+    expect(screen.getAllByText("1 of 1 controllers completed their last reported pass.")).toHaveLength(2);
+    expect(screen.getAllByText("Stale controllers:")).toHaveLength(2);
+  });
+
+  it("does not call a stale or failed controller active", () => {
+    const healthy = kubernetesTrustBundleFixture();
+    expect(kubernetesControllerBadgeValue(healthy)).toBe("active");
+    expect(kubernetesControllerBadgeValue({ ...healthy, summary: { ...healthy.summary, stale_controllers: 1 } })).toBe("pending");
+    expect(kubernetesControllerBadgeValue({ ...healthy, summary: { ...healthy.summary, failed: 1 } })).toBe("failed");
+    expect(kubernetesControllerBadgeValue(healthy, true)).toBe("failed");
+    expect(kubernetesControllerBadgeValue({ ...healthy, summary: undefined })).toBe("pending");
   });
 
   it("renders missing overview evidence as unknown instead of safe zeroes", async () => {
@@ -310,6 +332,19 @@ function kubernetesCSRSupportFixture() {
     evidence_refs: ["internal/agent/k8s/certificate_signing_request.go"],
     residuals: ["poll-based controller"],
     recommended_next_actions: ["move reconciliation to informer-backed queues"],
+    last_sync: "2026-09-30T21:40:15Z",
+    summary: { controllers: 1, complete_controllers: 1, stale_controllers: 0, observed: 1, ready: 1, pending: 0, failed: 0 },
+    objects: [
+      {
+        cluster_id: "sha256:cluster",
+        controller_id: "controller-1",
+        uid: "csr-uid",
+        name: "csr-ckd5k",
+        state: "ready" as const,
+        reason: "already_ready",
+        resource_version: "394",
+      },
+    ],
   };
 }
 
@@ -333,5 +368,19 @@ function kubernetesTrustBundleFixture() {
     evidence_refs: ["internal/agent/k8s/trust_bundle.go"],
     residuals: ["poll-based controller"],
     recommended_next_actions: ["add fleet-level receipts"],
+    last_sync: "2026-09-30T21:40:15Z",
+    summary: { controllers: 1, complete_controllers: 1, stale_controllers: 0, observed: 1, ready: 1, pending: 0, failed: 0 },
+    objects: [
+      {
+        cluster_id: "sha256:cluster",
+        controller_id: "controller-1",
+        uid: "bundle-uid",
+        name: "qa-j5-agent-ca",
+        state: "ready" as const,
+        reason: "distributed",
+        resource_version: "10090",
+        public_hash: "324c0a9b756691181688c2842d83db73676b44bb487a55a36c4d3ab04882608f",
+      },
+    ],
   };
 }

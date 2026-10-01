@@ -7,9 +7,11 @@ import { ScrollableTableRegion } from "@/components/ScrollableTableRegion";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Num } from "@/components/typography";
+import { useApiQuery } from "@/lib/query";
 import { EphemeralCredentialWorkflow } from "@/pages/workloads/EphemeralCredentialWorkflow";
 import { AttestedSVIDWorkflow } from "@/pages/workloads/AttestedSVIDWorkflow";
 import { BrokerIdentityWorkflow } from "@/pages/workloads/BrokerIdentityWorkflow";
+import { KubernetesControllerState, kubernetesControllerBadgeValue } from "@/pages/workloads/KubernetesControllerState";
 import {
   api,
   type Agent,
@@ -19,8 +21,6 @@ import {
   type ContextualRiskPriority,
   type DynamicLease,
   type Identity,
-  type KubernetesCSRSupport,
-  type KubernetesTrustBundleDistribution,
   type RotationRun,
   type SSHFleetInventory,
   type SSHStatus,
@@ -134,10 +134,21 @@ export function Workloads() {
   const [showTrustSourceSetup, setShowTrustSourceSetup] = useState(() => searchParams.get("workflow") === "attester-trust");
   const [showTrustSourceRotation, setShowTrustSourceRotation] = useState(false);
   const [showAttestedIssue, setShowAttestedIssue] = useState(() => searchParams.get("workflow") === "attested");
-  const [csrSupport, setCSRSupport] = useState<KubernetesCSRSupport | null>(null);
-  const [trustBundleSupport, setTrustBundleSupport] = useState<KubernetesTrustBundleDistribution | null>(null);
   const [kubernetesOpened, setKubernetesOpened] = useState(false);
-  const [kubernetesLoaded, setKubernetesLoaded] = useState(false);
+  const csrQuery = useApiQuery(["kubernetes", "csr-posture"], () => api.kubernetesCSRSupport(), {
+    enabled: kubernetesOpened,
+    retry: false,
+    live: { intervalMs: 30_000 },
+  });
+  const trustBundleQuery = useApiQuery(["kubernetes", "trust-bundle-posture"], () => api.kubernetesTrustBundles(), {
+    enabled: kubernetesOpened,
+    retry: false,
+    live: { intervalMs: 30_000 },
+  });
+  const csrSupport = csrQuery.data;
+  const trustBundleSupport = trustBundleQuery.data;
+  const csrSupportError = csrQuery.errorValue ? apiProblemMessage(csrQuery.errorValue, t("workloads.kubernetesCSR.errorFallback")) : null;
+  const trustBundleError = trustBundleQuery.errorValue ? apiProblemMessage(trustBundleQuery.errorValue, t("workloads.trustBundles.errorFallback")) : null;
   const [busy, setBusy] = useState<string | null>(null);
   // B3: per-host SPIFFE Workload API status, read from agent heartbeats. Loaded
   // separately so a deployment without the agent fleet still renders the rest.
@@ -155,8 +166,6 @@ export function Workloads() {
   const [leaseError, setLeaseError] = useState<string | null>(null);
   const [attestationFailures, setAttestationFailures] = useState<AttestationFailure[]>([]);
   const [trustSourceError, setTrustSourceError] = useState<string | null>(null);
-  const [csrSupportError, setCSRSupportError] = useState<string | null>(null);
-  const [trustBundleError, setTrustBundleError] = useState<string | null>(null);
   const trustSourceLoadErrorFallback = t("workloads.attestation.loadErrorFallback");
   const enabledTrustSources = attesterTrustSources.filter((source) => source.enabled && !source.revoked_at);
   const hasEnabledTrustSource = enabledTrustSources.length > 0;
@@ -193,30 +202,6 @@ export function Workloads() {
       active = false;
     };
   }, []);
-
-  useEffect(() => {
-    if (!kubernetesOpened || kubernetesLoaded) return;
-    let cancelled = false;
-    void Promise.allSettled([api.kubernetesCSRSupport(), api.kubernetesTrustBundles()]).then(([csr, bundles]) => {
-      if (cancelled) return;
-      if (csr.status === "fulfilled") {
-        setCSRSupport(csr.value);
-        setCSRSupportError(null);
-      } else {
-        setCSRSupportError(apiProblemMessage(csr.reason, t("workloads.kubernetesCSR.errorFallback")));
-      }
-      if (bundles.status === "fulfilled") {
-        setTrustBundleSupport(bundles.value);
-        setTrustBundleError(null);
-      } else {
-        setTrustBundleError(apiProblemMessage(bundles.reason, t("workloads.trustBundles.errorFallback")));
-      }
-      setKubernetesLoaded(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [kubernetesLoaded, kubernetesOpened, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -650,11 +635,12 @@ export function Workloads() {
                 </h2>
                 <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("workloads.kubernetesCSR.description")}</p>
               </div>
-              <StatusBadge vocabulary="certificate" value={csrSupport?.served ? "active" : "pending"} />
+              <StatusBadge vocabulary="certificate" value={kubernetesControllerBadgeValue(csrSupport, Boolean(csrSupportError))} />
             </div>
             {csrSupportError && <ErrorState title={t("workloads.kubernetesCSR.errorTitle")}>{csrSupportError}</ErrorState>}
+            <KubernetesControllerState kind="csr" report={csrSupport} loading={csrQuery.loading} onRefresh={csrQuery.refetch} />
             <div className="ui-panel grid gap-4 p-comfortable">
-              <div className="grid gap-3 md:grid-cols-4">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <div>
                   <p className="text-xs font-semibold text-muted-foreground">{t("workloads.kubernetesCSR.capability")}</p>
                   <p className="mt-1 font-mono text-sm">{csrSupport?.capability ?? translateNow("source.cap.k8s.04.8591b21c0c")}</p>
@@ -720,11 +706,17 @@ export function Workloads() {
                 </h2>
                 <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("workloads.trustBundles.description")}</p>
               </div>
-              <StatusBadge vocabulary="certificate" value={trustBundleSupport?.served ? "active" : "pending"} />
+              <StatusBadge vocabulary="certificate" value={kubernetesControllerBadgeValue(trustBundleSupport, Boolean(trustBundleError))} />
             </div>
             {trustBundleError && <ErrorState title={t("workloads.trustBundles.errorTitle")}>{trustBundleError}</ErrorState>}
+            <KubernetesControllerState
+              kind="trust-bundle"
+              report={trustBundleSupport}
+              loading={trustBundleQuery.loading}
+              onRefresh={trustBundleQuery.refetch}
+            />
             <div className="ui-panel grid gap-4 p-comfortable">
-              <div className="grid gap-3 md:grid-cols-4">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <div>
                   <p className="text-xs font-semibold text-muted-foreground">{t("workloads.trustBundles.capability")}</p>
                   <p className="mt-1 font-mono text-sm">{trustBundleSupport?.capability ?? translateNow("source.cap.k8s.07.5ce4e8b7f7")}</p>
