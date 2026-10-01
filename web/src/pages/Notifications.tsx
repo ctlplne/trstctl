@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { formatDateTime } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 import {
@@ -115,7 +114,7 @@ const policyQueryKey = ["alert-center", "routing-policies"] as const;
 
 export function Notifications() {
   const { toast } = useToast();
-  const { t } = useTranslation();
+  const { t, formatDateTime } = useTranslation();
   const queryClient = useQueryClient();
   const channelLoadError = t("notifications.channels.loadError");
   const notificationUnavailable = t("notifications.error.unavailable");
@@ -1044,7 +1043,7 @@ function RoutingPolicyAuthoring({
   onSavePolicy: (event: FormEvent<HTMLFormElement>) => void;
   onPreviewRoute: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, formatDateTime } = useTranslation();
   const configured = channels.filter(channelReady);
   const readyChannelIDs = new Set(configured.map((channel) => channel.id));
   const requestedChannelIDs = Array.from(
@@ -1336,7 +1335,7 @@ function NotificationsTable({
   onRequeue: (notification: Notification) => void;
   onDetails: (notification: Notification) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, formatDateTime } = useTranslation();
   const columns: DataGridColumn<Notification>[] = [
     {
       id: "notification",

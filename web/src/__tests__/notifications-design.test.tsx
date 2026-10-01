@@ -6,6 +6,7 @@ import { ToastProvider } from "@/components/ToastProvider";
 import { messages } from "@/i18n/messages";
 import { Notifications } from "@/pages/Notifications";
 import { AppQueryProvider } from "@/lib/query";
+import { IntlProvider } from "@/i18n/I18nProvider";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -43,16 +44,17 @@ const catalog = [
   { id: "webhook", label: "Webhook", category: "webhook", configured: false, delivery: "notification.* outbox fanout" },
 ];
 
-function renderNotifications() {
-  return render(
+function renderNotifications(initialTimeZone?: string) {
+  const page = (
     <AppQueryProvider>
       <MemoryRouter>
         <ToastProvider>
           <Notifications />
         </ToastProvider>
       </MemoryRouter>
-    </AppQueryProvider>,
+    </AppQueryProvider>
   );
+  return render(initialTimeZone ? <IntlProvider initialTimeZone={initialTimeZone}>{page}</IntlProvider> : page);
 }
 
 describe("Global Alert Center", () => {
@@ -118,6 +120,34 @@ describe("Global Alert Center", () => {
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(opener).toHaveFocus();
+  });
+
+  it("renders alert and receipt times in the operator's selected time zone", async () => {
+    const alert = {
+      id: "728",
+      tenant_id: "t1",
+      destination: "notification.verification",
+      kind: "endpoint.verification_failed",
+      subject: "127.0.0.1:18443",
+      status: "dead",
+      severity: "critical",
+      attempts: 10,
+      created_at: "2026-10-01T04:42:39Z",
+    };
+    apiMock.notifications.mockResolvedValue({ items: [alert] });
+    apiMock.notification.mockResolvedValue({
+      ...alert,
+      deliveries: [{ id: "receipt-1", channel: "test", delivered_at: "2026-10-01T04:43:00Z", routing_source: "channel_test" }],
+    });
+    const user = userEvent.setup();
+    renderNotifications("America/New_York");
+    await user.click(await screen.findByRole("button", { name: "Review details" }));
+    const dialog = await screen.findByRole("dialog", { name: "Notification 728" });
+    expect(within(dialog).getByText(/Created Oct 1, 2026, 12:42 AM/)).toBeInTheDocument();
+    expect(within(dialog).getByText("Oct 1, 2026, 12:43 AM")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
+    await user.click(screen.getByRole("tab", { name: "Delivery failures (1)" }));
+    expect(await screen.findByText("Oct 1, 2026, 12:42 AM")).toBeInTheDocument();
   });
 
   it("makes the five operator jobs first-class and keeps a blank tenant honest", async () => {

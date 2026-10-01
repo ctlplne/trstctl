@@ -680,6 +680,8 @@ failed deliveries without claiming that an unavailable read model is empty. It a
 shows a compact event-to-destination path and flags rules that reference only missing
 or disabled channels. **Add channel** is the one primary action. Its bounded dialog
 requires a public HTTPS destination and a credential reference, never a secret value.
+Alert, deadline, and delivery-receipt times use the console's selected time zone;
+the API keeps RFC 3339 UTC timestamps for exact evidence exchange.
 
 Three closed evidence sections keep the default page calm. **Channels and webhooks**
 shows every supported family from `GET /api/v1/notification-channels` (email, Slack,

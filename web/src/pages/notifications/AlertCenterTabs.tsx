@@ -7,7 +7,6 @@ export { meaningfulAttention } from "@/lib/notificationAttention";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
 import { StatusBadge } from "@/components/StatusBadge";
-import { formatDateTime } from "@/i18n/format";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { Eyebrow } from "@/components/typography";
 
@@ -74,7 +73,7 @@ export function NeedsAttention({
   onDetails: (notification: Notification) => void;
   onRequeue: (notification: Notification) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, formatDateTime } = useTranslation();
   const urgent = meaningfulAttention(notifications);
   if (urgent.length === 0) {
     return <EmptyState title={t("notifications.center.clearTitle")}>{t("notifications.center.clearBody")}</EmptyState>;
@@ -114,7 +113,7 @@ export function NeedsAttention({
               <div className="grid min-w-0 gap-4 sm:grid-cols-3">
                 <Fact
                   label={t(notification.deployment_recorded_at ? "notifications.context.historicalDeadline" : "notifications.center.deadline")}
-                  value={deadlineLabel(notification, t)}
+                  value={notification.not_after ? formatDateTime(notification.not_after) : t("notifications.center.noDeadline")}
                 />
                 <Fact
                   label={t("notifications.center.owner")}
@@ -167,11 +166,6 @@ export function ViewIntroduction({ view }: { view: "failures" | "history" | "rou
       <p className="text-sm text-muted-foreground">{t(`notifications.center.${view}Help`)}</p>
     </div>
   );
-}
-
-function deadlineLabel(notification: Notification, t: (key: "notifications.center.noDeadline") => string): string {
-  if (!notification.not_after) return t("notifications.center.noDeadline");
-  return formatDateTime(notification.not_after);
 }
 
 function automationLabel(

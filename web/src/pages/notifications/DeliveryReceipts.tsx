@@ -1,7 +1,6 @@
 import { CredentialChip } from "@/components/CredentialChip";
 import { Num } from "@/components/typography";
 import { useTranslation } from "@/i18n/I18nProvider";
-import { formatDateTime } from "@/i18n/format";
 import type { MessageKey } from "@/i18n/messages";
 import type { Notification } from "@/lib/api";
 
@@ -14,7 +13,7 @@ const routingLabels = {
 } satisfies Record<string, MessageKey>;
 
 export function DeliveryReceipts({ deliveries }: { deliveries: Notification["deliveries"] }) {
-  const { t } = useTranslation();
+  const { t, formatDateTime } = useTranslation();
   return (
     <section aria-label={t("notifications.receipts.heading")} className="min-w-0">
       <h3 className="text-sm font-semibold">{t("notifications.receipts.heading")}</h3>
