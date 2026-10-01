@@ -891,7 +891,10 @@ export function AdminEditions() {
   const [open, setOpen] = useState({ signature: false, features: false, entitlements: false });
   const addLicenseRef = useRef<HTMLButtonElement>(null);
   const packaging = editions?.packaging ?? defaultPackaging;
-  const licensedFeatures = editions?.features.filter((feature) => feature.licensed && feature.mode !== "off").length ?? 0;
+  // The fips row records commercial assurance packaging, while the crypto
+  // module itself is selected by the artifact and checked at startup.
+  const runtimeLicensedFeatures = editions?.features.filter((feature) => feature.name !== "fips") ?? [];
+  const licensedFeatures = runtimeLicensedFeatures.filter((feature) => feature.licensed && feature.mode !== "off").length;
 
   useEffect(() => {
     let active = true;
@@ -994,7 +997,9 @@ export function AdminEditions() {
                 </div>
                 <div className="rounded-control border border-border bg-background p-3">
                   <dt className="text-sm text-muted-foreground">{t("admin.editions.featuresEnabled")}</dt>
-                  <dd className="mt-1 font-semibold">{t("admin.editions.featureCount", { enabled: licensedFeatures, total: editions.features.length })}</dd>
+                  <dd className="mt-1 font-semibold">
+                    {t("admin.editions.featureCount", { enabled: licensedFeatures, total: runtimeLicensedFeatures.length })}
+                  </dd>
                 </div>
                 <div className="rounded-control border border-border bg-background p-3">
                   <dt className="text-sm text-muted-foreground">{t("admin.access.expires")}</dt>
@@ -1060,7 +1065,11 @@ export function AdminEditions() {
                         <span className="mt-1 block font-mono text-xs text-muted-foreground">{feature.name}</span>
                       </td>
                       <td>{humanizeToken(feature.tier)}</td>
-                      <td>{featureStateLabel(feature.licensed, feature.mode)}</td>
+                      <td>
+                        {feature.name === "fips"
+                          ? t(editions.fips?.module_active ? "admin.editions.fipsModuleActive" : "admin.editions.fipsModuleInactive")
+                          : featureStateLabel(feature.licensed, feature.mode)}
+                      </td>
                     </tr>
                   ))}
                   {editions.features.length === 0 ? (
@@ -1275,7 +1284,9 @@ function RegionalIssuanceEvidence({ plan, formatPolicy }: { plan: ActiveActiveIs
             {t("platform.ha.heading")}
           </h3>
         </div>
-        <span className={scaleServedClass(plan.served)}>{plan.served ? t("platform.ha.active") : t("platform.ha.unavailable")}</span>
+        <span className="rounded-control border border-border bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
+          {plan.served && plan.evidence_scope === "reference_architecture" ? t("platform.ha.active") : t("platform.ha.unavailable")}
+        </span>
       </div>
       <p className="mt-2 text-sm text-muted-foreground">{t("platform.ha.description")}</p>
       {/* TRACE-014 source anchor: follower regions expose a served worker's

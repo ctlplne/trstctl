@@ -627,7 +627,7 @@ trstctl-cli revocation rogue-certificates
 # Queue a precertificate and final certificate for RFC 6962 CT log submission.
 trstctl-cli revocation ct-submit -f ct-submission.json
 
-# Show the regional HA issuance posture and write fences.
+# Show the regional HA reference model and write fences; qualify deployment separately.
 trstctl-cli scale ha-issuance
 
 # Start a root CA ceremony, collect two approvals, then create the root.

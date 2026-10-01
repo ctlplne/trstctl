@@ -1416,22 +1416,23 @@ func componentSchemas() map[string]*Schema {
 	}, "id", "trigger", "action", "gate")
 	activeActiveIssuancePlan := object(map[string]*Schema{
 		"capability":              str(),
-		"served":                  {Type: "boolean"},
+		"served":                  {Type: "boolean", Description: "True when the reference route is available; it does not prove regional HA is deployed."},
+		"evidence_scope":          {Type: "string", Enum: []string{"reference_architecture"}, Description: "This response is a static architecture reference, not observed deployment or failover evidence."},
 		"generated_at":            timestamp(),
 		"topology":                str(),
 		"write_model":             str(),
-		"regions":                 {Type: "array", Items: ref("IssuanceRegion")},
+		"regions":                 {Type: "array", Items: ref("IssuanceRegion"), Description: "Example regional roles, not discovered deployment members."},
 		"tenant_write_fences":     {Type: "array", Items: ref("TenantWriteFence")},
 		"issuance_lanes":          {Type: "array", Items: ref("RegionalIssuanceLane")},
 		"failover_runbook":        {Type: "array", Items: ref("RegionalFailoverStep")},
 		"release_gates":           {Type: "array", Items: ref("ScaleReleaseGate")},
-		"rpo_seconds":             {Type: "integer"},
-		"rto_seconds":             {Type: "integer"},
+		"rpo_seconds":             {Type: "integer", Description: "Reference recovery point target; not measured for this deployment."},
+		"rto_seconds":             {Type: "integer", Description: "Reference recovery time target; not measured for this deployment."},
 		"operator_actions":        {Type: "array", Items: str()},
 		"residuals":               {Type: "array", Items: str()},
 		"evidence_refs":           {Type: "array", Items: str()},
 		"architecture_invariants": {Type: "array", Items: str()},
-	}, "capability", "served", "generated_at", "topology", "write_model", "regions", "tenant_write_fences", "issuance_lanes", "failover_runbook", "release_gates", "rpo_seconds", "rto_seconds", "operator_actions", "residuals", "evidence_refs", "architecture_invariants")
+	}, "capability", "served", "evidence_scope", "generated_at", "topology", "write_model", "regions", "tenant_write_fences", "issuance_lanes", "failover_runbook", "release_gates", "rpo_seconds", "rto_seconds", "operator_actions", "residuals", "evidence_refs", "architecture_invariants")
 	managedTenantReq := object(map[string]*Schema{
 		"tenant_id":      uuid(),
 		"name":           str(),

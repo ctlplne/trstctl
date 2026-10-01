@@ -181,9 +181,13 @@ CAP-SCALE-01 is also served as operator-facing posture: `GET
 250k, and 1M credential bands, execution lanes, bulkhead/backpressure controls,
 release gates, and residuals tied to this performance contract.
 
-CAP-SCALE-02 is served as regional HA issuance posture: `GET
-/api/v1/scale/ha-issuance` and `trstctl-cli scale ha-issuance` return active regional
-ingress lanes, tenant write fences, failover gates, and 5s/30s RPO/RTO targets. The
-numbers assume a healthy shared or promoted PostgreSQL writer endpoint, replicated
-JetStream event log, isolated signer placement, and green regional smoke. They do not
-turn independent split-brain writers into a supported topology.
+CAP-SCALE-02 is a regional HA issuance **reference architecture**: `GET
+/api/v1/scale/ha-issuance` and `trstctl-cli scale ha-issuance` return example regional
+ingress lanes, tenant write fences, failover gates, and 5s/30s RPO/RTO **targets**.
+`served: true` means the contract route is available; `evidence_scope:
+reference_architecture` makes clear that this response does not discover deployed
+regions or measure recovery. Qualify each installation with regional issue/renew/revoke
+smoke and a multi-host failover drill before claiming HA or those objectives. The
+targets assume a healthy shared or promoted PostgreSQL writer endpoint, replicated
+JetStream event log, isolated signer placement, and green regional smoke. Independent
+split-brain writers remain unsupported.

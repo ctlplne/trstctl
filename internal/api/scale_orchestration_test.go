@@ -77,6 +77,9 @@ func TestServedActiveActiveIssuanceCAPSCALE02(t *testing.T) {
 	if got.Capability != "CAP-SCALE-02" || !got.Served {
 		t.Fatalf("capability/served = %q/%v, want CAP-SCALE-02/true", got.Capability, got.Served)
 	}
+	if got.EvidenceScope != "reference_architecture" {
+		t.Fatalf("evidence scope = %q, want reference_architecture; the route does not verify a deployment", got.EvidenceScope)
+	}
 	if len(got.Regions) < 2 || len(got.IssuanceLanes) < 2 {
 		t.Fatalf("regions/lanes = %d/%d, want multi-region active issuance lanes", len(got.Regions), len(got.IssuanceLanes))
 	}

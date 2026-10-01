@@ -233,6 +233,7 @@ describe("SIMP-01 Platform served-data reduction", () => {
     apiMock.activeActiveIssuance.mockResolvedValue({
       capability: "CAP-SCALE-02",
       served: true,
+      evidence_scope: "reference_architecture",
       generated_at: "2026-06-29T00:00:00Z",
       topology: "multi-region active ingress on a shared writer plane",
       write_model: "active regional API acceptance with idempotency and event append fencing",
@@ -385,8 +386,8 @@ describe("SIMP-01 Platform served-data reduction", () => {
     expect(apiMock.platformDistribution).not.toHaveBeenCalled();
     await user.click(screen.getByText("Entitlement evidence", { exact: true }));
     await user.click(screen.getByText("Deployment architecture evidence", { exact: true }));
-    expect(await screen.findByRole("heading", { name: "Regional issuance HA" })).toBeInTheDocument();
-    expect(screen.getByText("CAP-SCALE-02 active")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Regional issuance reference" })).toBeInTheDocument();
+    expect(screen.getByText("CAP-SCALE-02 reference available")).toBeInTheDocument();
     expect(screen.getByText("idempotency")).toBeInTheDocument();
     expect(apiMock.members).not.toHaveBeenCalled();
     expect(apiMock.scaleOrchestration).not.toHaveBeenCalled();

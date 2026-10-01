@@ -440,9 +440,12 @@ they depend on how often you back up and how fast your datastores restore.
   `TRSTCTL_FEDERATION_RTO=30s`, but validate it against your ingress, DNS, and client
   retry behavior.
 
-CAP-SCALE-02 exposes the active regional issuance posture at
-`GET /api/v1/scale/ha-issuance` and `trstctl-cli scale ha-issuance`. Its 5s RPO and
-30s RTO targets assume regional ingress only routes to healthy regions whose shared or
+CAP-SCALE-02 exposes a regional issuance reference architecture at
+`GET /api/v1/scale/ha-issuance` and `trstctl-cli scale ha-issuance`. The response
+sets `evidence_scope: reference_architecture`; `served: true` confirms route
+availability, not that multiple regions are deployed or recovery was measured.
+Its 5s RPO and 30s RTO targets require a multi-host drill before they can be claimed
+for a deployment. They assume regional ingress only routes to healthy regions whose shared or
 promoted PostgreSQL writer endpoint, replicated JetStream event log, idempotency table,
 outbox leadership, and signer/HSM path are green. If any write fence is stale, the
 runbook pauses issuance instead of allowing independent writers for the same tenant.

@@ -914,6 +914,7 @@ ActiveActiveIssuancePlan = TypedDict(
         'architecture_invariants': list[str],
         'capability': str,
         'evidence_refs': list[str],
+        'evidence_scope': str,
         'failover_runbook': list[dict[str, Any]],
         'generated_at': str,
         'issuance_lanes': list[dict[str, Any]],

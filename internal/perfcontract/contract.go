@@ -148,13 +148,13 @@ type ScaleProjectionPosture struct {
 	RebuildSource              string `json:"rebuild_source"`
 }
 
-// ActiveActiveIssuancePlan describes the served HA issuance contract. It is
-// deliberately a fenced active/active ingress model: many regions may accept
-// issuance traffic, while idempotency, PostgreSQL transactions, the event log, and
-// signer isolation keep each mutation single-writer and replayable.
+// ActiveActiveIssuancePlan describes a reference HA issuance architecture.
+// Served means this route is available; it does not verify that a deployment has
+// these regions or has met the recovery targets. A regional drill must do that.
 type ActiveActiveIssuancePlan struct {
 	Capability             string                 `json:"capability"`
 	Served                 bool                   `json:"served"`
+	EvidenceScope          string                 `json:"evidence_scope"`
 	GeneratedAt            string                 `json:"generated_at"`
 	Topology               string                 `json:"topology"`
 	WriteModel             string                 `json:"write_model"`
@@ -524,12 +524,13 @@ func ActiveActiveIssuance(generatedAt string) ActiveActiveIssuancePlan {
 		generatedAt = "1970-01-01T00:00:00Z"
 	}
 	return ActiveActiveIssuancePlan{
-		Capability:  "CAP-SCALE-02",
-		Served:      true,
-		GeneratedAt: generatedAt,
-		Topology:    "multi-region active ingress on a shared external PostgreSQL writer plane and replicated JetStream event log",
-		WriteModel:  "active-active regional API acceptance with single-writer mutation fencing per idempotency key and event append; not split-brain independent CAs",
-		Regions:     append([]IssuanceRegion(nil), activeActiveRegions...),
+		Capability:    "CAP-SCALE-02",
+		Served:        true,
+		EvidenceScope: "reference_architecture",
+		GeneratedAt:   generatedAt,
+		Topology:      "multi-region active ingress on a shared external PostgreSQL writer plane and replicated JetStream event log",
+		WriteModel:    "active-active regional API acceptance with single-writer mutation fencing per idempotency key and event append; not split-brain independent CAs",
+		Regions:       append([]IssuanceRegion(nil), activeActiveRegions...),
 		TenantWriteFences: append(
 			[]TenantWriteFence(nil),
 			activeActiveFences...,

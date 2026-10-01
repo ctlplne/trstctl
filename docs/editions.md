@@ -194,6 +194,12 @@ Free/Community by default unless a signed license explicitly grants it as an ext
 Provider inherits every Enterprise row below, then adds the Provider rows.
 PCAS, agent delegation, reconciliation, verifiable decommissioning, PQC and
 remediation are core capabilities and require no commercial feature grant.
+The `fips` row is a commercial assurance/distribution classification, not a
+runtime switch: a FIPS-capable artifact is built with `make fips-build`, and
+startup checks its module and self-test. The running module status appears
+separately in `GET /api/v1/editions` under `fips`; the license feature row does
+not decide whether the module runs. The console excludes `fips` from its count
+of runtime licensed features.
 
 | Feature ID | Edition | Product line |
 |---|---|---|

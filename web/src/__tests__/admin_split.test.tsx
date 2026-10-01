@@ -197,6 +197,7 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
     });
     apiMock.activeActiveIssuance.mockResolvedValue({
       served: true,
+      evidence_scope: "reference_architecture",
       topology: "active-active",
       write_model: "tenant fenced",
       regions: [{ id: "region-a", region: "us-east", role: "primary", writable_scope: "tenant-a", health_signal: "healthy" }],
@@ -255,12 +256,15 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
     await user.click(architectureSummary);
     await waitFor(() => expect(apiMock.activeActiveIssuance).toHaveBeenCalledTimes(1));
     expect(apiMock.platformDistribution).toHaveBeenCalledTimes(1);
-    const regionalHeading = await screen.findByRole("heading", { name: "Regional issuance HA" });
+    const regionalHeading = await screen.findByRole("heading", { name: "Regional issuance reference" });
     expect(regionalHeading.closest("section")).toHaveClass("min-w-0");
+    expect(screen.getByText("CAP-SCALE-02 reference available")).toBeInTheDocument();
+    expect(screen.getByText(/does not verify this deployment's regions or recovery times/i)).toBeInTheDocument();
+    expect(screen.getByText("Target RPO / RTO (not measured)")).toBeInTheDocument();
     expect(
       screen.getByText("Passive-read-state model: projections can be read from follower regions while the write path stays on one writable region per tenant."),
     ).toBeInTheDocument();
-    expect(screen.getByRole("table", { name: "Regional issuance ingress table" }).closest("[role='region']")).toHaveClass("min-w-0", "max-w-full");
+    expect(screen.getByRole("table", { name: "Example regional ingress roles" }).closest("[role='region']")).toHaveClass("min-w-0", "max-w-full");
     expect(await axe(view.container)).toHaveNoViolations();
   });
 
@@ -332,6 +336,30 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
     expect(screen.getByText(expiry)).toBeInTheDocument();
     expect(apiMock.activeActiveIssuance).not.toHaveBeenCalled();
     expect(apiMock.platformDistribution).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])("separates FIPS artifact state %s from commercial license grants", async (moduleActive) => {
+    apiMock.editions.mockResolvedValue({
+      tier: "community",
+      state: "community",
+      rights: ["self_host"],
+      features: [
+        { name: "fips", tier: "enterprise", licensed: false, mode: "off" },
+        { name: "byok", tier: "enterprise", licensed: false, mode: "off" },
+      ],
+      fips: { module_active: moduleActive, required: false, self_test_passed: true, build_target: "make fips-build" },
+    });
+
+    renderAt("/admin/editions");
+    expect(await screen.findByRole("heading", { name: "Community plan is active" })).toBeInTheDocument();
+    expect(screen.getByText("Licensed features enabled").parentElement).toHaveTextContent("0 of 1 enabled");
+    await userEvent.click(screen.getByText("Feature table", { exact: true }));
+    const rows = within(screen.getByRole("table", { name: "Feature table" })).getAllByRole("row");
+    const fipsRow = rows.find((row) => within(row).queryAllByText("fips", { exact: true }).length > 0);
+    expect(fipsRow).toBeDefined();
+    expect(fipsRow).toHaveTextContent(moduleActive ? "FIPS module active — artifact controlled" : "FIPS module inactive — artifact controlled");
+    expect(fipsRow).not.toHaveTextContent("Not licensed");
+    expect(screen.getByText(/FIPS activation uses a FIPS-capable build and startup self-test/)).toBeInTheDocument();
   });
 
   it("redirects an unknown /platform tab to /admin/access", async () => {

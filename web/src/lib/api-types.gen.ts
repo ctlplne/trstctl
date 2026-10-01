@@ -666,6 +666,7 @@ export interface ActiveActiveIssuancePlan {
   architecture_invariants: string[];
   capability: string;
   evidence_refs: string[];
+  evidence_scope: "reference_architecture";
   failover_runbook: RegionalFailoverStep[];
   generated_at: string;
   issuance_lanes: RegionalIssuanceLane[];

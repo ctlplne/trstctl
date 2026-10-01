@@ -5296,7 +5296,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Multi-region HA issuance posture */
+        /** Multi-region HA issuance reference architecture */
         get: operations["getActiveActiveIssuance"];
         put?: never;
         post?: never;
@@ -7295,16 +7295,25 @@ export interface components {
             architecture_invariants: string[];
             capability: string;
             evidence_refs: string[];
+            /**
+             * @description This response is a static architecture reference, not observed deployment or failover evidence.
+             * @enum {string}
+             */
+            evidence_scope: "reference_architecture";
             failover_runbook: components["schemas"]["RegionalFailoverStep"][];
             /** Format: date-time */
             generated_at: string;
             issuance_lanes: components["schemas"]["RegionalIssuanceLane"][];
             operator_actions: string[];
+            /** @description Example regional roles, not discovered deployment members. */
             regions: components["schemas"]["IssuanceRegion"][];
             release_gates: components["schemas"]["ScaleReleaseGate"][];
             residuals: string[];
+            /** @description Reference recovery point target; not measured for this deployment. */
             rpo_seconds: number;
+            /** @description Reference recovery time target; not measured for this deployment. */
             rto_seconds: number;
+            /** @description True when the reference route is available; it does not prove regional HA is deployed. */
             served: boolean;
             tenant_write_fences: components["schemas"]["TenantWriteFence"][];
             topology: string;

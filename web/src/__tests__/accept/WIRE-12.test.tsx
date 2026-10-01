@@ -271,6 +271,7 @@ describe("WIRE-12 Platform served admin surface", () => {
     apiMock.activeActiveIssuance.mockResolvedValue({
       capability: "CAP-SCALE-02",
       served: true,
+      evidence_scope: "reference_architecture",
       generated_at: "2026-06-29T00:00:00Z",
       topology: "multi-region active ingress on a shared writer plane",
       write_model: "active regional API acceptance with idempotency and event append fencing",
@@ -356,15 +357,15 @@ describe("WIRE-12 Platform served admin surface", () => {
     expect(screen.queryByText(/\$15,000/)).not.toBeInTheDocument();
     expect(screen.getByRole("row", { name: /Free Enterprise self-host Provider \/ MSP/i })).toBeInTheDocument();
     await user.click(screen.getByText("Feature table", { exact: true }));
-    expect(screen.getByRole("row", { name: /fips enterprise Enabled/i })).toBeInTheDocument();
-    expect(screen.getByText(/FIPS module inactive/i)).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /fips enterprise FIPS module inactive/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/FIPS module inactive/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/self-test passed/i)).toBeInTheDocument();
-    // Regional issuance HA is an edition-gated capability disclosed with the license matrix.
+    // The regional contract is a reference, not deployment verification.
     await user.click(screen.getByText("Deployment architecture evidence", { exact: true }));
-    expect(await screen.findByRole("heading", { name: "Regional issuance HA" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Regional issuance reference" })).toBeInTheDocument();
     expect(apiMock.activeActiveIssuance).toHaveBeenCalledTimes(1);
     expect(apiMock.platformDistribution).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("CAP-SCALE-02 active")).toBeInTheDocument();
+    expect(screen.getByText("CAP-SCALE-02 reference available")).toBeInTheDocument();
     expect(screen.getByText("regional-smoke")).toBeInTheDocument();
     editionsPage.unmount();
 

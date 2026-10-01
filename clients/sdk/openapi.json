@@ -2738,6 +2738,13 @@
             },
             "type": "array"
           },
+          "evidence_scope": {
+            "description": "This response is a static architecture reference, not observed deployment or failover evidence.",
+            "enum": [
+              "reference_architecture"
+            ],
+            "type": "string"
+          },
           "failover_runbook": {
             "items": {
               "$ref": "#/components/schemas/RegionalFailoverStep"
@@ -2761,6 +2768,7 @@
             "type": "array"
           },
           "regions": {
+            "description": "Example regional roles, not discovered deployment members.",
             "items": {
               "$ref": "#/components/schemas/IssuanceRegion"
             },
@@ -2779,12 +2787,15 @@
             "type": "array"
           },
           "rpo_seconds": {
+            "description": "Reference recovery point target; not measured for this deployment.",
             "type": "integer"
           },
           "rto_seconds": {
+            "description": "Reference recovery time target; not measured for this deployment.",
             "type": "integer"
           },
           "served": {
+            "description": "True when the reference route is available; it does not prove regional HA is deployed.",
             "type": "boolean"
           },
           "tenant_write_fences": {
@@ -2803,6 +2814,7 @@
         "required": [
           "capability",
           "served",
+          "evidence_scope",
           "generated_at",
           "topology",
           "write_model",
@@ -55139,7 +55151,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Multi-region HA issuance posture",
+        "summary": "Multi-region HA issuance reference architecture",
         "x-trstctl-permission": "access:read"
       }
     },

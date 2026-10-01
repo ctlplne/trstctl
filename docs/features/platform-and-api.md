@@ -350,31 +350,34 @@ renders the same plan with the served lane/gate/band tables.
 
 ### Multi-region HA issuance (CAP-SCALE-02)
 
-trstctl serves the regional HA issuance posture at
-`GET /api/v1/scale/ha-issuance` and `trstctl-cli scale ha-issuance`. This is an
-active regional ingress model, not independent split-brain CA writers: multiple regions
-can accept issuance traffic, but every tenant mutation still commits through a fenced
+trstctl serves a regional HA issuance **reference architecture** at
+`GET /api/v1/scale/ha-issuance` and `trstctl-cli scale ha-issuance`. The response
+sets `evidence_scope: reference_architecture`. Its named regions are examples, not
+discovered deployment members; `served: true` confirms the route is available, not
+that this installation has active regional HA. In the model, multiple regions can
+accept issuance traffic, but every tenant mutation still commits through a fenced
 writer plane with the same idempotency record, event append, transactional outbox,
 leader election, and isolated signer boundary.
 
 The endpoint returns:
 
-- active issuance regions, their writable scope, signer placement, datastore/event-log
+- example issuance regions, their writable scope, signer placement, datastore/event-log
   posture, and health signals;
 - tenant write fences for idempotency, event-log append, outbox side effects,
   leader-owned workers, and signer isolation;
 - regional issuance lanes for API, agent renewal, and protocol enrollment traffic;
 - failover steps and release gates for regional smoke, failover drills, idempotency
   replay, and the architecture linter;
-- default RPO/RTO targets of 5 seconds and 30 seconds, plus residuals for customer DNS,
+- RPO/RTO targets of 5 seconds and 30 seconds, not measurements, plus residuals for customer DNS,
   ingress, datastore promotion, signer/HSM latency, and external CA provider limits.
 
-This fits beside F41 federation rather than replacing it. Federation still gives a
-passive region replayable read state from peer event import. CAP-SCALE-02 adds a served
-operator contract for active regional issuance ingress only when the shared or promoted
-writer endpoint, replicated JetStream event log, idempotency table, outbox, and signer
-health are green. If those fences degrade, issuance fails closed instead of minting from
-two independent writers.
+This fits beside F41 federation. Federation gives a passive region replayable read
+state from peer event import. CAP-SCALE-02 describes active regional issuance ingress
+that requires a healthy shared or promoted writer endpoint, replicated JetStream
+event log, idempotency table, outbox, and signer. Qualify a real installation with
+regional issue/renew/revoke smoke and a multi-host failover drill before claiming
+HA or the target recovery times. If write fences degrade, issuance must fail closed
+instead of minting from two independent writers.
 
 ### Enterprise support, SLAs, and professional services (CAP-MODEL-04)
 

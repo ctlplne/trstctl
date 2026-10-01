@@ -4201,7 +4201,10 @@ export const messages = {
     defaultMessage: "Plan and license could not be read. No license state was assumed.",
     description: "Sanitized, fail-closed license read error.",
   },
-  "admin.editions.featuresEnabled": { defaultMessage: "Features enabled", description: "Enabled-feature answer metric." },
+  "admin.editions.featuresEnabled": {
+    defaultMessage: "Licensed features enabled",
+    description: "Enabled runtime license-feature answer metric; excludes artifact-gated FIPS.",
+  },
   "admin.editions.featureCount": { defaultMessage: "{enabled} of {total} enabled", description: "Enabled license feature count." },
   "admin.editions.noExpiry": { defaultMessage: "No expiry — Community", description: "Community has no signed commercial license expiry." },
   "admin.editions.activeAnswer": { defaultMessage: "{plan} plan is active", description: "Answer for an active signed plan." },
@@ -4235,8 +4238,17 @@ export const messages = {
   },
   "admin.editions.featureTable": { defaultMessage: "Feature table", description: "Second Plan and license disclosure label." },
   "admin.editions.featureDescription": {
-    defaultMessage: "Each gated feature, its plan, and whether this process can use it.",
-    description: "Feature disclosure summary.",
+    defaultMessage:
+      "Commercial grants and FIPS build posture. FIPS activation uses a FIPS-capable build and startup self-test, not a runtime license; its Enterprise row covers assurance packaging.",
+    description: "Feature disclosure summary that distinguishes artifact-gated FIPS from runtime license grants.",
+  },
+  "admin.editions.fipsModuleActive": {
+    defaultMessage: "FIPS module active — artifact controlled",
+    description: "FIPS row runtime state when the served artifact has an active module.",
+  },
+  "admin.editions.fipsModuleInactive": {
+    defaultMessage: "FIPS module inactive — artifact controlled",
+    description: "FIPS row runtime state when the served artifact has no active module.",
   },
   "admin.editions.entitlementEvidence": { defaultMessage: "Entitlement evidence", description: "Third Plan and license disclosure label." },
   "admin.editions.entitlementDescription": {
@@ -14923,12 +14935,12 @@ export const messages = {
     description: "Scale credential band tier table column.",
   },
   "platform.ha.heading": {
-    defaultMessage: "Regional issuance HA",
-    description: "Heading for the multi-region high-availability issuance panel.",
+    defaultMessage: "Regional issuance reference",
+    description: "Heading for the reference multi-region issuance architecture.",
   },
   "platform.ha.active": {
-    defaultMessage: "CAP-SCALE-02 active",
-    description: "Badge showing that regional HA issuance is active.",
+    defaultMessage: "CAP-SCALE-02 reference available",
+    description: "Badge showing that a reference architecture is available, not deployed HA.",
   },
   "platform.ha.unavailable": {
     defaultMessage: "regional issuance unavailable",
@@ -14936,24 +14948,24 @@ export const messages = {
   },
   "platform.ha.description": {
     defaultMessage:
-      "Regional ingress can accept issuance traffic while idempotency, event append, outbox, leader election, and signer isolation keep each tenant mutation fenced.",
-    description: "Short description of the regional HA issuance safety model.",
+      "This API returns a reference architecture. It does not verify this deployment's regions or recovery times. Run regional issuance and failover drills before claiming HA or the target RPO/RTO.",
+    description: "Explains the scope and verification limit of regional HA evidence.",
   },
   "source.passive.read.state.model.projections.can.b.9f2d6a2da6": {
     defaultMessage: "Passive-read-state model: projections can be read from follower regions while the write path stays on one writable region per tenant.",
     description: "Explains that follower regions serve read state without becoming independent writers.",
   },
   "platform.ha.topology": {
-    defaultMessage: "Topology",
-    description: "Metric label for regional issuance topology.",
+    defaultMessage: "Reference topology",
+    description: "Metric label for example regional issuance topology.",
   },
   "platform.ha.writeModel": {
     defaultMessage: "Write model",
     description: "Metric label for regional issuance write model.",
   },
   "platform.ha.rpoRto": {
-    defaultMessage: "RPO / RTO",
-    description: "Metric label for recovery point and recovery time objectives.",
+    defaultMessage: "Target RPO / RTO (not measured)",
+    description: "Metric label for reference recovery point and time targets.",
   },
   "platform.ha.rpoRtoValue": {
     defaultMessage: "RPO {rpo}s · RTO {rto}s",
@@ -14964,8 +14976,8 @@ export const messages = {
     description: "Metric label for architecture invariants preserved by regional issuance.",
   },
   "platform.ha.regionCaption": {
-    defaultMessage: "Regional issuance ingress table",
-    description: "Accessible caption for regional issuance ingress rows.",
+    defaultMessage: "Example regional ingress roles",
+    description: "Accessible caption for example regional issuance ingress rows.",
   },
   "platform.ha.region": {
     defaultMessage: "Region",
