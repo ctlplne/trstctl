@@ -124,9 +124,14 @@ export function CodeSigning() {
                       ? t("codesign.health.tsaServing")
                       : t("codesign.health.tsaReview")
                 }
-                to="/tsa"
+                to="/protocols"
               />
-              <SoftwareHealth icon={<KeyRound className="h-4 w-4" aria-hidden="true" />} urgent label={t("codesign.health.keysUnavailable")} to="/ca" />
+              <SoftwareHealth
+                icon={<KeyRound className="h-4 w-4" aria-hidden="true" />}
+                urgent
+                label={t("codesign.health.keysUnavailable")}
+                to="/ca-hierarchy"
+              />
               <SoftwareHealth
                 icon={<CheckCircle2 className="h-4 w-4" aria-hidden="true" />}
                 urgent={operationsUnavailable}

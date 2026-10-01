@@ -320,8 +320,8 @@ describe("code signing console", () => {
     const health = screen.getByRole("list", { name: "Software Trust health" });
     expect(screen.getByText("1 signing or transparency failure")).toBeInTheDocument();
     expect(screen.getByText("1 signing approval waiting")).toBeInTheDocument();
-    expect(screen.getByText("Timestamping is serving")).toBeInTheDocument();
-    expect(screen.getByText("Managed-key inventory is not exposed by this read model")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Timestamping is serving" })).toHaveAttribute("href", "/protocols");
+    expect(screen.getByRole("link", { name: "Managed-key inventory is not exposed by this read model" })).toHaveAttribute("href", "/ca-hierarchy");
     expect(within(health).getByText("2 recent signing operations")).toBeInTheDocument();
 
     const outcomes = screen.getByRole("table", { name: "Recent software-signing outcomes" });
