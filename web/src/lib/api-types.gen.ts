@@ -6668,6 +6668,7 @@ export interface SPIFFEQualification {
   checks: SPIFFEQualificationCheck[];
   client_boundary: string;
   effect_free: boolean;
+  hybrid_svids: boolean;
   local_socket_deprecated: boolean;
   preview_external_effects: string[];
   preview_signer_calls: string[];

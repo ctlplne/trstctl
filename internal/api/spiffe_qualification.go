@@ -34,6 +34,7 @@ type SPIFFERuntimePosture struct {
 	IssuingPathReady       bool
 	BulkheadReady          bool
 	LocalSocketDeprecated  bool
+	HybridSVIDs            bool
 	SupportedOperations    []string
 }
 
@@ -63,6 +64,7 @@ type SPIFFEQualification struct {
 	SocketMode             string                     `json:"socket_mode"`
 	RegistrationEntryCount int                        `json:"registration_entry_count"`
 	LocalSocketDeprecated  bool                       `json:"local_socket_deprecated"`
+	HybridSVIDs            bool                       `json:"hybrid_svids"`
 	SupportedOperations    []string                   `json:"supported_operations"`
 	Checks                 []SPIFFEQualificationCheck `json:"checks"`
 	PreviewWrites          []string                   `json:"preview_writes"`
@@ -98,6 +100,10 @@ func (a *API) qualifySPIFFE(w http.ResponseWriter, r *http.Request) {
 }
 
 func buildSPIFFEQualification(posture SPIFFERuntimePosture, checkedAt time.Time) SPIFFEQualification {
+	clientBoundary := "Workloads fetch short-lived credentials from their local Unix socket; operators review readiness here without receiving workload key material."
+	if posture.HybridSVIDs {
+		clientBoundary += " Hybrid X.509-SVIDs are enabled: clients must parse both the classical and ML-DSA-65 key entries; stock go-spiffe v2.8.1 rejects this response."
+	}
 	checks := []SPIFFEQualificationCheck{
 		spiffeCheck("configured", "SPIFFE enabled", posture.Configured,
 			"SPIFFE is enabled in startup configuration.",
@@ -139,6 +145,7 @@ func buildSPIFFEQualification(posture SPIFFERuntimePosture, checkedAt time.Time)
 		CheckedAt: checkedAt.Format(time.RFC3339), Ready: ready, EffectFree: true,
 		TrustDomain: posture.TrustDomain, SocketURI: posture.SocketURI, Transport: "unix", SocketMode: posture.SocketMode,
 		RegistrationEntryCount: posture.RegistrationEntryCount, LocalSocketDeprecated: posture.LocalSocketDeprecated,
+		HybridSVIDs:         posture.HybridSVIDs,
 		SupportedOperations: append([]string(nil), posture.SupportedOperations...), Checks: checks,
 		PreviewWrites: []string{}, PreviewExternalEffects: []string{}, PreviewSignerCalls: []string{},
 		Proof: []string{
@@ -147,7 +154,7 @@ func buildSPIFFEQualification(posture SPIFFERuntimePosture, checkedAt time.Time)
 			"It does not call the signer, event log, outbox, database, or network; a stock workload client supplies the final wire proof.",
 		},
 		Blockers:       blockers,
-		ClientBoundary: "Workloads fetch short-lived credentials from their local Unix socket; operators review readiness here without receiving workload key material.",
+		ClientBoundary: clientBoundary,
 	}
 }
 

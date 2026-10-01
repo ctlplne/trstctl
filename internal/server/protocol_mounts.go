@@ -1029,7 +1029,10 @@ func (s *Server) buildSPIFFE(ctx context.Context, cfg config.SPIFFEProtocol, ten
 		socket = defaultSPIFFESocket
 	}
 	var workloadOpts []spiffe.WorkloadAPIOption
-	if s.licensedSPIFFESVIDFactory != nil {
+	if cfg.HybridSVIDs {
+		if s.licensedSPIFFESVIDFactory == nil {
+			return nil, errors.New("server: hybrid SPIFFE SVIDs requested but the additional issuer is unavailable")
+		}
 		additional, err := s.licensedSPIFFESVIDFactory(s.caCertDER, s.caSigner)
 		if err != nil {
 			return nil, fmt.Errorf("server: build licensed SPIFFE X509-SVID issuer: %w", err)

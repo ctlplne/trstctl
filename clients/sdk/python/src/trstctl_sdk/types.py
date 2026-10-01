@@ -9184,6 +9184,7 @@ SPIFFEQualification = TypedDict(
         'checks': list[dict[str, Any]],
         'client_boundary': str,
         'effect_free': bool,
+        'hybrid_svids': bool,
         'local_socket_deprecated': bool,
         'preview_external_effects': list[str],
         'preview_signer_calls': list[str],

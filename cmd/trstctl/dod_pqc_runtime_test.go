@@ -195,7 +195,7 @@ func dodRunPureMLDSAProof(t *testing.T) {
 func dodRunMultiKeySPIFFEProof(t *testing.T) {
 	runtime, control, external := dodStartPQCRuntime(t, "pqc_end_to_end.multikey_spiffe_hybrid_svid", func(cfg *config.Config, root string, _ *proof.ExternalSubstrate) {
 		cfg.Protocols.SPIFFE = config.SPIFFEProtocol{
-			Enabled: true, TenantID: dodPQCTenant, TrustDomain: "pqc.dod.test",
+			Enabled: true, HybridSVIDs: true, TenantID: dodPQCTenant, TrustDomain: "pqc.dod.test",
 			SocketPath: dodPQCLocalSocketPath(t),
 		}
 	})

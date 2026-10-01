@@ -27315,6 +27315,10 @@
           "effect_free": {
             "type": "boolean"
           },
+          "hybrid_svids": {
+            "description": "Whether this socket returns a classical plus ML-DSA-65 SVID pair. Stock go-spiffe v2.8.1 requires false.",
+            "type": "boolean"
+          },
           "local_socket_deprecated": {
             "type": "boolean"
           },
@@ -27380,6 +27384,7 @@
           "socket_mode",
           "registration_entry_count",
           "local_socket_deprecated",
+          "hybrid_svids",
           "supported_operations",
           "checks",
           "preview_writes",

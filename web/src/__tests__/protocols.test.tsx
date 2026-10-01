@@ -301,6 +301,7 @@ describe("protocol surface", () => {
       transport: "unix",
       socket_mode: "Srwx------",
       registration_entry_count: 1,
+      hybrid_svids: false,
       local_socket_deprecated: true,
       supported_operations: ["FetchX509SVID", "FetchX509Bundles", "FetchJWTSVID", "FetchJWTBundles", "ValidateJWTSVID"],
       checks: [
@@ -1485,6 +1486,7 @@ describe("protocol surface", () => {
     expect(await within(panel).findAllByText("SPIFFE is ready for a workload client")).toHaveLength(1);
     expect(within(panel).getByText("workloads.example.test")).toBeInTheDocument();
     expect(within(panel).getByText("unix:///run/trstctl-spiffe/workload.sock")).toBeInTheDocument();
+    expect(within(panel).getByText("Classical (stock client compatible)")).toBeInTheDocument();
     expect(within(panel).getByText("1 active rule(s)")).toBeInTheDocument();
     expect(within(panel).getByText("5 supported operations")).toBeInTheDocument();
     expect(within(panel).getByText(/0 writes · 0 outside calls · 0 signer calls · 0 identities minted/i)).toBeInTheDocument();
@@ -1499,6 +1501,7 @@ describe("protocol surface", () => {
       transport: "unix",
       socket_mode: "",
       registration_entry_count: 1,
+      hybrid_svids: false,
       local_socket_deprecated: true,
       supported_operations: ["FetchX509SVID", "FetchX509Bundles", "FetchJWTSVID", "FetchJWTBundles", "ValidateJWTSVID"],
       checks: [

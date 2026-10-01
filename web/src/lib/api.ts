@@ -1297,6 +1297,7 @@ export interface SPIFFEQualification {
   transport: "unix";
   socket_mode: string;
   registration_entry_count: number;
+  hybrid_svids: boolean;
   local_socket_deprecated: boolean;
   supported_operations: string[];
   checks: SPIFFEQualificationCheck[];

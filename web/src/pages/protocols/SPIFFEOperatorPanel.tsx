@@ -24,6 +24,7 @@ function isSPIFFEQualification(value: unknown): value is SPIFFEQualification {
     typeof result.socket_uri === "string" &&
     result.transport === "unix" &&
     typeof result.registration_entry_count === "number" &&
+    typeof result.hybrid_svids === "boolean" &&
     typeof result.local_socket_deprecated === "boolean" &&
     Array.isArray(result.supported_operations) &&
     Array.isArray(result.checks) &&
@@ -117,6 +118,10 @@ export function SPIFFEOperatorPanel({ onResult }: { onResult?: (result: SPIFFEQu
             <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <RuntimeFact label={t("protocols.spiffeCheck.trustDomain")} value={result.trust_domain} />
               <RuntimeFact label={t("protocols.spiffeCheck.socket")} value={result.socket_uri} />
+              <RuntimeFact
+                label={t("protocols.spiffeCheck.svidFormat")}
+                value={t(result.hybrid_svids ? "protocols.spiffeCheck.svidHybrid" : "protocols.spiffeCheck.svidClassical")}
+              />
               <RuntimeFact
                 label={t("protocols.spiffeCheck.entries")}
                 value={t("protocols.spiffeCheck.entryCount", { count: result.registration_entry_count })}

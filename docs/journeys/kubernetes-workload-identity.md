@@ -198,11 +198,15 @@ needs access, and gets a pass (an SVID) that expires in minutes.
    separate signing service, that expires in minutes, not months. The wire details are in
    [Workload identity](../features/workload-identity.md).
 
-   With the Enterprise/PQC license attached, that same stock Workload API call returns
-   two X.509-SVID entries for the same SPIFFE ID: the classical SVID and a second
-   ML-DSA-65 SVID labeled `trstctl-hybrid-ml-dsa-65`, each with its matching private
-   key and trust bundle. The response is production-attached, and both key buffers are
-   explicitly wiped after the client consumes them.
+   The default Workload API response contains one classical X.509-SVID, which stock
+   go-spiffe and spiffe-helper can parse. For a client that also understands ML-DSA-65,
+   explicitly set `protocols.spiffe.hybrid_svids: true` or
+   `TRSTCTL_PROTOCOLS_SPIFFE_HYBRID_SVIDS_ENABLED=true` before startup. The hybrid
+   response then carries two entries for the same SPIFFE ID: the classical SVID and
+   an ML-DSA-65 SVID labeled `trstctl-hybrid-ml-dsa-65`, each with its matching
+   private key and trust bundle. Stock go-spiffe v2.8.1 cannot parse the additional
+   key and rejects the whole response. PQC is available in core; the explicit
+   setting protects clients that need the classical wire format.
 
 9. Confirm there is no static secret to steal. Because the SVID is short-lived
    and minted only after attestation, there is nothing long-lived in the pod to leak,

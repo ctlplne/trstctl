@@ -13677,6 +13677,8 @@ export interface components {
             checks: components["schemas"]["SPIFFEQualificationCheck"][];
             client_boundary: string;
             effect_free: boolean;
+            /** @description Whether this socket returns a classical plus ML-DSA-65 SVID pair. Stock go-spiffe v2.8.1 requires false. */
+            hybrid_svids: boolean;
             local_socket_deprecated: boolean;
             preview_external_effects: string[];
             preview_signer_calls: string[];

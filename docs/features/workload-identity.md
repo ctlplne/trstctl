@@ -318,6 +318,14 @@ JWT-SVIDs use the signer-backed JWT handle and validate against the served JWT b
 The Workload-API gRPC/protobuf contract is vendored verbatim from go-spiffe, so the
 wire format is byte-identical.
 
+The default Workload API response contains one classical X.509-SVID. A second
+ML-DSA-65 SVID is available in core when `protocols.spiffe.hybrid_svids: true`
+or `TRSTCTL_PROTOCOLS_SPIFFE_HYBRID_SVIDS_ENABLED=true` is set before startup.
+Enable it only for a socket whose clients parse both private-key algorithms:
+go-spiffe v2.8.1 rejects the entire response when it sees the ML-DSA-65 key,
+including the classical entry. This setting chooses the wire format; it is not a
+license gate. Keep the default for stock go-spiffe and spiffe-helper clients.
+
 #### Check the running path before connecting a workload
 
 Open **How machines request credentials** and find **SPIFFE workload identity

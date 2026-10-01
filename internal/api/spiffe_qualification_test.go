@@ -29,6 +29,7 @@ func TestSPIFFEQualificationIsTenantScopedEffectFreeAndExact(t *testing.T) {
 				SocketReady: true, SocketOwnerOnly: true, SocketMode: "Srwx------",
 				RegistrationEntryCount: 1, IssuingPathReady: true, BulkheadReady: true,
 				LocalSocketDeprecated: true,
+				HybridSVIDs:           true,
 				SupportedOperations:   []string{"FetchX509SVID", "FetchX509Bundles", "FetchJWTSVID", "FetchJWTBundles", "ValidateJWTSVID"},
 			}
 		}),
@@ -54,6 +55,9 @@ func TestSPIFFEQualificationIsTenantScopedEffectFreeAndExact(t *testing.T) {
 	}
 	if got.SocketURI != "unix:///run/trstctl-spiffe/workload.sock" || got.RegistrationEntryCount != 1 || !got.LocalSocketDeprecated {
 		t.Fatalf("SPIFFE runtime facts=%+v, want exact served posture", got)
+	}
+	if !got.HybridSVIDs || !strings.Contains(got.ClientBoundary, "go-spiffe v2.8.1 rejects") {
+		t.Fatalf("hybrid wire compatibility was not disclosed: %+v", got)
 	}
 	if len(got.Checks) != 9 || len(got.Blockers) != 0 || len(got.Proof) < 3 || len(got.SupportedOperations) != 5 {
 		t.Fatalf("SPIFFE qualification checks=%d blockers=%v proof=%v operations=%v", len(got.Checks), got.Blockers, got.Proof, got.SupportedOperations)

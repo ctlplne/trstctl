@@ -562,6 +562,22 @@ func TestEvalProtocolProfileLoadsFromEnvironment(t *testing.T) {
 	}
 }
 
+func TestSPIFFEHybridSVIDsRequireExplicitOptIn(t *testing.T) {
+	if Default().Protocols.SPIFFE.HybridSVIDs {
+		t.Fatal("stock SPIFFE clients must receive a classical-only response by default")
+	}
+	protocols := Default().Protocols
+	applyProtocolsEnv(func(key string) string {
+		if key == "TRSTCTL_PROTOCOLS_SPIFFE_HYBRID_SVIDS_ENABLED" {
+			return "true"
+		}
+		return ""
+	}, &protocols)
+	if !protocols.SPIFFE.HybridSVIDs {
+		t.Fatal("explicit hybrid SVID configuration was not applied")
+	}
+}
+
 func TestEvalProtocolProfileFailsClosedWithoutTenantOrForUnknownName(t *testing.T) {
 	for name, protocols := range map[string]Protocols{
 		"missing tenant":  {Profile: ProtocolProfileEval},

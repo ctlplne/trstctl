@@ -941,6 +941,10 @@ type SPIFFEProtocol struct {
 	TenantID    string `json:"tenant_id,omitempty"`
 	SocketPath  string `json:"socket_path,omitempty"`  // UDS path; empty uses a default under the data dir
 	TrustDomain string `json:"trust_domain,omitempty"` // e.g. "example.org"; empty disables (no default trust domain)
+	// HybridSVIDs sends an additional post-quantum key pair on the Workload API.
+	// Stock go-spiffe cannot parse that private key, so operators must opt in only
+	// for clients that understand both entries. PQC remains available in core.
+	HybridSVIDs bool `json:"hybrid_svids,omitempty"`
 }
 
 // ValidateTenantBindings reports AN-1 configuration errors for enabled served
@@ -2890,6 +2894,7 @@ func applyProtocolsEnv(getenv func(string) string, p *Protocols) {
 	setString(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_TENANT_ID", &p.SPIFFE.TenantID)
 	setString(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_SOCKET_PATH", &p.SPIFFE.SocketPath)
 	setString(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_TRUST_DOMAIN", &p.SPIFFE.TrustDomain)
+	setBool(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_HYBRID_SVIDS_ENABLED", &p.SPIFFE.HybridSVIDs)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_SSH_ENABLED", &p.SSH.Enabled)
 	setString(getenv, "TRSTCTL_PROTOCOLS_SSH_TENANT_ID", &p.SSH.TenantID)
 	setCSV(getenv, "TRSTCTL_PROTOCOLS_SSH_USER_PRINCIPALS", &p.SSHUserPrincipals)

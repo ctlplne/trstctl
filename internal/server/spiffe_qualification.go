@@ -21,6 +21,7 @@ type spiffeQualificationSource struct {
 	configuredFor string
 	trustDomain   string
 	socketPath    string
+	hybridSVIDs   bool
 }
 
 func newSPIFFEQualificationSource(s *Server, protocols config.Protocols, tenantFallback string) spiffeQualificationSource {
@@ -33,6 +34,7 @@ func newSPIFFEQualificationSource(s *Server, protocols config.Protocols, tenantF
 		server: s, configured: protocols.SPIFFE.Enabled && trustDomain != "",
 		configuredFor: firstNonEmpty(protocols.SPIFFE.TenantID, tenantFallback),
 		trustDomain:   trustDomain, socketPath: socketPath,
+		hybridSVIDs: protocols.SPIFFE.HybridSVIDs,
 	}
 }
 
@@ -46,6 +48,7 @@ func (source spiffeQualificationSource) read(_ context.Context, tenantID string)
 		Configured: source.configured, TenantBound: source.configured && source.configuredFor != "" && source.configuredFor == tenantID,
 		TrustDomain: source.trustDomain, SocketURI: "unix://" + source.socketPath,
 		LocalSocketDeprecated: true,
+		HybridSVIDs:           source.hybridSVIDs,
 		SupportedOperations:   []string{"FetchX509SVID", "FetchX509Bundles", "FetchJWTSVID", "FetchJWTBundles", "ValidateJWTSVID"},
 	}
 	if source.server == nil {
