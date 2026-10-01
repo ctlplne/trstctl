@@ -10,7 +10,7 @@ valid_envelope if {
   input.action == "gitops.validate"
   input.permission == "gitops:apply"
   input.declaration.apiVersion == "trstctl.com/v1"
-  input.declaration_kind in {"TrstctlProfile", "TrstctlDiscoverySource", "TrstctlNotificationRoutingPolicy", "TrstctlInstallValues"}
+  input.declaration_kind in {"TrstctlProfile", "TrstctlDiscoverySource", "TrstctlNotificationRoutingPolicy", "TrstctlInstallInventory"}
   input.declaration.kind == input.declaration_kind
   is_string(input.declaration.metadata.name)
   input.declaration.metadata.name != ""

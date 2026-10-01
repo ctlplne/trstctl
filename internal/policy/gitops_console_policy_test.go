@@ -46,4 +46,28 @@ func TestConsoleGitOpsEnvelopeDryRunUsesABACDecision(t *testing.T) {
 	if !denied.Valid || !denied.Deny || denied.Allow || denied.Reason == "" {
 		t.Fatalf("expected reasoned denial for incomplete envelope, got %+v", denied)
 	}
+
+	input["declaration_kind"] = "TrstctlInstallInventory"
+	input["declaration"] = map[string]any{
+		"apiVersion": "trstctl.com/v1",
+		"kind":       "TrstctlInstallInventory",
+		"metadata":   map[string]any{"name": "trstctl-control-plane"},
+		"spec":       map[string]any{"chart": "deploy/helm/trstctl"},
+	}
+	inventory, err := DryRun(context.Background(), DryRunConfig{Kind: DryRunKindABAC, Module: string(module), Input: input})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !inventory.Valid || !inventory.Allow || inventory.Deny {
+		t.Fatalf("expected inventory preview envelope allow, got %+v", inventory)
+	}
+	input["declaration_kind"] = "TrstctlInstallValues"
+	input["declaration"].(map[string]any)["kind"] = "TrstctlInstallValues"
+	obsolete, err := DryRun(context.Background(), DryRunConfig{Kind: DryRunKindABAC, Module: string(module), Input: input})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !obsolete.Valid || !obsolete.Deny || obsolete.Allow {
+		t.Fatalf("old install-values envelope must not imply a deployable file, got %+v", obsolete)
+	}
 }

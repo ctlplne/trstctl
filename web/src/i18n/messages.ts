@@ -19464,9 +19464,22 @@ export const messages = {
     defaultMessage: "Notification routing policy",
     description: "Manifest type option for notification routing policies.",
   },
-  "integrate.gitops.manifest.installValues": {
-    defaultMessage: "Install values",
-    description: "Manifest type option for installation values.",
+  "integrate.gitops.manifest.installInventory": {
+    defaultMessage: "Installation inventory preview",
+    description: "Manifest type option for reference-only installation inventory.",
+  },
+  "integrate.gitops.installInventoryNotice": {
+    defaultMessage:
+      "This JSON is an inventory preview, not a Helm values file. No live installation was compared. Provide an exact release image digest and deployment-specific PostgreSQL, NATS, and secret settings through the Helm chart.",
+    description: "Warning that an installation inventory cannot be applied to Helm.",
+  },
+  "integrate.gitops.openHelmGuide": {
+    defaultMessage: "Open Helm installation guide",
+    description: "Link to the supported Helm control-plane installation procedure.",
+  },
+  "integrate.gitops.noInstallComparison": {
+    defaultMessage: "No live installation was compared; installation drift is unavailable in this view.",
+    description: "Clarifies that inventory preview is not live Helm drift evidence.",
   },
   "integrate.gitops.manifestType": {
     defaultMessage: "Manifest type",

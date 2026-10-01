@@ -38,7 +38,7 @@ const iac: Array<{ name: string; reference: string; statusKey?: MessageKey }> = 
   { name: "SPIRE upstream authority", reference: 'UpstreamAuthority "trstctl" { ... }' },
 ];
 
-type ManifestType = "profile" | "discovery-source" | "routing-policy" | "install-values";
+type ManifestType = "profile" | "discovery-source" | "routing-policy" | "install-inventory";
 
 type DriftStatus = "In sync" | "Drift";
 
@@ -61,7 +61,7 @@ const manifestTypes: Array<{ value: ManifestType; labelKey: MessageKey }> = [
   { value: "profile", labelKey: "integrate.gitops.manifest.profile" },
   { value: "discovery-source", labelKey: "integrate.gitops.manifest.discoverySource" },
   { value: "routing-policy", labelKey: "integrate.gitops.manifest.routingPolicy" },
-  { value: "install-values", labelKey: "integrate.gitops.manifest.installValues" },
+  { value: "install-inventory", labelKey: "integrate.gitops.manifest.installInventory" },
 ];
 
 function gitOpsResultMessage(result: PolicyDryRun): MessageKey {
@@ -163,8 +163,8 @@ export function Integrate() {
   );
   const parsedManifest = useMemo(() => parseManifest(manifestText), [manifestText]);
   const driftRows = useMemo(
-    () => (liveManifest && parsedManifest.value ? diffManifests(liveManifest, parsedManifest.value) : []),
-    [liveManifest, parsedManifest.value],
+    () => (manifestType !== "install-inventory" && liveManifest && parsedManifest.value ? diffManifests(liveManifest, parsedManifest.value) : []),
+    [liveManifest, manifestType, parsedManifest.value],
   );
   const driftCount = driftRows.filter((row) => row.status === "Drift").length;
   const exportHref = useMemo(() => `data:application/json;charset=utf-8,${encodeURIComponent(manifestText)}`, [manifestText]);
@@ -316,7 +316,7 @@ export function Integrate() {
                   ))}
                 </select>
               </label>
-              {manifestType !== "install-values" && (
+              {manifestType !== "install-inventory" && (
                 <label className="grid gap-1 text-sm">
                   <span className="font-medium">{t("integrate.gitops.liveObject")}</span>
                   <select
@@ -335,6 +335,20 @@ export function Integrate() {
             </div>
 
             {loading && <p className="text-sm text-muted-foreground">{t("integrate.gitops.loading")}</p>}
+
+            {manifestType === "install-inventory" && (
+              <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm" role="note">
+                <p>{t("integrate.gitops.installInventoryNotice")}</p>
+                <a
+                  className="mt-2 inline-block font-medium underline"
+                  href="https://github.com/ctlplne/trstctl/blob/main/docs/install.md#kubernetes-control-plane-via-helm"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {t("integrate.gitops.openHelmGuide")}
+                </a>
+              </div>
+            )}
 
             <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(22rem,0.9fr)]">
               <label className="grid gap-1 text-sm">
@@ -404,43 +418,54 @@ export function Integrate() {
                   </section>
                 )}
 
-                <div className="overflow-x-auto rounded-md border border-border" role="region" aria-label={t("integrate.design.gitopsScrollArea")} tabIndex={0}>
-                  <table className="ui-table min-w-[40rem]">
-                    <caption className="sr-only">{t("integrate.gitops.driftComparison")}</caption>
-                    <thead>
-                      <tr>
-                        <th scope="col">{t("integrate.gitops.path")}</th>
-                        <th scope="col">{t("integrate.gitops.live")}</th>
-                        <th scope="col">{t("integrate.gitops.declared")}</th>
-                        <th scope="col">{t("integrate.gitops.status")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {driftRows.length > 0 ? (
-                        driftRows.map((row) => (
-                          <tr key={row.path} className="align-top">
-                            <td className="font-mono text-xs">{row.path}</td>
-                            <td className="font-mono text-xs">{row.live}</td>
-                            <td className="font-mono text-xs">{row.declared}</td>
-                            <td>{row.status}</td>
+                {manifestType !== "install-inventory" ? (
+                  <>
+                    <div
+                      className="overflow-x-auto rounded-md border border-border"
+                      role="region"
+                      aria-label={t("integrate.design.gitopsScrollArea")}
+                      tabIndex={0}
+                    >
+                      <table className="ui-table min-w-[40rem]">
+                        <caption className="sr-only">{t("integrate.gitops.driftComparison")}</caption>
+                        <thead>
+                          <tr>
+                            <th scope="col">{t("integrate.gitops.path")}</th>
+                            <th scope="col">{t("integrate.gitops.live")}</th>
+                            <th scope="col">{t("integrate.gitops.declared")}</th>
+                            <th scope="col">{t("integrate.gitops.status")}</th>
                           </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={4} className="text-muted-foreground">
-                            {t("integrate.gitops.noComparableDeclaration")}
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="text-caption text-muted-foreground">
-                  {t("integrate.gitops.driftSummary", {
-                    count: driftCount,
-                    fields: driftCount === 1 ? t("integrate.gitops.fieldSingular") : t("integrate.gitops.fieldPlural"),
-                  })}
-                </p>
+                        </thead>
+                        <tbody>
+                          {driftRows.length > 0 ? (
+                            driftRows.map((row) => (
+                              <tr key={row.path} className="align-top">
+                                <td className="font-mono text-xs">{row.path}</td>
+                                <td className="font-mono text-xs">{row.live}</td>
+                                <td className="font-mono text-xs">{row.declared}</td>
+                                <td>{row.status}</td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={4} className="text-muted-foreground">
+                                {t("integrate.gitops.noComparableDeclaration")}
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="text-caption text-muted-foreground">
+                      {t("integrate.gitops.driftSummary", {
+                        count: driftCount,
+                        fields: driftCount === 1 ? t("integrate.gitops.fieldSingular") : t("integrate.gitops.fieldPlural"),
+                      })}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-caption text-muted-foreground">{t("integrate.gitops.noInstallComparison")}</p>
+                )}
               </div>
             </div>
           </div>
@@ -638,15 +663,10 @@ function buildLiveManifest(
   }
   return {
     apiVersion: "trstctl.com/v1",
-    kind: "TrstctlInstallValues",
-    metadata: { name: "trstctl-control-plane" },
+    kind: "TrstctlInstallInventory",
+    metadata: { name: "trstctl-inventory" },
     spec: {
       chart: "deploy/helm/trstctl",
-      namespace: "trstctl",
-      image: { digest: "sha256:<release-image-digest>" },
-      postgres: { external: true, dsnSecretRef: "trstctl-postgres-dsn" },
-      nats: { external: true, urlSecretRef: "trstctl-nats-url" },
-      signer: { mode: "sidecar-uds" },
       profiles: profiles.map((item) => ({ name: item.name, version: item.version })),
       discovery_sources: sources.map((item) => ({ name: item.name, kind: item.kind })),
       notification_policies: policies.map((item) => ({ name: item.name, default_channels: item.default_channels ?? [] })),

@@ -108,9 +108,19 @@ describe("DESIGN-003 GitOps workflow", () => {
     expect((screen.getByLabelText("Declarative manifest") as HTMLTextAreaElement).value).toContain('"kind": "TrstctlNotificationRoutingPolicy"');
     expect((screen.getByLabelText("Declarative manifest") as HTMLTextAreaElement).value).toContain('"default_channels"');
 
-    await user.selectOptions(screen.getByLabelText("Manifest type"), "install-values");
-    expect((screen.getByLabelText("Declarative manifest") as HTMLTextAreaElement).value).toContain('"chart": "deploy/helm/trstctl"');
-    expect((screen.getByLabelText("Declarative manifest") as HTMLTextAreaElement).value).toContain('"postgres"');
+    await user.selectOptions(screen.getByLabelText("Manifest type"), "install-inventory");
+    const inventory = (screen.getByLabelText("Declarative manifest") as HTMLTextAreaElement).value;
+    expect(inventory).toContain('"kind": "TrstctlInstallInventory"');
+    expect(inventory).toContain('"chart": "deploy/helm/trstctl"');
+    expect(inventory).not.toContain("release-image-digest");
+    expect(inventory).not.toContain('"dsnSecretRef"');
+    expect(within(screen.getByRole("note")).getByText(/not a Helm values file/i)).toBeInTheDocument();
+    expect(screen.getByText(/installation drift is unavailable in this view/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Helm installation guide" })).toHaveAttribute(
+      "href",
+      "https://github.com/ctlplne/trstctl/blob/main/docs/install.md#kubernetes-control-plane-via-helm",
+    );
+    expect(screen.queryByRole("table", { name: "GitOps drift comparison" })).not.toBeInTheDocument();
 
     await user.selectOptions(screen.getByLabelText("Manifest type"), "profile");
     fireEvent.change(manifest, {
