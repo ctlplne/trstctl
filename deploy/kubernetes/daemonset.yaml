@@ -43,7 +43,9 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
-              add: ["CHOWN"]
+              # After chown, the directory belongs to the agent UID. FOWNER
+              # lets this init container enforce mode 0700 on every restart.
+              add: ["CHOWN", "FOWNER"]
       containers:
         - name: agent
           # The agent ships inside the single multi-binary trstctl image (the

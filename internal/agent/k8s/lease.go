@@ -23,6 +23,9 @@ import (
 // resourceVersion we last read, so two pods cannot both believe they hold it.
 
 const (
+	// Kubernetes metav1.MicroTime rejects whole-second timestamps in Lease
+	// JSON. Six fractional digits are required even when the fraction is zero.
+	leaseTimestampLayout = "2006-01-02T15:04:05.000000Z07:00"
 	// LeaseDuration is how long a lease is honored without renewal. A
 	// follower waits out this window before taking over, so a rolling
 	// restart does not produce two active reconcilers.
@@ -73,7 +76,7 @@ func (l *Lease) Acquire(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	nowStr := l.now().UTC().Format(time.RFC3339)
+	nowStr := l.now().UTC().Format(leaseTimestampLayout)
 
 	if st == http.StatusNotFound {
 		created := leaseObject{
@@ -91,8 +94,13 @@ func (l *Lease) Acquire(ctx context.Context) (bool, error) {
 		if cerr != nil {
 			return false, cerr
 		}
-		// 409 means another pod created it first — it leads this round.
-		return cst >= 200 && cst < 300, nil
+		if cst == http.StatusConflict {
+			return false, nil // another pod won the create race
+		}
+		if cst < 200 || cst >= 300 {
+			return false, fmt.Errorf("k8s: create lease %s: status %d", l.name, cst)
+		}
+		return true, nil
 	}
 	if st < 200 || st >= 300 {
 		return false, fmt.Errorf("k8s: read lease %s: status %d", l.name, st)
@@ -119,7 +127,13 @@ func (l *Lease) Acquire(ctx context.Context) (bool, error) {
 	if uerr != nil {
 		return false, uerr
 	}
-	return ust >= 200 && ust < 300, nil
+	if ust == http.StatusConflict {
+		return false, nil // a competing pod updated the resourceVersion
+	}
+	if ust < 200 || ust >= 300 {
+		return false, fmt.Errorf("k8s: update lease %s: status %d", l.name, ust)
+	}
+	return true, nil
 }
 
 // expired reports whether a lease's renewal window has elapsed, which is what

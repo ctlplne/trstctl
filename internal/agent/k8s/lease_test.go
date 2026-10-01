@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -43,6 +44,10 @@ func (a *leaseAPI) handler() http.Handler {
 			if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 				a.t.Fatalf("decode create: %v", err)
 			}
+			if !validLeaseTimestamp(in.Spec.AcquireTime) || !validLeaseTimestamp(in.Spec.RenewTime) {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
 			a.version++
 			in.Metadata["resourceVersion"] = itoaVersion(a.version)
 			a.obj = &in
@@ -53,6 +58,10 @@ func (a *leaseAPI) handler() http.Handler {
 			var in leaseObject
 			if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 				a.t.Fatalf("decode update: %v", err)
+			}
+			if !validLeaseTimestamp(in.Spec.AcquireTime) || !validLeaseTimestamp(in.Spec.RenewTime) {
+				w.WriteHeader(http.StatusBadRequest)
+				return
 			}
 			// Compare-and-swap on resourceVersion, like the API server.
 			if got, want := in.Metadata["resourceVersion"], a.obj.Metadata["resourceVersion"]; got != want {
@@ -67,6 +76,12 @@ func (a *leaseAPI) handler() http.Handler {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
 	})
+}
+
+// Kubernetes' metav1.MicroTime JSON decoder requires six fractional digits.
+func validLeaseTimestamp(value string) bool {
+	_, err := time.Parse("2006-01-02T15:04:05.000000Z07:00", value)
+	return err == nil
 }
 
 func itoaVersion(v int) string { return string(rune('0' + v%10)) }
@@ -168,5 +183,21 @@ func TestLeaseTakeoverAfterExpiry(t *testing.T) {
 	b.now = func() time.Time { return base.Add(LeaseDuration + time.Second) }
 	if lead, err := b.Acquire(context.Background()); err != nil || !lead {
 		t.Fatalf("pod-b did not take over an expired lease: lead=%v err=%v", lead, err)
+	}
+}
+
+func TestLeaseCreateValidationFailureIsReported(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer srv.Close()
+	client := New(srv.URL, "", "trstctl", srv.Client())
+	leading, err := NewLease(client, "ctl", "pod-a").Acquire(context.Background())
+	if leading || err == nil || !strings.Contains(err.Error(), "status 400") {
+		t.Fatalf("bad lease create: leading=%v err=%v, want reported 400", leading, err)
 	}
 }

@@ -736,7 +736,7 @@ func hasIdentityPrepInitContainer(podSpec map[string]any, volumeName, dir string
 		}
 		sc, _ := c["securityContext"].(map[string]any)
 		caps, _ := sc["capabilities"].(map[string]any)
-		if !contains(asStringSlice(caps["drop"]), "ALL") || !contains(asStringSlice(caps["add"]), "CHOWN") {
+		if !contains(asStringSlice(caps["drop"]), "ALL") || !contains(asStringSlice(caps["add"]), "CHOWN") || !contains(asStringSlice(caps["add"]), "FOWNER") {
 			return false
 		}
 		return true
