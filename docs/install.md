@@ -168,7 +168,7 @@ the manifest. Replace the version and platform deliberately; do not use a moving
 `latest` URL in automation.
 
 ```bash
-version=0.5.4
+version="${TRSTCTL_RELEASE_VERSION:?Select a published release with the CLI archive, manifest, checksums, and provenance}"
 platform=linux_amd64
 base="https://github.com/ctlplne/trstctl/releases/download/v${version}"
 archive="trstctl-cli_${version}_${platform}.tar.gz"
@@ -279,15 +279,20 @@ file so it is never placed in pod arguments or environment variables. See
 
 ## Download a Linux or macOS host agent
 
-Tagged releases publish exact-commit `trstctl-agent` archives for
+Completed tagged releases publish exact-commit `trstctl-agent` archives for
 `linux_amd64`, `linux_arm64`, `darwin_amd64`, and `darwin_arm64`. Choose the
 platform of the **host that runs the agent**. The single control-plane container
 image also contains the agent for container and Kubernetes deployments; a
 container does not give a macOS host connector access to the host keychain or
 Apache files.
 
+Check the selected release's asset list before using this path. A tag alone does
+not prove the archive and its provenance were published. As of 2026-10-02, the
+published `v0.6.0` release has no assets, so it cannot supply an agent download;
+see [the release limitation](limitations.md#agent-release-distribution).
+
 ```bash
-version=1.2.3                    # replace with the release tag you selected
+version="${TRSTCTL_RELEASE_VERSION:?Select a published release with agent archives, manifest, checksums, and provenance}"
 platform=darwin_arm64            # or linux_amd64, linux_arm64, darwin_amd64
 base="https://github.com/ctlplne/trstctl/releases/download/v${version}"
 archive="trstctl-agent_${version}_${platform}.tar.gz"

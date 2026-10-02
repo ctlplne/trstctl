@@ -47,6 +47,22 @@ specific host reason. Changing Docker Desktop's emulation mode requires a
 daemon restart; defer that change while unrelated containers use the shared
 daemon. Keep the runtime proof intact and record its failed native result.
 
+## Agent release distribution
+
+As of 2026-10-02, the published `v0.6.0` GitHub release lists zero assets. It
+cannot supply a downloadable host agent, checksum manifest, or SLSA provenance.
+The current source tree has a four-platform archive builder and a protected
+release job that uploads and checks those assets. A task-local exact-commit
+archive has been downloaded with `curl`, checksum-checked, and run on macOS;
+that proves the candidate packaging path, not public distribution.
+
+An operator needs a subsequently completed release with the archive for their
+host, the source-commit manifest, `SHA256SUMS`, and provenance. Verify the public
+asset roster, download without repository credentials, check the hashes and
+provenance, and compare the binary's full reported commit with the manifest
+before treating the release install journey as complete. Publishing that release
+requires the protected release pipeline and is outside a local-only QA run.
+
 ## Historical scheduled-rotation detail
 
 The current live event generation does not serve arbitrary provider error text
