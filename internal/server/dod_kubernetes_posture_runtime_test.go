@@ -163,6 +163,7 @@ func dodBuildKubernetesPostureServer(t *testing.T, dir string) *Server {
 	if err != nil {
 		t.Fatalf("open Kubernetes posture event log: %v", err)
 	}
+	dodRegisterActiveTenant(t, ctx, log, st, dodKubernetesTenant, "DoD Kubernetes tenant")
 	t.Cleanup(func() { _ = log.Close() })
 	runSecrets, err := loadRunSecrets(cfg)
 	if err != nil {

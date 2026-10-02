@@ -81,6 +81,7 @@ func TestDODCodeSigningProductionAssembly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open embedded event log: %v", err)
 	}
+	dodRegisterActiveTenant(t, ctx, log, st, servedTestTenant, "DoD code-signing tenant")
 	runSecrets, err := loadRunSecrets(cfg)
 	if err != nil {
 		_ = log.Close()

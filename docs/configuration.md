@@ -97,6 +97,7 @@ lives in **NATS JetStream**). PostgreSQL is the datastore in every deployment mo
 | `TRSTCTL_POSTGRES_MODE` | `bundled` | `bundled` (embedded single-node eval on a manifest-pinned host archive; downloads once and fails closed if unpinned) or `external` (managed cluster; recommended for production). |
 | `TRSTCTL_POSTGRES_DSN` | — | Connection string; **required** when mode is `external`. |
 | `TRSTCTL_POSTGRES_DATA_DIR` | `data/postgres` | Data directory for the **bundled** datastore; eval data persists here across restarts. |
+| `TRSTCTL_BUNDLED_PG_CACHE_ROOT` | process temporary directory | Optional root for the bundled PostgreSQL's manifest-verified executable archive cache. Use an existing, owned, private, executable directory, or a trusted sticky temporary directory. Startup checks ownership, mode, and symlinks before using it and refuses an unsafe root. The isolated DoD runner uses its owned executable tmpfs because its host receipt bind mount is not a safe cache anchor. |
 | `TRSTCTL_POSTGRES_PORT` | `5432` | Loopback port for the **bundled** datastore (override if 5432 is taken). |
 | `TRSTCTL_POSTGRES_STATEMENT_TIMEOUT` | `60s` | Server-side deadline applied to every statement (OPS-TIMEOUTS-001), so a stuck query fails closed instead of holding a connection indefinitely. DR rebuild/restore transactions widen this explicitly. |
 | `TRSTCTL_POSTGRES_ACQUIRE_TIMEOUT` | `10s` | How long a request may wait for a pooled PostgreSQL connection before failing closed with a structured `503`. |

@@ -581,6 +581,10 @@ func runtimeRunnerScratchArgs(receiptDir string, uid, gid uint32) []string {
 			strconv.FormatUint(uint64(uid), 10) + ",gid=" + strconv.FormatUint(uint64(gid), 10),
 		"--env", "HOME=" + dodproof.RuntimeTempDir,
 		"--env", "TMPDIR=" + dodproof.RuntimeTempDir,
+		// Docker Desktop may show the host receipt bind mount as root-owned to
+		// the non-root proof process. The bundled PG archive guard must reject
+		// that mount. Use the owned, executable tmpfs for its verified cache.
+		"--env", "TRSTCTL_BUNDLED_PG_CACHE_ROOT=" + dodproof.RuntimeExecDir,
 		"--env", dodproof.HostReceiptRootEnv + "=" + receiptDir,
 		"--env", dodproof.RuntimeTempRootEnv + "=" + dodproof.RuntimeTempDir,
 		"--env", dodproof.RuntimeExecRootEnv + "=" + dodproof.RuntimeExecDir,

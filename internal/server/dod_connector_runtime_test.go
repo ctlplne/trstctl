@@ -505,6 +505,7 @@ func dodRunAllNativeConnectorsProductionAssembly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open embedded event log: %v", err)
 	}
+	dodRegisterActiveTenant(t, ctx, log, st, dodConnectorTenant, "DoD connector tenant")
 	runSecrets, err := loadRunSecrets(cfg)
 	if err != nil {
 		_ = log.Close()
@@ -675,6 +676,7 @@ func dodRunFocusedNativeConnector(t *testing.T, entryID, connectorName string, e
 	if err != nil {
 		t.Fatalf("open embedded event log: %v", err)
 	}
+	dodRegisterActiveTenant(t, ctx, log, st, dodConnectorTenant, "DoD connector tenant")
 	runSecrets, err := loadRunSecrets(cfg)
 	if err != nil {
 		_ = log.Close()

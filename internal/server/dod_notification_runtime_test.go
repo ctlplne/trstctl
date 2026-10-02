@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"trstctl.com/trstctl/internal/app"
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
@@ -77,6 +78,7 @@ func dodRunNativeNotification(t *testing.T, entryID, channelName string, externa
 	if err != nil {
 		t.Fatalf("open embedded event log: %v", err)
 	}
+	dodRegisterActiveTenant(t, ctx, log, st, servedTestTenant, "DoD notification tenant")
 	runSecrets, err := loadRunSecrets(cfg)
 	if err != nil {
 		_ = log.Close()
@@ -151,6 +153,18 @@ func dodSeedAPIToken(t *testing.T, ctx context.Context, st *store.Store, tenantI
 		t.Fatalf("seed API token: %v", err)
 	}
 	return secrettext.String(raw)
+}
+
+// dodRegisterActiveTenant seeds an isolated production proof through the event
+// spine. Its retained registration envelope is required by agent enrollment and
+// other mutations; writing only the tenant read model would hide that contract.
+func dodRegisterActiveTenant(t *testing.T, ctx context.Context, log *events.Log, st *store.Store, tenantID, name string) {
+	t.Helper()
+	service := app.New(log, st, nil)
+	defer service.Close()
+	if err := service.RegisterTenant(ctx, tenantID, name, "dod-register-"+tenantID); err != nil {
+		t.Fatalf("register active DoD tenant through event spine: %v", err)
+	}
 }
 
 func dodNotificationReadback(t *testing.T, endpoint string) []byte {

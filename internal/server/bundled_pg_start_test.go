@@ -21,6 +21,22 @@ import (
 //go:embed testdata/bundled-pg/verified-postgres-fixture.txz
 var bundledPGHarmlessArchive []byte
 
+func TestBundledPostgresCacheRootOverrideStillChecksAnchor(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("TRSTCTL_BUNDLED_PG_CACHE_ROOT", root)
+	if got := bundledPGCacheRoot(); got != root {
+		t.Fatalf("bundled postgres cache root = %q, want %q", got, root)
+	}
+	if err := os.Chmod(root, 0777); err != nil { // #nosec G302 -- adversarial test anchor must be writable to prove the verifier rejects it (CWE-732)
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(root, 0700) }) // #nosec G302 -- restore the private directory's required execute bit (CWE-732)
+	_, _, err := startBundledPostgres(config.Postgres{Mode: config.PostgresBundled, DataDir: t.TempDir(), Port: 5432})
+	if err == nil || !strings.Contains(err.Error(), "postgres cache anchor must be private or a trusted sticky temporary directory") {
+		t.Fatalf("unsafe override anchor accepted: %v", err)
+	}
+}
+
 // The archive and local pin in these tests are synthetic. No PostgreSQL server
 // exists in the fixture: initdb prints one marker line and exits86, and the other
 // two executables also only print that line and exit86.

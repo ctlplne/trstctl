@@ -50,6 +50,7 @@ func TestDODBreakglassRotationProductionAssembly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	dodRegisterActiveTenant(t, ctx, log, st, dodBreakglassTenant, "DoD breakglass tenant")
 	t.Cleanup(func() { _ = log.Close() })
 	signer, reconnectSigner := dodStartRestartableAuthorizedSoftwareSignerProcess(t, dir)
 	cfg := config.Default()

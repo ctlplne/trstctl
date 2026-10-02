@@ -95,6 +95,7 @@ func TestRuntimeRunnerScratchMountsBoundedTmpfsAndShortReceiptAlias(t *testing.T
 		"--tmpfs", "/dod-exec:rw,nosuid,nodev,exec,size=1g,mode=0700,uid=501,gid=20",
 		"--env", "HOME=/dod-tmp",
 		"--env", "TMPDIR=/dod-tmp",
+		"--env", "TRSTCTL_BUNDLED_PG_CACHE_ROOT=/dod-exec",
 		"--env", "TRSTCTL_DOD_HOST_RECEIPT_ROOT=" + receiptDir,
 		"--env", "TRSTCTL_DOD_RUNTIME_TEMP_ROOT=/dod-tmp",
 		"--env", "TRSTCTL_DOD_RUNTIME_EXEC_ROOT=/dod-exec",

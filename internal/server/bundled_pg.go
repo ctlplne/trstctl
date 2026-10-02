@@ -57,8 +57,9 @@ func startBundledPostgres(cfg config.Postgres) (dsn string, stop func() error, e
 		return "", nil, err
 	}
 
-	legacyArchive := bundledPGCacheArchive(filepath.Join(os.TempDir(), "trstctl-pg-bin"))
-	cache, err := embeddedpostgres.OpenVerifiedCache(os.TempDir(), "trstctl-pg-archives", identity.OS+"-"+identity.Arch+"-"+string(identity.Version)+"-"+identity.SHA256)
+	cacheRoot := bundledPGCacheRoot()
+	legacyArchive := bundledPGCacheArchive(filepath.Join(cacheRoot, "trstctl-pg-bin"))
+	cache, err := embeddedpostgres.OpenVerifiedCache(cacheRoot, "trstctl-pg-archives", identity.OS+"-"+identity.Arch+"-"+string(identity.Version)+"-"+identity.SHA256)
 	if err != nil {
 		return "", nil, err
 	}
@@ -112,6 +113,16 @@ func startBundledPostgres(cfg config.Postgres) (dsn string, stop func() error, e
 
 	dsn = fmt.Sprintf("postgres://postgres:postgres@127.0.0.1:%d/postgres", port)
 	return dsn, db.Stop, nil
+}
+
+// An operator may place the verified, executable archive cache on a dedicated
+// private filesystem. OpenVerifiedCache validates ownership, mode, and every
+// child before acquisition; selecting a root never bypasses that guard.
+func bundledPGCacheRoot() string {
+	if root := os.Getenv("TRSTCTL_BUNDLED_PG_CACHE_ROOT"); root != "" {
+		return root
+	}
+	return os.TempDir()
 }
 
 // bundledPGArchiveIdentity is the served trust authority. Empty or unsupported
