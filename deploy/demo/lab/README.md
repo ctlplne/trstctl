@@ -24,6 +24,13 @@ The default `TRSTCTL_LAB_RUN_DOD=1` is the qualification profile. It follows
 the live journeys with the full definition-of-done census and is mandatory
 before a candidate is called qualified.
 
+Run that census on native `amd64` Linux or a validated Docker Desktop Rosetta
+setup. Apple Silicon Docker using QEMU user emulation cannot expose the guest
+executable through `/proc/<pid>/map_files`, which the census requires to prove
+the exact binary under test. In that case the live journeys can pass while the
+census fails before exercising its rows. See
+[the local qualification host limit](../../../docs/limitations.md#local-qualification-host-limit).
+
 Each project name also owns its control, seeder, and front-door image tags.
 Docker still shares unchanged layers, but a later repair build cannot invalidate
 the image digest an earlier retained census is actively examining.

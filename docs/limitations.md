@@ -29,6 +29,24 @@ The safe decision rule is simple: **served** says the running binary has a real
 path; **verified** says the required external effect was observed; neither word
 replaces your deployment-specific acceptance test.
 
+## Local qualification host limit
+
+The shipped definition-of-done runtime runner targets `linux/amd64`. Its proof
+opens the kernel's `/proc/<pid>/map_files` object to check that the executable
+being tested is the exact binary built by the gate. On an Apple Silicon Docker
+daemon using QEMU user emulation, the kernel exposes the emulator's mappings
+instead of the guest executable's mapping. The runner then stops at its
+`map_files` preflight. All 81 census rows can show `stub` before any capability
+is exercised; those rows cannot establish whether the capabilities work.
+
+Run this qualification gate on native `amd64` Linux, or on a separately
+validated Docker Desktop Rosetta setup whose `map_files` proof succeeds. The
+2026-10-02 local partner-lab run on the current Apple Silicon host passed its
+18 live journeys, but its 81-row runtime census remains unqualified for this
+specific host reason. Changing Docker Desktop's emulation mode requires a
+daemon restart; defer that change while unrelated containers use the shared
+daemon. Keep the runtime proof intact and record its failed native result.
+
 ## Historical scheduled-rotation detail
 
 The current live event generation does not serve arbitrary provider error text
