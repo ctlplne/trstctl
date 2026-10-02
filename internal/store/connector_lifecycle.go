@@ -651,7 +651,8 @@ func (s *Store) HasUnverifiedConnectorDeliveryAfterConfirmedServe(ctx context.Co
 	var blocked bool
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `WITH proved AS (
-		  SELECT max(r.updated_at) AS at FROM connector_delivery_receipts r
+		  SELECT r.updated_at AS at, coalesce(r.latest_event_sequence, 0) AS sequence
+		    FROM connector_delivery_receipts r
 		   WHERE r.tenant_id = $1 AND r.identity_id = $2
 		     AND ((r.destination = 'connector.rollback' AND r.status = 'rolled_back')
 		       OR (r.destination = 'connector.deploy' AND r.status = 'verified')
@@ -660,12 +661,20 @@ func (s *Store) HasUnverifiedConnectorDeliveryAfterConfirmedServe(ctx context.Co
 		         AND NOT EXISTS (SELECT 1 FROM connector_delivery_receipts failed
 		           WHERE failed.tenant_id = r.tenant_id AND failed.identity_id = r.identity_id
 		             AND failed.destination = 'connector.deploy' AND failed.status = 'verify_failed'
-		             AND failed.idempotency_key = r.idempotency_key || ':verified')))
-		) SELECT EXISTS (SELECT 1 FROM connector_delivery_receipts failed, proved
+		         AND failed.idempotency_key = r.idempotency_key || ':verified')))
+		   ORDER BY coalesce(r.latest_event_sequence, 0) DESC, r.updated_at DESC, r.id DESC
+		   LIMIT 1
+		) SELECT EXISTS (SELECT 1 FROM connector_delivery_receipts failed
+		    LEFT JOIN proved ON true
 		    WHERE failed.tenant_id = $1 AND failed.identity_id = $2
 		      AND failed.destination = 'connector.deploy'
 		      AND failed.status IN ('failed', 'verify_failed')
-		      AND failed.updated_at > coalesce(proved.at, '-infinity'::timestamptz))`, tenantID, identityID).Scan(&blocked)
+		      AND (proved.at IS NULL
+		        OR (coalesce(failed.latest_event_sequence, 0) > 0 AND proved.sequence > 0
+		          AND failed.latest_event_sequence > proved.sequence)
+		        OR (coalesce(failed.latest_event_sequence, 0) > 0 AND proved.sequence = 0)
+		        OR (coalesce(failed.latest_event_sequence, 0) = 0 AND proved.sequence = 0
+		          AND failed.updated_at >= proved.at)))`, tenantID, identityID).Scan(&blocked)
 	})
 	return blocked, err
 }

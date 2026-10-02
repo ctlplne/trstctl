@@ -192,6 +192,85 @@ func TestLifecycleAutomationShowsFailedDeliveryWithoutBorrowingAnotherCertificat
 	}
 }
 
+// The event log orders observations even when PostgreSQL rounds their wall
+// clock times to the same microsecond. UUID order carries no temporal meaning.
+func TestLifecycleAutomationOrdersSameTimestampReceiptsByEventSequence(t *testing.T) {
+	s := newStore(t)
+	ctx := t.Context()
+	owner, err := s.CreateOwner(ctx, store.Owner{TenantID: tenantA, Kind: store.OwnerTeam, Name: "same timestamp owner"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := s.CreateIdentity(ctx, store.Identity{TenantID: tenantA, Kind: store.KindX509Certificate,
+		Name: "same-timestamp.example.test", OwnerID: owner.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity.Status = "deployed"
+	if err := s.UpsertIdentity(ctx, identity); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Now().UTC().Truncate(time.Microsecond)
+	end := at.Add(time.Hour)
+	served, err := s.UpsertCertificate(ctx, store.Certificate{TenantID: tenantA, OwnerID: &owner.ID,
+		Subject: identity.Name, SANs: []string{identity.Name}, Issuer: "local", Serial: "served-same-time",
+		Fingerprint: strings.Repeat("a", 64), Source: "issued", Status: "active", NotBefore: &at, NotAfter: &end})
+	if err != nil {
+		t.Fatal(err)
+	}
+	failedEnd := at.Add(24 * time.Hour)
+	successor, err := s.UpsertCertificate(ctx, store.Certificate{TenantID: tenantA, OwnerID: &owner.ID,
+		Subject: identity.Name, SANs: []string{identity.Name}, Issuer: "local", Serial: "successor-same-time",
+		Fingerprint: strings.Repeat("b", 64), Source: "issued", Status: "active", NotBefore: &at, NotAfter: &failedEnd})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, receipt := range []struct {
+		id, status, fingerprint string
+		sequence                uint64
+	}{
+		{"77777777-7777-4777-8777-000000000003", "verified", served.Fingerprint, 10},
+		{"77777777-7777-4777-8777-000000000002", "verify_failed", successor.Fingerprint, 11},
+	} {
+		if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+			return s.ApplyConnectorDeliveryRecordedTx(ctx, tx, store.ConnectorDeliveryReceipt{
+				ID: receipt.id, TenantID: tenantA, IdentityID: &identity.ID, Destination: "connector.deploy",
+				Connector: "apache", Target: "same-timestamp", Fingerprint: receipt.fingerprint,
+				Status: receipt.status, IdempotencyKey: receipt.id, EventSequence: receipt.sequence,
+				CreatedAt: at, UpdatedAt: at,
+			})
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	blocked, err := s.HasUnverifiedConnectorDeliveryAfterConfirmedServe(ctx, tenantA, identity.ID)
+	if err != nil || !blocked {
+		t.Fatalf("later failed event must block unattended renewal: blocked=%v err=%v", blocked, err)
+	}
+	rows, err := s.ListLifecycleAutomationInventory(ctx, tenantA, 100)
+	if err != nil || len(rows) != 1 || !rows[0].DeliveryUnverified || rows[0].CertificateID != served.ID {
+		t.Fatalf("same-time failure must stay visible beside last served leaf: rows=%+v err=%v", rows, err)
+	}
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return s.ApplyConnectorDeliveryRecordedTx(ctx, tx, store.ConnectorDeliveryReceipt{
+			ID: "77777777-7777-4777-8777-000000000001", TenantID: tenantA, IdentityID: &identity.ID,
+			Destination: "connector.deploy", Connector: "apache", Target: "same-timestamp",
+			Fingerprint: successor.Fingerprint, Status: "verified", IdempotencyKey: "same-time-recovery",
+			EventSequence: 12, CreatedAt: at, UpdatedAt: at,
+		})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	blocked, err = s.HasUnverifiedConnectorDeliveryAfterConfirmedServe(ctx, tenantA, identity.ID)
+	if err != nil || blocked {
+		t.Fatalf("later verified event must clear hold: blocked=%v err=%v", blocked, err)
+	}
+	rows, err = s.ListLifecycleAutomationInventory(ctx, tenantA, 100)
+	if err != nil || len(rows) != 1 || rows[0].DeliveryUnverified || rows[0].CertificateID != successor.ID {
+		t.Fatalf("same-time recovery must select successor: rows=%+v err=%v", rows, err)
+	}
+}
+
 // The host can install a successor but fail its listener probe. The last
 // confirmed rollback still determines the renewal clock, while the new failure
 // must remain visible and block unattended action.

@@ -154,15 +154,22 @@ func TestServedLifecycleAutomationPlanListsDueWorkWithoutTenantLeakage(t *testin
 	if queued, err := h.srv.runLifecycleOnceAt(t.Context(), cert.ValidityAnchor.Add(21*24*time.Hour)); err != nil || queued != 0 {
 		t.Fatalf("scheduler renewed an unverified destination: queued=%d err=%v", queued, err)
 	}
-	// This planner test now supplies a read-model fixture for verified delivery;
-	// live connector execution is exercised by the connector journey tests.
+	// This planner test supplies a read-model fixture for a later verified
+	// delivery; live connector execution is exercised by connector journey
+	// tests. Preserve event order: an unsequenced fixture cannot override the
+	// sequenced failed delivery emitted by the served transition above.
 	verifiedAt := time.Now().UTC()
 	if err := h.store.WithTenant(t.Context(), h.tenant, func(tx pgx.Tx) error {
+		var nextSequence uint64
+		if err := tx.QueryRow(t.Context(), `SELECT coalesce(max(latest_event_sequence), 0) + 1
+			FROM connector_delivery_receipts WHERE tenant_id = $1`, h.tenant).Scan(&nextSequence); err != nil {
+			return err
+		}
 		return h.store.ApplyConnectorDeliveryRecordedTx(t.Context(), tx, store.ConnectorDeliveryReceipt{
 			ID: "77777777-7777-4777-8777-777777777777", TenantID: h.tenant, IdentityID: &identity.ID,
 			Destination: "connector.deploy", Connector: "test", Target: "checkout.internal",
 			Fingerprint: cert.Fingerprint, Status: "verified", IdempotencyKey: "automation-plan-verified-fixture",
-			CreatedAt: verifiedAt, UpdatedAt: verifiedAt,
+			EventSequence: nextSequence, CreatedAt: verifiedAt, UpdatedAt: verifiedAt,
 		})
 	}); err != nil {
 		t.Fatalf("record verified planner fixture: %v", err)

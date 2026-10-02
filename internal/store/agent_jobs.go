@@ -139,8 +139,8 @@ func (s *Store) LastSuccessfulHostDeployEvidence(ctx context.Context, tenantID, 
 			   AND prior_job.claimed_by_agent_id = $4::uuid
 			   AND prior_job.required_agent_role = 'host'
 			   AND prior_job.status = 'delivered'
-			   AND prior_job.delivered_at < $5
-			   AND prior_job.id <> $6
+			   AND (prior_job.delivered_at < $5
+			     OR (prior_job.delivered_at = $5 AND prior_job.id < $6))
 			   AND convert_from(prior_job.payload, 'UTF8')::jsonb ->> 'target_id' = $2
 			   AND cert.status IN ('active', 'superseded')
 			   AND ((receipt.destination = 'connector.rollback' AND receipt.status = 'rolled_back')

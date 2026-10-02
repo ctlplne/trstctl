@@ -73,7 +73,8 @@ func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID s
 			  JOIN owners AS o
 			    ON o.tenant_id = $1 AND o.tenant_id = i.tenant_id AND o.id = i.owner_id
 			  LEFT JOIN LATERAL (
-			       SELECT receipt.fingerprint, receipt.updated_at
+			       SELECT receipt.fingerprint, receipt.updated_at,
+			              coalesce(receipt.latest_event_sequence, 0) AS sequence
 			         FROM connector_delivery_receipts receipt
 			         JOIN certificates served
 			           ON served.tenant_id = $1 AND served.tenant_id = receipt.tenant_id
@@ -89,7 +90,7 @@ func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID s
 			                AND failed.destination = 'connector.deploy' AND failed.status = 'verify_failed'
 			                AND failed.idempotency_key = receipt.idempotency_key || ':verified'))
 			            OR (receipt.destination = 'connector.rollback' AND receipt.status = 'rolled_back' AND served.status IN ('active', 'superseded')))
-			        ORDER BY receipt.updated_at DESC, receipt.id DESC LIMIT 1
+			        ORDER BY coalesce(receipt.latest_event_sequence, 0) DESC, receipt.updated_at DESC, receipt.id DESC LIMIT 1
 		  ) AS deployed ON true
 		  LEFT JOIN LATERAL (
 		       SELECT receipt.fingerprint
@@ -103,8 +104,13 @@ func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID s
 		          AND receipt.identity_id = i.id
 		          AND receipt.destination = 'connector.deploy'
 		          AND receipt.status IN ('failed', 'verify_failed')
-		          AND (deployed.updated_at IS NULL OR receipt.updated_at > deployed.updated_at)
-		        ORDER BY receipt.updated_at DESC, receipt.id DESC LIMIT 1
+		          AND (deployed.updated_at IS NULL
+		            OR (coalesce(receipt.latest_event_sequence, 0) > 0 AND deployed.sequence > 0
+		              AND receipt.latest_event_sequence > deployed.sequence)
+		            OR (coalesce(receipt.latest_event_sequence, 0) > 0 AND deployed.sequence = 0)
+		            OR (coalesce(receipt.latest_event_sequence, 0) = 0 AND deployed.sequence = 0
+		              AND receipt.updated_at >= deployed.updated_at))
+		        ORDER BY coalesce(receipt.latest_event_sequence, 0) DESC, receipt.updated_at DESC, receipt.id DESC LIMIT 1
 		  ) AS unverified ON true
 		  JOIN LATERAL (
 			       SELECT c.id, c.not_before, c.not_after, c.validity_anchor,

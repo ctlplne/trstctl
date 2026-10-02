@@ -660,7 +660,9 @@ func TestHostRollbackUsesServedPredecessorAfterRestore(t *testing.T) {
 		{"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "endpoint.renew", "delivered", "agent_delivered_verification_failed"},
 	}
 	for index, step := range steps {
-		at := now.Add(time.Duration(index) * time.Second)
+		// PostgreSQL stores microseconds; distinct, serialized host jobs can
+		// share that value. The durable outbox ID must break the tie.
+		at := now
 		if index != 2 && index != 3 {
 			status := "superseded"
 			source := "issued"
