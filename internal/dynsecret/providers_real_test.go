@@ -151,7 +151,7 @@ func assertCredentialPassword(t *testing.T, credential []byte, want string) {
 func TestGeneratedDatabasePasswordErrorsAreClosed(t *testing.T) {
 	t.Run("mysql driver echo", func(t *testing.T) {
 		exec := &echoingSQLExec{}
-		backend, err := NewMySQLBackend(exec, MySQLConfig{Database: "app", Addr: "mysql.internal:3306"})
+		backend, err := NewMySQLBackend(exec, MySQLConfig{Database: "app", Addr: "mysql.internal:3306", AccountHost: "10.4.0.12"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -181,6 +181,22 @@ func TestGeneratedDatabasePasswordErrorsAreClosed(t *testing.T) {
 			t.Fatalf("MongoDB error retained adapter echo or saw no password: error=%v password_len=%d", err, len(admin.password))
 		}
 	})
+}
+
+func TestMySQLBackendRefusesImplicitOrUnapprovedWildcardHost(t *testing.T) {
+	exec := &recordingSQLExec{}
+	base := MySQLConfig{Database: "app", Addr: "mysql.internal:3306"}
+	if _, err := NewMySQLBackend(exec, base); err == nil || !strings.Contains(err.Error(), "AccountHost") {
+		t.Fatalf("implicit account host error = %v", err)
+	}
+	base.AccountHost = "%"
+	if _, err := NewMySQLBackend(exec, base); err == nil || !strings.Contains(err.Error(), "AllowWildcardAccountHost") {
+		t.Fatalf("unapproved wildcard error = %v", err)
+	}
+	base.AllowWildcardAccountHost = true
+	if _, err := NewMySQLBackend(exec, base); err != nil {
+		t.Fatalf("explicit wildcard opt-in rejected: %v", err)
+	}
 }
 
 func TestMongoCreateUserCommandEncodesPasswordWithoutStringConversion(t *testing.T) {
@@ -244,7 +260,7 @@ func TestGeneratedDatabasePasswordCodeDoesNotStringifySecrets(t *testing.T) {
 func TestConcreteBackendsCreateScopedCredentialAndRevoke(t *testing.T) {
 	ctx := context.Background()
 	mysql := &recordingSQLExec{}
-	mysqlBackend, err := NewMySQLBackend(mysql, MySQLConfig{Database: "app", Host: "%", UsernamePrefix: "trstctl"})
+	mysqlBackend, err := NewMySQLBackend(mysql, MySQLConfig{Database: "app", Addr: "localhost:3306", AccountHost: "127.0.0.1", UsernamePrefix: "trstctl"})
 	if err != nil {
 		t.Fatal(err)
 	}

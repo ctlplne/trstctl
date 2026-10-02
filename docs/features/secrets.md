@@ -205,6 +205,11 @@ outbox command first, so only the outbox worker calls the provider and a crash r
 reuses the same identity. Cloud/Kubernetes endpoints require HTTPS; `allow_insecure_loopback` is a
 same-host-emulator exception limited to `localhost`, `127.0.0.0/8`, or `::1`.
 
+The MySQL backend requires an explicit `account_host` for every generated
+account. Wildcard host patterns need the separate
+`allow_wildcard_account_host` operator opt-in; omitting the host never creates a
+global `user@'%'` login. The provider catalog shows both settings before issue.
+
 - `GET /api/v1/secrets/leases/providers` returns the eight safe setup recipes plus
   this tenant's real configured provider IDs, allowed roles, maximum TTLs, and
   runtime configuration revisions. It never returns endpoints, native bindings,

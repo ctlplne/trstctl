@@ -300,7 +300,7 @@ func TestSecretIntegrationFactoriesBuildAllTenantBoundRegistrations(t *testing.T
 	role := []string{"reader"}
 	dynamic := []config.DynamicSecretProviderConfig{
 		{TenantID: tenantA, ID: "pg", Type: "postgresql", AdminDSNRef: ref, AllowedRoles: role},
-		{TenantID: tenantA, ID: "mysql", Type: "mysql", AdminDSNRef: ref, Database: "app", Addr: "mysql.internal:3306", AllowedRoles: role},
+		{TenantID: tenantA, ID: "mysql", Type: "mysql", AdminDSNRef: ref, Database: "app", Addr: "mysql.internal:3306", AccountHost: "10.4.0.12", AllowedRoles: role},
 		{TenantID: tenantA, ID: "mongo", Type: "mongodb", AdminDSNRef: ref, Database: "app", AllowedRoles: role},
 		{TenantID: tenantA, ID: "aws", Type: "aws-iam", Endpoint: "https://iam.example.test", Region: "us-east-1", AccessKeyID: "AKID", SecretAccessRef: ref, AllowedRoles: role, RoleBindings: map[string]string{"reader": "arn:aws:iam::aws:policy/ReadOnlyAccess"}},
 		{TenantID: tenantA, ID: "gcp", Type: "gcp-iam", Endpoint: "https://iam.example.test", Project: "p", ServiceAccount: "issuer@example.test", BearerTokenRef: ref, AllowedRoles: role},

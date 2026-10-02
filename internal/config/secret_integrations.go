@@ -31,22 +31,25 @@ type DynamicSecretProviderConfig struct {
 	ID       string `json:"id"`
 	Type     string `json:"type"`
 
-	Endpoint          string `json:"endpoint,omitempty"`
-	AdminDSNRef       string `json:"admin_dsn_ref,omitempty"`
-	Database          string `json:"database,omitempty"`
-	Schema            string `json:"schema,omitempty"`
-	Addr              string `json:"addr,omitempty"`
-	AccountHost       string `json:"account_host,omitempty"`
-	Namespace         string `json:"namespace,omitempty"`
-	Region            string `json:"region,omitempty"`
-	AccessKeyID       string `json:"access_key_id,omitempty"`
-	Project           string `json:"project,omitempty"`
-	ServiceAccount    string `json:"service_account,omitempty"`
-	ApplicationObject string `json:"application_object_id,omitempty"`
-	ApplicationClient string `json:"application_client_id,omitempty"`
-	AzureTenant       string `json:"azure_tenant_id,omitempty"`
-	DB                int    `json:"db,omitempty"`
-	UsernamePrefix    string `json:"username_prefix,omitempty"`
+	Endpoint    string `json:"endpoint,omitempty"`
+	AdminDSNRef string `json:"admin_dsn_ref,omitempty"`
+	Database    string `json:"database,omitempty"`
+	Schema      string `json:"schema,omitempty"`
+	Addr        string `json:"addr,omitempty"`
+	AccountHost string `json:"account_host,omitempty"`
+	// MySQL host patterns containing % or _ can admit clients outside a
+	// single named host. Require an explicit operator opt-in for that scope.
+	AllowWildcardAccountHost bool   `json:"allow_wildcard_account_host,omitempty"`
+	Namespace                string `json:"namespace,omitempty"`
+	Region                   string `json:"region,omitempty"`
+	AccessKeyID              string `json:"access_key_id,omitempty"`
+	Project                  string `json:"project,omitempty"`
+	ServiceAccount           string `json:"service_account,omitempty"`
+	ApplicationObject        string `json:"application_object_id,omitempty"`
+	ApplicationClient        string `json:"application_client_id,omitempty"`
+	AzureTenant              string `json:"azure_tenant_id,omitempty"`
+	DB                       int    `json:"db,omitempty"`
+	UsernamePrefix           string `json:"username_prefix,omitempty"`
 
 	PasswordRef     string   `json:"password_ref,omitempty"`
 	SecretAccessRef string   `json:"secret_access_key_ref,omitempty"`
@@ -201,6 +204,9 @@ func validateSecretIntegrations(cfg SecretIntegrationsConfig, secretsEnabled boo
 
 func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []error {
 	var errs []error
+	if c.AllowWildcardAccountHost && c.Type != "mysql" {
+		errs = append(errs, fmt.Errorf("%s allow_wildcard_account_host is only valid for mysql", where))
+	}
 	require := func(value, name string) {
 		if strings.TrimSpace(value) == "" {
 			errs = append(errs, fmt.Errorf("%s %s is required for %s", where, name, c.Type))
@@ -221,6 +227,10 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 		ref(c.AdminDSNRef, "admin_dsn_ref", false)
 		require(c.Database, "database")
 		require(c.Addr, "addr")
+		require(c.AccountHost, "account_host")
+		if strings.ContainsAny(c.AccountHost, "%_") && !c.AllowWildcardAccountHost {
+			errs = append(errs, fmt.Errorf("%s wildcard account_host requires allow_wildcard_account_host=true", where))
+		}
 	case "mongodb":
 		ref(c.AdminDSNRef, "admin_dsn_ref", false)
 		require(c.Database, "database")

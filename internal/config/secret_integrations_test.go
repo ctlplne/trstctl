@@ -16,7 +16,7 @@ func TestValidateSecretIntegrationsAcceptsEveryBuiltIn(t *testing.T) {
 	cfg := SecretIntegrationsConfig{
 		DynamicProviders: []DynamicSecretProviderConfig{
 			{TenantID: tenant, ID: "pg", Type: "postgresql", AdminDSNRef: ref, AllowedRoles: role},
-			{TenantID: tenant, ID: "mysql", Type: "mysql", AdminDSNRef: ref, Database: "app", Addr: "mysql.internal:3306", AllowedRoles: role},
+			{TenantID: tenant, ID: "mysql", Type: "mysql", AdminDSNRef: ref, Database: "app", Addr: "mysql.internal:3306", AccountHost: "10.4.0.12", AllowedRoles: role},
 			{TenantID: tenant, ID: "mongo", Type: "mongodb", AdminDSNRef: ref, Database: "app", AllowedRoles: role},
 			{TenantID: tenant, ID: "aws", Type: "aws-iam", Endpoint: "https://iam.example.test", Region: "us-east-1", AccessKeyID: "AKID", SecretAccessRef: ref, AllowedRoles: role, RoleBindings: map[string]string{"reader": "arn:aws:iam::aws:policy/ReadOnlyAccess"}},
 			{TenantID: tenant, ID: "gcp", Type: "gcp-iam", Endpoint: "https://iam.example.test", Project: "project", ServiceAccount: "issuer@example.test", BearerTokenRef: ref, AllowedRoles: role},
@@ -39,6 +39,34 @@ func TestValidateSecretIntegrationsAcceptsEveryBuiltIn(t *testing.T) {
 	}
 	if err := ValidateSecretIntegrations(cfg, true); err != nil {
 		t.Fatalf("all built-ins should validate: %v", err)
+	}
+}
+
+func TestValidateMySQLAccountHostRequiresExplicitScope(t *testing.T) {
+	base := DynamicSecretProviderConfig{
+		TenantID: "11111111-1111-1111-1111-111111111111", ID: "mysql", Type: "mysql",
+		AdminDSNRef: "file:/run/secrets/mysql-admin-dsn", Database: "app", Addr: "mysql.internal:3306",
+		AllowedRoles: []string{"reader"},
+	}
+	check := func(c DynamicSecretProviderConfig, want string) {
+		t.Helper()
+		err := ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Fatalf("MySQL account host validation = %v, want %q", err, want)
+		}
+	}
+	check(base, "account_host")
+	wildcard := base
+	wildcard.AccountHost = "%"
+	check(wildcard, "allow_wildcard_account_host")
+	wildcard.AllowWildcardAccountHost = true
+	if err := ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{wildcard}}, true); err != nil {
+		t.Fatalf("explicit wildcard opt-in rejected: %v", err)
+	}
+	exact := base
+	exact.AccountHost = "10.4.0.12"
+	if err := ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{exact}}, true); err != nil {
+		t.Fatalf("exact account host rejected: %v", err)
 	}
 }
 

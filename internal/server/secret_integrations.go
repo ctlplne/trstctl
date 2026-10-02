@@ -400,7 +400,8 @@ func openConfiguredDatabaseBackend(o *configuredDynamicBackendOpener) (requestDy
 			return o.fail(err)
 		}
 		backend, err := dynsecret.NewMySQLBackend(db, dynsecret.MySQLConfig{
-			Database: cfg.Database, Addr: cfg.Addr, AccountHost: cfg.AccountHost, UsernamePrefix: cfg.UsernamePrefix,
+			Database: cfg.Database, Addr: cfg.Addr, AccountHost: cfg.AccountHost,
+			AllowWildcardAccountHost: cfg.AllowWildcardAccountHost, UsernamePrefix: cfg.UsernamePrefix,
 		})
 		if err != nil {
 			_ = db.Close()

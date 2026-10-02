@@ -3,6 +3,7 @@
 package dynsecret
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/binary"
@@ -69,6 +70,10 @@ $trstctl$`
 // Callers close the returned pool immediately after one create/revoke operation;
 // this keeps the authority-bearing admin DSN out of long-lived process state.
 func OpenMySQLExecutor(ctx context.Context, adminDSN []byte) (*sql.DB, error) {
+	// A mode-0600 file: reference written by a shell commonly ends in LF.
+	// Remove only the terminal line ending; interior credential bytes remain
+	// untouched, and the caller wipes its resolved buffer after this attempt.
+	adminDSN = bytes.TrimRight(adminDSN, "\r\n")
 	if len(adminDSN) == 0 {
 		return nil, errors.New("dynsecret mysql: admin DSN required")
 	}

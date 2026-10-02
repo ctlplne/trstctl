@@ -1276,6 +1276,15 @@ credential-reference form before accepting traffic. An absent tenant target or
 provider fails its served mutation closed; it never falls back to another tenant or
 to a test registry.
 
+For MySQL, set `admin_dsn_ref`, `database`, `addr`, and `account_host` explicitly.
+`addr` is the server address returned to clients; `account_host` is the MySQL
+account's allowed client host or network matcher. A missing `account_host` fails
+startup instead of creating `user@'%'`. Patterns containing `%` or `_` require
+`allow_wildcard_account_host: true`. Prefer a specific client IP, hostname, or
+MySQL-supported IP netmask; the opt-in exists for deployments with changing
+client addresses and gives every matching client a chance to authenticate with
+the leased password. Review the network boundary before enabling it.
+
 AWS, GCP, and Azure sync targets can explicitly replace their static target
 credential with tenant-owned workload identity. Set exactly the provider switch
 (`aws_workload_identity`, `gcp_workload_identity`, or

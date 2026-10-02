@@ -255,17 +255,20 @@ func (v postgresVerifier) VerifyCredential(ctx context.Context, _, _ string, cre
 
 // MySQLConfig configures the concrete MySQL static-credential rotator.
 type MySQLConfig struct {
-	Executor       dynsecret.SQLExecutor
-	Database       string
-	Host           string
-	UsernamePrefix string
-	Publisher      CredentialPublisher
-	Verifier       CredentialVerifier
+	Executor                 dynsecret.SQLExecutor
+	Database                 string
+	Host                     string
+	AccountHost              string
+	AllowWildcardAccountHost bool
+	UsernamePrefix           string
+	Publisher                CredentialPublisher
+	Verifier                 CredentialVerifier
 }
 
 func NewMySQLRotator(cfg MySQLConfig) (*BackendRotator, error) {
 	backend, err := dynsecret.NewMySQLBackend(cfg.Executor, dynsecret.MySQLConfig{
-		Database: cfg.Database, Host: cfg.Host, UsernamePrefix: cfg.UsernamePrefix,
+		Database: cfg.Database, Host: cfg.Host, AccountHost: cfg.AccountHost,
+		AllowWildcardAccountHost: cfg.AllowWildcardAccountHost, UsernamePrefix: cfg.UsernamePrefix,
 	})
 	if err != nil {
 		return nil, err

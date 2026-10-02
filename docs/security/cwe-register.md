@@ -194,10 +194,10 @@ not this file.
 | `internal/config/saml_test.go:8` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/scim_test.go:10` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/scim_test.go:57` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/secret_integrations_test.go:153` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/secret_integrations_test.go:157` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/secret_integrations_test.go:161` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/secret_integrations_test.go:165` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secret_integrations_test.go:181` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secret_integrations_test.go:185` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secret_integrations_test.go:189` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secret_integrations_test.go:193` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/secrets_config_test.go:23` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/secrets_config_test.go:42` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/secrets_config_test.go:65` | fabricated fixture path/identifiers; no credential value is present (CWE-798) |
@@ -345,7 +345,7 @@ not this file.
 | `internal/server/response_integrations_served_test.go:54` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
-| `internal/server/secret_integrations.go:945` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_integrations.go:946` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_third_party_scan_served_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_scan_served_test.go:260` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_served_test.go:583` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -460,9 +460,9 @@ not this file.
 | `internal/dns/rfc2136/rfc2136.go:314` | DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190) |
 | `internal/dns/rfc2136/rfc2136.go:339` | DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190) |
 | `internal/dns/rfc2136/rfc2136.go:343` | DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190) |
-| `internal/dynsecret/drivers.go:230` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
-| `internal/dynsecret/drivers.go:238` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
-| `internal/dynsecret/providers_real_test.go:483` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `internal/dynsecret/drivers.go:235` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
+| `internal/dynsecret/drivers.go:243` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
+| `internal/dynsecret/providers_real_test.go:499` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/events/backup_history_test.go:216` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/events/backup_restore_floor_test.go:593` | tiny fixed test sequence |
 | `internal/historycontinuity/continuity_test.go:203` | bounded fixture/corpus value packing inside a test (CWE-190) |
@@ -925,9 +925,9 @@ not this file.
 | `internal/api/vault_compat_contract_test.go:246` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/ca/profilelint/profilelint_test.go:173` | non-secret fixture directory in t.TempDir (CWE-22, CWE-276) |
 | `internal/crypto/secretfile/secretfile_test.go:61` | deliberately loose fixture dir; secretfile must refuse it (CWE-276) |
-| `internal/dynsecret/providers_real_test.go:471` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/dynsecret/providers_real_test.go:474` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/dynsecret/providers_real_test.go:477` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/dynsecret/providers_real_test.go:487` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/dynsecret/providers_real_test.go:490` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/dynsecret/providers_real_test.go:493` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/projections/golden_events_test.go:107` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/projections/sshdiscovery_store_test.go:92` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/protocols/acme/certbot_client_test.go:48` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -1191,7 +1191,7 @@ not this file.
 | `internal/crypto/pfx/pfx_test.go:44` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/secretfile/secretfile.go:34` | operator-configured local secret path; parents and file mode validated above (CWE-22) |
 | `internal/crypto/secretfile/secretfile.go:65` | operator-configured local secret path; O_EXCL + 0600, parents validated above (CWE-22) |
-| `internal/dynsecret/providers_real_test.go:230` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/dynsecret/providers_real_test.go:246` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/events/protect_schema005_guard_test.go:138` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/events/protect_schema005_guard_test.go:157` | fixed repository source anchor, not caller input (CWE-22) |
 | `internal/featureparity/catalog.go:94` | fixed repo-relative catalog path read by tools and tests (CWE-22) |

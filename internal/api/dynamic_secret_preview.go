@@ -131,7 +131,8 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			credential("admin_dsn_ref", "Admin DSN reference", "Credential reference containing the least-privilege administrative DSN.", true),
 			value("addr", "Client address", "Host and port applications use for the generated account.", true),
 			value("database", "Database", "Database granted to the generated account.", true),
-			value("account_host", "Account host", "Optional MySQL account host restriction; defaults to %.", false),
+			value("account_host", "Account host", "Required MySQL client host or network matcher; never defaults to %.", true),
+			value("allow_wildcard_account_host", "Wildcard account host opt-in", "Required to use % or _ in account_host; review the matched client range before enabling.", false),
 		)},
 		{Type: "mongodb", Label: "MongoDB", Purpose: "Creates and drops a scoped MongoDB database user.", Requirements: dynamicSecretProviderRequirements(
 			credential("admin_dsn_ref", "Admin URI reference", "Credential reference containing the least-privilege administrative MongoDB URI.", true),

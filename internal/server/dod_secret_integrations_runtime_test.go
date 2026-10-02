@@ -253,7 +253,7 @@ func dodRunAllDynamicSecretProductionAssembly(t *testing.T) {
 	cfg.SecretIntegrations.DynamicProviders = []config.DynamicSecretProviderConfig{
 		{TenantID: dodSecretIntegrationTenant, ID: "registry", Type: "postgresql", AdminDSNRef: fileRef("registry-postgres-dsn", []byte(registryDB.AdminDSN)), Database: registryDB.Database, AllowedRoles: []string{"reader"}, MaxTTL: "15m", UsernamePrefix: "dod_registry"},
 		{TenantID: dodSecretIntegrationTenant, ID: "postgresql", Type: "postgresql", AdminDSNRef: fileRef("postgres-dsn", []byte(postgresDB.AdminDSN)), Database: postgresDB.Database, AllowedRoles: []string{"reader"}, MaxTTL: "15m", UsernamePrefix: "dod_postgres"},
-		{TenantID: dodSecretIntegrationTenant, ID: "mysql", Type: "mysql", AdminDSNRef: fileRef("mysql-dsn", []byte(mysqlDB.AdminDSN)), Database: mysqlDB.Database, Addr: mysqlDB.Addr, AccountHost: "%", AllowedRoles: []string{"reader"}, MaxTTL: "15m", UsernamePrefix: "dod_mysql"},
+		{TenantID: dodSecretIntegrationTenant, ID: "mysql", Type: "mysql", AdminDSNRef: fileRef("mysql-dsn", []byte(mysqlDB.AdminDSN+"\n")), Database: mysqlDB.Database, Addr: mysqlDB.Addr, AccountHost: "%", AllowWildcardAccountHost: true, AllowedRoles: []string{"reader"}, MaxTTL: "15m", UsernamePrefix: "dod_mysql"},
 		{TenantID: dodSecretIntegrationTenant, ID: "mongodb", Type: "mongodb", AdminDSNRef: fileRef("mongo-dsn", []byte(mongoDB.AdminDSN)), Database: mongoDB.Database, AllowedRoles: []string{"reader"}, MaxTTL: "15m", UsernamePrefix: "dod_mongo"},
 		{TenantID: dodSecretIntegrationTenant, ID: "aws-iam", Type: "aws-iam", Endpoint: dynamicAWSEndpoint, Region: "us-east-1", AccessKeyID: "AKIADODADMIN", SecretAccessRef: fileRef("aws-admin-secret", []byte("dod-aws-admin-secret")), AllowedRoles: []string{"reader"}, RoleBindings: map[string]string{"reader": "arn:aws:iam::123456789012:policy/DODReadOnly"}, MaxTTL: "15m", AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs, UsernamePrefix: "dod_aws"},
 		{TenantID: dodSecretIntegrationTenant, ID: "gcp-iam", Type: "gcp-iam", Endpoint: dynamicGCPEndpoint, Project: "p", ServiceAccount: "dyn@p.iam.gserviceaccount.com", BearerTokenRef: fileRef("gcp-admin-token", []byte("dod-gcp-admin-token")), AllowedRoles: []string{"reader"}, MaxTTL: "15m", AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs, UsernamePrefix: "dod-gcp"},
@@ -335,8 +335,8 @@ func dodRunFocusedDynamicSecret(t *testing.T, entryID string, external *proof.Ex
 		database := dodSecretSubstrateConfig(t, external)
 		provider = config.DynamicSecretProviderConfig{
 			TenantID: dodSecretIntegrationTenant, ID: target.id, Type: "mysql",
-			AdminDSNRef: fileRef("mysql-dsn", []byte(database.AdminDSN)), Database: database.Database,
-			Addr: database.Addr, AccountHost: "%", AllowedRoles: []string{"reader"}, MaxTTL: "15m", UsernamePrefix: "dod_mysql",
+			AdminDSNRef: fileRef("mysql-dsn", []byte(database.AdminDSN+"\n")), Database: database.Database,
+			Addr: database.Addr, AccountHost: "%", AllowWildcardAccountHost: true, AllowedRoles: []string{"reader"}, MaxTTL: "15m", UsernamePrefix: "dod_mysql",
 		}
 	case "dynamic_secret.mongodb":
 		database := dodSecretSubstrateConfig(t, external)

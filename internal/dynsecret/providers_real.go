@@ -217,12 +217,12 @@ func (b *PostgresBackend) Revoke(ctx context.Context, ref string) error {
 
 // MySQLConfig configures a MySQL or MariaDB dynamic-secret backend.
 type MySQLConfig struct {
-	Database    string
-	Addr        string
-	AccountHost string
-	// Host is the legacy combined address/account host. New production config
-	// must set Addr and AccountHost separately because "%" is a valid account
-	// host but not a dial address.
+	Database                 string
+	Addr                     string
+	AccountHost              string
+	AllowWildcardAccountHost bool
+	// Host is the legacy dial address. The MySQL account host must be explicit
+	// so a missing scope cannot silently become the global % matcher.
 	Host           string
 	UsernamePrefix string
 }
@@ -253,11 +253,11 @@ func NewMySQLBackend(exec SQLExecutor, cfg MySQLConfig) (*MySQLBackend, error) {
 			cfg.Addr = "localhost:3306"
 		}
 	}
-	if cfg.AccountHost == "" {
-		cfg.AccountHost = cfg.Host
+	if strings.TrimSpace(cfg.AccountHost) == "" {
+		return nil, errors.New("dynsecret mysql: AccountHost required")
 	}
-	if cfg.AccountHost == "" {
-		cfg.AccountHost = "%"
+	if strings.ContainsAny(cfg.AccountHost, "%_") && !cfg.AllowWildcardAccountHost {
+		return nil, errors.New("dynsecret mysql: wildcard AccountHost requires AllowWildcardAccountHost")
 	}
 	if cfg.Addr == "" || cfg.Addr == "%" {
 		return nil, errors.New("dynsecret mysql: Addr must name a reachable server")
