@@ -20,6 +20,9 @@ const { apiMock } = vi.hoisted(() => ({
     sshFleet: vi.fn(),
     sshStatus: vi.fn(),
     workloadAttesterTrustSources: vi.fn(),
+    issueDynamicLease: vi.fn(),
+    renewDynamicLease: vi.fn(),
+    getDynamicLease: vi.fn(),
   },
 }));
 
@@ -109,6 +112,9 @@ describe("workload identity disclosure surface", () => {
       ],
     });
     apiMock.rotationRuns.mockReset().mockResolvedValue({ items: [] });
+    apiMock.issueDynamicLease.mockReset();
+    apiMock.renewDynamicLease.mockReset();
+    apiMock.getDynamicLease.mockReset();
   });
 
   it("opens as a served Machine and Workload cockpit and keeps unopened Kubernetes diagnostics quiet", async () => {
@@ -240,6 +246,34 @@ describe("workload identity disclosure surface", () => {
     expect(screen.queryByText("PKI secret bundle")).not.toBeInTheDocument();
     expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /revoke now|renew now/i })).not.toBeInTheDocument();
+  });
+
+  it("reveals a rotated Kubernetes token once and follows the replacement lease", async () => {
+    const issuedAt = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + 15 * 60_000).toISOString();
+    const base = { provider: "kubernetes", role: "reader", state: "active", issued_at: issuedAt, expires_at: expiresAt, max_expires_at: expiresAt };
+    apiMock.issueDynamicLease.mockResolvedValue({ ...base, id: "lease-old", credential: "first-token" });
+    apiMock.renewDynamicLease.mockResolvedValue({ ...base, id: "lease-new", credential: "replacement-token" });
+    apiMock.getDynamicLease.mockResolvedValue({ ...base, id: "lease-old", state: "revoked" });
+    const user = userEvent.setup();
+    renderWorkloads();
+
+    await user.click(screen.getByText("Dynamic secret leases"));
+    await user.clear(screen.getByLabelText("Provider"));
+    await user.type(screen.getByLabelText("Provider"), "kubernetes");
+    await user.clear(screen.getByLabelText("Role"));
+    await user.type(screen.getByLabelText("Role"), "reader");
+    await user.click(screen.getByRole("button", { name: "Issue lease" }));
+    expect(await screen.findByText("first-token")).toBeInTheDocument();
+    expect(apiMock.issueDynamicLease).toHaveBeenCalledWith({ provider: "kubernetes", role: "reader", ttl_seconds: 1200 });
+
+    await user.click(screen.getByRole("button", { name: "Renew 5m" }));
+    expect(await screen.findByText("replacement-token")).toBeInTheDocument();
+    expect(screen.queryByText("first-token")).not.toBeInTheDocument();
+    expect(apiMock.getDynamicLease).toHaveBeenCalledWith("lease-old");
+    expect(screen.getByText("Reveal-once credential for lease-new")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(screen.queryByText("replacement-token")).not.toBeInTheDocument();
   });
 
   it("describes configured tenant trust without claiming the workload proof is already verified", async () => {

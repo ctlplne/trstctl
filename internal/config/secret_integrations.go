@@ -53,11 +53,14 @@ type DynamicSecretProviderConfig struct {
 	DB                       int    `json:"db,omitempty"`
 	UsernamePrefix           string `json:"username_prefix,omitempty"`
 
-	PasswordRef     string   `json:"password_ref,omitempty"`
-	SecretAccessRef string   `json:"secret_access_key_ref,omitempty"`
-	SessionTokenRef string   `json:"session_token_ref,omitempty"`
-	BearerTokenRef  string   `json:"bearer_token_ref,omitempty"`
-	AllowedRoles    []string `json:"allowed_roles"`
+	PasswordRef             string   `json:"password_ref,omitempty"`
+	SecretAccessRef         string   `json:"secret_access_key_ref,omitempty"`
+	SessionTokenRef         string   `json:"session_token_ref,omitempty"`
+	BearerTokenRef          string   `json:"bearer_token_ref,omitempty"`
+	KubernetesAudience      string   `json:"kubernetes_audience,omitempty"`
+	KubernetesTLSCARef      string   `json:"kubernetes_tls_ca_ref,omitempty"`
+	KubernetesTLSServerName string   `json:"kubernetes_tls_server_name,omitempty"`
+	AllowedRoles            []string `json:"allowed_roles"`
 	// RoleBindings maps an allowed role to its provider-native authority. AWS
 	// values are managed-policy ARNs; Kubernetes values are Role/name or
 	// ClusterRole/name. Fixed-authority providers may omit it.
@@ -221,6 +224,9 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 	if c.Type != "redis" && (c.RedisTLSCARef != "" || c.RedisTLSServerName != "" || c.AllowPlaintextRedis) {
 		errs = append(errs, fmt.Errorf("%s Redis transport settings are only valid for redis", where))
 	}
+	if c.Type != "kubernetes" && (c.KubernetesAudience != "" || c.KubernetesTLSCARef != "" || c.KubernetesTLSServerName != "") {
+		errs = append(errs, fmt.Errorf("%s Kubernetes audience and TLS settings are only valid for kubernetes", where))
+	}
 	require := func(value, name string) {
 		if strings.TrimSpace(value) == "" {
 			errs = append(errs, fmt.Errorf("%s %s is required for %s", where, name, c.Type))
@@ -287,7 +293,15 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 	case "kubernetes":
 		require(c.Endpoint, "endpoint")
 		require(c.Namespace, "namespace")
+		require(c.KubernetesAudience, "kubernetes_audience")
 		ref(c.BearerTokenRef, "bearer_token_ref", false)
+		ref(c.KubernetesTLSCARef, "kubernetes_tls_ca_ref", true)
+		if c.KubernetesTLSServerName != "" && c.KubernetesTLSCARef == "" {
+			errs = append(errs, fmt.Errorf("%s kubernetes_tls_server_name requires kubernetes_tls_ca_ref", where))
+		}
+		if maxTTL, err := c.MaxTTLDuration(); err == nil && maxTTL < 10*time.Minute {
+			errs = append(errs, fmt.Errorf("%s kubernetes max_ttl must be at least 10 minutes", where))
+		}
 		for _, role := range normalizedStrings(c.AllowedRoles) {
 			binding := strings.TrimSpace(c.RoleBindings[role])
 			if !strings.HasPrefix(binding, "Role/") && !strings.HasPrefix(binding, "ClusterRole/") {

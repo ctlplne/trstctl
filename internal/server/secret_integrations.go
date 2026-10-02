@@ -18,6 +18,7 @@ import (
 	"trstctl.com/trstctl/internal/cloudauth"
 	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/secretfile"
@@ -459,12 +460,19 @@ func openConfiguredCloudBackend(o *configuredDynamicBackendOpener) (requestDynam
 		if err != nil {
 			return o.fail(err)
 		}
-		client, err := secretIntegrationHTTPClient(cfg.Endpoint, cfg.AllowPrivate, cfg.AllowInsecureLoopback, cfg.PrivateEgressCIDRs, o.provider.guard)
+		var caPEM []byte
+		if cfg.KubernetesTLSCARef != "" {
+			caPEM, err = o.resolve(cfg.KubernetesTLSCARef)
+			if err != nil {
+				return o.fail(err)
+			}
+		}
+		client, err := secretIntegrationHTTPClientWithTLS(cfg.Endpoint, cfg.AllowPrivate, cfg.AllowInsecureLoopback, cfg.PrivateEgressCIDRs, caPEM, cfg.KubernetesTLSServerName, o.provider.guard)
 		if err != nil {
 			return o.fail(err)
 		}
 		backend, err := dynsecret.NewKubernetesBackend(dynsecret.KubernetesConfig{
-			Endpoint: cfg.Endpoint, HTTPClient: client, Namespace: cfg.Namespace,
+			Endpoint: cfg.Endpoint, HTTPClient: client, Namespace: cfg.Namespace, Audience: cfg.KubernetesAudience,
 			BearerToken: token, UsernamePrefix: cfg.UsernamePrefix, RoleBindings: cfg.RoleBindings,
 		})
 		if err != nil {
@@ -1190,8 +1198,15 @@ func (p *configuredSyncPusher) recordWorkloadIdentityStatus(ctx context.Context,
 }
 
 func secretIntegrationHTTPClient(endpoint string, allowPrivate, allowInsecureLoopback bool, privateCIDRs []string, guard *egress.Guard) (*http.Client, error) {
+	return secretIntegrationHTTPClientWithTLS(endpoint, allowPrivate, allowInsecureLoopback, privateCIDRs, nil, "", guard)
+}
+
+func secretIntegrationHTTPClientWithTLS(endpoint string, allowPrivate, allowInsecureLoopback bool, privateCIDRs []string, caPEM []byte, serverName string, guard *egress.Guard) (*http.Client, error) {
 	if err := netsec.ValidateHTTPSOrInsecureLoopbackURL(endpoint, allowInsecureLoopback); err != nil {
 		return nil, err
+	}
+	if len(caPEM) > 0 && netsec.IsInsecureLoopbackHTTPURL(endpoint) {
+		return nil, errors.New("server: pinned Kubernetes CA requires HTTPS")
 	}
 	var client *http.Client
 	var err error
@@ -1202,6 +1217,19 @@ func secretIntegrationHTTPClient(endpoint string, allowPrivate, allowInsecureLoo
 		if err != nil {
 			return nil, err
 		}
+	}
+	if len(caPEM) > 0 {
+		pinned, err := mtls.HTTPTransportForServerName(caPEM, serverName)
+		if err != nil {
+			return nil, err
+		}
+		base, ok := client.Transport.(*http.Transport)
+		if !ok {
+			return nil, errors.New("server: safe HTTPS transport is unavailable")
+		}
+		copy := base.Clone()
+		copy.TLSClientConfig = pinned.TLSClientConfig
+		client.Transport = copy
 	}
 	clone := *client
 	clone.Transport = guard.WrapTransport(client.Transport)

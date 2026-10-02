@@ -29,6 +29,7 @@ import {
   type WorkloadAttesterTrustSourceRotateRequest,
 } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
+import { RevealPanel } from "@/pages/secrets/SecretsPageParts";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 
@@ -127,6 +128,17 @@ export function Workloads() {
   const [role, setRole] = useState("readonly-reporting");
   const [ttlSeconds, setTtlSeconds] = useState(1200);
   const [leases, setLeases] = useState<DynamicLease[]>([]);
+  const [leaseCredential, setLeaseCredential] = useState<{ id: string; value: string; expiresAt: string } | null>(null);
+  useEffect(() => {
+    if (!leaseCredential) return;
+    const remaining = Date.parse(leaseCredential.expiresAt) - Date.now();
+    if (remaining <= 0) {
+      setLeaseCredential(null);
+      return;
+    }
+    const timer = setTimeout(() => setLeaseCredential(null), Math.min(remaining + 1, 2147483647));
+    return () => clearTimeout(timer);
+  }, [leaseCredential]);
   const [attestedSVIDs, setAttestedSVIDs] = useState<AttestedSVIDRow[]>([]);
   const [attesterTrustSources, setAttesterTrustSources] = useState<WorkloadAttesterTrustSource[]>([]);
   const [trustSourceMethod, setTrustSourceMethod] = useState<TrustSourceMethod>("k8s_sat");
@@ -243,7 +255,9 @@ export function Workloads() {
     setBusy("issue");
     setLeaseError(null);
     try {
-      upsertLease(await api.issueDynamicLease({ provider: provider.trim(), role: role.trim(), ttl_seconds: ttlSeconds }));
+      const issued = await api.issueDynamicLease({ provider: provider.trim(), role: role.trim(), ttl_seconds: ttlSeconds });
+      upsertLease(issued);
+      setLeaseCredential(issued.credential ? { id: issued.id, value: issued.credential, expiresAt: issued.expires_at } : null);
     } catch (err) {
       setLeaseError(apiProblemMessage(err, "Could not issue lease"));
     } finally {
@@ -255,7 +269,10 @@ export function Workloads() {
     setBusy(`renew:${leaseId}`);
     setLeaseError(null);
     try {
-      upsertLease(await api.renewDynamicLease(leaseId, { extend_seconds: 300 }));
+      const renewed = await api.renewDynamicLease(leaseId, { extend_seconds: 300 });
+      upsertLease(renewed);
+      if (renewed.credential) setLeaseCredential({ id: renewed.id, value: renewed.credential, expiresAt: renewed.expires_at });
+      if (renewed.id !== leaseId) upsertLease(await api.getDynamicLease(leaseId));
     } catch (err) {
       setLeaseError(apiProblemMessage(err, "Could not renew lease"));
     } finally {
@@ -266,6 +283,7 @@ export function Workloads() {
   async function revokeLease(leaseId: string) {
     setBusy(`revoke:${leaseId}`);
     setLeaseError(null);
+    if (leaseCredential?.id === leaseId) setLeaseCredential(null);
     try {
       upsertLease(await api.revokeDynamicLease(leaseId));
     } catch (err) {
@@ -843,6 +861,16 @@ export function Workloads() {
             </form>
 
             {leaseError && <ErrorState title={t("workloads.leases.errorTitle")}>{leaseError}</ErrorState>}
+
+            {leaseCredential && leases.some((item) => item.id === leaseCredential.id && item.state === "active") ? (
+              <RevealPanel
+                title={t("secrets.dynamic.credentialTitle", { id: leaseCredential.id })}
+                value={leaseCredential.value}
+                onDismiss={() => setLeaseCredential(null)}
+              >
+                {t("secrets.dynamic.credentialHelp")}
+              </RevealPanel>
+            ) : null}
 
             <div className="ui-panel overflow-x-auto">
               <table className="ui-table min-w-[58rem]">

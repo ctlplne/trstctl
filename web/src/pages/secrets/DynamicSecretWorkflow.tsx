@@ -214,7 +214,18 @@ export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean })
     setLifecycleBusy("renew");
     setError(null);
     try {
-      await metadata.acceptMutation(await api.renewDynamicLease(lease.id, { extend_seconds: extend }));
+      const renewed = await api.renewDynamicLease(lease.id, { extend_seconds: extend });
+      if (renewed.id !== lease.id) {
+        // Kubernetes TokenRequest tokens cannot be extended. The server creates
+        // a replacement lease and revokes the predecessor before returning.
+        if (renewed.provider !== lease.provider || renewed.role !== lease.role || !renewed.credential) {
+          throw new Error(t("secrets.dynamic.metadataMismatch"));
+        }
+        setReceipt(leaseMetadataOnly(renewed));
+        setCredential({ leaseID: renewed.id, value: renewed.credential });
+      } else {
+        await metadata.acceptMutation(renewed);
+      }
     } catch (failure) {
       setError(apiProblemMessage(failure, t("secrets.dynamic.renewFailed")));
     } finally {

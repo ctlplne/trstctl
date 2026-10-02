@@ -15,6 +15,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/seal"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -321,6 +322,9 @@ func (l *durableDynamicSecretLifecycle) RenewBound(ctx context.Context, leaseID 
 	if err != nil {
 		return dynsecret.Lease{}, leaseStoreError(err, leaseID)
 	}
+	if typed, ok := l.providers[record.Provider].(interface{ DynamicSecretProviderType() string }); ok && typed.DynamicSecretProviderType() == "kubernetes" {
+		return dynsecret.Lease{}, errors.New("dynsecret: Kubernetes token renewal must rotate the credential")
+	}
 	if record.State != store.DynamicSecretLeaseActive {
 		return dynsecret.Lease{}, fmt.Errorf("%w %q", dynsecret.ErrLeaseNotActive, leaseID)
 	}
@@ -353,6 +357,87 @@ func (l *durableDynamicSecretLifecycle) RenewBound(ctx context.Context, leaseID 
 		return dynsecret.Lease{}, dynamicSecretIdempotencyConflict()
 	}
 	return l.resumeRenewal(ctx, op)
+}
+
+// RotateBound renews an immutable Kubernetes TokenRequest credential by issuing
+// a replacement lease through the normal durable outbox, then revoking the old
+// bound Secret through the normal revocation outbox. The two child commands have
+// stable identities so an interrupted response can recover the same token.
+func (l *durableDynamicSecretLifecycle) RotateBound(ctx context.Context, leaseID string, extend time.Duration, idempotencyKey, requestBinding string) (dynsecret.Lease, []byte, error) {
+	if leaseID == "" || idempotencyKey == "" || requestBinding == "" || extend <= 0 {
+		return dynsecret.Lease{}, nil, errors.New("dynsecret: rotating renewal requires lease, positive extension, idempotency key, and authenticated binding")
+	}
+	record, err := l.store.GetDynamicSecretLease(ctx, l.tenantID, leaseID)
+	if err != nil {
+		return dynsecret.Lease{}, nil, leaseStoreError(err, leaseID)
+	}
+	provider := l.providers[record.Provider]
+	typed, ok := provider.(interface{ DynamicSecretProviderType() string })
+	if !ok || typed.DynamicSecretProviderType() != "kubernetes" {
+		return dynsecret.Lease{}, nil, errors.New("dynsecret: rotating renewal requires a Kubernetes provider")
+	}
+	identity := dynamicSecretOperationID(l.tenantID, idempotencyKey)
+	issueKey := "rotate-issue:" + identity
+	revokeKey := "rotate-revoke:" + identity
+	issueBinding := crypto.SHA256Hex([]byte(requestBinding + "\x00kubernetes-rotation-issue"))
+	revokeBinding := crypto.SHA256Hex([]byte(requestBinding + "\x00kubernetes-rotation-revoke"))
+	_, childErr := l.store.GetDynamicSecretOperationByIdempotencyKey(ctx, l.tenantID, issueKey)
+	if childErr != nil && !store.IsNotFound(childErr) {
+		return dynsecret.Lease{}, nil, childErr
+	}
+	if store.IsNotFound(childErr) && (record.State != store.DynamicSecretLeaseActive || !time.Now().Before(record.ExpiresAt)) {
+		return dynsecret.Lease{}, nil, fmt.Errorf("%w %q", dynsecret.ErrLeaseNotActive, leaseID)
+	}
+	next := record.ExpiresAt.Add(extend)
+	if next.After(record.HardExpiresAt) {
+		return dynsecret.Lease{}, nil, dynsecret.ErrLeaseHardExpiry
+	}
+	ttl := time.Until(next)
+	if store.IsNotFound(childErr) && ttl < 10*time.Minute {
+		return dynsecret.Lease{}, nil, dynsecret.ErrLeaseMinimumTTL
+	}
+	if childErr == nil && ttl <= 0 {
+		// IssueBound recovers the immutable child command by its key and binding;
+		// it still requires a positive argument before consulting that record.
+		ttl = 10 * time.Minute
+	}
+	replacement, credential, err := l.IssueBound(ctx, record.Provider, record.Role, ttl, issueKey, issueBinding)
+	if err != nil {
+		return dynsecret.Lease{}, nil, err
+	}
+	if !time.Now().Before(replacement.ExpiresAt) {
+		secret.Wipe(credential)
+		return dynsecret.Lease{}, nil, fmt.Errorf("%w %q", dynsecret.ErrLeaseNotActive, replacement.ID)
+	}
+	if _, err := l.RevokeBound(ctx, leaseID, revokeKey, revokeBinding); err != nil {
+		secret.Wipe(credential)
+		return dynsecret.Lease{}, nil, err
+	}
+	// Do not report renewal complete while the predecessor token is still
+	// accepted by the API server. A timed-out call remains idempotently retryable.
+	deadline := time.NewTimer(10 * time.Second)
+	defer deadline.Stop()
+	tick := time.NewTicker(25 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		old, readErr := l.store.GetDynamicSecretLease(ctx, l.tenantID, leaseID)
+		if readErr != nil {
+			secret.Wipe(credential)
+			return dynsecret.Lease{}, nil, readErr
+		}
+		if old.RevocationStatus == store.DynamicSecretRevocationCompleted {
+			return replacement, credential, nil
+		}
+		select {
+		case <-ctx.Done():
+			secret.Wipe(credential)
+			return dynsecret.Lease{}, nil, ctx.Err()
+		case <-deadline.C:
+			secret.Wipe(credential)
+			return dynsecret.Lease{}, nil, context.DeadlineExceeded
+		case <-tick.C:
+		}
+	}
 }
 
 func (l *durableDynamicSecretLifecycle) resumeRenewal(ctx context.Context, op store.DynamicSecretOperation) (dynsecret.Lease, error) {

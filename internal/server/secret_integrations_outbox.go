@@ -383,6 +383,12 @@ func (d *secretIntegrationOutboxDispatcher) issueDynamicSecret(ctx context.Conte
 	if provider == nil {
 		return fmt.Errorf("server: dynamic-secret provider %q is not configured for tenant", command.Provider)
 	}
+	// Kubernetes TokenRequest tokens are immutable. Rotating renewal issues a
+	// replacement lease and token, so native validity matches the requested
+	// lease duration rather than the longer renewal ceiling.
+	if typed, ok := provider.(interface{ DynamicSecretProviderType() string }); ok && typed.DynamicSecretProviderType() == "kubernetes" {
+		nativeTTL = record.ExpiresAt.Sub(record.IssuedAt)
+	}
 	request := dynsecret.GenerateRequest{Role: command.Role, TTL: nativeTTL, LeaseID: command.ID}
 	credential, err := d.generateDynamicSecretCredential(ctx, m, command, record, provider, request)
 	if err != nil {

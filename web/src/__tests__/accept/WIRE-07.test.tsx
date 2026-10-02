@@ -212,6 +212,70 @@ describe("WIRE-07 dynamic secret lease wiring", () => {
     expect(sessionStorage.length).toBe(0);
   });
 
+  it("reveals a replacement Kubernetes token and follows its new lease after renewal", async () => {
+    const storageSpy = vi.spyOn(Storage.prototype, "setItem");
+    const providerCatalog = await apiMock.dynamicSecretProviders();
+    apiMock.dynamicSecretProviders.mockResolvedValue({
+      ...providerCatalog,
+      configured_providers: [
+        {
+          id: "cluster-reader",
+          type: "kubernetes",
+          label: "Kubernetes",
+          allowed_roles: ["reader"],
+          maximum_ttl_seconds: 1800,
+          ready: true,
+          configuration_revision: "runtime-revision-a",
+        },
+      ],
+    });
+    apiMock.previewDynamicLease.mockResolvedValue({
+      ...(await apiMock.previewDynamicLease()),
+      provider_id: "cluster-reader",
+      provider_type: "kubernetes",
+      provider_label: "Kubernetes",
+      role: "reader",
+      requested_ttl_seconds: 900,
+      effective_ttl_seconds: 900,
+      maximum_ttl_seconds: 1800,
+    });
+    currentLease = {
+      id: "lease-kubernetes-old",
+      provider: "cluster-reader",
+      role: "reader",
+      state: "active",
+      issued_at: "2026-06-19T13:00:00Z",
+      expires_at: "2026-06-19T13:15:00Z",
+      hard_expires_at: "2026-06-19T13:30:00Z",
+      revocation_status: "none",
+    };
+    apiMock.issueDynamicLease.mockResolvedValue({ ...currentLease, credential: "old-token" });
+    apiMock.renewDynamicLease.mockImplementation(async () => {
+      currentLease = {
+        ...currentLease,
+        id: "lease-kubernetes-new",
+        issued_at: "2026-06-19T13:00:00Z",
+        expires_at: "2026-06-19T13:20:00Z",
+        hard_expires_at: "2026-06-19T13:30:00Z",
+      };
+      return { ...currentLease, credential: "replacement-token" };
+    });
+
+    const user = userEvent.setup();
+    renderSecrets("/secrets/engines");
+    await user.click(await screen.findByRole("button", { name: "Open temporary credential" }));
+    await user.selectOptions(screen.getByLabelText("Connected provider"), "cluster-reader");
+    await user.click(screen.getByRole("button", { name: "Review without creating" }));
+    await user.click(await screen.findByRole("button", { name: "Create reviewed credential" }));
+    expect(await screen.findByText("old-token")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /renew lease/i }));
+    await waitFor(() => expect(apiMock.renewDynamicLease).toHaveBeenCalledWith("lease-kubernetes-old", { extend_seconds: 300 }));
+    expect(await screen.findByText("replacement-token")).toBeInTheDocument();
+    expect(screen.queryByText("old-token")).not.toBeInTheDocument();
+    expect(screen.getByText("lease-kubernetes-new")).toBeInTheDocument();
+    expect(storageSpy).not.toHaveBeenCalled();
+  });
+
   it("leaves renewal headroom by default and disables renewal when the hard lifetime is spent", async () => {
     apiMock.dynamicSecretProviders.mockResolvedValueOnce({
       capability: "F65",

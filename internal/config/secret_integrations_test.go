@@ -23,7 +23,7 @@ func TestValidateSecretIntegrationsAcceptsEveryBuiltIn(t *testing.T) {
 			{TenantID: tenant, ID: "aws", Type: "aws-iam", Endpoint: "https://iam.example.test", Region: "us-east-1", AccessKeyID: "AKID", SecretAccessRef: ref, AllowedRoles: role, RoleBindings: map[string]string{"reader": "arn:aws:iam::aws:policy/ReadOnlyAccess"}},
 			{TenantID: tenant, ID: "gcp", Type: "gcp-iam", Endpoint: "https://iam.example.test", Project: "project", ServiceAccount: "issuer@example.test", BearerTokenRef: ref, AllowedRoles: role},
 			{TenantID: tenant, ID: "azure", Type: "azure-entra", Endpoint: "https://graph.example.test", ApplicationObject: "object", ApplicationClient: "client", AzureTenant: "tenant", BearerTokenRef: ref, AllowedRoles: role},
-			{TenantID: tenant, ID: "k8s", Type: "kubernetes", Endpoint: "https://kubernetes.example.test", Namespace: "default", BearerTokenRef: ref, AllowedRoles: role, RoleBindings: map[string]string{"reader": "Role/secret-reader"}},
+			{TenantID: tenant, ID: "k8s", Type: "kubernetes", Endpoint: "https://kubernetes.example.test", Namespace: "default", KubernetesAudience: "https://kubernetes.example.test", BearerTokenRef: ref, AllowedRoles: role, RoleBindings: map[string]string{"reader": "Role/secret-reader"}},
 			{TenantID: tenant, ID: "redis", Type: "redis", Addr: "redis.internal:6379", PasswordRef: ref, RedisTLSServerName: "redis.internal", AllowedRoles: role,
 				RedisACLRoles: map[string]redisacl.Role{"reader": {KeyPrefixes: []string{"app:"}, Commands: []string{"get"}}}},
 		},
@@ -42,6 +42,32 @@ func TestValidateSecretIntegrationsAcceptsEveryBuiltIn(t *testing.T) {
 	}
 	if err := ValidateSecretIntegrations(cfg, true); err != nil {
 		t.Fatalf("all built-ins should validate: %v", err)
+	}
+}
+
+func TestValidateKubernetesTokenLeaseConfiguration(t *testing.T) {
+	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "k8s", Type: "kubernetes", Endpoint: "https://kubernetes.example.test", Namespace: "apps", BearerTokenRef: "file:/run/secrets/kubernetes-admin-token", KubernetesAudience: "https://kubernetes.example.test", AllowedRoles: []string{"reader"}, RoleBindings: map[string]string{"reader": "Role/reader"}, MaxTTL: "10m"}
+	check := func(c DynamicSecretProviderConfig) error {
+		t.Helper()
+		return ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+	}
+	if err := check(base); err != nil {
+		t.Fatal(err)
+	}
+	bad := base
+	bad.KubernetesAudience = ""
+	if err := check(bad); err == nil || !strings.Contains(err.Error(), "kubernetes_audience") {
+		t.Fatalf("missing audience = %v", err)
+	}
+	bad = base
+	bad.MaxTTL = "9m"
+	if err := check(bad); err == nil || !strings.Contains(err.Error(), "at least 10 minutes") {
+		t.Fatalf("short maximum = %v", err)
+	}
+	bad = base
+	bad.KubernetesTLSServerName = "kubernetes.default.svc"
+	if err := check(bad); err == nil || !strings.Contains(err.Error(), "requires kubernetes_tls_ca_ref") {
+		t.Fatalf("untrusted name override = %v", err)
 	}
 }
 

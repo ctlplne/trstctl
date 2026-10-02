@@ -563,6 +563,7 @@ type KubernetesConfig struct {
 	Endpoint       string
 	HTTPClient     HTTPDoer
 	Namespace      string
+	Audience       string
 	BearerToken    []byte
 	UsernamePrefix string
 	RoleBindings   map[string]string
@@ -573,15 +574,36 @@ type KubernetesBackend struct {
 	endpoint       string
 	doer           HTTPDoer
 	namespace      string
+	audience       string
 	bearerToken    *secret.Buffer
 	usernamePrefix string
 	roleBindings   map[string]string
+}
+
+const kubernetesLeaseOwnerLabel = "trstctl.com/lease-name"
+
+type kubernetesProviderRef struct {
+	Version           int    `json:"version"`
+	Name              string `json:"name"`
+	ServiceAccountUID string `json:"service_account_uid"`
+	BoundSecretUID    string `json:"bound_secret_uid"`
+	RoleBindingUID    string `json:"role_binding_uid,omitempty"`
+}
+
+type kubernetesObject struct {
+	Metadata struct {
+		UID    string            `json:"uid"`
+		Labels map[string]string `json:"labels"`
+	} `json:"metadata"`
 }
 
 // NewKubernetesBackend builds a Kubernetes dynamic-secret backend.
 func NewKubernetesBackend(cfg KubernetesConfig) (*KubernetesBackend, error) {
 	if cfg.Endpoint == "" {
 		return nil, errors.New("dynsecret kubernetes: Endpoint required")
+	}
+	if strings.TrimSpace(cfg.Audience) == "" {
+		return nil, errors.New("dynsecret kubernetes: one explicit API audience required")
 	}
 	if cfg.Namespace == "" {
 		cfg.Namespace = "default"
@@ -604,6 +626,7 @@ func NewKubernetesBackend(cfg KubernetesConfig) (*KubernetesBackend, error) {
 		endpoint:       strings.TrimRight(cfg.Endpoint, "/"),
 		doer:           cfg.HTTPClient,
 		namespace:      cfg.Namespace,
+		audience:       cfg.Audience,
 		bearerToken:    token,
 		usernamePrefix: cfg.UsernamePrefix,
 		roleBindings:   cloneStringMap(cfg.RoleBindings),
@@ -616,91 +639,190 @@ func (b *KubernetesBackend) Create(ctx context.Context, role string) (string, []
 }
 
 func (b *KubernetesBackend) CreateCredential(ctx context.Context, req GenerateRequest) (string, []byte, error) {
+	ttl := req.TTL
+	if ttl <= 0 {
+		ttl = time.Hour
+	}
+	if ttl < 10*time.Minute {
+		return "", nil, errors.New("dynsecret kubernetes: lease TTL must be at least 10 minutes (TokenRequest minimum)")
+	}
 	name, err := scopedKubernetesNameForRequest(b.usernamePrefix, req)
 	if err != nil {
 		return "", nil, err
 	}
+	var roleKind, roleName string
+	if len(b.roleBindings) > 0 {
+		roleRef, ok := b.roleBindings[req.Role]
+		if !ok || strings.TrimSpace(roleRef) == "" {
+			return "", nil, fmt.Errorf("dynsecret kubernetes: role %q has no configured RoleBinding", req.Role)
+		}
+		roleKind, roleName, ok = strings.Cut(roleRef, "/")
+		if !ok || (roleKind != "Role" && roleKind != "ClusterRole") || roleName == "" {
+			return "", nil, fmt.Errorf("dynsecret kubernetes: invalid role binding %q", roleRef)
+		}
+	}
 	if req.LeaseID != "" {
 		// TokenRequest has no idempotency token. Deleting and recreating the same
-		// lease-scoped ServiceAccount invalidates any token whose response was lost
-		// before the issued event committed.
-		if err := b.Revoke(ctx, name); err != nil {
-			return "", nil, fmt.Errorf("dynsecret kubernetes: clean interrupted serviceaccount: %w", err)
+		// lease-scoped objects invalidates a token whose response was lost before
+		// the issued event committed. Check ownership and UID before deletion.
+		if err := b.reconcileInterrupted(ctx, name); err != nil {
+			return "", nil, fmt.Errorf("dynsecret kubernetes: reconcile interrupted lease: %w", err)
 		}
+	}
+	owner := map[string]any{"name": name, "namespace": b.namespace, "labels": map[string]string{kubernetesLeaseOwnerLabel: name}}
+	ref := kubernetesProviderRef{Version: 1, Name: name}
+	cleanupError := func(stage string, cause error) (string, []byte, error) {
+		return "", nil, errors.Join(fmt.Errorf("dynsecret kubernetes: %s: %w", stage, cause), b.reconcileInterrupted(ctx, name))
 	}
 	saPath := "/api/v1/namespaces/" + pathEscape(b.namespace) + "/serviceaccounts"
 	body := map[string]any{
 		"apiVersion": "v1",
 		"kind":       "ServiceAccount",
-		"metadata":   map[string]string{"name": name},
+		"metadata":   owner,
 	}
-	if err := b.json(ctx, http.MethodPost, saPath, body, nil); err != nil && !statusIs(err, http.StatusConflict) {
+	var serviceAccount kubernetesObject
+	if err := b.json(ctx, http.MethodPost, saPath, body, &serviceAccount); err != nil {
 		return "", nil, fmt.Errorf("dynsecret kubernetes: create serviceaccount: %w", err)
 	}
+	ref.ServiceAccountUID = serviceAccount.Metadata.UID
+	if ref.ServiceAccountUID == "" {
+		return cleanupError("serviceaccount response has no UID", errors.New("cannot safely revoke an unbound object"))
+	}
+	secretPath := "/api/v1/namespaces/" + pathEscape(b.namespace) + "/secrets"
+	var boundSecret kubernetesObject
+	secretBody := map[string]any{"apiVersion": "v1", "kind": "Secret", "type": "Opaque", "metadata": owner}
+	if err := b.json(ctx, http.MethodPost, secretPath, secretBody, &boundSecret); err != nil {
+		return cleanupError("create token-bound secret", err)
+	}
+	ref.BoundSecretUID = boundSecret.Metadata.UID
+	if ref.BoundSecretUID == "" {
+		return cleanupError("bound secret response has no UID", errors.New("cannot safely revoke an unbound object"))
+	}
 	if len(b.roleBindings) > 0 {
-		roleRef, ok := b.roleBindings[req.Role]
-		if !ok || strings.TrimSpace(roleRef) == "" {
-			_ = b.Revoke(ctx, name)
-			return "", nil, fmt.Errorf("dynsecret kubernetes: role %q has no configured RoleBinding", req.Role)
-		}
-		kind, roleName, ok := strings.Cut(roleRef, "/")
-		if !ok || (kind != "Role" && kind != "ClusterRole") || roleName == "" {
-			_ = b.Revoke(ctx, name)
-			return "", nil, fmt.Errorf("dynsecret kubernetes: invalid role binding %q", roleRef)
-		}
 		rbPath := "/apis/rbac.authorization.k8s.io/v1/namespaces/" + pathEscape(b.namespace) + "/rolebindings"
 		rb := map[string]any{
 			"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "RoleBinding",
-			"metadata": map[string]string{"name": name, "namespace": b.namespace},
+			"metadata": owner,
 			"subjects": []map[string]string{{"kind": "ServiceAccount", "name": name, "namespace": b.namespace}},
-			"roleRef":  map[string]string{"apiGroup": "rbac.authorization.k8s.io", "kind": kind, "name": roleName},
+			"roleRef":  map[string]string{"apiGroup": "rbac.authorization.k8s.io", "kind": roleKind, "name": roleName},
 		}
-		if err := b.json(ctx, http.MethodPost, rbPath, rb, nil); err != nil && !statusIs(err, http.StatusConflict) {
-			_ = b.Revoke(ctx, name)
-			return "", nil, fmt.Errorf("dynsecret kubernetes: create rolebinding: %w", err)
+		var binding kubernetesObject
+		if err := b.json(ctx, http.MethodPost, rbPath, rb, &binding); err != nil {
+			return cleanupError("create rolebinding", err)
+		}
+		ref.RoleBindingUID = binding.Metadata.UID
+		if ref.RoleBindingUID == "" {
+			return cleanupError("rolebinding response has no UID", errors.New("cannot safely revoke an unbound object"))
 		}
 	}
 	tokenPath := saPath + "/" + pathEscape(name) + "/token"
 	var out struct {
 		Status struct {
-			Token secret.JSONBytes `json:"token"`
+			Token               secret.JSONBytes `json:"token"`
+			ExpirationTimestamp time.Time        `json:"expirationTimestamp"`
 		} `json:"status"`
 	}
 	// Closure: the field is nil until the response is decoded below, so a bare
 	// defer would capture that nil and wipe nothing (AN-8).
 	defer func() { secret.Wipe(out.Status.Token) }()
-	ttl := req.TTL
-	if ttl <= 0 {
-		ttl = time.Hour
-	}
 	tokenReq := map[string]any{
 		"apiVersion": "authentication.k8s.io/v1",
 		"kind":       "TokenRequest",
-		"spec":       map[string]int64{"expirationSeconds": max(int64(ttl/time.Second), 600)},
+		"spec": map[string]any{
+			"audiences":         []string{b.audience},
+			"boundObjectRef":    map[string]string{"apiVersion": "v1", "kind": "Secret", "name": name, "uid": boundSecret.Metadata.UID},
+			"expirationSeconds": int64(ttl / time.Second),
+		},
 	}
+	requestedAt := time.Now()
 	if err := b.json(ctx, http.MethodPost, tokenPath, tokenReq, &out); err != nil {
-		_ = b.Revoke(ctx, name)
-		return "", nil, fmt.Errorf("dynsecret kubernetes: token request: %w", err)
+		return cleanupError("token request", err)
 	}
 	if len(out.Status.Token) == 0 {
-		_ = b.Revoke(ctx, name)
-		return "", nil, errors.New("dynsecret kubernetes: empty token response")
+		return cleanupError("empty token response", errors.New("TokenRequest returned no token"))
 	}
-	return name, bytes.Clone(out.Status.Token), nil
+	if out.Status.ExpirationTimestamp.IsZero() || out.Status.ExpirationTimestamp.After(requestedAt.Add(ttl+5*time.Second)) || out.Status.ExpirationTimestamp.Before(requestedAt.Add(ttl-30*time.Second)) {
+		return cleanupError("TokenRequest response lifetime does not match the lease", errors.New("unexpected token expiration"))
+	}
+	encodedRef, err := json.Marshal(ref)
+	if err != nil {
+		return cleanupError("encode provider reference", err)
+	}
+	return string(encodedRef), bytes.Clone(out.Status.Token), nil
 }
 
-// Revoke implements Backend.
+func (b *KubernetesBackend) resourcePaths(name string) [3]string {
+	base := "/api/v1/namespaces/" + pathEscape(b.namespace)
+	roles := "/apis/rbac.authorization.k8s.io/v1/namespaces/" + pathEscape(b.namespace)
+	return [3]string{base + "/secrets/" + pathEscape(name), roles + "/rolebindings/" + pathEscape(name), base + "/serviceaccounts/" + pathEscape(name)}
+}
+
+func (b *KubernetesBackend) deleteWithUID(ctx context.Context, path, uid string) error {
+	if uid == "" {
+		return nil
+	}
+	options := map[string]any{"apiVersion": "v1", "kind": "DeleteOptions", "preconditions": map[string]string{"uid": uid}}
+	if err := b.json(ctx, http.MethodDelete, path, options, nil); err != nil && !statusIs(err, http.StatusNotFound) {
+		return err
+	}
+	return nil
+}
+
+// reconcileInterrupted runs before an outbox retry and on partial creation.
+// It inspects every same-name object before deleting any, then uses each UID
+// as an API precondition so a replacement cannot be removed by a race.
+func (b *KubernetesBackend) reconcileInterrupted(ctx context.Context, name string) error {
+	paths := b.resourcePaths(name)
+	var ids [3]string
+	for index, path := range paths {
+		var object kubernetesObject
+		err := b.json(ctx, http.MethodGet, path, nil, &object)
+		if statusIs(err, http.StatusNotFound) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("inspect %s: %w", path, err)
+		}
+		if object.Metadata.UID == "" || object.Metadata.Labels[kubernetesLeaseOwnerLabel] != name {
+			return fmt.Errorf("resource collision at %s: object is not owned by this lease", path)
+		}
+		ids[index] = object.Metadata.UID
+	}
+	for index, path := range paths {
+		if err := b.deleteWithUID(ctx, path, ids[index]); err != nil {
+			return fmt.Errorf("remove owned %s: %w", path, err)
+		}
+	}
+	return nil
+}
+
+// Revoke implements Backend. New leases persist UIDs in the durable provider
+// reference. A plain name is a legacy reference issued by older builds; it is
+// retained only so an upgrade can retire already-issued credentials.
 func (b *KubernetesBackend) Revoke(ctx context.Context, ref string) error {
 	if ref == "" {
 		return nil
 	}
-	rbPath := "/apis/rbac.authorization.k8s.io/v1/namespaces/" + pathEscape(b.namespace) + "/rolebindings/" + pathEscape(ref)
-	if err := b.json(ctx, http.MethodDelete, rbPath, nil, nil); err != nil && !statusIs(err, http.StatusNotFound) {
-		return fmt.Errorf("dynsecret kubernetes: delete rolebinding: %w", err)
+	if strings.HasPrefix(ref, "{") {
+		var owned kubernetesProviderRef
+		if err := json.Unmarshal([]byte(ref), &owned); err != nil || owned.Version != 1 || owned.Name == "" || owned.ServiceAccountUID == "" || owned.BoundSecretUID == "" {
+			return errors.New("dynsecret kubernetes: invalid UID-bound provider reference")
+		}
+		paths := b.resourcePaths(owned.Name)
+		for index, uid := range [3]string{owned.BoundSecretUID, owned.RoleBindingUID, owned.ServiceAccountUID} {
+			if err := b.deleteWithUID(ctx, paths[index], uid); err != nil {
+				return fmt.Errorf("dynsecret kubernetes: delete UID-bound resource %s: %w", paths[index], err)
+			}
+		}
+		return nil
 	}
-	path := "/api/v1/namespaces/" + pathEscape(b.namespace) + "/serviceaccounts/" + pathEscape(ref)
-	if err := b.json(ctx, http.MethodDelete, path, nil, nil); err != nil && !statusIs(err, http.StatusNotFound) {
-		return fmt.Errorf("dynsecret kubernetes: delete serviceaccount: %w", err)
+	// Legacy references did not carry UIDs or ownership labels. Their exact
+	// generated name remains the only recovery handle for active old leases.
+	paths := b.resourcePaths(ref)
+	for _, path := range paths {
+		if err := b.json(ctx, http.MethodDelete, path, nil, nil); err != nil && !statusIs(err, http.StatusNotFound) {
+			return fmt.Errorf("dynsecret kubernetes: delete legacy resource %s: %w", path, err)
+		}
 	}
 	return nil
 }

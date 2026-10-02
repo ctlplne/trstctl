@@ -243,7 +243,13 @@ global `user@'%'` login. The provider catalog shows both settings before issue.
   backend identity is gone. A one-line PostgreSQL `file:` DSN may end in CR/LF;
   the PostgreSQL adapter removes only that terminal line ending before parsing it.
 - `POST /api/v1/secrets/leases/{lease_id}/renew` extends a lease without returning the
-  credential again.
+  credential again for renewable backends. Kubernetes TokenRequest tokens are
+  immutable: renewal issues a new bound token and lease, confirms provider-side
+  revocation of the predecessor, and returns the replacement credential once with
+  a new lease ID. Store that token only in the workload's protected credential
+  location, update the lease ID used for later renew/revoke calls, and verify the
+  previous token is rejected with `kubectl`. A Kubernetes replacement must have
+  at least 600 seconds remaining and fit within the predecessor's renewal limit.
 - `POST /api/v1/secrets/leases/{lease_id}/revoke` closes the lease and queues backend
   revocation through the outbox worker.
 

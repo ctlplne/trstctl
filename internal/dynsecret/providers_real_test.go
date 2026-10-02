@@ -329,7 +329,7 @@ func TestConcreteBackendsCreateScopedCredentialAndRevoke(t *testing.T) {
 		t.Fatal(err)
 	}
 	k8s := newK8sTokenServer(t)
-	k8sBackend, err := NewKubernetesBackend(KubernetesConfig{Endpoint: k8s.URL, HTTPClient: k8s.Client(), Namespace: "apps", BearerToken: []byte("sa-token"), UsernamePrefix: "trstctl"})
+	k8sBackend, err := NewKubernetesBackend(KubernetesConfig{Endpoint: k8s.URL, HTTPClient: k8s.Client(), Namespace: "apps", Audience: "https://kubernetes.default.svc", BearerToken: []byte("sa-token"), UsernamePrefix: "trstctl"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -375,9 +375,15 @@ func TestConcreteBackendsCreateScopedCredentialAndRevoke(t *testing.T) {
 			redisSrv.require(t, "ACL DELUSER "+ref)
 		}},
 		{"kubernetes", k8sBackend, func(ref string) {
+			var owned kubernetesProviderRef
+			if err := json.Unmarshal([]byte(ref), &owned); err != nil {
+				t.Fatal(err)
+			}
 			k8s.require(t, http.MethodPost, "/api/v1/namespaces/apps/serviceaccounts")
-			k8s.require(t, http.MethodPost, "/api/v1/namespaces/apps/serviceaccounts/"+ref+"/token")
-			k8s.require(t, http.MethodDelete, "/api/v1/namespaces/apps/serviceaccounts/"+ref)
+			k8s.require(t, http.MethodPost, "/api/v1/namespaces/apps/secrets")
+			k8s.require(t, http.MethodPost, "/api/v1/namespaces/apps/serviceaccounts/"+owned.Name+"/token")
+			k8s.require(t, http.MethodDelete, "/api/v1/namespaces/apps/secrets/"+owned.Name)
+			k8s.require(t, http.MethodDelete, "/api/v1/namespaces/apps/serviceaccounts/"+owned.Name)
 		}},
 		{"aws-iam", awsBackend, func(ref string) {
 			aws.require(t, "CreateUser")
@@ -500,7 +506,7 @@ func TestProviderWorkerRetryReplacesLostAuthorityOnStableIdentity(t *testing.T) 
 		remote := newK8sTokenServer(t)
 		backend, err := NewKubernetesBackend(KubernetesConfig{
 			Endpoint: remote.URL, HTTPClient: remote.Client(), Namespace: "apps",
-			BearerToken: []byte("sa-token"), UsernamePrefix: "trstctl",
+			Audience: "https://kubernetes.default.svc", BearerToken: []byte("sa-token"), UsernamePrefix: "trstctl",
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -514,11 +520,137 @@ func TestProviderWorkerRetryReplacesLostAuthorityOnStableIdentity(t *testing.T) 
 		if err != nil {
 			t.Fatal(err)
 		}
-		path := "/api/v1/namespaces/apps/serviceaccounts/" + ref1
-		if ref1 != ref2 || remote.count(http.MethodDelete, path) < 2 {
-			t.Fatalf("retry did not recreate stable ServiceAccount: refs=%q/%q deletes=%d", ref1, ref2, remote.count(http.MethodDelete, path))
+		var first, second kubernetesProviderRef
+		if err := json.Unmarshal([]byte(ref1), &first); err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal([]byte(ref2), &second); err != nil {
+			t.Fatal(err)
+		}
+		path := "/api/v1/namespaces/apps/serviceaccounts/" + first.Name
+		if first.Name != second.Name || first.ServiceAccountUID == second.ServiceAccountUID || remote.count(http.MethodDelete, path) == 0 {
+			t.Fatalf("retry did not replace stable ServiceAccount UID: first=%+v second=%+v deletes=%d", first, second, remote.count(http.MethodDelete, path))
 		}
 	})
+}
+
+func TestKubernetesTokenRequestIsBoundToLeaseSecretAndAudience(t *testing.T) {
+	remote := newK8sTokenServer(t)
+	backend, err := NewKubernetesBackend(KubernetesConfig{
+		Endpoint: remote.URL, HTTPClient: remote.Client(), Namespace: "apps",
+		Audience: "https://kubernetes.default.svc", BearerToken: []byte("sa-token"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer backend.Close()
+	if _, _, err := backend.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "short", TTL: 5 * time.Minute}); err == nil || !strings.Contains(err.Error(), "10 minutes") {
+		t.Fatalf("sub-minimum Kubernetes lease must fail before creating an identity: %v", err)
+	}
+	if remote.count(http.MethodPost, "/api/v1/namespaces/apps/serviceaccounts") != 0 {
+		t.Fatal("short lease created a ServiceAccount")
+	}
+	ref, _, err := backend.CreateCredential(context.Background(), GenerateRequest{Role: "reader", LeaseID: "bounded", TTL: 10 * time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var owned kubernetesProviderRef
+	if err := json.Unmarshal([]byte(ref), &owned); err != nil {
+		t.Fatal(err)
+	}
+	remote.mu.Lock()
+	request := remote.tokenRequest
+	remote.mu.Unlock()
+	spec, _ := request["spec"].(map[string]any)
+	if spec["expirationSeconds"] != float64(600) {
+		t.Fatalf("TokenRequest expiration = %v", spec["expirationSeconds"])
+	}
+	audiences, _ := spec["audiences"].([]any)
+	if len(audiences) != 1 || audiences[0] != "https://kubernetes.default.svc" {
+		t.Fatalf("TokenRequest audiences = %v", audiences)
+	}
+	bound, _ := spec["boundObjectRef"].(map[string]any)
+	if bound["kind"] != "Secret" || bound["name"] != owned.Name || bound["uid"] != owned.BoundSecretUID {
+		t.Fatalf("TokenRequest bound object = %v", bound)
+	}
+	if err := backend.Revoke(context.Background(), ref); err != nil {
+		t.Fatal(err)
+	}
+	remote.require(t, http.MethodDelete, "/api/v1/namespaces/apps/secrets/"+owned.Name)
+}
+
+func TestKubernetesRetryRefusesForeignResourceCollision(t *testing.T) {
+	req := GenerateRequest{Role: "reader", LeaseID: "lease-collision", TTL: 10 * time.Minute}
+	name, err := scopedKubernetesNameForRequest("trstctl", req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deletes := 0
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/namespaces/apps/serviceaccounts/"+name {
+			http.NotFound(w, r)
+			return
+		}
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(map[string]any{"metadata": map[string]any{"name": name, "uid": "foreign-uid", "labels": map[string]string{"owner": "another-operator"}}})
+		case http.MethodDelete:
+			deletes++
+			w.WriteHeader(http.StatusOK)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer remote.Close()
+	backend, err := NewKubernetesBackend(KubernetesConfig{Endpoint: remote.URL, HTTPClient: remote.Client(), Namespace: "apps", Audience: "https://kubernetes.default.svc", BearerToken: []byte("sa-token"), UsernamePrefix: "trstctl"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer backend.Close()
+	_, _, err = backend.CreateCredential(context.Background(), req)
+	if deletes != 0 {
+		t.Fatalf("foreign ServiceAccount was deleted %d times", deletes)
+	}
+	if err == nil || !strings.Contains(err.Error(), "collision") {
+		t.Fatalf("foreign ServiceAccount collision must fail closed: %v", err)
+	}
+}
+
+func TestKubernetesRevokeWillNotDeleteReplacedObject(t *testing.T) {
+	seen := 0
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen++
+		if r.Method != http.MethodDelete || r.URL.Path != "/api/v1/namespaces/apps/secrets/lease-name" {
+			http.Error(w, "unexpected resource", http.StatusBadRequest)
+			return
+		}
+		var options struct {
+			Preconditions struct {
+				UID string `json:"uid"`
+			} `json:"preconditions"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&options); err != nil || options.Preconditions.UID != "original-secret-uid" {
+			http.Error(w, "missing original UID", http.StatusBadRequest)
+			return
+		}
+		http.Error(w, "object was replaced", http.StatusConflict)
+	}))
+	defer remote.Close()
+	backend, err := NewKubernetesBackend(KubernetesConfig{Endpoint: remote.URL, HTTPClient: remote.Client(), Namespace: "apps", Audience: "https://kubernetes.default.svc", BearerToken: []byte("sa-token")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer backend.Close()
+	ref, err := json.Marshal(kubernetesProviderRef{Version: 1, Name: "lease-name", ServiceAccountUID: "original-sa-uid", BoundSecretUID: "original-secret-uid"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := backend.Revoke(context.Background(), string(ref)); err == nil || !strings.Contains(err.Error(), "409") {
+		t.Fatalf("replaced object must leave revocation pending: %v", err)
+	}
+	if seen != 1 {
+		t.Fatalf("revocation touched %d resources after UID conflict", seen)
+	}
 }
 
 // dynsecretShortTempRoot returns a short world-standard temp root so the
@@ -758,8 +890,9 @@ func parseRESPArray(raw string) []string {
 
 type pathRecorder struct {
 	*httptest.Server
-	mu    sync.Mutex
-	calls []string
+	mu           sync.Mutex
+	calls        []string
+	tokenRequest map[string]any
 }
 
 func (p *pathRecorder) record(r *http.Request) {
@@ -797,6 +930,8 @@ func (p *pathRecorder) count(method, path string) int {
 func newK8sTokenServer(t *testing.T) *pathRecorder {
 	t.Helper()
 	p := &pathRecorder{}
+	objects := map[string]kubernetesObject{}
+	sequence := 0
 	p.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p.record(r)
 		if r.Header.Get("Authorization") != "Bearer sa-token" {
@@ -804,12 +939,78 @@ func newK8sTokenServer(t *testing.T) *pathRecorder {
 			return
 		}
 		switch {
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/serviceaccounts"):
+		case r.Method == http.MethodPost && (strings.HasSuffix(r.URL.Path, "/serviceaccounts") || strings.HasSuffix(r.URL.Path, "/secrets") || strings.HasSuffix(r.URL.Path, "/rolebindings")):
+			var request struct {
+				Metadata struct {
+					Name   string            `json:"name"`
+					Labels map[string]string `json:"labels"`
+				} `json:"metadata"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				http.Error(w, "bad create", http.StatusBadRequest)
+				return
+			}
+			path := r.URL.Path + "/" + request.Metadata.Name
+			p.mu.Lock()
+			if _, exists := objects[path]; exists {
+				p.mu.Unlock()
+				http.Error(w, "already exists", http.StatusConflict)
+				return
+			}
+			sequence++
+			var object kubernetesObject
+			object.Metadata.UID = fmt.Sprintf("fixture-uid-%d", sequence)
+			object.Metadata.Labels = request.Metadata.Labels
+			objects[path] = object
+			p.mu.Unlock()
 			w.WriteHeader(http.StatusCreated)
-			_, _ = w.Write([]byte(`{"metadata":{"name":"ok"}}`))
+			_ = json.NewEncoder(w).Encode(object)
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/token"):
-			_ = json.NewEncoder(w).Encode(map[string]any{"status": map[string]string{"token": "k8s-token"}})
+			var request map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				http.Error(w, "bad request", http.StatusBadRequest)
+				return
+			}
+			p.mu.Lock()
+			p.tokenRequest = request
+			p.mu.Unlock()
+			seconds, _ := request["spec"].(map[string]any)["expirationSeconds"].(float64)
+			_ = json.NewEncoder(w).Encode(map[string]any{"status": map[string]string{"token": "k8s-token", "expirationTimestamp": time.Now().Add(time.Duration(seconds) * time.Second).UTC().Format(time.RFC3339)}})
+		case r.Method == http.MethodGet:
+			p.mu.Lock()
+			object, exists := objects[r.URL.Path]
+			p.mu.Unlock()
+			if !exists {
+				http.NotFound(w, r)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(object)
 		case r.Method == http.MethodDelete:
+			var options struct {
+				Preconditions struct {
+					UID string `json:"uid"`
+				} `json:"preconditions"`
+			}
+			if r.ContentLength > 0 {
+				if err := json.NewDecoder(r.Body).Decode(&options); err != nil {
+					http.Error(w, "bad delete", http.StatusBadRequest)
+					return
+				}
+			}
+			p.mu.Lock()
+			object, exists := objects[r.URL.Path]
+			if !exists {
+				p.mu.Unlock()
+				http.NotFound(w, r)
+				return
+			}
+			if options.Preconditions.UID != "" && options.Preconditions.UID != object.Metadata.UID {
+				p.mu.Unlock()
+				http.Error(w, "UID mismatch", http.StatusConflict)
+				return
+			}
+			delete(objects, r.URL.Path)
+			p.mu.Unlock()
 			w.WriteHeader(http.StatusOK)
 		default:
 			http.NotFound(w, r)

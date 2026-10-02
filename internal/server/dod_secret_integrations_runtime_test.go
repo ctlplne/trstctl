@@ -259,7 +259,7 @@ func dodRunAllDynamicSecretProductionAssembly(t *testing.T) {
 		{TenantID: dodSecretIntegrationTenant, ID: "aws-iam", Type: "aws-iam", Endpoint: dynamicAWSEndpoint, Region: "us-east-1", AccessKeyID: "AKIADODADMIN", SecretAccessRef: fileRef("aws-admin-secret", []byte("dod-aws-admin-secret")), AllowedRoles: []string{"reader"}, RoleBindings: map[string]string{"reader": "arn:aws:iam::123456789012:policy/DODReadOnly"}, MaxTTL: "15m", AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs, UsernamePrefix: "dod_aws"},
 		{TenantID: dodSecretIntegrationTenant, ID: "gcp-iam", Type: "gcp-iam", Endpoint: dynamicGCPEndpoint, Project: "p", ServiceAccount: "dyn@p.iam.gserviceaccount.com", BearerTokenRef: fileRef("gcp-admin-token", []byte("dod-gcp-admin-token")), AllowedRoles: []string{"reader"}, MaxTTL: "15m", AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs, UsernamePrefix: "dod-gcp"},
 		{TenantID: dodSecretIntegrationTenant, ID: "azure-entra", Type: "azure-entra", Endpoint: dynamicAzureEndpoint, ApplicationObject: "app-obj", ApplicationClient: "dod-client", AzureTenant: "dod-tenant", BearerTokenRef: fileRef("azure-admin-token", []byte("dod-azure-admin-token")), AllowedRoles: []string{"reader"}, MaxTTL: "15m", AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs, UsernamePrefix: "dod-azure"},
-		{TenantID: dodSecretIntegrationTenant, ID: "kubernetes", Type: "kubernetes", Endpoint: dynamicKubernetesEndpoint, Namespace: "apps", BearerTokenRef: fileRef("kubernetes-admin-token", []byte("dod-k8s-admin-token")), AllowedRoles: []string{"reader"}, RoleBindings: map[string]string{"reader": "Role/dod-reader"}, MaxTTL: "15m", AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs, UsernamePrefix: "dod-k8s"},
+		{TenantID: dodSecretIntegrationTenant, ID: "kubernetes", Type: "kubernetes", Endpoint: dynamicKubernetesEndpoint, Namespace: "apps", KubernetesAudience: "https://kubernetes.default.svc", BearerTokenRef: fileRef("kubernetes-admin-token", []byte("dod-k8s-admin-token")), AllowedRoles: []string{"reader"}, RoleBindings: map[string]string{"reader": "Role/dod-reader"}, MaxTTL: "15m", AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs, UsernamePrefix: "dod-k8s"},
 		{TenantID: dodSecretIntegrationTenant, ID: "redis", Type: "redis", Addr: redisDB.Addr, PasswordRef: fileRef("redis-admin-password", []byte(redisDB.Password)), AllowedRoles: []string{"reader"}, AllowPlaintextRedis: true,
 			RedisACLRoles: map[string]redisacl.Role{"reader": {KeyPrefixes: []string{"trstctl:dod:"}, Commands: []string{"get"}}},
 			MaxTTL:        "15m", UsernamePrefix: "dod_redis"},
@@ -373,7 +373,7 @@ func dodRunFocusedDynamicSecret(t *testing.T, entryID string, external *proof.Ex
 	case "dynamic_secret.kubernetes":
 		provider = config.DynamicSecretProviderConfig{
 			TenantID: dodSecretIntegrationTenant, ID: target.id, Type: "kubernetes",
-			Endpoint: dodParentSubstrateLoopbackBridge(t, external.Endpoint()), Namespace: "apps",
+			Endpoint: dodParentSubstrateLoopbackBridge(t, external.Endpoint()), Namespace: "apps", KubernetesAudience: "https://kubernetes.default.svc",
 			BearerTokenRef: fileRef("kubernetes-admin-token", []byte("dod-k8s-admin-token")), AllowedRoles: []string{"reader"},
 			RoleBindings: map[string]string{"reader": "Role/dod-reader"}, MaxTTL: "15m",
 			AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs, UsernamePrefix: "dod-k8s",
@@ -918,7 +918,11 @@ func dodRegisterSecretIntegrationTenant(t *testing.T, ctx context.Context, log *
 
 func dodProveDynamicSecret(t *testing.T, entryID string, external *proof.ExternalSubstrate, srv *Server, st *store.Store, token string, deliveryErrorClass func() string, target dodSecretIntegrationTarget) {
 	t.Helper()
-	body, _ := json.Marshal(map[string]any{"provider": target.id, "role": "reader", "ttl_seconds": 300})
+	ttlSeconds := 300
+	if target.kind == "kubernetes" {
+		ttlSeconds = 600
+	}
+	body, _ := json.Marshal(map[string]any{"provider": target.id, "role": "reader", "ttl_seconds": ttlSeconds})
 	idempotencyKey := "dod-" + strings.ReplaceAll(target.entryID, ".", "-") + "-issue"
 	firstSession := dodStartDynamicLeaseProofSession(t, entryID, external, srv, st, token, idempotencyKey, body, deliveryErrorClass)
 	firstBody := firstSession.ResponseBody()

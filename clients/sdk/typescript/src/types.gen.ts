@@ -9644,6 +9644,7 @@ export interface components {
             ssh_key_count: number;
         };
         DynamicLease: {
+            /** @description Reveal-once provider credential on issue. A Kubernetes renewal returns a replacement bound token with a new lease ID after predecessor revocation completes. Metadata reads omit this field. */
             credential?: string;
             /** Format: date-time */
             expires_at: string;

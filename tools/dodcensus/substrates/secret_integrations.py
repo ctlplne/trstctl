@@ -941,14 +941,53 @@ class Handler(BaseHTTPRequestHandler):
         if self.headers.get("Authorization") != "Bearer dod-k8s-admin-token":
             self.send_body(401); return
         if method == "POST" and path.endswith("/serviceaccounts"):
-            name = json.loads(body)["metadata"]["name"]; self.state.principals[name] = {}; self.send_body(201, json.dumps({"metadata": {"name": name}}).encode())
+            metadata = json.loads(body)["metadata"]; name = metadata["name"]
+            self.state.principals[name] = {"uid": "dod-sa-uid-" + name, "labels": metadata.get("labels", {})}
+            self.send_body(201, json.dumps({"metadata": {"name": name, **self.state.principals[name]}}).encode())
+        elif method == "POST" and path.endswith("/secrets"):
+            metadata = json.loads(body)["metadata"]; name = metadata["name"]
+            self.state.principals["bound-secret-" + name] = {"uid": "dod-uid-" + name, "labels": metadata.get("labels", {})}
+            self.send_body(201, json.dumps({"metadata": {"name": name, **self.state.principals["bound-secret-" + name]}}).encode())
         elif method == "POST" and path.endswith("/rolebindings"):
-            self.send_body(201)
+            metadata = json.loads(body)["metadata"]; name = metadata["name"]
+            self.state.principals["role-binding-" + name] = {"uid": "dod-rb-uid-" + name, "labels": metadata.get("labels", {})}
+            self.send_body(201, json.dumps({"metadata": {"name": name, **self.state.principals["role-binding-" + name]}}).encode())
         elif method == "POST" and path.endswith("/token"):
-            name = path.split("/")[-2]; token = "dod-k8s-token-" + name; self.state.principals[token] = {"secret": token, "user": name}; self.state.issued = True
-            self.send_body(201, json.dumps({"status": {"token": token}}).encode())
+            name = path.split("/")[-2]
+            spec = json.loads(body).get("spec", {})
+            bound = spec.get("boundObjectRef", {})
+            seconds = spec.get("expirationSeconds", 0)
+            if (spec.get("audiences") != ["https://kubernetes.default.svc"] or seconds < 600 or
+                bound != {"apiVersion": "v1", "kind": "Secret", "name": name, "uid": "dod-uid-" + name} or
+                "bound-secret-" + name not in self.state.principals):
+                self.state.protocol_errors += 1; self.send_body(400); return
+            token = "dod-k8s-token-" + name; self.state.principals[token] = {"secret": token, "user": name}; self.state.issued = True
+            expiry = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + seconds))
+            self.send_body(201, json.dumps({"status": {"token": token, "expirationTimestamp": expiry}}).encode())
+        elif method == "GET":
+            name = path.rsplit("/", 1)[-1]
+            key = ("bound-secret-" + name if "/secrets/" in path else
+                   "role-binding-" + name if "/rolebindings/" in path else name)
+            resource = self.state.principals.get(key)
+            if resource is None or not resource.get("uid"):
+                self.send_body(404); return
+            self.send_body(200, json.dumps({"metadata": {"name": name, **resource}}).encode())
         elif method == "DELETE":
             name = path.rsplit("/", 1)[-1]
+            key = ("bound-secret-" + name if "/secrets/" in path else
+                   "role-binding-" + name if "/rolebindings/" in path else name)
+            resource = self.state.principals.get(key)
+            if resource is None:
+                self.send_body(404); return
+            uid = json.loads(body).get("preconditions", {}).get("uid") if body else None
+            if uid and uid != resource.get("uid"):
+                self.send_body(409); return
+            if "/secrets/" in path:
+                self.state.principals.pop("bound-secret-" + name, None)
+                for key in [k for k, v in self.state.principals.items() if v.get("user") == name]: self.state.principals.pop(key, None)
+                self.state.revoked = True
+            if "/rolebindings/" in path:
+                self.state.principals.pop("role-binding-" + name, None)
             if "/serviceaccounts/" in path:
                 self.state.principals.pop(name, None)
                 for key in [k for k, v in self.state.principals.items() if v.get("user") == name]: self.state.principals.pop(key, None)

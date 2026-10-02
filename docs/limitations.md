@@ -3321,7 +3321,9 @@ when off, requiring a KEK when on):
   `POST /api/v1/secrets/leases/{lease_id}/renew`, and
   `POST /api/v1/secrets/leases/{lease_id}/revoke` — issue returns the backend
   credential once, later reads return metadata only, renew extends an active
-  lease, and revoke closes it; the leaseworker expires leases through an
+  lease except for immutable Kubernetes TokenRequest credentials (renewal issues
+  and reveals a replacement lease, then revokes the predecessor), and revoke
+  closes it; the leaseworker expires leases through an
   outbox-backed backend revocation queue. `buildRunDeps` constructs a
   tenant-bound registry for `postgresql`, `mysql`, `mongodb`, `aws-iam`,
   `gcp-iam`, `azure-entra`, `kubernetes`, and `redis`. Issuance is
@@ -3330,6 +3332,11 @@ when off, requiring a KEK when on):
   response opens the sealed credential. The acceptance proof logs in with each
   generated credential, rotates it, revokes both copies, and verifies both are
   rejected afterward.
+  New Kubernetes leases record the UIDs of the ServiceAccount, bound Secret,
+  and RoleBinding and delete with UID preconditions. Leases issued by older
+  builds have name-only provider references; their cleanup remains name-based
+  during upgrade. Drain those older leases before repurposing generated object
+  names in the same namespace.
 - Secret rotation (F37) backs `POST /api/v1/secrets/rotations` for worker-queued
   `connector:<target>` secret-sync handoffs. Concrete PostgreSQL, MySQL, and AWS
   IAM four-phase engines remain library/configuration components only: manual

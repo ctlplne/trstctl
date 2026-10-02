@@ -124,6 +124,10 @@ type boundDynamicLeaseRenewer interface {
 	RenewBound(context.Context, string, time.Duration, string, string) (dynsecret.Lease, error)
 }
 
+type boundDynamicLeaseRotator interface {
+	RotateBound(context.Context, string, time.Duration, string, string) (dynsecret.Lease, []byte, error)
+}
+
 type boundDynamicLeaseRevoker interface {
 	RevokeBound(context.Context, string, string, string) (dynsecret.Lease, error)
 }
@@ -273,10 +277,38 @@ func (a *API) renewDynamicLease(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	a.mutateDurableBound(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	lookup, err := a.secrets.dynamicLeaseEngine(tenantID)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	current, err := getDynamicLeaseContext(r.Context(), lookup, leaseID)
+	if err != nil {
+		a.writeError(w, dynamicLeaseError(err))
+		return
+	}
+	configured, found := a.secrets.configuredDynamicSecretProvider(tenantID, current.Provider)
+	rotating := found && configured.Type == "kubernetes"
+	mutate := func(ctx context.Context, tenantID string) (int, any, error) {
 		engine, err := a.secrets.dynamicLeaseEngine(tenantID)
 		if err != nil {
 			return 0, nil, err
+		}
+		if rotating {
+			rotator, ok := engine.(boundDynamicLeaseRotator)
+			if !ok {
+				return 0, nil, errStatus(http.StatusServiceUnavailable, "Kubernetes rotating renewal is unavailable")
+			}
+			replacement, credential, rotateErr := rotator.RotateBound(ctx, leaseID, time.Duration(req.ExtendSeconds)*time.Second, idempotencyKey, binding)
+			if rotateErr != nil {
+				return 0, nil, dynamicLeaseError(rotateErr)
+			}
+			return http.StatusOK, toDynamicLeaseResponse(replacement, credential), nil
 		}
 		var lease dynsecret.Lease
 		if renewer, ok := engine.(boundDynamicLeaseRenewer); ok {
@@ -288,7 +320,12 @@ func (a *API) renewDynamicLease(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, dynamicLeaseError(err)
 		}
 		return http.StatusOK, toDynamicLeaseResponse(lease, nil), nil
-	})
+	}
+	if rotating {
+		a.mutateSealedDynamicLease(w, r, idempotencyKey, binding, mutate)
+	} else {
+		a.mutateDurableBound(w, r, idempotencyKey, binding, mutate)
+	}
 }
 
 //trstctl:mutation
@@ -382,6 +419,8 @@ func dynamicLeaseError(err error) error {
 		return errStatus(http.StatusConflict, "dynamic secret lease is not active")
 	case errors.Is(err, dynsecret.ErrLeaseHardExpiry):
 		return errStatus(http.StatusUnprocessableEntity, "renewal cannot pass the provider's original hard expiry; revoke this lease and create a new credential")
+	case errors.Is(err, dynsecret.ErrLeaseMinimumTTL):
+		return errStatus(http.StatusUnprocessableEntity, "Kubernetes rotating renewal needs at least 600 seconds of remaining lifetime")
 	case errors.Is(err, store.ErrIdempotencyConflict):
 		return errStatus(http.StatusConflict, "Idempotency-Key was already used for a different dynamic secret request")
 	case errors.Is(err, context.DeadlineExceeded):

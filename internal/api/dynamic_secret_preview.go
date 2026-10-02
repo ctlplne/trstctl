@@ -159,10 +159,13 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("azure_tenant_id", "Azure tenant ID", "Entra tenant containing the application.", true),
 			credential("bearer_token_ref", "Bearer token reference", "Short-lived Microsoft Graph token reference.", true),
 		)},
-		{Type: "kubernetes", Label: "Kubernetes", Purpose: "Requests a bounded ServiceAccount token and removes its temporary binding on revoke.", Requirements: dynamicSecretProviderRequirements(
+		{Type: "kubernetes", Label: "Kubernetes", Purpose: "Requests a 10-minute-or-longer audience-scoped token bound to a temporary Secret; deleting the Secret invalidates the token.", Requirements: dynamicSecretProviderRequirements(
 			value("endpoint", "Kubernetes API endpoint", "HTTPS Kubernetes API server endpoint.", true),
 			value("namespace", "Namespace", "Namespace containing the temporary ServiceAccount.", true),
-			credential("bearer_token_ref", "Bearer token reference", "Short-lived administrative ServiceAccount token reference.", true),
+			value("kubernetes_audience", "Kubernetes API audience", "Exactly one audience accepted by the target API server. The cluster administrator supplies its configured --api-audiences value; Kubernetes requires a minimum 600-second TokenRequest TTL.", true),
+			credential("bearer_token_ref", "Bearer token reference", "Administrative bearer token in a 0600 file: or tenant secret:// reference; it needs ServiceAccount, Secret, RoleBinding, TokenRequest, and bind permission on each target Role in the namespace.", true),
+			credential("kubernetes_tls_ca_ref", "Kubernetes TLS CA reference", "Optional 0600 file: or tenant secret:// reference to the API server CA. If omitted, system roots are used.", false),
+			value("kubernetes_tls_server_name", "Kubernetes TLS server name", "Optional certificate identity override when reaching the API by an internal alias; requires kubernetes_tls_ca_ref.", false),
 			roles("Each allowed role maps to Role/name or ClusterRole/name."),
 		)},
 		{Type: "redis", Label: "Redis", Purpose: "Creates and deletes a scoped Redis ACL user.", Requirements: dynamicSecretProviderRequirements(
@@ -246,6 +249,9 @@ func validateDynamicLeaseProviderRequest(provider dynamicSecretConfiguredProvide
 	}
 	if provider.MaximumTTLSeconds > 0 && int64(req.TTLSeconds) > provider.MaximumTTLSeconds {
 		return errStatus(http.StatusUnprocessableEntity, "ttl_seconds exceeds the configured provider maximum")
+	}
+	if provider.Type == "kubernetes" && req.TTLSeconds < 600 {
+		return errStatus(http.StatusUnprocessableEntity, "Kubernetes token leases require at least 600 seconds")
 	}
 	return nil
 }

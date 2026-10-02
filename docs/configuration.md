@@ -1279,6 +1279,53 @@ credential-reference form before accepting traffic. An absent tenant target or
 provider fails its served mutation closed; it never falls back to another tenant or
 to a test registry.
 
+For Kubernetes, create a dedicated namespace and an administrator ServiceAccount
+whose Role can create, get, and delete ServiceAccounts, Opaque Secrets, and RoleBindings,
+create `serviceaccounts/token`, and `bind` only the named target Roles or
+ClusterRoles in that namespace. Kubernetes rejects RoleBinding creation when
+the issuer lacks the bound role's permissions and lacks `bind`; a generic
+`rolebindings:create` grant alone is insufficient. Give each allowed trstctl
+role an existing, narrowly scoped Kubernetes Role or ClusterRole; trstctl creates
+a namespace RoleBinding for each lease. Configure one `kubernetes_audience` that
+the target API server accepts. Do not use a token meant for a different relying
+party. The TokenRequest API rejects durations below 600 seconds, so Kubernetes
+leases and `max_ttl` must be at least 10 minutes. trstctl requests the exact lease
+duration, checks the response expiration, and binds the token to an Opaque Secret
+with the same lease name and the returned Secret UID. Each created object carries
+a lease ownership label, and the provider records its UID. Retries inspect the
+label and delete with UID preconditions; an object with the same name but another
+owner stops the operation instead of being removed. Revocation and expiry delete
+that Secret first with its UID precondition, invalidating the token at the API server, then remove the
+RoleBinding and ServiceAccount. A Kubernetes renewal creates a new bound token
+and lease, revokes the predecessor, and returns the replacement credential once.
+Update the workload with the replacement token and new lease ID. The renewal
+response is withheld until the predecessor's provider removal is confirmed. The
+requested replacement lifetime must be at least 10 minutes and fit within the
+original lease's renewal limit. Example:
+
+```json
+{
+  "type": "kubernetes",
+  "endpoint": "https://kubernetes.internal.example:6443",
+  "namespace": "trstctl-credential-leases",
+  "bearer_token_ref": "file:/run/secrets/kubernetes-issuer-token",
+  "kubernetes_audience": "https://kubernetes.default.svc.cluster.local",
+  "kubernetes_tls_ca_ref": "file:/run/secrets/kubernetes-api-ca.pem",
+  "allowed_roles": ["reader"],
+  "role_bindings": {"reader": "Role/lease-reader"},
+  "max_ttl": "30m",
+  "allow_private_endpoint": true,
+  "private_egress_cidrs": ["10.45.0.7/32"]
+}
+```
+
+Both file references must be mode 0600 and readable by the control-plane user.
+If the endpoint is an internal alias that is absent from the API certificate,
+set `kubernetes_tls_server_name` to a certificate SAN; this setting requires
+`kubernetes_tls_ca_ref`. Keep the private CIDR list to the API server's actual
+resolved address. Confirm the audience, CA, native permissions, token use, and
+post-revocation rejection with `kubectl` against the target cluster.
+
 For MySQL, set `admin_dsn_ref`, `database`, `addr`, and `account_host` explicitly.
 `addr` is the server address returned to clients; `account_host` is the MySQL
 account's allowed client host or network matcher. A missing `account_host` fails

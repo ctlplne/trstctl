@@ -28,10 +28,11 @@ import (
 )
 
 type issueOutboxProvider struct {
-	name     string
-	mu       sync.Mutex
-	requests []dynsecret.GenerateRequest
-	revoked  []string
+	name         string
+	providerType string
+	mu           sync.Mutex
+	requests     []dynsecret.GenerateRequest
+	revoked      []string
 }
 
 func TestDynamicSecretIssueDoesNotCreateCredentialAfterRequestedExpiry(t *testing.T) {
@@ -198,8 +199,9 @@ func TestDynamicSecretExpiredIssuedResultIsNeverRevealed(t *testing.T) {
 	}
 }
 
-func (p *issueOutboxProvider) Name() string              { return p.name }
-func (p *issueOutboxProvider) MaximumTTL() time.Duration { return time.Hour }
+func (p *issueOutboxProvider) Name() string                      { return p.name }
+func (p *issueOutboxProvider) MaximumTTL() time.Duration         { return time.Hour }
+func (p *issueOutboxProvider) DynamicSecretProviderType() string { return p.providerType }
 func (p *issueOutboxProvider) Generate(_ context.Context, req dynsecret.GenerateRequest) (dynsecret.Credential, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -965,6 +967,49 @@ func TestDurableDynamicSecretRenewRevokeReplayAndWorkerCrashFence(t *testing.T) 
 	afterRevokeRenewReplay, err := restarted.RenewBound(ctx, lease.ID, 5*time.Minute, "lifecycle-renew", "sha256:caller-a-renew-300")
 	if err != nil || afterRevokeRenewReplay.State != dynsecret.LeaseActive || !afterRevokeRenewReplay.ExpiresAt.Equal(renewed.ExpiresAt) {
 		t.Fatalf("renewal response drifted after later revoke: %+v err=%v", afterRevokeRenewReplay, err)
+	}
+}
+
+func TestKubernetesRenewalRotatesBoundTokenAndRevokesPredecessor(t *testing.T) {
+	const tenant = "11111111-1111-4111-8111-111111111128"
+	ctx := context.Background()
+	st, log, kek, outbox, provider, dispatcher := newDynamicSecretOutboxTestStack(t, tenant)
+	provider.providerType = "kubernetes"
+	srv, stop := startSecretIntegrationDispatcher(t, st, outbox, dispatcher)
+	defer stop()
+	lifecycle, err := newDurableDynamicSecretLifecycle(tenant, []dynsecret.Provider{provider}, st, log, kek, outbox, srv.wakeOutbox)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, credential, err := lifecycle.IssueBound(ctx, provider.name, "reader", 15*time.Minute, "k8s-issue", "sha256:k8s-issue")
+	if err != nil {
+		t.Fatal(err)
+	}
+	secret.Wipe(credential)
+	if got := provider.Requests(); len(got) != 1 || got[0].TTL < 14*time.Minute || got[0].TTL > 15*time.Minute {
+		t.Fatalf("Kubernetes native TTL = %+v, want requested lease TTL around 15m", got)
+	}
+	replacement, newCredential, err := lifecycle.RotateBound(ctx, first.ID, 5*time.Minute, "k8s-renew", "sha256:k8s-renew")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer secret.Wipe(newCredential)
+	if replacement.ID == first.ID || len(newCredential) == 0 {
+		t.Fatalf("renewal did not return a replacement token lease: %+v", replacement)
+	}
+	if got := provider.Requests(); len(got) != 2 || got[1].TTL < 18*time.Minute || got[1].TTL > 20*time.Minute {
+		t.Fatalf("replacement native TTL = %+v, want remaining extended lease", got)
+	}
+	if got := provider.Revocations(); len(got) != 1 || got[0] != first.BackendRef {
+		t.Fatalf("predecessor revocations = %v", got)
+	}
+	replayed, replayCredential, err := lifecycle.RotateBound(ctx, first.ID, 5*time.Minute, "k8s-renew", "sha256:k8s-renew")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer secret.Wipe(replayCredential)
+	if replayed.ID != replacement.ID || !bytes.Equal(replayCredential, newCredential) || len(provider.Requests()) != 2 {
+		t.Fatal("Kubernetes renewal replay created a second replacement")
 	}
 }
 
