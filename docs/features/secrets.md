@@ -231,6 +231,12 @@ same-host-emulator exception limited to `localhost`, `127.0.0.0/8`, or `::1`.
   `revocation_completed_at` confirms the provider removal operation. `revoked_at`
   records when the control plane queued the request. Older immutable operation
   receipts may omit these additional fields; GET returns current durable evidence.
+  If provider creation finishes after `expires_at`, `issued_at` records the real
+  late completion time, the API withholds the expired credential, and the expiry
+  worker queues native revocation. A retry that starts after `expires_at` fails
+  before provider contact. Check `revocation_status=completed` before assuming the
+  backend identity is gone. A one-line PostgreSQL `file:` DSN may end in CR/LF;
+  the PostgreSQL adapter removes only that terminal line ending before parsing it.
 - `POST /api/v1/secrets/leases/{lease_id}/renew` extends a lease without returning the
   credential again.
 - `POST /api/v1/secrets/leases/{lease_id}/revoke` closes the lease and queues backend

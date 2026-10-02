@@ -218,6 +218,69 @@ func mustObserveDynamicSecretLifecycleTest(
 	}
 }
 
+func TestDynamicSecretLateIssuedResultMakesLaterRetryExhaustionInert(t *testing.T) {
+	const (
+		tenant  = "11111111-1111-4111-8111-111111111209"
+		epoch   = "11111111-1111-4111-8111-111111111210"
+		leaseID = "late-issued-lease"
+	)
+	base := time.Date(2026, 10, 2, 9, 0, 0, 0, time.UTC)
+	makeEvent := func(sequence uint64, purpose, typ string, at time.Time, payload any) events.Event {
+		t.Helper()
+		data, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return events.Event{
+			ID:   store.DynamicSecretEventID(tenant, epoch, purpose, leaseID),
+			Type: typ, TenantID: tenant, Sequence: sequence,
+			SchemaVersion: DynamicSecretEventSchemaVersion, Time: at, Data: data,
+		}
+	}
+	registered := events.Event{ID: "tenant-registered", Type: EventTenantRegistered, TenantID: tenant,
+		Sequence: 1, SchemaVersion: events.DefaultSchemaVersion, Time: base,
+		Data: []byte(`{"name":"late-issued-test"}`)}
+	pending := makeEvent(2, "issue-requested", EventDynamicSecretLeasePending, base,
+		DynamicSecretLeasePending{TenantEpoch: epoch, ID: leaseID, IdempotencyKey: "one-command",
+			RequestBinding: "sha256:one-command", Provider: "postgres", Role: "reader",
+			ExpiresAt: base.Add(time.Minute), HardExpiresAt: base.Add(10 * time.Minute)})
+	issued := makeEvent(3, "provider-issued", EventDynamicSecretLeaseIssued, base.Add(2*time.Minute),
+		DynamicSecretLeaseIssued{TenantEpoch: epoch, ID: leaseID, IdempotencyKey: "one-command",
+			RequestBinding: "sha256:one-command", Provider: "postgres", Role: "reader",
+			BackendRef: "native-lease-role", SealedCredential: []byte("sealed"),
+			ExpiresAt: base.Add(time.Minute), HardExpiresAt: base.Add(10 * time.Minute)})
+	failure := makeEvent(4, "provider-issue-failed", EventDynamicSecretLeaseIssuanceFailed, base.Add(2*time.Minute+time.Second),
+		DynamicSecretLeaseIssuanceFailure{TenantEpoch: epoch, ID: leaseID, Error: "external delivery exhausted its retry budget"})
+	authority := newDynamicSecretLifecycleAuthority()
+	for _, event := range []events.Event{registered, pending, issued} {
+		mustObserveDynamicSecretLifecycleTest(t, authority, event, false)
+	}
+	mustObserveDynamicSecretLifecycleTest(t, authority, failure, true)
+	if _, ok := authority.skipSequences[failure.Sequence]; !ok {
+		t.Fatal("stale terminal failure was not fenced from replay")
+	}
+
+	// A different error or reversed outcome order has no special recovery rule.
+	other := newDynamicSecretLifecycleAuthority()
+	for _, event := range []events.Event{registered, pending, issued} {
+		mustObserveDynamicSecretLifecycleTest(t, other, event, false)
+	}
+	conflict := failure
+	conflict.Data, _ = json.Marshal(DynamicSecretLeaseIssuanceFailure{TenantEpoch: epoch, ID: leaseID, Error: "provider denied"})
+	if _, err := other.observe(conflict); !errors.Is(err, store.ErrIdempotencyConflict) {
+		t.Fatalf("different error accepted: %v", err)
+	}
+	reversed := newDynamicSecretLifecycleAuthority()
+	for _, event := range []events.Event{registered, pending} {
+		mustObserveDynamicSecretLifecycleTest(t, reversed, event, false)
+	}
+	failure.Sequence, issued.Sequence = 3, 4
+	mustObserveDynamicSecretLifecycleTest(t, reversed, failure, false)
+	if _, err := reversed.observe(issued); !errors.Is(err, store.ErrIdempotencyConflict) {
+		t.Fatalf("issued after failure accepted: %v", err)
+	}
+}
+
 func TestDynamicSecretLifecycleRejectsZeroCanonicalTimeForEveryTransitionAUD108(t *testing.T) {
 	for _, eventType := range []string{
 		EventDynamicSecretLeasePending,

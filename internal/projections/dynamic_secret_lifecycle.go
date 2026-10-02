@@ -303,6 +303,18 @@ func (a *dynamicSecretLifecycleAuthority) observeTransition(
 			return skip, err
 		}
 		if lease.issued != nil {
+			// Before the requested-expiry guard existed, a provider retry could
+			// mint after the lease deadline. Projecting that issued event failed
+			// the SQL time constraint, and generic outbox exhaustion then
+			// appended a contradictory failure. The earlier issued event proves
+			// a native credential exists and must remain visible for revocation.
+			// Only that exact historical ordering and closed-set failure may be
+			// reconciled; all other A/B outcomes still fail closed.
+			if lease.issued.Time.After(lease.expiresAt) &&
+				payload.Error == "external delivery exhausted its retry budget" {
+				lease.sequences[event.Sequence] = struct{}{}
+				return true, nil
+			}
 			return false, fmt.Errorf("%w: dynamic-secret lease %s has both issued and failed outcomes", store.ErrIdempotencyConflict, payload.ID)
 		}
 		return recordDynamicSecretSingleton(event, &lease.issuanceFailed, lease.sequences, "issuance failure")

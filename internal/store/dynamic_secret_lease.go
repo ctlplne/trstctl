@@ -261,10 +261,15 @@ func (s *Store) ApplyDynamicSecretLeaseIssuedTx(ctx context.Context, tx pgx.Tx, 
 		dynamicSecretTimeBefore(current.ExpiresAt, lease.ExpiresAt) {
 		return fmt.Errorf("%w: dynamic-secret issued result differs from pending command", ErrIdempotencyConflict)
 	}
+	recoverLateResult := current.State == DynamicSecretLeaseFailed
 	switch current.State {
-	case DynamicSecretLeasePending:
+	case DynamicSecretLeasePending, DynamicSecretLeaseFailed:
 		if !sameDynamicSecretTime(current.ExpiresAt, lease.ExpiresAt) {
 			return fmt.Errorf("%w: dynamic-secret issued expiry differs from pending command", ErrIdempotencyConflict)
+		}
+		if recoverLateResult && (current.LastError != "external delivery exhausted its retry budget" ||
+			!lease.IssuedAt.After(lease.ExpiresAt) || current.BackendRef != "" || len(current.SealedCredential) != 0) {
+			return fmt.Errorf("%w: failed dynamic-secret lease has no late-issued recovery authority", ErrIdempotencyConflict)
 		}
 		if _, err := tx.Exec(ctx, `
 			UPDATE dynamic_secret_leases
@@ -274,11 +279,63 @@ func (s *Store) ApplyDynamicSecretLeaseIssuedTx(ctx context.Context, tx pgx.Tx, 
 			       sealed_preparation = ''::bytea,
 			       state = 'active', issued_at = $7, expires_at = $8,
 			       hard_expires_at = $9, last_error = '', updated_at = $10
-			 WHERE tenant_id = $1 AND tenant_epoch = $2 AND id = $3 AND state = 'pending'`,
+			 WHERE tenant_id = $1 AND tenant_epoch = $2 AND id = $3 AND state = $11`,
 			lease.TenantID, lease.TenantEpoch, lease.ID, lease.BackendRef,
 			lease.SealedCredential, digest, lease.IssuedAt, lease.ExpiresAt,
-			hardExpiresAt, updatedAt); err != nil {
+			hardExpiresAt, updatedAt, current.State); err != nil {
 			return err
+		}
+		if recoverLateResult {
+			// A retained issued event preceded the generic retry-exhausted
+			// failure, but the old time constraint kept it out of the read
+			// model. Restore the issue operation and requeue only its exact
+			// failed command with the lease. The normal dispatcher sees the
+			// active lease and completes its own claim, including circuit
+			// success; projections must never mark an outbox row delivered.
+			var operationStatus, operationError string
+			err := tx.QueryRow(ctx, `
+				SELECT status, last_error FROM dynamic_secret_operations
+				 WHERE tenant_id = $1 AND tenant_epoch = $2 AND operation_id = $3
+				   AND idempotency_key = $4 AND request_binding = $5`,
+				lease.TenantID, lease.TenantEpoch, "issue:"+lease.ID,
+				lease.IdempotencyKey, lease.RequestBinding).Scan(&operationStatus, &operationError)
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+			if operationStatus == "failed" {
+				if operationError != "external delivery exhausted its retry budget" {
+					return fmt.Errorf("%w: failed dynamic-secret operation has different authority", ErrIdempotencyConflict)
+				}
+				if _, err := tx.Exec(ctx, `
+					UPDATE dynamic_secret_operations SET status = 'pending', last_error = ''
+					 WHERE tenant_id = $1 AND tenant_epoch = $2 AND operation_id = $3
+					   AND status = 'failed' AND last_error = $4`,
+					lease.TenantID, lease.TenantEpoch, "issue:"+lease.ID, operationError); err != nil {
+					return err
+				}
+			}
+			var outboxStatus, outboxError string
+			err = tx.QueryRow(ctx, `
+				SELECT status, COALESCE(last_error, '') FROM outbox
+				 WHERE tenant_id = $1 AND id = $2 AND destination = 'dynsecret.issue'`,
+				lease.TenantID, current.IssueOutboxID).Scan(&outboxStatus, &outboxError)
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+			if outboxStatus == "failed" {
+				if outboxError != "external_delivery_failed" {
+					return fmt.Errorf("%w: failed dynamic-secret outbox has different authority", ErrIdempotencyConflict)
+				}
+				if _, err := tx.Exec(ctx, `
+					UPDATE outbox SET status = 'pending', last_error = NULL,
+					       next_attempt_at = $3, worker_id = NULL,
+					       lease_until = NULL, retry_attempt_limit = 0
+					 WHERE tenant_id = $1 AND id = $2 AND destination = 'dynsecret.issue'
+					   AND status = 'failed' AND last_error = 'external_delivery_failed'`,
+					lease.TenantID, current.IssueOutboxID, updatedAt); err != nil {
+					return err
+				}
+			}
 		}
 	case DynamicSecretLeaseActive, DynamicSecretLeaseRevoked:
 		if current.BackendRef != lease.BackendRef || !sameDynamicSecretTime(current.IssuedAt, lease.IssuedAt) ||

@@ -34,6 +34,170 @@ type issueOutboxProvider struct {
 	revoked  []string
 }
 
+func TestDynamicSecretIssueDoesNotCreateCredentialAfterRequestedExpiry(t *testing.T) {
+	const tenant = "11111111-1111-4111-8111-111111111126"
+	ctx := context.Background()
+	st, log, _, outbox, provider, dispatcher := newDynamicSecretOutboxTestStack(t, tenant)
+	now := time.Now().UTC()
+	pending := projections.DynamicSecretLeasePending{
+		ID: "lease-expired-before-provider", IdempotencyKey: "expired-before-provider",
+		RequestBinding: "sha256:expired-before-provider", Provider: provider.name, Role: "reader",
+		ExpiresAt: now.Add(-time.Minute), HardExpiresAt: now.Add(10 * time.Minute),
+	}
+	data, err := json.Marshal(pending)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event, err := log.Append(ctx, events.Event{
+		Type: projections.EventDynamicSecretLeasePending, TenantID: tenant,
+		Time: now.Add(-2 * time.Minute), Data: data,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projections.New(st).Apply(ctx, event); err != nil {
+		t.Fatal(err)
+	}
+	record, err := st.GetDynamicSecretLease(ctx, tenant, pending.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	message, err := outbox.Get(ctx, tenant, record.IssueOutboxID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handled, err := dispatcher.Deliver(ctx, orchestrator.Message{
+		ID: message.ID, TenantID: tenant, Destination: message.Destination,
+		IdempotencyKey: message.IdempotencyKey, Payload: message.Payload, Attempts: 1,
+	})
+	if !handled || err != nil {
+		t.Fatalf("expired issuance handled=%t err=%v", handled, err)
+	}
+	if calls := provider.Requests(); len(calls) != 0 {
+		t.Fatalf("expired issuance contacted provider %d times", len(calls))
+	}
+	record, err = st.GetDynamicSecretLease(ctx, tenant, pending.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.State != store.DynamicSecretLeaseFailed {
+		t.Fatalf("expired issuance state=%s, want failed", record.State)
+	}
+}
+
+func TestDynamicSecretTerminalRetryRecoversCanonicalIssuedResult(t *testing.T) {
+	const tenant = "11111111-1111-4111-8111-111111111127"
+	ctx := context.Background()
+	st, log, _, outbox, provider, dispatcher := newDynamicSecretOutboxTestStack(t, tenant)
+	now := time.Now().UTC()
+	pending := projections.DynamicSecretLeasePending{
+		ID: "lease-issued-before-terminal", IdempotencyKey: "issued-before-terminal",
+		RequestBinding: "sha256:issued-before-terminal", Provider: provider.name, Role: "reader",
+		ExpiresAt: now.Add(5 * time.Minute), HardExpiresAt: now.Add(15 * time.Minute),
+	}
+	data, err := json.Marshal(pending)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event, err := log.Append(ctx, events.Event{Type: projections.EventDynamicSecretLeasePending,
+		TenantID: tenant, Time: now, Data: data})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projections.New(st).Apply(ctx, event); err != nil {
+		t.Fatal(err)
+	}
+	record, err := st.GetDynamicSecretLease(ctx, tenant, pending.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outboxRecord, err := outbox.Get(ctx, tenant, record.IssueOutboxID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	message := orchestrator.Message{ID: outboxRecord.ID, TenantID: tenant,
+		Destination: outboxRecord.Destination, IdempotencyKey: outboxRecord.IdempotencyKey,
+		Payload: outboxRecord.Payload, Attempts: 10}
+	crash := errors.New("injected projection interruption after canonical append")
+	dispatcher.afterCanonicalAppend = func(e events.Event) error {
+		if e.Type == projections.EventDynamicSecretLeaseIssued {
+			return crash
+		}
+		return nil
+	}
+	if handled, err := dispatcher.Deliver(ctx, message); !handled || !errors.Is(err, crash) {
+		t.Fatalf("canonical append crash handled=%t err=%v", handled, err)
+	}
+	if len(provider.Requests()) != 1 {
+		t.Fatalf("provider calls before recovery=%d", len(provider.Requests()))
+	}
+	dispatcher.afterCanonicalAppend = nil
+	if handled, err := dispatcher.DeliverTerminalFailure(ctx, message, crash); !handled || !orchestrator.IsDeliveryDeferred(err) {
+		t.Fatalf("terminal recovery handled=%t err=%v, want deferred finalization", handled, err)
+	}
+	if _, found, err := log.EventByID(ctx, dynamicSecretEventID(tenant, record.TenantEpoch, "provider-issue-failed", pending.ID)); err != nil || found {
+		t.Fatalf("terminal failure event found=%t err=%v", found, err)
+	}
+	recovered, err := st.GetDynamicSecretLease(ctx, tenant, pending.ID)
+	if err != nil || recovered.State != store.DynamicSecretLeaseActive {
+		t.Fatalf("recovered issued lease state=%s err=%v", recovered.State, err)
+	}
+	if handled, err := dispatcher.Deliver(ctx, message); !handled || err != nil {
+		t.Fatalf("finalization replay handled=%t err=%v", handled, err)
+	}
+	if len(provider.Requests()) != 1 {
+		t.Fatalf("provider calls after recovery=%d", len(provider.Requests()))
+	}
+}
+
+func TestDynamicSecretExpiredIssuedResultIsNeverRevealed(t *testing.T) {
+	const tenant = "11111111-1111-4111-8111-111111111128"
+	ctx := context.Background()
+	st, log, kek, outbox, provider, _ := newDynamicSecretOutboxTestStack(t, tenant)
+	now := time.Now().UTC()
+	pending := projections.DynamicSecretLeasePending{
+		ID: "lease-late-result-hidden", IdempotencyKey: "late-result-hidden",
+		RequestBinding: "sha256:late-result-hidden", Provider: provider.name, Role: "reader",
+		ExpiresAt: now.Add(-time.Minute), HardExpiresAt: now.Add(10 * time.Minute),
+	}
+	data, err := json.Marshal(pending)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event, err := log.Append(ctx, events.Event{Type: projections.EventDynamicSecretLeasePending,
+		TenantID: tenant, Time: now.Add(-2 * time.Minute), Data: data})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projections.New(st).Apply(ctx, event); err != nil {
+		t.Fatal(err)
+	}
+	record, err := st.GetDynamicSecretLease(ctx, tenant, pending.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.WithTenant(ctx, tenant, func(tx pgx.Tx) error {
+		return st.ApplyDynamicSecretLeaseIssuedTx(ctx, tx, store.DynamicSecretLease{
+			ID: record.ID, TenantID: tenant, TenantEpoch: record.TenantEpoch,
+			IdempotencyKey: record.IdempotencyKey, RequestBinding: record.RequestBinding,
+			Provider: record.Provider, Role: record.Role, BackendRef: "native-late-role",
+			SealedCredential: []byte("sealed-unusable-credential"),
+			IssuedAt:         now, ExpiresAt: record.ExpiresAt, HardExpiresAt: record.HardExpiresAt,
+			UpdatedAt: now,
+		})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	lifecycle, err := newDurableDynamicSecretLifecycle(tenant, []dynsecret.Provider{provider}, st, log, kek, outbox, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lease, credential, err := lifecycle.waitForIssued(ctx, pending.ID)
+	if err == nil || len(credential) != 0 || lease.ID != "" {
+		t.Fatalf("expired result revealed: lease=%q credential_bytes=%d err=%v", lease.ID, len(credential), err)
+	}
+}
+
 func (p *issueOutboxProvider) Name() string              { return p.name }
 func (p *issueOutboxProvider) MaximumTTL() time.Duration { return time.Hour }
 func (p *issueOutboxProvider) Generate(_ context.Context, req dynsecret.GenerateRequest) (dynsecret.Credential, error) {

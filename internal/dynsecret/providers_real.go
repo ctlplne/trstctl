@@ -84,6 +84,10 @@ type PostgresBackend struct {
 
 // NewPostgresBackend builds a PostgreSQL dynamic-secret backend.
 func NewPostgresBackend(cfg PostgresConfig) (*PostgresBackend, error) {
+	// A file: DSN commonly has the line ending added by the tool that wrote
+	// it. PostgreSQL URI syntax does not include that terminator. Remove only
+	// terminal CR/LF bytes; keep all other credential bytes unchanged.
+	cfg.DSN = bytes.TrimRight(cfg.DSN, "\r\n")
 	if len(cfg.DSN) == 0 {
 		return nil, errors.New("dynsecret postgres: DSN required")
 	}

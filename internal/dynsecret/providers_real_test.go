@@ -42,7 +42,10 @@ func TestPostgresBackendCreatesUsableLoginAndRevokes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	backend, err := NewPostgresBackend(PostgresConfig{DSN: []byte(dsn), Database: "postgres", Schema: "public", UsernamePrefix: "trstctl_test"})
+	// Secret files written by ordinary shell tools end in a newline. The
+	// administrator DSN must still connect, and the returned lease DSN must
+	// remain usable by a stock client.
+	backend, err := NewPostgresBackend(PostgresConfig{DSN: []byte(dsn + "\n"), Database: "postgres", Schema: "public", UsernamePrefix: "trstctl_test"})
 	if err != nil {
 		t.Fatal(err)
 	}

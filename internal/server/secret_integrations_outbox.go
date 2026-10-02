@@ -227,6 +227,17 @@ func (d *secretIntegrationOutboxDispatcher) DeliverTerminalFailure(ctx context.C
 		if record.State != store.DynamicSecretLeasePending {
 			return true, nil
 		}
+		// A provider may have succeeded and appended its immutable issued event
+		// while SQL projection or outbox finalization failed. Recover that
+		// canonical result before considering retry exhaustion terminal. Defer
+		// this claim once so the next delivery sees the active lease and can
+		// finalize the outbox as delivered, without a second provider call.
+		issuedEventID := dynamicSecretEventID(m.TenantID, command.TenantEpoch, "provider-issued", command.ID)
+		if recovered, recoverErr := d.recoverDynamicSecretIssued(ctx, issuedEventID, m.TenantID, command); recoverErr != nil {
+			return true, recoverErr
+		} else if recovered {
+			return true, orchestrator.DeferDelivery(errors.New("canonical dynamic-secret issuance recovered; finalize on next delivery"))
+		}
 		return true, d.appendAndProjectID(ctx, dynamicSecretEventID(m.TenantID, command.TenantEpoch, "provider-issue-failed", command.ID), m.TenantID, projections.EventDynamicSecretLeaseIssuanceFailed,
 			projections.DynamicSecretLeaseIssuanceFailure{TenantEpoch: record.TenantEpoch, ID: command.ID, Error: terminal})
 	case m.Destination == dynamicSecretRevokeDestination:
@@ -344,6 +355,16 @@ func (d *secretIntegrationOutboxDispatcher) issueDynamicSecret(ctx context.Conte
 		return recoverErr
 	} else if recovered {
 		return nil
+	}
+	// The hard ceiling controls native credential validity, but the requested
+	// lease deadline controls whether a new credential may still be minted. A
+	// retry after that deadline must close the pending lease without contacting
+	// the provider or appending an issued event whose issue time is too late.
+	if !time.Now().Before(record.ExpiresAt) {
+		return d.appendAndProjectID(ctx, dynamicSecretEventID(m.TenantID, command.TenantEpoch, "provider-issue-failed", command.ID), m.TenantID, projections.EventDynamicSecretLeaseIssuanceFailed, projections.DynamicSecretLeaseIssuanceFailure{
+			TenantEpoch: record.TenantEpoch, ID: record.ID,
+			Error: "requested lease expired before provider credential creation",
+		})
 	}
 	nativeTTL := time.Until(record.HardExpiresAt)
 	if nativeTTL <= 0 {

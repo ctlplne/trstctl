@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -178,6 +179,92 @@ func projectDynamicSecretLease(t *testing.T, s *store.Store, tenantID string, le
 	t.Helper()
 	projectPendingDynamicSecretLease(t, s, tenantID, lease)
 	projectIssuedDynamicSecretLease(t, s, tenantID, lease)
+}
+
+func TestDynamicSecretLateIssuedResultRecoversExpiredTerminalProjection(t *testing.T) {
+	s := newStore(t)
+	resetSecretIntegrationTables(t, s)
+	seedTwoTenants(t, s)
+	ctx := context.Background()
+	requested := time.Date(2026, 10, 2, 9, 0, 0, 0, time.UTC)
+	lease := store.DynamicSecretLease{
+		ID: "late-issued-recovery", TenantID: tenantA,
+		IdempotencyKey: "late-issued-recovery", RequestBinding: "sha256:late-issued-recovery",
+		Provider: "postgresql", Role: "readonly",
+		IssuedAt: requested, ExpiresAt: requested.Add(time.Minute),
+		HardExpiresAt: requested.Add(10 * time.Minute), UpdatedAt: requested,
+	}
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		if err := s.ApplyDynamicSecretOperationRequestedTx(ctx, tx, store.DynamicSecretOperation{
+			TenantID: tenantA, OperationID: "issue:" + lease.ID,
+			IdempotencyKey: lease.IdempotencyKey, RequestBinding: lease.RequestBinding,
+			Action: "issue", LeaseID: lease.ID, Response: []byte(`{}`),
+			CreatedAt: requested, UpdatedAt: requested,
+		}); err != nil {
+			return err
+		}
+		return tx.QueryRow(ctx, `
+			INSERT INTO outbox (tenant_id, destination, payload, idempotency_key,
+			                    status, attempts, last_error)
+			VALUES ($1, 'dynsecret.issue', '{}'::bytea, $2,
+			        'failed', 10, 'external_delivery_failed') RETURNING id`,
+			tenantA, "late-issued-recovery-outbox").Scan(&lease.IssueOutboxID)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	projectPendingDynamicSecretLease(t, s, tenantA, lease)
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return s.ApplyDynamicSecretLeaseIssuanceFailedTx(ctx, tx, tenantA, lease.ID,
+			"external delivery exhausted its retry budget", requested.Add(2*time.Minute+time.Second))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	lease.BackendRef = "native-late-role"
+	lease.SealedCredential = []byte("sealed-result")
+	lease.IssuedAt = requested.Add(2 * time.Minute)
+	lease.UpdatedAt = lease.IssuedAt
+	projectIssuedDynamicSecretLease(t, s, tenantA, lease)
+	got, err := s.GetDynamicSecretLease(ctx, tenantA, lease.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.State != store.DynamicSecretLeaseActive || got.BackendRef != lease.BackendRef ||
+		!got.IssuedAt.Equal(lease.IssuedAt) || !got.ExpiresAt.Equal(lease.ExpiresAt) {
+		t.Fatalf("late issued result not retained for provider revocation: state=%s ref=%q issued=%s expires=%s",
+			got.State, got.BackendRef, got.IssuedAt, got.ExpiresAt)
+	}
+	op, err := s.GetDynamicSecretOperation(ctx, tenantA, "issue:"+lease.ID)
+	if err != nil || op.Status != store.DynamicSecretOperationCompleted {
+		t.Fatalf("recovered issue operation status=%s err=%v", op.Status, err)
+	}
+	var outboxStatus, outboxError string
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT status, COALESCE(last_error, '') FROM outbox
+			WHERE tenant_id = $1 AND id = $2`, tenantA, lease.IssueOutboxID).Scan(&outboxStatus, &outboxError)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if outboxStatus != "pending" || outboxError != "" {
+		t.Fatalf("recovered outbox status=%s error=%q, want pending for normal dispatcher", outboxStatus, outboxError)
+	}
+	completed, err := orchestrator.NewOutbox(s).DispatchOneScoped(ctx, orchestrator.HandlerFunc(func(_ context.Context, message orchestrator.Message) error {
+		if message.ID != lease.IssueOutboxID || message.TenantID != tenantA || message.Destination != "dynsecret.issue" {
+			t.Fatalf("recovery dispatched another command: %+v", message)
+		}
+		return nil // Active lease means no second provider credential is created.
+	}), orchestrator.DestinationScope{IncludePrefixes: []string{"dynsecret.issue"}})
+	if err != nil || !completed {
+		t.Fatalf("normal outbox completion of recovered command: completed=%t err=%v", completed, err)
+	}
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT status, COALESCE(last_error, '') FROM outbox
+			WHERE tenant_id = $1 AND id = $2`, tenantA, lease.IssueOutboxID).Scan(&outboxStatus, &outboxError)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if outboxStatus != "delivered" || outboxError != "" {
+		t.Fatalf("dispatcher completion status=%s error=%q", outboxStatus, outboxError)
+	}
 }
 
 func projectSecretSyncJob(t *testing.T, s *store.Store, tenantID string, job store.SecretSyncJob) {

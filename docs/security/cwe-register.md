@@ -362,7 +362,7 @@ not this file.
 | `internal/server/unvaulted_secret_posture_served_test.go:152` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/store/agent_bootstrap_token_test.go:67` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/store/approved_target_fences.go:229` | SQL column identifiers only; this constant contains no credential material. |
-| `internal/store/dynamic_secret_lease.go:587` | sealed_credential is a SQL column name, not a hardcoded credential (CWE-798). |
+| `internal/store/dynamic_secret_lease.go:644` | sealed_credential is a SQL column name, not a hardcoded credential (CWE-798). |
 | `internal/store/privacy_erasure_preparation.go:153` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/secret_rotation_schedule_privacy.go:694` | SQL authority columns are names, not embedded credentials (CWE-798). |
 | `internal/store/secret_store.go:325` | SQL column identifiers only; this constant contains no credential material. |
@@ -462,7 +462,7 @@ not this file.
 | `internal/dns/rfc2136/rfc2136.go:343` | DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190) |
 | `internal/dynsecret/drivers.go:230` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
 | `internal/dynsecret/drivers.go:238` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
-| `internal/dynsecret/providers_real_test.go:480` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `internal/dynsecret/providers_real_test.go:483` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/events/backup_history_test.go:216` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/events/backup_restore_floor_test.go:593` | tiny fixed test sequence |
 | `internal/historycontinuity/continuity_test.go:203` | bounded fixture/corpus value packing inside a test (CWE-190) |
@@ -521,10 +521,10 @@ not this file.
 | `internal/server/recovery_projection_factory_test.go:172` | event test sequence is PostgreSQL bigint-bounded. |
 | `internal/server/revocation.go:423` | value reduced modulo the shard count before conversion (CWE-190) |
 | `internal/server/run.go:211` | bounded small ints from config (CWE-190) |
-| `internal/server/secret_integrations_outbox.go:810` | positive int64 is exactly representable as uint64. |
-| `internal/server/secret_integrations_outbox.go:811` | positive int64 is exactly representable as uint64. |
-| `internal/server/secret_integrations_outbox.go:814` | positive int64 is exactly representable as uint64. |
-| `internal/server/secret_integrations_outbox.go:823` | positive int64 is exactly representable as uint64. |
+| `internal/server/secret_integrations_outbox.go:831` | positive int64 is exactly representable as uint64. |
+| `internal/server/secret_integrations_outbox.go:832` | positive int64 is exactly representable as uint64. |
+| `internal/server/secret_integrations_outbox.go:835` | positive int64 is exactly representable as uint64. |
+| `internal/server/secret_integrations_outbox.go:844` | positive int64 is exactly representable as uint64. |
 | `internal/server/secrets_rotation_served_test.go:2566` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/signing/keystore.go:112` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
 | `internal/signing/keystore.go:114` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
@@ -634,7 +634,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/dynsecret/providers_real.go:1162` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
+| `internal/dynsecret/providers_real.go:1166` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
 
 ### G118 — CWE-664 Improper lifetime control (goroutine context) (2 sites)
 
@@ -925,9 +925,9 @@ not this file.
 | `internal/api/vault_compat_contract_test.go:246` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/ca/profilelint/profilelint_test.go:173` | non-secret fixture directory in t.TempDir (CWE-22, CWE-276) |
 | `internal/crypto/secretfile/secretfile_test.go:61` | deliberately loose fixture dir; secretfile must refuse it (CWE-276) |
-| `internal/dynsecret/providers_real_test.go:468` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/dynsecret/providers_real_test.go:471` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/dynsecret/providers_real_test.go:474` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/dynsecret/providers_real_test.go:477` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/projections/golden_events_test.go:107` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/projections/sshdiscovery_store_test.go:92` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/protocols/acme/certbot_client_test.go:48` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -1191,7 +1191,7 @@ not this file.
 | `internal/crypto/pfx/pfx_test.go:44` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/secretfile/secretfile.go:34` | operator-configured local secret path; parents and file mode validated above (CWE-22) |
 | `internal/crypto/secretfile/secretfile.go:65` | operator-configured local secret path; O_EXCL + 0600, parents validated above (CWE-22) |
-| `internal/dynsecret/providers_real_test.go:227` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/dynsecret/providers_real_test.go:230` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/events/protect_schema005_guard_test.go:138` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/events/protect_schema005_guard_test.go:157` | fixed repository source anchor, not caller input (CWE-22) |
 | `internal/featureparity/catalog.go:94` | fixed repo-relative catalog path read by tools and tests (CWE-22) |

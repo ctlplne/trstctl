@@ -17,7 +17,7 @@ func TestDynamicSecretIssuanceFailureProducersCarryLiveTenantEpochAUD108(t *test
 		producers int
 	}{
 		{file: "dynamic_secret_lifecycle.go", producers: 2},
-		{file: "secret_integrations_outbox.go", producers: 2},
+		{file: "secret_integrations_outbox.go", producers: 3},
 	} {
 		raw, err := os.ReadFile(item.file) // #nosec G304 -- closed sibling-source fixture list.
 		if err != nil {

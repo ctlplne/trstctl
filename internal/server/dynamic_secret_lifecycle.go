@@ -205,6 +205,13 @@ func (l *durableDynamicSecretLifecycle) waitForIssued(ctx context.Context, lease
 		}
 		switch record.State {
 		case store.DynamicSecretLeaseActive:
+			if !time.Now().Before(record.ExpiresAt) {
+				// A slow provider can finish after the requested lease deadline.
+				// Keep its backend reference in the read model so the expiry
+				// worker can revoke it, but never reveal an already expired
+				// credential to an API caller or idempotent replay.
+				return dynsecret.Lease{}, nil, errors.New("dynsecret: issued credential expired before delivery; wait for provider revocation and issue a new lease")
+			}
 			credential, openErr := l.openCredential(waitCtx, record)
 			return dynamicLeaseFromStore(record), credential, openErr
 		case store.DynamicSecretLeaseFailed:
