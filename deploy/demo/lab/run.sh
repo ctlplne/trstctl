@@ -81,7 +81,7 @@ census_status=0
 # control plane running) or a non-Docker process on 127.0.0.1:9443 used to let
 # the bring-up "succeed": the health probe below reached the stale plane and the
 # runner reported exit 0 while this project's control plane never came up.
-lab_ports="9443 10443 10444 10445 10446 10447 10448 10449 19081 29443 29444"
+lab_ports="9443 10443 10444 10445 10446 10447 10448 10449 18025 19081 29443 29444"
 port_holders=""
 for port in $lab_ports; do
   holder="$(docker ps --filter "publish=$port" --format '{{.Names}} (compose project {{.Label "com.docker.compose.project"}})' 2>/dev/null | grep -v "^${lab_project}-" | head -n 1)"
@@ -136,7 +136,7 @@ if [ -z "$plane_id" ] || [ "$plane_running" != true ] || [ "$plane_networks" -lt
 fi
 
 $compose up -d --no-deps demo-oidc || exit $?
-$compose up -d --no-deps localstack-loopback oidc-loopback pebble-loopback dns-webhook-loopback alert-sink || exit $?
+$compose up -d --no-deps localstack-loopback oidc-loopback pebble-loopback dns-webhook-loopback alert-sink mailpit || exit $?
 $compose run --rm --no-deps demo-seed || exit $?
 $compose run --rm --no-deps lab-bootstrap || exit $?
 $compose up -d --no-deps frontdoors-lab || exit $?

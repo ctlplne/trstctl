@@ -118,7 +118,12 @@ for (const [name, dns] of subjects) {
       "-addext", "keyUsage=critical,digitalSignature,keyEncipherment",
       "-addext", "extendedKeyUsage=serverAuth", "-days", "1"]);
   }
-  if (name === "haproxy") writeFileSync(pem, `${readFileSync(cert, "utf8").trim()}\n${readFileSync(key, "utf8").trim()}\n`, { mode: 0o600 });
+  // HAProxy uses one combined PEM. A deployment updates that file in place;
+  // rebuilding the baseline from the original .crt/.key on every bootstrap
+  // would silently undo a successful renewal before the next container start.
+  if (name === "haproxy" && !existsSync(pem)) {
+    writeFileSync(pem, `${readFileSync(cert, "utf8").trim()}\n${readFileSync(key, "utf8").trim()}\n`, { mode: 0o600, flag: "wx" });
+  }
 }
 
 const certPath = "/frontdoors-state/agent.crt";

@@ -20,6 +20,20 @@
     }
   ],
   "notifications": {
+    "email": {
+      "enabled": true,
+      "smtp_addr": "127.0.0.1:1025",
+      "from": "trstctl@partner-lab.example.com",
+      "to": ["operator@partner-lab.example.com"]
+    },
+    "pagerduty": {
+      "enabled": true,
+      "endpoint": "http://127.0.0.1:18082/v2/enqueue",
+      "routing_key_file": "/lab-runtime/pagerduty-routing-key",
+      "timeout": "5s",
+      "allow_private_cidrs": ["127.0.0.1/32"],
+      "allow_insecure_http": true
+    },
     "opsgenie": {
       "enabled": true,
       "endpoint": "http://127.0.0.1:18082/v2/alerts",

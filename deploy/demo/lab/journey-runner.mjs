@@ -1,6 +1,8 @@
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import tls from "node:tls";
+import { validateRetainedBinding } from "./retained-binding.mjs";
+import { verifiedDeliveryMatches } from "./delivery-selection.mjs";
 
 const server = process.env.TRSTCTL_LAB_SERVER ?? "https://trstctl:8443";
 const bearer = readFileSync("/seed-state/bootstrap.token", "utf8").trim();
@@ -149,6 +151,7 @@ async function waitForAgent() {
     // envelope used by most inventory routes. Presence is the live heartbeat
     // verdict; status is the enrollment lifecycle state.
     return (listed.agents ?? []).find((agent) =>
+      agent.id &&
       agent.name === "partner-lab-frontdoors" &&
       agent.status === "active" &&
       agent.presence?.state === "online" &&
@@ -181,11 +184,11 @@ function normalizedFingerprint(value) {
   return String(value ?? "").replace(/^sha256:/i, "").replaceAll(":", "").toLowerCase();
 }
 
-async function waitForDelivery(identityID, targetName, connector, description, excludedID = "", excludedFingerprint = "") {
+async function waitForDelivery(identityID, targetName, connector, description, excludedID = "", excludedFingerprint = "", expectedKey = "") {
   return waitFor(description, async () => {
-    return findDelivery((item) => item.id !== excludedID && item.target === targetName &&
-      item.connector === connector && ["delivered", "verified"].includes(item.status) && normalizedFingerprint(item.fingerprint) &&
-      normalizedFingerprint(item.fingerprint) !== normalizedFingerprint(excludedFingerprint),
+    return findDelivery((item) => verifiedDeliveryMatches(item, {
+      targetName, connector, excludedID, excludedFingerprint, key: expectedKey,
+    }),
     identityID);
   });
 }
@@ -207,6 +210,23 @@ async function findDelivery(predicate, identityID = "") {
     if (!after) return false;
   }
   throw new Error("connector delivery pagination exceeded 100 pages");
+}
+
+async function findRetainedIdentity(name) {
+  let after = "";
+  const matches = [];
+  for (let pageNumber = 0; pageNumber < 100; pageNumber += 1) {
+    const query = new URLSearchParams({ limit: "100" });
+    if (after) query.set("cursor", after);
+    const page = await api("GET", `/api/v1/identities?${query.toString()}`);
+    matches.push(...(page.items ?? []).filter((item) => item.name === name));
+    after = String(page.next_cursor ?? "");
+    if (!after) {
+      if (matches.length > 1) throw new Error(`multiple retained identities have the name ${name}`);
+      return matches[0] ?? null;
+    }
+  }
+  throw new Error("identity pagination exceeded 100 pages");
 }
 
 async function ensureNetworkDiscoverySource() {
@@ -279,19 +299,59 @@ async function runNetworkDiscovery(source, phase) {
   };
 }
 
-async function runTargetJourney(target, owner) {
+async function runTargetJourney(target, owner, agentID) {
   const before = await probeTarget(target, false);
 	const targetName = `Partner lab ${target.connector.toUpperCase()} listener ${runNonce}`;
 	const targetConfig = {
 		...target.config,
 		executor: "agent",
 		required_agent_role: "host",
+		required_agent_id: agentID,
 		lab_class: "real_local",
 	};
-	if (target.raw_tls_discovery !== false) {
-		targetConfig.verify_address = `127.0.0.1:${target.port}`;
-		targetConfig.verify_server_name = target.dns;
-	}
+	// Discovery's raw-TLS limitation is separate from connector verification.
+	// The host agent negotiates PostgreSQL SSLRequest for this target.
+	targetConfig.verify_address = `127.0.0.1:${target.port}`;
+	targetConfig.verify_server_name = target.dns;
+  const retained = await findRetainedIdentity(target.dns);
+  if (retained) {
+    const attributes = retained.attributes ?? {};
+    if (!attributes.deployment_target_id) throw new Error(`${target.connector} retained identity has no deployment target`);
+    const existingTarget = await api("GET", `/api/v1/connectors/targets/${encodeURIComponent(attributes.deployment_target_id)}`);
+    validateRetainedBinding(retained, existingTarget, { owner, connector: target.connector, config: targetConfig });
+    const served = await probeTarget(target, true);
+    if (!served.authorized || !served.subject_alt_name.split(", ").includes(`DNS:${target.dns}`)) {
+      throw new Error(`${target.connector} retained listener does not serve a trusted certificate for ${target.dns}`);
+    }
+    const receipt = await findDelivery((item) => item.target === existingTarget.name &&
+      item.connector === target.connector && ["verified", "rolled_back"].includes(item.status) &&
+      normalizedFingerprint(item.fingerprint) === served.fingerprint_sha256, retained.id);
+    if (!receipt) throw new Error(`${target.connector} served certificate has no matching confirmed deployment or rollback receipt`);
+    const dryRun = await api("POST", `/api/v1/connectors/targets/${encodeURIComponent(existingTarget.id)}/test`, {},
+      `partner-lab-dry-run-${target.connector}-${existingTarget.id}-${runNonce}`);
+    await waitFor(`${target.connector} retained target-vantage dry run`, async () =>
+      findDelivery((item) => item.target === existingTarget.name && item.connector === target.connector &&
+        item.status === "dry_run_planned" && item.idempotency_key === `${dryRun.idempotency_key}:result`), 60000);
+    return {
+      id: target.connector,
+      class: "real_local",
+      status: "pass",
+      mode: "retained_binding_reverified",
+      stages: ["discover", "understand", "configure", "observe", "verify", "automate"],
+      ...(target.remaining_stage ? { remaining_stage: target.remaining_stage } : {}),
+      issuer: { source: attributes.issuing_authority_source, id: attributes.issuing_authority_id },
+      identity_id: retained.id,
+      target_id: existingTarget.id,
+      target_name: existingTarget.name,
+      delivery_id: receipt.id,
+      delivery_status: receipt.status,
+      before_fingerprint: before.fingerprint_sha256,
+      after_fingerprint: served.fingerprint_sha256,
+      changed_from_baseline: false,
+      tls: served,
+      dry_run_status: dryRun.status,
+    };
+  }
   const plan = {
     owner_id: owner,
     identity_name: target.dns,
@@ -354,12 +414,14 @@ async function runRenewAndRollbackJourney(deployed, target) {
       (preview.preview_writes ?? []).length !== 0 || (preview.preview_external_effects ?? []).length !== 0) {
     throw new Error("renewal preview was not ready, effect-free, and bound to the deployed identity");
   }
+	const renewalKey = `partner-lab-${target.connector}-renew-${runNonce}`;
 	await api("POST", `/api/v1/identities/${encodeURIComponent(deployed.identity_id)}/transitions`, {
 		...transition,
 		expected_version: preview.expected_version,
-	}, `partner-lab-${target.connector}-renew-${runNonce}`);
+	}, renewalKey);
 	const renewalDelivery = await waitForDelivery(deployed.identity_id, deployed.target_name, target.connector,
-		`${label} successor delivery receipt`, deployed.delivery_id, deployed.after_fingerprint);
+		`${label} successor delivery receipt`, deployed.delivery_id, deployed.after_fingerprint,
+		`host-renew:renew:transition:${renewalKey}`);
 	const renewed = await waitFor(`${label} successor certificate deployment`, async () => {
 		const probe = await probeTarget(target, true);
 		return probe.authorized && probe.fingerprint_sha256 !== deployed.after_fingerprint &&
@@ -411,7 +473,7 @@ try {
   const discovery = await ensureNetworkDiscoverySource();
   results.push(await runNetworkDiscovery(discovery.source, "baseline"));
   for (const target of targets) {
-    try { results.push(await runTargetJourney(target, owner)); }
+    try { results.push(await runTargetJourney(target, owner, agent.id)); }
     catch (error) { results.push({ id: target.connector, class: "real_local", status: "fail", error: clean(error.message) }); }
   }
 	for (const target of targets) {

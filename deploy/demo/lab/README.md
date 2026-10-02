@@ -1,6 +1,6 @@
 # Lightweight persistent partner lab
 
-This opt-in overlay turns the normal seeded demo into a real local lifecycle lab. It keeps one independent ACME CA (Pebble), its DNS challenge server, one bounded alert receiver, and one nonroot edge host running real Apache, NGINX, HAProxy, Caddy, Traefik, and PostgreSQL processes. The same trstctl host collector updates all six services, so host-role jobs cannot race between unrelated collectors.
+This opt-in overlay turns the normal seeded demo into a real local lifecycle lab. It keeps one independent ACME CA (Pebble), its DNS challenge server, a bounded incident receiver for OpsGenie and PagerDuty contracts, a local Mailpit SMTP receiver, and one nonroot edge host running real Apache, NGINX, HAProxy, Caddy, Traefik, and PostgreSQL processes. The same trstctl host collector updates all six services, so host-role jobs cannot race between unrelated collectors.
 
 ## Run every safe local journey
 
@@ -10,7 +10,7 @@ From the repository root:
 deploy/demo/lab/run.sh
 ```
 
-The script starts or resumes the lab, executes six real TLS lifecycle journeys, then runs the complete shipped production-assembly census and retains all 81 capability rows as evidence. It deliberately does **not** tear the lab down. Re-running it checks convergence against the retained state.
+The script starts or resumes the lab, executes six real TLS lifecycle journeys, then runs the complete shipped production-assembly census and retains all 81 capability rows as evidence. It deliberately does **not** tear the lab down. On a retained run, the runner finds each existing deployed identity by its exact DNS name, checks its owner, external issuer, connector, bound target, agent, paths, verifier settings, live Pebble-signed certificate, and matching confirmed receipt. A mismatch fails the journey without replacing or deleting the existing binding. It then performs a new target dry run, renewal, independent TLS readback, and host rollback. The renewal wait accepts only the verified receipt for that run's exact idempotency key; older receipts in UUID-sorted history cannot satisfy it. The receipt marks retained binding checks separately from first-time enrollment, so a rerun does not claim another first deployment.
 
 During repair, use the short live profile so a new candidate gets fast service
 feedback without claiming that the full release gate ran:
@@ -36,6 +36,7 @@ Open the console at <https://127.0.0.1:9443>. The real target listeners remain a
 - Caddy: <https://127.0.0.1:10446>
 - Traefik: <https://127.0.0.1:10447>
 - PostgreSQL TLS: `127.0.0.1:10448` (PostgreSQL SSLRequest negotiation, not browser HTTPS)
+- Mailpit inbox: <http://127.0.0.1:18025> (local-only SMTP listener is inside the lab network namespace at `127.0.0.1:1025`)
 
 The browser will not recognize the target DNS names when you use the IP address. The automated probes connect to the published ports with the correct SNI names and verify the resulting chains against Pebble's pinned public test root.
 
@@ -116,7 +117,11 @@ This builds and starts every service, seeds the demo tenant, enrolls the
 `partner-lab-frontdoors` agent (host and network-relay roles), registers the
 tenant DNS-01 provider config (`Local Pebble DNS validation`, zone
 `partner-lab.example.com`) that the lab's ACME CA needs for every issuance, and
-leaves each listener on its self-signed one-day baseline. Nothing is issued or
+configures operator-owned OpsGenie, PagerDuty, and email receivers. The two incident
+credentials are generated once as mode `0600` files in the project runtime volume;
+the local sink checks their exact values and records only sanitized alert metadata.
+Mailpit stores email in its project volume; neither fixture forwards to the Internet.
+Each listener stays on its self-signed one-day baseline. Nothing is issued or
 deployed until you do it. The definition-of-done census is skipped in this mode;
 run the default profile before calling a candidate qualified.
 

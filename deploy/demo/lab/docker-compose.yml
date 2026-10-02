@@ -25,6 +25,7 @@ services:
       - "127.0.0.1:10447:10447"
       - "127.0.0.1:10448:10448"
       - "127.0.0.1:10449:10449"
+      - "127.0.0.1:18025:8025"
     volumes:
       - ./lab/trstctl-lab.json:/etc/trstctl/partner-lab.json:ro
       - ./lab/ci-secret-access-key:/etc/trstctl/ci-secret-access-key:ro
@@ -43,6 +44,7 @@ services:
       - ./lab/lab-init.mjs:/lab/lab-init.mjs:ro
       - labruntime:/lab-runtime
       - labevidence:/lab-evidence
+      - labmailpit:/lab-mailpit
 
   pebble-challtestsrv:
     image: ghcr.io/letsencrypt/pebble-challtestsrv:2.10.1@sha256:12ce21884def456bcf9786542113949e1f19dc7738d2c70e156c2d0c38a1405b
@@ -130,7 +132,26 @@ services:
     entrypoint: ["node", "/lab/alert-sink.mjs"]
     volumes:
       - ./lab/alert-sink.mjs:/lab/alert-sink.mjs:ro
+      - labruntime:/lab-runtime:ro
       - labevidence:/lab-evidence
+
+  mailpit:
+    image: axllent/mailpit:v1.27.4@sha256:df6c2541907e1be6fac21f509927cf6ed771617a1f4b361ef66d97bd05593d2d
+    profiles: ["partner-lab"]
+    user: "65532:65532"
+    network_mode: "service:trstctl"
+    restart: on-failure
+    depends_on:
+      trstctl:
+        condition: service_started
+        restart: true
+      lab-init:
+        condition: service_completed_successfully
+    environment:
+      MP_DATABASE: /data/mailpit.db
+      MP_MAX_MESSAGES: "5000"
+    volumes:
+      - labmailpit:/data
 
   lab-bootstrap:
     image: ${TRSTCTL_DEMO_SEED_IMAGE:-ctlplne-demo-seed:local}
@@ -145,6 +166,8 @@ services:
       dns-webhook-loopback:
         condition: service_started
       alert-sink:
+        condition: service_started
+      mailpit:
         condition: service_started
     entrypoint: ["node", "/lab/bootstrap.mjs"]
     environment:
@@ -233,12 +256,16 @@ services:
         condition: service_healthy
       alert-sink:
         condition: service_started
+      mailpit:
+        condition: service_started
     entrypoint: ["node", "/lab/journey-runner.mjs"]
     environment:
       NODE_EXTRA_CA_CERTS: /public-trust/control-plane.crt
       TRSTCTL_LAB_SERVER: https://trstctl:8443
     volumes:
       - ./lab/journey-runner.mjs:/lab/journey-runner.mjs:ro
+      - ./lab/retained-binding.mjs:/lab/retained-binding.mjs:ro
+      - ./lab/delivery-selection.mjs:/lab/delivery-selection.mjs:ro
       - ./lab/journey-matrix.json:/lab/journey-matrix.json:ro
       - ./lab/certs:/lab-ca:ro
       - seedstate:/seed-state:ro
@@ -248,5 +275,6 @@ services:
 volumes:
   labruntime:
   labevidence:
+  labmailpit:
   frontdoorsstate:
   frontdoorstls:

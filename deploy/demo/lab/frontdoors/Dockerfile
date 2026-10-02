@@ -8,12 +8,12 @@ FROM ${APACHE_IMAGE}
 
 RUN apk add --no-cache \
     nginx=1.30.4-r1 \
-    haproxy=3.4.4-r0 \
+    haproxy=3.4.6-r0 \
     caddy=2.11.4-r1 \
     traefik=3.7.1-r1 \
     postgresql16=16.15-r0 \
     postgresql16-client=16.15-r0 \
-    openssl=3.5.8-r0 \
+    openssl=3.5.9-r0 \
     && addgroup -S -g 65532 trstctl \
     && adduser -S -D -H -u 65532 -G trstctl trstctl
 COPY --from=trstctl /usr/local/bin/trstctl-agent /usr/local/bin/trstctl-agent

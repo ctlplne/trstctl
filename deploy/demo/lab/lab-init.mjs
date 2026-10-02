@@ -1,17 +1,18 @@
 import { randomBytes } from "node:crypto";
 import { chmodSync, chownSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
-for (const path of ["/lab-runtime", "/lab-evidence"]) {
+for (const path of ["/lab-runtime", "/lab-evidence", "/lab-mailpit"]) {
   mkdirSync(path, { recursive: true, mode: 0o700 });
   chownSync(path, 65532, 65532);
   chmodSync(path, 0o700);
 }
-const keyPath = "/lab-runtime/opsgenie-api-key";
-if (!existsSync(keyPath)) {
-  writeFileSync(keyPath, randomBytes(24).toString("base64url"), { mode: 0o600, flag: "wx" });
+for (const keyPath of ["/lab-runtime/opsgenie-api-key", "/lab-runtime/pagerduty-routing-key"]) {
+  if (!existsSync(keyPath)) {
+    writeFileSync(keyPath, randomBytes(24).toString("base64url"), { mode: 0o600, flag: "wx" });
+  }
+  chownSync(keyPath, 65532, 65532);
+  chmodSync(keyPath, 0o600);
 }
-chownSync(keyPath, 65532, 65532);
-chmodSync(keyPath, 0o600);
 // Licensed profile: the operator's 0600 license file is bind-mounted read-only
 // here and copied once into the run-owned runtime volume for the service uid.
 // The host file keeps its owner and mode; the copy is 0400 for uid 65532.

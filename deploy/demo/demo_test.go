@@ -1823,7 +1823,7 @@ func TestPartnerLabTeardownIsOwnedAndProven(t *testing.T) {
 func TestPartnerLabRunnerFailsLoudOnPortCollision(t *testing.T) {
 	launcher := read(t, "lab", "run.sh")
 	for _, want := range []string{
-		`lab_ports="9443 10443 10444 10445 10446 10447 10448 10449 19081 29443 29444"`,
+		`lab_ports="9443 10443 10444 10445 10446 10447 10448 10449 18025 19081 29443 29444"`,
 		`--filter "publish=$port"`, "is held by", "cannot start: its published ports are already in use",
 		"deploy/demo/lab/down.sh", "lsof -nP -iTCP:",
 		`plane_id="$($compose ps -q trstctl`, "{{.State.Running}}", "{{len .NetworkSettings.Networks}}", `docker port "$plane_id" 8443`,
