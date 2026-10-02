@@ -1,6 +1,7 @@
-import { chmodSync, chownSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, chownSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import https from "node:https";
+import { mergePebbleRoots } from "./pebble-root-trust.mjs";
 
 const server = "https://trstctl:8443";
 const token = readFileSync("/seed-state/bootstrap.token", "utf8").trim();
@@ -92,9 +93,27 @@ for (const path of ["/frontdoors-state", "/frontdoors-state/rollbacks", "/frontd
   chmodSync(path, 0o700);
 }
 const pebbleIssuingRoot = await readPebbleIssuingRoot();
-writeFileSync("/lab-evidence/runtime-pebble-root.crt", pebbleIssuingRoot, { mode: 0o600 });
-chownSync("/lab-evidence/runtime-pebble-root.crt", 65532, 65532);
-chmodSync("/lab-evidence/runtime-pebble-root.crt", 0o600);
+const currentRootPath = "/lab-evidence/runtime-pebble-root.crt";
+const trustedRootsPath = "/lab-evidence/trusted-pebble-roots.pem";
+const importedRootPath = "/lab-previous-root.crt";
+const previousRoots = existsSync(trustedRootsPath)
+  ? readFileSync(trustedRootsPath, "utf8")
+  : existsSync(currentRootPath) ? readFileSync(currentRootPath, "utf8") : "";
+const importedRoot = existsSync(importedRootPath) ? readFileSync(importedRootPath, "utf8") : "";
+const rootTrust = mergePebbleRoots(`${previousRoots}\n${importedRoot}`, pebbleIssuingRoot);
+function writePrivateAtomic(path, content) {
+  const temporary = `${path}.${process.pid}.tmp`;
+  writeFileSync(temporary, content, { mode: 0o600, flag: "wx" });
+  chownSync(temporary, 65532, 65532);
+  chmodSync(temporary, 0o600);
+  renameSync(temporary, path);
+}
+writePrivateAtomic(trustedRootsPath, rootTrust.bundlePEM);
+writePrivateAtomic(currentRootPath, rootTrust.currentPEM);
+writePrivateAtomic("/lab-evidence/pebble-root-trust.json", `${JSON.stringify({
+  current_root_sha256: rootTrust.currentFingerprint,
+  trusted_roots_sha256: rootTrust.trustedFingerprints,
+}, null, 2)}\n`);
 
 const bundle = `${readFileSync("/public-trust/control-plane.crt", "utf8").trim()}\n${readFileSync("/trstctl-data/ca/agent-ca.crt", "utf8").trim()}\n`;
 writeFileSync("/frontdoors-state/ca-bundle.pem", bundle, { mode: 0o600 });

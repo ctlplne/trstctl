@@ -7,9 +7,10 @@ import { verifiedDeliveryMatches } from "./delivery-selection.mjs";
 const server = process.env.TRSTCTL_LAB_SERVER ?? "https://trstctl:8443";
 const bearer = readFileSync("/seed-state/bootstrap.token", "utf8").trim();
 // Pebble creates a fresh issuing hierarchy for every disposable lab. Bootstrap
-// captures that run's public root; the static minica certificate authenticates
-// Pebble's API TLS but does not validate the leaf certificates it issues.
-const pebbleRoot = readFileSync("/lab-evidence/runtime-pebble-root.crt");
+// retains the authenticated public roots needed for old and new listener certs;
+// the static minica certificate authenticates Pebble's API TLS only.
+const pebbleRoot = readFileSync("/lab-evidence/trusted-pebble-roots.pem");
+const pebbleRootTrust = JSON.parse(readFileSync("/lab-evidence/pebble-root-trust.json", "utf8"));
 const matrix = JSON.parse(readFileSync("/lab/journey-matrix.json", "utf8"));
 const startedAt = new Date().toISOString();
 const runNonce = startedAt.replace(/[^0-9]/g, "");
@@ -522,6 +523,7 @@ const receipt = {
   status: failed.length ? "fail" : "pass",
   continue_after_failure: true,
   state_retained: true,
+  pebble_root_trust: pebbleRootTrust,
   results,
   blocked_external: results.filter((item) => item.status === "blocked_external"),
   secret_handling: "The receipt contains public certificate metadata, resource IDs, statuses, and redacted errors only. Bearer tokens, cookies, private keys, certificate bodies, and alert credentials are excluded.",

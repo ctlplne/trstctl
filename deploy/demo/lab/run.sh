@@ -6,6 +6,17 @@ repo_dir="$(CDPATH= cd -- "$lab_dir/../../.." && pwd)"
 lab_project="${TRSTCTL_LAB_PROJECT:-trstctl-partner-lab}"
 run_dod="${TRSTCTL_LAB_RUN_DOD:-1}"
 run_journeys="${TRSTCTL_LAB_RUN_JOURNEYS:-1}"
+previous_pebble_root="${TRSTCTL_LAB_PREVIOUS_PEBBLE_ROOT_FILE:-}"
+if [ -n "$previous_pebble_root" ]; then
+  case "$previous_pebble_root" in
+    /*) ;;
+    *) printf '%s\n' "TRSTCTL_LAB_PREVIOUS_PEBBLE_ROOT_FILE must be an absolute path to a previously captured public Pebble root." >&2; exit 2 ;;
+  esac
+  if [ ! -f "$previous_pebble_root" ] || [ ! -r "$previous_pebble_root" ]; then
+    printf '%s\n' "TRSTCTL_LAB_PREVIOUS_PEBBLE_ROOT_FILE must name a readable public certificate file." >&2
+    exit 2
+  fi
+fi
 case "$lab_project" in
   ""|[!a-z0-9]*|*[!a-z0-9_-]*)
     printf '%s\n' "TRSTCTL_LAB_PROJECT must start with a lowercase letter or digit and contain only lowercase letters, digits, underscores, or hyphens." >&2
@@ -138,7 +149,11 @@ fi
 $compose up -d --no-deps demo-oidc || exit $?
 $compose up -d --no-deps localstack-loopback oidc-loopback pebble-loopback dns-webhook-loopback alert-sink mailpit || exit $?
 $compose run --rm --no-deps demo-seed || exit $?
-$compose run --rm --no-deps lab-bootstrap || exit $?
+if [ -n "$previous_pebble_root" ]; then
+  $compose run --rm --no-deps --volume "$previous_pebble_root:/lab-previous-root.crt:ro" lab-bootstrap || exit $?
+else
+  $compose run --rm --no-deps lab-bootstrap || exit $?
+fi
 $compose up -d --no-deps frontdoors-lab || exit $?
 if [ "$run_journeys" -eq 1 ]; then
   $compose run --rm --no-deps lab-runner || live_status=$?

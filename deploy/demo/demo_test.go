@@ -162,7 +162,7 @@ func TestPartnerLabRunnerIsPersistentTruthfulAndSecretSafe(t *testing.T) {
 	for _, want := range []string{
 		"apache", "nginx", "haproxy", "caddy", "traefik", "postgresql", "postgresTLSProbe", "connector-contract-census", "iis-windows-required",
 		"continue_after_failure", "blocked_external", "before_fingerprint", "after_fingerprint",
-		"listed.agents ?? []", "runtime-pebble-root.crt", "subject_alt_name", "sink_receipts_after",
+		"listed.agents ?? []", "trusted-pebble-roots.pem", "pebble-root-trust.json", "subject_alt_name", "sink_receipts_after",
 		"network-discovery", "partner-lab-loopback", `agent.roles ?? []).includes(role)`,
 		"allow_loopback: true", "-renew-and-rollback", `"recover"`, "rollback_queued", "rolled_back",
 		"runNonce", "targetName", "planKey", "normalizedFingerprint", "waitForDelivery", "delivery_id", "renewal_delivery_id", "partner-lab-dry-run-${target.connector}-${created.target.id}", "candidate.outbox_id === queued.outbox_id", "-renew-${runNonce}", "-rollback-${runNonce}",
@@ -182,7 +182,7 @@ func TestPartnerLabRunnerIsPersistentTruthfulAndSecretSafe(t *testing.T) {
 	if !strings.Contains(postgresConfig, "unix_socket_directories = '/lab/run'") {
 		t.Error("partner lab PostgreSQL target must keep its Unix socket inside the nonroot-owned lab run directory")
 	}
-	for _, want := range []string{"/roots/0", "runtime-pebble-root.crt", `roles: ["host", "network"]`,
+	for _, want := range []string{"/roots/0", "runtime-pebble-root.crt", "trusted-pebble-roots.pem", "pebble-root-trust.json", `roles: ["host", "network"]`,
 		"/api/v1/acme/dns-01/provider-configs", "partner-lab-dns-provider-v1", "allow_upstream_dv: true", "dns01_provider_config"} {
 		if !strings.Contains(bootstrap, want) {
 			t.Errorf("partner lab bootstrap is missing contract marker %q", want)

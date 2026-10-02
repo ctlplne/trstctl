@@ -38,7 +38,30 @@ Open the console at <https://127.0.0.1:9443>. The real target listeners remain a
 - PostgreSQL TLS: `127.0.0.1:10448` (PostgreSQL SSLRequest negotiation, not browser HTTPS)
 - Mailpit inbox: <http://127.0.0.1:18025> (local-only SMTP listener is inside the lab network namespace at `127.0.0.1:1025`)
 
-The browser will not recognize the target DNS names when you use the IP address. The automated probes connect to the published ports with the correct SNI names and verify the resulting chains against Pebble's pinned public test root.
+The browser will not recognize the target DNS names when you use the IP address. The automated probes connect to the published ports with the correct SNI names and verify the resulting chains against the pinned public Pebble roots captured for this lab.
+
+Pebble generates a new issuing root when its process restarts. The lab keeps a
+private, bounded bundle of roots fetched from Pebble's authenticated root
+endpoint, so retained listeners can still be checked against their original CA
+while a renewal moves them to the current CA. The current root remains in
+`runtime-pebble-root.crt`; `trusted-pebble-roots.pem` and
+`pebble-root-trust.json` record the overlap in the project's `labevidence`
+volume. The runner still requires TLS chain validation, the exact DNS name,
+and a matching product delivery receipt. A repeated `run.sh` performs a fresh
+renewal and rollback through the product after checking each retained binding.
+
+If you are upgrading an existing retained lab whose earlier root was overwritten
+before the bundle existed, provide the previously captured **public** Pebble
+root on the next run:
+
+```sh
+TRSTCTL_LAB_PREVIOUS_PEBBLE_ROOT_FILE=/absolute/path/to/previous-pebble-root.crt \
+deploy/demo/lab/run.sh
+```
+
+The import must be a self-signed CA certificate. If the earlier root was never
+captured, the old listener cannot be independently trusted; reissue it under
+the current CA through the product before calling the retained journey verified.
 
 ## Licensed profile (Enterprise Provider)
 
@@ -100,7 +123,7 @@ verified on the wire at `127.0.0.1:10449`.
 - **Faithful local:** the repository's production-assembly census drives every other shipped connector against a strict command or protocol receiver. This includes F5, NetScaler, A10, Kemp, Cisco, FortiGate, Palo Alto, cloud certificate stores, databases, and the exact IIS PowerShell/netsh contract.
 - **External-only:** full IIS still needs Windows + IIS + HTTP.sys; current Windows CI proves CryptoAPI and MSI/service lifecycle but not a live IIS binding. Physical/vendor appliance qualification needs that appliance; vendor entitlement and public Internet trust need real third-party accounts and domains. Those are the only remaining external walls.
 
-Evidence is retained in the `trstctl-partner-lab_labevidence` named volume. It contains public fingerprints, resource IDs, stage results, redacted failures, and sanitized alert metadata. It does not contain tokens, cookies, private keys, certificate bodies, or alert credentials.
+Evidence is retained in the `trstctl-partner-lab_labevidence` named volume. It contains public fingerprints, public Pebble root certificates, resource IDs, stage results, redacted failures, and sanitized alert metadata. It does not contain tokens, cookies, private keys, leaf certificate bodies, or alert credentials.
 
 Set `TRSTCTL_LAB_PROJECT` to a constrained Compose project name when you need a clean before/after qualification while preserving an earlier run, for example `TRSTCTL_LAB_PROJECT=trstctl-partner-lab-repair deploy/demo/lab/run.sh`. The default remains `trstctl-partner-lab`.
 
