@@ -460,8 +460,8 @@ not this file.
 | `internal/dns/rfc2136/rfc2136.go:314` | DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190) |
 | `internal/dns/rfc2136/rfc2136.go:339` | DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190) |
 | `internal/dns/rfc2136/rfc2136.go:343` | DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190) |
-| `internal/dynsecret/drivers.go:235` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
-| `internal/dynsecret/drivers.go:243` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
+| `internal/dynsecret/drivers.go:238` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
+| `internal/dynsecret/drivers.go:246` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
 | `internal/dynsecret/providers_real_test.go:499` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/events/backup_history_test.go:216` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/events/backup_restore_floor_test.go:593` | tiny fixed test sequence |
@@ -634,7 +634,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/dynsecret/providers_real.go:1166` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
+| `internal/dynsecret/providers_real.go:1169` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
 
 ### G118 — CWE-664 Improper lifetime control (goroutine context) (2 sites)
 

@@ -152,6 +152,9 @@ type MongoDriverAdmin struct {
 // OpenMongoAdmin connects and pings a MongoDB deployment using an operator-owned
 // admin URI. The driver receives the URI only for the lifetime of this adapter.
 func OpenMongoAdmin(ctx context.Context, adminURI []byte) (*MongoDriverAdmin, error) {
+	// File references commonly carry a terminal shell line ending. MongoDB URI
+	// syntax does not include it; preserve every interior credential byte.
+	adminURI = bytes.TrimRight(adminURI, "\r\n")
 	if len(adminURI) == 0 {
 		return nil, errors.New("dynsecret mongodb: admin URI required")
 	}

@@ -343,6 +343,9 @@ func NewMongoBackend(admin MongoAdmin, cfg MongoConfig) (*MongoBackend, error) {
 	if cfg.UsernamePrefix == "" {
 		cfg.UsernamePrefix = defaultDynsecretPrefix
 	}
+	// The same normalized URI feeds the one-shot admin connection and the
+	// workload credential; a file terminator must not enter the issued URI.
+	cfg.URI = bytes.TrimRight(cfg.URI, "\r\n")
 	var uri *secret.Buffer
 	var err error
 	if len(cfg.URI) > 0 {

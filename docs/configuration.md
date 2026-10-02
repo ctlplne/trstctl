@@ -1237,6 +1237,9 @@ each entry is bound to exactly one tenant. Authority-bearing values are referenc
 not inline strings: `file:/absolute/path` loads an operator-owned `0600` file, while
 `secret://path` opens that tenant's encrypted secret-store row for one outbox attempt.
 Both are copied into locked, non-dumpable memory and destroyed after the provider call.
+PostgreSQL, MySQL, and MongoDB admin connection files may end in shell-added
+CR/LF line endings; the provider strips only those terminal bytes before parsing
+the connection value and creating a workload credential.
 
 ```json
 {
