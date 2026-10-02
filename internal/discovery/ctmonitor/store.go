@@ -53,6 +53,7 @@ func (a *StoreAlerter) Raise(ctx context.Context, tenantID string, f Finding) er
 		Subject:  f.Subject,
 		Serial:   f.Serial,
 		NotAfter: f.NotAfter,
+		Severity: notify.AlertSeverityCritical,
 		Detail: fmt.Sprintf("unexpected certificate for watched domain %q in CT log %s (index %d, issuer %q)",
 			f.MatchedDomain, f.LogURL, f.Index, f.Issuer),
 	})

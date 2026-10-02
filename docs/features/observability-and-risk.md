@@ -99,6 +99,8 @@ at the database layer.
 ct-monitoring get|update`, or the console to configure watched domains/logs, inspect
 checkpoints, queue a poll, and review `ct_unexpected_issuance` findings. The worker polls,
 records tenant-scoped findings, and queues notifications via the outbox.
+An unexpected issuance is a **critical** notification, matching the rogue-certificate
+posture, so a severity-based routing rule can page the configured incident channel.
 
 Before the console exposes **Save and run now**, it sends the proposed `ct_log` source to
 `POST /api/v1/discovery/plans/preview`. The server uses the same CT validator as execution
@@ -166,6 +168,9 @@ record a decision via `GET /api/v1/discovery/drift-remediation`, `POST
 CLI, or the Posture page. Decisions are event-sourced as
 `discovery.finding.triage_changed` audit evidence; the API never stores or returns
 credential bytes.
+Drift alerts include the detected change type and a non-secret cause. Missing,
+replaced, or permission-changed credentials are **critical**; relocated content is
+**warning**. Routing policy can send those levels to different incident channels.
 
 Before a run or recovery, `POST /api/v1/discovery/plans/preview` and `GET
 /api/v1/discovery/sources/{id}/preflight` resolve the same drift plan the worker will

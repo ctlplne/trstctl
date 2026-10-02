@@ -302,6 +302,14 @@ never live in the API process. What you can do end to end against the running bi
   memory and wipes them on shutdown; the payload carries the owner, approver
   escalation recipients, severity, and threshold-day metadata. This is runtime
   delivery, not a tenant channel-management API.
+- Air-gapped alert delivery limit: operator-configured PagerDuty and OpsGenie
+  channels can opt into bounded private CIDRs and HTTP; the partner lab grants
+  only `127.0.0.1/32`. Operator-configured Slack, Teams, SIEM, SMS,
+  and generic webhook channels have no equivalent private-address allowlist,
+  so they cannot be pointed at an internal receiver while retaining the SSRF
+  guard. Tenant-authored webhooks also remain public-HTTPS-only. These channels
+  need a separately designed operator-owned private-egress policy before they
+  can serve an air-gapped deployment; no tenant-controlled bypass is available.
 - Deployment connector orchestration serves target metadata, identity binding,
   outbox intent, receipts, provenance-verified WASM dispatch, and all 24 advertised native connectors.
   Device proof (E1): every appliance family — a10, cisco, f5, fortigate, kemp,

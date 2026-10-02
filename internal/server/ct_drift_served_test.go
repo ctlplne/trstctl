@@ -55,7 +55,7 @@ func TestServedCTMonitoringAndDriftWorkers(t *testing.T) {
 		t.Fatalf("bad CT finding: %+v", f)
 	}
 	alert := sink.LastAlert()
-	if sink.Accepted() != 1 || alert.Kind != notify.KindUnexpectedIssuance || alert.Subject != "CN=shadow" {
+	if sink.Accepted() != 1 || alert.Kind != notify.KindUnexpectedIssuance || alert.Subject != "CN=shadow" || alert.Severity != notify.AlertSeverityCritical {
 		t.Fatalf("CT alert not dispatched through notification webhook: accepted=%d alert=%+v", sink.Accepted(), alert)
 	}
 
@@ -90,11 +90,39 @@ func TestServedCTMonitoringAndDriftWorkers(t *testing.T) {
 	if meta.Type != string(drift.Replaced) || meta.Class != "certificate" {
 		t.Fatalf("drift metadata = %+v, want replaced certificate", meta)
 	}
+	driftAlert, foundDriftAlert := sink.AlertKind(notify.KindCredentialDrift)
+	if !foundDriftAlert || driftAlert.Severity != notify.AlertSeverityCritical ||
+		!strings.Contains(driftAlert.Detail, "replaced") || !strings.Contains(driftAlert.Detail, path) {
+		t.Fatalf("drift alert lacks critical routing or a useful cause: found=%v alert=%+v", foundDriftAlert, driftAlert)
+	}
 
 	for _, eventType := range []string{"discovery.finding.recorded", "discovery.run.completed"} {
 		if !h.hasEvent(t, eventType) {
 			t.Fatalf("missing %s event", eventType)
 		}
+	}
+}
+
+func TestDriftAlertSeverityAndCauseContract(t *testing.T) {
+	for _, tc := range []struct {
+		kind     drift.Type
+		severity string
+		cause    string
+	}{
+		{drift.Deleted, notify.AlertSeverityCritical, "declared file is missing"},
+		{drift.Replaced, notify.AlertSeverityCritical, "content differs from the declared fingerprint"},
+		{drift.PermissionChanged, notify.AlertSeverityCritical, "permissions differ from the declared mode"},
+		{drift.Relocated, notify.AlertSeverityWarning, "declared content moved to /moved/leaf.pem"},
+	} {
+		t.Run(string(tc.kind), func(t *testing.T) {
+			f := drift.Finding{Watched: drift.Watched{Path: "/watched/leaf.pem", Class: "certificate"}, Type: tc.kind, FoundAt: "/moved/leaf.pem"}
+			if got := driftAlertSeverity(tc.kind); got != tc.severity {
+				t.Fatalf("%s severity = %q, want %q", tc.kind, got, tc.severity)
+			}
+			if got := driftAlertDetail(f, drift.Event{}); !strings.Contains(got, string(tc.kind)) || !strings.Contains(got, tc.cause) {
+				t.Fatalf("%s detail = %q, want type and %q", tc.kind, got, tc.cause)
+			}
+		})
 	}
 }
 

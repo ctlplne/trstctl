@@ -866,7 +866,8 @@ func (d *issuanceDispatcher) enqueueDriftAlert(ctx context.Context, tenantID str
 		Kind:     notify.KindCredentialDrift,
 		TenantID: tenantID,
 		Subject:  f.Watched.Path,
-		Detail:   fmt.Sprintf("%s drift for %s: %s", f.Watched.Class, f.Watched.Path, nonempty(f.Detail, ev.Detail)),
+		Severity: driftAlertSeverity(f.Type),
+		Detail:   driftAlertDetail(f, ev),
 	})
 	if err != nil {
 		return err
@@ -878,6 +879,34 @@ func (d *issuanceDispatcher) enqueueDriftAlert(ctx context.Context, tenantID str
 		})
 		return err
 	})
+}
+
+func driftAlertSeverity(kind drift.Type) string {
+	switch kind {
+	case drift.Deleted, drift.Replaced, drift.PermissionChanged:
+		return notify.AlertSeverityCritical
+	default:
+		return notify.AlertSeverityWarning
+	}
+}
+
+func driftAlertDetail(f drift.Finding, ev drift.Event) string {
+	cause := strings.TrimSpace(nonempty(f.Detail, ev.Detail))
+	if cause == "" {
+		switch f.Type {
+		case drift.Deleted:
+			cause = "declared file is missing"
+		case drift.Replaced:
+			cause = "content differs from the declared fingerprint"
+		case drift.PermissionChanged:
+			cause = "permissions differ from the declared mode"
+		case drift.Relocated:
+			cause = "declared content moved to " + f.FoundAt
+		default:
+			cause = "declared state differs from the target"
+		}
+	}
+	return fmt.Sprintf("%s drift (%s) for %s: %s", f.Watched.Class, f.Type, f.Watched.Path, cause)
 }
 
 func driftRiskScore(t drift.Type) int {

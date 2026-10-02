@@ -911,6 +911,7 @@ type servedWebhookSink struct {
 	mu       sync.Mutex
 	accepted int
 	last     notify.Alert
+	alerts   []notify.Alert
 }
 
 type flakyNotificationChannel struct {
@@ -1084,6 +1085,17 @@ func (s *servedWebhookSink) LastAlert() notify.Alert {
 	return s.last
 }
 
+func (s *servedWebhookSink) AlertKind(kind string) (notify.Alert, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, alert := range s.alerts {
+		if alert.Kind == kind {
+			return alert, true
+		}
+	}
+	return notify.Alert{}, false
+}
+
 func (s *servedWebhookSink) handle(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 	want := "sha256=" + hex.EncodeToString(crypto.HMACSHA256(s.secret, body))
@@ -1099,6 +1111,7 @@ func (s *servedWebhookSink) handle(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	s.accepted++
 	s.last = alert
+	s.alerts = append(s.alerts, alert)
 	s.mu.Unlock()
 	w.WriteHeader(http.StatusOK)
 }
