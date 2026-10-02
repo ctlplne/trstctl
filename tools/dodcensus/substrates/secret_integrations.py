@@ -230,6 +230,7 @@ class State:
         self.vault_race_injected: set[str] = set()
         self.counter = 0
         self.github_box_directory = None
+        self.redis_acl_directory = None
         self.github_box_process = None
         self.github_public_key = b""
         self.github_key_id = ""
@@ -265,7 +266,19 @@ class State:
             elif self.kind == "mongodb":
                 args += ["-e", "MONGO_INITDB_ROOT_USERNAME=root", "-e", "MONGO_INITDB_ROOT_PASSWORD=dod-admin", IMAGES[self.kind]]
             else:
-                args += [IMAGES[self.kind], "redis-server", "--requirepass", "dod-admin"]
+                # ACL SAVE is part of issuance/revocation completion. Give the
+                # official Redis process a writable ACL file so a restart can
+                # retain issued users and removed users rather than merely
+                # acknowledging an in-memory ACL edit.
+                self.redis_acl_directory = tempfile.TemporaryDirectory(prefix="trstctl-dod-redis-acl-")
+                acl_dir = self.redis_acl_directory.name
+                acl_path = os.path.join(acl_dir, "users.acl")
+                with open(acl_path, "w", encoding="utf-8") as acl_file:
+                    acl_file.write("user default on >dod-admin ~* +@all\n")
+                os.chmod(acl_path, 0o600)
+                args += ["--user", str(os.getuid()), "--mount", f"type=bind,src={acl_dir},dst=/acl",
+                         "--entrypoint", "redis-server", IMAGES[self.kind],
+                         "--aclfile", "/acl/users.acl", "--save", "", "--appendonly", "no"]
             run(args, timeout=180)
             deadline = time.time() + 120
             last_database_error = ""
@@ -483,6 +496,8 @@ class State:
             self.github_box_directory.cleanup()
         if self.kind in IMAGES:
             run(["docker", "rm", "-f", self.container], timeout=20, check=False)
+        if self.redis_acl_directory is not None:
+            self.redis_acl_directory.cleanup()
 
 
 class Handler(BaseHTTPRequestHandler):

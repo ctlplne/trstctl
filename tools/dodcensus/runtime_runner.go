@@ -209,16 +209,22 @@ map_probe = subprocess.Popen(["/usr/bin/sleep", "10"])
 try:
     map_deadline = time.monotonic() + 2
     while True:
+        # Native Linux marks the text mapping r-xp. Under amd64 emulation on
+        # arm64, binfmt/QEMU can map the same ELF as r--p. The offset-zero
+        # mapping still names the exact sleep image and opens through the
+        # kernel-owned map_files link; check its ELF magic below. Requiring
+        # r-xp here would reject a valid isolated runner before any proof runs.
         map_rows = [
-            line.split() for line in pathlib.Path("/proc/%d/maps" % map_probe.pid).read_text().splitlines()
-            if "r-xp" in line and line.endswith("/usr/bin/sleep")
+            row for line in pathlib.Path("/proc/%d/maps" % map_probe.pid).read_text().splitlines()
+            if (row := line.split()) and len(row) >= 6 and row[2] == "00000000"
+            and row[-1] == "/usr/bin/sleep"
         ]
         if len(map_rows) == 1:
             break
         if map_probe.poll() is not None:
             raise RuntimeError("map_files preflight child exited before its executable map appeared")
         if time.monotonic() >= map_deadline:
-            raise RuntimeError("map_files preflight found %d executable sleep mappings" % len(map_rows))
+            raise RuntimeError("map_files preflight found %d offset-zero sleep mappings" % len(map_rows))
         time.sleep(0.01)
     map_file = pathlib.Path("/proc/%d/map_files/%s" % (map_probe.pid, map_rows[0][0]))
     descriptor = os.open(map_file, os.O_RDONLY)

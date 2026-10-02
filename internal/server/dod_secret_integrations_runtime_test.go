@@ -37,6 +37,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/redisacl"
 	"trstctl.com/trstctl/internal/secrettext"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/tools/dodcensus/proof"
@@ -259,7 +260,9 @@ func dodRunAllDynamicSecretProductionAssembly(t *testing.T) {
 		{TenantID: dodSecretIntegrationTenant, ID: "gcp-iam", Type: "gcp-iam", Endpoint: dynamicGCPEndpoint, Project: "p", ServiceAccount: "dyn@p.iam.gserviceaccount.com", BearerTokenRef: fileRef("gcp-admin-token", []byte("dod-gcp-admin-token")), AllowedRoles: []string{"reader"}, MaxTTL: "15m", AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs, UsernamePrefix: "dod-gcp"},
 		{TenantID: dodSecretIntegrationTenant, ID: "azure-entra", Type: "azure-entra", Endpoint: dynamicAzureEndpoint, ApplicationObject: "app-obj", ApplicationClient: "dod-client", AzureTenant: "dod-tenant", BearerTokenRef: fileRef("azure-admin-token", []byte("dod-azure-admin-token")), AllowedRoles: []string{"reader"}, MaxTTL: "15m", AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs, UsernamePrefix: "dod-azure"},
 		{TenantID: dodSecretIntegrationTenant, ID: "kubernetes", Type: "kubernetes", Endpoint: dynamicKubernetesEndpoint, Namespace: "apps", BearerTokenRef: fileRef("kubernetes-admin-token", []byte("dod-k8s-admin-token")), AllowedRoles: []string{"reader"}, RoleBindings: map[string]string{"reader": "Role/dod-reader"}, MaxTTL: "15m", AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs, UsernamePrefix: "dod-k8s"},
-		{TenantID: dodSecretIntegrationTenant, ID: "redis", Type: "redis", Addr: redisDB.Addr, PasswordRef: fileRef("redis-admin-password", []byte(redisDB.Password)), AllowedRoles: []string{"reader"}, MaxTTL: "15m", UsernamePrefix: "dod_redis"},
+		{TenantID: dodSecretIntegrationTenant, ID: "redis", Type: "redis", Addr: redisDB.Addr, PasswordRef: fileRef("redis-admin-password", []byte(redisDB.Password)), AllowedRoles: []string{"reader"}, AllowPlaintextRedis: true,
+			RedisACLRoles: map[string]redisacl.Role{"reader": {KeyPrefixes: []string{"trstctl:dod:"}, Commands: []string{"get"}}},
+			MaxTTL:        "15m", UsernamePrefix: "dod_redis"},
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("secret integration production config: %v", err)
@@ -378,9 +381,10 @@ func dodRunFocusedDynamicSecret(t *testing.T, entryID string, external *proof.Ex
 	case "dynamic_secret.redis":
 		database := dodSecretSubstrateConfig(t, external)
 		provider = config.DynamicSecretProviderConfig{
-			TenantID: dodSecretIntegrationTenant, ID: target.id, Type: "redis", Addr: database.Addr,
+			TenantID: dodSecretIntegrationTenant, ID: target.id, Type: "redis", Addr: database.Addr, AllowPlaintextRedis: true,
 			PasswordRef: fileRef("redis-admin-password", []byte(database.Password)), AllowedRoles: []string{"reader"},
-			MaxTTL: "15m", UsernamePrefix: "dod_redis",
+			RedisACLRoles: map[string]redisacl.Role{"reader": {KeyPrefixes: []string{"trstctl:dod:"}, Commands: []string{"get"}}},
+			MaxTTL:        "15m", UsernamePrefix: "dod_redis",
 		}
 	default:
 		t.Fatalf("focused dynamic-secret proof has no configuration for %q", entryID)
@@ -734,6 +738,24 @@ func dodSecretSubstrateConfig(t *testing.T, external *proof.ExternalSubstrate) d
 	cfg, err = dodSecretSubstrateConfigForHost(cfg, host)
 	if err != nil {
 		t.Fatalf("invalid secret substrate database endpoint: %v", err)
+	}
+	if cfg.Kind == "redis" && host == "host.docker.internal" {
+		addresses, lookupErr := net.LookupIP(host)
+		if lookupErr != nil {
+			t.Fatalf("resolve fixed Docker host for literal private Redis proof: %v", lookupErr)
+		}
+		_, port, _ := net.SplitHostPort(cfg.Addr)
+		matched := false
+		for _, address := range addresses {
+			if address.To4() != nil && address.IsPrivate() {
+				cfg.Addr = net.JoinHostPort(address.String(), port)
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			t.Fatal("fixed Docker host has no private IPv4 address for plaintext Redis proof")
+		}
 	}
 	return cfg
 }

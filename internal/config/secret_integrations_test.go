@@ -5,6 +5,8 @@ package config
 import (
 	"strings"
 	"testing"
+
+	"trstctl.com/trstctl/internal/redisacl"
 )
 
 func TestValidateSecretIntegrationsAcceptsEveryBuiltIn(t *testing.T) {
@@ -22,7 +24,8 @@ func TestValidateSecretIntegrationsAcceptsEveryBuiltIn(t *testing.T) {
 			{TenantID: tenant, ID: "gcp", Type: "gcp-iam", Endpoint: "https://iam.example.test", Project: "project", ServiceAccount: "issuer@example.test", BearerTokenRef: ref, AllowedRoles: role},
 			{TenantID: tenant, ID: "azure", Type: "azure-entra", Endpoint: "https://graph.example.test", ApplicationObject: "object", ApplicationClient: "client", AzureTenant: "tenant", BearerTokenRef: ref, AllowedRoles: role},
 			{TenantID: tenant, ID: "k8s", Type: "kubernetes", Endpoint: "https://kubernetes.example.test", Namespace: "default", BearerTokenRef: ref, AllowedRoles: role, RoleBindings: map[string]string{"reader": "Role/secret-reader"}},
-			{TenantID: tenant, ID: "redis", Type: "redis", Addr: "redis.internal:6379", PasswordRef: ref, AllowedRoles: role},
+			{TenantID: tenant, ID: "redis", Type: "redis", Addr: "redis.internal:6379", PasswordRef: ref, RedisTLSServerName: "redis.internal", AllowedRoles: role,
+				RedisACLRoles: map[string]redisacl.Role{"reader": {KeyPrefixes: []string{"app:"}, Commands: []string{"get"}}}},
 		},
 		SyncTargets: []SecretSyncTargetConfig{
 			{TenantID: tenant, ID: "aws-sm", Type: "aws-secrets-manager", Endpoint: "https://secretsmanager.example.test", Region: "us-east-1", AccessKeyID: "AKID", SecretAccessRef: ref},
@@ -39,6 +42,67 @@ func TestValidateSecretIntegrationsAcceptsEveryBuiltIn(t *testing.T) {
 	}
 	if err := ValidateSecretIntegrations(cfg, true); err != nil {
 		t.Fatalf("all built-ins should validate: %v", err)
+	}
+}
+
+func TestValidateRedisACLRequiresExplicitScopedRoles(t *testing.T) {
+	base := DynamicSecretProviderConfig{
+		TenantID: "11111111-1111-1111-1111-111111111111", ID: "redis", Type: "redis",
+		Addr: "redis.internal:6379", PasswordRef: "file:/run/secrets/redis-admin", RedisTLSServerName: "redis.internal",
+		AllowedRoles: []string{"reader", "writer"},
+		RedisACLRoles: map[string]redisacl.Role{
+			"reader": {KeyPrefixes: []string{"app:"}, Commands: []string{"get"}},
+			"writer": {KeyPrefixes: []string{"app:"}, Commands: []string{"get", "set", "del"}},
+		},
+	}
+	validate := func(cfg DynamicSecretProviderConfig) error {
+		t.Helper()
+		return ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{cfg}}, true)
+	}
+	if err := validate(base); err != nil {
+		t.Fatalf("scoped Redis ACL rejected: %v", err)
+	}
+	bad := base
+	bad.RedisACLRoles = map[string]redisacl.Role{"reader": base.RedisACLRoles["reader"]}
+	if err := validate(bad); err == nil || !strings.Contains(err.Error(), "redis_acl_roles[\"writer\"]") {
+		t.Fatalf("missing writer ACL error = %v", err)
+	}
+	bad = base
+	bad.RedisACLRoles = map[string]redisacl.Role{
+		"reader": {KeyPrefixes: []string{"*"}, Commands: []string{"get"}},
+		"writer": base.RedisACLRoles["writer"],
+	}
+	if err := validate(bad); err == nil || !strings.Contains(err.Error(), "key prefix") {
+		t.Fatalf("global key scope error = %v", err)
+	}
+	bad = base
+	bad.RedisACLRoles = map[string]redisacl.Role{
+		"reader": base.RedisACLRoles["reader"],
+		"writer": {KeyPrefixes: []string{"app:"}, Commands: []string{"config"}},
+	}
+	if err := validate(bad); err == nil || !strings.Contains(err.Error(), "safe command set") {
+		t.Fatalf("admin command error = %v", err)
+	}
+	bad = base
+	bad.PasswordRef = ""
+	if err := validate(bad); err == nil || !strings.Contains(err.Error(), "password_ref") {
+		t.Fatalf("anonymous admin error = %v", err)
+	}
+	bad = base
+	bad.RedisTLSServerName = ""
+	if err := validate(bad); err == nil || !strings.Contains(err.Error(), "redis_tls_server_name") {
+		t.Fatalf("missing verified transport error = %v", err)
+	}
+	bad = base
+	bad.DB = 1
+	if err := validate(bad); err == nil || !strings.Contains(err.Error(), "db must be 0") {
+		t.Fatalf("Redis logical database scope error = %v", err)
+	}
+	bad = base
+	bad.AllowPlaintextRedis = true
+	bad.RedisTLSServerName = ""
+	if err := validate(bad); err == nil || !strings.Contains(err.Error(), "literal loopback or private IP") {
+		t.Fatalf("plaintext public or DNS address error = %v", err)
 	}
 }
 

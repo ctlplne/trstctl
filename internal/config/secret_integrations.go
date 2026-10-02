@@ -5,12 +5,14 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/netsec"
+	"trstctl.com/trstctl/internal/redisacl"
 )
 
 // SecretIntegrationsConfig is the operator-owned, tenant-bound configuration for
@@ -59,11 +61,17 @@ type DynamicSecretProviderConfig struct {
 	// RoleBindings maps an allowed role to its provider-native authority. AWS
 	// values are managed-policy ARNs; Kubernetes values are Role/name or
 	// ClusterRole/name. Fixed-authority providers may omit it.
-	RoleBindings          map[string]string `json:"role_bindings,omitempty"`
-	MaxTTL                string            `json:"max_ttl,omitempty"`
-	AllowPrivate          bool              `json:"allow_private_endpoint,omitempty"`
-	AllowInsecureLoopback bool              `json:"allow_insecure_loopback,omitempty"`
-	PrivateEgressCIDRs    []string          `json:"private_egress_cidrs,omitempty"`
+	RoleBindings map[string]string `json:"role_bindings,omitempty"`
+	// RedisACLRoles gives each allowed Redis role literal key namespaces and an
+	// explicit command allowlist. Raw ACL rules and categories are forbidden.
+	RedisACLRoles         map[string]redisacl.Role `json:"redis_acl_roles,omitempty"`
+	RedisTLSCARef         string                   `json:"redis_tls_ca_ref,omitempty"`
+	RedisTLSServerName    string                   `json:"redis_tls_server_name,omitempty"`
+	AllowPlaintextRedis   bool                     `json:"allow_plaintext_redis,omitempty"`
+	MaxTTL                string                   `json:"max_ttl,omitempty"`
+	AllowPrivate          bool                     `json:"allow_private_endpoint,omitempty"`
+	AllowInsecureLoopback bool                     `json:"allow_insecure_loopback,omitempty"`
+	PrivateEgressCIDRs    []string                 `json:"private_egress_cidrs,omitempty"`
 }
 
 // MaxTTLDuration is the hard validity ceiling for a generated credential. A
@@ -207,6 +215,12 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 	if c.AllowWildcardAccountHost && c.Type != "mysql" {
 		errs = append(errs, fmt.Errorf("%s allow_wildcard_account_host is only valid for mysql", where))
 	}
+	if len(c.RedisACLRoles) > 0 && c.Type != "redis" {
+		errs = append(errs, fmt.Errorf("%s redis_acl_roles is only valid for redis", where))
+	}
+	if c.Type != "redis" && (c.RedisTLSCARef != "" || c.RedisTLSServerName != "" || c.AllowPlaintextRedis) {
+		errs = append(errs, fmt.Errorf("%s Redis transport settings are only valid for redis", where))
+	}
 	require := func(value, name string) {
 		if strings.TrimSpace(value) == "" {
 			errs = append(errs, fmt.Errorf("%s %s is required for %s", where, name, c.Type))
@@ -236,7 +250,40 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 		require(c.Database, "database")
 	case "redis":
 		require(c.Addr, "addr")
-		ref(c.PasswordRef, "password_ref", true)
+		ref(c.PasswordRef, "password_ref", false)
+		ref(c.RedisTLSCARef, "redis_tls_ca_ref", true)
+		if c.DB != 0 {
+			errs = append(errs, fmt.Errorf("%s redis db must be 0 because Redis ACLs cannot scope SELECT to one database", where))
+		}
+		if c.AllowPlaintextRedis {
+			if c.RedisTLSCARef != "" || c.RedisTLSServerName != "" {
+				errs = append(errs, fmt.Errorf("%s plaintext Redis forbids TLS settings", where))
+			}
+			host, _, splitErr := net.SplitHostPort(c.Addr)
+			address := net.ParseIP(host)
+			if splitErr != nil || address == nil || (!address.IsLoopback() && !address.IsPrivate()) {
+				errs = append(errs, fmt.Errorf("%s allow_plaintext_redis requires a literal loopback or private IP address", where))
+			}
+		} else {
+			require(c.RedisTLSServerName, "redis_tls_server_name")
+		}
+		allowed := make(map[string]bool, len(c.AllowedRoles))
+		for _, role := range normalizedStrings(c.AllowedRoles) {
+			allowed[role] = true
+			policy, found := c.RedisACLRoles[role]
+			if !found {
+				errs = append(errs, fmt.Errorf("%s redis_acl_roles[%q] is required", where, role))
+				continue
+			}
+			if _, err := redisacl.Compile(policy); err != nil {
+				errs = append(errs, fmt.Errorf("%s redis_acl_roles[%q]: %w", where, role, err))
+			}
+		}
+		for role := range c.RedisACLRoles {
+			if !allowed[role] {
+				errs = append(errs, fmt.Errorf("%s redis_acl_roles[%q] has no matching allowed role", where, role))
+			}
+		}
 	case "kubernetes":
 		require(c.Endpoint, "endpoint")
 		require(c.Namespace, "namespace")

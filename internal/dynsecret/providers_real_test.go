@@ -25,6 +25,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/redisacl"
 	embeddedpostgres "trstctl.com/trstctl/third_party/embedded-postgres"
 )
 
@@ -132,8 +134,11 @@ func TestGeneratedDatabaseCredentialsStayByteNative(t *testing.T) {
 		t.Fatalf("MongoDB workload URI lost safe routing options: %q", mongo)
 	}
 
-	redis := redisCredential("redis.internal:6379", 4, "lease-user", password)
+	redis := redisCredential("redis.internal:6379", 4, "lease-user", password, true)
 	assertCredentialPassword(t, redis, "generated p@ss/?")
+	if !bytes.HasPrefix(redis, []byte("rediss://")) {
+		t.Fatal("Redis credential did not require verified TLS")
+	}
 }
 
 func assertCredentialPassword(t *testing.T, credential []byte, want string) {
@@ -220,8 +225,8 @@ func TestRedisResponsesAreBoundedWipedAndClosed(t *testing.T) {
 	if !errors.Is(err, errRedisRejected) || strings.Contains(err.Error(), echoed) {
 		t.Fatalf("Redis rejection = %v; want closed error without echo", err)
 	}
-	if err := redisReadOK(bufio.NewReader(strings.NewReader("-ERR no SUCH user " + echoed + "\r\n"))); err != nil {
-		t.Fatalf("idempotent missing-user response = %v", err)
+	if err := redisReadOK(bufio.NewReader(strings.NewReader("-ERR no SUCH user " + echoed + "\r\n"))); !errors.Is(err, errRedisRejected) {
+		t.Fatalf("Redis missing-user error was not rejected: %v", err)
 	}
 	oversized := "-ERR " + strings.Repeat(echoed, 512) + "\r\n"
 	err = redisReadOK(bufio.NewReaderSize(strings.NewReader(oversized), 64))
@@ -238,6 +243,13 @@ func TestRedisResponsesAreBoundedWipedAndClosed(t *testing.T) {
 	}
 	if !allZero(w.last) {
 		t.Fatalf("Redis staging buffer was not explicitly wiped: %v", w.last)
+	}
+	partial := &partialRESPWriter{limit: 3}
+	if err := redisWriteArray(partial, [][]byte{[]byte("PING")}); err != nil {
+		t.Fatalf("short writes did not complete the command: %v", err)
+	}
+	if got := partial.data.String(); got != "*1\r\n$4\r\nPING\r\n" {
+		t.Fatalf("short writes truncated RESP command: %q", got)
 	}
 }
 
@@ -257,6 +269,43 @@ func TestGeneratedDatabasePasswordCodeDoesNotStringifySecrets(t *testing.T) {
 	}
 }
 
+func TestRedisWriterUsesExplicitNamespaceAndNeverAdministrativeCommands(t *testing.T) {
+	server := newRESPServer(t)
+	if _, err := NewRedisBackend(RedisConfig{
+		Addr: server.addr, Password: []byte("operator-admin"), DB: 1, AllowPlaintext: true,
+		RolePolicies: map[string]redisacl.Role{"writer": {KeyPrefixes: []string{"tenant-a:cache:"}, Commands: []string{"get", "set"}}},
+	}); err == nil {
+		t.Fatal("nonzero Redis database accepted even though ACLs cannot constrain SELECT")
+	}
+	backend, err := NewRedisBackend(RedisConfig{
+		Addr: server.addr, Password: []byte("operator-admin"), UsernamePrefix: "trstctl", AllowPlaintext: true,
+		RolePolicies: map[string]redisacl.Role{
+			"writer": {KeyPrefixes: []string{"tenant-a:cache:"}, Commands: []string{"get", "set", "del"}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer backend.Close()
+	if _, _, err := backend.CreateCredential(context.Background(), GenerateRequest{Role: "undeclared"}); err == nil {
+		t.Fatal("undeclared role reached Redis backend")
+	}
+	ref, credential, err := backend.CreateCredential(context.Background(), GenerateRequest{Role: "writer"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer secret.Wipe(credential)
+	server.require(t, "~tenant-a:cache:* +get +set +del +ping")
+	server.require(t, "ACL SAVE")
+	for _, forbidden := range []string{"~*", "+@all", "+@write", "+config", "+acl", "+flushall", "+select"} {
+		server.reject(t, forbidden)
+	}
+	if err := backend.Revoke(context.Background(), ref); err != nil {
+		t.Fatal(err)
+	}
+	server.require(t, "ACL DELUSER "+ref)
+}
+
 func TestConcreteBackendsCreateScopedCredentialAndRevoke(t *testing.T) {
 	ctx := context.Background()
 	mysql := &recordingSQLExec{}
@@ -270,7 +319,12 @@ func TestConcreteBackendsCreateScopedCredentialAndRevoke(t *testing.T) {
 		t.Fatal(err)
 	}
 	redisSrv := newRESPServer(t)
-	redisBackend, err := NewRedisBackend(RedisConfig{Addr: redisSrv.addr, UsernamePrefix: "trstctl"})
+	redisBackend, err := NewRedisBackend(RedisConfig{
+		Addr: redisSrv.addr, Password: []byte("operator-admin"), UsernamePrefix: "trstctl", AllowPlaintext: true,
+		RolePolicies: map[string]redisacl.Role{
+			"readonly": {KeyPrefixes: []string{"trstctl:dod:"}, Commands: []string{"get"}},
+		},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -312,9 +366,12 @@ func TestConcreteBackendsCreateScopedCredentialAndRevoke(t *testing.T) {
 		}},
 		{"redis", redisBackend, func(ref string) {
 			redisSrv.require(t, "ACL SETUSER "+ref)
-			redisSrv.require(t, "~* +@read +ping +select")
+			redisSrv.require(t, "reset on")
+			redisSrv.require(t, "~trstctl:dod:* +get +ping")
+			redisSrv.reject(t, "+select")
 			redisSrv.reject(t, "+@connection")
 			redisSrv.reject(t, "+@all")
+			redisSrv.require(t, "ACL SAVE")
 			redisSrv.require(t, "ACL DELUSER "+ref)
 		}},
 		{"kubernetes", k8sBackend, func(ref string) {
@@ -601,6 +658,18 @@ type respServer struct {
 }
 
 type retainingWriter struct{ last []byte }
+
+type partialRESPWriter struct {
+	data  bytes.Buffer
+	limit int
+}
+
+func (w *partialRESPWriter) Write(value []byte) (int, error) {
+	if len(value) > w.limit {
+		value = value[:w.limit]
+	}
+	return w.data.Write(value)
+}
 
 func (w *retainingWriter) Write(value []byte) (int, error) {
 	w.last = value

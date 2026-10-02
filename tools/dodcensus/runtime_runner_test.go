@@ -399,6 +399,8 @@ func TestRuntimeRunnerPreflightCoversBothWritesAndAuthenticatedBroker(t *testing
 		`process_status.get("Seccomp") != "2"`,
 		`subprocess.Popen(["/usr/bin/sleep", "10"])`,
 		`map_deadline = time.monotonic() + 2`,
+		`row[2] == "00000000"`,
+		`row[-1] == "/usr/bin/sleep"`,
 		`map_probe.poll() is not None`,
 		`pathlib.Path("/proc/%d/map_files/%s"`,
 		`os.open(map_file, os.O_RDONLY)`,

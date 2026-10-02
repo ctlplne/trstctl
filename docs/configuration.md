@@ -1288,6 +1288,44 @@ MySQL-supported IP netmask; the opt-in exists for deployments with changing
 client addresses and gives every matching client a chance to authenticate with
 the leased password. Review the network boundary before enabling it.
 
+For Redis, `password_ref` is required and each `allowed_roles` name needs one
+`redis_acl_roles` policy. Give a literal key namespace prefix, then list only
+the commands that workload needs. trstctl appends the sole wildcard, so a
+prefix of `payments:` grants `payments:*`; raw ACL syntax, global `~*`, command
+categories, and administrative commands are refused. `ping` is added for
+client connections. Redis `SELECT` is never granted: ACLs cannot restrict its
+database argument, so a lease could otherwise access matching key prefixes in
+other logical databases. Only `db: 0` is supported; use separate Redis
+instances or distinct prefixes for separate authority domains. Configure
+`redis_tls_server_name` to match the
+Redis server certificate. `redis_tls_ca_ref` pins a private CA from a mode-0600
+`file:` or tenant `secret://` reference; if omitted, system roots are used.
+The administrator connection verifies TLS before sending its password, and
+issued credentials use `rediss://`. Workload clients must trust the same CA.
+For example:
+
+```json
+{
+  "allowed_roles": ["reader", "writer"],
+  "redis_tls_server_name": "redis.internal.example",
+  "redis_tls_ca_ref": "file:/run/secrets/redis-ca.pem",
+  "redis_acl_roles": {
+    "reader": {"key_prefixes": ["payments:"], "commands": ["get", "mget"]},
+    "writer": {"key_prefixes": ["payments:"], "commands": ["get", "set", "del"]}
+  }
+}
+```
+
+Redis must use a writable ACL file, with the task's administrator allowed to
+run `ACL SETUSER`, `ACL DELUSER`, and `ACL SAVE`. trstctl saves each issue and
+revoke before reporting provider completion, so an ordinary Redis restart
+cannot resurrect a revoked user or discard a still-active lease. The
+administrator password belongs in a mode-0600 `file:` reference or tenant
+`secret://` reference; never inline it in JSON.
+`allow_plaintext_redis: true` is an explicit local-lab exception for a literal
+loopback or private IP address. It cannot be combined with TLS settings and
+returns a `redis://` lease. Do not use it across an untrusted network.
+
 AWS, GCP, and Azure sync targets can explicitly replace their static target
 credential with tenant-owned workload identity. Set exactly the provider switch
 (`aws_workload_identity`, `gcp_workload_identity`, or

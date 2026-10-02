@@ -430,8 +430,17 @@ func openConfiguredDatabaseBackend(o *configuredDynamicBackendOpener) (requestDy
 		if err != nil {
 			return o.fail(err)
 		}
+		var caPEM []byte
+		if cfg.RedisTLSCARef != "" {
+			caPEM, err = o.resolve(cfg.RedisTLSCARef)
+			if err != nil {
+				return o.fail(err)
+			}
+		}
 		backend, err := dynsecret.NewRedisBackend(dynsecret.RedisConfig{
 			Addr: cfg.Addr, Password: password, DB: cfg.DB, UsernamePrefix: cfg.UsernamePrefix,
+			RolePolicies: cfg.RedisACLRoles, TLSCAPEM: caPEM,
+			TLSServerName: cfg.RedisTLSServerName, AllowPlaintext: cfg.AllowPlaintextRedis,
 		})
 		if err != nil {
 			return o.fail(err)

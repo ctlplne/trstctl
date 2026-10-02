@@ -167,8 +167,12 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 		)},
 		{Type: "redis", Label: "Redis", Purpose: "Creates and deletes a scoped Redis ACL user.", Requirements: dynamicSecretProviderRequirements(
 			value("addr", "Redis address", "Redis host and port.", true),
-			credential("password_ref", "Admin password reference", "Optional Redis administrator password reference.", false),
-			value("db", "Database number", "Optional Redis database number.", false),
+			credential("password_ref", "Admin password reference", "Required 0600 file: or tenant secret:// reference for the Redis ACL administrator.", true),
+			value("redis_acl_roles", "Redis role policies", "For every allowed role, set literal key_prefixes and explicit safe commands. Raw ACL rules, categories, and global key access are refused. Redis must have a writable ACL file so ACL SAVE makes issue and revoke durable.", true),
+			value("redis_tls_server_name", "Verified Redis TLS name", "Required server certificate DNS name or IP identity. TLS is used by default and the lease URI is rediss://.", true),
+			credential("redis_tls_ca_ref", "Redis TLS CA reference", "Optional 0600 file: or tenant secret:// reference to the private Redis CA. When absent, system roots are used.", false),
+			value("allow_plaintext_redis", "Local plaintext exception", "Explicitly permit plain Redis only at a literal loopback or private IP address. The returned URI is redis://; use only in a protected local lab.", false),
+			value("db", "Database number", "Only database 0 is supported. Leased users cannot run SELECT because Redis ACLs cannot constrain its database argument.", false),
 		)},
 	}
 }

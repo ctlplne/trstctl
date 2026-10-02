@@ -16,6 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/netsec"
+	"trstctl.com/trstctl/internal/redisacl"
 )
 
 type configuredDynamicBackendFixture struct {
@@ -213,7 +214,8 @@ func TestConfiguredBackendOpenersConstructEveryNetworklessProvider(t *testing.T)
 	credentialRef := "file:" + credentialPath
 	tests := []config.DynamicSecretProviderConfig{
 		{Type: "postgresql", AdminDSNRef: credentialRef, Database: "app"},
-		{Type: "redis", Addr: "redis.internal:6379", PasswordRef: credentialRef},
+		{Type: "redis", Addr: "redis.internal:6379", PasswordRef: credentialRef, RedisTLSServerName: "redis.internal",
+			RedisACLRoles: map[string]redisacl.Role{"reader": {KeyPrefixes: []string{"app:"}, Commands: []string{"get"}}}},
 		{Type: "kubernetes", Endpoint: "https://kubernetes.example.test", Namespace: "apps", BearerTokenRef: credentialRef},
 		{Type: "aws-iam", Endpoint: "https://iam.example.test", Region: "us-east-1", AccessKeyID: "AKID", SecretAccessRef: credentialRef},
 		{Type: "gcp-iam", Endpoint: "https://iam.example.test", Project: "project-a", ServiceAccount: "issuer@example.test", BearerTokenRef: credentialRef},
@@ -306,8 +308,10 @@ func TestSecretIntegrationFactoriesBuildAllTenantBoundRegistrations(t *testing.T
 		{TenantID: tenantA, ID: "gcp", Type: "gcp-iam", Endpoint: "https://iam.example.test", Project: "p", ServiceAccount: "issuer@example.test", BearerTokenRef: ref, AllowedRoles: role},
 		{TenantID: tenantA, ID: "azure", Type: "azure-entra", Endpoint: "https://graph.example.test", ApplicationObject: "object", ApplicationClient: "client", AzureTenant: "tenant", BearerTokenRef: ref, AllowedRoles: role},
 		{TenantID: tenantA, ID: "k8s", Type: "kubernetes", Endpoint: "https://kubernetes.example.test", Namespace: "apps", BearerTokenRef: ref, AllowedRoles: role, RoleBindings: map[string]string{"reader": "Role/reader"}},
-		{TenantID: tenantA, ID: "redis", Type: "redis", Addr: "redis.internal:6379", PasswordRef: ref, AllowedRoles: role},
-		{TenantID: tenantB, ID: "redis-b", Type: "redis", Addr: "redis-b.internal:6379", AllowedRoles: role},
+		{TenantID: tenantA, ID: "redis", Type: "redis", Addr: "redis.internal:6379", PasswordRef: ref, RedisTLSServerName: "redis.internal", AllowedRoles: role,
+			RedisACLRoles: map[string]redisacl.Role{"reader": {KeyPrefixes: []string{"tenant-a:"}, Commands: []string{"get"}}}},
+		{TenantID: tenantB, ID: "redis-b", Type: "redis", Addr: "redis-b.internal:6379", PasswordRef: ref, RedisTLSServerName: "redis-b.internal", AllowedRoles: role,
+			RedisACLRoles: map[string]redisacl.Role{"reader": {KeyPrefixes: []string{"tenant-b:"}, Commands: []string{"get"}}}},
 	}
 	dynamicRegistry, err := dynamicSecretProvidersFromConfig(context.Background(), dynamic, nil, nil, nil)
 	if err != nil {

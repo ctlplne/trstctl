@@ -24,7 +24,9 @@ import (
 
 	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/redisacl"
 	"trstctl.com/trstctl/internal/secrettext"
 )
 
@@ -417,6 +419,10 @@ type RedisConfig struct {
 	Password       []byte
 	DB             int
 	UsernamePrefix string
+	RolePolicies   map[string]redisacl.Role
+	TLSCAPEM       []byte
+	TLSServerName  string
+	AllowPlaintext bool
 }
 
 // RedisBackend creates Redis ACL users by speaking RESP to Redis.
@@ -425,13 +431,46 @@ type RedisBackend struct {
 	password       *secret.Buffer
 	db             int
 	usernamePrefix string
+	roleRules      map[string][]string
 	dialer         net.Dialer
+	tlsCA          []byte
+	tlsServerName  string
+	allowPlaintext bool
 }
 
 // NewRedisBackend builds a Redis dynamic-secret backend.
 func NewRedisBackend(cfg RedisConfig) (*RedisBackend, error) {
 	if cfg.Addr == "" {
 		return nil, errors.New("dynsecret redis: Addr required")
+	}
+	if len(cfg.Password) == 0 {
+		return nil, errors.New("dynsecret redis: admin password required")
+	}
+	if cfg.DB != 0 {
+		return nil, errors.New("dynsecret redis: DB must be 0 because Redis ACLs cannot scope SELECT")
+	}
+	if cfg.AllowPlaintext {
+		host, _, err := net.SplitHostPort(cfg.Addr)
+		address := net.ParseIP(host)
+		if err != nil || address == nil || (!address.IsLoopback() && !address.IsPrivate()) || cfg.TLSServerName != "" || len(cfg.TLSCAPEM) > 0 {
+			return nil, errors.New("dynsecret redis: plaintext is allowed only to a literal private IP without TLS settings")
+		}
+	} else if cfg.TLSServerName == "" {
+		return nil, errors.New("dynsecret redis: verified TLS server name required")
+	}
+	if len(cfg.RolePolicies) == 0 {
+		return nil, errors.New("dynsecret redis: explicit role policies required")
+	}
+	roleRules := make(map[string][]string, len(cfg.RolePolicies))
+	for name, policy := range cfg.RolePolicies {
+		if name == "" {
+			return nil, errors.New("dynsecret redis: empty role name")
+		}
+		rules, err := redisacl.Compile(policy)
+		if err != nil {
+			return nil, fmt.Errorf("dynsecret redis: role %q: %w", name, err)
+		}
+		roleRules[name] = rules
 	}
 	if cfg.UsernamePrefix == "" {
 		cfg.UsernamePrefix = defaultDynsecretPrefix
@@ -444,7 +483,9 @@ func NewRedisBackend(cfg RedisConfig) (*RedisBackend, error) {
 			return nil, fmt.Errorf("dynsecret redis: lock password: %w", err)
 		}
 	}
-	return &RedisBackend{addr: cfg.Addr, password: password, db: cfg.DB, usernamePrefix: cfg.UsernamePrefix}, nil
+	return &RedisBackend{addr: cfg.Addr, password: password, db: cfg.DB, usernamePrefix: cfg.UsernamePrefix,
+		roleRules: roleRules, tlsCA: append([]byte(nil), cfg.TLSCAPEM...), tlsServerName: cfg.TLSServerName,
+		allowPlaintext: cfg.AllowPlaintext}, nil
 }
 
 // Create implements Backend.
@@ -453,6 +494,10 @@ func (b *RedisBackend) Create(ctx context.Context, role string) (string, []byte,
 }
 
 func (b *RedisBackend) CreateCredential(ctx context.Context, req GenerateRequest) (string, []byte, error) {
+	rules, allowed := b.roleRules[req.Role]
+	if !allowed {
+		return "", nil, errors.New("dynsecret redis: role has no explicit ACL policy")
+	}
 	user, err := scopedNameForRequest(b.usernamePrefix, req, 64, "_")
 	if err != nil {
 		return "", nil, err
@@ -470,20 +515,26 @@ func (b *RedisBackend) CreateCredential(ctx context.Context, req GenerateRequest
 	passArg := append([]byte{'>'}, password...)
 	defer secret.Wipe(passArg)
 	command := [][]byte{
-		[]byte("ACL"), []byte("SETUSER"), []byte(user), []byte("on"), passArg, []byte("~*"), []byte("+@all"),
+		[]byte("ACL"), []byte("SETUSER"), []byte(user), []byte("reset"),
+		[]byte("on"), passArg, []byte("resetkeys"), []byte("resetchannels"),
 	}
-	if readonlyRole(req.Role) {
-		// Redis keeps PING and SELECT in the connection category rather than the
-		// read category. Common clients use both while authenticating/selecting the
-		// configured logical DB, so grant only those two safe connection commands
-		// alongside read operations instead of broadening to +@connection/+@all.
-		command[len(command)-1] = []byte("+@read")
-		command = append(command, []byte("+ping"), []byte("+select"))
+	for _, rule := range rules {
+		command = append(command, []byte(rule))
 	}
+	// PING lets clients probe the connection. SELECT is intentionally absent:
+	// Redis ACLs cannot constrain its database argument, so granting it would
+	// let a lease access matching key prefixes in every logical database.
+	command = append(command, []byte("+ping"))
 	if err := b.redisCommands(ctx, command); err != nil {
 		return "", nil, err
 	}
-	return user, redisCredential(b.addr, b.db, user, password), nil
+	// ACL users are otherwise only in Redis memory, even when AOF is enabled.
+	// A lease is not active until its exact authority survives a Redis restart.
+	if err := b.redisCommands(ctx, [][]byte{[]byte("ACL"), []byte("SAVE")}); err != nil {
+		_ = b.Revoke(ctx, user)
+		return "", nil, fmt.Errorf("dynsecret redis: persist user ACL: %w", err)
+	}
+	return user, redisCredential(b.addr, b.db, user, password, !b.allowPlaintext), nil
 }
 
 func (b *RedisBackend) Close() {
@@ -498,7 +549,13 @@ func (b *RedisBackend) Revoke(ctx context.Context, ref string) error {
 	if ref == "" {
 		return nil
 	}
-	return b.redisCommands(ctx, [][]byte{[]byte("ACL"), []byte("DELUSER"), []byte(ref)})
+	if err := b.redisCommands(ctx, [][]byte{[]byte("ACL"), []byte("DELUSER"), []byte(ref)}); err != nil {
+		return err
+	}
+	if err := b.redisCommands(ctx, [][]byte{[]byte("ACL"), []byte("SAVE")}); err != nil {
+		return fmt.Errorf("dynsecret redis: persist user revocation: %w", err)
+	}
+	return nil
 }
 
 // KubernetesConfig configures a Kubernetes ServiceAccount token backend.
@@ -1791,9 +1848,13 @@ func appendJSONSecretBytes(dst, src []byte) []byte {
 	return append(dst, '"')
 }
 
-func redisCredential(addr string, db int, user string, password []byte) []byte {
+func redisCredential(addr string, db int, user string, password []byte, verifiedTLS bool) []byte {
 	out := make([]byte, 0, len(addr)+len(user)+len(password)+24)
-	out = append(out, "redis://"...)
+	if verifiedTLS {
+		out = append(out, "rediss://"...)
+	} else {
+		out = append(out, "redis://"...)
+	}
 	out = appendURIUserinfo(out, user, password)
 	out = append(out, '@')
 	out = append(out, addr...)
@@ -1802,11 +1863,24 @@ func redisCredential(addr string, db int, user string, password []byte) []byte {
 }
 
 func (b *RedisBackend) redisCommands(ctx context.Context, command [][]byte) error {
-	conn, err := b.dialer.DialContext(ctx, "tcp", b.addr)
+	var conn net.Conn
+	var err error
+	if b.allowPlaintext {
+		conn, err = b.dialer.DialContext(ctx, "tcp", b.addr)
+	} else {
+		conn, err = mtls.DialVerifiedTCP(ctx, b.addr, b.tlsServerName, b.tlsCA)
+	}
 	if err != nil {
 		return fmt.Errorf("dynsecret redis: dial: %w", err)
 	}
 	defer func() { _ = conn.Close() }()
+	deadline := time.Now().Add(15 * time.Second)
+	if contextDeadline, ok := ctx.Deadline(); ok && contextDeadline.Before(deadline) {
+		deadline = contextDeadline
+	}
+	if err := conn.SetDeadline(deadline); err != nil {
+		return fmt.Errorf("dynsecret redis: deadline: %w", err)
+	}
 	reader := bufio.NewReader(conn)
 	if b.password != nil && b.password.Len() > 0 {
 		if err := redisWriteArray(conn, [][]byte{[]byte("AUTH"), b.password.Bytes()}); err != nil {
@@ -1842,8 +1916,17 @@ func redisWriteArray(w io.Writer, args [][]byte) error {
 		buf = append(buf, '\r', '\n')
 	}
 	defer secret.Wipe(buf)
-	_, err := w.Write(buf)
-	return err
+	for written := 0; written < len(buf); {
+		n, err := w.Write(buf[written:])
+		if err != nil {
+			return err
+		}
+		if n <= 0 || n > len(buf)-written {
+			return io.ErrShortWrite
+		}
+		written += n
+	}
+	return nil
 }
 
 func redisReadOK(r *bufio.Reader) error {
@@ -1859,14 +1942,10 @@ func redisReadOK(r *bufio.Reader) error {
 	if len(line) < 2 || line[len(line)-2] != '\r' {
 		return errRedisProtocol
 	}
-	line = line[:len(line)-2]
 	switch prefix {
 	case '+', ':':
 		return nil
 	case '-':
-		if containsASCIIFold(line, []byte("no such user")) {
-			return nil
-		}
 		return errRedisRejected
 	default:
 		return errRedisProtocol
