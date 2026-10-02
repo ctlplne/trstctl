@@ -23,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/discovery/adcs"
+	"trstctl.com/trstctl/internal/discovery/segmentscan"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
@@ -497,6 +498,9 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 	}
 
 	if ingestErr := a.ingestExecutedReport(ctx, info, agentID, claim, req); ingestErr != nil {
+		if claim.Destination == relay.KindDiscoveryRun && errors.Is(ingestErr, segmentscan.ErrFindingCountMismatch) {
+			return a.failInconsistentDiscoveryReport(ctx, info, agentID, claim, req, now)
+		}
 		return nil, status.Errorf(codes.Internal, "ingest signed agent result: %v", ingestErr)
 	}
 	if err := a.recordCertificateCustodyFromJob(ctx, info, claim, req); err != nil {
@@ -537,6 +541,33 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 	}
 	a.recordExecutedReportObservations(ctx, info, agentID, claim, req, now)
 	return &transport.ReportJobResultResponse{Accepted: true}, nil
+}
+
+// failInconsistentDiscoveryReport retains the signed original, then closes
+// its exact claim as failed. A malformed report can never become a successful
+// discovery, but it also cannot hold the agent's one encrypted pending slot
+// forever after a crash or an older agent bug.
+func (a *agentService) failInconsistentDiscoveryReport(ctx context.Context, info mtls.PeerCertInfo,
+	agentID string, claim store.AgentJobResultClaim, req *transport.ReportJobResultRequest,
+	now time.Time) (*transport.ReportJobResultResponse, error) {
+	const reason = "discovery_findings_count_mismatch"
+	if err := a.recordVerifiedReceipt(ctx, info, req, claim.Destination, now); err != nil {
+		return nil, status.Error(codes.Unavailable, "signed discovery receipt could not be stored; retry the same report")
+	}
+	ok, err := a.store.FailAgentJobTerminally(ctx, info.TenantID, agentID, req.JobID, req.Attempt, reason, now)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "fail inconsistent discovery job: %v", err)
+	}
+	if ok {
+		failed := map[string]any{"agent": info.CommonName, "job_id": req.JobID, "detail": reason, "outcome": strings.TrimSpace(req.Outcome)}
+		a.attachJobReceipt(failed, info, req)
+		a.recordAgentJobEvent(ctx, info.TenantID, "agent.job.failed", failed)
+		if a.logger != nil {
+			a.logger.Warn("signed discovery report had inconsistent counts; no findings imported and exact job failed",
+				slog.String("tenant_id", info.TenantID), slog.Int64("job_id", req.JobID), slog.String("reason", reason))
+		}
+	}
+	return &transport.ReportJobResultResponse{Accepted: ok}, nil
 }
 
 // recordExecutedReportObservations runs only after the exact agent claim has

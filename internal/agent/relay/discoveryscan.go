@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"sync"
 
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/discovery/netscan"
@@ -57,16 +58,26 @@ type DiscoveryReport = segmentscan.Report
 // relayScanSink collects findings in memory for one sweep. The relay holds no
 // database — findings travel back over the channel the agent opened, and the
 // control plane is the only thing that writes them (AN-2).
-type relayScanSink struct{ findings []DiscoveryFinding }
+type relayScanSink struct {
+	mu       sync.Mutex
+	findings []DiscoveryFinding
+}
 
 func (s *relayScanSink) Record(_ context.Context, f netscan.Found) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.findings = append(s.findings, discoveryFindingFromCert(f.Address, f.Cert))
 	return nil
 }
 
-type relaySSHSink struct{ findings []DiscoveryFinding }
+type relaySSHSink struct {
+	mu       sync.Mutex
+	findings []DiscoveryFinding
+}
 
 func (s *relaySSHSink) Record(_ context.Context, f sshinv.Found) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.findings = append(s.findings, DiscoveryFinding{
 		Address:     f.Location,
 		Fingerprint: f.Fingerprint,

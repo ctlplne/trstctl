@@ -156,6 +156,14 @@ same server rule. If recovery is blocked, restore or enroll the required network
 relay, then retry with a new idempotency key; never rewrite the old run or its outbox
 row.
 
+If a relay's signed result says it discovered more credentials than it actually
+included, the control plane fails that run and imports **no** findings from it.
+It retains the signed receipt, marks the exact agent job failed, and acknowledges
+the terminal report so one bad sealed result cannot block every later job after
+a restart. **Discover → Runs** and the API show the count mismatch and the need
+to retry. Use the same **Retry** action above after the relay is updated; the
+old failed run remains in the audit trail.
+
 ### Continuous monitoring rollup
 
 `GET /api/v1/discovery/monitoring` (CLI: `trstctl discovery monitoring`) is a single

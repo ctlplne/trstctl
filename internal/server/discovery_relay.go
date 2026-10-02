@@ -39,8 +39,10 @@ func (s *Server) recordDiscoveryScan(ctx context.Context, tenantID, agentName, i
 	if err := decodeStrictJSON([]byte(reportJSON), &report); err != nil {
 		return fmt.Errorf("decode discovery relay report: %w", err)
 	}
-	if err := segmentscan.ValidateReport(intent, report); err != nil {
-		return err
+	validationErr := segmentscan.ValidateReport(intent, report)
+	countMismatch := errors.Is(validationErr, segmentscan.ErrFindingCountMismatch)
+	if validationErr != nil && !countMismatch {
+		return validationErr
 	}
 
 	run, err := s.store.GetDiscoveryRun(ctx, tenantID, intent.ID)
@@ -54,6 +56,12 @@ func (s *Server) recordDiscoveryScan(ctx context.Context, tenantID, agentName, i
 	}
 	if discoveryRunTerminal(run.Status) {
 		if run.ExecutedByAgentID == agentID {
+			if countMismatch && run.Status == "failed" && strings.HasPrefix(run.Error, "relay report rejected: findings count mismatch") {
+				return validationErr
+			}
+			if validationErr != nil {
+				return validationErr
+			}
 			return nil
 		}
 		return errors.New("discovery relay run is already terminal under another executor")
@@ -66,6 +74,22 @@ func (s *Server) recordDiscoveryScan(ctx context.Context, tenantID, agentName, i
 			orchestrator.DiscoveryRelayEventID(tenantID, idempotencyKey, "run-started")); err != nil {
 			return err
 		}
+	}
+	if countMismatch {
+		// The signed result is permanently inconsistent. A retry cannot
+		// reconstruct lost concurrent findings, so close this run visibly as
+		// failed and import none of its untrustworthy observations. The caller
+		// keeps the original signed receipt and closes the exact job as failed.
+		reason := fmt.Sprintf("relay report rejected: findings count mismatch (reported %d, retained %d); no findings imported; rerun discovery",
+			report.Discovered, len(report.Findings))
+		if err := s.orch.CompleteDiscoveryRunWithEventID(ctx, tenantID,
+			orchestrator.DiscoveryRelayEventID(tenantID, idempotencyKey, "run-completed"), store.DiscoveryRun{
+				ID: intent.ID, Status: "failed", Targets: len(intent.Targets), Rejected: len(intent.Targets),
+				Error: reason, Segment: intent.Segment, ExecutedByAgentID: agentID,
+			}); err != nil {
+			return err
+		}
+		return validationErr
 	}
 
 	if !intent.DryRun {

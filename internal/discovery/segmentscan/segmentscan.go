@@ -399,6 +399,10 @@ const (
 // names; the full per-target list travels in the completion event.
 const maxTargetsNamedInReason = 3
 
+// ErrFindingCountMismatch identifies a permanently invalid signed observation.
+// A receiver may close its job as failed, but must never import its findings.
+var ErrFindingCountMismatch = errors.New("segment scan: reported findings do not match discovered count")
+
 // ValidateReport binds a report to the exact assigned command before any event
 // or read model is changed.
 func ValidateReport(intent Intent, report Report) error {
@@ -415,7 +419,7 @@ func ValidateReport(intent Intent, report Report) error {
 		return errors.New("segment scan: report counts must not be negative")
 	}
 	if report.Discovered != len(report.Findings) || len(report.Findings) > maxFindings {
-		return errors.New("segment scan: reported findings do not match discovered count")
+		return ErrFindingCountMismatch
 	}
 	if report.Discovered+report.Failed+report.Rejected+report.Blocked != report.Targets {
 		return errors.New("segment scan: report outcome counts do not cover assigned targets")

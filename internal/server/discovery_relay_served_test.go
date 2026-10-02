@@ -15,11 +15,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/discovery/segmentscan"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
@@ -336,6 +338,137 @@ func discoveryRelayEventCounts(t *testing.T, h *roleHarness) map[string]int {
 		t.Fatal(err)
 	}
 	return counts
+}
+
+// A legacy agent may have durably sealed a malformed terminal observation
+// before a race fix. It must be closed as an audited failed run, without
+// importing partial findings, so the original report is acknowledged and the
+// agent can claim a clean retry after restart.
+func TestServedDiscoveryCountMismatchFailsClosedAndUnblocksRelay(t *testing.T) {
+	tlsServer := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	defer tlsServer.Close()
+	target := strings.TrimPrefix(tlsServer.URL, "https://")
+	h := newDiscoveryRelayHarness(t, "report-recovery-loopback")
+	operator := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+	statusCode, body := secretsReq(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/sources", operator, map[string]any{
+		"name": "report-recovery-tls", "kind": "network",
+		"config": map[string]any{
+			"targets": []string{target}, "segment": "report-recovery-loopback",
+			"allow_loopback": true, "relay_agent_id": agentRowID(h.tenant, h.agent),
+		},
+	})
+	if statusCode != http.StatusCreated {
+		t.Fatalf("create discovery source: %d %s", statusCode, body)
+	}
+	var source struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &source); err != nil {
+		t.Fatal(err)
+	}
+	queue := func() string {
+		t.Helper()
+		code, queuedBody := secretsReq(t, h.servedHarness, http.MethodPost, "/api/v1/discovery/runs", operator,
+			map[string]any{"source_id": source.ID})
+		if code != http.StatusCreated {
+			t.Fatalf("queue discovery: %d %s", code, queuedBody)
+		}
+		var run struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(queuedBody, &run); err != nil {
+			t.Fatal(err)
+		}
+		return run.ID
+	}
+	claim := func() transport.ClaimedJob {
+		t.Helper()
+		claimed, err := h.client.ClaimJobs(t.Context(), &transport.ClaimJobsRequest{
+			Kinds: []string{relay.KindDiscoveryRun}, Limit: 1,
+		})
+		if err != nil || len(claimed.Jobs) != 1 {
+			t.Fatalf("claim discovery: jobs=%d err=%v", len(claimed.Jobs), err)
+		}
+		return claimed.Jobs[0]
+	}
+	failedRunID := queue()
+	job := claim()
+	invalid := segmentscan.Report{
+		Mode: segmentscan.ModeTLS, Targets: 1, Discovered: 1,
+		TargetResults: []segmentscan.TargetResult{{Target: target, Status: segmentscan.TargetSucceeded}},
+	}
+	encoded, err := json.Marshal(invalid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := h.client.ReportJobResult(t.Context(), h.report(t, job.JobID, job.Attempt,
+		transport.JobOutcomeExecuted, string(encoded), "sha256:sealed-count-mismatch"))
+	if err != nil || response == nil || !response.Accepted {
+		t.Fatalf("invalid sealed report was not closed as a failed run: response=%+v err=%v", response, err)
+	}
+	failed, err := h.store.GetDiscoveryRun(t.Context(), h.tenant, failedRunID)
+	if err != nil || failed.Status != "failed" || failed.Discovered != 0 || !strings.Contains(failed.Error, "findings count") {
+		t.Fatalf("invalid report was not visible as a failed run: %+v err=%v", failed, err)
+	}
+	statusCode, body = secretsReq(t, h.servedHarness, http.MethodGet,
+		"/api/v1/discovery/runs/"+failedRunID, operator, nil)
+	if statusCode != http.StatusOK || !strings.Contains(string(body), "findings count mismatch") {
+		t.Fatalf("operator API hid the failed run: %d %s", statusCode, body)
+	}
+	if events := discoveryRelayEventCounts(t, h); events["agent.job.failed"] != 1 {
+		t.Fatalf("signed inconsistent result produced %d agent failure audit events, want 1", events["agent.job.failed"])
+	}
+	var jobStatus, jobReason string
+	var retainedReceipts int
+	if err := h.store.WithTenant(t.Context(), h.tenant, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(t.Context(),
+			`SELECT status, coalesce(last_error, '') FROM outbox WHERE tenant_id = $1 AND id = $2`,
+			h.tenant, job.JobID).Scan(&jobStatus, &jobReason); err != nil {
+			return err
+		}
+		return tx.QueryRow(t.Context(),
+			`SELECT count(*) FROM agent_job_receipts WHERE tenant_id = $1 AND job_id = $2
+			  AND attempt = $3 AND state = 'verified' AND signature <> ''`,
+			h.tenant, job.JobID, job.Attempt).Scan(&retainedReceipts)
+	}); err != nil || jobStatus != "failed" || jobReason != "discovery_findings_count_mismatch" || retainedReceipts != 1 {
+		t.Fatalf("job/receipt recovery status=%q reason=%q signed_receipts=%d err=%v",
+			jobStatus, jobReason, retainedReceipts, err)
+	}
+	findings, err := h.store.ListDiscoveryFindingsPage(t.Context(), h.tenant, failedRunID, store.ZeroUUID, 10)
+	if err != nil || len(findings) != 0 {
+		t.Fatalf("invalid report imported %d findings: %v", len(findings), err)
+	}
+	if err := h.srv.proj.Rebuild(t.Context(), h.log); err != nil {
+		t.Fatalf("replay failed run: %v", err)
+	}
+	rebuilt, err := h.store.GetDiscoveryRun(t.Context(), h.tenant, failedRunID)
+	if err != nil || rebuilt.Status != "failed" || rebuilt.Discovered != 0 {
+		t.Fatalf("replayed failed run: %+v err=%v", rebuilt, err)
+	}
+
+	retryRunID := queue()
+	retryJob := claim()
+	var intent relay.DiscoveryScanIntent
+	if err := json.Unmarshal(retryJob.Payload, &intent); err != nil {
+		t.Fatal(err)
+	}
+	valid, err := relay.Sweep(t.Context(), intent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err = json.Marshal(valid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err = h.client.ReportJobResult(t.Context(), h.report(t, retryJob.JobID, retryJob.Attempt,
+		transport.JobOutcomeExecuted, string(encoded), "sha256:clean-retry"))
+	if err != nil || response == nil || !response.Accepted {
+		t.Fatalf("clean retry: response=%+v err=%v", response, err)
+	}
+	retry, err := h.store.GetDiscoveryRun(t.Context(), h.tenant, retryRunID)
+	if err != nil || retry.Status != "succeeded" || retry.Discovered != 1 {
+		t.Fatalf("relay did not recover on a new run: %+v err=%v", retry, err)
+	}
 }
 
 func TestServedNetworkDiscoveryRequiresDeclaredSegmentAUD28(t *testing.T) {
