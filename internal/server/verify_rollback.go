@@ -78,6 +78,19 @@ func (a *agentService) maybeAutoRollbackAfterVerifyFailure(ctx context.Context, 
 	}
 
 	predecessor := a.store.ResolvePredecessorCertificateForFingerprint(ctx, tenantID, intent.Fingerprint)
+	if connector.CanRollbackOnHost(target.Type) {
+		evidence, found, evidenceErr := a.store.LastSuccessfulHostDeployEvidence(ctx, tenantID, target.ID)
+		if evidenceErr != nil || !found || evidence.AgentID != reportingAgentID ||
+			evidence.IdentityID != intent.IdentityID || evidence.Fingerprint != intent.Fingerprint ||
+			evidence.PredecessorFingerprint == "" {
+			return
+		}
+		previous, loadErr := a.store.GetCertificateByFingerprint(ctx, tenantID, evidence.PredecessorFingerprint)
+		if loadErr != nil {
+			return
+		}
+		predecessor.Fingerprint, predecessor.Serial = previous.Fingerprint, previous.Serial
+	}
 	if predecessor.Fingerprint == "" {
 		// No predecessor means there is nothing to roll back TO. A first
 		// deployment that fails verification is a deployment to fix, not a

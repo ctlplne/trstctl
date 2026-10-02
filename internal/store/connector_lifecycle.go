@@ -612,9 +612,14 @@ func (s *Store) LatestDeployedCertificateFingerprintForIdentity(ctx context.Cont
 			    AND c.fingerprint = r.fingerprint
 			  WHERE r.tenant_id = $1
 			    AND r.identity_id = $2
-			    AND ((r.destination = 'connector.deploy' AND r.status IN ('delivered', 'verified') AND c.status = 'active')
+			    AND ((r.destination = 'connector.deploy' AND r.status IN ('delivered', 'verified') AND c.status = 'active'
+			      AND r.reason <> 'agent_delivered_verification_failed'
+			      AND NOT EXISTS (SELECT 1 FROM connector_delivery_receipts failed
+			        WHERE failed.tenant_id = r.tenant_id AND failed.identity_id = r.identity_id
+			          AND failed.destination = 'connector.deploy' AND failed.status = 'verify_failed'
+			          AND failed.idempotency_key = r.idempotency_key || ':verified'))
 			      OR (r.destination = 'connector.rollback' AND r.status = 'rolled_back' AND c.status IN ('active', 'superseded')))
-			    AND c.source = 'issued'
+			    AND (c.source = 'issued' OR c.issuance_idempotency_key <> '')
 			  ORDER BY r.updated_at DESC, r.id DESC
 			  LIMIT 1`, tenantID, identityID).Scan(&fingerprint)
 	})
@@ -622,6 +627,47 @@ func (s *Store) LatestDeployedCertificateFingerprintForIdentity(ctx context.Cont
 		return "", false, nil
 	}
 	return fingerprint, err == nil, err
+}
+
+// HasConnectorDeliveryHistoryForIdentity distinguishes a legacy deployed
+// identity with no delivery timeline from one whose connector attempted a
+// deployment but never proved it. The scheduler may use the legacy owner/SAN
+// fallback only in the first case.
+func (s *Store) HasConnectorDeliveryHistoryForIdentity(ctx context.Context, tenantID, identityID string) (bool, error) {
+	var exists bool
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT EXISTS (
+			SELECT 1 FROM connector_delivery_receipts
+			 WHERE tenant_id = $1 AND identity_id = $2
+		)`, tenantID, identityID).Scan(&exists)
+	})
+	return exists, err
+}
+
+// HasUnverifiedConnectorDeliveryAfterConfirmedServe prevents the unattended
+// scheduler from treating a prior successful rollout as recovery from a newer
+// failed deployment. An operator may repair the route and retry explicitly.
+func (s *Store) HasUnverifiedConnectorDeliveryAfterConfirmedServe(ctx context.Context, tenantID, identityID string) (bool, error) {
+	var blocked bool
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `WITH proved AS (
+		  SELECT max(r.updated_at) AS at FROM connector_delivery_receipts r
+		   WHERE r.tenant_id = $1 AND r.identity_id = $2
+		     AND ((r.destination = 'connector.rollback' AND r.status = 'rolled_back')
+		       OR (r.destination = 'connector.deploy' AND r.status = 'verified')
+		       OR (r.destination = 'connector.deploy' AND r.status = 'delivered'
+		         AND r.reason <> 'agent_delivered_verification_failed'
+		         AND NOT EXISTS (SELECT 1 FROM connector_delivery_receipts failed
+		           WHERE failed.tenant_id = r.tenant_id AND failed.identity_id = r.identity_id
+		             AND failed.destination = 'connector.deploy' AND failed.status = 'verify_failed'
+		             AND failed.idempotency_key = r.idempotency_key || ':verified')))
+		) SELECT EXISTS (SELECT 1 FROM connector_delivery_receipts failed, proved
+		    WHERE failed.tenant_id = $1 AND failed.identity_id = $2
+		      AND failed.destination = 'connector.deploy'
+		      AND failed.status IN ('failed', 'verify_failed')
+		      AND failed.updated_at > coalesce(proved.at, '-infinity'::timestamptz))`, tenantID, identityID).Scan(&blocked)
+	})
+	return blocked, err
 }
 
 // GetConnectorDeliveryReceiptForOutboxTx resolves the canonical projected row
@@ -713,8 +759,12 @@ func (s *Store) ListRenewableIdentities(ctx context.Context, tenantID string, cu
 			   FROM identities i
 			   JOIN certificates c
 			     ON c.tenant_id = i.tenant_id
-			    AND c.owner_id = i.owner_id
-			    AND i.name = ANY(c.sans)
+			    AND ((c.owner_id = i.owner_id AND i.name = ANY(c.sans))
+			      OR EXISTS (SELECT 1 FROM connector_delivery_receipts served
+			        WHERE served.tenant_id = i.tenant_id AND served.identity_id = i.id
+			          AND served.fingerprint = c.fingerprint
+			          AND ((served.destination = 'connector.rollback' AND served.status = 'rolled_back')
+			            OR (served.destination = 'connector.deploy' AND served.status = 'verified'))))
 			  WHERE i.tenant_id = $1
 			    AND i.kind = 'x509_certificate'
 			    AND i.status IN ('deployed', 'renewal_failed')
@@ -722,7 +772,7 @@ func (s *Store) ListRenewableIdentities(ctx context.Context, tenantID string, cu
 			      WHERE replacement.tenant_id = i.tenant_id
 			        AND replacement.attributes->>'endpoint_replaces_identity_id' = i.id::text
 			        AND replacement.status IN ('issued', 'deployed', 'renewing', 'renewal_failed'))
-			    AND c.source = 'issued'
+			    AND (c.source = 'issued' OR c.issuance_idempotency_key <> '')
 			    AND c.status = 'active'
 			    AND c.not_after IS NOT NULL
 			    AND c.not_after < $2
@@ -780,8 +830,12 @@ func (s *Store) ListRenewalIdentityCandidates(ctx context.Context, tenantID stri
 			   FROM identities i
 			   JOIN certificates c
 			     ON c.tenant_id = i.tenant_id
-			    AND c.owner_id = i.owner_id
-			    AND i.name = ANY(c.sans)
+			    AND ((c.owner_id = i.owner_id AND i.name = ANY(c.sans))
+			      OR EXISTS (SELECT 1 FROM connector_delivery_receipts served
+			        WHERE served.tenant_id = i.tenant_id AND served.identity_id = i.id
+			          AND served.fingerprint = c.fingerprint
+			          AND ((served.destination = 'connector.rollback' AND served.status = 'rolled_back')
+			            OR (served.destination = 'connector.deploy' AND served.status = 'verified'))))
 			  WHERE i.tenant_id = $1
 			    AND i.kind = 'x509_certificate'
 			    AND i.status IN ('deployed', 'renewal_failed')
@@ -789,7 +843,7 @@ func (s *Store) ListRenewalIdentityCandidates(ctx context.Context, tenantID stri
 			      WHERE replacement.tenant_id = i.tenant_id
 			        AND replacement.attributes->>'endpoint_replaces_identity_id' = i.id::text
 			        AND replacement.status IN ('issued', 'deployed', 'renewing', 'renewal_failed'))
-			    AND c.source = 'issued'
+			    AND (c.source = 'issued' OR c.issuance_idempotency_key <> '')
 			    AND (c.status = 'active' OR (c.status = 'superseded' AND EXISTS (
 			      SELECT 1 FROM connector_delivery_receipts restored
 			       WHERE restored.tenant_id = $1 AND restored.tenant_id = i.tenant_id
@@ -853,11 +907,15 @@ func (s *Store) TenantsWithRenewalIdentityCandidates(ctx context.Context, fixedC
 		   FROM identities i
 		   JOIN certificates c
 		     ON c.tenant_id = i.tenant_id
-		    AND c.owner_id = i.owner_id
-		    AND i.name = ANY(c.sans)
+		    AND ((c.owner_id = i.owner_id AND i.name = ANY(c.sans))
+		      OR EXISTS (SELECT 1 FROM connector_delivery_receipts served
+		        WHERE served.tenant_id = i.tenant_id AND served.identity_id = i.id
+		          AND served.fingerprint = c.fingerprint
+		          AND ((served.destination = 'connector.rollback' AND served.status = 'rolled_back')
+		            OR (served.destination = 'connector.deploy' AND served.status = 'verified'))))
 		  WHERE i.kind = 'x509_certificate'
 		    AND i.status IN ('deployed', 'renewal_failed')
-		    AND c.source = 'issued'
+		    AND (c.source = 'issued' OR c.issuance_idempotency_key <> '')
 		    AND (c.status = 'active' OR (c.status = 'superseded' AND EXISTS (
 		      SELECT 1 FROM connector_delivery_receipts restored
 		       WHERE restored.tenant_id = i.tenant_id

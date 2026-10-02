@@ -3340,7 +3340,7 @@ func componentSchemas() map[string]*Schema {
 	lifecycleAutomationItem := object(map[string]*Schema{
 		"identity_id": uuid(), "identity_name": str(), "identity_status": str(),
 		"owner_id": uuid(), "owner_name": str(), "certificate_id": uuid(), "not_after": timestamp(),
-		"due": {Type: "boolean"}, "renewal_source": {Type: "string", Enum: []string{"ari", "fixed_deadline", "not_due", "in_flight"}},
+		"due": {Type: "boolean"}, "renewal_source": {Type: "string", Enum: []string{"ari", "fixed_deadline", "not_due", "in_flight", "target_conflict", "unverified_delivery"}},
 		"reason": str(), "latest_run_id": uuid(), "latest_run_status": str(), "rollback_ref": str(),
 		"blockers": {Type: "array", Items: str()},
 	}, "identity_id", "identity_name", "identity_status", "owner_id", "owner_name", "certificate_id", "due", "renewal_source", "reason", "blockers")

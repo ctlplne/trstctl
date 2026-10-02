@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -145,8 +147,30 @@ func TestServedLifecycleAutomationPlanListsDueWorkWithoutTenantLeakage(t *testin
 	if err := json.Unmarshal(body, &plan); err != nil {
 		t.Fatalf("decode due plan: %v (%s)", err, body)
 	}
-	if plan.Summary.Monitored != 1 || plan.Summary.DueNow != 0 || len(plan.Items) != 1 || plan.Items[0].Due {
-		t.Fatalf("HTTP plan immediately requeues a fresh certificate: %+v", plan)
+	if plan.Summary.Monitored != 1 || plan.Summary.DueNow != 0 || len(plan.Items) != 1 || plan.Items[0].Due ||
+		plan.Items[0].RenewalSource != "unverified_delivery" || len(plan.Items[0].Blockers) == 0 {
+		t.Fatalf("HTTP plan hid a failed destination or offered it for renewal: %+v", plan)
+	}
+	if queued, err := h.srv.runLifecycleOnceAt(t.Context(), cert.ValidityAnchor.Add(21*24*time.Hour)); err != nil || queued != 0 {
+		t.Fatalf("scheduler renewed an unverified destination: queued=%d err=%v", queued, err)
+	}
+	// This planner test now supplies a read-model fixture for verified delivery;
+	// live connector execution is exercised by the connector journey tests.
+	verifiedAt := time.Now().UTC()
+	if err := h.store.WithTenant(t.Context(), h.tenant, func(tx pgx.Tx) error {
+		return h.store.ApplyConnectorDeliveryRecordedTx(t.Context(), tx, store.ConnectorDeliveryReceipt{
+			ID: "77777777-7777-4777-8777-777777777777", TenantID: h.tenant, IdentityID: &identity.ID,
+			Destination: "connector.deploy", Connector: "test", Target: "checkout.internal",
+			Fingerprint: cert.Fingerprint, Status: "verified", IdempotencyKey: "automation-plan-verified-fixture",
+			CreatedAt: verifiedAt, UpdatedAt: verifiedAt,
+		})
+	}); err != nil {
+		t.Fatalf("record verified planner fixture: %v", err)
+	}
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/lifecycle/automation-plan", tok, nil)
+	if status != http.StatusOK || json.Unmarshal(body, &plan) != nil || plan.Summary.Monitored != 1 ||
+		plan.Summary.DueNow != 0 || len(plan.Items) != 1 || plan.Items[0].Due {
+		t.Fatalf("HTTP plan immediately requeues a fresh verified certificate: status=%d plan=%+v body=%s", status, plan, body)
 	}
 	// The public route above uses the real clock. Evaluate its same served
 	// planner at the actual future renewal window without editing signed data.

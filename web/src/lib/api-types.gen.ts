@@ -4160,7 +4160,7 @@ export interface LifecycleAutomationItem {
   owner_id: string;
   owner_name: string;
   reason: string;
-  renewal_source: "ari" | "fixed_deadline" | "not_due" | "in_flight";
+  renewal_source: "ari" | "fixed_deadline" | "not_due" | "in_flight" | "target_conflict" | "unverified_delivery";
   rollback_ref?: string;
 }
 

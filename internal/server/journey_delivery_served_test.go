@@ -31,6 +31,19 @@ import (
 // real issuance through that CA. A dropdown without this server proof would be
 // cosmetic: the old worker silently used the built-in CA regardless of UI.
 func TestEndpointBindingPinsExternalIssuerFromEffectFreePreview(t *testing.T) {
+	const (
+		awsAccessKey = "AKIDDP004"
+		awsSecretKey = "DP004SecretKeyForSigV4Only" // #nosec G101 -- fabricated test-only credential (CWE-798)
+		acmARN       = "arn:aws:acm:us-east-1:123456789012:certificate/dp-004"
+	)
+	provider := acmtest.New(awsAccessKey, awsSecretKey)
+	t.Cleanup(provider.Close)
+	registry := connector.NewRegistry(func(string) connector.Ops {
+		return connector.NewHTTPOps(provider.Client())
+	})
+	registry.Register(acm.New("us-east-1", acm.Credentials{
+		AccessKeyID: awsAccessKey, SecretAccessKey: []byte(awsSecretKey),
+	}, acm.WithEndpoint(provider.URL())))
 	dc, err := digicertfake.NewServer()
 	if err != nil {
 		t.Fatal(err)
@@ -38,6 +51,7 @@ func TestEndpointBindingPinsExternalIssuerFromEffectFreePreview(t *testing.T) {
 	t.Cleanup(dc.Close)
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.LifecycleRenewBefore = 31 * 24 * time.Hour
+		d.ConnectorRegistry = registry
 		d.ExternalCAs = []ExternalCA{{
 			ID: "corporate-digicert", Type: "digicert", Name: "Corporate DigiCert",
 			CA: digicert.New("corporate-digicert", dc.URL(), []byte(dc.APIKey()), digicert.WithHTTPClient(&http.Client{Timeout: 5 * time.Second})),
@@ -61,9 +75,9 @@ func TestEndpointBindingPinsExternalIssuerFromEffectFreePreview(t *testing.T) {
 		t.Fatalf("decode owner: %v", err)
 	}
 	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets", tok, map[string]any{
-		"name": "cloud/acm/dp-004", "connector": "aws-acm", "enabled": true,
+		"name": acmARN, "connector": "aws-acm", "enabled": true,
 		"config": map[string]any{
-			"region": "us-east-1", "access_key_id": "AKIDTESTONLY",
+			"region": "us-east-1", "access_key_id": awsAccessKey,
 			"secret_access_key_ref": "secret://connectors/aws-acm/dp-004",
 		},
 	})
@@ -281,12 +295,10 @@ func TestEndpointBindingPreviewRejectsTargetHostnameMismatchBeforeMutation(t *te
 	}
 }
 
-// TestServedDeployAndRotationPublishReceipts is the JOURNEY-002 proof: the served
-// issue->deploy->rotate path exposes connector delivery receipts and rotation-run
-// status from real outbox work. On the pre-fix tree the connector delivery and
-// lifecycle endpoints are 404s, deploy acks were invisible, and renewals did not
-// queue a post-rotation connector.deploy receipt.
-func TestServedDeployAndRotationPublishReceipts(t *testing.T) {
+// TestServedFailedDeployPublishesReceiptAndBlocksRotation is JOURNEY-002's
+// failed-destination proof. A failed connector receipt remains visible, but an
+// issued certificate without verified delivery is not a renewal predecessor.
+func TestServedFailedDeployPublishesReceiptAndBlocksRotation(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.LifecycleRenewBefore = 31 * 24 * time.Hour
 	})
@@ -371,43 +383,15 @@ func TestServedDeployAndRotationPublishReceipts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run lifecycle scheduler: %v", err)
 	}
-	if queued != 1 {
-		t.Fatalf("scheduled renewals = %d, want 1", queued)
+	if queued != 0 {
+		t.Fatalf("failed delivery scheduled %d renewals, want 0", queued)
 	}
-	if err := h.srv.Drain(t.Context()); err != nil {
-		t.Fatalf("drain renewal: %v", err)
-	}
-
 	runs := rotationRunsForIdentity(t, h, tok, ident.ID)
-	if len(runs.Items) != 1 {
-		t.Fatalf("rotation runs = %d, want 1 (%s)", len(runs.Items), runs.Raw)
+	if len(runs.Items) != 0 {
+		t.Fatalf("failed delivery produced rotation runs: %s", runs.Raw)
 	}
-	run := runs.Items[0]
-	if run.Status != "succeeded" || run.Trigger != "scheduler" || run.PredecessorFingerprint == "" || run.SuccessorFingerprint == "" || run.RollbackRef == "" {
-		t.Fatalf("bad rotation run: %+v", run)
-	}
-
-	afterRenew := connectorDeliveriesForIdentity(t, h, tok, ident.ID)
-	if len(afterRenew.Items) != 2 {
-		t.Fatalf("connector receipts after renewal = %d, want 2 (%s)", len(afterRenew.Items), afterRenew.Raw)
-	}
-	foundSuccessorReceipt := false
-	for _, got := range afterRenew.Items {
-		if got.Status != "failed" || got.Fingerprint == "" {
-			t.Fatalf("bad deploy receipt after renewal: %+v", got)
-		}
-		if got.Fingerprint == run.SuccessorFingerprint {
-			foundSuccessorReceipt = true
-		}
-	}
-	if !foundSuccessorReceipt {
-		t.Fatalf("no connector delivery receipt references renewal successor %s: %+v", run.SuccessorFingerprint, afterRenew.Items)
-	}
-
-	for _, eventType := range []string{"connector.delivery.recorded", "lifecycle.rotation.recorded"} {
-		if !h.hasEvent(t, eventType) {
-			t.Fatalf("missing %s event", eventType)
-		}
+	if !h.hasEvent(t, "connector.delivery.recorded") || h.hasEvent(t, "lifecycle.rotation.recorded") {
+		t.Fatal("failed delivery must publish a receipt without publishing a rotation")
 	}
 }
 
@@ -571,16 +555,46 @@ func TestServedLifecycleSchedulerUsesARIWindowForRenewal(t *testing.T) {
 }
 
 func TestServedWildcardIdentityRequiresAcknowledgementAndRenewsTRACE017(t *testing.T) {
+	const (
+		awsAccessKey = "AKIDTRACE017"
+		awsSecretKey = "TRACE017SecretKeyForSigV4Only" // #nosec G101 -- fabricated test-only credential (CWE-798)
+		acmARN       = "arn:aws:acm:us-east-1:123456789012:certificate/trace-017"
+	)
+	provider := acmtest.New(awsAccessKey, awsSecretKey)
+	t.Cleanup(provider.Close)
+	registry := connector.NewRegistry(func(string) connector.Ops {
+		return connector.NewHTTPOps(provider.Client())
+	})
+	registry.Register(acm.New("us-east-1", acm.Credentials{
+		AccessKeyID: awsAccessKey, SecretAccessKey: []byte(awsSecretKey),
+	}, acm.WithEndpoint(provider.URL())))
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.LifecycleRenewBefore = 31 * 24 * time.Hour
+		d.ConnectorRegistry = registry
 	})
 	tok := seedScopedToken(t, h.store, h.tenant,
 		"owners:read", "owners:write",
 		"identities:read", "identities:write",
-		"certs:read", "certs:issue", "lifecycle:read",
+		"certs:read", "certs:issue", "connectors:read", "connectors:write", "lifecycle:read",
 	)
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets", tok, map[string]any{
+		"name": acmARN, "connector": "aws-acm", "enabled": true,
+		"config": map[string]any{
+			"region": "us-east-1", "access_key_id": awsAccessKey,
+			"secret_access_key_ref": "secret://connectors/aws-acm/trace-017",
+		},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create wildcard delivery target: status %d body %s", status, body)
+	}
+	var target struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &target); err != nil || target.ID == "" {
+		t.Fatalf("decode wildcard delivery target: %v (%s)", err, body)
+	}
 
-	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/owners", tok, map[string]any{
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/owners", tok, map[string]any{
 		"kind": "workload",
 		"name": "trace017-owner",
 	})
@@ -638,6 +652,12 @@ func TestServedWildcardIdentityRequiresAcknowledgementAndRenewsTRACE017(t *testi
 	if ident.ID == "" || !jsonContains(t, ident.Attributes, "wildcard_blast_radius_acknowledged") || !jsonContains(t, ident.Attributes, "dns-01") {
 		t.Fatalf("wildcard identity response lost acknowledgment/DNS-01 attributes: %s", ident.Attributes)
 	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/identities/"+ident.ID+"/connector-target", tok, map[string]any{
+		"target_id": target.ID,
+	})
+	if status != http.StatusOK {
+		t.Fatalf("bind wildcard delivery target: status %d body %s", status, body)
+	}
 
 	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/identities/"+ident.ID+"/transitions", tok, map[string]any{
 		"to":     "issued",
@@ -653,11 +673,19 @@ func TestServedWildcardIdentityRequiresAcknowledgementAndRenewsTRACE017(t *testi
 		"to":     "deployed",
 		"reason": "TRACE-017 wildcard deployed for renewal",
 	})
-	if status != http.StatusOK {
+	alreadyDeployed := status == http.StatusConflict && jsonContains(t, body, `"from":"deployed"`)
+	if status != http.StatusOK && !alreadyDeployed {
 		t.Fatalf("deploy wildcard identity: status %d body %s", status, body)
 	}
 	if err := h.srv.Drain(t.Context()); err != nil {
 		t.Fatalf("drain wildcard deploy: %v", err)
+	}
+	first := connectorDeliveriesForIdentity(t, h, tok, ident.ID)
+	if len(first.Items) != 1 || first.Items[0].Status != "delivered" {
+		t.Fatalf("wildcard destination did not confirm delivery: %s", first.Raw)
+	}
+	if imported, ok := provider.Imported(acmARN); !ok || len(imported.Certificate) == 0 {
+		t.Fatal("wildcard certificate did not reach the independent ACM fixture")
 	}
 	certs, err := h.store.ListActiveIssuedCertificatesForIdentity(t.Context(), h.tenant, owner.ID, wildcardName)
 	if err != nil {
@@ -918,8 +946,22 @@ func TestServedConnectorTargetJourneyJOURNEY001EndToEnd(t *testing.T) {
 }
 
 func TestServedEndpointBindingAutomationCAPLIFE01(t *testing.T) {
+	const (
+		awsAccessKey = "AKIDCAPLIFE01"
+		awsSecretKey = "CAPLIFE01SecretKeyForSigV4Only" // #nosec G101 -- fabricated test-only credential (CWE-798)
+		acmARN       = "arn:aws:acm:us-east-1:123456789012:certificate/cap-life-01"
+	)
+	provider := acmtest.New(awsAccessKey, awsSecretKey)
+	t.Cleanup(provider.Close)
+	registry := connector.NewRegistry(func(string) connector.Ops {
+		return connector.NewHTTPOps(provider.Client())
+	})
+	registry.Register(acm.New("us-east-1", acm.Credentials{
+		AccessKeyID: awsAccessKey, SecretAccessKey: []byte(awsSecretKey),
+	}, acm.WithEndpoint(provider.URL())))
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.LifecycleRenewBefore = 31 * 24 * time.Hour
+		d.ConnectorRegistry = registry
 	})
 	tok := seedScopedToken(t, h.store, h.tenant,
 		"owners:read", "owners:write",
@@ -946,11 +988,11 @@ func TestServedEndpointBindingAutomationCAPLIFE01(t *testing.T) {
 		"identity_name": "cap-life-01.served.test",
 		"reason":        "CAP-LIFE-01 endpoint lifecycle automation",
 		"target": map[string]any{
-			"name":      "cloud/acm/cap-life-01",
+			"name":      acmARN,
 			"connector": "aws-acm",
 			"config": map[string]any{
 				"region":                "us-east-1",
-				"access_key_id":         "AKIDTESTONLY",
+				"access_key_id":         awsAccessKey,
 				"secret_access_key_ref": "secret://connectors/aws-acm/access-key",
 			},
 		},
@@ -978,7 +1020,7 @@ func TestServedEndpointBindingAutomationCAPLIFE01(t *testing.T) {
 	if binding.Identity.ID == "" || binding.Identity.Status != "issued" {
 		t.Fatalf("binding identity = %+v, want issued before outbox deployment", binding.Identity)
 	}
-	if binding.Target.ID == "" || binding.Target.Name != "cloud/acm/cap-life-01" || binding.Target.Connector != "aws-acm" {
+	if binding.Target.ID == "" || binding.Target.Name != acmARN || binding.Target.Connector != "aws-acm" {
 		t.Fatalf("binding target = %+v", binding.Target)
 	}
 	for _, want := range []string{"ca.issue", "connector.deploy"} {
@@ -1001,8 +1043,11 @@ func TestServedEndpointBindingAutomationCAPLIFE01(t *testing.T) {
 		t.Fatalf("issued certs after endpoint binding = %+v", certs)
 	}
 	first := connectorDeliveriesForIdentity(t, h, tok, binding.Identity.ID)
-	if len(first.Items) != 1 || first.Items[0].Connector != "aws-acm" || first.Items[0].Target != "cloud/acm/cap-life-01" || first.Items[0].Fingerprint != certs[0].Fingerprint {
+	if len(first.Items) != 1 || first.Items[0].Status != "delivered" || first.Items[0].Connector != "aws-acm" || first.Items[0].Target != acmARN || first.Items[0].Fingerprint != certs[0].Fingerprint {
 		t.Fatalf("initial delivery receipt = %+v raw=%s cert=%s", first.Items, first.Raw, certs[0].Fingerprint)
+	}
+	if imported, ok := provider.Imported(acmARN); !ok || len(imported.Certificate) == 0 {
+		t.Fatal("endpoint binding certificate did not reach the independent ACM fixture")
 	}
 	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/identities/"+binding.Identity.ID, tok, nil)
 	if status != http.StatusOK || !jsonContains(t, body, `"status":"deployed"`) {

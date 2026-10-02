@@ -92,7 +92,10 @@ func TestCertificateRecordingTwoSessionsFenceFirstAppendAndReplay(t *testing.T) 
 			if kind == "different-key" {
 				second.IssuanceIdempotencyKey += "-other"
 			}
-			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+			// The package-wide race/coverage lane can delay the second peer before
+			// it reaches PostgreSQL. This is a correctness barrier, not a latency
+			// budget: require both real advisory-lock waiters before releasing it.
+			ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 			defer cancel()
 			peers := make([]*store.Store, 2)
 			for i := range peers {
@@ -144,7 +147,7 @@ func TestCertificateRecordingTwoSessionsFenceFirstAppendAndReplay(t *testing.T) 
 					results <- outcome{c, err}
 				}(i, in)
 			}
-			until := time.Now().Add(5 * time.Second)
+			until := time.Now().Add(30 * time.Second)
 			blocked := 0
 			for time.Now().Before(until) {
 				select {

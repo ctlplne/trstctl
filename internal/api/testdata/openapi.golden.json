@@ -17180,7 +17180,9 @@
               "ari",
               "fixed_deadline",
               "not_due",
-              "in_flight"
+              "in_flight",
+              "target_conflict",
+              "unverified_delivery"
             ],
             "type": "string"
           },

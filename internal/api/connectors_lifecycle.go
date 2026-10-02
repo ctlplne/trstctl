@@ -817,8 +817,10 @@ func (a *API) rollbackConnectorTarget(w http.ResponseWriter, r *http.Request) {
 		}
 		// D4/AUD32: this EXECUTES where it can.
 		//
-		// The predecessor is resolved from the certificate's own replacement
-		// chain. Where the connector family can address an installed object
+		// For a host target, the predecessor is the last certificate this
+		// exact agent proved serving before the new deployment. Issuance
+		// ancestry can differ after a successful rollback. Where the connector
+		// family can address an installed object
 		// separately from uploading one, the rollback is queued as a real
 		// connector.rollback job a network relay claims and performs as a
 		// re-bind. A host connector instead routes to the exact host agent whose
@@ -858,8 +860,15 @@ func (a *API) rollbackConnectorTarget(w http.ResponseWriter, r *http.Request) {
 				identityID = &req.IdentityID
 			}
 			fingerprint = evidence.Fingerprint
-			p := a.store.ResolvePredecessorCertificateForFingerprint(ctx, tenantID, evidence.Fingerprint)
-			predecessor = predecessorCertificate{Serial: p.Serial, Fingerprint: p.Fingerprint}
+			if evidence.PredecessorFingerprint == "" {
+				return 0, nil, errStatus(http.StatusConflict,
+					"this host has no confirmed prior served certificate for the same identity and target; no rollback was queued or recorded")
+			}
+			previous, previousErr := a.store.GetCertificateByFingerprint(ctx, tenantID, evidence.PredecessorFingerprint)
+			if previousErr != nil {
+				return 0, nil, previousErr
+			}
+			predecessor = predecessorCertificate{Serial: previous.Serial, Fingerprint: previous.Fingerprint}
 		}
 		if predecessor.Fingerprint == "" {
 			return 0, nil, errStatus(http.StatusConflict,

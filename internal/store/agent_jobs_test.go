@@ -637,6 +637,90 @@ func TestLastSuccessfulHostDeployAgentIDIsExactRecentAndTenantScoped(t *testing.
 	}
 }
 
+// Issuance ancestry is not the host's retained predecessor after a restore.
+// The next failed verification must still route rollback to the certificate
+// that this exact agent last proved serving on this target.
+func TestHostRollbackUsesServedPredecessorAfterRestore(t *testing.T) {
+	if testing.Short() {
+		t.Skip("starts an embedded PostgreSQL; skipped in -short")
+	}
+	st := newStore(t)
+	ctx := t.Context()
+	seedAgentJobTenant(t, ctx, st, tenantA)
+	const agentID = "eeeeeeee-0000-0000-0000-000000000061"
+	identityID := "eeeeeeee-0000-0000-0000-000000000062"
+	const targetID = "target-served-lineage"
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	steps := []struct {
+		fingerprint, destination, status, reason string
+	}{
+		{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "connector.deploy", "delivered", "agent_delivered_and_verified"},
+		{"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "connector.deploy", "delivered", "agent_delivered_and_verified"},
+		{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "connector.rollback", "rolled_back", "rolled_back_and_reverified"},
+		{"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "endpoint.renew", "delivered", "agent_delivered_verification_failed"},
+	}
+	for index, step := range steps {
+		at := now.Add(time.Duration(index) * time.Second)
+		if index != 2 && index != 3 {
+			status := "superseded"
+			source := "issued"
+			issuanceKey := ""
+			if index == 0 {
+				// Discovery refreshed the same fingerprint after issuance.
+				source, issuanceKey = "discovery:network", "agentcsr:prior:fixture"
+			}
+			if _, err := st.UpsertCertificate(ctx, store.Certificate{TenantID: tenantA,
+				Subject: "served-lineage.example.test", Issuer: "local", Serial: fmt.Sprint(index + 1),
+				Fingerprint: step.fingerprint, Source: source, Status: status, IssuanceIdempotencyKey: issuanceKey,
+			}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		var jobID int64
+		if err := st.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+			payload := []byte(fmt.Sprintf(`{"target_id":%q,"identity_id":%q,"fingerprint":%q}`, targetID, identityID, step.fingerprint))
+			if err := tx.QueryRow(ctx, `INSERT INTO outbox
+				(tenant_id, destination, payload, idempotency_key, status, delivered_at,
+				 required_agent_role, claimed_by_agent_id, claim_expires_at, claim_completed_at)
+				VALUES ($1, $2, $3, $4, 'delivered', $5, 'host', $6::uuid, $5, $5)
+				RETURNING id`, tenantA, step.destination, payload, fmt.Sprintf("lineage-%d", index), at, agentID).Scan(&jobID); err != nil {
+				return err
+			}
+			receiptDestination := step.destination
+			if receiptDestination == "endpoint.renew" {
+				receiptDestination = "connector.deploy"
+			}
+			return st.ApplyConnectorDeliveryRecordedTx(ctx, tx, store.ConnectorDeliveryReceipt{
+				ID: fmt.Sprintf("eeeeeeee-0000-4000-8000-%012d", index+1), TenantID: tenantA,
+				OutboxID: &jobID, IdentityID: &identityID, Destination: receiptDestination,
+				Connector: "apache", Target: "served-lineage", Fingerprint: step.fingerprint,
+				Status: step.status, Reason: step.reason, IdempotencyKey: fmt.Sprintf("lineage-%d", index),
+				CreatedAt: at, UpdatedAt: at,
+			})
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if index == 3 {
+			if _, err := st.UpsertCertificate(ctx, store.Certificate{TenantID: tenantA,
+				Subject: "served-lineage.example.test", Issuer: "local", Serial: "4",
+				Fingerprint: step.fingerprint, Source: "issued", Status: "active",
+				IssuanceIdempotencyKey: fmt.Sprintf("agentcsr:%d:0:fixture", jobID),
+			}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	got, found, err := st.LastSuccessfulHostDeployEvidence(ctx, tenantA, targetID)
+	if err != nil || !found || got.AgentID != agentID || got.IdentityID != identityID ||
+		got.Fingerprint != steps[3].fingerprint || got.PredecessorFingerprint != steps[0].fingerprint {
+		t.Fatalf("served predecessor after rollback = %+v found=%v err=%v", got, found, err)
+	}
+	fingerprint, found, err := st.LatestDeployedCertificateFingerprintForIdentity(ctx, tenantA, identityID)
+	if err != nil || !found || fingerprint != steps[0].fingerprint {
+		t.Fatalf("verification failure advanced served selector to %q found=%v err=%v", fingerprint, found, err)
+	}
+}
+
 func redemptionSnapshot(job store.AgentJob) store.AgentJobForRedemption {
 	return store.AgentJobForRedemption{Destination: job.Destination, IdempotencyKey: job.IdempotencyKey, Payload: job.Payload, ClaimAttempts: job.ClaimAttempts}
 }

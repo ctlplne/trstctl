@@ -116,20 +116,160 @@ func TestLifecycleAutomationUsesIdentityBoundServedCertificate(t *testing.T) {
 			t.Fatalf("after %s/%s scheduler selected %q found=%v error=%v; want %q", step.destination, step.status, fingerprint, found, err, certs[step.want].Fingerprint)
 		}
 		rows, err := s.ListLifecycleAutomationInventory(ctx, tenantA, 100)
-		// Identity 0 has only a superseded leaf and no proved restore. It must
-		// leave the renewable inventory, while identity 1 stays bound to its
-		// exact served leaf through each pending, failed, and proved step.
-		if err != nil || len(rows) != 1 {
+		// Identity 0 retains a failed delivery to show as blocked, even
+		// though its older certificate is superseded. Identity 1 stays bound
+		// to its exact served leaf through each pending and failed step.
+		if err != nil || len(rows) != 2 {
 			t.Fatalf("after restore inventory count=%d error=%v", len(rows), err)
 		}
+		seenBound := false
 		for _, row := range rows {
+			if row.IdentityID == identities[0].ID {
+				if !row.DeliveryUnverified {
+					t.Fatalf("failed delivery disappeared for identity %s", row.IdentityID)
+				}
+				continue
+			}
+			seenBound = true
 			if row.IdentityID != identities[1].ID || row.CertificateID != certs[step.want].ID || !row.CertificateEnd.Equal(*certs[step.want].NotAfter) {
 				t.Fatalf("after %s/%s plan selected %s expiring %v; want %s expiring %v", step.destination, step.status, row.CertificateID, row.CertificateEnd, certs[step.want].ID, certs[step.want].NotAfter)
 			}
 		}
+		if !seenBound {
+			t.Fatal("identity-bound served leaf disappeared")
+		}
 	}
 	if fingerprint, found, err := s.LatestDeployedCertificateFingerprintForIdentity(ctx, tenantB, identities[1].ID); err != nil || found || fingerprint != "" {
 		t.Fatalf("foreign tenant resolved certificate=%q found=%v error=%v", fingerprint, found, err)
+	}
+}
+
+func TestLifecycleAutomationShowsFailedDeliveryWithoutBorrowingAnotherCertificate(t *testing.T) {
+	s := newStore(t)
+	ctx := t.Context()
+	owner, err := s.CreateOwner(ctx, store.Owner{TenantID: tenantA, Kind: store.OwnerTeam, Name: "failed delivery owner"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := s.CreateIdentity(ctx, store.Identity{TenantID: tenantA, Kind: store.KindX509Certificate,
+		Name: "failed-delivery.example.test", OwnerID: owner.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity.Status = "deployed"
+	if err := s.UpsertIdentity(ctx, identity); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	end := now.Add(10 * time.Minute)
+	failed, err := s.UpsertCertificate(ctx, store.Certificate{TenantID: tenantA, OwnerID: &owner.ID,
+		Subject: "CN=failed-delivery.example.test", SANs: []string{identity.Name}, Issuer: "CA 1",
+		Serial: "failed", Fingerprint: strings.Repeat("a", 64), Source: "issued", Status: "active",
+		NotBefore: &now, NotAfter: &end})
+	if err != nil {
+		t.Fatal(err)
+	}
+	later := now.Add(90 * 24 * time.Hour)
+	if _, err := s.UpsertCertificate(ctx, store.Certificate{TenantID: tenantA, OwnerID: &owner.ID,
+		Subject: "CN=failed-delivery.example.test", SANs: []string{identity.Name}, Issuer: "CA 2",
+		Serial: "other", Fingerprint: strings.Repeat("b", 64), Source: "issued", Status: "active",
+		NotBefore: &now, NotAfter: &later}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return s.ApplyConnectorDeliveryRecordedTx(ctx, tx, store.ConnectorDeliveryReceipt{
+			ID: "66666666-6666-4666-8666-666666666666", TenantID: tenantA, IdentityID: &identity.ID,
+			Destination: "connector.deploy", Connector: "caddy", Target: "failed-target",
+			Fingerprint: failed.Fingerprint, Status: "failed", IdempotencyKey: "failed-delivery",
+			CreatedAt: now, UpdatedAt: now,
+		})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := s.ListLifecycleAutomationInventory(ctx, tenantA, 100)
+	if err != nil || len(rows) != 1 || rows[0].CertificateID != failed.ID || !rows[0].DeliveryUnverified {
+		t.Fatalf("failed delivery must be visible and bound to its own certificate: rows=%+v err=%v", rows, err)
+	}
+}
+
+// The host can install a successor but fail its listener probe. The last
+// confirmed rollback still determines the renewal clock, while the new failure
+// must remain visible and block unattended action.
+func TestLifecycleAutomationFlagsFailedVerificationAfterConfirmedRollback(t *testing.T) {
+	s := newStore(t)
+	ctx := t.Context()
+	owner, err := s.CreateOwner(ctx, store.Owner{TenantID: tenantA, Kind: store.OwnerTeam, Name: "failed verifier owner"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := s.CreateIdentity(ctx, store.Identity{TenantID: tenantA, Kind: store.KindX509Certificate,
+		Name: "failed-verifier.example.test", OwnerID: owner.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity.Status = "renewal_failed"
+	if err := s.UpsertIdentity(ctx, identity); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	end := now.Add(time.Hour)
+	served, err := s.UpsertCertificate(ctx, store.Certificate{TenantID: tenantA,
+		Subject: identity.Name, SANs: []string{identity.Name}, Issuer: "local", Serial: "served",
+		Fingerprint: strings.Repeat("a", 64), Source: "discovery:network", IssuanceIdempotencyKey: "agentcsr:prior:fixture",
+		Status: "superseded", NotBefore: &now, NotAfter: &end})
+	if err != nil {
+		t.Fatal(err)
+	}
+	failedEnd := now.Add(30 * 24 * time.Hour)
+	failed, err := s.UpsertCertificate(ctx, store.Certificate{TenantID: tenantA, OwnerID: &owner.ID,
+		Subject: identity.Name, SANs: []string{identity.Name}, Issuer: "local", Serial: "failed",
+		Fingerprint: strings.Repeat("b", 64), Source: "issued", Status: "active", NotBefore: &now, NotAfter: &failedEnd})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, step := range []struct{ destination, status, reason, fingerprint, key string }{
+		{"connector.rollback", "rolled_back", "rolled_back_and_reverified", served.Fingerprint, "restore"},
+		{"connector.deploy", "delivered", "agent_delivered_verification_failed", failed.Fingerprint, "renew"},
+		{"connector.deploy", "verify_failed", "endpoint_unreachable", failed.Fingerprint, "renew:verified"},
+	} {
+		at := now.Add(time.Duration(i) * time.Second)
+		if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+			return s.ApplyConnectorDeliveryRecordedTx(ctx, tx, store.ConnectorDeliveryReceipt{
+				ID: fmt.Sprintf("66666666-6666-4666-8666-%012d", i+1), TenantID: tenantA,
+				IdentityID: &identity.ID, Destination: step.destination, Connector: "apache", Target: "failed-verifier",
+				Fingerprint: step.fingerprint, Status: step.status, Reason: step.reason, IdempotencyKey: step.key,
+				CreatedAt: at, UpdatedAt: at,
+			})
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rows, err := s.ListLifecycleAutomationInventory(ctx, tenantA, 100)
+	if err != nil || len(rows) != 1 || rows[0].CertificateID != served.ID || !rows[0].DeliveryUnverified {
+		t.Fatalf("plan must show last confirmed leaf and current verifier failure: rows=%+v err=%v", rows, err)
+	}
+	candidates, err := s.ListRenewalIdentityCandidates(ctx, tenantA, now.Add(2*time.Hour), now)
+	if err != nil || len(candidates) != 1 || candidates[0].Certificate.ID != served.ID {
+		t.Fatalf("scheduler prefilter lost rediscovered restored leaf: candidates=%+v err=%v", candidates, err)
+	}
+	blocked, err := s.HasUnverifiedConnectorDeliveryAfterConfirmedServe(ctx, tenantA, identity.ID)
+	if err != nil || !blocked {
+		t.Fatalf("unattended retry must wait for repair: blocked=%v err=%v", blocked, err)
+	}
+	at := now.Add(3 * time.Second)
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return s.ApplyConnectorDeliveryRecordedTx(ctx, tx, store.ConnectorDeliveryReceipt{
+			ID: "66666666-6666-4666-8666-000000000004", TenantID: tenantA,
+			IdentityID: &identity.ID, Destination: "connector.deploy", Connector: "apache", Target: "failed-verifier",
+			Fingerprint: failed.Fingerprint, Status: "verified", Reason: "endpoint_serving_deployed_identity",
+			IdempotencyKey: "recovery:verified", CreatedAt: at, UpdatedAt: at,
+		})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	blocked, err = s.HasUnverifiedConnectorDeliveryAfterConfirmedServe(ctx, tenantA, identity.ID)
+	if err != nil || blocked {
+		t.Fatalf("confirmed recovery must clear unattended hold: blocked=%v err=%v", blocked, err)
 	}
 }
 

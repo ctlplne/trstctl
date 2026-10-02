@@ -102,6 +102,12 @@ func (s *Server) LifecycleAutomationPlan(ctx context.Context, tenantID string, a
 			explanation = "The configured renewal deadline has arrived."
 		}
 		blockers := []string{}
+		if row.DeliveryUnverified {
+			due = false
+			source = "unverified_delivery"
+			explanation = "The latest delivery or endpoint verification failed; this run has not confirmed the served certificate."
+			blockers = append(blockers, "Repair the destination or its verifier, retry the renewal explicitly, and confirm the served certificate before unattended renewal resumes.")
+		}
 		if row.IdentityStatus == "renewing" || row.PendingRenewal {
 			due = false
 			source = "in_flight"

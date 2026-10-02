@@ -72,6 +72,33 @@ func TestRollbackRequestReturnsReadableCanonicalReceiptOnRepeat(t *testing.T) {
 	}
 }
 
+func TestRollbackNewSuccessorDoesNotReplayAnOldRestore(t *testing.T) {
+	ctx := t.Context()
+	s := newStore(t)
+	mustRegisterTenant(t, s, tenantA)
+	o := orchestrator.NewOrchestrator(openLog(t), s, orchestrator.NewOutbox(s))
+	seedRollbackPredecessor(t, o)
+	request := orchestrator.ConnectorRollbackRequest{Connector: "f5", Target: "execution-route", PredecessorFingerprint: "old-leaf", SuccessorFingerprint: "first-successor"}
+	first, _, err := requestRollbackReceipt(ctx, o, request, "first-incident")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE outbox SET status='delivered', delivered_at=now() WHERE tenant_id=$1 AND id=$2`, tenantA, first.OutboxID)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	request.SuccessorFingerprint = "second-successor"
+	second, receipt, err := requestRollbackReceipt(ctx, o, request, "second-incident")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.OutboxID == first.OutboxID || second.IdempotencyKey == first.IdempotencyKey || !second.Queued || receipt.Status != "rollback_queued" {
+		t.Fatalf("later successor did not get its own rollback command: first=%+v second=%+v receipt=%+v", first, second, receipt)
+	}
+}
+
 func TestRollbackRequestCannotBecomeClaimableBeforeItsQueuedReceipt(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()

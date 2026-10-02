@@ -154,11 +154,11 @@ func (o *Orchestrator) requestConnectorRollback(ctx context.Context, tenantID st
 	if err != nil {
 		return ConnectorRollbackQueued{}, err
 	}
-	// Idempotent on (target, predecessor): asking twice for the same rollback is
-	// one rollback. Without this an operator hammering the button during an
-	// incident would queue a job per click, and a relay would execute the same
-	// restore repeatedly against a target already in the desired state.
-	idemKey := "connector-rollback:" + req.TargetID + ":" + req.Target + ":" + req.PredecessorFingerprint
+	// Idempotent for one successor-to-predecessor transition. A later renewal
+	// can replace a different successor while restoring the same predecessor;
+	// that is a new command, not a replay of the previous incident. Retrying
+	// the same transition still reuses its durable row and signed generation.
+	idemKey := "connector-rollback:" + req.TargetID + ":" + req.Target + ":" + req.SuccessorFingerprint + ":" + req.PredecessorFingerprint
 
 	var outboxID int64
 	var queuedNow bool

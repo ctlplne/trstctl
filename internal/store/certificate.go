@@ -425,7 +425,8 @@ func (s *Store) CertificateExists(ctx context.Context, tenantID, fingerprint, is
 // ListActiveIssuedCertificatesForIdentity returns the active, internally-issued
 // certificates that belong to an identity, matched by the identity's owner and
 // its name appearing as a DNS SAN. The served mint sets owner_id =
-// identity.owner, source = "issued", and DNS SAN = identity.name (the subject is
+// identity.owner, an issuance key, and DNS SAN = identity.name. A later scan
+// may change source to discovery without erasing that issuance key (the subject is
 // stored as the full DN "CN=<name>", so the name is matched against the SANs, not
 // the subject string). The served revocation handler uses it to find the cert(s)
 // to revoke when an identity transitions to revoked. Only active certs are
@@ -438,7 +439,7 @@ func (s *Store) ListActiveIssuedCertificatesForIdentity(ctx context.Context, ten
 			`SELECT `+certificateColumns+`
 			   FROM certificates
 			  WHERE tenant_id = $1 AND owner_id = $2 AND $3 = ANY(sans)
-			    AND source = 'issued' AND status = 'active'
+			    AND (source = 'issued' OR issuance_idempotency_key <> '') AND status = 'active'
 			  ORDER BY created_at`,
 			tenantID, ownerID, name)
 		if err != nil {

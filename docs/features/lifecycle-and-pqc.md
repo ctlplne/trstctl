@@ -91,7 +91,13 @@ three signals, tenant-isolated at the database layer:
   than the reviewed profile requests; inspect the returned certificate and listener.
   A 47-day leaf with a 30-day lead still becomes due around day 17; this repair does
   not shorten the configured lead or postpone that deadline. The automation plan uses
-  the same decision as the scheduler.
+  the same decision as the scheduler. If a connector attempted deployment but
+  returned a failed receipt, the plan keeps the identity visible with
+  `renewal_source: unverified_delivery`, `due: false`, and a repair instruction.
+  The scheduler will not use that issued certificate as a served predecessor.
+  Repair the destination, explicitly retry renewal, and independently verify the
+  served leaf before relying on automatic renewal. A historical `deployed`
+  identity state alone is not delivery evidence.
 - **Revoke with propagation.** `Revoke(certID, reason)` is idempotent, updates the
   inventory, enqueues a `revocation.publish` to the [outbox](../glossary.md) in the same
   transaction so a crash can't drop it, and emits `certificate.revoked`.
@@ -185,7 +191,15 @@ completed restore moves that deadline back to the predecessor; queued or failed
 restores do not change it. Issuance history may still call that predecessor
 `superseded`; a completed restore proves it is serving again, so its earlier
 deadline still applies. Revoked certificates are never made renewable by a
-restore receipt. A replacement with the same owner and DNS name cannot inherit
+restore receipt. A later discovery scan can change the inventory `source` and
+owner observation for that same fingerprint. The retained issuance key and
+identity-bound delivery receipt keep its renewal binding; a scan does not erase
+the original issuance fact. If a later deployment fails verification, the plan
+shows `unverified_delivery` and unattended renewal waits until an operator
+repairs and verifies a retry. Host rollback uses the last certificate that the
+same agent proved serving on that target before the attempted deploy. The
+certificate's `replaces_id` can name a different leaf after an earlier restore.
+A replacement with the same owner and DNS name cannot inherit
 its predecessor's longer lifetime. An active endpoint replacement holds the
 predecessor's automatic renewal; the plan omits that predecessor from its watched
 and due counts just as the scheduler does. Verify the replacement at the listener

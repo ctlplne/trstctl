@@ -29,8 +29,12 @@ type LifecycleAutomationInventory struct {
 	LatestRunStatus           string
 	RollbackRef               string
 	PendingRenewal            bool
-	TargetID                  string
-	PredecessorID             string
+	// DeliveryUnverified means an identity has an issued certificate and a
+	// failed connector delivery for it, but no successful served-certificate
+	// receipt. The plan may show this row; the scheduler must not renew it.
+	DeliveryUnverified bool
+	TargetID           string
+	PredecessorID      string
 }
 
 // LifecycleAutomationOutboxSummary reports only aggregate command state for the
@@ -60,6 +64,7 @@ func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID s
 			       coalesce(run.id::text, ''), coalesce(run.status, ''), coalesce(run.rollback_ref, ''),
 			       coalesce(i.attributes->>'deployment_target_id', ''),
 			       coalesce(i.attributes->>'endpoint_replaces_identity_id', ''),
+			       unverified.fingerprint IS NOT NULL,
 			       EXISTS (SELECT 1 FROM outbox job WHERE job.tenant_id = $1 AND job.tenant_id = i.tenant_id
 			         AND job.status IN ('pending', 'processing')
 			         AND CASE WHEN job.destination IN ('ca.renew', 'endpoint.renew')
@@ -68,31 +73,54 @@ func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID s
 			  JOIN owners AS o
 			    ON o.tenant_id = $1 AND o.tenant_id = i.tenant_id AND o.id = i.owner_id
 			  LEFT JOIN LATERAL (
-			       SELECT receipt.fingerprint
+			       SELECT receipt.fingerprint, receipt.updated_at
 			         FROM connector_delivery_receipts receipt
 			         JOIN certificates served
 			           ON served.tenant_id = $1 AND served.tenant_id = receipt.tenant_id
 			          AND served.fingerprint = receipt.fingerprint
-			          AND served.source = 'issued'
+			          AND (served.source = 'issued' OR served.issuance_idempotency_key <> '')
 			        WHERE receipt.tenant_id = $1 AND receipt.tenant_id = i.tenant_id
 			          AND receipt.identity_id = i.id
-			          AND ((receipt.destination = 'connector.deploy' AND receipt.status IN ('delivered', 'verified') AND served.status = 'active')
+			          AND ((receipt.destination = 'connector.deploy' AND receipt.status IN ('delivered', 'verified') AND served.status = 'active'
+			            AND receipt.reason <> 'agent_delivered_verification_failed'
+			            AND NOT EXISTS (SELECT 1 FROM connector_delivery_receipts failed
+			              WHERE failed.tenant_id = $1 AND failed.tenant_id = receipt.tenant_id
+			                AND failed.identity_id = receipt.identity_id
+			                AND failed.destination = 'connector.deploy' AND failed.status = 'verify_failed'
+			                AND failed.idempotency_key = receipt.idempotency_key || ':verified'))
 			            OR (receipt.destination = 'connector.rollback' AND receipt.status = 'rolled_back' AND served.status IN ('active', 'superseded')))
 			        ORDER BY receipt.updated_at DESC, receipt.id DESC LIMIT 1
-			  ) AS deployed ON true
-			  JOIN LATERAL (
+		  ) AS deployed ON true
+		  LEFT JOIN LATERAL (
+		       SELECT receipt.fingerprint
+		         FROM connector_delivery_receipts receipt
+		         JOIN certificates candidate
+		           ON candidate.tenant_id = $1 AND candidate.tenant_id = receipt.tenant_id
+		          AND candidate.fingerprint = receipt.fingerprint
+		          AND (candidate.source = 'issued' OR candidate.issuance_idempotency_key <> '') AND candidate.status = 'active'
+		          AND candidate.owner_id = i.owner_id AND i.name = ANY(candidate.sans)
+		        WHERE receipt.tenant_id = $1 AND receipt.tenant_id = i.tenant_id
+		          AND receipt.identity_id = i.id
+		          AND receipt.destination = 'connector.deploy'
+		          AND receipt.status IN ('failed', 'verify_failed')
+		          AND (deployed.updated_at IS NULL OR receipt.updated_at > deployed.updated_at)
+		        ORDER BY receipt.updated_at DESC, receipt.id DESC LIMIT 1
+		  ) AS unverified ON true
+		  JOIN LATERAL (
 			       SELECT c.id, c.not_before, c.not_after, c.validity_anchor,
 			              c.created_at, c.issuance_idempotency_key
 			         FROM certificates AS c
 			        WHERE c.tenant_id = $1
 			          AND c.tenant_id = i.tenant_id
-			          AND ((deployed.fingerprint IS NOT NULL AND c.fingerprint = deployed.fingerprint)
-			            OR (deployed.fingerprint IS NULL AND NOT EXISTS (
+		          AND ((deployed.fingerprint IS NOT NULL AND c.fingerprint = deployed.fingerprint)
+		            OR (deployed.fingerprint IS NULL AND unverified.fingerprint IS NOT NULL
+		                AND c.fingerprint = unverified.fingerprint)
+		            OR (deployed.fingerprint IS NULL AND NOT EXISTS (
 			                  SELECT 1 FROM connector_delivery_receipts prior
 			                   WHERE prior.tenant_id = $1 AND prior.tenant_id = i.tenant_id
 			                     AND prior.identity_id = i.id)
 			                AND c.status = 'active' AND c.owner_id = i.owner_id AND i.name = ANY(c.sans)))
-			          AND c.source = 'issued'
+			          AND (c.source = 'issued' OR c.issuance_idempotency_key <> '')
 			          AND c.status IN ('active', 'superseded')
 			        ORDER BY c.not_after DESC NULLS LAST, c.created_at DESC, c.id
 			        LIMIT 1
@@ -127,7 +155,7 @@ func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID s
 				&item.CertificateStart, &item.CertificateEnd, &item.CertificateValidityAnchor,
 				&item.CertificateCreatedAt, &item.CertificateIssuanceKey,
 				&item.LatestRunID, &item.LatestRunStatus, &item.RollbackRef,
-				&item.TargetID, &item.PredecessorID,
+				&item.TargetID, &item.PredecessorID, &item.DeliveryUnverified,
 				&item.PendingRenewal,
 			); err != nil {
 				return err

@@ -57,12 +57,16 @@ type HostDeployEvidence struct {
 	AgentID     string
 	IdentityID  string
 	Fingerprint string
+	// PredecessorFingerprint is the last certificate this same agent proved
+	// serving on the target before the successor job. Certificate issuance
+	// ancestry can differ after a rollback, so it cannot authorize restore.
+	PredecessorFingerprint string
 }
 
 // LastSuccessfulHostDeployEvidence returns the exact host agent and public
 // successor identity for targetID. That agent owns the encrypted predecessor;
-// the fingerprint follows the certificate replacement edge even when the bad
-// successor's SAN no longer matches its identity.
+// the predecessor is selected from this agent's last confirmed serving receipt,
+// even when the successor's issuance chain or SAN names a different leaf.
 //
 // Two jobs can install a host certificate. connector.deploy carries an already
 // issued fingerprint in its immutable payload. endpoint.renew generates the key
@@ -77,6 +81,8 @@ func (s *Store) LastSuccessfulHostDeployEvidence(ctx context.Context, tenantID, 
 		return HostDeployEvidence{}, false, nil
 	}
 	var out HostDeployEvidence
+	var currentJobID int64
+	var deliveredAt time.Time
 	found := false
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx,
@@ -110,12 +116,45 @@ func (s *Store) LastSuccessfulHostDeployEvidence(ctx context.Context, tenantID, 
 			            job.delivered_at
 			       FROM host_jobs job
 			 )
-			 SELECT claimed_by_agent_id::text, identity_id, fingerprint
+			 SELECT claimed_by_agent_id::text, identity_id, fingerprint, id, delivered_at
 			   FROM routed
 			  ORDER BY delivered_at DESC, id DESC
-			  LIMIT 1`, tenantID, targetID).Scan(&out.AgentID, &out.IdentityID, &out.Fingerprint)
+			  LIMIT 1`, tenantID, targetID).Scan(&out.AgentID, &out.IdentityID, &out.Fingerprint, &currentJobID, &deliveredAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
+		}
+		if err != nil {
+			return err
+		}
+		// The host retained the bytes it replaced, not necessarily the
+		// certificate named by the successor's issuance ReplacesID edge. A
+		// previous successful rollback is a common reason for that difference.
+		// Restrict the predecessor to this exact agent, target and identity.
+		err = tx.QueryRow(ctx, `
+			SELECT receipt.fingerprint
+			  FROM connector_delivery_receipts receipt
+			  JOIN outbox prior_job ON prior_job.tenant_id = $1 AND prior_job.id = receipt.outbox_id
+			  JOIN certificates cert ON cert.tenant_id = $1 AND cert.fingerprint = receipt.fingerprint
+			 WHERE receipt.tenant_id = $1 AND receipt.identity_id::text = $3
+			   AND prior_job.claimed_by_agent_id = $4::uuid
+			   AND prior_job.required_agent_role = 'host'
+			   AND prior_job.status = 'delivered'
+			   AND prior_job.delivered_at < $5
+			   AND prior_job.id <> $6
+			   AND convert_from(prior_job.payload, 'UTF8')::jsonb ->> 'target_id' = $2
+			   AND cert.status IN ('active', 'superseded')
+			   AND ((receipt.destination = 'connector.rollback' AND receipt.status = 'rolled_back')
+			     OR (receipt.destination = 'connector.deploy' AND receipt.status = 'delivered'
+			       AND receipt.reason IN ('agent_delivered', 'agent_delivered_and_verified')
+			       AND NOT EXISTS (SELECT 1 FROM connector_delivery_receipts failed
+			         WHERE failed.tenant_id = receipt.tenant_id
+			           AND failed.identity_id = receipt.identity_id
+			           AND failed.destination = 'connector.deploy' AND failed.status = 'verify_failed'
+			           AND failed.idempotency_key = receipt.idempotency_key || ':verified')))
+			 ORDER BY prior_job.delivered_at DESC, prior_job.id DESC
+			 LIMIT 1`, tenantID, targetID, out.IdentityID, out.AgentID, deliveredAt, currentJobID).Scan(&out.PredecessorFingerprint)
+		if errors.Is(err, pgx.ErrNoRows) {
+			err = nil
 		}
 		if err != nil {
 			return err

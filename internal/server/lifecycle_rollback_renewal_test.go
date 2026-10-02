@@ -73,3 +73,59 @@ func TestLifecycleSchedulerUsesTheRestoredCertificateDeadline(t *testing.T) {
 		t.Fatalf("duplicate renewal after restore: queued=%d error=%v", queued, err)
 	}
 }
+
+func TestLifecycleSchedulerHoldsAfterNewerFailedVerification(t *testing.T) {
+	ctx := t.Context()
+	h := newIssuanceDispatcherHarness(t)
+	owner, err := h.store.CreateOwner(ctx, store.Owner{TenantID: h.tenant, Kind: store.OwnerTeam, Name: "Failed verifier owner"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ident, err := h.store.CreateIdentity(ctx, store.Identity{TenantID: h.tenant, Kind: store.KindX509Certificate, Name: "failed-verifier.example.test", OwnerID: owner.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ident.Status = "renewal_failed"
+	if err := h.store.UpsertIdentity(ctx, ident); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	end := now.Add(2 * time.Minute)
+	cert, err := h.store.UpsertCertificate(ctx, store.Certificate{TenantID: h.tenant, OwnerID: &owner.ID,
+		SANs: []string{ident.Name}, Serial: "prior", Fingerprint: strings.Repeat("c", 64), Source: "issued",
+		Status: "active", NotBefore: &now, NotAfter: &end})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, step := range []struct{ status, key string }{{"verified", "first:verified"}, {"verify_failed", "second:verified"}} {
+		at := now.Add(time.Duration(i) * time.Second)
+		if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+			return h.store.ApplyConnectorDeliveryRecordedTx(ctx, tx, store.ConnectorDeliveryReceipt{
+				ID:       []string{"77777777-7777-4777-8777-000000000001", "77777777-7777-4777-8777-000000000002"}[i],
+				TenantID: h.tenant, IdentityID: &ident.ID, Destination: "connector.deploy", Connector: "apache",
+				Target: "failed-verifier", Fingerprint: cert.Fingerprint, Status: step.status,
+				IdempotencyKey: step.key, CreatedAt: at, UpdatedAt: at,
+			})
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	srv := &Server{store: h.store, orch: h.orch, lifecycleRenewBefore: 5 * time.Minute}
+	if queued, err := srv.runLifecycleOnceAt(ctx, now.Add(2*time.Second)); err != nil || queued != 0 {
+		t.Fatalf("failed verification must hold unattended renewal: queued=%d err=%v", queued, err)
+	}
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		at := now.Add(3 * time.Second)
+		return h.store.ApplyConnectorDeliveryRecordedTx(ctx, tx, store.ConnectorDeliveryReceipt{
+			ID: "77777777-7777-4777-8777-000000000003", TenantID: h.tenant, IdentityID: &ident.ID,
+			Destination: "connector.deploy", Connector: "apache", Target: "failed-verifier",
+			Fingerprint: cert.Fingerprint, Status: "verified", IdempotencyKey: "recovery:verified",
+			CreatedAt: at, UpdatedAt: at,
+		})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if queued, err := srv.runLifecycleOnceAt(ctx, now.Add(4*time.Second)); err != nil || queued != 1 {
+		t.Fatalf("proved recovery must release unattended renewal: queued=%d err=%v", queued, err)
+	}
+}

@@ -3400,24 +3400,17 @@ func (s *Server) runLifecycleOnceAt(ctx context.Context, renewalAt time.Time) (i
 						continue
 					}
 					seen[ident.ID] = struct{}{}
-					// The SQL prefilter is intentionally broad for legacy
-					// identities. Where a signed connector timeline exists,
-					// replace its owner+SAN candidate with the exact certificate
-					// this identity is proved to serve before making the ARI/time
-					// decision.
-					deployedFingerprint, deployed, resolveErr := s.store.LatestDeployedCertificateFingerprintForIdentity(ctx, tenant, ident.ID)
+					// Resolve the certificate actually served by this identity before
+					// applying ARI or the fixed renewal window.
+					servedCertificate, eligible, resolveErr := s.lifecycleServedRenewalCertificate(ctx, tenant, candidate)
 					if resolveErr != nil {
 						s.observeLifecycleSweep(queued, 0, resolveErr)
 						return queued, resolveErr
 					}
-					if deployed && deployedFingerprint != candidate.Certificate.Fingerprint {
-						deployedCertificate, loadErr := s.store.GetCertificateByFingerprint(ctx, tenant, deployedFingerprint)
-						if loadErr != nil {
-							s.observeLifecycleSweep(queued, 0, loadErr)
-							return queued, loadErr
-						}
-						candidate.Certificate = deployedCertificate
+					if !eligible {
+						continue
 					}
+					candidate.Certificate = servedCertificate
 					reason, due := lifecycleRenewalReason(candidate.Certificate, now, cutoff)
 					if !due {
 						continue
@@ -3470,6 +3463,42 @@ func (s *Server) runLifecycleOnceAt(ctx context.Context, renewalAt time.Time) (i
 	}
 	s.observeLifecycleSweep(queued, alerted+horizonAlerts+ownershipAlerts, nil)
 	return queued, nil
+}
+
+// lifecycleServedRenewalCertificate uses the signed connector timeline when
+// one exists. The legacy owner/SAN match is allowed only for identities with
+// no delivery history; a failed or unverified rollout never becomes the
+// unattended renewal predecessor.
+func (s *Server) lifecycleServedRenewalCertificate(ctx context.Context, tenant string, candidate store.RenewalIdentityCandidate) (store.Certificate, bool, error) {
+	identityID := candidate.Identity.ID
+	fingerprint, deployed, err := s.store.LatestDeployedCertificateFingerprintForIdentity(ctx, tenant, identityID)
+	if err != nil {
+		return store.Certificate{}, false, err
+	}
+	if !deployed {
+		hasHistory, err := s.store.HasConnectorDeliveryHistoryForIdentity(ctx, tenant, identityID)
+		if err != nil {
+			return store.Certificate{}, false, err
+		}
+		if hasHistory {
+			return store.Certificate{}, false, nil
+		}
+	}
+	unverified, err := s.store.HasUnverifiedConnectorDeliveryAfterConfirmedServe(ctx, tenant, identityID)
+	if err != nil {
+		return store.Certificate{}, false, err
+	}
+	if unverified {
+		return store.Certificate{}, false, nil
+	}
+	if !deployed || fingerprint == candidate.Certificate.Fingerprint {
+		return candidate.Certificate, true, nil
+	}
+	certificate, err := s.store.GetCertificateByFingerprint(ctx, tenant, fingerprint)
+	if err != nil {
+		return store.Certificate{}, false, err
+	}
+	return certificate, true, nil
 }
 
 // runOwnershipReattestationOnce is bounded twice: tenant discovery selects only
