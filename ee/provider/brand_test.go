@@ -4,7 +4,9 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -93,5 +95,20 @@ func TestBrandAdministrationRefusesWithoutADurableStore(t *testing.T) {
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("brand set with no store = %d, want 403: a brand that cannot survive a restart "+
 			"is not a white-label guarantee", rec.Code)
+	}
+}
+
+func TestBrandCollisionAndPersistenceErrorsAreSafeForOperators(t *testing.T) {
+	conflict := httptest.NewRecorder()
+	writeProviderError(conflict, ErrBrandDomainConflict)
+	if conflict.Code != http.StatusConflict || !strings.Contains(conflict.Body.String(), `"brand_domain_conflict"`) ||
+		strings.Contains(conflict.Body.String(), "tenant_branding_domain_key") {
+		t.Fatalf("domain collision response = %d %s", conflict.Code, conflict.Body.String())
+	}
+	internal := httptest.NewRecorder()
+	writeProviderError(internal, fmt.Errorf("%w: tenant_branding_domain_key secret detail", ErrMutationPersistence))
+	if internal.Code != http.StatusInternalServerError || strings.Contains(internal.Body.String(), "tenant_branding_domain_key") ||
+		strings.Contains(internal.Body.String(), "secret detail") {
+		t.Fatalf("persistence detail leaked = %d %s", internal.Code, internal.Body.String())
 	}
 }

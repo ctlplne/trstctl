@@ -118,6 +118,82 @@ func TestProviderAuthorityRebuildsExactlyFromOneEventHistory(t *testing.T) {
 	}
 }
 
+func TestProviderBrandCollisionRefusesBeforeAppendAndRecoversOlderPoisonedHistory(t *testing.T) {
+	ctx := context.Background()
+	st := openProviderStore(t)
+	truncateProviderAuthority(t, st)
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	runtime := NewAuthorityRuntime(st, log)
+	alpha, beta := CustomerID("brand-owner-alpha"), CustomerID("brand-owner-beta")
+	at := time.Date(2026, 10, 3, 18, 0, 0, 0, time.UTC)
+	brand := func(tenant, name, domain string) AuthorityEvent {
+		return AuthorityEvent{Brand: &TenantBrand{TenantID: tenant, ProductName: name, CustomDomain: domain},
+			EffectiveAt: at, Audit: AuditEvent{Type: EventTenantBrandSet, TenantID: tenant, OperatorID: "provider-admin", At: at}}
+	}
+	if _, err := runtime.Mutations.Append(ctx, "alpha-brand-v1", EventTenantBrandSet, alpha, brand(alpha, "Alpha", "alpha.qa.test")); err != nil {
+		t.Fatal(err)
+	}
+	head, err := log.LastSequence(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	duplicate := brand(beta, "Beta", "alpha.qa.test")
+	if _, err := runtime.Mutations.Append(ctx, "beta-duplicate-new", EventTenantBrandSet, beta, duplicate); !errors.Is(err, ErrBrandDomainConflict) {
+		t.Fatalf("new collision = %v, want safe domain conflict", err)
+	}
+	if after, err := log.LastSequence(ctx); err != nil || after != head {
+		t.Fatalf("refused command appended an event: %d -> %d, err=%v", head, after, err)
+	}
+
+	// An older build appended this event before PostgreSQL refused its view.
+	// The new build must retain that attempt without claiming the hostname or
+	// bricking boot, and must record that its projection was rejected.
+	poisonID := uuid.NewSHA1(providerMutationNamespace, []byte(beta+"\x00beta-old-poison")).String()
+	poison := appendUnprojectedAuthority(t, log, poisonID, EventTenantBrandSet, beta, duplicate)
+	restarted := NewAuthorityRuntime(st, log)
+	if err := restarted.Bootstrap(ctx); err != nil {
+		t.Fatalf("cold replay after old domain collision: %v", err)
+	}
+	var outcome string
+	if err := st.SystemPool().QueryRow(ctx, `SELECT outcome FROM provider_authority_projection_receipts
+		WHERE tenant_id = $1 AND event_id = $2`, providerAuthorityTenant, poison.ID).Scan(&outcome); err != nil || outcome != "rejected_domain" {
+		t.Fatalf("poisoned event outcome = %q, err=%v", outcome, err)
+	}
+	var owner string
+	if err := st.SystemPool().QueryRow(ctx, `SELECT tenant_id::text FROM tenant_branding WHERE custom_domain = $1`, "alpha.qa.test").Scan(&owner); err != nil || owner != alpha {
+		t.Fatalf("custom domain owner = %q, err=%v; beta must not seize it", owner, err)
+	}
+	activity, err := NewEventLogActivitySource(log).ProviderActivity(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rejected bool
+	for _, item := range activity {
+		if item.EventID == poison.ID && item.Reason == "rejected: custom domain already assigned" {
+			rejected = true
+		}
+	}
+	if !rejected {
+		t.Fatal("immutable activity did not identify the rejected brand attempt")
+	}
+	if _, err := restarted.Mutations.Append(ctx, "alpha-brand-v2", EventTenantBrandSet, alpha, brand(alpha, "Alpha", "new-alpha.qa.test")); err != nil {
+		t.Fatalf("later valid brand after rejected event: %v", err)
+	}
+	if _, err := restarted.Mutations.Append(ctx, "beta-old-poison", EventTenantBrandSet, beta, duplicate); !errors.Is(err, ErrBrandDomainConflict) {
+		t.Fatalf("retry of rejected event after domain release = %v, want original rejection", err)
+	}
+	if _, err := restarted.Mutations.Append(ctx, "beta-brand-v1", EventTenantBrandSet, beta, brand(beta, "Beta", "alpha.qa.test")); err != nil {
+		t.Fatalf("new unique brand after rejection: %v", err)
+	}
+	if _, err := restarted.Mutations.Append(ctx, "alpha-brand-v1", EventTenantBrandSet, alpha, brand(alpha, "Alpha", "alpha.qa.test")); err != nil {
+		t.Fatalf("successful old key did not replay after domain changed owners: %v", err)
+	}
+}
+
 // AUD-58 assembles the real seams in one journey: a signed IdP token is useful
 // only while its SCIM identity is active; the projected grant reveals exactly
 // one customer; a restart adds no bootstrap duplicates; and erasing PostgreSQL

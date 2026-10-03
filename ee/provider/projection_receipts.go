@@ -170,13 +170,13 @@ func (p *AuthorityProjection) recoverHistory(ctx context.Context, log *events.Lo
 	})
 }
 
-func recordAuthorityCompletionTx(ctx context.Context, tx pgx.Tx, event events.Event, digest string) error {
+func recordAuthorityCompletionTx(ctx context.Context, tx pgx.Tx, event events.Event, digest, outcome string) error {
 	if event.Sequence == 0 {
 		return nil
 	}
 	//trstctl:system-query — receipt and Provider state commit in the same transaction under the fixed authority partition.
 	_, err := tx.Exec(ctx, `INSERT INTO provider_authority_projection_receipts
-		(tenant_id, event_sequence, event_id, event_digest) VALUES ($1, $2::bigint, $3, $4)`,
-		providerAuthorityTenant, strconv.FormatUint(event.Sequence, 10), event.ID, digest)
+		(tenant_id, event_sequence, event_id, event_digest, outcome) VALUES ($1, $2::bigint, $3, $4, $5)`,
+		providerAuthorityTenant, strconv.FormatUint(event.Sequence, 10), event.ID, digest, outcome)
 	return err
 }

@@ -323,6 +323,15 @@ grant/use state share one tenant-scoped immutable authority history. The
 projection; their PostgreSQL stores expose no direct mutators. An upgraded
 installation captures each uncovered pre-event row once before its first
 rebuild, including brand token overrides and both break-glass consents.
+Custom domains are unique across customers. A new claim for an already owned
+domain returns `409 brand_domain_conflict` before an authority event is
+appended, and the existing owner's public brand remains served. If an older
+release retained a claim that its database index refused, startup replays that
+attempt as a rejected outcome rather than failing the entire Provider plane;
+activity names the rejection. Retry the rejected idempotency key to inspect its
+original conflict, then use a new key after choosing an unclaimed domain.
+Internal projection failures return a generic retry instruction; database
+constraint names and SQL diagnostics stay in server logs.
 
 Every state-changing `/provider/v1` request requires `Idempotency-Key`. The key
 is immutably bound to the authenticated operator, method, path, and body; exact

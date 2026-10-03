@@ -40,6 +40,9 @@ var (
 	// transport validation. The HTTP layer returns 500 and leaves the durable
 	// idempotency claim replayable instead of caching the failure as a 4xx.
 	ErrMutationPersistence = errors.New("provider: durable mutation did not converge")
+	// ErrBrandDomainConflict is a stable, safe refusal. A customer cannot claim
+	// a hostname already assigned to another customer.
+	ErrBrandDomainConflict = errors.New("provider: custom domain is already assigned to another customer")
 
 	providerMutationNamespace = uuid.NewSHA1(uuid.NameSpaceURL, []byte("trstctl.com/provider/mutation"))
 )
@@ -194,6 +197,24 @@ func (s *EventMutationSink) appendLocked(ctx context.Context, idempotencyKey, ty
 		eventTime = payload.Audit.At
 	}
 	wanted := events.Event{ID: eventID, Type: typ, TenantID: tenantID, Time: eventTime, Data: data}
+	if typ == EventTenantBrandSet && payload.Brand != nil {
+		// A stable-key retry must return its original outcome even when the
+		// hostname changed owners later. Look up retained history before testing
+		// the present claim; JetStream's duplicate window alone is finite.
+		_, found, err := s.log.EventByID(ctx, eventID)
+		if err != nil {
+			return eventspec.Event{}, fmt.Errorf("%w: find brand command: %v", ErrMutationPersistence, err)
+		}
+		if !found {
+			claimed, err := brandDomainClaimed(ctx, s.projection.store.SystemPool(), payload.Brand.CustomDomain, tenantID)
+			if err != nil {
+				return eventspec.Event{}, fmt.Errorf("%w: check custom-domain ownership: %v", ErrMutationPersistence, err)
+			}
+			if claimed {
+				return eventspec.Event{}, ErrBrandDomainConflict
+			}
+		}
+	}
 	canonical, err := s.log.Append(ctx, wanted)
 	if err != nil {
 		return eventspec.Event{}, fmt.Errorf("%w: append %s: %v", ErrMutationPersistence, typ, err)
@@ -219,8 +240,44 @@ func (s *EventMutationSink) appendLocked(ctx context.Context, idempotencyKey, ty
 		if err != nil {
 			return eventspec.Event{}, fmt.Errorf("%w: project %s: %w", ErrMutationPersistence, typ, err)
 		}
+		if typ == EventTenantBrandSet {
+			outcome, err := s.projection.brandOutcome(ctx, canonical.ID)
+			if err != nil {
+				return eventspec.Event{}, fmt.Errorf("%w: read brand outcome: %v", ErrMutationPersistence, err)
+			}
+			if outcome == "rejected_domain" {
+				return eventspec.Event{}, ErrBrandDomainConflict
+			}
+		}
 	}
 	return canonical, nil
+}
+
+type brandDomainQuerier interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
+func brandDomainClaimed(ctx context.Context, query brandDomainQuerier, domain, tenantID string) (bool, error) {
+	domain = strings.ToLower(strings.TrimSpace(domain))
+	if domain == "" {
+		return false, nil
+	}
+	var owner string
+	//trstctl:system-query — a custom hostname is globally unique across customer tenants.
+	err := query.QueryRow(ctx, `SELECT tenant_id::text FROM tenant_branding
+		WHERE custom_domain = $1 AND tenant_id <> $2`, domain, tenantID).Scan(&owner)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+func (p *AuthorityProjection) brandOutcome(ctx context.Context, eventID string) (string, error) {
+	var outcome string
+	//trstctl:system-query — this fixed Provider authority partition records the exact event outcome.
+	err := p.store.SystemPool().QueryRow(ctx, `SELECT outcome FROM provider_authority_projection_receipts
+		WHERE tenant_id = $1 AND event_id = $2`, providerAuthorityTenant, eventID).Scan(&outcome)
+	return outcome, err
 }
 
 // AuthorityProjection owns the six PostgreSQL views of Provider authority.
@@ -429,10 +486,25 @@ func (p *AuthorityProjection) ApplyTx(ctx context.Context, tx pgx.Tx, event even
 				}
 			}
 		}
-		if err := applyAuthorityEventTx(ctx, tx, event, payload); err != nil {
-			return err
+		outcome := "applied"
+		if event.Type == EventTenantBrandSet && payload.Brand != nil {
+			claimed, err := brandDomainClaimed(ctx, tx, payload.Brand.CustomDomain, event.TenantID)
+			if err != nil {
+				return err
+			}
+			if claimed {
+				// Earlier releases appended the command before the domain index
+				// refused its projection. Retain that immutable attempt, but do
+				// not let it brick every subsequent restart or seize the host.
+				outcome = "rejected_domain"
+			}
 		}
-		return recordAuthorityCompletionTx(ctx, tx, event, digest)
+		if outcome == "applied" {
+			if err := applyAuthorityEventTx(ctx, tx, event, payload); err != nil {
+				return err
+			}
+		}
+		return recordAuthorityCompletionTx(ctx, tx, event, digest, outcome)
 	}
 	if coreOffboard || event.Type == AuditUnregisteredTenantOffboarded {
 		// Core calls under the customer's RLS context. Retain that role and

@@ -1034,12 +1034,20 @@ func writeProviderError(w http.ResponseWriter, err error) {
 		status, code = http.StatusConflict, "customer_state_conflict"
 	case errors.Is(err, ErrMutationConflict), errors.Is(err, orchestrator.ErrIdempotencyConflict):
 		status, code = http.StatusConflict, "idempotency_conflict"
+	case errors.Is(err, ErrBrandDomainConflict):
+		status, code = http.StatusConflict, "brand_domain_conflict"
 	case errors.Is(err, orchestrator.ErrInProgress), errors.Is(err, orchestrator.ErrEffectIndeterminate):
 		status, code = http.StatusConflict, "idempotency_in_progress"
 	case errors.Is(err, ErrMutationPersistence):
 		status, code = http.StatusInternalServerError, "mutation_persistence_failed"
 	}
-	_ = problem.New(status, err.Error()).
+	detail := err.Error()
+	if status == http.StatusInternalServerError {
+		// Projection and database diagnostics belong in server logs. A Provider
+		// response must never disclose table names, constraints or credentials.
+		detail = "Provider mutation could not be completed; retry the same command with its original idempotency key."
+	}
+	_ = problem.New(status, detail).
 		WithType("urn:trstctl:provider:"+code).
 		WithExtension("code", code).
 		WithExtension("retry_after_seconds", retryAfterSeconds(err)).

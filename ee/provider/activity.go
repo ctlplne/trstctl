@@ -63,6 +63,8 @@ func (s eventLogActivitySource) ProviderActivity(ctx context.Context) ([]Provide
 	out := []ProviderActivity{}
 	requests := map[string]AuthorityEvent{}
 	states := map[string]string{}
+	claimedDomains := map[string]string{}
+	tenantDomains := map[string]string{}
 	err := s.log.Replay(ctx, 0, func(event events.Event) error {
 		if !providerActivityEvent(event.Type) {
 			return nil
@@ -86,6 +88,23 @@ func (s eventLogActivitySource) ProviderActivity(ctx context.Context) ([]Provide
 			GrantID: audit.GrantID, Subject: audit.Subject, Reason: audit.Reason, At: at.UTC(),
 		}
 		switch event.Type {
+		case EventTenantBrandSet:
+			var command AuthorityEvent
+			if json.Unmarshal(event.Data, &command) == nil && command.Brand != nil {
+				domain := strings.ToLower(strings.TrimSpace(command.Brand.CustomDomain))
+				if owner := claimedDomains[domain]; domain != "" && owner != "" && owner != event.TenantID {
+					// The immutable attempt predates the collision repair. Show
+					// its refusal rather than claiming the other customer's host
+					// was assigned to this customer.
+					item.Reason = "rejected: custom domain already assigned"
+				} else {
+					delete(claimedDomains, tenantDomains[event.TenantID])
+					tenantDomains[event.TenantID] = domain
+					if domain != "" {
+						claimedDomains[domain] = event.TenantID
+					}
+				}
+			}
 		case AuditTenantErasureRequested, AuditTenantErasureFailed, AuditTenantErasureCompleted:
 			var command AuthorityEvent
 			if event.SchemaVersion != events.DefaultSchemaVersion || json.Unmarshal(event.Data, &command) != nil || validateAuthorityEvent(event, command) != nil {
