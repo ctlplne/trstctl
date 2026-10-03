@@ -240,8 +240,8 @@ func TestCertificateHealthDifferentiatesBeyondNinetyDays(t *testing.T) {
 		buckets[b.Name] = b.Count
 		total += b.Count
 	}
-	if total != snap.Summary.Total {
-		t.Fatalf("buckets sum to %d but total is %d; the bands must stay a partition", total, snap.Summary.Total)
+	if total != snap.Summary.Active {
+		t.Fatalf("buckets sum to %d but active count is %d; the bands must stay a live partition", total, snap.Summary.Active)
 	}
 	for name, want := range map[string]int{
 		"expiring_90d":  1, // the 60-day leaf
@@ -260,6 +260,72 @@ func TestCertificateHealthDifferentiatesBeyondNinetyDays(t *testing.T) {
 	}
 	if snap.Summary.Expiring90d != 1 {
 		t.Errorf("cumulative expiring_90d = %d, want 1", snap.Summary.Expiring90d)
+	}
+}
+
+func TestCertificateHealthExpiryActionExcludesRevokedAndSuperseded(t *testing.T) {
+	if testing.Short() {
+		t.Skip("starts an embedded PostgreSQL; skipped in -short")
+	}
+	ctx := context.Background()
+	const tenantID = "77777777-7777-4777-8777-777777777777"
+	st := newServerTestStore(t)
+	if err := st.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: "expiry-action"}); err != nil {
+		t.Fatalf("seed tenant: %v", err)
+	}
+	now := time.Now().UTC()
+	notBefore, notAfter := now.Add(-time.Hour), now.Add(10*24*time.Hour)
+	for _, fingerprint := range []string{"active-leaf", "revoked-leaf", "superseded-leaf"} {
+		if _, err := st.UpsertCertificate(ctx, store.Certificate{
+			TenantID: tenantID, Subject: "CN=" + fingerprint, Fingerprint: fingerprint,
+			Serial: fingerprint, Issuer: "CN=expiry-action", KeyAlgorithm: "ECDSA-P256",
+			NotBefore: &notBefore, NotAfter: &notAfter, Source: "issued",
+		}); err != nil {
+			t.Fatalf("seed %s: %v", fingerprint, err)
+		}
+	}
+	if err := st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if err := st.SetCertificateRevokedTx(ctx, tx, tenantID, "revoked-leaf", "keyCompromise", now); err != nil {
+			return err
+		}
+		return st.SetCertificateSupersededTx(ctx, tx, tenantID, "superseded-leaf", now)
+	}); err != nil {
+		t.Fatalf("project retired statuses: %v", err)
+	}
+	snap, err := st.CertificateHealth(ctx, tenantID, now, 25)
+	if err != nil {
+		t.Fatalf("certificate health: %v", err)
+	}
+	if snap.Summary.Total != 3 || snap.Summary.Active != 1 || snap.Summary.Revoked != 1 || snap.Summary.Superseded != 1 ||
+		snap.Summary.Expiring30d != 1 || len(snap.Expiring) != 1 || snap.Expiring[0].Fingerprint != "active-leaf" {
+		t.Fatalf("historical certificates inflated current expiry action: summary=%+v expiring=%+v", snap.Summary, snap.Expiring)
+	}
+	count := 0
+	for _, bucket := range snap.ExpiryBuckets {
+		count += bucket.Count
+	}
+	if count != snap.Summary.Active {
+		t.Fatalf("expiry buckets count %d live certificates, want %d", count, snap.Summary.Active)
+	}
+	window := now.Add(30 * 24 * time.Hour)
+	page, err := st.ListCertificatesPage(ctx, tenantID, store.ZeroUUID, nil, 25, &window)
+	if err != nil {
+		t.Fatalf("expiring certificate page: %v", err)
+	}
+	if len(page) != 1 || page[0].Fingerprint != "active-leaf" {
+		t.Fatalf("expiring page included retired predecessors: %+v", page)
+	}
+	if err := st.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return st.SetCertificateSupersededTx(ctx, tx, tenantID, "active-leaf", now)
+	}); err != nil {
+		t.Fatalf("project final retirement: %v", err)
+	}
+	snap, err = st.CertificateHealth(ctx, tenantID, now, 25)
+	if err != nil {
+		t.Fatalf("certificate health after final retirement: %v", err)
+	}
+	if snap.Summary.Total != 3 || snap.Summary.Active != 0 || snap.Summary.Expiring30d != 0 || len(snap.Expiring) != 0 {
+		t.Fatalf("retired estate still raises an expiry action: summary=%+v expiring=%+v", snap.Summary, snap.Expiring)
 	}
 }
 

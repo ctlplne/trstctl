@@ -57,10 +57,13 @@ Certificate parsing routes through the single isolated cryptography path, so the
 inventory code itself never touches the low-level X.509 libraries directly.
 
 `GET /api/v1/certificates/health` serves a tenant-wide expiry dashboard from that same
-projection: total active inventory, expired and 7/30/90-day expiry bands, source
-breakdown, and the soonest-expiring certificates. It counts trstctl-issued rows,
-manually imported rows, and discovery-fed rows together, so a certificate issued by a
-different CA but found on a load balancer still shows up in the same health posture.
+projection: total and lifecycle-status inventory counts, expired and 7/30/90-day
+expiry bands, source breakdown, and the soonest-expiring certificates. Total and
+source counts preserve revoked and superseded history. Expiry action counts, bands,
+and the soonest-expiring list include only active certificates, so a retired
+predecessor does not raise a new expiry warning. The expiry bands sum to the active
+count. Issued, manually imported, and discovery-fed active certificates all count,
+including one found on a load balancer after a different CA issued it.
 
 ### Find a certificate across the inventory
 
@@ -84,6 +87,8 @@ For subsequent pages, send `next_cursor` as `cursor` with the same `q` and
 pagination and the expiry filter's result limit; it does not retrieve private keys,
 issuance responses, or custody receipts. Broad substring searches can scan the
 tenant's metadata; this endpoint does not establish a large-estate latency guarantee.
+When `expiring_before` is set, the result contains active certificates only. Omit it
+to search historical revoked and superseded rows as well.
 
 ### Network discovery (F2) — scanning from an enrolled [network relay](../glossary.md#network-relay)
 

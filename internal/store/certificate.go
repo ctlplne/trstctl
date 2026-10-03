@@ -213,8 +213,10 @@ func (s *Store) UpsertCertificate(ctx context.Context, c Certificate) (Certifica
 
 // CertificateHealth returns a bounded estate-wide expiry/health dashboard. All
 // counts are computed from tenant-scoped certificate inventory rows under RLS
-// (AN-1); no source is excluded, so certificates issued elsewhere and later
-// imported/discovered count in the same dashboard as trstctl-issued certificates.
+// (AN-1); no source is excluded. Total and lifecycle-status counts retain the
+// history, while expiry action counts and buckets contain only active rows.
+// Revoked and superseded predecessors remain in inventory, but cannot create
+// new expiry work for an operator.
 func (s *Store) CertificateHealth(ctx context.Context, tenantID string, now time.Time, expiringLimit int) (CertificateHealthSnapshot, error) {
 	if expiringLimit <= 0 || expiringLimit > 100 {
 		expiringLimit = 25
@@ -224,10 +226,11 @@ func (s *Store) CertificateHealth(ctx context.Context, tenantID string, now time
 	soon30 := now.Add(30 * 24 * time.Hour)
 	soon90 := now.Add(90 * 24 * time.Hour)
 	// The long-horizon boundaries (H5). "later" keeps its name and its place at
-	// the end of the partition, but it now means "beyond three years" rather than
+	// the end of the active-certificate partition, but it now means "beyond
+	// three years" rather than
 	// "beyond ninety days" — the 90-day ceiling is exactly what hid multi-year CA
 	// expiry. The buckets remain a partition, so a consumer summing them still
-	// gets the total.
+	// gets the active count.
 	soon180 := now.Add(180 * 24 * time.Hour)
 	soon1y := now.Add(365 * 24 * time.Hour)
 	soon2y := now.Add(2 * 365 * 24 * time.Hour)
@@ -254,19 +257,19 @@ func (s *Store) CertificateHealth(ctx context.Context, tenantID string, now time
 			    COUNT(*) FILTER (WHERE status = 'active'),
 			    COUNT(*) FILTER (WHERE status = 'revoked'),
 			    COUNT(*) FILTER (WHERE status = 'superseded'),
-			    COUNT(*) FILTER (WHERE not_after IS NOT NULL AND not_after < $2),
-			    COUNT(*) FILTER (WHERE not_after IS NOT NULL AND not_after >= $2 AND not_after < $3),
-			    COUNT(*) FILTER (WHERE not_after IS NOT NULL AND not_after >= $2 AND not_after < $4),
-			    COUNT(*) FILTER (WHERE not_after IS NOT NULL AND not_after >= $2 AND not_after < $5),
+			    COUNT(*) FILTER (WHERE status = 'active' AND not_after IS NOT NULL AND not_after < $2),
+			    COUNT(*) FILTER (WHERE status = 'active' AND not_after IS NOT NULL AND not_after >= $2 AND not_after < $3),
+			    COUNT(*) FILTER (WHERE status = 'active' AND not_after IS NOT NULL AND not_after >= $2 AND not_after < $4),
+			    COUNT(*) FILTER (WHERE status = 'active' AND not_after IS NOT NULL AND not_after >= $2 AND not_after < $5),
 			    COUNT(*) FILTER (WHERE COALESCE(source, '') <> 'issued'),
 			    COUNT(*) FILTER (WHERE COALESCE(source, '') IN ('import', 'manual', 'manual-ui')),
 			    COUNT(*) FILTER (WHERE COALESCE(source, '') LIKE 'discovery:%'),
-			    COUNT(*) FILTER (WHERE not_after IS NULL),
-			    COUNT(*) FILTER (WHERE not_after IS NOT NULL AND not_after >= $2 AND not_after < $6),
-			    COUNT(*) FILTER (WHERE not_after IS NOT NULL AND not_after >= $2 AND not_after < $7),
-			    COUNT(*) FILTER (WHERE not_after IS NOT NULL AND not_after >= $2 AND not_after < $8),
-			    COUNT(*) FILTER (WHERE not_after IS NOT NULL AND not_after >= $2 AND not_after < $9),
-			    COUNT(*) FILTER (WHERE not_after IS NOT NULL AND not_after >= $9)
+			    COUNT(*) FILTER (WHERE status = 'active' AND not_after IS NULL),
+			    COUNT(*) FILTER (WHERE status = 'active' AND not_after IS NOT NULL AND not_after >= $2 AND not_after < $6),
+			    COUNT(*) FILTER (WHERE status = 'active' AND not_after IS NOT NULL AND not_after >= $2 AND not_after < $7),
+			    COUNT(*) FILTER (WHERE status = 'active' AND not_after IS NOT NULL AND not_after >= $2 AND not_after < $8),
+			    COUNT(*) FILTER (WHERE status = 'active' AND not_after IS NOT NULL AND not_after >= $2 AND not_after < $9),
+			    COUNT(*) FILTER (WHERE status = 'active' AND not_after IS NOT NULL AND not_after >= $9)
 			   FROM certificates
 			  WHERE tenant_id = $1`,
 			tenantID, now, soon7, soon30, soon90, soon180, soon1y, soon2y, soon3y).
@@ -292,7 +295,8 @@ func (s *Store) CertificateHealth(ctx context.Context, tenantID string, now time
 			return err
 		}
 		// Each bucket is the slice between its boundary and the previous one, so
-		// the partition sums to the total. Cumulative counts come off the summary.
+		// the partition sums to active certificates. Historical status counts
+		// remain separate from the actionable expiry denominator.
 		snap.ExpiryBuckets[0].Count = snap.Summary.Expired
 		snap.ExpiryBuckets[1].Count = snap.Summary.Expiring7d
 		snap.ExpiryBuckets[2].Count = snap.Summary.Expiring30d - snap.Summary.Expiring7d
@@ -311,8 +315,8 @@ func (s *Store) CertificateHealth(ctx context.Context, tenantID string, now time
 		rows, err := tx.Query(ctx,
 			`SELECT COALESCE(NULLIF(source, ''), 'unknown') AS source,
 			        COUNT(*),
-			        COUNT(*) FILTER (WHERE not_after IS NOT NULL AND not_after < $2),
-			        COUNT(*) FILTER (WHERE not_after IS NOT NULL AND not_after >= $2 AND not_after < $3)
+			        COUNT(*) FILTER (WHERE status = 'active' AND not_after IS NOT NULL AND not_after < $2),
+			        COUNT(*) FILTER (WHERE status = 'active' AND not_after IS NOT NULL AND not_after >= $2 AND not_after < $3)
 			   FROM certificates
 			  WHERE tenant_id = $1
 			  GROUP BY COALESCE(NULLIF(source, ''), 'unknown')
@@ -337,7 +341,7 @@ func (s *Store) CertificateHealth(ctx context.Context, tenantID string, now time
 		expiringRows, err := tx.Query(ctx,
 			`SELECT `+certificateColumns+`
 			   FROM certificates
-			  WHERE tenant_id = $1 AND not_after IS NOT NULL AND not_after < $2
+			  WHERE tenant_id = $1 AND status = 'active' AND not_after IS NOT NULL AND not_after < $2
 			  ORDER BY not_after, id LIMIT $3`,
 			tenantID, soon90, expiringLimit)
 		if err != nil {
@@ -584,7 +588,7 @@ func (s *Store) SearchCertificatesPage(ctx context.Context, tenantID, afterID st
 			rows, qerr = tx.Query(ctx,
 				`SELECT `+certificateColumns+`
 				   FROM certificates
-				  WHERE tenant_id = $1 AND not_after < $2
+				  WHERE tenant_id = $1 AND status = 'active' AND not_after < $2
 				    AND (not_after, id) > ($3, $4)`+searchClause(6)+`
 				  ORDER BY not_after, id LIMIT $5`,
 				searchArgs(tenantID, *expiringBefore, *afterNotAfter, afterID, limit)...)
@@ -594,7 +598,7 @@ func (s *Store) SearchCertificatesPage(ctx context.Context, tenantID, afterID st
 			rows, qerr = tx.Query(ctx,
 				`SELECT `+certificateColumns+`
 				   FROM certificates
-				  WHERE tenant_id = $1 AND not_after < $2`+searchClause(4)+`
+				  WHERE tenant_id = $1 AND status = 'active' AND not_after < $2`+searchClause(4)+`
 				  ORDER BY not_after, id LIMIT $3`,
 				searchArgs(tenantID, *expiringBefore, limit)...)
 		default:

@@ -95,9 +95,14 @@ cursor-paginated, expiry-filtered table it renders issuer/profile/team/environme
 filters with URL-resident state, a Team column, estate-wide expiry/source health,
 expiry bands, a 47-day renewal-readiness simulator (does each cert renew comfortably
 inside the shrinking CA/Browser-Forum maximum lifetime?), deployment receipts from
-the connectors, and one guided revocation center under **Revocation & CT**. That center makes
-an operator choose a managed X.509 identity and RFC 5280 reason, then reads an
-effect-free, version-bound server plan before typed confirmation unlocks execution.
+the connectors, and one guided revocation center under **Revocation & CT**. Expiry
+action counts and bands cover active certificates; historical revoked and
+superseded rows remain in inventory without creating new expiry warnings. The
+**Expiring** inventory filter also selects active certificates only.
+
+The revocation center makes an operator choose a managed X.509 identity and RFC
+5280 reason, then reads an effect-free, version-bound server plan before typed
+confirmation unlocks execution.
 The review keeps affected systems, queued CRL/OCSP publication, signed endpoint health,
 CRL availability, immutable audit evidence, and recovery guidance in one journey.
 Unknown graph or propagation state is labeled unknown; it is never rendered as healthy.
