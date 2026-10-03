@@ -4250,6 +4250,14 @@ closed for native PKCS#11/YubiHSM selection; use the published HSM signer artifa
 is startup-static: this is ordinary Go interface injection, not a runtime crypto
 plugin engine or a policy-selected algorithm marketplace.
 
+The shipped managed-key runtime proof is pinned to the released `linux/amd64`
+signer and an `amd64` proof runner. An arm64 Docker host that crashes while
+emulating that runner cannot qualify the shipped artifact, even when its native
+SoftHSM and swtpm component tests pass. Run the proof on a native amd64 host, or
+define and audit a separate arm64 release and proof profile before claiming arm64
+artifact coverage. Neither a component test nor a locally rebuilt signer is a
+substitute for that production-assembly proof.
+
 Still library-tier (reachable from no served verb yet): the in-process key
 lifecycle for the local CA/issuing signing key and the secrets KEK
 (generate-or-import → rotate → revoke → zeroize is implemented and
