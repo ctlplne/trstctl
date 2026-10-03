@@ -13,16 +13,73 @@ import (
 
 type memBrandStore struct {
 	byTenant map[string]TenantBrand
+	revision int
 }
 
 func (m *memBrandStore) Invalidate() {}
+
+func (m *memBrandStore) TenantBrand(_ context.Context, id string) (*TenantBrand, error) {
+	brand, ok := m.byTenant[id]
+	if !ok {
+		return nil, nil
+	}
+	return &brand, nil
+}
 
 func (m *memBrandStore) SetTenantBrand(_ context.Context, b TenantBrand) error {
 	if m.byTenant == nil {
 		m.byTenant = map[string]TenantBrand{}
 	}
+	m.revision++
+	b.Revision = fmt.Sprintf("revision-%d", m.revision)
 	m.byTenant[b.TenantID] = b
 	return nil
+}
+
+func TestBrandReadbackAndConditionalUpdate(t *testing.T) {
+	brands := &memBrandStore{}
+	h := twoCustomerHandlerWithBrands(t, fullyDelegated("op-1", "tenant-alpha"), brands)
+	path := "/provider/v1/tenants/tenant-alpha/brand"
+	read := providerRequest(t, h, http.MethodGet, path, "")
+	if read.Code != http.StatusOK || read.Header().Get("ETag") != `"0"` ||
+		!strings.Contains(read.Body.String(), `"revision":"0"`) {
+		t.Fatalf("initial brand = %d/%s", read.Code, read.Body.String())
+	}
+	missing := httptest.NewRequest(http.MethodPut, path, strings.NewReader(`{"product_name":"blind"}`))
+	missing.Header.Set("Authorization", "Bearer real-credential")
+	missingResult := httptest.NewRecorder()
+	h.ServeHTTP(missingResult, missing)
+	if missingResult.Code != http.StatusPreconditionRequired {
+		t.Fatalf("blind update = %d", missingResult.Code)
+	}
+	first := providerRequest(t, h, http.MethodPut, path, `{"product_name":"Original","custom_domain":"first.qa.test"}`)
+	if first.Code != http.StatusNoContent {
+		t.Fatalf("first brand = %d/%s", first.Code, first.Body.String())
+	}
+	current := providerRequest(t, h, http.MethodGet, path, "")
+	if current.Code != http.StatusOK || current.Header().Get("ETag") != `"revision-1"` ||
+		!strings.Contains(current.Body.String(), `"custom_domain":"first.qa.test"`) {
+		t.Fatalf("current brand = %d/%s", current.Code, current.Body.String())
+	}
+	stale := providerRequest(t, h, http.MethodPut, path, `{"product_name":"stale","custom_domain":""}`)
+	if stale.Code != http.StatusConflict || !strings.Contains(stale.Body.String(), "brand_revision_conflict") {
+		t.Fatalf("stale update = %d/%s", stale.Code, stale.Body.String())
+	}
+	if got := brands.byTenant["tenant-alpha"].CustomDomain; got != "first.qa.test" {
+		t.Fatalf("stale update erased domain: %q", got)
+	}
+	updated := httptest.NewRequest(http.MethodPut, path, strings.NewReader(`{"product_name":"Updated","custom_domain":"first.qa.test"}`))
+	updated.Header.Set("Authorization", "Bearer real-credential")
+	updated.Header.Set("If-Match", current.Header().Get("ETag"))
+	updatedResult := httptest.NewRecorder()
+	h.ServeHTTP(updatedResult, updated)
+	if updatedResult.Code != http.StatusNoContent {
+		t.Fatalf("reviewed update = %d/%s", updatedResult.Code, updatedResult.Body.String())
+	}
+	other := providerRequest(t, h, http.MethodGet, "/provider/v1/tenants/tenant-beta/brand", "")
+	if other.Code != http.StatusForbidden {
+		t.Fatalf("undelegated read = %d", other.Code)
+	}
 }
 
 func twoCustomerHandlerWithBrands(t *testing.T, delegations DelegationSource, brands BrandStore) http.Handler {

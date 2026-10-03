@@ -5,6 +5,7 @@ package whitelabel
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"github.com/jackc/pgx/v5"
 
@@ -27,13 +28,13 @@ func NewPGStore(s *corestore.Store) *PGStore { return &PGStore{store: s} }
 var _ Store = (*PGStore)(nil)
 
 const brandCols = `product_name, logo_data_uri, login_message, token_overrides,
-	email_from_name, email_footer, custom_domain`
+	email_from_name, email_footer, custom_domain, revision`
 
 func scanBrand(row pgx.Row, tenantID string) (*Record, error) {
 	var r Record
 	var tokens []byte
 	if err := row.Scan(&r.ProductName, &r.LogoDataURI, &r.LoginMessage, &tokens,
-		&r.EmailFromName, &r.EmailFooter, &r.CustomDomain); err != nil {
+		&r.EmailFromName, &r.EmailFooter, &r.CustomDomain, &r.Revision); err != nil {
 		return nil, err
 	}
 	r.TenantID = tenantID
@@ -55,11 +56,14 @@ func (p *PGStore) TenantBrand(ctx context.Context, tenantID string) (*Record, er
 	err := p.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		r, err := scanBrand(tx.QueryRow(ctx,
 			`SELECT `+brandCols+` FROM tenant_branding WHERE tenant_id = $1`, tenantID), tenantID)
-		if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
 			// No row means no brand, which is the DEFAULT — not an error. An
 			// error here would blank a login page over a tenant that simply
 			// never configured one.
 			return nil
+		}
+		if err != nil {
+			return err
 		}
 		out = r
 		return nil
@@ -84,7 +88,7 @@ func (p *PGStore) TenantByDomain(ctx context.Context, domain string) (*Record, e
 	var r Record
 	var tokens []byte
 	if err := row.Scan(&tenantID, &r.ProductName, &r.LogoDataURI, &r.LoginMessage, &tokens,
-		&r.EmailFromName, &r.EmailFooter, &r.CustomDomain); err != nil {
+		&r.EmailFromName, &r.EmailFooter, &r.CustomDomain, &r.Revision); err != nil {
 		return nil, nil
 	}
 	r.TenantID = tenantID

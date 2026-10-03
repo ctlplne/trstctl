@@ -60,6 +60,12 @@ export interface ProviderBrand {
   email_from_name?: string;
   email_footer?: string;
   custom_domain?: string;
+  token_overrides?: Record<string, string>;
+}
+
+export interface ProviderBrandSnapshot extends ProviderBrand {
+  tenant_id: string;
+  revision: string;
 }
 
 export interface ProviderDrillCheck {
@@ -428,8 +434,19 @@ export const providerApi = {
   getQuota: (id: string): Promise<ProviderQuota> => providerReq<ProviderQuota>(`/provider/v1/tenants/${encodeURIComponent(id)}/quota`),
   setQuota: (id: string, quota: ProviderQuota): Promise<void> =>
     providerReq<void>(`/provider/v1/tenants/${encodeURIComponent(id)}/quota`, { method: "PUT", body: JSON.stringify(quota) }),
-  setBrand: (id: string, brand: ProviderBrand): Promise<void> =>
-    providerReq<void>(`/provider/v1/tenants/${encodeURIComponent(id)}/brand`, { method: "PUT", body: JSON.stringify(brand) }),
+  getBrand: async (id: string): Promise<ProviderBrandSnapshot> => {
+    const brand = await providerReq<ProviderBrandSnapshot>(`/provider/v1/tenants/${encodeURIComponent(id)}/brand`);
+    if (!brand || brand.tenant_id !== id || typeof brand.revision !== "string" || brand.revision.length === 0) {
+      throw new Error("provider: brand readback does not match the requested customer or revision");
+    }
+    return brand;
+  },
+  setBrand: (id: string, brand: ProviderBrand, revision: string): Promise<void> =>
+    providerReq<void>(`/provider/v1/tenants/${encodeURIComponent(id)}/brand`, {
+      method: "PUT",
+      body: JSON.stringify(brand),
+      headers: { "If-Match": JSON.stringify(revision) },
+    }),
   runIsolationDrill: (): Promise<ProviderDrillReport> =>
     providerReq<ProviderDrillReport>("/provider/v1/isolation-drill", { method: "POST", body: JSON.stringify({}) }),
   requestBreakGlass: (input: { tenant_id: string; reason: string; ttl: string }): Promise<ProviderBreakGlassGrant> =>

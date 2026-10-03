@@ -24,6 +24,7 @@ import {
   setProviderToken,
   clearProviderToken,
   ProviderAuthError,
+  ProviderApiError,
   type ProviderTenant,
   type ProviderQuota,
   type ProviderBrand,
@@ -270,56 +271,94 @@ function QuotaSummary({ quota }: { quota: ProviderQuota }) {
 type QuotaViewState = { id: string; state: "loading" } | { id: string; state: "error" } | { id: string; state: "ok"; data: ProviderQuota };
 
 function BrandEditor({ tenantId, onSaved, onAuthError }: { tenantId: string; onSaved: () => void; onAuthError: () => void }) {
-  const [productName, setProductName] = useState("");
-  const [customDomain, setCustomDomain] = useState("");
-  const [loginMessage, setLoginMessage] = useState("");
+  const queryClient = useQueryClient();
+  const brand = useApiQuery(["provider", "brand", tenantId], () => providerApi.getBrand(tenantId), { retry: false });
+  const form = useForm<{ productName: string; customDomain: string; loginMessage: string }>({
+    resolver: zodResolver(z.object({ productName: z.string().trim(), customDomain: z.string().trim(), loginMessage: z.string().trim() })),
+    defaultValues: { productName: "", customDomain: "", loginMessage: "" },
+  });
+  const { reset } = form;
+  useEffect(() => {
+    if (!brand.data) return;
+    reset({ productName: brand.data.product_name ?? "", customDomain: brand.data.custom_domain ?? "", loginMessage: brand.data.login_message ?? "" });
+  }, [brand.data, reset]);
+  useEffect(() => {
+    if (brand.errorValue instanceof ProviderAuthError) onAuthError();
+  }, [brand.errorValue, onAuthError]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const field = (labelKey: MessageKey, value: string, setValue: (v: string) => void) => (
+  const field = (labelKey: MessageKey, name: "productName" | "customDomain" | "loginMessage") => (
     <label className="grid gap-1">
       <span className="font-medium text-muted-foreground">{translateNow(labelKey)}</span>
-      <Input value={value} onChange={(e) => setValue(e.target.value)} aria-label={translateNow(labelKey)} className="w-56" />
+      <Input {...form.register(name)} aria-label={translateNow(labelKey)} className="w-56" />
     </label>
   );
 
-  const save = async () => {
+  const save = async (values: { productName: string; customDomain: string; loginMessage: string }) => {
+    if (!brand.data || brand.data.tenant_id !== tenantId || !brand.data.revision) return;
     setSaving(true);
     setSaveError(null);
-    const brand: ProviderBrand = {
-      product_name: productName.trim() || undefined,
-      custom_domain: customDomain.trim() || undefined,
-      login_message: loginMessage.trim() || undefined,
+    const payload: ProviderBrand = {
+      product_name: values.productName,
+      custom_domain: values.customDomain,
+      login_message: values.loginMessage,
+      logo_data_uri: brand.data.logo_data_uri,
+      email_from_name: brand.data.email_from_name,
+      email_footer: brand.data.email_footer,
+      token_overrides: brand.data.token_overrides,
     };
     try {
-      await providerApi.setBrand(tenantId, brand);
+      await providerApi.setBrand(tenantId, payload, brand.data.revision);
+      queryClient.removeQueries({ queryKey: ["provider", "brand", tenantId] });
       onSaved();
     } catch (err) {
       if (err instanceof ProviderAuthError) {
         onAuthError();
         return;
       }
-      // A custom-domain collision (another customer already claims the host)
-      // surfaces here as the store's refusal — shown, not swallowed.
-      setSaveError(err instanceof Error ? err.message : String(err));
+      setSaveError(
+        err instanceof ProviderApiError && err.body.includes("brand_revision_conflict")
+          ? translateNow("provider.brand.stale")
+          : err instanceof Error
+            ? err.message
+            : String(err),
+      );
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="grid gap-2">
+    <form className="grid gap-2" onSubmit={form.handleSubmit((values) => void save(values))}>
       <p className="text-muted-foreground">{translateNow("source.provider.brand.hint.l3prov0031")}</p>
+      {brand.loading ? <p>{translateNow("source.loading.4f9d1e0e3a")}</p> : null}
+      {brand.error && !(brand.errorValue instanceof ProviderAuthError) ? (
+        <p className="text-status-danger">{translateNow("provider.brand.loadFailed")}</p>
+      ) : null}
+      {brand.data ? (
+        <p className="text-muted-foreground">{translateNow(brand.data.revision === "0" ? "provider.brand.default" : "provider.brand.saved")}</p>
+      ) : null}
       <div className="flex flex-wrap items-end gap-3">
-        {field("source.provider.brand.product.l3prov0032", productName, setProductName)}
-        {field("source.provider.brand.domain.l3prov0033", customDomain, setCustomDomain)}
-        {field("source.provider.brand.message.l3prov0034", loginMessage, setLoginMessage)}
-        <Button type="button" disabled={saving} onClick={() => void save()}>
+        {field("source.provider.brand.product.l3prov0032", "productName")}
+        {field("source.provider.brand.domain.l3prov0033", "customDomain")}
+        {field("source.provider.brand.message.l3prov0034", "loginMessage")}
+        <Button type="submit" disabled={saving || !brand.data || brand.data.tenant_id !== tenantId}>
           {translateNow("source.provider.brand.save.l3prov0035")}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            setSaveError(null);
+            brand.refetch();
+          }}
+        >
+          {translateNow("provider.brand.reload")}
         </Button>
       </div>
       {saveError ? <p className="text-status-danger">{saveError}</p> : null}
-    </div>
+    </form>
   );
 }
 
@@ -372,9 +411,7 @@ function ProviderConsole({ onSignOut }: { onSignOut: (reason?: "authentication")
   // The customer whose quota is expanded, as a discriminated union so the
   // render narrows cleanly between loading, a load failure, and a value.
   const [quotaView, setQuotaView] = useState<QuotaViewState | null>(null);
-  // The customer whose brand editor is expanded. Brand has no read route here,
-  // so it opens to an empty form the operator fills — a write surface, not a
-  // round-trip.
+  // The customer whose current brand is read before an ETag-bound edit.
   const [brandFor, setBrandFor] = useState<string | null>(null);
   // The last isolation-drill result, or "running" while one is in flight. The
   // drill is deployment-wide, not per-customer, so it stays in its own section.

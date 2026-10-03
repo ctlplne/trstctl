@@ -330,6 +330,12 @@ release retained a claim that its database index refused, startup replays that
 attempt as a rejected outcome rather than failing the entire Provider plane;
 activity names the rejection. Retry the rejected idempotency key to inspect its
 original conflict, then use a new key after choosing an unclaimed domain.
+Provider brand editors first read the exact delegated customer's saved brand at
+`GET /provider/v1/tenants/{id}/brand`. The response includes a strong ETag;
+`PUT` requires that value in `If-Match` and an `Idempotency-Key`. An absent
+precondition returns 428, and a stale revision returns `409
+brand_revision_conflict` without overwriting the newer state. The immutable
+event ID becomes the next revision during projection, including cold replay.
 Internal projection failures return a generic retry instruction; database
 constraint names and SQL diagnostics stay in server logs.
 Deployment-wide Provider audit events use the reserved UUID Provider partition.

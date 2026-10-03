@@ -2814,14 +2814,15 @@ than sending an operator looking for a credential that was never there.
   console with per-customer quota MANAGEMENT — each customer row expands to
   view and EDIT its limits (max agents, certificates, secrets), a blank field
   saved as unlimited never zero — and per-customer WHITE-LABEL BRANDING: a brand
-  editor (product name, custom domain, login message) that writes through
-  `/provider/v1/tenants/{id}/brand`, a route wired to the tenant-scoped provider
+  editor (product name, custom domain, login message) that reads the current
+  delegated brand and writes through `/provider/v1/tenants/{id}/brand` with
+  `If-Match`, a route wired to the tenant-scoped provider
   authority event receiver and its white-label read projection, behind the same
   per-customer delegation gate (an
   operator can brand only a customer they are delegated, because a custom domain
   is a claim on a host and branding another's customer could seize it). A
-  duplicate custom domain is refused by the projection's uniqueness constraint
-  and the refusal is surfaced. Customer lifecycle, quota, brand, delegation,
+  duplicate custom domain is refused before event append, and replay retains
+  a rejected outcome for older conflicts. Customer lifecycle, quota, brand, delegation,
   and break-glass state now rebuild exactly from one immutable provider
   authority history; the six PostgreSQL views, now including
   `provider_operators`, expose no production mutator.

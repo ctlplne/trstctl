@@ -16,6 +16,7 @@ const { providerMock } = vi.hoisted(() => ({
     offboardTenant: vi.fn(),
     getQuota: vi.fn(),
     setQuota: vi.fn(),
+    getBrand: vi.fn(),
     setBrand: vi.fn(),
     runIsolationDrill: vi.fn(),
     availability: vi.fn(),
@@ -435,12 +436,32 @@ describe("provider console (L3)", () => {
       { id: "t-1", slug: "acme", name: "Acme Corp", status: "active", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" },
     ]);
     providerMock.setBrand.mockResolvedValue(undefined);
+    providerMock.getBrand
+      .mockResolvedValueOnce({
+        tenant_id: "t-1",
+        revision: "event-1",
+        product_name: "Original",
+        custom_domain: "old.acme.example",
+        login_message: "Welcome",
+        logo_data_uri: "data:image/png;base64,abc",
+        email_footer: "Trusted",
+      })
+      .mockResolvedValueOnce({
+        tenant_id: "t-1",
+        revision: "event-2",
+        product_name: "Acme PKI",
+        custom_domain: "certs.acme.example",
+        login_message: "Welcome",
+        logo_data_uri: "data:image/png;base64,abc",
+        email_footer: "Trusted",
+      });
     setProviderToken("operator-bearer");
     renderProvider();
 
     const row = (await screen.findByText("Acme Corp")).closest("tr")!;
     fireEvent.click(within(row).getByRole("button", { name: "Brand" }));
-    fireEvent.change(await screen.findByLabelText("Product name"), { target: { value: "Acme PKI" } });
+    expect(await screen.findByDisplayValue("old.acme.example")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Product name"), { target: { value: "Acme PKI" } });
     fireEvent.change(screen.getByLabelText("Custom domain"), { target: { value: "certs.acme.example" } });
     fireEvent.click(screen.getByRole("button", { name: "Save brand" }));
     await waitFor(() =>
@@ -449,9 +470,31 @@ describe("provider console (L3)", () => {
         expect.objectContaining({
           product_name: "Acme PKI",
           custom_domain: "certs.acme.example",
+          login_message: "Welcome",
+          logo_data_uri: "data:image/png;base64,abc",
+          email_footer: "Trusted",
         }),
+        "event-1",
       ),
     );
+    await waitFor(() => expect(screen.queryByLabelText("Product name")).not.toBeInTheDocument());
+    fireEvent.click(within(row).getByRole("button", { name: "Brand" }));
+    expect(await screen.findByDisplayValue("certs.acme.example")).toBeInTheDocument();
+    expect(providerMock.getBrand).toHaveBeenCalledTimes(2);
+  });
+
+  it("refuses a blind brand write when current customer readback fails", async () => {
+    providerMock.listTenants.mockResolvedValue([
+      { id: "t-1", slug: "acme", name: "Acme Corp", status: "active", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" },
+    ]);
+    providerMock.getBrand.mockRejectedValue(new Error("readback unavailable"));
+    setProviderToken("operator-bearer");
+    renderProvider();
+    const row = (await screen.findByText("Acme Corp")).closest("tr")!;
+    fireEvent.click(within(row).getByRole("button", { name: "Brand" }));
+    expect(await screen.findByText("The current brand could not be read. Reload it before editing this customer.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save brand" })).toBeDisabled();
+    expect(providerMock.setBrand).not.toHaveBeenCalled();
   });
 
   it("drops the operator back to the gate when the plane refuses the token", async () => {

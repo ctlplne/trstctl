@@ -36,7 +36,7 @@ describe("provider API idempotency", () => {
     await providerApi.suspendTenant("tenant-acme");
     await providerApi.offboardTenant("tenant-acme");
     await providerApi.setQuota("tenant-acme", { tenant_id: "tenant-acme", max_agents: 4 });
-    await providerApi.setBrand("tenant-acme", { product_name: "Acme Trust" });
+    await providerApi.setBrand("tenant-acme", { product_name: "Acme Trust" }, "0");
     await providerApi.runIsolationDrill();
     await providerApi.requestBreakGlass({ tenant_id: "tenant-acme", reason: "incident", ttl: "15m" });
     await providerApi.consentBreakGlass("grant-1", "tenant-acme");
@@ -48,6 +48,8 @@ describe("provider API idempotency", () => {
     const keys = calls.map(([, init]) => (init?.headers as Record<string, string>)["Idempotency-Key"]);
     expect(keys.every((key) => typeof key === "string" && key.length > 0)).toBe(true);
     expect(new Set(keys).size).toBe(keys.length);
+    const brand = calls.find(([path]) => String(path).endsWith("/brand"));
+    expect((brand?.[1]?.headers as Record<string, string>)["If-Match"]).toBe('"0"');
   });
 
   it("keeps provider reads free of mutation keys", async () => {
@@ -59,6 +61,13 @@ describe("provider API idempotency", () => {
       const headers = init?.headers as Record<string, string>;
       expect(headers["Idempotency-Key"]).toBeUndefined();
     }
+  });
+
+  it("binds a brand read to the requested customer and exact revision", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(response(200, { tenant_id: "tenant-alpha", revision: "event-1", custom_domain: "alpha.qa.test" }));
+    await expect(providerApi.getBrand("tenant-alpha")).resolves.toMatchObject({ revision: "event-1" });
+    vi.mocked(fetch).mockResolvedValueOnce(response(200, { tenant_id: "tenant-beta", revision: "event-2" }));
+    await expect(providerApi.getBrand("tenant-alpha")).rejects.toThrow("does not match");
   });
 
   it("reads one customer health snapshot through the delegated customer path", async () => {

@@ -21,6 +21,7 @@ type Record struct {
 	EmailFromName  string            `json:"email_from_name,omitempty"`
 	EmailFooter    string            `json:"email_footer,omitempty"`
 	CustomDomain   string            `json:"custom_domain,omitempty"`
+	Revision       string            `json:"revision,omitempty"`
 	UpdatedBy      string            `json:"updated_by,omitempty"`
 }
 

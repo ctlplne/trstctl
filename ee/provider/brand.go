@@ -22,13 +22,15 @@ import (
 
 // TenantBrand is the operator-supplied brand for one customer.
 type TenantBrand struct {
-	TenantID      string
-	ProductName   string
-	LogoDataURI   string
-	LoginMessage  string
-	EmailFromName string
-	EmailFooter   string
-	CustomDomain  string
+	TenantID       string
+	ProductName    string
+	LogoDataURI    string
+	LoginMessage   string
+	EmailFromName  string
+	EmailFooter    string
+	CustomDomain   string
+	TokenOverrides map[string]string `json:"-"`
+	Revision       string            `json:"-"`
 }
 
 // BrandStore is the read-view cache seam. The PostgreSQL brand store exposes
@@ -36,6 +38,7 @@ type TenantBrand struct {
 // so the new projected row is served immediately.
 type BrandStore interface {
 	Invalidate()
+	TenantBrand(context.Context, string) (*TenantBrand, error)
 }
 
 type legacyBrandStore interface {
@@ -51,7 +54,7 @@ type legacyBrandStore interface {
 // authorized against, never the body — a body naming a different customer would
 // turn an authorization on one tenancy into a write on another, and with a
 // custom domain that would be one customer seizing another's host.
-func (s *Service) SetTenantBrand(ctx context.Context, actor Operator, customerID string, brand TenantBrand) error {
+func (s *Service) SetTenantBrand(ctx context.Context, actor Operator, customerID string, brand TenantBrand, expectedRevision string) error {
 	if err := s.requireMutation(actor, true); err != nil {
 		return err
 	}
@@ -67,11 +70,12 @@ func (s *Service) SetTenantBrand(ctx context.Context, actor Operator, customerID
 			ErrForbidden)
 	}
 	brand.TenantID = customerID
+	brand.Revision = ""
 	brand.ProductName = strings.TrimSpace(brand.ProductName)
 	brand.CustomDomain = strings.ToLower(strings.TrimSpace(brand.CustomDomain))
 	now := s.clock()
 	if s.mutations != nil {
-		if _, err := s.emit(ctx, EventTenantBrandSet, customerID, AuthorityEvent{Brand: &brand,
+		if _, err := s.emit(ctx, EventTenantBrandSet, customerID, AuthorityEvent{Brand: &brand, BrandTokenOverrides: brand.TokenOverrides, BrandExpectedRevision: &expectedRevision,
 			Audit: AuditEvent{Type: EventTenantBrandSet, TenantID: customerID,
 				OperatorID: actor.ID, OperatorEmail: actor.Email, At: now}}); err != nil {
 			return err
@@ -83,6 +87,13 @@ func (s *Service) SetTenantBrand(ctx context.Context, actor Operator, customerID
 	if !ok {
 		return fmt.Errorf("provider: production brand stores require the event mutation sink")
 	}
+	current, err := s.brands.TenantBrand(ctx, customerID)
+	if err != nil {
+		return err
+	}
+	if brandRevision(current) != expectedRevision {
+		return ErrBrandRevisionConflict
+	}
 	if err := legacy.SetTenantBrand(ctx, brand); err != nil {
 		// A custom-domain collision (two tenants claiming one host) surfaces
 		// from the store's uniqueness constraint. It is the store's job to
@@ -91,4 +102,35 @@ func (s *Service) SetTenantBrand(ctx context.Context, actor Operator, customerID
 	}
 	return s.record(ctx, AuditEvent{Type: EventTenantBrandSet, TenantID: customerID,
 		OperatorID: actor.ID, OperatorEmail: actor.Email, At: now})
+}
+
+func brandRevision(brand *TenantBrand) string {
+	if brand == nil || brand.Revision == "" {
+		return "0"
+	}
+	return brand.Revision
+}
+
+// GetTenantBrand reads only the exact delegated customer's projected brand.
+// A missing record is an explicit default with revision 0, never another
+// customer's provider-wide fallback.
+func (s *Service) GetTenantBrand(ctx context.Context, actor Operator, customerID string) (TenantBrand, error) {
+	if err := s.requireOperator(actor); err != nil {
+		return TenantBrand{}, err
+	}
+	if err := s.authorize(ctx, actor, customerID, OpProvision); err != nil {
+		return TenantBrand{}, err
+	}
+	if s.brands == nil {
+		return TenantBrand{}, fmt.Errorf("%w: no durable white-label store is attached", ErrForbidden)
+	}
+	brand, err := s.brands.TenantBrand(ctx, customerID)
+	if err != nil {
+		return TenantBrand{}, err
+	}
+	if brand == nil {
+		return TenantBrand{TenantID: customerID, Revision: "0"}, nil
+	}
+	brand.TenantID, brand.Revision = customerID, brandRevision(brand)
+	return *brand, nil
 }

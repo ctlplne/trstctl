@@ -69,11 +69,12 @@ type providerQuotaAuthorityPayload struct {
 }
 
 type providerBrandAuthorityPayload struct {
-	Brand               *provider.TenantBrand `json:"brand,omitempty"`
-	BrandTokenOverrides map[string]string     `json:"brand_token_overrides,omitempty"`
-	EffectiveAt         time.Time             `json:"effective_at,omitempty"`
-	RequestBinding      string                `json:"request_binding,omitempty"`
-	Audit               provider.AuditEvent   `json:"audit"`
+	Brand                 *provider.TenantBrand `json:"brand,omitempty"`
+	BrandTokenOverrides   map[string]string     `json:"brand_token_overrides,omitempty"`
+	BrandExpectedRevision *string               `json:"brand_expected_revision,omitempty"`
+	EffectiveAt           time.Time             `json:"effective_at,omitempty"`
+	RequestBinding        string                `json:"request_binding,omitempty"`
+	Audit                 provider.AuditEvent   `json:"audit"`
 }
 
 type providerBreakGlassAuthorityPayload struct {
@@ -273,6 +274,7 @@ var licensedProductionPrivacyEventCatalog = func() []licensedPrivacyEventPolicy 
 			licensedPrivacyRule("/quota/updated_by", events.PrivacyFieldIdentityExact),
 		)),
 		entry(provider.EventTenantBrandSet, 1, providerPolicy[providerBrandAuthorityPayload](
+			licensedPrivacyRule("/brand_expected_revision", events.PrivacyFieldOpaqueExact),
 			licensedPrivacyRule("/brand/TenantID", events.PrivacyFieldOpaqueExact),
 			licensedPrivacyRule("/brand/ProductName", events.PrivacyFieldSubjectToken),
 			licensedPrivacyRule("/brand/LogoDataURI", events.PrivacyFieldOpaqueExact),

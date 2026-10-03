@@ -52,6 +52,9 @@ func providerRequest(t *testing.T, h http.Handler, method, path, body string) *h
 	t.Helper()
 	req := httptest.NewRequest(method, path, bytes.NewBufferString(body))
 	req.Header.Set("Authorization", "Bearer real-credential")
+	if strings.HasSuffix(path, "/brand") && method == http.MethodPut {
+		req.Header.Set("If-Match", `"0"`)
+	}
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	return rec

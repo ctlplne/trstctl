@@ -42,7 +42,8 @@ var (
 	ErrMutationPersistence = errors.New("provider: durable mutation did not converge")
 	// ErrBrandDomainConflict is a stable, safe refusal. A customer cannot claim
 	// a hostname already assigned to another customer.
-	ErrBrandDomainConflict = errors.New("provider: custom domain is already assigned to another customer")
+	ErrBrandDomainConflict   = errors.New("provider: custom domain is already assigned to another customer")
+	ErrBrandRevisionConflict = errors.New("provider: brand changed since it was read; reload the customer's current brand before saving")
 
 	providerMutationNamespace = uuid.NewSHA1(uuid.NameSpaceURL, []byte("trstctl.com/provider/mutation"))
 )
@@ -64,20 +65,21 @@ type DelegationMutation struct {
 // what, when, and why view of that SAME immutable event. There is no second
 // best-effort audit append that can disagree with the business state.
 type AuthorityEvent struct {
-	Tenant              *Tenant               `json:"tenant,omitempty"`
-	Operator            *OperatorIdentity     `json:"operator,omitempty"`
-	Delegation          *DelegationMutation   `json:"delegation,omitempty"`
-	Delegations         []DelegationMutation  `json:"delegations,omitempty"`
-	Quota               *billing.Quota        `json:"quota,omitempty"`
-	Brand               *TenantBrand          `json:"brand,omitempty"`
-	BrandTokenOverrides map[string]string     `json:"brand_token_overrides,omitempty"`
-	Grant               *BreakGlassGrant      `json:"break_glass_grant,omitempty"`
-	Snapshot            *TenantSnapshot       `json:"tenant_snapshot,omitempty"`
-	Drill               *IsolationDrillReport `json:"isolation_drill,omitempty"`
-	EffectiveAt         time.Time             `json:"effective_at,omitempty"`
-	RequestBinding      string                `json:"request_binding,omitempty"`
-	Erasure             *TenantErasureRequest `json:"erasure,omitempty"`
-	Audit               AuditEvent            `json:"audit"`
+	Tenant                *Tenant               `json:"tenant,omitempty"`
+	Operator              *OperatorIdentity     `json:"operator,omitempty"`
+	Delegation            *DelegationMutation   `json:"delegation,omitempty"`
+	Delegations           []DelegationMutation  `json:"delegations,omitempty"`
+	Quota                 *billing.Quota        `json:"quota,omitempty"`
+	Brand                 *TenantBrand          `json:"brand,omitempty"`
+	BrandExpectedRevision *string               `json:"brand_expected_revision,omitempty"`
+	BrandTokenOverrides   map[string]string     `json:"brand_token_overrides,omitempty"`
+	Grant                 *BreakGlassGrant      `json:"break_glass_grant,omitempty"`
+	Snapshot              *TenantSnapshot       `json:"tenant_snapshot,omitempty"`
+	Drill                 *IsolationDrillReport `json:"isolation_drill,omitempty"`
+	EffectiveAt           time.Time             `json:"effective_at,omitempty"`
+	RequestBinding        string                `json:"request_binding,omitempty"`
+	Erasure               *TenantErasureRequest `json:"erasure,omitempty"`
+	Audit                 AuditEvent            `json:"audit"`
 }
 
 // MutationSink is the command-side boundary used by Service. Production wires
@@ -206,6 +208,15 @@ func (s *EventMutationSink) appendLocked(ctx context.Context, idempotencyKey, ty
 			return eventspec.Event{}, fmt.Errorf("%w: find brand command: %v", ErrMutationPersistence, err)
 		}
 		if !found {
+			if payload.BrandExpectedRevision != nil {
+				current, err := brandProjectionRevision(ctx, s.projection.store.SystemPool(), tenantID)
+				if err != nil {
+					return eventspec.Event{}, fmt.Errorf("%w: read brand revision: %v", ErrMutationPersistence, err)
+				}
+				if current != *payload.BrandExpectedRevision {
+					return eventspec.Event{}, ErrBrandRevisionConflict
+				}
+			}
 			claimed, err := brandDomainClaimed(ctx, s.projection.store.SystemPool(), payload.Brand.CustomDomain, tenantID)
 			if err != nil {
 				return eventspec.Event{}, fmt.Errorf("%w: check custom-domain ownership: %v", ErrMutationPersistence, err)
@@ -248,6 +259,9 @@ func (s *EventMutationSink) appendLocked(ctx context.Context, idempotencyKey, ty
 			if outcome == "rejected_domain" {
 				return eventspec.Event{}, ErrBrandDomainConflict
 			}
+			if outcome == "rejected_revision" {
+				return eventspec.Event{}, ErrBrandRevisionConflict
+			}
 		}
 	}
 	return canonical, nil
@@ -255,6 +269,16 @@ func (s *EventMutationSink) appendLocked(ctx context.Context, idempotencyKey, ty
 
 type brandDomainQuerier interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
+func brandProjectionRevision(ctx context.Context, query brandDomainQuerier, tenantID string) (string, error) {
+	var revision string
+	//trstctl:system-query — exact customer brand revision for serialized Provider compare-and-set.
+	err := query.QueryRow(ctx, `SELECT revision FROM tenant_branding WHERE tenant_id = $1`, tenantID).Scan(&revision)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "0", nil
+	}
+	return revision, err
 }
 
 func brandDomainClaimed(ctx context.Context, query brandDomainQuerier, domain, tenantID string) (bool, error) {
@@ -488,11 +512,20 @@ func (p *AuthorityProjection) ApplyTx(ctx context.Context, tx pgx.Tx, event even
 		}
 		outcome := "applied"
 		if event.Type == EventTenantBrandSet && payload.Brand != nil {
+			if payload.BrandExpectedRevision != nil {
+				current, err := brandProjectionRevision(ctx, tx, event.TenantID)
+				if err != nil {
+					return err
+				}
+				if current != *payload.BrandExpectedRevision {
+					outcome = "rejected_revision"
+				}
+			}
 			claimed, err := brandDomainClaimed(ctx, tx, payload.Brand.CustomDomain, event.TenantID)
 			if err != nil {
 				return err
 			}
-			if claimed {
+			if claimed && outcome == "applied" {
 				// Earlier releases appended the command before the domain index
 				// refused its projection. Retain that immutable attempt, but do
 				// not let it brick every subsequent restart or seize the host.
@@ -785,14 +818,14 @@ func applyAuthorityEventTx(ctx context.Context, tx pgx.Tx, event eventspec.Event
 		}
 		_, err = tx.Exec(ctx, `INSERT INTO tenant_branding
 			(tenant_id, product_name, logo_data_uri, login_message, token_overrides,
-			 email_from_name, email_footer, custom_domain, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			 email_from_name, email_footer, custom_domain, updated_at, revision)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 			ON CONFLICT (tenant_id) DO UPDATE SET product_name = EXCLUDED.product_name,
 			logo_data_uri = EXCLUDED.logo_data_uri, login_message = EXCLUDED.login_message,
 			token_overrides = EXCLUDED.token_overrides, email_from_name = EXCLUDED.email_from_name,
 			email_footer = EXCLUDED.email_footer, custom_domain = EXCLUDED.custom_domain,
-			updated_at = EXCLUDED.updated_at`, b.TenantID, b.ProductName, b.LogoDataURI,
-			b.LoginMessage, tokens, b.EmailFromName, b.EmailFooter, b.CustomDomain, effectiveAt)
+			updated_at = EXCLUDED.updated_at, revision = EXCLUDED.revision`, b.TenantID, b.ProductName, b.LogoDataURI,
+			b.LoginMessage, tokens, b.EmailFromName, b.EmailFooter, b.CustomDomain, effectiveAt, event.ID)
 		return err
 	case AuditBreakGlassRequested, AuditBreakGlassConsented, AuditBreakGlassDenied, AuditBreakGlassAccessed:
 		if payload.Grant == nil {

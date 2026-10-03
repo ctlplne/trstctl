@@ -200,6 +200,8 @@ func (h *handler) serve(w http.ResponseWriter, r *http.Request) {
 		h.getQuota(w, r)
 	case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/brand"):
 		h.setBrand(w, r)
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/brand"):
+		h.getBrand(w, r)
 	case r.Method == http.MethodPost && r.URL.Path == "/provider/v1/isolation-drill":
 		h.runIsolationDrill(w, r)
 	case r.Method == http.MethodPost && r.URL.Path == "/provider/v1/breakglass":
@@ -703,35 +705,82 @@ func (h *handler) setBrand(w http.ResponseWriter, r *http.Request) {
 		writeProviderError(w, ErrProviderUnauthenticated)
 		return
 	}
+	expectedRevision, err := parseBrandIfMatch(r.Header.Get("If-Match"))
+	if err != nil {
+		_ = problem.New(http.StatusPreconditionRequired, "Read this customer's current brand and send its exact ETag in If-Match before saving.").
+			WithType("urn:trstctl:provider:brand_revision_required").
+			WithExtension("code", "brand_revision_required").Write(w)
+		return
+	}
 	r, ok = h.withMutationKey(w, r)
 	if !ok {
 		return
 	}
 	customerID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/provider/v1/tenants/"), "/brand")
 	var body struct {
-		ProductName   string `json:"product_name"`
-		LogoDataURI   string `json:"logo_data_uri"`
-		LoginMessage  string `json:"login_message"`
-		EmailFromName string `json:"email_from_name"`
-		EmailFooter   string `json:"email_footer"`
-		CustomDomain  string `json:"custom_domain"`
+		ProductName    string            `json:"product_name"`
+		LogoDataURI    string            `json:"logo_data_uri"`
+		LoginMessage   string            `json:"login_message"`
+		EmailFromName  string            `json:"email_from_name"`
+		EmailFooter    string            `json:"email_footer"`
+		CustomDomain   string            `json:"custom_domain"`
+		TokenOverrides map[string]string `json:"token_overrides"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeProviderError(w, err)
 		return
 	}
 	if err := h.svc.SetTenantBrand(r.Context(), op, customerID, TenantBrand{
-		ProductName:   body.ProductName,
-		LogoDataURI:   body.LogoDataURI,
-		LoginMessage:  body.LoginMessage,
-		EmailFromName: body.EmailFromName,
-		EmailFooter:   body.EmailFooter,
-		CustomDomain:  body.CustomDomain,
-	}); err != nil {
+		ProductName:    body.ProductName,
+		LogoDataURI:    body.LogoDataURI,
+		LoginMessage:   body.LoginMessage,
+		EmailFromName:  body.EmailFromName,
+		EmailFooter:    body.EmailFooter,
+		CustomDomain:   body.CustomDomain,
+		TokenOverrides: body.TokenOverrides,
+	}, expectedRevision); err != nil {
 		writeProviderError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func parseBrandIfMatch(header string) (string, error) {
+	if len(header) > 130 {
+		return "", errors.New("brand revision too long")
+	}
+	revision, err := strconv.Unquote(strings.TrimSpace(header))
+	if err != nil || revision == "" || strings.ContainsAny(revision, "\r\n\x00") {
+		return "", errors.New("brand revision must be one strong ETag")
+	}
+	return revision, nil
+}
+
+func (h *handler) getBrand(w http.ResponseWriter, r *http.Request) {
+	op, ok := h.operatorFromRequest(r)
+	if !ok {
+		writeProviderError(w, ErrProviderUnauthenticated)
+		return
+	}
+	customerID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/provider/v1/tenants/"), "/brand")
+	brand, err := h.svc.GetTenantBrand(r.Context(), op, customerID)
+	if err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	w.Header().Set("ETag", strconv.Quote(brand.Revision))
+	writeJSON(w, http.StatusOK, struct {
+		TenantID       string            `json:"tenant_id"`
+		ProductName    string            `json:"product_name"`
+		LogoDataURI    string            `json:"logo_data_uri"`
+		LoginMessage   string            `json:"login_message"`
+		EmailFromName  string            `json:"email_from_name"`
+		EmailFooter    string            `json:"email_footer"`
+		CustomDomain   string            `json:"custom_domain"`
+		TokenOverrides map[string]string `json:"token_overrides"`
+		Revision       string            `json:"revision"`
+	}{brand.TenantID, brand.ProductName, brand.LogoDataURI, brand.LoginMessage,
+		brand.EmailFromName, brand.EmailFooter, brand.CustomDomain, brand.TokenOverrides, brand.Revision})
 }
 
 func (h *handler) getQuota(w http.ResponseWriter, r *http.Request) {
@@ -1036,6 +1085,8 @@ func writeProviderError(w http.ResponseWriter, err error) {
 		status, code = http.StatusConflict, "idempotency_conflict"
 	case errors.Is(err, ErrBrandDomainConflict):
 		status, code = http.StatusConflict, "brand_domain_conflict"
+	case errors.Is(err, ErrBrandRevisionConflict):
+		status, code = http.StatusConflict, "brand_revision_conflict"
 	case errors.Is(err, orchestrator.ErrInProgress), errors.Is(err, orchestrator.ErrEffectIndeterminate):
 		status, code = http.StatusConflict, "idempotency_in_progress"
 	case errors.Is(err, ErrMutationPersistence):

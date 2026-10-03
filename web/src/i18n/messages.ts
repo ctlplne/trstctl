@@ -15907,6 +15907,26 @@ export const messages = {
     defaultMessage: "Save brand",
     description: "L3: brand save button.",
   },
+  "provider.brand.loadFailed": {
+    defaultMessage: "The current brand could not be read. Reload it before editing this customer.",
+    description: "Provider brand read failure; do not permit a blind write.",
+  },
+  "provider.brand.default": {
+    defaultMessage: "Default brand: no customer-specific brand has been saved.",
+    description: "Provider brand editor readback before its first save.",
+  },
+  "provider.brand.saved": {
+    defaultMessage: "Saved customer brand loaded.",
+    description: "Provider brand editor shows a persisted customer-specific brand.",
+  },
+  "provider.brand.reload": {
+    defaultMessage: "Reload current brand",
+    description: "Refresh the authorized brand and its edit revision.",
+  },
+  "provider.brand.stale": {
+    defaultMessage: "This brand changed after you opened it. Reload the current brand, review it, then save again.",
+    description: "Provider brand optimistic concurrency refusal.",
+  },
   "source.provider.drill.title.l3prov0036": {
     defaultMessage: "Tenant isolation",
     description: "L3: isolation-drill section heading.",

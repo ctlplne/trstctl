@@ -130,6 +130,19 @@ this view automatically. The server distinguishes an uninitialized workspace
 from an initialized customer with no certificates. An unavailable read stays
 unknown; it must not become a green status or an instruction to create credentials.
 
+For white-label edits, choose **Brand** beside the exact customer. The editor
+first reads that customer's saved product name, custom domain, and login message;
+**Save brand** stays unavailable if that read fails. An authorized automation
+client uses `GET /provider/v1/tenants/{id}/brand` and keeps its strong `ETag`.
+Send that ETag as `If-Match` on `PUT /provider/v1/tenants/{id}/brand`, along with
+an `Idempotency-Key` and the complete brand document. The default brand has
+ETag `"0"`. A missing precondition returns 428; a concurrent edit returns
+`409 brand_revision_conflict` without replacing the newer brand. Reload and
+review before retrying with a new idempotency key. A different customer's brand
+cannot be read or edited without that customer's provision delegation. The
+console preserves advanced logo, email, and token-override fields when editing
+the three common fields. A custom domain must be unique across customers.
+
 The deployment administrator initializes customer access on the control-plane
 host, using the running service's configuration. The setup view supplies a command
 bound to the selected customer. The equivalent command below uses the customer ID

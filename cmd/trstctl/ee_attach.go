@@ -494,6 +494,19 @@ func providerBrandStore(inst *eewhitelabel.Installation) eeprovider.BrandStore {
 
 type brandStoreAdapter struct{ inst *eewhitelabel.Installation }
 
+func (a brandStoreAdapter) TenantBrand(ctx context.Context, tenantID string) (*eeprovider.TenantBrand, error) {
+	record, err := a.inst.PG.TenantBrand(ctx, tenantID)
+	if err != nil || record == nil {
+		return nil, err
+	}
+	return &eeprovider.TenantBrand{
+		TenantID: tenantID, ProductName: record.ProductName, LogoDataURI: record.LogoDataURI,
+		LoginMessage: record.LoginMessage, EmailFromName: record.EmailFromName,
+		EmailFooter: record.EmailFooter, CustomDomain: record.CustomDomain, Revision: record.Revision,
+		TokenOverrides: record.TokenOverrides,
+	}, nil
+}
+
 func (a brandStoreAdapter) Invalidate() {
 	if a.inst.Resolver != nil {
 		a.inst.Resolver.Invalidate()

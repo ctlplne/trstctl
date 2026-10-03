@@ -45,6 +45,9 @@ func (authorityAuthenticator) AuthenticateOperator(r *http.Request) (Operator, b
 type authorityBrandCache struct{}
 
 func (authorityBrandCache) Invalidate() {}
+func (authorityBrandCache) TenantBrand(context.Context, string) (*TenantBrand, error) {
+	return nil, nil
+}
 
 // AUD-62: provider authority is one immutable history, not five independently
 // mutable tables plus a best-effort audit append. This real PostgreSQL/JetStream
@@ -191,6 +194,69 @@ func TestProviderBrandCollisionRefusesBeforeAppendAndRecoversOlderPoisonedHistor
 	}
 	if _, err := restarted.Mutations.Append(ctx, "alpha-brand-v1", EventTenantBrandSet, alpha, brand(alpha, "Alpha", "alpha.qa.test")); err != nil {
 		t.Fatalf("successful old key did not replay after domain changed owners: %v", err)
+	}
+}
+
+func TestProviderBrandRevisionSurvivesColdReplay(t *testing.T) {
+	ctx := context.Background()
+	st := openProviderStore(t)
+	truncateProviderAuthority(t, st)
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	runtime := NewAuthorityRuntime(st, log)
+	id := CustomerID("brand-revision-cold")
+	initial := "0"
+	command := func(name, domain string, expected *string) AuthorityEvent {
+		return AuthorityEvent{Brand: &TenantBrand{TenantID: id, ProductName: name, CustomDomain: domain}, BrandExpectedRevision: expected,
+			Audit: AuditEvent{Type: EventTenantBrandSet, TenantID: id, OperatorID: "provider-admin", At: time.Now().UTC()}}
+	}
+	first := command("First", "first.revision.test", &initial)
+	event, err := runtime.Mutations.Append(ctx, "revision-first", EventTenantBrandSet, id, first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := func() (string, string) {
+		var revision, domain string
+		//trstctl:system-query — exact test customer projection after a Provider event.
+		if err := st.SystemPool().QueryRow(ctx, `SELECT revision, custom_domain FROM tenant_branding WHERE tenant_id = $1`, id).Scan(&revision, &domain); err != nil {
+			t.Fatal(err)
+		}
+		return revision, domain
+	}
+	if revision, domain := read(); revision != event.ID || domain != "first.revision.test" {
+		t.Fatalf("first read = %s/%s", revision, domain)
+	}
+	head, err := log.LastSequence(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtime.Mutations.Append(ctx, "revision-stale", EventTenantBrandSet, id,
+		command("Stale", "", &initial)); !errors.Is(err, ErrBrandRevisionConflict) {
+		t.Fatalf("stale edit = %v", err)
+	}
+	if after, err := log.LastSequence(ctx); err != nil || after != head {
+		t.Fatalf("stale edit appended: %d -> %d, %v", head, after, err)
+	}
+	if revision, domain := read(); revision != event.ID || domain != "first.revision.test" {
+		t.Fatalf("stale edit changed brand = %s/%s", revision, domain)
+	}
+	current := event.ID
+	second, err := runtime.Mutations.Append(ctx, "revision-second", EventTenantBrandSet, id,
+		command("Second", "first.revision.test", &current))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := NewAuthorityRuntime(st, log).Bootstrap(ctx); err != nil {
+		t.Fatalf("cold replay: %v", err)
+	}
+	if revision, domain := read(); revision != second.ID || domain != "first.revision.test" {
+		t.Fatalf("cold read = %s/%s", revision, domain)
+	}
+	if _, err := runtime.Mutations.Append(ctx, "revision-first", EventTenantBrandSet, id, first); err != nil {
+		t.Fatalf("original idempotency key after replay: %v", err)
 	}
 }
 
@@ -580,6 +646,9 @@ func TestProviderServedMutationIsExactAndHealsPostAppendFailure(t *testing.T) {
 	} {
 		req := httptest.NewRequest(mutation.method, mutation.path, bytes.NewBufferString(mutation.body))
 		req.Header.Set("Authorization", "Bearer real-credential")
+		if mutation.method == http.MethodPut && strings.HasSuffix(mutation.path, "/brand") {
+			req.Header.Set("If-Match", `"0"`)
+		}
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "Idempotency-Key") {
@@ -700,6 +769,9 @@ func TestEveryProviderMutationConvergesAcrossPostAppendFailure(t *testing.T) {
 		req := httptest.NewRequest(method, path, bytes.NewBufferString(body))
 		req.Header.Set("Authorization", auth)
 		req.Header.Set("Idempotency-Key", key)
+		if method == http.MethodPut && strings.HasSuffix(path, "/brand") {
+			req.Header.Set("If-Match", `"0"`)
+		}
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
 		return rec
