@@ -53,6 +53,12 @@ cloud discovery sources whose AWS providers point at LocalStack (seeded with a
 tagged certificate secret and an ACM certificate), discovery jobs/runs, API tokens, ephemeral API keys, agent enrollment tokens,
 audit-producing lifecycle transitions, and notification-facing preview rows.
 
+The pinned LocalStack Community image keeps KMS keys in memory. Its named volume
+does not make those keys survive a container restart, and `PERSISTENCE=1` does
+not enable persistence in that edition. The demo can prove AWS KMS API contract
+behavior while the emulator runs; do not use it as a managed-key recovery drill.
+Use a durable provider and independently check the same key after restart.
+
 The seed is a convergent, versioned migration. It first reads each logical
 resource, refuses duplicate or same-name/different-policy preserved data, and
 advances lifecycle state only when that transition is still needed. Its final

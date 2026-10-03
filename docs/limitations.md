@@ -4236,8 +4236,14 @@ The cloud receipts are high-fidelity protocol emulation, not a claim that this t
 ran in a customer's live cloud account. Likewise, SoftHSM proves the PKCS#11 ABI and
 swtpm proves TPM command/lifecycle behavior; an operator still validates its exact
 device firmware, module certificate, network policy, and cloud IAM. The LocalStack
-demo is not the acceptance proof's receipt source. Static no-cgo signer builds fail closed for native
-PKCS#11/YubiHSM selection; use the published HSM signer artifact. Provider selection
+demo is not the acceptance proof's receipt source. Its pinned Community 3.8.1
+image keeps KMS keys in memory; the named volume and `PERSISTENCE=1` do not make
+them durable. A key may remain in trstctl's event-projected inventory after this
+emulator loses the external key. Cold recovery of the AWS KMS demo lane is blocked
+on a durable, faithful KMS service (for example, a licensed LocalStack edition or
+a real isolated cloud account). SoftHSM and swtpm can prove their own provider
+recovery, but cannot stand in for native AWS KMS. Static no-cgo signer builds fail
+closed for native PKCS#11/YubiHSM selection; use the published HSM signer artifact. Provider selection
 is startup-static: this is ordinary Go interface injection, not a runtime crypto
 plugin engine or a policy-selected algorithm marketplace.
 
