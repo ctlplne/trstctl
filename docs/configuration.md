@@ -776,6 +776,9 @@ inside `internal/crypto`. Its HttpOnly cookie is Provider-only and mutations use
 double-submit CSRF. When Provider SCIM is enabled, both methods resolve the
 SCIM-projected operator on every request, so deprovisioning immediately refuses
 an otherwise valid token/session and revokes the operator's live delegations.
+Without Provider SCIM, a signed role and MFA claim may bootstrap a subject absent
+from the operator directory. An existing inactive subject or a directory lookup
+error still refuses the request; an outage is never treated as absence.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |

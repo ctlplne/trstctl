@@ -98,6 +98,18 @@ func TestOIDCAuthenticatorMapsVerifiedClaims(t *testing.T) {
 	}
 }
 
+func TestOIDCOptionalDirectoryFallsBackOnlyWhenSubjectIsAbsent(t *testing.T) {
+	f := newOIDCFixture(t)
+	f.auth.cfg.Directory = newAUD58AccessStore()
+	if _, ok := f.auth.AuthenticateOperator(f.request(t, f.signer, "idp-k1", f.baseClaims())); !ok {
+		t.Fatal("signed OIDC role was refused merely because optional SCIM was not configured")
+	}
+	f.auth.cfg.Directory = unavailableGrantDirectory{}
+	if _, ok := f.auth.AuthenticateOperator(f.request(t, f.signer, "idp-k1", f.baseClaims())); ok {
+		t.Fatal("directory outage was treated as an absent optional subject")
+	}
+}
+
 func TestOIDCAuthenticatorRefusesEverythingNotPositivelyVerified(t *testing.T) {
 	t.Parallel()
 	f := newOIDCFixture(t)

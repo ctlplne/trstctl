@@ -120,23 +120,7 @@ func (a *SAMLAuthenticator) AuthenticateOperator(r *http.Request) (Operator, boo
 		return Operator{}, false
 	}
 	operator := Operator{ID: session.Subject, Email: session.Email, Role: sessionRole, MFA: true, Session: session.ID}
-	if a.cfg.Directory != nil {
-		identity, resolveErr := a.cfg.Directory.ResolveOperator(r.Context(), session.Subject)
-		if resolveErr != nil || !identity.Active {
-			return Operator{}, false
-		}
-		role := lesserRole(sessionRole, identity.Role)
-		if role == "" {
-			return Operator{}, false
-		}
-		operator.ID, operator.Role = identity.ID, role
-		if strings.TrimSpace(identity.Email) != "" {
-			operator.Email = identity.Email
-		}
-	} else if a.cfg.RequireDirectory {
-		return Operator{}, false
-	}
-	return operator, true
+	return a.bindDirectory(r.Context(), operator)
 }
 
 // AuthenticateLogout recognizes the same signed, unexpired Provider cookie
@@ -315,21 +299,29 @@ func (a *SAMLAuthenticator) operatorFromAssertion(r *http.Request, assertion sam
 		email = strings.TrimSpace(values[0])
 	}
 	operator := Operator{ID: subject, Email: email, Role: role, MFA: true}
-	if a.cfg.Directory != nil {
-		identity, err := a.cfg.Directory.ResolveOperator(r.Context(), subject)
-		if err != nil || !identity.Active {
-			return Operator{}, false
-		}
-		role = lesserRole(role, identity.Role)
-		if role == "" {
-			return Operator{}, false
-		}
-		operator.ID, operator.Role = identity.ID, role
-		if identity.Email != "" {
-			operator.Email = identity.Email
-		}
-	} else if a.cfg.RequireDirectory {
+	return a.bindDirectory(r.Context(), operator)
+}
+
+func (a *SAMLAuthenticator) bindDirectory(ctx context.Context, operator Operator) (Operator, bool) {
+	if a.cfg.Directory == nil {
+		return operator, !a.cfg.RequireDirectory
+	}
+	identity, err := a.cfg.Directory.ResolveOperator(ctx, operator.ID)
+	if err != nil {
+		// Without SCIM an IdP-signed role may bootstrap an operator, but an
+		// unavailable directory must never look like an absent identity.
+		return operator, !a.cfg.RequireDirectory && errors.Is(err, ErrNotFound)
+	}
+	if !identity.Active {
 		return Operator{}, false
+	}
+	role := lesserRole(operator.Role, identity.Role)
+	if role == "" {
+		return Operator{}, false
+	}
+	operator.ID, operator.Role = identity.ID, role
+	if strings.TrimSpace(identity.Email) != "" {
+		operator.Email = strings.TrimSpace(identity.Email)
 	}
 	return operator, true
 }

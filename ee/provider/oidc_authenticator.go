@@ -4,6 +4,7 @@ package provider
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -171,7 +172,7 @@ func (a *OIDCAuthenticator) AuthenticateOperator(r *http.Request) (Operator, boo
 	if a.cfg.Directory != nil {
 		identity, err := a.cfg.Directory.ResolveOperator(r.Context(), claims.Sub)
 		if err != nil {
-			if a.cfg.RequireDirectory {
+			if a.cfg.RequireDirectory || !errors.Is(err, ErrNotFound) {
 				return Operator{}, false
 			}
 			return operator, true

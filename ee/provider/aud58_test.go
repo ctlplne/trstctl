@@ -315,6 +315,51 @@ func (p aud58SAMLProvider) VerifyResponse(*http.Request, []string) (samlsp.Asser
 	return p.assertion, nil
 }
 
+func TestProviderSAMLAllowsPinnedRoleWithoutSCIMButHonorsExistingOffboard(t *testing.T) {
+	directory := newAUD58AccessStore()
+	auth := NewSAMLAuthenticator(SAMLAuthenticatorConfig{
+		Provider: aud58SAMLProvider{assertion: samlsp.Assertion{
+			Subject:    "provider-admin-saml@local.qa",
+			Attributes: map[string][]string{"groups": {"provider-admin"}, "amr": {"mfa"}},
+		}},
+		Directory: directory, RequireDirectory: false,
+		RoleAttribute: "groups", AdminValues: []string{"provider-admin"},
+		MFAAttribute: "amr", MFAValues: []string{"mfa"},
+		SessionSecret: []byte("aud58-saml-session-secret-32bytes"), SessionTTL: time.Hour, Secure: true,
+	})
+	login := httptest.NewRecorder()
+	auth.ServeLogin(login, httptest.NewRequest(http.MethodGet, "/provider/v1/auth/saml/login", nil))
+	acs := httptest.NewRequest(http.MethodPost, "/provider/v1/auth/saml/acs",
+		strings.NewReader("RelayState="+cookieValueByName(login.Result().Cookies(), providerSAMLStateCookie)))
+	acs.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	for _, cookie := range login.Result().Cookies() {
+		acs.AddCookie(cookie)
+	}
+	result := httptest.NewRecorder()
+	auth.ServeACS(result, acs)
+	if result.Code != http.StatusFound {
+		t.Fatalf("SAML login without SCIM status=%d body=%s", result.Code, result.Body.String())
+	}
+	session := cookieByName(result.Result().Cookies(), providerSessionCookie)
+	if session == nil {
+		t.Fatal("signed SAML login did not issue a provider session")
+	}
+	request := httptest.NewRequest(http.MethodGet, "/provider/v1/auth/session", nil)
+	request.AddCookie(session)
+	operator, ok := auth.AuthenticateOperator(request)
+	if !ok || operator.ID != "provider-admin-saml@local.qa" || operator.Role != OperatorAdmin || !operator.MFA {
+		t.Fatalf("provider SAML session = %+v accepted=%t", operator, ok)
+	}
+	directory.identities[operator.ID] = OperatorIdentity{ID: operator.ID, Role: OperatorAdmin, Active: false}
+	if _, ok := auth.AuthenticateOperator(request); ok {
+		t.Fatal("existing inactive operator retained a live SAML session")
+	}
+	auth.cfg.Directory = unavailableGrantDirectory{}
+	if _, ok := auth.AuthenticateOperator(request); ok {
+		t.Fatal("directory outage was treated as an absent optional SAML subject")
+	}
+}
+
 func TestAUD58SAMLSessionRechecksSCIMLifecycleOnEveryRequest(t *testing.T) {
 	t.Parallel()
 	access := newAUD58AccessStore()
