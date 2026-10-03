@@ -363,6 +363,13 @@ key, identity, connector, target, and certificate fingerprint before associating
 those receipts. A missing match stays unverified. These are historical observations,
 not a promise that the listener still serves the same certificate now.
 
+The Certificates cockpit separates current repair work from history. Its deployment
+attention count uses the latest loaded receipt for each live certificate's identity,
+connector, destination, and target. A later verified retry or successor clears an
+older failed attempt from that count; the failed attempt remains visible in the
+outcome chart and receipt history. The count is based on the loaded tenant-scoped
+read, so a fresh listener handshake is still needed to prove what serves now.
+
 The certificate detail drawer limits this history to the selected fingerprint and
 its retained identity links. A later successor's delivery or renewal is not proof
 for the selected certificate. If several identities used that certificate, choose

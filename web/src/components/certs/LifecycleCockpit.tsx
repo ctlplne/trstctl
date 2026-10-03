@@ -260,6 +260,7 @@ export function LifecycleCockpit(props: LifecycleCockpitProps) {
   const deliveries = props.deliveries ?? [];
   const ownerByID = new Map(owners.map((owner) => [owner.id, owner]));
   const evidenceObserved = props.identities !== null && props.rotationRuns !== null;
+  const liveCertificates = props.certificates.filter(isLiveCertificate);
   const certificateFingerprints = new Set(props.certificates.map((certificate) => certificate.fingerprint));
   const certificateIdentityIDs = new Set(
     props.certificates.map((certificate) => certificateIdentity(certificate, identities)?.id).filter((identityID): identityID is string => Boolean(identityID)),
@@ -373,11 +374,37 @@ export function LifecycleCockpit(props: LifecycleCockpitProps) {
   const actionRows = allActionRows.slice(0, 10);
   const ownerGaps = allActionRows.filter((row) => row.ownerGap).length;
   const renewalFailures = scopedRuns.filter((run) => run.status === "failed").length;
-  const deploymentIssues = scopedDeliveries
+  // The chart keeps historical attempts, but the alert is a current repair
+  // queue. A verified retry or successor must clear a prior failed/delivered
+  // receipt for the same tenant-scoped identity and exact connector target.
+  const liveFingerprints = new Set(liveCertificates.map((certificate) => certificate.fingerprint));
+  const liveIdentityIDs = new Set(
+    liveCertificates.map((certificate) => certificateIdentity(certificate, identities)?.id).filter((id): id is string => Boolean(id)),
+  );
+  const liveDestinations = new Set(
+    liveCertificates.map((certificate) => certificate.deployment_location).filter((location): location is string => Boolean(location)),
+  );
+  const latestDeliveryByTarget = new Map<string, ConnectorDelivery>();
+  for (const delivery of scopedDeliveries) {
+    if (
+      !(
+        (delivery.identity_id && liveIdentityIDs.has(delivery.identity_id)) ||
+        (delivery.fingerprint && liveFingerprints.has(delivery.fingerprint)) ||
+        (delivery.destination && liveDestinations.has(delivery.destination))
+      )
+    )
+      continue;
+    const key = [delivery.identity_id || delivery.fingerprint, delivery.connector, delivery.target, delivery.destination].join("\u0000");
+    const previous = latestDeliveryByTarget.get(key);
+    if (!previous || Date.parse(delivery.updated_at || delivery.created_at) > Date.parse(previous.updated_at || previous.created_at)) {
+      latestDeliveryByTarget.set(key, delivery);
+    }
+  }
+  const deploymentIssues = [...latestDeliveryByTarget.values()]
     .map((delivery) => deliveryIssue(delivery, now))
     .filter((issue): issue is NonNullable<ReturnType<typeof deliveryIssue>> => issue !== null);
   const deploymentFailures = deploymentIssues.length;
-  const onlyExplicitDeploymentFailures = deploymentIssues.every((issue) => issue === "failed");
+  const onlyExplicitDeploymentFailures = deploymentIssues.length > 0 && deploymentIssues.every((issue) => issue === "failed");
   const arrival = workArrivalData(props.certificates, now, (start, end) => t("certificateCockpit.arrival.range", { start: String(start), end: String(end) }));
   const outcomes = outcomeData(scopedRuns, scopedDeliveries, locale, timeZone, t("audit.design.result.succeeded"), t("audit.design.result.failed"), now);
   const deadUrgent = (props.notifications ?? []).filter(

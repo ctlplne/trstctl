@@ -690,6 +690,44 @@ describe("Certificate Lifecycle cockpit", () => {
     expect(await axe(view.container)).toHaveNoViolations();
   });
 
+  it("clears the current deployment alert after a verified recovery while retaining failed history", async () => {
+    const prior = await apiMock.connectorDeliveries();
+    apiMock.connectorDeliveries.mockResolvedValue({
+      items: [
+        ...prior.items,
+        {
+          ...prior.items[0],
+          id: "delivery-recovered",
+          status: "verified",
+          attempts: 1,
+          detail: "stock listener matches the replacement",
+          created_at: "2026-08-24T10:13:00Z",
+          updated_at: "2026-08-24T10:14:00Z",
+        },
+      ],
+    });
+
+    renderPage();
+    const cockpit = await screen.findByRole("region", { name: "Certificate Lifecycle cockpit" });
+    expect(within(cockpit).getByText(/0 deployments/)).toBeInTheDocument();
+    expect(within(cockpit).queryByText(/1 deployment failed verification/)).not.toBeInTheDocument();
+    const queue = within(cockpit).getByRole("table", { name: "Certificate action queue" });
+    const row = within(queue).getByRole("row", { name: /api\.prod\.example/i });
+    expect(within(row).queryByText(/deployment verification failed/i)).not.toBeInTheDocument();
+    const historicalOutcomes = within(cockpit).getByRole("table", { name: "Renewal and deployment outcome data" });
+    const historicalTotals = within(historicalOutcomes)
+      .getAllByRole("row")
+      .slice(1)
+      .reduce(
+        (totals, historicalRow) => {
+          const cells = within(historicalRow).getAllByRole("cell");
+          return { succeeded: totals.succeeded + Number(cells[0]?.textContent ?? 0), failed: totals.failed + Number(cells[1]?.textContent ?? 0) };
+        },
+        { succeeded: 0, failed: 0 },
+      );
+    expect(historicalTotals).toEqual({ succeeded: 3, failed: 2 });
+  });
+
   it("identifies SPIFFE certificates and routes fresh attestation without inventing key custody", async () => {
     const certificate = {
       id: "workload-cert",
