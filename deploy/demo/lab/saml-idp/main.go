@@ -18,6 +18,8 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"syscall"
 	"time"
 
@@ -32,6 +34,28 @@ type labIDP struct {
 	spMetadata string
 	session    *saml.Session
 }
+
+var labAttributeName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_.:-]*$`)
+
+type labAttributes []saml.Attribute
+
+func (a *labAttributes) String() string { return fmt.Sprintf("%d attributes", len(*a)) }
+
+func (a *labAttributes) Set(raw string) error {
+	name, value, ok := strings.Cut(raw, "=")
+	if !ok || !labAttributeName.MatchString(name) || value == "" || name == "email" || name == "tenant" {
+		return errors.New("attribute must be a nonempty name=value other than email or tenant")
+	}
+	for _, existing := range *a {
+		if existing.Name == name {
+			return fmt.Errorf("duplicate lab attribute %q", name)
+		}
+	}
+	*a = append(*a, saml.Attribute{Name: name, FriendlyName: name, Values: []saml.AttributeValue{{Type: "xs:string", Value: value}}})
+	return nil
+}
+
+func (a labAttributes) SAML() []saml.Attribute { return []saml.Attribute(a) }
 
 func (l *labIDP) GetSession(http.ResponseWriter, *http.Request, *saml.IdpAuthnRequest) *saml.Session {
 	session := *l.session
@@ -59,6 +83,8 @@ func main() {
 	subject := flag.String("subject", "", "disposable lab identity subject")
 	email := flag.String("email", "", "disposable lab identity email")
 	tenant := flag.String("tenant", "", "task tenant ID in signed assertion")
+	var attributes labAttributes
+	flag.Var(&attributes, "attribute", "additional signed name=value claim; repeat for local roles and MFA")
 	flag.Parse()
 
 	host, _, err := net.SplitHostPort(*addr)
@@ -85,10 +111,10 @@ func main() {
 		session: &saml.Session{
 			ID: *subject, CreateTime: now, ExpireTime: now.Add(8 * time.Hour),
 			Index: *subject + "-lab", NameID: *subject, UserEmail: *email,
-			CustomAttributes: []saml.Attribute{
+			CustomAttributes: append([]saml.Attribute{
 				{Name: "email", FriendlyName: "email", Values: []saml.AttributeValue{{Type: "xs:string", Value: *email}}},
 				{Name: "tenant", FriendlyName: "tenant", Values: []saml.AttributeValue{{Type: "xs:string", Value: *tenant}}},
-			},
+			}, attributes.SAML()...),
 		},
 	}
 	idp := &saml.IdentityProvider{

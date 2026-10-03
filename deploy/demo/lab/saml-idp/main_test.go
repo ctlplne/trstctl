@@ -68,3 +68,22 @@ func TestSessionUsesFreshAssertionWindow(t *testing.T) {
 		t.Fatal("shared session template was mutated")
 	}
 }
+
+func TestLabAttributesRequireUniqueNonReservedNames(t *testing.T) {
+	var attributes labAttributes
+	if err := attributes.Set("groups=provider-admin"); err != nil {
+		t.Fatal(err)
+	}
+	if err := attributes.Set("amr=mfa"); err != nil {
+		t.Fatal(err)
+	}
+	got := attributes.SAML()
+	if len(got) != 2 || got[0].Name != "groups" || got[0].Values[0].Value != "provider-admin" || got[1].Name != "amr" || got[1].Values[0].Value != "mfa" {
+		t.Fatalf("claims = %+v", got)
+	}
+	for _, invalid := range []string{"groups=other", "email=other@local.qa", "tenant=other", "bad name=value", "amr=", "no-equals"} {
+		if err := attributes.Set(invalid); err == nil {
+			t.Fatalf("accepted invalid lab attribute %q", invalid)
+		}
+	}
+}

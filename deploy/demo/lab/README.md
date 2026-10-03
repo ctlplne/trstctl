@@ -137,6 +137,15 @@ running for the replay; restart the control plane to test cold session recovery.
 The fixture reads only the pinned SP metadata file and refuses any other SP
 entity ID.
 
+For a separate Provider-plane SAML login, run a second fixture on another
+loopback port and pin `/provider/v1/auth/saml/metadata` as its exact SP entity.
+Pass `-attribute groups=provider-admin -attribute amr=mfa` for signed role and
+MFA claims matching `provider.saml.role_attribute` and
+`provider.saml.mfa_attribute`. The fixture refuses duplicate or reserved
+`email`/`tenant` claims. Keep its signing metadata, SP metadata, and persistent
+Provider session secret separate from the tenant SAML files; the Provider plane
+has its own browser session and must not inherit tenant-console access.
+
 ## Customer listener for the provider journey
 
 The front doors also serve `customer-edge.acme-robotics.example.com` on
