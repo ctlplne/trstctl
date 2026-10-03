@@ -92,6 +92,51 @@ operator can sign in at `/provider` with a token from
 `http://127.0.0.1:19081/provider/sign-in`. Delegations are bootstrapped with
 `trstctl provider-grant` inside the control-plane container (docs/editions.md).
 
+## Local SAML identity provider for Enterprise SSO
+
+The optional `saml-idp` fixture is a real SAML HTTP-POST identity provider for
+an owned, disposable lab identity. It signs assertions and serves metadata on
+an explicit loopback listener. It authenticates its configured actor without a
+password, so never expose it outside a lab or register a real operator. The
+identity provider's signing key lives only in its process; restarting it creates
+new metadata and requires the control plane to pin that new metadata and restart.
+
+From the repository root, set a private task directory and the exact tenant ID:
+
+```sh
+LAB_SAML_DIR=/secure/partner-lab/saml
+install -d -m 700 "$LAB_SAML_DIR"
+go build -o "$LAB_SAML_DIR/saml-idp" ./deploy/demo/lab/saml-idp
+"$LAB_SAML_DIR/saml-idp" \
+  -addr 127.0.0.1:18481 \
+  -metadata-file "$LAB_SAML_DIR/idp-metadata.xml" \
+  -sp-metadata-file "$LAB_SAML_DIR/sp-metadata.xml" \
+  -sp-entity-id https://127.0.0.1:9443/auth/saml/metadata \
+  -subject saml-lab-operator@local.qa \
+  -email saml-lab-operator@local.qa \
+  -tenant YOUR_TASK_TENANT_ID
+```
+
+The process writes `idp-metadata.xml` mode `0600`. Mount that public metadata
+read-only into the control plane. Enable `auth.saml` with the SP entity ID and
+metadata URL above, ACS URL `https://127.0.0.1:9443/auth/saml/acs`, the mounted
+`idp_metadata_file`, a persistent `session_secret_file`, and an exact
+subject-to-tenant mapping. See [SAML configuration](../../../docs/configuration.md#browser-sso).
+In a licensed stack, restart the signer and control plane together. Before
+sign-in, fetch the SP's public metadata into the file the local IdP reads:
+
+```sh
+curl --fail --cacert /path/to/pinned-control-plane.crt \
+  https://127.0.0.1:9443/auth/saml/metadata \
+  --output "$LAB_SAML_DIR/sp-metadata.xml"
+```
+
+The browser's **Continue with SAML** action then uses the IdP's signed
+assertion and returns to the requested local console page. Keep the IdP process
+running for the replay; restart the control plane to test cold session recovery.
+The fixture reads only the pinned SP metadata file and refuses any other SP
+entity ID.
+
 ## Customer listener for the provider journey
 
 The front doors also serve `customer-edge.acme-robotics.example.com` on
