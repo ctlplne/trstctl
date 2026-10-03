@@ -32,15 +32,19 @@ type APIToken struct {
 // an owned byte buffer to show once at the edge; callers must wipe it after use.
 // Only the hash is stored for later lookup.
 func GenerateAPIToken() (raw []byte, hash string, err error) {
+	return generateTokenWithPrefix(TokenPrefix)
+}
+
+func generateTokenWithPrefix(prefix string) (raw []byte, hash string, err error) {
 	seed, err := crypto.RandomBytes(32)
 	if err != nil {
 		return nil, "", err
 	}
 	defer secret.Wipe(seed)
 
-	raw = make([]byte, len(TokenPrefix)+base64.RawURLEncoding.EncodedLen(len(seed)))
-	copy(raw, TokenPrefix)
-	base64.RawURLEncoding.Encode(raw[len(TokenPrefix):], seed)
+	raw = make([]byte, len(prefix)+base64.RawURLEncoding.EncodedLen(len(seed)))
+	copy(raw, prefix)
+	base64.RawURLEncoding.Encode(raw[len(prefix):], seed)
 	hash, err = HashAPIToken(raw)
 	if err != nil {
 		secret.Wipe(raw)

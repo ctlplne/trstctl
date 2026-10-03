@@ -3738,6 +3738,37 @@ export interface GraphTrustStores {
   stores: GraphNode[];
 }
 
+export interface HoneyToken {
+  created_at: string;
+  id: string;
+  name: string;
+  placement: string;
+  revoked_at?: string;
+  state: "active" | "triggered" | "revoked";
+  trigger_method?: string;
+  trigger_path?: string;
+  triggered_at?: string;
+}
+
+export interface HoneyTokenCreateRequest {
+  name: string;
+  placement: string;
+}
+
+export interface HoneyTokenCreateResponse {
+  created_at: string;
+  id: string;
+  name: string;
+  placement: string;
+  state: string;
+  token: string;
+}
+
+export interface HoneyTokenList {
+  items: HoneyToken[];
+  next_cursor?: string;
+}
+
 export interface ITSMTicket {
   created_at: string;
   destination: string;

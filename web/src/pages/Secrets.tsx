@@ -68,6 +68,7 @@ import { PKISecretWorkflow } from "./secrets/PKISecretWorkflow";
 import { MachineAuthWorkflow } from "./secrets/MachineAuthWorkflow";
 import { SecretScanningWorkflow } from "./secrets/SecretScanningWorkflow";
 import { DynamicSecretWorkflow } from "./secrets/DynamicSecretWorkflow";
+import { HoneyTokenWorkflow } from "./secrets/HoneyTokenWorkflow";
 import { SecretSyncWorkflow } from "./secrets/SecretSyncWorkflow";
 import { GrantSecretVerification } from "./secrets/GrantSecretVerification";
 
@@ -262,7 +263,7 @@ export function Secrets() {
   const [sessionError, setSessionError] = useState<string | null>(null);
 
   const [sharingTask, setSharingTask] = useState<"share" | "machine" | null>(null);
-  const [engineTask, setEngineTask] = useState<"dynamic" | "transit" | "pki" | null>(null);
+  const [engineTask, setEngineTask] = useState<"dynamic" | "honeytokens" | "transit" | "pki" | null>(null);
 
   const [repoScanPosture, setRepoScanPosture] = useState<SecretRepositoryScanPosture | null>(null);
   const [thirdPartyPosture, setThirdPartyPosture] = useState<ThirdPartySecretScanPosture | null>(null);
@@ -2599,6 +2600,12 @@ export function Secrets() {
                 actionLabel: t("secrets.tasks.dynamic.action"),
               },
               {
+                id: "honeytokens",
+                title: t("secrets.tasks.honeytokens.title"),
+                description: t("secrets.tasks.honeytokens.description"),
+                actionLabel: t("secrets.tasks.honeytokens.action"),
+              },
+              {
                 id: "transit",
                 title: t("secrets.tasks.transit.title"),
                 description: t("secrets.tasks.transit.description"),
@@ -2622,6 +2629,8 @@ export function Secrets() {
               <DynamicSecretWorkflow loadBlocked={Boolean(loadError)} />
             </div>
           )}
+
+          {engineTask === "honeytokens" && <HoneyTokenWorkflow />}
 
           {engineTask === "transit" && (
             <Suspense fallback={<SecretsWorkflowFallback />}>

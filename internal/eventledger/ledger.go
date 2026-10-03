@@ -127,6 +127,9 @@ const (
 	EventTenantMemberOffboarded             = "tenant.member.offboarded"
 	EventAPITokenCreated                    = "api_token.created"
 	EventAPITokenRevoked                    = "api_token.revoked"
+	EventHoneyTokenCreated                  = "honeytoken.created"
+	EventHoneyTokenTriggered                = "honeytoken.triggered"
+	EventHoneyTokenRevoked                  = "honeytoken.revoked"
 	EventPAMSessionStarted                  = "pam.session.started"
 	EventPAMSessionExpired                  = "pam.session.expired"
 	EventProfileCreated                     = "profile.created"
@@ -299,6 +302,9 @@ var ledger = []FeatureEvent{
 	{"F8", "RBAC", "offboard_member", "offboardMember", []string{EventTenantMemberOffboarded}},
 	{"F8", "RBAC", "create_api_token", "createAPIToken", []string{EventAPITokenCreated}},
 	{"F8", "RBAC", "revoke_api_token", "revokeAPIToken", []string{EventAPITokenRevoked}},
+	{"F39", "Honeytoken exposure detection", "create_honey_token", "createHoneyToken", []string{EventHoneyTokenCreated}},
+	{"F39", "Honeytoken exposure detection", "revoke_honey_token", "revokeHoneyToken", []string{EventHoneyTokenRevoked}},
+	{"F39", "Honeytoken exposure detection", "trigger_honey_token", "recordHoneyTokenTrigger", []string{EventHoneyTokenTriggered}},
 
 	// F40 — per-tenant cryptographic custody. The migration operation reports
 	// resumable progress/failure through the same served command, while seal and

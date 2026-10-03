@@ -368,6 +368,7 @@ diff, a version-history selector, and an explicit disabled bulk-import disclosur
 [Secrets](features/secrets.md). Backed by `/api/v1/secrets/store` and
 `/api/v1/secrets/store/{name}`. **Automatic secret sources** (`/secrets/engines`) holds
 dynamic leases, CSR-first PKI-as-a-secrets-engine (the default; certificate-only),
+inert API honeytokens (plant, reveal once, inspect first use, and retire),
 an explicit deprecated key-returning mode linked to its Audit receipts, and the
 Transit console for safe key-metadata readback, typed key creation/selection/rotation,
 and encrypt/decrypt/rewrap/HMAC/sign operations (`/api/v1/transit/*`). Key material

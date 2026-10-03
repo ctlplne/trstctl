@@ -16,6 +16,34 @@ import (
 	"trstctl.com/trstctl/internal/auth"
 )
 
+// The honeytoken detector inspects trst_ bearers even on public routes. An
+// attacker who invents bearer values must not obtain unbounded DB lookups.
+func TestPublicHoneyTokenProbeIsAbuseLimited(t *testing.T) {
+	h := api.New(nil, nil, nil, api.WithSpecialRouteAbuseLimits(api.SpecialRouteAbuseLimits{
+		Global: 10, PerSource: 1, PerToken: 10, PerTenant: 10,
+	}))
+	probe := func(withBearer bool) *httptest.ResponseRecorder {
+		t.Helper()
+		r := httptest.NewRequest(http.MethodGet, "/api/v1/openapi.json", nil)
+		r.RemoteAddr = "203.0.113.40:1234"
+		if withBearer {
+			r.Header.Set("Authorization", "Bearer trst_unknown-decoy-probe")
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	if got := probe(true).Code; got != http.StatusOK {
+		t.Fatalf("first public token probe HTTP %d, want 200", got)
+	}
+	if got := probe(true).Code; got != http.StatusTooManyRequests {
+		t.Fatalf("second public token probe HTTP %d, want 429", got)
+	}
+	if got := probe(false).Code; got != http.StatusOK {
+		t.Fatalf("ordinary public OpenAPI read HTTP %d, want 200", got)
+	}
+}
+
 func TestSpecialAuthLoginRouteRateLimitedSEC002(t *testing.T) {
 	cfg, _ := authConfig()
 	h := api.New(nil, nil, nil,

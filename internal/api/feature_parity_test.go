@@ -240,8 +240,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// Includes the bounded, audited recovery of an exhausted first issuance.
 	// F68's durable secret-sync delivery receipt adds one read-only operation.
 	// The requester-visible issuer roster adds one read-only operation to F33.
-	if len(out) != 444 {
-		t.Fatalf("OpenAPI operationIds = %d, want 444", len(out))
+	// Four F39 decoy-credential lifecycle operations extend exposure detection.
+	if len(out) != 448 {
+		t.Fatalf("OpenAPI operationIds = %d, want 448", len(out))
 	}
 	return out
 }

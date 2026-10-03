@@ -62,6 +62,8 @@ const (
 	// discovery delivery because the alert names the risk decision, while the
 	// immutable discovery event remains its evidence source.
 	DestinationRisk = "notification.risk"
+	// DestinationHoneyToken carries the first observed use of an inert decoy.
+	DestinationHoneyToken = "notification.honeytoken"
 )
 
 // Alert kinds.
@@ -115,6 +117,7 @@ const (
 	KindRestoreDrillSkipped    = "backup.restore_drill_skipped"
 	KindRestoreDrillObjective  = "backup.restore_drill_objective_breached"
 	KindUrgentRisk             = "risk.urgent"
+	KindHoneyTokenTriggered    = "honeytoken.triggered"
 )
 
 // Alert severity tiers. Low is the safe fallback tier for unknown or missing

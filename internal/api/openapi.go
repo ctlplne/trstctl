@@ -3535,6 +3535,14 @@ func componentSchemas() map[string]*Schema {
 		"expires_at": timestamp(), "created_at": timestamp(), "token": str(),
 	}, "id", "tenant_id", "subject", "scopes", "created_at", "token")
 	apiTokenRevokeReq := object(map[string]*Schema{"reason": str()})
+	honeyToken := object(map[string]*Schema{
+		"id": uuid(), "name": str(), "placement": str(), "state": {Type: "string", Enum: []string{"active", "triggered", "revoked"}},
+		"created_at": timestamp(), "triggered_at": timestamp(), "trigger_method": str(), "trigger_path": str(), "revoked_at": timestamp(),
+	}, "id", "name", "placement", "state", "created_at")
+	honeyTokenCreateReq := object(map[string]*Schema{"name": str(), "placement": str()}, "name", "placement")
+	honeyTokenCreateResp := object(map[string]*Schema{
+		"id": uuid(), "name": str(), "placement": str(), "state": str(), "created_at": timestamp(), "token": str(),
+	}, "id", "name", "placement", "state", "created_at", "token")
 	ephemeralAPIKeyReq := object(map[string]*Schema{
 		"subject": str(), "scopes": {Type: "array", Items: str()}, "ttl_seconds": {Type: "integer"},
 		"preview_fingerprint": {Type: "string", Description: "Optional server-keyed fingerprint returned by EphemeralAPIKeyPreview. When supplied, issuance fails closed if subject, scopes, caller, tenant, or lifetime changed."},
@@ -6451,6 +6459,10 @@ func componentSchemas() map[string]*Schema {
 		"APITokenCreateRequest":                    apiTokenCreateReq,
 		"APITokenCreateResponse":                   apiTokenCreateResp,
 		"APITokenRevokeRequest":                    apiTokenRevokeReq,
+		"HoneyToken":                               honeyToken,
+		"HoneyTokenList":                           list("HoneyToken"),
+		"HoneyTokenCreateRequest":                  honeyTokenCreateReq,
+		"HoneyTokenCreateResponse":                 honeyTokenCreateResp,
 		"AuditEvent":                               auditEvent,
 		"AuditEventList":                           auditEventList,
 		"AuditTimestampInfo":                       auditTimestampInfo,

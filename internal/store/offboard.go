@@ -221,6 +221,7 @@ var TenantScopedTables = []string{
 	"policy_bindings",
 	"tenant_members",
 	"api_tokens",
+	"honey_tokens",
 	"machine_sessions",
 	"machine_auth_method_overrides",
 	"ca_authorities",

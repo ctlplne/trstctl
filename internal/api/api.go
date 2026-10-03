@@ -46,6 +46,7 @@ const (
 // (AN-5), and the lifecycle orchestrator, resolves the tenant and principal per
 // request, and enforces RBAC (F8) on every guarded route.
 type API struct {
+	guardedPatterns     map[string]bool
 	subjectCSRInspector func([]byte) (crypto.CSRInfo, error)
 	tenantServiceCheck  tenancy.ServiceCheck
 	store               *store.Store
@@ -622,9 +623,13 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		a.principal = a.resolvePrincipal
 	}
 	mux := http.NewServeMux()
+	a.guardedPatterns = make(map[string]bool)
 	for _, r := range a.routes() {
 		if !a.routeEnabled(r) {
 			continue
+		}
+		if r.perm != "" {
+			a.guardedPatterns[r.method+" "+r.path] = true
 		}
 		handler := r.handler
 		if a.tenantCrypto != nil && r.perm != "" && !tenantCryptoExemptOperation(r.opID) {
@@ -694,6 +699,9 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 
 // ServeHTTP implements http.Handler.
 func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if a.refusePublicHoneyTokenBearer(w, r) {
+		return
+	}
 	serveTenantServiceRequest(localizedProblemWriter(w, r), r, a.mux)
 }
 
@@ -1464,6 +1472,10 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/secrets/leases/{lease_id}", opID: "getDynamicSecretLease", summary: "Read dynamic secret lease metadata", handler: a.getDynamicLease, pathParams: dynamicLeaseIDPath, resSchema: "DynamicLease", successCode: "200", perm: authz.SecretsRead},
 		{method: "POST", path: "/api/v1/secrets/leases/{lease_id}/renew", opID: "renewDynamicSecretLease", summary: "Renew a dynamic secret lease", handler: a.renewDynamicLease, pathParams: dynamicLeaseIDPath, reqSchema: "DynamicLeaseRenewRequest", resSchema: "DynamicLease", successCode: "200", mutation: true, perm: authz.SecretsWrite},
 		{method: "POST", path: "/api/v1/secrets/leases/{lease_id}/revoke", opID: "revokeDynamicSecretLease", summary: "Revoke a dynamic secret lease or retry failed provider removal", handler: a.revokeDynamicLease, pathParams: dynamicLeaseIDPath, resSchema: "DynamicLease", successCode: "200", mutation: true, perm: authz.SecretsWrite},
+		{method: "POST", path: "/api/v1/secrets/honeytokens", opID: "createHoneyToken", summary: "Plant an inert decoy API bearer and reveal its value once", handler: a.createHoneyToken, reqSchema: "HoneyTokenCreateRequest", resSchema: "HoneyTokenCreateResponse", successCode: "201", mutation: true, sensitiveResponse: true, perm: authz.SecretsWrite},
+		{method: "GET", path: "/api/v1/secrets/honeytokens", opID: "listHoneyTokens", summary: "List planted decoy credentials without bearer values", handler: a.listHoneyTokens, query: []param{{name: "limit", typ: "integer", desc: "page size (1-100)"}, {name: "cursor", typ: "string", desc: "opaque pagination cursor"}}, resSchema: "HoneyTokenList", successCode: "200", perm: authz.SecretsRead},
+		{method: "GET", path: "/api/v1/secrets/honeytokens/{id}", opID: "getHoneyToken", summary: "Investigate a decoy credential and its first trigger", handler: a.getHoneyToken, pathParams: idPath, resSchema: "HoneyToken", successCode: "200", perm: authz.SecretsRead},
+		{method: "POST", path: "/api/v1/secrets/honeytokens/{id}/revoke", opID: "revokeHoneyToken", summary: "Retire a planted decoy bearer", handler: a.revokeHoneyToken, pathParams: idPath, resSchema: "HoneyToken", successCode: "200", mutation: true, perm: authz.SecretsWrite},
 
 		{method: "POST", path: "/api/v1/secrets/shares/preview", opID: "previewShare", summary: "Preview a one-time share lifetime, effects, recovery, and verification without receiving the value", handler: a.previewShare, reqSchema: "SharePreviewRequest", resSchema: "SharePreview", successCode: "200", perm: authz.SecretsWrite},
 		{method: "POST", path: "/api/v1/secrets/shares", opID: "createShare", summary: "Create a reviewed one-time secret share (returns a bearer token once)", handler: a.createShare, reqSchema: "ShareRequest", resSchema: "ShareToken", successCode: "201", mutation: true, sensitiveResponse: true, perm: authz.SecretsWrite},
@@ -1658,6 +1670,13 @@ func (a *API) resolvePrincipal(r *http.Request) (authz.Principal, error) {
 			}
 			rec, err := a.store.LookupAPITokenByHash(r.Context(), hash)
 			if err != nil {
+				if store.IsNotFound(err) {
+					// Unknown ordinary tokens get a second lookup only after the
+					// authority-bearing table missed. A decoy never gets a principal.
+					if _, detectErr := a.observeHoneyTokenHash(r, hash, r.Pattern); detectErr != nil {
+						return authz.Principal{}, errors.Join(errHoneyTokenDetectorUnavailable, detectErr)
+					}
+				}
 				return authz.Principal{}, errors.New("api: unknown api token")
 			}
 			if rec.ExpiresAt != nil && !rec.ExpiresAt.After(time.Now()) {
@@ -1736,7 +1755,7 @@ func mergeRoleNames(base, extra []string) []string {
 func bearerTokenBytes(r *http.Request) []byte {
 	const prefix = "Bearer "
 	h := r.Header.Get("Authorization")
-	if strings.HasPrefix(h, prefix) {
+	if len(h) >= len(prefix) && strings.EqualFold(h[:len(prefix)], prefix) {
 		return []byte(strings.TrimSpace(h[len(prefix):]))
 	}
 	if tok := strings.TrimSpace(r.Header.Get("X-Vault-Token")); tok != "" {
@@ -1756,6 +1775,11 @@ func (a *API) guard(perm authz.Permission, scope routeScope, h http.HandlerFunc)
 	return func(w http.ResponseWriter, r *http.Request) {
 		principal, err := a.principal(r)
 		if err != nil {
+			if errors.Is(err, errHoneyTokenDetectorUnavailable) {
+				a.logInternalError(w, err)
+				a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "credential detector unavailable"))
+				return
+			}
 			a.writeProblem(w, problemUnauthorized())
 			return
 		}

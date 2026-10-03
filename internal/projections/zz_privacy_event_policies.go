@@ -547,6 +547,15 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/id", opaque), privacyRule("/reason", clear),
 		privacyRule("/revoked_by", exact),
 	)
+	honeyTokenCreated := privacyRules(
+		privacyRule("/id", opaque), privacyRule("/name", clear),
+		privacyRule("/placement", clear), privacyRule("/token_hash", opaque),
+	)
+	honeyTokenTriggered := privacyRules(
+		privacyRule("/id", opaque), privacyRule("/method", opaque),
+		privacyRule("/path", clear),
+	)
+	honeyTokenRevoked := privacyRules(privacyRule("/id", opaque))
 	pamSessionStarted := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/target_type", opaque),
 		privacyRule("/target_id", opaque), privacyRule("/role", opaque),
@@ -796,6 +805,9 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		),
 		{EventAPITokenCreated, 1}:                                         apiTokenCreated,
 		{EventAPITokenRevoked, 1}:                                         apiTokenRevoked,
+		{EventHoneyTokenCreated, 1}:                                       honeyTokenCreated,
+		{EventHoneyTokenTriggered, 1}:                                     honeyTokenTriggered,
+		{EventHoneyTokenRevoked, 1}:                                       honeyTokenRevoked,
 		{EventPAMSessionStarted, 1}:                                       pamSessionStarted,
 		{EventPAMSessionExpired, 1}:                                       pamSessionExpired,
 		{EventAgentHeartbeat, 1}:                                          agentHeartbeat,
@@ -1479,6 +1491,9 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventTenantMemberOffboarded, 1}:                                  privacyPayloadShape[privacyTenantMemberOffboardedV1](),
 		{EventAPITokenCreated, 1}:                                         privacyPayloadShape[APITokenCreated](),
 		{EventAPITokenRevoked, 1}:                                         privacyPayloadShape[APITokenRevoked](),
+		{EventHoneyTokenCreated, 1}:                                       privacyPayloadShape[HoneyTokenCreated](),
+		{EventHoneyTokenTriggered, 1}:                                     privacyPayloadShape[HoneyTokenTriggered](),
+		{EventHoneyTokenRevoked, 1}:                                       privacyPayloadShape[HoneyTokenRevoked](),
 		{EventPAMSessionStarted, 1}:                                       privacyPayloadShape[PAMSessionStarted](),
 		{EventPAMSessionExpired, 1}:                                       privacyPayloadShape[PAMSessionExpired](),
 		{EventAgentHeartbeat, 1}:                                          privacyPayloadShape[AgentHeartbeat](),

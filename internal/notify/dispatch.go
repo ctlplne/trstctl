@@ -685,6 +685,8 @@ func FormatMessage(a Alert) string {
 		b.WriteString("Unexpected certificate issuance")
 	case KindCredentialDrift:
 		b.WriteString("Credential drift")
+	case KindHoneyTokenTriggered:
+		b.WriteString("Decoy credential was used")
 	case KindApprovalRequest:
 		b.WriteString("Approval requested")
 	case KindEndpointVerificationFailed:

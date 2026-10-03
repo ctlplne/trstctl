@@ -818,6 +818,35 @@ issued it.
 
 ### Secret scanning bridge (F39) and sharing & approvals (F60)
 
+#### Decoy API credentials
+
+The console's **Secrets → Automatic secret sources → Plant a decoy credential**
+workflow, `trstctl-cli secrets honeytokens`, and `/api/v1/secrets/honeytokens`
+serve the same tenant-scoped decoy lifecycle. A caller with `secrets:write` plants
+a name and intended placement. The create response reveals one ordinary-looking
+`trst_` bearer; an identical idempotency replay to the same authenticated caller
+returns that original response. Subsequent list/get responses contain only
+metadata. Put that value in a
+controlled location where a real trstctl API bearer would not belong. Do not
+put a production credential there. The decoy is stored in `honey_tokens`, never
+`api_tokens`, and has no permission or authentication path. Even a public API
+route refuses it.
+
+The first bearer use appends `honeytoken.triggered`, changes the decoy to
+`triggered`, and queues one `notification.honeytoken` critical alert in the same
+tenant transaction. The event and detail view retain the matched route pattern
+and method, not the raw URL, query, or bearer. Configure an operator notification
+channel and routing policy before planting so the alert has a receiver; the
+notification inbox and delivery receipts show retry or failure. Refresh the
+decoy list to investigate, then retire it. A retired value remains unusable.
+To replace exposed bait, retire the old record and plant a new one.
+
+This is a trstctl-native API honeytoken. It does not create an AWS IAM access
+key, consume CloudTrail, or prove use outside trstctl. The AWS path needs a
+real customer-account integration, zero-permission key policy, CloudTrail event
+binding, reliable incident ingest, and revocation/rotation evidence before it
+can be called equivalent to an AWS honeytoken.
+
 The scanning bridge runs the pinned Gitleaks scanner from the served control plane,
 recording redacted findings into [discovery](discovery-and-inventory.md), the
 [credential graph](graph-query-ai.md), and the risk view. `TRSTCTL_SECRETS_GITLEAKS_BIN`

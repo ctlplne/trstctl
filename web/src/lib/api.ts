@@ -225,6 +225,10 @@ import type {
   DynamicLeaseRenewRequest,
   DynamicLeaseRequest,
   DynamicSecretProviderCatalog,
+  HoneyToken,
+  HoneyTokenCreateRequest,
+  HoneyTokenCreateResponse,
+  HoneyTokenList,
   EndpointBinding,
   EndpointBindingPlanRequest,
   EndpointBindingPreview,
@@ -908,6 +912,10 @@ export type {
   DynamicLeaseRenewRequest,
   DynamicLeaseRequest,
   DynamicSecretProviderCatalog,
+  HoneyToken,
+  HoneyTokenCreateRequest,
+  HoneyTokenCreateResponse,
+  HoneyTokenList,
   EnterpriseSupportStatus,
   EphemeralAPIKey,
   EphemeralAPIKeyPreview,
@@ -1907,6 +1915,10 @@ export interface Api {
   getDynamicLease(leaseId: string, signal?: AbortSignal): Promise<DynamicLease>;
   renewDynamicLease(leaseId: string, input: DynamicLeaseRenewRequest): Promise<DynamicLease>;
   revokeDynamicLease(leaseId: string): Promise<DynamicLease>;
+  createHoneyToken(input: HoneyTokenCreateRequest, idempotencyKey?: string): Promise<HoneyTokenCreateResponse>;
+  listHoneyTokens(cursor?: string): Promise<HoneyTokenList>;
+  getHoneyToken(id: string): Promise<HoneyToken>;
+  revokeHoneyToken(id: string): Promise<HoneyToken>;
   previewEphemeralAPIKey(input: EphemeralAPIKeyRequest): Promise<EphemeralAPIKeyPreview>;
   issueEphemeralAPIKey(input: EphemeralAPIKeyRequest, idempotencyKey?: string): Promise<EphemeralAPIKey>;
   /** Prove the reveal-once bearer works on one access:read route without using
@@ -2518,6 +2530,10 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   getDynamicLease: (leaseId, signal) => req<DynamicLease>(`/api/v1/secrets/leases/${encodeURIComponent(leaseId)}`, { signal }),
   renewDynamicLease: (leaseId, input) => mutate<DynamicLease>("POST", `/api/v1/secrets/leases/${encodeURIComponent(leaseId)}/renew`, input),
   revokeDynamicLease: (leaseId) => mutate<DynamicLease>("POST", `/api/v1/secrets/leases/${encodeURIComponent(leaseId)}/revoke`),
+  createHoneyToken: (input, idempotencyKey) => mutate<HoneyTokenCreateResponse>("POST", "/api/v1/secrets/honeytokens", input, idempotencyKey),
+  listHoneyTokens: (cursor) => req<HoneyTokenList>(`/api/v1/secrets/honeytokens${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`),
+  getHoneyToken: (id) => req<HoneyToken>(`/api/v1/secrets/honeytokens/${encodeURIComponent(id)}`),
+  revokeHoneyToken: (id) => mutate<HoneyToken>("POST", `/api/v1/secrets/honeytokens/${encodeURIComponent(id)}/revoke`),
   previewEphemeralAPIKey: (input) => postRead<EphemeralAPIKeyPreview>("/api/v1/ephemeral/api-keys/preview", input),
   issueEphemeralAPIKey: (input, idempotencyKey) => mutate<EphemeralAPIKey>("POST", "/api/v1/ephemeral/api-keys", input, idempotencyKey),
   verifyEphemeralAPIKey: async (token) => {

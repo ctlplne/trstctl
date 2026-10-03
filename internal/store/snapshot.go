@@ -147,7 +147,9 @@ import (
 // their covered history with an incomplete certificate identity.
 // Version 44 includes each live tenant registration, including its event sequence.
 // Older snapshots erase this row and cannot resume after their capture offset.
-const SnapshotFormatVersion = 44
+// Version 45 captures event-derived decoy credential metadata. Older snapshots
+// cannot skip honeytoken creation and trigger events after truncating this table.
+const SnapshotFormatVersion = 45
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -218,7 +220,8 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"operation_approval_requests", "operation_approval_decisions",
 	"profile_edit_approvals",
 	// Format 32: parent before child for the delivery FK.
-	"audit_feed_destinations", "audit_feed_deliveries"}
+	"audit_feed_destinations", "audit_feed_deliveries",
+	"honey_tokens"}
 
 // joinReadModel renders the read-model table list for a TRUNCATE, matching the set
 // the rebuild path empties so a snapshot restore starts from the same clean slate.
@@ -462,7 +465,10 @@ SELECT jsonb_build_object(
   'audit_feed_destinations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM audit_feed_destinations t),
   'audit_feed_deliveries', (SELECT coalesce(jsonb_agg(to_jsonb(t.*) ORDER BY t.queued_at, t.batch_id), '[]'::jsonb) FROM audit_feed_deliveries t)
 ) || jsonb_build_object(
+  -- Further tables join this extension object, never the first 50-table object
+  -- above (PostgreSQL caps jsonb_build_object at 100 arguments).
   'tenants',               (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM tenants t),
+  'honey_tokens',          (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM honey_tokens t),
   '_trstctl_snapshot_set', jsonb_build_object(
     'id', $1::text,
     'covered_seq', $2::bigint,

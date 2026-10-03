@@ -5172,6 +5172,53 @@ GraphTrustStores = TypedDict(
     total=False,
 )
 
+HoneyToken = TypedDict(
+    'HoneyToken',
+    {
+        'created_at': str,
+        'id': str,
+        'name': str,
+        'placement': str,
+        'revoked_at': str,
+        'state': str,
+        'trigger_method': str,
+        'trigger_path': str,
+        'triggered_at': str,
+    },
+    total=False,
+)
+
+HoneyTokenCreateRequest = TypedDict(
+    'HoneyTokenCreateRequest',
+    {
+        'name': str,
+        'placement': str,
+    },
+    total=False,
+)
+
+HoneyTokenCreateResponse = TypedDict(
+    'HoneyTokenCreateResponse',
+    {
+        'created_at': str,
+        'id': str,
+        'name': str,
+        'placement': str,
+        'state': str,
+        'token': str,
+    },
+    total=False,
+)
+
+HoneyTokenList = TypedDict(
+    'HoneyTokenList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
 ITSMTicket = TypedDict(
     'ITSMTicket',
     {

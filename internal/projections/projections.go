@@ -246,6 +246,9 @@ const (
 	EventTenantMemberOffboarded                   = "tenant.member.offboarded"
 	EventAPITokenCreated                          = "api_token.created"
 	EventAPITokenRevoked                          = "api_token.revoked"
+	EventHoneyTokenCreated                        = "honeytoken.created"
+	EventHoneyTokenTriggered                      = "honeytoken.triggered"
+	EventHoneyTokenRevoked                        = "honeytoken.revoked"
 	EventPAMSessionStarted                        = "pam.session.started"
 	EventPAMSessionExpired                        = "pam.session.expired"
 	EventMachineSessionStarted                    = "secrets.session.started"
@@ -3008,6 +3011,24 @@ type APITokenRevoked struct {
 	RevokedBy string `json:"revoked_by,omitempty"`
 }
 
+// HoneyTokenCreated carries only the hash of the reveal-once decoy value.
+type HoneyTokenCreated struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Placement string `json:"placement"`
+	TokenHash string `json:"token_hash"`
+}
+
+type HoneyTokenTriggered struct {
+	ID     string `json:"id"`
+	Method string `json:"method"`
+	Path   string `json:"path"`
+}
+
+type HoneyTokenRevoked struct {
+	ID string `json:"id"`
+}
+
 // PAMSessionStarted is the payload of pam.session.started. It carries only
 // session metadata and backend revoke handles; the one-time credential bytes/DSN
 // returned to the caller are intentionally omitted.
@@ -3475,6 +3496,9 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventTenantMemberOffboarded:                   {1: true, TenantMemberSCIMSchemaVersion: true},
 	EventAPITokenCreated:                          {1: true},
 	EventAPITokenRevoked:                          {1: true},
+	EventHoneyTokenCreated:                        {1: true},
+	EventHoneyTokenTriggered:                      {1: true},
+	EventHoneyTokenRevoked:                        {1: true},
 	EventPAMSessionStarted:                        {1: true},
 	EventMachineSessionStarted:                    {1: true},
 	EventMachineSessionRevoked:                    {1: true},
@@ -5775,6 +5799,36 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		// Machine-session bearers reuse the session UUID as their API-token ID.
 		// For ordinary API tokens this tenant-scoped update is simply a no-op.
 		return p.store.ApplyMachineSessionRevokedTx(ctx, tx, e.TenantID, pl.ID, pl.RevokedBy, e.Time)
+	case EventHoneyTokenCreated:
+		var pl HoneyTokenCreated
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.Name == "" || pl.Placement == "" || pl.TokenHash == "" {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyHoneyTokenCreatedTx(ctx, tx, store.HoneyToken{
+			ID: pl.ID, TenantID: e.TenantID, Name: pl.Name, Placement: pl.Placement,
+			TokenHash: pl.TokenHash, CreatedAt: e.Time,
+		})
+	case EventHoneyTokenTriggered:
+		var pl HoneyTokenTriggered
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyHoneyTokenTriggeredTx(ctx, tx, e.TenantID, pl.ID, pl.Method, pl.Path, e.Time)
+	case EventHoneyTokenRevoked:
+		var pl HoneyTokenRevoked
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyHoneyTokenRevokedTx(ctx, tx, e.TenantID, pl.ID, e.Time)
 	case EventPAMSessionStarted:
 		var pl PAMSessionStarted
 		if err := decode(e, &pl); err != nil {

@@ -3337,6 +3337,13 @@ when off, requiring a KEK when on):
   builds have name-only provider references; their cleanup remains name-based
   during upgrade. Drain those older leases before repurposing generated object
   names in the same namespace.
+- Honeytokens (F39 extension) currently detect only use of trstctl-native
+  `trst_` API bearer decoys. An AWS IAM bait-key journey cannot run in the
+  local lab: it requires an AWS account with IAM and CloudTrail delivery, a
+  zero-permission user/key provisioner, signed ingestion, and a production
+  rotation/retirement path. LocalStack's pinned lab profile does not provide
+  faithful IAM/CloudTrail evidence. Do not treat local API decoy detection as
+  proof that an AWS key use is observable or revoked.
 - Secret rotation (F37) backs `POST /api/v1/secrets/rotations` for worker-queued
   `connector:<target>` secret-sync handoffs. Concrete PostgreSQL, MySQL, and AWS
   IAM four-phase engines remain library/configuration components only: manual
