@@ -3321,17 +3321,29 @@ when off, requiring a KEK when on):
   `POST /api/v1/secrets/leases/{lease_id}/renew`, and
   `POST /api/v1/secrets/leases/{lease_id}/revoke` — issue returns the backend
   credential once, later reads return metadata only, renew extends an active
-  lease except for immutable Kubernetes TokenRequest credentials (renewal issues
-  and reveals a replacement lease, then revokes the predecessor), and revoke
+  lease except for immutable Kubernetes TokenRequest and AWS STS credentials
+  (renewal issues and reveals a replacement lease, then closes the predecessor), and revoke
   closes it; the leaseworker expires leases through an
   outbox-backed backend revocation queue. `buildRunDeps` constructs a
-  tenant-bound registry for `postgresql`, `mysql`, `mongodb`, `aws-iam`,
+  tenant-bound registry for `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam` alias),
   `gcp-iam`, `azure-entra`, `kubernetes`, and `redis`. Issuance is
   outbox-only: the pending event and sealed command commit first, provider
-  retries reuse one stable lease identity, and only the authorized issue
-  response opens the sealed credential. The acceptance proof logs in with each
-  generated credential, rotates it, revokes both copies, and verifies both are
-  rejected afterward.
+  retries reuse one stable lease identity where the provider has a native
+  replay/lookup path; AWS STS fences an indeterminate call instead. Only the
+  authorized issue response opens the sealed credential. Local acceptance proof
+  logs in with each generated PostgreSQL, MySQL, MongoDB, Redis, and Kubernetes
+  credential, rotates it, revokes both copies, and verifies rejection afterward.
+  AWS STS is a contract-tested adapter, not a completed cloud journey: no AWS
+  account is available in this local-only run for stock-client authentication,
+  CloudTrail reconciliation, or rejection after native expiry. The local query
+  double does not qualify AWS IAM/STS behavior. `aws-sts` and its `aws-iam` alias
+  issue expiring AssumeRole sessions; they no longer create permanent IAM users or
+  keys. STS cannot delete one session early. A trstctl revoke closes its lease,
+  but AWS may accept the session until `native_expires_at`; the status remains
+  pending until then. A lost AssumeRole reply leaves an indeterminate, fenced
+  operation rather than risking a second session. Existing `aws-iam` startup
+  attachments must migrate their policy ARN role bindings to full assumable IAM
+  role ARNs and set an explicit 15-minute to 12-hour `max_ttl`.
   New Kubernetes leases record the UIDs of the ServiceAccount, bound Secret,
   and RoleBinding and delete with UID preconditions. Leases issued by older
   builds have name-only provider references; their cleanup remains name-based

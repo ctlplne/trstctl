@@ -38,6 +38,7 @@ type dynamicLeaseResponse struct {
 	IssuedAt              time.Time       `json:"issued_at"`
 	ExpiresAt             time.Time       `json:"expires_at"`
 	HardExpiresAt         *time.Time      `json:"hard_expires_at,omitempty"`
+	NativeExpiresAt       *time.Time      `json:"native_expires_at,omitempty"`
 	RevocationStatus      string          `json:"revocation_status,omitempty"`
 	RevokedAt             *time.Time      `json:"revoked_at,omitempty"`
 	RevocationCompletedAt *time.Time      `json:"revocation_completed_at,omitempty"`
@@ -293,7 +294,7 @@ func (a *API) renewDynamicLease(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	configured, found := a.secrets.configuredDynamicSecretProvider(tenantID, current.Provider)
-	rotating := found && configured.Type == "kubernetes"
+	rotating := found && (configured.Type == "kubernetes" || configured.Type == "aws-iam" || configured.Type == "aws-sts")
 	mutate := func(ctx context.Context, tenantID string) (int, any, error) {
 		engine, err := a.secrets.dynamicLeaseEngine(tenantID)
 		if err != nil {
@@ -302,7 +303,7 @@ func (a *API) renewDynamicLease(w http.ResponseWriter, r *http.Request) {
 		if rotating {
 			rotator, ok := engine.(boundDynamicLeaseRotator)
 			if !ok {
-				return 0, nil, errStatus(http.StatusServiceUnavailable, "Kubernetes rotating renewal is unavailable")
+				return 0, nil, errStatus(http.StatusServiceUnavailable, "immutable credential rotating renewal is unavailable")
 			}
 			replacement, credential, rotateErr := rotator.RotateBound(ctx, leaseID, time.Duration(req.ExtendSeconds)*time.Second, idempotencyKey, binding)
 			if rotateErr != nil {
@@ -401,10 +402,14 @@ func toDynamicLeaseResponse(l dynsecret.Lease, credential []byte) dynamicLeaseRe
 	if !l.HardExpiresAt.IsZero() {
 		hardExpiresAt = &l.HardExpiresAt
 	}
+	var nativeExpiresAt *time.Time
+	if expiration, ok := dynsecret.AWSSTSExpiration(l.BackendRef); ok {
+		nativeExpiresAt = &expiration
+	}
 	return dynamicLeaseResponse{
 		ID: l.ID, Provider: l.Provider, Role: l.Role, State: string(l.State),
 		Credential: secretJSONBytes(credential), IssuedAt: l.IssuedAt, ExpiresAt: l.ExpiresAt,
-		HardExpiresAt: hardExpiresAt, RevocationStatus: l.RevocationStatus,
+		HardExpiresAt: hardExpiresAt, NativeExpiresAt: nativeExpiresAt, RevocationStatus: l.RevocationStatus,
 		RevokedAt: l.RevokedAt, RevocationCompletedAt: l.RevocationCompletedAt,
 	}
 }
@@ -421,6 +426,8 @@ func dynamicLeaseError(err error) error {
 		return errStatus(http.StatusUnprocessableEntity, "renewal cannot pass the provider's original hard expiry; revoke this lease and create a new credential")
 	case errors.Is(err, dynsecret.ErrLeaseMinimumTTL):
 		return errStatus(http.StatusUnprocessableEntity, "Kubernetes rotating renewal needs at least 600 seconds of remaining lifetime")
+	case errors.Is(err, dynsecret.ErrAWSSTSMinimumTTL):
+		return errStatus(http.StatusUnprocessableEntity, "AWS STS rotating renewal needs at least 900 seconds of remaining lifetime")
 	case errors.Is(err, store.ErrIdempotencyConflict):
 		return errStatus(http.StatusConflict, "Idempotency-Key was already used for a different dynamic secret request")
 	case errors.Is(err, context.DeadlineExceeded):

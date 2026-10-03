@@ -27,6 +27,17 @@ func TestSecretIntegrationManifestMatchesProductionAssemblyAndRuntimeBinding(t *
 			continue
 		}
 		seen[entry.Capability]++
+		// Native AWS STS use and CloudTrail evidence cannot be produced by the
+		// local Query API double. Keep the inventory row visible but unclaimed.
+		if entry.ID == "dynamic_secret.aws_iam" {
+			if entry.Enforcement != enforcementPending {
+				t.Errorf("%s enforcement=%q, want pending external proof", entry.ID, entry.Enforcement)
+			}
+			if evidence := inspectAssembly(repo, entry, profile); !evidence.OK {
+				t.Errorf("%s assembly: %s; required=%v found=%v", entry.ID, evidence.Detail, evidence.Required, evidence.Found)
+			}
+			continue
+		}
 		if entry.Enforcement != enforcementRequired {
 			t.Errorf("%s enforcement=%q, want required", entry.ID, entry.Enforcement)
 		}

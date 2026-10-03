@@ -2874,6 +2874,7 @@ export interface DynamicLease {
   hard_expires_at?: string;
   id: string;
   issued_at: string;
+  native_expires_at?: string;
   provider: string;
   revocation_completed_at?: string;
   revocation_status?: "none" | "pending" | "completed" | "failed";

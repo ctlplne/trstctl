@@ -140,7 +140,7 @@ func TestFeatureServedStateClassifiesRuntimeConditionsAndResiduals(t *testing.T)
 		"F62": "conditional", // Enterprise governance/evidence-pack license
 		"F63": "conditional", // secrets.enable_api
 		"F64": "partial",     // served SDK spine; Vault/Terraform residuals remain
-		"F65": "conditional", // all eight providers are assembled when tenant endpoints and credentials are configured
+		"F65": "conditional", // seven providers have runtime proof; AWS STS is assembled but needs native account evidence
 		"F66": "conditional", // Transit requires sealed persistence; the optional licensed KMIP listener requires tenant-bound mTLS configuration
 		"F67": "conditional", // secrets.enable_api
 		"F68": "conditional", // ten native pushers are served when operator endpoints and credentials are configured

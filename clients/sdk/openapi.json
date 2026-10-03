@@ -11824,6 +11824,11 @@
             "format": "date-time",
             "type": "string"
           },
+          "native_expires_at": {
+            "description": "AWS STS session expiration returned by the provider. An early lease revoke remains pending until this time unless AWS denies the exact session sooner.",
+            "format": "date-time",
+            "type": "string"
+          },
           "provider": {
             "type": "string"
           },

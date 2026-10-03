@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1455 annotated sites across 26 rules. Each row is
+1457 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -194,10 +194,10 @@ not this file.
 | `internal/config/saml_test.go:8` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/scim_test.go:10` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/scim_test.go:57` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/secret_integrations_test.go:271` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/secret_integrations_test.go:275` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/secret_integrations_test.go:279` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/secret_integrations_test.go:283` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secret_integrations_test.go:272` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secret_integrations_test.go:276` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secret_integrations_test.go:280` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secret_integrations_test.go:284` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/secrets_config_test.go:23` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/secrets_config_test.go:42` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/secrets_config_test.go:65` | fabricated fixture path/identifiers; no credential value is present (CWE-798) |
@@ -244,8 +244,8 @@ not this file.
 | `internal/operator/secretsync.go:27` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/operator/secretsync.go:28` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/orchestrator/cmdb_sweep_test.go:17` | TokenRef is a non-secret locator in a deterministic fixture (CWE-798). |
-| `internal/orchestrator/outbox_internal_test.go:1202` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/orchestrator/outbox_internal_test.go:1251` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/orchestrator/outbox_internal_test.go:1300` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/perf/capacity.go:11` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/perf/perf_test.go:234` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/projections/apitoken_test.go:59` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -345,7 +345,7 @@ not this file.
 | `internal/server/response_integrations_served_test.go:54` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
-| `internal/server/secret_integrations.go:963` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_integrations.go:981` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_third_party_scan_served_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_scan_served_test.go:260` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secrets_served_test.go:583` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -522,10 +522,10 @@ not this file.
 | `internal/server/recovery_projection_factory_test.go:172` | event test sequence is PostgreSQL bigint-bounded. |
 | `internal/server/revocation.go:423` | value reduced modulo the shard count before conversion (CWE-190) |
 | `internal/server/run.go:211` | bounded small ints from config (CWE-190) |
-| `internal/server/secret_integrations_outbox.go:845` | positive int64 is exactly representable as uint64. |
-| `internal/server/secret_integrations_outbox.go:846` | positive int64 is exactly representable as uint64. |
-| `internal/server/secret_integrations_outbox.go:849` | positive int64 is exactly representable as uint64. |
-| `internal/server/secret_integrations_outbox.go:858` | positive int64 is exactly representable as uint64. |
+| `internal/server/secret_integrations_outbox.go:900` | positive int64 is exactly representable as uint64. |
+| `internal/server/secret_integrations_outbox.go:901` | positive int64 is exactly representable as uint64. |
+| `internal/server/secret_integrations_outbox.go:904` | positive int64 is exactly representable as uint64. |
+| `internal/server/secret_integrations_outbox.go:913` | positive int64 is exactly representable as uint64. |
 | `internal/server/secrets_rotation_served_test.go:2566` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/signing/keystore.go:112` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
 | `internal/signing/keystore.go:114` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
@@ -631,11 +631,13 @@ not this file.
 | `tools/dodcensus/substrate_broker.go:420` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 | `tools/dodcensus/substrate_broker.go:450` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 
-### G117 — CWE-200 Exposure of sensitive information (marshaled secret field) (1 sites)
+### G117 — CWE-200 Exposure of sensitive information (marshaled secret field) (3 sites)
 
 | Location | Reason |
 |---|---|
+| `internal/dynsecret/aws_sts.go:143` | this is the reveal-once AWS STS credential payload; the caller seals it before storage (CWE-200) |
 | `internal/dynsecret/providers_real.go:1348` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
+| `internal/server/secret_integrations_outbox.go:475` | the result is sealed by DoAtMostOnceEffect and plaintext is wiped after issue (CWE-200) |
 
 ### G118 — CWE-664 Improper lifetime control (goroutine context) (2 sites)
 
@@ -947,7 +949,7 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:189` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/secret_third_party_scan_served_test.go:154` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_rotation_served_test.go:2559` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2396` | served CA certificate directory; the PEM is public material (CWE-276) |
+| `internal/server/server.go:2397` | served CA certificate directory; the PEM is public material (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:24` | the loose mode IS the attack fixture this test defends against (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:56` | the wide mode IS the precondition this test proves gets narrowed (CWE-276) |
 | `internal/tsa/http_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
@@ -1293,8 +1295,8 @@ not this file.
 | `internal/server/serve_test.go:80` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:81` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:125` | test-owned path under t.TempDir (CWE-22) |
-| `internal/server/server.go:2323` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/server.go:2400` | same operator-configured directory as the target certificate (CWE-22) |
+| `internal/server/server.go:2324` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/server.go:2401` | same operator-configured directory as the target certificate (CWE-22) |
 | `internal/signing/design_test.go:30` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/design_test.go:136` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/gated_destruction_journal.go:226` | exact signer-owned journal path. |
@@ -1388,8 +1390,8 @@ not this file.
 | `tools/dodcensus/runtime_runner_test.go:474` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/runtime_runner_test.go:528` | test reads its own fixture/tempdir path (CWE-22) |
 | `tools/dodcensus/runtime_runner_test.go:532` | test reads its own fixture/tempdir path (CWE-22) |
-| `tools/dodcensus/secret_integrations_manifest_test.go:113` | test reads the exact committed substrate source (CWE-22) |
-| `tools/dodcensus/secret_integrations_manifest_test.go:145` | test reads the exact committed runtime proof source (CWE-22) |
+| `tools/dodcensus/secret_integrations_manifest_test.go:124` | test reads the exact committed substrate source (CWE-22) |
+| `tools/dodcensus/secret_integrations_manifest_test.go:156` | test reads the exact committed runtime proof source (CWE-22) |
 | `tools/featureparityreport/main.go:49` | explicit operator-selected local report output |
 | `tools/pqclab/main.go:201` | developer tool reading the repo paths it is pointed at (CWE-22) |
 | `tools/pqclab/main.go:266` | developer tool reading the repo paths it is pointed at (CWE-22) |
@@ -1470,7 +1472,7 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:574` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_scan_served_test.go:27` | isolated executable test fixture |
 | `internal/server/secrets_scan_served_test.go:157` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2406` | served CA certificate PEM is public material (CWE-276) |
+| `internal/server/server.go:2407` | served CA certificate PEM is public material (CWE-276) |
 | `internal/server/signer_authorization_test.go:132` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/ssh_journey_served_test.go:277` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -1553,7 +1555,7 @@ not this file.
 | `internal/crypto/x509_property_test.go:126` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/crypto/x509_property_test.go:175` | deterministic property-test name, not security randomness (CWE-338) |
 | `internal/crypto/x509_property_test.go:196` | deterministic property-test stream, not security randomness (CWE-338) |
-| `internal/orchestrator/outbox.go:498` | retry backoff jitter, not a security decision (CWE-338) |
+| `internal/orchestrator/outbox.go:521` | retry backoff jitter, not a security decision (CWE-338) |
 | `internal/protocols/acme/property_test.go:90` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/protocols/acme/property_test.go:144` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/protocols/ari/ari.go:94` | deterministic per-certificate renewal jitter (int64 seed reinterpreted for the PCG); scheduling spread, not a security decision (CWE-338, CWE-190) |

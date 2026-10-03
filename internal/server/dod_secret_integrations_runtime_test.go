@@ -96,9 +96,9 @@ type dodDynamicLeaseWire struct {
 	Credential dodSecretBytes `json:"credential"`
 }
 
-// TestDODSecretIntegrationsProductionAssembly is shared by the registry and all eight
-// granular dynamic-secret census rows. It passes untouched buildRunDeps output
-// to Build and proves independently usable, rotated, then revoked credentials.
+// TestDODSecretIntegrationsProductionAssembly proves the locally runnable
+// providers against independent clients. AWS STS needs an actual AWS account:
+// a query-API double cannot prove native session use or expiry.
 func TestDODSecretIntegrationsProductionAssembly(t *testing.T) {
 	only := dodRuntimeSelection(t,
 		"dynamic_secret.registry", "dynamic_secret.postgresql", "dynamic_secret.mysql",
@@ -130,8 +130,7 @@ func TestDODSecretIntegrationsProductionAssembly(t *testing.T) {
 		return
 	}
 	if only == "dynamic_secret.aws_iam" {
-		external := proof.StartCommand(t, "dynamic_secret.aws_iam")
-		dodRunFocusedDynamicSecret(t, "dynamic_secret.aws_iam", external, dodSecretIntegrationTarget{"dynamic_secret.aws_iam", "aws-iam", "aws-iam"})
+		t.Skip("AWS STS native credential use and expiry require an AWS account; local Query API contract tests do not qualify this DoD row")
 		return
 	}
 	if only == "dynamic_secret.gcp_iam" {
@@ -231,7 +230,6 @@ func dodRunAllDynamicSecretProductionAssembly(t *testing.T) {
 	dynamicMySQL, mysqlDB := dodStartDatabaseSecretSubstrate(t, "dynamic_secret.mysql")
 	dynamicMongo, mongoDB := dodStartDatabaseSecretSubstrate(t, "dynamic_secret.mongodb")
 	dynamicRedis, redisDB := dodStartDatabaseSecretSubstrate(t, "dynamic_secret.redis")
-	dynamicAWS := proof.StartCommand(t, "dynamic_secret.aws_iam")
 	dynamicGCP := proof.StartCommand(t, "dynamic_secret.gcp_iam")
 	dynamicAzure := proof.StartCommand(t, "dynamic_secret.azure_entra")
 	dynamicKubernetes := proof.StartCommand(t, "dynamic_secret.kubernetes")
@@ -247,7 +245,6 @@ func dodRunAllDynamicSecretProductionAssembly(t *testing.T) {
 	cfg.Secrets.KEKFile = filepath.Join(t.TempDir(), "secrets-kek.bin")
 	cfg.Audit.SigningKeyFile = filepath.Join(t.TempDir(), "audit-signing-key.pem")
 	cfg.CA.CertFile = filepath.Join(t.TempDir(), "issuing-ca.pem")
-	dynamicAWSEndpoint := dodParentSubstrateLoopbackBridge(t, dynamicAWS.Endpoint())
 	dynamicGCPEndpoint := dodParentSubstrateLoopbackBridge(t, dynamicGCP.Endpoint())
 	dynamicAzureEndpoint := dodParentSubstrateLoopbackBridge(t, dynamicAzure.Endpoint())
 	dynamicKubernetesEndpoint := dodParentSubstrateLoopbackBridge(t, dynamicKubernetes.Endpoint())
@@ -256,7 +253,6 @@ func dodRunAllDynamicSecretProductionAssembly(t *testing.T) {
 		{TenantID: dodSecretIntegrationTenant, ID: "postgresql", Type: "postgresql", AdminDSNRef: fileRef("postgres-dsn", []byte(postgresDB.AdminDSN)), Database: postgresDB.Database, AllowedRoles: []string{"reader"}, MaxTTL: "15m", UsernamePrefix: "dod_postgres"},
 		{TenantID: dodSecretIntegrationTenant, ID: "mysql", Type: "mysql", AdminDSNRef: fileRef("mysql-dsn", []byte(mysqlDB.AdminDSN+"\n")), Database: mysqlDB.Database, Addr: mysqlDB.Addr, AccountHost: "%", AllowWildcardAccountHost: true, AllowedRoles: []string{"reader"}, MaxTTL: "15m", UsernamePrefix: "dod_mysql"},
 		{TenantID: dodSecretIntegrationTenant, ID: "mongodb", Type: "mongodb", AdminDSNRef: fileRef("mongo-dsn", []byte(mongoDB.AdminDSN+"\n")), Database: mongoDB.Database, AllowedRoles: []string{"reader"}, MaxTTL: "15m", UsernamePrefix: "dod_mongo"},
-		{TenantID: dodSecretIntegrationTenant, ID: "aws-iam", Type: "aws-iam", Endpoint: dynamicAWSEndpoint, Region: "us-east-1", AccessKeyID: "AKIADODADMIN", SecretAccessRef: fileRef("aws-admin-secret", []byte("dod-aws-admin-secret")), AllowedRoles: []string{"reader"}, RoleBindings: map[string]string{"reader": "arn:aws:iam::123456789012:policy/DODReadOnly"}, MaxTTL: "15m", AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs, UsernamePrefix: "dod_aws"},
 		{TenantID: dodSecretIntegrationTenant, ID: "gcp-iam", Type: "gcp-iam", Endpoint: dynamicGCPEndpoint, Project: "p", ServiceAccount: "dyn@p.iam.gserviceaccount.com", BearerTokenRef: fileRef("gcp-admin-token", []byte("dod-gcp-admin-token")), AllowedRoles: []string{"reader"}, MaxTTL: "15m", AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs, UsernamePrefix: "dod-gcp"},
 		{TenantID: dodSecretIntegrationTenant, ID: "azure-entra", Type: "azure-entra", Endpoint: dynamicAzureEndpoint, ApplicationObject: "app-obj", ApplicationClient: "dod-client", AzureTenant: "dod-tenant", BearerTokenRef: fileRef("azure-admin-token", []byte("dod-azure-admin-token")), AllowedRoles: []string{"reader"}, MaxTTL: "15m", AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs, UsernamePrefix: "dod-azure"},
 		{TenantID: dodSecretIntegrationTenant, ID: "kubernetes", Type: "kubernetes", Endpoint: dynamicKubernetesEndpoint, Namespace: "apps", KubernetesAudience: "https://kubernetes.default.svc", BearerTokenRef: fileRef("kubernetes-admin-token", []byte("dod-k8s-admin-token")), AllowedRoles: []string{"reader"}, RoleBindings: map[string]string{"reader": "Role/dod-reader"}, MaxTTL: "15m", AllowPrivate: private, AllowInsecureLoopback: true, PrivateEgressCIDRs: cidrs, UsernamePrefix: "dod-k8s"},
@@ -306,7 +302,6 @@ func dodRunAllDynamicSecretProductionAssembly(t *testing.T) {
 	dodProveDynamicSecret(t, "dynamic_secret.postgresql", dynamicPostgres, srv, st, token, dynamicDeliveryErrorClass, dodSecretIntegrationTarget{"dynamic_secret.postgresql", "postgresql", "postgresql"})
 	dodProveDynamicSecret(t, "dynamic_secret.mysql", dynamicMySQL, srv, st, token, dynamicDeliveryErrorClass, dodSecretIntegrationTarget{"dynamic_secret.mysql", "mysql", "mysql"})
 	dodProveDynamicSecret(t, "dynamic_secret.mongodb", dynamicMongo, srv, st, token, dynamicDeliveryErrorClass, dodSecretIntegrationTarget{"dynamic_secret.mongodb", "mongodb", "mongodb"})
-	dodProveDynamicSecret(t, "dynamic_secret.aws_iam", dynamicAWS, srv, st, token, dynamicDeliveryErrorClass, dodSecretIntegrationTarget{"dynamic_secret.aws_iam", "aws-iam", "aws-iam"})
 	dodProveDynamicSecret(t, "dynamic_secret.gcp_iam", dynamicGCP, srv, st, token, dynamicDeliveryErrorClass, dodSecretIntegrationTarget{"dynamic_secret.gcp_iam", "gcp-iam", "gcp-iam"})
 	dodProveDynamicSecret(t, "dynamic_secret.azure_entra", dynamicAzure, srv, st, token, dynamicDeliveryErrorClass, dodSecretIntegrationTarget{"dynamic_secret.azure_entra", "azure-entra", "azure-entra"})
 	dodProveDynamicSecret(t, "dynamic_secret.kubernetes", dynamicKubernetes, srv, st, token, dynamicDeliveryErrorClass, dodSecretIntegrationTarget{"dynamic_secret.kubernetes", "kubernetes", "kubernetes"})

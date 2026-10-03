@@ -1838,6 +1838,7 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 		tenantCrypto:             d.TenantCrypto,
 		store:                    d.Store,
 		log:                      d.Log,
+		idem:                     idem,
 	}
 	var tenantKeyDomains *tenantKeyDomainSealOutboxDispatcher
 	if d.TenantKeyDomains != nil {

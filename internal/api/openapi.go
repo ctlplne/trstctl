@@ -5807,6 +5807,7 @@ func componentSchemas() map[string]*Schema {
 		"id": str(), "provider": str(), "role": str(), "state": str(),
 		"credential": {Type: "string", Description: "Reveal-once provider credential on issue. A Kubernetes renewal returns a replacement bound token with a new lease ID after predecessor revocation completes. Metadata reads omit this field."}, "issued_at": timestamp(), "expires_at": timestamp(),
 		"hard_expires_at":   {Type: "string", Format: "date-time", Description: "Original lease renewal ceiling. Not proof of native credential expiry."},
+		"native_expires_at": {Type: "string", Format: "date-time", Description: "AWS STS session expiration returned by the provider. An early lease revoke remains pending until this time unless AWS denies the exact session sooner."},
 		"revocation_status": {Type: "string", Enum: []string{"none", "pending", "completed", "failed"}, Description: "Provider revocation progress. Revoked lease state alone acknowledges queuing, not provider removal. After failed, POST revoke with a fresh Idempotency-Key queues a new audited provider-removal attempt; replaying the old key returns its original receipt."},
 		"revoked_at":        timestamp(), "revocation_completed_at": timestamp(),
 	}, "id", "provider", "role", "state", "issued_at", "expires_at")

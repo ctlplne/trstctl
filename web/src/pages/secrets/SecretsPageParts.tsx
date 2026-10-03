@@ -693,8 +693,16 @@ export function DynamicLeaseMetadata({ lease }: { lease: DynamicLease }) {
         <dt className="font-medium text-muted-foreground">{translateNow("secrets.dynamic.renewalCeiling")}</dt>
         <dd>{formatDate(lease.hard_expires_at)}</dd>
       </div>
+      {lease.native_expires_at && (
+        <div>
+          <dt className="font-medium text-muted-foreground">{translateNow("secrets.dynamic.nativeExpiresAt")}</dt>
+          <dd>{formatDate(lease.native_expires_at)}</dd>
+        </div>
+      )}
       <div>
-        <dt className="font-medium text-muted-foreground">{translateNow("secrets.dynamic.providerRevokedAt")}</dt>
+        <dt className="font-medium text-muted-foreground">
+          {translateNow(lease.native_expires_at ? "secrets.dynamic.awsExpiryConfirmedAt" : "secrets.dynamic.providerRevokedAt")}
+        </dt>
         <dd>{formatDate(lease.revocation_completed_at)}</dd>
       </div>
     </dl>
@@ -959,6 +967,7 @@ export function leaseMetadataOnly(lease: DynamicLease): DynamicLease {
     issued_at: lease.issued_at,
     expires_at: lease.expires_at,
     hard_expires_at: lease.hard_expires_at,
+    native_expires_at: lease.native_expires_at,
     revocation_status: lease.revocation_status,
     revoked_at: lease.revoked_at,
     revocation_completed_at: lease.revocation_completed_at,

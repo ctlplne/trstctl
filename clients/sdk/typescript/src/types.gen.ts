@@ -9708,6 +9708,11 @@ export interface components {
             id: string;
             /** Format: date-time */
             issued_at: string;
+            /**
+             * Format: date-time
+             * @description AWS STS session expiration returned by the provider. An early lease revoke remains pending until this time unless AWS denies the exact session sooner.
+             */
+            native_expires_at?: string;
             provider: string;
             /** Format: date-time */
             revocation_completed_at?: string;

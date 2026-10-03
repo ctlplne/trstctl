@@ -26,6 +26,7 @@ import (
 	"trstctl.com/trstctl/internal/egress"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/netsec"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/secretsync"
 	"trstctl.com/trstctl/internal/store"
@@ -222,6 +223,13 @@ func (p *configuredDynamicProvider) Name() string { return p.id }
 // operator review. It deliberately does not expose endpoint or credential refs.
 func (p *configuredDynamicProvider) DynamicSecretProviderType() string { return p.cfg.Type }
 
+// AWS STS has no idempotency token or lookup by our lease ID. The outbox must
+// retain an at-most-once effect claim around AssumeRole so a lost response can
+// never mint a second live session for the same lease.
+func (p *configuredDynamicProvider) DynamicSecretNeedsAtMostOnceEffect() bool {
+	return p.cfg.Type == "aws-iam" || p.cfg.Type == "aws-sts"
+}
+
 // DynamicSecretAllowedRoles returns only operator-selectable role names.
 // Provider-native bindings remain startup-owned and do not cross the API seam.
 func (p *configuredDynamicProvider) DynamicSecretAllowedRoles() []string {
@@ -250,14 +258,14 @@ func (p *configuredDynamicProvider) Generate(ctx context.Context, req dynsecret.
 
 func (p *configuredDynamicProvider) generate(ctx context.Context, req dynsecret.GenerateRequest, prepared []byte) (dynsecret.Credential, error) {
 	if !p.allowedRoles[req.Role] {
-		return dynsecret.Credential{}, fmt.Errorf("dynamic-secret provider %q does not allow role %q", p.id, req.Role)
+		return dynsecret.Credential{}, p.beforeDynamicReceiver(fmt.Errorf("dynamic-secret provider %q does not allow role %q", p.id, req.Role))
 	}
 	if req.TTL <= 0 || req.TTL > p.maxTTL {
-		return dynsecret.Credential{}, fmt.Errorf("dynamic-secret provider %q TTL must be between 1s and %s", p.id, p.maxTTL)
+		return dynsecret.Credential{}, p.beforeDynamicReceiver(fmt.Errorf("dynamic-secret provider %q TTL must be between 1s and %s", p.id, p.maxTTL))
 	}
 	backend, closeBackend, err := p.openBackend(ctx)
 	if err != nil {
-		return dynsecret.Credential{}, err
+		return dynsecret.Credential{}, p.beforeDynamicReceiver(err)
 	}
 	defer closeBackend()
 	var ref string
@@ -281,6 +289,13 @@ func (p *configuredDynamicProvider) generate(ctx context.Context, req dynsecret.
 	}, nil
 }
 
+func (p *configuredDynamicProvider) beforeDynamicReceiver(err error) error {
+	if p.DynamicSecretNeedsAtMostOnceEffect() {
+		return orchestrator.ConfirmedNoMutation(err)
+	}
+	return err
+}
+
 // configuredPreparedDynamicProvider is deliberately a separate concrete type:
 // only GCP IAM implements dynsecret.PreparedProvider. Putting these methods on
 // configuredDynamicProvider makes every database/cloud backend satisfy that
@@ -299,6 +314,9 @@ func (p *configuredPreparedDynamicProvider) GeneratePrepared(ctx context.Context
 }
 
 func (p *configuredDynamicProvider) Revoke(ctx context.Context, backendRef string) error {
+	if p.DynamicSecretNeedsAtMostOnceEffect() {
+		return dynsecret.CheckAWSSTSExpiration(backendRef, time.Now())
+	}
 	backend, closeBackend, err := p.openBackend(ctx)
 	if err != nil {
 		return err
@@ -324,7 +342,7 @@ func openConfiguredDynamicBackend(ctx context.Context, p *configuredDynamicProvi
 	switch p.cfg.Type {
 	case "postgresql", "mysql", "mongodb", "redis":
 		return openConfiguredDatabaseBackend(opener)
-	case "kubernetes", "aws-iam", "gcp-iam", "azure-entra":
+	case "kubernetes", "aws-iam", "aws-sts", "gcp-iam", "azure-entra":
 		return openConfiguredCloudBackend(opener)
 	default:
 		return opener.fail(fmt.Errorf("server: unsupported dynamic-secret backend type %q", p.cfg.Type))
@@ -479,7 +497,7 @@ func openConfiguredCloudBackend(o *configuredDynamicBackendOpener) (requestDynam
 			return o.fail(err)
 		}
 		return backend, o.closeWith(backend, nil), nil
-	case "aws-iam":
+	case "aws-iam", "aws-sts":
 		secretKey, err := o.resolve(cfg.SecretAccessRef)
 		if err != nil {
 			return o.fail(err)
@@ -492,10 +510,10 @@ func openConfiguredCloudBackend(o *configuredDynamicBackendOpener) (requestDynam
 		if err != nil {
 			return o.fail(err)
 		}
-		backend, err := dynsecret.NewAWSIAMBackend(dynsecret.AWSIAMConfig{
+		backend, err := dynsecret.NewAWSSTSBackend(dynsecret.AWSSTSConfig{
 			Endpoint: cfg.Endpoint, HTTPClient: client, Region: cfg.Region,
 			AccessKeyID: cfg.AccessKeyID, SecretAccessKey: secretKey, SessionToken: session,
-			UsernamePrefix: cfg.UsernamePrefix, PolicyARNs: cfg.RoleBindings,
+			SessionPrefix: cfg.UsernamePrefix, RoleARNs: cfg.RoleBindings,
 		})
 		if err != nil {
 			return o.fail(err)

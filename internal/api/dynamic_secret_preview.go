@@ -111,6 +111,17 @@ func dynamicSecretProviderRequirements(specific ...dynamicSecretProviderRequirem
 	return append(dynamicSecretCommonRequirements(), specific...)
 }
 
+func dynamicSecretAWSRequirements(specific ...dynamicSecretProviderRequirement) []dynamicSecretProviderRequirement {
+	common := dynamicSecretCommonRequirements()
+	for i := range common {
+		if common[i].Key == "max_ttl" {
+			common[i].Required = true
+			common[i].Description = "Explicit AWS STS ceiling from 15m to 12h. The target role may enforce a smaller maximum; each issued session expires natively."
+		}
+	}
+	return append(common, specific...)
+}
+
 func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 	credential := func(key, label, description string, required bool) dynamicSecretProviderRequirement {
 		return dynamicSecretRequirement(key, label, "credential_reference", description+" Use a mode-0600 file: ref or tenant-scoped secret:// ref; never inline the value.", required)
@@ -138,13 +149,21 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			credential("admin_dsn_ref", "Admin URI reference", "Credential reference containing the least-privilege administrative MongoDB URI.", true),
 			value("database", "Database", "Database in which the generated user is created.", true),
 		)},
-		{Type: "aws-iam", Label: "AWS IAM", Purpose: "Creates and deletes a short-lived IAM access key for a bounded user.", Requirements: dynamicSecretProviderRequirements(
-			value("endpoint", "IAM endpoint", "HTTPS IAM API endpoint.", true),
-			value("region", "AWS region", "Region used to sign IAM requests.", true),
-			value("access_key_id", "Access key ID", "Identifier for the least-privilege IAM administrator.", true),
-			credential("secret_access_key_ref", "Secret access key reference", "Administrative AWS secret access key reference.", true),
-			credential("session_token_ref", "Session token reference", "Optional temporary AWS session token reference.", false),
-			roles("Each allowed role maps to one managed-policy ARN."),
+		{Type: "aws-sts", Label: "AWS STS", Purpose: "Assumes a bounded IAM role and returns an expiring AWS session. Early lease revocation remains pending until AWS session expiry.", Requirements: dynamicSecretAWSRequirements(
+			value("endpoint", "STS endpoint", "HTTPS AWS STS Query API endpoint.", true),
+			value("region", "AWS region", "Region used to sign STS requests.", true),
+			value("access_key_id", "Caller access key ID", "Identifier of the identity allowed to call STS AssumeRole.", true),
+			credential("secret_access_key_ref", "Caller secret access key reference", "AWS caller secret reference, resolved only during issuance.", true),
+			credential("session_token_ref", "Caller session token reference", "Required when the caller itself uses temporary AWS credentials.", false),
+			roles("Each allowed role maps to one full IAM role ARN trusted to allow sts:AssumeRole."),
+		)},
+		{Type: "aws-iam", Label: "AWS STS (legacy aws-iam name)", Purpose: "Compatibility name for the same expiring AssumeRole session issuer; IAM user access keys are not created.", Requirements: dynamicSecretAWSRequirements(
+			value("endpoint", "STS endpoint", "HTTPS AWS STS Query API endpoint.", true),
+			value("region", "AWS region", "Region used to sign STS requests.", true),
+			value("access_key_id", "Caller access key ID", "Identifier of the identity allowed to call STS AssumeRole.", true),
+			credential("secret_access_key_ref", "Caller secret access key reference", "AWS caller secret reference, resolved only during issuance.", true),
+			credential("session_token_ref", "Caller session token reference", "Required when the caller itself uses temporary AWS credentials.", false),
+			roles("Each allowed role maps to one full IAM role ARN trusted to allow sts:AssumeRole."),
 		)},
 		{Type: "gcp-iam", Label: "Google Cloud IAM", Purpose: "Creates and deletes a service-account key with a stable retry identity.", Requirements: dynamicSecretProviderRequirements(
 			value("endpoint", "IAM endpoint", "HTTPS Google IAM API endpoint.", true),
@@ -253,6 +272,9 @@ func validateDynamicLeaseProviderRequest(provider dynamicSecretConfiguredProvide
 	if provider.Type == "kubernetes" && req.TTLSeconds < 600 {
 		return errStatus(http.StatusUnprocessableEntity, "Kubernetes token leases require at least 600 seconds")
 	}
+	if (provider.Type == "aws-iam" || provider.Type == "aws-sts") && req.TTLSeconds < 900 {
+		return errStatus(http.StatusUnprocessableEntity, "AWS STS sessions require at least 900 seconds")
+	}
 	return nil
 }
 
@@ -360,6 +382,31 @@ func (a *API) previewDynamicSecretLease(w http.ResponseWriter, r *http.Request) 
 		a.writeError(w, err)
 		return
 	}
+	recoverySteps := []string{
+		"Before issuance, cancel and leave the provider and trstctl unchanged.",
+		"After an interrupted issue response, retry the unchanged request with the same Idempotency-Key to recover the original result without creating a second provider credential.",
+		"Revoke the lease from its metadata receipt; the durable worker keeps retrying provider revocation after a restart.",
+	}
+	verificationSteps := []string{
+		"Use the reveal-once credential directly against the reviewed provider and role.",
+		"Read the lease metadata and confirm provider, role, active state, and expiry without replaying the credential.",
+		"Revoke the lease, then prove the same credential no longer authenticates to the provider.",
+	}
+	externalEffect := "the bounded dynamic-secret worker asks " + provider.Label + " to create one scoped credential for role " + req.Role
+	if provider.Type == "aws-sts" || provider.Type == "aws-iam" {
+		externalEffect = "the bounded dynamic-secret worker submits one STS AssumeRole request for the configured IAM role ARN"
+		recoverySteps = []string{
+			"Before issuance, cancel and leave AWS and trstctl unchanged.",
+			"If the response was interrupted after a saved STS result, retry the unchanged request with the same Idempotency-Key to recover it.",
+			"If AWS accepted AssumeRole but its response was lost, the result is indeterminate; trstctl refuses to submit that operation again. Inspect AWS CloudTrail and issue a new lease only after reconciliation.",
+			"Revoke closes the trstctl lease. The AWS session can remain valid until native_expires_at; rotate the dependent workload promptly.",
+		}
+		verificationSteps = []string{
+			"Use the reveal-once access key ID, secret access key, and session token with an AWS stock client against the reviewed role.",
+			"Read the lease metadata and compare native_expires_at with the STS credential expiration.",
+			"After revoke, confirm the trstctl lease is closed and treat the AWS session as valid until native_expires_at; verify rejection after native expiry with an AWS stock client.",
+		}
+	}
 	a.writeJSON(w, http.StatusOK, dynamicLeasePreviewResponse{
 		Capability: "F65", Operation: "issue_dynamic_secret_lease", Ready: true, EffectFree: true,
 		ProviderID: provider.ID, ProviderType: provider.Type, ProviderLabel: provider.Label, Role: req.Role,
@@ -372,20 +419,10 @@ func (a *API) previewDynamicSecretLease(w http.ResponseWriter, r *http.Request) 
 			"seal one provider command into the durable outbox before provider contact",
 			"protect the reveal-once response for exact Idempotency-Key recovery",
 		},
-		ExecuteExternalEffects: []string{
-			"the bounded dynamic-secret worker asks " + provider.Label + " to create one scoped credential for role " + req.Role,
-		},
-		RecoverySteps: []string{
-			"Before issuance, cancel and leave the provider and trstctl unchanged.",
-			"After an interrupted issue response, retry the unchanged request with the same Idempotency-Key to recover the original result without creating a second provider credential.",
-			"Revoke the lease from its metadata receipt; the durable worker keeps retrying provider revocation after a restart.",
-		},
-		VerificationSteps: []string{
-			"Use the reveal-once credential directly against the reviewed provider and role.",
-			"Read the lease metadata and confirm provider, role, active state, and expiry without replaying the credential.",
-			"Revoke the lease, then prove the same credential no longer authenticates to the provider.",
-		},
-		CLIArgv:      []string{"trstctl", "secrets", "leases", "preview", "-f", "dynamic-lease.json"},
-		DataHandling: "Preview never resolves or receives provider credentials. Issue returns the generated credential once; only sealed recovery state and non-secret lease/provider handles remain. Never place the generated credential in URLs, logs, screenshots, or browser storage.",
+		ExecuteExternalEffects: []string{externalEffect},
+		RecoverySteps:          recoverySteps,
+		VerificationSteps:      verificationSteps,
+		CLIArgv:                []string{"trstctl", "secrets", "leases", "preview", "-f", "dynamic-lease.json"},
+		DataHandling:           "Preview never resolves or receives provider credentials. Issue returns the generated credential once; only sealed recovery state and non-secret lease/provider handles remain. Never place the generated credential in URLs, logs, screenshots, or browser storage.",
 	})
 }

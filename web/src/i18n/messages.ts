@@ -4507,18 +4507,34 @@ export const messages = {
   "secrets.dynamic.needsAttention": { defaultMessage: "Temporary credential needs attention", description: "Dynamic workflow error wrapper title." },
   "secrets.dynamic.revocationDeadline": { defaultMessage: "Revocation deadline", description: "Dynamic lease revocation evidence." },
   "secrets.dynamic.renewalCeiling": { defaultMessage: "Original renewal limit", description: "Dynamic lease revocation evidence." },
+  "secrets.dynamic.nativeExpiresAt": {
+    defaultMessage: "AWS session expires at",
+    description: "Native AWS STS credential expiration; early trstctl lease closure does not invalidate the AWS session.",
+  },
   "secrets.dynamic.providerRevokedAt": { defaultMessage: "Provider removal confirmed at", description: "Dynamic lease revocation evidence." },
+  "secrets.dynamic.awsExpiryConfirmedAt": {
+    defaultMessage: "AWS session expiry confirmed at",
+    description: "The native STS expiration passed; this is not an AWS delete operation.",
+  },
   "secrets.dynamic.metadataMismatch": {
     defaultMessage: "The response does not match this lease, provider, and role. Its status is unconfirmed.",
     description: "Dynamic lease revocation evidence.",
   },
   "secrets.dynamic.statusUnavailable": { defaultMessage: "Current lease status unavailable", description: "Dynamic lease revocation evidence." },
   "secrets.dynamic.providerRemoved": { defaultMessage: "Provider confirmed credential removal", description: "Dynamic lease revocation evidence." },
+  "secrets.dynamic.awsExpired": {
+    defaultMessage: "AWS session reached native expiry",
+    description: "An STS session expired natively; no per-session delete was performed.",
+  },
   "secrets.dynamic.providerRevokeFailed": {
     defaultMessage: "Provider revocation failed; access removal unconfirmed",
     description: "Dynamic lease revocation evidence.",
   },
   "secrets.dynamic.providerRevokePending": { defaultMessage: "Revocation queued; provider removal pending", description: "Dynamic lease revocation evidence." },
+  "secrets.dynamic.awsPendingExpiry": {
+    defaultMessage: "Lease closed; AWS session may remain valid",
+    description: "Early STS lease closure leaves the AWS session valid until native expiry.",
+  },
   "secrets.dynamic.providerRemovalUnconfirmed": {
     defaultMessage: "Lease ended; provider removal unconfirmed",
     description: "Dynamic lease revocation evidence.",
@@ -4527,6 +4543,11 @@ export const messages = {
     defaultMessage:
       "At the lease deadline, a worker queues revocation. Provider access may continue until removal completes. Confirm the same login is rejected by the provider.",
     description: "Dynamic lease revocation evidence.",
+  },
+  "secrets.dynamic.awsRevocationTiming": {
+    defaultMessage:
+      "STS cannot delete one issued session. The old credentials may work in AWS until the native expiration below. Replace workload credentials now and verify rejection after expiry.",
+    description: "AWS STS passive expiry evidence and operator action.",
   },
   "secrets.dynamic.refreshStatus": { defaultMessage: "Refresh lease status", description: "Dynamic lease revocation evidence." },
   "secrets.dynamic.startAgain": { defaultMessage: "Create another credential", description: "Reset completed dynamic lease workflow action." },

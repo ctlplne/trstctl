@@ -96,6 +96,26 @@ describe("dynamic lease provider evidence", () => {
     expect(screen.queryByText("REVEAL-FIXTURE")).not.toBeInTheDocument();
   });
 
+  it("does not call early AWS STS lease closure provider removal", async () => {
+    const nativeExpiry = new Date(Date.now() + 15 * 60000).toISOString();
+    const awsLease = {
+      ...lease,
+      provider: "qa-aws-sts",
+      state: "revoked",
+      revocation_status: "pending" as const,
+      native_expires_at: nativeExpiry,
+    };
+    read.mockResolvedValue(awsLease);
+    renderReceipt(awsLease);
+    expect(await screen.findByText("Lease closed; AWS session may remain valid")).toBeInTheDocument();
+    expect(screen.getByText("AWS session expires at")).toBeInTheDocument();
+    expect(screen.queryByText("Provider confirmed credential removal")).not.toBeInTheDocument();
+    read.mockResolvedValue({ ...awsLease, revocation_status: "completed", revocation_completed_at: nativeExpiry });
+    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    expect(await screen.findByText("AWS session reached native expiry")).toBeInTheDocument();
+    expect(screen.getByText("AWS session expiry confirmed at")).toBeInTheDocument();
+  });
+
   it("uses the persisted original renewal limit for an active lease", async () => {
     renderReceipt(lease);
     await waitFor(() => expect(read).toHaveBeenCalledTimes(1));

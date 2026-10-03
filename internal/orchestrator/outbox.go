@@ -247,7 +247,10 @@ func (f HandlerFunc) Deliver(ctx context.Context, m Message) error { return f(ct
 // this is a pause, not a failed attempt. The outbox keeps the row pending and
 // refunds the claim attempt so a long tenant seal cannot consume the dead-letter
 // budget before an operator unseals it.
-type DeliveryDeferredError struct{ cause error }
+type DeliveryDeferredError struct {
+	cause    error
+	resumeAt time.Time
+}
 
 func (e *DeliveryDeferredError) Error() string { return "outbox delivery deferred" }
 func (e *DeliveryDeferredError) Unwrap() error { return e.cause }
@@ -260,6 +263,26 @@ func DeferDelivery(err error) error {
 		return err
 	}
 	return &DeliveryDeferredError{cause: err}
+}
+
+// DeferDeliveryUntil pauses a no-I/O delivery until a known native deadline.
+// The outbox preserves its retry budget and schedules no earlier than resumeAt.
+func DeferDeliveryUntil(err error, resumeAt time.Time) error {
+	if err == nil {
+		return nil
+	}
+	if resumeAt.IsZero() {
+		return DeferDelivery(err)
+	}
+	return &DeliveryDeferredError{cause: err, resumeAt: resumeAt.UTC()}
+}
+
+func deferredResumeAt(err error) time.Time {
+	var deferred *DeliveryDeferredError
+	if errors.As(err, &deferred) {
+		return deferred.resumeAt
+	}
+	return time.Time{}
 }
 
 // IsDeliveryDeferred reports whether a handler explicitly proved that receiver
@@ -1071,6 +1094,9 @@ func (o *Outbox) finalizeClaim(ctx context.Context, claim claimedOutboxEntry, de
 		}
 		now := o.clockNow()
 		next := now.Add(o.retryDelay(claim.attempts))
+		if deferred && deferredResumeAt(deliverErr).After(next) {
+			next = deferredResumeAt(deliverErr)
+		}
 		tag, err := tx.Exec(ctx,
 			`UPDATE outbox
 			    SET attempts = CASE WHEN $7 THEN GREATEST(attempts - 1, 0) ELSE attempts END,

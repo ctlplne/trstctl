@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -62,7 +63,7 @@ type DynamicSecretProviderConfig struct {
 	KubernetesTLSServerName string   `json:"kubernetes_tls_server_name,omitempty"`
 	AllowedRoles            []string `json:"allowed_roles"`
 	// RoleBindings maps an allowed role to its provider-native authority. AWS
-	// values are managed-policy ARNs; Kubernetes values are Role/name or
+	// dynamic values are assumable IAM role ARNs; Kubernetes values are Role/name or
 	// ClusterRole/name. Fixed-authority providers may omit it.
 	RoleBindings map[string]string `json:"role_bindings,omitempty"`
 	// RedisACLRoles gives each allowed Redis role literal key namespaces and an
@@ -137,9 +138,11 @@ type SecretSyncTargetConfig struct {
 }
 
 var dynamicSecretTypes = map[string]struct{}{
-	"postgresql": {}, "mysql": {}, "mongodb": {}, "aws-iam": {},
+	"postgresql": {}, "mysql": {}, "mongodb": {}, "aws-iam": {}, "aws-sts": {},
 	"gcp-iam": {}, "azure-entra": {}, "kubernetes": {}, "redis": {},
 }
+
+var dynamicAWSRoleARN = regexp.MustCompile(`^arn:(aws|aws-us-gov|aws-cn):iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]+$`)
 
 var secretSyncTypes = map[string]struct{}{
 	"aws-secrets-manager": {}, "gcp-secret-manager": {}, "azure-key-vault": {},
@@ -308,15 +311,20 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 				errs = append(errs, fmt.Errorf("%s role_bindings[%q] must be Role/name or ClusterRole/name", where, role))
 			}
 		}
-	case "aws-iam":
+	case "aws-iam", "aws-sts":
 		require(c.Endpoint, "endpoint")
 		require(c.Region, "region")
 		require(c.AccessKeyID, "access_key_id")
 		ref(c.SecretAccessRef, "secret_access_key_ref", false)
 		ref(c.SessionTokenRef, "session_token_ref", true)
+		if c.MaxTTL == "" {
+			errs = append(errs, fmt.Errorf("%s AWS STS max_ttl must be explicit (15m to 12h)", where))
+		} else if ttl, err := c.MaxTTLDuration(); err == nil && (ttl < 15*time.Minute || ttl > 12*time.Hour) {
+			errs = append(errs, fmt.Errorf("%s AWS STS max_ttl must be between 15m and 12h", where))
+		}
 		for _, role := range normalizedStrings(c.AllowedRoles) {
-			if !strings.HasPrefix(strings.TrimSpace(c.RoleBindings[role]), "arn:") {
-				errs = append(errs, fmt.Errorf("%s role_bindings[%q] must be a managed-policy ARN", where, role))
+			if !dynamicAWSRoleARN.MatchString(strings.TrimSpace(c.RoleBindings[role])) {
+				errs = append(errs, fmt.Errorf("%s role_bindings[%q] must be a full IAM role ARN for STS AssumeRole", where, role))
 			}
 		}
 	case "gcp-iam":

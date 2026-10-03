@@ -61,7 +61,7 @@ func TestDynamicLeaseContractDistinguishesRevocationFromProviderCompletion(t *te
 	schemas := doc["components"].(map[string]any)["schemas"].(map[string]any)
 	lease := schemas["DynamicLease"].(map[string]any)
 	properties := lease["properties"].(map[string]any)
-	for _, field := range []string{"hard_expires_at", "revocation_status", "revoked_at", "revocation_completed_at"} {
+	for _, field := range []string{"hard_expires_at", "native_expires_at", "revocation_status", "revoked_at", "revocation_completed_at"} {
 		if properties[field] == nil {
 			t.Errorf("lease metadata hides durable %s", field)
 		}

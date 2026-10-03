@@ -467,6 +467,55 @@ func TestOutboxDeferredDeliveryRefundsAttemptAndSurvivesPastDeadLetterCap(t *tes
 	}
 }
 
+func TestOutboxDeferredUntilNativeExpiryDoesNotPollOrUseRetryBudget(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	ob := orchestrator.NewOutbox(s,
+		orchestrator.WithMaxAttempts(1),
+		orchestrator.WithBackoff(func(int) time.Duration { return time.Second }),
+		orchestrator.WithNow(func() time.Time { return now }),
+	)
+	id := enqueue(t, s, ob, orchestrator.Entry{
+		TenantID: tenantA, Destination: "test.native-expiry", IdempotencyKey: "deferred-native-expiry", Payload: []byte(`{}`),
+	})
+	// Enqueue uses PostgreSQL's clock; advance the worker clock past that insert.
+	now = time.Now().UTC().Add(time.Second).Truncate(time.Microsecond)
+	expires := now.Add(30 * time.Minute)
+	calls := 0
+	handler := orchestrator.HandlerFunc(func(context.Context, orchestrator.Message) error {
+		calls++
+		if !now.Before(expires) {
+			return nil
+		}
+		return orchestrator.DeferDeliveryUntil(errors.New("native credential remains valid"), expires)
+	})
+	if n, err := ob.Dispatch(ctx, handler); err != nil || n != 1 {
+		t.Fatalf("native-expiry first dispatch = (%d, %v)", n, err)
+	}
+	var next time.Time
+	if err := s.SystemPool().QueryRow(ctx, `SELECT next_attempt_at FROM outbox WHERE id = $1`, id).Scan(&next); err != nil {
+		t.Fatal(err)
+	}
+	record, err := ob.Get(ctx, tenantA, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.Status != "pending" || record.Attempts != 0 || !next.Equal(expires) {
+		t.Fatalf("native-expiry defer = status:%s attempts:%d next:%s, want pending/0/%s", record.Status, record.Attempts, next, expires)
+	}
+	if n, err := ob.Dispatch(ctx, handler); err != nil || n != 0 || calls != 1 {
+		t.Fatalf("native-expiry defer polled early: dispatch=%d calls=%d error=%v", n, calls, err)
+	}
+	now = expires.Add(time.Second)
+	if n, err := ob.Dispatch(ctx, handler); err != nil || n != 1 || calls != 2 {
+		t.Fatalf("native-expiry completion was not delivered: dispatch=%d calls=%d error=%v", n, calls, err)
+	}
+	if record, err := ob.Get(ctx, tenantA, id); err != nil || record.Status != "delivered" || record.Attempts != 1 {
+		t.Fatalf("native-expiry completed row = %+v error=%v", record, err)
+	}
+}
+
 type terminalFailureFixture struct {
 	called bool
 }

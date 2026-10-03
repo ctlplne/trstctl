@@ -216,8 +216,8 @@ export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean })
     try {
       const renewed = await api.renewDynamicLease(lease.id, { extend_seconds: extend });
       if (renewed.id !== lease.id) {
-        // Kubernetes TokenRequest tokens cannot be extended. The server creates
-        // a replacement lease and revokes the predecessor before returning.
+        // Kubernetes tokens and AWS STS sessions cannot be extended. The server
+        // creates a replacement lease and closes the predecessor first.
         if (renewed.provider !== lease.provider || renewed.role !== lease.role || !renewed.credential) {
           throw new Error(t("secrets.dynamic.metadataMismatch"));
         }

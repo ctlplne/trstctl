@@ -191,18 +191,20 @@ secret as its own event-sourced request and use a separate idempotency key.
 
 Instead of a long-lived secret to steal, dynamic secrets are minted on demand, scoped,
 and time-limited by a [lease](../glossary.md); on expiry trstctl revokes the credential
-automatically, even across a restart, since the revocation intent is journaled first to
-a durable [outbox](../glossary.md) and delivered at-least-once. Eight backends ship
+automatically where the provider supports native revocation, even across a restart, since the revocation intent is journaled first to
+a durable [outbox](../glossary.md) and delivered at-least-once. Eight backend families ship
 behind one interface, each backed by real infrastructure, not a stub: PostgreSQL,
-MySQL, MongoDB, AWS IAM, GCP IAM, Azure Entra, Kubernetes ServiceAccount tokens, and
+MySQL, MongoDB, AWS STS, GCP IAM, Azure Entra, Kubernetes ServiceAccount tokens, and
 Redis ACL users.
 
 The control plane mounts the lease lifecycle when `secrets.enable_api` is on and
 `secret_integrations.dynamic_providers` supplies tenant-bound endpoints, allowed roles,
 maximum TTLs, egress policy, and `file:`/`secret://` credential references
 (`buildRunDeps` wires the registry). Issuance commits a pending lease and sealed
-outbox command first, so only the outbox worker calls the provider and a crash retry
-reuses the same identity. Cloud/Kubernetes endpoints require HTTPS; `allow_insecure_loopback` is a
+outbox command first, so only the outbox worker calls the provider. Providers
+with a native lookup or replay identity recover the same identity after a crash;
+AWS STS instead fences an uncertain AssumeRole call and never blindly retries it.
+Cloud/Kubernetes endpoints require HTTPS; `allow_insecure_loopback` is a
 same-host-emulator exception limited to `localhost`, `127.0.0.0/8`, or `::1`.
 
 The MySQL backend requires an explicit `account_host` for every generated
@@ -210,7 +212,8 @@ account. Wildcard host patterns need the separate
 `allow_wildcard_account_host` operator opt-in; omitting the host never creates a
 global `user@'%'` login. The provider catalog shows both settings before issue.
 
-- `GET /api/v1/secrets/leases/providers` returns the eight safe setup recipes plus
+- `GET /api/v1/secrets/leases/providers` returns nine safe setup recipes (including the
+  `aws-iam` compatibility name for `aws-sts`) plus
   this tenant's real configured provider IDs, allowed roles, maximum TTLs, and
   runtime configuration revisions. It never returns endpoints, native bindings,
   credential references, or provider credential values. Configuration remains a
@@ -233,7 +236,8 @@ global `user@'%'` login. The provider catalog shows both settings before issue.
   access can continue during delivery or retries. `hard_expires_at` is the original
   renewal ceiling, not proof of native credential expiry. `revocation_status` is
   `none`, `pending`, `completed`, or `failed`; only `completed` with
-  `revocation_completed_at` confirms the provider removal operation. `revoked_at`
+  `revocation_completed_at` confirms the provider removal operation, or for AWS
+  STS, that its native session expiration has passed. `revoked_at`
   records when the control plane queued the request. Older immutable operation
   receipts may omit these additional fields; GET returns current durable evidence.
   If provider creation finishes after `expires_at`, `issued_at` records the real
@@ -242,6 +246,20 @@ global `user@'%'` login. The provider catalog shows both settings before issue.
   before provider contact. Check `revocation_status=completed` before assuming the
   backend identity is gone. A one-line PostgreSQL `file:` DSN may end in CR/LF;
   the PostgreSQL adapter removes only that terminal line ending before parsing it.
+- AWS dynamic leases use STS `AssumeRole`, with an explicit role ARN binding and a
+  15-minute to 12-hour maximum TTL. The `aws-iam` provider name remains a compatibility
+  spelling for this issuer; it does not create IAM users or long-lived access keys.
+  Configure the caller's signing key through a mode-0600 `file:` or tenant-scoped
+  `secret://` reference. A short-lived caller also needs `session_token_ref`. The
+  issued credential contains an access key ID, secret access key, session token, and
+  expiration; `native_expires_at` on metadata is the AWS session expiry. STS has no
+  per-session delete call: early revoke closes the trstctl lease and leaves
+  `revocation_status=pending` until native expiry. AWS can still accept the old
+  session during that window. Set the shortest workable TTL and replace dependent
+  workload credentials promptly. A saved AssumeRole result can be recovered with
+  the original idempotency key. If AWS may have accepted the request but its response
+  was lost, trstctl fences that operation as indeterminate and does not submit it
+  again; reconcile it with CloudTrail before starting a new lease.
 - `POST /api/v1/secrets/leases/{lease_id}/renew` extends a lease without returning the
   credential again for renewable backends. Kubernetes TokenRequest tokens are
   immutable: renewal issues a new bound token and lease, confirms provider-side
@@ -250,6 +268,10 @@ global `user@'%'` login. The provider catalog shows both settings before issue.
   location, update the lease ID used for later renew/revoke calls, and verify the
   previous token is rejected with `kubectl`. A Kubernetes replacement must have
   at least 600 seconds remaining and fit within the predecessor's renewal limit.
+  AWS STS renewal likewise issues a replacement lease and reveals one new session;
+  the predecessor remains usable in AWS until its own `native_expires_at`. A
+  replacement needs at least 900 seconds of requested validity and must fit within
+  the original renewal limit.
 - `POST /api/v1/secrets/leases/{lease_id}/revoke` closes the lease and queues backend
   revocation through the outbox worker. If GET later reports
   `revocation_status=failed`, correct the provider outage and POST the same revoke
@@ -1045,7 +1067,7 @@ curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   (`PUT/GET /secrets/<path>`, `Idempotency-Key`).
 - **Developer run wrapper:** `trstctl-cli run --secret ENV=secret/path -- <cmd>`
   fetches via `/api/v1/secrets/store/{name}` and injects only into the child env.
-- **Dynamic backends:** `postgresql`, `mysql`, `mongodb`, `aws-iam`, `gcp-iam`,
+- **Dynamic backends:** `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam` alias), `gcp-iam`,
   `azure-entra`, `kubernetes`, `redis`, plus `pki`.
 - **Transit:** `/api/v1/transit/{keys,encrypt,decrypt,rewrap,hmac,sign,verify}`,
   `trstctl-cli transit ...`, versioned `trv:<n>:` ciphertext.

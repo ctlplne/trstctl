@@ -9,11 +9,12 @@ import "context"
 // built from one template (BackendProvider) over the Backend seam, so each backend
 // is a small, uniform instance that inherits the engine's AN-5/AN-6/AN-8
 // guarantees. The realism of each lives in its Backend implementation (Postgres
-// GRANT/DROP ROLE, IAM access keys, Kubernetes TokenRequest, Redis ACL, …); the
+// GRANT/DROP ROLE, AWS STS AssumeRole, Kubernetes TokenRequest, Redis ACL, …); the
 // template handles the lease-facing contract identically for all.
 
 // Backend is the per-target seam a provider drives: create a scoped credential and
-// revoke it (idempotently). Real backends implement this against the live system;
+// retire it (idempotently, or after native expiry when an individual credential
+// cannot be deleted). Real backends implement this against the live system;
 // in-sandbox conformance uses in-memory doubles (live integration is the CI
 // backstop, like the EST/SCEP differentials).
 type Backend interface {
@@ -82,10 +83,11 @@ func NewMySQLProvider(b Backend) *BackendProvider { return NewProvider("mysql", 
 // NewMongoProvider builds the MongoDB dynamic-secret provider (S17.4).
 func NewMongoProvider(b Backend) *BackendProvider { return NewProvider("mongodb", b) }
 
-// NewAWSIAMProvider builds the AWS IAM dynamic-secret provider (S17.5).
+// NewAWSIAMProvider retains the legacy name for AWS dynamic-secret registrations.
+// Production server configuration maps this name to bounded STS AssumeRole.
 func NewAWSIAMProvider(b Backend) *BackendProvider { return NewProvider("aws-iam", b) }
 
-// NewAWSSTSProvider builds the legacy AWS STS-named dynamic-secret provider alias.
+// NewAWSSTSProvider builds a canonical AWS STS-named dynamic-secret provider.
 func NewAWSSTSProvider(b Backend) *BackendProvider { return NewProvider("aws-sts", b) }
 
 // NewGCPIAMProvider builds the GCP IAM dynamic-secret provider (S17.6).

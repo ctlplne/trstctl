@@ -2130,6 +2130,10 @@ func (b *AWSIAMBackend) setEndpoint(endpoint string) {
 }
 
 func (b *AWSIAMBackend) call(ctx context.Context, params map[string]string) ([]byte, error) {
+	return b.callService(ctx, params, awsIAMService)
+}
+
+func (b *AWSIAMBackend) callService(ctx context.Context, params map[string]string, service string) ([]byte, error) {
 	form := url.Values{}
 	for k, v := range params {
 		form.Set(k, v)
@@ -2140,7 +2144,7 @@ func (b *AWSIAMBackend) call(ctx context.Context, params map[string]string) ([]b
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
-	b.signV4(req, body, b.now().UTC())
+	b.signV4(req, body, b.now().UTC(), service)
 	resp, err := b.doer.Do(req)
 	if err != nil {
 		return nil, err
@@ -2184,7 +2188,7 @@ func containsASCIIFold(body, needle []byte) bool {
 	return false
 }
 
-func (b *AWSIAMBackend) signV4(req *http.Request, body []byte, t time.Time) {
+func (b *AWSIAMBackend) signV4(req *http.Request, body []byte, t time.Time, service string) {
 	amzDate := t.Format("20060102T150405Z")
 	dateStamp := t.Format("20060102")
 	req.Header.Set("X-Amz-Date", amzDate)
@@ -2213,14 +2217,14 @@ func (b *AWSIAMBackend) signV4(req *http.Request, body []byte, t time.Time) {
 		signedHeaders,
 		crypto.SHA256Hex(body),
 	}, "\n")
-	credScope := dateStamp + "/" + b.region + "/" + awsIAMService + "/aws4_request"
+	credScope := dateStamp + "/" + b.region + "/" + service + "/aws4_request"
 	stringToSign := strings.Join([]string{
 		"AWS4-HMAC-SHA256",
 		amzDate,
 		credScope,
 		crypto.SHA256Hex([]byte(canonicalRequest)),
 	}, "\n")
-	kSigning := awsSigV4SigningKey(b.secretKey.Bytes(), dateStamp, b.region, awsIAMService)
+	kSigning := awsSigV4SigningKey(b.secretKey.Bytes(), dateStamp, b.region, service)
 	defer secret.Wipe(kSigning)
 	signature := hex.EncodeToString(crypto.HMACSHA256(kSigning, []byte(stringToSign)))
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 "+

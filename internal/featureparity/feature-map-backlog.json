@@ -16116,10 +16116,10 @@
             "phase": "P2",
             "priority": 77,
             "served_state": "conditional",
-            "backend_status": "conditional: buildRunDeps constructs all eight tenant-bound dynamic-secret providers from operator configuration; served secret-free catalog and effect-free preview bind the tenant, caller, configured provider ID/type/runtime revision, allowed role, and TTL before issue/renew/revoke uses the event-projected sealed outbox and restart-safe leaseworker against the real provider authority",
+            "backend_status": "conditional: buildRunDeps constructs eight tenant-bound dynamic-secret providers from operator configuration; seven have production-assembly runtime proof. AWS STS has a signed Query API contract but still requires native AWS account use and expiry evidence. The served catalog and preview bind the tenant, caller, provider ID/type/runtime revision, role, and TTL before the sealed outbox delivers issue/renew/revoke",
             "current_frontend_mapping": "complete conditional journey: Secrets at /secrets/engines uses Choose connection, Review exact plan, and Use and retire steps; it reads real tenant provider IDs and role allowlists, shows secret-free setup recipes for all eight backends, refuses issuance without a zero-effect current review, passes the server-keyed fingerprint with a stable Idempotency-Key, reveals the credential once, and preserves metadata-only renew/revoke/verification evidence",
             "target_gui_mapping": "No GA frontend residual: the conditional console journey covers safe startup setup guidance, runtime readiness, exact effect-free preview, issue, reveal-once custody, observe, recover, revoke, verify, and equivalent API/CLI automation for all eight provider types.",
-            "acceptance_test": "The dynamic_secret DoD census drives all eight providers through production buildRunDeps and the authenticated lease route, proves the generated credential works independently, rotates it, revokes it, and proves both credentials are dead.",
+            "acceptance_test": "The dynamic_secret DoD census drives seven providers through production buildRunDeps and the authenticated lease route with independent credential use, rotation, and revocation. The AWS STS row remains pending until a real AWS account proves native use and expiry; a local Query API double is only contract evidence.",
             "source_docs": [
                 "docs/features/secrets.md"
             ],
@@ -16136,7 +16136,7 @@
                 "web/src/pages/secrets/DynamicSecretWorkflow.tsx"
             ],
             "status": "closed",
-            "notes": "SEC-03 mounted the dynsecret.Engine lease lifecycle on the served path. WIRE-DYNSEC-000/101-108 add validated tenant/provider configuration, production buildRunDeps construction, event-projected pending/issued/revoked lease state, sealed issuance/revocation outbox work, stable crash-retry identities, and a universal shipped-assembly proof against official PostgreSQL, MySQL, MongoDB, and Redis containers plus protocol-faithful AWS IAM, GCP IAM, Azure Entra, and Kubernetes substrates. TestDODSecretIntegrationsProductionAssembly issues, renews, rotates, uses, and revokes each provider credential from the authenticated served route; the external process independently verifies use and post-revoke denial. F65 frontend convergence at d3072f969c4429c2f5c9e18095dd06d10d53f45a adds the secret-free eight-provider catalog, configured-ID/readiness projection, exact zero-write/zero-call preview, stale-review refusal, three-step console journey, reveal-once custody, API/CLI parity, and focused served/browser/a11y proof.",
+            "notes": "SEC-03 mounted the dynsecret.Engine lease lifecycle on the served path. WIRE-DYNSEC-000/101-108 add validated tenant/provider configuration, production buildRunDeps construction, event-projected pending/issued/revoked lease state, and sealed outbox work. Seven backend rows have production-assembly runtime proof; AWS STS replaces permanent IAM key issuance but remains pending native account proof of use and expiry. The local signed-Query double is contract evidence only. F65 frontend convergence at d3072f969c4429c2f5c9e18095dd06d10d53f45a adds the secret-free eight-provider catalog, configured-ID/readiness projection, exact zero-write/zero-call preview, stale-review refusal, three-step console journey, reveal-once custody, API/CLI parity, and focused served/browser/a11y proof.",
             "api_surface": [
                 "listDynamicSecretProviders",
                 "previewDynamicSecretLease",
@@ -16158,10 +16158,10 @@
                     "evidence": [
                         "buildRunDeps constructs TenantDynamicSecretProviders from validated operator configuration and returns that registry to Build.",
                         "Lease issuance projects a deterministic pending lease plus sealed dynsecret.issue outbox command before the provider worker makes any external call; retries converge on one provider identity.",
-                        "TestDODSecretIntegrationsProductionAssembly enters through POST /api/v1/secrets/leases, independently uses and rotates each credential, revokes both through the outbox, and verifies post-revoke denial for all eight providers.",
+                        "TestDODSecretIntegrationsProductionAssembly enters through POST /api/v1/secrets/leases and proves independent use and post-revoke denial for seven provider rows; AWS STS native use and expiry require a real AWS account.",
                         "GET /api/v1/secrets/leases/providers projects only safe requirement descriptors and tenant-configured IDs/types/roles/TTL/revision; POST /preview validates the exact plan without resolving credentials, calling a provider, or writing state.",
                         "served_state=conditional",
-                        "backend_status=conditional: buildRunDeps constructs all eight tenant-bound dynamic-secret providers from operator configuration; served issue/renew/revoke uses an event-projected sealed outbox and restart-safe leaseworker against the real provider authority"
+                        "backend_status=conditional: buildRunDeps constructs eight tenant-bound dynamic-secret providers from operator configuration; seven have runtime proof, while AWS STS remains pending native account evidence"
                     ],
                     "refs": [
                         "internal/server/secret_integrations.go",
@@ -16219,7 +16219,7 @@
                 "test": {
                     "evidence": [
                         "Dynamic-lease unit and route tests cover lifecycle behavior, tenant isolation, idempotency, event projection, and sealed outbox state.",
-                        "The required dynamic_secret census entries bind every provider constructor to TenantDynamicSecretProviders and the same universal production-assembly runtime proof.",
+                        "The seven required dynamic_secret census entries bind provider constructors to TenantDynamicSecretProviders and the universal production-assembly runtime proof for those seven; AWS STS stays pending until native account evidence exists.",
                         "TestServedDynamicSecretCatalogAndPreviewBindTheExactRuntimeConfiguration proves all eight recipes, safe configured identity, zero provider calls during preview, stale-review 409 before provider contact, and one exact reviewed issue. WIRE-07 proves the same three-step UI, fingerprint-bound issue, reveal-once lifecycle, no browser storage, and axe-clean review state."
                     ],
                     "refs": [
@@ -16310,7 +16310,9 @@
             "dod_capabilities": [
                 "dynamic_secret"
             ],
-            "dod_residuals": {},
+            "dod_residuals": {
+                "dynamic_secret": "AWS STS native issued-session use and passive expiry require an owner-controlled AWS account; the local signed Query API double cannot establish this runtime proof."
+            },
             "contract": {
                 "purpose": "Lets an operator understand and safely use dynamic secrets while tenant, policy, and security authority remain on the server.",
                 "tool": "secrets",

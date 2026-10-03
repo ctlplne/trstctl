@@ -21,14 +21,15 @@ export function DynamicLeaseEvidence({
 }) {
   const { t } = useTranslation();
   const complete = lease.revocation_status === "completed" && !!lease.revocation_completed_at;
+  const awsSession = !!lease.native_expires_at;
   const status = error
     ? t("secrets.dynamic.statusUnavailable")
     : complete
-      ? t("secrets.dynamic.providerRemoved")
+      ? t(awsSession ? "secrets.dynamic.awsExpired" : "secrets.dynamic.providerRemoved")
       : lease.revocation_status === "failed"
         ? t("secrets.dynamic.providerRevokeFailed")
         : lease.revocation_status === "pending"
-          ? t("secrets.dynamic.providerRevokePending")
+          ? t(awsSession ? "secrets.dynamic.awsPendingExpiry" : "secrets.dynamic.providerRevokePending")
           : active
             ? t("secrets.dynamic.issuedTitle")
             : t("secrets.dynamic.providerRemovalUnconfirmed");
@@ -37,7 +38,7 @@ export function DynamicLeaseEvidence({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div role="status">
           <h3 className="font-semibold">{status}</h3>
-          <p className="mt-1 text-sm text-muted-foreground">{t("secrets.dynamic.revocationTiming")}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t(awsSession ? "secrets.dynamic.awsRevocationTiming" : "secrets.dynamic.revocationTiming")}</p>
         </div>
         <Button type="button" variant="outline" onClick={refresh}>
           {t("secrets.dynamic.refreshStatus")}
