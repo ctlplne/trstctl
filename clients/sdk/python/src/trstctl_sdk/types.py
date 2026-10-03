@@ -6500,6 +6500,7 @@ ManagedKeyGenerateRequest = TypedDict(
     'ManagedKeyGenerateRequest',
     {
         'algorithm': str,
+        'provider': str,
     },
     total=False,
 )

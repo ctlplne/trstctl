@@ -39,18 +39,21 @@ func TestServedCloudKMSManagedKeyLifecycleCAPKEY02(t *testing.T) {
 	gcp := newServedGCPKMS(t)
 	cases := []struct {
 		name      string
+		provider  string
 		prefix    string
 		lifecycle crypto.RemoteKeyLifecycle
 	}{
 		{
-			name:   "azure-key-vault-hsm",
-			prefix: servedAzureVaultURL + "/keys/",
+			name:     "azure-key-vault-hsm",
+			provider: config.ManagedKeyProviderAzureKeyVault,
+			prefix:   servedAzureVaultURL + "/keys/",
 			lifecycle: azurekv.New(servedAzureVaultURL, azurekv.Credentials{BearerToken: []byte(servedAzureToken)},
 				azurekv.WithEndpoint("https://azure-kms.test"), azurekv.WithHTTPClient(azure)),
 		},
 		{
-			name:   "gcp-kms",
-			prefix: servedGCPParent + "/cryptoKeys/",
+			name:     "gcp-kms",
+			provider: config.ManagedKeyProviderGCPKMS,
+			prefix:   servedGCPParent + "/cryptoKeys/",
 			lifecycle: gcpkms.New(servedGCPParent, gcpkms.Credentials{BearerToken: []byte(servedGCPToken)},
 				gcpkms.WithEndpoint("https://cloudkms.test/v1"), gcpkms.WithHTTPClient(gcp)),
 		},
@@ -59,6 +62,7 @@ func TestServedCloudKMSManagedKeyLifecycleCAPKEY02(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
+				d.ManagedKeyCustody = api.ManagedKeyCustodyConfiguration{Enabled: true, Provider: tc.provider}
 				d.ManagedKeyFactory = func(md ManagedKeyServiceDeps) (api.ManagedKeyService, error) {
 					if md.Log == nil || md.Idempotency == nil {
 						t.Fatal("managed-key cloud KMS factory did not receive event log and idempotency spine")
@@ -71,6 +75,7 @@ func TestServedCloudKMSManagedKeyLifecycleCAPKEY02(t *testing.T) {
 			})
 
 			code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/managed-keys", token, tc.name+"-generate", map[string]string{
+				"provider":  tc.provider,
 				"algorithm": string(crypto.RSA2048),
 			})
 			if code != http.StatusCreated {

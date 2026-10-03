@@ -4708,6 +4708,7 @@ export interface ManagedKeyCustodyRequirement {
 
 export interface ManagedKeyGenerateRequest {
   algorithm: "RSA-2048" | "RSA-3072" | "RSA-4096" | "ECDSA-P256" | "ECDSA-P384" | "ECDSA-P521";
+  provider: "aws" | "azure-key-vault" | "gcp-kms" | "pkcs11" | "tpm2" | "yubihsm2";
 }
 
 export interface ManagedKeyGenerationPreview {

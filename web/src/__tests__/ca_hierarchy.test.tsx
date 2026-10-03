@@ -781,7 +781,7 @@ describe("CA hierarchy and custody surface", () => {
     await user.click(screen.getByRole("button", { name: "Continue to generation" }));
     await user.click(screen.getByRole("button", { name: "Generate managed key" }));
 
-    await waitFor(() => expect(apiMock.generateManagedKey).toHaveBeenCalledWith({ algorithm: "ECDSA-P256" }));
+    await waitFor(() => expect(apiMock.generateManagedKey).toHaveBeenCalledWith({ provider: "gcp-kms", algorithm: "ECDSA-P256" }));
     expect(await screen.findByText("kms/root-1")).toBeInTheDocument();
     expect(screen.getByText("Version 1")).toBeInTheDocument();
 

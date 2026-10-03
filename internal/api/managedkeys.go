@@ -290,6 +290,7 @@ func (a *API) previewManagedKeyGeneration(w http.ResponseWriter, r *http.Request
 // ---- request/response shapes (key-material-free) ---------------------------
 
 type managedKeyGenerateRequest struct {
+	Provider  string `json:"provider"`
 	Algorithm string `json:"algorithm"`
 }
 
@@ -402,6 +403,15 @@ func (a *API) generateManagedKey(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Algorithm == "" {
 		a.writeError(w, errStatus(http.StatusBadRequest, "algorithm is required"))
+		return
+	}
+	provider, ok := managedKeyProvider(req.Provider)
+	if !ok {
+		a.writeError(w, errStatus(http.StatusBadRequest, `provider must be "aws", "azure-key-vault", "gcp-kms", "pkcs11", "tpm2", or "yubihsm2"`))
+		return
+	}
+	if !a.managedKeyCustody.Enabled || a.managedKeys == nil || a.managedKeyCustody.Provider != provider.ID {
+		a.writeError(w, errStatus(http.StatusConflict, "selected managed-key provider is not configured and attached; review custody and preview again"))
 		return
 	}
 	alg, err := parseManagedKeyAlgorithm(req.Algorithm)

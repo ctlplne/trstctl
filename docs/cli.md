@@ -885,7 +885,7 @@ trstctl-cli secrets leases get <lease-id>  # wait for revocation_status=complete
 
 # Generate and retire an HSM/KMS-backed managed key after managed_keys is enabled.
 cat > managed-key.json <<'JSON'
-{"algorithm":"RSA-2048"}
+{"provider":"aws","algorithm":"RSA-2048"}
 JSON
 trstctl-cli --idempotency-key kms-key-1 managed-keys generate -f managed-key.json
 printf '{"key_id":"<key-id>","action":"rotate"}' | trstctl-cli --idempotency-key kms-key-1-approve-a managed-keys approve -f -

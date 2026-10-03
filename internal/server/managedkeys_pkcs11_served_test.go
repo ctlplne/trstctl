@@ -183,6 +183,7 @@ func TestServedPKCS11ManagedKeyLifecycleCAPKEY01(t *testing.T) {
 	var lifecycle crypto.RemoteKeyLifecycle = backend
 
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.ManagedKeyCustody = api.ManagedKeyCustodyConfiguration{Enabled: true, Provider: config.ManagedKeyProviderPKCS11}
 		d.ManagedKeyFactory = func(md ManagedKeyServiceDeps) (api.ManagedKeyService, error) {
 			if md.Log == nil || md.Idempotency == nil {
 				t.Fatal("managed-key PKCS#11 factory did not receive event log and idempotency spine")
@@ -195,6 +196,7 @@ func TestServedPKCS11ManagedKeyLifecycleCAPKEY01(t *testing.T) {
 	})
 
 	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/managed-keys", token, "pkcs11-key-generate", map[string]string{
+		"provider":  config.ManagedKeyProviderPKCS11,
 		"algorithm": string(crypto.RSA2048),
 	})
 	if code != http.StatusCreated {
@@ -253,6 +255,7 @@ func TestServedInHSMNonExtractableGenerationCAPKEY04(t *testing.T) {
 	var lifecycle crypto.RemoteKeyLifecycle = backend
 
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.ManagedKeyCustody = api.ManagedKeyCustodyConfiguration{Enabled: true, Provider: config.ManagedKeyProviderPKCS11}
 		d.ManagedKeyFactory = func(md ManagedKeyServiceDeps) (api.ManagedKeyService, error) {
 			if md.Log == nil || md.Idempotency == nil {
 				t.Fatal("managed-key PKCS#11 factory did not receive event log and idempotency spine")
@@ -265,6 +268,7 @@ func TestServedInHSMNonExtractableGenerationCAPKEY04(t *testing.T) {
 	})
 
 	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/managed-keys", token, "pkcs11-key-generate-cap-key-04", map[string]string{
+		"provider":  config.ManagedKeyProviderPKCS11,
 		"algorithm": string(crypto.RSA2048),
 	})
 	if code != http.StatusCreated {

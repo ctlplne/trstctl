@@ -5961,8 +5961,9 @@ func componentSchemas() map[string]*Schema {
 	// Managed-key (BYOK/HSM) lifecycle schemas (CRYPTO-005). public_der is the PKIX
 	// public key (base64 in JSON); the private material is never represented here.
 	managedKeyGenerateReq := object(map[string]*Schema{
+		"provider":  {Type: "string", Enum: []string{"aws", "azure-key-vault", "gcp-kms", "pkcs11", "tpm2", "yubihsm2"}},
 		"algorithm": {Type: "string", Enum: []string{"RSA-2048", "RSA-3072", "RSA-4096", "ECDSA-P256", "ECDSA-P384", "ECDSA-P521"}},
-	}, "algorithm")
+	}, "provider", "algorithm")
 	managedKeyProviderIDs := []string{"aws", "azure-key-vault", "gcp-kms", "pkcs11", "tpm2", "yubihsm2"}
 	managedKeyCustodyRequirement := object(map[string]*Schema{
 		"key": str(), "label": str(), "kind": {Type: "string", Enum: []string{"value", "secret_file"}},

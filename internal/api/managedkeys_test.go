@@ -88,7 +88,9 @@ func managedKeyRequest(t *testing.T, handler http.Handler, path, idempotencyKey,
 }
 
 func managedKeyHarness(service *stubManagedKeys, idem *orchestrator.Idempotency) http.Handler {
-	return api.New(nil, idem, nil, api.WithInsecureHeaderResolver(), api.WithManagedKeys(service))
+	return api.New(nil, idem, nil, api.WithInsecureHeaderResolver(),
+		api.WithManagedKeyCustody(api.ManagedKeyCustodyConfiguration{Enabled: true, Provider: "aws"}),
+		api.WithManagedKeys(service))
 }
 
 func managedKeyServiceCalls(service *stubManagedKeys) int {
@@ -103,7 +105,7 @@ func TestManagedKeyIdempotencyExactReplayInvokesEachServiceActionOnce(t *testing
 		wantStatus int
 		calls      func(*stubManagedKeys) int
 	}{
-		{name: "generate", path: "/api/v1/managed-keys", body: `{"algorithm":"ECDSA-P256"}`, wantStatus: http.StatusCreated, calls: func(s *stubManagedKeys) int { return s.generateCalls }},
+		{name: "generate", path: "/api/v1/managed-keys", body: `{"provider":"aws","algorithm":"ECDSA-P256"}`, wantStatus: http.StatusCreated, calls: func(s *stubManagedKeys) int { return s.generateCalls }},
 		{name: "rotate", path: "/api/v1/managed-keys/rotate", body: `{"key_id":"fake-kms-key-0001"}`, wantStatus: http.StatusOK, calls: func(s *stubManagedKeys) int { return s.rotateCalls }},
 		{name: "revoke", path: "/api/v1/managed-keys/revoke", body: `{"key_id":"fake-kms-key-0001"}`, wantStatus: http.StatusOK, calls: func(s *stubManagedKeys) int { return s.revokeCalls }},
 		{name: "zeroize", path: "/api/v1/managed-keys/zeroize", body: `{"key_id":"fake-kms-key-0001"}`, wantStatus: http.StatusOK, calls: func(s *stubManagedKeys) int { return s.zeroizeCalls }},
@@ -150,8 +152,8 @@ func TestManagedKeyIdempotencyRejectsChangedActionBodyOrCallerBeforeService(t *t
 		body    string
 		subject string
 	}{
-		{name: "body", path: "/api/v1/managed-keys", body: `{"algorithm":"RSA-2048"}`, subject: "operator-a"},
-		{name: "caller", path: "/api/v1/managed-keys", body: `{"algorithm":"ECDSA-P256"}`, subject: "operator-b"},
+		{name: "body", path: "/api/v1/managed-keys", body: `{"provider":"aws","algorithm":"RSA-2048"}`, subject: "operator-a"},
+		{name: "caller", path: "/api/v1/managed-keys", body: `{"provider":"aws","algorithm":"ECDSA-P256"}`, subject: "operator-b"},
 		{name: "action", path: "/api/v1/managed-keys/revoke", body: `{"key_id":"fake-kms-key-0001"}`, subject: "operator-a"},
 	}
 
@@ -160,7 +162,7 @@ func TestManagedKeyIdempotencyRejectsChangedActionBodyOrCallerBeforeService(t *t
 			service := &stubManagedKeys{}
 			handler := managedKeyHarness(service, orchestrator.NewMemoryIdempotency())
 			const rawKey = "managed-key-shared-collision"
-			first := managedKeyRequest(t, handler, "/api/v1/managed-keys", rawKey, "operator-a", `{"algorithm":"ECDSA-P256"}`)
+			first := managedKeyRequest(t, handler, "/api/v1/managed-keys", rawKey, "operator-a", `{"provider":"aws","algorithm":"ECDSA-P256"}`)
 			if first.Code != http.StatusCreated || service.generateCalls != 1 {
 				t.Fatalf("baseline status=%d calls=%d body=%s", first.Code, service.generateCalls, first.Body.String())
 			}
@@ -206,7 +208,7 @@ func TestManagedKeyValidationRunsBeforeIdempotencyReplay(t *testing.T) {
 	service := &stubManagedKeys{}
 	handler := managedKeyHarness(service, orchestrator.NewMemoryIdempotency())
 	const rawKey = "managed-key-validate-before-replay"
-	first := managedKeyRequest(t, handler, "/api/v1/managed-keys", rawKey, "operator-a", `{"algorithm":"ECDSA-P256"}`)
+	first := managedKeyRequest(t, handler, "/api/v1/managed-keys", rawKey, "operator-a", `{"provider":"aws","algorithm":"ECDSA-P256"}`)
 	if first.Code != http.StatusCreated || service.generateCalls != 1 {
 		t.Fatalf("baseline status=%d calls=%d body=%s", first.Code, service.generateCalls, first.Body.String())
 	}
@@ -219,7 +221,7 @@ func TestManagedKeyValidationRunsBeforeIdempotencyReplay(t *testing.T) {
 		t.Fatalf("malformed replay reached service; calls=%d, want baseline call only", service.generateCalls)
 	}
 
-	unsupported := managedKeyRequest(t, handler, "/api/v1/managed-keys", "managed-key-unsupported", "operator-a", `{"algorithm":"not-an-algorithm"}`)
+	unsupported := managedKeyRequest(t, handler, "/api/v1/managed-keys", "managed-key-unsupported", "operator-a", `{"provider":"aws","algorithm":"not-an-algorithm"}`)
 	if unsupported.Code != http.StatusBadRequest {
 		t.Fatalf("unsupported algorithm status=%d body=%s, want 400", unsupported.Code, unsupported.Body.String())
 	}
@@ -228,10 +230,37 @@ func TestManagedKeyValidationRunsBeforeIdempotencyReplay(t *testing.T) {
 	}
 }
 
+func TestManagedKeyGenerateRequiresSelectedConfiguredProvider(t *testing.T) {
+	service := &stubManagedKeys{}
+	handler := managedKeyHarness(service, orchestrator.NewMemoryIdempotency())
+	for _, tc := range []struct {
+		name, body string
+		want       int
+	}{
+		{name: "missing provider", body: `{"algorithm":"ECDSA-P256"}`, want: http.StatusBadRequest},
+		{name: "unknown provider", body: `{"provider":"unknown","algorithm":"ECDSA-P256"}`, want: http.StatusBadRequest},
+		{name: "different provider", body: `{"provider":"gcp-kms","algorithm":"ECDSA-P256"}`, want: http.StatusConflict},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			response := managedKeyRequest(t, handler, "/api/v1/managed-keys", "managed-key-provider-"+tc.name, "operator-a", tc.body)
+			if response.Code != tc.want {
+				t.Fatalf("status=%d body=%s, want %d", response.Code, response.Body.String(), tc.want)
+			}
+			if service.generateCalls != 0 {
+				t.Fatalf("mismatched provider reached custody backend %d times", service.generateCalls)
+			}
+		})
+	}
+	response := managedKeyRequest(t, handler, "/api/v1/managed-keys", "managed-key-provider-aws", "operator-a", `{"provider":"aws","algorithm":"ECDSA-P256"}`)
+	if response.Code != http.StatusCreated || service.generateCalls != 1 {
+		t.Fatalf("configured provider status=%d calls=%d body=%s", response.Code, service.generateCalls, response.Body.String())
+	}
+}
+
 func TestManagedKeyServiceIdempotencyDriftMapsToConflict(t *testing.T) {
 	service := &stubManagedKeys{err: orchestrator.ErrIdempotencyConflict}
 	handler := managedKeyHarness(service, orchestrator.NewMemoryIdempotency())
-	response := managedKeyRequest(t, handler, "/api/v1/managed-keys", "managed-key-lower-drift", "operator-a", `{"algorithm":"ECDSA-P256"}`)
+	response := managedKeyRequest(t, handler, "/api/v1/managed-keys", "managed-key-lower-drift", "operator-a", `{"provider":"aws","algorithm":"ECDSA-P256"}`)
 	if response.Code != http.StatusConflict {
 		t.Fatalf("service drift status=%d body=%s, want 409", response.Code, response.Body.String())
 	}

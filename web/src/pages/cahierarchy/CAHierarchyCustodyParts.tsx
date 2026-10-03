@@ -118,7 +118,7 @@ export function ManagedKeyCustodyWorkspace() {
     setKeyBusy(true);
     setKeyError(null);
     try {
-      setManagedKey(await api.generateManagedKey({ algorithm: preview.algorithm as ManagedKeyGenerateRequest["algorithm"] }));
+      setManagedKey(await api.generateManagedKey({ provider: preview.provider, algorithm: preview.algorithm as ManagedKeyGenerateRequest["algorithm"] }));
     } catch (error) {
       setKeyError(apiProblemMessage(error, t("caHierarchy.custody.generateFailed")));
     } finally {

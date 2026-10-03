@@ -19402,9 +19402,21 @@
               "ECDSA-P521"
             ],
             "type": "string"
+          },
+          "provider": {
+            "enum": [
+              "aws",
+              "azure-key-vault",
+              "gcp-kms",
+              "pkcs11",
+              "tpm2",
+              "yubihsm2"
+            ],
+            "type": "string"
           }
         },
         "required": [
+          "provider",
           "algorithm"
         ],
         "type": "object"

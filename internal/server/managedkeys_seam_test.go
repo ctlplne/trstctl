@@ -126,6 +126,7 @@ func projectDualControlManagedKey(t *testing.T, h *servedHarness, key api.Manage
 func TestManagedKeysServedThroughEditionFactory(t *testing.T) {
 	var sawSpine bool
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.ManagedKeyCustody = api.ManagedKeyCustodyConfiguration{Enabled: true, Provider: config.ManagedKeyProviderAWS}
 		d.ManagedKeyFactory = func(md ManagedKeyServiceDeps) (api.ManagedKeyService, error) {
 			if md.Log == nil || md.Idempotency == nil {
 				t.Fatal("managed-key factory did not receive event log and idempotency spine")
@@ -144,6 +145,7 @@ func TestManagedKeysServedThroughEditionFactory(t *testing.T) {
 		string(authz.KeysRead), string(authz.KeysWrite),
 	})
 	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/managed-keys", token, "managed-key-seam-generate", map[string]string{
+		"provider":  config.ManagedKeyProviderAWS,
 		"algorithm": string(crypto.RSA2048),
 	})
 	if code != http.StatusCreated {
@@ -154,6 +156,7 @@ func TestManagedKeysServedThroughEditionFactory(t *testing.T) {
 func TestManagedKeyDestructiveActionsRequireTwoServedDistinctApprovals(t *testing.T) {
 	var service *dualControlManagedKeyService
 	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.ManagedKeyCustody = api.ManagedKeyCustodyConfiguration{Enabled: true, Provider: config.ManagedKeyProviderAWS}
 		// Even a weaker shared CA-policy value cannot reduce destructive managed-key
 		// custody below the fixed two-person floor.
 		d.RequiredApprovals = 1
@@ -177,6 +180,7 @@ func TestManagedKeyDestructiveActionsRequireTwoServedDistinctApprovals(t *testin
 	})
 
 	status, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/managed-keys", requester, "managed-key-dual-generate", map[string]string{
+		"provider":  config.ManagedKeyProviderAWS,
 		"algorithm": string(crypto.RSA2048),
 	})
 	if status != http.StatusCreated {

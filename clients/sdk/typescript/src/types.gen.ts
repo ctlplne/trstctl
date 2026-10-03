@@ -11762,6 +11762,8 @@ export interface components {
         ManagedKeyGenerateRequest: {
             /** @enum {string} */
             algorithm: "RSA-2048" | "RSA-3072" | "RSA-4096" | "ECDSA-P256" | "ECDSA-P384" | "ECDSA-P521";
+            /** @enum {string} */
+            provider: "aws" | "azure-key-vault" | "gcp-kms" | "pkcs11" | "tpm2" | "yubihsm2";
         };
         ManagedKeyGenerationPreview: {
             algorithm: string;

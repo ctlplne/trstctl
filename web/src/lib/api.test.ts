@@ -1002,7 +1002,7 @@ describe("api CA hierarchy and managed keys", () => {
       { status: 200, body: JSON.stringify({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 2, state: "zeroized" }) },
     ]);
 
-    await api.generateManagedKey({ algorithm: "ECDSA-P256" });
+    await api.generateManagedKey({ provider: "aws", algorithm: "ECDSA-P256" });
     await api.rotateManagedKey("kms/root-1");
     await api.revokeManagedKey("kms/root-1");
     await api.zeroizeManagedKey("kms/root-1");

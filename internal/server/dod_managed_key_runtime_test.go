@@ -784,7 +784,7 @@ func dodRunManagedKeyProvider(t *testing.T, artifacts dodManagedKeyArtifacts, en
 	control.Start(runtime.dir, runtime.env)
 	runtime.waitControlPlane()
 
-	generateResponse := control.Do(dodManagedKeyRequestObject(runtime, http.MethodPost, "/api/v1/managed-keys", "generate", map[string]string{"algorithm": string(crypto.RSA2048)}))
+	generateResponse := control.Do(dodManagedKeyRequestObject(runtime, http.MethodPost, "/api/v1/managed-keys", "generate", map[string]string{"provider": provider, "algorithm": string(crypto.RSA2048)}))
 	if status := proof.LaunchedResponseStatusCode(t, entryID, generateResponse); status/100 != 2 {
 		t.Fatalf("initial managed-key route status=%d durable=%s", status, runtime.durableDiagnostics())
 	}
@@ -799,7 +799,7 @@ func dodRunManagedKeyProvider(t *testing.T, artifacts dodManagedKeyArtifacts, en
 		runtime.assertTPMForeignCollisionAndOperationTag(generated.KeyID)
 	}
 	// Same HTTP idempotency key must return the original provider handle.
-	replayed := dodDecodeManagedKey(t, runtime.responseBody(dodManagedKeyRequest(runtime, http.MethodPost, "/api/v1/managed-keys", "generate", map[string]string{"algorithm": string(crypto.RSA2048)})))
+	replayed := dodDecodeManagedKey(t, runtime.responseBody(dodManagedKeyRequest(runtime, http.MethodPost, "/api/v1/managed-keys", "generate", map[string]string{"provider": provider, "algorithm": string(crypto.RSA2048)})))
 	runtime.requireHardwareKeyID(replayed.KeyID)
 	if replayed.KeyID != generated.KeyID {
 		t.Fatalf("HTTP idempotency replay minted %q after %q", replayed.KeyID, generated.KeyID)
