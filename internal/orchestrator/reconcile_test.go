@@ -128,6 +128,30 @@ func seedLifecycleIdentity(t *testing.T, s *store.Store, tenantID, identityID st
 	}
 }
 
+func TestReconcileOutboxRetainsLegacyProviderAuditWithoutTenantFence(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	log := openLog(t)
+	orch := orchestrator.NewOrchestrator(log, s, orchestrator.NewOutbox(s),
+		orchestrator.WithTenantCommandService(s.BeginTenantService, func(context.Context, string) error { return nil }))
+	legacy, err := log.Append(ctx, events.Event{Type: "provider.isolation.drill", TenantID: "provider-control-plane", Data: []byte(`{"passed":true}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if healed, err := orch.ReconcileOutbox(ctx, log); err != nil || healed != 0 {
+		t.Fatalf("Provider audit outbox recovery = healed %d, err %v; want no effect", healed, err)
+	}
+	if checkpoint, err := s.OutboxReconciliationCheckpoint(ctx); err != nil || checkpoint != legacy.Sequence {
+		t.Fatalf("outbox checkpoint = %d, err %v; want %d", checkpoint, err, legacy.Sequence)
+	}
+	if _, err := log.Append(ctx, events.Event{Type: "unexpected.core.event", TenantID: "provider-control-plane", Data: []byte(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := orch.ReconcileOutbox(ctx, log); err == nil {
+		t.Fatal("unrelated malformed tenant event bypassed outbox admission")
+	}
+}
+
 // TestReconcileOutboxHealsCrashGapExactlyOnce is the SPINE-011 acceptance: a crash
 // between Transition's event Append and the separate transaction that projects it
 // and enqueues its outbox side effect leaves the event durable but the side effect

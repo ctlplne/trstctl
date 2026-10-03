@@ -965,6 +965,12 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 		return 0, err
 	}
 	err = log.Replay(ctx, from+1, func(ev events.Event) (reconcileErr error) {
+		if events.IsLegacyProviderGlobalAudit(ev) {
+			// This retained audit event has no core outbox intent and its old
+			// textual partition cannot enter a tenant service fence. Keep the
+			// immutable event for Provider activity and advance only our cursor.
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
 		ctx, releaseTenant, obsolete, err := o.beginTenantOutboxRecovery(ctx, ev)
 		if err != nil {
 			return err
