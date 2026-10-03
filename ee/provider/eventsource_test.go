@@ -770,6 +770,14 @@ func TestEveryProviderMutationConvergesAcrossPostAppendFailure(t *testing.T) {
 		"crash-breakglass-results-1", `{}`, AuditBreakGlassAccessed, http.StatusOK)
 	crashAndHeal(http.MethodPost, "/provider/v1/isolation-drill", "Bearer requester", "crash-isolation-drill-1",
 		`{}`, "provider.isolation.drill", http.StatusOK)
+	if err := log.Replay(ctx, 0, func(event events.Event) error {
+		if event.Type == "provider.isolation.drill" && event.TenantID != corestore.ZeroUUID {
+			t.Fatalf("new Provider audit event has non-UUID tenant partition %q", event.TenantID)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 	crashAndHeal(http.MethodPost, "/provider/v1/tenants/"+tenantID+"/offboard", "Bearer requester", "crash-offboard-1",
 		`{}`, AuditTenantOffboarded, http.StatusNoContent)
 
@@ -822,7 +830,7 @@ func TestProviderActivityIsEventBackedAndDelegationScoped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal drill activity: %v", err)
 	}
-	if _, err := log.Append(ctx, events.Event{Type: "provider.isolation.drill", TenantID: providerAuditTenant, Data: drillPayload}); err != nil {
+	if _, err := log.Append(ctx, events.Event{Type: "provider.isolation.drill", TenantID: legacyProviderAuditTenant, Data: drillPayload}); err != nil {
 		t.Fatalf("append drill activity: %v", err)
 	}
 

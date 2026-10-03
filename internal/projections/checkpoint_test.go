@@ -76,6 +76,42 @@ func TestProjectCatchUpReplaysOnlyAfterCheckpoint(t *testing.T) {
 	}
 }
 
+func TestProjectCatchUpAcceptsLegacyProviderAuditPartitionOnlyForProviderEvents(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	log := openLog(t)
+	p := projections.New(s)
+	legacy, err := log.Append(ctx, events.Event{Type: "provider.isolation.drill", TenantID: "provider-control-plane", Data: []byte(`{"passed":true}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.ProjectCatchUp(ctx, log); err != nil {
+		t.Fatalf("legacy Provider audit blocked core catch-up: %v", err)
+	}
+	if checkpoint, err := s.ProjectionCheckpoint(ctx); err != nil || checkpoint != legacy.Sequence {
+		t.Fatalf("checkpoint = %d, err=%v, want %d", checkpoint, err, legacy.Sequence)
+	}
+	current, err := log.Append(ctx, events.Event{Type: "provider.isolation.drill", TenantID: store.ZeroUUID, Data: []byte(`{"passed":true}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.ProjectCatchUp(ctx, log); err != nil {
+		t.Fatalf("UUID-scoped Provider audit blocked core catch-up: %v", err)
+	}
+	if checkpoint, err := s.ProjectionCheckpoint(ctx); err != nil || checkpoint != current.Sequence {
+		t.Fatalf("checkpoint = %d, err=%v, want %d", checkpoint, err, current.Sequence)
+	}
+	if err := p.Rebuild(ctx, log); err != nil {
+		t.Fatalf("legacy and current Provider audits blocked full core rebuild: %v", err)
+	}
+	if _, err := log.Append(ctx, events.Event{Type: "unexpected.core.event", TenantID: "provider-control-plane", Data: []byte(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.ProjectCatchUp(ctx, log); err == nil {
+		t.Fatal("non-Provider event with invalid tenant bypassed core tenant validation")
+	}
+}
+
 func TestProjectCatchUpConcurrentReplicasRefuseActivePrivacyPreparationAUD109(t *testing.T) {
 	ctx := context.Background()
 	primary := newStore(t)

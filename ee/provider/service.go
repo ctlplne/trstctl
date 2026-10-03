@@ -32,7 +32,8 @@ const (
 	AuditBreakGlassConsented          = "provider.breakglass_consent"
 	AuditBreakGlassDenied             = "provider.breakglass_deny"
 	AuditBreakGlassAccessed           = "provider.breakglass_access"
-	providerAuditTenant               = "provider-control-plane"
+	providerAuditTenant               = providerAuthorityTenant
+	legacyProviderAuditTenant         = "provider-control-plane"
 	defaultMaxBreakGlassTTL           = 2 * time.Hour
 	defaultBreakGlassTTL              = 30 * time.Minute
 )
@@ -291,7 +292,8 @@ func (s *Service) ListActivity(ctx context.Context, actor Operator, limit int) (
 		ownErasure := item.RequestEventID != "" && item.OperatorID == actor.ID
 		item.CanContinueOffboard = ownErasure && item.Type == AuditTenantErasureRequested &&
 			item.OffboardState == "pending" && s.requireMutation(actor, true) == nil
-		if ownErasure || visible[item.TenantID] || (item.TenantID == providerAuditTenant && actor.Role == OperatorAdmin) {
+		if ownErasure || visible[item.TenantID] ||
+			((item.TenantID == providerAuditTenant || item.TenantID == legacyProviderAuditTenant) && actor.Role == OperatorAdmin) {
 			out = append(out, item)
 		}
 	}

@@ -3126,6 +3126,9 @@ func (p *Projector) Apply(ctx context.Context, e events.Event) error {
 }
 
 func (p *Projector) applyCore(ctx context.Context, e events.Event) error {
+	if legacyProviderAuditOutsideTenant(e) {
+		return ValidateSchemaVersion(e)
+	}
 	if e.Type == EventTenantRegistered {
 		if err := ValidateSchemaVersion(e); err != nil {
 			return err
@@ -3171,6 +3174,15 @@ func (p *Projector) applyCore(ctx context.Context, e events.Event) error {
 	return p.store.WithTenant(ctx, e.TenantID, func(tx pgx.Tx) error {
 		return p.ApplyTx(ctx, tx, e)
 	})
+}
+
+// Early Provider releases wrote deployment-wide audit events under a textual
+// partition. Core has no read model for this reserved extension namespace, and
+// PostgreSQL tenant RLS requires UUIDs. Let the licensed projection replay the
+// retained event while core skips only that exact historical partition/type
+// pair. Every other malformed tenant ID still fails closed.
+func legacyProviderAuditOutsideTenant(e events.Event) bool {
+	return e.TenantID == "provider-control-plane" && strings.HasPrefix(e.Type, "provider.")
 }
 
 func (p *Projector) applyEventProjections(ctx context.Context, e events.Event) error {
@@ -7451,6 +7463,9 @@ func (p *Projector) restoreFromSnapshotWithPrivacyBarrier(
 //     rebuilt from the log.
 //   - everything else    -> set the tenant GUC on the tx, then ApplyTx.
 func (p *Projector) applyForRebuild(ctx context.Context, tx pgx.Tx, e events.Event) error {
+	if legacyProviderAuditOutsideTenant(e) {
+		return ValidateSchemaVersion(e)
+	}
 	switch e.Type {
 	case EventTenantRegistered:
 		if err := ValidateSchemaVersion(e); err != nil {

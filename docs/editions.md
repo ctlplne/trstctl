@@ -332,6 +332,12 @@ activity names the rejection. Retry the rejected idempotency key to inspect its
 original conflict, then use a new key after choosing an unclaimed domain.
 Internal projection failures return a generic retry instruction; database
 constraint names and SQL diagnostics stay in server logs.
+Deployment-wide Provider audit events use the reserved UUID Provider partition.
+Older events recorded under the historical `provider-control-plane` text
+partition remain readable during catch-up and full rebuild; core skips only
+that historical Provider namespace while its licensed projection preserves
+the audit activity. Malformed tenant IDs on other event namespaces still stop
+replay.
 
 Every state-changing `/provider/v1` request requires `Idempotency-Key`. The key
 is immutably bound to the authenticated operator, method, path, and body; exact
