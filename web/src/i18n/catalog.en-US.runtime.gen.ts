@@ -10315,7 +10315,7 @@ export const defaultMessageValues = [
   "Extend by seconds",
   "Renewal can never pass the provider's original hard expiry.",
   "You can extend this lease by up to {seconds}s within its original renewal limit.",
-  "No confirmed renewal time is available. Revoke this lease and create a new credential.",
+  "This lease has reached its original renewal limit. It remains active until the revocation deadline shown above. Create a replacement before that deadline, or revoke early.",
   "Enter a whole number of seconds greater than zero before renewing.",
   "Renew lease",
   "Revoke lease",

@@ -4600,8 +4600,8 @@ export const messages = {
     description: "Dynamic lease remaining renewal headroom.",
   },
   "secrets.dynamic.extendUnavailable": {
-    defaultMessage: "No confirmed renewal time is available. Revoke this lease and create a new credential.",
-    description: "Dynamic lease hard-expiry recovery guidance.",
+    defaultMessage: "This lease has reached its original renewal limit. It remains active until the revocation deadline shown above. Create a replacement before that deadline, or revoke early.",
+    description: "Dynamic lease guidance when the original renewal ceiling has been reached.",
   },
   "secrets.dynamic.extendError": {
     defaultMessage: "Enter a whole number of seconds greater than zero before renewing.",

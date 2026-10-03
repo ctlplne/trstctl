@@ -378,7 +378,7 @@ describe("WIRE-07 dynamic secret lease wiring", () => {
     expect(renew).toBeEnabled();
     await user.click(renew);
     await waitFor(() => expect(apiMock.renewDynamicLease).toHaveBeenCalledWith("lease-postgres-headroom", { extend_seconds: 300 }));
-    expect(await screen.findByText("No confirmed renewal time is available. Revoke this lease and create a new credential.")).toBeInTheDocument();
+    expect(await screen.findByText("This lease has reached its original renewal limit. It remains active until the revocation deadline shown above. Create a replacement before that deadline, or revoke early.")).toBeInTheDocument();
     expect(renew).toBeDisabled();
   });
 
