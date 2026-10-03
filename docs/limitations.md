@@ -1322,7 +1322,9 @@ never live in the API process. What you can do end to end against the running bi
   ENFORCED at the served issuance transition with a structured 429 before the
   orchestrator accepts anything. Scope, stated exactly: only
   certificates_issued has an independent event source today — other meters say
-  in the document that the metered value stands alone; only the
+  in the document that the metered value stands alone. The Provider console
+  labels those unchecked meters separately from a checked meter that diverged;
+  the document's signable verdict determines whether finance may invoice. Only the
   certificates_stored cap is enforced at a served create path (agents, tenants
   and secrets caps are stored and reported but no create site consults them
   yet). The tenant-self-service route still serves only the caller's own

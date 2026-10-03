@@ -667,7 +667,10 @@ describe("provider console (L3)", () => {
       lines: [{ meter: "certificates_issued", kind: "counter", value: 7 }],
       signable: true,
       reason: "complete and reconciled",
-      reconciliation: [{ meter: "certificates_issued", metered: 7, event_history: 7, checked: true, matches: true }],
+      reconciliation: [
+        { meter: "certificates_issued", metered: 7, event_history: 7, checked: true, matches: true },
+        { meter: "tenants", metered: 1, event_history: 0, checked: false, matches: false },
+      ],
       digest: "abc123",
       signature: { alg: "RS256", key_id: "audit-1", jws: "header.payload.signature" },
       guidance: "verify before invoicing",
@@ -687,6 +690,11 @@ describe("provider console (L3)", () => {
     expect(await screen.findByText("Signature verified")).toBeInTheDocument();
     expect(screen.getByText("7")).toBeInTheDocument();
     expect(screen.getByText("abc123")).toBeInTheDocument();
+    expect(screen.getByText("certificates_issued: reconciled to 7 event-history records.")).toBeInTheDocument();
+    expect(
+      screen.getByText("tenants: no independent event-history comparison exists; this metered value stands alone. Use the billability verdict above."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/tenants: not reconciled; do not invoice/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Download signed JSON" }));
     fireEvent.click(screen.getByRole("button", { name: "Download finance CSV" }));

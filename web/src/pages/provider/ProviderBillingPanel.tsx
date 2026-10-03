@@ -272,13 +272,18 @@ export function ProviderBillingPanel({ tenants, onAuthError }: { tenants: Provid
             <p className="text-caption text-muted-foreground">{translateNow("source.provider.billing.empty.aud590018")}</p>
           )}
           {(document.reconciliation ?? []).map((line) => (
-            <p key={line.meter ?? "primary"} className="text-caption text-muted-foreground">
-              {line.checked && line.matches
-                ? translateNow("source.provider.billing.reconciled.aud590019", {
-                    meter: line.meter ?? "",
-                    events: String(line.event_history ?? 0),
-                  })
-                : translateNow("source.provider.billing.unreconciled.aud590020", { meter: line.meter ?? "" })}
+            <p
+              key={line.meter ?? "primary"}
+              className={line.checked && !line.matches ? "text-caption text-status-danger" : "text-caption text-muted-foreground"}
+            >
+              {!line.checked
+                ? translateNow("source.provider.billing.notCrossChecked.qa000002", { meter: line.meter ?? "" })
+                : line.matches
+                  ? translateNow("source.provider.billing.reconciled.aud590019", {
+                      meter: line.meter ?? "",
+                      events: String(line.event_history ?? 0),
+                    })
+                  : translateNow("source.provider.billing.unreconciled.aud590020", { meter: line.meter ?? "" })}
             </p>
           ))}
           <p className="break-all text-caption text-muted-foreground">

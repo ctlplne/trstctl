@@ -4600,7 +4600,8 @@ export const messages = {
     description: "Dynamic lease remaining renewal headroom.",
   },
   "secrets.dynamic.extendUnavailable": {
-    defaultMessage: "This lease has reached its original renewal limit. It remains active until the revocation deadline shown above. Create a replacement before that deadline, or revoke early.",
+    defaultMessage:
+      "This lease has reached its original renewal limit. It remains active until the revocation deadline shown above. Create a replacement before that deadline, or revoke early.",
     description: "Dynamic lease guidance when the original renewal ceiling has been reached.",
   },
   "secrets.dynamic.extendError": {
@@ -16011,6 +16012,10 @@ export const messages = {
   "source.provider.billing.reconciled.aud590019": {
     defaultMessage: "{meter}: reconciled to {events} event-history records.",
     description: "AUD-59: Matching reconciliation evidence.",
+  },
+  "source.provider.billing.notCrossChecked.qa000002": {
+    defaultMessage: "{meter}: no independent event-history comparison exists; this metered value stands alone. Use the billability verdict above.",
+    description: "Provider billing: an unchecked snapshot meter is not a failed reconciliation.",
   },
   "source.provider.billing.unreconciled.aud590020": {
     defaultMessage: "{meter}: not reconciled; do not invoice until the reason above is resolved.",
