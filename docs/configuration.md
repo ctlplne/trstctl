@@ -962,6 +962,10 @@ and configure that IdP's SCIM attribute mapping to put the exact login subject
 in `externalId`. SCIM defines `externalId` as a client-issued identifier; it is
 **not automatically an OIDC subject**. trstctl never infers this binding from an
 email address. Only a trusted deployment configuration selects the attribute.
+The console's **People and roles → SSO groups and role bindings** panel shows
+the current session's exact sign-in subject. Use it to check the IdP's SCIM
+attribute mapping before the first provision. For LDAP, that subject can be the
+full directory DN rather than the short login name.
 
 Both `userName` and `externalId` are retained and returned. The selected attribute
 becomes the stable SCIM resource `id` and tenant-member subject. It cannot change

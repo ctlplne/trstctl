@@ -787,7 +787,9 @@ offers requeue only for failed delivery. Toasts report real success and failure.
   separately scoped administration pages. Historical tab-query deep links still
   redirect to their matching page. **People and roles** (`/admin/access`) covers
   members, roles, OIDC mapping, tokens,
-  offboarding, and JIT sessions; **System health** (`/admin/system`) answers
+  offboarding, and JIT sessions. Its SSO disclosure shows the current session's
+  exact sign-in subject so an operator can bind SCIM `userName` or `externalId`
+  to that value before provisioning. **System health** (`/admin/system`) answers
   whether the control plane is securely configured, then keeps exact checks,
   configuration evidence, dependency health, and exceptions available on demand; it is the
   read-only packaging, tenant, transport, scale, and support disclosure; and

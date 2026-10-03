@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type SyntheticEvent } from "react";
 import { ChevronDown, History, KeyRound, Loader2, Plus, RefreshCw, ShieldCheck, UserMinus, Users } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/auth/AuthProvider";
 import { AdminHeaderActions } from "@/components/AdminHeaderActions";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { Dialog } from "@/components/Dialog";
@@ -49,6 +50,7 @@ const defaultPAMSessionForm: PAMSessionFormState = {
  * access-key reads are lazy so an unavailable expert integration cannot turn
  * the first screen into an error wall. */
 export function AdminAccess() {
+  const { user } = useAuth();
   const { locale, timeZone, t } = useTranslation();
   const tRef = useRef(t);
   useEffect(() => {
@@ -427,6 +429,13 @@ export function AdminAccess() {
 
       <div className="grid gap-3">
         <AccessDisclosure title={t("admin.access.ssoSummary")} description={t("admin.access.ssoBody")} onToggle={loadSSOWhenOpened}>
+          {user?.subject ? (
+            <div className="rounded-control border border-border bg-background p-3 text-sm">
+              <p className="font-medium">{t("admin.access.exactSignInSubject")}</p>
+              <code className="mt-1 block break-all text-xs">{user.subject}</code>
+              <p className="mt-2 text-muted-foreground">{t("admin.access.scimSubjectBindingHint")}</p>
+            </div>
+          ) : null}
           {ssoLoading ? <LoadingState>{t("admin.access.ssoLoading")}</LoadingState> : null}
           {ssoError ? (
             <ErrorState title={t("admin.access.ssoFailed")}>

@@ -3980,6 +3980,14 @@ export const messages = {
     defaultMessage: "See the exact sign-in claims, group mappings, people, roles, and permission strings used by this tenant.",
     description: "Plain-language SSO and role disclosure summary.",
   },
+  "admin.access.exactSignInSubject": {
+    defaultMessage: "Exact sign-in subject",
+    description: "Authenticated principal identifier used for SCIM and member binding.",
+  },
+  "admin.access.scimSubjectBindingHint": {
+    defaultMessage: "SCIM userName or externalId must equal this exact value. A display name or email can differ; verify the IdP mapping before provisioning.",
+    description: "Operator guidance preventing SCIM provisioning against the wrong SSO subject.",
+  },
   "admin.access.ssoLoading": { defaultMessage: "Reading SSO group mappings.", description: "SSO detail loading state." },
   "admin.access.ssoFailed": { defaultMessage: "SSO group mappings are unavailable", description: "SSO detail error title." },
   "admin.access.ssoStatus": { defaultMessage: "SSO sign-in", description: "OIDC enabled-state label." },

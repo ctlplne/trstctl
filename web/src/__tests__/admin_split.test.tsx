@@ -148,6 +148,16 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "Plan and license" })).toBeInTheDocument();
   });
 
+  it("shows the exact authenticated subject used for SCIM binding", async () => {
+    renderAt("/admin/access");
+    await screen.findByRole("heading", { level: 1, name: "People and roles" });
+
+    await userEvent.setup().click(screen.getByText("SSO groups and role bindings", { exact: true }));
+    expect(await screen.findByText("Exact sign-in subject")).toBeInTheDocument();
+    expect(screen.getByText("admin-1", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText(/SCIM userName or externalId must equal this exact value/)).toBeInTheDocument();
+  });
+
   it("answers platform readiness at bare /platform without fetching protected detail", async () => {
     renderAt("/platform");
     expect(await screen.findByRole("heading", { level: 1, name: "Platform setup" })).toBeInTheDocument();
