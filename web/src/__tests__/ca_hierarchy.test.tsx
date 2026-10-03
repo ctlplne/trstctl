@@ -768,6 +768,7 @@ describe("CA hierarchy and custody surface", () => {
     renderCAHierarchy("/ca-hierarchy?tab=custody");
 
     expect(await screen.findByRole("heading", { name: "Managed key custody" })).toBeInTheDocument();
+    expect(screen.getByText("Saved key records survive restart. Verify the custody provider still holds a key before using it.")).toBeInTheDocument();
     const provider = await screen.findByRole("combobox", { name: "Custody provider" });
     expect(within(provider).getAllByRole("option")).toHaveLength(6);
     expect(screen.getByText("Configured now: Google Cloud KMS")).toBeInTheDocument();

@@ -8996,7 +8996,7 @@ export const defaultMessageValues = [
   "Generate the reviewed key to see its public identifier, version, and lifecycle state.",
   "Managed key",
   "Managed keys",
-  "Keys remain here after a browser refresh or server restart. Select one to inspect its current state.",
+  "Saved key records survive restart. Verify the custody provider still holds a key before using it.",
   "No managed keys yet",
   "Loading managed keys...",
   "Could not load managed keys",

@@ -1129,8 +1129,8 @@ export const messages = {
   "caHierarchy.custody.managedKey": { defaultMessage: "Managed key", description: "Heading for generated managed-key metadata." },
   "caHierarchy.custody.inventoryTitle": { defaultMessage: "Managed keys", description: "Heading for durable managed-key inventory." },
   "caHierarchy.custody.inventoryDetail": {
-    defaultMessage: "Keys remain here after a browser refresh or server restart. Select one to inspect its current state.",
-    description: "Explains how managed-key recovery works.",
+    defaultMessage: "Saved key records survive restart. Verify the custody provider still holds a key before using it.",
+    description: "Distinguishes the durable managed-key record from the provider's actual retained key.",
   },
   "caHierarchy.custody.inventoryEmpty": { defaultMessage: "No managed keys yet", description: "Empty durable managed-key inventory." },
   "caHierarchy.custody.inventoryLoading": { defaultMessage: "Loading managed keys...", description: "Busy state for managed-key inventory." },
