@@ -863,11 +863,83 @@ notification inbox and delivery receipts show retry or failure. Refresh the
 decoy list to investigate, then retire it. A retired value remains unusable.
 To replace exposed bait, retire the old record and plant a new one.
 
-This is a trstctl-native API honeytoken. It does not create an AWS IAM access
-key, consume CloudTrail, or prove use outside trstctl. The AWS path needs a
-real customer-account integration, zero-permission key policy, CloudTrail event
-binding, reliable incident ingest, and revocation/rotation evidence before it
-can be called equivalent to an AWS honeytoken.
+#### AWS IAM decoy keys
+
+**Secrets → Automatic secret sources → Plant a decoy credential** also has an
+AWS IAM decoy workflow. An operator first attaches one AWS account to one tenant
+with `secret_integrations.honey_aws_accounts`. The browser lists only the account
+ID, configured Regions, polling interval, and key lifetime limit. IAM writer and
+CloudTrail reader authority are separate `file:` or tenant `secret://` references;
+neither credential is sent to the browser. Each referenced file must be mode 0600
+and contain JSON fields `access_key_id`, `secret_access_key`, `session_token`, and
+`expires_at`. These are **short-lived operator caller sessions**, refreshed in
+place before expiry. The bait key itself is an IAM access key and remains stable
+until its lease expires or the operator retires it; an STS session would expire
+before it could serve as durable bait.
+
+Example attachment (substitute owned values and private file paths):
+
+```json
+{
+  "secret_integrations": {
+    "honey_aws_accounts": [{
+      "tenant_id": "11111111-1111-1111-1111-111111111111",
+      "id": "security-decoys",
+      "account_id": "123456789012",
+      "regions": ["us-east-1"],
+      "iam_credentials_ref": "file:/var/lib/trstctl/private/iam-decoy-writer.json",
+      "cloudtrail_credentials_ref": "file:/var/lib/trstctl/private/cloudtrail-decoy-reader.json",
+      "max_ttl": "720h",
+      "poll_interval": "5m"
+    }]
+  }
+}
+```
+
+The IAM writer needs narrowly scoped create/get/tag/policy/key/delete permissions
+under `/trstctl/honeytokens/`; the reader needs `cloudtrail:LookupEvents` in each
+listed Region. Grant those through independently assumed roles. trstctl checks
+the account, IAM path, and ownership tag; installs an explicit deny-all inline
+user policy; reads that policy back; **then** creates the bait access key. The
+create response reveals the secret access key once, with an idempotent same-caller
+recovery path. The normal dynamic-secret issue endpoint cannot issue these keys.
+For an owned local IAM/CloudTrail fixture, set explicit loopback endpoints and
+`allow_private_endpoint`, `allow_insecure_loopback`, and a narrow
+`private_egress_cidrs` entry. Private overrides are operator-only; tenant webhooks
+retain their public HTTPS rule.
+
+`trstctl-cli secrets honeytokens aws accounts` lists attachments. Run
+`trstctl-cli secrets honeytokens aws preview -f request.json` to review the
+exact account, Regions, TTL, IAM sequence, detection limit, recovery, and
+verification without an IAM or CloudTrail call. It validates local account
+configuration; remote IAM permission is checked only by the creation attempt.
+Plant with
+`trstctl-cli secrets honeytokens aws plant -f request.json` where the JSON has
+`account_id` (the configured attachment ID), `name`, `placement`, and
+`ttl_seconds`. Supplying the returned `preview_fingerprint` binds the plant
+request to the reviewed caller, account attachment, and fields; a changed
+request is rejected before IAM effects. The console requires this review step.
+`list`, `get <id>`, `rearm <id>`, and `retire <id>` match the console and the
+`/api/v1/secrets/honeytokens/aws` API. Retirement queues IAM key/user removal;
+`lease.revocation_status=completed` means a subsequent IAM `GetUser` confirmed
+the user absent. A queued `retiring` state does not claim deletion. Monitoring
+continues for 72 hours after confirmed removal to catch delayed CloudTrail
+delivery.
+
+The monitor calls CloudTrail `LookupEvents` through a durable outbox. Each page
+becomes an immutable event before the next page is queued; account/Region calls
+share a PostgreSQL rate slot across replicas. Duplicate event IDs yield one
+incident. The first observed use enters the existing critical honeytoken alert
+route; the investigation view shows Region watermarks, gaps, AWS event IDs,
+operation names, source addresses, and detection times. Coverage is limited to
+management events in the configured account and Regions. CloudTrail delivery can
+lag; after triage, `rearm` makes the same live bait alert on its next
+distinct observed use while preserving earlier incident records. An already seen
+CloudTrail event does not trigger another alert. Data events, other accounts/Regions,
+and gaps older than CloudTrail's 90-day
+lookup window are not covered. A failed/dead-lettered scan is a monitoring outage,
+not evidence that the bait was untouched. No real AWS account was available for
+the local QA campaign, so the AWS adapter has local contract evidence only.
 
 The scanning bridge runs the pinned Gitleaks scanner from the served control plane,
 recording redacted findings into [discovery](discovery-and-inventory.md), the
@@ -1102,4 +1174,4 @@ glossary: [secret](../glossary.md), [envelope encryption](../glossary.md),
 [KEK/DEK](../glossary.md), [dynamic secret](../glossary.md), [lease](../glossary.md),
 [transit](../glossary.md), [KMIP](../glossary.md)
 
-**Covers:** F37, F38, F39, F63, F64, F65, F66, F67, F68, F58, F60
+**Covers:** F37, F38, F39, F63, F64, F65, F66, F67, F68, F58, F60, F80

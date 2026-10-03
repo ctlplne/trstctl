@@ -683,6 +683,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		ExternalCAs:                  outbound.externalCAs,
 		UpstreamDV:                   outbound.upstreamDV,
 		TenantDynamicSecretProviders: outbound.dynamicSecretProviders,
+		TenantAWSHoneyAccounts:       outbound.awsHoneyAccounts,
 		TenantSecretSyncTargets:      outbound.secretSyncTargets,
 		CloudTokenMinter:             outbound.cloudTokenMinter,
 		Logger:                       logger, RateLimiter: securityGuards.rateLimiter,
@@ -726,6 +727,7 @@ type runOutboundDeps struct {
 	externalCAs            []ExternalCA
 	upstreamDV             *upstreamDVHolder
 	dynamicSecretProviders DynamicSecretProviderRegistry
+	awsHoneyAccounts       AWSHoneyAccountRegistry
 	secretSyncTargets      SecretSyncTargetRegistry
 	cloudTokenMinter       *cloudauth.Minter
 	telemetryReporter      *telemetry.Reporter
@@ -765,6 +767,12 @@ func buildRunOutboundDeps(
 	}
 	if out.dynamicSecretProviders, err = dynamicSecretProvidersFromConfig(ctx, cfg.SecretIntegrations.DynamicProviders, st, sec.kek, egressGuard, tenantCrypto); err != nil {
 		return runOutboundDeps{}, fmt.Errorf("dynamic-secret providers: %w", err)
+	}
+	if out.awsHoneyAccounts, err = awsHoneyAccountsFromConfig(cfg.SecretIntegrations.HoneyAWSAccounts, st, sec.kek, egressGuard, tenantCrypto); err != nil {
+		return runOutboundDeps{}, fmt.Errorf("aws honeytoken accounts: %w", err)
+	}
+	for tenantID := range out.awsHoneyAccounts {
+		out.dynamicSecretProviders[tenantID] = append(out.dynamicSecretProviders[tenantID], out.awsHoneyAccounts.ForTenant(tenantID)...)
 	}
 	if out.secretSyncTargets, out.cloudTokenMinter, err = secretSyncTargetsFromConfig(ctx, cfg.SecretIntegrations.SyncTargets, st, sec.kek, egressGuard, log, tenantCrypto); err != nil {
 		return runOutboundDeps{}, fmt.Errorf("secret-sync targets: %w", err)

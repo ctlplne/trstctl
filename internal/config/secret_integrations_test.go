@@ -46,6 +46,42 @@ func TestValidateSecretIntegrationsAcceptsEveryBuiltIn(t *testing.T) {
 	}
 }
 
+func TestAWSHoneyAccountRequiresExactOwnerScopeAndCredentialRefs(t *testing.T) {
+	base := AWSHoneyAccountConfig{ // #nosec G101 -- test-only file reference paths, no credential values (CWE-798)
+		TenantID: "11111111-1111-4111-8111-111111111111", ID: "security-account",
+		AccountID: "123456789012", Regions: []string{"us-east-1", "eu-west-1"},
+		IAMCredentialsRef:        "file:/var/lib/trstctl/iam-session.json",
+		CloudTrailCredentialsRef: "file:/var/lib/trstctl/cloudtrail-session.json",
+		MaxTTL:                   "720h", PollInterval: "5m",
+	}
+	if err := ValidateSecretIntegrations(SecretIntegrationsConfig{HoneyAWSAccounts: []AWSHoneyAccountConfig{base}}, true); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name string
+		edit func(*AWSHoneyAccountConfig)
+	}{
+		{"wrong account", func(c *AWSHoneyAccountConfig) { c.AccountID = "123" }},
+		{"no regions", func(c *AWSHoneyAccountConfig) { c.Regions = nil }},
+		{"duplicate region", func(c *AWSHoneyAccountConfig) { c.Regions = []string{"us-east-1", "us-east-1"} }},
+		{"unknown endpoint region", func(c *AWSHoneyAccountConfig) {
+			c.CloudTrailEndpoints = map[string]string{"ap-south-1": "https://cloudtrail.example.test"}
+		}},
+		{"inline credential", func(c *AWSHoneyAccountConfig) { c.IAMCredentialsRef = "inline-secret" }},
+		{"unbounded lifetime", func(c *AWSHoneyAccountConfig) { c.MaxTTL = "9000h" }},
+		{"rapid polling", func(c *AWSHoneyAccountConfig) { c.PollInterval = "1s" }},
+		{"private without allowlist", func(c *AWSHoneyAccountConfig) { c.IAMEndpoint = "https://127.0.0.1:4566" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			item := base
+			tc.edit(&item)
+			if err := ValidateSecretIntegrations(SecretIntegrationsConfig{HoneyAWSAccounts: []AWSHoneyAccountConfig{item}}, true); err == nil {
+				t.Fatal("unsafe AWS honeytoken account accepted")
+			}
+		})
+	}
+}
+
 func TestValidateKubernetesTokenLeaseConfiguration(t *testing.T) {
 	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "k8s", Type: "kubernetes", Endpoint: "https://kubernetes.example.test", Namespace: "apps", BearerTokenRef: "file:/run/secrets/kubernetes-admin-token", KubernetesAudience: "https://kubernetes.example.test", AllowedRoles: []string{"reader"}, RoleBindings: map[string]string{"reader": "Role/reader"}, MaxTTL: "10m"}
 	check := func(c DynamicSecretProviderConfig) error {

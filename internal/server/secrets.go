@@ -293,6 +293,11 @@ func (s *Server) buildSecretsBackend(d Deps) api.SecretsBackend {
 		be.DynamicProvidersForTenant = d.TenantDynamicSecretProviders.ForTenant
 		be.DynamicLifecycleTenantIDs = d.TenantDynamicSecretProviders.TenantIDs
 	}
+	if d.TenantAWSHoneyAccounts != nil {
+		be.AWSHoneyAccountsForTenant = func(tenantID string) []api.AWSHoneyAccount {
+			return d.TenantAWSHoneyAccounts.PublicForTenant(tenantID)
+		}
+	}
 	if d.TenantDynamicSecretProviders != nil || len(d.DynamicSecretProviders) > 0 {
 		be.DynamicLifecycleForTenant = func(tenantID string) (dynsecret.Lifecycle, error) {
 			providers := append([]dynsecret.Provider(nil), d.DynamicSecretProviders...)

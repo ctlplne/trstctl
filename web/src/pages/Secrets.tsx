@@ -69,6 +69,7 @@ import { MachineAuthWorkflow } from "./secrets/MachineAuthWorkflow";
 import { SecretScanningWorkflow } from "./secrets/SecretScanningWorkflow";
 import { DynamicSecretWorkflow } from "./secrets/DynamicSecretWorkflow";
 import { HoneyTokenWorkflow } from "./secrets/HoneyTokenWorkflow";
+import { AWSHoneyTokenWorkflow } from "./secrets/AWSHoneyTokenWorkflow";
 import { SecretSyncWorkflow } from "./secrets/SecretSyncWorkflow";
 import { GrantSecretVerification } from "./secrets/GrantSecretVerification";
 
@@ -2630,7 +2631,12 @@ export function Secrets() {
             </div>
           )}
 
-          {engineTask === "honeytokens" && <HoneyTokenWorkflow />}
+          {engineTask === "honeytokens" && (
+            <>
+              <HoneyTokenWorkflow />
+              <AWSHoneyTokenWorkflow />
+            </>
+          )}
 
           {engineTask === "transit" && (
             <Suspense fallback={<SecretsWorkflowFallback />}>

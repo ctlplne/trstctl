@@ -80,14 +80,14 @@ export function validateCatalog(value) {
   exactArray(catalog.canonical_tools, TOOLS, "canonical_tools");
   exactArray(catalog.maturity_values, MATURITIES, "maturity_values");
   exactArray(catalog.stage_status_values, STAGE_STATUSES, "stage_status_values");
-  if (!Array.isArray(catalog.items) || catalog.items.length !== 79) fail("items must contain exactly 79 canonical capabilities");
+  if (!Array.isArray(catalog.items) || catalog.items.length !== 80) fail("items must contain exactly 80 canonical capabilities");
 
   const ids = new Set();
   for (const [index, item] of catalog.items.entries()) {
     if (!item || typeof item !== "object" || Array.isArray(item)) fail(`items[${index}] must be an object`);
     const prefix = `items[${index}]`;
     requiredString(item.feature_id, `${prefix}.feature_id`);
-    if (!/^F(?:[1-9]|[1-7][0-9]|79)$/.test(item.feature_id)) fail(`${prefix}.feature_id=${item.feature_id} is outside F1..F79`);
+    if (!/^F(?:[1-9]|[1-7][0-9]|80)$/.test(item.feature_id)) fail(`${prefix}.feature_id=${item.feature_id} is outside F1..F80`);
     if (ids.has(item.feature_id)) fail(`duplicate feature_id ${item.feature_id}`);
     ids.add(item.feature_id);
     requiredString(item.feature, `${prefix}.feature`);

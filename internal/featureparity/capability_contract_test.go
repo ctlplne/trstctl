@@ -34,8 +34,8 @@ func TestCanonicalCapabilityContractsCoverEveryFeature(t *testing.T) {
 			t.Errorf("%s release_blocking=%t, want %t from classification=%q maturity=%q", item.FeatureID, contract.ReleaseBlocking, wantBlocker, contract.Classification, computed)
 		}
 	}
-	if len(seen) != 79 {
-		t.Fatalf("canonical contract rows = %d, want 79", len(seen))
+	if len(seen) != 80 {
+		t.Fatalf("canonical contract rows = %d, want 80", len(seen))
 	}
 }
 
@@ -57,8 +57,8 @@ func TestEmbeddedCapabilityCatalogLoadsOutsideRepository(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load embedded capability catalog: %v", err)
 	}
-	if catalog.SchemaVersion != 3 || len(catalog.Items) != 79 {
-		t.Fatalf("embedded catalog schema/items = %d/%d, want 3/79", catalog.SchemaVersion, len(catalog.Items))
+	if catalog.SchemaVersion != 3 || len(catalog.Items) != 80 {
+		t.Fatalf("embedded catalog schema/items = %d/%d, want 3/80", catalog.SchemaVersion, len(catalog.Items))
 	}
 }
 

@@ -1174,6 +1174,9 @@ func postgresStateTables() []string {
 func postgresStateRestoreOrder() ([]string, error) {
 	parentFirst := []string{
 		"api_tokens",
+		// CloudTrail lookup permits have no parent FK; restore their exact
+		// per-account/Region schedule before monitors resume after recovery.
+		"aws_honey_cloudtrail_slots",
 		"agent_bootstrap_tokens",
 		// A3 redemptions reference outbox rows, but the outbox is a log-rebuilt
 		// projection restored separately, and the reference is by id with no

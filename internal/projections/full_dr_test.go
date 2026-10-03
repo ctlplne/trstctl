@@ -617,6 +617,10 @@ func seedRecoveredFromPostgresTables(
 			// ledger. Restore the decision evidence, not merely an empty table.
 			{`INSERT INTO provider_breakglass_grants (id, tenant_id, operator_id, operator_email, reason, requested_at, expires_at, consented_at, consented_by, consented_at_2, consented_by_2, use_count) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`, []any{"full-dr-breakglass", tenantA, "full-dr-operator", "operator@example.test", "recovery drill", now.Add(-30 * time.Minute), now.Add(30 * time.Minute), now.Add(-20 * time.Minute), "approver-one", now.Add(-10 * time.Minute), "approver-two", 2}},
 			{`INSERT INTO api_tokens (id, tenant_id, token_hash, subject, scopes, expires_at) VALUES ($1, $2, $3, $4, $5, $6)`, []any{"00000000-0000-0000-0000-00000000a001", tenantA, "full-dr-api-token-hash", "ci", []string{"owners:read"}, now.Add(time.Hour)}},
+			// CloudTrail's shared account/Region permit is independent quota
+			// state; a restore must retain the scheduled next lookup.
+			{`INSERT INTO aws_honey_cloudtrail_slots (tenant_id, account_id, region, next_allowed_at)
+			  VALUES ($1, $2, $3, $4)`, []any{tenantA, "123456789012", "us-east-1", now.Add(time.Minute)}},
 			{`INSERT INTO agent_bootstrap_tokens (id, tenant_id, token_hash, allowed_identity, expires_at) VALUES ($1, $2, $3, $4, $5)`, []any{"00000000-0000-0000-0000-00000000a002", tenantA, "full-dr-bootstrap-hash", "edge-1", now.Add(time.Hour)}},
 			// A3: the credential-redemption ledger must survive a restore intact.
 			// It is the single-use gate, and nothing in the event log can rebuild

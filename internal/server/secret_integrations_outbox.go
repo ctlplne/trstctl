@@ -33,6 +33,7 @@ import (
 // it had been delivered.
 type secretIntegrationOutboxDispatcher struct {
 	dynamicProviders         DynamicSecretProviderRegistry
+	awsHoneyAccounts         AWSHoneyAccountRegistry
 	fallbackDynamicProviders []dynsecret.Provider
 	syncTargets              SecretSyncTargetRegistry
 	fallbackSyncTargets      map[string]*secretsync.Target
@@ -181,6 +182,8 @@ func (d *secretIntegrationOutboxDispatcher) Deliver(ctx context.Context, m orche
 		return true, err
 	case m.Destination == dynamicSecretRevokeDestination:
 		return true, d.revokeDynamicSecret(ctx, m)
+	case m.Destination == store.AWSHoneyScanDestination:
+		return true, d.scanAWSHoneyToken(ctx, m)
 	case strings.HasPrefix(m.Destination, secretSyncDestinationPrefix):
 		return true, d.deliverSecretSync(ctx, m)
 	case strings.HasPrefix(m.Destination, "dynsecret.") || strings.HasPrefix(m.Destination, "secret.sync"):
@@ -704,11 +707,12 @@ func (d *secretIntegrationOutboxDispatcher) revokeDynamicSecret(ctx context.Cont
 	if _, found, err := d.log.EventByID(ctx, completedEventID); err != nil {
 		return err
 	} else if found {
-		return d.appendAndProjectID(ctx, completedEventID, m.TenantID,
+		err := d.appendAndProjectID(ctx, completedEventID, m.TenantID,
 			projections.EventDynamicSecretLeaseRevocationCompleted,
 			projections.DynamicSecretLeaseRevocationCompleted{
 				TenantEpoch: item.TenantEpoch, ID: item.LeaseID, AttemptID: item.AttemptID,
 			})
+		return err
 	}
 	for _, provider := range d.dynamicProvidersForTenant(m.TenantID) {
 		if provider.Name() == item.Provider {
@@ -724,9 +728,10 @@ func (d *secretIntegrationOutboxDispatcher) revokeDynamicSecret(ctx context.Cont
 				}
 				return fmt.Errorf("server: revoke dynamic-secret lease %s with provider %s: %w", item.LeaseID, item.Provider, err)
 			}
-			return d.appendAndProjectID(ctx, completedEventID, m.TenantID, projections.EventDynamicSecretLeaseRevocationCompleted, projections.DynamicSecretLeaseRevocationCompleted{
+			err := d.appendAndProjectID(ctx, completedEventID, m.TenantID, projections.EventDynamicSecretLeaseRevocationCompleted, projections.DynamicSecretLeaseRevocationCompleted{
 				TenantEpoch: item.TenantEpoch, ID: item.LeaseID, AttemptID: item.AttemptID,
 			})
+			return err
 		}
 	}
 	return fmt.Errorf("server: dynamic-secret provider %q is not configured for tenant", item.Provider)

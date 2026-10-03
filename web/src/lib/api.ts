@@ -229,6 +229,13 @@ import type {
   HoneyTokenCreateRequest,
   HoneyTokenCreateResponse,
   HoneyTokenList,
+  AWSHoneyAccountCatalog,
+  AWSHoneyToken,
+  AWSHoneyTokenList,
+  AWSHoneyTokenCreateRequest,
+  AWSHoneyTokenCreateResponse,
+  AWSHoneyTokenPreview,
+  AWSHoneyTokenDetail,
   EndpointBinding,
   EndpointBindingPlanRequest,
   EndpointBindingPreview,
@@ -916,6 +923,13 @@ export type {
   HoneyTokenCreateRequest,
   HoneyTokenCreateResponse,
   HoneyTokenList,
+  AWSHoneyAccountCatalog,
+  AWSHoneyToken,
+  AWSHoneyTokenList,
+  AWSHoneyTokenCreateRequest,
+  AWSHoneyTokenCreateResponse,
+  AWSHoneyTokenPreview,
+  AWSHoneyTokenDetail,
   EnterpriseSupportStatus,
   EphemeralAPIKey,
   EphemeralAPIKeyPreview,
@@ -1917,6 +1931,13 @@ export interface Api {
   revokeDynamicLease(leaseId: string): Promise<DynamicLease>;
   createHoneyToken(input: HoneyTokenCreateRequest, idempotencyKey?: string): Promise<HoneyTokenCreateResponse>;
   listHoneyTokens(cursor?: string): Promise<HoneyTokenList>;
+  listAWSHoneyAccounts(): Promise<AWSHoneyAccountCatalog>;
+  previewAWSHoneyToken(input: AWSHoneyTokenCreateRequest): Promise<AWSHoneyTokenPreview>;
+  createAWSHoneyToken(input: AWSHoneyTokenCreateRequest, idempotencyKey?: string): Promise<AWSHoneyTokenCreateResponse>;
+  listAWSHoneyTokens(cursor?: string): Promise<AWSHoneyTokenList>;
+  getAWSHoneyToken(id: string): Promise<AWSHoneyTokenDetail>;
+  retireAWSHoneyToken(id: string): Promise<AWSHoneyTokenDetail>;
+  rearmAWSHoneyToken(id: string): Promise<AWSHoneyTokenDetail>;
   getHoneyToken(id: string): Promise<HoneyToken>;
   revokeHoneyToken(id: string): Promise<HoneyToken>;
   previewEphemeralAPIKey(input: EphemeralAPIKeyRequest): Promise<EphemeralAPIKeyPreview>;
@@ -2534,6 +2555,13 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   listHoneyTokens: (cursor) => req<HoneyTokenList>(`/api/v1/secrets/honeytokens${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`),
   getHoneyToken: (id) => req<HoneyToken>(`/api/v1/secrets/honeytokens/${encodeURIComponent(id)}`),
   revokeHoneyToken: (id) => mutate<HoneyToken>("POST", `/api/v1/secrets/honeytokens/${encodeURIComponent(id)}/revoke`),
+  listAWSHoneyAccounts: () => req<AWSHoneyAccountCatalog>("/api/v1/secrets/honeytokens/aws/accounts"),
+  previewAWSHoneyToken: (input) => postRead<AWSHoneyTokenPreview>("/api/v1/secrets/honeytokens/aws/preview", input),
+  createAWSHoneyToken: (input, idempotencyKey) => mutate<AWSHoneyTokenCreateResponse>("POST", "/api/v1/secrets/honeytokens/aws", input, idempotencyKey),
+  listAWSHoneyTokens: (cursor) => req<AWSHoneyTokenList>(`/api/v1/secrets/honeytokens/aws${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`),
+  getAWSHoneyToken: (id) => req<AWSHoneyTokenDetail>(`/api/v1/secrets/honeytokens/aws/${encodeURIComponent(id)}`),
+  retireAWSHoneyToken: (id) => mutate<AWSHoneyTokenDetail>("POST", `/api/v1/secrets/honeytokens/aws/${encodeURIComponent(id)}/retire`),
+  rearmAWSHoneyToken: (id) => mutate<AWSHoneyTokenDetail>("POST", `/api/v1/secrets/honeytokens/aws/${encodeURIComponent(id)}/rearm`),
   previewEphemeralAPIKey: (input) => postRead<EphemeralAPIKeyPreview>("/api/v1/ephemeral/api-keys/preview", input),
   issueEphemeralAPIKey: (input, idempotencyKey) => mutate<EphemeralAPIKey>("POST", "/api/v1/ephemeral/api-keys", input, idempotencyKey),
   verifyEphemeralAPIKey: async (token) => {

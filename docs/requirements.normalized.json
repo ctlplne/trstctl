@@ -1225,6 +1225,24 @@
       ],
       "ga_served_scope": "",
       "ga_scope_reason": ""
+    },
+    {
+      "requirement_id": "F80",
+      "requirement_text": "trstctl shall provide AWS IAM decoy keys.",
+      "owner": "Secrets",
+      "priority": "P1",
+      "acceptance_criteria": "Real signed IAM/CloudTrail fixture and real AWS account prove deny-all before key creation, use detection, alert routing, rearm, expiry, remote retirement, replay, and tenant isolation in UI/API/CLI.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional: operator-attached AWS IAM and CloudTrail account",
+      "source_docs": [
+        "docs/features/secrets.md",
+        "docs/web-console.md",
+        "docs/cli.md",
+        "docs/limitations.md"
+      ],
+      "ga_served_scope": "out_of_ga",
+      "ga_scope_reason": "Residual native AWS-account propagation and console Create/Retire interactions are not yet verified."
     }
   ]
 }

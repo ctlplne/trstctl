@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -24,6 +25,37 @@ import (
 type SecretIntegrationsConfig struct {
 	DynamicProviders []DynamicSecretProviderConfig `json:"dynamic_providers,omitempty"`
 	SyncTargets      []SecretSyncTargetConfig      `json:"sync_targets,omitempty"`
+	HoneyAWSAccounts []AWSHoneyAccountConfig       `json:"honey_aws_accounts,omitempty"`
+}
+
+// AWSHoneyAccountConfig grants one tenant an operator-approved AWS account for
+// decoy IAM keys. Credential refs are reread for each outbox delivery, so an
+// operator can use independently rotated, short-lived caller sessions. The
+// public AWS endpoints are defaults; private overrides require an explicit
+// allowlist and are intended for owned labs or private cloud endpoints.
+type AWSHoneyAccountConfig struct {
+	TenantID                 string            `json:"tenant_id"`
+	ID                       string            `json:"id"`
+	AccountID                string            `json:"account_id"`
+	Regions                  []string          `json:"regions"`
+	IAMCredentialsRef        string            `json:"iam_credentials_ref"`
+	CloudTrailCredentialsRef string            `json:"cloudtrail_credentials_ref"`
+	IAMEndpoint              string            `json:"iam_endpoint,omitempty"`
+	CloudTrailEndpoints      map[string]string `json:"cloudtrail_endpoints,omitempty"`
+	UsernamePrefix           string            `json:"username_prefix,omitempty"`
+	MaxTTL                   string            `json:"max_ttl"`
+	PollInterval             string            `json:"poll_interval"`
+	AllowPrivate             bool              `json:"allow_private_endpoint,omitempty"`
+	AllowInsecureLoopback    bool              `json:"allow_insecure_loopback,omitempty"`
+	PrivateEgressCIDRs       []string          `json:"private_egress_cidrs,omitempty"`
+}
+
+func (c AWSHoneyAccountConfig) MaxTTLDuration() (time.Duration, error) {
+	return time.ParseDuration(c.MaxTTL)
+}
+
+func (c AWSHoneyAccountConfig) PollIntervalDuration() (time.Duration, error) {
+	return time.ParseDuration(c.PollInterval)
 }
 
 // DynamicSecretProviderConfig configures one named provider for exactly one
@@ -159,7 +191,7 @@ func ValidateSecretIntegrations(cfg SecretIntegrationsConfig, secretsEnabled boo
 
 func validateSecretIntegrations(cfg SecretIntegrationsConfig, secretsEnabled bool) []error {
 	var errs []error
-	if !secretsEnabled && (len(cfg.DynamicProviders) > 0 || len(cfg.SyncTargets) > 0) {
+	if !secretsEnabled && (len(cfg.DynamicProviders) > 0 || len(cfg.SyncTargets) > 0 || len(cfg.HoneyAWSAccounts) > 0) {
 		errs = append(errs, errors.New("secret integrations require secrets.enable_api=true"))
 	}
 	dynamicIDs := map[string]bool{}
@@ -213,7 +245,93 @@ func validateSecretIntegrations(cfg SecretIntegrationsConfig, secretsEnabled boo
 		errs = append(errs, validateSyncTarget(where, item)...)
 		errs = append(errs, validatePrivateEgress(where, item.AllowPrivate, item.PrivateEgressCIDRs)...)
 	}
+	honeyIDs := map[string]bool{}
+	honeyAccountOwners := map[string]string{}
+	for i, item := range cfg.HoneyAWSAccounts {
+		where := fmt.Sprintf("secret_integrations.honey_aws_accounts[%d]", i)
+		key := item.TenantID + "\x00" + item.ID
+		if honeyIDs[key] {
+			errs = append(errs, fmt.Errorf("%s duplicates tenant/id %q/%q", where, item.TenantID, item.ID))
+		}
+		honeyIDs[key] = true
+		if owner, exists := honeyAccountOwners[item.AccountID]; exists && owner != item.TenantID {
+			errs = append(errs, fmt.Errorf("%s AWS account %q is already attached to another tenant; regional CloudTrail quota requires one tenant owner", where, item.AccountID))
+		}
+		honeyAccountOwners[item.AccountID] = item.TenantID
+		errs = append(errs, validateAWSHoneyAccount(where, item)...)
+	}
 	return errs
+}
+
+var awsHoneyRegion = regexp.MustCompile(`^[a-z]{2}(?:-[a-z0-9]+)+-[0-9]+$`)
+var awsHoneyAccount = regexp.MustCompile(`^[0-9]{12}$`)
+
+func validateAWSHoneyAccount(where string, item AWSHoneyAccountConfig) []error {
+	var errs []error
+	if strings.TrimSpace(item.TenantID) == "" || strings.TrimSpace(item.ID) == "" {
+		errs = append(errs, fmt.Errorf("%s tenant_id and id are required", where))
+	}
+	if !awsHoneyAccount.MatchString(item.AccountID) {
+		errs = append(errs, fmt.Errorf("%s account_id must be a 12-digit AWS account", where))
+	}
+	if len(item.Regions) == 0 || len(item.Regions) > 32 {
+		errs = append(errs, fmt.Errorf("%s requires 1-32 explicit CloudTrail regions", where))
+	}
+	regions := map[string]bool{}
+	for _, region := range item.Regions {
+		if !awsHoneyRegion.MatchString(region) || regions[region] {
+			errs = append(errs, fmt.Errorf("%s regions must be unique AWS region names", where))
+		}
+		regions[region] = true
+	}
+	for region := range item.CloudTrailEndpoints {
+		if !regions[region] {
+			errs = append(errs, fmt.Errorf("%s cloudtrail_endpoints[%q] has no monitored region", where, region))
+		}
+	}
+	for name, ref := range map[string]string{
+		"iam_credentials_ref":        item.IAMCredentialsRef,
+		"cloudtrail_credentials_ref": item.CloudTrailCredentialsRef,
+	} {
+		if err := validateCredentialRef(ref); err != nil {
+			errs = append(errs, fmt.Errorf("%s %s: %w", where, name, err))
+		}
+	}
+	if ttl, err := item.MaxTTLDuration(); err != nil || ttl < time.Hour || ttl > 365*24*time.Hour {
+		errs = append(errs, fmt.Errorf("%s max_ttl must be explicit and between 1h and 365d", where))
+	}
+	if interval, err := item.PollIntervalDuration(); err != nil || interval < time.Minute || interval > time.Hour {
+		errs = append(errs, fmt.Errorf("%s poll_interval must be explicit and between 1m and 1h", where))
+	} else if ttl, err := item.MaxTTLDuration(); err == nil && ttl < 2*interval {
+		errs = append(errs, fmt.Errorf("%s max_ttl must cover at least two CloudTrail polling intervals", where))
+	}
+	endpoints := append([]string{item.IAMEndpoint}, mapValues(item.CloudTrailEndpoints)...)
+	for _, endpoint := range endpoints {
+		if endpoint == "" {
+			continue
+		}
+		if err := validateSecretIntegrationEndpoint(endpoint, item.AllowInsecureLoopback); err != nil {
+			errs = append(errs, fmt.Errorf("%s endpoint: %w", where, err))
+		}
+		parsed, parseErr := url.Parse(endpoint)
+		if parseErr == nil {
+			host := parsed.Hostname()
+			address := net.ParseIP(host)
+			if !item.AllowPrivate && (netsec.IsLoopbackHost(host) || (address != nil && (address.IsPrivate() || address.IsLinkLocalUnicast()))) {
+				errs = append(errs, fmt.Errorf("%s private IAM/CloudTrail endpoint requires allow_private_endpoint and a CIDR allowlist", where))
+			}
+		}
+	}
+	errs = append(errs, validatePrivateEgress(where, item.AllowPrivate, item.PrivateEgressCIDRs)...)
+	return errs
+}
+
+func mapValues(values map[string]string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		out = append(out, value)
+	}
+	return out
 }
 
 func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []error {

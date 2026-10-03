@@ -5426,6 +5426,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/honeytokens/aws": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List AWS IAM decoys without their secret access keys */
+        get: operations["listAWSHoneyTokens"];
+        put?: never;
+        /** Create an explicitly denied AWS IAM bait key and reveal its secret once */
+        post: operations["createAWSHoneyToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/honeytokens/aws/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List operator-configured AWS decoy accounts and CloudTrail coverage */
+        get: operations["listAWSHoneyAccounts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/honeytokens/aws/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review exact AWS decoy IAM effects and CloudTrail coverage without remote calls */
+        post: operations["previewAWSHoneyToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/honeytokens/aws/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect IAM bait status, regional CloudTrail coverage, and observed use */
+        get: operations["getAWSHoneyToken"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/honeytokens/aws/{id}/rearm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rearm a triggered AWS decoy while preserving incident history */
+        post: operations["rearmAWSHoneyToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/honeytokens/aws/{id}/retire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue IAM key deletion and verify completion from the lease receipt */
+        post: operations["retireAWSHoneyToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/honeytokens/{id}": {
         parameters: {
             query?: never;
@@ -7268,6 +7371,145 @@ export interface components {
         };
         APITokenRevokeRequest: {
             reason?: string;
+        };
+        AWSHoneyAccount: {
+            account_id: string;
+            id: string;
+            max_ttl_seconds: number;
+            poll_interval_seconds: number;
+            regions: string[];
+        };
+        AWSHoneyAccountCatalog: {
+            accounts: components["schemas"]["AWSHoneyAccount"][];
+            detection_scope: string;
+        };
+        AWSHoneyScan: {
+            cycle: number;
+            delivery_attempts?: number;
+            delivery_error?: string;
+            delivery_status?: string;
+            /** Format: date-time */
+            gap_since?: string;
+            /** Format: uuid */
+            honey_id: string;
+            /** Format: date-time */
+            last_success_at?: string;
+            page: number;
+            region: string;
+            /** Format: date-time */
+            watermark: string;
+            /** Format: date-time */
+            window_end?: string;
+            /** Format: date-time */
+            window_start?: string;
+        };
+        AWSHoneyToken: {
+            alarm_generation?: number;
+            aws_access_key_id: string;
+            aws_account_config_id: string;
+            aws_account_id: string;
+            aws_lease_id: string;
+            aws_poll_interval_seconds: number;
+            aws_regions: string[];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            kind: "aws";
+            name: string;
+            placement: string;
+            /** @enum {string} */
+            state: "active" | "triggered" | "retiring" | "retirement_failed" | "revoked" | "failed";
+            trigger_method?: string;
+            trigger_path?: string;
+            /** Format: date-time */
+            triggered_at?: string;
+        };
+        AWSHoneyTokenCreateRequest: {
+            account_id: string;
+            name: string;
+            placement: string;
+            /** @description Optional request/caller/account fingerprint from the effect-free AWSHoneyTokenPreview; when supplied, a changed review is rejected before IAM effects. */
+            preview_fingerprint?: string;
+            ttl_seconds: number;
+        };
+        AWSHoneyTokenCreateResponse: {
+            access_key_id: string;
+            alarm_generation?: number;
+            aws_access_key_id: string;
+            aws_account_config_id: string;
+            aws_account_id: string;
+            aws_lease_id: string;
+            aws_poll_interval_seconds: number;
+            aws_regions: string[];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+            kind: string;
+            name: string;
+            placement: string;
+            /** @description Reveal once; a secret AWS IAM decoy value, never present on metadata reads or in the event log. */
+            secret_access_key: string;
+            state: string;
+        };
+        AWSHoneyTokenDetail: {
+            alarm_generation?: number;
+            aws_access_key_id?: string;
+            aws_account_config_id?: string;
+            aws_account_id?: string;
+            aws_lease_id?: string;
+            aws_poll_interval_seconds?: number;
+            aws_regions?: string[];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+            kind: string;
+            lease: components["schemas"]["DynamicLease"];
+            monitoring: components["schemas"]["AWSHoneyScan"][];
+            name: string;
+            placement: string;
+            state: string;
+            trigger_method?: string;
+            trigger_path?: string;
+            /** Format: date-time */
+            triggered_at?: string;
+            uses: components["schemas"]["AWSHoneyUse"][];
+        };
+        AWSHoneyTokenList: {
+            items: components["schemas"]["AWSHoneyToken"][];
+            next_cursor?: string;
+        };
+        AWSHoneyTokenPreview: {
+            account_attachment_id: string;
+            aws_account_id: string;
+            detection_scope: string;
+            effect_free: boolean;
+            iam_actions: string[];
+            name: string;
+            placement: string;
+            preview_fingerprint: string;
+            ready: boolean;
+            recovery: string;
+            regions: string[];
+            remote_authority_checked: boolean;
+            ttl_seconds: number;
+            verification: string;
+        };
+        AWSHoneyUse: {
+            /** Format: date-time */
+            detected_at: string;
+            error_code?: string;
+            event_id: string;
+            event_name: string;
+            event_source: string;
+            /** Format: date-time */
+            event_time: string;
+            region: string;
+            source_ip_address: string;
+            user_agent: string;
         };
         AccessChangeDecision: {
             approver_subject: string;
@@ -9798,7 +10040,7 @@ export interface components {
             purpose: string;
             requirements: components["schemas"]["DynamicSecretProviderRequirement"][];
             /** @enum {string} */
-            type: "postgresql" | "mysql" | "mongodb" | "aws-iam" | "gcp-iam" | "azure-entra" | "kubernetes" | "redis";
+            type: "postgresql" | "mysql" | "mongodb" | "aws-iam" | "aws-sts" | "gcp-iam" | "azure-entra" | "kubernetes" | "redis";
         };
         EdgeDelegation: {
             attested_key_sha256?: string;
@@ -10625,6 +10867,8 @@ export interface components {
             created_at: string;
             /** Format: uuid */
             id: string;
+            /** @enum {string} */
+            kind: "native";
             name: string;
             placement: string;
             /** Format: date-time */
@@ -10645,6 +10889,7 @@ export interface components {
             created_at: string;
             /** Format: uuid */
             id: string;
+            kind: string;
             name: string;
             placement: string;
             state: string;
@@ -30791,6 +31036,300 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HoneyTokenCreateResponse"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listAWSHoneyTokens: {
+        parameters: {
+            query?: {
+                /** @description page size (1-100) */
+                limit?: number;
+                /** @description opaque pagination cursor */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AWSHoneyTokenList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createAWSHoneyToken: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AWSHoneyTokenCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AWSHoneyTokenCreateResponse"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listAWSHoneyAccounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AWSHoneyAccountCatalog"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewAWSHoneyToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AWSHoneyTokenCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AWSHoneyTokenPreview"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getAWSHoneyToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AWSHoneyTokenDetail"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    rearmAWSHoneyToken: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AWSHoneyTokenDetail"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    retireAWSHoneyToken: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AWSHoneyTokenDetail"];
                 };
             };
             /** @description client error */

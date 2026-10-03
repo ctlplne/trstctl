@@ -6,10 +6,10 @@ describe("canonical frontend capability contract", () => {
     expect(readGenerated()).toBe(generate());
   });
 
-  it("generates all 79 capabilities from schema version 3", () => {
+  it("generates all 80 capabilities from schema version 3", () => {
     const catalog = loadCanonicalCatalog();
     expect(catalog.schema_version).toBe(3);
-    expect(catalog.items).toHaveLength(79);
+    expect(catalog.items).toHaveLength(80);
     expect(generateFromCatalog(catalog)).toContain('"featureId": "F66"');
     expect(generateFromCatalog(catalog)).toContain('"maturity": "partial_workflow"');
   });

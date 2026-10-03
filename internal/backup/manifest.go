@@ -34,6 +34,10 @@ var RecoveredByLogRebuild = append([]string(nil), store.ReadModelTables...)
 // PostgreSQL dump in the backup set.
 var RecoveredFromPostgresBackup = []string{
 	"api_tokens",
+	// The per-account CloudTrail lookup slot is independent PostgreSQL quota
+	// coordination. Replay cannot reconstruct its next allowed time; restoring
+	// it prevents a recovery from immediately bursting past AWS lookup limits.
+	"aws_honey_cloudtrail_slots",
 	"agent_bootstrap_tokens",
 	// A3 credential redemptions. Independent persistent state, not a log
 	// projection: nothing in the event log can rebuild WHICH attempt already

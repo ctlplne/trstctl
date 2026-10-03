@@ -174,6 +174,10 @@ func (a *API) getHoneyToken(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
+	if h.Kind != "native" {
+		a.writeProblem(w, problem.New(http.StatusNotFound, "honeytoken not found"))
+		return
+	}
 	a.writeJSON(w, http.StatusOK, h)
 }
 
@@ -187,6 +191,9 @@ func (a *API) revokeHoneyToken(w http.ResponseWriter, r *http.Request) {
 		}
 		if err != nil {
 			return 0, nil, err
+		}
+		if h.Kind != "native" {
+			return 0, nil, errStatus(http.StatusNotFound, "honeytoken not found")
 		}
 		if h.State != "revoked" {
 			if err := a.orch.RevokeHoneyToken(ctx, tenantID, id); err != nil {

@@ -535,6 +535,10 @@ type Deps struct {
 	// present it takes precedence over the legacy static slice above, which remains
 	// for embedded compositions and existing tests.
 	TenantDynamicSecretProviders DynamicSecretProviderRegistry
+	// TenantAWSHoneyAccounts is the private operator registry behind AWS decoy
+	// creation and CloudTrail monitoring. Its hidden lease providers are also
+	// present in TenantDynamicSecretProviders for durable outbox execution.
+	TenantAWSHoneyAccounts AWSHoneyAccountRegistry
 	// SecretRotators retain configured static-credential engines for library users
 	// and a future durable worker. The served HTTP route refuses them before any
 	// provider effect; only connector rotation is executable today (F37).
@@ -1831,6 +1835,7 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 	}
 	secretIntegrations := &secretIntegrationOutboxDispatcher{
 		dynamicProviders:         d.TenantDynamicSecretProviders,
+		awsHoneyAccounts:         d.TenantAWSHoneyAccounts,
 		fallbackDynamicProviders: d.DynamicSecretProviders,
 		syncTargets:              d.TenantSecretSyncTargets,
 		fallbackSyncTargets:      d.SecretSyncTargets,

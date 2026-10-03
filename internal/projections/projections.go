@@ -249,6 +249,9 @@ const (
 	EventHoneyTokenCreated                        = "honeytoken.created"
 	EventHoneyTokenTriggered                      = "honeytoken.triggered"
 	EventHoneyTokenRevoked                        = "honeytoken.revoked"
+	EventAWSHoneyTokenCreated                     = "honeytoken.aws.created"
+	EventAWSHoneyScanPage                         = "honeytoken.aws.scan_page"
+	EventAWSHoneyTokenRearmed                     = "honeytoken.aws.rearmed"
 	EventPAMSessionStarted                        = "pam.session.started"
 	EventPAMSessionExpired                        = "pam.session.expired"
 	EventMachineSessionStarted                    = "secrets.session.started"
@@ -3029,6 +3032,25 @@ type HoneyTokenRevoked struct {
 	ID string `json:"id"`
 }
 
+// AWSHoneyTokenCreated contains IAM identity metadata, never access-key secret
+// material. The durable dynamic lease event separately owns IAM creation.
+type AWSHoneyTokenCreated struct {
+	ID                  string   `json:"id"`
+	Name                string   `json:"name"`
+	Placement           string   `json:"placement"`
+	AccountConfigID     string   `json:"account_config_id"`
+	AccountID           string   `json:"account_id"`
+	AccessKeyID         string   `json:"access_key_id"`
+	LeaseID             string   `json:"lease_id"`
+	Regions             []string `json:"regions"`
+	PollIntervalSeconds int      `json:"poll_interval_seconds"`
+}
+
+type AWSHoneyTokenRearmed struct {
+	ID                 string `json:"id"`
+	ExpectedGeneration int    `json:"expected_generation"`
+}
+
 // PAMSessionStarted is the payload of pam.session.started. It carries only
 // session metadata and backend revoke handles; the one-time credential bytes/DSN
 // returned to the caller are intentionally omitted.
@@ -3499,6 +3521,9 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventHoneyTokenCreated:                        {1: true},
 	EventHoneyTokenTriggered:                      {1: true},
 	EventHoneyTokenRevoked:                        {1: true},
+	EventAWSHoneyTokenCreated:                     {1: true},
+	EventAWSHoneyScanPage:                         {1: true},
+	EventAWSHoneyTokenRearmed:                     {1: true},
 	EventPAMSessionStarted:                        {1: true},
 	EventMachineSessionStarted:                    {1: true},
 	EventMachineSessionRevoked:                    {1: true},
@@ -5829,6 +5854,33 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return fmt.Errorf("projections: incomplete %s", e.Type)
 		}
 		return p.store.ApplyHoneyTokenRevokedTx(ctx, tx, e.TenantID, pl.ID, e.Time)
+	case EventAWSHoneyTokenCreated:
+		var pl AWSHoneyTokenCreated
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyAWSHoneyTokenCreatedTx(ctx, tx, store.HoneyToken{
+			ID: pl.ID, TenantID: e.TenantID, Kind: "aws", Name: pl.Name,
+			Placement: pl.Placement, AWSAccountConfigID: pl.AccountConfigID,
+			AWSAccountID: pl.AccountID, AWSAccessKeyID: pl.AccessKeyID,
+			AWSLeaseID: pl.LeaseID, AWSRegions: pl.Regions,
+			AWSPollIntervalSeconds: pl.PollIntervalSeconds, CreatedAt: e.Time,
+		})
+	case EventAWSHoneyScanPage:
+		var pl store.AWSHoneyScanPage
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyAWSHoneyScanPageTx(ctx, tx, e.TenantID, pl, e.Time)
+	case EventAWSHoneyTokenRearmed:
+		var pl AWSHoneyTokenRearmed
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.ExpectedGeneration < 0 {
+			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		return p.store.ApplyAWSHoneyTokenRearmedTx(ctx, tx, e.TenantID, pl.ID, pl.ExpectedGeneration)
 	case EventPAMSessionStarted:
 		var pl PAMSessionStarted
 		if err := decode(e, &pl); err != nil {

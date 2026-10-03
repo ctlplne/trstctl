@@ -556,6 +556,30 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/path", clear),
 	)
 	honeyTokenRevoked := privacyRules(privacyRule("/id", opaque))
+	awsHoneyTokenCreated := privacyRules(
+		privacyRule("/id", opaque), privacyRule("/name", clear),
+		privacyRule("/placement", clear), privacyRule("/account_config_id", opaque),
+		privacyRule("/account_id", opaque), privacyRule("/access_key_id", opaque),
+		privacyRule("/lease_id", opaque), privacyRule("/regions", opaque),
+		privacyRule("/poll_interval_seconds", opaque),
+	)
+	awsHoneyScanPage := privacyRules(
+		privacyRule("/honey_id", opaque), privacyRule("/region", opaque),
+		privacyRule("/cycle", opaque), privacyRule("/page", opaque),
+		privacyRule("/window_start", opaque), privacyRule("/window_end", opaque),
+		privacyRule("/request_token", opaque), privacyRule("/next_token", opaque),
+		privacyRule("/gap_since", opaque),
+		privacyRule("/uses/*/event_id", opaque),
+		privacyRule("/uses/*/region", opaque),
+		privacyRule("/uses/*/event_source", opaque),
+		privacyRule("/uses/*/event_name", opaque),
+		privacyRule("/uses/*/source_ip_address", clear),
+		privacyRule("/uses/*/user_agent", clear),
+		privacyRule("/uses/*/error_code", opaque),
+		privacyRule("/uses/*/event_time", opaque),
+		privacyRule("/uses/*/detected_at", opaque),
+	)
+	awsHoneyTokenRearmed := privacyRules(privacyRule("/id", opaque))
 	pamSessionStarted := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/target_type", opaque),
 		privacyRule("/target_id", opaque), privacyRule("/role", opaque),
@@ -808,6 +832,9 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		{EventHoneyTokenCreated, 1}:                                       honeyTokenCreated,
 		{EventHoneyTokenTriggered, 1}:                                     honeyTokenTriggered,
 		{EventHoneyTokenRevoked, 1}:                                       honeyTokenRevoked,
+		{EventAWSHoneyTokenCreated, 1}:                                    awsHoneyTokenCreated,
+		{EventAWSHoneyScanPage, 1}:                                        awsHoneyScanPage,
+		{EventAWSHoneyTokenRearmed, 1}:                                    awsHoneyTokenRearmed,
 		{EventPAMSessionStarted, 1}:                                       pamSessionStarted,
 		{EventPAMSessionExpired, 1}:                                       pamSessionExpired,
 		{EventAgentHeartbeat, 1}:                                          agentHeartbeat,
@@ -1051,7 +1078,7 @@ type privacyDynamicSecretLeaseFailureV2 struct {
 	TenantEpoch string `json:"tenant_epoch"`
 	ID          string `json:"id"`
 	Error       string `json:"error"`
-	AttemptID   string `json:"attempt_id"`
+	AttemptID   string `json:"attempt_id,omitempty"`
 }
 
 type privacyDynamicSecretLeaseRenewedV2 struct {
@@ -1081,7 +1108,7 @@ type privacyDynamicSecretLeaseRevocationRetryRequestedV2 struct {
 type privacyDynamicSecretLeaseRevocationCompletedV2 struct {
 	TenantEpoch string `json:"tenant_epoch"`
 	ID          string `json:"id"`
-	AttemptID   string `json:"attempt_id"`
+	AttemptID   string `json:"attempt_id,omitempty"`
 }
 
 type privacyDynamicSecretOperationRequestedV2 struct {
@@ -1494,6 +1521,9 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventHoneyTokenCreated, 1}:                                       privacyPayloadShape[HoneyTokenCreated](),
 		{EventHoneyTokenTriggered, 1}:                                     privacyPayloadShape[HoneyTokenTriggered](),
 		{EventHoneyTokenRevoked, 1}:                                       privacyPayloadShape[HoneyTokenRevoked](),
+		{EventAWSHoneyTokenCreated, 1}:                                    privacyPayloadShape[AWSHoneyTokenCreated](),
+		{EventAWSHoneyScanPage, 1}:                                        privacyPayloadShape[store.AWSHoneyScanPage](),
+		{EventAWSHoneyTokenRearmed, 1}:                                    privacyPayloadShape[AWSHoneyTokenRearmed](),
 		{EventPAMSessionStarted, 1}:                                       privacyPayloadShape[PAMSessionStarted](),
 		{EventPAMSessionExpired, 1}:                                       privacyPayloadShape[PAMSessionExpired](),
 		{EventAgentHeartbeat, 1}:                                          privacyPayloadShape[AgentHeartbeat](),

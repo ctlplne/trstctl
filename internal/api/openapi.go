@@ -3536,13 +3536,69 @@ func componentSchemas() map[string]*Schema {
 	}, "id", "tenant_id", "subject", "scopes", "created_at", "token")
 	apiTokenRevokeReq := object(map[string]*Schema{"reason": str()})
 	honeyToken := object(map[string]*Schema{
-		"id": uuid(), "name": str(), "placement": str(), "state": {Type: "string", Enum: []string{"active", "triggered", "revoked"}},
+		"id": uuid(), "kind": {Type: "string", Enum: []string{"native"}}, "name": str(), "placement": str(), "state": {Type: "string", Enum: []string{"active", "triggered", "revoked"}},
 		"created_at": timestamp(), "triggered_at": timestamp(), "trigger_method": str(), "trigger_path": str(), "revoked_at": timestamp(),
-	}, "id", "name", "placement", "state", "created_at")
+	}, "id", "kind", "name", "placement", "state", "created_at")
 	honeyTokenCreateReq := object(map[string]*Schema{"name": str(), "placement": str()}, "name", "placement")
 	honeyTokenCreateResp := object(map[string]*Schema{
-		"id": uuid(), "name": str(), "placement": str(), "state": str(), "created_at": timestamp(), "token": str(),
-	}, "id", "name", "placement", "state", "created_at", "token")
+		"id": uuid(), "kind": str(), "name": str(), "placement": str(), "state": str(), "created_at": timestamp(), "token": str(),
+	}, "id", "kind", "name", "placement", "state", "created_at", "token")
+	awsHoneyAccount := object(map[string]*Schema{
+		"id": str(), "account_id": str(), "regions": {Type: "array", Items: str()},
+		"max_ttl_seconds": {Type: "integer"}, "poll_interval_seconds": {Type: "integer"},
+	}, "id", "account_id", "regions", "max_ttl_seconds", "poll_interval_seconds")
+	awsHoneyAccountCatalog := object(map[string]*Schema{
+		"accounts": {Type: "array", Items: ref("AWSHoneyAccount")}, "detection_scope": str(),
+	}, "accounts", "detection_scope")
+	awsHoneyToken := object(map[string]*Schema{
+		"id": uuid(), "kind": {Type: "string", Enum: []string{"aws"}}, "name": str(), "placement": str(),
+		"state":      {Type: "string", Enum: []string{"active", "triggered", "retiring", "retirement_failed", "revoked", "failed"}},
+		"created_at": timestamp(), "triggered_at": timestamp(), "trigger_method": str(), "trigger_path": str(),
+		"aws_account_config_id": str(), "aws_account_id": str(), "aws_access_key_id": str(),
+		"aws_lease_id": str(), "aws_regions": {Type: "array", Items: str()},
+		"aws_poll_interval_seconds": {Type: "integer"},
+		"alarm_generation":          {Type: "integer"},
+	}, "id", "kind", "name", "placement", "state", "created_at", "aws_account_config_id", "aws_account_id", "aws_access_key_id", "aws_lease_id", "aws_regions", "aws_poll_interval_seconds")
+	awsHoneyTokenCreateReq := object(map[string]*Schema{
+		"account_id": str(), "name": str(), "placement": str(), "ttl_seconds": {Type: "integer"},
+		"preview_fingerprint": {Type: "string", Description: "Optional request/caller/account fingerprint from the effect-free AWSHoneyTokenPreview; when supplied, a changed review is rejected before IAM effects."},
+	}, "account_id", "name", "placement", "ttl_seconds")
+	awsHoneyTokenPreview := object(map[string]*Schema{
+		"ready": {Type: "boolean"}, "effect_free": {Type: "boolean"}, "remote_authority_checked": {Type: "boolean"},
+		"account_attachment_id": str(), "aws_account_id": str(), "name": str(), "placement": str(),
+		"ttl_seconds": {Type: "integer"}, "regions": {Type: "array", Items: str()},
+		"iam_actions": {Type: "array", Items: str()}, "detection_scope": str(),
+		"recovery": str(), "verification": str(), "preview_fingerprint": str(),
+	}, "ready", "effect_free", "remote_authority_checked", "account_attachment_id", "aws_account_id", "name", "placement", "ttl_seconds", "regions", "iam_actions", "detection_scope", "recovery", "verification", "preview_fingerprint")
+	awsHoneyTokenCreateResp := object(map[string]*Schema{
+		"id": uuid(), "kind": str(), "name": str(), "placement": str(), "state": str(),
+		"created_at": timestamp(), "aws_account_config_id": str(), "aws_account_id": str(),
+		"aws_access_key_id": str(), "aws_lease_id": str(), "aws_regions": {Type: "array", Items: str()},
+		"aws_poll_interval_seconds": {Type: "integer"}, "access_key_id": str(),
+		"alarm_generation":  {Type: "integer"},
+		"secret_access_key": {Type: "string", Description: "Reveal once; a secret AWS IAM decoy value, never present on metadata reads or in the event log."},
+	}, "id", "kind", "name", "placement", "state", "created_at", "aws_account_config_id", "aws_account_id", "aws_access_key_id", "aws_lease_id", "aws_regions", "aws_poll_interval_seconds", "access_key_id", "secret_access_key")
+	awsHoneyScan := object(map[string]*Schema{
+		"honey_id": uuid(), "region": str(), "cycle": {Type: "integer"}, "page": {Type: "integer"},
+		"window_start": timestamp(), "window_end": timestamp(), "watermark": timestamp(),
+		"last_success_at": timestamp(), "gap_since": timestamp(),
+		"delivery_status": str(), "delivery_attempts": {Type: "integer"}, "delivery_error": str(),
+	}, "honey_id", "region", "cycle", "page", "watermark")
+	awsHoneyUse := object(map[string]*Schema{
+		"event_id": str(), "region": str(), "event_source": str(), "event_name": str(),
+		"source_ip_address": str(), "user_agent": str(), "error_code": str(),
+		"event_time": timestamp(), "detected_at": timestamp(),
+	}, "event_id", "region", "event_source", "event_name", "source_ip_address", "user_agent", "event_time", "detected_at")
+	awsHoneyTokenDetail := object(map[string]*Schema{
+		"id": uuid(), "kind": str(), "name": str(), "placement": str(), "state": str(),
+		"created_at": timestamp(), "triggered_at": timestamp(), "trigger_method": str(), "trigger_path": str(),
+		"aws_account_config_id": str(), "aws_account_id": str(), "aws_access_key_id": str(),
+		"aws_lease_id": str(), "aws_regions": {Type: "array", Items: str()},
+		"aws_poll_interval_seconds": {Type: "integer"},
+		"alarm_generation":          {Type: "integer"},
+		"lease":                     ref("DynamicLease"), "monitoring": {Type: "array", Items: ref("AWSHoneyScan")},
+		"uses": {Type: "array", Items: ref("AWSHoneyUse")},
+	}, "id", "kind", "name", "placement", "state", "created_at", "lease", "monitoring", "uses")
 	ephemeralAPIKeyReq := object(map[string]*Schema{
 		"subject": str(), "scopes": {Type: "array", Items: str()}, "ttl_seconds": {Type: "integer"},
 		"preview_fingerprint": {Type: "string", Description: "Optional server-keyed fingerprint returned by EphemeralAPIKeyPreview. When supplied, issuance fails closed if subject, scopes, caller, tenant, or lifetime changed."},
@@ -5331,7 +5387,7 @@ func componentSchemas() map[string]*Schema {
 		"required": {Type: "boolean"}, "description": str(),
 	}, "key", "label", "kind", "required", "description")
 	dynamicSecretSupportedProvider := object(map[string]*Schema{
-		"type":  {Type: "string", Enum: []string{"postgresql", "mysql", "mongodb", "aws-iam", "gcp-iam", "azure-entra", "kubernetes", "redis"}},
+		"type":  {Type: "string", Enum: []string{"postgresql", "mysql", "mongodb", "aws-iam", "aws-sts", "gcp-iam", "azure-entra", "kubernetes", "redis"}},
 		"label": str(), "purpose": str(),
 		"requirements": {Type: "array", Items: ref("DynamicSecretProviderRequirement")},
 	}, "type", "label", "purpose", "requirements")
@@ -6464,6 +6520,16 @@ func componentSchemas() map[string]*Schema {
 		"HoneyTokenList":                           list("HoneyToken"),
 		"HoneyTokenCreateRequest":                  honeyTokenCreateReq,
 		"HoneyTokenCreateResponse":                 honeyTokenCreateResp,
+		"AWSHoneyAccount":                          awsHoneyAccount,
+		"AWSHoneyAccountCatalog":                   awsHoneyAccountCatalog,
+		"AWSHoneyToken":                            awsHoneyToken,
+		"AWSHoneyTokenList":                        list("AWSHoneyToken"),
+		"AWSHoneyTokenCreateRequest":               awsHoneyTokenCreateReq,
+		"AWSHoneyTokenPreview":                     awsHoneyTokenPreview,
+		"AWSHoneyTokenCreateResponse":              awsHoneyTokenCreateResp,
+		"AWSHoneyScan":                             awsHoneyScan,
+		"AWSHoneyUse":                              awsHoneyUse,
+		"AWSHoneyTokenDetail":                      awsHoneyTokenDetail,
 		"AuditEvent":                               auditEvent,
 		"AuditEventList":                           auditEventList,
 		"AuditTimestampInfo":                       auditTimestampInfo,

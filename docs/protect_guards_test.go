@@ -14,7 +14,7 @@ package docs
 //     measured-issuance claims stay bound to code (telemetry no-ops when disabled and
 //     carries no PII/credential field; no gating symbol exists; getting-started cites
 //     the real measured issuance test).
-//   - DOCS-009: the headline counts the docs advertise (79 capabilities, 9 CA
+//   - DOCS-009: the headline counts the docs advertise (80 capabilities, 9 CA
 //     integrations, 13 connectors, current internal Go-file count, federation NOT built)
 //     stay equal to what the tree actually contains.
 
@@ -2294,7 +2294,7 @@ func TestSchemaCompatibilityStrengthGuardsStayRequired(t *testing.T) {
 		{"../internal/backup/backup.go", []string{"trstctl-event-log-backup", "version    = 1", "unsupported backup version"}},
 		{"../internal/backup/full_manifest.go", []string{"trstctl-full-backup", "fullVersion      = 1", "unsupported full backup manifest version"}},
 		{"../internal/backup/postgres_state.go", []string{"trstctl-postgres-state-backup", "postgresStateVersion    = 1", "unsupported postgres-state backup version"}},
-		{"../internal/store/snapshot.go", []string{"SnapshotFormatVersion = 45", "WHERE format_version = $1", "SELECT tenant_id, payload FROM read_model_snapshots"}},
+		{"../internal/store/snapshot.go", []string{"SnapshotFormatVersion = 46", "WHERE format_version = $1", "SELECT tenant_id, payload FROM read_model_snapshots"}},
 		{"../internal/projections/broker_issuance_recovery_test.go", []string{"TestBrokerFactsSurviveRediscoverySnapshotAndEventOnlyRebuild", "TestBrokerV35SnapshotCannotSkipIssuanceFacts"}},
 	} {
 		body := read(t, file.path)
@@ -3093,7 +3093,7 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 	}
 	snapshotGo := read(t, "../internal/store/snapshot.go")
 	for _, want := range []string{
-		"const SnapshotFormatVersion = 45",
+		"const SnapshotFormatVersion = 46",
 		"func (s *Store) WriteTenantSnapshot(",
 		"func (s *Store) LatestSnapshotOffset(",
 		"func (s *Store) RestoreSnapshotsTx(",
@@ -3249,7 +3249,7 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 
 // ---- DOCS-009: headline counts stay equal to the tree ----------------------------
 
-// TestFeatureCountMatchesDocs is the DOCS-009 lock for the "79 capabilities" claim:
+// TestFeatureCountMatchesDocs is the DOCS-009 lock for the "80 capabilities" claim:
 // the number of distinct F-IDs in features.md must equal the count both README and
 // features.md advertise, so the catalog and its headline number cannot drift apart.
 func TestFeatureCountMatchesDocs(t *testing.T) {

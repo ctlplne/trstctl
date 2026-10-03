@@ -244,6 +244,10 @@ func (a *API) getDynamicLease(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, dynamicLeaseError(err))
 		return
 	}
+	if a.secrets.isHoneyOnlyProvider(tenantID, lease.Provider) {
+		a.writeProblem(w, problem.New(http.StatusNotFound, "no such dynamic secret lease"))
+		return
+	}
 	a.writeJSON(w, http.StatusOK, toDynamicLeaseResponse(lease, nil))
 }
 
@@ -291,6 +295,10 @@ func (a *API) renewDynamicLease(w http.ResponseWriter, r *http.Request) {
 	current, err := getDynamicLeaseContext(r.Context(), lookup, leaseID)
 	if err != nil {
 		a.writeError(w, dynamicLeaseError(err))
+		return
+	}
+	if a.secrets.isHoneyOnlyProvider(tenantID, current.Provider) {
+		a.writeProblem(w, problem.New(http.StatusNotFound, "no such dynamic secret lease"))
 		return
 	}
 	configured, found := a.secrets.configuredDynamicSecretProvider(tenantID, current.Provider)
@@ -355,6 +363,13 @@ func (a *API) revokeDynamicLease(w http.ResponseWriter, r *http.Request) {
 		engine, err := a.secrets.dynamicLeaseEngine(tenantID)
 		if err != nil {
 			return 0, nil, err
+		}
+		current, err := getDynamicLeaseContext(ctx, engine, leaseID)
+		if err != nil {
+			return 0, nil, dynamicLeaseError(err)
+		}
+		if a.secrets.isHoneyOnlyProvider(tenantID, current.Provider) {
+			return 0, nil, errStatus(http.StatusNotFound, "no such dynamic secret lease")
 		}
 		var lease dynsecret.Lease
 		if revoker, ok := engine.(boundDynamicLeaseRevoker); ok {

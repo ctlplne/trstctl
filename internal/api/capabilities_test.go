@@ -157,8 +157,8 @@ func TestCapabilitiesViewIsAuthenticatedSanitizedAndAuthorizationAware(t *testin
 	if err := json.Unmarshal([]byte(viewerBody), &viewer); err != nil {
 		t.Fatalf("decode viewer response: %v", err)
 	}
-	if viewer.SchemaVersion != 2 || viewer.ContractSchemaVersion != 3 || len(viewer.Items) != 79 {
-		t.Fatalf("viewer schema/contract/items=%d/%d/%d, want 2/3/79", viewer.SchemaVersion, viewer.ContractSchemaVersion, len(viewer.Items))
+	if viewer.SchemaVersion != 2 || viewer.ContractSchemaVersion != 3 || len(viewer.Items) != 80 {
+		t.Fatalf("viewer schema/contract/items=%d/%d/%d, want 2/3/80", viewer.SchemaVersion, viewer.ContractSchemaVersion, len(viewer.Items))
 	}
 	if len(viewer.Operations) == 0 {
 		t.Fatal("viewer runtime operation registry is empty")

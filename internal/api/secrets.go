@@ -141,6 +141,10 @@ type SecretsBackend struct {
 	// DynamicLeaseWorkerInterval controls the served leaseworker cadence. Zero uses
 	// the leaseworker default.
 	DynamicLeaseWorkerInterval time.Duration
+	// AWSHoneyAccountsForTenant exposes only non-secret, operator-owned AWS
+	// account topology. Its hidden IAM provider runs through the durable lease
+	// outbox and is never exposed by the generic dynamic-secret API.
+	AWSHoneyAccountsForTenant func(tenantID string) []AWSHoneyAccount
 	// SecretRotators retain configured static-credential engines for compatibility
 	// and future durable workers. The HTTP route refuses them before invocation until
 	// an independently recoverable phase receiver exists.

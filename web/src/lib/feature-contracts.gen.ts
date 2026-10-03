@@ -6,7 +6,7 @@ export const canonicalTools = ["discover","certificates","workloads_machines","s
 export const capabilityMaturities = ["absent","api_cli_only","observe_only","partial_workflow","complete_vertical_slice"] as const;
 export const capabilityStageNames = ["discover","understand","configure","preview","execute","observe","recover","verify","automate"] as const;
 export const capabilityStageStatuses = ["complete","not_applicable","intentional_api_only","blocked","missing"] as const;
-export const canonicalCapabilityIDs = ["F1","F2","F3","F42","F49","F35","F36","F17","F18","F19","F52","F4","F48","F53","F46","F47","F26","F5","F69","F70","F71","F72","F73","F74","F22","F23","F55","F54","F56","F24","F25","F30","F59","F61","F43","F44","F45","F6","F16","F57","F7","F27","F50","F51","F31","F32","F33","F34","F37","F38","F39","F63","F64","F65","F66","F67","F68","F58","F60","F28","F29","F62","F8","F9","F10","F11","F12","F13","F14","F15","F40","F41","F20","F21","F75","F76","F77","F78","F79"] as const;
+export const canonicalCapabilityIDs = ["F1","F2","F3","F42","F49","F35","F36","F17","F18","F19","F52","F4","F48","F53","F46","F47","F26","F5","F69","F70","F71","F72","F73","F74","F22","F23","F55","F54","F56","F24","F25","F30","F59","F61","F43","F44","F45","F6","F16","F57","F7","F27","F50","F51","F31","F32","F33","F34","F37","F38","F39","F63","F64","F65","F66","F67","F68","F58","F60","F28","F29","F62","F8","F9","F10","F11","F12","F13","F14","F15","F40","F41","F20","F21","F75","F76","F77","F78","F79","F80"] as const;
 
 export type CanonicalTool = (typeof canonicalTools)[number];
 export type CapabilityMaturity = (typeof capabilityMaturities)[number];
@@ -8436,6 +8436,115 @@ export const canonicalCapabilities = [
       "targetCheckpoint": "frontend-convergence",
       "candidateSHA": "57b52ac2e149078381f137192093838316f8e516",
       "freshness": "2026-09-04"
+    }
+  },
+  {
+    "featureId": "F80",
+    "feature": "AWS IAM decoy keys",
+    "domain": "Secrets",
+    "phase": "P1",
+    "priority": 84,
+    "contract": {
+      "purpose": "Plant no-permission IAM decoy keys and detect their use through tenant-scoped CloudTrail evidence and critical alerts.",
+      "tool": "secrets",
+      "classification": "primary",
+      "releaseBlocking": true,
+      "consoleRoute": "/secrets/engines",
+      "navigationEntrypoints": [
+        "tool navigation",
+        "task search",
+        "/secrets/engines"
+      ],
+      "permissionAuthority": "internal/api route registry and feature authorization manifest",
+      "edition": "core",
+      "dependencies": [
+        "An operator attaches a tenant-owned AWS account, IAM writer credentials, CloudTrail reader credentials, and monitored Regions."
+      ],
+      "sideEffects": "mixed",
+      "secretDataHandling": "The IAM secret access key is revealed once in the plant response; inventory, incidents, audit, and parity reports contain metadata only.",
+      "maturity": "partial_workflow",
+      "stages": {
+        "discover": {
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/Secrets.tsx",
+            "web/src/pages/secrets/AWSHoneyTokenWorkflow.tsx"
+          ]
+        },
+        "understand": {
+          "status": "complete",
+          "evidence": [
+            "web/src/pages/secrets/AWSHoneyTokenWorkflow.tsx",
+            "docs/features/secrets.md"
+          ]
+        },
+        "configure": {
+          "status": "complete",
+          "evidence": [
+            "internal/config/secret_integrations.go",
+            "docs/features/secrets.md",
+            "OpenAPI operationId: listAWSHoneyAccounts"
+          ]
+        },
+        "preview": {
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: previewAWSHoneyToken",
+            "internal/server/aws_honeytoken_served_test.go",
+            "web/src/pages/secrets/AWSHoneyTokenWorkflow.tsx",
+            "web/src/__tests__/secrets.test.tsx"
+          ]
+        },
+        "execute": {
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: createAWSHoneyToken",
+            "internal/server/aws_honeytoken_served_test.go",
+            "web/src/pages/secrets/AWSHoneyTokenWorkflow.tsx"
+          ]
+        },
+        "observe": {
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: getAWSHoneyToken",
+            "web/src/pages/secrets/AWSHoneyTokenWorkflow.tsx",
+            "internal/server/aws_honeytoken_served_test.go"
+          ]
+        },
+        "recover": {
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: rearmAWSHoneyToken",
+            "OpenAPI operationId: retireAWSHoneyToken",
+            "internal/projections/dynamic_secret_revocation_privacy_test.go",
+            "web/src/pages/secrets/AWSHoneyTokenWorkflow.tsx"
+          ]
+        },
+        "verify": {
+          "status": "blocked",
+          "evidence": [],
+          "reason": "Native IAM/CloudTrail propagation, account quotas, and console Create/Retire actions require an owner-controlled AWS account and browser action-time confirmation; the local signed fixture contract is recorded in the test facet."
+        },
+        "automate": {
+          "status": "complete",
+          "evidence": [
+            "OpenAPI operationId: listAWSHoneyAccounts",
+            "OpenAPI operationId: previewAWSHoneyToken",
+            "OpenAPI operationId: createAWSHoneyToken",
+            "OpenAPI operationId: listAWSHoneyTokens",
+            "OpenAPI operationId: getAWSHoneyToken",
+            "OpenAPI operationId: rearmAWSHoneyToken",
+            "OpenAPI operationId: retireAWSHoneyToken",
+            "CLI command: secrets honeytokens aws plant",
+            "CLI command: secrets honeytokens aws retire",
+            "CLI command: secrets honeytokens aws preview"
+          ]
+        }
+      },
+      "owner": "secrets",
+      "targetCheckpoint": "aws-decoy-completion",
+      "candidateSHA": "2984557ed9ffc5b348307641676c10e80b667b4b",
+      "freshness": "2026-10-03"
     }
   }
 ] as const satisfies readonly CanonicalCapability[];

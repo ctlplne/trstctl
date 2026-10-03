@@ -183,7 +183,7 @@ export const navSpaces: NavSpace[] = [
         labelKey: "nav.group.secretsEngines",
         items: [
           { to: "/secrets", labelKey: "nav.item.secrets", icon: "vault", mode: "real", featureIds: ["F37", "F63"] },
-          { to: "/secrets/engines", labelKey: "secrets.route.engines", icon: "key", mode: "real", featureIds: ["F65", "F66", "F67"] },
+          { to: "/secrets/engines", labelKey: "secrets.route.engines", icon: "key", mode: "real", featureIds: ["F65", "F66", "F67", "F80"] },
         ],
       },
       {
@@ -959,6 +959,14 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     kind: "operate",
     evidence:
       "dynamic secret lease issue/renew/revoke controls with backend provider, role, TTL, lease status, backend error handling, and reveal-once generated credential panel",
+  },
+  {
+    featureId: "F80",
+    routes: ["/secrets/engines"],
+    component: "Secrets",
+    kind: "operate",
+    evidence:
+      "AWS IAM decoy account review, explicit deny-all key creation, reveal-once placement, CloudTrail use investigation, alarm rearm, automatic expiry, and IAM-confirmed retirement",
   },
   {
     featureId: "F66",

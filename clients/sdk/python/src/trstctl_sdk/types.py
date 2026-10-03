@@ -822,6 +822,175 @@ APITokenRevokeRequest = TypedDict(
     total=False,
 )
 
+AWSHoneyAccount = TypedDict(
+    'AWSHoneyAccount',
+    {
+        'account_id': str,
+        'id': str,
+        'max_ttl_seconds': int,
+        'poll_interval_seconds': int,
+        'regions': list[str],
+    },
+    total=False,
+)
+
+AWSHoneyAccountCatalog = TypedDict(
+    'AWSHoneyAccountCatalog',
+    {
+        'accounts': list[dict[str, Any]],
+        'detection_scope': str,
+    },
+    total=False,
+)
+
+AWSHoneyScan = TypedDict(
+    'AWSHoneyScan',
+    {
+        'cycle': int,
+        'delivery_attempts': int,
+        'delivery_error': str,
+        'delivery_status': str,
+        'gap_since': str,
+        'honey_id': str,
+        'last_success_at': str,
+        'page': int,
+        'region': str,
+        'watermark': str,
+        'window_end': str,
+        'window_start': str,
+    },
+    total=False,
+)
+
+AWSHoneyToken = TypedDict(
+    'AWSHoneyToken',
+    {
+        'alarm_generation': int,
+        'aws_access_key_id': str,
+        'aws_account_config_id': str,
+        'aws_account_id': str,
+        'aws_lease_id': str,
+        'aws_poll_interval_seconds': int,
+        'aws_regions': list[str],
+        'created_at': str,
+        'id': str,
+        'kind': str,
+        'name': str,
+        'placement': str,
+        'state': str,
+        'trigger_method': str,
+        'trigger_path': str,
+        'triggered_at': str,
+    },
+    total=False,
+)
+
+AWSHoneyTokenCreateRequest = TypedDict(
+    'AWSHoneyTokenCreateRequest',
+    {
+        'account_id': str,
+        'name': str,
+        'placement': str,
+        'preview_fingerprint': str,
+        'ttl_seconds': int,
+    },
+    total=False,
+)
+
+AWSHoneyTokenCreateResponse = TypedDict(
+    'AWSHoneyTokenCreateResponse',
+    {
+        'access_key_id': str,
+        'alarm_generation': int,
+        'aws_access_key_id': str,
+        'aws_account_config_id': str,
+        'aws_account_id': str,
+        'aws_lease_id': str,
+        'aws_poll_interval_seconds': int,
+        'aws_regions': list[str],
+        'created_at': str,
+        'id': str,
+        'kind': str,
+        'name': str,
+        'placement': str,
+        'secret_access_key': str,
+        'state': str,
+    },
+    total=False,
+)
+
+AWSHoneyTokenDetail = TypedDict(
+    'AWSHoneyTokenDetail',
+    {
+        'alarm_generation': int,
+        'aws_access_key_id': str,
+        'aws_account_config_id': str,
+        'aws_account_id': str,
+        'aws_lease_id': str,
+        'aws_poll_interval_seconds': int,
+        'aws_regions': list[str],
+        'created_at': str,
+        'id': str,
+        'kind': str,
+        'lease': dict[str, Any],
+        'monitoring': list[dict[str, Any]],
+        'name': str,
+        'placement': str,
+        'state': str,
+        'trigger_method': str,
+        'trigger_path': str,
+        'triggered_at': str,
+        'uses': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+AWSHoneyTokenList = TypedDict(
+    'AWSHoneyTokenList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+AWSHoneyTokenPreview = TypedDict(
+    'AWSHoneyTokenPreview',
+    {
+        'account_attachment_id': str,
+        'aws_account_id': str,
+        'detection_scope': str,
+        'effect_free': bool,
+        'iam_actions': list[str],
+        'name': str,
+        'placement': str,
+        'preview_fingerprint': str,
+        'ready': bool,
+        'recovery': str,
+        'regions': list[str],
+        'remote_authority_checked': bool,
+        'ttl_seconds': int,
+        'verification': str,
+    },
+    total=False,
+)
+
+AWSHoneyUse = TypedDict(
+    'AWSHoneyUse',
+    {
+        'detected_at': str,
+        'error_code': str,
+        'event_id': str,
+        'event_name': str,
+        'event_source': str,
+        'event_time': str,
+        'region': str,
+        'source_ip_address': str,
+        'user_agent': str,
+    },
+    total=False,
+)
+
 AccessChangeDecision = TypedDict(
     'AccessChangeDecision',
     {
@@ -5178,6 +5347,7 @@ HoneyToken = TypedDict(
     {
         'created_at': str,
         'id': str,
+        'kind': str,
         'name': str,
         'placement': str,
         'revoked_at': str,
@@ -5203,6 +5373,7 @@ HoneyTokenCreateResponse = TypedDict(
     {
         'created_at': str,
         'id': str,
+        'kind': str,
         'name': str,
         'placement': str,
         'state': str,

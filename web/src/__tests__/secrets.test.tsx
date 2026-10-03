@@ -42,6 +42,13 @@ const { apiMock } = vi.hoisted(() => ({
     getDynamicLease: vi.fn(),
     renewDynamicLease: vi.fn(),
     revokeDynamicLease: vi.fn(),
+    listAWSHoneyAccounts: vi.fn(),
+    previewAWSHoneyToken: vi.fn(),
+    createAWSHoneyToken: vi.fn(),
+    listAWSHoneyTokens: vi.fn(),
+    getAWSHoneyToken: vi.fn(),
+    retireAWSHoneyToken: vi.fn(),
+    rearmAWSHoneyToken: vi.fn(),
     transitKeys: vi.fn(),
     transitKeyVersions: vi.fn(),
     transitPosture: vi.fn(),
@@ -542,6 +549,27 @@ function primeSecretsMocks() {
     expires_at: "2026-06-19T13:15:00Z",
     token: "epk_live_reveal_once_123",
   });
+  apiMock.listAWSHoneyAccounts.mockResolvedValue({
+    accounts: [{ id: "qa-aws", account_id: "123456789012", regions: ["us-east-1"], max_ttl_seconds: 172800, poll_interval_seconds: 60 }],
+    detection_scope: "CloudTrail management events in configured Regions",
+  });
+  apiMock.previewAWSHoneyToken.mockResolvedValue({
+    ready: true,
+    effect_free: true,
+    remote_authority_checked: false,
+    account_attachment_id: "qa-aws",
+    aws_account_id: "123456789012",
+    name: "qa-bait",
+    placement: "qa/trap",
+    ttl_seconds: 120,
+    regions: ["us-east-1"],
+    iam_actions: ["iam.install_and_verify_deny_all", "iam.create_access_key"],
+    detection_scope: "CloudTrail management events in us-east-1",
+    recovery: "retry the same request",
+    verification: "read IAM user status",
+    preview_fingerprint: "sha256:qa-aws-reviewed",
+  });
+  apiMock.listAWSHoneyTokens.mockResolvedValue({ items: [], next_cursor: "" });
   apiMock.dynamicSecretProviders.mockResolvedValue({
     capability: "F65",
     configuration_mode: "startup_static",
@@ -1247,6 +1275,55 @@ describe("secrets surface", () => {
     await user.click(within(chooser).getByRole("button", { name: "Open certificate request" }));
     expect(screen.queryByRole("heading", { name: "Dynamic secrets" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "PKI as a secret" })).toBeInTheDocument();
+  });
+
+  it("reviews an AWS decoy without effects, then binds the creation to that review", async () => {
+    const user = userEvent.setup();
+    const created = {
+      id: "33333333-3333-4333-8333-333333333333",
+      kind: "aws",
+      name: "qa-bait",
+      placement: "qa/trap",
+      state: "active",
+      created_at: "2026-10-03T00:00:00Z",
+      aws_account_config_id: "qa-aws",
+      aws_account_id: "123456789012",
+      aws_access_key_id: "AKIAEXAMPLE00000001",
+      access_key_id: "AKIAEXAMPLE00000001",
+      secret_access_key: "one-time-bait-secret",
+      aws_lease_id: "lease-qa",
+      aws_regions: ["us-east-1"],
+      aws_poll_interval_seconds: 60,
+      alarm_generation: 0,
+    };
+    apiMock.createAWSHoneyToken.mockResolvedValue(created);
+    apiMock.getAWSHoneyToken.mockResolvedValue({ ...created, secret_access_key: undefined, lease: { state: "active" }, monitoring: [], uses: [] });
+    renderSecrets("/secrets/engines");
+    await user.click(await screen.findByRole("button", { name: "Open decoy credentials" }));
+    const aws = within(await screen.findByRole("region", { name: "AWS IAM decoy keys" }));
+    await user.type(aws.getByRole("textbox", { name: "Decoy name" }), " qa-bait ");
+    await user.type(aws.getByRole("textbox", { name: "Intended placement" }), " qa/trap ");
+    await user.clear(aws.getByRole("spinbutton", { name: "Key lifetime in seconds" }));
+    await user.type(aws.getByRole("spinbutton", { name: "Key lifetime in seconds" }), "120");
+    await user.click(aws.getByRole("button", { name: "Review AWS decoy creation" }));
+    expect(await aws.findByRole("heading", { name: "Review IAM key and monitoring effects" })).toBeInTheDocument();
+    expect(apiMock.createAWSHoneyToken).not.toHaveBeenCalled();
+    expect(apiMock.previewAWSHoneyToken).toHaveBeenCalledWith({ account_id: "qa-aws", name: "qa-bait", placement: "qa/trap", ttl_seconds: 120 });
+    await user.type(aws.getByRole("textbox", { name: "Decoy name" }), "changed");
+    expect(aws.queryByRole("button", { name: "Create AWS decoy key" })).not.toBeInTheDocument();
+    await user.clear(aws.getByRole("textbox", { name: "Decoy name" }));
+    await user.type(aws.getByRole("textbox", { name: "Decoy name" }), " qa-bait ");
+    await user.click(aws.getByRole("button", { name: "Review AWS decoy creation" }));
+    expect(await aws.findByRole("button", { name: "Create AWS decoy key" })).toBeInTheDocument();
+    expect(apiMock.previewAWSHoneyToken).toHaveBeenLastCalledWith({ account_id: "qa-aws", name: "qa-bait", placement: "qa/trap", ttl_seconds: 120 });
+    await user.click(aws.getByRole("button", { name: "Create AWS decoy key" }));
+    await waitFor(() =>
+      expect(apiMock.createAWSHoneyToken).toHaveBeenCalledWith(
+        { account_id: "qa-aws", name: "qa-bait", placement: "qa/trap", ttl_seconds: 120, preview_fingerprint: "sha256:qa-aws-reviewed" },
+        expect.any(String),
+      ),
+    );
+    expect(await aws.findByText("one-time-bait-secret")).toBeInTheDocument();
   });
 
   it("refuses to imply delivery when no secret destination is configured", async () => {

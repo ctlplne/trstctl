@@ -231,10 +231,24 @@ func (s *secretsService) configuredDynamicSecretProviders(tenantID string) []dyn
 	providers := s.dynamicProviders(tenantID)
 	out := make([]dynamicSecretConfiguredProvider, 0, len(providers))
 	for _, provider := range providers {
+		if hidden, ok := provider.(interface{ DynamicSecretHoneyOnly() bool }); ok && hidden.DynamicSecretHoneyOnly() {
+			continue
+		}
 		out = append(out, dynamicSecretConfiguredProviderFrom(provider))
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
+}
+
+func (s *secretsService) isHoneyOnlyProvider(tenantID, providerID string) bool {
+	for _, provider := range s.dynamicProviders(tenantID) {
+		if provider.Name() != providerID {
+			continue
+		}
+		hidden, ok := provider.(interface{ DynamicSecretHoneyOnly() bool })
+		return ok && hidden.DynamicSecretHoneyOnly()
+	}
+	return false
 }
 
 func (s *secretsService) configuredDynamicSecretProvider(tenantID, id string) (dynamicSecretConfiguredProvider, bool) {

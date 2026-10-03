@@ -703,6 +703,9 @@ describe("exported API surface census", () => {
       // runtime configuration revision without opening its credential
       // reference, calling the backend, or writing lease state.
       "/api/v1/secrets/leases/preview",
+      // F80: validates the exact decoy request and caller-bound fingerprint
+      // against local account configuration without calling IAM or CloudTrail.
+      "/api/v1/secrets/honeytokens/aws/preview",
     ]);
     for (const [target, init] of transport.mock.calls) {
       const url = String(target);

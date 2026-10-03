@@ -2445,6 +2445,506 @@
         },
         "type": "object"
       },
+      "AWSHoneyAccount": {
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "max_ttl_seconds": {
+            "type": "integer"
+          },
+          "poll_interval_seconds": {
+            "type": "integer"
+          },
+          "regions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "account_id",
+          "regions",
+          "max_ttl_seconds",
+          "poll_interval_seconds"
+        ],
+        "type": "object"
+      },
+      "AWSHoneyAccountCatalog": {
+        "properties": {
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/AWSHoneyAccount"
+            },
+            "type": "array"
+          },
+          "detection_scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "accounts",
+          "detection_scope"
+        ],
+        "type": "object"
+      },
+      "AWSHoneyScan": {
+        "properties": {
+          "cycle": {
+            "type": "integer"
+          },
+          "delivery_attempts": {
+            "type": "integer"
+          },
+          "delivery_error": {
+            "type": "string"
+          },
+          "delivery_status": {
+            "type": "string"
+          },
+          "gap_since": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "honey_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "last_success_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "region": {
+            "type": "string"
+          },
+          "watermark": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "window_end": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "window_start": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "honey_id",
+          "region",
+          "cycle",
+          "page",
+          "watermark"
+        ],
+        "type": "object"
+      },
+      "AWSHoneyToken": {
+        "properties": {
+          "alarm_generation": {
+            "type": "integer"
+          },
+          "aws_access_key_id": {
+            "type": "string"
+          },
+          "aws_account_config_id": {
+            "type": "string"
+          },
+          "aws_account_id": {
+            "type": "string"
+          },
+          "aws_lease_id": {
+            "type": "string"
+          },
+          "aws_poll_interval_seconds": {
+            "type": "integer"
+          },
+          "aws_regions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "aws"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "placement": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "active",
+              "triggered",
+              "retiring",
+              "retirement_failed",
+              "revoked",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "trigger_method": {
+            "type": "string"
+          },
+          "trigger_path": {
+            "type": "string"
+          },
+          "triggered_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "placement",
+          "state",
+          "created_at",
+          "aws_account_config_id",
+          "aws_account_id",
+          "aws_access_key_id",
+          "aws_lease_id",
+          "aws_regions",
+          "aws_poll_interval_seconds"
+        ],
+        "type": "object"
+      },
+      "AWSHoneyTokenCreateRequest": {
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "placement": {
+            "type": "string"
+          },
+          "preview_fingerprint": {
+            "description": "Optional request/caller/account fingerprint from the effect-free AWSHoneyTokenPreview; when supplied, a changed review is rejected before IAM effects.",
+            "type": "string"
+          },
+          "ttl_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "account_id",
+          "name",
+          "placement",
+          "ttl_seconds"
+        ],
+        "type": "object"
+      },
+      "AWSHoneyTokenCreateResponse": {
+        "properties": {
+          "access_key_id": {
+            "type": "string"
+          },
+          "alarm_generation": {
+            "type": "integer"
+          },
+          "aws_access_key_id": {
+            "type": "string"
+          },
+          "aws_account_config_id": {
+            "type": "string"
+          },
+          "aws_account_id": {
+            "type": "string"
+          },
+          "aws_lease_id": {
+            "type": "string"
+          },
+          "aws_poll_interval_seconds": {
+            "type": "integer"
+          },
+          "aws_regions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "placement": {
+            "type": "string"
+          },
+          "secret_access_key": {
+            "description": "Reveal once; a secret AWS IAM decoy value, never present on metadata reads or in the event log.",
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "placement",
+          "state",
+          "created_at",
+          "aws_account_config_id",
+          "aws_account_id",
+          "aws_access_key_id",
+          "aws_lease_id",
+          "aws_regions",
+          "aws_poll_interval_seconds",
+          "access_key_id",
+          "secret_access_key"
+        ],
+        "type": "object"
+      },
+      "AWSHoneyTokenDetail": {
+        "properties": {
+          "alarm_generation": {
+            "type": "integer"
+          },
+          "aws_access_key_id": {
+            "type": "string"
+          },
+          "aws_account_config_id": {
+            "type": "string"
+          },
+          "aws_account_id": {
+            "type": "string"
+          },
+          "aws_lease_id": {
+            "type": "string"
+          },
+          "aws_poll_interval_seconds": {
+            "type": "integer"
+          },
+          "aws_regions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "lease": {
+            "$ref": "#/components/schemas/DynamicLease"
+          },
+          "monitoring": {
+            "items": {
+              "$ref": "#/components/schemas/AWSHoneyScan"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "placement": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "trigger_method": {
+            "type": "string"
+          },
+          "trigger_path": {
+            "type": "string"
+          },
+          "triggered_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "uses": {
+            "items": {
+              "$ref": "#/components/schemas/AWSHoneyUse"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "placement",
+          "state",
+          "created_at",
+          "lease",
+          "monitoring",
+          "uses"
+        ],
+        "type": "object"
+      },
+      "AWSHoneyTokenList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AWSHoneyToken"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "AWSHoneyTokenPreview": {
+        "properties": {
+          "account_attachment_id": {
+            "type": "string"
+          },
+          "aws_account_id": {
+            "type": "string"
+          },
+          "detection_scope": {
+            "type": "string"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "iam_actions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "placement": {
+            "type": "string"
+          },
+          "preview_fingerprint": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "recovery": {
+            "type": "string"
+          },
+          "regions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "remote_authority_checked": {
+            "type": "boolean"
+          },
+          "ttl_seconds": {
+            "type": "integer"
+          },
+          "verification": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ready",
+          "effect_free",
+          "remote_authority_checked",
+          "account_attachment_id",
+          "aws_account_id",
+          "name",
+          "placement",
+          "ttl_seconds",
+          "regions",
+          "iam_actions",
+          "detection_scope",
+          "recovery",
+          "verification",
+          "preview_fingerprint"
+        ],
+        "type": "object"
+      },
+      "AWSHoneyUse": {
+        "properties": {
+          "detected_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "error_code": {
+            "type": "string"
+          },
+          "event_id": {
+            "type": "string"
+          },
+          "event_name": {
+            "type": "string"
+          },
+          "event_source": {
+            "type": "string"
+          },
+          "event_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "source_ip_address": {
+            "type": "string"
+          },
+          "user_agent": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_id",
+          "region",
+          "event_source",
+          "event_name",
+          "source_ip_address",
+          "user_agent",
+          "event_time",
+          "detected_at"
+        ],
+        "type": "object"
+      },
       "AccessChangeDecision": {
         "properties": {
           "approver_subject": {
@@ -12185,6 +12685,7 @@
               "mysql",
               "mongodb",
               "aws-iam",
+              "aws-sts",
               "gcp-iam",
               "azure-entra",
               "kubernetes",
@@ -15444,6 +15945,12 @@
             "format": "uuid",
             "type": "string"
           },
+          "kind": {
+            "enum": [
+              "native"
+            ],
+            "type": "string"
+          },
           "name": {
             "type": "string"
           },
@@ -15475,6 +15982,7 @@
         },
         "required": [
           "id",
+          "kind",
           "name",
           "placement",
           "state",
@@ -15507,6 +16015,9 @@
             "format": "uuid",
             "type": "string"
           },
+          "kind": {
+            "type": "string"
+          },
           "name": {
             "type": "string"
           },
@@ -15522,6 +16033,7 @@
         },
         "required": [
           "id",
+          "kind",
           "name",
           "placement",
           "state",
@@ -55738,6 +56250,434 @@
         "summary": "Plant an inert decoy API bearer and reveal its value once",
         "x-trstctl-permission": "secrets:write",
         "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/secrets/honeytokens/aws": {
+      "get": {
+        "operationId": "listAWSHoneyTokens",
+        "parameters": [
+          {
+            "description": "page size (1-100)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque pagination cursor",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AWSHoneyTokenList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List AWS IAM decoys without their secret access keys",
+        "x-trstctl-permission": "secrets:read"
+      },
+      "post": {
+        "operationId": "createAWSHoneyToken",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AWSHoneyTokenCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AWSHoneyTokenCreateResponse"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Create an explicitly denied AWS IAM bait key and reveal its secret once",
+        "x-trstctl-permission": "secrets:write",
+        "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/secrets/honeytokens/aws/accounts": {
+      "get": {
+        "operationId": "listAWSHoneyAccounts",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AWSHoneyAccountCatalog"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List operator-configured AWS decoy accounts and CloudTrail coverage",
+        "x-trstctl-permission": "secrets:read"
+      }
+    },
+    "/api/v1/secrets/honeytokens/aws/preview": {
+      "post": {
+        "operationId": "previewAWSHoneyToken",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AWSHoneyTokenCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AWSHoneyTokenPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Review exact AWS decoy IAM effects and CloudTrail coverage without remote calls",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/honeytokens/aws/{id}": {
+      "get": {
+        "operationId": "getAWSHoneyToken",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AWSHoneyTokenDetail"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Inspect IAM bait status, regional CloudTrail coverage, and observed use",
+        "x-trstctl-permission": "secrets:read"
+      }
+    },
+    "/api/v1/secrets/honeytokens/aws/{id}/rearm": {
+      "post": {
+        "operationId": "rearmAWSHoneyToken",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AWSHoneyTokenDetail"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Rearm a triggered AWS decoy while preserving incident history",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/honeytokens/aws/{id}/retire": {
+      "post": {
+        "operationId": "retireAWSHoneyToken",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AWSHoneyTokenDetail"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Queue IAM key deletion and verify completion from the lease receipt",
+        "x-trstctl-permission": "secrets:write"
       }
     },
     "/api/v1/secrets/honeytokens/{id}": {

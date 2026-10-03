@@ -117,8 +117,8 @@ func parseCatalog(b []byte) (Catalog, error) {
 	if err := json.Unmarshal(b, &catalog); err != nil {
 		return Catalog{}, fmt.Errorf("parse feature-map backlog: %w", err)
 	}
-	if len(catalog.Items) != 79 {
-		return Catalog{}, fmt.Errorf("feature-map backlog rows = %d, want 79", len(catalog.Items))
+	if len(catalog.Items) != 80 {
+		return Catalog{}, fmt.Errorf("feature-map backlog rows = %d, want 80", len(catalog.Items))
 	}
 	if err := ValidateCatalog(catalog); err != nil {
 		return Catalog{}, fmt.Errorf("validate canonical capability contracts: %w", err)

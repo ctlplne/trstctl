@@ -19,6 +19,51 @@ import (
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
+// The AWS expansion must leave every preexisting native decoy and alert intact.
+func TestMigration0235PreservesNativeHoneyTokens(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 235)
+	pool, err := pgxpool.New(ctx, createFreshMigrationDatabase(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+	for i, tenant := range []string{tenantA, tenantB} {
+		if _, err := pool.Exec(ctx, `INSERT INTO tenants (tenant_id,name) VALUES ($1,$2)
+			ON CONFLICT (tenant_id) DO NOTHING`, tenant, fmt.Sprintf("honey-%d", i)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO honey_tokens
+			(id,tenant_id,name,placement,token_hash,state,created_at,triggered_at,trigger_method,trigger_path)
+			VALUES ($1,$2,$3,$4,$5,$6,'2026-09-01T00:00:00Z',$7,$8,$9)`,
+			fmt.Sprintf("23500000-0000-4000-8000-%012d", i+1), tenant,
+			fmt.Sprintf("legacy-%d", i), fmt.Sprintf("vault/%d", i), fmt.Sprintf("digest-%d", i),
+			[]string{"active", "triggered"}[i],
+			[]any{nil, "2026-09-02T00:00:00Z"}[i],
+			[]any{nil, "GET"}[i], []any{nil, "/api/v1/secrets"}[i]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const stable = `SELECT id::text, tenant_id::text, name, placement, token_hash,
+		state, created_at::text, triggered_at::text, trigger_method, trigger_path,
+		revoked_at::text FROM honey_tokens ORDER BY tenant_id,id`
+	beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, stable)
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	afterCount, afterChecksum := checksumQuery(t, ctx, pool, stable)
+	if beforeCount != 2 || afterCount != beforeCount || afterChecksum != beforeChecksum {
+		t.Fatalf("0235 changed native decoys: before %d/%s after %d/%s",
+			beforeCount, beforeChecksum, afterCount, afterChecksum)
+	}
+	var retained int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM honey_tokens WHERE kind='native'
+		AND alarm_generation=0 AND aws_account_config_id IS NULL AND aws_account_id IS NULL
+		AND aws_access_key_id IS NULL AND aws_lease_id IS NULL AND aws_regions IS NULL
+		AND aws_poll_interval_seconds IS NULL`).Scan(&retained); err != nil || retained != 2 {
+		t.Fatalf("0235 native defaults: retained=%d err=%v", retained, err)
+	}
+}
+
 // Historical requests did not record a selected CA. The upgrade must preserve
 // their decision evidence without implying that anyone chose the platform CA.
 func TestMigration0232PreservesLegacyRequestsWithoutInventingIssuerChoice(t *testing.T) {
@@ -236,6 +281,7 @@ func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *t
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	235: true, // TestMigration0235PreservesNativeHoneyTokens
 	232: true, // TestMigration0232PreservesLegacyRequestsWithoutInventingIssuerChoice
 	227: true, // TestMigration0227PreservesUnknownIssuanceReceipts
 	228: true, // TestMigration0228PreservesMissingIssuerEventProvenance

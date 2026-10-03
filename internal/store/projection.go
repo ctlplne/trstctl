@@ -802,7 +802,7 @@ var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "id
 	// receipts rebuild from the audit.feed.* event family.
 	"audit_feed_destinations", "audit_feed_deliveries",
 	// Decoy metadata and one-way bearer hashes rebuild from honeytoken events.
-	"honey_tokens"}
+	"honey_tokens", "aws_honey_scans", "aws_honey_uses"}
 
 // TruncateReadModel empties the event-sourced read model so it can be rebuilt
 // from the log (AN-2). It is a system operation. It covers exactly

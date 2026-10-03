@@ -264,17 +264,17 @@ func TestFeatureIndexDoesNotOverclaimAllCatalogRowsAsServed(t *testing.T) {
 	body := read(t, "features.md")
 	lower := strings.ToLower(body)
 	for _, stale := range []string{
-		"trstctl ships **79 capabilities**",
-		"ships 79 capabilities",
-		"all 79 capabilities are served",
-		"79 ga capabilities",
+		"trstctl ships **80 capabilities**",
+		"ships 80 capabilities",
+		"all 80 capabilities are served",
+		"80 ga capabilities",
 	} {
 		if strings.Contains(lower, strings.ToLower(stale)) {
 			t.Errorf("features.md over-claims the feature catalog with %q", stale)
 		}
 	}
 	for _, want := range []string{
-		"tracks **79 capabilities**",
+		"tracks **80 capabilities**",
 		"served-state metadata",
 		"`served_state`",
 		"`api_surface`",
@@ -350,7 +350,7 @@ func TestReadmeRoadmapMatchesServedStateReality(t *testing.T) {
 		"enrollment protocols": {"F22", "F23", "F54", "F55", "F56"},
 		"connectors":           {"F7", "F27"},
 		"workload identity":    {"F24", "F25", "F30", "F59", "F61"},
-		"secrets domain":       {"F35", "F36", "F37", "F38", "F39", "F58", "F60", "F63", "F64", "F65", "F66", "F67", "F68"},
+		"secrets domain":       {"F35", "F36", "F37", "F38", "F39", "F58", "F60", "F63", "F64", "F65", "F66", "F67", "F68", "F80"},
 	}
 	for domain, ids := range domainFeatureIDs {
 		if !servedStateDomainHasRuntimeRows(t, ids) {

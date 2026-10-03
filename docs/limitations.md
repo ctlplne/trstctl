@@ -168,6 +168,7 @@ receipt cannot certify it.
 | F39 | Code/CI secret scanning bridge | docs/features/secrets.md |
 | F63 | Native secret store | docs/features/secrets.md |
 | F65 | Dynamic secrets | docs/features/secrets.md |
+| F80 | AWS IAM decoy keys | docs/features/secrets.md, docs/web-console.md, docs/cli.md, docs/limitations.md |
 | F66 | Encryption-as-a-service and KMIP | docs/features/secrets.md |
 | F68 | Secret sync / platform integrations | docs/features/secrets.md |
 | F67 | PKI as a secrets engine | docs/features/secrets.md |
@@ -3349,13 +3350,19 @@ when off, requiring a KEK when on):
   builds have name-only provider references; their cleanup remains name-based
   during upgrade. Drain those older leases before repurposing generated object
   names in the same namespace.
-- Honeytokens (F39 extension) currently detect only use of trstctl-native
-  `trst_` API bearer decoys. An AWS IAM bait-key journey cannot run in the
-  local lab: it requires an AWS account with IAM and CloudTrail delivery, a
-  zero-permission user/key provisioner, signed ingestion, and a production
-  rotation/retirement path. LocalStack's pinned lab profile does not provide
-  faithful IAM/CloudTrail evidence. Do not treat local API decoy detection as
-  proof that an AWS key use is observable or revoked.
+- Honeytokens include the native `trst_` bait (F39 extension) and an
+  operator-attached AWS IAM bait-key adapter (F80). The AWS path is a local IAM/
+  CloudTrail contract test until a real account runs it: the pinned LocalStack
+  profile does not emulate IAM, CloudTrail delivery, account quotas, or
+  cross-account event visibility faithfully. No owner AWS account was available
+  in this local-only campaign. AWS-native use detection, live-account IAM
+  deletion, and a stock AWS client rejection after deletion remain unverified.
+  CloudTrail `LookupEvents` covers only management events in configured Regions
+  for the configured account, with delayed delivery and a 90-day lookup limit.
+  An outbox retry/dead-letter or an expired CloudTrail reader session is a
+  monitoring outage; it must be investigated and requeued before asserting
+  coverage. The AWS key is deliberately longer lived bait with explicit deny,
+  unlike the short-lived STS credentials in ordinary dynamic-secret leases.
 - Secret rotation (F37) backs `POST /api/v1/secrets/rotations` for worker-queued
   `connector:<target>` secret-sync handoffs. Concrete PostgreSQL, MySQL, and AWS
   IAM four-phase engines remain library/configuration components only: manual

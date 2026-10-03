@@ -1,6 +1,6 @@
 # Feature index
 
-trstctl tracks **79 capabilities**. This page answers "where is feature X
+trstctl tracks **80 capabilities**. This page answers "where is feature X
 documented?": every capability, its ID, and the primary page that teaches it —
 what it is, why it exists, how it works — for a reader who starts with
 [zero knowledge](glossary.md). What the running binary actually serves, versus
@@ -160,6 +160,7 @@ See **[Secrets](features/secrets.md)**.
 | F63 | Native secret store |
 | F64 | Developer secrets experience (CLI, portal, SDKs) |
 | F65 | Dynamic secrets |
+| F80 | AWS IAM decoy keys |
 | F66 | Encryption-as-a-service (transit) & KMIP |
 | F67 | PKI as a secrets engine |
 | F68 | Secret sync / platform integrations |

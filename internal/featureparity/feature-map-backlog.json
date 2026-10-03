@@ -23525,6 +23525,280 @@
                 "candidate_sha": "57b52ac2e149078381f137192093838316f8e516",
                 "freshness": "2026-09-04"
             }
+        },
+        {
+            "id": "GUI-F080",
+            "feature_id": "F80",
+            "feature": "AWS IAM decoy keys",
+            "domain": "Secrets",
+            "phase": "P1",
+            "priority": 84,
+            "served_state": "conditional",
+            "backend_status": "conditional: operator-attached AWS IAM and CloudTrail account",
+            "current_frontend_mapping": "operate: Automatic secret sources at /secrets/engines provides AWS account selection, reveal-once creation, monitoring and incident inspection, rearm, and retirement.",
+            "target_gui_mapping": "End-to-end AWS decoy key lifecycle with an effect-free request review, explicit failure recovery, monitoring coverage, and independent IAM readback.",
+            "acceptance_test": "Real signed IAM/CloudTrail fixture and real AWS account prove deny-all before key creation, use detection, alert routing, rearm, expiry, remote retirement, replay, and tenant isolation in UI/API/CLI.",
+            "source_docs": [
+                "docs/features/secrets.md",
+                "docs/web-console.md",
+                "docs/cli.md",
+                "docs/limitations.md"
+            ],
+            "source_backend": [
+                "internal/api/aws_honey_tokens.go",
+                "internal/dynsecret/aws_honeytoken.go",
+                "internal/dynsecret/aws_honeytoken_cloudtrail.go",
+                "internal/server/aws_honeytoken_provider.go",
+                "internal/server/aws_honeytoken_scan.go",
+                "internal/store/aws_honey_token.go"
+            ],
+            "source_frontend": [
+                "web/src/pages/secrets/AWSHoneyTokenWorkflow.tsx"
+            ],
+            "status": "in-progress",
+            "notes": "Local signed IAM/CloudTrail fixture plus stock curl proved create, deny-all use, deduplicated monitoring, rearm, two alert generations, remote delete/readback, and an optional attempt-ID event-shape repair. Live API and CLI review made no IAM change; a stale reviewed request was rejected before issuance and the console displayed the exact effect-free plan. No owner AWS account exists in this local-only campaign, so native AWS propagation and quotas remain unverified. Console Create/Retire clicks remain unverified under the browser action-time confirmation policy.",
+            "api_surface": [
+                "listAWSHoneyAccounts",
+                "previewAWSHoneyToken",
+                "createAWSHoneyToken",
+                "listAWSHoneyTokens",
+                "getAWSHoneyToken",
+                "rearmAWSHoneyToken",
+                "retireAWSHoneyToken"
+            ],
+            "api_na": "",
+            "cli_surface": [
+                "secrets honeytokens aws accounts",
+                "secrets honeytokens aws preview",
+                "secrets honeytokens aws plant",
+                "secrets honeytokens aws list",
+                "secrets honeytokens aws get",
+                "secrets honeytokens aws rearm",
+                "secrets honeytokens aws retire"
+            ],
+            "cli_na": "",
+            "facet_evidence": {
+                "served": {
+                    "evidence": [
+                        "Signed IAM and CloudTrail fixture proved deny policy readback before key creation, durable detection, rearm, and remote retirement.",
+                        "served_state=conditional",
+                        "backend_status=conditional: operator-attached AWS IAM and CloudTrail account"
+                    ],
+                    "refs": [
+                        "internal/server/aws_honeytoken_served_test.go",
+                        "internal/dynsecret/aws_honeytoken.go",
+                        "internal/server/aws_honeytoken_scan.go"
+                    ],
+                    "commands": [
+                        "go test ./internal/server -run TestServedAWSHoneyTokenIssueDetectAndRetire"
+                    ]
+                },
+                "ui": {
+                    "evidence": [
+                        "The Secrets console AWS decoy panel provides account selection, reveal-once creation, inventory, coverage, observed use, rearm, and retirement."
+                    ],
+                    "refs": [
+                        "web/src/pages/Secrets.tsx",
+                        "web/src/pages/secrets/AWSHoneyTokenWorkflow.tsx"
+                    ]
+                },
+                "cli": {
+                    "evidence": [
+                        "CLI commands: secrets honeytokens aws accounts, preview, plant, list, get, rearm, retire."
+                    ],
+                    "refs": [
+                        "internal/cli/command.go",
+                        "docs/cli.md"
+                    ]
+                },
+                "api": {
+                    "evidence": [
+                        "OpenAPI operationIds: listAWSHoneyAccounts, previewAWSHoneyToken, createAWSHoneyToken, listAWSHoneyTokens, getAWSHoneyToken, rearmAWSHoneyToken, retireAWSHoneyToken."
+                    ],
+                    "refs": [
+                        "internal/api/openapi.go",
+                        "internal/api/aws_honey_tokens.go",
+                        "internal/api/testdata/openapi.golden.json"
+                    ]
+                },
+                "test": {
+                    "evidence": [
+                        "Served integration tests prove IAM deny policy, detection, alert rearm, retirement, RBAC, and hidden generic provider paths.",
+                        "Closed event privacy regression covers first retirement without an attempt ID and retry retirement with one.",
+                        "Preview returns a caller-bound fingerprint without IAM effects and stale reviewed requests are rejected before issuance."
+                    ],
+                    "refs": [
+                        "internal/server/aws_honeytoken_served_test.go",
+                        "internal/dynsecret/aws_honeytoken_test.go",
+                        "internal/dynsecret/aws_honeytoken_cloudtrail_test.go",
+                        "internal/projections/dynamic_secret_revocation_privacy_test.go"
+                    ]
+                },
+                "docs": {
+                    "evidence": [
+                        "AWS decoy setup, use, CloudTrail coverage, CLI, console, and local-only limitation are documented."
+                    ],
+                    "refs": [
+                        "docs/features/secrets.md",
+                        "docs/web-console.md",
+                        "docs/cli.md",
+                        "docs/limitations.md"
+                    ]
+                },
+                "rbac": {
+                    "evidence": [
+                        "AWS account/decoy reads require secrets:read; create, rearm, and retire require secrets:write and tenant scope. The feature authz manifest maps each operation to its route permission."
+                    ],
+                    "refs": [
+                        "internal/api/api.go",
+                        "internal/api/aws_honey_tokens.go",
+                        "internal/server/aws_honeytoken_served_test.go",
+                        "internal/api/feature_authz_test.go"
+                    ]
+                },
+                "audit": {
+                    "evidence": [
+                        "Created, scan-page, alarm rearm, and lease revocation events are immutable and projected under tenant RLS."
+                    ],
+                    "refs": [
+                        "internal/projections/projections.go",
+                        "internal/store/aws_honey_token.go",
+                        "internal/projections/zz_privacy_event_policies.go"
+                    ]
+                },
+                "telemetry": {
+                    "evidence": [
+                        "The detail response and console expose per-Region watermark, last scan, monitoring delivery status, gap, observed uses, and IAM removal status."
+                    ],
+                    "refs": [
+                        "internal/store/aws_honey_token.go",
+                        "internal/api/aws_honey_tokens.go",
+                        "web/src/pages/secrets/AWSHoneyTokenWorkflow.tsx"
+                    ]
+                },
+                "a11y": {
+                    "evidence": [
+                        "Account, name, placement, TTL, reveal, inventory, and investigation controls have labels or headings in the console."
+                    ],
+                    "refs": [
+                        "web/src/pages/secrets/AWSHoneyTokenWorkflow.tsx",
+                        "web/src/__tests__/feature_a11y_receipts.test.tsx"
+                    ]
+                },
+                "i18n": {
+                    "evidence": [
+                        "AWS decoy workflow copy is in the typed message catalog and generated English runtime catalog."
+                    ],
+                    "refs": [
+                        "web/src/i18n/messages.ts",
+                        "web/src/i18n/catalog.en-US.runtime.gen.ts"
+                    ]
+                }
+            },
+            "ga_served_scope": "out_of_ga",
+            "ga_scope_reason": "Residual native AWS-account propagation and console Create/Retire interactions are not yet verified.",
+            "contract": {
+                "purpose": "Plant no-permission IAM decoy keys and detect their use through tenant-scoped CloudTrail evidence and critical alerts.",
+                "tool": "secrets",
+                "classification": "primary",
+                "release_blocking": true,
+                "console_route": "/secrets/engines",
+                "navigation_entrypoints": [
+                    "tool navigation",
+                    "task search",
+                    "/secrets/engines"
+                ],
+                "permission_authority": "internal/api route registry and feature authorization manifest",
+                "edition": "core",
+                "dependencies": [
+                    "An operator attaches a tenant-owned AWS account, IAM writer credentials, CloudTrail reader credentials, and monitored Regions."
+                ],
+                "side_effects": "mixed",
+                "secret_data_handling": "The IAM secret access key is revealed once in the plant response; inventory, incidents, audit, and parity reports contain metadata only.",
+                "maturity": "partial_workflow",
+                "stages": {
+                    "discover": {
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/Secrets.tsx",
+                            "web/src/pages/secrets/AWSHoneyTokenWorkflow.tsx"
+                        ]
+                    },
+                    "understand": {
+                        "status": "complete",
+                        "evidence": [
+                            "web/src/pages/secrets/AWSHoneyTokenWorkflow.tsx",
+                            "docs/features/secrets.md"
+                        ]
+                    },
+                    "configure": {
+                        "status": "complete",
+                        "evidence": [
+                            "internal/config/secret_integrations.go",
+                            "docs/features/secrets.md",
+                            "OpenAPI operationId: listAWSHoneyAccounts"
+                        ]
+                    },
+                    "preview": {
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: previewAWSHoneyToken",
+                            "internal/server/aws_honeytoken_served_test.go",
+                            "web/src/pages/secrets/AWSHoneyTokenWorkflow.tsx",
+                            "web/src/__tests__/secrets.test.tsx"
+                        ]
+                    },
+                    "execute": {
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: createAWSHoneyToken",
+                            "internal/server/aws_honeytoken_served_test.go",
+                            "web/src/pages/secrets/AWSHoneyTokenWorkflow.tsx"
+                        ]
+                    },
+                    "observe": {
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: getAWSHoneyToken",
+                            "web/src/pages/secrets/AWSHoneyTokenWorkflow.tsx",
+                            "internal/server/aws_honeytoken_served_test.go"
+                        ]
+                    },
+                    "recover": {
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: rearmAWSHoneyToken",
+                            "OpenAPI operationId: retireAWSHoneyToken",
+                            "internal/projections/dynamic_secret_revocation_privacy_test.go",
+                            "web/src/pages/secrets/AWSHoneyTokenWorkflow.tsx"
+                        ]
+                    },
+                    "verify": {
+                        "status": "blocked",
+                        "evidence": [],
+                        "reason": "Native IAM/CloudTrail propagation, account quotas, and console Create/Retire actions require an owner-controlled AWS account and browser action-time confirmation; the local signed fixture contract is recorded in the test facet."
+                    },
+                    "automate": {
+                        "status": "complete",
+                        "evidence": [
+                            "OpenAPI operationId: listAWSHoneyAccounts",
+                            "OpenAPI operationId: previewAWSHoneyToken",
+                            "OpenAPI operationId: createAWSHoneyToken",
+                            "OpenAPI operationId: listAWSHoneyTokens",
+                            "OpenAPI operationId: getAWSHoneyToken",
+                            "OpenAPI operationId: rearmAWSHoneyToken",
+                            "OpenAPI operationId: retireAWSHoneyToken",
+                            "CLI command: secrets honeytokens aws plant",
+                            "CLI command: secrets honeytokens aws retire",
+                            "CLI command: secrets honeytokens aws preview"
+                        ]
+                    }
+                },
+                "owner": "secrets",
+                "target_checkpoint": "aws-decoy-completion",
+                "candidate_sha": "2984557ed9ffc5b348307641676c10e80b667b4b",
+                "freshness": "2026-10-03"
+            }
         }
     ],
     "canonical_tools": [

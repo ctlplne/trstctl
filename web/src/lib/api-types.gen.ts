@@ -596,6 +596,135 @@ export interface APITokenRevokeRequest {
   reason?: string;
 }
 
+export interface AWSHoneyAccount {
+  account_id: string;
+  id: string;
+  max_ttl_seconds: number;
+  poll_interval_seconds: number;
+  regions: string[];
+}
+
+export interface AWSHoneyAccountCatalog {
+  accounts: AWSHoneyAccount[];
+  detection_scope: string;
+}
+
+export interface AWSHoneyScan {
+  cycle: number;
+  delivery_attempts?: number;
+  delivery_error?: string;
+  delivery_status?: string;
+  gap_since?: string;
+  honey_id: string;
+  last_success_at?: string;
+  page: number;
+  region: string;
+  watermark: string;
+  window_end?: string;
+  window_start?: string;
+}
+
+export interface AWSHoneyToken {
+  alarm_generation?: number;
+  aws_access_key_id: string;
+  aws_account_config_id: string;
+  aws_account_id: string;
+  aws_lease_id: string;
+  aws_poll_interval_seconds: number;
+  aws_regions: string[];
+  created_at: string;
+  id: string;
+  kind: "aws";
+  name: string;
+  placement: string;
+  state: "active" | "triggered" | "retiring" | "retirement_failed" | "revoked" | "failed";
+  trigger_method?: string;
+  trigger_path?: string;
+  triggered_at?: string;
+}
+
+export interface AWSHoneyTokenCreateRequest {
+  account_id: string;
+  name: string;
+  placement: string;
+  preview_fingerprint?: string;
+  ttl_seconds: number;
+}
+
+export interface AWSHoneyTokenCreateResponse {
+  access_key_id: string;
+  alarm_generation?: number;
+  aws_access_key_id: string;
+  aws_account_config_id: string;
+  aws_account_id: string;
+  aws_lease_id: string;
+  aws_poll_interval_seconds: number;
+  aws_regions: string[];
+  created_at: string;
+  id: string;
+  kind: string;
+  name: string;
+  placement: string;
+  secret_access_key: string;
+  state: string;
+}
+
+export interface AWSHoneyTokenDetail {
+  alarm_generation?: number;
+  aws_access_key_id?: string;
+  aws_account_config_id?: string;
+  aws_account_id?: string;
+  aws_lease_id?: string;
+  aws_poll_interval_seconds?: number;
+  aws_regions?: string[];
+  created_at: string;
+  id: string;
+  kind: string;
+  lease: DynamicLease;
+  monitoring: AWSHoneyScan[];
+  name: string;
+  placement: string;
+  state: string;
+  trigger_method?: string;
+  trigger_path?: string;
+  triggered_at?: string;
+  uses: AWSHoneyUse[];
+}
+
+export interface AWSHoneyTokenList {
+  items: AWSHoneyToken[];
+  next_cursor?: string;
+}
+
+export interface AWSHoneyTokenPreview {
+  account_attachment_id: string;
+  aws_account_id: string;
+  detection_scope: string;
+  effect_free: boolean;
+  iam_actions: string[];
+  name: string;
+  placement: string;
+  preview_fingerprint: string;
+  ready: boolean;
+  recovery: string;
+  regions: string[];
+  remote_authority_checked: boolean;
+  ttl_seconds: number;
+  verification: string;
+}
+
+export interface AWSHoneyUse {
+  detected_at: string;
+  error_code?: string;
+  event_id: string;
+  event_name: string;
+  event_source: string;
+  event_time: string;
+  region: string;
+  source_ip_address: string;
+  user_agent: string;
+}
+
 export interface AccessChangeDecision {
   approver_subject: string;
   decided_at: string;
@@ -2954,7 +3083,7 @@ export interface DynamicSecretSupportedProvider {
   label: string;
   purpose: string;
   requirements: DynamicSecretProviderRequirement[];
-  type: "postgresql" | "mysql" | "mongodb" | "aws-iam" | "gcp-iam" | "azure-entra" | "kubernetes" | "redis";
+  type: "postgresql" | "mysql" | "mongodb" | "aws-iam" | "aws-sts" | "gcp-iam" | "azure-entra" | "kubernetes" | "redis";
 }
 
 export interface EdgeDelegation {
@@ -3742,6 +3871,7 @@ export interface GraphTrustStores {
 export interface HoneyToken {
   created_at: string;
   id: string;
+  kind: "native";
   name: string;
   placement: string;
   revoked_at?: string;
@@ -3759,6 +3889,7 @@ export interface HoneyTokenCreateRequest {
 export interface HoneyTokenCreateResponse {
   created_at: string;
   id: string;
+  kind: string;
   name: string;
   placement: string;
   state: string;

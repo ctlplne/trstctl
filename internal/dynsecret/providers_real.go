@@ -2199,6 +2199,12 @@ func (b *AWSIAMBackend) signV4(req *http.Request, body []byte, t time.Time, serv
 	if b.sessionToken != nil && b.sessionToken.Len() > 0 {
 		signed = append(signed, "x-amz-security-token")
 	}
+	if req.Header.Get("X-Amz-Target") != "" {
+		// AWS JSON services dispatch by this header. Include it in the
+		// signature so a proxy cannot redirect an authenticated request to
+		// another operation after the payload has been signed.
+		signed = append(signed, "x-amz-target")
+	}
 	sort.Strings(signed)
 	var canonHeaders strings.Builder
 	for _, h := range signed {
