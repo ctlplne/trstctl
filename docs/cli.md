@@ -876,6 +876,10 @@ trstctl-cli --idempotency-key lease-issue-1 secrets leases issue -f dynamic-leas
 trstctl-cli secrets leases get <lease-id>
 printf '{"extend_seconds":900}' | trstctl-cli --idempotency-key lease-renew-1 secrets leases renew <lease-id> -f -
 trstctl-cli --idempotency-key lease-revoke-1 secrets leases revoke <lease-id> --force
+# If GET later reports revocation_status=failed, repair the provider, then retry
+# the exact lease with a fresh key. Keep the old key for replay of its first receipt.
+trstctl-cli --idempotency-key lease-revoke-retry-1 secrets leases revoke <lease-id> --force
+trstctl-cli secrets leases get <lease-id>  # wait for revocation_status=completed
 
 # Generate and retire an HSM/KMS-backed managed key after managed_keys is enabled.
 cat > managed-key.json <<'JSON'

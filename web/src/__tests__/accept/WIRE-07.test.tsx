@@ -212,6 +212,32 @@ describe("WIRE-07 dynamic secret lease wiring", () => {
     expect(sessionStorage.length).toBe(0);
   });
 
+  it("offers an explicit retry after provider removal fails and shows the recovered result", async () => {
+    const user = userEvent.setup();
+    renderSecrets("/secrets/engines");
+    await user.click(await screen.findByRole("button", { name: "Open temporary credential" }));
+    await user.selectOptions(screen.getByLabelText("Connected provider"), "payments-db");
+    await user.click(screen.getByRole("button", { name: "Review without creating" }));
+    await user.click(await screen.findByRole("button", { name: "Create reviewed credential" }));
+    await screen.findByText("lease-postgres-1");
+
+    await user.click(screen.getByRole("button", { name: /revoke lease/i }));
+    await waitFor(() => expect(apiMock.revokeDynamicLease).toHaveBeenCalledTimes(1));
+    currentLease = {
+      ...currentLease,
+      revocation_status: "failed",
+      revocation_completed_at: undefined,
+    };
+    await user.click(screen.getByRole("button", { name: "Refresh lease status" }));
+    expect(await screen.findByRole("heading", { name: "Provider revocation failed; access removal unconfirmed" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Retry provider removal" }));
+    await waitFor(() => expect(apiMock.revokeDynamicLease).toHaveBeenCalledTimes(2));
+    expect(await screen.findByRole("heading", { name: "Revocation queued; provider removal pending" })).toBeInTheDocument();
+    currentLease = { ...currentLease, revocation_status: "completed", revocation_completed_at: "2026-06-19T13:00:05Z" };
+    await user.click(screen.getByRole("button", { name: "Refresh lease status" }));
+    expect(await screen.findByRole("heading", { name: "Provider confirmed credential removal" })).toBeInTheDocument();
+  });
+
   it("reveals a replacement Kubernetes token and follows its new lease after renewal", async () => {
     const storageSpy = vi.spyOn(Storage.prototype, "setItem");
     const providerCatalog = await apiMock.dynamicSecretProviders();

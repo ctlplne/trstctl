@@ -512,6 +512,18 @@ export function DynamicSecretWorkflow({ loadBlocked }: { loadBlocked: boolean })
                 </Button>
               </div>
             ) : null}
+            {lease.state === "revoked" && lease.revocation_status === "failed" ? (
+              <Button type="button" variant="outline" onClick={() => void revokeLease()} disabled={lifecycleBusy !== null} loading={lifecycleBusy === "revoke"}>
+                <RotateCw className="h-4 w-4" aria-hidden="true" />
+                {t("secrets.dynamic.retryRemoval")}
+              </Button>
+            ) : null}
+            <p className="text-sm text-muted-foreground">
+              {t("secrets.dynamic.recoverExistingLease")}{" "}
+              <a className="underline" href="/workloads">
+                {t("secrets.dynamic.openLeaseLookup")}
+              </a>
+            </p>
             <PlanList title={t("secrets.dynamic.verification")} items={currentReview?.verification_steps ?? []} />
           </div>
         ) : null}

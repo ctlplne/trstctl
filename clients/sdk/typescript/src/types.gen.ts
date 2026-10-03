@@ -5519,7 +5519,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Revoke a dynamic secret lease */
+        /** Revoke a dynamic secret lease or retry failed provider removal */
         post: operations["revokeDynamicSecretLease"];
         delete?: never;
         options?: never;
@@ -9660,7 +9660,7 @@ export interface components {
             /** Format: date-time */
             revocation_completed_at?: string;
             /**
-             * @description Provider revocation progress. Revoked lease state alone acknowledges queuing, not provider removal.
+             * @description Provider revocation progress. Revoked lease state alone acknowledges queuing, not provider removal. After failed, POST revoke with a fresh Idempotency-Key queues a new audited provider-removal attempt; replaying the old key returns its original receipt.
              * @enum {string}
              */
             revocation_status?: "none" | "pending" | "completed" | "failed";

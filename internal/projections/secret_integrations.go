@@ -207,22 +207,23 @@ const (
 	// through the registration-sequence legacy fence.
 	SecretSyncEventSchemaVersion = 2
 
-	EventDynamicSecretLeasePending             = "dynsecret.lease.pending"
-	EventDynamicSecretLeasePrepared            = "dynsecret.lease.prepared"
-	EventDynamicSecretLeaseIssued              = "dynsecret.lease.issued"
-	EventDynamicSecretLeaseIssuanceFailed      = "dynsecret.lease.issuance_failed"
-	EventDynamicSecretLeaseRenewed             = "dynsecret.lease.renewed"
-	EventDynamicSecretLeaseRevocationRequested = "dynsecret.lease.revocation_requested"
-	EventDynamicSecretLeaseRevocationCompleted = "dynsecret.lease.revocation_completed"
-	EventDynamicSecretLeaseRevocationFailed    = "dynsecret.lease.revocation_failed"
-	EventDynamicSecretOperationRequested       = "dynsecret.operation.requested"
-	EventDynamicSecretOperationCompleted       = "dynsecret.operation.completed"
-	EventSecretSyncQueued                      = "secret.sync.queued" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
-	EventSecretSyncDelivered                   = "secret.sync.delivered"
-	EventSecretSyncFailed                      = "secret.sync.failed"
-	EventSecretSyncWorkloadIdentityUpserted    = "secret.sync.workload_identity_source.upserted"
-	EventSecretSyncWorkloadIdentityStatus      = "secret.sync.workload_identity_source.status"
-	EventSecretSyncWorkloadIdentityDeleted     = "secret.sync.workload_identity_source.deleted"
+	EventDynamicSecretLeasePending                  = "dynsecret.lease.pending"
+	EventDynamicSecretLeasePrepared                 = "dynsecret.lease.prepared"
+	EventDynamicSecretLeaseIssued                   = "dynsecret.lease.issued"
+	EventDynamicSecretLeaseIssuanceFailed           = "dynsecret.lease.issuance_failed"
+	EventDynamicSecretLeaseRenewed                  = "dynsecret.lease.renewed"
+	EventDynamicSecretLeaseRevocationRequested      = "dynsecret.lease.revocation_requested"
+	EventDynamicSecretLeaseRevocationRetryRequested = "dynsecret.lease.revocation_retry_requested"
+	EventDynamicSecretLeaseRevocationCompleted      = "dynsecret.lease.revocation_completed"
+	EventDynamicSecretLeaseRevocationFailed         = "dynsecret.lease.revocation_failed"
+	EventDynamicSecretOperationRequested            = "dynsecret.operation.requested"
+	EventDynamicSecretOperationCompleted            = "dynsecret.operation.completed"
+	EventSecretSyncQueued                           = "secret.sync.queued" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
+	EventSecretSyncDelivered                        = "secret.sync.delivered"
+	EventSecretSyncFailed                           = "secret.sync.failed"
+	EventSecretSyncWorkloadIdentityUpserted         = "secret.sync.workload_identity_source.upserted"
+	EventSecretSyncWorkloadIdentityStatus           = "secret.sync.workload_identity_source.status"
+	EventSecretSyncWorkloadIdentityDeleted          = "secret.sync.workload_identity_source.deleted"
 )
 
 func secretSyncTargetOrder(sequence uint64) (int64, error) {
@@ -351,6 +352,7 @@ type DynamicSecretLeaseFailure struct {
 	TenantEpoch string `json:"tenant_epoch,omitempty"`
 	ID          string `json:"id"`
 	Error       string `json:"error"`
+	AttemptID   string `json:"attempt_id,omitempty"`
 }
 
 // DynamicSecretLeaseIssuanceFailure is the current failure wire shape. The
@@ -377,6 +379,17 @@ type DynamicSecretLeaseRevocationRequested struct {
 	BackendRef  string `json:"backend_ref"`
 }
 
+// DynamicSecretLeaseRevocationRetryRequested binds a new outbox command to an
+// exact failed predecessor. The old failure remains in immutable history.
+type DynamicSecretLeaseRevocationRetryRequested struct {
+	TenantEpoch      string `json:"tenant_epoch"`
+	OperationID      string `json:"operation_id"`
+	ID               string `json:"id"`
+	Provider         string `json:"provider"`
+	BackendRef       string `json:"backend_ref"`
+	PreviousOutboxID int64  `json:"previous_outbox_id"`
+}
+
 // DynamicSecretRevokeCommand preserves the legacy RevokeItem field names while
 // adding the lower-case epoch field migration 0156 injects into retained rows.
 type DynamicSecretRevokeCommand struct {
@@ -384,11 +397,13 @@ type DynamicSecretRevokeCommand struct {
 	LeaseID     string `json:"LeaseID"`
 	Provider    string `json:"Provider"`
 	BackendRef  string `json:"BackendRef"`
+	AttemptID   string `json:"attempt_id,omitempty"`
 }
 
 type DynamicSecretLeaseRevocationCompleted struct {
 	TenantEpoch string `json:"tenant_epoch,omitempty"`
 	ID          string `json:"id"`
+	AttemptID   string `json:"attempt_id,omitempty"`
 }
 
 // DynamicSecretOperationRequested claims one raw Idempotency-Key for an exact
@@ -509,6 +524,7 @@ func init() {
 	} {
 		knownSchemaVersions[eventType][DynamicSecretEventSchemaVersion] = true
 	}
+	knownSchemaVersions[EventDynamicSecretLeaseRevocationRetryRequested] = map[int]bool{DynamicSecretEventSchemaVersion: true}
 }
 
 func (p *Projector) applySecretIntegrationTx(ctx context.Context, tx pgx.Tx, e events.Event) (bool, error) {
@@ -667,6 +683,35 @@ func (p *Projector) applySecretIntegrationTx(ctx context.Context, tx pgx.Tx, e e
 		}
 		return true, p.store.ApplyDynamicSecretRevocationIntentForEpochTx(
 			ctx, tx, e.TenantID, tenantEpoch, payload.ID, outboxPayload, e.Time)
+	case EventDynamicSecretLeaseRevocationRetryRequested:
+		var payload DynamicSecretLeaseRevocationRetryRequested
+		if err := decode(e, &payload); err != nil {
+			return true, err
+		}
+		if payload.ID == "" || payload.OperationID == "" || payload.Provider == "" ||
+			payload.BackendRef == "" || payload.PreviousOutboxID <= 0 {
+			return true, fmt.Errorf("projections: %s payload is incomplete", e.Type)
+		}
+		if err := validateDynamicSecretEventIdentity(e, payload.TenantEpoch, "lease-revocation-retry-requested", payload.OperationID); err != nil {
+			return true, err
+		}
+		tenantEpoch, inert, err := p.resolveDynamicSecretEventEpochTx(ctx, tx, e, payload.TenantEpoch)
+		if inert {
+			return true, nil
+		}
+		if err != nil {
+			return true, err
+		}
+		outboxPayload, err := json.Marshal(DynamicSecretRevokeCommand{
+			TenantEpoch: tenantEpoch, LeaseID: payload.ID, Provider: payload.Provider,
+			BackendRef: payload.BackendRef, AttemptID: payload.OperationID,
+		})
+		if err != nil {
+			return true, err
+		}
+		return true, p.store.ApplyDynamicSecretRevocationRetryIntentForEpochTx(
+			ctx, tx, e.TenantID, tenantEpoch, payload.ID, payload.OperationID,
+			payload.PreviousOutboxID, outboxPayload)
 	case EventDynamicSecretLeaseRevocationCompleted:
 		var payload DynamicSecretLeaseRevocationCompleted
 		if err := decode(e, &payload); err != nil {
@@ -675,7 +720,11 @@ func (p *Projector) applySecretIntegrationTx(ctx context.Context, tx pgx.Tx, e e
 		if payload.ID == "" {
 			return true, fmt.Errorf("projections: %s payload is incomplete", e.Type)
 		}
-		if err := validateDynamicSecretEventIdentity(e, payload.TenantEpoch, "provider-revocation-completed", payload.ID); err != nil {
+		identity := payload.ID
+		if payload.AttemptID != "" {
+			identity = payload.AttemptID
+		}
+		if err := validateDynamicSecretEventIdentity(e, payload.TenantEpoch, "provider-revocation-completed", identity); err != nil {
 			return true, err
 		}
 		tenantEpoch, inert, err := p.resolveDynamicSecretEventEpochTx(ctx, tx, e, payload.TenantEpoch)
@@ -695,7 +744,11 @@ func (p *Projector) applySecretIntegrationTx(ctx context.Context, tx pgx.Tx, e e
 		if payload.ID == "" || payload.Error == "" {
 			return true, fmt.Errorf("projections: %s payload is incomplete", e.Type)
 		}
-		if err := validateDynamicSecretEventIdentity(e, payload.TenantEpoch, "provider-revocation-failed", payload.ID); err != nil {
+		identity := payload.ID
+		if payload.AttemptID != "" {
+			identity = payload.AttemptID
+		}
+		if err := validateDynamicSecretEventIdentity(e, payload.TenantEpoch, "provider-revocation-failed", identity); err != nil {
 			return true, err
 		}
 		tenantEpoch, inert, err := p.resolveDynamicSecretEventEpochTx(ctx, tx, e, payload.TenantEpoch)

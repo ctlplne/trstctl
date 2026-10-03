@@ -127,6 +127,64 @@ func (s *Store) ApplyDynamicSecretRevocationIntentForEpochTx(
 		ctx, tx, tenantID, tenantEpoch, leaseID, outboxID, revokedAt)
 }
 
+// ApplyDynamicSecretRevocationRetryIntentForEpochTx projects an operator's
+// explicit retry after provider removal exhausted its first bounded attempt.
+// The new outbox row and pending read state commit in the same transaction; the
+// prior failed row and immutable failure event remain available for audit.
+func (s *Store) ApplyDynamicSecretRevocationRetryIntentForEpochTx(
+	ctx context.Context, tx pgx.Tx, tenantID, tenantEpoch, leaseID, attemptID string,
+	previousOutboxID int64, payload []byte,
+) error {
+	if tenantID == "" || tenantEpoch == "" || leaseID == "" || attemptID == "" || previousOutboxID <= 0 {
+		return errors.New("store: dynamic-secret revocation retry is incomplete")
+	}
+	if err := s.ValidateDynamicSecretTenantEpochTx(ctx, tx, tenantID, tenantEpoch); err != nil {
+		return err
+	}
+	command, err := decodeDynamicSecretRevokeOutboxBinding(payload)
+	if err != nil {
+		return err
+	}
+	var provider, backendRef, status string
+	var currentOutboxID int64
+	if err := tx.QueryRow(ctx,
+		`SELECT provider, backend_ref, revocation_status, revoke_outbox_id
+		   FROM dynamic_secret_leases
+		  WHERE tenant_id = $1 AND tenant_epoch = $2 AND id = $3 AND state = 'revoked'
+		  FOR UPDATE`, tenantID, tenantEpoch, leaseID).Scan(&provider, &backendRef, &status, &currentOutboxID); err != nil {
+		return fmt.Errorf("store: load failed dynamic-secret revocation: %w", err)
+	}
+	if command.TenantEpoch != tenantEpoch || command.LeaseID != leaseID ||
+		command.Provider != provider || command.BackendRef != backendRef || command.AttemptID != attemptID {
+		return fmt.Errorf("%w: dynamic-secret retry payload differs from lease", ErrIdempotencyConflict)
+	}
+	key := DynamicSecretRevokeOutboxIdempotencyKeyForAttempt(tenantEpoch, leaseID, attemptID)
+	outboxID, err := ensureSecretIntegrationOutboxTx(ctx, tx, tenantID, "dynsecret.revoke", "dynsecret.provider:"+provider, key, payload)
+	if err != nil {
+		return err
+	}
+	if currentOutboxID == outboxID {
+		return nil // exact event replay after its transaction already committed
+	}
+	if status != string(DynamicSecretRevocationFailed) || currentOutboxID != previousOutboxID {
+		return fmt.Errorf("%w: dynamic-secret retry requires the exact failed predecessor", ErrIdempotencyConflict)
+	}
+	result, err := tx.Exec(ctx,
+		`UPDATE dynamic_secret_leases
+		    SET revocation_status = 'pending', revoke_outbox_id = $4,
+		        last_error = '', revocation_completed_at = NULL, updated_at = now()
+		  WHERE tenant_id = $1 AND tenant_epoch = $2 AND id = $3
+		    AND state = 'revoked' AND revocation_status = 'failed' AND revoke_outbox_id = $5`,
+		tenantID, tenantEpoch, leaseID, outboxID, previousOutboxID)
+	if err != nil {
+		return fmt.Errorf("store: project dynamic-secret revocation retry: %w", err)
+	}
+	if result.RowsAffected() != 1 {
+		return fmt.Errorf("%w: dynamic-secret retry predecessor changed", ErrIdempotencyConflict)
+	}
+	return nil
+}
+
 // ApplySecretSyncIntentTx projects a queued sync job and recreates its sealed
 // outbox payload atomically. The event contains ciphertext only; plaintext never
 // enters either lifecycle table or the event stream.
@@ -301,6 +359,7 @@ type dynamicSecretRevokeOutboxBinding struct {
 	LeaseID     string `json:"LeaseID"`
 	Provider    string `json:"Provider"`
 	BackendRef  string `json:"BackendRef"`
+	AttemptID   string `json:"attempt_id,omitempty"`
 }
 
 func DynamicSecretIssueOutboxIdempotencyKey(tenantEpoch, leaseID string) string {
@@ -309,6 +368,13 @@ func DynamicSecretIssueOutboxIdempotencyKey(tenantEpoch, leaseID string) string 
 
 func DynamicSecretRevokeOutboxIdempotencyKey(tenantEpoch, leaseID string) string {
 	return "dynsecret.revoke:" + tenantEpoch + ":" + leaseID
+}
+
+func DynamicSecretRevokeOutboxIdempotencyKeyForAttempt(tenantEpoch, leaseID, attemptID string) string {
+	if attemptID == "" {
+		return DynamicSecretRevokeOutboxIdempotencyKey(tenantEpoch, leaseID)
+	}
+	return "dynsecret.revoke.retry:" + tenantEpoch + ":" + leaseID + ":" + attemptID
 }
 
 func decodeDynamicSecretIssueOutboxBinding(payload []byte) (dynamicSecretIssueOutboxBinding, error) {

@@ -4457,6 +4457,15 @@ export const messages = {
   },
   "secrets.dynamic.renew": { defaultMessage: "Renew lease", description: "Dynamic lease renewal action." },
   "secrets.dynamic.revoke": { defaultMessage: "Revoke lease", description: "Dynamic lease revoke action." },
+  "secrets.dynamic.retryRemoval": {
+    defaultMessage: "Retry provider removal",
+    description: "Retry an exact failed dynamic-secret cleanup with a new audited command.",
+  },
+  "secrets.dynamic.recoverExistingLease": {
+    defaultMessage: "Need to inspect a lease from an earlier session?",
+    description: "Points operators to durable lease lookup after browser restart.",
+  },
+  "secrets.dynamic.openLeaseLookup": { defaultMessage: "Find it by ID", description: "Link to durable dynamic-secret lease lookup on Workloads." },
   "secrets.dynamic.renewFailed": { defaultMessage: "Could not renew this lease", description: "Dynamic lease renewal error title." },
   "secrets.dynamic.revokeFailed": { defaultMessage: "Could not confirm lease revocation", description: "Dynamic lease revocation error title." },
   "secrets.dynamic.needsAttention": { defaultMessage: "Temporary credential needs attention", description: "Dynamic workflow error wrapper title." },
@@ -18243,31 +18252,32 @@ export const messages = {
     description: "Heading for the Workloads dynamic lease section.",
   },
   "workloads.leases.description": {
-    defaultMessage: "A lease is a short promise: a workload proves who it is, receives one credential class, and loses it at expiry unless it re-attests.",
+    defaultMessage:
+      "A provider issues a short-lived credential. At expiry or revocation, trstctl queues provider removal and records when that removal actually finishes.",
     description: "Description for ephemeral credential leases.",
   },
   "workloads.leases.timelineIssued": {
-    defaultMessage: "00:00 issued",
+    defaultMessage: "Issued",
     description: "Timeline marker for when an ephemeral credential lease is issued.",
   },
   "workloads.leases.timelineIssuedDescription": {
-    defaultMessage: "policy and attestation digest bind the lease",
+    defaultMessage: "the selected provider creates one scoped credential",
     description: "Timeline detail for issued ephemeral credential leases.",
   },
   "workloads.leases.timelineRenew": {
-    defaultMessage: "00:45 renew window",
+    defaultMessage: "Renewed",
     description: "Timeline marker for when an ephemeral credential lease can renew.",
   },
   "workloads.leases.timelineRenewDescription": {
-    defaultMessage: "workload must re-attest before renewal",
+    defaultMessage: "the provider extends or replaces the credential within its original limit",
     description: "Timeline detail for renewing ephemeral credential leases.",
   },
   "workloads.leases.timelineExpires": {
-    defaultMessage: "01:00 expires",
+    defaultMessage: "Expired or revoked",
     description: "Timeline marker for when an ephemeral credential lease expires.",
   },
   "workloads.leases.timelineExpiresDescription": {
-    defaultMessage: "credential is no longer trusted by policy",
+    defaultMessage: "provider removal is queued; confirm completion before assuming access is gone",
     description: "Timeline detail for expired ephemeral credential leases.",
   },
   "workloads.leases.issueHeading": {
@@ -18275,7 +18285,8 @@ export const messages = {
     description: "Form heading for issuing an ephemeral credential lease.",
   },
   "workloads.leases.issueDescription": {
-    defaultMessage: "The API returns lease metadata only. If a provider returns credential material, this panel keeps it out of the browser table.",
+    defaultMessage:
+      "The provider credential appears once after issue or renewal. Copy it for the target, then dismiss it; the lease table retains metadata only.",
     description: "Security note for the dynamic lease issue form.",
   },
   "workloads.leases.provider": {
@@ -18293,6 +18304,54 @@ export const messages = {
   "workloads.leases.issueButton": {
     defaultMessage: "Issue lease",
     description: "Button label for issuing a dynamic lease.",
+  },
+  "workloads.leases.loadHeading": {
+    defaultMessage: "Find an existing lease",
+    description: "Heading for looking up a dynamic-secret lease after a browser or control-plane restart.",
+  },
+  "workloads.leases.loadDescription": {
+    defaultMessage: "Load a lease by ID to check provider removal, including failed cleanup that needs a retry. This returns metadata, never the credential.",
+    description: "Explains the durable dynamic-secret lease lookup.",
+  },
+  "workloads.leases.lookupID": {
+    defaultMessage: "Lease ID",
+    description: "Label for looking up a dynamic-secret lease by ID.",
+  },
+  "workloads.leases.loadButton": {
+    defaultMessage: "Load lease",
+    description: "Button for reading durable dynamic-secret lease metadata.",
+  },
+  "workloads.leases.loadErrorFallback": {
+    defaultMessage: "Could not load lease",
+    description: "Fallback error for a failed dynamic-secret lease lookup.",
+  },
+  "workloads.leases.removalPending": {
+    defaultMessage: "Provider removal pending",
+    description: "Dynamic-secret lease revocation progress while the provider command is queued.",
+  },
+  "workloads.leases.removalCompleted": {
+    defaultMessage: "Provider removal confirmed",
+    description: "Dynamic-secret lease revocation progress after provider completion.",
+  },
+  "workloads.leases.removalFailed": {
+    defaultMessage: "Provider removal failed; inspect the provider and retry",
+    description: "Dynamic-secret lease revocation progress after bounded retries are exhausted.",
+  },
+  "workloads.leases.refreshButton": {
+    defaultMessage: "Refresh",
+    description: "Button for refreshing one dynamic-secret lease's current provider status.",
+  },
+  "workloads.leases.refreshAria": {
+    defaultMessage: "Refresh lease {id}",
+    description: "Accessible label for refreshing a specific dynamic-secret lease.",
+  },
+  "workloads.leases.retryRemovalButton": {
+    defaultMessage: "Retry provider removal",
+    description: "Button for a fresh audited retry of one failed provider cleanup.",
+  },
+  "workloads.leases.retryRemovalAria": {
+    defaultMessage: "Retry provider removal for lease {id}",
+    description: "Accessible label for retrying failed cleanup of a specific dynamic-secret lease.",
   },
   "workloads.leases.errorTitle": {
     defaultMessage: "Lease operation failed",

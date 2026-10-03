@@ -11832,7 +11832,7 @@
             "type": "string"
           },
           "revocation_status": {
-            "description": "Provider revocation progress. Revoked lease state alone acknowledges queuing, not provider removal.",
+            "description": "Provider revocation progress. Revoked lease state alone acknowledges queuing, not provider removal. After failed, POST revoke with a fresh Idempotency-Key queues a new audited provider-removal attempt; replaying the old key returns its original receipt.",
             "enum": [
               "none",
               "pending",
@@ -55908,7 +55908,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Revoke a dynamic secret lease",
+        "summary": "Revoke a dynamic secret lease or retry failed provider removal",
         "x-trstctl-permission": "secrets:write"
       }
     },

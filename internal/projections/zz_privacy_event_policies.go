@@ -1039,6 +1039,7 @@ type privacyDynamicSecretLeaseFailureV2 struct {
 	TenantEpoch string `json:"tenant_epoch"`
 	ID          string `json:"id"`
 	Error       string `json:"error"`
+	AttemptID   string `json:"attempt_id"`
 }
 
 type privacyDynamicSecretLeaseRenewedV2 struct {
@@ -1056,9 +1057,19 @@ type privacyDynamicSecretLeaseRevocationRequestedV2 struct {
 	BackendRef  string `json:"backend_ref"`
 }
 
+type privacyDynamicSecretLeaseRevocationRetryRequestedV2 struct {
+	TenantEpoch      string `json:"tenant_epoch"`
+	OperationID      string `json:"operation_id"`
+	ID               string `json:"id"`
+	Provider         string `json:"provider"`
+	BackendRef       string `json:"backend_ref"`
+	PreviousOutboxID int64  `json:"previous_outbox_id"`
+}
+
 type privacyDynamicSecretLeaseRevocationCompletedV2 struct {
 	TenantEpoch string `json:"tenant_epoch"`
 	ID          string `json:"id"`
+	AttemptID   string `json:"attempt_id"`
 }
 
 type privacyDynamicSecretOperationRequestedV2 struct {
@@ -1715,26 +1726,27 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 			privacyPayloadShape[privacyDynamicSecretLegacyLeaseAudit](),
 			privacyPayloadShape[privacyDynamicSecretLeaseRenewedV1](),
 		),
-		{EventDynamicSecretLeaseRenewed, DynamicSecretEventSchemaVersion}:             privacyPayloadShape[privacyDynamicSecretLeaseRenewedV2](),
-		{EventDynamicSecretLeaseRevocationRequested, 1}:                               privacyPayloadShape[privacyDynamicSecretLeaseRevocationRequestedV1](),
-		{EventDynamicSecretLeaseRevocationRequested, DynamicSecretEventSchemaVersion}: privacyPayloadShape[privacyDynamicSecretLeaseRevocationRequestedV2](),
-		{EventDynamicSecretLeaseRevocationCompleted, 1}:                               privacyPayloadShape[privacyDynamicSecretLeaseRevocationCompletedV1](),
-		{EventDynamicSecretLeaseRevocationCompleted, DynamicSecretEventSchemaVersion}: privacyPayloadShape[privacyDynamicSecretLeaseRevocationCompletedV2](),
-		{EventDynamicSecretLeaseRevocationFailed, 1}:                                  privacyPayloadShape[privacyDynamicSecretLeaseFailureV1](),
-		{EventDynamicSecretLeaseRevocationFailed, DynamicSecretEventSchemaVersion}:    privacyPayloadShape[privacyDynamicSecretLeaseFailureV2](),
-		{EventDynamicSecretOperationRequested, 1}:                                     privacyPayloadShape[privacyDynamicSecretOperationRequestedV1](),
-		{EventDynamicSecretOperationRequested, DynamicSecretEventSchemaVersion}:       privacyPayloadShape[privacyDynamicSecretOperationRequestedV2](),
-		{EventDynamicSecretOperationCompleted, 1}:                                     privacyPayloadShape[privacyDynamicSecretOperationCompletedV1](),
-		{EventDynamicSecretOperationCompleted, DynamicSecretEventSchemaVersion}:       privacyPayloadShape[privacyDynamicSecretOperationCompletedV2](),
-		{EventSecretSyncQueued, 1}:                                                    privacyPayloadShape[privacySecretSyncQueuedV1](),
-		{EventSecretSyncQueued, SecretSyncEventSchemaVersion}:                         privacyPayloadShape[privacySecretSyncQueuedV2](),
-		{EventSecretSyncDelivered, 1}:                                                 privacyPayloadShape[privacySecretSyncDeliveredV1](),
-		{EventSecretSyncDelivered, SecretSyncEventSchemaVersion}:                      privacyPayloadShape[privacySecretSyncDeliveredV2](),
-		{EventSecretSyncFailed, 1}:                                                    privacyPayloadShape[privacySecretSyncFailedV1](),
-		{EventSecretSyncFailed, SecretSyncEventSchemaVersion}:                         privacyPayloadShape[privacySecretSyncFailedV2](),
-		{EventSecretSyncWorkloadIdentityUpserted, 1}:                                  privacyPayloadShape[SecretSyncWorkloadIdentitySourceUpserted](),
-		{EventSecretSyncWorkloadIdentityStatus, 1}:                                    privacyPayloadShape[SecretSyncWorkloadIdentitySourceStatus](),
-		{EventSecretSyncWorkloadIdentityDeleted, 1}:                                   privacyPayloadShape[SecretSyncWorkloadIdentitySourceDeleted](),
+		{EventDynamicSecretLeaseRenewed, DynamicSecretEventSchemaVersion}:                  privacyPayloadShape[privacyDynamicSecretLeaseRenewedV2](),
+		{EventDynamicSecretLeaseRevocationRequested, 1}:                                    privacyPayloadShape[privacyDynamicSecretLeaseRevocationRequestedV1](),
+		{EventDynamicSecretLeaseRevocationRequested, DynamicSecretEventSchemaVersion}:      privacyPayloadShape[privacyDynamicSecretLeaseRevocationRequestedV2](),
+		{EventDynamicSecretLeaseRevocationRetryRequested, DynamicSecretEventSchemaVersion}: privacyPayloadShape[privacyDynamicSecretLeaseRevocationRetryRequestedV2](),
+		{EventDynamicSecretLeaseRevocationCompleted, 1}:                                    privacyPayloadShape[privacyDynamicSecretLeaseRevocationCompletedV1](),
+		{EventDynamicSecretLeaseRevocationCompleted, DynamicSecretEventSchemaVersion}:      privacyPayloadShape[privacyDynamicSecretLeaseRevocationCompletedV2](),
+		{EventDynamicSecretLeaseRevocationFailed, 1}:                                       privacyPayloadShape[privacyDynamicSecretLeaseFailureV1](),
+		{EventDynamicSecretLeaseRevocationFailed, DynamicSecretEventSchemaVersion}:         privacyPayloadShape[privacyDynamicSecretLeaseFailureV2](),
+		{EventDynamicSecretOperationRequested, 1}:                                          privacyPayloadShape[privacyDynamicSecretOperationRequestedV1](),
+		{EventDynamicSecretOperationRequested, DynamicSecretEventSchemaVersion}:            privacyPayloadShape[privacyDynamicSecretOperationRequestedV2](),
+		{EventDynamicSecretOperationCompleted, 1}:                                          privacyPayloadShape[privacyDynamicSecretOperationCompletedV1](),
+		{EventDynamicSecretOperationCompleted, DynamicSecretEventSchemaVersion}:            privacyPayloadShape[privacyDynamicSecretOperationCompletedV2](),
+		{EventSecretSyncQueued, 1}:                                                         privacyPayloadShape[privacySecretSyncQueuedV1](),
+		{EventSecretSyncQueued, SecretSyncEventSchemaVersion}:                              privacyPayloadShape[privacySecretSyncQueuedV2](),
+		{EventSecretSyncDelivered, 1}:                                                      privacyPayloadShape[privacySecretSyncDeliveredV1](),
+		{EventSecretSyncDelivered, SecretSyncEventSchemaVersion}:                           privacyPayloadShape[privacySecretSyncDeliveredV2](),
+		{EventSecretSyncFailed, 1}:                                                         privacyPayloadShape[privacySecretSyncFailedV1](),
+		{EventSecretSyncFailed, SecretSyncEventSchemaVersion}:                              privacyPayloadShape[privacySecretSyncFailedV2](),
+		{EventSecretSyncWorkloadIdentityUpserted, 1}:                                       privacyPayloadShape[SecretSyncWorkloadIdentitySourceUpserted](),
+		{EventSecretSyncWorkloadIdentityStatus, 1}:                                         privacyPayloadShape[SecretSyncWorkloadIdentitySourceStatus](),
+		{EventSecretSyncWorkloadIdentityDeleted, 1}:                                        privacyPayloadShape[SecretSyncWorkloadIdentitySourceDeleted](),
 	}
 }
 

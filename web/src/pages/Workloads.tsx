@@ -6,6 +6,9 @@ import { PageHeader } from "@/components/PageHeader";
 import { ScrollableTableRegion } from "@/components/ScrollableTableRegion";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { Num } from "@/components/typography";
 import { useApiQuery } from "@/lib/query";
 import { EphemeralCredentialWorkflow } from "@/pages/workloads/EphemeralCredentialWorkflow";
@@ -127,6 +130,7 @@ export function Workloads() {
   const [provider, setProvider] = useState("postgresql");
   const [role, setRole] = useState("readonly-reporting");
   const [ttlSeconds, setTtlSeconds] = useState(1200);
+  const [leaseLookupID, setLeaseLookupID] = useState("");
   const [leases, setLeases] = useState<DynamicLease[]>([]);
   const [leaseCredential, setLeaseCredential] = useState<{ id: string; value: string; expiresAt: string } | null>(null);
   useEffect(() => {
@@ -275,6 +279,33 @@ export function Workloads() {
       if (renewed.id !== leaseId) upsertLease(await api.getDynamicLease(leaseId));
     } catch (err) {
       setLeaseError(apiProblemMessage(err, "Could not renew lease"));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function loadLease(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const leaseId = leaseLookupID.trim();
+    if (!leaseId) return;
+    setBusy(`load:${leaseId}`);
+    setLeaseError(null);
+    try {
+      upsertLease(await api.getDynamicLease(leaseId));
+    } catch (err) {
+      setLeaseError(apiProblemMessage(err, t("workloads.leases.loadErrorFallback")));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function refreshLease(leaseId: string) {
+    setBusy(`refresh:${leaseId}`);
+    setLeaseError(null);
+    try {
+      upsertLease(await api.getDynamicLease(leaseId));
+    } catch (err) {
+      setLeaseError(apiProblemMessage(err, t("workloads.leases.loadErrorFallback")));
     } finally {
       setBusy(null);
     }
@@ -860,6 +891,23 @@ export function Workloads() {
               </div>
             </form>
 
+            <Card>
+              <form aria-label={t("workloads.leases.loadHeading")} className="grid gap-3 p-comfortable" onSubmit={loadLease}>
+                <div>
+                  <h3 className="text-title font-semibold">{t("workloads.leases.loadHeading")}</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">{t("workloads.leases.loadDescription")}</p>
+                </div>
+                <div className="flex flex-wrap items-end gap-3">
+                  <Field label={t("workloads.leases.lookupID")} className="min-w-64 flex-1" required>
+                    {(field) => <Input {...field} value={leaseLookupID} onChange={(event) => setLeaseLookupID(event.target.value)} required />}
+                  </Field>
+                  <Button type="submit" variant="outline" disabled={busy?.startsWith("load:") || !leaseLookupID.trim()}>
+                    {t("workloads.leases.loadButton")}
+                  </Button>
+                </div>
+              </form>
+            </Card>
+
             {leaseError && <ErrorState title={t("workloads.leases.errorTitle")}>{leaseError}</ErrorState>}
 
             {leaseCredential && leases.some((item) => item.id === leaseCredential.id && item.state === "active") ? (
@@ -901,11 +949,31 @@ export function Workloads() {
                         <td>{lease.role}</td>
                         <td>
                           <StatusBadge vocabulary="certificate" value={lease.state} />
+                          {lease.state === "revoked" ? (
+                            <p className="mt-1 text-xs text-muted-foreground" aria-live="polite">
+                              {lease.revocation_status === "completed"
+                                ? t("workloads.leases.removalCompleted")
+                                : lease.revocation_status === "failed"
+                                  ? t("workloads.leases.removalFailed")
+                                  : t("workloads.leases.removalPending")}
+                            </p>
+                          ) : null}
                         </td>
                         <td>{formatDate(lease.issued_at)}</td>
                         <td>{formatDate(lease.expires_at)}</td>
                         <td>
                           <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={busy === `refresh:${lease.id}`}
+                              aria-label={t("workloads.leases.refreshAria", { id: lease.id })}
+                              onClick={() => void refreshLease(lease.id)}
+                            >
+                              <RefreshCw className={busy === `refresh:${lease.id}` ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
+                              {t("workloads.leases.refreshButton")}
+                            </Button>
                             <Button
                               type="button"
                               size="sm"
@@ -920,12 +988,16 @@ export function Workloads() {
                               type="button"
                               size="sm"
                               variant="outline"
-                              disabled={busy === `revoke:${lease.id}` || lease.state === "revoked"}
-                              aria-label={t("workloads.leases.revokeAria", { id: lease.id })}
+                              disabled={busy === `revoke:${lease.id}` || (lease.state === "revoked" && lease.revocation_status !== "failed")}
+                              aria-label={
+                                lease.state === "revoked"
+                                  ? t("workloads.leases.retryRemovalAria", { id: lease.id })
+                                  : t("workloads.leases.revokeAria", { id: lease.id })
+                              }
                               onClick={() => void revokeLease(lease.id)}
                             >
                               <Ban className="h-4 w-4" aria-hidden="true" />
-                              {t("workloads.leases.revokeButton")}
+                              {lease.state === "revoked" ? t("workloads.leases.retryRemovalButton") : t("workloads.leases.revokeButton")}
                             </Button>
                           </div>
                         </td>
@@ -1244,6 +1316,10 @@ function leaseMetadataOnly(lease: DynamicLease): DynamicLease {
     state: lease.state,
     issued_at: lease.issued_at,
     expires_at: lease.expires_at,
+    hard_expires_at: lease.hard_expires_at,
+    revocation_status: lease.revocation_status,
+    revoked_at: lease.revoked_at,
+    revocation_completed_at: lease.revocation_completed_at,
   };
 }
 

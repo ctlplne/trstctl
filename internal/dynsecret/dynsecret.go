@@ -99,6 +99,7 @@ type RevokeItem struct {
 	LeaseID     string
 	Provider    string
 	BackendRef  string
+	AttemptID   string `json:"attempt_id,omitempty"`
 }
 
 // RevokeQueue is the durable revocation outbox (AN-6): a revocation enqueued here

@@ -252,7 +252,7 @@ func (d *secretIntegrationOutboxDispatcher) DeliverTerminalFailure(ctx context.C
 		if err != nil {
 			return true, err
 		}
-		if m.IdempotencyKey != store.DynamicSecretRevokeOutboxIdempotencyKey(item.TenantEpoch, item.LeaseID) ||
+		if m.IdempotencyKey != store.DynamicSecretRevokeOutboxIdempotencyKeyForAttempt(item.TenantEpoch, item.LeaseID, item.AttemptID) ||
 			record.TenantEpoch != item.TenantEpoch || record.RevokeOutboxID == nil ||
 			*record.RevokeOutboxID != m.ID || record.Provider != item.Provider ||
 			record.BackendRef != item.BackendRef || record.State != store.DynamicSecretLeaseRevoked {
@@ -261,8 +261,12 @@ func (d *secretIntegrationOutboxDispatcher) DeliverTerminalFailure(ctx context.C
 		if record.RevocationStatus != store.DynamicSecretRevocationPending {
 			return true, nil
 		}
-		return true, d.appendAndProjectID(ctx, dynamicSecretEventID(m.TenantID, item.TenantEpoch, "provider-revocation-failed", item.LeaseID), m.TenantID, projections.EventDynamicSecretLeaseRevocationFailed,
-			projections.DynamicSecretLeaseFailure{TenantEpoch: item.TenantEpoch, ID: item.LeaseID, Error: terminal})
+		outcomeID := item.LeaseID
+		if item.AttemptID != "" {
+			outcomeID = item.AttemptID
+		}
+		return true, d.appendAndProjectID(ctx, dynamicSecretEventID(m.TenantID, item.TenantEpoch, "provider-revocation-failed", outcomeID), m.TenantID, projections.EventDynamicSecretLeaseRevocationFailed,
+			projections.DynamicSecretLeaseFailure{TenantEpoch: item.TenantEpoch, ID: item.LeaseID, AttemptID: item.AttemptID, Error: terminal})
 	case strings.HasPrefix(m.Destination, secretSyncDestinationPrefix):
 		var payload secretSyncOutboxPayload
 		if err := json.Unmarshal(m.Payload, &payload); err != nil || payload.ID == "" || payload.Key == "" || payload.Target == "" || len(payload.Sealed) == 0 {
@@ -624,7 +628,7 @@ func (d *secretIntegrationOutboxDispatcher) revokeDynamicSecret(ctx context.Cont
 	if item.TenantEpoch == "" || item.LeaseID == "" || item.Provider == "" || item.BackendRef == "" {
 		return errors.New("server: dynamic-secret revocation payload is incomplete")
 	}
-	if m.IdempotencyKey != store.DynamicSecretRevokeOutboxIdempotencyKey(item.TenantEpoch, item.LeaseID) {
+	if m.IdempotencyKey != store.DynamicSecretRevokeOutboxIdempotencyKeyForAttempt(item.TenantEpoch, item.LeaseID, item.AttemptID) {
 		return errors.New("server: dynamic-secret revocation outbox identity is mismatched")
 	}
 	record, err := d.store.GetDynamicSecretLease(ctx, m.TenantID, item.LeaseID)
@@ -645,15 +649,19 @@ func (d *secretIntegrationOutboxDispatcher) revokeDynamicSecret(ctx context.Cont
 	default:
 		return fmt.Errorf("server: dynamic-secret revocation has invalid projected status %q", record.RevocationStatus)
 	}
+	outcomeID := item.LeaseID
+	if item.AttemptID != "" {
+		outcomeID = item.AttemptID
+	}
 	completedEventID := dynamicSecretEventID(
-		m.TenantID, item.TenantEpoch, "provider-revocation-completed", item.LeaseID)
+		m.TenantID, item.TenantEpoch, "provider-revocation-completed", outcomeID)
 	if _, found, err := d.log.EventByID(ctx, completedEventID); err != nil {
 		return err
 	} else if found {
 		return d.appendAndProjectID(ctx, completedEventID, m.TenantID,
 			projections.EventDynamicSecretLeaseRevocationCompleted,
 			projections.DynamicSecretLeaseRevocationCompleted{
-				TenantEpoch: item.TenantEpoch, ID: item.LeaseID,
+				TenantEpoch: item.TenantEpoch, ID: item.LeaseID, AttemptID: item.AttemptID,
 			})
 	}
 	for _, provider := range d.dynamicProvidersForTenant(m.TenantID) {
@@ -662,7 +670,7 @@ func (d *secretIntegrationOutboxDispatcher) revokeDynamicSecret(ctx context.Cont
 				return fmt.Errorf("server: revoke dynamic-secret lease %s with provider %s: %w", item.LeaseID, item.Provider, err)
 			}
 			return d.appendAndProjectID(ctx, completedEventID, m.TenantID, projections.EventDynamicSecretLeaseRevocationCompleted, projections.DynamicSecretLeaseRevocationCompleted{
-				TenantEpoch: item.TenantEpoch, ID: item.LeaseID,
+				TenantEpoch: item.TenantEpoch, ID: item.LeaseID, AttemptID: item.AttemptID,
 			})
 		}
 	}

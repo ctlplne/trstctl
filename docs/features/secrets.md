@@ -251,7 +251,15 @@ global `user@'%'` login. The provider catalog shows both settings before issue.
   previous token is rejected with `kubectl`. A Kubernetes replacement must have
   at least 600 seconds remaining and fit within the predecessor's renewal limit.
 - `POST /api/v1/secrets/leases/{lease_id}/revoke` closes the lease and queues backend
-  revocation through the outbox worker.
+  revocation through the outbox worker. If GET later reports
+  `revocation_status=failed`, correct the provider outage and POST the same revoke
+  path with a **new** `Idempotency-Key`. That creates a separate audited outbox
+  attempt, preserves the failed predecessor, and returns `pending`; use GET until
+  `completed`, then test the old credential with the native client. Replaying an
+  earlier key returns that earlier immutable receipt and never queues another
+  provider call. The Workloads console can load an existing lease ID after a
+  restart, show failed removal, and retry it. A revoked lease is unusable in
+  trstctl while provider cleanup is pending, but native access can persist.
 
 The console presents the same contract as three small steps: **Choose connection →
 Review exact plan → Use and retire**. It selects only a real configured provider ID

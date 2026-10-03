@@ -250,7 +250,7 @@ not this file.
 | `internal/perf/perf_test.go:234` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/projections/apitoken_test.go:59` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/projections/cli_api_test.go:90` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/projections/secret_integrations.go:220` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/projections/secret_integrations.go:221` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/risk/contextual_test.go:192` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/risk/contextual_test.go:214` | fabricated identifier, not credential material (CWE-798) |
 | `internal/schedulerhistory/history_test.go:12` | deliberately toxic non-routable fixture proves redaction (CWE-798). |
@@ -492,8 +492,8 @@ not this file.
 | `internal/projections/full_dr_test.go:467` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/projections.go:4619` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/secret_integrations.go:232` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
-| `internal/projections/secret_integrations.go:239` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
+| `internal/projections/secret_integrations.go:233` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
+| `internal/projections/secret_integrations.go:240` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations_test.go:659` | embedded JetStream fixture sequences are bounded far below MaxInt64 (CWE-190). |
 | `internal/projections/secret_integrations_test.go:812` | fixture sequence is tiny and asserted positive above. |
 | `internal/projections/secret_sync_lifecycle.go:318` | observe checked the explicit PostgreSQL bigint bound. |
@@ -521,10 +521,10 @@ not this file.
 | `internal/server/recovery_projection_factory_test.go:172` | event test sequence is PostgreSQL bigint-bounded. |
 | `internal/server/revocation.go:423` | value reduced modulo the shard count before conversion (CWE-190) |
 | `internal/server/run.go:211` | bounded small ints from config (CWE-190) |
-| `internal/server/secret_integrations_outbox.go:837` | positive int64 is exactly representable as uint64. |
-| `internal/server/secret_integrations_outbox.go:838` | positive int64 is exactly representable as uint64. |
-| `internal/server/secret_integrations_outbox.go:841` | positive int64 is exactly representable as uint64. |
-| `internal/server/secret_integrations_outbox.go:850` | positive int64 is exactly representable as uint64. |
+| `internal/server/secret_integrations_outbox.go:845` | positive int64 is exactly representable as uint64. |
+| `internal/server/secret_integrations_outbox.go:846` | positive int64 is exactly representable as uint64. |
+| `internal/server/secret_integrations_outbox.go:849` | positive int64 is exactly representable as uint64. |
+| `internal/server/secret_integrations_outbox.go:858` | positive int64 is exactly representable as uint64. |
 | `internal/server/secrets_rotation_served_test.go:2566` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/signing/keystore.go:112` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
 | `internal/signing/keystore.go:114` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |

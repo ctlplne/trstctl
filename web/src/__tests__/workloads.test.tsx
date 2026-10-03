@@ -22,6 +22,7 @@ const { apiMock } = vi.hoisted(() => ({
     workloadAttesterTrustSources: vi.fn(),
     issueDynamicLease: vi.fn(),
     renewDynamicLease: vi.fn(),
+    revokeDynamicLease: vi.fn(),
     getDynamicLease: vi.fn(),
   },
 }));
@@ -43,6 +44,10 @@ function renderWorkloads() {
 
 describe("workload identity disclosure surface", () => {
   beforeEach(() => {
+    apiMock.issueDynamicLease.mockReset();
+    apiMock.renewDynamicLease.mockReset();
+    apiMock.revokeDynamicLease.mockReset();
+    apiMock.getDynamicLease.mockReset();
     apiMock.brokerAgentIdentities.mockReset().mockResolvedValue(brokerHistoryPage([]));
     apiMock.kubernetesCSRSupport.mockReset().mockResolvedValue(kubernetesCSRSupportFixture());
     apiMock.kubernetesTrustBundles.mockReset().mockResolvedValue(kubernetesTrustBundleFixture());
@@ -230,13 +235,19 @@ describe("workload identity disclosure surface", () => {
     expect(screen.getByText("trstctl.com/trstctl")).toBeInTheDocument();
     expect(screen.getByText("certificatesigningrequests/status: update, patch")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Ephemeral credential leases" })).toBeInTheDocument();
-    expect(screen.getByText("00:00 issued")).toBeInTheDocument();
-    expect(screen.getByText("00:45 renew window")).toBeInTheDocument();
-    expect(screen.getByText("01:00 expires")).toBeInTheDocument();
+    expect(screen.getAllByText("Issued").length).toBeGreaterThan(0);
+    expect(screen.getByText("Renewed")).toBeInTheDocument();
+    expect(screen.getByText("Expired or revoked")).toBeInTheDocument();
+    expect(screen.getByText(/provider removal is queued; confirm completion/)).toBeInTheDocument();
     expect(screen.getByLabelText("Provider")).toHaveValue("postgresql");
     expect(screen.getByLabelText("Role")).toHaveValue("readonly-reporting");
     expect(screen.getByLabelText("TTL seconds")).toHaveValue(1200);
     expect(screen.getByRole("button", { name: "Issue lease" })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "The provider credential appears once after issue or renewal. Copy it for the target, then dismiss it; the lease table retains metadata only.",
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText("No lease has been issued in this browser session.")).toBeInTheDocument();
     expect(screen.getByText("Lease history isn't in the console yet")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Request a temporary workload certificate" })).toBeInTheDocument();
@@ -274,6 +285,35 @@ describe("workload identity disclosure surface", () => {
     expect(screen.getByText("Reveal-once credential for lease-new")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Dismiss" }));
     expect(screen.queryByText("replacement-token")).not.toBeInTheDocument();
+  });
+
+  it("loads a failed lease after restart and retries only its provider removal", async () => {
+    const issuedAt = new Date().toISOString();
+    const expiresAt = new Date(Date.now() - 60_000).toISOString();
+    const base = {
+      id: "lease-failed",
+      provider: "u2-kubernetes",
+      role: "reader",
+      state: "revoked",
+      issued_at: issuedAt,
+      expires_at: expiresAt,
+      max_expires_at: expiresAt,
+    };
+    apiMock.getDynamicLease.mockResolvedValueOnce({ ...base, revocation_status: "failed" }).mockResolvedValueOnce({ ...base, revocation_status: "completed" });
+    apiMock.revokeDynamicLease.mockResolvedValue({ ...base, revocation_status: "pending" });
+    const user = userEvent.setup();
+    renderWorkloads();
+
+    await user.click(screen.getByText("Dynamic secret leases"));
+    await user.type(screen.getByLabelText("Lease ID"), "lease-failed");
+    await user.click(screen.getByRole("button", { name: "Load lease" }));
+    expect(await screen.findByText("Provider removal failed; inspect the provider and retry")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Retry provider removal for lease lease-failed" }));
+    expect(apiMock.revokeDynamicLease).toHaveBeenCalledWith("lease-failed");
+    expect(await screen.findByText("Provider removal pending")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Refresh lease lease-failed" }));
+    expect(await screen.findByText("Provider removal confirmed")).toBeInTheDocument();
+    expect(screen.queryByText(/first-token|replacement-token/)).not.toBeInTheDocument();
   });
 
   it("describes configured tenant trust without claiming the workload proof is already verified", async () => {

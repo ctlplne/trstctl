@@ -872,6 +872,93 @@ func TestDurableDynamicSecretConcurrentIssueUsesOneCanonicalIntent(t *testing.T)
 	}
 }
 
+func TestFailedDynamicSecretRevocationCanBeRetriedWithNewBoundCommand(t *testing.T) {
+	const tenant = "11111111-1111-4111-8111-111111111138"
+	ctx := context.Background()
+	st, log, kek, outbox, provider, dispatcher := newDynamicSecretOutboxTestStack(t, tenant)
+	srv, stop := startSecretIntegrationDispatcher(t, st, outbox, dispatcher)
+	lifecycle, err := newDurableDynamicSecretLifecycle(tenant, []dynsecret.Provider{provider}, st, log, kek, outbox, srv.wakeOutbox)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lease, credential, err := lifecycle.IssueBound(ctx, provider.name, "reader", 20*time.Minute, "retry-issue", "sha256:retry-issue")
+	if err != nil {
+		t.Fatal(err)
+	}
+	secret.Wipe(credential)
+	stop()
+	if _, err := lifecycle.RevokeBound(ctx, lease.ID, "retry-first-revoke", "sha256:retry-first-revoke"); err != nil {
+		t.Fatal(err)
+	}
+	failed, err := st.GetDynamicSecretLease(ctx, tenant, lease.ID)
+	if err != nil || failed.RevokeOutboxID == nil {
+		t.Fatalf("load pending provider removal: %+v, %v", failed, err)
+	}
+	first, err := outbox.Get(ctx, tenant, *failed.RevokeOutboxID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	message := orchestrator.Message{ID: first.ID, TenantID: tenant, Destination: first.Destination, IdempotencyKey: first.IdempotencyKey, Payload: first.Payload, Attempts: 10}
+	if handled, err := dispatcher.DeliverTerminalFailure(ctx, message, errors.New("provider temporarily unavailable")); !handled || err != nil {
+		t.Fatalf("record terminal provider failure: handled=%t err=%v", handled, err)
+	}
+	failed, err = st.GetDynamicSecretLease(ctx, tenant, lease.ID)
+	if err != nil || failed.RevocationStatus != store.DynamicSecretRevocationFailed {
+		t.Fatalf("terminal provider failure not projected: %+v, %v", failed, err)
+	}
+	retryReceipt, err := lifecycle.RevokeBound(ctx, lease.ID, "retry-revoke-after-repair", "sha256:retry-revoke-after-repair")
+	if err != nil || retryReceipt.RevocationStatus != "pending" || retryReceipt.RevocationCompletedAt != nil {
+		t.Fatalf("retry receipt must acknowledge queued provider removal: %+v, %v", retryReceipt, err)
+	}
+	retried, err := st.GetDynamicSecretLease(ctx, tenant, lease.ID)
+	if err != nil || retried.RevocationStatus != store.DynamicSecretRevocationPending || retried.RevokeOutboxID == nil || *retried.RevokeOutboxID == first.ID {
+		t.Fatalf("failed removal was not requeued as a new bound provider command: %+v, %v", retried, err)
+	}
+	second, err := outbox.Get(ctx, tenant, *retried.RevokeOutboxID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondMessage := orchestrator.Message{ID: second.ID, TenantID: tenant, Destination: second.Destination, IdempotencyKey: second.IdempotencyKey, Payload: second.Payload, Attempts: 10}
+	if handled, err := dispatcher.DeliverTerminalFailure(ctx, secondMessage, errors.New("provider still unavailable")); !handled || err != nil {
+		t.Fatalf("record repeated terminal provider failure: handled=%t err=%v", handled, err)
+	}
+	if latest, err := st.GetDynamicSecretLease(ctx, tenant, lease.ID); err != nil || latest.RevocationStatus != store.DynamicSecretRevocationFailed || *latest.RevokeOutboxID != second.ID {
+		t.Fatalf("repeated failure did not bind its own attempt: %+v, %v", latest, err)
+	}
+	thirdReceipt, err := lifecycle.RevokeBound(ctx, lease.ID, "retry-revoke-after-second-repair", "sha256:retry-revoke-after-second-repair")
+	if err != nil || thirdReceipt.RevocationStatus != "pending" {
+		t.Fatalf("second recovery attempt did not queue: %+v, %v", thirdReceipt, err)
+	}
+	thirdLease, err := st.GetDynamicSecretLease(ctx, tenant, lease.ID)
+	if err != nil || thirdLease.RevokeOutboxID == nil || *thirdLease.RevokeOutboxID == second.ID {
+		t.Fatalf("second recovery attempt reused a failed command: %+v, %v", thirdLease, err)
+	}
+	third, err := outbox.Get(ctx, tenant, *thirdLease.RevokeOutboxID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if handled, err := dispatcher.Deliver(ctx, orchestrator.Message{ID: third.ID, TenantID: tenant, Destination: third.Destination, IdempotencyKey: third.IdempotencyKey, Payload: third.Payload, Attempts: 1}); !handled || err != nil {
+		t.Fatalf("retry provider removal: handled=%t err=%v", handled, err)
+	}
+	completed, err := st.GetDynamicSecretLease(ctx, tenant, lease.ID)
+	if err != nil || completed.RevocationStatus != store.DynamicSecretRevocationCompleted || len(provider.Revocations()) != 1 {
+		t.Fatalf("retry did not complete exactly one provider removal: %+v revocations=%v err=%v", completed, provider.Revocations(), err)
+	}
+	if _, err := lifecycle.RevokeBound(ctx, lease.ID, "retry-revoke-after-repair", "sha256:retry-revoke-after-repair"); err != nil {
+		t.Fatalf("exact retry replay: %v", err)
+	}
+	if latest, err := st.GetDynamicSecretLease(ctx, tenant, lease.ID); err != nil || *latest.RevokeOutboxID != third.ID {
+		t.Fatalf("exact retry replay created another provider command: %+v, %v", latest, err)
+	}
+	if err := projections.New(st).Rebuild(ctx, log); err != nil {
+		t.Fatalf("cold event replay after failed predecessor and completed retry: %v", err)
+	}
+	rebuilt, err := st.GetDynamicSecretLease(ctx, tenant, lease.ID)
+	if err != nil || rebuilt.RevocationStatus != store.DynamicSecretRevocationCompleted || rebuilt.RevokeOutboxID == nil || *rebuilt.RevokeOutboxID != third.ID {
+		t.Fatalf("cold replay lost retry outcome or command binding: %+v, %v", rebuilt, err)
+	}
+}
+
 func TestDurableDynamicSecretRenewRevokeReplayAndWorkerCrashFence(t *testing.T) {
 	const tenant = "11111111-1111-4111-8111-111111111123"
 	ctx := context.Background()

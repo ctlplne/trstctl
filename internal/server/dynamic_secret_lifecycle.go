@@ -531,7 +531,15 @@ func (l *durableDynamicSecretLifecycle) RevokeBound(ctx context.Context, leaseID
 	if record.TenantEpoch != tenantEpoch {
 		return dynsecret.Lease{}, store.ErrDynamicSecretTenantEpochMismatch
 	}
-	response, err := json.Marshal(dynamicSecretOperationResponseFromLease(dynamicLeaseFromStore(record), dynsecret.LeaseRevoked, record.ExpiresAt))
+	receipt := dynamicLeaseFromStore(record)
+	if record.State == store.DynamicSecretLeaseRevoked && record.RevocationStatus == store.DynamicSecretRevocationFailed {
+		// This fresh command acknowledges a queued retry. Preserve the original
+		// revoked_at, but do not replay the predecessor's terminal failure as the
+		// new request's result or claim provider completion early.
+		receipt.RevocationStatus = string(store.DynamicSecretRevocationPending)
+		receipt.RevocationCompletedAt = nil
+	}
+	response, err := json.Marshal(dynamicSecretOperationResponseFromLease(receipt, dynsecret.LeaseRevoked, record.ExpiresAt))
 	if err != nil {
 		return dynsecret.Lease{}, err
 	}
@@ -587,8 +595,23 @@ func (l *durableDynamicSecretLifecycle) resumeRevocation(ctx context.Context, op
 		l.wake()
 	case store.DynamicSecretLeaseRevoked:
 		// A crash after projecting the outbox intent lands here. Do not enqueue or
-		// call the provider again; complete only this authenticated API command.
-		if record.RevocationStatus == store.DynamicSecretRevocationPending {
+		// call the provider again unless an operator supplied a fresh bound
+		// command for the exact failed predecessor. The retry has its own immutable
+		// event and outbox row; an exact Idempotency-Key replay only reads it.
+		switch record.RevocationStatus {
+		case store.DynamicSecretRevocationFailed:
+			if record.RevokeOutboxID == nil {
+				return dynsecret.Lease{}, errors.New("dynsecret: failed revocation has no provider command")
+			}
+			if err := l.appendAndProjectID(ctx, dynamicSecretEventID(l.tenantID, op.TenantEpoch, "lease-revocation-retry-requested", op.OperationID), projections.EventDynamicSecretLeaseRevocationRetryRequested, projections.DynamicSecretLeaseRevocationRetryRequested{
+				TenantEpoch: op.TenantEpoch, OperationID: op.OperationID,
+				ID: record.ID, Provider: record.Provider, BackendRef: record.BackendRef,
+				PreviousOutboxID: *record.RevokeOutboxID,
+			}); err != nil {
+				return dynsecret.Lease{}, err
+			}
+			l.wake()
+		case store.DynamicSecretRevocationPending:
 			l.wake()
 		}
 	default:
