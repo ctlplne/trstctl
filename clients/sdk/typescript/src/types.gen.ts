@@ -3438,7 +3438,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List tenant-scoped event-projected managed keys for recovery and lifecycle operations */
+        get: operations["listManagedKeys"];
         put?: never;
         /** Generate a BYOK/HSM-resident managed key (private material stays in the provider) */
         post: operations["generateManagedKey"];
@@ -3544,6 +3545,23 @@ export interface paths {
         put?: never;
         /** Zeroize a managed key's material at the provider (requires dual-control approval) */
         post: operations["zeroizeManagedKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/managed-keys/{provider}/{key_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one tenant-scoped event-projected managed key by provider and handle */
+        get: operations["getManagedKey"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -11792,6 +11810,24 @@ export interface components {
             algorithm: "RSA-2048" | "RSA-3072" | "RSA-4096" | "ECDSA-P256" | "ECDSA-P384" | "ECDSA-P521";
             /** @enum {string} */
             provider: "aws" | "azure-key-vault" | "gcp-kms" | "pkcs11" | "tpm2" | "yubihsm2";
+        };
+        ManagedKeyRecord: {
+            algorithm: string;
+            /** Format: date-time */
+            created_at: string;
+            extractable: boolean;
+            key_id: string;
+            provider: string;
+            /** Format: byte */
+            public_der?: string;
+            state: string;
+            /** Format: date-time */
+            updated_at: string;
+            version: number;
+        };
+        ManagedKeyRecordList: {
+            items: components["schemas"]["ManagedKeyRecord"][];
+            next_cursor: string;
         };
         ManagedOfferingStatus: {
             billing_unit: string;
@@ -25212,6 +25248,49 @@ export interface operations {
             };
         };
     };
+    listManagedKeys: {
+        parameters: {
+            query?: {
+                /** @description Page size (1-100; default 20) */
+                limit?: number;
+                /** @description Opaque next_cursor from the preceding page */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedKeyRecordList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     generateManagedKey: {
         parameters: {
             query?: never;
@@ -25495,6 +25574,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ManagedKey"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getManagedKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Provider identity from the inventory */
+                provider: string;
+                /** @description Provider key handle from the inventory */
+                key_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedKeyRecord"];
                 };
             };
             /** @description client error */

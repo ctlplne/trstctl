@@ -107,6 +107,30 @@ func TestManagedKeyCustodyAndPreviewUseSecretFreeReadSurfaces(t *testing.T) {
 	}
 }
 
+func TestManagedKeyInventoryCLIUsesReadOnlyProviderScopedRoutes(t *testing.T) {
+	var listed capture
+	listServer := mockServer(t, http.StatusOK,
+		`{"items":[{"provider":"aws-kms","key_id":"key-1","state":"active"}],"next_cursor":"next"}`, &listed)
+	env := cli.Env{Server: listServer.URL, Token: "keys-token", Tenant: "tenant-a", HTTPClient: listServer.Client()}
+	code, stdout, stderr := run(t, []string{"managed-keys", "list", "--limit", "1", "--cursor", "opaque"}, env, "")
+	if code != 0 || stderr != "" || !strings.Contains(stdout, `"next_cursor": "next"`) {
+		t.Fatalf("managed-key list = exit %d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if listed.Method != http.MethodGet || listed.Path != "/api/v1/managed-keys" || listed.Query != "cursor=opaque&limit=1" || listed.Header.Get("Idempotency-Key") != "" {
+		t.Fatalf("inventory request = %s %s?%s key=%q", listed.Method, listed.Path, listed.Query, listed.Header.Get("Idempotency-Key"))
+	}
+	var read capture
+	getServer := mockServer(t, http.StatusOK, `{"provider":"aws-kms","key_id":"key-1","state":"active"}`, &read)
+	env = cli.Env{Server: getServer.URL, Token: "keys-token", Tenant: "tenant-a", HTTPClient: getServer.Client()}
+	code, stdout, stderr = run(t, []string{"managed-keys", "get", "aws-kms", "key-1"}, env, "")
+	if code != 0 || stderr != "" || !strings.Contains(stdout, `"key_id": "key-1"`) {
+		t.Fatalf("managed-key get = exit %d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if read.Method != http.MethodGet || read.Path != "/api/v1/managed-keys/aws-kms/key-1" || read.Header.Get("Idempotency-Key") != "" {
+		t.Fatalf("managed-key read request = %s %s key=%q", read.Method, read.Path, read.Header.Get("Idempotency-Key"))
+	}
+}
+
 func TestDynamicSecretProviderCatalogAndPreviewUseEffectFreeReadSurfaces(t *testing.T) {
 	var catalog capture
 	catalogServer := mockServer(t, http.StatusOK,

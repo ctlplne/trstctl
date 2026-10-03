@@ -1127,6 +1127,23 @@ export const messages = {
     description: "Empty-state guidance before managed-key generation.",
   },
   "caHierarchy.custody.managedKey": { defaultMessage: "Managed key", description: "Heading for generated managed-key metadata." },
+  "caHierarchy.custody.inventoryTitle": { defaultMessage: "Managed keys", description: "Heading for durable managed-key inventory." },
+  "caHierarchy.custody.inventoryDetail": {
+    defaultMessage: "Keys remain here after a browser refresh or server restart. Select one to inspect its current state.",
+    description: "Explains how managed-key recovery works.",
+  },
+  "caHierarchy.custody.inventoryEmpty": { defaultMessage: "No managed keys yet", description: "Empty durable managed-key inventory." },
+  "caHierarchy.custody.inventoryLoading": { defaultMessage: "Loading managed keys...", description: "Busy state for managed-key inventory." },
+  "caHierarchy.custody.inventoryLoadFailed": {
+    defaultMessage: "Could not load managed keys",
+    description: "Error reading the managed-key inventory or one key.",
+  },
+  "caHierarchy.custody.inspectKey": { defaultMessage: "Inspect key", description: "Select a durable managed key to inspect and manage." },
+  "caHierarchy.custody.loadMore": { defaultMessage: "Load more keys", description: "Read the next page of durable managed keys." },
+  "caHierarchy.custody.providerUnavailable": {
+    defaultMessage: "This key belongs to a provider that is not attached to this deployment. Restore that provider before changing the key.",
+    description: "Prevents lifecycle actions on a key whose provider is not currently attached.",
+  },
   "caHierarchy.custody.keyID": { defaultMessage: "key ID", description: "Accessible copy label for a managed-key identifier." },
   "caHierarchy.custody.actions.rotate.button": { defaultMessage: "Rotate", description: "Managed-key rotate action." },
   "caHierarchy.custody.actions.rotate.label": { defaultMessage: "Rotate key {keyId}", description: "Accessible label for managed-key rotation." },

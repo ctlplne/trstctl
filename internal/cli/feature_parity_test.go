@@ -285,8 +285,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// complete the headless recovery and post-retirement inspection paths.
 	// The requester-visible issuer roster adds one read-only command to F33.
 	// The durable secret-sync job read adds one read-only command to F68.
-	if len(out) != 467 {
-		t.Fatalf("CLI commands = %d, want 467", len(out))
+	// F26 adds paginated managed-key inventory and exact key recovery commands.
+	if len(out) != 469 {
+		t.Fatalf("CLI commands = %d, want 469", len(out))
 	}
 	return out
 }

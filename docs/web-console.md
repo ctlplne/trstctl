@@ -571,7 +571,10 @@ remain UTC.
   `/api/v1/code-signing/sign`, `/api/v1/code-signing/keyless`).
 - **CA hierarchy** — the m-of-n key ceremony flow, existing-CA-chain import,
   offline-root import/intermediate-CSR workflow, and HSM/KMS managed-key custody
-  (generate, rotate, revoke, zeroize), guarded by RBAC. The issuer catalog has
+  (generate, list, inspect, rotate, revoke, zeroize), guarded by RBAC. The key
+  inventory comes from the durable tenant projection and survives refresh and
+  restart; a key from a detached provider stays visible but cannot be changed
+  until that provider is restored. The issuer catalog has
   schema-driven config forms for built-in and upstream issuer types, sensitive-field
   masking, and per-issuer **Test connection** actions.
 

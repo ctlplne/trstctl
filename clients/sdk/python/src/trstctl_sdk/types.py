@@ -6539,6 +6539,31 @@ ManagedKeyGenerationPreviewRequest = TypedDict(
     total=False,
 )
 
+ManagedKeyRecord = TypedDict(
+    'ManagedKeyRecord',
+    {
+        'algorithm': str,
+        'created_at': str,
+        'extractable': bool,
+        'key_id': str,
+        'provider': str,
+        'public_der': str,
+        'state': str,
+        'updated_at': str,
+        'version': int,
+    },
+    total=False,
+)
+
+ManagedKeyRecordList = TypedDict(
+    'ManagedKeyRecordList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
 ManagedOfferingStatus = TypedDict(
     'ManagedOfferingStatus',
     {

@@ -26,6 +26,8 @@ const { apiMock } = vi.hoisted(() => ({
     rotateCAAuthority: vi.fn(),
     rekeyCAAuthority: vi.fn(),
     managedKeyCustody: vi.fn(),
+    listManagedKeys: vi.fn(),
+    getManagedKey: vi.fn(),
     previewManagedKeyGeneration: vi.fn(),
     generateManagedKey: vi.fn(),
     rotateManagedKey: vi.fn(),
@@ -98,6 +100,7 @@ describe("CA hierarchy and custody surface", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     for (const mock of Object.values(apiMock)) mock.mockReset();
+    apiMock.listManagedKeys.mockResolvedValue({ items: [], next_cursor: "" });
     apiMock.caAuthorities.mockResolvedValue({ items: [] });
     apiMock.edgeSegmentPolicies.mockResolvedValue({ items: [], guidance: "" });
     apiMock.edgeDelegations.mockResolvedValue({ items: [], guidance: "" });

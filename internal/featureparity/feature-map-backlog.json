@@ -5221,6 +5221,8 @@
             "notes": "The final conditional vertical slice is closed by a secret-free readiness plan and effect-free generation preview for all six served providers. The console never accepts provider credentials or private-key bytes: it shows startup variable/file-reference names, exact blockers, zero preview writes/outside calls, the later execution effects, and proof expectations before unlocking generation. Focused API and CA Hierarchy tests preserve both ready and deliberately blocked controls.",
             "api_surface": [
                 "getManagedKeyCustody",
+                "listManagedKeys",
+                "getManagedKey",
                 "previewManagedKeyGeneration",
                 "generateManagedKey",
                 "approveManagedKeyAction",
@@ -5231,6 +5233,8 @@
             ],
             "cli_surface": [
                 "managed-keys custody",
+                "managed-keys list",
+                "managed-keys get",
                 "managed-keys preview",
                 "managed-keys generate",
                 "managed-keys approve",
@@ -5277,7 +5281,7 @@
                 },
                 "cli": {
                     "evidence": [
-                        "CLI parity exposes the secret-free managed-keys custody read, effect-free managed-keys preview, and generate, approve, rotate, revoke, and zeroize lifecycle commands against the same licensed/configured API. The preview carries no idempotency key because it cannot write state or contact a provider; mutations remain safely retryable. Approvers hold keys:approve without needing provider-mutation authority, and the launched-binary DoD receipt, not CLI shape alone, proves backend runtime wiring."
+                        "CLI parity exposes the secret-free managed-keys custody read, tenant-scoped paginated list and exact provider/handle get for recovery after restart, effect-free managed-keys preview, and generate, approve, rotate, revoke, and zeroize lifecycle commands against the same licensed/configured API. The preview carries no idempotency key because it cannot write state or contact a provider; mutations remain safely retryable. Approvers hold keys:approve without needing provider-mutation authority, and the launched-binary DoD receipt, not CLI shape alone, proves backend runtime wiring."
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -5286,7 +5290,7 @@
                 },
                 "api": {
                     "evidence": [
-                        "OpenAPI includes an authenticated secret-free custody readiness plan for all six providers and an exact effect-free generation preview.",
+                        "OpenAPI includes an authenticated secret-free custody readiness plan for all six providers, tenant-scoped event-projected list and exact provider/handle reads for recovery after restart, and an exact effect-free generation preview.",
                         "OpenAPI includes the managed-key lifecycle and dedicated approval routes with key-material-free request/response schemas.",
                         "ManagedKey includes extractable=false so generated clients and the console can display non-extractable custody without exposing private material.",
                         "OpenAPI operation getEditions includes additive FIPS posture fields for the validated-module path without making product certification a required claim."

@@ -299,6 +299,8 @@ import type {
   MachineSession,
   MachineSessionList,
   ManagedKey,
+  ManagedKeyRecord,
+  ManagedKeyRecordList,
   ManagedKeyCustodyPlan,
   ManagedKeyGenerateRequest,
   ManagedKeyGenerationPreview,
@@ -978,6 +980,8 @@ export type {
   MachineSession,
   MachineSessionList,
   ManagedKey,
+  ManagedKeyRecord,
+  ManagedKeyRecordList,
   ManagedKeyCustodyPlan,
   ManagedKeyGenerateRequest,
   ManagedKeyGenerationPreview,
@@ -1708,6 +1712,8 @@ export interface Api {
   rotateCAAuthority(id: string, input: CAAuthorityRotationRequest): Promise<CAAuthorityRotation>;
   rekeyCAAuthority(id: string, input: CAAuthorityRekeyRequest): Promise<CAAuthorityRotation>;
   managedKeyCustody(): Promise<ManagedKeyCustodyPlan>;
+  listManagedKeys(options?: { limit?: number; cursor?: string }): Promise<ManagedKeyRecordList>;
+  getManagedKey(provider: string, keyId: string): Promise<ManagedKeyRecord>;
   previewManagedKeyGeneration(input: ManagedKeyGenerationPreviewRequest): Promise<ManagedKeyGenerationPreview>;
   generateManagedKey(input: ManagedKeyGenerateRequest): Promise<ManagedKey>;
   rotateManagedKey(keyId: string): Promise<ManagedKey>;
@@ -2305,6 +2311,13 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   rotateCAAuthority: (id, input) => mutate<CAAuthorityRotation>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/rotate`, input),
   rekeyCAAuthority: (id, input) => mutate<CAAuthorityRotation>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/rekey`, input),
   managedKeyCustody: () => req<ManagedKeyCustodyPlan>("/api/v1/managed-keys/custody"),
+  listManagedKeys: (options) => {
+    const query = new URLSearchParams();
+    if (options?.limit) query.set("limit", String(options.limit));
+    if (options?.cursor) query.set("cursor", options.cursor);
+    return req<ManagedKeyRecordList>(`/api/v1/managed-keys${query.size ? `?${query}` : ""}`);
+  },
+  getManagedKey: (provider, keyId) => req<ManagedKeyRecord>(`/api/v1/managed-keys/${encodeURIComponent(provider)}/${encodeURIComponent(keyId)}`),
   previewManagedKeyGeneration: (input) => postRead<ManagedKeyGenerationPreview>("/api/v1/managed-keys/preview", input),
   generateManagedKey: (input) => mutate<ManagedKey>("POST", "/api/v1/managed-keys", input),
   rotateManagedKey: (keyId) => mutate<ManagedKey>("POST", "/api/v1/managed-keys/rotate", { key_id: keyId }),

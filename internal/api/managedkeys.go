@@ -15,10 +15,13 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
+	"time"
+	"unicode/utf8"
 
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
@@ -350,6 +353,121 @@ func toManagedKeyResponse(r ManagedKey) managedKeyResponse {
 		PublicDER:   r.PublicDER,
 		Extractable: r.Extractable,
 	}
+}
+
+// The inventory contains only the durable, event-projected public metadata.
+// Provider is part of the identity: a key handle can occur in two backends.
+type managedKeyRecordResponse struct {
+	Provider    string    `json:"provider"`
+	KeyID       string    `json:"key_id"`
+	Algorithm   string    `json:"algorithm"`
+	Version     int       `json:"version"`
+	State       string    `json:"state"`
+	PublicDER   []byte    `json:"public_der,omitempty"`
+	Extractable bool      `json:"extractable"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+type managedKeyRecordListResponse struct {
+	Items      []managedKeyRecordResponse `json:"items"`
+	NextCursor string                     `json:"next_cursor"`
+}
+
+func toManagedKeyRecordResponse(key store.ManagedKey) managedKeyRecordResponse {
+	return managedKeyRecordResponse{
+		Provider: key.Provider, KeyID: key.KeyID, Algorithm: key.Algorithm,
+		Version: key.Version, State: key.State, PublicDER: key.PublicDER,
+		Extractable: false, CreatedAt: key.CreatedAt, UpdatedAt: key.UpdatedAt,
+	}
+}
+
+func managedKeyCursor(provider, keyID string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(provider + "\x00" + keyID))
+}
+
+func parseManagedKeyCursor(raw string) (string, string, error) {
+	if raw == "" {
+		return "", "", nil
+	}
+	if len(raw) > 1024 {
+		return "", "", errors.New("invalid managed-key cursor")
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(raw)
+	if err != nil {
+		return "", "", errors.New("invalid managed-key cursor")
+	}
+	provider, keyID, found := strings.Cut(string(decoded), "\x00")
+	if !utf8.Valid(decoded) || !found || provider == "" || keyID == "" ||
+		len(provider) > 128 || len(keyID) > 512 || strings.ContainsRune(keyID, '\x00') {
+		return "", "", errors.New("invalid managed-key cursor")
+	}
+	return provider, keyID, nil
+}
+
+func (a *API) listManagedKeys(w http.ResponseWriter, r *http.Request) {
+	if a.managedKeys == nil || a.store == nil {
+		a.writeError(w, managedKeysDisabledProblem())
+		return
+	}
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	limit, err := pageLimit(r)
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		return
+	}
+	provider, keyID, err := parseManagedKeyCursor(r.URL.Query().Get("cursor"))
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		return
+	}
+	keys, err := a.store.ListManagedKeysPage(r.Context(), tenantID, provider, keyID, limit+1)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	next := ""
+	if len(keys) > limit {
+		keys = keys[:limit]
+		last := keys[len(keys)-1]
+		next = managedKeyCursor(last.Provider, last.KeyID)
+	}
+	items := make([]managedKeyRecordResponse, 0, len(keys))
+	for _, key := range keys {
+		items = append(items, toManagedKeyRecordResponse(key))
+	}
+	a.writeJSON(w, http.StatusOK, managedKeyRecordListResponse{Items: items, NextCursor: next})
+}
+
+func (a *API) getManagedKey(w http.ResponseWriter, r *http.Request) {
+	if a.managedKeys == nil || a.store == nil {
+		a.writeError(w, managedKeysDisabledProblem())
+		return
+	}
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	provider, keyID := r.PathValue("provider"), r.PathValue("key_id")
+	if provider == "" || keyID == "" {
+		a.writeError(w, errStatus(http.StatusNotFound, "no such managed key for this tenant"))
+		return
+	}
+	key, err := a.store.GetManagedKey(r.Context(), tenantID, provider, keyID)
+	if store.IsNotFound(err) {
+		a.writeError(w, errStatus(http.StatusNotFound, "no such managed key for this tenant"))
+		return
+	}
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, toManagedKeyRecordResponse(key))
 }
 
 // requesterFor returns the authenticated principal's subject, which the dual-control

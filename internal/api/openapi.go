@@ -6012,6 +6012,14 @@ func componentSchemas() map[string]*Schema {
 		"public_der":  {Type: "string", Format: "byte"},
 		"extractable": {Type: "boolean"},
 	}, "key_id", "algorithm", "version", "state")
+	managedKeyRecord := object(map[string]*Schema{
+		"provider": str(), "key_id": str(), "algorithm": str(), "version": {Type: "integer"},
+		"state": str(), "public_der": {Type: "string", Format: "byte"},
+		"extractable": {Type: "boolean"}, "created_at": timestamp(), "updated_at": timestamp(),
+	}, "provider", "key_id", "algorithm", "version", "state", "extractable", "created_at", "updated_at")
+	managedKeyRecordList := object(map[string]*Schema{
+		"items": {Type: "array", Items: ref("ManagedKeyRecord")}, "next_cursor": str(),
+	}, "items", "next_cursor")
 	secretValue := object(map[string]*Schema{
 		"name": str(), "value": str(), "version": {Type: "integer"},
 	}, "name", "value")
@@ -6952,6 +6960,8 @@ func componentSchemas() map[string]*Schema {
 		"ManagedKeyApprovalRequest":          managedKeyApprovalReq,
 		"ManagedKeyApproval":                 managedKeyApproval,
 		"ManagedKey":                         managedKey,
+		"ManagedKeyRecord":                   managedKeyRecord,
+		"ManagedKeyRecordList":               managedKeyRecordList,
 		"ShareRequest":                       shareReq,
 		"SharePreviewRequest":                sharePreviewReq,
 		"SharePreview":                       sharePreview,

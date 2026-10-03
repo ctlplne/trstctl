@@ -14,6 +14,8 @@ const { apiMock } = vi.hoisted(() => ({
     createCACeremony: vi.fn(),
     approveCACeremony: vi.fn(),
     managedKeyCustody: vi.fn(),
+    listManagedKeys: vi.fn(),
+    getManagedKey: vi.fn(),
     previewManagedKeyGeneration: vi.fn(),
     generateManagedKey: vi.fn(),
     rotateManagedKey: vi.fn(),
@@ -98,6 +100,7 @@ describe("SIMP-05 CA hierarchy ceremony and custody wiring", () => {
       blockers: [],
       providers: [{ id: "aws", label: "AWS KMS", custody: "AWS retains the private key.", requirements: [] }],
     });
+    apiMock.listManagedKeys.mockResolvedValue({ items: [], next_cursor: "" });
     apiMock.previewManagedKeyGeneration.mockResolvedValue({
       ready: true,
       effect_free: true,
@@ -168,7 +171,7 @@ describe("SIMP-05 CA hierarchy ceremony and custody wiring", () => {
     await user.click(await screen.findByRole("button", { name: "Continue to generation" }));
     await user.click(await screen.findByRole("button", { name: "Generate managed key" }));
 
-    await waitFor(() => expect(apiMock.generateManagedKey).toHaveBeenCalledWith({ algorithm: "ECDSA-P256" }));
+    await waitFor(() => expect(apiMock.generateManagedKey).toHaveBeenCalledWith({ provider: "aws", algorithm: "ECDSA-P256" }));
     expect(await screen.findByText("kms/root-1")).toBeInTheDocument();
     expect(screen.getByText("ECDSA-P256")).toBeInTheDocument();
     expect(screen.getByText("Version 1")).toBeInTheDocument();

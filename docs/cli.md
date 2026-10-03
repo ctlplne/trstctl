@@ -266,7 +266,7 @@ exhaustive subcommand list:
 | `itsm servicenow tickets`         | Queue a ServiceNow ITSM ticket through the outbox (`create`)                                                                                                                                                                                                                                                        |
 | `kubernetes`                      | Native Kubernetes CertificateSigningRequest and trust-bundle distribution support (`csr` · `trust-bundles`)                                                                                                                                                                                                         |
 | `lifecycle`                       | CA-explicit endpoint lifecycle review/execution and rotation-run history (`endpoint-bindings preview` · `endpoint-bindings create` · `rotation-runs list` · `rotation-runs get`)                                                                                                                                      |
-| `managed-keys`                    | BYOK/HSM-resident key lifecycle: generate, dual-control approve, rotate, revoke, zeroize (`generate` · `approve` · `rotate` · `revoke` · `zeroize`)                                                                                                                                                                 |
+| `managed-keys`                    | BYOK/HSM-resident key lifecycle and recovery: custody readiness, preview, generate, tenant-scoped paginated inventory, exact provider/handle read, dual-control approve, rotate, revoke, zeroize (`custody` · `preview` · `generate` · `list` · `get` · `approve` · `rotate` · `revoke` · `zeroize`) |
 | `managed-offering`                | Managed-offering/provider-plane posture and hosted-tenant provisioning (`status` · `tenants provision`)                                                                                                                                                                                                             |
 | `mcp`                             | List and invoke the MCP tools the server exposes (`tools` · `call`), or serve them to a standard MCP client over stdio (`serve`)                                                                                                                                                                                                                                                 |
 | `mdm`                             | MDM SCEP policy/challenge status and enrollment-policy management (`scep status` · `scep policies`)                                                                                                                                                                                                                 |
@@ -888,6 +888,8 @@ cat > managed-key.json <<'JSON'
 {"provider":"aws","algorithm":"RSA-2048"}
 JSON
 trstctl-cli --idempotency-key kms-key-1 managed-keys generate -f managed-key.json
+trstctl-cli managed-keys list --limit 20
+trstctl-cli managed-keys get aws-kms <key-id> # provider comes from the list result
 printf '{"key_id":"<key-id>","action":"rotate"}' | trstctl-cli --idempotency-key kms-key-1-approve-a managed-keys approve -f -
 printf '{"key_id":"<key-id>","action":"rotate"}' | trstctl-cli --idempotency-key kms-key-1-approve-b managed-keys approve -f -
 printf '{"key_id":"<key-id>"}' | trstctl-cli --idempotency-key kms-key-1-rotate managed-keys rotate -f - --force

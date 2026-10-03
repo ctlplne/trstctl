@@ -244,6 +244,41 @@ func (s *Store) GetManagedKey(ctx context.Context, tenantID, provider, keyID str
 	return key, err
 }
 
+// ListManagedKeysPage reads the event-projected inventory in stable composite
+// provider/key order. A key handle alone is not globally unique: two providers
+// may mint the same handle, especially after a deployment changes custody.
+func (s *Store) ListManagedKeysPage(ctx context.Context, tenantID, afterProvider, afterKeyID string, limit int) ([]ManagedKey, error) {
+	if limit < 1 || limit > 101 {
+		return nil, fmt.Errorf("store: managed-key page limit must be between 1 and 101")
+	}
+	items := make([]ManagedKey, 0, limit)
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT tenant_id, provider, key_id, algorithm, version, state,
+			        public_der, created_at, updated_at
+			   FROM managed_keys
+			  WHERE tenant_id = $1
+			    AND ($2 = '' OR (provider, key_id) > ($2, $3))
+			  ORDER BY provider, key_id
+			  LIMIT $4`, tenantID, afterProvider, afterKeyID, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var key ManagedKey
+			if err := rows.Scan(&key.TenantID, &key.Provider, &key.KeyID,
+				&key.Algorithm, &key.Version, &key.State, &key.PublicDER,
+				&key.CreatedAt, &key.UpdatedAt); err != nil {
+				return err
+			}
+			items = append(items, key)
+		}
+		return rows.Err()
+	})
+	return items, err
+}
+
 // ManagedKeyApprovalTargetTx reads the exact event-projected target generation.
 // The command path requests a row lock so the state/version approved by reviewers
 // cannot change between authority validation and requested-event projection.

@@ -6,7 +6,15 @@ import { ToastProvider } from "@/components/ToastProvider";
 import { CAHierarchy } from "@/pages/CAHierarchy";
 
 const { apiMock } = vi.hoisted(() => ({
-  apiMock: { issuers: vi.fn(), managedKeyCustody: vi.fn(), previewManagedKeyGeneration: vi.fn(), generateManagedKey: vi.fn(), rotateManagedKey: vi.fn() },
+  apiMock: {
+    issuers: vi.fn(),
+    managedKeyCustody: vi.fn(),
+    listManagedKeys: vi.fn(),
+    getManagedKey: vi.fn(),
+    previewManagedKeyGeneration: vi.fn(),
+    generateManagedKey: vi.fn(),
+    rotateManagedKey: vi.fn(),
+  },
 }));
 
 vi.mock("@/lib/api", async (orig) => {
@@ -28,6 +36,8 @@ beforeEach(() => {
     blockers: [],
     providers: [{ id: "aws", label: "AWS KMS", custody: "AWS retains the private key.", requirements: [] }],
   });
+  apiMock.listManagedKeys.mockReset().mockResolvedValue({ items: [], next_cursor: "" });
+  apiMock.getManagedKey.mockReset();
   apiMock.previewManagedKeyGeneration.mockReset().mockResolvedValue({
     ready: true,
     effect_free: true,
@@ -70,5 +80,60 @@ describe("U7-4 ceremony + KMS custody console", () => {
     const rotate = await screen.findByRole("button", { name: "Rotate key key-1" });
     await user.click(rotate);
     await waitFor(() => expect(apiMock.rotateManagedKey).toHaveBeenCalledWith("key-1"));
+  });
+
+  it("recovers a projected managed key after a fresh mount without replaying generation", async () => {
+    const recovered = {
+      provider: "aws-kms",
+      key_id: "recovered-key",
+      algorithm: "RSA-2048",
+      state: "active",
+      version: 1,
+      public_der: "DER",
+      extractable: false,
+      created_at: "2026-10-03T00:00:00Z",
+      updated_at: "2026-10-03T00:00:00Z",
+    };
+    apiMock.listManagedKeys.mockResolvedValue({ items: [recovered], next_cursor: "" });
+    apiMock.getManagedKey.mockResolvedValue(recovered);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/ca-hierarchy?tab=custody"]}>
+        <ToastProvider>
+          <CAHierarchy />
+        </ToastProvider>
+      </MemoryRouter>,
+    );
+    await user.click(await screen.findByRole("button", { name: "Inspect key" }));
+    await waitFor(() => expect(apiMock.getManagedKey).toHaveBeenCalledWith("aws-kms", "recovered-key"));
+    expect(await screen.findByRole("button", { name: "Rotate key recovered-key" })).toBeEnabled();
+    expect(apiMock.generateManagedKey).not.toHaveBeenCalled();
+  });
+
+  it("keeps a detached-provider key visible while refusing its actions", async () => {
+    const detached = {
+      provider: "pkcs11",
+      key_id: "old-key",
+      algorithm: "RSA-2048",
+      state: "active",
+      version: 1,
+      public_der: "DER",
+      extractable: false,
+      created_at: "2026-10-03T00:00:00Z",
+      updated_at: "2026-10-03T00:00:00Z",
+    };
+    apiMock.listManagedKeys.mockResolvedValue({ items: [detached], next_cursor: "" });
+    apiMock.getManagedKey.mockResolvedValue(detached);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/ca-hierarchy?tab=custody"]}>
+        <ToastProvider>
+          <CAHierarchy />
+        </ToastProvider>
+      </MemoryRouter>,
+    );
+    await user.click(await screen.findByRole("button", { name: "Inspect key" }));
+    expect(await screen.findByRole("button", { name: "Rotate key old-key" })).toBeDisabled();
+    expect(screen.getByText(/provider that is not attached/)).toBeInTheDocument();
   });
 });

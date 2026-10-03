@@ -241,8 +241,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// F68's durable secret-sync delivery receipt adds one read-only operation.
 	// The requester-visible issuer roster adds one read-only operation to F33.
 	// Four F39 decoy-credential lifecycle operations extend exposure detection.
-	if len(out) != 455 {
-		t.Fatalf("OpenAPI operationIds = %d, want 455", len(out))
+	// F26 adds durable managed-key inventory and exact provider/handle recovery.
+	if len(out) != 457 {
+		t.Fatalf("OpenAPI operationIds = %d, want 457", len(out))
 	}
 	return out
 }

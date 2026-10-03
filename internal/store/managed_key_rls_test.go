@@ -115,6 +115,46 @@ func TestManagedKeyTablesUseProductTenantGUC(t *testing.T) {
 	}
 }
 
+// A managed key must remain findable after its creation response and browser
+// state are gone. The inventory reads only the event projection, keeps the
+// provider in the stable identity, and never crosses a tenant's RLS boundary.
+func TestManagedKeyInventoryIsTenantScopedAndPagesCompositeIdentity(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	for _, tenant := range []string{tenantA, tenantB} {
+		if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenant, Name: tenant}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, item := range []struct{ tenant, provider, id, state string }{
+		{tenantA, "aws-kms", "same", "active"},
+		{tenantA, "pkcs11", "same", "revoked"},
+		{tenantA, "pkcs11", "next", "zeroized"},
+		{tenantB, "aws-kms", "foreign", "active"},
+	} {
+		if _, err := s.SystemPool().Exec(ctx,
+			`INSERT INTO managed_keys (tenant_id, provider, key_id, algorithm, version, state, public_der, created_at, updated_at)
+			 VALUES ($1,$2,$3,'RSA-2048',1,$4,$5,now(),now())`,
+			item.tenant, item.provider, item.id, item.state, []byte("public:"+item.id)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	first, err := s.ListManagedKeysPage(ctx, tenantA, "", "", 2)
+	if err != nil || len(first) != 2 || first[0].Provider != "aws-kms" || first[0].KeyID != "same" || first[1].Provider != "pkcs11" || first[1].KeyID != "next" {
+		t.Fatalf("first inventory page = %+v, err %v", first, err)
+	}
+	second, err := s.ListManagedKeysPage(ctx, tenantA, first[1].Provider, first[1].KeyID, 2)
+	if err != nil || len(second) != 1 || second[0].Provider != "pkcs11" || second[0].KeyID != "same" || second[0].State != "revoked" {
+		t.Fatalf("second inventory page = %+v, err %v", second, err)
+	}
+	if _, err := s.GetManagedKey(ctx, tenantA, "aws-kms", "foreign"); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("cross-tenant key read error = %v, want not found", err)
+	}
+	if _, err := s.GetManagedKey(ctx, tenantA, "pkcs11", "same"); err != nil {
+		t.Fatalf("same handle under second provider should be independent: %v", err)
+	}
+}
+
 func TestManagedKeyIntentPersistsBindingAndRejectsStaleOutboxIdentity(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()

@@ -19563,6 +19563,69 @@
         ],
         "type": "object"
       },
+      "ManagedKeyRecord": {
+        "properties": {
+          "algorithm": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "extractable": {
+            "type": "boolean"
+          },
+          "key_id": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "public_der": {
+            "format": "byte",
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "provider",
+          "key_id",
+          "algorithm",
+          "version",
+          "state",
+          "extractable",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "ManagedKeyRecordList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ManagedKeyRecord"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "type": "object"
+      },
       "ManagedOfferingStatus": {
         "properties": {
           "billing_unit": {
@@ -47931,6 +47994,69 @@
       }
     },
     "/api/v1/managed-keys": {
+      "get": {
+        "operationId": "listManagedKeys",
+        "parameters": [
+          {
+            "description": "Page size (1-100; default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Opaque next_cursor from the preceding page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedKeyRecordList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List tenant-scoped event-projected managed keys for recovery and lifecycle operations",
+        "x-trstctl-permission": "keys:read"
+      },
       "post": {
         "operationId": "generateManagedKey",
         "parameters": [
@@ -48372,6 +48498,73 @@
         ],
         "summary": "Zeroize a managed key's material at the provider (requires dual-control approval)",
         "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/managed-keys/{provider}/{key_id}": {
+      "get": {
+        "operationId": "getManagedKey",
+        "parameters": [
+          {
+            "description": "Provider identity from the inventory",
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Provider key handle from the inventory",
+            "in": "path",
+            "name": "key_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedKeyRecord"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get one tenant-scoped event-projected managed key by provider and handle",
+        "x-trstctl-permission": "keys:read"
       }
     },
     "/api/v1/managed-offering/status": {

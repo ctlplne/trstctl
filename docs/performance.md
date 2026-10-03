@@ -47,7 +47,8 @@ the same profile against their chosen datastore, signer placement, and connector
 
 `make test` builds the isolated signer before timed live work. The serial live
 packages keep race detection and whole-repository atomic coverage for correctness;
-their harness has four minutes for instrumented startup and completion. The exact
+both the live-load and soak-capture stack startups use the explicit four-minute
+instrumented harness allowance. The exact
 live mutation SLO test then runs once without race or coverage instrumentation,
 with its original 90-second deadline and unchanged latency, throughput, error,
 queue, and lag assertions. Instrumented timings are never release performance

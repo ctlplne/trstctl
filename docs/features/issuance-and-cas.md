@@ -602,6 +602,11 @@ exposes:
   and verification evidence;
 - `POST /api/v1/managed-keys` — create a non-extractable KMS/HSM-resident signing key
   (`extractable: false`; no private material returned);
+- `GET /api/v1/managed-keys` — read the tenant's event-projected key inventory with
+  bounded cursor pagination, including keys from providers used before a deployment
+  configuration change;
+- `GET /api/v1/managed-keys/{provider}/{key_id}` — read the current state and public
+  material of one exact provider/handle pair after a lost response or restart;
 - `POST /api/v1/managed-keys/approvals` — record a distinct custodian's approval for
   an opaque key handle and `rotate`/`revoke`/`zeroize`;
 - `POST /api/v1/managed-keys/rotate` — mint a successor key;
@@ -614,9 +619,13 @@ nothing changed, then generate and manage the key. It lists configuration variab
 and file-reference names but never accepts provider credentials, file contents, or
 private-key bytes in the browser. A provider mismatch, disabled lifecycle, missing
 signer attachment, non-effect-free preview, or any server blocker keeps generation
-locked.
+locked. The inventory remains visible after a browser refresh; selecting a key
+performs a fresh tenant-scoped read. Keys from a provider no longer attached to
+this deployment remain visible for audit, with actions disabled until that
+provider is restored.
 
-The CLI mirrors those verbs under `trstctl managed-keys`, including `approve`.
+The CLI mirrors those verbs under `trstctl managed-keys`, including `list`,
+`get <provider> <key_id>`, and `approve`.
 Approval requires `keys:approve`; lifecycle mutation requires `keys:write`; the
 requester never counts as an approver; and every request is tenant-scoped, idempotent,
 and recorded as a key-material-free event before its PostgreSQL outbox command reaches

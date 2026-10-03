@@ -4737,6 +4737,23 @@ export interface ManagedKeyGenerationPreviewRequest {
   provider: "aws" | "azure-key-vault" | "gcp-kms" | "pkcs11" | "tpm2" | "yubihsm2";
 }
 
+export interface ManagedKeyRecord {
+  algorithm: string;
+  created_at: string;
+  extractable: boolean;
+  key_id: string;
+  provider: string;
+  public_der?: string;
+  state: string;
+  updated_at: string;
+  version: number;
+}
+
+export interface ManagedKeyRecordList {
+  items: ManagedKeyRecord[];
+  next_cursor: string;
+}
+
 export interface ManagedOfferingStatus {
   billing_unit: string;
   deployment_model: string;

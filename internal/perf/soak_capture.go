@@ -73,7 +73,15 @@ func CaptureSoakSeries(opts SoakCaptureOptions) (SoakSeries, error) {
 			source = s
 		}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	// The same bounded startup allowance applies to both live-load and soak
+	// correctness runs. Race and repository-wide coverage instrumentation can
+	// spend most of the default 90 seconds starting the signer and embedded
+	// stack; the uninstrumented release wall keeps that default unchanged.
+	timeout, err := liveHarnessTimeout()
+	if err != nil {
+		return SoakSeries{}, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	stack, err := startLiveEvalStack(ctx)
 	if err != nil {

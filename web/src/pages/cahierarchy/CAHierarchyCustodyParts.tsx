@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, KeyRound, ShieldCheck } from "lucide-react";
 import { CredentialChip } from "@/components/CredentialChip";
 import { EmptyState } from "@/components/EmptyState";
@@ -12,6 +12,7 @@ import { translateNow, useTranslation } from "@/i18n/I18nProvider";
 import {
   api,
   type ManagedKey,
+  type ManagedKeyRecord,
   type ManagedKeyCustodyPlan,
   type ManagedKeyGenerateRequest,
   type ManagedKeyGenerationPreview,
@@ -37,8 +38,27 @@ export function ManagedKeyCustodyWorkspace() {
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [managedKey, setManagedKey] = useState<ManagedKey | null>(null);
+  const [managedKeyProvider, setManagedKeyProvider] = useState("");
   const [keyBusy, setKeyBusy] = useState(false);
   const [keyError, setKeyError] = useState<string | null>(null);
+  const [inventory, setInventory] = useState<ManagedKeyRecord[]>([]);
+  const [inventoryCursor, setInventoryCursor] = useState("");
+  const [inventoryBusy, setInventoryBusy] = useState(false);
+  const [inventoryError, setInventoryError] = useState<string | null>(null);
+
+  const loadInventory = useCallback(async (cursor = "") => {
+    setInventoryBusy(true);
+    setInventoryError(null);
+    try {
+      const page = await api.listManagedKeys({ limit: 20, cursor });
+      setInventory((current) => (cursor ? [...current, ...page.items] : page.items));
+      setInventoryCursor(page.next_cursor);
+    } catch (error) {
+      setInventoryError(apiProblemMessage(error, translateNow("caHierarchy.custody.inventoryLoadFailed")));
+    } finally {
+      setInventoryBusy(false);
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -74,6 +94,26 @@ export function ManagedKeyCustodyWorkspace() {
     };
   }, []);
 
+  useEffect(() => {
+    if (plan?.lifecycle_attached) void loadInventory();
+  }, [loadInventory, plan?.lifecycle_attached]);
+
+  async function selectManagedKey(key: ManagedKeyRecord) {
+    setKeyBusy(true);
+    setKeyError(null);
+    try {
+      const current = await api.getManagedKey(key.provider, key.key_id);
+      setManagedKey(current);
+      setManagedKeyProvider(current.provider);
+      setPreview(null);
+      setCurrentIndex(0);
+    } catch (error) {
+      setKeyError(apiProblemMessage(error, t("caHierarchy.custody.inventoryLoadFailed")));
+    } finally {
+      setKeyBusy(false);
+    }
+  }
+
   const selectedProvider = useMemo(() => plan?.providers.find((item) => item.id === provider) ?? null, [plan, provider]);
   const previewIsSafe = Boolean(preview?.ready && preview.effect_free && preview.preview_writes.length === 0 && preview.preview_external_effects.length === 0);
   const localizedSteps: CarouselStep[] = [
@@ -90,6 +130,8 @@ export function ManagedKeyCustodyWorkspace() {
 
   async function reviewGeneration() {
     if (!provider) return;
+    setManagedKey(null);
+    setManagedKeyProvider("");
     setPreviewBusy(true);
     setPreviewError(null);
     setPreview(null);
@@ -119,6 +161,8 @@ export function ManagedKeyCustodyWorkspace() {
     setKeyError(null);
     try {
       setManagedKey(await api.generateManagedKey({ provider: preview.provider, algorithm: preview.algorithm as ManagedKeyGenerateRequest["algorithm"] }));
+      setManagedKeyProvider(plan?.configured_provider === "aws" ? "aws-kms" : (plan?.configured_provider ?? ""));
+      await loadInventory();
     } catch (error) {
       setKeyError(apiProblemMessage(error, t("caHierarchy.custody.generateFailed")));
     } finally {
@@ -133,6 +177,7 @@ export function ManagedKeyCustodyWorkspace() {
       const next =
         action === "rotate" ? await api.rotateManagedKey(keyId) : action === "revoke" ? await api.revokeManagedKey(keyId) : await api.zeroizeManagedKey(keyId);
       setManagedKey(next);
+      await loadInventory();
     } catch (error) {
       setKeyError(apiProblemMessage(error, t("caHierarchy.custody.actionFailed", { action })));
     } finally {
@@ -155,47 +200,98 @@ export function ManagedKeyCustodyWorkspace() {
       {loading ? <LoadingState>{t("caHierarchy.custody.loading")}</LoadingState> : null}
       {planError ? <ErrorState title={t("caHierarchy.custody.unavailable")}>{planError}</ErrorState> : null}
       {!loading && !planError && plan ? (
-        <StepShell
-          currentIndex={currentIndex}
-          steps={localizedSteps}
-          progressLabel={t("caHierarchy.custody.progress")}
-          onPrevious={currentIndex > 0 ? () => setCurrentIndex((index) => Math.max(0, index - 1)) : undefined}
-          onNext={currentIndex === 0 ? () => void reviewGeneration() : currentIndex === 1 ? () => setCurrentIndex(2) : undefined}
-          nextDisabled={currentIndex === 0 ? !provider || previewBusy : !previewIsSafe}
-          nextLabel={currentIndex === 0 ? t("caHierarchy.custody.review") : t("caHierarchy.custody.continue")}
-        >
-          {currentIndex === 0 ? (
-            <CustodyConfiguration
-              algorithm={algorithm}
-              plan={plan}
-              provider={provider}
-              previewBusy={previewBusy}
-              selectedProvider={selectedProvider}
-              onAlgorithmChange={(next) => {
-                setAlgorithm(next);
-                invalidatePreview();
-              }}
-              onProviderChange={(next) => {
-                setProvider(next);
-                invalidatePreview();
-              }}
-            />
+        <>
+          {plan.lifecycle_attached ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>{t("caHierarchy.custody.inventoryTitle")}</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-3">
+                <p className="text-sm text-muted-foreground">{t("caHierarchy.custody.inventoryDetail")}</p>
+                {inventoryError ? <ErrorState title={t("caHierarchy.custody.inventoryLoadFailed")}>{inventoryError}</ErrorState> : null}
+                {inventory.length === 0 && !inventoryBusy && !inventoryError ? <EmptyState title={t("caHierarchy.custody.inventoryEmpty")} /> : null}
+                {inventory.length > 0 ? (
+                  <ul className="grid gap-2" aria-label={t("caHierarchy.custody.inventoryTitle")}>
+                    {inventory.map((key) => (
+                      <li
+                        key={`${key.provider}:${key.key_id}`}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-2"
+                      >
+                        <span className="text-sm">
+                          <CredentialChip value={key.key_id} label={t("caHierarchy.custody.keyID")} /> · {key.provider} · {key.state}
+                        </span>
+                        <Button type="button" size="sm" variant="outline" disabled={keyBusy} onClick={() => void selectManagedKey(key)}>
+                          {t("caHierarchy.custody.inspectKey")}
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {inventoryCursor ? (
+                  <Button type="button" variant="outline" disabled={inventoryBusy} onClick={() => void loadInventory(inventoryCursor)}>
+                    {t("caHierarchy.custody.loadMore")}
+                  </Button>
+                ) : null}
+                {inventoryBusy ? <LoadingState>{t("caHierarchy.custody.inventoryLoading")}</LoadingState> : null}
+              </CardContent>
+            </Card>
           ) : null}
-          {currentIndex === 1 ? <CustodyPreview preview={preview} error={previewError} /> : null}
-          {currentIndex === 2 && preview ? (
-            <CustodyGeneration
-              busy={keyBusy}
-              error={keyError}
+          {keyError && currentIndex !== 2 ? <ErrorState title={t("caHierarchy.custody.actionFailedTitle")}>{keyError}</ErrorState> : null}
+          {managedKey && currentIndex !== 2 ? (
+            <ManagedKeyPanel
               managedKey={managedKey}
-              preview={preview}
-              onGenerate={() => void generateManagedKey()}
+              busy={keyBusy}
               onAction={(action, keyId) => void runManagedKeyAction(action, keyId)}
+              actionsDisabled={!isCurrentManagedKeyProvider(managedKeyProvider, plan.configured_provider)}
             />
           ) : null}
-        </StepShell>
+          <StepShell
+            currentIndex={currentIndex}
+            steps={localizedSteps}
+            progressLabel={t("caHierarchy.custody.progress")}
+            onPrevious={currentIndex > 0 ? () => setCurrentIndex((index) => Math.max(0, index - 1)) : undefined}
+            onNext={currentIndex === 0 ? () => void reviewGeneration() : currentIndex === 1 ? () => setCurrentIndex(2) : undefined}
+            nextDisabled={currentIndex === 0 ? !provider || previewBusy : !previewIsSafe}
+            nextLabel={currentIndex === 0 ? t("caHierarchy.custody.review") : t("caHierarchy.custody.continue")}
+          >
+            {currentIndex === 0 ? (
+              <CustodyConfiguration
+                algorithm={algorithm}
+                plan={plan}
+                provider={provider}
+                previewBusy={previewBusy}
+                selectedProvider={selectedProvider}
+                onAlgorithmChange={(next) => {
+                  setAlgorithm(next);
+                  invalidatePreview();
+                }}
+                onProviderChange={(next) => {
+                  setProvider(next);
+                  invalidatePreview();
+                }}
+              />
+            ) : null}
+            {currentIndex === 1 ? <CustodyPreview preview={preview} error={previewError} /> : null}
+            {currentIndex === 2 && preview ? (
+              <CustodyGeneration
+                busy={keyBusy}
+                error={keyError}
+                managedKey={managedKey}
+                preview={preview}
+                onGenerate={() => void generateManagedKey()}
+                onAction={(action, keyId) => void runManagedKeyAction(action, keyId)}
+                actionsDisabled={!isCurrentManagedKeyProvider(managedKeyProvider, plan.configured_provider)}
+              />
+            ) : null}
+          </StepShell>
+        </>
       ) : null}
     </section>
   );
+}
+
+function isCurrentManagedKeyProvider(keyProvider: string, configuredProvider: string) {
+  return keyProvider === configuredProvider || (keyProvider === "aws-kms" && configuredProvider === "aws");
 }
 
 function CustodyConfiguration({
@@ -380,6 +476,7 @@ function CustodyGeneration({
   preview,
   onAction,
   onGenerate,
+  actionsDisabled,
 }: {
   busy: boolean;
   error: string | null;
@@ -387,6 +484,7 @@ function CustodyGeneration({
   preview: ManagedKeyGenerationPreview;
   onAction: (action: "rotate" | "revoke" | "zeroize", keyId: string) => void;
   onGenerate: () => void;
+  actionsDisabled: boolean;
 }) {
   const { t } = useTranslation();
   return (
@@ -411,7 +509,7 @@ function CustodyGeneration({
       </Card>
       {error ? <ErrorState title={t("caHierarchy.custody.actionFailedTitle")}>{error}</ErrorState> : null}
       {managedKey ? (
-        <ManagedKeyPanel managedKey={managedKey} busy={busy} onAction={onAction} />
+        <ManagedKeyPanel managedKey={managedKey} busy={busy} onAction={onAction} actionsDisabled={actionsDisabled} />
       ) : (
         <EmptyState title={t("caHierarchy.custody.noKey")}>{t("caHierarchy.custody.noKeyDetail")}</EmptyState>
       )}
@@ -423,10 +521,12 @@ function ManagedKeyPanel({
   busy,
   managedKey,
   onAction,
+  actionsDisabled,
 }: {
   busy: boolean;
   managedKey: ManagedKey;
   onAction: (action: "rotate" | "revoke" | "zeroize", keyId: string) => void;
+  actionsDisabled: boolean;
 }) {
   const { t } = useTranslation();
   return (
@@ -447,7 +547,7 @@ function ManagedKeyPanel({
               type="button"
               size="sm"
               variant="outline"
-              disabled={busy}
+              disabled={busy || actionsDisabled}
               onClick={() => onAction(action, managedKey.key_id)}
               aria-label={t(`caHierarchy.custody.actions.${action}.label`, { keyId: managedKey.key_id })}
             >
@@ -456,6 +556,7 @@ function ManagedKeyPanel({
           ))}
         </div>
       </div>
+      {actionsDisabled ? <p className="mt-3 text-sm text-status-warning">{t("caHierarchy.custody.providerUnavailable")}</p> : null}
       <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Fact label={t("caHierarchy.custody.algorithm")} value={managedKey.algorithm} />
         <Fact label={t("caHierarchy.custody.version")} value={t("caHierarchy.custody.versionValue", { version: managedKey.version })} />

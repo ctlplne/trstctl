@@ -3,9 +3,18 @@
 package perf
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestCaptureSoakSeriesRejectsInvalidInstrumentedStartupTimeout(t *testing.T) {
+	t.Setenv("TRSTCTL_PERF_INSTRUMENTED_TIMEOUT", "89s")
+	_, err := CaptureSoakSeries(SoakCaptureOptions{Samples: 2})
+	if err == nil || !strings.Contains(err.Error(), "invalid instrumented harness timeout") {
+		t.Fatalf("soak capture startup timeout error = %v, want bounded-setting rejection", err)
+	}
+}
 
 func TestCaptureSoakSeriesFeedsAnalyzer(t *testing.T) {
 	series, err := CaptureSoakSeries(SoakCaptureOptions{
