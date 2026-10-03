@@ -389,6 +389,50 @@ describe("certificate inventory gap closure", () => {
     );
   });
 
+  it("follows the expiry metric into the filtered inventory without retaining retired rows", async () => {
+    apiMock.certificatePage.mockImplementation(({ expiringBefore }: { expiringBefore?: string }) =>
+      Promise.resolve({
+        items: expiringBefore
+          ? [{ id: "c1", subject: "CN=active.example.com", status: "active", fingerprint: "fp1" }]
+          : [
+              { id: "c1", subject: "CN=active.example.com", status: "active", fingerprint: "fp1" },
+              { id: "c2", subject: "CN=retired.example.com", status: "revoked", fingerprint: "fp2" },
+            ],
+      }),
+    );
+    apiMock.certificateHealth.mockResolvedValue({
+      generated_at: "2026-10-03T22:00:00Z",
+      inventory_path: "/api/v1/certificates",
+      expiring_path: "/api/v1/certificates?expiring_before=2026-11-02T22:00:00Z",
+      summary: {
+        total: 2,
+        active: 1,
+        revoked: 1,
+        superseded: 0,
+        expired: 0,
+        expiring_7d: 0,
+        expiring_30d: 1,
+        expiring_90d: 1,
+        external_source_count: 0,
+        imported_count: 0,
+        discovered_count: 0,
+        unknown_expiry_count: 0,
+        health: "warning",
+      },
+      expiry_buckets: [],
+      source_breakdown: [],
+      expiring: [],
+    });
+    const user = userEvent.setup();
+    renderCerts();
+
+    expect(await screen.findByText("CN=retired.example.com")).toBeInTheDocument();
+    await user.click(await screen.findByRole("link", { name: "Expiring ≤30d 1" }));
+    await waitFor(() => expect(apiMock.certificatePage).toHaveBeenLastCalledWith(expect.objectContaining({ expiringBefore: expect.any(String) })));
+    expect(screen.queryByText("CN=retired.example.com")).not.toBeInTheDocument();
+    expect(screen.getByText("CN=active.example.com")).toBeInTheDocument();
+  });
+
   it("renders expiry bands and revoked metadata from served certificate fields", async () => {
     const user = userEvent.setup();
     const soon = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();

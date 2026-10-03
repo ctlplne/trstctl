@@ -634,11 +634,13 @@ function CertificateWorkspace() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = tabFromSearchParam(searchParams.get("tab"));
   const [query, setQuery] = useState("");
-  const [expiry, setExpiry] = useState<ExpiryFilter>(() => expiryFromSearchParam(searchParams.get("expiry")));
-  const [issuerFilter, setIssuerFilter] = useState<FacetFilter>(() => searchParams.get("issuer") ?? "all");
-  const [profileFilter, setProfileFilter] = useState<FacetFilter>(() => searchParams.get("profile") ?? "all");
-  const [teamFilter, setTeamFilter] = useState<FacetFilter>(() => searchParams.get("team") ?? "all");
-  const [environmentFilter, setEnvironmentFilter] = useState<FacetFilter>(() => searchParams.get("environment") ?? "all");
+  // URL state is the source of truth. Metric links, saved views, and browser
+  // history can change these parameters while this workspace stays mounted.
+  const expiry = expiryFromSearchParam(searchParams.get("expiry"));
+  const issuerFilter = searchParams.get("issuer") ?? "all";
+  const profileFilter = searchParams.get("profile") ?? "all";
+  const teamFilter = searchParams.get("team") ?? "all";
+  const environmentFilter = searchParams.get("environment") ?? "all";
   const [limit, setLimit] = useState(20);
   const expiryCutoff = useMemo(() => expiringBefore(expiry), [expiry]);
   const inventory = useCertificateInventory([user?.tenant_id ?? null, user?.subject ?? null, (user?.permissions ?? []).join("|")], query, limit, expiryCutoff);
@@ -769,7 +771,6 @@ function CertificateWorkspace() {
   }
 
   function selectExpiry(nextExpiry: ExpiryFilter) {
-    setExpiry(nextExpiry);
     setSearchParams(
       (current) => {
         const next = new URLSearchParams(current);
@@ -785,10 +786,6 @@ function CertificateWorkspace() {
   }
 
   function selectFacet(key: "environment" | "issuer" | "profile" | "team", value: FacetFilter) {
-    if (key === "issuer") setIssuerFilter(value);
-    if (key === "profile") setProfileFilter(value);
-    if (key === "team") setTeamFilter(value);
-    if (key === "environment") setEnvironmentFilter(value);
     setSearchParams(
       (current) => {
         const next = new URLSearchParams(current);
@@ -811,11 +808,6 @@ function CertificateWorkspace() {
     const nextEnvironment = stringFromGridMetadata(metadata, "environment");
 
     setQuery(stringFromGridMetadata(metadata, "query", ""));
-    setExpiry(nextExpiry);
-    setIssuerFilter(nextIssuer);
-    setProfileFilter(nextProfile);
-    setTeamFilter(nextTeam);
-    setEnvironmentFilter(nextEnvironment);
     setLimit(limitFromGridMetadata(metadata, limit));
     setSearchParams(
       (current) => {

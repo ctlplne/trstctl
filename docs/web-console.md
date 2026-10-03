@@ -98,7 +98,9 @@ inside the shrinking CA/Browser-Forum maximum lifetime?), deployment receipts fr
 the connectors, and one guided revocation center under **Revocation & CT**. Expiry
 action counts and bands cover active certificates; historical revoked and
 superseded rows remain in inventory without creating new expiry warnings. The
-**Expiring** inventory filter also selects active certificates only.
+**Expiring** inventory filter also selects active certificates only. The expiry
+metric links apply that filter when the workspace is already open, including
+after back/forward navigation.
 
 The revocation center makes an operator choose a managed X.509 identity and RFC
 5280 reason, then reads an effect-free, version-bound server plan before typed
