@@ -398,7 +398,8 @@ metering and no usage are different facts.
 The Provider route returns the same canonical signed JSON/JWS document as the
 tenant route, or `?format=csv` for a strict finance CSV whose rows retain the
 customer, period, signable verdict, reconciliation result, and document digest.
-The `/provider` console selects customer and period, downloads signed JSON or
+The `/provider` console selects a customer and exact UTC period to the minute
+(including a single closed meter hour), rejects a reversed interval, downloads signed JSON or
 finance CSV, and fetches public trust separately from `GET
 /provider/v1/evidence/verification-keys`. It reconstructs the displayed
 document's canonical bytes and shows **Signature verified** only when RS256,

@@ -19,11 +19,18 @@ function defaultBillingPeriod(): { start: string; end: string } {
   const now = new Date();
   const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   const start = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - 1, 1));
-  return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
+  return { start: start.toISOString().slice(0, 16), end: end.toISOString().slice(0, 16) };
 }
 
-function asRFC3339(date: string): string {
-  return `${date}T00:00:00Z`;
+function asRFC3339(utcMinute: string): string {
+  return `${utcMinute}:00Z`;
+}
+
+function validUTCPeriod(start: string, end: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(end)) return false;
+  const first = Date.parse(asRFC3339(start));
+  const last = Date.parse(asRFC3339(end));
+  return Number.isFinite(first) && Number.isFinite(last) && first < last;
 }
 
 type VerificationState = ProviderEvidenceVerification | null;
@@ -82,7 +89,7 @@ export function ProviderBillingPanel({ tenants, onAuthError }: { tenants: Provid
 
   async function pull(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!customerId || !periodStart || !periodEnd) return;
+    if (!customerId || !validUTCPeriod(periodStart, periodEnd)) return;
     const requestGeneration = ++generation.current;
     const isCurrent = () => generation.current === requestGeneration;
     setLoading(true);
@@ -133,7 +140,7 @@ export function ProviderBillingPanel({ tenants, onAuthError }: { tenants: Provid
   }
 
   async function download(format: "json" | "csv") {
-    if (!customerId || !periodStart || !periodEnd) return;
+    if (!customerId || !validUTCPeriod(periodStart, periodEnd)) return;
     const requestGeneration = generation.current;
     setError(null);
     try {
@@ -180,7 +187,8 @@ export function ProviderBillingPanel({ tenants, onAuthError }: { tenants: Provid
         <label className="grid gap-1">
           <span className="text-caption font-medium">{translateNow("source.provider.billing.start.aud590004")}</span>
           <Input
-            type="date"
+            type="datetime-local"
+            step="60"
             aria-label={translateNow("source.provider.billing.start.aud590004")}
             value={periodStart}
             onChange={(event) => setPeriodStart(event.target.value)}
@@ -189,16 +197,18 @@ export function ProviderBillingPanel({ tenants, onAuthError }: { tenants: Provid
         <label className="grid gap-1">
           <span className="text-caption font-medium">{translateNow("source.provider.billing.end.aud590005")}</span>
           <Input
-            type="date"
+            type="datetime-local"
+            step="60"
             aria-label={translateNow("source.provider.billing.end.aud590005")}
             value={periodEnd}
             onChange={(event) => setPeriodEnd(event.target.value)}
           />
         </label>
-        <Button type="submit" disabled={loading || !customerId || !periodStart || !periodEnd}>
+        <Button type="submit" disabled={loading || !customerId || !validUTCPeriod(periodStart, periodEnd)}>
           {translateNow(loading ? "source.provider.billing.loading.aud590007" : "source.provider.billing.pull.aud590006")}
         </Button>
       </form>
+      <p className="mt-1 text-caption text-muted-foreground">{translateNow("source.provider.billing.utcHint.qa000001")}</p>
 
       {error ? (
         <p className="mt-3 text-caption text-status-danger" role="alert">

@@ -679,8 +679,8 @@ describe("provider console (L3)", () => {
     await screen.findByRole("option", { name: "Bravo Health · bravo" });
     const customer = screen.getByLabelText("Billing customer");
     fireEvent.change(customer, { target: { value: "tenant-bravo" } });
-    fireEvent.change(screen.getByLabelText("Billing period start"), { target: { value: "2026-07-01" } });
-    fireEvent.change(screen.getByLabelText("Billing period end"), { target: { value: "2026-08-01" } });
+    fireEvent.change(screen.getByLabelText("Billing period start (UTC)"), { target: { value: "2026-07-01T00:00" } });
+    fireEvent.change(screen.getByLabelText("Billing period end (UTC)"), { target: { value: "2026-08-01T00:00" } });
     fireEvent.click(screen.getByRole("button", { name: "Pull invoice evidence" }));
 
     await waitFor(() => expect(providerMock.usageEvidence).toHaveBeenCalledWith("tenant-bravo", "2026-07-01T00:00:00Z", "2026-08-01T00:00:00Z"));
@@ -693,6 +693,36 @@ describe("provider console (L3)", () => {
     await waitFor(() => expect(providerMock.downloadUsageEvidence).toHaveBeenCalledTimes(2));
     expect(providerMock.downloadUsageEvidence).toHaveBeenNthCalledWith(1, "tenant-bravo", "2026-07-01T00:00:00Z", "2026-08-01T00:00:00Z", "json");
     expect(providerMock.downloadUsageEvidence).toHaveBeenNthCalledWith(2, "tenant-bravo", "2026-07-01T00:00:00Z", "2026-08-01T00:00:00Z", "csv");
+  });
+
+  it("pulls the exact closed UTC hour and refuses a reversed period", async () => {
+    providerMock.listTenants.mockResolvedValue([
+      { id: "tenant-alpha", slug: "alpha", name: "Alpha Bank", status: "active", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" },
+    ]);
+    providerMock.usageEvidence.mockResolvedValue({
+      customer_id: "tenant-alpha",
+      period_start: "2026-10-03T19:00:00Z",
+      period_end: "2026-10-03T20:00:00Z",
+      lines: [],
+      signable: false,
+      reason: "meter coverage is incomplete",
+      digest: "hour-fixture",
+      guidance: "do not invoice",
+    });
+    setProviderToken("operator-bearer");
+    renderProvider();
+    await screen.findByRole("option", { name: "Alpha Bank · alpha" });
+    const start = screen.getByLabelText("Billing period start (UTC)");
+    const end = screen.getByLabelText("Billing period end (UTC)");
+    expect(start).toHaveAttribute("type", "datetime-local");
+    fireEvent.change(start, { target: { value: "2026-10-03T20:00" } });
+    fireEvent.change(end, { target: { value: "2026-10-03T19:00" } });
+    expect(screen.getByRole("button", { name: "Pull invoice evidence" })).toBeDisabled();
+    expect(providerMock.usageEvidence).not.toHaveBeenCalled();
+    fireEvent.change(start, { target: { value: "2026-10-03T19:00" } });
+    fireEvent.change(end, { target: { value: "2026-10-03T20:00" } });
+    fireEvent.click(screen.getByRole("button", { name: "Pull invoice evidence" }));
+    await waitFor(() => expect(providerMock.usageEvidence).toHaveBeenCalledWith("tenant-alpha", "2026-10-03T19:00:00Z", "2026-10-03T20:00:00Z"));
   });
 
   it("renders delegated customer health beside the selected usage evidence", async () => {

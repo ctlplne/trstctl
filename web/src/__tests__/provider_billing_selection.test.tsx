@@ -71,7 +71,7 @@ describe("Provider billing selection boundaries", () => {
     renderPanel();
     fireEvent.click(await screen.findByRole("button", { name: "Pull invoice evidence" }));
     await screen.findByText("old-period-digest");
-    fireEvent.change(screen.getByLabelText("Billing period start"), { target: { value: "2026-07-01" } });
+    fireEvent.change(screen.getByLabelText("Billing period start (UTC)"), { target: { value: "2026-07-01T00:00" } });
     expect(screen.queryByText("old-period-digest")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Download finance CSV" })).not.toBeInTheDocument();
     expect(screen.getByText("Health unknown")).toBeInTheDocument();
