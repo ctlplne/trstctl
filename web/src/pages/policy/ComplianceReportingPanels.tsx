@@ -71,29 +71,35 @@ export function ComplianceInventoryReportPanel({
               </tr>
             </thead>
             <tbody>
-              {rows.map((schedule) => (
-                <tr key={schedule.id}>
-                  <td>
-                    <p className="font-medium">{schedule.name}</p>
-                    {schedule.recipient_ref && <p className="mt-1 font-mono text-xs text-muted-foreground">{schedule.recipient_ref}</p>}
-                  </td>
-                  <td>{schedule.framework}</td>
-                  <td>{reportTypeLabel(schedule.report_type, t)}</td>
-                  <td>{formatScheduleCadence(schedule.interval_seconds)}</td>
-                  <td>{schedule.enabled ? formatDateTime(schedule.next_run_at) : t("policy.reporting.noDueWhilePaused")}</td>
-                  <td>
-                    <Button type="button" variant="outline" onClick={() => onToggleSchedule(schedule)} disabled={scheduleAction !== null}>
-                      {scheduleAction === `${schedule.enabled ? "pause" : "resume"}:${schedule.id}`
-                        ? schedule.enabled
-                          ? t("policy.reporting.pausing")
-                          : t("policy.reporting.resuming")
-                        : schedule.enabled
-                          ? t("policy.reporting.pause")
-                          : t("policy.reporting.resume")}
-                    </Button>
-                  </td>
-                </tr>
-              ))}
+              {rows.map((schedule) => {
+                const overdue = scheduleOverdueAtReportTime(schedule, report.generated_at);
+                return (
+                  <tr key={schedule.id}>
+                    <td>
+                      <p className="font-medium">{schedule.name}</p>
+                      {schedule.recipient_ref && <p className="mt-1 font-mono text-xs text-muted-foreground">{schedule.recipient_ref}</p>}
+                    </td>
+                    <td>{schedule.framework}</td>
+                    <td>{reportTypeLabel(schedule.report_type, t)}</td>
+                    <td>{formatScheduleCadence(schedule.interval_seconds)}</td>
+                    <td>
+                      {schedule.enabled ? formatDateTime(schedule.next_run_at) : t("policy.reporting.noDueWhilePaused")}
+                      {overdue && <strong className="mt-1 block text-destructive">{t("policy.reporting.overdue")}</strong>}
+                    </td>
+                    <td>
+                      <Button type="button" variant="outline" onClick={() => onToggleSchedule(schedule)} disabled={scheduleAction !== null}>
+                        {scheduleAction === `${schedule.enabled ? "pause" : "resume"}:${schedule.id}`
+                          ? schedule.enabled
+                            ? t("policy.reporting.pausing")
+                            : t("policy.reporting.resuming")
+                          : schedule.enabled
+                            ? t("policy.reporting.pause")
+                            : t("policy.reporting.resume")}
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </ScrollableTableRegion>
@@ -102,6 +108,16 @@ export function ComplianceInventoryReportPanel({
       )}
     </section>
   );
+}
+
+// Compare two server-supplied timestamps. The browser clock can be wrong, so an
+// operator sees "overdue" only when the fresh inventory report itself was
+// generated after the schedule's next due time.
+export function scheduleOverdueAtReportTime(schedule: ComplianceReportSchedule, reportGeneratedAt: string): boolean {
+  if (!schedule.enabled) return false;
+  const due = Date.parse(schedule.next_run_at);
+  const observed = Date.parse(reportGeneratedAt);
+  return Number.isFinite(due) && Number.isFinite(observed) && due < observed;
 }
 
 export function NHIComplianceReportPanel({ report }: { report: NHIComplianceReport }) {

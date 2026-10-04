@@ -11825,6 +11825,10 @@ export const messages = {
     defaultMessage: "Paused — no run due",
     description: "Paused compliance report schedule has no active next run, even if a stored timestamp remains.",
   },
+  "policy.reporting.overdue": {
+    defaultMessage: "Overdue — scheduled time passed",
+    description: "Server report time is later than the next due time for an enabled compliance report schedule.",
+  },
   "policy.reporting.empty": {
     defaultMessage: "No report schedules yet.",
     description: "Empty state for compliance report schedules.",

@@ -222,6 +222,10 @@ Pause writes a new immutable configuration event with `enabled=false`; it does n
 delete the definition or prior evidence. Resume writes `enabled=true` and calculates a
 fresh full interval. Read the schedule list and inventory report after either action to
 verify both the exact row and the aggregate enabled-schedule count.
+The console marks an enabled schedule **Overdue** when the server's latest inventory
+report was generated after its `next_run_at`. This is a missed deadline signal, not
+evidence of a run or delivery. Inspect the signed export separately and pause the
+definition if an operator is relying on unattended delivery.
 
 ## What the operator must still do
 

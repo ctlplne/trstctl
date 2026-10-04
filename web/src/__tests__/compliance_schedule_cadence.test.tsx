@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { render, screen, within } from "@testing-library/react";
-import { ComplianceInventoryReportPanel, formatScheduleCadence } from "@/pages/policy/ComplianceReportingPanels";
+import { ComplianceInventoryReportPanel, formatScheduleCadence, scheduleOverdueAtReportTime } from "@/pages/policy/ComplianceReportingPanels";
 import { I18nProvider } from "@/i18n/I18nProvider";
 import type { ComplianceInventoryReport, ComplianceReportSchedule } from "@/lib/api";
 
@@ -66,5 +66,16 @@ describe("compliance report schedule cadence and due time", () => {
     const cells = within(row!).getAllByRole("cell");
     expect(cells[4]).toHaveTextContent("Paused — no run due");
     expect(cells[4]).not.toHaveTextContent(/Oct 4, 2026/);
+  });
+
+  it("labels a missed due time using the server report time, without trusting the browser clock", () => {
+    const overdueReport = { ...report, generated_at: "2026-10-04T09:18:35Z" };
+    render(<ComplianceInventoryReportPanel report={overdueReport} schedules={[hourly]} scheduleAction={null} onToggleSchedule={() => {}} />);
+    const row = screen.getByText("Hourly signed pack").closest("tr");
+    expect(within(row!).getAllByRole("cell")[4]).toHaveTextContent("Overdue — scheduled time passed");
+    expect(scheduleOverdueAtReportTime(hourly, report.generated_at)).toBe(false);
+    expect(scheduleOverdueAtReportTime(hourly, overdueReport.generated_at)).toBe(true);
+    expect(scheduleOverdueAtReportTime({ ...hourly, enabled: false }, overdueReport.generated_at)).toBe(false);
+    expect(scheduleOverdueAtReportTime({ ...hourly, next_run_at: "invalid" }, overdueReport.generated_at)).toBe(false);
   });
 });
