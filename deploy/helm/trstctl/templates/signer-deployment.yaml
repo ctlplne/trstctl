@@ -58,6 +58,10 @@ spec:
             - "--auth-secret=/etc/trstctl/signer-auth/{{ $signerAuthKey }}"
             - "--legacy-audit-key=/data/audit/audit-signing.key"
           env:
+            {{- with .Values.fips }}{{- if .required }}
+            - name: TRSTCTL_FIPS
+              value: "1"
+            {{- end }}{{- end }}
             - name: SIGNER_MTLS_PEER_PIN
               valueFrom:
                 secretKeyRef:

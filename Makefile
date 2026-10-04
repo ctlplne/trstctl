@@ -722,6 +722,14 @@ image: docker-context-check ## Build the control-plane container image (deploy/d
 		--build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg DATE=$(DATE) \
 		-t trstctl:$(VERSION) .
 
+.PHONY: fips-image
+fips-image: docker-context-check ## Build a FIPS-capable control-plane/signer image using the pinned Go module
+	docker build -f deploy/docker/Dockerfile \
+		--target release \
+		--build-arg GOFIPS140=$(GOFIPS140) --build-arg LICENSE_KEYS_B64=$(LICENSE_KEYS_B64) \
+		--build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg DATE=$(DATE) \
+		-t trstctl:$(VERSION)-fips .
+
 .PHONY: compose-up
 compose-up: docker-context-check ## Bring up the evaluation stack (Postgres + NATS + trstctl)
 	docker compose -f deploy/docker/docker-compose.yml up --build

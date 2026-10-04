@@ -1,16 +1,22 @@
 name: trstctl-demo
 
 services:
+  signer:
+    environment:
+      TRSTCTL_FIPS: ${TRSTCTL_LAB_FIPS_REQUIRED:-0}
+
   trstctl:
     build:
       args:
         VERSION: ${TRSTCTL_LAB_BUILD_VERSION:-dev}
         COMMIT: ${TRSTCTL_LAB_BUILD_COMMIT:-none}
         DATE: ${TRSTCTL_LAB_BUILD_DATE:-1970-01-01T00:00:00Z}
+        GOFIPS140: ${TRSTCTL_LAB_GOFIPS140:-off}
     depends_on:
       lab-init:
         condition: service_completed_successfully
     environment:
+      TRSTCTL_FIPS: ${TRSTCTL_LAB_FIPS_REQUIRED:-0}
       TRSTCTL_CONFIG_FILE: /etc/trstctl/partner-lab.json
       TRSTCTL_AGENT_CHANNEL_CLAIMABLE_JOB_KINDS: "discovery.run,endpoint.verify,endpoint.renew,connector.test,connector.deploy,connector.rollback"
       TRSTCTL_CONNECTORS_ENABLED: "apache,nginx,haproxy,caddy,traefik,postgresql"

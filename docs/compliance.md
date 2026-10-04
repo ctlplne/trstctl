@@ -346,21 +346,38 @@ or that your archive storage is WORM-hardened (that is yours to provide).
 ## FIPS cryptography: a FIPS-capable build path
 
 trstctl ships a FIPS-capable build path. Building with the Go FIPS 140-3
-Cryptographic Module enabled routes all of trstctl's cryptography through
-that module:
+Cryptographic Module enabled routes Go standard-library cryptography through
+that module. CIRCL post-quantum algorithms and external HSM/KMS operations
+remain separate validation boundaries:
 
 ```sh
 make fips-build      # builds bin/<binary>-fips with GOFIPS140=v1.0.0
+make fips-image      # builds trstctl:<version>-fips with the same pinned selector
 ```
 
-`make fips-build` sets the pinned regulated selector `GOFIPS140=v1.0.0`
-(the toolchain rejects `GOFIPS140=on`; the valid values are
-`off|latest|inprocess|certified|vX.Y.Z`), builds all three binaries, and
-verifies the produced binary actually has the module active —
+For a licensed deployment, pass the vendor **public** license key to the image
+build as `LICENSE_KEYS_B64`; keep the private license-signing key outside the
+build context. The partner lab accepts `TRSTCTL_LAB_GOFIPS140=v1.0.0` with its
+licensed Compose overlay to build the same module into both the control plane
+and isolated signer. Set `TRSTCTL_LAB_FIPS_REQUIRED=1` there, or set
+`TRSTCTL_FIPS=1` for both processes in another deployment, to make each process
+fail closed if its own module is inactive. Both binaries also accept `--fips`.
+The Helm chart's `fips.required=true` passes that requirement to both processes
+in sidecar and isolated signer topologies when a FIPS-capable image is pinned.
+Build the image for
+the target architecture and verify its `GET /api/v1/editions` posture in the
+running deployment; a local native binary does not establish image posture.
+
+`make fips-build` and `make fips-image` set the pinned regulated selector
+`GOFIPS140=v1.0.0` (the toolchain rejects `GOFIPS140=on`; the valid values are
+`off|latest|inprocess|certified|vX.Y.Z`). The native target builds every
+shipped Go binary and verifies the control plane has the module active —
 `bin/trstctl-fips --check-config` reports `crypto.fips.module_active: true`,
-and the build fails if it does not. Because everything routes through one
-crypto boundary, when the module is active every signature, hash, and AEAD
-trstctl performs runs inside the validated Go Cryptographic Module. A CI
+and the build fails if it does not. The image build checks the control plane's
+active-module posture and the matching Go module build setting in the control
+plane, isolated signer, agent, and operator. The `internal/crypto` boundary
+keeps Go-backed signature, hash, and AEAD operations on that module; the
+algorithm and external-provider fences below still apply. A CI
 job (`fips-capable build (GOFIPS140)`) builds and verifies this on every
 change. The same module can also be turned on at runtime for a standard
 build via `GODEBUG=fips140=on`. `GOFIPS140=latest` remains an explicit
@@ -396,8 +413,9 @@ pack proving the trstctl artifact and tenant posture, while still leaving
 the product CMVP certificate, deployment-approved configuration, and
 external module certificates as operator/lab artifacts.
 
-**Power-on self-test, fail-closed.** A FIPS deployment runs trstctl with
-`--fips` (or `TRSTCTL_FIPS=1`). At startup, before the control plane serves
+**Power-on self-test, fail-closed.** A FIPS deployment runs the control plane
+and signer with `--fips` (or `TRSTCTL_FIPS=1` on both). At startup, before either
+process loads key material or serves
 any request, trstctl runs a cryptographic power-on self-test (POST): a
 known-answer sign/verify/reject round-trip through the boundary, plus —
 under `--fips` — an assertion that the FIPS module is active. If FIPS is

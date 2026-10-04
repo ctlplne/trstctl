@@ -720,6 +720,14 @@ func composeLoaderKeys(t *testing.T) map[string]bool {
 	for _, m := range re.FindAllStringSubmatch(string(src), -1) {
 		keys[m[1]] = true
 	}
+	// FIPS is a process-startup assertion in both executables, not a field in
+	// internal/config. Only admit the Compose key if both process entry points
+	// actually read it; this keeps the phantom-environment guard meaningful.
+	controlMain := readArtifact(t, filepath.Join("..", "..", "cmd", "trstctl", "main.go"))
+	signerMain := readArtifact(t, filepath.Join("..", "..", "cmd", "trstctl-signer", "main.go"))
+	if strings.Contains(controlMain, `getenv("TRSTCTL_FIPS")`) && strings.Contains(signerMain, `os.Getenv("TRSTCTL_FIPS")`) {
+		keys["TRSTCTL_FIPS"] = true
+	}
 	if len(keys) < 10 {
 		t.Fatalf("parsed only %d loader keys — extractor broken", len(keys))
 	}

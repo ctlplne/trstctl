@@ -70,6 +70,11 @@ spec:
           image: {{ include "trstctl.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["/usr/local/bin/trstctl-signer"]
+          {{- with .Values.fips }}{{- if .required }}
+          env:
+            - name: TRSTCTL_FIPS
+              value: "1"
+          {{- end }}{{- end }}
           args:
             - "--socket=/run/trstctl/signer.sock"
             - "--keystore=/data/signer/keys"
@@ -124,6 +129,10 @@ spec:
             - configMapRef:
                 name: {{ include "trstctl.fullname" . }}
           env:
+            {{- with .Values.fips }}{{- if .required }}
+            - name: TRSTCTL_FIPS
+              value: "1"
+            {{- end }}{{- end }}
             - name: TRSTCTL_POSTGRES_DSN
               valueFrom:
                 secretKeyRef:

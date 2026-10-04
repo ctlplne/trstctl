@@ -991,6 +991,21 @@ jobs:
             --set signer.auth.tokenCommand=/opt/trstctl-auth/bin/signer-token-provider \
             | kubeconform -strict -summary -ignore-missing-schemas
 
+      - name: Require FIPS in both chart processes
+        run: |
+          for signer_mode in sidecar isolated; do
+            rendered="$(mktemp)"
+            helm template trstctl deploy/helm/trstctl --namespace trstctl \
+              --set postgres.dsn='postgres://u:p@pg:5432/trstctl?sslmode=require' \
+              --set nats.url='nats://nats:4222' --set kek.generate=true \
+              --set signer.auth.tokenCommand=/opt/trstctl-auth/bin/signer-token-provider \
+              --set signer.mode="$signer_mode" --set signer.mtls.serverName=signer.trstctl.svc \
+              --set fips.required=true > "$rendered"
+            test "$(grep -c 'name: TRSTCTL_FIPS' "$rendered")" -eq 2
+            kubeconform -strict -summary -ignore-missing-schemas < "$rendered"
+            rm -f "$rendered"
+          done
+
   proto:
     name: proto (buf lint + breaking-change gate)
     runs-on: ubuntu-latest
@@ -1473,8 +1488,8 @@ jobs:
       - name: Cross-build for Windows (amd64)
         run: make windows-build
 
-  # FIPS-capable build gate (PKIGOV-007 / EXC-CRYPTO-01). It builds all three
-  # binaries with the Go FIPS 140-3 Cryptographic Module enabled (GOFIPS140), then
+  # FIPS-capable build gate (PKIGOV-007 / EXC-CRYPTO-01). It builds every
+  # shipped Go binary with the Go FIPS 140-3 Cryptographic Module enabled (GOFIPS140), then
   # PROVES the produced binary actually has the module active (not merely that it
   # compiled) and that the --fips power-on self-test boots cleanly. It also runs
   # the internal/crypto FIPS suite under the FIPS build so the required+active POST
@@ -1498,7 +1513,7 @@ jobs:
           check-latest: true
           cache: true
 
-      # Builds all three binaries with the pinned regulated selector
+      # Builds all shipped binaries with the pinned regulated selector
       # GOFIPS140=v1.0.0 and self-verifies the
       # control plane reports `crypto.fips.module_active: true` (fails the job
       # otherwise — a build whose module is inactive is not FIPS-capable).
@@ -1512,6 +1527,12 @@ jobs:
         env:
           GOFIPS140: v1.0.0
         run: go test ./internal/crypto/ -run 'TestPowerOnSelfTest|TestSelfTestKAT|TestFIPSStatus' -count=1 -v
+
+      - name: FIPS-capable release image (control plane and signer)
+        run: |
+          make fips-image VERSION=ci
+          docker run --rm --entrypoint /usr/local/bin/trstctl trstctl:ci-fips --check-config \
+            | grep -qx 'crypto.fips.module_active: true'
 
   windows:
     name: windows / test + MSI

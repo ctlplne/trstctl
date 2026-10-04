@@ -16,10 +16,12 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"trstctl.com/trstctl/internal/buildinfo"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/kek"
 	"trstctl.com/trstctl/internal/crypto/kmswrap"
 	"trstctl.com/trstctl/internal/crypto/mtls"
@@ -30,6 +32,7 @@ import (
 
 func main() {
 	showVersion := flag.Bool("version", false, "print version information and exit")
+	fipsRequired := flag.Bool("fips", false, "require an active Go FIPS 140-3 module before the signer loads or serves keys")
 	socket := flag.String("socket", "", "path to the Unix domain socket to listen on (single-node/sidecar transport)")
 	keystore := flag.String("keystore", "", "directory for sealed key persistence; keys survive a restart (R3.2)")
 	kekFile := flag.String("kek", "", "path to the key-encryption key file that seals persisted keys (required with --keystore)")
@@ -88,6 +91,13 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Fprintf(os.Stderr, "trstctl-signer: WARNING: non-Linux development hardening override active; process hardening, UDS peer UID checks, and locked memory are unavailable\n")
+	}
+	// The signer is a separate process, so the control plane's startup check
+	// cannot prove the module loaded here. Assert this process's module before
+	// opening a key store or listening, and always run the boundary KAT.
+	if _, err := crypto.PowerOnSelfTest(*fipsRequired || signerFIPSEnvRequired(os.Getenv("TRSTCTL_FIPS"))); err != nil {
+		fmt.Fprintf(os.Stderr, "trstctl-signer: crypto power-on self-test: %v\n", err)
+		os.Exit(1)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -172,6 +182,15 @@ func main() {
 	if serveErr != nil {
 		fmt.Fprintf(os.Stderr, "trstctl-signer: %v\n", serveErr)
 		os.Exit(1)
+	}
+}
+
+func signerFIPSEnvRequired(raw string) bool {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
 	}
 }
 

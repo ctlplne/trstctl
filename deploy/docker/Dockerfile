@@ -70,10 +70,16 @@ ARG DATE=1970-01-01T00:00:00Z
 # contain amd64 Go binaries (and vice versa).
 ARG TARGETOS
 ARG TARGETARCH
+# Explicitly select the Go cryptographic module for a regulated image. The
+# ordinary image stays on the toolchain default; a FIPS build passes the pinned
+# selector used by make fips-build (for example v1.0.0). Keep this in the build
+# stage so the control plane and isolated signer receive identical settings.
+ARG GOFIPS140=off
 
 ENV CGO_ENABLED=0 \
     GOOS=${TARGETOS} \
     GOARCH=${TARGETARCH} \
+    GOFIPS140=${GOFIPS140} \
     GOFLAGS=-mod=readonly
 
 # The shipped reproducible flags. Build the control plane and the signer with
@@ -89,6 +95,14 @@ RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS} -X trstctl.com/trstc
 RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS} -X trstctl.com/trstctl/internal/license.builtinPubKeysB64=${LICENSE_KEYS_B64}" -o /out/trstctl-signer   ./cmd/trstctl-signer
 RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS}" -o /out/trstctl-agent    ./cmd/trstctl-agent
 RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS}" -o /out/trstctl-operator ./cmd/trstctl-operator
+RUN if [ "${GOFIPS140}" != "off" ]; then \
+      /out/trstctl --check-config 2>/dev/null | grep -qx 'crypto.fips.module_active: true' \
+        || { echo 'FIPS image control plane did not activate the Go module' >&2; exit 1; }; \
+      for binary in trstctl trstctl-signer trstctl-agent trstctl-operator; do \
+        go version -m "/out/${binary}" | grep -Fq "GOFIPS140=${GOFIPS140}" \
+          || { echo "FIPS image ${binary} lacks the selected Go module" >&2; exit 1; }; \
+      done; \
+    fi
 
 # Stage the persistent mount points OWNED BY the nonroot uid (65532). Docker
 # initializes an empty named volume from the image's directory at the mount path,

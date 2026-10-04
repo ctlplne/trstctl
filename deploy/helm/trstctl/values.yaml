@@ -15,6 +15,12 @@ image:
   pullPolicy: IfNotPresent
 imagePullSecrets: []
 
+# Require the Go FIPS module in every serving process. Supply a FIPS-capable
+# image built from the pinned module selector; both the control plane and signer
+# independently refuse startup if the supplied artifact is not active.
+fips:
+  required: false
+
 # Multi-replica HA by default (RESIL-002 / EXC-RESIL-01): the control plane runs
 # with redundancy so a node failure or a config rollout does not take issuance/
 # validation offline. Safety with >1 replica rests on three mechanisms that ship

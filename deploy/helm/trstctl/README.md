@@ -7,6 +7,14 @@ in-memory Unix socket. For stricter process and pod isolation, set
 `signer.mode=isolated` and provide the `signer.mtls.*` trust material; the chart
 then renders a separate signer Deployment reached over mutually pinned mTLS.
 
+For a FIPS-required deployment, pin a FIPS-capable image built with
+`make fips-image` and set `fips.required=true`. The chart passes the required
+mode to both the control plane and signer, in sidecar and isolated signer
+topologies. Each process refuses startup if its own Go FIPS module is inactive;
+verify the running control-plane posture through `GET /api/v1/editions`.
+This is artifact posture, not a product CMVP certificate or validation of an
+external HSM/KMS.
+
 ## What it deploys
 
 By default, one control-plane pod contains two containers:
