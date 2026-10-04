@@ -209,6 +209,7 @@ const (
 	EventWorkloadAttesterTrustSourceRevoked       = "workload.attester_trust_source.revoked"
 	EventWorkloadAttesterTrustSourceDeleted       = "workload.attester_trust_source.deleted"
 	EventComplianceReportScheduleUpserted         = "compliance.report_schedule.upserted"
+	EventComplianceReportRunRecorded              = "compliance.report_run.recorded"
 	EventSecretRotationScheduleUpserted           = "secret.rotation_schedule.upserted"
 	EventSecretRotationScheduleRan                = "secret.rotation_schedule.ran"
 	EventNotificationRead                         = "notification.read"
@@ -2206,6 +2207,26 @@ type ComplianceReportScheduleUpserted struct {
 	RecipientRef    string `json:"recipient_ref,omitempty"`
 }
 
+// ComplianceReportRunRecorded is one durable state transition for an exact
+// schedule due edge. A completed run binds an archive reference and digest;
+// signed wire bytes stay outside replay payloads.
+type ComplianceReportRunRecorded struct {
+	ID              string    `json:"id"`
+	ScheduleID      string    `json:"schedule_id"`
+	DueAt           time.Time `json:"due_at"`
+	Framework       string    `json:"framework"`
+	ReportType      string    `json:"report_type"`
+	Status          string    `json:"status"`
+	RetryGeneration int       `json:"retry_generation"`
+	Attempt         int       `json:"attempt"`
+	NextAttemptAt   time.Time `json:"next_attempt_at,omitempty"`
+	ErrorCode       string    `json:"error_code,omitempty"`
+	ArtifactRef     string    `json:"artifact_ref,omitempty"`
+	ArtifactDigest  string    `json:"artifact_digest,omitempty"`
+	CompletedAt     time.Time `json:"completed_at,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
 // SecretRotationScheduleUpserted is the payload of
 // secret.rotation_schedule.upserted. It carries references only; generated
 // credential material remains inside the configured rotator/provider.
@@ -3500,6 +3521,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventWorkloadAttesterTrustSourceRevoked:       {1: true},
 	EventWorkloadAttesterTrustSourceDeleted:       {1: true},
 	EventComplianceReportScheduleUpserted:         {1: true},
+	EventComplianceReportRunRecorded:              {1: true},
 	EventSecretRotationScheduleUpserted:           {1: true},
 	EventSecretRotationScheduleRan:                {1: true, rotationcommand.LegacyBoundEventSchemaVersion: true, SecretRotationScheduleRanEventSchemaVersion: true},
 	EventNotificationRead:                         {1: true},
@@ -5175,6 +5197,20 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			Delivery: delivery, RecipientRef: pl.RecipientRef,
 			NextRunAt: e.Time.Add(time.Duration(pl.IntervalSeconds) * time.Second),
 			CreatedAt: e.Time, UpdatedAt: e.Time,
+		})
+	case EventComplianceReportRunRecorded:
+		var pl ComplianceReportRunRecorded
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyComplianceReportRunTx(ctx, tx, store.ComplianceReportRun{
+			ID: pl.ID, TenantID: e.TenantID, ScheduleID: pl.ScheduleID,
+			DueAt: pl.DueAt, Framework: pl.Framework, ReportType: pl.ReportType,
+			Status: pl.Status, RetryGeneration: pl.RetryGeneration,
+			Attempt: pl.Attempt, NextAttemptAt: pl.NextAttemptAt,
+			ErrorCode: pl.ErrorCode, ArtifactRef: pl.ArtifactRef, ArtifactDigest: pl.ArtifactDigest,
+			CompletedAt: pl.CompletedAt, EventSequence: e.Sequence,
+			CreatedAt: pl.CreatedAt, UpdatedAt: e.Time,
 		})
 	case EventSecretRotationScheduleUpserted:
 		var pl SecretRotationScheduleUpserted

@@ -104,6 +104,66 @@ func (s *Store) GetComplianceReportSchedule(ctx context.Context, tenantID, id st
 	return out, err
 }
 
+// TenantsWithEnabledComplianceReportSchedules is a system inventory of tenant
+// IDs only. The scheduler then reads each due row inside that tenant's RLS
+// context; no report definition or artifact crosses this system query.
+func (s *Store) TenantsWithEnabledComplianceReportSchedules(ctx context.Context) ([]string, error) {
+	rows, err := s.pool.Query(ctx,
+		//trstctl:system-query — leader-only cross-tenant scheduler enumeration returns tenant UUIDs only; exact definitions and artifacts are read under each tenant's forced RLS policy.
+		`SELECT DISTINCT tenant_id::text FROM compliance_report_schedules WHERE enabled ORDER BY tenant_id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var tenantID string
+		if err := rows.Scan(&tenantID); err != nil {
+			return nil, err
+		}
+		out = append(out, tenantID)
+	}
+	return out, rows.Err()
+}
+
+// ComplianceReportSchedulesDue returns a bounded, tenant-scoped set. A failed
+// run waits for explicit requeue; a retry waits for its persisted backoff. A
+// queued run is recoverable after five minutes if a process died mid-attempt.
+func (s *Store) ComplianceReportSchedulesDue(ctx context.Context, tenantID string, now time.Time, limit int) ([]ComplianceReportSchedule, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	var out []ComplianceReportSchedule
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT s.id::text, s.tenant_id::text, s.framework, s.name, s.report_type,
+			        s.interval_seconds, s.enabled, s.delivery, s.recipient_ref,
+			        s.next_run_at, s.created_at, s.updated_at
+			   FROM compliance_report_schedules s
+			   LEFT JOIN compliance_report_runs r
+			     ON r.tenant_id = s.tenant_id AND r.schedule_id = s.id
+			    AND r.due_at = s.next_run_at
+			  WHERE s.tenant_id = $1 AND s.enabled AND s.next_run_at <= $2
+			    AND (r.id IS NULL OR
+			         (r.status = 'retrying' AND r.next_attempt_at <= $2) OR
+			         (r.status = 'queued' AND r.updated_at <= $2::timestamptz - interval '5 minutes'))
+			  ORDER BY s.next_run_at, s.id LIMIT $3`, tenantID, now, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var sched ComplianceReportSchedule
+			if err := scanComplianceReportSchedule(rows, &sched); err != nil {
+				return err
+			}
+			out = append(out, sched)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
 // ComplianceInventoryCounts returns the tenant-scoped inventory totals that feed
 // the compliance/inventory report.
 func (s *Store) ComplianceInventoryCounts(ctx context.Context, tenantID string) (ComplianceInventoryCounts, error) {

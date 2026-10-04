@@ -99,6 +99,7 @@ var TenantScopedTables = []string{
 	"incident_fleet_reissuance_runs",
 	"incident_executions",
 	"pam_sessions",
+	"compliance_report_runs",
 	"compliance_report_schedules",
 	"secret_rotation_schedule_tick_rows",
 	"secret_rotation_schedule_ticks",

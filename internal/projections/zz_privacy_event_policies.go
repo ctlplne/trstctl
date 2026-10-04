@@ -627,6 +627,16 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/interval_seconds", opaque), privacyRule("/enabled", opaque),
 		privacyRule("/delivery", opaque), privacyRule("/recipient_ref", exact),
 	)
+	complianceRun := privacyRules(
+		privacyRule("/id", opaque), privacyRule("/schedule_id", opaque),
+		privacyRule("/due_at", opaque), privacyRule("/framework", opaque),
+		privacyRule("/report_type", opaque), privacyRule("/status", opaque),
+		privacyRule("/retry_generation", opaque), privacyRule("/attempt", opaque),
+		privacyRule("/next_attempt_at", opaque),
+		privacyRule("/error_code", opaque), privacyRule("/artifact_ref", opaque),
+		privacyRule("/artifact_digest", opaque), privacyRule("/completed_at", opaque),
+		privacyRule("/created_at", opaque),
+	)
 	secretRotationRunV1 := privacyRules(
 		privacyRule("/schedule_id", opaque), privacyRule("/run_id", opaque),
 		privacyRule("/status", opaque), privacyRule("/new_ref", opaque),
@@ -860,6 +870,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		{EventDiscoveryFindingRecorded, 1}:               discoveryFinding,
 		{EventDiscoveryFindingTriageChanged, 1}:          discoveryTriage,
 		{EventComplianceReportScheduleUpserted, 1}:       complianceSchedule,
+		{EventComplianceReportRunRecorded, 1}:            complianceRun,
 		{EventSecretRotationScheduleRan, 1}:              secretRotationRunV1,
 		{EventSecretRotationScheduleRan, 2}:              secretRotationRunV2,
 		{EventSecretRotationScheduleRan, 3}:              secretRotationRunV3,
@@ -1545,6 +1556,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventDiscoveryFindingRecorded, 1}:                                privacyPayloadShape[DiscoveryFindingRecorded](),
 		{EventDiscoveryFindingTriageChanged, 1}:                           privacyPayloadShape[DiscoveryFindingTriageChanged](),
 		{EventComplianceReportScheduleUpserted, 1}:                        privacyPayloadShape[ComplianceReportScheduleUpserted](),
+		{EventComplianceReportRunRecorded, 1}:                             privacyPayloadShape[ComplianceReportRunRecorded](),
 		{EventSecretRotationScheduleRan, 1}:                               privacyPayloadShape[privacySecretRotationRunV1](),
 		{EventSecretRotationScheduleRan, 2}:                               privacyPayloadShape[privacySecretRotationRunV2](),
 		{EventSecretRotationScheduleRan, 3}:                               privacyPayloadShape[SecretRotationScheduleRan](),

@@ -77,6 +77,7 @@ const (
 	EventSecretSyncWorkloadIdentityUpserted       = "secret.sync.workload_identity_source.upserted"
 	EventSecretSyncWorkloadIdentityDeleted        = "secret.sync.workload_identity_source.deleted"
 	EventComplianceReportScheduleUpserted         = "compliance.report_schedule.upserted"
+	EventComplianceReportRunRecorded              = "compliance.report_run.recorded"
 	EventSecretRotationScheduleUpserted           = "secret.rotation_schedule.upserted"
 	EventSecretRotationScheduleRan                = "secret.rotation_schedule.ran"
 	EventCBOMAssetObserved                        = "cbom.asset.observed"
@@ -356,7 +357,7 @@ var ledger = []FeatureEvent{
 	{"F79", "Privacy archive erasure evidence", "attest_archive_erasure", "attestPrivacyArchiveErasure", []string{EventPrivacyArchiveErasureAttested}},
 
 	// F62 — IGA-grade NHI access-review / certification campaigns.
-	{"F62", "Cryptographic compliance reporting & posture dashboards", "schedule_report", "createComplianceReportSchedule", []string{EventComplianceReportScheduleUpserted}},
+	{"F62", "Cryptographic compliance reporting & posture dashboards", "schedule_report", "createComplianceReportSchedule", []string{EventComplianceReportScheduleUpserted, EventComplianceReportRunRecorded}},
 	{"F62", "NHI access certification campaigns", "start_nhi_review", "startNHIReviewCampaign", []string{EventNHIAccessReviewCampaignStarted}},
 	{"F62", "NHI access certification campaigns", "decide_nhi_review_item", "decideNHIReviewItem", []string{EventNHIAccessReviewItemDecided}},
 

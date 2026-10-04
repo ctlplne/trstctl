@@ -56,6 +56,7 @@ var projectionEventConstants = map[string]string{
 	projections.EventSecretSyncWorkloadIdentityUpserted:       "EventSecretSyncWorkloadIdentityUpserted",
 	projections.EventSecretSyncWorkloadIdentityDeleted:        "EventSecretSyncWorkloadIdentityDeleted",
 	projections.EventComplianceReportScheduleUpserted:         "EventComplianceReportScheduleUpserted",
+	projections.EventComplianceReportRunRecorded:              "EventComplianceReportRunRecorded",
 	projections.EventSecretRotationScheduleUpserted:           "EventSecretRotationScheduleUpserted",
 	projections.EventSecretRotationScheduleRan:                "EventSecretRotationScheduleRan",
 	projections.EventCBOMAssetObserved:                        "EventCBOMAssetObserved",
