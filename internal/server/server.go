@@ -1014,22 +1014,8 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 	if s.signTO <= 0 {
 		s.signTO = 10 * time.Second
 	}
-	privacyRecovery := orchestrator.NewOrchestrator(
-		d.Log,
-		d.Store,
-		orchestrator.NewOutbox(d.Store),
-		historyRewriteOrchestratorOptions(d.Store, d.AuditSigningKey)...,
-	)
-	if completed, recoveryErr := privacyRecovery.RecoverPrivacySubjectErasurePreparations(ctx); recoveryErr != nil {
-		return nil, fmt.Errorf(
-			"server: recover prepared privacy subject erasures before read-model restore: %w",
-			recoveryErr,
-		)
-	} else if completed > 0 && d.Logger != nil {
-		d.Logger.Warn(
-			"completed privacy subject erasures interrupted after durable preparation",
-			slog.Int("completed", completed),
-		)
+	if err := recoverPreparedPrivacySubjectErasures(ctx, d); err != nil {
+		return nil, err
 	}
 	proj, err := catchUpReadModel(ctx, d)
 	if err != nil {
@@ -1070,6 +1056,25 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 	}
 	s.configureRootMux(d, a)
 	return s, nil
+}
+
+// Recovery must finish before projection replay so it cannot restore a read model
+// containing subject data whose erasure was already durably prepared.
+func recoverPreparedPrivacySubjectErasures(ctx context.Context, d Deps) error {
+	privacyRecovery := orchestrator.NewOrchestrator(
+		d.Log,
+		d.Store,
+		orchestrator.NewOutbox(d.Store),
+		historyRewriteOrchestratorOptions(d.Store, d.AuditSigningKey)...,
+	)
+	completed, err := privacyRecovery.RecoverPrivacySubjectErasurePreparations(ctx)
+	if err != nil {
+		return fmt.Errorf("server: recover prepared privacy subject erasures before read-model restore: %w", err)
+	}
+	if completed > 0 && d.Logger != nil {
+		d.Logger.Warn("completed privacy subject erasures interrupted after durable preparation", slog.Int("completed", completed))
+	}
+	return nil
 }
 
 // configureProviderCommandSurface attaches Provider commands to the assembled
