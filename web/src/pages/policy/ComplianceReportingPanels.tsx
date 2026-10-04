@@ -23,7 +23,7 @@ export function ComplianceInventoryReportPanel({
   scheduleAction: string | null;
   onToggleSchedule: (schedule: ComplianceReportSchedule) => void;
 }) {
-  const { formatDate, t } = useTranslation();
+  const { formatDate, formatDateTime, t } = useTranslation();
   const rows = schedules.length > 0 ? schedules : report.schedules;
 
   return (
@@ -79,8 +79,8 @@ export function ComplianceInventoryReportPanel({
                   </td>
                   <td>{schedule.framework}</td>
                   <td>{reportTypeLabel(schedule.report_type, t)}</td>
-                  <td>{Math.round(schedule.interval_seconds / 86400)}d</td>
-                  <td>{formatDate(schedule.next_run_at)}</td>
+                  <td>{formatScheduleCadence(schedule.interval_seconds)}</td>
+                  <td>{formatDateTime(schedule.next_run_at)}</td>
                   <td>
                     <Button type="button" variant="outline" onClick={() => onToggleSchedule(schedule)} disabled={scheduleAction !== null}>
                       {scheduleAction === `${schedule.enabled ? "pause" : "resume"}:${schedule.id}`
@@ -211,4 +211,24 @@ function EvidenceList({ items, title }: { items: string[]; title: string }) {
 function reportTypeLabel(value: string, t: (key: MessageKey) => string): string {
   const key = reportTypeMessageKeys[value];
   return key ? t(key) : value;
+}
+
+// API schedules may be hourly or use an exact second interval. Never round a
+// valid cadence to zero days: operators use this value to judge missed runs.
+export function formatScheduleCadence(seconds: number): string {
+  if (!Number.isSafeInteger(seconds) || seconds <= 0) return "-";
+  const units: Array<[number, string]> = [
+    [86400, "d"],
+    [3600, "h"],
+    [60, "m"],
+    [1, "s"],
+  ];
+  let remaining = seconds;
+  const parts: string[] = [];
+  for (const [size, label] of units) {
+    const count = Math.floor(remaining / size);
+    if (count > 0) parts.push(`${count}${label}`);
+    remaining %= size;
+  }
+  return parts.join(" ");
 }
