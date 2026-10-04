@@ -38,6 +38,30 @@ service to business units, or an evaluator checking those claims.
   (`deploy/demo/lab/README.md`), with a local identity provider whose operator
   sign-in page is `http://127.0.0.1:19081/provider/sign-in`.
 
+## Provider API contract
+
+The Provider workforce plane publishes its own OpenAPI 3.1 document at
+`GET /provider/v1/openapi.json` when the Provider entitlement is attached.
+This document uses Provider bearer or Provider SAML session authority; customer
+tenant API tokens cannot authorize its operations. SAML paths appear only when
+the Provider SAML service is configured, and `/provider/scim/v2` paths appear
+only when a dedicated Provider SCIM token source is attached. The tenant API's
+`/api/v1/openapi.json` remains a separate contract with separate credentials.
+Read the live Provider document before generating an automation client, since
+it reflects the identity services attached to that deployment.
+
+```bash
+curl --cacert "$TRSTCTL_CA_FILE" \
+  "$TRSTCTL_SERVER/provider/v1/openapi.json" -o provider-openapi.json
+```
+
+Every Provider v1 mutation requires an `Idempotency-Key`. A browser SAML session
+also sends `X-Provider-CSRF-Token` matching its CSRF cookie. SCIM mutations use
+the dedicated SCIM bearer and derive a stable idempotency key when the client
+does not supply one. `PUT /provider/v1/tenants/{id}/brand` additionally requires
+the exact current `If-Match` ETag; the contract names these headers so generated
+clients cannot silently omit them.
+
 ## Steps
 
 ### 1. Confirm the entitlement

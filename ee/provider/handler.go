@@ -75,6 +75,9 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // its own file-backed bearer. Returning true means the request was consumed.
 func (h *handler) serveIdentityRoute(w http.ResponseWriter, r *http.Request) bool {
 	switch {
+	case r.Method == http.MethodGet && r.URL.Path == "/provider/v1/openapi.json":
+		writeJSON(w, http.StatusOK, providerOpenAPIDocument(h.saml != nil, h.scim != nil))
+		return true
 	case r.Method == http.MethodGet && r.URL.Path == "/provider/v1/auth/methods":
 		writeJSON(w, http.StatusOK, map[string]any{"methods": providerAuthMethods(h.svc.authenticator)})
 		return true

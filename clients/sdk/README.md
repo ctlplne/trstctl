@@ -4,6 +4,12 @@ Supported client SDKs for the trstctl control-plane REST API, plus the blessed
 generator configs that produce them. They are pinned to the served OpenAPI 3.1
 contract so they cannot silently drift from the API.
 
+These SDKs cover the tenant control-plane namespace in `/api/v1/openapi.json`.
+The separately authenticated licensed Provider namespace publishes its own
+live contract at `/provider/v1/openapi.json` when attached; use that document
+to generate a Provider client. The tenant SDK bearer must never be treated as
+a Provider operator credential.
+
 ```
 clients/sdk/
   openapi.json          # the served OpenAPI spec the SDKs are generated from
