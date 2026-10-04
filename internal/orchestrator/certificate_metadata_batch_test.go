@@ -95,13 +95,17 @@ func TestCertificateMetadataReceiptBatchesPreserveExactEnvelopeChecks(t *testing
 		t.Fatal(err)
 	}
 
-	for _, kind := range []string{"mixed-tenants", "oversized", "invalid-sequence", "empty-id"} {
+	for _, kind := range []string{"mixed-tenants", "legacy-provider-partition", "oversized", "invalid-sequence", "empty-id"} {
 		t.Run(kind, func(t *testing.T) {
 			page := []events.Event{original}
 			switch kind {
 			case "mixed-tenants":
 				foreign := original
 				foreign.TenantID = tenantB
+				page = append(page, foreign)
+			case "legacy-provider-partition":
+				foreign := original
+				foreign.TenantID = events.LegacyProviderGlobalAuditScope
 				page = append(page, foreign)
 			case "oversized":
 				page = make([]events.Event, store.CertificateMetadataReceiptBatchLimit+1)
