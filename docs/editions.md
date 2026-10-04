@@ -319,6 +319,18 @@ and is protected by the same CSRF and idempotency contract as other mutations.
 
 ### Provider authority event source and retries
 
+The Provider `max_secrets_stored` quota counts current native/Vault application
+secrets and stored connector credentials for the exact customer tenant. New
+names require a free slot; an exact replay or update of an existing name does
+not. A pending first-create command reserves its slot through restart until
+projection finishes. The Provider usage evidence gauge reports materialized
+objects only. A cap refusal returns 429, and a concurrent first-create returns
+a retryable 503. A missing quota leaves this resource uncapped; a quota-store
+or count outage refuses a new capped write with a retryable 503. Quota changes are Provider authority
+events and require the customer's `provision` delegation.
+An already admitted first write can finish while a lower cap is being saved;
+the next admission reads the new projected limit.
+
 Customer lifecycle, delegation, quota, white-label branding, and break-glass
 grant/use state share one tenant-scoped immutable authority history. The
 `provider_tenants`, `provider_operators`, `provider_operator_delegations`,

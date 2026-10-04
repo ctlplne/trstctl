@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenantseal"
+	"trstctl.com/trstctl/internal/usage"
 )
 
 // writeError maps an error to a problem+json response.
@@ -47,6 +48,14 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 		// statement deadline): a structured 503 tells the caller to retry
 		// rather than hanging or mislabeling it a 500 (OPS-TIMEOUTS-001).
 		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "datastore is busy; the request was bounded by its acquire/statement deadline — retry"))
+	case errors.Is(err, store.ErrResourceAdmissionBusy):
+		w.Header().Set("Retry-After", "1")
+		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "resource creation is in progress; retry the same request"))
+	case errors.Is(err, usage.ErrQuotaExhausted):
+		a.writeProblem(w, problem.New(http.StatusTooManyRequests, err.Error()))
+	case errors.Is(err, usage.ErrQuotaUnavailable):
+		w.Header().Set("Retry-After", "1")
+		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "quota authority is unavailable; retry the same request"))
 	case store.IsNotFound(err):
 		a.writeProblem(w, problem.New(http.StatusNotFound, "resource not found"))
 	case errors.Is(err, orchestrator.ErrRenewalWorkPending):

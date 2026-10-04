@@ -28,6 +28,7 @@ import (
 	"trstctl.com/trstctl/internal/secretsync"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenantseal"
+	"trstctl.com/trstctl/internal/usage"
 )
 
 // This file is the SERVED secrets/identity surface (GAP-006 / EXC-WIRE secrets):
@@ -550,83 +551,106 @@ func (a *API) createSecret(w http.ResponseWriter, r *http.Request) {
 		if tenantID != bindingTenantID {
 			return 0, nil, errors.New("api: application-secret binding tenant changed")
 		}
-		const operation = "create"
-		tenantEpoch, epochErr := a.applicationSecretTenantEpoch(ctx, tenantID)
-		if epochErr != nil {
-			return 0, nil, epochErr
-		}
-		eventID := applicationSecretMutationEventID(tenantID, tenantEpoch, req.Name, operation, keyDigest)
-		if receipt, ok, receiptErr := a.applicationSecretMaterializedResult(
-			ctx, tenantID, eventID, requestBinding, req.Name, "create"); receiptErr != nil {
-			return 0, nil, applicationSecretMutationError(receiptErr)
-		} else if ok {
-			return http.StatusCreated, applicationSecretReceiptMeta(receipt), nil
-		}
-		fence, payload, prepared, fenceErr := a.applicationSecretMutationFence(
-			ctx, tenantID, req.Name, operation, eventID, requestBinding)
-		if fenceErr != nil {
-			return 0, nil, applicationSecretMutationError(fenceErr)
-		}
-		if !prepared {
-			if _, getErr := a.secrets.be.Store.GetSecret(ctx, tenantID, req.Name); getErr == nil {
-				return 0, nil, errStatus(http.StatusConflict, "a secret with this name already exists; rotate it instead")
-			} else if !errors.Is(getErr, store.ErrSecretNotFound) {
-				return 0, nil, getErr
+		return withStoredSecretCreationFence(ctx, tenantID, func(ctx context.Context) (int, any, error) {
+			const operation = "create"
+			tenantEpoch, epochErr := a.applicationSecretTenantEpoch(ctx, tenantID)
+			if epochErr != nil {
+				return 0, nil, epochErr
 			}
-			commandKeyDigest, commandEvidence, commandErr := a.applicationSecretCommandEvidence(tenantID, idempotencyKey, canonicalApplicationSecretCommand{
-				Domain: "trstctl.api.application-secret-command.v2", TenantEpoch: tenantEpoch, Action: "create",
-				Name: req.Name, OwnerID: req.OwnerID, Surface: "native", ResultVersion: 1, Value: []byte(req.Value),
-			})
-			if commandErr != nil {
-				return 0, nil, commandErr
+			eventID := applicationSecretMutationEventID(tenantID, tenantEpoch, req.Name, operation, keyDigest)
+			if receipt, ok, receiptErr := a.applicationSecretMaterializedResult(
+				ctx, tenantID, eventID, requestBinding, req.Name, "create"); receiptErr != nil {
+				return 0, nil, applicationSecretMutationError(receiptErr)
+			} else if ok {
+				return http.StatusCreated, applicationSecretReceiptMeta(receipt), nil
 			}
-			if commandKeyDigest != keyDigest {
-				return 0, nil, errors.New("api: application-secret idempotency digest changed")
-			}
-			sealed, sealErr := a.secrets.seal(ctx, tenantID, []byte(req.Value), sealAAD(tenantID, req.Name))
-			if sealErr != nil {
-				return 0, nil, sealErr
-			}
-			payload = projections.ApplicationSecretMutation{
-				TenantEpoch: tenantEpoch, Action: "create", Name: req.Name, OwnerID: req.OwnerID, ResultVersion: 1, Sealed: sealed,
-				IdempotencyKeyDigest: keyDigest, RequestBinding: requestBinding,
-				CommandEvidence: commandEvidence, Surface: "native",
-			}
-			fence, payload, fenceErr = a.claimApplicationSecretMutationFence(ctx, tenantID, req.Name,
-				operation, eventID, projections.EventApplicationSecretCreated, requestBinding, payload)
+			fence, payload, prepared, fenceErr := a.applicationSecretMutationFence(
+				ctx, tenantID, req.Name, operation, eventID, requestBinding)
 			if fenceErr != nil {
 				return 0, nil, applicationSecretMutationError(fenceErr)
 			}
-		}
-		if fence.EventTime.IsZero() {
-			fence, fenceErr = a.secrets.be.Store.FinalizeApplicationSecretMutationFence(
-				ctx, tenantID, req.Name, eventID, nil, time.Now().UTC())
-			if fenceErr != nil {
+			if !prepared {
+				if _, getErr := a.secrets.be.Store.GetSecret(ctx, tenantID, req.Name); getErr == nil {
+					return 0, nil, errStatus(http.StatusConflict, "a secret with this name already exists; rotate it instead")
+				} else if !errors.Is(getErr, store.ErrSecretNotFound) {
+					return 0, nil, getErr
+				}
+				if err := usage.AllowCreate(ctx, tenantID, usage.MeterSecretsStored); err != nil {
+					return 0, nil, err
+				}
+				commandKeyDigest, commandEvidence, commandErr := a.applicationSecretCommandEvidence(tenantID, idempotencyKey, canonicalApplicationSecretCommand{
+					Domain: "trstctl.api.application-secret-command.v2", TenantEpoch: tenantEpoch, Action: "create",
+					Name: req.Name, OwnerID: req.OwnerID, Surface: "native", ResultVersion: 1, Value: []byte(req.Value),
+				})
+				if commandErr != nil {
+					return 0, nil, commandErr
+				}
+				if commandKeyDigest != keyDigest {
+					return 0, nil, errors.New("api: application-secret idempotency digest changed")
+				}
+				sealed, sealErr := a.secrets.seal(ctx, tenantID, []byte(req.Value), sealAAD(tenantID, req.Name))
+				if sealErr != nil {
+					return 0, nil, sealErr
+				}
+				payload = projections.ApplicationSecretMutation{
+					TenantEpoch: tenantEpoch, Action: "create", Name: req.Name, OwnerID: req.OwnerID, ResultVersion: 1, Sealed: sealed,
+					IdempotencyKeyDigest: keyDigest, RequestBinding: requestBinding,
+					CommandEvidence: commandEvidence, Surface: "native",
+				}
+				fence, payload, fenceErr = a.claimApplicationSecretMutationFence(ctx, tenantID, req.Name,
+					operation, eventID, projections.EventApplicationSecretCreated, requestBinding, payload)
+				if fenceErr != nil {
+					return 0, nil, applicationSecretMutationError(fenceErr)
+				}
+			}
+			if fence.EventTime.IsZero() {
+				fence, fenceErr = a.secrets.be.Store.FinalizeApplicationSecretMutationFence(
+					ctx, tenantID, req.Name, eventID, nil, time.Now().UTC())
+				if fenceErr != nil {
+					if receipt, ok, retiredErr := a.applicationSecretResultAfterFenceRetired(
+						ctx, tenantID, eventID, requestBinding, req.Name, operation, fenceErr); retiredErr != nil {
+						return 0, nil, retiredErr
+					} else if ok {
+						return http.StatusCreated, applicationSecretReceiptMeta(receipt), nil
+					}
+					return 0, nil, applicationSecretMutationError(fenceErr)
+				}
+			}
+			if _, _, appendErr := a.appendAndProjectApplicationSecretMutation(ctx, tenantID, fence, payload, prepared); appendErr != nil {
 				if receipt, ok, retiredErr := a.applicationSecretResultAfterFenceRetired(
-					ctx, tenantID, eventID, requestBinding, req.Name, operation, fenceErr); retiredErr != nil {
+					ctx, tenantID, eventID, requestBinding, req.Name, operation, appendErr); retiredErr != nil {
 					return 0, nil, retiredErr
 				} else if ok {
 					return http.StatusCreated, applicationSecretReceiptMeta(receipt), nil
 				}
-				return 0, nil, applicationSecretMutationError(fenceErr)
+				return 0, nil, applicationSecretMutationError(appendErr)
 			}
-		}
-		if _, _, appendErr := a.appendAndProjectApplicationSecretMutation(ctx, tenantID, fence, payload, prepared); appendErr != nil {
-			if receipt, ok, retiredErr := a.applicationSecretResultAfterFenceRetired(
-				ctx, tenantID, eventID, requestBinding, req.Name, operation, appendErr); retiredErr != nil {
-				return 0, nil, retiredErr
-			} else if ok {
-				return http.StatusCreated, applicationSecretReceiptMeta(receipt), nil
+			rec, getErr := a.secrets.be.Store.GetSecret(ctx, tenantID, req.Name)
+			if getErr != nil {
+				return 0, nil, getErr
 			}
-			return 0, nil, applicationSecretMutationError(appendErr)
-		}
-		rec, getErr := a.secrets.be.Store.GetSecret(ctx, tenantID, req.Name)
-		if getErr != nil {
-			return 0, nil, getErr
-		}
-		a.auditSecretVersion(ctx, tenantID, rec, nil)
-		return http.StatusCreated, toSecretMeta(rec), nil
+			a.auditSecretVersion(ctx, tenantID, rec, nil)
+			return http.StatusCreated, toSecretMeta(rec), nil
+		})
 	})
+}
+
+// The Provider edition supplies a cross-replica PostgreSQL lock. Core builds
+// execute the callback directly. The lock covers the admission count, durable
+// command claim, event append, and projection so two first writes cannot use
+// the same last slot. Exact receipt/fence replays run inside it but skip the cap.
+func withStoredSecretCreationFence(
+	ctx context.Context, tenantID string,
+	fn func(context.Context) (int, any, error),
+) (int, any, error) {
+	var status int
+	var body any
+	err := usage.WithCreationFence(ctx, tenantID, usage.MeterSecretsStored, func(work context.Context) error {
+		var err error
+		status, body, err = fn(work)
+		return err
+	})
+	return status, body, err
 }
 
 // getSecret reads a stored secret's value through a secretsdk.Client (F64), so the

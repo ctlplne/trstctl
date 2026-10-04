@@ -56,11 +56,11 @@ func NewQuotaChecker(store Store, count TenantCounter, _ time.Duration) *QuotaCh
 
 func (q *QuotaChecker) AllowCreate(ctx context.Context, tenantID, resource string) error {
 	if q == nil || q.store == nil || tenantID == "" || resource == "" {
-		return errors.New("billing: quota admission is not configured")
+		return fmt.Errorf("%w: billing quota admission is not configured", usage.ErrQuotaUnavailable)
 	}
 	quota, err := q.store.QuotaFor(ctx, tenantID)
 	if err != nil {
-		return fmt.Errorf("billing: read tenant quota: %w", err)
+		return fmt.Errorf("%w: billing read tenant quota: %w", usage.ErrQuotaUnavailable, err)
 	}
 	limit := quota.LimitFor(resource)
 	if limit == nil {
@@ -68,7 +68,7 @@ func (q *QuotaChecker) AllowCreate(ctx context.Context, tenantID, resource strin
 	}
 	counts, err := q.count(ctx, tenantID)
 	if err != nil {
-		return fmt.Errorf("billing: count tenant resources: %w", err)
+		return fmt.Errorf("%w: billing count tenant resources: %w", usage.ErrQuotaUnavailable, err)
 	}
 	current := counts[resource]
 	if current >= int64(*limit) {
@@ -79,11 +79,11 @@ func (q *QuotaChecker) AllowCreate(ctx context.Context, tenantID, resource strin
 
 func (q *QuotaChecker) WithCreationFence(ctx context.Context, tenantID, resource string, fn func(context.Context) error) error {
 	if q == nil || q.store == nil || fn == nil {
-		return errors.New("billing: quota creation fence is not configured")
+		return fmt.Errorf("%w: billing quota creation fence is not configured", usage.ErrQuotaUnavailable)
 	}
 	if durable, ok := q.store.(*PGStore); ok {
 		if durable.store == nil {
-			return errors.New("billing: durable quota creation fence has no datastore")
+			return fmt.Errorf("%w: billing durable quota creation fence has no datastore", usage.ErrQuotaUnavailable)
 		}
 		return durable.store.WithTenantResourceCreation(ctx, tenantID, resource, fn)
 	}

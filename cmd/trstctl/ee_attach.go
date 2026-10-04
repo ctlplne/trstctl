@@ -427,7 +427,7 @@ func attachEEProviderMetering(ctx context.Context, log *slog.Logger, lic *licens
 	}
 	// The durable meter compares quotas against current tenant resources and
 	// keeps invoice coverage through restarts.
-	billingInst := eebilling.InstallDurable(ctx, log, eebilling.StoreTenantCounter(deps.Store), deps.Store)
+	billingInst := eebilling.InstallDurable(ctx, log, eebilling.StoreTenantAdmissionCounter(deps.Store), deps.Store)
 	var evidenceReader eebilling.EvidenceReader = billingInst.Store
 	var reconciler eebilling.EvidenceReconciler
 	if billingInst.PG != nil {

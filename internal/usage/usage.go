@@ -103,6 +103,11 @@ type CreationFencer interface {
 // it — the editions boundary cuts exactly between those two packages.
 var ErrQuotaExhausted = errors.New("usage: quota exhausted")
 
+// ErrQuotaUnavailable means the licensed quota authority could not establish
+// a current limit or stock count. New capped resources fail closed, and callers
+// may retry once the authority recovers.
+var ErrQuotaUnavailable = errors.New("usage: quota authority unavailable")
+
 type nopRecorder struct{}
 
 func (nopRecorder) Record(string, string, int64) {}

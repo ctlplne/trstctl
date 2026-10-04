@@ -1324,7 +1324,7 @@ never live in the API process. What you can do end to end against the running bi
   certificates_issued has an independent event source today — other meters say
   in the document that the metered value stands alone. The Provider console
   labels those unchecked meters separately from a checked meter that diverged;
-  the document's signable verdict determines whether finance may invoice. Only the
+  the document's signable verdict determines whether finance may invoice. The
   certificates_stored cap is enforced at a served create path. The agents cap
   is enforced when a new agent first heartbeats over the mTLS channel: the
   server serializes the live quota/count check through event projection across
@@ -1332,9 +1332,17 @@ never live in the API process. What you can do end to end against the running bi
   lets an existing agent keep heartbeating after a cap is lowered. A one-time
   enrollment token and signed bootstrap certificate do not reserve a fleet
   slot; a cap changed after token mint still applies at the first heartbeat.
-  Tenants and secrets caps are stored and reported but do not yet gate their
-  create paths. Quota-read/count outages refuse new capped creation rather
-  than silently treating an unknown count as zero. The tenant-self-service
+  The secrets_stored cap gates first writes through both the native and Vault KV
+  APIs, and connector credential insertion; those objects share the same live
+  stock count. Each tenant's first writes serialize across replicas. A durable
+  secret command already admitted but not yet projected reserves a slot so a
+  process crash cannot oversubscribe the cap. Signed usage gauges count only
+  materialized objects, not reservations. Lowering a cap still permits exact
+  idempotent retries, rotations, and deletion of existing objects. New writes
+  over the cap return 429; concurrent first writes can return a retryable 503.
+  The tenants cap is stored and reported but does not yet gate its create path.
+  Quota-read/count outages return a retryable 503 for new capped creation rather than silently
+  treating an unknown count as zero. The tenant-self-service
   route still serves only the caller's own
   tenancy and refuses a foreign `customer_id`. Provider staff use authenticated
   `GET /provider/v1/tenants/{id}/usage-evidence` instead: the handler requires

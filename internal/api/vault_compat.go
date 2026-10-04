@@ -23,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenancy"
 	"trstctl.com/trstctl/internal/tenantseal"
+	"trstctl.com/trstctl/internal/usage"
 )
 
 const (
@@ -522,6 +523,17 @@ func (a *API) upsertVaultKVSecret(
 	plaintext []byte,
 	idempotencyKey, keyDigest, requestBinding string,
 ) (store.Secret, error) {
+	return a.upsertVaultKVSecretWithAdmission(ctx, tenantID, name, plaintext,
+		idempotencyKey, keyDigest, requestBinding, false)
+}
+
+func (a *API) upsertVaultKVSecretWithAdmission(
+	ctx context.Context,
+	tenantID, name string,
+	plaintext []byte,
+	idempotencyKey, keyDigest, requestBinding string,
+	creationFenceHeld bool,
+) (store.Secret, error) {
 	const operation = "vault-write"
 	tenantEpoch, err := a.applicationSecretTenantEpoch(ctx, tenantID)
 	if err != nil {
@@ -552,6 +564,25 @@ func (a *API) upsertVaultKVSecret(
 			return store.Secret{}, err
 		} else {
 			expectedVersion, resultVersion = current.Version, current.Version+1
+		}
+		if action == "create" {
+			if !creationFenceHeld {
+				// A fast read outside the tenant-wide lock lets ordinary rotations
+				// proceed independently. Re-enter from the start under the lock
+				// for a first write: another replica may have created, deleted,
+				// or durably claimed this name since that read.
+				var admitted store.Secret
+				lockErr := usage.WithCreationFence(ctx, tenantID, usage.MeterSecretsStored, func(work context.Context) error {
+					var err error
+					admitted, err = a.upsertVaultKVSecretWithAdmission(work, tenantID, name, plaintext,
+						idempotencyKey, keyDigest, requestBinding, true)
+					return err
+				})
+				return admitted, lockErr
+			}
+			if err := usage.AllowCreate(ctx, tenantID, usage.MeterSecretsStored); err != nil {
+				return store.Secret{}, err
+			}
 		}
 		commandKeyDigest, commandEvidence, commandErr := a.applicationSecretCommandEvidence(tenantID, idempotencyKey, canonicalApplicationSecretCommand{
 			Domain: "trstctl.api.application-secret-command.v2", TenantEpoch: tenantEpoch, Action: action,

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"trstctl.com/trstctl/internal/usage"
 )
 
 // ErrCredentialNotFound is returned by GetCredential when no sealed credential
@@ -30,14 +31,27 @@ type Credential struct {
 // PutCredential stores or replaces a sealed credential in its tenant context
 // (AN-1). Sealed must already be ciphertext.
 func (s *Store) PutCredential(ctx context.Context, c Credential) error {
-	return s.WithTenant(ctx, c.TenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx,
-			`INSERT INTO credentials (id, tenant_id, scope, ref, name, sealed)
-			 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)
-			 ON CONFLICT (tenant_id, scope, ref, name) DO UPDATE
-			    SET sealed = EXCLUDED.sealed, updated_at = now()`,
-			c.TenantID, c.Scope, c.Ref, c.Name, c.Sealed)
-		return err
+	return usage.WithCreationFence(ctx, c.TenantID, usage.MeterSecretsStored, func(work context.Context) error {
+		return s.WithTenant(work, c.TenantID, func(tx pgx.Tx) error {
+			var existing bool
+			if err := tx.QueryRow(work, `SELECT EXISTS (
+				SELECT 1 FROM credentials WHERE tenant_id=$1 AND scope=$2 AND ref=$3 AND name=$4)`,
+				c.TenantID, c.Scope, c.Ref, c.Name).Scan(&existing); err != nil {
+				return err
+			}
+			if !existing {
+				if err := usage.AllowCreate(work, c.TenantID, usage.MeterSecretsStored); err != nil {
+					return err
+				}
+			}
+			_, err := tx.Exec(work,
+				`INSERT INTO credentials (id, tenant_id, scope, ref, name, sealed)
+				 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)
+				 ON CONFLICT (tenant_id, scope, ref, name) DO UPDATE
+				    SET sealed = EXCLUDED.sealed, updated_at = now()`,
+				c.TenantID, c.Scope, c.Ref, c.Name, c.Sealed)
+			return err
+		})
 	})
 }
 

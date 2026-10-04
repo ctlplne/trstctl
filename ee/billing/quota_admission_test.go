@@ -30,12 +30,12 @@ func TestQuotaAdmissionSeesNewCapImmediatelyAndFailsClosedOnCountError(t *testin
 	broken := NewQuotaChecker(store, func(context.Context, string) (TenantCounts, error) {
 		return nil, errors.New("count unavailable")
 	}, time.Minute)
-	if err := broken.AllowCreate(ctx, "tenant-a", usage.MeterAgents); err == nil {
-		t.Fatal("count outage silently admitted an over-cap resource")
+	if err := broken.AllowCreate(ctx, "tenant-a", usage.MeterAgents); !errors.Is(err, usage.ErrQuotaUnavailable) {
+		t.Fatalf("count outage = %v, want retryable quota-authority refusal", err)
 	}
 	missingStore := NewQuotaChecker(&PGStore{}, nil, time.Minute)
-	if err := missingStore.AllowCreate(ctx, "tenant-a", usage.MeterAgents); err == nil {
-		t.Fatal("durable quota-store outage silently admitted a new resource")
+	if err := missingStore.AllowCreate(ctx, "tenant-a", usage.MeterAgents); !errors.Is(err, usage.ErrQuotaUnavailable) {
+		t.Fatalf("durable quota-store outage = %v, want retryable quota-authority refusal", err)
 	}
 	if _, err := StoreTenantCounter(nil)(ctx, "tenant-a"); err == nil {
 		t.Fatal("missing resource counter silently reported zero resources")
