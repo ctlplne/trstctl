@@ -290,8 +290,8 @@ type Deps struct {
 	// internal/approval.
 	RequiredApprovals int
 	AuditSigningKey   *jose.SigningKey // public + signer-RPC capability only; private audit key stays in trstctl-signer (AUD-63)
-	// ComplianceSigner signs served framework evidence-pack exports (COMP-01).
-	// Nil generates a process-local locked ECDSA key when audit + store are wired.
+	// ComplianceSigner is an injected embedding/test signer. Production binds a
+	// persistent, purpose-constrained handle in the isolated signer when nil.
 	ComplianceSigner crypto.DigestSigner
 	AuditRetention   time.Duration // licensed audit retention window; >0 with AuditArchiveDir configures the attached worker
 	AuditArchiveDir  string        // cold-storage directory for signed audit archive bundles (R4.4)
@@ -650,15 +650,12 @@ type Server struct {
 	transitStateFound  bool
 	// codeSignGate is the production adapter over the live OPA evaluator and
 	// distinct-approver store assembled by configurePolicyGate.
-	codeSignGate  codesign.Gate
-	codeSign      *servedCodeSigningService
-	ctSubmit      *servedCTSubmissionService
-	kmip          KMIPRuntime
-	kmipStateMu   sync.RWMutex
-	kmipListening bool
-	// complianceSigner is a generated locked key used only when the deployment did
-	// not supply Deps.ComplianceSigner. Supplied signers are owned by the caller.
-	complianceSigner *crypto.LockedSigner
+	codeSignGate     codesign.Gate
+	codeSign         *servedCodeSigningService
+	ctSubmit         *servedCTSubmissionService
+	kmip             KMIPRuntime
+	kmipStateMu      sync.RWMutex
+	kmipListening    bool
 	cloudTokenMinter *cloudauth.Minter
 	tenantCrypto     tenantseal.Access
 
@@ -1045,7 +1042,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 	if err := s.configurePluginSurface(ctx, d); err != nil {
 		return nil, err
 	}
-	a, auditSvc, err := s.configureAPI(d, orch, idem)
+	a, auditSvc, err := s.configureAPI(ctx, d, orch, idem)
 	if err != nil {
 		return nil, err
 	}
@@ -1258,7 +1255,7 @@ func (s *Server) configureAgentEnrollment(ctx context.Context, d Deps) error {
 	return nil
 }
 
-func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orchestrator.Idempotency) (*api.API, *audit.Service, error) {
+func (s *Server) configureAPI(ctx context.Context, d Deps, orch *orchestrator.Orchestrator, idem *orchestrator.Idempotency) (*api.API, *audit.Service, error) {
 	ea := enrollAuthority{a: s.agentEnroll, peerCheck: agentRenewalPeerCheck(d.Store)}
 	// Per-feature telemetry (COVER-009): register the feature metrics on the shared
 	// registry (set in Build before this runs) and wire the served API to emit a
@@ -1366,7 +1363,7 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	if d.AuditSigningKey == nil {
 		complianceAuditSvc = nil
 	}
-	if complianceSvc, err := s.buildComplianceEvidenceService(d, complianceAuditSvc); err != nil {
+	if complianceSvc, err := s.buildComplianceEvidenceService(ctx, d, complianceAuditSvc); err != nil {
 		return nil, nil, err
 	} else if complianceSvc != nil {
 		defaults = append(defaults, api.WithComplianceEvidence(complianceSvc))
@@ -3995,9 +3992,6 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	}
 	if s.kmip != nil {
 		s.kmip.Close()
-	}
-	if s.complianceSigner != nil {
-		s.complianceSigner.Destroy()
 	}
 	if s.cloudTokenMinter != nil {
 		s.cloudTokenMinter.Close()

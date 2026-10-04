@@ -97,6 +97,17 @@ has seven stable fields:
 | `adcs` | Convenience copy of the latest complete per-domain AD CS v2 observations and bounded semantic drift. The authoritative copy is `signed_export.manifest.adcs`; each row carries its immutable audit reference. |
 | `crypto_readiness` | Convenience copy of the canonical ordered graph-readiness dataset, bound actions, evidence references, recommendations, coverage wording, and `dataset_digest`. The authoritative copy is `signed_export.manifest.crypto_readiness`. |
 
+The shipped control plane binds a separate `compliance-evidence` key in the
+isolated signer's persistent keystore. Its private key does not enter the control
+plane, and restarting either process retains the same public verification key.
+Back up the signer keystore and KEK together. Pin the public key through an
+authenticated, independent channel before accepting an offline pack; the
+`public_key_der` supplied alongside a pack identifies its signing key but is
+not, by itself, an independent trust anchor. Packs made by older builds with
+process-local governance keys keep their original verification key only in
+copies saved before that process stopped; the new persistent key cannot
+retroactively sign them.
+
 The v4 manifest is derived from tenant-scoped facts, not static product
 capability labels. An audit-event reference contains the immutable event ID,
 tenant-local sequence, event type, observation time, and audit-chain digest;
@@ -217,7 +228,8 @@ verify both the exact row and the aggregate enabled-schedule count.
 trstctl enables the controls below; you operate them:
 
 - **Custody and back up the signer key store plus its KEK.** The purpose-bound
-  `audit-export` private key lives only there. `TRSTCTL_AUDIT_SIGNING_KEY_FILE`
+  `audit-export` and separate `compliance-evidence` private keys live only there.
+  `TRSTCTL_AUDIT_SIGNING_KEY_FILE`
   is a one-time legacy migration path, not live custody. Losing the sealed store
   or KEK means past bundles still verify but you cannot produce new ones under
   the same key; rotating it changes the verification key your auditor pins.

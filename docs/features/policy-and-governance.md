@@ -318,14 +318,16 @@ because completed channel receipts are preserved and skipped.
 
 Compliance reporting turns the audit log and the [CBOM](observability-and-risk.md) into
 signed, reproducible evidence packs covering all 15 supported frameworks (full list
-under [Reference](#reference)). A v2 pack binds its claims to one tenant and one
+under [Reference](#reference)). A v5 pack binds its claims to one tenant and one
 inclusive 90-day evidence window. Every evidenced control names exact immutable event
 references (ID, tenant-local sequence, type, time, and audit-chain digest) or exact
 tenant graph objects. Every prerequisite must resolve inside that boundary; missing,
 stale, malformed, or wrong-tenant evidence is a visible *gap*. CNSA 2.0's PQC control,
 for example, passes only when post-quantum assets exist and quantum-vulnerable ones do
-not. Reports are signed through the single crypto path, but a valid signature proves
-authenticity of the bounded manifest, not certification or auditor sufficiency.
+not. Reports use a persistent `compliance-evidence` key in the isolated signer.
+Its public key must be pinned independently for offline verification; a valid
+signature proves authenticity of the bounded manifest, not certification or
+auditor sufficiency.
 
 Each pack states residuals honestly. `fips-140` marks POST evidenced only when the
 running module is active and its fail-closed self-test passes; build provenance,
