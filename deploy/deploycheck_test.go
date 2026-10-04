@@ -841,7 +841,8 @@ func keys(m map[string]bool) []string {
 // real env contract, derived from the AST — not a hand-maintained list — so a
 // manifest that sets a key the binary silently ignores (the phantom-env class:
 // e.g. a TRSTCTL_KMS_* contract no Go code reads) is caught. It also recognizes
-// TRSTCTL_CONFIG_FILE (consulted by Load before applyEnv runs).
+// TRSTCTL_CONFIG_FILE (consulted by Load before applyEnv runs) and direct
+// getenv calls in the control-plane entrypoint (for example its FIPS assertion).
 func loaderEnvKeys(t *testing.T, root string) map[string]bool {
 	t.Helper()
 	src, err := os.ReadFile(filepath.Join(root, "internal", "config", "config.go")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
@@ -878,6 +879,34 @@ func loaderEnvKeys(t *testing.T, root string) map[string]bool {
 		val, err := strconv.Unquote(lit.Value)
 		if err == nil && strings.HasPrefix(val, "TRSTCTL_") {
 			keys[val] = true
+		}
+		return true
+	})
+	mainPath := filepath.Join(root, "cmd", "trstctl", "main.go")
+	mainSource, err := os.ReadFile(mainPath) // #nosec G304 -- test reads its own repository source file.
+	if err != nil {
+		t.Fatalf("read control-plane entrypoint: %v", err)
+	}
+	mainFile, err := parser.ParseFile(fset, mainPath, mainSource, 0)
+	if err != nil {
+		t.Fatalf("parse control-plane entrypoint: %v", err)
+	}
+	ast.Inspect(mainFile, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok || len(call.Args) != 1 {
+			return true
+		}
+		ident, ok := call.Fun.(*ast.Ident)
+		if !ok || ident.Name != "getenv" {
+			return true
+		}
+		lit, ok := call.Args[0].(*ast.BasicLit)
+		if !ok || lit.Kind != token.STRING {
+			return true
+		}
+		key, err := strconv.Unquote(lit.Value)
+		if err == nil && strings.HasPrefix(key, "TRSTCTL_") {
+			keys[key] = true
 		}
 		return true
 	})

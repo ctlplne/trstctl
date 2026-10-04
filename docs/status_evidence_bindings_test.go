@@ -101,6 +101,7 @@ var servedEvidenceBindings = []EvidenceBinding{
 	evidence("MDMTraceStep", "outcome", predicate(evidenceObservation, "ok/failed require the matching durable SCEP, issuance, installation, or renewal evidence event; missing stage evidence remains pending or unknown"), "internal/api/mdm_devices.go:API.buildDeviceTrace"),
 	evidence("MigrationRun", "status", predicate(evidenceEventProjection, "the status is the immutable H2 aggregate state produced by signed trust, live-serving, exact revocation, and rollback observations; complete and rolled_back are impossible while a required cohort verdict is absent"), "internal/migration/run.go:Observe"),
 	evidence("MachineSession", "status", eventProjectionPredicate, "internal/store/machine_session.go:Store.ApplyMachineSessionStartedTx"),
+	evidence("ManagedKeyApprovalProblem", "status", predicate(evidenceProtocol, "the integer is the HTTP response code of the RFC 9457 refusal; approval_request_id and intent_digest appear only when the exact managed-key command opened a still-pending request"), "internal/api/problem/problem.go:Problem.Write"),
 	evidence("Member", "status", eventProjectionPredicate, "internal/orchestrator/commands.go:Orchestrator.UpsertTenantMember"),
 	evidence("NHIComplianceControl", "status", attestationPredicate, "internal/api/nhi_compliance.go:buildNHIComplianceControls"),
 	evidence("NHIExposureFinding", "status", observationPredicate, "internal/api/nhi_exposure_posture.go:nhiExposureFindingForItem"),
