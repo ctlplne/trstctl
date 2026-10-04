@@ -60,7 +60,7 @@ export function TransitOperations({ nativeStoreUnavailable }: { nativeStoreUnava
   const queryClient = useQueryClient();
   const keyQuery = useApiQuery(["transit-keys"], loadTransitKeys, { enabled: canRead });
   const postureQuery = useApiQuery(["transit-posture"], () => api.transitPosture(), { enabled: canRead, live: { intervalMs: 15_000 } });
-  const auditQuery = useApiQuery(["transit-audit"], () => api.auditEvents({ type: transitAuditTypes, limit: 8 }), {
+  const auditQuery = useApiQuery(["transit-audit"], () => api.auditEvents({ type: transitAuditTypes, limit: 8, window: "latest" }), {
     enabled: canReadAudit,
     live: { intervalMs: 15_000 },
   });
@@ -170,6 +170,7 @@ export function TransitOperations({ nativeStoreUnavailable }: { nativeStoreUnava
       setTransitCiphertext(ciphertext);
       setTransitCiphertextInput(ciphertext.ciphertext);
       setTransitPlaintext("");
+      void queryClient.invalidateQueries({ queryKey: ["transit-audit"] });
     } catch (error) {
       setTransitError(apiProblemMessage(error, t("secrets.transit.encryptFailed")));
     } finally {
@@ -188,6 +189,7 @@ export function TransitOperations({ nativeStoreUnavailable }: { nativeStoreUnava
         ...(transitAAD.trim() ? { aad: encodeTransitBytes(transitAAD.trim()) } : {}),
       });
       setTransitPlaintextResult(decodeTransitBytes(result.plaintext));
+      void queryClient.invalidateQueries({ queryKey: ["transit-audit"] });
     } catch (error) {
       setTransitError(apiProblemMessage(error, t("secrets.transit.decryptFailed")));
     } finally {
@@ -206,6 +208,7 @@ export function TransitOperations({ nativeStoreUnavailable }: { nativeStoreUnava
       });
       setTransitCiphertext(result);
       setTransitCiphertextInput(result.ciphertext);
+      void queryClient.invalidateQueries({ queryKey: ["transit-audit"] });
     } catch (error) {
       setTransitError(apiProblemMessage(error, t("secrets.transit.rewrapFailed")));
     } finally {
@@ -219,6 +222,7 @@ export function TransitOperations({ nativeStoreUnavailable }: { nativeStoreUnava
     setTransitBusy("hmac");
     try {
       setTransitHMACResult(await api.hmacTransit({ key: hmacKey, data: encodeTransitBytes(transitMessage) }));
+      void queryClient.invalidateQueries({ queryKey: ["transit-audit"] });
     } catch (error) {
       setTransitError(apiProblemMessage(error, t("secrets.transit.hmacFailed")));
     } finally {

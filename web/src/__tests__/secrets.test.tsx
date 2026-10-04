@@ -2219,6 +2219,23 @@ describe("secrets surface", () => {
     expect(apiMock.signTransit).toHaveBeenCalledTimes(1);
   });
 
+  it("shows the latest matching Transit audit receipts instead of the oldest page", async () => {
+    apiMock.transitKeys.mockResolvedValue({ items: [{ name: "payments-integrity", kind: "hmac", version: 1 }] });
+    apiMock.auditEvents
+      .mockResolvedValueOnce([{ sequence: 42, tenant_id: "tenant-a", time: "2026-09-03T12:00:00Z", type: "transit.key.created" }])
+      .mockResolvedValue([{ sequence: 43, tenant_id: "tenant-a", time: "2026-09-03T12:01:00Z", type: "transit.hmac" }]);
+    const user = userEvent.setup();
+    renderSecrets("/secrets/engines");
+
+    await user.click(await screen.findByRole("button", { name: "Open encryption and signing" }));
+    expect(await screen.findByText("transit.key.created")).toBeInTheDocument();
+    expect(apiMock.auditEvents).toHaveBeenCalledWith(expect.objectContaining({ limit: 8, window: "latest" }));
+    await user.type(screen.getByLabelText("Message"), "local audit probe");
+    await user.click(screen.getByRole("button", { name: "Compute HMAC" }));
+    expect(await screen.findByText("transit.hmac")).toBeInTheDocument();
+    expect(apiMock.auditEvents).toHaveBeenCalledTimes(2);
+  });
+
   it("issues PKI secrets, tests machine login, and creates/redeems one-time shares once", async () => {
     const storageSpy = vi.spyOn(Storage.prototype, "setItem");
     apiMock.previewPKISecret.mockResolvedValueOnce({
