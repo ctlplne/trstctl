@@ -19252,6 +19252,42 @@
         ],
         "type": "object"
       },
+      "ManagedKeyApprovalProblem": {
+        "properties": {
+          "approval_request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "code": {
+            "description": "managed_key_approval_pending only when this command opened a still-pending exact approval request; other 403 refusals may have another code or no code.",
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string"
+          },
+          "intent_digest": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status"
+        ],
+        "type": "object"
+      },
       "ManagedKeyApprovalRequest": {
         "properties": {
           "action": {
@@ -48359,6 +48395,16 @@
             },
             "description": "success"
           },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedKeyApprovalProblem"
+                }
+              }
+            },
+            "description": "Forbidden. If the command opened a still-pending exact approval request, code is managed_key_approval_pending and approval_request_id plus intent_digest identify it. Other 403 refusals do not claim a pending request."
+          },
           "4XX": {
             "content": {
               "application/problem+json": {
@@ -48427,6 +48473,16 @@
             },
             "description": "success"
           },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedKeyApprovalProblem"
+                }
+              }
+            },
+            "description": "Forbidden. If the command opened a still-pending exact approval request, code is managed_key_approval_pending and approval_request_id plus intent_digest identify it. Other 403 refusals do not claim a pending request."
+          },
           "4XX": {
             "content": {
               "application/problem+json": {
@@ -48494,6 +48550,16 @@
               }
             },
             "description": "success"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedKeyApprovalProblem"
+                }
+              }
+            },
+            "description": "Forbidden. If the command opened a still-pending exact approval request, code is managed_key_approval_pending and approval_request_id plus intent_digest identify it. Other 403 refusals do not claim a pending request."
           },
           "4XX": {
             "content": {

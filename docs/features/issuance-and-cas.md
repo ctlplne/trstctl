@@ -634,6 +634,16 @@ exercises all six providers end to end against faithful cloud emulators, SoftHSM
 swtpm, and stops the signer mid-rotation to independently verify the resulting state
 (see Pitfalls & limits for what that proves and doesn't).
 
+Rotate, revoke, and zeroize first open an exact, immutable approval request when
+dual control is required. A pending request returns HTTP 403 with
+`code=managed_key_approval_pending`, `approval_request_id`, and `intent_digest` in
+the problem body. The key is unchanged. The Key custody console shows this as a
+waiting state and links to **Requests waiting for approval**; an independent
+custodian approves there, then the requester retries the action. A denial,
+expired request, missing approval authority, or ordinary permission failure is a
+refusal and does not use the pending code. The requester cannot approve their own
+request.
+
 The same posture includes the served CAP-KEY-03 FIPS path: `GET /api/v1/editions` and
 the Platform page expose the live FIPS POST booleans, `make fips-build` build target,
 `fips-capable build (GOFIPS140)` CI gate, and `internal/crypto` boundary, keeping the

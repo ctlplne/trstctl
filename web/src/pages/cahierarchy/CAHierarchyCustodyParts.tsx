@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { AlertTriangle, CheckCircle2, KeyRound, ShieldCheck } from "lucide-react";
 import { CredentialChip } from "@/components/CredentialChip";
 import { EmptyState } from "@/components/EmptyState";
@@ -11,6 +12,7 @@ import { StepShell, type CarouselStep } from "@/components/wizard/StepShell";
 import { translateNow, useTranslation } from "@/i18n/I18nProvider";
 import {
   api,
+  ApiError,
   type ManagedKey,
   type ManagedKeyRecord,
   type ManagedKeyCustodyPlan,
@@ -21,6 +23,26 @@ import {
 import { apiProblemMessage } from "@/lib/apiProblem";
 
 const algorithms: ManagedKeyGenerateRequest["algorithm"][] = ["ECDSA-P256", "ECDSA-P384", "ECDSA-P521", "RSA-2048", "RSA-3072", "RSA-4096"];
+
+type PendingManagedKeyApproval = { requestId: string; intentDigest: string };
+
+function pendingManagedKeyApproval(error: unknown): PendingManagedKeyApproval | null {
+  if (!(error instanceof ApiError) || error.status !== 403) return null;
+  try {
+    const problem = JSON.parse(error.body) as { code?: unknown; approval_request_id?: unknown; intent_digest?: unknown };
+    if (
+      problem.code !== "managed_key_approval_pending" ||
+      typeof problem.approval_request_id !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(problem.approval_request_id) ||
+      typeof problem.intent_digest !== "string" ||
+      !/^sha256:[0-9a-f]{64}$/i.test(problem.intent_digest)
+    )
+      return null;
+    return { requestId: problem.approval_request_id, intentDigest: problem.intent_digest };
+  } catch {
+    return null;
+  }
+}
 
 /** ManagedKeyCustodyWorkspace owns one complete operator journey. The browser
  * only selects a provider and algorithm. Provider credentials and device paths
@@ -41,6 +63,7 @@ export function ManagedKeyCustodyWorkspace() {
   const [managedKeyProvider, setManagedKeyProvider] = useState("");
   const [keyBusy, setKeyBusy] = useState(false);
   const [keyError, setKeyError] = useState<string | null>(null);
+  const [pendingApproval, setPendingApproval] = useState<PendingManagedKeyApproval | null>(null);
   const [inventory, setInventory] = useState<ManagedKeyRecord[]>([]);
   const [inventoryCursor, setInventoryCursor] = useState("");
   const [inventoryBusy, setInventoryBusy] = useState(false);
@@ -101,6 +124,7 @@ export function ManagedKeyCustodyWorkspace() {
   async function selectManagedKey(key: ManagedKeyRecord) {
     setKeyBusy(true);
     setKeyError(null);
+    setPendingApproval(null);
     try {
       const current = await api.getManagedKey(key.provider, key.key_id);
       setManagedKey(current);
@@ -159,6 +183,7 @@ export function ManagedKeyCustodyWorkspace() {
     if (!previewIsSafe || !preview) return;
     setKeyBusy(true);
     setKeyError(null);
+    setPendingApproval(null);
     try {
       setManagedKey(await api.generateManagedKey({ provider: preview.provider, algorithm: preview.algorithm as ManagedKeyGenerateRequest["algorithm"] }));
       setManagedKeyProvider(plan?.configured_provider === "aws" ? "aws-kms" : (plan?.configured_provider ?? ""));
@@ -173,13 +198,16 @@ export function ManagedKeyCustodyWorkspace() {
   async function runManagedKeyAction(action: "rotate" | "revoke" | "zeroize", keyId: string) {
     setKeyBusy(true);
     setKeyError(null);
+    setPendingApproval(null);
     try {
       const next =
         action === "rotate" ? await api.rotateManagedKey(keyId) : action === "revoke" ? await api.revokeManagedKey(keyId) : await api.zeroizeManagedKey(keyId);
       setManagedKey(next);
       await loadInventory();
     } catch (error) {
-      setKeyError(apiProblemMessage(error, t("caHierarchy.custody.actionFailed", { action })));
+      const pending = pendingManagedKeyApproval(error);
+      if (pending) setPendingApproval(pending);
+      else setKeyError(apiProblemMessage(error, t("caHierarchy.custody.actionFailed", { action })));
     } finally {
       setKeyBusy(false);
     }
@@ -237,6 +265,7 @@ export function ManagedKeyCustodyWorkspace() {
             </Card>
           ) : null}
           {keyError && currentIndex !== 2 ? <ErrorState title={t("caHierarchy.custody.actionFailedTitle")}>{keyError}</ErrorState> : null}
+          {pendingApproval && currentIndex !== 2 ? <ManagedKeyPendingApproval approval={pendingApproval} /> : null}
           {managedKey && currentIndex !== 2 ? (
             <ManagedKeyPanel
               managedKey={managedKey}
@@ -276,6 +305,7 @@ export function ManagedKeyCustodyWorkspace() {
               <CustodyGeneration
                 busy={keyBusy}
                 error={keyError}
+                pendingApproval={pendingApproval}
                 managedKey={managedKey}
                 preview={preview}
                 onGenerate={() => void generateManagedKey()}
@@ -472,6 +502,7 @@ function CustodyPreview({ preview, error }: { preview: ManagedKeyGenerationPrevi
 function CustodyGeneration({
   busy,
   error,
+  pendingApproval,
   managedKey,
   preview,
   onAction,
@@ -480,6 +511,7 @@ function CustodyGeneration({
 }: {
   busy: boolean;
   error: string | null;
+  pendingApproval: PendingManagedKeyApproval | null;
   managedKey: ManagedKey | null;
   preview: ManagedKeyGenerationPreview;
   onAction: (action: "rotate" | "revoke" | "zeroize", keyId: string) => void;
@@ -508,12 +540,29 @@ function CustodyGeneration({
         </CardContent>
       </Card>
       {error ? <ErrorState title={t("caHierarchy.custody.actionFailedTitle")}>{error}</ErrorState> : null}
+      {pendingApproval ? <ManagedKeyPendingApproval approval={pendingApproval} /> : null}
       {managedKey ? (
         <ManagedKeyPanel managedKey={managedKey} busy={busy} onAction={onAction} actionsDisabled={actionsDisabled} />
       ) : (
         <EmptyState title={t("caHierarchy.custody.noKey")}>{t("caHierarchy.custody.noKeyDetail")}</EmptyState>
       )}
     </div>
+  );
+}
+
+function ManagedKeyPendingApproval({ approval }: { approval: PendingManagedKeyApproval }) {
+  const { t } = useTranslation();
+  return (
+    <UnavailableState title={t("caHierarchy.custody.approvalPendingTitle")}>
+      <p>{t("caHierarchy.custody.approvalPendingDetail")}</p>
+      <p className="mt-2">
+        <CredentialChip value={approval.requestId} label={t("caHierarchy.custody.approvalRequestID")} fullValue />
+      </p>
+      <p className="mt-2">{t("caHierarchy.custody.approvalPendingNext")}</p>
+      <Link className="mt-2 inline-block text-sm font-medium text-primary underline" to="/approvals">
+        {t("caHierarchy.custody.openApprovalRequests")}
+      </Link>
+    </UnavailableState>
   );
 }
 

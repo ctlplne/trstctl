@@ -252,7 +252,10 @@ type managedKeyExactIntentSpy struct {
 
 func (s *managedKeyExactIntentSpy) AuthorizeApproval(_ context.Context, intent api.ApprovalIntent) (api.ApprovalAuthority, bool, string) {
 	s.intents = append(s.intents, intent)
-	return api.ApprovalAuthority{}, false, "awaiting exact approval"
+	return api.ApprovalAuthority{
+		RequestID: "bea71d61-2826-5abf-917a-2163186ca94b", IntentDigest: "sha256:exact-intent",
+		Disposition: api.ApprovalDispositionPending,
+	}, false, "awaiting exact approval"
 }
 
 func TestDurableManagedKeyApprovalIntentBindsCurrentTargetAndCommandEvidence(t *testing.T) {
@@ -278,6 +281,10 @@ func TestDurableManagedKeyApprovalIntentBindsCurrentTargetAndCommandEvidence(t *
 		_, err := service.Rotate(context.Background(), tenantID, keyID, "alice", idempotencyKey, "sha256:http-command")
 		if !errors.Is(err, ErrNotApproved) {
 			t.Fatalf("rotate %q error = %v, want ErrNotApproved", idempotencyKey, err)
+		}
+		var pending *api.ManagedKeyApprovalPendingError
+		if !errors.As(err, &pending) || pending.RequestID != "bea71d61-2826-5abf-917a-2163186ca94b" || pending.IntentDigest != "sha256:exact-intent" {
+			t.Fatalf("rotate %q lost exact pending request: %v", idempotencyKey, err)
 		}
 	}
 	if len(spy.intents) != 3 {

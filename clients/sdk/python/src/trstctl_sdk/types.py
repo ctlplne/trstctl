@@ -6455,6 +6455,21 @@ ManagedKeyApproval = TypedDict(
     total=False,
 )
 
+ManagedKeyApprovalProblem = TypedDict(
+    'ManagedKeyApprovalProblem',
+    {
+        'approval_request_id': str,
+        'code': str,
+        'detail': str,
+        'instance': str,
+        'intent_digest': str,
+        'status': int,
+        'title': str,
+        'type': str,
+    },
+    total=False,
+)
+
 ManagedKeyApprovalRequest = TypedDict(
     'ManagedKeyApprovalRequest',
     {

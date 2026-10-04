@@ -457,6 +457,7 @@ public final class OpenApiSchemas {
       "ManagedKey",
       "ManagedKeyActionRequest",
       "ManagedKeyApproval",
+      "ManagedKeyApprovalProblem",
       "ManagedKeyApprovalRequest",
       "ManagedKeyCustodyPlan",
       "ManagedKeyCustodyProvider",

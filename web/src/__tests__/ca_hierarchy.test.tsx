@@ -804,6 +804,48 @@ describe("CA hierarchy and custody surface", () => {
     expect(screen.queryByText(/PRIVATE KEY-----/)).not.toBeInTheDocument();
   });
 
+  it("shows a genuine pending managed-key approval as a waiting state with the exact request", async () => {
+    const user = userEvent.setup();
+    const requestId = "bea71d61-2826-5abf-917a-2163186ca94b";
+    apiMock.rotateManagedKey.mockRejectedValueOnce(
+      new ApiError(
+        403,
+        JSON.stringify({
+          status: 403,
+          code: "managed_key_approval_pending",
+          approval_request_id: requestId,
+          intent_digest: "sha256:" + "a".repeat(64),
+          detail: "dual control: exact request awaits two distinct approvals",
+        }),
+      ),
+    );
+    renderCAHierarchy("/ca-hierarchy?tab=custody");
+    await user.click(await screen.findByRole("button", { name: "Review generation plan" }));
+    await user.click(await screen.findByRole("button", { name: "Continue to generation" }));
+    await user.click(screen.getByRole("button", { name: "Generate managed key" }));
+    await user.click(await screen.findByRole("button", { name: "Rotate key kms/root-1" }));
+
+    expect(await screen.findByText("Managed key action awaits approval")).toBeInTheDocument();
+    expect(screen.getByText(requestId)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open approval requests" })).toHaveAttribute("href", "/approvals");
+    expect(screen.getByText("The key has not changed yet.", { exact: false })).toBeInTheDocument();
+    expect(screen.queryByText("Managed key action failed")).not.toBeInTheDocument();
+    expect(screen.getByText("Version 1")).toBeInTheDocument();
+  });
+
+  it("does not present an unrelated managed-key refusal as an approval request", async () => {
+    const user = userEvent.setup();
+    apiMock.rotateManagedKey.mockRejectedValueOnce(new ApiError(403, JSON.stringify({ status: 403, detail: "permission denied" })));
+    renderCAHierarchy("/ca-hierarchy?tab=custody");
+    await user.click(await screen.findByRole("button", { name: "Review generation plan" }));
+    await user.click(await screen.findByRole("button", { name: "Continue to generation" }));
+    await user.click(screen.getByRole("button", { name: "Generate managed key" }));
+    await user.click(await screen.findByRole("button", { name: "Rotate key kms/root-1" }));
+
+    expect(await screen.findByText("Managed key action failed")).toBeInTheDocument();
+    expect(screen.queryByText("Managed key action awaits approval")).not.toBeInTheDocument();
+  });
+
   it("keeps generation locked when the server preview names a deployment blocker", async () => {
     const user = userEvent.setup();
     apiMock.managedKeyCustody.mockResolvedValueOnce({

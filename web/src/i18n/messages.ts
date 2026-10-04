@@ -1121,6 +1121,26 @@ export const messages = {
     description: "Fallback error for a managed-key lifecycle action.",
   },
   "caHierarchy.custody.actionFailedTitle": { defaultMessage: "Managed key action failed", description: "Heading for a managed-key lifecycle action error." },
+  "caHierarchy.custody.approvalPendingTitle": {
+    defaultMessage: "Managed key action awaits approval",
+    description: "Heading for an exact pending managed-key dual-control request.",
+  },
+  "caHierarchy.custody.approvalPendingDetail": {
+    defaultMessage: "Distinct custodians must approve this exact request. The person who requested the action cannot approve it.",
+    description: "Explain the managed-key dual-control boundary.",
+  },
+  "caHierarchy.custody.approvalRequestID": {
+    defaultMessage: "Approval request ID",
+    description: "Accessible label for the exact pending managed-key request ID.",
+  },
+  "caHierarchy.custody.approvalPendingNext": {
+    defaultMessage: "Open the approval queue, then return and retry this action after approval. The key has not changed yet.",
+    description: "Next operator step after a managed-key action opens an approval request.",
+  },
+  "caHierarchy.custody.openApprovalRequests": {
+    defaultMessage: "Open approval requests",
+    description: "Link from key custody to the separate approval queue.",
+  },
   "caHierarchy.custody.noKey": { defaultMessage: "No managed key has been generated", description: "Empty-state heading before reviewed key generation." },
   "caHierarchy.custody.noKeyDetail": {
     defaultMessage: "Generate the reviewed key to see its public identifier, version, and lifecycle state.",

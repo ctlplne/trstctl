@@ -152,6 +152,13 @@ func idempotencyHeaderParam() Parameter {
 	}
 }
 
+func managedKeyApprovalRefusalResponse() Response {
+	return Response{
+		Description: "Forbidden. If the command opened a still-pending exact approval request, code is managed_key_approval_pending and approval_request_id plus intent_digest identify it. Other 403 refusals do not claim a pending request.",
+		Content:     map[string]MediaType{"application/problem+json": {Schema: ref("ManagedKeyApprovalProblem")}},
+	}
+}
+
 // buildSpec generates the OpenAPI document from the route registry. The spec
 // endpoint itself is omitted from the documented paths.
 func buildSpec(routes []route, extraSchemas map[string]*Schema) *Document {
@@ -1039,6 +1046,11 @@ func componentSchemas() map[string]*Schema {
 	problemSchema := object(map[string]*Schema{
 		"type": str(), "title": str(), "status": {Type: "integer"}, "detail": str(), "instance": str(), "code": str(),
 	})
+	managedKeyApprovalProblem := object(map[string]*Schema{
+		"type": str(), "title": str(), "status": {Type: "integer"}, "detail": str(), "instance": str(),
+		"code":                {Type: "string", Description: "managed_key_approval_pending only when this command opened a still-pending exact approval request; other 403 refusals may have another code or no code."},
+		"approval_request_id": uuid(), "intent_digest": str(),
+	}, "type", "title", "status")
 	editionTiers := []string{"community", "enterprise", "provider"}
 	editionStates := []string{"community", "active", "grace", "read_only"}
 	featureModes := []string{"enabled", "read_only", "off"}
@@ -6196,6 +6208,7 @@ func componentSchemas() map[string]*Schema {
 
 	return map[string]*Schema{
 		"Problem":                                  problemSchema,
+		"ManagedKeyApprovalProblem":                managedKeyApprovalProblem,
 		"CapabilityLicensePosture":                 capabilityLicensePosture,
 		"CapabilityViewStage":                      capabilityViewStage,
 		"CapabilityUnavailableAction":              capabilityUnavailableAction,

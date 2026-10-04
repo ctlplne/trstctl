@@ -48,6 +48,21 @@ var (
 	ErrManagedKeyRefRequired = errors.New("managedkeys: key ref (id) is required")
 )
 
+// ManagedKeyApprovalPendingError carries the exact immutable approval request
+// opened by a destructive managed-key command. A caller may show this as a
+// waiting state; other approval refusals remain failures.
+type ManagedKeyApprovalPendingError struct {
+	RequestID    string
+	IntentDigest string
+	Reason       string
+}
+
+func (e *ManagedKeyApprovalPendingError) Error() string {
+	return ErrManagedKeyNotApproved.Error() + ": " + e.Reason
+}
+
+func (e *ManagedKeyApprovalPendingError) Unwrap() error { return ErrManagedKeyNotApproved }
+
 // ManagedKeyService is the served managed-key lifecycle the API drives.
 // The API depends only on this minimal interface
 // so it never links a concrete KMS backend; the composition root wires the backend,
@@ -482,9 +497,15 @@ func requesterFor(ctx context.Context) (string, error) {
 
 // mapManagedKeyError maps service-layer errors to problem+json statuses.
 func mapManagedKeyError(err error) error {
+	var pending *ManagedKeyApprovalPendingError
 	switch {
 	case errors.Is(err, orchestrator.ErrIdempotencyConflict):
 		return errStatus(http.StatusConflict, "Idempotency-Key was already used for a different authenticated request")
+	case errors.As(err, &pending):
+		return &apiError{status: http.StatusForbidden, detail: "dual control: " + err.Error(), ext: map[string]any{
+			"code": "managed_key_approval_pending", "approval_request_id": pending.RequestID,
+			"intent_digest": pending.IntentDigest,
+		}}
 	case errors.Is(err, ErrManagedKeyNotApproved):
 		return errStatus(http.StatusForbidden, "dual control: "+err.Error())
 	case errors.Is(err, ErrManagedKeyUnknown):

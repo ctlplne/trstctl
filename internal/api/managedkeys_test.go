@@ -269,6 +269,34 @@ func TestManagedKeyServiceIdempotencyDriftMapsToConflict(t *testing.T) {
 	}
 }
 
+func TestManagedKeyPendingApprovalHasStructuredRequestIdentity(t *testing.T) {
+	service := &stubManagedKeys{err: &api.ManagedKeyApprovalPendingError{
+		RequestID:    "bea71d61-2826-5abf-917a-2163186ca94b",
+		IntentDigest: "sha256:exact-intent", Reason: "awaits 2 distinct approval(s)",
+	}}
+	handler := managedKeyHarness(service, orchestrator.NewMemoryIdempotency())
+	response := managedKeyRequest(t, handler, "/api/v1/managed-keys/rotate", "managed-key-pending", "operator-a", `{"key_id":"fake-kms-key-0001"}`)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("pending status=%d body=%s, want 403", response.Code, response.Body.String())
+	}
+	var problem struct {
+		Code              string `json:"code"`
+		ApprovalRequestID string `json:"approval_request_id"`
+		IntentDigest      string `json:"intent_digest"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &problem); err != nil {
+		t.Fatal(err)
+	}
+	if problem.Code != "managed_key_approval_pending" || problem.ApprovalRequestID != "bea71d61-2826-5abf-917a-2163186ca94b" || problem.IntentDigest != "sha256:exact-intent" {
+		t.Fatalf("pending approval identity = %+v", problem)
+	}
+	service.err = api.ErrManagedKeyNotApproved
+	terminal := managedKeyRequest(t, handler, "/api/v1/managed-keys/revoke", "managed-key-terminal", "operator-a", `{"key_id":"fake-kms-key-0001"}`)
+	if terminal.Code != http.StatusForbidden || strings.Contains(terminal.Body.String(), "managed_key_approval_pending") {
+		t.Fatalf("non-pending refusal presented as pending: %d %s", terminal.Code, terminal.Body.String())
+	}
+}
+
 // TestManagedKeysServedReflectsWiring proves the CRYPTO-005 wiring assertion: the
 // served surface reports enabled only when WithManagedKeys is given.
 func TestManagedKeysServedReflectsWiring(t *testing.T) {

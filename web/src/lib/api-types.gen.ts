@@ -4677,6 +4677,17 @@ export interface ManagedKeyApproval {
   resource: string;
 }
 
+export interface ManagedKeyApprovalProblem {
+  approval_request_id?: string;
+  code?: string;
+  detail?: string;
+  instance?: string;
+  intent_digest?: string;
+  status: number;
+  title: string;
+  type: string;
+}
+
 export interface ManagedKeyApprovalRequest {
   action: "rotate" | "revoke" | "zeroize";
   intent_digest: string;

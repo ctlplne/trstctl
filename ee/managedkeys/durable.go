@@ -203,6 +203,11 @@ func (s *durableService) submit(ctx context.Context, tenantID, keyID, requester,
 			if reason == "" {
 				reason = "an exact approved operation request is required"
 			}
+			if authority.Disposition == api.ApprovalDispositionPending && authority.RequestID != "" && authority.IntentDigest != "" {
+				return Result{}, &api.ManagedKeyApprovalPendingError{
+					RequestID: authority.RequestID, IntentDigest: authority.IntentDigest, Reason: reason,
+				}
+			}
 			return Result{}, fmt.Errorf("%w: %s", ErrNotApproved, reason)
 		}
 		command.Approval = &store.OperationApprovalUse{

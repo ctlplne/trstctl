@@ -11746,6 +11746,18 @@ export interface components {
             approver: string;
             resource: string;
         };
+        ManagedKeyApprovalProblem: {
+            /** Format: uuid */
+            approval_request_id?: string;
+            /** @description managed_key_approval_pending only when this command opened a still-pending exact approval request; other 403 refusals may have another code or no code. */
+            code?: string;
+            detail?: string;
+            instance?: string;
+            intent_digest?: string;
+            status: number;
+            title: string;
+            type: string;
+        };
         ManagedKeyApprovalRequest: {
             /** @enum {string} */
             action: "rotate" | "revoke" | "zeroize";
@@ -25494,6 +25506,15 @@ export interface operations {
                     "application/json": components["schemas"]["ManagedKey"];
                 };
             };
+            /** @description Forbidden. If the command opened a still-pending exact approval request, code is managed_key_approval_pending and approval_request_id plus intent_digest identify it. Other 403 refusals do not claim a pending request. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ManagedKeyApprovalProblem"];
+                };
+            };
             /** @description client error */
             "4XX": {
                 headers: {
@@ -25539,6 +25560,15 @@ export interface operations {
                     "application/json": components["schemas"]["ManagedKey"];
                 };
             };
+            /** @description Forbidden. If the command opened a still-pending exact approval request, code is managed_key_approval_pending and approval_request_id plus intent_digest identify it. Other 403 refusals do not claim a pending request. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ManagedKeyApprovalProblem"];
+                };
+            };
             /** @description client error */
             "4XX": {
                 headers: {
@@ -25582,6 +25612,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ManagedKey"];
+                };
+            };
+            /** @description Forbidden. If the command opened a still-pending exact approval request, code is managed_key_approval_pending and approval_request_id plus intent_digest identify it. Other 403 refusals do not claim a pending request. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ManagedKeyApprovalProblem"];
                 };
             };
             /** @description client error */
