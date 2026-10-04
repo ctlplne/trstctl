@@ -22,6 +22,7 @@ type AuditRetentionWorker interface {
 type AuditCheckpoints interface {
 	audit.CheckpointSource
 	audit.CheckpointSink
+	WithAuditRetentionScope(context.Context, string, func(context.Context) error) error
 }
 
 type AuditComplianceDeps struct {

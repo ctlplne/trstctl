@@ -26,14 +26,26 @@ import (
 // memCheckpoints is an in-memory audit.CheckpointSource + audit.CheckpointSink for
 // the worker unit test (the store implements the real one).
 type memCheckpoints struct {
-	mu sync.Mutex
-	m  map[string]audit.Checkpoint
+	mu          sync.Mutex
+	scopeMu     sync.Mutex
+	coordinator *retentionHistoryCoordinator
+	m           map[string]audit.Checkpoint
+}
+
+func (c *memCheckpoints) WithAuditRetentionScope(ctx context.Context, _ string, fn func(context.Context) error) error {
+	if c.coordinator != nil {
+		c.coordinator.operation.RLock()
+		defer c.coordinator.operation.RUnlock()
+	}
+	c.scopeMu.Lock()
+	defer c.scopeMu.Unlock()
+	return fn(ctx)
 }
 
 type retentionHistoryReadKey struct{}
 
 type retentionHistoryCoordinator struct {
-	operation sync.Mutex
+	operation sync.RWMutex
 	barrier   sync.RWMutex
 	readDepth atomic.Int64
 }
@@ -554,7 +566,7 @@ func assertArchivedEventCount(t *testing.T, log *events.Log, tenantID string, wa
 	}
 }
 
-func TestRetentionPinsArchiveAndExcludesRewriteWhileCheckpointCommits(t *testing.T) {
+func TestRetentionPinsArchiveAndExcludesCutoverWhileCheckpointCommits(t *testing.T) {
 	ctx := context.Background()
 	coordinator := &retentionHistoryCoordinator{}
 	log, err := events.Open(
@@ -577,7 +589,7 @@ func TestRetentionPinsArchiveAndExcludesRewriteWhileCheckpointCommits(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	baseCheckpoints := &memCheckpoints{}
+	baseCheckpoints := &memCheckpoints{coordinator: coordinator}
 	checkpoints := &blockingCheckpoints{
 		memCheckpoints: baseCheckpoints,
 		entered:        make(chan struct{}),
@@ -604,6 +616,20 @@ func TestRetentionPinsArchiveAndExcludesRewriteWhileCheckpointCommits(t *testing
 		t.Fatal("retention never reached archive")
 	}
 
+	// Provider's short privacy barrier shares the operation grant with retention.
+	providerEntered := make(chan struct{})
+	go func() {
+		coordinator.operation.RLock()
+		close(providerEntered)
+		coordinator.operation.RUnlock()
+	}()
+	select {
+	case <-providerEntered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("retention blocked the Provider shared operation grant")
+	}
+	// Rewrite and full-backup operations need the exclusive grant, so neither
+	// can observe a split archive event and checkpoint.
 	rewriteEntered := make(chan struct{})
 	rewriteDone := make(chan error, 1)
 	go func() {
@@ -614,28 +640,12 @@ func TestRetentionPinsArchiveAndExcludesRewriteWhileCheckpointCommits(t *testing
 	}()
 	select {
 	case <-rewriteEntered:
-		t.Fatal("competing rewrite operation interleaved with pinned retention archive")
+		t.Fatal("exclusive history operation entered during retention")
 	case <-time.After(75 * time.Millisecond):
 	}
-	close(archiver.release)
-	select {
-	case <-checkpoints.entered:
-		if coordinator.readDepth.Load() != 0 {
-			t.Fatal("retention attempted shared-to-exclusive upgrade without releasing read lease")
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("retention never reached checkpoint")
-	}
-	select {
-	case <-rewriteEntered:
-		t.Fatal("competing rewrite entered between archive and checkpoint")
-	default:
-	}
-
-	// Source history is immutable across logical retention, so a backup history
-	// read may proceed while the PostgreSQL checkpoint waits. Its paired PG
-	// snapshot will either include the checkpoint or rebuild it from the already
-	// appended audit.archived event.
+	// An ordinary event-history read can share the archive's generation before
+	// a waiting cutover takes priority. A full backup additionally needs the
+	// exclusive operation grant above and therefore waits for retention.
 	backupEntered := make(chan struct{})
 	backupDone := make(chan error, 1)
 	go func() {
@@ -647,16 +657,39 @@ func TestRetentionPinsArchiveAndExcludesRewriteWhileCheckpointCommits(t *testing
 	select {
 	case <-backupEntered:
 	case <-time.After(2 * time.Second):
-		t.Fatal("logical retention unnecessarily blocked an immutable backup history read")
+		t.Fatal("logical retention blocked an immutable backup history read")
 	}
+	if err := <-backupDone; err != nil {
+		t.Fatalf("backup read: %v", err)
+	}
+	cutoverEntered := make(chan struct{})
+	cutoverDone := make(chan error, 1)
+	go func() {
+		cutoverDone <- coordinator.WithCutover(ctx, func(context.Context) error {
+			close(cutoverEntered)
+			return nil
+		})
+	}()
 	select {
-	case err := <-backupDone:
-		if err != nil {
-			t.Fatalf("backup read: %v", err)
+	case <-cutoverEntered:
+		t.Fatal("cutover changed the history generation during retention archive")
+	case <-time.After(75 * time.Millisecond):
+	}
+	close(archiver.release)
+	select {
+	case <-checkpoints.entered:
+		if coordinator.readDepth.Load() == 0 {
+			t.Fatal("retention released its history generation before checkpoint")
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("backup read did not finish")
+		t.Fatal("retention never reached checkpoint")
 	}
+	select {
+	case <-cutoverEntered:
+		t.Fatal("cutover entered between archive and checkpoint")
+	default:
+	}
+
 	close(checkpoints.release)
 	select {
 	case err := <-retentionDone:
@@ -665,6 +698,14 @@ func TestRetentionPinsArchiveAndExcludesRewriteWhileCheckpointCommits(t *testing
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("retention did not finish")
+	}
+	select {
+	case err := <-cutoverDone:
+		if err != nil {
+			t.Fatalf("queued cutover: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("queued cutover did not continue")
 	}
 	select {
 	case err := <-rewriteDone:

@@ -57,6 +57,7 @@ func (a DirArchiver) Archive(_ context.Context, tenantID string, boundarySeq uin
 type Checkpoints interface {
 	audit.CheckpointSource
 	audit.CheckpointSink
+	WithAuditRetentionScope(context.Context, string, func(context.Context) error) error
 }
 
 // RetentionWorker archives audit records older than Retention and advances the
@@ -154,10 +155,16 @@ func (w *RetentionWorker) liveTenants(ctx context.Context) ([]string, error) {
 // logical live-query floor, and returns how many were processed.
 func (w *RetentionWorker) archiveTenant(ctx context.Context, tenantID string, cutoff time.Time) (int, error) {
 	var archived int
-	err := w.log.WithHistoryOperation(ctx, func(operationCtx context.Context) error {
-		var err error
-		archived, err = w.archiveTenantUnderOperation(operationCtx, tenantID, cutoff)
-		return err
+	err := w.sink.WithAuditRetentionScope(ctx, tenantID, func(scopeCtx context.Context) error {
+		// Hold one immutable generation through archive, event, and checkpoint.
+		// The separate scope election prevents duplicate segments across replicas;
+		// retention no longer monopolizes the history rewrite operation lock that
+		// ordinary Provider writes and metering need for short privacy checks.
+		return w.log.WithHistoryRead(scopeCtx, func(readCtx context.Context) error {
+			var err error
+			archived, err = w.archiveTenantUnderOperation(readCtx, tenantID, cutoff)
+			return err
+		})
 	})
 	return archived, err
 }
@@ -191,9 +198,9 @@ func (w *RetentionWorker) archiveTenantUnderOperation(
 		boundary audit.Record
 		uri      string
 	)
-	// Pin one shared generation from Search through signed archive durability.
-	// The outer operation lock prevents another retention/rewrite operation from
-	// cutting over after this view releases and before the checkpoint is sealed.
+	// The outer history read pins this generation through checkpoint durability.
+	// This nested read documents the archive-specific boundary and reuses its
+	// re-entrant lease without borrowing another PostgreSQL session.
 	err := w.log.WithHistoryRead(ctx, func(readCtx context.Context) error {
 		// Survivors past the last sealed boundary, already hash-linked from it.
 		recs, prevSeed, err := w.svc.SearchWithSeed(readCtx, audit.Query{TenantID: tenantID})

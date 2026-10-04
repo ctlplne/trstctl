@@ -1395,6 +1395,14 @@ the archive file or host path; retention does not silently turn an online
 audit read into an archive retrieval. An archive custodian must supply the
 signed JWS files and pinned verification keys for offline checking.
 
+Retention elects one archiver per audit scope across control-plane replicas.
+It pins the source generation until the signed segment, `audit.archived` event,
+and PostgreSQL checkpoint are durable. Ordinary Provider quota and metering
+writes can continue during that work; a history rewrite or full backup waits
+for the active segment to finish. A large or slow archive can therefore delay a
+privacy-erasure cutover or full backup. The retention worker reports its failure
+for retry without claiming the unfinished segment is archived.
+
 ## Built and tested, but not yet served by the binary
 
 No current feature-map row is in this bucket. The empty section is deliberate:
