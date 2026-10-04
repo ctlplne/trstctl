@@ -185,8 +185,8 @@ curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
 
 The response is intentionally mechanical: framework ids, report types
 (`framework_evidence_pack`, `inventory_snapshot`, `cbom_posture`,
-`audit_summary`), served routes, evidence references, inventory counts,
-and the first page of tenant report schedules.
+`audit_summary`, `nhi_compliance_mapping`), served routes, evidence
+references, inventory counts, and the first page of tenant report schedules.
 
 An operator with `audit:write` first reviews the exact definition and then records it.
 Review returns a tenant-bound SHA-256 fingerprint, normalized definition, later writes,
