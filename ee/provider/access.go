@@ -39,16 +39,17 @@ type OperatorIdentity struct {
 // DelegationRecord is the inventory form of one exact authority row. Revoked
 // rows remain readable; only the active projection is used for authorization.
 type DelegationRecord struct {
-	OperatorID string    `json:"operator_id"`
-	CustomerID string    `json:"customer_id"`
-	Operation  Operation `json:"operation"`
-	Source     string    `json:"source"`
-	GrantedBy  string    `json:"granted_by,omitempty"`
-	GrantedAt  time.Time `json:"granted_at"`
-	ExpiresAt  time.Time `json:"expires_at,omitzero"`
-	LastUsedAt time.Time `json:"last_used_at,omitzero"`
-	RevokedAt  time.Time `json:"revoked_at,omitzero"`
-	RevokedBy  string    `json:"revoked_by,omitempty"`
+	GrantEventID string    `json:"grant_event_id"`
+	OperatorID   string    `json:"operator_id"`
+	CustomerID   string    `json:"customer_id"`
+	Operation    Operation `json:"operation"`
+	Source       string    `json:"source"`
+	GrantedBy    string    `json:"granted_by,omitempty"`
+	GrantedAt    time.Time `json:"granted_at"`
+	ExpiresAt    time.Time `json:"expires_at,omitzero"`
+	LastUsedAt   time.Time `json:"last_used_at,omitzero"`
+	RevokedAt    time.Time `json:"revoked_at,omitzero"`
+	RevokedBy    string    `json:"revoked_by,omitempty"`
 }
 
 // OperatorAccess is the Provider-console row: lifecycle plus every current and
@@ -124,11 +125,11 @@ func (p *PGAccessStore) ListOperatorAccess(ctx context.Context) ([]OperatorAcces
 		return nil, err
 	}
 
-	//trstctl:system-query — cross-customer Provider authority inventory; no customer data is returned and every row is attached to an already authorized Provider operator.
-	grantRows, err := p.store.SystemPool().Query(ctx, `SELECT operator_id, customer_tenant_id, operation,
+	//trstctl:system-query — operator-visible event-projected episodes retain prior revoked grants after the same tuple is regranted.
+	grantRows, err := p.store.SystemPool().Query(ctx, `SELECT grant_event_id, operator_id, customer_tenant_id, operation,
 		source, granted_by, granted_at, expires_at, last_used_at, revoked_at, revoked_by
-		FROM provider_operator_delegations WHERE tenant_id = $1
-		ORDER BY operator_id, customer_tenant_id, operation`, providerAuthorityTenant)
+		FROM provider_operator_grant_episodes WHERE tenant_id = $1
+		ORDER BY operator_id, customer_tenant_id, operation, granted_at, grant_event_id`, providerAuthorityTenant)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +172,7 @@ func scanOperatorIdentity(row pgx.Row) (OperatorIdentity, error) {
 func scanDelegationRecord(row pgx.Row) (DelegationRecord, error) {
 	var delegation DelegationRecord
 	var expiresAt, lastUsedAt, revokedAt *time.Time
-	if err := row.Scan(&delegation.OperatorID, &delegation.CustomerID, &delegation.Operation,
+	if err := row.Scan(&delegation.GrantEventID, &delegation.OperatorID, &delegation.CustomerID, &delegation.Operation,
 		&delegation.Source, &delegation.GrantedBy, &delegation.GrantedAt, &expiresAt,
 		&lastUsedAt, &revokedAt, &delegation.RevokedBy); err != nil {
 		return DelegationRecord{}, err

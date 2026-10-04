@@ -899,6 +899,51 @@ describe("provider console (L3)", () => {
     expect(opener).toHaveFocus();
   });
 
+  it("shows both grant episodes when the same customer scope is reissued after revocation", async () => {
+    providerMock.listTenants.mockResolvedValue([]);
+    providerMock.listOperatorAccess.mockResolvedValue([
+      {
+        identity: {
+          id: "op-regranted",
+          user_name: "regranted",
+          email: "regranted@example.test",
+          display_name: "Regranted Operator",
+          role: "admin",
+          active: true,
+          source: "scim:test",
+          created_at: "2026-10-04T00:00:00Z",
+          updated_at: "2026-10-04T00:04:00Z",
+        },
+        delegations: [
+          {
+            grant_event_id: "event-old",
+            operator_id: "op-regranted",
+            customer_id: "same-customer",
+            operation: "read",
+            source: "scim",
+            granted_at: "2026-10-04T00:01:00Z",
+            revoked_at: "2026-10-04T00:02:00Z",
+          },
+          {
+            grant_event_id: "event-new",
+            operator_id: "op-regranted",
+            customer_id: "same-customer",
+            operation: "read",
+            source: "scim",
+            granted_at: "2026-10-04T00:04:00Z",
+          },
+        ],
+      },
+    ]);
+    setProviderToken("operator-bearer");
+    renderProvider();
+    const operatorRow = (await screen.findByText("Regranted Operator")).closest("tr")!;
+    fireEvent.click(within(operatorRow).getByRole("button", { name: /View delegations/i }));
+    const drawer = await screen.findByRole("dialog", { name: /Regranted Operator/ });
+    expect(within(drawer).getAllByText("same-customer")).toHaveLength(2);
+    expect(within(drawer).getAllByRole("button", { name: "Revoke" })).toHaveLength(1);
+  });
+
   it("keeps all returned delegations visible when refresh shrinks an anchored page", async () => {
     const delegations = Array.from({ length: 21 }, (_, index) => ({
       operator_id: "op-shrink",

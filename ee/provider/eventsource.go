@@ -372,6 +372,8 @@ func (p *AuthorityProjection) ResetTx(ctx context.Context, tx pgx.Tx) error {
 	for _, statement := range []string{
 		//trstctl:system-query — completion receipts are derived and reset atomically with the Provider views they prove.
 		`DELETE FROM provider_authority_projection_receipts WHERE tenant_id = '` + providerAuthorityTenant + `'`,
+		//trstctl:system-query — grant episodes are rebuilt from immutable authority events, including every revoke and regrant.
+		`DELETE FROM provider_operator_grant_episodes WHERE tenant_id = '` + providerAuthorityTenant + `'`,
 		//trstctl:system-query — edition projection reset rebuilds every provider customer before a tenant is selected; each table remains tenant-filtered on normal reads.
 		`DELETE FROM provider_operator_delegations WHERE tenant_id = '` + providerAuthorityTenant + `'`,
 		//trstctl:system-query — the fixed Provider authority tenant is restored only from immutable Provider events.
@@ -702,6 +704,13 @@ func applyAuthorityEventTx(ctx context.Context, tx pgx.Tx, event eventspec.Event
 		if _, err := tx.Exec(ctx, `SELECT set_config('trstctl.tenant_id', $1, true)`, providerAuthorityTenant); err != nil {
 			return err
 		}
+		//trstctl:system-query — close the exact erased customer's open grant episodes in the fixed Provider partition.
+		if _, err := tx.Exec(ctx, `UPDATE provider_operator_grant_episodes
+			SET revoked_at = $3, revoked_by = 'system:customer-offboard'
+			WHERE tenant_id = $1 AND customer_tenant_id = $2 AND revoked_at IS NULL`,
+			providerAuthorityTenant, event.TenantID, event.Time.UTC()); err != nil {
+			return err
+		}
 		//trstctl:system-query — fixed Provider partition, revoking only the exact erased customer's authority and retaining its history.
 		_, err := tx.Exec(ctx, `UPDATE provider_operator_delegations
 			SET revoked_at = $3, revoked_by = 'system:customer-offboard'
@@ -729,6 +738,13 @@ func applyAuthorityEventTx(ctx context.Context, tx pgx.Tx, event eventspec.Event
 			return err
 		}
 		if !operator.Active {
+			//trstctl:system-query — offboarding closes every still-live episode without erasing an earlier one.
+			if _, err := tx.Exec(ctx, `UPDATE provider_operator_grant_episodes
+				SET revoked_at = $3, revoked_by = $4
+				WHERE tenant_id = $1 AND operator_id = $2 AND revoked_at IS NULL`,
+				providerAuthorityTenant, operator.ID, effectiveAt, payload.Audit.OperatorID); err != nil {
+				return err
+			}
 			//trstctl:system-query — one provider-global leaver revokes only that operator's still-live customer authority.
 			if _, err := tx.Exec(ctx, `UPDATE provider_operator_delegations
 				SET revoked_at = COALESCE(revoked_at, $3), revoked_by = CASE WHEN revoked_at IS NULL THEN $4 ELSE revoked_by END
@@ -752,6 +768,13 @@ func applyAuthorityEventTx(ctx context.Context, tx pgx.Tx, event eventspec.Event
 			return err
 		}
 		if event.Type == AuditTenantOffboarded {
+			//trstctl:system-query — customer offboarding closes its historical grant episodes in the Provider partition.
+			if _, err := tx.Exec(ctx, `UPDATE provider_operator_grant_episodes
+				SET revoked_at = $3, revoked_by = 'system:customer-offboard'
+				WHERE tenant_id = $1 AND customer_tenant_id = $2 AND revoked_at IS NULL`,
+				providerAuthorityTenant, event.TenantID, effectiveAt); err != nil {
+				return err
+			}
 			//trstctl:system-query — offboarding retires authority over this exact customer but keeps the historical row.
 			_, err := tx.Exec(ctx, `UPDATE provider_operator_delegations
 				SET revoked_at = COALESCE(revoked_at, $3), revoked_by = CASE WHEN revoked_at IS NULL THEN 'system:customer-offboard' ELSE revoked_by END
@@ -765,6 +788,22 @@ func applyAuthorityEventTx(ctx context.Context, tx pgx.Tx, event eventspec.Event
 			return errors.New("provider: delegation grant event needs delegation state")
 		}
 		for _, d := range delegations {
+			//trstctl:system-query — a new grant supersedes an open episode but cannot erase that episode's prior grant time.
+			if _, err := tx.Exec(ctx, `UPDATE provider_operator_grant_episodes
+				SET revoked_at = $5, revoked_by = 'system:grant-superseded'
+				WHERE tenant_id = $1 AND operator_id = $2 AND customer_tenant_id = $3 AND operation = $4
+				  AND revoked_at IS NULL`,
+				providerAuthorityTenant, d.OperatorID, d.CustomerID, string(d.Operation), effectiveAt); err != nil {
+				return err
+			}
+			//trstctl:system-query — each immutable grant event adds one operator-visible episode, even for a previously revoked tuple.
+			if _, err := tx.Exec(ctx, `INSERT INTO provider_operator_grant_episodes
+				(tenant_id, grant_event_id, operator_id, customer_tenant_id, operation, source, granted_by, granted_at, expires_at)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+				providerAuthorityTenant, event.ID, d.OperatorID, d.CustomerID, string(d.Operation),
+				normalizeDelegationSource(d.Source), d.GrantedBy, effectiveAt, nullTime(d.ExpiresAt)); err != nil {
+				return err
+			}
 			//trstctl:system-query — provider authority projection, keyed by exact operator/customer/operation.
 			if _, err := tx.Exec(ctx, `INSERT INTO provider_operator_delegations
 				(tenant_id, operator_id, customer_tenant_id, operation, granted_by, granted_at, source, expires_at,
@@ -785,6 +824,14 @@ func applyAuthorityEventTx(ctx context.Context, tx pgx.Tx, event eventspec.Event
 			return errors.New("provider: delegation revoke event needs delegation state")
 		}
 		for _, d := range delegations {
+			//trstctl:system-query — retire only the open episode; retained earlier episodes remain immutable evidence.
+			if _, err := tx.Exec(ctx, `UPDATE provider_operator_grant_episodes
+				SET revoked_at = $5, revoked_by = $6
+				WHERE tenant_id = $1 AND operator_id = $2 AND customer_tenant_id = $3 AND operation = $4
+				  AND revoked_at IS NULL`,
+				providerAuthorityTenant, d.OperatorID, d.CustomerID, string(d.Operation), effectiveAt, payload.Audit.OperatorID); err != nil {
+				return err
+			}
 			//trstctl:system-query — provider authority projection, retiring the exact event-named grant while retaining evidence.
 			if _, err := tx.Exec(ctx, `UPDATE provider_operator_delegations
 				SET revoked_at = COALESCE(revoked_at, $5), revoked_by = CASE WHEN revoked_at IS NULL THEN $6 ELSE revoked_by END
@@ -851,6 +898,14 @@ func applyAuthorityEventTx(ctx context.Context, tx pgx.Tx, event eventspec.Event
 		return err
 	}
 	if operation, ok := delegationOperationForEvent(event.Type); ok && payload.Audit.OperatorID != "" && event.TenantID != providerAuthorityTenant {
+		//trstctl:system-query — last use belongs to the open episode that actually authorized this customer action.
+		if _, err := tx.Exec(ctx, `UPDATE provider_operator_grant_episodes
+			SET last_used_at = $5
+			WHERE tenant_id = $1 AND operator_id = $2 AND customer_tenant_id = $3 AND operation = $4
+			  AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > $5)`,
+			providerAuthorityTenant, payload.Audit.OperatorID, event.TenantID, string(operation), effectiveAt); err != nil {
+			return err
+		}
 		//trstctl:system-query — last use is derived from the exact successful immutable customer action and updates only its exact active authority row.
 		if _, err := tx.Exec(ctx, `UPDATE provider_operator_delegations
 			SET last_used_at = $5

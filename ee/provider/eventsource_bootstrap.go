@@ -15,17 +15,20 @@ import (
 )
 
 type authorityCoverage struct {
-	tenants     map[string]bool
-	operators   map[string]bool
-	delegations map[string]bool
-	quotas      map[string]bool
-	brands      map[string]bool
-	grants      map[string]bool
+	tenants                 map[string]bool
+	operators               map[string]bool
+	delegations             map[string]bool
+	nonBootstrapDelegations map[string]bool
+	delegationRevocations   map[string]bool
+	quotas                  map[string]bool
+	brands                  map[string]bool
+	grants                  map[string]bool
 }
 
 func newAuthorityCoverage() authorityCoverage {
 	return authorityCoverage{
-		tenants: map[string]bool{}, operators: map[string]bool{}, delegations: map[string]bool{}, quotas: map[string]bool{},
+		tenants: map[string]bool{}, operators: map[string]bool{}, delegations: map[string]bool{},
+		nonBootstrapDelegations: map[string]bool{}, delegationRevocations: map[string]bool{}, quotas: map[string]bool{},
 		brands: map[string]bool{}, grants: map[string]bool{},
 	}
 }
@@ -67,11 +70,21 @@ func (r *AuthorityRuntime) captureLegacyAuthority(ctx context.Context) error {
 		if payload.Operator != nil {
 			coverage.operators[payload.Operator.ID] = true
 		}
+		markDelegation := func(delegation DelegationMutation) {
+			key := delegationCoverageKey(delegation)
+			coverage.delegations[key] = true
+			if payload.Audit.Subject != "system:provider-authority-bootstrap" {
+				coverage.nonBootstrapDelegations[key] = true
+			}
+			if event.Type == EventDelegationRevoked {
+				coverage.delegationRevocations[key] = true
+			}
+		}
 		if payload.Delegation != nil {
-			coverage.delegations[delegationCoverageKey(*payload.Delegation)] = true
+			markDelegation(*payload.Delegation)
 		}
 		for _, delegation := range payload.Delegations {
-			coverage.delegations[delegationCoverageKey(delegation)] = true
+			markDelegation(delegation)
 		}
 		if payload.Quota != nil {
 			coverage.quotas[payload.Quota.TenantID] = true
@@ -174,7 +187,7 @@ func (r *AuthorityRuntime) bootstrapTenants(ctx context.Context, coverage author
 func (r *AuthorityRuntime) bootstrapDelegations(ctx context.Context, coverage authorityCoverage) error {
 	//trstctl:system-query — one-time provider-global upgrade capture before projection reset.
 	rows, err := r.Projection.store.SystemPool().Query(ctx, `SELECT operator_id, customer_tenant_id, operation, granted_by,
-		source, expires_at, granted_at
+		source, expires_at, granted_at, revoked_at, revoked_by
 		FROM provider_operator_delegations WHERE tenant_id = $1
 		ORDER BY operator_id, customer_tenant_id, operation`, providerAuthorityTenant)
 	if err != nil {
@@ -184,24 +197,43 @@ func (r *AuthorityRuntime) bootstrapDelegations(ctx context.Context, coverage au
 	for rows.Next() {
 		var mutation DelegationMutation
 		var expiresAt *time.Time
+		var revokedAt *time.Time
+		var revokedBy string
 		var at time.Time
 		if err := rows.Scan(&mutation.OperatorID, &mutation.CustomerID, &mutation.Operation,
-			&mutation.GrantedBy, &mutation.Source, &expiresAt, &at); err != nil {
+			&mutation.GrantedBy, &mutation.Source, &expiresAt, &at, &revokedAt, &revokedBy); err != nil {
 			return err
 		}
 		if expiresAt != nil {
 			mutation.ExpiresAt = expiresAt.UTC()
 		}
-		if coverage.delegations[delegationCoverageKey(mutation)] {
+		key := delegationCoverageKey(mutation)
+		if coverage.nonBootstrapDelegations[key] {
 			continue
 		}
-		if _, err := r.Mutations.Append(ctx, "bootstrap:delegation:"+delegationCoverageKey(mutation),
-			EventDelegationGranted, mutation.CustomerID, AuthorityEvent{
-				Delegation: &mutation, EffectiveAt: at,
-				Audit: AuditEvent{Type: EventDelegationGranted, TenantID: mutation.CustomerID,
-					Subject: "system:provider-authority-bootstrap", At: at},
-			}); err != nil {
-			return err
+		if !coverage.delegations[key] {
+			if _, err := r.Mutations.Append(ctx, "bootstrap:delegation:"+key,
+				EventDelegationGranted, mutation.CustomerID, AuthorityEvent{
+					Delegation: &mutation, EffectiveAt: at,
+					Audit: AuditEvent{Type: EventDelegationGranted, TenantID: mutation.CustomerID,
+						Subject: "system:provider-authority-bootstrap", At: at},
+				}); err != nil {
+				return err
+			}
+		}
+		if revokedAt != nil && !coverage.delegationRevocations[key] {
+			actor := strings.TrimSpace(revokedBy)
+			if actor == "" {
+				actor = "system:provider-authority-bootstrap"
+			}
+			if _, err := r.Mutations.Append(ctx, "bootstrap:delegation-revoked:"+key,
+				EventDelegationRevoked, mutation.CustomerID, AuthorityEvent{
+					Delegation: &mutation, EffectiveAt: revokedAt.UTC(),
+					Audit: AuditEvent{Type: EventDelegationRevoked, TenantID: mutation.CustomerID,
+						OperatorID: actor, Subject: "system:provider-authority-bootstrap", At: revokedAt.UTC()},
+				}); err != nil {
+				return err
+			}
 		}
 	}
 	return rows.Err()

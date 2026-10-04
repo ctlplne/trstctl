@@ -53,7 +53,7 @@ var ErrAuthorityRebuildRequired = errors.New("provider: authority projection req
 func lockAuthorityProjectionTx(ctx context.Context, tx pgx.Tx) error {
 	// Relation locks precede the advisory lock so a rebuild holding these tables
 	// cannot wait behind a writer that has the advisory lock but needs a table.
-	if _, err := tx.Exec(ctx, `LOCK TABLE provider_operator_delegations, provider_operators,
+	if _, err := tx.Exec(ctx, `LOCK TABLE provider_operator_delegations, provider_operator_grant_episodes, provider_operators,
 		provider_breakglass_grants, provider_tenant_quotas, tenant_branding,
 		provider_tenants, provider_authority_projection_receipts,
 		provider_authority_projection_state IN ROW EXCLUSIVE MODE`); err != nil {

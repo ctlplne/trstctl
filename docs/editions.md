@@ -308,6 +308,10 @@ Provider administrators with current MFA use `GET /provider/v1/operators`,
 `/revocations`, and `/role` mutation routes.
 The console shows the operator, SCIM source, role, exact customer/operation,
 grant source, expiry, last use, and retained revocation evidence. These routes
+return each grant episode with its immutable `grant_event_id`; regranting an
+exact customer/operation creates a new episode while the previous revoked
+episode remains readable. The current authorization tuple is a separate
+projection and never derives authority from historical rows.
 are not the install-time bootstrap: the local `provider-grant` command remains
 available for creating the first authority before an administrator exists.
 `POST /provider/v1/auth/logout` revokes the Provider session, clears its cookie,
@@ -318,6 +322,7 @@ and is protected by the same CSRF and idempotency contract as other mutations.
 Customer lifecycle, delegation, quota, white-label branding, and break-glass
 grant/use state share one tenant-scoped immutable authority history. The
 `provider_tenants`, `provider_operators`, `provider_operator_delegations`,
+`provider_operator_grant_episodes`,
 `provider_tenant_quotas`, `tenant_branding`, and
 `provider_breakglass_grants` tables are read models owned only by that
 projection; their PostgreSQL stores expose no direct mutators. An upgraded

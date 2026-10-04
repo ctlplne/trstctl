@@ -159,6 +159,7 @@ export interface ProviderOperatorIdentity {
 }
 
 export interface ProviderDelegation {
+  grant_event_id?: string;
   operator_id: string;
   customer_id: string;
   operation: ProviderOperation;

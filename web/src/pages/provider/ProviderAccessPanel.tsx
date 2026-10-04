@@ -41,7 +41,8 @@ export function ProviderAccessPanel({ onAuthError, canWrite }: { onAuthError: ()
     }
   }, [access.data, access.error, selectedOperatorId]);
   const grants = selectedOperator?.delegations ?? [];
-  const grantId = (grant: ProviderOperatorAccess["delegations"][number]) => `${grant.customer_id}:${grant.operation}`;
+  const grantId = (grant: ProviderOperatorAccess["delegations"][number]) =>
+    `${grant.customer_id}:${grant.operation}:${grant.grant_event_id ?? grant.granted_at}`;
   const grantStart =
     grants.length > 10 && firstGrantId
       ? Math.max(
@@ -54,7 +55,7 @@ export function ProviderAccessPanel({ onAuthError, canWrite }: { onAuthError: ()
     if (
       selectedOperator &&
       firstGrantId &&
-      (selectedOperator.delegations.length <= 10 || !selectedOperator.delegations.some((grant) => `${grant.customer_id}:${grant.operation}` === firstGrantId))
+      (selectedOperator.delegations.length <= 10 || !selectedOperator.delegations.some((grant) => grantId(grant) === firstGrantId))
     ) {
       setFirstGrantId(null);
     }

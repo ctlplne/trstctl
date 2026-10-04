@@ -110,6 +110,10 @@ with a new idempotency key. The same ordering applies to operator deprovisioning
 and customer suspension: replay cannot undo a later decision. After a crash,
 the control plane recovers missing authority updates from retained events in
 sequence and commits the recovered state together with its completion records.
+In the Provider console, open **View delegations** for the operator to inspect
+both the revoked episode and the new active episode after a regrant. `GET
+/provider/v1/operators` returns a distinct `grant_event_id` for each episode;
+the older row keeps its revoke time and the new row alone has current authority.
 If that history is unavailable, recovery fails rather than inventing authority.
 
 ### 4. Provision two customers
