@@ -123,7 +123,7 @@ func TestDockerfileIsMinimalAndReproducible(t *testing.T) {
 		"COPY --from=build --chown=65532:65532 /mnt-skel/public-trust /public-trust")
 	mustContainAll(t, "Dockerfile entrypoint", df, "ENTRYPOINT")
 	mustContainAll(t, "Dockerfile builds the web console before Go embeds it", df,
-		"FROM ${WEB_BUILD_IMAGE} AS web-build",
+		"FROM --platform=$BUILDPLATFORM ${WEB_BUILD_IMAGE} AS web-build",
 		"npm --prefix web ci",
 		"npm --prefix web run build",
 		"COPY --from=web-build /src/internal/webui/dist ./internal/webui/dist")
@@ -1287,8 +1287,8 @@ func TestServerCoverageIsReportedAndGated(t *testing.T) {
 func TestReleasePinsContainerBasesByDigest(t *testing.T) {
 	df := readArtifact(t, "Dockerfile")
 	mustContainAll(t, "Dockerfile takes pin-able web, Go, and runtime image args", df,
-		"ARG WEB_BUILD_IMAGE", "FROM ${WEB_BUILD_IMAGE} AS web-build",
-		"ARG BUILD_IMAGE", "FROM ${BUILD_IMAGE} AS build",
+		"ARG WEB_BUILD_IMAGE", "FROM --platform=$BUILDPLATFORM ${WEB_BUILD_IMAGE} AS web-build",
+		"ARG BUILD_IMAGE", "FROM --platform=$BUILDPLATFORM ${BUILD_IMAGE} AS build",
 		"ARG BASE_IMAGE", "FROM ${BASE_IMAGE}")
 
 	// Both image args must be declared in the GLOBAL scope — before the FIRST FROM.
