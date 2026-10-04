@@ -121,6 +121,15 @@ type ComplianceEvidenceService interface {
 	ExportEvidencePack(ctx context.Context, tenantID string, framework ComplianceFramework) (ComplianceEvidencePack, error)
 }
 
+// ComplianceScheduledSigner is the licensed signing seam for a completed
+// scheduled-report manifest. The API assembles the tenant/run-bound data; the
+// Enterprise service signs it through the isolated compliance-evidence key.
+// Keeping this optional preserves core read/export routes while a missing
+// licensed signer makes scheduled execution fail closed.
+type ComplianceScheduledSigner interface {
+	SignScheduledManifest(ctx context.Context, manifest json.RawMessage) (json.RawMessage, error)
+}
+
 // ComplianceEvidencePack is the served response for a signed framework export.
 type ComplianceEvidencePack struct {
 	Format       string          `json:"format"`

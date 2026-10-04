@@ -296,6 +296,49 @@ func TestComplianceReportArchiveReferenceSurvivesSnapshotRestore(t *testing.T) {
 	}
 }
 
+func TestComplianceReportRunLockExcludesSameDueEdgeAcrossWorkers(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	due := time.Date(2026, 10, 4, 16, 0, 0, 0, time.UTC)
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	done := make(chan error, 1)
+	const scheduleID = "ea0f4e18-8654-4bef-8e8c-c56a75ca0401"
+	go func() {
+		acquired, err := s.WithComplianceReportRunLock(ctx, tenantA, scheduleID, due, func() error {
+			close(entered)
+			<-release
+			return nil
+		})
+		if !acquired && err == nil {
+			err = errors.New("first worker did not acquire report lock")
+		}
+		done <- err
+	}()
+	select {
+	case <-entered:
+	case err := <-done:
+		t.Fatalf("first report worker failed before entering lock: %v", err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("first report worker did not enter lock")
+	}
+	if acquired, err := s.WithComplianceReportRunLock(ctx, tenantA, scheduleID, due, func() error {
+		return errors.New("competing worker entered exact due edge")
+	}); err != nil || acquired {
+		t.Fatalf("competing worker acquired exact due edge: %t, %v", acquired, err)
+	}
+	if acquired, err := s.WithComplianceReportRunLock(ctx, tenantA, scheduleID, due.Add(time.Hour), func() error { return nil }); err != nil || !acquired {
+		t.Fatalf("independent due edge was blocked: %t, %v", acquired, err)
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if acquired, err := s.WithComplianceReportRunLock(ctx, tenantA, scheduleID, due, func() error { return nil }); err != nil || !acquired {
+		t.Fatalf("released exact due edge stayed locked: %t, %v", acquired, err)
+	}
+}
+
 func reportArtifactRef(run store.ComplianceReportRun) string {
 	return fmt.Sprintf("reports/%s/%s/%s.json", run.TenantID, run.ID, run.ArtifactDigest)
 }

@@ -92,6 +92,36 @@ func (s *evidenceService) ExportEvidencePack(ctx context.Context, tenantID strin
 	}, nil
 }
 
+type scheduledSignedEnvelope struct {
+	Manifest     json.RawMessage `json:"manifest"`
+	Signature    []byte          `json:"signature"`
+	PublicKeyDER []byte          `json:"public_key_der"`
+}
+
+// SignScheduledManifest binds an already assembled tenant/run/due manifest to
+// the same purpose-bound, isolated signer as on-demand governance exports.
+// The signed bytes can be verified offline without contacting this service.
+func (s *evidenceService) SignScheduledManifest(ctx context.Context, manifest json.RawMessage) (json.RawMessage, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if s == nil || s.signer == nil || !json.Valid(manifest) || len(manifest) == 0 {
+		return nil, errors.New("governance: scheduled manifest and isolated signer are required")
+	}
+	signature, err := crypto.SignMessage(s.signer, manifest)
+	if err != nil {
+		return nil, fmt.Errorf("governance: sign scheduled manifest: %w", err)
+	}
+	wire, err := json.Marshal(scheduledSignedEnvelope{
+		Manifest: append(json.RawMessage(nil), manifest...), Signature: signature,
+		PublicKeyDER: append([]byte(nil), s.signer.Public().DER...),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return wire, nil
+}
+
 // PolicySource is the Enterprise governance policy source consulted by core
 // privacy retention. A nil or empty override set means core defaults apply.
 type PolicySource struct {
