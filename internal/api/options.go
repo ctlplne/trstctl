@@ -290,6 +290,12 @@ func WithLicense(m *license.Manager) Option {
 	return func(c *config) { c.license = m }
 }
 
+// WithFIPSRequired reports the assertion that already passed the startup POST.
+// The editions route still rechecks the live module on each request.
+func WithFIPSRequired(required bool) Option {
+	return func(c *config) { c.fipsRequired = required }
+}
+
 // WithRemediation mounts the Core remediation HTTP surface. Production server
 // assembly installs it unconditionally. Bare API instances may omit the routes;
 // mounting them does not bypass authentication, RBAC, policy or idempotency.

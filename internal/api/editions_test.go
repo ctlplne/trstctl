@@ -82,6 +82,17 @@ func TestEditionsEndpointReturnsCommunityAndFIPSPosture(t *testing.T) {
 	}
 }
 
+func TestEditionsEndpointReportsResolvedStartupFIPSAssertion(t *testing.T) {
+	var got editionsTestResponse
+	getEditions(t, api.New(nil, nil, nil, api.WithFIPSRequired(true)), &got)
+	if !got.FIPS.Required {
+		t.Fatal("editions erased the FIPS assertion that passed startup")
+	}
+	if got.FIPS.ModuleActive != crypto.FIPSEnabled() || !got.FIPS.SelfTestPassed {
+		t.Fatalf("editions must recheck live module and self-test: %+v", got.FIPS)
+	}
+}
+
 func TestEditionsEndpointServesRED006PackagingDecisions(t *testing.T) {
 	var got editionsTestResponse
 	getCanonicalEditions(t, api.New(nil, nil, nil), &got)

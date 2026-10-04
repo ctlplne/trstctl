@@ -78,6 +78,7 @@ func (a *API) getEditions(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusServiceUnavailable, "crypto power-on self-test failed"))
 		return
 	}
+	fips.Required = a.fipsRequired
 	a.writeJSON(w, http.StatusOK, editionsResponse{
 		Info:      a.licenseManager().Info(),
 		FIPS:      fipsPosture(fips),

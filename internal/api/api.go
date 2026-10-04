@@ -142,6 +142,7 @@ type API struct {
 	licensedSchemas                    map[string]*Schema
 	complianceEvidence                 ComplianceEvidenceService
 	license                            *license.Manager
+	fipsRequired                       bool
 	remediation                        bool
 	notificationChannels               []string
 	notificationOutbox                 *orchestrator.Outbox
@@ -261,6 +262,7 @@ type config struct {
 	licensedSchemas             map[string]*Schema
 	complianceEvidence          ComplianceEvidenceService
 	license                     *license.Manager
+	fipsRequired                bool
 	remediation                 bool
 	notificationChannels        []string
 	notificationOutbox          *orchestrator.Outbox
@@ -570,6 +572,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		licensedSchemas:             copySchemaMap(cfg.licensedSchemas),
 		complianceEvidence:          cfg.complianceEvidence,
 		license:                     cfg.license,
+		fipsRequired:                cfg.fipsRequired,
 		remediation:                 cfg.remediation,
 		notificationChannels:        append([]string(nil), cfg.notificationChannels...),
 		notificationOutbox:          cfg.notificationOutbox,

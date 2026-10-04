@@ -266,6 +266,7 @@ func serveControlPlane(ctx context.Context, cfg *config.Config, getenv func(stri
 	if err != nil {
 		return fmt.Errorf("crypto power-on self-test: %w", err)
 	}
+	cfg.RuntimeFIPSRequired = fipsStatus.Required
 
 	// Assemble and serve the control plane (S7.7). Run starts the event log,
 	// projections, orchestrator, and API in order, supervises the signer as a

@@ -113,6 +113,7 @@ type IdempotencyResultMigrator interface {
 }
 
 type Deps struct {
+	FIPSRequired bool // resolved, fail-closed control-plane startup assertion
 	// TenantAuthFactory is supplied only by the licensed tenant-auth attach seam.
 	TenantAuthFactory editionseam.TenantAuthFactory
 	// AuditComplianceFactory is attached only for licensed audit compliance.
@@ -1451,6 +1452,7 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		api.WithPAM(s),
 		api.WithEventLog(d.Log),
 		api.WithLicense(d.License),
+		api.WithFIPSRequired(d.FIPSRequired),
 		api.WithFeatureObserver(s.featureMetrics.Hook()),
 		api.WithCBOM(s.buildCBOMService(d)),
 		api.WithNotificationChannels(notificationChannelNames(d.NotificationChannels)...),

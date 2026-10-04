@@ -82,6 +82,9 @@ const (
 
 // Config is the top-level configuration.
 type Config struct {
+	// RuntimeFIPSRequired is the resolved startup assertion from the CLI, environment,
+	// and regulated CA configuration. It is process state, never a config-file key.
+	RuntimeFIPSRequired       bool                     `json:"-"`
 	CBOM                      CBOM                     `json:"cbom"`
 	Server                    Server                   `json:"server"`
 	Postgres                  Postgres                 `json:"postgres"`
