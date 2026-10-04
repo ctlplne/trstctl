@@ -304,6 +304,72 @@ func TestRetentionWorkerArchivesRetiresViewAndRetainsRebuildSource(t *testing.T)
 	}
 }
 
+// A deployment with more than one signer message of overdue events must drain
+// on its first sweep, with each archive independently verifiable and linked to
+// the preceding segment. The isolated signer caps each RPC at 1 MiB.
+func TestRetentionWorkerChunksLargeHistoryForIsolatedSigner(t *testing.T) {
+	ctx := context.Background()
+	log := openTestLog(t)
+	key, err := jose.GenerateRSASigningKey("audit-export")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cp := &memCheckpoints{}
+	archiveDir := t.TempDir()
+	svc := audit.NewService(log, key, audit.WithCheckpoints(cp))
+	worker := auditcompliance.NewRetentionWorker(svc, log, auditcompliance.DirArchiver{Dir: archiveDir}, cp, time.Hour, key)
+	const tenant = "11111111-1111-1111-1111-111111111111"
+	const records = 180
+	for i := 0; i < records; i++ {
+		if _, err := log.Append(ctx, events.Event{
+			Type: "thing.created", TenantID: tenant, Time: time.Now().Add(-2 * time.Hour),
+			Data: []byte(fmt.Sprintf(`{"sequence":%d,"padding":"%s"}`, i, strings.Repeat("x", 4096))),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sum, err := worker.RunOnce(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.RecordsArchived != records || sum.RecordsSourceRetained != records || sum.TenantsProcessed != 1 || sum.SegmentsArchived < 2 {
+		t.Fatalf("summary = %+v, want all %d records in multiple archives", sum, records)
+	}
+	files, err := filepath.Glob(filepath.Join(archiveDir, tenant, "*.jws"))
+	if err != nil || len(files) != sum.SegmentsArchived {
+		t.Fatalf("archives = %v, err = %v, want %d", files, err, sum.SegmentsArchived)
+	}
+	var count int
+	var head string
+	for _, file := range files {
+		signed, err := os.ReadFile(file) // #nosec G304 -- glob is restricted to this test's private temporary archive directory.
+		if err != nil {
+			t.Fatal(err)
+		}
+		bundle, err := audit.VerifyRetentionBundle(string(signed), svc.VerificationKeys())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if bundle.PrevHash != head {
+			t.Fatalf("archive %s starts at %q, previous head %q", file, bundle.PrevHash, head)
+		}
+		head = bundle.ChainHead
+		count += bundle.Count
+	}
+	if count != records {
+		t.Fatalf("archive records = %d, want %d", count, records)
+	}
+	remaining, err := svc.Search(ctx, audit.Query{TenantID: tenant})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, record := range remaining {
+		if record.Type != audit.EventTypeArchived {
+			t.Fatalf("old source event remains in served history: %s", record.Type)
+		}
+	}
+}
+
 // TestRetentionWorkerDoesNothingWithoutWindow confirms an unconfigured worker is a
 // no-op (Retention=0): nothing is archived or pruned.
 func TestRetentionWorkerDoesNothingWithoutWindow(t *testing.T) {

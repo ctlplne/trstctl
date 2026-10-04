@@ -71,6 +71,11 @@ type RetentionWorker struct {
 	now         func() time.Time
 }
 
+// Keep an archive signing request well below the signer's 1 MiB gRPC ceiling.
+// The bound also keeps each durable file and history read manageable when a
+// long-running deployment catches up on years of retained audit history.
+const maxArchiveSigningPayloadBytes = 512 << 10
+
 // NewRetentionWorker constructs the worker. svc must be the audit service wired
 // with the same checkpoint source as sink, so a run's freshly sealed boundary is
 // the anchor the next query and the next run see.
@@ -92,15 +97,25 @@ func (w *RetentionWorker) RunOnce(ctx context.Context) (audit.Summary, error) {
 		return sum, err
 	}
 	for _, tenant := range tenants {
-		n, err := w.archiveTenant(ctx, tenant, cutoff)
-		if err != nil {
-			return sum, fmt.Errorf("audit retention: tenant %s: %w", tenant, err)
-		}
-		if n > 0 {
-			sum.TenantsProcessed++
+		processed := false
+		for {
+			if err := ctx.Err(); err != nil {
+				return sum, err
+			}
+			n, err := w.archiveTenant(ctx, tenant, cutoff)
+			if err != nil {
+				return sum, fmt.Errorf("audit retention: tenant %s: %w", tenant, err)
+			}
+			if n == 0 {
+				break
+			}
+			processed = true
 			sum.SegmentsArchived++
 			sum.RecordsArchived += n
 			sum.RecordsSourceRetained += n
+		}
+		if processed {
+			sum.TenantsProcessed++
 		}
 	}
 	return sum, nil
@@ -184,7 +199,28 @@ func (w *RetentionWorker) archiveTenantUnderOperation(
 		if k == 0 {
 			return nil
 		}
-		segment = recs[:k]
+		// A remote artifact signer accepts bounded messages. Find the largest
+		// contiguous prefix that fits, so a busy tenant makes progress without
+		// raising the signer's transport limit or breaking the hash chain.
+		low, high, fit := 1, k, 0
+		for low <= high {
+			middle := low + (high-low)/2
+			candidate := recs[:middle]
+			payload, err := w.marshalSegment(tenantID, prevSeed, candidate[len(candidate)-1].Hash, candidate)
+			if err != nil {
+				return err
+			}
+			if len(payload) <= maxArchiveSigningPayloadBytes {
+				fit = middle
+				low = middle + 1
+			} else {
+				high = middle - 1
+			}
+		}
+		if fit == 0 {
+			return fmt.Errorf("audit record %d exceeds the %d-byte archive signing limit", recs[0].Sequence, maxArchiveSigningPayloadBytes)
+		}
+		segment = recs[:fit]
 		boundary = segment[len(segment)-1]
 
 		if boundary.StreamSequence == 0 {
@@ -291,7 +327,15 @@ func (w *RetentionWorker) ensureArchivedEvent(ctx context.Context, checkpoint au
 // signSegment marshals and signs the segment as a continuation audit.Bundle whose
 // PrevHash chains it onto the previous archived segment (or genesis).
 func (w *RetentionWorker) signSegment(tenantID, prevHash, head string, segment []audit.Record) (string, error) {
-	payload, err := json.Marshal(audit.Bundle{
+	payload, err := w.marshalSegment(tenantID, prevHash, head, segment)
+	if err != nil {
+		return "", err
+	}
+	return w.signer.SignArtifact(jose.ArtifactAuditRetention, payload)
+}
+
+func (w *RetentionWorker) marshalSegment(tenantID, prevHash, head string, segment []audit.Record) ([]byte, error) {
+	return json.Marshal(audit.Bundle{
 		TenantID:    tenantID,
 		GeneratedAt: w.now().UTC(),
 		Query:       audit.Query{TenantID: tenantID},
@@ -300,8 +344,4 @@ func (w *RetentionWorker) signSegment(tenantID, prevHash, head string, segment [
 		PrevHash:    prevHash,
 		ChainHead:   head,
 	})
-	if err != nil {
-		return "", err
-	}
-	return w.signer.SignArtifact(jose.ArtifactAuditRetention, payload)
 }

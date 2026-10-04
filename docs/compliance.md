@@ -279,6 +279,9 @@ audit-view policy in four ordered steps:
    `trstctl_audit_source_records_retained_total`, and
    `trstctl_audit_retention_runs_total` on `/metrics`.
 
+The worker splits a large overdue prefix into bounded, contiguous signed
+segments below the isolated signer's message limit and drains the backlog in
+the same sweep. It does not increase the signing service's transport limit.
 Each archived segment chains onto the previous one. The complete event log
 remains the AN-2 rebuild source; the signed bundles are independently
 verifiable cold evidence, not a substitute event stream. At backup, restore,
