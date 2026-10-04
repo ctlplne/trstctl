@@ -19,6 +19,93 @@ import (
 	corestore "trstctl.com/trstctl/internal/store"
 )
 
+// The outcome column classifies old committed receipts as applied without
+// changing their event identity or digest. Rejected-domain is reserved for new
+// projection writes; the constraint must reject any other classification.
+func TestMigration0237PreservesProviderAuthorityReceipts(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 237)
+	pool, err := pgxpool.New(ctx, createFreshMigrationDatabase(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+	const authority = "00000000-0000-0000-0000-000000000000"
+	for seq, eventID := range []string{"provider-event-1", "provider-event-2"} {
+		if _, err := pool.Exec(ctx, `INSERT INTO provider_authority_projection_receipts
+			(tenant_id,event_sequence,event_id,event_digest)
+			VALUES ($1,$2,$3,repeat('a',64))`, authority, seq+1, eventID); err != nil {
+			t.Fatalf("seed receipt %d: %v", seq+1, err)
+		}
+	}
+	const stable = `SELECT tenant_id::text,event_sequence,event_id,event_digest
+		FROM provider_authority_projection_receipts ORDER BY tenant_id,event_sequence`
+	beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, stable)
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	afterCount, afterChecksum := checksumQuery(t, ctx, pool, stable)
+	if beforeCount != 2 || afterCount != beforeCount || afterChecksum != beforeChecksum {
+		t.Fatalf("0237 changed committed receipt evidence: %d/%s before, %d/%s after",
+			beforeCount, beforeChecksum, afterCount, afterChecksum)
+	}
+	var applied int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM provider_authority_projection_receipts
+		WHERE tenant_id=$1 AND outcome='applied'`, authority).Scan(&applied); err != nil || applied != 2 {
+		t.Fatalf("0237 legacy receipt outcomes: applied=%d err=%v", applied, err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO provider_authority_projection_receipts
+		(tenant_id,event_sequence,event_id,event_digest,outcome)
+		VALUES ($1,3,'provider-event-3',repeat('b',64),'rejected_domain')`, authority); err != nil {
+		t.Fatalf("0237 rejected-domain outcome: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE provider_authority_projection_receipts
+		SET outcome='invented' WHERE tenant_id=$1 AND event_sequence=1`, authority); err == nil {
+		t.Fatal("0237 accepted an unknown authority projection outcome")
+	}
+}
+
+// A legacy brand has no source event revision. The migration must preserve the
+// displayed brand and mark it as revision zero until replay supplies an event ID.
+func TestMigration0238PreservesTenantBrands(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 238)
+	pool, err := pgxpool.New(ctx, createFreshMigrationDatabase(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+	for i, tenant := range []string{tenantA, tenantB} {
+		if _, err := pool.Exec(ctx, `INSERT INTO tenant_branding
+			(tenant_id,product_name,custom_domain,login_message,token_overrides)
+			VALUES ($1,$2,$3,$4,$5::jsonb)`, tenant,
+			fmt.Sprintf("Legacy Brand %d", i), fmt.Sprintf("brand-%d.example.test", i),
+			fmt.Sprintf("Hello %d", i), `{"accent":"#123456"}`); err != nil {
+			t.Fatalf("seed brand %d: %v", i, err)
+		}
+	}
+	const stable = `SELECT tenant_id::text,product_name,custom_domain,login_message,token_overrides::text,updated_at::text
+		FROM tenant_branding ORDER BY tenant_id`
+	beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, stable)
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	afterCount, afterChecksum := checksumQuery(t, ctx, pool, stable)
+	if beforeCount != 2 || afterCount != beforeCount || afterChecksum != beforeChecksum {
+		t.Fatalf("0238 changed legacy brand content: %d/%s before, %d/%s after",
+			beforeCount, beforeChecksum, afterCount, afterChecksum)
+	}
+	var zeroRevisions int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM tenant_branding WHERE revision='0'`).Scan(&zeroRevisions); err != nil || zeroRevisions != 2 {
+		t.Fatalf("0238 legacy brand revisions: zero=%d err=%v", zeroRevisions, err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE tenant_branding SET revision='event:brand-1' WHERE tenant_id=$1`, tenantA); err != nil {
+		t.Fatalf("0238 current event revision update: %v", err)
+	}
+	var revision string
+	if err := pool.QueryRow(ctx, `SELECT revision FROM tenant_branding WHERE tenant_id=$1`, tenantB).Scan(&revision); err != nil || revision != "0" {
+		t.Fatalf("0238 unrelated brand revision=%q err=%v", revision, err)
+	}
+}
+
 // The AWS expansion must leave every preexisting native decoy and alert intact.
 func TestMigration0235PreservesNativeHoneyTokens(t *testing.T) {
 	ctx := context.Background()
@@ -281,6 +368,8 @@ func TestMigration0197KeepsExistingRoutesManualAndConstrainsAutomaticScopes(t *t
 const contentPrefixVersion = 31
 
 var valueChangingMigrationContentHarnesses = map[int]bool{
+	237: true, // TestMigration0237PreservesProviderAuthorityReceipts
+	238: true, // TestMigration0238PreservesTenantBrands
 	235: true, // TestMigration0235PreservesNativeHoneyTokens
 	232: true, // TestMigration0232PreservesLegacyRequestsWithoutInventingIssuerChoice
 	227: true, // TestMigration0227PreservesUnknownIssuanceReceipts

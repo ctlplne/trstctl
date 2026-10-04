@@ -157,6 +157,7 @@ var TenantScopedTables = []string{
 	// retained delegation evidence; the Provider authority event separately
 	// revokes that customer's standing grants.
 	"provider_operator_delegations",
+	"provider_operator_grant_episodes", // fixed Provider partition; customer offboard revokes live episodes but retains history
 	"provider_operators",
 	"provider_authority_projection_receipts", // same fixed Provider partition; no customer state or secret payload
 	"provider_authority_projection_state",    // upgrade/recovery status for the same fixed partition

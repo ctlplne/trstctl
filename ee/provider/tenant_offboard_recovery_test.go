@@ -15,6 +15,7 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
+	corestore "trstctl.com/trstctl/internal/store"
 )
 
 // Recovery rebuilds Provider views from the complete history, including core
@@ -62,6 +63,8 @@ func TestProviderRecoveryPreservesCoreTenantOffboard(t *testing.T) {
 	if _, err := NewPGStore(st).Tenant(ctx, deletedID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("core erasure left customer registry: %v", err)
 	}
+	assertProviderGrantEpisodes(t, st, deletedID, 1, 1)
+	assertProviderGrantEpisodes(t, st, otherID, 1, 0)
 	assertReplayAuthority(t, st, "operator-1", deletedID, false)
 	assertReplayAuthority(t, st, "operator-1", otherID, true)
 	head, err := log.LastSequence(ctx)
@@ -77,6 +80,8 @@ func TestProviderRecoveryPreservesCoreTenantOffboard(t *testing.T) {
 	}
 	assertReplayAuthority(t, st, "operator-1", deletedID, false)
 	assertReplayAuthority(t, st, "operator-1", otherID, true)
+	assertProviderGrantEpisodes(t, st, deletedID, 1, 1)
+	assertProviderGrantEpisodes(t, st, otherID, 1, 0)
 	if _, err := NewPGStore(st).Tenant(ctx, otherID); err != nil {
 		t.Fatalf("recovery removed other customer: %v", err)
 	}
@@ -100,6 +105,8 @@ func TestProviderRecoveryPreservesCoreTenantOffboard(t *testing.T) {
 	}
 	assertReplayAuthority(t, st, "operator-1", deletedID, false)
 	assertReplayAuthority(t, st, "operator-1", otherID, true)
+	assertProviderGrantEpisodes(t, st, deletedID, 1, 1)
+	assertProviderGrantEpisodes(t, st, otherID, 1, 0)
 	if err := projections.New(st, restarted.ProjectionOptions...).Rebuild(ctx, log); err != nil {
 		t.Fatalf("full transactional rebuild: %v", err)
 	}
@@ -108,6 +115,8 @@ func TestProviderRecoveryPreservesCoreTenantOffboard(t *testing.T) {
 	}
 	assertReplayAuthority(t, st, "operator-1", deletedID, false)
 	assertReplayAuthority(t, st, "operator-1", otherID, true)
+	assertProviderGrantEpisodes(t, st, deletedID, 1, 1)
+	assertProviderGrantEpisodes(t, st, otherID, 1, 0)
 	// Later explicit provisioning is allowed; a stale offboard projection must
 	// not erase that new customer generation or revoke its new delegation.
 	later := Tenant{ID: deletedID, Slug: "new-customer", Name: "New customer", Status: TenantActive, CreatedAt: now.Add(time.Minute), UpdatedAt: now.Add(time.Minute)}
@@ -127,6 +136,21 @@ func TestProviderRecoveryPreservesCoreTenantOffboard(t *testing.T) {
 		t.Fatalf("old deletion changed new customer: %+v error=%v", got, err)
 	}
 	assertReplayAuthority(t, st, "operator-1", deletedID, true)
+	assertProviderGrantEpisodes(t, st, deletedID, 2, 1)
+}
+
+func assertProviderGrantEpisodes(t *testing.T, st *corestore.Store, customerID string, wantTotal, wantRevoked int) {
+	t.Helper()
+	var total, revoked int
+	if err := st.SystemPool().QueryRow(t.Context(), `SELECT count(*), count(*) FILTER (WHERE revoked_at IS NOT NULL)
+		FROM provider_operator_grant_episodes WHERE tenant_id=$1 AND customer_tenant_id=$2`,
+		providerAuthorityTenant, customerID).Scan(&total, &revoked); err != nil {
+		t.Fatalf("read Provider grant episodes for %s: %v", customerID, err)
+	}
+	if total != wantTotal || revoked != wantRevoked {
+		t.Fatalf("Provider grant episodes for %s: %d total, %d revoked; want %d, %d",
+			customerID, total, revoked, wantTotal, wantRevoked)
+	}
 }
 
 func TestProviderOffboardRollsBackWithCoreAndRestoresRLSScope(t *testing.T) {
