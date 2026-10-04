@@ -116,23 +116,29 @@ func (s *Store) ApplyComplianceReportRunTx(ctx context.Context, tx pgx.Tx, run C
 		return errors.New("store: report run cannot begin in a requeue generation")
 	}
 	if err == nil {
-		if old.ScheduleID != run.ScheduleID || !old.DueAt.Equal(run.DueAt) ||
+		if old.ScheduleID != run.ScheduleID || !postgresTimestampEqual(old.DueAt, run.DueAt) ||
 			old.Framework != run.Framework || old.ReportType != run.ReportType ||
-			!old.CreatedAt.Equal(run.CreatedAt) {
+			!postgresTimestampEqual(old.CreatedAt, run.CreatedAt) {
 			return errors.New("store: report run identity conflicts with retained due edge")
+		}
+		// The command applies each event immediately, while the independent
+		// tail may revisit its earlier sequence after a later run transition.
+		// The later row is already the required projection of that prefix.
+		if old.EventSequence > run.EventSequence {
+			return nil
 		}
 		if old.EventSequence == run.EventSequence {
 			if old.Status == run.Status && old.RetryGeneration == run.RetryGeneration && old.Attempt == run.Attempt &&
 				old.ErrorCode == run.ErrorCode && old.ArtifactDigest == run.ArtifactDigest &&
-				old.ArtifactRef == run.ArtifactRef && old.CompletedAt.Equal(run.CompletedAt) &&
-				old.NextAttemptAt.Equal(run.NextAttemptAt) && old.UpdatedAt.Equal(run.UpdatedAt) {
+				old.ArtifactRef == run.ArtifactRef && postgresTimestampEqual(old.CompletedAt, run.CompletedAt) &&
+				postgresTimestampEqual(old.NextAttemptAt, run.NextAttemptAt) && postgresTimestampEqual(old.UpdatedAt, run.UpdatedAt) {
 				return nil
 			}
 			return errors.New("store: report run event sequence conflicts with retained receipt")
 		}
 		requeued := old.Status == "failed" && run.Status == "retrying" &&
 			run.RetryGeneration == old.RetryGeneration+1 && run.Attempt == 0
-		if old.EventSequence > run.EventSequence || old.Status == "completed" ||
+		if old.Status == "completed" ||
 			(!requeued && (run.RetryGeneration != old.RetryGeneration || run.Attempt < old.Attempt)) ||
 			(old.Status == "failed" && !requeued) {
 			return errors.New("store: report run transition is stale or terminal")
@@ -174,6 +180,15 @@ func (s *Store) ApplyComplianceReportRunTx(ctx context.Context, tx pgx.Tx, run C
 			run.TenantID, run.ScheduleID, run.DueAt, run.CompletedAt)
 	}
 	return err
+}
+
+// PostgreSQL timestamptz stores microseconds. Source events retain Go's
+// nanoseconds, so replay must compare the value PostgreSQL can actually store.
+func postgresTimestampEqual(left, right time.Time) bool {
+	if left.IsZero() || right.IsZero() {
+		return left.IsZero() && right.IsZero()
+	}
+	return left.UTC().Truncate(time.Microsecond).Equal(right.UTC().Truncate(time.Microsecond))
 }
 
 // GetComplianceReportRun returns one exact receipt. The archive read must verify

@@ -41,7 +41,7 @@ func TestComplianceReportRunCommandRecoversRetainedAppendAndBindsDueEdge(t *test
 	run := store.ComplianceReportRun{
 		ID: orchestrator.ComplianceReportRunID(tenantA, scheduleID, due), TenantID: tenantA,
 		ScheduleID: scheduleID, DueAt: due, Framework: schedule.Framework,
-		ReportType: schedule.ReportType, Status: "queued", CreatedAt: now,
+		ReportType: schedule.ReportType, Status: "queued", CreatedAt: now.Add(123456789 * time.Nanosecond),
 	}
 	command := orchestrator.NewOrchestrator(log, st, nil)
 	got, err := command.RecordComplianceReportRun(ctx, run)
@@ -95,6 +95,9 @@ func TestComplianceReportRunCommandRecoversRetainedAppendAndBindsDueEdge(t *test
 		t.Fatal("same deterministic event identity accepted different failure metadata")
 	}
 	completed := got
+	// The retained payload can carry nanoseconds that PostgreSQL cannot. A
+	// crash after append must still recover it against the projected receipt.
+	completed.CreatedAt = run.CreatedAt
 	completed.Status = "completed"
 	completed.Attempt++
 	completed.NextAttemptAt = time.Time{}

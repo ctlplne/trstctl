@@ -73,12 +73,12 @@ func (o *Orchestrator) RecordComplianceReportRun(ctx context.Context, run store.
 		if retained.Type != projections.EventComplianceReportRunRecorded || retained.TenantID != run.TenantID ||
 			json.Unmarshal(retained.Data, &previous) != nil ||
 			previous.ID != run.ID || previous.ScheduleID != run.ScheduleID ||
-			!previous.DueAt.Equal(run.DueAt) || previous.Framework != run.Framework ||
+			!reportEventTimestampEqual(previous.DueAt, run.DueAt) || previous.Framework != run.Framework ||
 			previous.ReportType != run.ReportType || previous.Status != run.Status ||
 			previous.RetryGeneration != run.RetryGeneration || previous.Attempt != run.Attempt ||
-			!previous.NextAttemptAt.Equal(run.NextAttemptAt) || previous.ErrorCode != run.ErrorCode ||
+			!reportEventTimestampEqual(previous.NextAttemptAt, run.NextAttemptAt) || previous.ErrorCode != run.ErrorCode ||
 			previous.ArtifactRef != run.ArtifactRef || previous.ArtifactDigest != run.ArtifactDigest ||
-			!previous.CompletedAt.Equal(run.CompletedAt) || !previous.CreatedAt.Equal(run.CreatedAt) {
+			!reportEventTimestampEqual(previous.CompletedAt, run.CompletedAt) || !reportEventTimestampEqual(previous.CreatedAt, run.CreatedAt) {
 			return store.ComplianceReportRun{}, errors.New("orchestrator: retained report event identity conflicts with requested transition")
 		}
 		current, readErr := o.store.GetComplianceReportRun(ctx, run.TenantID, run.ID)
@@ -143,9 +143,9 @@ func (o *Orchestrator) RecoverComplianceReportNextTransition(ctx context.Context
 	if retained.Type != projections.EventComplianceReportRunRecorded || retained.TenantID != current.TenantID ||
 		retained.SchemaVersion != 1 || json.Unmarshal(retained.Data, &payload) != nil ||
 		payload.ID != current.ID || payload.ScheduleID != current.ScheduleID ||
-		!payload.DueAt.Equal(current.DueAt) || payload.Framework != current.Framework ||
+		!reportEventTimestampEqual(payload.DueAt, current.DueAt) || payload.Framework != current.Framework ||
 		payload.ReportType != current.ReportType || payload.Status != retainedStatus || payload.RetryGeneration != current.RetryGeneration ||
-		payload.Attempt != current.Attempt+1 || !payload.CreatedAt.Equal(current.CreatedAt) {
+		payload.Attempt != current.Attempt+1 || !reportEventTimestampEqual(payload.CreatedAt, current.CreatedAt) {
 		return store.ComplianceReportRun{}, false, errors.New("orchestrator: retained report outcome conflicts with due-edge identity")
 	}
 	if err := o.withTenantCommand(ctx, current.TenantID, func(ctx context.Context, tx pgx.Tx) error {
@@ -155,4 +155,14 @@ func (o *Orchestrator) RecoverComplianceReportNextTransition(ctx context.Context
 	}
 	recovered, err := o.store.GetComplianceReportRun(ctx, current.TenantID, current.ID)
 	return recovered, true, err
+}
+
+// PostgreSQL receipt timestamps have microsecond precision, while retained
+// JetStream payloads preserve nanoseconds. Compare the representable instant
+// when repairing an append that projected before or after a process restart.
+func reportEventTimestampEqual(left, right time.Time) bool {
+	if left.IsZero() || right.IsZero() {
+		return left.IsZero() && right.IsZero()
+	}
+	return left.UTC().Truncate(time.Microsecond).Equal(right.UTC().Truncate(time.Microsecond))
 }

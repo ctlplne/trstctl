@@ -36,20 +36,27 @@ func TestComplianceReportRunProjectionRetainsArtifactAndAdvancesExactDueEdge(t *
 	}); err != nil {
 		t.Fatal(err)
 	}
-	completed := due.Add(25 * time.Minute)
-	run := store.ComplianceReportRun{
+	created := due.Add(123456789 * time.Nanosecond)
+	queued := store.ComplianceReportRun{
 		ID: runID, TenantID: tenantA, ScheduleID: scheduleID,
-		DueAt: due, CompletedAt: completed, Framework: "soc2",
-		ReportType: "framework_evidence_pack", Status: "completed", Attempt: 1, EventSequence: 10,
-		CreatedAt: due, UpdatedAt: completed,
+		DueAt: due, Framework: "soc2",
+		ReportType: "framework_evidence_pack", Status: "queued", EventSequence: 9,
+		CreatedAt: created, UpdatedAt: created,
 	}
+	completed := due.Add(25*time.Minute + 987654321*time.Nanosecond)
+	run := queued
+	run.Status = "completed"
+	run.Attempt = 1
+	run.EventSequence = 10
+	run.CompletedAt = completed
+	run.UpdatedAt = completed.Add(123 * time.Nanosecond)
 	run.ArtifactDigest = crypto.SHA256Hex([]byte(`{"signed_export":{"signature":"AQ=="}}`))
 	run.ArtifactRef = reportArtifactRef(run)
-	for i := 0; i < 2; i++ {
+	for _, step := range []store.ComplianceReportRun{queued, run, queued, run} {
 		if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
-			return s.ApplyComplianceReportRunTx(ctx, tx, run)
+			return s.ApplyComplianceReportRunTx(ctx, tx, step)
 		}); err != nil {
-			t.Fatalf("project/replay run %d: %v", i, err)
+			t.Fatalf("project/replay %s sequence %d: %v", step.Status, step.EventSequence, err)
 		}
 	}
 	got, err := s.GetComplianceReportRun(ctx, tenantA, runID)
@@ -58,7 +65,7 @@ func TestComplianceReportRunProjectionRetainsArtifactAndAdvancesExactDueEdge(t *
 		t.Fatalf("retained report run = %+v, err = %v", got, err)
 	}
 	updated, err := s.GetComplianceReportSchedule(ctx, tenantA, scheduleID)
-	if err != nil || !updated.NextRunAt.Equal(completed.Add(time.Hour)) {
+	if err != nil || !updated.NextRunAt.Equal(completed.Truncate(time.Microsecond).Add(time.Hour)) {
 		t.Fatalf("next due after completed run = %+v, err = %v", updated, err)
 	}
 	if _, err := s.GetComplianceReportRun(ctx, tenantB, runID); !errors.Is(err, pgx.ErrNoRows) {
