@@ -91,6 +91,9 @@ func (e *ABACEngine) EvaluateDeny(ctx context.Context, in ABACInput) (ABACDecisi
 }
 
 func (e *ABACEngine) runDeny(ctx context.Context, in ABACInput) (ABACDecision, error) {
+	if err := ctx.Err(); err != nil {
+		return ABACDecision{Deny: true, Reason: "abac evaluation canceled"}, err
+	}
 	raw, err := json.Marshal(in)
 	if err != nil {
 		return ABACDecision{Deny: true, Reason: "abac: bad input"}, err
@@ -118,8 +121,15 @@ func (e *ABACEngine) runDeny(ctx context.Context, in ABACInput) (ABACDecision, e
 	if err := e.pool.Submit(func() { d, err := eval(); done <- result{d, err} }); err != nil {
 		return ABACDecision{Deny: true, Reason: "abac engine busy"}, bulkhead.ErrRejected
 	}
-	r := <-done
-	return r.d, r.err
+	select {
+	case r := <-done:
+		if err := ctx.Err(); err != nil {
+			return ABACDecision{Deny: true, Reason: "abac evaluation canceled"}, err
+		}
+		return r.d, r.err
+	case <-ctx.Done():
+		return ABACDecision{Deny: true, Reason: "abac evaluation canceled"}, ctx.Err()
+	}
 }
 
 func abacDecisionFrom(rs rego.ResultSet) ABACDecision {

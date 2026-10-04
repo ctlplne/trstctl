@@ -242,6 +242,9 @@ func (e *Engine) Evaluate(ctx context.Context, in Input) (Decision, error) {
 }
 
 func (e *Engine) run(ctx context.Context, in Input) (Decision, error) {
+	if err := ctx.Err(); err != nil {
+		return Decision{Allow: false, Reason: "policy evaluation canceled"}, err
+	}
 	// Convert through JSON so Rego sees the json-tagged field names (input.action, ...).
 	raw, err := json.Marshal(in)
 	if err != nil {
@@ -272,8 +275,15 @@ func (e *Engine) run(ctx context.Context, in Input) (Decision, error) {
 	if err := e.pool.Submit(func() { d, err := eval(); done <- result{d, err} }); err != nil {
 		return Decision{Allow: false, Reason: "policy engine busy"}, bulkhead.ErrRejected
 	}
-	r := <-done
-	return r.d, r.err
+	select {
+	case r := <-done:
+		if err := ctx.Err(); err != nil {
+			return Decision{Allow: false, Reason: "policy evaluation canceled"}, err
+		}
+		return r.d, r.err
+	case <-ctx.Done():
+		return Decision{Allow: false, Reason: "policy evaluation canceled"}, ctx.Err()
+	}
 }
 
 func decisionFrom(rs rego.ResultSet) Decision {
