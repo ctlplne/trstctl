@@ -11137,8 +11137,17 @@ export const messages = {
     description: "Title when the current bounded change-history window is empty.",
   },
   "audit.design.summaryEmptyBody": {
-    defaultMessage: "Nothing is recorded in this 50-event window. Search a different time or event type before concluding that no change happened.",
-    description: "Bounded and non-misleading explanation for an empty event window.",
+    defaultMessage: "No live events match this window. Widen the filters, and check with the archive custodian before concluding that no change happened.",
+    description: "Empty live audit window without a reported archived predecessor; absence is not proof of no older activity.",
+  },
+  "audit.design.summaryArchivedTitle": {
+    defaultMessage: "Older changes are in signed archives",
+    description: "Empty live audit window with a sealed archived predecessor for this tenant.",
+  },
+  "audit.design.summaryArchivedBody": {
+    defaultMessage:
+      "{count} older audit records are in signed offline archives. Ask the archive custodian for the JWS files and verify them with trstctl audit verify before concluding that no change happened.",
+    description: "Tenant-scoped archived record count from the same pinned history read as the empty live window.",
   },
   "audit.design.summaryOne": {
     defaultMessage: "1 change is ready to search",

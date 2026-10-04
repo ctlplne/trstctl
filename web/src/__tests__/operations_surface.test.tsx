@@ -51,7 +51,14 @@ vi.mock("@/lib/bootstrapApi", async (orig) => {
 
 vi.mock("@/lib/api", async (orig) => {
   const actual = await orig<typeof import("@/lib/api")>();
-  return { ...actual, api: apiMock };
+  return {
+    ...actual,
+    api: {
+      ...apiMock,
+      auditWindow: (...args: Parameters<typeof actual.api.auditEvents>) =>
+        apiMock.auditEvents(...args).then((events: Awaited<ReturnType<typeof actual.api.auditEvents>>) => ({ events })),
+    },
+  };
 });
 
 function renderAt(path: string) {

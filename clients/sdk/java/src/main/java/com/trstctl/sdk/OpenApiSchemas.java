@@ -115,6 +115,7 @@ public final class OpenApiSchemas {
       "AttestedSVIDPreview",
       "AttestedSVIDRequest",
       "AuditAnchor",
+      "AuditArchivedPrefix",
       "AuditBundle",
       "AuditEvent",
       "AuditEventList",

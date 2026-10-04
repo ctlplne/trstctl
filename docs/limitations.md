@@ -1381,6 +1381,12 @@ inspect it with `GET /api/v1/privacy/archive-erasure-attestations`, or use
 `trstctl privacy archives attest/list`. The attestation stores `subject_ref` and
 redacted evidence refs rather than the raw subject.
 
+An empty Change history search reports the tenant's sealed archived-prefix
+count when one exists. The API returns only its count and chain head, never
+the archive file or host path; retention does not silently turn an online
+audit read into an archive retrieval. An archive custodian must supply the
+signed JWS files and pinned verification keys for offline checking.
+
 ## Built and tested, but not yet served by the binary
 
 No current feature-map row is in this bucket. The empty section is deliberate:

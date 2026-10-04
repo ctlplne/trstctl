@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { api, ApiError, type AuditBundle, type AuditEvent, type AuditQuery } from "@/lib/api";
+import { api, ApiError, type AuditBundle, type AuditEvent, type AuditQuery, type AuditWindow } from "@/lib/api";
 // This page renders errors in the fallback-prefixed shape ("Could not export
 // evidence: <detail>"), pinned by __tests__/operations_surface.test.tsx.
 import { apiProblemContext as apiProblemMessage } from "@/lib/apiProblem";
@@ -76,8 +76,9 @@ function AuditWorkspace() {
   const queryKey = ["audit", user?.tenant_id ?? null, user?.subject ?? null, (user?.permissions ?? []).join("|"), applied];
   const scopeKey = JSON.stringify(queryKey);
   const scopeRef = useRef(scopeKey);
-  const result = useApiQuery<AuditEvent[]>(queryKey, ({ signal }) => api.auditEvents(applied, signal), { retry: false });
-  const events = result.error ? null : result.data;
+  const result = useApiQuery<AuditWindow>(queryKey, ({ signal }) => api.auditWindow(applied, signal), { retry: false });
+  const events = result.error ? null : (result.data?.events ?? null);
+  const archivedPrefix = result.data?.archived_prefix;
   const loading = result.loading || result.fetching;
   const error = result.errorValue ? noticeFor(result.errorValue, "Could not load audit events") : null;
 
@@ -164,7 +165,7 @@ function AuditWorkspace() {
     : error
       ? t("audit.design.summaryUnavailableTitle")
       : events?.length === 0
-        ? t("audit.design.summaryEmptyTitle")
+        ? t(archivedPrefix ? "audit.design.summaryArchivedTitle" : "audit.design.summaryEmptyTitle")
         : events?.length === 1
           ? t("audit.design.summaryOne")
           : t("audit.design.summaryMany", { count: String(events?.length ?? 0) });
@@ -173,7 +174,9 @@ function AuditWorkspace() {
     : error
       ? t("audit.design.summaryUnavailableBody")
       : events?.length === 0
-        ? t("audit.design.summaryEmptyBody")
+        ? archivedPrefix
+          ? t("audit.design.summaryArchivedBody", { count: String(archivedPrefix.record_count) })
+          : t("audit.design.summaryEmptyBody")
         : t(applied.window === "latest" ? "audit.design.summaryLatestBoundary" : "audit.design.summaryWindowBoundary", { count: String(events?.length ?? 0) });
 
   const auditColumns = useMemo<Array<DataGridColumn<AuditEvent>>>(

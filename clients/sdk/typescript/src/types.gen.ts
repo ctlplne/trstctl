@@ -7905,6 +7905,11 @@ export interface components {
             kind: "" | "rfc3161";
             token?: components["schemas"]["AuditTimestampToken"];
         };
+        AuditArchivedPrefix: {
+            chain_head: string;
+            /** @description Tenant-local records retired from the served audit view into signed offline archives. */
+            record_count: number;
+        };
         AuditBundle: {
             anchor: components["schemas"]["AuditAnchor"];
             bundle: string;
@@ -7926,6 +7931,7 @@ export interface components {
             type: string;
         };
         AuditEventList: {
+            archived_prefix?: components["schemas"]["AuditArchivedPrefix"];
             count?: number;
             events: components["schemas"]["AuditEvent"][];
         };

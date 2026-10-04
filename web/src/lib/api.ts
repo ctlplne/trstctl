@@ -112,6 +112,7 @@ import type {
   AuditFeedPreview,
   AuditFeedRequest,
   AuditEvent as GenAuditEvent,
+  AuditEventList,
   BreakglassBundle,
   BreakglassCeremony,
   BreakglassIssueExecutionRequest,
@@ -770,6 +771,7 @@ export type SecretApproval = GenSecretApproval;
 export type SecretApprovalRequest = GenSecretApprovalRequest;
 export type SecretApprovalAction = GenSecretApprovalRequest["action"];
 export type AuditEvent = GenAuditEvent;
+export type AuditWindow = AuditEventList;
 export type Profile = GenProfile;
 export type ProfileMutationResult = Profile | ProfileApprovalResponse;
 export type IssueCertificateInput = {
@@ -1744,6 +1746,7 @@ export interface Api {
   privacyRetentionRuns(options?: { limit?: number; cursor?: string }): Promise<PrivacyRetentionRunList>;
   privacyCatalog(): Promise<PrivacyCatalog>;
   auditEvents(options?: AuditQuery, signal?: AbortSignal): Promise<AuditEvent[]>;
+  auditWindow(options?: AuditQuery, signal?: AbortSignal): Promise<AuditWindow>;
   exportAudit(options?: AuditQuery, signal?: AbortSignal): Promise<AuditBundle>;
   auditFeeds(): Promise<AuditFeedList>;
   previewAuditFeed(id: string, input: AuditFeedRequest): Promise<AuditFeedPreview>;
@@ -2350,6 +2353,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   privacyCatalog: () => req<PrivacyCatalog>("/api/v1/privacy/catalog"),
   auditEvents: (options, signal) =>
     req<{ events: AuditEvent[] }>(`/api/v1/audit/events${auditQueryString(options)}`, { signal: auditReadSignal(signal) }).then((r) => r.events ?? []),
+  auditWindow: (options, signal) => req<AuditWindow>(`/api/v1/audit/events${auditQueryString(options)}`, { signal: auditReadSignal(signal) }),
   exportAudit: (options, signal) => req<AuditBundle>(`/api/v1/audit/export${auditQueryString(options)}`, { signal: auditReadSignal(signal) }),
   auditFeeds: () => req<AuditFeedList>("/api/v1/audit/feeds"),
   previewAuditFeed: (id, input) => postRead<AuditFeedPreview>(`/api/v1/audit/feeds/${encodeURIComponent(id)}/preview`, input),

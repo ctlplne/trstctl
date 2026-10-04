@@ -130,12 +130,16 @@ func (a *API) searchAudit(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	records, err := a.audit.Search(r.Context(), q)
+	records, prefix, err := a.audit.SearchWithArchivedPrefix(r.Context(), q)
 	if err != nil {
 		a.writeError(w, err)
 		return
 	}
-	a.writeJSON(w, http.StatusOK, map[string]any{"events": records, "count": len(records)})
+	response := map[string]any{"events": records, "count": len(records)}
+	if prefix.RecordCount > 0 {
+		response["archived_prefix"] = prefix
+	}
+	a.writeJSON(w, http.StatusOK, response)
 }
 
 func (a *API) exportAudit(w http.ResponseWriter, r *http.Request) {

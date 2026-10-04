@@ -95,6 +95,16 @@ or the supporting `platform_integrations` area. Omit it for the whole tenant
 stream; an unknown tool is an error, not an unfiltered result. Shared lifecycle
 records can appear in more than one tool without creating another audit stream.
 
+`GET /api/v1/audit/events` also returns `archived_prefix` when this tenant has
+a sealed retention boundary. Its `record_count` and `chain_head` come from the
+same pinned history view as the returned events. An empty `events` array can
+therefore coexist with older signed archive records. The API intentionally
+does not return archive files or their host paths: request the JWS files from
+the archive custodian and verify each with pinned audit JWKS and
+`trstctl-cli audit verify --format retention-jws`. A missing
+`archived_prefix` means no sealed boundary was observed in this read, not that
+the tenant never had activity.
+
 ```bash
 trstctl-cli audit events --tool workloads_machines --limit 100
 trstctl-cli audit events --window latest --limit 50

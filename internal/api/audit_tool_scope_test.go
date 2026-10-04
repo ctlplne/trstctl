@@ -123,10 +123,29 @@ func TestAuditHTTPToolScopeAndRetainedExportChain(t *testing.T) {
 	const scope = "tool=workloads_machines&q=payments&as_of=2&limit=1"
 	raw := get("/api/v1/audit/events?"+scope, "", 200)
 	var response struct {
-		Events []audit.Record `json:"events"`
+		Events         []audit.Record `json:"events"`
+		ArchivedPrefix *struct {
+			RecordCount uint64 `json:"record_count"`
+			ChainHead   string `json:"chain_head"`
+		} `json:"archived_prefix"`
 	}
 	if err := json.Unmarshal(raw, &response); err != nil || len(response.Events) != 1 || response.Events[0].Type != "attestation.verified" || response.Events[0].TenantID != tenant {
 		t.Fatalf("scoped HTTP records=%s err=%v", raw, err)
+	}
+	if response.ArchivedPrefix == nil || response.ArchivedPrefix.RecordCount != 1 || response.ArchivedPrefix.ChainHead != old[0].Hash {
+		t.Fatalf("scoped audit response hid its archived predecessor: %s", raw)
+	}
+	var empty struct {
+		Events         []audit.Record `json:"events"`
+		ArchivedPrefix *struct {
+			RecordCount uint64 `json:"record_count"`
+			ChainHead   string `json:"chain_head"`
+		} `json:"archived_prefix"`
+	}
+	raw = get("/api/v1/audit/events?type=no.such.event", "", 200)
+	if err := json.Unmarshal(raw, &empty); err != nil || len(empty.Events) != 0 ||
+		empty.ArchivedPrefix == nil || empty.ArchivedPrefix.RecordCount != 1 || empty.ArchivedPrefix.ChainHead != old[0].Hash {
+		t.Fatalf("empty filtered audit response lost its archived predecessor: %s err=%v", raw, err)
 	}
 	for _, path := range []string{"events", "export"} {
 		get("/api/v1/audit/"+path+"?window=unknown", "", 400)

@@ -4382,6 +4382,22 @@
         ],
         "type": "object"
       },
+      "AuditArchivedPrefix": {
+        "properties": {
+          "chain_head": {
+            "type": "string"
+          },
+          "record_count": {
+            "description": "Tenant-local records retired from the served audit view into signed offline archives.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "record_count",
+          "chain_head"
+        ],
+        "type": "object"
+      },
       "AuditBundle": {
         "properties": {
           "anchor": {
@@ -4451,6 +4467,9 @@
       },
       "AuditEventList": {
         "properties": {
+          "archived_prefix": {
+            "$ref": "#/components/schemas/AuditArchivedPrefix"
+          },
           "count": {
             "type": "integer"
           },

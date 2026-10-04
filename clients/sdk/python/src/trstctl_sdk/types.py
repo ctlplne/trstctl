@@ -1487,6 +1487,15 @@ AuditAnchor = TypedDict(
     total=False,
 )
 
+AuditArchivedPrefix = TypedDict(
+    'AuditArchivedPrefix',
+    {
+        'chain_head': str,
+        'record_count': int,
+    },
+    total=False,
+)
+
 AuditBundle = TypedDict(
     'AuditBundle',
     {
@@ -1517,6 +1526,7 @@ AuditEvent = TypedDict(
 AuditEventList = TypedDict(
     'AuditEventList',
     {
+        'archived_prefix': dict[str, Any],
         'count': int,
         'events': list[dict[str, Any]],
     },

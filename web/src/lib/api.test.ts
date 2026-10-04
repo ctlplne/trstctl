@@ -575,6 +575,7 @@ describe("exported API surface census", () => {
     const readInputs: Record<string, unknown[]> = {
       certificateHealth: [signal],
       auditEvents: [optionBag, signal],
+      auditWindow: [optionBag, signal],
       exportAudit: [optionBag, signal],
       downloadAuditExport: [optionBag, "ndjson", signal],
       brokerAgentIdentities: [optionBag, signal],
@@ -2550,6 +2551,16 @@ describe("profile contract", () => {
 });
 
 describe("audit contract", () => {
+  it("keeps the served archived-prefix evidence with an empty live window", async () => {
+    mockFetch(200, JSON.stringify({ events: [], count: 0, archived_prefix: { record_count: 543, chain_head: "sealed-head" } }));
+
+    const window = await api.auditWindow({ until: "2026-10-03T23:00:00Z", limit: 50, window: "latest" });
+
+    expect(window.events).toEqual([]);
+    expect(window.archived_prefix).toEqual({ record_count: 543, chain_head: "sealed-head" });
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/audit/events?limit=50&window=latest&until=2026-10-03T23%3A00%3A00Z");
+  });
+
   it("passes served audit filters through the event query", async () => {
     mockFetch(200, JSON.stringify({ events: [] }));
 

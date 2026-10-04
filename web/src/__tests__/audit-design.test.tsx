@@ -8,6 +8,7 @@ import { Audit } from "@/pages/Audit";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     auditEvents: vi.fn(),
+    auditWindow: vi.fn(),
     auditFeeds: vi.fn(),
     exportAudit: vi.fn(),
     previewAuditFeed: vi.fn(),
@@ -36,7 +37,7 @@ describe("Route 035 change-history hierarchy", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     for (const mock of Object.values(apiMock)) mock.mockReset();
-    apiMock.auditEvents.mockResolvedValue([
+    const events = [
       {
         id: "evt-7",
         sequence: 7,
@@ -47,7 +48,9 @@ describe("Route 035 change-history hierarchy", () => {
         actor: { email: "ra@example.test" },
         data: { identity_id: "09090909-0909-4909-8909-090909090909", result: "succeeded" },
       },
-    ]);
+    ];
+    apiMock.auditEvents.mockResolvedValue(events);
+    apiMock.auditWindow.mockResolvedValue({ events });
     apiMock.auditFeeds.mockResolvedValue({ items: [] });
     apiMock.exportAudit.mockResolvedValue({ format: "jws", bundle: "signed", chain_head: "sha256:change-seven" });
   });
@@ -103,14 +106,23 @@ describe("Route 035 change-history hierarchy", () => {
 
   it("says when the recent window is empty without inventing product activity", async () => {
     apiMock.auditEvents.mockResolvedValue([]);
+    apiMock.auditWindow.mockResolvedValue({ events: [] });
     renderAudit();
 
     expect(await screen.findByRole("heading", { level: 2, name: "No changes found in this window" })).toBeInTheDocument();
     expect(
-      screen.getByText("Nothing is recorded in this 50-event window. Search a different time or event type before concluding that no change happened.", {
+      screen.getByText("No live events match this window. Widen the filters, and check with the archive custodian before concluding that no change happened.", {
         exact: true,
       }),
     ).toBeInTheDocument();
     expect(screen.queryByText("Identity issued")).not.toBeInTheDocument();
+  });
+
+  it("identifies an archived predecessor when a filtered live window is empty", async () => {
+    apiMock.auditEvents.mockResolvedValue([]);
+    apiMock.auditWindow.mockResolvedValue({ events: [], archived_prefix: { record_count: 543, chain_head: "verified-head" } });
+    renderAudit();
+    expect(await screen.findByRole("heading", { level: 2, name: "Older changes are in signed archives" })).toBeInTheDocument();
+    expect(screen.getByText(/543 older audit records.*archive custodian.*trstctl audit verify/i)).toBeInTheDocument();
   });
 });

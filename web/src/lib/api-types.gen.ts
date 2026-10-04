@@ -1077,6 +1077,11 @@ export interface AuditAnchor {
   token?: AuditTimestampToken;
 }
 
+export interface AuditArchivedPrefix {
+  chain_head: string;
+  record_count: number;
+}
+
 export interface AuditBundle {
   anchor: AuditAnchor;
   bundle: string;
@@ -1097,6 +1102,7 @@ export interface AuditEvent {
 }
 
 export interface AuditEventList {
+  archived_prefix?: AuditArchivedPrefix;
   count?: number;
   events: AuditEvent[];
 }

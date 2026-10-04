@@ -3628,9 +3628,14 @@ func componentSchemas() map[string]*Schema {
 		"sequence": {Type: "integer"}, "id": str(), "type": str(),
 		"tenant_id": uuid(), "time": timestamp(), "actor": {Type: "object"}, "data": {Type: "object"}, "hash": str(),
 	}, "sequence", "type", "tenant_id", "time")
+	auditArchivedPrefix := object(map[string]*Schema{
+		"record_count": {Type: "integer", Description: "Tenant-local records retired from the served audit view into signed offline archives."},
+		"chain_head":   str(),
+	}, "record_count", "chain_head")
 	auditEventList := object(map[string]*Schema{
-		"events": {Type: "array", Items: ref("AuditEvent")},
-		"count":  {Type: "integer"},
+		"events":          {Type: "array", Items: ref("AuditEvent")},
+		"count":           {Type: "integer"},
+		"archived_prefix": ref("AuditArchivedPrefix"),
 	}, "events")
 	auditTimestampInfo := object(map[string]*Schema{
 		"version": {Type: "integer"}, "policy": str(), "hash_algorithm": str(),
@@ -6540,6 +6545,7 @@ func componentSchemas() map[string]*Schema {
 		"AWSHoneyUse":                              awsHoneyUse,
 		"AWSHoneyTokenDetail":                      awsHoneyTokenDetail,
 		"AuditEvent":                               auditEvent,
+		"AuditArchivedPrefix":                      auditArchivedPrefix,
 		"AuditEventList":                           auditEventList,
 		"AuditTimestampInfo":                       auditTimestampInfo,
 		"AuditTimestampToken":                      auditTimestampToken,

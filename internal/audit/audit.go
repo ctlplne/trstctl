@@ -92,6 +92,14 @@ type Checkpoint struct {
 	ArchiveURI   string
 }
 
+// ArchivedPrefix is the tenant-local predecessor of a served audit window.
+// It omits the archive URI: retention removes old records from the online
+// query, and an API read must not become a way to retrieve those records.
+type ArchivedPrefix struct {
+	RecordCount uint64 `json:"record_count"`
+	ChainHead   string `json:"chain_head"`
+}
+
 // CheckpointSource yields a tenant's latest sealed retention boundary, or ok=false
 // if none has been sealed. Search and Export anchor the live chain on it.
 type CheckpointSource interface {
@@ -170,8 +178,17 @@ func (s *Service) searchSeed(ctx context.Context, tenantID string) (from uint64,
 // prefix and the chain is seeded from the boundary hash, so the surviving records
 // keep the exact hashes they had in the full chain.
 func (s *Service) Search(ctx context.Context, q Query) ([]Record, error) {
-	records, _, err := s.search(ctx, q)
+	records, _, _, err := s.search(ctx, q)
 	return records, err
+}
+
+// SearchWithArchivedPrefix returns the same bounded view and its archived
+// predecessor from one pinned history generation. An empty filtered result can
+// therefore explain that older records exist in signed offline archives
+// without exposing the archive location or records through the served API.
+func (s *Service) SearchWithArchivedPrefix(ctx context.Context, q Query) ([]Record, ArchivedPrefix, error) {
+	records, _, prefix, err := s.search(ctx, q)
+	return records, prefix, err
 }
 
 // SearchWithSeed returns the visible records plus the archived-prefix head they
@@ -179,29 +196,31 @@ func (s *Service) Search(ctx context.Context, q Query) ([]Record, error) {
 // without the seed, an offline verifier cannot reconstruct a chain after
 // retention has pruned its prefix.
 func (s *Service) SearchWithSeed(ctx context.Context, q Query) ([]Record, string, error) {
-	return s.search(ctx, q)
+	records, seed, _, err := s.search(ctx, q)
+	return records, seed, err
 }
 
 // search also returns the exact chain seed captured inside the same pinned
 // history read. Signing records with a seed fetched afterward can pair a new
 // retention checkpoint with an older result, producing a bundle that cannot
 // verify even though neither component is corrupt.
-func (s *Service) search(ctx context.Context, q Query) ([]Record, string, error) {
+func (s *Service) search(ctx context.Context, q Query) ([]Record, string, ArchivedPrefix, error) {
 	// Fail closed on a missing tenant scope (TENANT-003): the audit log is
 	// cross-tenant, and matches() only filters when TenantID is set, so an empty
 	// TenantID would leak every tenant's records. Reject it — a missing scope is an
 	// error, not "all tenants". Export and VerifyChain route through here, so all
 	// three query surfaces are covered by this one check.
 	if q.TenantID == "" {
-		return nil, "", ErrMissingTenant
+		return nil, "", ArchivedPrefix{}, ErrMissingTenant
 	}
 	toolScope, err := newAuditToolScope(q.Tool)
 	if err != nil {
-		return nil, "", err
+		return nil, "", ArchivedPrefix{}, err
 	}
 	var (
-		seed string
-		out  []Record
+		seed   string
+		prefix ArchivedPrefix
+		out    []Record
 	)
 	err = s.log.WithHistoryRead(ctx, func(readCtx context.Context) error {
 		// The retention checkpoint is only a query floor, not permission to skip
@@ -233,6 +252,9 @@ func (s *Service) search(ctx context.Context, q Query) ([]Record, string, error)
 			return err
 		}
 		seed = chainSeed
+		if tenantOrdinal > 0 {
+			prefix = ArchivedPrefix{RecordCount: tenantOrdinal, ChainHead: chainSeed}
+		}
 		refs := map[string]struct{}{}
 		if s.erasures != nil {
 			refs, err = s.erasures.ListPrivacyErasureRefs(readCtx, q.TenantID)
@@ -263,7 +285,7 @@ func (s *Service) search(ctx context.Context, q Query) ([]Record, string, error)
 		})
 	})
 	if err != nil {
-		return nil, "", err
+		return nil, "", ArchivedPrefix{}, err
 	}
 	if q.Limit > 0 && len(out) > q.Limit {
 		if q.Latest {
@@ -276,7 +298,7 @@ func (s *Service) search(ctx context.Context, q Query) ([]Record, string, error)
 	// chain attests to exactly this slice as a continuation of the archived prefix;
 	// a later tampering of any record is detectable by VerifyChain.
 	SealFrom(seed, out)
-	return out, seed, nil
+	return out, seed, prefix, nil
 }
 
 func (q Query) matches(e events.Event, tenantSequence uint64) bool {
@@ -378,7 +400,7 @@ func (s *Service) exportWithBundle(ctx context.Context, q Query, maxPayloadBytes
 	if s.signer == nil {
 		return "", Bundle{}, ErrMissingSigner
 	}
-	recs, seed, err := s.search(ctx, q)
+	recs, seed, _, err := s.search(ctx, q)
 	if err != nil {
 		return "", Bundle{}, err
 	}
@@ -404,7 +426,7 @@ func (s *Service) exportWithBundle(ctx context.Context, q Query, maxPayloadBytes
 // record's stored hash does not match its recomputed link — i.e. a stored event
 // was altered, dropped, inserted, or reordered (R2.1 tamper detection).
 func (s *Service) VerifyChain(ctx context.Context, tenantID string) (string, error) {
-	recs, seed, err := s.search(ctx, Query{TenantID: tenantID})
+	recs, seed, _, err := s.search(ctx, Query{TenantID: tenantID})
 	if err != nil {
 		return "", err
 	}
