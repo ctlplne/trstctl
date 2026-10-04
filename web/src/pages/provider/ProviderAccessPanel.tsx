@@ -234,6 +234,7 @@ export function ProviderAccessPanel({ onAuthError, canWrite }: { onAuthError: ()
       />
       <DetailDrawer
         open={!!selectedOperator}
+        className="max-w-5xl"
         title={translateNow("provider.access.delegations.title", {
           operator: selectedOperator?.identity.display_name || selectedOperator?.identity.user_name || "",
         })}
@@ -282,7 +283,13 @@ export function ProviderAccessPanel({ onAuthError, canWrite }: { onAuthError: ()
             {
               id: "customer",
               header: translateNow("source.provider.access.customer.aud580004"),
-              cell: (grant) => <CredentialChip value={grant.customer_id} fullValue label={translateNow("source.provider.access.customer.aud580004")} />,
+              cell: (grant) => (
+                <CredentialChip
+                  value={grant.customer_id}
+                  fullValue={grant.customer_id.length <= 24}
+                  label={translateNow("source.provider.access.customer.aud580004")}
+                />
+              ),
             },
             { id: "operation", header: translateNow("source.provider.access.operation.aud580005"), cell: (grant) => grant.operation },
             { id: "source", header: translateNow("source.provider.access.source.aud580011"), cell: (grant) => grant.source },
