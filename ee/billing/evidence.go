@@ -93,6 +93,9 @@ func MaySign(p EvidencePeriod, c Coverage, now time.Time) EvidenceDecision {
 			"— which is worse than no evidence, because a signature turns a gap somebody might " +
 			"have questioned into a number they will rely on."}
 	}
+	if c.ObservedFrom.IsZero() || c.ObservedTo.IsZero() {
+		return EvidenceDecision{Reason: "The metering store has no complete coverage bounds for this period. The figure cannot be attested until its durable observation window is known."}
+	}
 	if c.ObservedFrom.After(p.Start) || c.ObservedTo.Before(p.End) {
 		return EvidenceDecision{Reason: fmt.Sprintf(
 			"The metering store only covers %s to %s, which does not span the period. The figure "+

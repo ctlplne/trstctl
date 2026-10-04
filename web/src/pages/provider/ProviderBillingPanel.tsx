@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { translateNow } from "@/i18n/I18nProvider";
+import { asRFC3339UTCMinute, defaultBillingPeriod, validUTCPeriod } from "@/lib/billingPeriod";
 import {
   ProviderAuthError,
   providerApi,
@@ -14,24 +15,6 @@ import {
   type ProviderTenantSnapshot,
   type ProviderUsageEvidence,
 } from "@/lib/providerApi";
-
-function defaultBillingPeriod(): { start: string; end: string } {
-  const now = new Date();
-  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const start = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - 1, 1));
-  return { start: start.toISOString().slice(0, 16), end: end.toISOString().slice(0, 16) };
-}
-
-function asRFC3339(utcMinute: string): string {
-  return `${utcMinute}:00Z`;
-}
-
-function validUTCPeriod(start: string, end: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(end)) return false;
-  const first = Date.parse(asRFC3339(start));
-  const last = Date.parse(asRFC3339(end));
-  return Number.isFinite(first) && Number.isFinite(last) && first < last;
-}
 
 type VerificationState = ProviderEvidenceVerification | null;
 
@@ -101,7 +84,7 @@ export function ProviderBillingPanel({ tenants, onAuthError }: { tenants: Provid
     try {
       const [healthResult, evidenceResult] = await Promise.allSettled([
         providerApi.customerHealth(customerId),
-        providerApi.usageEvidence(customerId, asRFC3339(periodStart), asRFC3339(periodEnd)),
+        providerApi.usageEvidence(customerId, asRFC3339UTCMinute(periodStart), asRFC3339UTCMinute(periodEnd)),
       ]);
       if (!isCurrent()) return;
       for (const result of [healthResult, evidenceResult]) {
@@ -144,7 +127,7 @@ export function ProviderBillingPanel({ tenants, onAuthError }: { tenants: Provid
     const requestGeneration = generation.current;
     setError(null);
     try {
-      await providerApi.downloadUsageEvidence(customerId, asRFC3339(periodStart), asRFC3339(periodEnd), format);
+      await providerApi.downloadUsageEvidence(customerId, asRFC3339UTCMinute(periodStart), asRFC3339UTCMinute(periodEnd), format);
     } catch (reason) {
       if (generation.current !== requestGeneration) return;
       if (reason instanceof ProviderAuthError) {

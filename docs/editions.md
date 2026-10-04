@@ -376,6 +376,9 @@ be read across tenancies.
 
 `GET /api/v1/provider/usage-evidence` (CLI: `trstctl usage evidence`, console:
 Platform → Usage & invoice evidence) returns the evidence document for a period.
+The tenant console accepts an exact UTC start and end to the minute, including a
+single closed meter hour, and clears an older verdict when the selected period
+changes. It disables a reversed or incomplete interval before requesting evidence.
 The System health panel first checks the running API's operation registry. Core
 builds without Provider metering show that invoice evidence is unavailable and
 do not offer a pull action that would return 404. An attached route still checks
@@ -396,6 +399,11 @@ Two properties of that document matter more than the totals:
   incomplete and here is how" is actionable and an error is not, but they are a
   partial view rather than an invoice. There is deliberately no way to get the
   numbers without the verdict attached.
+
+For a fully covered closed period, `observed_from` and `observed_to` describe
+the selected period exactly. Later observations outside that period cannot
+change its signed digest. An incomplete period retains the metering store's
+actual diagnostic bounds and remains unsigned.
 
 An absent metering store returns 503 rather than a zero-usage document: no
 metering and no usage are different facts.

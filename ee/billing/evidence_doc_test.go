@@ -73,6 +73,39 @@ func TestTheDigestIsStableAcrossBuilds(t *testing.T) {
 	}
 }
 
+// A closed hour must have one invoice identity. Later observation of unrelated
+// hours cannot alter its signed bytes when its own counts and coverage are the
+// same; finance may have already exported the earlier document.
+func TestClosedPeriodDigestDoesNotDriftAsCoverageExtendsOutsideIt(t *testing.T) {
+	t.Parallel()
+	firstCoverage := fullDurable()
+	firstCoverage.ObservedFrom = pStart.Add(-time.Hour)
+	firstCoverage.ObservedTo = pEnd.Add(time.Hour)
+	laterCoverage := firstCoverage
+	laterCoverage.ObservedFrom = pStart.Add(-2 * time.Hour)
+	laterCoverage.ObservedTo = pEnd.Add(2 * time.Hour)
+
+	first := BuildEvidence(period(), firstCoverage, docRecords(), after)
+	later := BuildEvidence(period(), laterCoverage, docRecords(), after)
+	if !first.Signable || !later.Signable {
+		t.Fatalf("closed fully covered period unexpectedly refused: %q / %q", first.Reason, later.Reason)
+	}
+	if first.Digest != later.Digest || first.ObservedFrom != later.ObservedFrom || first.ObservedTo != later.ObservedTo {
+		t.Fatalf("closed-period invoice changed when only out-of-period coverage grew: %s (%s..%s) vs %s (%s..%s)",
+			first.Digest, first.ObservedFrom, first.ObservedTo, later.Digest, later.ObservedFrom, later.ObservedTo)
+	}
+	if first.ObservedFrom != pStart.UTC().Format(time.RFC3339) || first.ObservedTo != pEnd.UTC().Format(time.RFC3339) {
+		t.Fatalf("signed coverage should describe the selected window, got %s..%s", first.ObservedFrom, first.ObservedTo)
+	}
+
+	partial := firstCoverage
+	partial.ObservedTo = pEnd.Add(-time.Hour)
+	unsignable := BuildEvidence(period(), partial, docRecords(), after)
+	if unsignable.Signable || unsignable.ObservedTo != partial.ObservedTo.UTC().Format(time.RFC3339) {
+		t.Fatalf("partial coverage must remain visible and unsignable: %+v", unsignable)
+	}
+}
+
 // The signable flag and its reason are INSIDE the digest, so a warning cannot
 // be stripped off a partial period while keeping a valid-looking hash.
 func TestStrippingTheWarningChangesTheDigest(t *testing.T) {

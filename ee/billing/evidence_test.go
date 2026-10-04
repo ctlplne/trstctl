@@ -56,6 +56,16 @@ func TestPartialCoverageCannotBeSigned(t *testing.T) {
 	}
 }
 
+func TestMissingObservedFromCannotBeSigned(t *testing.T) {
+	t.Parallel()
+	c := fullDurable()
+	c.ObservedFrom = time.Time{}
+	got := MaySign(period(), c, after)
+	if got.Signable || !strings.Contains(got.Reason, "coverage bounds") {
+		t.Fatalf("missing lower coverage bound must prevent an invoice: %+v", got)
+	}
+}
+
 // An open period is still accruing; signing it produces a partial month that
 // reads like a final figure.
 func TestAnOpenPeriodCannotBeSigned(t *testing.T) {

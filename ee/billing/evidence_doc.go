@@ -39,9 +39,10 @@ type EvidenceDocument struct {
 	// rendered as a normal invoice by a client that forgot to check.
 	Signable bool   `json:"signable"`
 	Reason   string `json:"reason"`
-	// ObservedFrom/To is what the metering store could actually vouch for. A
-	// reader comparing these to the period sees the gap directly rather than
-	// inferring it.
+	// ObservedFrom/To describe the metering coverage relevant to this period.
+	// A fully covered period reports its exact selected bounds so later
+	// observations outside it cannot change a signed invoice's identity.
+	// An incomplete period retains the store's diagnostic bounds.
 	ObservedFrom string `json:"observed_from,omitempty"`
 	ObservedTo   string `json:"observed_to,omitempty"`
 	// Reconciliation is the cross-check of metered totals against the event
@@ -118,11 +119,19 @@ func BuildEvidence(p EvidencePeriod, c Coverage, records []UsageRecord, now time
 
 	decision := MaySign(p, c, now)
 	doc.Signable, doc.Reason = decision.Signable, decision.Reason
-	if !c.ObservedFrom.IsZero() {
-		doc.ObservedFrom = c.ObservedFrom.UTC().Format(time.RFC3339)
-	}
-	if !c.ObservedTo.IsZero() {
-		doc.ObservedTo = c.ObservedTo.UTC().Format(time.RFC3339)
+	if decision.Signable {
+		// The coverage gate has already proved the entire selected period.
+		// Record only that period, because the store-wide bounds grow as later
+		// hours are observed and would otherwise change this invoice's digest.
+		doc.ObservedFrom = doc.PeriodStart
+		doc.ObservedTo = doc.PeriodEnd
+	} else {
+		if !c.ObservedFrom.IsZero() {
+			doc.ObservedFrom = c.ObservedFrom.UTC().Format(time.RFC3339)
+		}
+		if !c.ObservedTo.IsZero() {
+			doc.ObservedTo = c.ObservedTo.UTC().Format(time.RFC3339)
+		}
 	}
 	doc.Digest = doc.canonicalDigest()
 	return doc

@@ -1,19 +1,13 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { KeyRound, Loader2, RefreshCw } from "lucide-react";
 import { Dialog } from "@/components/Dialog";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { api, type SystemReadout, type TenantKeyDomainStatus, type UsageEvidence } from "@/lib/api";
+import { asRFC3339UTCMinute, defaultBillingPeriod, validUTCPeriod } from "@/lib/billingPeriod";
 import { useRuntimeOperationExecution } from "@/lib/capabilities";
 import type { StatusTone } from "@/lib/statusVocab";
-
-// The default window is the previous whole calendar month: the only period a
-// provider can bill without waiting, because it is the only one that is closed.
-const previousMonthEnd = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1));
-const previousMonthStart = new Date(Date.UTC(previousMonthEnd.getUTCFullYear(), previousMonthEnd.getUTCMonth() - 1, 1));
-const defaultPeriodStart = previousMonthStart.toISOString().slice(0, 10);
-const defaultPeriodEnd = previousMonthEnd.toISOString().slice(0, 10);
 
 export function IdempotencyResultProtectionPanel({
   readout,
@@ -432,24 +426,36 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
 export function UsageEvidencePanel() {
   const { t } = useTranslation();
   const operation = useRuntimeOperationExecution("getUsageEvidence");
+  const defaults = defaultBillingPeriod();
   const [doc, setDoc] = useState<UsageEvidence | null>(null);
   const [loading, setLoading] = useState(false);
   const [requestFailed, setRequestFailed] = useState(false);
-  const [periodStart, setPeriodStart] = useState(defaultPeriodStart);
-  const [periodEnd, setPeriodEnd] = useState(defaultPeriodEnd);
+  const [periodStart, setPeriodStart] = useState(defaults.start);
+  const [periodEnd, setPeriodEnd] = useState(defaults.end);
+  const generation = useRef(0);
+
+  function changePeriod(setter: (value: string) => void, value: string) {
+    generation.current += 1;
+    setter(value);
+    setDoc(null);
+    setLoading(false);
+    setRequestFailed(false);
+  }
 
   async function pull(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!operation.runnable) return;
+    if (!operation.runnable || !validUTCPeriod(periodStart, periodEnd)) return;
+    const requestGeneration = ++generation.current;
     setLoading(true);
     setRequestFailed(false);
+    setDoc(null);
     try {
-      setDoc(await api.usageEvidence(`${periodStart}T00:00:00Z`, `${periodEnd}T00:00:00Z`));
+      const result = await api.usageEvidence(asRFC3339UTCMinute(periodStart), asRFC3339UTCMinute(periodEnd));
+      if (generation.current === requestGeneration) setDoc(result);
     } catch {
-      setDoc(null);
-      setRequestFailed(true);
+      if (generation.current === requestGeneration) setRequestFailed(true);
     } finally {
-      setLoading(false);
+      if (generation.current === requestGeneration) setLoading(false);
     }
   }
 
@@ -475,29 +481,34 @@ export function UsageEvidencePanel() {
       {operation.runnable ? (
         <form className="mt-4 flex flex-wrap items-end gap-3" onSubmit={pull}>
           <label className="flex flex-col gap-1 text-caption">
-            {t("platform.usageEvidence.periodStart")}
+            {t("platform.usageEvidence.periodStartUTC")}
             <input
-              type="date"
+              type="datetime-local"
+              step="60"
+              required
               value={periodStart}
-              onChange={(e) => setPeriodStart(e.target.value)}
+              onChange={(e) => changePeriod(setPeriodStart, e.target.value)}
               className="rounded-control border border-border bg-background px-2 py-1"
             />
           </label>
           <label className="flex flex-col gap-1 text-caption">
-            {t("platform.usageEvidence.periodEnd")}
+            {t("platform.usageEvidence.periodEndUTC")}
             <input
-              type="date"
+              type="datetime-local"
+              step="60"
+              required
               value={periodEnd}
-              onChange={(e) => setPeriodEnd(e.target.value)}
+              onChange={(e) => changePeriod(setPeriodEnd, e.target.value)}
               className="rounded-control border border-border bg-background px-2 py-1"
             />
           </label>
-          <Button type="submit" disabled={loading}>
+          <Button type="submit" disabled={loading || !validUTCPeriod(periodStart, periodEnd)}>
             {loading ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
             {t("platform.usageEvidence.pull")}
           </Button>
         </form>
       ) : null}
+      {operation.runnable ? <p className="mt-1 text-caption text-muted-foreground">{t("platform.usageEvidence.utcHint")}</p> : null}
 
       {loading && <p className="mt-3 text-caption text-muted-foreground">{t("platform.usageEvidence.loading")}</p>}
       {requestFailed && (
