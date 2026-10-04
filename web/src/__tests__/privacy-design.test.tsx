@@ -247,6 +247,7 @@ describe("Route 036 evidence-privacy hierarchy", () => {
     expect(apiMock.enforcePrivacyRetention).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Review retention" }));
     const retentionReview = await screen.findByRole("dialog", { name: "Review retention enforcement" });
+    expect(within(retentionReview).getByRole("heading", { name: "Review retention enforcement" })).toHaveFocus();
     expect(retentionReview).toHaveTextContent("4 records matched");
     expect(retentionReview).toHaveTextContent("ssh stale before");
     await user.click(within(retentionReview).getByRole("button", { name: "Enforce reviewed retention" }));

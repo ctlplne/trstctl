@@ -810,6 +810,7 @@ function PrivacyReviewDialog({
   titleId: string;
 }) {
   const { t, formatDateTime } = useTranslation();
+  const headingRef = useRef<HTMLHeadingElement>(null);
   const countEntries = Object.entries(preview.counts).filter(([, count]) => typeof count === "number" && count > 0);
   const isErasure = "subject_ref" in preview;
   const cutoffEntries = "cutoffs" in preview ? Object.entries(preview.cutoffs) : [];
@@ -819,13 +820,14 @@ function PrivacyReviewDialog({
       onClose={onClose}
       titleId={titleId}
       descriptionId={`${titleId}-description`}
+      initialFocusRef={headingRef}
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       overlayClassName="absolute inset-0 bg-black/55"
       panelClassName="relative max-h-[calc(100vh-2rem)] w-full max-w-3xl overflow-y-auto rounded-panel border border-border bg-card shadow-elevation2"
     >
       <header className="border-b border-border px-5 py-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 id={titleId} className="text-title font-semibold">
+          <h2 ref={headingRef} id={titleId} tabIndex={-1} className="text-title font-semibold">
             {title}
           </h2>
           <StatusBadge
