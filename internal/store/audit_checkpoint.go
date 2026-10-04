@@ -6,26 +6,26 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/events"
 )
 
-// AuditCheckpointRLSID maps historical non-UUID audit scopes to a stable RLS
-// partition. The original scope is retained in scope_id and in the event. A
-// namespace-bound UUID keeps the RLS contract without relabeling old evidence
-// as an unrelated customer tenant.
-func AuditCheckpointRLSID(scope string) string {
-	if strings.TrimSpace(scope) == "" {
-		return ""
-	}
+// AuditCheckpointRLSID maps only the known pre-UUID Provider audit scope to a
+// stable, isolated RLS partition. The original scope remains in the event and
+// scope_id. Unknown text must fail closed rather than minting arbitrary UUID
+// partitions that could make malformed replay or restore look valid.
+func AuditCheckpointRLSID(scope string) (string, error) {
 	if parsed, err := uuid.Parse(scope); err == nil {
-		return parsed.String()
+		return parsed.String(), nil
 	}
-	return uuid.NewSHA1(uuid.NameSpaceOID, []byte("trstctl.audit.checkpoint.scope.v1\x00"+scope)).String()
+	if scope != events.LegacyProviderGlobalAuditScope {
+		return "", errors.New("store: unsupported non-UUID audit scope")
+	}
+	return uuid.NewSHA1(uuid.NameSpaceOID, []byte("trstctl.audit.checkpoint.scope.v1\x00"+scope)).String(), nil
 }
 
 // SaveAuditCheckpoint persists a sealed retention boundary for a tenant (R4.4):
@@ -34,7 +34,10 @@ func AuditCheckpointRLSID(scope string) string {
 // source envelopes remain present for rebuild. Re-sealing the same boundary
 // updates it in place, so a retried run is idempotent.
 func (s *Store) SaveAuditCheckpoint(ctx context.Context, cp audit.Checkpoint) error {
-	storageTenant := AuditCheckpointRLSID(cp.TenantID)
+	storageTenant, err := AuditCheckpointRLSID(cp.TenantID)
+	if err != nil {
+		return err
+	}
 	return s.WithTenant(ctx, storageTenant, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx,
 			`INSERT INTO audit_checkpoints (tenant_id, scope_id, boundary_seq, boundary_hash, record_count, archive_uri)
@@ -67,7 +70,10 @@ func (s *Store) ApplyAuditCheckpointTx(ctx context.Context, tx pgx.Tx, cp audit.
 		cp.BoundaryHash == "" || cp.ArchiveURI == "" {
 		return errors.New("store: audit checkpoint event is incomplete")
 	}
-	storageTenant := AuditCheckpointRLSID(cp.TenantID)
+	storageTenant, err := AuditCheckpointRLSID(cp.TenantID)
+	if err != nil {
+		return err
+	}
 	tag, err := tx.Exec(ctx,
 		`INSERT INTO audit_checkpoints (tenant_id, scope_id, boundary_seq, boundary_hash, record_count, archive_uri)
 		 VALUES ($1, $2, $3, $4, $5, $6)
@@ -93,8 +99,11 @@ func (s *Store) ApplyAuditCheckpointTx(ctx context.Context, tx pgx.Tx, cp audit.
 func (s *Store) LatestAuditCheckpoint(ctx context.Context, tenantID string) (audit.Checkpoint, bool, error) {
 	cp := audit.Checkpoint{TenantID: tenantID}
 	found := false
-	storageTenant := AuditCheckpointRLSID(tenantID)
-	err := s.WithTenant(ctx, storageTenant, func(tx pgx.Tx) error {
+	storageTenant, err := AuditCheckpointRLSID(tenantID)
+	if err != nil {
+		return audit.Checkpoint{}, false, err
+	}
+	err = s.WithTenant(ctx, storageTenant, func(tx pgx.Tx) error {
 		var bseq, count int64
 		row := tx.QueryRow(ctx,
 			`SELECT boundary_seq, boundary_hash, record_count, archive_uri

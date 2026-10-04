@@ -3177,7 +3177,11 @@ func (p *Projector) applyCore(ctx context.Context, e events.Event) error {
 	// signed event while the SQL receiver uses a stable UUID RLS partition.
 	storageTenant := e.TenantID
 	if e.Type == audit.EventTypeArchived {
-		storageTenant = store.AuditCheckpointRLSID(e.TenantID)
+		var err error
+		storageTenant, err = store.AuditCheckpointRLSID(e.TenantID)
+		if err != nil {
+			return err
+		}
 	}
 	// Domain entity events apply under the tenant's RLS context.
 	return p.store.WithTenant(ctx, storageTenant, func(tx pgx.Tx) error {
@@ -7496,7 +7500,11 @@ func (p *Projector) applyForRebuild(ctx context.Context, tx pgx.Tx, e events.Eve
 	default:
 		storageTenant := e.TenantID
 		if e.Type == audit.EventTypeArchived {
-			storageTenant = store.AuditCheckpointRLSID(e.TenantID)
+			var err error
+			storageTenant, err = store.AuditCheckpointRLSID(e.TenantID)
+			if err != nil {
+				return err
+			}
 		}
 		if err := p.store.SetTenantGUCTx(ctx, tx, storageTenant); err != nil {
 			return err

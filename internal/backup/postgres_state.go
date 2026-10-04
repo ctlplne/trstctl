@@ -435,7 +435,8 @@ func latestAuditCheckpointBoundaries(rows []json.RawMessage) ([]AuditCheckpointB
 		if row.ScopeID != nil {
 			scope = *row.ScopeID
 		}
-		if scope == "" || store.AuditCheckpointRLSID(scope) != row.TenantID {
+		mapped, mapErr := store.AuditCheckpointRLSID(scope)
+		if mapErr != nil || mapped != row.TenantID {
 			return nil, fmt.Errorf("backup: audit_checkpoints row %d storage tenant does not match event scope", index+1)
 		}
 		candidate := AuditCheckpointBoundary{

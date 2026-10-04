@@ -1863,8 +1863,11 @@ func (s *Store) ListPrivacyErasureRefs(ctx context.Context, tenantID string) (ma
 	refs := map[string]struct{}{}
 	// Historical administrative audit scopes use the same isolated UUID mapping
 	// as their checkpoints. Ordinary UUID tenants keep their original RLS key.
-	storageTenant := AuditCheckpointRLSID(tenantID)
-	err := s.WithTenant(ctx, storageTenant, func(tx pgx.Tx) error {
+	storageTenant, err := AuditCheckpointRLSID(tenantID)
+	if err != nil {
+		return nil, err
+	}
+	err = s.WithTenant(ctx, storageTenant, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
 			`SELECT subject_ref FROM privacy_subject_erasures WHERE tenant_id = $1`,
 			storageTenant)

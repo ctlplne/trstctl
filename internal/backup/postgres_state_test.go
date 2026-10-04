@@ -20,7 +20,10 @@ import (
 func TestPostgresBackupCheckpointUsesLegacyEventScopeForRestoreProof(t *testing.T) {
 	ctx := context.Background()
 	const scope = "provider-control-plane"
-	storageTenant := store.AuditCheckpointRLSID(scope)
+	storageTenant, err := store.AuditCheckpointRLSID(scope)
+	if err != nil {
+		t.Fatal(err)
+	}
 	row, err := json.Marshal(map[string]any{
 		"tenant_id": storageTenant, "scope_id": scope,
 		"boundary_seq": 1, "record_count": 1,

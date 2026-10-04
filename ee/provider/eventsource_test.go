@@ -121,6 +121,47 @@ func TestProviderAuthorityRebuildsExactlyFromOneEventHistory(t *testing.T) {
 	}
 }
 
+func TestProviderLegacyAuditReplayCannotCreateStateFromTextualPartition(t *testing.T) {
+	ctx := context.Background()
+	st := openProviderStore(t)
+	truncateProviderAuthority(t, st)
+	log, err := events.Open(ctx, config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	projection := NewAuthorityProjection(st)
+	oldAudit, err := json.Marshal(AuditEvent{Type: AuditTenantProvisioned, TenantID: legacyProviderAuditTenant})
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := log.Append(ctx, events.Event{Type: AuditTenantProvisioned, TenantID: legacyProviderAuditTenant, Data: oldAudit})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projection.Apply(ctx, legacy); err != nil {
+		t.Fatalf("audit-only historical Provider event blocked replay: %v", err)
+	}
+	state, err := json.Marshal(AuthorityEvent{
+		Tenant: &Tenant{ID: legacyProviderAuditTenant, Slug: "invalid", Name: "Invalid", Status: TenantActive},
+		Audit:  AuditEvent{Type: AuditTenantProvisioned, TenantID: legacyProviderAuditTenant},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bad, err := log.Append(ctx, events.Event{Type: AuditTenantProvisioned, TenantID: legacyProviderAuditTenant, Data: state})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := projection.Apply(ctx, bad); err == nil {
+		t.Fatal("stateful Provider event in textual audit partition bypassed tenant UUID fence")
+	}
+	var count int
+	if err := st.SystemPool().QueryRow(ctx, `SELECT count(*) FROM provider_tenants WHERE slug='invalid'`).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("refused legacy scope projected Provider tenant: count %d, err %v", count, err)
+	}
+}
+
 func TestProviderBrandCollisionRefusesBeforeAppendAndRecoversOlderPoisonedHistory(t *testing.T) {
 	ctx := context.Background()
 	st := openProviderStore(t)

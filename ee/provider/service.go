@@ -33,7 +33,7 @@ const (
 	AuditBreakGlassDenied             = "provider.breakglass_deny"
 	AuditBreakGlassAccessed           = "provider.breakglass_access"
 	providerAuditTenant               = providerAuthorityTenant
-	legacyProviderAuditTenant         = "provider-control-plane"
+	legacyProviderAuditTenant         = events.LegacyProviderGlobalAuditScope
 	defaultMaxBreakGlassTTL           = 2 * time.Hour
 	defaultBreakGlassTTL              = 30 * time.Minute
 )

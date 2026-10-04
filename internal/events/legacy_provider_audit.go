@@ -4,6 +4,10 @@ package events
 
 import "strings"
 
+// LegacyProviderGlobalAuditScope is the single pre-UUID Provider audit partition.
+// It is retained verbatim for historical evidence, never assigned to a customer.
+const LegacyProviderGlobalAuditScope = "provider-control-plane"
+
 // IsLegacyProviderGlobalAudit identifies only the historical Provider audit
 // partition that predates UUID tenant identifiers on deployment-wide events.
 // Its envelope stays immutable. Core consumers with no Provider side effect may
@@ -14,7 +18,7 @@ import "strings"
 // New Provider events use the reserved UUID partition instead.
 func IsLegacyProviderGlobalAudit(event Event) bool {
 	return IsLegacyProviderCoreProjectionNoop(event) ||
-		(event.TenantID == "provider-control-plane" && event.Type == "audit.archived")
+		(event.TenantID == LegacyProviderGlobalAuditScope && event.Type == "audit.archived")
 }
 
 // IsLegacyProviderCoreProjectionNoop is narrower than the outbox predicate.
@@ -22,5 +26,5 @@ func IsLegacyProviderGlobalAudit(event Event) bool {
 // audit.archived must still project the retention checkpoint in its mapped UUID
 // RLS partition. Unknown event types in this textual scope remain fail-closed.
 func IsLegacyProviderCoreProjectionNoop(event Event) bool {
-	return event.TenantID == "provider-control-plane" && strings.HasPrefix(event.Type, "provider.")
+	return event.TenantID == LegacyProviderGlobalAuditScope && strings.HasPrefix(event.Type, "provider.")
 }

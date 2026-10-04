@@ -60,7 +60,11 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 	// a later ownership/privacy/migration write cannot go unnoticed by recovery.
 	projectionTenant := e.TenantID
 	if e.Type == audit.EventTypeArchived {
-		projectionTenant = store.AuditCheckpointRLSID(e.TenantID)
+		var err error
+		projectionTenant, err = store.AuditCheckpointRLSID(e.TenantID)
+		if err != nil {
+			return err
+		}
 	}
 	return p.store.WithCertificateProjectionOrderTx(ctx, tx, projectionTenant, e.Sequence, func() error {
 		if e.Type == EventCAEndEntityIssued || e.Type == EventCAIssuedCertificate {

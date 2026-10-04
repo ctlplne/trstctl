@@ -4,15 +4,19 @@ package auditcompliance_test
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/ee/auditcompliance"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // TestAuditRetentionPreservesProjectionRebuild pins the event-sourcing durability
@@ -177,6 +181,76 @@ func TestLegacyAdministrativeAuditScopeRejectsUnknownCoreEvent(t *testing.T) {
 	}
 	if err := projections.New(st).ProjectCatchUp(ctx, log); err == nil {
 		t.Fatal("unknown core event under textual Provider audit scope bypassed tenant isolation")
+	}
+}
+
+func TestLegacyAdministrativeAuditScopeRejectsUnknownRetentionPartitionBeforeArchive(t *testing.T) {
+	ctx := context.Background()
+	st := newAuditTestStore(t)
+	log := openTestLog(t)
+	if _, err := log.Append(ctx, events.Event{
+		Type: "identity.issued", TenantID: events.LegacyProviderGlobalAuditScope,
+		Time: time.Now().Add(-48 * time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	key, err := jose.GenerateRSASigningKey("audit-export")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	svc := audit.NewService(log, key, audit.WithCheckpoints(st), audit.WithPrivacyErasures(st))
+	worker := auditcompliance.NewRetentionWorker(svc, log, auditcompliance.DirArchiver{Dir: dir}, st, time.Hour, key)
+	if _, err := worker.RunOnce(ctx); err == nil || !strings.Contains(err.Error(), "unsupported non-UUID event partition") {
+		t.Fatalf("retention accepted unknown event in legacy partition: %v", err)
+	}
+	if entries, err := os.ReadDir(dir); err != nil || len(entries) != 0 {
+		t.Fatalf("refused retention wrote archive entries %v, err %v", entries, err)
+	}
+	if _, ok, err := st.LatestAuditCheckpoint(ctx, events.LegacyProviderGlobalAuditScope); err != nil || ok {
+		t.Fatalf("refused retention sealed checkpoint: %v, %v", ok, err)
+	}
+	if _, err := st.ListPrivacyErasureRefs(ctx, "another-administrative-scope"); err == nil {
+		t.Fatal("privacy lookup mapped an unknown textual scope into RLS")
+	}
+	if err := st.SaveAuditCheckpoint(ctx, audit.Checkpoint{TenantID: "another-administrative-scope"}); err == nil {
+		t.Fatal("checkpoint storage mapped an unknown textual scope into RLS")
+	}
+}
+
+func TestLegacyAdministrativeAuditPrivacyRefsStayInTheirRLSPartition(t *testing.T) {
+	ctx := context.Background()
+	st := newAuditTestStore(t)
+	legacyStorage, err := store.AuditCheckpointRLSID(events.LegacyProviderGlobalAuditScope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const customer = "22222222-2222-2222-2222-222222222222"
+	for _, row := range []struct{ tenant, ref string }{
+		{legacyStorage, "legacy-subject-ref"},
+		{customer, "customer-subject-ref"},
+	} {
+		if err := st.WithTenant(ctx, row.tenant, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `INSERT INTO privacy_subject_erasures (tenant_id,subject_ref,erased_at) VALUES ($1,$2,now())`, row.tenant, row.ref)
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, check := range []struct{ scope, want, absent string }{
+		{events.LegacyProviderGlobalAuditScope, "legacy-subject-ref", "customer-subject-ref"},
+		{customer, "customer-subject-ref", "legacy-subject-ref"},
+	} {
+		refs, err := st.ListPrivacyErasureRefs(ctx, check.scope)
+		if err != nil || len(refs) != 1 {
+			t.Fatalf("privacy refs for %s = %v, err %v", check.scope, refs, err)
+		}
+		if _, ok := refs[check.want]; !ok {
+			t.Fatalf("privacy refs for %s missed %s", check.scope, check.want)
+		}
+		if _, ok := refs[check.absent]; ok {
+			t.Fatalf("privacy refs for %s exposed %s", check.scope, check.absent)
+		}
 	}
 }
 

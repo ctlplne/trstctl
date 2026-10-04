@@ -12,6 +12,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/google/uuid"
+
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
@@ -129,7 +131,13 @@ func (w *RetentionWorker) liveTenants(ctx context.Context) ([]string, error) {
 	seen := map[string]bool{}
 	var out []string
 	err := w.log.Replay(ctx, 0, func(e events.Event) error {
-		if e.TenantID != "" && !seen[e.TenantID] {
+		if e.TenantID == "" {
+			return errors.New("audit retention: event has no partition")
+		}
+		if _, err := uuid.Parse(e.TenantID); err != nil && !events.IsLegacyProviderGlobalAudit(e) {
+			return fmt.Errorf("audit retention: unsupported non-UUID event partition at sequence %d", e.Sequence)
+		}
+		if !seen[e.TenantID] {
 			seen[e.TenantID] = true
 			out = append(out, e.TenantID)
 		}

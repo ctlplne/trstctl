@@ -11,21 +11,26 @@ import (
 )
 
 func TestAuditCheckpointRLSIDPreservesUUIDAndMapsLegacyScope(t *testing.T) {
-	if got := store.AuditCheckpointRLSID("  "); got != "" {
-		t.Fatalf("blank audit scope acquired RLS id %q", got)
+	if got, err := store.AuditCheckpointRLSID("  "); err == nil || got != "" {
+		t.Fatalf("blank audit scope acquired RLS id %q, err %v", got, err)
 	}
 	const tenant = "33333333-3333-3333-3333-333333333333"
-	if got := store.AuditCheckpointRLSID(tenant); got != tenant {
-		t.Fatalf("UUID tenant remapped to %s", got)
+	if got, err := store.AuditCheckpointRLSID(tenant); err != nil || got != tenant {
+		t.Fatalf("UUID tenant remapped to %s, err %v", got, err)
 	}
-	legacy := store.AuditCheckpointRLSID("provider-control-plane")
+	legacy, err := store.AuditCheckpointRLSID("provider-control-plane")
 	if _, err := uuidlib.Parse(legacy); err != nil || legacy == store.ZeroUUID || legacy == tenant {
 		t.Fatalf("legacy audit scope mapped to invalid or shared RLS id %q: %v", legacy, err)
 	}
-	if again := store.AuditCheckpointRLSID("provider-control-plane"); again != legacy {
-		t.Fatalf("legacy audit scope mapping changed: %q then %q", legacy, again)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if other := store.AuditCheckpointRLSID("another-administrative-scope"); other == legacy {
-		t.Fatalf("different audit scopes share RLS id %q", legacy)
+	if again, err := store.AuditCheckpointRLSID("provider-control-plane"); err != nil || again != legacy {
+		t.Fatalf("legacy audit scope mapping changed: %q then %q, err %v", legacy, again, err)
+	}
+	for _, unsupported := range []string{"another-administrative-scope", "provider-control-plane/other", "provider-control-plane ", "00000000-0000-0000-0000-00000000000g"} {
+		if got, err := store.AuditCheckpointRLSID(unsupported); err == nil || got != "" {
+			t.Fatalf("unsupported audit scope %q acquired RLS id %q, err %v", unsupported, got, err)
+		}
 	}
 }
