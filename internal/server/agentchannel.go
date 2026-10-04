@@ -66,6 +66,7 @@ import (
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenancy"
+	"trstctl.com/trstctl/internal/usage"
 )
 
 // agentCAHandle is the stable signer handle for the AGENT CA key (distinct from the
@@ -564,6 +565,41 @@ func (a *agentService) heartbeat(ctx context.Context, req *transport.HeartbeatRe
 		return nil, err
 	}
 	defer release()
+	agentID := agentRowID(info.TenantID, info.CommonName)
+	if _, err := a.store.GetAgent(ctx, info.TenantID, agentID); err == nil {
+		// A lowered quota must never strand an already enrolled host. This is a
+		// heartbeat, not a new fleet slot.
+		return a.recordHeartbeat(ctx, req, info)
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, status.Error(codes.Unavailable, "agent registration state is unavailable; retry later")
+	}
+	var response *transport.HeartbeatResponse
+	err = usage.WithCreationFence(ctx, info.TenantID, usage.MeterAgents, func(fenced context.Context) error {
+		// Another replica may have committed this same stable agent ID while we
+		// waited for admission. Re-read under the cross-replica fence.
+		if _, readErr := a.store.GetAgent(fenced, info.TenantID, agentID); readErr == nil {
+			response, readErr = a.recordHeartbeat(fenced, req, info)
+			return readErr
+		} else if !errors.Is(readErr, pgx.ErrNoRows) {
+			return status.Error(codes.Unavailable, "agent registration state is unavailable; retry later")
+		}
+		if quotaErr := usage.AllowCreate(fenced, info.TenantID, usage.MeterAgents); quotaErr != nil {
+			if errors.Is(quotaErr, usage.ErrQuotaExhausted) {
+				return status.Error(codes.ResourceExhausted, quotaErr.Error())
+			}
+			return status.Error(codes.Unavailable, "agent quota authority is unavailable; retry later")
+		}
+		var recordErr error
+		response, recordErr = a.recordHeartbeat(fenced, req, info)
+		return recordErr
+	})
+	if errors.Is(err, store.ErrResourceAdmissionBusy) {
+		return nil, status.Error(codes.Unavailable, "agent registration is in progress; retry the heartbeat")
+	}
+	return response, err
+}
+
+func (a *agentService) recordHeartbeat(ctx context.Context, req *transport.HeartbeatRequest, info mtls.PeerCertInfo) (*transport.HeartbeatResponse, error) {
 	// The agent id/name is the certificate's common name — the attacker-proof
 	// identity — not the request's AgentID (which is advisory/observability only).
 	name := info.CommonName

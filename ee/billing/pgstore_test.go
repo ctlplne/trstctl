@@ -186,7 +186,6 @@ func TestQuotaCheckerRefusesAtTheCapAgainstTheDurableStore(t *testing.T) {
 		t.Fatalf("under the cap: %v", err)
 	}
 	current = 2
-	time.Sleep(2 * time.Millisecond) // let the cached quota expire
 	err := checker.AllowCreate(ctx, quotaTenant, usage.MeterCertificatesStored)
 	if err == nil {
 		t.Fatal("at the cap the checker allowed another create; the durable limit decided nothing")
@@ -199,6 +198,50 @@ func TestQuotaCheckerRefusesAtTheCapAgainstTheDurableStore(t *testing.T) {
 	if !billingErrIsUsageQuota(err) {
 		t.Fatal("the refusal does not match usage.ErrQuotaExhausted; core handlers could not " +
 			"classify it and the caller would get a 500 instead of a structured 429")
+	}
+}
+
+func TestAgentQuotaAdmissionSerializesReplicasAgainstDurableCount(t *testing.T) {
+	firstPG, first := newBillingStoreOn(t, "billing_agent_quota_admission")
+	ctx := t.Context()
+	dsn := strings.TrimSuffix(billingTestDSN, "/postgres") + "/billing_agent_quota_admission"
+	second, err := corestore.Open(ctx, dsn, corestore.WithPoolSizes(corestore.PoolSizes{Lock: 1}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(second.Close)
+	secondPG := billing.NewPGStore(second)
+	one := 1
+	seedQuota(t, first, billing.Quota{TenantID: quotaTenant, MaxAgents: &one})
+	firstChecker := billing.NewQuotaChecker(firstPG, billing.StoreTenantCounter(first), time.Minute)
+	secondChecker := billing.NewQuotaChecker(secondPG, billing.StoreTenantCounter(second), time.Minute)
+	const agentID = "55555555-5555-5555-5555-555555555555"
+	err = firstChecker.WithCreationFence(ctx, quotaTenant, usage.MeterAgents, func(work context.Context) error {
+		if err := firstChecker.AllowCreate(work, quotaTenant, usage.MeterAgents); err != nil {
+			return err
+		}
+		called := false
+		err := secondChecker.WithCreationFence(ctx, quotaTenant, usage.MeterAgents, func(context.Context) error {
+			called = true
+			return nil
+		})
+		if !errors.Is(err, corestore.ErrResourceAdmissionBusy) || called {
+			t.Fatalf("racing replica admitted at the same slot: %v, called=%v", err, called)
+		}
+		return first.WithTenant(work, quotaTenant, func(tx pgx.Tx) error {
+			_, err := tx.Exec(work, `INSERT INTO agents (id, tenant_id, name, status, version)
+				VALUES ($1, $2, 'quota-first-agent', 'active', 'test')`, agentID, quotaTenant)
+			return err
+		})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = secondChecker.WithCreationFence(ctx, quotaTenant, usage.MeterAgents, func(work context.Context) error {
+		return secondChecker.AllowCreate(work, quotaTenant, usage.MeterAgents)
+	})
+	if !errors.Is(err, usage.ErrQuotaExhausted) {
+		t.Fatalf("next replica after commit = %v, want quota refusal", err)
 	}
 }
 

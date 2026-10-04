@@ -233,7 +233,7 @@ func (p *PGStore) Query(ctx context.Context, from, to time.Time, tenantID string
 func (p *PGStore) QuotaFor(ctx context.Context, tenantID string) (Quota, error) {
 	out := Quota{TenantID: tenantID}
 	if p == nil || p.store == nil || tenantID == "" {
-		return out, nil
+		return out, errors.New("billing: durable quota store or tenant is unavailable")
 	}
 	err := p.tx(ctx, tenantID, func(tx pgx.Tx) error {
 		scanErr := tx.QueryRow(ctx,

@@ -89,6 +89,14 @@ type QuotaChecker interface {
 	AllowCreate(ctx context.Context, tenantID, resource string) error
 }
 
+// CreationFencer serializes a resource's quota check and its committed
+// creation across control-plane replicas. The callback must re-read whether
+// the resource already exists, then call AllowCreate only for a new resource.
+// Core builds run the callback directly; Provider attaches a PostgreSQL fence.
+type CreationFencer interface {
+	WithCreationFence(ctx context.Context, tenantID, resource string, fn func(context.Context) error) error
+}
+
 // ErrQuotaExhausted is the sentinel a checker's refusal matches via errors.Is.
 // It lives HERE, in core, so the serving handlers can classify the refusal
 // (429, structured problem) without importing the licensed checker that raised
@@ -150,4 +158,14 @@ func AllowCreate(ctx context.Context, tenantID, resource string) error {
 	q := quota
 	mu.RUnlock()
 	return q.AllowCreate(ctx, tenantID, resource)
+}
+
+func WithCreationFence(ctx context.Context, tenantID, resource string, fn func(context.Context) error) error {
+	mu.RLock()
+	q := quota
+	mu.RUnlock()
+	if fencer, ok := q.(CreationFencer); ok {
+		return fencer.WithCreationFence(ctx, tenantID, resource, fn)
+	}
+	return fn(ctx)
 }

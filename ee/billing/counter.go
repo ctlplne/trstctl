@@ -4,6 +4,7 @@ package billing
 
 import (
 	"context"
+	"errors"
 
 	"github.com/jackc/pgx/v5"
 
@@ -20,15 +21,13 @@ import (
 // many did this tenant DO". Counting certificates by meter would let a tenant
 // whose old certificates expired stay over a cap they are actually under.
 //
-// Missing resources are absent from the map, and the checker treats absent as
-// zero: a resource this counter cannot count is a resource no cap can bind,
-// which is the fail-open direction — deliberate, because failing CLOSED here
-// would let a counting bug freeze every tenant's issuance at once (AN-7's
-// blast-radius rule applied to billing).
+// Missing resources are absent from the map and are counted as zero. A missing
+// datastore or tenant, however, is an authority outage: admitting creation
+// without a count would let a Provider cap be bypassed.
 func StoreTenantCounter(s *corestore.Store) TenantCounter {
 	return func(ctx context.Context, tenantID string) (TenantCounts, error) {
 		if s == nil || tenantID == "" {
-			return TenantCounts{}, nil
+			return nil, errors.New("billing: tenant resource counter is unavailable")
 		}
 		out := TenantCounts{}
 		err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {

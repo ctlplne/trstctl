@@ -38,37 +38,29 @@ func (e *QuotaError) Is(target error) bool {
 }
 
 type QuotaChecker struct {
-	store Store
-	count TenantCounter
-	ttl   time.Duration
-	now   func() time.Time
-
-	mu    sync.Mutex
-	cache map[string]cachedQuota
+	store   Store
+	count   TenantCounter
+	admitMu sync.Mutex // only the non-durable in-memory installation uses this
 }
 
-type cachedQuota struct {
-	quota   Quota
-	fetched time.Time
-}
-
-func NewQuotaChecker(store Store, count TenantCounter, ttl time.Duration) *QuotaChecker {
-	if ttl <= 0 {
-		ttl = 30 * time.Second
-	}
+// The duration argument is retained for the attach API, but quota decisions
+// never cache a cap: a Provider's lowered limit must apply on the next create.
+func NewQuotaChecker(store Store, count TenantCounter, _ time.Duration) *QuotaChecker {
 	if count == nil {
-		count = func(context.Context, string) (TenantCounts, error) { return TenantCounts{}, nil }
+		count = func(context.Context, string) (TenantCounts, error) {
+			return nil, errors.New("billing: resource counter is not configured")
+		}
 	}
-	return &QuotaChecker{store: store, count: count, ttl: ttl, now: time.Now, cache: map[string]cachedQuota{}}
+	return &QuotaChecker{store: store, count: count}
 }
 
 func (q *QuotaChecker) AllowCreate(ctx context.Context, tenantID, resource string) error {
 	if q == nil || q.store == nil || tenantID == "" || resource == "" {
-		return nil
+		return errors.New("billing: quota admission is not configured")
 	}
-	quota, err := q.quota(ctx, tenantID)
+	quota, err := q.store.QuotaFor(ctx, tenantID)
 	if err != nil {
-		return nil
+		return fmt.Errorf("billing: read tenant quota: %w", err)
 	}
 	limit := quota.LimitFor(resource)
 	if limit == nil {
@@ -76,7 +68,7 @@ func (q *QuotaChecker) AllowCreate(ctx context.Context, tenantID, resource strin
 	}
 	counts, err := q.count(ctx, tenantID)
 	if err != nil {
-		return nil
+		return fmt.Errorf("billing: count tenant resources: %w", err)
 	}
 	current := counts[resource]
 	if current >= int64(*limit) {
@@ -85,25 +77,17 @@ func (q *QuotaChecker) AllowCreate(ctx context.Context, tenantID, resource strin
 	return nil
 }
 
-func (q *QuotaChecker) Invalidate(tenantID string) {
-	q.mu.Lock()
-	delete(q.cache, tenantID)
-	q.mu.Unlock()
-}
-
-func (q *QuotaChecker) quota(ctx context.Context, tenantID string) (Quota, error) {
-	q.mu.Lock()
-	if cached, ok := q.cache[tenantID]; ok && q.now().Sub(cached.fetched) < q.ttl {
-		q.mu.Unlock()
-		return cached.quota, nil
+func (q *QuotaChecker) WithCreationFence(ctx context.Context, tenantID, resource string, fn func(context.Context) error) error {
+	if q == nil || q.store == nil || fn == nil {
+		return errors.New("billing: quota creation fence is not configured")
 	}
-	q.mu.Unlock()
-	quota, err := q.store.QuotaFor(ctx, tenantID)
-	if err != nil {
-		return Quota{}, err
+	if durable, ok := q.store.(*PGStore); ok {
+		if durable.store == nil {
+			return errors.New("billing: durable quota creation fence has no datastore")
+		}
+		return durable.store.WithTenantResourceCreation(ctx, tenantID, resource, fn)
 	}
-	q.mu.Lock()
-	q.cache[tenantID] = cachedQuota{quota: quota, fetched: q.now()}
-	q.mu.Unlock()
-	return quota, nil
+	q.admitMu.Lock()
+	defer q.admitMu.Unlock()
+	return fn(ctx)
 }
