@@ -123,6 +123,6 @@ describe("Route 035 change-history hierarchy", () => {
     apiMock.auditWindow.mockResolvedValue({ events: [], archived_prefix: { record_count: 543, chain_head: "verified-head" } });
     renderAudit();
     expect(await screen.findByRole("heading", { level: 2, name: "Older changes are in signed archives" })).toBeInTheDocument();
-    expect(screen.getByText(/543 older audit records.*archive custodian.*trstctl audit verify/i)).toBeInTheDocument();
+    expect(screen.getByText(/543 older audit records.*archive custodian.*trstctl-cli audit verify/i)).toBeInTheDocument();
   });
 });

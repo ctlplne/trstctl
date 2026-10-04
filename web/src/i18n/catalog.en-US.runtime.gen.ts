@@ -12517,7 +12517,7 @@ export const defaultMessageValues = [
   "No changes found in this window",
   "No live events match this window. Widen the filters, and check with the archive custodian before concluding that no change happened.",
   "Older changes are in signed archives",
-  "{count} older audit records are in signed offline archives. Ask the archive custodian for the JWS files and verify them with trstctl audit verify before concluding that no change happened.",
+  "{count} older audit records are in signed offline archives. Ask the archive custodian for the JWS files and verify them with trstctl-cli audit verify before concluding that no change happened.",
   "1 change is ready to search",
   "{count} changes are ready to search",
   "This is the earliest {count} matching events in this bounded window, not the complete history. Search or export an exact window before making an audit decision.",

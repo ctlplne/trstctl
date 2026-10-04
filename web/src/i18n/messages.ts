@@ -11146,7 +11146,7 @@ export const messages = {
   },
   "audit.design.summaryArchivedBody": {
     defaultMessage:
-      "{count} older audit records are in signed offline archives. Ask the archive custodian for the JWS files and verify them with trstctl audit verify before concluding that no change happened.",
+      "{count} older audit records are in signed offline archives. Ask the archive custodian for the JWS files and verify them with trstctl-cli audit verify before concluding that no change happened.",
     description: "Tenant-scoped archived record count from the same pinned history read as the empty live window.",
   },
   "audit.design.summaryOne": {
