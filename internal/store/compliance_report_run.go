@@ -41,7 +41,10 @@ type ComplianceReportRun struct {
 
 var complianceReportErrorCode = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 
-func validateComplianceReportRun(run ComplianceReportRun) error {
+// ValidateComplianceReportRun checks a proposed event projection before its
+// source event is appended. Producers may use a placeholder positive sequence;
+// the projector checks the actual source sequence again on apply.
+func ValidateComplianceReportRun(run ComplianceReportRun) error {
 	if _, err := uuid.Parse(run.ID); err != nil {
 		return errors.New("store: report run id must be a UUID")
 	}
@@ -93,7 +96,7 @@ func validateComplianceReportRun(run ComplianceReportRun) error {
 // only if that exact due edge is still enabled; a pause or later replacement
 // cannot be undone by a delayed worker result.
 func (s *Store) ApplyComplianceReportRunTx(ctx context.Context, tx pgx.Tx, run ComplianceReportRun) error {
-	if err := validateComplianceReportRun(run); err != nil {
+	if err := ValidateComplianceReportRun(run); err != nil {
 		return err
 	}
 	if err := lockUpsertArbiterTx(ctx, tx, "compliance_report_runs", run.TenantID, run.ID); err != nil {
