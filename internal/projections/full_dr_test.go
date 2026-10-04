@@ -778,6 +778,15 @@ func seedRecoveredFromPostgresTables(
 		); err != nil {
 			return fmt.Errorf("seed Provider delegation authority: %w", err)
 		}
+		if _, err := tx.Exec(ctx, `INSERT INTO provider_operator_grant_episodes
+			(tenant_id, grant_event_id, operator_id, customer_tenant_id, operation,
+			 source, granted_by, granted_at, expires_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+			store.ZeroUUID, "full-dr-provider-grant-event", "full-dr-operator", tenantA,
+			"suspend", "provider_access_api", "full-dr-admin", now, now.Add(time.Hour),
+		); err != nil {
+			return fmt.Errorf("seed Provider grant episode authority: %w", err)
+		}
 		return nil
 	}); err != nil {
 		t.Fatalf("seed fixed-partition Provider authority: %v", err)
@@ -855,6 +864,8 @@ type recoveredProviderState struct {
 	OperatorActive     bool
 	DelegatedOperation string
 	DelegationSource   string
+	GrantEventID       string
+	GrantSource        string
 	Reason             string
 	FirstApprover      string
 	SecondApprover     string
@@ -872,6 +883,7 @@ func providerRecoveryState(t *testing.T, st *store.Store) recoveredProviderState
 		`SELECT tenant.slug, tenant.name, tenant.status,
 		        operator.id, operator.user_name, operator.source, operator.active,
 		        delegation.operation, delegation.source,
+		        episode.grant_event_id, episode.source,
 		        bg.reason, bg.consented_by,
 		        COALESCE(bg.consented_by_2, ''), bg.use_count,
 		        receipt.event_sequence, receipt.event_id, receipt.event_digest,
@@ -884,6 +896,12 @@ func providerRecoveryState(t *testing.T, st *store.Store) recoveredProviderState
 		     ON delegation.tenant_id = $3
 		    AND delegation.operator_id = operator.id
 		    AND delegation.customer_tenant_id = tenant.tenant_id::text
+		   JOIN provider_operator_grant_episodes AS episode
+		     ON episode.tenant_id = $3
+		    AND episode.operator_id = delegation.operator_id
+		    AND episode.customer_tenant_id = delegation.customer_tenant_id
+		    AND episode.operation = delegation.operation
+		    AND episode.grant_event_id = 'full-dr-provider-grant-event'
 		   JOIN provider_authority_projection_receipts AS receipt
 		     ON receipt.tenant_id = $3 AND receipt.event_sequence = 77
 		   JOIN provider_authority_projection_state AS projection_state
@@ -892,7 +910,8 @@ func providerRecoveryState(t *testing.T, st *store.Store) recoveredProviderState
 		tenantA, "full-dr-breakglass", store.ZeroUUID).Scan(
 		&got.Slug, &got.Name, &got.Status,
 		&got.OperatorID, &got.OperatorUser, &got.OperatorSource, &got.OperatorActive,
-		&got.DelegatedOperation, &got.DelegationSource, &got.Reason,
+		&got.DelegatedOperation, &got.DelegationSource,
+		&got.GrantEventID, &got.GrantSource, &got.Reason,
 		&got.FirstApprover, &got.SecondApprover, &got.BreakGlassUseCount,
 		&got.ReceiptSequence, &got.ReceiptEventID, &got.ReceiptDigest, &got.NeedsRebuild,
 	)

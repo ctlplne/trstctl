@@ -3,6 +3,7 @@
 package auditcompliance_test
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"strings"
@@ -12,9 +13,12 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/ee/auditcompliance"
+	"trstctl.com/trstctl/ee/provider"
 	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/backup"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -106,11 +110,28 @@ func TestLegacyAdministrativeAuditScopeRebuildsCheckpoint(t *testing.T) {
 	st := newAuditTestStore(t)
 	log := openTestLog(t)
 	const scope = "provider-control-plane"
-	if _, err := log.Append(ctx, events.Event{
-		Type: "provider.isolation.drill", TenantID: scope,
-		Time: time.Now().Add(-48 * time.Hour),
-	}); err != nil {
-		t.Fatal(err)
+	// Use the complete historical Provider event catalog, not one convenient
+	// representative. A missing type can otherwise brick only the next restart
+	// whose replay cursor happens to encounter it.
+	legacyTypes := []string{
+		provider.AuditTenantProvisioned, provider.AuditTenantSuspended,
+		provider.AuditTenantResumed, provider.AuditTenantOffboarded,
+		provider.AuditTenantErasureRequested, provider.AuditUnregisteredTenantOffboarded,
+		provider.AuditTenantErasureFailed, provider.AuditTenantErasureCompleted,
+		provider.AuditBreakGlassRequested, provider.AuditBreakGlassConsented,
+		provider.AuditBreakGlassDenied, provider.AuditBreakGlassAccessed,
+		"provider.isolation.drill", provider.EventDelegationGranted,
+		provider.EventDelegationRevoked, provider.EventOperatorUpserted,
+		provider.EventOperatorOffboarded, provider.EventTenantQuotaSet,
+		provider.EventTenantBrandSet,
+	}
+	for _, eventType := range legacyTypes {
+		if _, err := log.Append(ctx, events.Event{
+			Type: eventType, TenantID: scope,
+			Time: time.Now().Add(-48 * time.Hour), Data: []byte(`{}`),
+		}); err != nil {
+			t.Fatalf("append historical Provider event %s: %v", eventType, err)
+		}
 	}
 	key, err := jose.GenerateRSASigningKey("audit-export")
 	if err != nil {
@@ -118,13 +139,13 @@ func TestLegacyAdministrativeAuditScopeRebuildsCheckpoint(t *testing.T) {
 	}
 	svc := audit.NewService(log, key, audit.WithCheckpoints(st), audit.WithPrivacyErasures(st))
 	worker := auditcompliance.NewRetentionWorker(svc, log, auditcompliance.DirArchiver{Dir: t.TempDir()}, st, time.Hour, key)
-	if sum, err := worker.RunOnce(ctx); err != nil || sum.RecordsArchived != 1 {
+	if sum, err := worker.RunOnce(ctx); err != nil || sum.RecordsArchived != len(legacyTypes) {
 		t.Fatalf("legacy retention = %+v, err = %v", sum, err)
 	}
 	assertCheckpoint := func(stage string) {
 		t.Helper()
 		cp, ok, err := st.LatestAuditCheckpoint(ctx, scope)
-		if err != nil || !ok || cp.TenantID != scope || cp.RecordCount != 1 {
+		if err != nil || !ok || cp.TenantID != scope || cp.RecordCount != len(legacyTypes) {
 			t.Fatalf("%s checkpoint = %+v, ok = %v, err = %v", stage, cp, ok, err)
 		}
 		inventory, err := st.ListAuditCheckpointTenants(ctx)
@@ -133,6 +154,34 @@ func TestLegacyAdministrativeAuditScopeRebuildsCheckpoint(t *testing.T) {
 		}
 	}
 	assertCheckpoint("live")
+	// One retained source must satisfy every restart consumer. In particular,
+	// the outbox cursor must pass the textual partition without opening a UUID
+	// tenant fence, while a restore verifier must count that same textual scope
+	// rather than the checkpoint's derived RLS UUID.
+	orch := orchestrator.NewOrchestrator(log, st, orchestrator.NewOutbox(st),
+		orchestrator.WithTenantCommandService(st.BeginTenantService, func(context.Context, string) error { return nil }))
+	if healed, err := orch.ReconcileOutbox(ctx, log); err != nil || healed != 0 {
+		t.Fatalf("legacy retention outbox reconciliation = healed %d, err %v", healed, err)
+	}
+	if checkpoint, err := st.OutboxReconciliationCheckpoint(ctx); err != nil {
+		t.Fatal(err)
+	} else if head, err := log.LastSequence(ctx); err != nil || checkpoint != head {
+		t.Fatalf("legacy outbox checkpoint = %d, head %d, err %v", checkpoint, head, err)
+	}
+	cp, ok, err := st.LatestAuditCheckpoint(ctx, scope)
+	if err != nil || !ok {
+		t.Fatalf("read retained legacy checkpoint: ok=%t err=%v", ok, err)
+	}
+	var artifact bytes.Buffer
+	if _, err := backup.WriteLog(ctx, log, &artifact); err != nil {
+		t.Fatalf("export legacy event history: %v", err)
+	}
+	if _, err := backup.VerifyEventLogBackupWithAuditCheckpoints(
+		bytes.NewReader(artifact.Bytes()), nil,
+		[]backup.AuditCheckpointBoundary{{TenantID: scope, BoundarySeq: cp.BoundarySeq, RecordCount: cp.RecordCount}},
+	); err != nil {
+		t.Fatalf("restore proof lost retained legacy scope: %v", err)
+	}
 	assertAuditReadback := func(stage string) {
 		t.Helper()
 		records, err := svc.Search(ctx, audit.Query{TenantID: scope})
@@ -155,7 +204,9 @@ func TestLegacyAdministrativeAuditScopeRebuildsCheckpoint(t *testing.T) {
 	if _, err := st.SystemPool().Exec(ctx, `TRUNCATE audit_checkpoints`); err != nil {
 		t.Fatal(err)
 	}
-	if err := projections.New(st).ProjectCatchUp(ctx, log); err != nil {
+	licensedProjector := projections.New(st,
+		projections.WithEventProjection(provider.NewAuthorityProjection(st)))
+	if err := licensedProjector.ProjectCatchUp(ctx, log); err != nil {
 		t.Fatalf("catch up legacy archive checkpoint: %v", err)
 	}
 	assertCheckpoint("catch-up")
@@ -163,7 +214,7 @@ func TestLegacyAdministrativeAuditScopeRebuildsCheckpoint(t *testing.T) {
 	if _, err := st.SystemPool().Exec(ctx, `TRUNCATE audit_checkpoints`); err != nil {
 		t.Fatal(err)
 	}
-	if err := projections.New(st).Rebuild(ctx, log); err != nil {
+	if err := licensedProjector.Rebuild(ctx, log); err != nil {
 		t.Fatalf("rebuild legacy archive checkpoint: %v", err)
 	}
 	assertCheckpoint("replayed")
