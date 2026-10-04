@@ -53,6 +53,7 @@ import {
   Snippet,
   mergeMeta,
   NativeSecretCreateForm,
+  GrantSecretVerification,
   secretApprovalActionLabel,
   secretApprovalQueueID,
   secretRotationDeferredReasonKeys,
@@ -66,16 +67,15 @@ import { useCapabilityExecution } from "@/lib/capabilities";
 import { SecretSyncWorkloadIdentityPanel } from "./secrets/SecretSyncWorkloadIdentityPanel";
 import { PKISecretWorkflow } from "./secrets/PKISecretWorkflow";
 import { MachineAuthWorkflow } from "./secrets/MachineAuthWorkflow";
+import { HoneyTokenWorkflow } from "./secrets/HoneyTokenWorkflow";
 import { SecretScanningWorkflow } from "./secrets/SecretScanningWorkflow";
 import { DynamicSecretWorkflow } from "./secrets/DynamicSecretWorkflow";
-import { HoneyTokenWorkflow } from "./secrets/HoneyTokenWorkflow";
 import { AWSHoneyTokenWorkflow } from "./secrets/AWSHoneyTokenWorkflow";
-import { SecretSyncWorkflow } from "./secrets/SecretSyncWorkflow";
-import { GrantSecretVerification } from "./secrets/GrantSecretVerification";
 
 const SecretSharingWorkflow = lazy(() => import("./secrets/SecretSharingWorkflow"));
 const EphemeralAPIKeyWorkflow = lazy(() => import("./secrets/EphemeralAPIKeyWorkflow"));
 const TransitOperations = lazy(() => import("./secrets/TransitOperations").then((module) => ({ default: module.TransitOperations })));
+const SecretSyncWorkflow = lazy(() => import("./secrets/SecretSyncWorkflow").then((module) => ({ default: module.SecretSyncWorkflow })));
 
 function SecretsWorkflowFallback() {
   return <div className="min-h-24 animate-pulse rounded-md bg-muted" aria-hidden="true" />;
@@ -2914,7 +2914,9 @@ export function Secrets() {
                 <SecretSyncWorkloadIdentityPanel />
               </div>
             </details>
-            <SecretSyncWorkflow catalog={syncCatalog} initialName={selectedMeta?.name ?? ""} loadBlocked={Boolean(loadError)} />
+            <Suspense fallback={<SecretsWorkflowFallback />}>
+              <SecretSyncWorkflow catalog={syncCatalog} initialName={selectedMeta?.name ?? ""} loadBlocked={Boolean(loadError)} />
+            </Suspense>
           </section>
         </div>
       )}

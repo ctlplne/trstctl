@@ -33,6 +33,10 @@ export default defineConfig({
   build: {
     outDir: path.resolve(webRoot, "../internal/webui/dist"),
     emptyOutDir: true,
+    // A second safe compression pass removes repeated route scaffolding while
+    // preserving the existing shipped-byte budgets.
+    minify: "terser",
+    terserOptions: { module: true, toplevel: true, compress: { passes: 3 } },
     rollupOptions: {
       output: {
         // Route splitting otherwise emits one sub-kilobyte file per shared

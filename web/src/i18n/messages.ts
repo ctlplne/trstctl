@@ -1947,18 +1947,6 @@ export const messages = {
     defaultMessage: "CA hierarchy",
     description: "Certificates & PKI module KPI: link to the certificate-authority hierarchy.",
   },
-  "moduleKpi.secrets.stored": {
-    defaultMessage: "Stored secrets",
-    description: "Secrets module KPI: number of stored secrets in the native store.",
-  },
-  "moduleKpi.secrets.engines": {
-    defaultMessage: "Automatic sources",
-    description: "Secrets module KPI: link to short-lived credential and transit sources.",
-  },
-  "moduleKpi.secrets.sync": {
-    defaultMessage: "Destinations",
-    description: "Secrets module KPI: link to configured outbound secret destinations.",
-  },
   "certificates.lifecycle.reviewIdentity": {
     defaultMessage: "Review identity lifecycle",
     description: "Open the managing identity to review actions allowed by its current lifecycle state.",
@@ -3508,7 +3496,6 @@ export const messages = {
       "Restart the control plane after changing its configuration, then select Refresh here. The configured target will appear in the delivery form.",
     description: "Final secret sync setup and readback step.",
   },
-  "secrets.sync.required": { defaultMessage: "This field is required.", description: "Secret-sync required-field validation." },
   "secrets.sync.formLabel": { defaultMessage: "Sync stored secret", description: "Accessible label for the exact secret-sync workflow." },
   "secrets.sync.configureStep": { defaultMessage: "Choose the delivery", description: "Secret-sync configuration step." },
   "secrets.sync.configureStepHelp": {
@@ -3584,7 +3571,6 @@ export const messages = {
   "secrets.sync.queued": { defaultMessage: "Queued", description: "Secret-sync queued state." },
   "secrets.sync.notQueued": { defaultMessage: "Not queued", description: "Secret-sync not-queued state." },
   "secrets.sync.delivered": { defaultMessage: "Delivered", description: "Secret-sync delivered state." },
-  "secrets.sync.notDelivered": { defaultMessage: "Not delivered", description: "Secret-sync not-yet-delivered state." },
   "secrets.sync.deliveryPending": { defaultMessage: "Pending delivery", description: "Secret-sync worker has not recorded delivery yet." },
   "secrets.sync.deliveryFailed": { defaultMessage: "Delivery failed", description: "Secret-sync worker recorded a terminal failure." },
   "secrets.sync.checkingDelivery": { defaultMessage: "Checking delivery", description: "Secret-sync delivery read is loading." },
@@ -4612,7 +4598,6 @@ export const messages = {
   "secrets.dynamic.issueReviewed": { defaultMessage: "Create reviewed credential", description: "Dynamic lease reviewed execution action." },
   "secrets.dynamic.retry": { defaultMessage: "Retry the exact request", description: "Dynamic lease stable-key retry action." },
   "secrets.dynamic.issuedTitle": { defaultMessage: "Credential created; verify it now", description: "Active dynamic lease result heading." },
-  "secrets.dynamic.revokedTitle": { defaultMessage: "Lease revoked; prove the login is dead", description: "Revoked dynamic lease result heading." },
   "secrets.dynamic.verifyHelp": {
     defaultMessage: "The lease below is durable metadata. The secret itself exists only in the reveal-once panel until you dismiss or leave it.",
     description: "Dynamic lease result evidence help.",
@@ -4919,7 +4904,6 @@ export const messages = {
     defaultMessage: "Alert contact",
     description: "Wizard owner step: email that receives expiry and failure alerts for this certificate's owner.",
   },
-  "wizard.certificate.ownerAlertContactPlaceholder": { defaultMessage: "team@example.com", description: "Wizard owner step: alert contact placeholder." },
   "wizard.certificate.ownerAlertContactHelp": {
     defaultMessage: "Expiry and failure alerts for this certificate go here. Without it the owner counts as unreachable.",
     description: "Wizard owner step: alert contact help.",
@@ -5139,10 +5123,6 @@ export const messages = {
   "wizard.agent.summaryMissing": {
     defaultMessage: "Not enrolled",
     description: "Completion-summary value when no agent was enrolled or explicitly deferred.",
-  },
-  "codesign.digest.placeholder": {
-    defaultMessage: "sha256:<64 hexadecimal characters>",
-    description: "Placeholder showing the required code-signing artifact digest format.",
   },
   "codesign.receipt.fulcioSAN": {
     defaultMessage: "Verified identity (Fulcio SAN binding)",
@@ -7893,7 +7873,6 @@ export const messages = {
   },
   "certificateCockpit.deadline.expiredOne": { defaultMessage: "Expired 1 day ago", description: "Certificate expired one day ago." },
   "certificateCockpit.deadline.expiredMany": { defaultMessage: "Expired {count} days ago", description: "Certificate expired several days ago." },
-  "certificateCockpit.deadline.today": { defaultMessage: "Expires today", description: "Certificate expires today." },
   "certificateCockpit.deadline.one": { defaultMessage: "Expires in 1 day", description: "Certificate expires in one day." },
   "certificateCockpit.deadline.many": { defaultMessage: "Expires in {count} days", description: "Certificate expires in several days." },
   "certificateCockpit.automation.failed": { defaultMessage: "Renewal failed", description: "Verified failed certificate automation state." },
@@ -11364,11 +11343,6 @@ export const messages = {
       "Requests bind a proposed access change to evidence. A different reviewer decides it; access reviews certify existing machine access without accepting credential values.",
     description: "Technical ELI5 dual-control and secret-value boundary.",
   },
-  "policy.overview.description": {
-    defaultMessage:
-      "Issue, deploy, and revoke mutations pass through the OPA/Rego default-deny gate, RA separation, dual-control approval, and bound-profile checks before state changes are emitted.",
-    description: "Policy page overview text.",
-  },
   "policy.enforcement.heading": {
     defaultMessage: "Enforcement path",
     description: "Heading for policy enforcement flow.",
@@ -13616,11 +13590,7 @@ export const messages = {
     defaultMessage: "The server could not calculate the effective route.",
     description: "Routing-preview fallback error detail.",
   },
-  "notifications.routing.resolution": { defaultMessage: "Resolution", description: "Effective routing hierarchy label." },
   "notifications.routing.channelsLabel": { defaultMessage: "Channels", description: "Effective notification channels label." },
-  "notifications.routing.none": { defaultMessage: "none", description: "No effective notification channels value." },
-  "notifications.routing.previewReady": { defaultMessage: "ready", description: "Effective route reaches every configured channel." },
-  "notifications.routing.previewNotReady": { defaultMessage: "not ready", description: "Effective route cannot deliver through every named channel." },
   "notifications.routing.reviewNoChanges": {
     defaultMessage: "No state changed during this review.",
     description: "Effect-free confirmation in the notification routing draft review.",
@@ -13769,18 +13739,6 @@ export const messages = {
   "notifications.design.moreRules": {
     defaultMessage: "+{count} more rules in exact details",
     description: "Count of routing rules beyond the compact opening preview.",
-  },
-  "notifications.design.disclosure.channels": {
-    defaultMessage: "Channels and webhooks",
-    description: "Closed expert disclosure for supported and configured destinations.",
-  },
-  "notifications.design.disclosure.routing": {
-    defaultMessage: "Routing rules and templates",
-    description: "Closed expert disclosure for routing authoring, templates, and tests.",
-  },
-  "notifications.design.disclosure.delivery": {
-    defaultMessage: "Delivery attempts and dead letters",
-    description: "Closed expert disclosure for notification delivery evidence.",
   },
   "notifications.design.channelsHelp": {
     defaultMessage: "A channel is one external destination. Webhook URLs and provider credentials stay behind server validation and secret references.",
@@ -14080,18 +14038,6 @@ export const messages = {
   "notifications.action.requeueLoadFailed": {
     defaultMessage: "Could not requeue notification",
     description: "Fallback error when requeueing a notification fails.",
-  },
-  "notifications.queue.tablist": {
-    defaultMessage: "Notification queues",
-    description: "Accessible label for notification queue tabs.",
-  },
-  "notifications.queue.all": {
-    defaultMessage: "All",
-    description: "Tab label for all notifications.",
-  },
-  "notifications.queue.deadLetter": {
-    defaultMessage: "Dead-letter",
-    description: "Tab label for dead-letter notifications.",
   },
   "notifications.filter.type": {
     defaultMessage: "Type filter",
@@ -20024,18 +19970,6 @@ export const messages = {
   "privacy.loading": {
     defaultMessage: "Loading privacy posture...",
     description: "Privacy route loading state.",
-  },
-  "privacy.stats.catalogEntries": {
-    defaultMessage: "Catalog entries",
-    description: "Privacy summary metric for personal-data catalog entries.",
-  },
-  "privacy.stats.subjectErasures": {
-    defaultMessage: "Subject erasures",
-    description: "Privacy summary metric for subject erasure requests.",
-  },
-  "privacy.stats.retentionRuns": {
-    defaultMessage: "Retention runs",
-    description: "Privacy summary metric for retention enforcement runs.",
   },
   "privacy.error.actionFailed": {
     defaultMessage: "Privacy action failed",
@@ -27755,7 +27689,6 @@ export const messages = {
     defaultMessage: "Try a different name, owner, or credential type.",
     description: "Identity search no-result recovery guidance.",
   },
-  "identities.column.type": { defaultMessage: "Credential type", description: "Human-friendly identity type column header." },
   "identities.kind.x509": { defaultMessage: "TLS certificate", description: "Human label for an X.509 certificate identity." },
   "identities.kind.sshCertificate": { defaultMessage: "SSH certificate", description: "Human label for an SSH certificate identity." },
   "identities.kind.sshKey": { defaultMessage: "SSH key", description: "Human label for a standing SSH key identity." },
@@ -27853,10 +27786,13 @@ function buildCatalog(localize: (message: string) => string): Record<MessageKey,
 
 // English is the only production catalog. Explicit developer pseudo-locales
 // remain available for layout and direction tests; they are not translations.
-const pseudoCatalog = buildCatalog(pseudoLocalize);
+const englishCatalog = buildCatalog((message) => message);
+// Pseudo locales are developer-only. Production locale negotiation already
+// refuses them, so do not build two unused full catalogs on every cold start.
+const pseudoCatalog = import.meta.env.DEV ? buildCatalog(pseudoLocalize) : englishCatalog;
 
 export const eagerCatalogs: Record<Locale, Record<MessageKey, string>> = {
-  "en-US": buildCatalog((message) => message),
+  "en-US": englishCatalog,
   "en-XA": pseudoCatalog,
   "ar-XB": pseudoCatalog,
 };

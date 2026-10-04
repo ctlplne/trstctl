@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { ShieldCheck } from "lucide-react";
-import { useForm, useWatch } from "react-hook-form";
 import { useSearchParams } from "react-router-dom";
-import { z } from "zod";
 import { CredentialChip } from "@/components/CredentialChip";
 import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -87,6 +84,7 @@ export function SecretSyncWorkflow({
   const [error, setError] = useState<string | null>(null);
   const [retryable, setRetryable] = useState(false);
   const [result, setResult] = useState<SecretSync | null>(null);
+  const [values, setValues] = useState<SecretSyncForm>(() => ({ name: initialName, target: catalog?.configured_targets[0] ?? "", remoteKey: "" }));
   const [searchParams, setSearchParams] = useSearchParams();
   const jobID = result?.job_id ?? searchParams.get("job_id") ?? "";
   const jobQuery = useApiQuery(["secret-sync-job", jobID], () => api.secretSyncJob(jobID), {
@@ -96,23 +94,7 @@ export function SecretSyncWorkflow({
   });
   const receipt = jobQuery.data ?? result;
 
-  const schema = useMemo(
-    () =>
-      z.object({
-        name: z.string().trim().min(1, t("secrets.sync.required")),
-        target: z.string().trim().min(1, t("secrets.sync.required")),
-        remoteKey: z.string().trim(),
-      }),
-    [t],
-  );
-  const form = useForm<SecretSyncForm>({
-    resolver: zodResolver(schema),
-    mode: "onTouched",
-    defaultValues: { name: initialName, target: catalog?.configured_targets[0] ?? "", remoteKey: "" },
-  });
-  const name = useWatch({ control: form.control, name: "name" }) ?? "";
-  const target = useWatch({ control: form.control, name: "target" }) ?? "";
-  const remoteKey = useWatch({ control: form.control, name: "remoteKey" }) ?? "";
+  const { name, target, remoteKey } = values;
   const request = normalizedRequest({ name, target, remoteKey });
   const currentReview = review?.requestKey === requestKey(request) ? review : null;
   const configuredTargets = useMemo(
@@ -125,12 +107,12 @@ export function SecretSyncWorkflow({
   );
 
   useEffect(() => {
-    if (!name && initialName) form.setValue("name", initialName, { shouldValidate: true });
-  }, [form, initialName, name]);
+    if (!name && initialName) setValues((current) => ({ ...current, name: initialName }));
+  }, [initialName, name]);
 
   useEffect(() => {
-    if (!target && configuredTargets[0]) form.setValue("target", configuredTargets[0].id, { shouldValidate: true });
-  }, [configuredTargets, form, target]);
+    if (!target && configuredTargets[0]) setValues((current) => ({ ...current, target: configuredTargets[0].id }));
+  }, [configuredTargets, target]);
 
   function invalidateReview() {
     setReview(null);
@@ -246,7 +228,7 @@ export function SecretSyncWorkflow({
       className="-order-1 grid gap-4"
       onSubmit={(event) => {
         event.preventDefault();
-        if (step === 0) void form.handleSubmit(reviewPlan)();
+        if (step === 0) void reviewPlan(values);
         else void executeReviewed();
       }}
     >
@@ -260,20 +242,37 @@ export function SecretSyncWorkflow({
         currentIndex={step}
         nextDisabled={!configureReady || previewBusy || loadBlocked || !previewRunnable || configuredTargets.length === 0}
         nextLabel={previewBusy ? t("secrets.sync.reviewing") : t("secrets.sync.reviewAction")}
-        onNext={step === 0 ? () => void form.handleSubmit(reviewPlan)() : undefined}
+        onNext={step === 0 ? () => void reviewPlan(values) : undefined}
         onPrevious={step === 1 ? () => setStep(0) : undefined}
         progressLabel={t("secrets.sync.progress")}
       >
         {step === 0 ? (
           <div className="grid gap-4 md:grid-cols-3">
-            <Field label={t("secrets.sync.secretName")} error={form.formState.errors.name?.message} required>
+            <Field label={t("secrets.sync.secretName")} required>
               {(field) => (
-                <Input {...field} {...form.register("name", { onChange: invalidateReview })} placeholder={t("secrets.sync.secretNameExample")} required />
+                <Input
+                  {...field}
+                  value={name}
+                  onChange={(event) => {
+                    setValues((current) => ({ ...current, name: event.target.value }));
+                    invalidateReview();
+                  }}
+                  placeholder={t("secrets.sync.secretNameExample")}
+                  required
+                />
               )}
             </Field>
-            <Field label={t("secrets.sync.target")} description={t("secrets.sync.targetHelp")} error={form.formState.errors.target?.message} required>
+            <Field label={t("secrets.sync.target")} description={t("secrets.sync.targetHelp")} required>
               {(field) => (
-                <Select {...field} {...form.register("target", { onChange: invalidateReview })} required>
+                <Select
+                  {...field}
+                  value={target}
+                  onChange={(event) => {
+                    setValues((current) => ({ ...current, target: event.target.value }));
+                    invalidateReview();
+                  }}
+                  required
+                >
                   <option value="">{t("secrets.sync.chooseTarget")}</option>
                   {configuredTargets.map((configuredTarget) => (
                     <option key={configuredTarget.id} value={configuredTarget.id}>
@@ -283,8 +282,18 @@ export function SecretSyncWorkflow({
                 </Select>
               )}
             </Field>
-            <Field label={t("secrets.sync.remoteKey")} description={t("secrets.sync.remoteKeyHelp")} error={form.formState.errors.remoteKey?.message}>
-              {(field) => <Input {...field} {...form.register("remoteKey", { onChange: invalidateReview })} placeholder={t("secrets.sync.remoteKeyExample")} />}
+            <Field label={t("secrets.sync.remoteKey")} description={t("secrets.sync.remoteKeyHelp")}>
+              {(field) => (
+                <Input
+                  {...field}
+                  value={remoteKey}
+                  onChange={(event) => {
+                    setValues((current) => ({ ...current, remoteKey: event.target.value }));
+                    invalidateReview();
+                  }}
+                  placeholder={t("secrets.sync.remoteKeyExample")}
+                />
+              )}
             </Field>
           </div>
         ) : currentReview ? (

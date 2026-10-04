@@ -23,6 +23,8 @@ import {
 } from "@/lib/api";
 import { StatusBadge } from "@/components/StatusBadge";
 
+export { GrantSecretVerification } from "./GrantSecretVerification";
+
 export function NativeSecretCreateForm({
   name,
   value,
