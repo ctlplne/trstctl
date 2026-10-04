@@ -144,6 +144,19 @@ func TestReconcileOutboxRetainsLegacyProviderAuditWithoutTenantFence(t *testing.
 	if checkpoint, err := s.OutboxReconciliationCheckpoint(ctx); err != nil || checkpoint != legacy.Sequence {
 		t.Fatalf("outbox checkpoint = %d, err %v; want %d", checkpoint, err, legacy.Sequence)
 	}
+	archive, err := log.Append(ctx, events.Event{
+		Type: "audit.archived", TenantID: "provider-control-plane",
+		Data: []byte(`{"source_history_retained":true}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if healed, err := orch.ReconcileOutbox(ctx, log); err != nil || healed != 0 {
+		t.Fatalf("legacy Provider retention checkpoint outbox recovery = healed %d, err %v; want no effect", healed, err)
+	}
+	if checkpoint, err := s.OutboxReconciliationCheckpoint(ctx); err != nil || checkpoint != archive.Sequence {
+		t.Fatalf("outbox checkpoint after archive = %d, err %v; want %d", checkpoint, err, archive.Sequence)
+	}
 	if _, err := log.Append(ctx, events.Event{Type: "unexpected.core.event", TenantID: "provider-control-plane", Data: []byte(`{}`)}); err != nil {
 		t.Fatal(err)
 	}
