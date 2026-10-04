@@ -1861,10 +1861,13 @@ func (s *Store) ListPrivacyArchiveErasureAttestationsPage(ctx context.Context, t
 // redaction. The values are non-PII hashes and the query is tenant-scoped.
 func (s *Store) ListPrivacyErasureRefs(ctx context.Context, tenantID string) (map[string]struct{}, error) {
 	refs := map[string]struct{}{}
-	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+	// Historical administrative audit scopes use the same isolated UUID mapping
+	// as their checkpoints. Ordinary UUID tenants keep their original RLS key.
+	storageTenant := AuditCheckpointRLSID(tenantID)
+	err := s.WithTenant(ctx, storageTenant, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
 			`SELECT subject_ref FROM privacy_subject_erasures WHERE tenant_id = $1`,
-			tenantID)
+			storageTenant)
 		if err != nil {
 			return err
 		}

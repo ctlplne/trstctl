@@ -112,7 +112,7 @@ func TestLegacyAdministrativeAuditScopeRebuildsCheckpoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc := audit.NewService(log, key, audit.WithCheckpoints(st))
+	svc := audit.NewService(log, key, audit.WithCheckpoints(st), audit.WithPrivacyErasures(st))
 	worker := auditcompliance.NewRetentionWorker(svc, log, auditcompliance.DirArchiver{Dir: t.TempDir()}, st, time.Hour, key)
 	if sum, err := worker.RunOnce(ctx); err != nil || sum.RecordsArchived != 1 {
 		t.Fatalf("legacy retention = %+v, err = %v", sum, err)
