@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
+	"sync"
 	"time"
 
 	"trstctl.com/trstctl/internal/api"
@@ -135,6 +137,7 @@ func (s *cbomService) Scan(ctx context.Context, tenantID string, req api.CBOMSca
 			Failed: rep.Failed,
 		},
 		MigrationProgress: inv.MigrationProgress,
+		ObservedAssetIDs:  sink.observedAssetIDs(),
 	}, nil
 }
 
@@ -150,6 +153,19 @@ type eventedCBOMSink struct {
 	store    *store.Store
 	log      *events.Log
 	tenantID string
+	mu       sync.Mutex
+	observed map[string]struct{}
+}
+
+func (s *eventedCBOMSink) observedAssetIDs() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ids := make([]string, 0, len(s.observed))
+	for id := range s.observed {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
 }
 
 const (
@@ -217,5 +233,11 @@ func (s *eventedCBOMSink) Record(ctx context.Context, f cbom.Finding) error {
 	if err := retryCBOMWrite(ctx, func() error { return projections.New(s.store).Apply(ctx, stored) }); err != nil {
 		return fmt.Errorf("server: project CBOM asset event: %w", err)
 	}
+	s.mu.Lock()
+	if s.observed == nil {
+		s.observed = make(map[string]struct{})
+	}
+	s.observed[asset.ID] = struct{}{}
+	s.mu.Unlock()
 	return nil
 }

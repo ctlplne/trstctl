@@ -96,12 +96,8 @@ func parseConfig(path string, data []byte) []cbom.Finding {
 		key := strings.ToLower(fields[0])
 		switch {
 		case protocolDirectives[key]:
-			for _, tok := range fields[1:] {
-				for _, p := range splitList(tok) {
-					if name := normalizeProtocol(p); name != "" {
-						out = append(out, cbom.Finding{Kind: cbom.AssetHostConfig, Location: path, Protocol: name, Library: "tls-config"})
-					}
-				}
+			for _, name := range configuredProtocols(key, fields[1:]) {
+				out = append(out, cbom.Finding{Kind: cbom.AssetHostConfig, Location: path, Protocol: name, Library: "tls-config"})
 			}
 		case cipherDirectives[key]:
 			for _, tok := range fields[1:] {
@@ -116,6 +112,52 @@ func parseConfig(path string, data []byte) []cbom.Finding {
 		}
 	}
 	return out
+}
+
+// configuredProtocols evaluates one declaration in order. Apache mod_ssl uses
+// + and - to modify the enabled set, including the all macro. Reporting a
+// removed version as enabled would produce a false weak-crypto finding.
+func configuredProtocols(directive string, tokens []string) []string {
+	var enabled []string
+	for _, tok := range tokens {
+		for _, raw := range splitList(tok) {
+			operation := byte('+')
+			if directive == "sslprotocol" && len(raw) > 0 && (raw[0] == '+' || raw[0] == '-') {
+				operation, raw = raw[0], raw[1:]
+			}
+			var names []string
+			if directive == "sslprotocol" && strings.EqualFold(raw, "all") {
+				// Apache's documented all macro includes every version available
+				// to its OpenSSL build. This is the declared maximum; the live
+				// endpoint scan determines what can actually negotiate.
+				names = []string{"SSLv3", "TLSv1.0", "TLSv1.1", "TLSv1.2", "TLSv1.3"}
+			} else if name := normalizeProtocol(raw); name != "" {
+				names = []string{name}
+			}
+			for _, name := range names {
+				if operation == '-' {
+					for i, current := range enabled {
+						if current == name {
+							enabled = append(enabled[:i], enabled[i+1:]...)
+							break
+						}
+					}
+					continue
+				}
+				present := false
+				for _, current := range enabled {
+					if current == name {
+						present = true
+						break
+					}
+				}
+				if !present {
+					enabled = append(enabled, name)
+				}
+			}
+		}
+	}
+	return enabled
 }
 
 // splitList splits an OpenSSL/nginx cipher or protocol list on ':' and ','.

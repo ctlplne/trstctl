@@ -220,6 +220,17 @@ remain visible in `report.failed` without discarding successful observations. `G
 migration progress. The four-worker, 64-slot CBOM bulkhead prevents a wide sweep from
 starving API or enrollment work.
 
+The scan response includes `observed_asset_ids`: stable IDs for findings that this
+run appended and projected. Read those exact IDs back through `GET
+/api/v1/cbom/assets` before claiming durable evidence. The console does this check;
+older inventory rows cannot make a new scan appear successful. A scan with zero
+findings is shown as inconclusive with recovery guidance, even when the tenant has
+older assets. Host-config parsing supports NGINX `ssl_protocols` and Apache
+`SSLProtocol`, including ordered `+` and `-` modifiers and the `all` macro. An
+Apache `all` declaration describes the maximum allowed by the config; the linked
+OpenSSL build can support fewer versions, so scan the live TLS endpoint to verify
+what clients can actually negotiate.
+
 Each returned asset includes the discovered algorithm, source, policy result, PQC
 posture, and a migration target:
 

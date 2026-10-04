@@ -629,6 +629,7 @@ describe("posture collector disclosures", () => {
     });
     apiMock.startCBOMScan.mockResolvedValue({
       report: { sources: 1, findings: 1, weak: 0, quantum_vulnerable: 1, out_of_policy: 0, failed: 0 },
+      observed_asset_ids: ["asset-edge-1"],
       migration_progress: {
         total_assets: 1,
         out_of_policy_assets: 0,
@@ -687,7 +688,7 @@ describe("posture collector disclosures", () => {
     await waitFor(() => expect(apiMock.listCBOMAssets).toHaveBeenCalledTimes(2));
     const receipt = await screen.findByRole("region", { name: "Saved inventory verification" });
     expect(receipt).toHaveTextContent("Saved evidence verified");
-    expect(receipt).toHaveTextContent("A separate server read found the saved tenant records");
+    expect(receipt).toHaveTextContent("A separate server read found every asset ID from this scan");
     expect(within(receipt).getAllByText("1", { exact: true })).toHaveLength(2);
     expect(receipt).toHaveTextContent("asset-edge-1");
     expect(receipt).toHaveTextContent("licensed-signature-transition");
@@ -720,6 +721,7 @@ describe("posture collector disclosures", () => {
     });
     apiMock.startCBOMScan.mockResolvedValue({
       report: { sources: 1, findings: 1, weak: 0, quantum_vulnerable: 1, out_of_policy: 0, failed: 0 },
+      observed_asset_ids: ["asset-edge-1"],
       migration_progress: {
         total_assets: 1,
         out_of_policy_assets: 0,

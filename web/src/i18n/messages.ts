@@ -24708,6 +24708,16 @@ export const messages = {
   "posture.cbom.workflow.blockers": { defaultMessage: "Why scanning is blocked", description: "CBOM blockers heading." },
   "posture.cbom.workflow.recovery": { defaultMessage: "If something fails", description: "CBOM recovery steps heading." },
   "posture.cbom.workflow.completeTitle": { defaultMessage: "The scan finished and the inventory was refreshed", description: "CBOM completion heading." },
+  "posture.cbom.workflow.emptyTitle": { defaultMessage: "No crypto observations were saved", description: "CBOM zero-finding scan heading." },
+  "posture.cbom.workflow.emptyBody": {
+    defaultMessage:
+      "The scanner read the selected scope but found no supported protocol, cipher, or TLS observation. Check the file syntax or target, then review a new plan. Older inventory rows do not prove this scan worked.",
+    description: "CBOM zero-finding recovery guidance.",
+  },
+  "posture.cbom.workflow.emptyFailedBody": {
+    defaultMessage: "No observations were saved and at least one input failed. Check the target and file permissions, then review a smaller plan and retry.",
+    description: "CBOM zero-finding partial failure guidance.",
+  },
   "posture.cbom.workflow.completeBody": {
     defaultMessage:
       "Successful public crypto observations are now durable tenant evidence. A non-zero failure count means some targets still need attention; it does not erase successful observations.",
@@ -24719,11 +24729,10 @@ export const messages = {
   },
   "posture.cbom.workflow.verifyTitle": { defaultMessage: "Saved evidence verified", description: "CBOM durable readback success title." },
   "posture.cbom.workflow.verifyBody": {
-    defaultMessage:
-      "A separate server read found the saved tenant records and their migration guidance. This proof comes from the inventory, not from trusting the scan response.",
+    defaultMessage: "A separate server read found every asset ID from this scan and its migration guidance. Older inventory rows cannot satisfy this check.",
     description: "ELI5 explanation of the independent CBOM inventory readback.",
   },
-  "posture.cbom.workflow.verifyAssets": { defaultMessage: "Saved inventory records", description: "Durable CBOM asset count label." },
+  "posture.cbom.workflow.verifyAssets": { defaultMessage: "This scan's saved records", description: "Exact durable CBOM asset count for this scan." },
   "posture.cbom.workflow.verifyTargets": {
     defaultMessage: "Records with a migration target",
     description: "Count of saved CBOM records with migration guidance.",

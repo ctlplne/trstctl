@@ -76,6 +76,7 @@ describe("WIRE-03 Posture CBOM wiring", () => {
     });
     apiMock.startCBOMScan.mockResolvedValue({
       migration_progress: scannedProgress,
+      observed_asset_ids: ["asset-weak-1"],
       report: {
         sources: 2,
         findings: 1,
@@ -144,6 +145,41 @@ describe("WIRE-03 Posture CBOM wiring", () => {
     const row = await screen.findByRole("row", { name: /https:\/\/legacy\.example\.com:443 tls_endpoint rsa-1024 tls 1\.0 \/ rc4 out of policy/i });
     expect(within(row).getByText("ML-KEM hybrid")).toBeInTheDocument();
     expect(within(row).getByText(/RSA-1024 below policy floor/)).toBeInTheDocument();
+  });
+
+  it("shows a zero-finding scan as inconclusive even when older inventory rows exist", async () => {
+    apiMock.startCBOMScan.mockResolvedValueOnce({
+      migration_progress: scannedProgress,
+      observed_asset_ids: [],
+      report: { sources: 1, findings: 0, weak: 0, failed: 0, out_of_policy: 0, quantum_vulnerable: 0 },
+    });
+    const user = userEvent.setup();
+    renderPosture();
+    await waitFor(() => expect(apiMock.listCBOMAssets).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByText("Algorithm inventory and scan evidence", { exact: true }));
+    await user.type(screen.getByLabelText("Host configuration files"), "/etc/ssh/sshd_config");
+    await user.click(screen.getByRole("button", { name: "Review scan plan" }));
+    await user.click(await screen.findByRole("button", { name: "Run this reviewed plan" }));
+    expect(await screen.findByText("No crypto observations were saved")).toBeInTheDocument();
+    expect(screen.getByText(/Older inventory rows do not prove this scan worked/)).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Saved inventory verification" })).not.toBeInTheDocument();
+  });
+
+  it("refuses a stale inventory row as proof of a new scan", async () => {
+    apiMock.startCBOMScan.mockResolvedValueOnce({
+      migration_progress: scannedProgress,
+      observed_asset_ids: ["asset-current-1"],
+      report: { sources: 1, findings: 1, weak: 0, failed: 0, out_of_policy: 0, quantum_vulnerable: 0 },
+    });
+    const user = userEvent.setup();
+    renderPosture();
+    await waitFor(() => expect(apiMock.listCBOMAssets).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByText("Algorithm inventory and scan evidence", { exact: true }));
+    await user.type(screen.getByLabelText("Host configuration files"), "/etc/ssh/sshd_config");
+    await user.click(screen.getByRole("button", { name: "Review scan plan" }));
+    await user.click(await screen.findByRole("button", { name: "Run this reviewed plan" }));
+    expect(await screen.findByText(/could not verify the saved inventory/)).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Saved inventory verification" })).not.toBeInTheDocument();
   });
 
   it("fails closed on an unsafe preview and keeps the reviewed plan recoverable after execution fails", async () => {

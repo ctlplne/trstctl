@@ -8669,6 +8669,8 @@ export interface components {
         };
         CBOMScan: {
             migration_progress: components["schemas"]["CBOMMigrationProgress"];
+            /** @description Stable tenant-scoped asset IDs durably observed by this scan; use these for an exact independent inventory readback. */
+            observed_asset_ids: string[];
             report: components["schemas"]["CBOMReport"];
         };
         CBOMScanPreview: {

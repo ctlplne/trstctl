@@ -1781,6 +1781,7 @@ export interface CBOMReport {
 
 export interface CBOMScan {
   migration_progress: CBOMMigrationProgress;
+  observed_asset_ids: string[];
   report: CBOMReport;
 }
 

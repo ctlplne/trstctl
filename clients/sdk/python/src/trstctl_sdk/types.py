@@ -2489,6 +2489,7 @@ CBOMScan = TypedDict(
     'CBOMScan',
     {
         'migration_progress': dict[str, Any],
+        'observed_asset_ids': list[str],
         'report': dict[str, Any],
     },
     total=False,

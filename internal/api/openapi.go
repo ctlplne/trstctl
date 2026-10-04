@@ -5254,7 +5254,8 @@ func componentSchemas() map[string]*Schema {
 	cbomScan := object(map[string]*Schema{
 		"report":             ref("CBOMReport"),
 		"migration_progress": ref("CBOMMigrationProgress"),
-	}, "report", "migration_progress")
+		"observed_asset_ids": {Type: "array", Items: uuid(), Description: "Stable tenant-scoped asset IDs durably observed by this scan; use these for an exact independent inventory readback."},
+	}, "report", "migration_progress", "observed_asset_ids")
 	acmeDeviceAttestationPolicy := object(map[string]*Schema{
 		"enabled":               {Type: "boolean"},
 		"format":                {Type: "string", Enum: []string{"tpm"}},

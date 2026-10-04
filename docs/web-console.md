@@ -311,7 +311,9 @@ The complete expert machinery remains on this page under three named disclosures
 - **Algorithm inventory and scan evidence** contains a three-step CBOM workflow:
   choose TLS/file scope, review the server-normalized effect-free plan and exact safety
   limits, then run and inspect durable results. Partial failures keep successful
-  observations and show repair-and-retry guidance. The section also contains the policy
+  observations and show repair-and-retry guidance. A zero-finding run is marked
+  inconclusive. An inventory receipt checks this run's exact asset IDs against a
+  separate server read, so older records cannot mask a failed scan. The section also contains the policy
   floor, algorithm rollup, exact asset rows, and recommendations.
 - **Compatibility, PQC policy, and upgrade planning** contains graph-bound readiness,
   attributed owners, dependency paths, core PQC campaigns, and licensed migration.

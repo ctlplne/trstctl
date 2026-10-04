@@ -90,7 +90,7 @@ export function CBOMScanWorkflow({ onCompleted }: { onCompleted: (scan: CBOMScan
       // server rebuilds the same plan before it performs any read.
       const completed = await api.startCBOMScan(exactPlan.normalized_request);
       const inventory = await api.listCBOMAssets();
-      const verification = verifyInventoryReadback(completed, inventory, t("posture.cbom.workflow.verifyFailed"));
+      const verification = completed.report.findings > 0 ? verifyInventoryReadback(completed, inventory, t("posture.cbom.workflow.verifyFailed")) : null;
       setResult(completed);
       setVerifiedInventory(verification);
       onCompleted(completed, inventory);
@@ -186,12 +186,27 @@ export function CBOMScanWorkflow({ onCompleted }: { onCompleted: (scan: CBOMScan
 
       {step === 2 && result ? (
         <div className="grid gap-4">
-          <section className="rounded-panel border border-status-success/35 bg-status-success/5 p-comfortable" aria-live="polite">
+          <section
+            className={`rounded-panel border p-comfortable ${result.report.findings > 0 ? "border-status-success/35 bg-status-success/5" : "border-status-warning/35 bg-status-warning/5"}`}
+            aria-live="polite"
+          >
             <div className="flex items-start gap-3">
-              <ShieldCheck className="mt-0.5 h-5 w-5 text-status-success" aria-hidden="true" />
+              {result.report.findings > 0 ? (
+                <ShieldCheck className="mt-0.5 h-5 w-5 text-status-success" aria-hidden="true" />
+              ) : (
+                <FileSearch className="mt-0.5 h-5 w-5 text-status-warning" aria-hidden="true" />
+              )}
               <div>
-                <h3 className="font-semibold">{t("posture.cbom.workflow.completeTitle")}</h3>
-                <p className="mt-1 text-sm text-muted-foreground">{t("posture.cbom.workflow.completeBody")}</p>
+                <h3 className="font-semibold">{t(result.report.findings > 0 ? "posture.cbom.workflow.completeTitle" : "posture.cbom.workflow.emptyTitle")}</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {t(
+                    result.report.findings > 0
+                      ? "posture.cbom.workflow.completeBody"
+                      : result.report.failed > 0
+                        ? "posture.cbom.workflow.emptyFailedBody"
+                        : "posture.cbom.workflow.emptyBody",
+                  )}
+                </p>
               </div>
             </div>
             <dl className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -216,13 +231,17 @@ export function CBOMScanWorkflow({ onCompleted }: { onCompleted: (scan: CBOMScan
 }
 
 function verifyInventoryReadback(scan: CBOMScan, inventory: CBOMInventory, errorMessage: string): VerifiedInventory {
-  const assets = inventory.items ?? [];
+  const allAssets = inventory.items ?? [];
+  const observedIDs = new Set(scan.observed_asset_ids ?? []);
+  const assets = allAssets.filter((asset) => observedIDs.has(asset.id));
   const progress = inventory.migration_progress;
   const completeMetadata = assets.every((asset) => asset.id && asset.migration_target && asset.migration_standard && asset.migration_generation);
   const readbackContainsScan =
-    progress.total_assets === assets.length &&
+    observedIDs.size > 0 &&
+    observedIDs.size === assets.length &&
+    progress.total_assets === allAssets.length &&
     progress.total_assets >= scan.migration_progress.total_assets &&
-    (scan.report.findings === 0 || assets.length > 0);
+    assets.length > 0;
   if (!completeMetadata || !readbackContainsScan) throw new Error(errorMessage);
   return {
     assets,

@@ -207,6 +207,7 @@ type CBOMInventoryResponse struct {
 type CBOMScanResponse struct {
 	Report            CBOMReport             `json:"report"`
 	MigrationProgress cbom.MigrationProgress `json:"migration_progress"`
+	ObservedAssetIDs  []string               `json:"observed_asset_ids"`
 }
 
 // CBOMInventoryFromAssets adapts store rows to the public inventory shape.

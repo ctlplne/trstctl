@@ -7198,13 +7198,22 @@
           "migration_progress": {
             "$ref": "#/components/schemas/CBOMMigrationProgress"
           },
+          "observed_asset_ids": {
+            "description": "Stable tenant-scoped asset IDs durably observed by this scan; use these for an exact independent inventory readback.",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
           "report": {
             "$ref": "#/components/schemas/CBOMReport"
           }
         },
         "required": [
           "report",
-          "migration_progress"
+          "migration_progress",
+          "observed_asset_ids"
         ],
         "type": "object"
       },

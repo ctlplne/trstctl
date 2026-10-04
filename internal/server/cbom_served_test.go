@@ -132,7 +132,8 @@ func TestServedCBOMScanPopulatesMigrationInventory(t *testing.T) {
 		t.Fatalf("start CBOM scan: status %d body %s", status, body)
 	}
 	var scan struct {
-		Report struct {
+		ObservedAssetIDs []string `json:"observed_asset_ids"`
+		Report           struct {
 			Findings          int `json:"findings"`
 			QuantumVulnerable int `json:"quantum_vulnerable"`
 			OutOfPolicy       int `json:"out_of_policy"`
@@ -149,6 +150,9 @@ func TestServedCBOMScanPopulatesMigrationInventory(t *testing.T) {
 	if scan.Report.Findings < 4 || scan.Report.QuantumVulnerable == 0 || scan.Report.OutOfPolicy == 0 {
 		t.Fatalf("scan report = %+v, want TLS + host findings with quantum and policy gaps", scan.Report)
 	}
+	if len(scan.ObservedAssetIDs) < 4 {
+		t.Fatalf("scan observed IDs = %v, want exact durable IDs for TLS and host observations", scan.ObservedAssetIDs)
+	}
 	if scan.MigrationProgress.TotalAssets < 4 || scan.MigrationProgress.QuantumVulnerableAssets == 0 || scan.MigrationProgress.PercentMigrated >= 100 {
 		t.Fatalf("scan migration progress = %+v, want partial/non-complete migration", scan.MigrationProgress)
 	}
@@ -159,6 +163,7 @@ func TestServedCBOMScanPopulatesMigrationInventory(t *testing.T) {
 	}
 	var inv struct {
 		Items []struct {
+			ID                  string `json:"id"`
 			Kind                string `json:"kind"`
 			Location            string `json:"location"`
 			Algorithm           string `json:"algorithm"`
@@ -181,6 +186,20 @@ func TestServedCBOMScanPopulatesMigrationInventory(t *testing.T) {
 	}
 	if len(inv.Items) < 4 {
 		t.Fatalf("CBOM inventory has %d assets, want TLS endpoint/key plus host protocol/cipher: %s", len(inv.Items), body)
+	}
+	observed := make(map[string]bool, len(scan.ObservedAssetIDs))
+	for _, id := range scan.ObservedAssetIDs {
+		observed[id] = false
+	}
+	for _, item := range inv.Items {
+		if _, ok := observed[item.ID]; ok {
+			observed[item.ID] = true
+		}
+	}
+	for id, found := range observed {
+		if !found {
+			t.Fatalf("scan asset %s absent from independent tenant inventory", id)
+		}
 	}
 	var sawSignatureReplacement, sawTLSReplacement, sawWeakConfig bool
 	for _, item := range inv.Items {
